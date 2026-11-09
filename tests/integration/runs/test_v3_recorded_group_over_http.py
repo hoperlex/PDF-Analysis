@@ -66,7 +66,7 @@ from auditmanager.bootstrap import adapters as adapters_module
 from auditmanager.bootstrap import composition as composition_module
 from auditmanager.bootstrap.composition import build_application
 from auditmanager.jobs.public import JobRepository
-from auditmanager.runs.public import PACK_MANIFEST_ENV, ReviewAttestation, seal_manifest
+from auditmanager.runs.public import PACK_MANIFEST_ENV, START_ALLOWED_ENV, ReviewAttestation, seal_manifest
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
 from tests.support.run_consent import run_consent
@@ -319,6 +319,8 @@ def _environment(database_url: str, manifest: Path | None) -> dict[str, str]:
         env[name] = os.environ[name]
     if manifest is not None:
         env[PACK_MANIFEST_ENV] = str(manifest)
+        # `AR-V3-OPT-IN`: the pack is the capability, this is the permission to start; this acceptance starts groups.
+        env[START_ALLOWED_ENV] = "1"
     return env
 
 
@@ -825,6 +827,7 @@ def test_the_pack_status_is_the_sealed_synthetic_pack_the_composition_root_insta
             "prompt_bundle_id": str(PROFILE.prompt_bundle_id),
             "pack_sha256": measured.pack.sha256,
             "scope_ids": list(SCOPE_LABELS),
+            "start_allowed": True,
             "review": {
                 "reviewer": REVIEW.reviewer, "capacity": REVIEW.capacity, "reviewed_at": REVIEW.reviewed_at,
                 "decision_ref": REVIEW.decision_ref, "scope_statement": REVIEW.scope_statement,

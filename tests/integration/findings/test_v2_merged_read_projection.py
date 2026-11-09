@@ -74,6 +74,11 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> FindingAdapter:
     monkeypatch.setattr(
         "auditmanager.decisions.decision_history", lambda _session, _finding_uid: (),
     )
+    # `UI-A-73` (contract 1.39.0): where a carried verdict came from is read through the projection view, which this
+    # SQLite stand has not got; none is carried here, as none is on a fresh finding.
+    monkeypatch.setattr(
+        "auditmanager.decisions.public.current_verdict_origins", lambda _session, _finding_uids: {},
+    )
     yield FindingAdapter(sessionmaker(engine))
     engine.dispose()
 

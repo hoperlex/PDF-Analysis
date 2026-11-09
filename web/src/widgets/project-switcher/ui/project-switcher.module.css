@@ -1,6 +1,6 @@
 /*
  * The project selector of the frame's top strip (`R-150b`). Every colour, length and radius is a
- * token (`--am-*`); the card follows the screen-context card beside it (`app-frame.module.css`).
+ * token (`--am-*`). One line, «Проекты ▾» and the open project's name, 30 px tall like the strip's other controls.
  */
 
 .switcher {
@@ -18,10 +18,11 @@
   display: flex;
   min-width: 0;
   max-width: 100%;
-  min-height: 48px;
-  padding: var(--am-gap-xs) var(--am-gap);
+  align-items: center;
+  min-height: 30px;
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
+  border-radius: var(--am-radius-sm);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
   color: var(--am-ink);
@@ -37,8 +38,8 @@
 
 .face {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
   column-gap: var(--am-gap-sm);
   min-width: 0;
 }
@@ -50,7 +51,7 @@
   font-size: var(--am-text-xs);
   font-weight: 650;
   letter-spacing: 0.09em;
-  line-height: 1.2;
+  line-height: var(--am-leading-tight);
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
@@ -63,21 +64,20 @@
 }
 
 .value {
-  grid-column: 1;
+  grid-column: 2;
   min-width: 0;
   max-width: 16rem;
   overflow: hidden;
   color: var(--am-ink);
-  font-size: var(--am-text-base);
+  font-size: var(--am-text-md);
   font-weight: 650;
-  line-height: 1.25;
+  line-height: var(--am-leading-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .caret {
-  grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-column: 3;
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }
@@ -103,6 +103,11 @@
   overflow-wrap: anywhere;
   white-space: pre-line;
   line-height: 1.35;
+}
+
+/* The open project's row reads heavier (the original's picker sets its active row in bold). */
+.switcher :global(.am-menu__item[aria-current='true']) {
+  font-weight: 650;
 }
 
 .notes {

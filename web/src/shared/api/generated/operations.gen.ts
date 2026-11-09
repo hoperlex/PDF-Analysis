@@ -7,14 +7,15 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.33.0 (OpenAPI 3.1.0)
- *   sha256 f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f
+ *   AuditManager PC-01 API 1.42.0 (OpenAPI 3.1.0)
+ *   sha256 8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 import type {
+  AcceptedOptimisationProposalPage,
   Account,
   AccountPage,
   AgentPackageVersion,
@@ -39,8 +40,10 @@ import type {
   AssignmentPage,
   AssignmentStatus,
   AssignmentUid,
+  AuthEventPage,
   CarryOverDecisionRequest,
   CarryOverDecisionResponse,
+  CarryOverProposalDecisionsRequest,
   ChangePasswordRequest,
   ClaimExecutorTaskRequest,
   ClaimedExecutorTask,
@@ -164,6 +167,7 @@ import type {
   GenerateComparisonSummaryRequest,
   GenerateComparisonSummaryResponse,
   IdempotencyKey,
+  ImportProposalDecisionsRequest,
   ImportRunDecisionsRequest,
   IssueRunnerTokenRequest,
   IssueTokenRequest,
@@ -201,6 +205,8 @@ import type {
   ProjectPage,
   ProjectSection,
   ProjectUid,
+  ProposalDecisionCarryoverReport,
+  ProposalDecisionImportReport,
   ProposalDecisionList,
   ProposalDecisionRecordPage,
   ProposalDecisionResult,
@@ -224,6 +230,7 @@ import type {
   ReviseStageAssemblyRequest,
   RunCostEstimate,
   RunCostEstimateRequest,
+  RunFindingBlockLinks,
   RunId,
   RunNormReferences,
   RunStatus,
@@ -302,6 +309,7 @@ import type {
   StartComparisonAiJobRequest,
   StartComparisonAiSheetChangesRequest,
   StartComparisonSeriesRequest,
+  StartRunFromStageRequest,
   StartRunRequest,
   StartStageChainBatchRequest,
   StartStageChainRunRequest,
@@ -356,6 +364,7 @@ export const OPERATION_IDS = [
   'cancelStageChainRun',
   'cancelStageUpload',
   'carryOverDecision',
+  'carryOverProposalDecisions',
   'changePassword',
   'claimExecutorTask',
   'classifyDocumentVersion',
@@ -384,6 +393,7 @@ export const OPERATION_IDS = [
   'deleteComparisonReport',
   'dequeueComparisonAiSheetChanges',
   'downloadAgentPackage',
+  'endUserSessions',
   'enqueueComparisonLaunch',
   'estimateArV3GroupCost',
   'estimateComparisonAiPairCheck',
@@ -394,6 +404,7 @@ export const OPERATION_IDS = [
   'estimateStageChainRun',
   'excludeComparisonUploadSet',
   'exportOptimisationProposalsCsv',
+  'exportOptimisationProposalsXlsx',
   'exportRunCsv',
   'exportRunXlsx',
   'extendExecutorTaskClaim',
@@ -460,13 +471,16 @@ export const OPERATION_IDS = [
   'getWorkSchedule',
   'getWorkScheduleReserve',
   'importComparisonZip',
+  'importOptimisationProposalDecisions',
   'importRunDecisions',
   'issueExecutorEnrollment',
   'issueRunnerToken',
   'issueToken',
+  'listAcceptedOptimisationProposals',
   'listAnalysisPresets',
   'listAnalysisProfiles',
   'listAssignments',
+  'listAuthEvents',
   'listComparisonAiLinks',
   'listComparisonAiPairHints',
   'listComparisonMatrixEdits',
@@ -503,6 +517,7 @@ export const OPERATION_IDS = [
   'listProposalDecisions',
   'listRegistrations',
   'listReleases',
+  'listRunFindingBlocks',
   'listRunFindings',
   'listRuns',
   'listStageAiReviews',
@@ -598,6 +613,7 @@ export const OPERATION_IDS = [
   'startComparisonSpecification',
   'startOptimisationPass',
   'startRun',
+  'startRunFromStage',
   'startStageChainBatch',
   'startStageChainRun',
   'streamComparisonPairTile',
@@ -1240,6 +1256,36 @@ export type CarryOverDecisionInput = {
 
 /** Success body of `carryOverDecision` (`application/json`, HTTP 201). */
 export type CarryOverDecisionResult = CarryOverDecisionResponse;
+
+// ------------------------------------------------------------------------------------
+// carryOverProposalDecisions - POST /optimisation-passes/{optimisation_pass_id}/decision-carryovers
+// ------------------------------------------------------------------------------------
+
+/**
+ * Carry Over Proposal Decisions
+ *
+ * `UI-B-14` (contract 1.37.0), «Перенести решения из V#»: carry the decisions in force of `source_optimisation_pass_id` -- a pass of the same document set started over an earlier version -- into the pass of the path. A source decision (an `accept`, a `reject` or a `revise`; a proposal nobody decided or whose decision was withdrawn carries nothing) is appended to a proposal of this pass only where exactly one proposal of each pass has the same content -- the type, the specification row's text, the unit, the currency, both positions by code, mark, name and supplier, and both unit prices; never a display number, a name alone or a position in the drawing -- and only when that proposal has no event at all. Each carried decision is an ordinary appended event, authored by the caller, with the source's verdict and comment and `carried_from` naming the source decision and its version; a later decision on the proposal supersedes it. The report counts every decision in force of the source in exactly one of `carried`, `target_decided` (the proposal already has an event, which stands), `ambiguous` (more than one proposal of either pass has that content) and `unmatched` (no proposal of this pass has it). An unknown target pass is `404`; a source that names no pass, is the target, belongs to another document set or was not started over an earlier version is `409 conflict` with `conflict_reason` `carryover_source_unknown`, `carryover_source_is_target`, `carryover_source_other_document` or `carryover_source_not_earlier`, and nothing is written. An exact repeat of the `Idempotency-Key` answers the stored report and appends nothing; the same key with another source or caller is `409 idempotency_key_reuse`; a new key repeats the matching and carries nothing more once the targets are decided. `expert` only (`admin` alone is `permission_denied`).
+ */
+export type CarryOverProposalDecisionsInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/decision-carryovers`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CarryOverProposalDecisionsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `carryOverProposalDecisions` (`application/json`, HTTP 200). */
+export type CarryOverProposalDecisionsResult = ProposalDecisionCarryoverReport;
 
 // ------------------------------------------------------------------------------------
 // changePassword - POST /auth/password
@@ -1899,7 +1945,7 @@ export type CreateStageUploadResult = StageUpload;
 /**
  * Decide Optimisation Proposal
  *
- * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters). Decisions are only appended, never changed; the latest one is current, and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed.
+ * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters), or `revoke` -- the withdrawal of the decision in force («Снять решение»), an event like any other that takes the proposal back to `pending`, with an optional comment, refused with `409 conflict` and `conflict_reason` `no_decision_to_revoke` when the proposal has no decision in force. Decisions are only appended, never changed; the latest one is current (unless it is a `revoke`), and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed. A decision that is ordered after a carried decision on the same proposal (`carryOverProposalDecisions`) simply takes the next place; the one case in which its place was taken meanwhile by a writer that held no lock is `409 conflict` with `conflict_reason` `proposal_decision_raced`, nothing is written and the same request can be repeated (contract 1.40.0).
  */
 export type DecideOptimisationProposalInput = {
   /** Path parameters, substituted into `/optimisation-proposals/{optimisation_proposal_id}/decisions`. */
@@ -2002,6 +2048,34 @@ export type DownloadAgentPackageInput = {
 export type DownloadAgentPackageResult = Blob;
 
 // ------------------------------------------------------------------------------------
+// endUserSessions - POST /users/{user_uid}/sessions/end
+// ------------------------------------------------------------------------------------
+
+/**
+ * End every session of an account.
+ *
+ * Requires `admin` and an `Idempotency-Key`. Raises the account's credential epoch, so every credential it holds -- in every browser and on every device -- is refused from its next request and it signs in again; its password, roles and sign-in brake are untouched. The event `sessions_ended` is journalled in the same transaction (`listAuthEvents`). Not oneself (`permission_denied`): an administrator ends their own sessions by changing their password. An archived or missing account is `not_found`. An exact repeat of the key answers the account unchanged and ends nothing more; the key under another account or another administrator is `idempotency_key_reuse`.
+ */
+export type EndUserSessionsInput = {
+  /** Path parameters, substituted into `/users/{user_uid}/sessions/end`. */
+  path: {
+    user_uid: UserUid;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `endUserSessions` (`application/json`, HTTP 200). */
+export type EndUserSessionsResult = Account;
+
+// ------------------------------------------------------------------------------------
 // enqueueComparisonLaunch - POST /projects/{project_uid}/comparison-launch-queue/entries
 // ------------------------------------------------------------------------------------
 
@@ -2039,6 +2113,8 @@ export type EnqueueComparisonLaunchResult = ComparisonLaunchQueue;
  * Estimate all six AR v3 checks before spend.
  *
  * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend.
+ *
+ * `AR-V3-OPT-IN`: the price of the six checks of one AR v3 beta group, asked before startArV3BetaGroup. While a reviewed pack is installed and the deployment has not allowed starts (`AR_V3_BETA_START_ALLOWED`, off by default), the answer is `409 conflict` with `conflict_reason` `ar_v3_start_not_enabled` and no figure, as the start's is. With no pack installed the answer is the `503 dependency_unavailable` it always was.
  */
 export type EstimateArV3GroupCostInput = {
   /** Request body, sent as `application/json`. */
@@ -2156,7 +2232,7 @@ export type EstimateComparisonSpecificationResult = ComparisonAiEstimate;
 /**
  * Estimate selected section analysis before spend.
  *
- * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest. `EXEC2-SEAL-2`: `executor_group_id` (exclusive with `executor_connection_id` and `preset_id`, with the same refusals as `startRun`) estimates a run on the group's current revision; the estimate then carries `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` (when a rule routed it) and the planned `pin_id`, and no `connection_revision_id`. The estimate digest binds them.
+ * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest. `EXEC2-SEAL-2`: `executor_group_id` (exclusive with `executor_connection_id` and `preset_id`, with the same refusals as `startRun`) estimates a run on the group's current revision; the estimate then carries `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` (when a rule routed it) and the planned `pin_id`, and no `connection_revision_id`. The estimate digest binds them. `AR-V3-OPT-IN`: with reaudit_of_run_id naming a member of an AR v3 group the answer is the repeat's refusal, `409 conflict` with `conflict_reason` `ar_v3_member_not_repeatable`, and no figure.
  */
 export type EstimateRunCostInput = {
   /** Request body, sent as `application/json`. */
@@ -2245,6 +2321,29 @@ export type ExportOptimisationProposalsCsvInput = {
 
 /** Success body of `exportOptimisationProposalsCsv` (`text/csv`, HTTP 200). */
 export type ExportOptimisationProposalsCsvResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// exportOptimisationProposalsXlsx - GET /optimisation-passes/{optimisation_pass_id}/export.xlsx
+// ------------------------------------------------------------------------------------
+
+/**
+ * Export Optimisation Proposals Xlsx
+ *
+ * `UI-B-15` (contract 1.35.0): every proposal of the pass as a workbook with one sheet, «Предложения», one row each in ordinal order. The first column, «ID предложения», is the proposal's own identity -- the key by which `importOptimisationProposalDecisions` reads the file back, never the display number «№»; then the specification row, both positions, the exact prices and the saving (an empty cell when it is absent, never `0`), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено` or `на доработку`) and «Комментарий», filled with the decision in force. Every cell is text, so one that begins with `=` is shown and not evaluated. Computed on request from the stored rows. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
+ */
+export type ExportOptimisationProposalsXlsxInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/export.xlsx`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `exportOptimisationProposalsXlsx` (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, HTTP 200). */
+export type ExportOptimisationProposalsXlsxResult = Blob;
 
 // ------------------------------------------------------------------------------------
 // exportRunCsv - GET /runs/{run_id}/export.csv
@@ -2494,7 +2593,11 @@ export type GetArV3BetaGroupReviewResult = ArV3BetaGroupReview;
 // getArV3BetaPackStatus - GET /ar-v3-beta/pack
 // ------------------------------------------------------------------------------------
 
-/** Get Ar V3 Beta Pack Status */
+/**
+ * Get Ar V3 Beta Pack Status
+ *
+ * `AR-V3-OPT-IN`: when the pack is installed, `start_allowed` says whether this deployment allows a start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`). The pack is the capability to execute, read and review; `start_allowed` is the separate permission to start. A screen offers the choice of AR v3 only when the pack is installed and `start_allowed` is true, and never makes it the default.
+ */
 export type GetArV3BetaPackStatusInput = {
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -3236,7 +3339,7 @@ export type GetRunNormVerificationResult = NormVerificationReport;
 /**
  * Read run state and per-stage state.
  *
- * The polling target. `state` is the contract run state; `stages` carries one entry per stage the run scheduled, with the `StageResult` status vocabulary. A client stops polling on any terminal state.
+ * The polling target. `state` is the contract run state; `stages` carries one entry per stage the run scheduled, with the `StageResult` status vocabulary. A client stops polling on any terminal state. `estimated_finish_at` (`UI-A-65`, contract 1.40.0) is the same estimate the queue shows for the run's job, present only while the run is being worked on.
  */
 export type GetRunStatusInput = {
   /** Path parameters, substituted into `/runs/{run_id}`. */
@@ -3740,6 +3843,36 @@ export type ImportComparisonZipInput = {
 export type ImportComparisonZipResult = ComparisonUpload;
 
 // ------------------------------------------------------------------------------------
+// importOptimisationProposalDecisions - POST /optimisation-passes/{optimisation_pass_id}/decision-imports
+// ------------------------------------------------------------------------------------
+
+/**
+ * Import Optimisation Proposal Decisions
+ *
+ * `UI-B-15` (contract 1.35.0): load back the pass's workbook as `exportOptimisationProposalsXlsx` produced it, with «Решение эксперта» and «Комментарий» edited, at most 10 MiB. Only our export is read: a workbook without a «Предложения» sheet naming the columns «ID предложения», «Решение эксперта» and «Комментарий» is `422 validation_failed` (`field: file`, `constraint: not_our_export`), as is a file that is not a readable XLSX (`unreadable`), is larger (`too_large`) or has more than 20 000 rows (`too_many_rows`); nothing is recorded then. Rows are matched by the proposal's identity, never by «№», and only proposals of this pass. A row whose decision differs from the one in force appends an `accept`, `reject` or `revise` event carrying the row's comment (`revise` requires one), authored by the caller exactly as `decideOptimisationProposal` would; «не решено» over a decision in force appends its withdrawal (`revoke`); the same decision with a new comment appends a new event; a blank decision cell keeps the decision in force. Every row naming an ID or a decision is reported, in sheet order, as `recorded`, `unchanged` or `refused` with a `reason`: `no_proposal_id`, `duplicate_proposal`, `unknown_proposal`, `unknown_decision` (not one of the four labels the export writes), `comment_required` or `comment_too_long`. The proposal's identity is reported only for a proposal of the pass. An unknown pass is `404`. An exact repeat of the `Idempotency-Key` answers the stored report and appends nothing; the same key with another file, pass or caller is `409 idempotency_key_reuse`. `expert` only (`admin` alone is `permission_denied`).
+ */
+export type ImportOptimisationProposalDecisionsInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/decision-imports`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /** Request body, sent as `multipart/form-data`. */
+  body: ImportProposalDecisionsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `importOptimisationProposalDecisions` (`application/json`, HTTP 200). */
+export type ImportOptimisationProposalDecisionsResult = ProposalDecisionImportReport;
+
+// ------------------------------------------------------------------------------------
 // importRunDecisions - POST /runs/{run_id}/decision-imports
 // ------------------------------------------------------------------------------------
 
@@ -3849,6 +3982,32 @@ export type IssueTokenInput = {
 export type IssueTokenResult = IssueTokenResponse;
 
 // ------------------------------------------------------------------------------------
+// listAcceptedOptimisationProposals - GET /optimisation-proposals/accepted
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Accepted Optimisation Proposals
+ *
+ * The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of proposals the filters match, on every page. Any one role, `role:admin|expert|viewer`.
+ */
+export type ListAcceptedOptimisationProposalsInput = {
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+    project_uid?: ProjectUid;
+    section_code?: ProjectSection;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAcceptedOptimisationProposals` (`application/json`, HTTP 200). */
+export type ListAcceptedOptimisationProposalsResult = AcceptedOptimisationProposalPage;
+
+// ------------------------------------------------------------------------------------
 // listAnalysisPresets - GET /analysis/presets
 // ------------------------------------------------------------------------------------
 
@@ -3893,7 +4052,7 @@ export type ListAnalysisProfilesResult = AnalysisProfileList;
 /**
  * List assignments.
  *
- * Any one role. An administrator reads every assignment (`mine=true` narrows to the ones currently given to them); an expert reads only the assignments currently given to them, whatever `mine` says. `status` and `project_uid` narrow the list; newest first, ordered by `(created_at, assignment_uid)`.
+ * Any one role. An administrator reads every assignment (`mine=true` narrows to the ones currently given to them); an expert reads only the assignments currently given to them, whatever `mine` says. `status` and `project_uid` narrow the list; newest first, ordered by `(created_at, assignment_uid)`. `total` is the number of assignments the caller may read under every filter of the request, and `overview` gives each of the five statuses with its count over the scope filters only (`project_uid`, `mine` and what the caller may read), so each count is what choosing that status would list.
  */
 export type ListAssignmentsInput = {
   /** Query string parameters. */
@@ -3914,6 +4073,30 @@ export type ListAssignmentsInput = {
 
 /** Success body of `listAssignments` (`application/json`, HTTP 200). */
 export type ListAssignmentsResult = AssignmentPage;
+
+// ------------------------------------------------------------------------------------
+// listAuthEvents - GET /auth-events
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the access journal.
+ *
+ * Requires `admin`. The append-only journal of sign-ins and what changes an account's access, newest first: `sign_in_succeeded`, `sign_in_blocked` (a refused attempt that started a cooling-off period, at most one per account per period -- refusals that start none and attempts on an unknown login are not journalled), `password_changed`, `password_reset`, `role_granted`, `role_revoked` and `sessions_ended`. An account is named by identity and by its label now; the journal never holds a password, a token, an address or a login as typed. The cursor is the last event's identity.
+ */
+export type ListAuthEventsInput = {
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAuthEvents` (`application/json`, HTTP 200). */
+export type ListAuthEventsResult = AuthEventPage;
 
 // ------------------------------------------------------------------------------------
 // listComparisonAiLinks - GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-links
@@ -4386,6 +4569,8 @@ export type ListDocumentTagsResult = DocumentTagList;
  * The item is a `DocumentVersion` because that is what `uploadDocument` publishes into this same collection: the `GET` of a collection returns a page of exactly what its `POST` returns, which is the rule `listProjects` follows against `createProject`. This surface has no separate `Document` resource and does not acquire one here.
  *
  * An unknown project is `404`, never an empty page: "this project has nothing in it yet" is a different answer from "there is no such project".
+ *
+ * `UI-PARITY-DOC-AUDIT` (contract 1.34.0): each item carries `audit`, the audit state of the version it shows (`DocumentAudit`), read for the page in one statement and never one request per document. No other operation that returns a `DocumentVersion` carries it. The optional `audit_state` filter and the `order` parameter are applied by the server to the whole listing before it is paged. `UI-A-47` (contract 1.40.0): `audit.active_run` names the run of the version that is in flight, read in the same statement.
  */
 export type ListDocumentsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents`. */
@@ -4394,12 +4579,16 @@ export type ListDocumentsInput = {
   };
   /** Query string parameters. */
   query?: {
+    /** `UI-PARITY-DOC-AUDIT` (contract 1.34.0, `UI-A-38`): only the documents whose current version is in this audit state (`DocumentAudit.state`: `not_run`, `clean`, `awaiting_decision` or `checked`); every document when absent. «Не запускались» is `not_run`. It is applied to the whole listing before the listing is paged, so the cursor and the end of the listing are those of the narrowed listing, and a screen that follows the cursors counts exactly the documents in that state. It composes with `section_code`, `include_archived` and `tag`. */
+    audit_state?: "not_run" | "clean" | "awaiting_decision" | "checked";
     /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
     cursor?: Cursor;
     /** Include archived accounts. Absent is `false`. */
     include_archived?: boolean;
     /** Page size. */
     limit?: number;
+    /** `UI-PARITY-DOC-AUDIT` (contract 1.34.0, `UI-A-49`): the order of the whole listing. `published` (the default) is the order the operation always had, newest first. `audit` is the original's order of a section, decided by the server so that it holds across pages: documents the expert has checked (`checked`) first, then documents processed and not yet decided on (`clean`, `awaiting_decision`), then documents never audited (`not_run`); within each group by `display_title` in natural Russian order (runs of digits compare as numbers, so «АР1-2» precedes «АР1-10»; letter case and the marks on a letter such as «ё» are ignored), and by `version_uid` among equal names. The cursor is built on the identity and resumes after its row in the ordered listing; presented under another `order` it yields that listing's continuation or an empty page, never a page from another listing. The order follows each document's audit state at the time of the request, so a document that changes state between two pages can appear on both or on neither; a screen that needs the whole listing reads it again from the first page. */
+    order?: "published" | "audit";
     /** Only the documents whose current version is confirmed for this section (its `classification.section_code`); every document when absent. A document whose current version has no confirmed classification never matches. `UI-PARITY-P0E` (contract 1.20.0, ruling `R-151l`): the section page lists one section's documents without walking the whole project. A cursor resumes after its row in the filtered listing; presented under another filter it yields that listing's continuation or an empty page, never a page from another listing. */
     section_code?: ProjectSection;
     /** `R-151e`: only the documents carrying this tag, regardless of case. */
@@ -4706,7 +4895,7 @@ export type ListOptimisationPassesResult = OptimisationPassList;
 /**
  * List Optimisation Proposals
  *
- * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
+ * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`. `UI-B-07` (contract 1.40.0): each proposal carries `saving_percent`, the percent of the current unit price it saves.
  */
 export type ListOptimisationProposalsInput = {
   /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/proposals`. */
@@ -4902,6 +5091,29 @@ export type ListReleasesInput = {
 
 /** Success body of `listReleases` (`application/json`, HTTP 200). */
 export type ListReleasesResult = ReleaseList;
+
+// ------------------------------------------------------------------------------------
+// listRunFindingBlocks - GET /runs/{run_id}/finding-blocks
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Run Finding Blocks
+ *
+ * `UI-PARITY-C6` (contract 1.41.0): which portal blocks a finding's evidence sits in, for the original's block thumbnails under a finding and the number of findings on a block tile. Derived on read, nothing stored: the evidence's characters are located on their page by the run's text-layer block index (the line boxes) and the page inventory (the page sizes), and a portal block holds the evidence when it covers at least half of the evidence's box on that page. One item per published finding, `portal_block_ids` in the portal list's order and empty when no block holds the evidence; `unlinked_pages` are the pages where the portal's raster does not describe the PDF page and no link can be derived (their blocks are unknown, not free of findings). A run without text-layer geometry, or a version without portal geometry, answers `status: "not_produced"` and no items. An unknown run is `404`. Any one role (`R-80`).
+ */
+export type ListRunFindingBlocksInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/finding-blocks`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listRunFindingBlocks` (`application/json`, HTTP 200). */
+export type ListRunFindingBlocksResult = RunFindingBlockLinks;
 
 // ------------------------------------------------------------------------------------
 // listRunFindings - GET /runs/{run_id}/findings
@@ -5886,7 +6098,7 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 /**
  * Reaudit Run
  *
- * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection. New served re-audits require fresh confirmed cost consent from estimateRunCost with reaudit_of_run_id before any new spend; the parent approval is never reused. Accepted historical command keys replay their recorded outcome.
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). `AR-V3-OPT-IN`: the source must be a run of the standard analysis. A member of an AR v3 group is refused with `409 conflict` and `conflict_reason` `ar_v3_member_not_repeatable` before the key is claimed, and nothing is written: the repeat would route by the section now and silently become the other analysis. AR v3 is repeated by a new startArV3BetaGroup. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection. New served re-audits require fresh confirmed cost consent from estimateRunCost with reaudit_of_run_id before any new spend; the parent approval is never reused. Accepted historical command keys replay their recorded outcome.
  */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
@@ -7162,7 +7374,11 @@ export type SetWorkerIntakeResult = ExecutionWorker;
 // startArV3BetaGroup - POST /ar-v3-beta/groups
 // ------------------------------------------------------------------------------------
 
-/** Start Ar V3 Beta Group */
+/**
+ * Start Ar V3 Beta Group
+ *
+ * `AR-V3-OPT-IN`: AR v3 is an opt-in analysis and its own operation; `startRun` and `reauditRun` never reach it, and no default, preset or repeat starts it. While a reviewed pack is installed and the deployment has not allowed starts (`AR_V3_BETA_START_ALLOWED`, off by default; getArV3BetaPackStatus.start_allowed says which), the answer is `409 conflict` with `conflict_reason` `ar_v3_start_not_enabled` and nothing is written (no command, run, group or job). A repeat of an accepted key replays the group it created whether or not starts are still allowed, and runs already accepted finish when the allowance is withdrawn. With no pack installed the answer is the `503 dependency_unavailable` it always was. Each member records the account that started it.
+ */
 export type StartArV3BetaGroupInput = {
   /** Request body, sent as `application/json`. */
   body: StartArV3BetaGroupRequest;
@@ -7426,6 +7642,36 @@ export type StartRunInput = {
 
 /** Success body of `startRun` (`application/json`, HTTP 202). */
 export type StartRunResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// startRunFromStage - POST /runs/{run_id}/start-from-stage
+// ------------------------------------------------------------------------------------
+
+/**
+ * Start Run From Stage
+ *
+ * `R-151i` (`UI-A-60`): a NEW run of the earlier run's document version that reuses the earlier run's completed outputs of every PC-01 stage before `stage_id` and computes `stage_id` and the stages after it. The earlier run is immutable history and is not changed; the new run is linked to it by `started_from_run_id` and `start_stage_id` on its `RunStatus` (not by `reaudit_of_run_id`) and records today's configuration, exactly as a re-audit does (R-82). `stage_id` is one of `page_geometry_extraction`, `document_context_build` or `text_analysis`: the first stage reuses nothing (`422 validation_failed`, `field` `stage_id`, `constraint` `nothing_to_reuse`; use `reauditRun`) and any other stage is not startable (`constraint` `stage_not_startable`). The earlier run must have ended (`409 state_transition_not_allowed`) and be a run of the standard analysis (a member of an AR v3 group is `409 conflict`, `conflict_reason` `ar_v3_member_not_repeatable`). A stage output that cannot be taken is `422 analysis_input_invalid` with `details.stage_id` (the first stage that cannot) and `details.reason`: `source_stage_not_completed`, `source_stage_version_changed`, `source_stage_output_incomplete`, `source_artifact_unavailable`, `source_artifact_changed` or `source_stage_inputs_changed`. Nothing is recomputed in place of a refused output and nothing is written. Served starts require fresh confirmed cost consent from estimateRunCost with `start_from_run_id` and `start_stage_id`: the price is for the stages the new run computes, and the digest is bound to this earlier run and stage. While a run from this earlier run and stage has not ended, a second is `409 conflict`. Accepted keys replay their recorded outcome.
+ */
+export type StartRunFromStageInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/start-from-stage`. */
+  path: {
+    run_id: RunId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: StartRunFromStageRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startRunFromStage` (`application/json`, HTTP 202). */
+export type StartRunFromStageResult = RunStatus;
 
 // ------------------------------------------------------------------------------------
 // startStageChainBatch - POST /projects/{project_uid}/stage-chain-batches
@@ -8563,6 +8809,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['decisions'],
   },
+  carryOverProposalDecisions: {
+    operationId: 'carryOverProposalDecisions',
+    method: 'POST',
+    path: '/optimisation-passes/{optimisation_pass_id}/decision-carryovers',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   changePassword: {
     operationId: 'changePassword',
     method: 'POST',
@@ -8955,6 +9215,20 @@ export const OPERATIONS = {
     errorStatuses: [422, 500, 503],
     tags: ['execution'],
   },
+  endUserSessions: {
+    operationId: 'endUserSessions',
+    method: 'POST',
+    path: '/users/{user_uid}/sessions/end',
+    pathParams: ['user_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['users'],
+  },
   enqueueComparisonLaunch: {
     operationId: 'enqueueComparisonLaunch',
     method: 'POST',
@@ -9091,6 +9365,20 @@ export const OPERATIONS = {
     requiresIdempotencyKey: false,
     requestMediaType: null,
     responseMediaType: 'text/csv',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['optimisation'],
+  },
+  exportOptimisationProposalsXlsx: {
+    operationId: 'exportOptimisationProposalsXlsx',
+    method: 'GET',
+    path: '/optimisation-passes/{optimisation_pass_id}/export.xlsx',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['optimisation'],
@@ -10019,6 +10307,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  importOptimisationProposalDecisions: {
+    operationId: 'importOptimisationProposalDecisions',
+    method: 'POST',
+    path: '/optimisation-passes/{optimisation_pass_id}/decision-imports',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'multipart/form-data',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   importRunDecisions: {
     operationId: 'importRunDecisions',
     method: 'POST',
@@ -10075,6 +10377,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 422, 500, 503],
     tags: ['auth'],
   },
+  listAcceptedOptimisationProposals: {
+    operationId: 'listAcceptedOptimisationProposals',
+    method: 'GET',
+    path: '/optimisation-proposals/accepted',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'project_uid', 'section_code'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   listAnalysisPresets: {
     operationId: 'listAnalysisPresets',
     method: 'GET',
@@ -10116,6 +10432,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['dispatch'],
+  },
+  listAuthEvents: {
+    operationId: 'listAuthEvents',
+    method: 'GET',
+    path: '/auth-events',
+    pathParams: [],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['users'],
   },
   listComparisonAiLinks: {
     operationId: 'listComparisonAiLinks',
@@ -10332,7 +10662,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/projects/{project_uid}/documents',
     pathParams: ['project_uid'],
-    queryParams: ['cursor', 'include_archived', 'limit', 'section_code', 'tag'],
+    queryParams: ['audit_state', 'cursor', 'include_archived', 'limit', 'order', 'section_code', 'tag'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -10620,6 +10950,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 500, 503],
     tags: ['releases'],
+  },
+  listRunFindingBlocks: {
+    operationId: 'listRunFindingBlocks',
+    method: 'GET',
+    path: '/runs/{run_id}/finding-blocks',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['findings'],
   },
   listRunFindings: {
     operationId: 'listRunFindings',
@@ -11950,6 +12294,20 @@ export const OPERATIONS = {
     successStatuses: [202],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['runs'],
+  },
+  startRunFromStage: {
+    operationId: 'startRunFromStage',
+    method: 'POST',
+    path: '/runs/{run_id}/start-from-stage',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [202],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   startStageChainBatch: {
     operationId: 'startStageChainBatch',

@@ -45,6 +45,9 @@ from typing_extensions import TypeAliasType
 __all__ = [
     "Account",
     "AccountPage",
+    "AuthEvent",
+    "AuthEventPage",
+    "AuthEventType",
     "AnalysisProfileId",
     "AnalysisProfileList",
     "AnalysisProfileListItem",
@@ -210,6 +213,7 @@ __all__ = [
     "ArV3GroupCostEstimateRequest",
     "RunCostEstimate",
     "ReauditRunRequest",
+    "StartRunFromStageRequest",
     "SubmitRegistrationRequest",
     "UpdateMyProfileRequest",
     "UpdateUserRequest",
@@ -433,6 +437,7 @@ __all__ = [
     "AssignmentEventKind",
     "AssignmentPage",
     "AssignmentStatus",
+    "AssignmentStatusCount",
     "AssignmentTransitionKind",
     "AssignmentUid",
     "CreateAssignmentRequest",
@@ -1045,7 +1050,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.33.0"]
+    contract_version: Literal["1.42.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1260,6 +1265,54 @@ class VersionUploadKind(str, enum.Enum):
     COMPARISON_PDF = "comparison_pdf"
 
 
+class DocumentActiveRun(_Object):
+    """`UI-A-47` (contract 1.40.0): the run of a version that is in flight -- admitted and not yet terminal.
+
+    `state` is `queued` (waiting for an executor), `running` or `validating`; a `created` run has not been admitted and
+    a terminal run is not active. Only the standard analysis is named here: a run of an AR v3 group is not (as it is
+    never the version's result). No progress figure is carried: the run reports its stages, and a figure of
+    «пакет n/m» would need a plan of its own (`D-345`).
+    """
+
+    run_id: RunId
+    state: Literal["queued", "running", "validating"]
+
+
+class DocumentAudit(_Object):
+    """The audit of one version, as `listDocuments` shows it on each document (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
+
+    The per-document form of the counters of `DocumentAuditCounts`, read by the same rules (`R-150n`, `R-150p`,
+    `R-150r`, `R-150s`, `R-150t`): the version's **result run** is its latest run in state `published` or `partial`,
+    ordered by `(created_at, run_id)` as `listRuns` orders them. A newer run still in flight does not displace it,
+    and a `failed` or `cancelled` run is not a result.
+
+    `state` is one of four words. `not_run`: no result run (never run, run only to `failed` or `cancelled`, or only
+    in flight); there is then no `result_run_id`, and a failed or cancelled latest run does not change that, so the
+    chip «отказ» (`R-150r`) is a marking of the screen's own and not a fifth state. `clean`: a result run that
+    published no finding, a state of its own (`R-150n`). `awaiting_decision`: a result run with at least one finding
+    whose current verdict is undecided (`pending` or `needs_manual_review`). `checked`: a result run, every finding
+    decided. `partial` is not a fifth state: it is true when the result run is `partial` and marks the document in
+    any of the four states (`R-150s`).
+
+    `finding_count` is the number of published findings of the result run and `undecided_finding_count` the number of
+    those still undecided; both are zero when there is no result run. Optimisation proposals are not part of any
+    figure (`R-150u`).
+
+    `active_run` (`UI-A-47`, contract 1.40.0) names the version's run in flight -- its latest run of the standard
+    analysis in state `queued`, `running` or `validating`, by the order of the result run -- and is absent when none
+    is. It is a fact beside the four words and changes none of them: a document whose first run is in flight is still
+    `not_run`, and a `checked` one with a re-run in flight is still `checked`.
+    """
+
+    state: Literal["not_run", "clean", "awaiting_decision", "checked"]
+    partial: bool
+    #: The result run the card links to «Разбор»; absent exactly when `state` is `not_run`.
+    result_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    finding_count: Annotated[int, Field(ge=0)]
+    undecided_finding_count: Annotated[int, Field(ge=0)]
+    active_run: DocumentActiveRun = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
 class DocumentVersion(_Object):
     version_uid: VersionUid
     document_uid: DocumentUid
@@ -1293,6 +1346,11 @@ class DocumentVersion(_Object):
     #: `R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them.
     tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version. Present on the items of `listDocuments`
+    #: only, where it is the audit of the document's current version; absent from every other answer that carries a
+    #: `DocumentVersion` (`uploadDocument`, `uploadDocumentVersion`, `getDocumentVersion`, `listVersions`,
+    #: `setDocumentArchived`, `renameDocument`, `setDocumentTags`), which read no runs.
+    audit: DocumentAudit = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DocumentVersionPage(_Object):
@@ -1411,6 +1469,31 @@ class VersionSheetLabelList(_Object):
     items: list[VersionSheetLabel]
 
 
+class FindingBlockLink(_Object):
+    """`UI-PARITY-C6` (contract 1.41.0): the portal blocks that hold one finding's evidence."""
+
+    finding_uid: FindingUid
+    #: The blocks whose box covers at least half of the box of some evidence item, in the portal list's order; empty
+    #: when the finding is on a page where a link can be derived and no block holds its evidence. Never a block the
+    #: evidence is not in.
+    portal_block_ids: list[PortalBlockId]
+
+
+class RunFindingBlockLinks(_Object):
+    """`UI-PARITY-C6`: a run's findings and the portal blocks their evidence sits in, derived on read from the run's text
+    layer geometry, its page inventory and the version's portal blocks (``docs/program/UI-PARITY-01.md``); nothing is
+    stored and the evidence is not changed. One item per published finding of the run, ``portal_block_ids`` empty where
+    no block holds the evidence. ``unlinked_pages`` are the pages of the portal geometry on which no link can be derived
+    (the portal's raster does not describe the PDF page): a block of such a page is **unknown**, never "no findings".
+    ``not_produced`` and no items while the run has no text-layer geometry or the version no portal geometry."""
+
+    run_id: RunId
+    version_uid: VersionUid
+    status: Literal["produced", "not_produced"]
+    unlinked_pages: list[Annotated[int, Field(ge=1)]]
+    items: list[FindingBlockLink]
+
+
 class PortalBlockPage(_Object):
     """One page of a version's portal blocks, ordered by page, ordinal (null last) and id.
 
@@ -1444,6 +1527,11 @@ class RunCostEstimateRequest(_Object):
     #: `EXEC2-SEAL-2`. Exclusive with ``executor_connection_id`` and ``preset_id``.
     executor_group_id: ExecutorGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151i` (contract 1.42.0). The price of a run started from ``start_stage_id`` of this earlier run; both or neither,
+    #: and exclusive with ``reaudit_of_run_id``, the connection, the preset, the group and ``relaxed_limits`` (the new run
+    #: follows today's route, as a re-audit does).
+    start_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class ArV3GroupCostEstimateRequest(_Object):
@@ -1475,6 +1563,12 @@ class RunCostEstimate(_Object):
     recommended_ceiling_micros: Annotated[int, Field(ge=0)]
     currency: Literal["USD"]
     relaxed_limits: bool
+    #: `R-151i` (contract 1.42.0). Present for the estimate of a run started from a stage: the earlier run, the first stage
+    #: the new run computes, the stages it takes from the earlier run and the stages it computes (the price is for those).
+    start_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reused_stage_ids: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    computed_stage_ids: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class StartRunRequest(_Object):
@@ -1500,6 +1594,13 @@ class StartRunRequest(_Object):
 
 
 class ReauditRunRequest(_Object):
+    cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class StartRunFromStageRequest(_Object):
+    """`R-151i` (contract 1.42.0): the first stage the new run computes; the earlier stages are taken from the run in the path."""
+
+    stage_id: StageId
     cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
@@ -1620,6 +1721,10 @@ class ArV3BetaPackStatus(_Object):
     review: ArV3BetaPackReview = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `AR-V3-OPT-IN` (contract 1.38.0). Present exactly when `state` is `installed`: whether this deployment allows a
+    #: start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`). Installed is the capability, this is the permission;
+    #: a pack that is installed with `start_allowed` false still executes, shows and reviews what was accepted.
+    start_allowed: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class StageState(_Object):
@@ -1666,6 +1771,10 @@ class RunQueueReason(str, enum.Enum):
 class RunStatus(_Object):
     run_id: RunId
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151i` (contract 1.42.0): the earlier run whose stage outputs this run reuses and the first stage it computes
+    #: itself (every earlier PC-01 stage is the earlier run's). Absent for a run started from a version or as a re-audit.
+    started_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     project_uid: ProjectUid
     version_uid: VersionUid
     state: RunState
@@ -1737,6 +1846,20 @@ class RunStatus(_Object):
     started_by_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     started_by_label: Annotated[str, Field(min_length=1, max_length=254)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `AR-V3-OPT-IN` (contract 1.38.0). Which analysis produced the run: `standard` (the text profile the section table
+    #: routes to) or `ar_v3_beta` (one run of a six-run AR v3 group). Derived from the pinned profile and bundle pair,
+    #: nothing else. A run holds exactly one analysis; no field of a run mixes the results of the two.
+    analysis_kind: Literal["standard", "ar_v3_beta"] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    #: Members of an AR v3 group only: the group and the scope (`F1` .. `S2`) the run is one of.
+    ar_v3_group_id: ArV3RunGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    ar_v3_scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    #: `UI-A-65` / `UI-B-45` (contract 1.40.0): the run's estimated finish, by the rule of
+    #: `ExecutionQueueItem.estimated_finish_at` (`R-151u`) and by the same function -- the job's first attempt plus the
+    #: median duration of similar recent runs. Absent while the run's job is not leased or running, before its first
+    #: attempt, and without enough similar history; never invented.
+    estimated_finish_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class RunStatusPage(_Object):
@@ -1907,6 +2030,45 @@ class DecisionImportReport(_Object):
     unchanged: Annotated[int, Field(ge=0)]
     refused: Annotated[int, Field(ge=0)]
     rows: list[DecisionImportRow]
+
+
+class ImportProposalDecisionsRequest(_Object):
+    """`UI-B-15` (contract 1.35.0): the multipart body of ``importOptimisationProposalDecisions``.
+
+    ``file`` is the pass's workbook as ``exportOptimisationProposalsXlsx`` produced it, edited, at most 10 MiB.
+    """
+
+    file: Annotated[UploadFile, WithJsonSchema(_BINARY_STRING)]
+
+
+class ProposalDecisionImportRefusal(str, enum.Enum):
+    """Why a row of the proposals workbook was refused."""
+
+    NO_PROPOSAL_ID = "no_proposal_id"
+    DUPLICATE_PROPOSAL = "duplicate_proposal"
+    UNKNOWN_PROPOSAL = "unknown_proposal"
+    UNKNOWN_DECISION = "unknown_decision"
+    COMMENT_REQUIRED = "comment_required"
+    COMMENT_TOO_LONG = "comment_too_long"
+
+
+class ProposalDecisionImportRow(_Object):
+    """`UI-B-15`: one row of «Предложения» that names an ID or a decision; the proposal's identity only for a proposal of the pass."""
+
+    row: Annotated[int, Field(ge=2)]
+    outcome: DecisionImportOutcome
+    optimisation_proposal_id: OptimisationProposalId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reason: ProposalDecisionImportRefusal = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ProposalDecisionImportReport(_Object):
+    """`UI-B-15`: what an import of edited proposal decisions did, row by row, in sheet order."""
+
+    optimisation_pass_id: OptimisationPassId
+    recorded: Annotated[int, Field(ge=0)]
+    unchanged: Annotated[int, Field(ge=0)]
+    refused: Annotated[int, Field(ge=0)]
+    rows: list[ProposalDecisionImportRow]
 
 
 class SetDocumentTagsRequest(_Object):
@@ -2160,6 +2322,19 @@ class NormCurrentSnapshot(_Object):
 # --- findings ----------------------------------------------------------------------
 
 
+class DecisionCarriedFrom(_Object):
+    """`UI-A-73` (contract 1.39.0): where a carried decision came from -- the decision of an earlier version's finding
+    that an expert carried over to this finding (`W59-DECISION-CARRYOVER-01`).
+
+    ``decision_id`` is the source decision's own identity and ``finding_uid`` and ``version_uid`` the finding and the
+    version it was made on. ``version_ordinal`` is the version's display order («V2») and is never an identity."""
+
+    decision_id: DecisionId
+    finding_uid: FindingUid
+    version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
+
+
 class Evidence(_Object):
     evidence_ordinal: Annotated[int, Field(ge=0)]
     page_number: Annotated[int, Field(ge=1)]
@@ -2260,6 +2435,11 @@ class Finding(_Object):
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
+    #: `UI-A-73` (contract 1.39.0): where the decision that carries ``current_verdict`` came from, when an expert carried
+    #: it over from an earlier version; absent when the verdict was decided directly (and for every verdict decided
+    #: before the field existed).
+    current_verdict_carried_from: DecisionCarriedFrom = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class FindingDetail(_Object):
@@ -2297,6 +2477,9 @@ class FindingDetail(_Object):
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
+    #: `UI-A-73` (contract 1.39.0): as on ``Finding``.
+    current_verdict_carried_from: DecisionCarriedFrom = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
     latest_comment: str | None = Field(default=None, json_schema_extra=optional_property)
     decision_event_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
@@ -2490,6 +2673,9 @@ class DecisionEvent(_Object):
     comment: str | None = Field(default=None, json_schema_extra=optional_property)
     author_label: Annotated[str, Field(min_length=1, max_length=128)]
     recorded_at: datetime
+    #: `UI-A-73` (contract 1.39.0): the decision this event carries over from an earlier version's finding; absent for an
+    #: event an expert made directly (and for every event written before the field existed).
+    carried_from: DecisionCarriedFrom = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class AppendDecisionResponse(_Object):
@@ -2538,6 +2724,8 @@ class DecisionRecord(_Object):
     finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
     current_verdict: Verdict
     decision_event_count: Annotated[int, Field(ge=0)]
+    #: `UI-A-73` (contract 1.39.0): as on ``DecisionEvent``.
+    carried_from: DecisionCarriedFrom = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DecisionRecordPage(_Object):
@@ -2882,10 +3070,58 @@ class Account(_Object):
     profile_complete: bool
     is_default_credential: bool
     archived_at: datetime | None
+    #: Contract 1.36.0 (`UI-A-92`): the instant of the account's latest successful sign-in, read from the access
+    #: journal; null when none is recorded (it never signed in, or signed in before the journal began).
+    last_sign_in_at: datetime | None
 
 
 class AccountPage(_Object):
     items: list[Account]
+    page: PageInfo
+
+
+class AuthEventType(str, enum.Enum):
+    """Contract 1.36.0 (`UI-A-94`): the kinds of line the access journal holds, the ``access.*`` events of its writer.
+
+    ``sign_in_succeeded``; ``sign_in_blocked`` (a refused attempt that started a cooling-off period, at most one per
+    account per period); ``password_changed`` (the account's own); ``password_reset`` (an administrator's temporary
+    password); ``role_granted`` and ``role_revoked``; ``sessions_ended`` (an administrator ended every session of the
+    account).
+    """
+
+    SIGN_IN_SUCCEEDED = "sign_in_succeeded"
+    SIGN_IN_BLOCKED = "sign_in_blocked"
+    PASSWORD_CHANGED = "password_changed"
+    PASSWORD_RESET = "password_reset"
+    ROLE_GRANTED = "role_granted"
+    ROLE_REVOKED = "role_revoked"
+    SESSIONS_ENDED = "sessions_ended"
+
+
+class AuthEvent(_Object):
+    """Contract 1.36.0 (`UI-A-94`): one line of the access journal, as it was recorded; never changed.
+
+    Never a password, a token, an address or a login as typed: the account is named by identity and by the label it has
+    now, and an event about an account that has since been deleted keeps its identity with a null label.
+    """
+
+    event_id: Annotated[str, Field(pattern=rf"^evt_{_ULID}$")]
+    event_type: AuthEventType
+    occurred_at: datetime
+    subject_user_uid: UserUid
+    subject_label: Annotated[str, Field(min_length=1, max_length=254)] | None
+    actor_user_uid: UserUid | None
+    actor_label: Annotated[str, Field(min_length=1, max_length=254)] | None
+    source: Literal["api", "host_cli"]
+    role: Role | None
+    failures: Annotated[int, Field(ge=1)] | None
+    default_credential: bool | None
+
+
+class AuthEventPage(_Object):
+    """Contract 1.36.0 (`UI-A-94`): one page of the access journal, newest first."""
+
+    items: list[AuthEvent]
     page: PageInfo
 
 
@@ -2991,9 +3227,22 @@ class AssignmentDetail(_Object):
     history: list[AssignmentEvent]
 
 
+class AssignmentStatusCount(_Object):
+    """Contract 1.36.0: how many assignments stand in one status."""
+
+    status: AssignmentStatus
+    count: Annotated[int, Field(ge=0)]
+
+
 class AssignmentPage(_Object):
     items: list[Assignment]
     page: PageInfo
+    #: Contract 1.36.0: how many assignments the caller may read under every filter of the request, the status included.
+    total: Annotated[int, Field(ge=0)]
+    #: Contract 1.36.0: every status with its count over the request's scope filters (`project_uid`, `mine` and what the
+    #: caller may read) and not its `status` filter, in the order of ``AssignmentStatus``; a status with none is 0. These
+    #: are the numbers of the dispatcher's state chips: each is what choosing that status would list.
+    overview: list[AssignmentStatusCount]
 
 
 class ProductVersion(_Object):
@@ -3148,6 +3397,7 @@ class ComparisonRefusal(_Object):
         "analysis_missing",
         "run_not_of_version",
         "run_not_published",
+        "analysis_not_comparable",
         "text_unavailable",
         "text_too_large",
     ]
@@ -4106,6 +4356,8 @@ ProposalDecisionId = TypeAliasType(
 #: (the product of a price difference below 10^14 by such a quantity, at most twelve
 #: decimals), plain text with no exponent and no trailing zero.
 _EXACT_DECIMAL = r"^(0|[1-9][0-9]{0,26})(\.[0-9]{0,11}[1-9])?$"
+#: `UI-B-07` (contract 1.40.0): a percent between 0 and 100 with at most two decimals, no trailing zero.
+_PERCENT = r"^(0|100|(0|[1-9][0-9]?)\.[0-9]?[1-9]|[1-9][0-9]?)$"
 #: The share of shared words of two names, ``0`` to ``1`` with at most four decimals.
 _SIMILARITY = r"^(0|1|0\.[0-9]{0,3}[1-9])$"
 _SPEC_ROW_KEY = r"^sr-[0-9a-f]{32}$"
@@ -4138,11 +4390,15 @@ class ProposalAnalogBasis(str, enum.Enum):
 
 class ProposalVerdict(str, enum.Enum):
     """An expert's verdict on a proposal. ``revise`` says the analog is right in principle
-    and the proposal needs changing; its comment is required."""
+    and the proposal needs changing; its comment is required. ``revoke`` (`UI-B-12`, contract
+    1.35.0, «Снять решение») withdraws the decision in force: it is one more appended event, it
+    takes the proposal back to ``pending``, and it is refused (``409 conflict``,
+    ``conflict_reason`` ``no_decision_to_revoke``) when no decision stands."""
 
     ACCEPT = "accept"
     REJECT = "reject"
     REVISE = "revise"
+    REVOKE = "revoke"
 
 
 class ProposalDecisionState(str, enum.Enum):
@@ -4168,12 +4424,16 @@ class ProposalDecisionCounts(_Object):
 class OptimisationPass(_Object):
     """One optimisation pass, pinned to everything it read: the version, its published run
     and that run's text layer, the price-list revision and the vendor-list revision (global
-    or the project's own, ``vendor_list_source``), and the three algorithm versions."""
+    or the project's own, ``vendor_list_source``), and the three algorithm versions.
+
+    ``version_ordinal`` (contract 1.37.0, `UI-B-14`) is the display order of the version the pass was started over
+    («V2»), so a screen can name an earlier version's pass; it is never an identity."""
 
     optimisation_pass_id: OptimisationPassId
     project_uid: ProjectUid
     document_uid: DocumentUid
     version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
     run_id: RunId
     text_layer_sha256: Sha256
     price_list_id: PriceListId
@@ -4210,8 +4470,27 @@ class ProposalPosition(_Object):
     vendor: Annotated[str, Field(min_length=1, max_length=500)] | None
 
 
+class ProposalDecisionCarriedFrom(_Object):
+    """`UI-B-14` (contract 1.37.0): where a carried decision came from -- the decision of an earlier version's pass
+    that an expert carried over to this proposal.
+
+    ``proposal_decision_id`` is the source decision's own identity and ``optimisation_pass_id`` and ``version_uid`` the
+    pass and version it was made in. ``version_ordinal`` is the version's display order («V2») and is never an identity.
+    """
+
+    proposal_decision_id: ProposalDecisionId
+    optimisation_pass_id: OptimisationPassId
+    version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
+
+
 class ProposalDecision(_Object):
-    """One appended expert decision. Never changed; the proposal's latest one is current."""
+    """One appended expert decision. Never changed; the proposal's latest one is current -- unless
+    that is a ``revoke``, which withdrew the decision before it and left the proposal ``pending``.
+
+    ``carried_from`` (`UI-B-14`) is ``null`` for a decision an expert made directly and names the source when the
+    expert carried it over from an earlier version's pass; the decision is the confirming expert's own either way
+    (``actor_user_uid``), and a later decision on the proposal supersedes it like any other."""
 
     proposal_decision_id: ProposalDecisionId
     optimisation_proposal_id: OptimisationProposalId
@@ -4220,6 +4499,7 @@ class ProposalDecision(_Object):
     actor_user_uid: UserUid
     actor_label: Annotated[str, Field(min_length=1, max_length=254)]
     decided_at: datetime
+    carried_from: ProposalDecisionCarriedFrom | None
 
 
 class OptimisationProposal(_Object):
@@ -4263,6 +4543,10 @@ class OptimisationProposal(_Object):
     rationale: Annotated[str, Field(min_length=1, max_length=10000)]
     current_verdict: ProposalDecisionState
     current_decision: ProposalDecision | None
+    #: `UI-B-07` (contract 1.40.0): how much cheaper the proposed unit price is than the current one, in percent of the
+    #: current unit price, rounded half up to two decimals; absent when the current unit price is zero.
+    saving_percent: Annotated[str, Field(pattern=_PERCENT)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class OptimisationProposalPage(_Object):
@@ -4288,6 +4572,29 @@ class DecideOptimisationProposalRequest(_Object):
     )  # type: ignore[assignment]
 
 
+class CarryOverProposalDecisionsRequest(_Object):
+    """`UI-B-14` (contract 1.37.0): the pass whose decisions in force are carried into the pass of the path."""
+
+    source_optimisation_pass_id: OptimisationPassId
+
+
+class ProposalDecisionCarryoverReport(_Object):
+    """`UI-B-14`: what a carryover did. Every decision in force of the source pass (``source_decided``) is counted in
+    exactly one of four outcomes: ``carried`` (appended to the target pass), ``target_decided`` (the one proposal of the
+    target with the same content already has an event, which stands), ``ambiguous`` (more than one proposal of either
+    pass has that content, so nothing is guessed) or ``unmatched`` (no proposal of the target pass has it).
+    ``source_version_ordinal`` is the display order of the source's version («V2»), never an identity."""
+
+    optimisation_pass_id: OptimisationPassId
+    source_optimisation_pass_id: OptimisationPassId
+    source_version_ordinal: Annotated[int, Field(ge=1)]
+    source_decided: Annotated[int, Field(ge=0, le=30000)]
+    carried: Annotated[int, Field(ge=0, le=30000)]
+    target_decided: Annotated[int, Field(ge=0, le=30000)]
+    ambiguous: Annotated[int, Field(ge=0, le=30000)]
+    unmatched: Annotated[int, Field(ge=0, le=30000)]
+
+
 class ProposalDecisionResult(_Object):
     """The decision appended (or replayed) and the proposal as it now stands."""
 
@@ -4299,6 +4606,53 @@ class ProposalDecisionList(_Object):
     """Every decision of one proposal, oldest first; the last is current."""
 
     items: list[ProposalDecision]
+
+
+class AcceptedOptimisationProposal(_Object):
+    """`UI-B-27` (contract 1.35.0): one proposal whose decision in force is an acceptance, with where it belongs
+    (project, document set, version, the version's section) and the acceptance itself.
+
+    A row is named by its proposal's own identity (``optimisation_proposal_id``); ``page_number`` and ``row_position``
+    locate it in the drawing and are never an identity. The prices and the saving are the proposal's own exact decimal
+    text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number."""
+
+    optimisation_proposal_id: OptimisationProposalId
+    optimisation_pass_id: OptimisationPassId
+    proposal_decision_id: ProposalDecisionId
+    proposal_type: OptimisationProposalType
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid
+    document_name: Annotated[str, Field(min_length=1, max_length=400)]
+    version_uid: VersionUid
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    page_number: Annotated[int, Field(ge=1)]
+    row_position: Annotated[str, Field(min_length=1, max_length=100)] | None
+    row_text: Annotated[str, Field(min_length=1, max_length=8000)]
+    matched_name: Annotated[str, Field(min_length=1, max_length=2000)]
+    proposed_name: Annotated[str, Field(min_length=1, max_length=2000)]
+    proposed_vendor: Annotated[str, Field(min_length=1, max_length=500)]
+    unit: Annotated[str, Field(min_length=1, max_length=50)]
+    quantity: Annotated[str, Field(pattern=_EXACT_DECIMAL)] | None
+    current_unit_price: Annotated[str, Field(pattern=_UNIT_PRICE)]
+    proposed_unit_price: Annotated[str, Field(pattern=_UNIT_PRICE)]
+    currency: Annotated[str, Field(pattern=_CURRENCY)]
+    saving: Annotated[str, Field(pattern=_EXACT_DECIMAL)] | None
+    comment: Annotated[str, Field(min_length=1, max_length=2000)] | None
+    actor_label: Annotated[str, Field(min_length=1, max_length=254)]
+    decided_at: datetime
+    #: `D-335` (contract 1.39.0): as on ``ProposalDecision`` -- ``null`` for an acceptance an expert made directly, the
+    #: source decision (with its pass, version and the version's display ordinal) for one carried over from an earlier
+    #: version's pass.
+    carried_from: ProposalDecisionCarriedFrom | None
+
+
+class AcceptedOptimisationProposalPage(_Object):
+    """`UI-B-27`: one page of the accepted proposals, newest acceptance first, and how many match the filters."""
+
+    items: list[AcceptedOptimisationProposal]
+    page: PageInfo
+    total: Annotated[int, Field(ge=0)]
 # --- the section's combined specification (`W63-SECTION-FORM7-01`) ---------------------------
 #
 # «Оптимизация разделов»: for one section code, the Form-7 rows of every project whose document

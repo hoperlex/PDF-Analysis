@@ -13,7 +13,6 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PathnameContext, SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,6 +29,7 @@ import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 
 import { mountLive } from '../analysis-settings/live-render';
+import { RoutedAddress } from './routed-address';
 import type { LiveRender } from '../analysis-settings/live-render';
 import '../review/fixtures';
 
@@ -84,7 +84,12 @@ type Query = { category?: string; verdict?: string; cursor?: string; limit?: num
 
 const journal = vi.mocked(listDecisions);
 const projects = vi.mocked(listProjects);
-const queries = (): Query[] => journal.mock.calls.map((call) => (call[0] as { query: Query }).query);
+const everyQuery = (): Query[] => journal.mock.calls.map((call) => (call[0] as { query: Query }).query);
+/**
+ * The journal's own pages. The verdict chips (`UI-B-32`) read `total` with `limit=1` beside them; those four reads are
+ * asserted in `knowledge-base-verdict-chips.test.ts`, and are left out here so these tests keep naming the list's reads.
+ */
+const queries = (): Query[] => everyQuery().filter((query) => query.limit !== 1);
 
 beforeEach(() => {
   journal.mockReset();
@@ -116,11 +121,7 @@ function page(client: QueryClient, query: string): ReactElement {
     createElement(
       KnowledgeBaseEagerSeam.Provider,
       { value: KnowledgeBase },
-      createElement(
-        PathnameContext.Provider,
-        { value: '/knowledge-base' },
-        createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, createElement(KnowledgeBasePage)),
-      ),
+      createElement(RoutedAddress, { query }, createElement(KnowledgeBasePage)),
     ),
   );
 }
@@ -250,7 +251,41 @@ describe('the screen states its scope and how many entries match', () => {
   });
 });
 
-describe('each record says where it belongs', () => {
+// `UI-B-34`: the page opens on the original's table, as the original does; the events are one press away and cost no read.
+describe('the page opens on the table', () => {
+  let live: LiveRender | null = null;
+  afterEach(async () => {
+    await live?.unmount();
+    live = null;
+  });
+
+  it('draws the table with the project and the section in their own cells, and the events after a press, with no further read', async () => {
+    live = await mountLive(page(freshClient(), ''));
+    await settled(live);
+    expect(live.markup()).toContain('data-knowledge-base-table');
+    expect(live.markup()).not.toContain('class="am-kb__record"');
+    expect(live.markup()).toMatch(/<button[^>]*aria-pressed="true"[^>]*data-kb-view="table"/);
+    expect(visible(live.markup())).toContain('Проект Альфа АР-1');
+    const reads = queries().length;
+    expect(await press(live, 'События')).toBe(true);
+    expect(live.markup()).toContain('class="am-kb__record"');
+    expect(live.markup()).not.toContain('data-knowledge-base-table');
+    expect(await press(live, 'Таблица')).toBe(true);
+    expect(live.markup()).toContain('data-knowledge-base-table');
+    expect(queries()).toHaveLength(reads);
+  });
+
+  it('keeps the page’s paging and its project in the table: the next page is another table of the same project', async () => {
+    live = await mountLive(page(freshClient(), `project=${A}`));
+    await settled(live);
+    expect(await press(live, 'Далее')).toBe(true);
+    expect(live.markup()).toContain('data-knowledge-base-table');
+    expect(live.markup()).toContain('Решение номер 13<');
+  });
+});
+
+// `UI-B-34`: the page opens on the original's table; the place line «Проект · Документ · Раздел» is the events view's, one press away.
+describe('each record says where it belongs, in the events view', () => {
   let live: LiveRender | null = null;
   afterEach(async () => {
     await live?.unmount();
@@ -260,12 +295,14 @@ describe('each record says where it belongs', () => {
   it('prints «Проект · Документ · Раздел» with the section’s name from the catalogue', async () => {
     live = await mountLive(page(freshClient(), ''));
     await settled(live);
+    await press(live, 'События');
     expect(visible(live.markup())).toContain('Проект Альфа · АР-1 · Архитектурные решения (АР)');
   });
 
   it('drops the section, and invents no label for its absence, when the version is not classified', async () => {
     live = await mountLive(page(freshClient(), `project=${B}`));
     await settled(live);
+    await press(live, 'События');
     const text = visible(live.markup());
     expect(text).toContain('Проект Бета · АР-1');
     expect(text).not.toContain('Проект Бета · АР-1 ·');
@@ -348,7 +385,8 @@ describe('an empty page under a selection is about the selection, and the way ba
     expect(text).toContain('По выбранному отбору решений нет');
     expect(text).toContain('Сбросить категорию и вердикт');
     expect(text.match(/Все проекты/g)).toHaveLength(1);
-    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar"[^>]*>Все проекты<\/a>/);
+    // The verdict is a parameter of the address now (`D-372`), so it stays with `foo`, as every parameter that is not the project's does.
+    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar&(?:amp;)?verdict=rejected"[^>]*>Все проекты<\/a>/);
     // The scope line still states the project the reader is in. An empty page carries no record to name it, and the project list
     // does not hold it, so the line shows the uid it was given, as it does for any project the page cannot name.
     expect(view.markup()).toContain('data-journal-scope="project"');

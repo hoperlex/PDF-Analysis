@@ -25,12 +25,12 @@ import { newClient, renderScreen } from '../screens/harness';
 import { MAIN_GROUP, ROUTED_GROUP, ruleOf, seedGroups, seedRules } from './executor-groups-fixtures';
 
 describe('the tabs', () => {
-  it('are «Подключения», «Процессы», «Группы», «Правила», «Назначения», in that order', () => {
-    expect([...WORKERS_TABS]).toEqual(['connections', 'processes', 'groups', 'rules', 'routes']);
+  it('are «Обзор», «Подключения», «Процессы», «Группы», «Правила», «Назначения», in that order', () => {
+    expect([...WORKERS_TABS]).toEqual(['overview', 'connections', 'processes', 'groups', 'rules', 'routes']);
     expect(WORKERS_TABS.map((tab) => WORKERS_TAB_LABELS[tab])).toEqual([
-      'Подключения', 'Процессы', 'Группы', 'Правила', 'Назначения',
+      'Обзор', 'Подключения', 'Процессы', 'Группы', 'Правила', 'Назначения',
     ]);
-    expect(DEFAULT_WORKERS_TAB).toBe('processes');
+    expect(DEFAULT_WORKERS_TAB).toBe('overview');
     expect(WORKERS_TAB_PARAM).toBe('tab');
   });
 
@@ -45,23 +45,24 @@ describe('the tabs', () => {
     expect(tabAfterKey('processes', 'ArrowRight')).toBe('groups');
     expect(tabAfterKey('groups', 'ArrowRight')).toBe('rules');
     expect(tabAfterKey('rules', 'ArrowRight')).toBe('routes');
-    expect(tabAfterKey('routes', 'ArrowRight')).toBe('connections');
-    expect(tabAfterKey('connections', 'ArrowLeft')).toBe('routes');
+    expect(tabAfterKey('routes', 'ArrowRight')).toBe('overview');
+    expect(tabAfterKey('overview', 'ArrowLeft')).toBe('routes');
+    expect(tabAfterKey('connections', 'ArrowLeft')).toBe('overview');
     expect(tabAfterKey('groups', 'ArrowLeft')).toBe('processes');
-    expect(tabAfterKey('routes', 'Home')).toBe('connections');
+    expect(tabAfterKey('routes', 'Home')).toBe('overview');
     expect(tabAfterKey('connections', 'End')).toBe('routes');
     expect(tabAfterKey('groups', 'Enter')).toBeNull();
   });
 
-  it('render as a tablist of five, one selected, one in the tab order, one labelled panel', () => {
+  it('render as a tablist of six, one selected, one in the tab order, one labelled panel', () => {
     const markup = renderToStaticMarkup(
       createElement(WorkersTabs, { active: 'rules', onSelect: () => {}, children: 'содержимое' }),
     );
-    expect(markup.match(/role="tab"/g)).toHaveLength(5);
+    expect(markup.match(/role="tab"/g)).toHaveLength(6);
     expect(markup.match(/aria-selected="true"/g)).toHaveLength(1);
-    expect(markup.match(/tabindex="-1"/g)).toHaveLength(4);
+    expect(markup.match(/tabindex="-1"/g)).toHaveLength(5);
     expect(markup).toContain('data-workers-panel="rules"');
-    for (const label of ['Группы', 'Правила', 'Назначения']) expect(markup).toContain(`>${label}<`);
+    for (const label of ['Обзор', 'Группы', 'Правила', 'Назначения']) expect(markup).toContain(`>${label}<`);
   });
 });
 

@@ -52,7 +52,9 @@ def test_two_clones_of_one_migrated_schema_are_equal(two_clones: list[Engine]) -
     # `0046_executor_capacity_enrollment`: two more tables (`executor_enrollment`, `executor_agent_install`); no new view.
     # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): five more tables (the group store and the routing-mode journal);
     # `0048_dispatch_time_binding` adds none; no new view.
-    assert len(first["tables"]) == 129 and len(first["views"]) == 5
+    # `0053`-`0055` (tags, finding execution status, «График работ»): seven more tables; no new view (136, lane C4's stand).
+    # `0059_decision_memory`: the eight tables of the decision memory; no new view (144).
+    assert len(first["tables"]) == 144 and len(first["views"]) == 5
     assert set(first["shape"]) == {
         "columns", "constraints", "indexes", "triggers", "functions", "views", "sequences", "extensions",
     }

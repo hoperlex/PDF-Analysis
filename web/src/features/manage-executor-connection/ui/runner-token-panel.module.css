@@ -1,0 +1,41 @@
+/*
+ * «Токены клиента» (`EXEC-PULL-01`) as a dense list: a token is two lines, its name with its states and its one command, and
+ * under it the facts as a muted paragraph; the explanation of how the state is read is one line, opened on request. Colour is
+ * read from the global layer and the tokens; every length is a token.
+ */
+
+.tokens {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0 0 var(--am-gap-xs);
+  padding: 0;
+  list-style: none;
+}
+
+.token {
+  display: grid;
+  gap: var(--am-gap-2xs);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+.facts {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.fold {
+  margin: 0 0 var(--am-gap-xs);
+}
+
+.fold > summary {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}

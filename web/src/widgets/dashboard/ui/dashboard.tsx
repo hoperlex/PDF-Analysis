@@ -104,24 +104,16 @@ export function Dashboard({ projectUid = null, allProjectsHref = '/dashboard' }:
 
   return (
     <div className={styles.showcase} data-dashboard-showcase="true">
+      {/*
+        * `UI-PARITY-DENSE`: the original's overview opens on its table; this screen opened on a 220px poster with an
+        * eyebrow, a lead and an orbit drawing. One line now: the title and the scope the numbers are read over.
+        */}
       <header className={styles.hero}>
-        <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}>AuditManager / Аналитика</p>
-          <h2 className={styles.heroTitle}>Сводка по проектам</h2>
-          <p className={styles.heroDescription}>
-            Разделы, документы, находки и прогоны в едином обзоре.
-          </p>
-          <p className={styles.scope} data-dashboard-scope={projectUid === null ? 'all' : 'project'}>
-            <span className={styles.scopeKey}>Охват</span>
-            <strong className={styles.scopeValue}>{scopeName}</strong>
-          </p>
-        </div>
-        <div className={styles.heroArt} aria-hidden="true">
-          <span className={styles.orbitOuter} />
-          <span className={styles.orbitMiddle} />
-          <span className={styles.orbitInner} />
-          <span className={styles.orbitCore} />
-        </div>
+        <h2 className={styles.heroTitle}>Сводка по проектам</h2>
+        <p className={styles.scope} data-dashboard-scope={projectUid === null ? 'all' : 'project'}>
+          <span className={styles.scopeKey}>Охват</span>
+          <strong className={styles.scopeValue}>{scopeName}</strong>
+        </p>
       </header>
       <div className={styles.grid} data-widget="dashboard">
         <section className={`${styles.panel} ${styles.sections}`} aria-labelledby="dashboard-sections-heading">

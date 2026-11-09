@@ -148,6 +148,7 @@ function VersionBlocksLoaded({ projectUid, versionUid }: { readonly projectUid: 
   return (
     <PageShell
       title="Блоки"
+      surface="canvas"
       subtitle={version.data === undefined ? undefined : (version.data.display_title ?? version.data.source_filename ?? version.data.version_uid)}
     >
       <DocumentContext projectUid={projectUid} current="blocks" versionUid={versionUid} />

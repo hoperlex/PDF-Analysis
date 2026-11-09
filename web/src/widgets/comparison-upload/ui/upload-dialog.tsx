@@ -46,6 +46,7 @@ import type { Group, PrecheckProblem } from '../model/files';
 import { PRECHECK_SENTENCES, formatMebibytes, groupsOf } from '../model/files';
 
 import { SetEditor } from './set-editor';
+import { UploadWindow } from './upload-window';
 import styles from './comparison-upload.module.css';
 import type { FlowPhase, Progress, UploadFlow } from './use-upload-flow';
 import { useUploadFlow } from './use-upload-flow';
@@ -458,69 +459,71 @@ export function UploadDialog({ projectUid, mode, mayAct, onSwitch, onClose }: Up
   };
 
   return (
-    <UploadDialogView
-      zipImport={<ZipImport projectUid={projectUid} disabled={!mayAct || busy || flow.picked.length > 0} onImported={(imported) => { setNotice('ZIP проверен. Подтвердите группировку и порядок версий.'); flow.attach(imported.upload_id); }} />}
-      mode={mode}
-      phase={phase}
-      groups={groupsOf(flow.picked)}
-      skipped={flow.skipped}
-      problem={flow.problem}
-      compare={flow.compare}
-      hashing={flow.hashing}
-      upload={upload}
-      loading={uploadId !== null && flow.upload.isPending}
-      sets={sets}
-      drafts={drafts}
-      fileNames={fileNames}
-      progress={flow.progress}
-      fileFailures={flow.fileFailures}
-      missing={flow.missing}
-      failure={commandFailure ?? flow.failure}
-      unfinished={unfinished.data ?? []}
-      notice={notice}
-      mayAct={mayAct}
-      busy={busy}
-      onPick={(files, kind) => flow.add(Array.from(files), kind)}
-      onRemoveGroup={flow.removeGroup}
-      onCompare={flow.setCompare}
-      onSend={() => void flow.send()}
-      onStop={flow.stop}
-      onContinue={(files) => {
-        const again = files === null ? [] : Array.from(files).map((file) => ({ file, path: file.name, group: '' }));
-        void flow.continueSending(again);
-      }}
-      onOpenUnfinished={(item) => {
-        setNotice(null);
-        flow.attach(item.upload_id);
-      }}
-      onDraft={(setId, draft) => setDrafts((held) => ({ ...held, [setId]: draft }))}
-      onConfirm={(set) =>
-        void confirmSets([set], (current) => confirmationOf(current, drafts[current.set_id] ?? draftOf(current)))
-      }
-      onConfirmAll={() =>
-        void confirmSets(awaitingConfirmation(sets), (current) => confirmationOf(current, drafts[current.set_id] ?? draftOf(current)))
-      }
-      onProposedAll={() => void confirmSets(awaitingConfirmation(sets), proposedConfirmation)}
-      onExclude={(set) => {
-        if (uploadId !== null) void wrap(() => exclude.mutateAsync({ uploadId, setId: set.set_id }), 'Комплект исключён.');
-      }}
-      onRetry={(set) => {
-        if (uploadId !== null) void wrap(() => retry.mutateAsync({ uploadId, setId: set.set_id }), 'Комплект поставлен на повтор.');
-      }}
-      onPause={() => {
-        if (uploadId !== null) void wrap(() => act.mutateAsync({ uploadId, act: 'pause' }), 'Обработка встанет на паузу после текущего проекта.');
-      }}
-      onResume={() => {
-        if (uploadId !== null) void wrap(() => act.mutateAsync({ uploadId, act: 'resume' }), 'Обработка продолжается.');
-      }}
-      onDelete={() => {
-        if (uploadId === null) return;
-        void wrap(() => act.mutateAsync({ uploadId, act: 'cancel' }), 'Загрузка удалена.').then((ok) => {
-          if (ok) flow.forget();
-        });
-      }}
-      onSwitch={onSwitch}
-      onClose={onClose}
-    />
+    <UploadWindow onClose={onClose} escBlocked={flow.phase === 'sending' || flow.phase === 'hashing'}>
+      <UploadDialogView
+        zipImport={<ZipImport projectUid={projectUid} disabled={!mayAct || busy || flow.picked.length > 0} onImported={(imported) => { setNotice('ZIP проверен. Подтвердите группировку и порядок версий.'); flow.attach(imported.upload_id); }} />}
+        mode={mode}
+        phase={phase}
+        groups={groupsOf(flow.picked)}
+        skipped={flow.skipped}
+        problem={flow.problem}
+        compare={flow.compare}
+        hashing={flow.hashing}
+        upload={upload}
+        loading={uploadId !== null && flow.upload.isPending}
+        sets={sets}
+        drafts={drafts}
+        fileNames={fileNames}
+        progress={flow.progress}
+        fileFailures={flow.fileFailures}
+        missing={flow.missing}
+        failure={commandFailure ?? flow.failure}
+        unfinished={unfinished.data ?? []}
+        notice={notice}
+        mayAct={mayAct}
+        busy={busy}
+        onPick={(files, kind) => flow.add(Array.from(files), kind)}
+        onRemoveGroup={flow.removeGroup}
+        onCompare={flow.setCompare}
+        onSend={() => void flow.send()}
+        onStop={flow.stop}
+        onContinue={(files) => {
+          const again = files === null ? [] : Array.from(files).map((file) => ({ file, path: file.name, group: '' }));
+          void flow.continueSending(again);
+        }}
+        onOpenUnfinished={(item) => {
+          setNotice(null);
+          flow.attach(item.upload_id);
+        }}
+        onDraft={(setId, draft) => setDrafts((held) => ({ ...held, [setId]: draft }))}
+        onConfirm={(set) =>
+          void confirmSets([set], (current) => confirmationOf(current, drafts[current.set_id] ?? draftOf(current)))
+        }
+        onConfirmAll={() =>
+          void confirmSets(awaitingConfirmation(sets), (current) => confirmationOf(current, drafts[current.set_id] ?? draftOf(current)))
+        }
+        onProposedAll={() => void confirmSets(awaitingConfirmation(sets), proposedConfirmation)}
+        onExclude={(set) => {
+          if (uploadId !== null) void wrap(() => exclude.mutateAsync({ uploadId, setId: set.set_id }), 'Комплект исключён.');
+        }}
+        onRetry={(set) => {
+          if (uploadId !== null) void wrap(() => retry.mutateAsync({ uploadId, setId: set.set_id }), 'Комплект поставлен на повтор.');
+        }}
+        onPause={() => {
+          if (uploadId !== null) void wrap(() => act.mutateAsync({ uploadId, act: 'pause' }), 'Обработка встанет на паузу после текущего проекта.');
+        }}
+        onResume={() => {
+          if (uploadId !== null) void wrap(() => act.mutateAsync({ uploadId, act: 'resume' }), 'Обработка продолжается.');
+        }}
+        onDelete={() => {
+          if (uploadId === null) return;
+          void wrap(() => act.mutateAsync({ uploadId, act: 'cancel' }), 'Загрузка удалена.').then((ok) => {
+            if (ok) flow.forget();
+          });
+        }}
+        onSwitch={onSwitch}
+        onClose={onClose}
+      />
+    </UploadWindow>
   );
 }

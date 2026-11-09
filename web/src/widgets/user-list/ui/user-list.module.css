@@ -8,7 +8,13 @@
 .table { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .table th, .table td { padding: var(--am-gap-xs) var(--am-gap-sm); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .name { min-width: 0; overflow-wrap: anywhere; }
-/* The two filters on one line: each label centres its control on its own text. */
+
+/* A row is a whole target: it opens the account where a page shows the card beside the list. */
+.row { cursor: pointer; }
+.row:hover { background: var(--am-surface); }
+.row[data-selected='true'] { background: var(--am-accent-light); box-shadow: inset 3px 0 0 var(--am-accent); }
+
+/* The filters on one line: each label centres its control on its own text. */
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -20,6 +26,6 @@
   border-radius: var(--am-radius);
   background: var(--am-paper);
 }
+.scopes { display: inline-flex; flex-wrap: wrap; gap: var(--am-gap-xs); }
 .filter { display: inline-flex; align-items: center; gap: var(--am-gap-sm); }
-.filter input[type='checkbox'] { width: 16px; height: 16px; margin: 0; }
-.filter select { padding: var(--am-gap-xs) var(--am-gap-sm); font-size: var(--am-text-sm); font-weight: 400; }
+.filter select, .filter input[type='search'] { padding: var(--am-gap-xs) var(--am-gap-sm); font-size: var(--am-text-sm); font-weight: 400; }

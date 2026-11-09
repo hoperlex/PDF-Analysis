@@ -25,6 +25,7 @@
  */
 
 import { useId, useState } from 'react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 
 import type {
@@ -33,12 +34,11 @@ import type {
   OptimisationPass,
   OptimisationPassId,
   ProjectUid,
-  ProposalDecisionState,
   Role,
 } from '@/shared/api';
 import type { FailureMessage } from '@/shared/api/failure-message';
 import { failureMessage } from '@/shared/api/failure-message';
-import { formatInstant, routes } from '@/shared/lib';
+import { formatInstant, routes, useAddressState } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import {
   COMPARISON_ONLY_MARK,
@@ -49,14 +49,20 @@ import {
 } from '@/entities/document-version';
 import { projectSectionOf } from '@/entities/project';
 import {
+  PROPOSAL_PAGE_LIMIT,
   describeCounts,
   useOptimisationPasses,
   useOptimisationProposals,
 } from '@/entities/optimisation-proposal';
 import { useEvidenceDocument } from '@/features/open-evidence';
+import { CarryOverProposalDecisions } from '@/features/carry-over-proposal-decisions';
+import { ImportProposalDecisions } from '@/features/import-proposal-decisions';
 import { StartOptimisationPass } from '@/features/start-optimisation-pass';
 
+import { readProposalDecision, writeProposalDecision } from '../model/decision-filter';
+import { pageLimitOf, readProposalLayout, writeProposalLayout } from '../model/layout';
 import { useExportProposalsCsv } from '../model/use-export-proposals-csv';
+import { useExportProposalsXlsx } from '../model/use-export-proposals-xlsx';
 import styles from './optimisation-proposals.module.css';
 import { PassSummary } from './pass-summary';
 import { ProposalList } from './proposal-list';
@@ -200,17 +206,40 @@ export interface ExportProposalsViewProps {
   readonly pending: boolean;
   readonly failure: FailureMessage | null;
   readonly onDownload: () => void;
+  /** `UI-B-15`: the workbook an expert edits and loads back; absent, the table is not offered. */
+  readonly onDownloadXlsx?: (() => void) | undefined;
+  /** `UI-B-15`: «Загрузить решения», offered to an expert only. */
+  readonly importControl?: ReactNode;
+  /** `UI-B-14`: «Перенести решения из V#», offered to an expert only, and only when an earlier version has a pass. */
+  readonly carryOverControl?: ReactNode;
 }
 
-/** «Выгрузить CSV» and its refusal, from state already in hand. Rendered by the harness. */
-export function ExportProposalsView({ pending, failure, onDownload }: ExportProposalsViewProps) {
+/** «Выгрузить CSV», «Выгрузить таблицу решений» and «Загрузить решения» with the refusal, from state already in hand. Rendered by the harness. */
+export function ExportProposalsView({
+  pending,
+  failure,
+  onDownload,
+  onDownloadXlsx,
+  importControl,
+  carryOverControl,
+}: ExportProposalsViewProps) {
   return (
     <div data-proposals-export="">
       <p>
         <button type="button" className="am-button am-button--quiet" disabled={pending} onClick={onDownload}>
           Выгрузить CSV предложений
         </button>
+        {onDownloadXlsx === undefined ? null : (
+          <>
+            {' '}
+            <button type="button" className="am-button am-button--quiet" disabled={pending} onClick={onDownloadXlsx}>
+              Выгрузить таблицу решений (.xlsx)
+            </button>
+          </>
+        )}
       </p>
+      {importControl ?? null}
+      {carryOverControl ?? null}
       {failure !== null ? (
         <ErrorState
           title="Файл не выгружен"
@@ -226,15 +255,23 @@ export function ExportProposalsView({ pending, failure, onDownload }: ExportProp
 interface ActivePassProps {
   readonly passId: OptimisationPassId;
   readonly canDecide: boolean;
+  /** The set's passes, newest first: the earlier versions' decisions can be carried from them (`UI-B-14`). */
+  readonly passes: readonly OptimisationPass[];
 }
 
-function ActivePass({ passId, canDecide }: ActivePassProps) {
-  const [decision, setDecision] = useState<ProposalDecisionState | null>(null);
+function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
+  // `D-372`: the decision filter is in the address (`?decision=`; «Все» is the absent parameter), as the layout is, so a link, a
+  // reload and Back/Forward return to it. A filter is not a place to go Back to: choosing one replaces the entry.
+  const [decision, setDecision] = useAddressState(readProposalDecision, writeProposalDecision);
   const [offset, setOffset] = useState(0);
-  const proposals = useOptimisationProposals(passId, decision, offset);
+  // `UI-B-06`: the layout is in the address (`?layout=table`); the table pages by the original's fifty, the cards by their own page.
+  const [layout, setLayout] = useAddressState(readProposalLayout, writeProposalLayout);
+  const proposals = useOptimisationProposals(passId, decision, offset, pageLimitOf(layout, PROPOSAL_PAGE_LIMIT));
   const exporter = useExportProposalsCsv({ passId });
+  const workbook = useExportProposalsXlsx({ passId });
   const failure = proposals.error === null ? null : failureMessage(proposals.error);
-  const exportFailure = exporter.error === null ? null : failureMessage(exporter.error);
+  const exportError = exporter.error ?? workbook.error;
+  const exportFailure = exportError === null || exportError === undefined ? null : failureMessage(exportError);
   // `UI-B-09`: the pass's version PDF is read once for every card's «Открыть лист», as the review screen reads its own;
   // the bytes are asked for only for a pass that has proposals, so an empty pass costs no download.
   const pass = proposals.data?.optimisation_pass;
@@ -258,20 +295,39 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
       ) : null}
       {proposals.data !== undefined && failure === null ? (
         <>
-          <PassSummary pass={proposals.data.optimisation_pass} />
-          <ExportProposalsView
-            pending={exporter.isPending}
-            failure={exportFailure}
-            onDownload={exporter.download}
-          />
+          {/* `UI-B-05`: the original's strip -- the counts by decision and the buttons -- comes first; the pass's facts follow it. */}
           <ProposalList
             page={proposals.data}
             canDecide={canDecide}
             onDecision={(state) => {
-              setDecision(state);
+              setDecision(state, 'replace');
               setOffset(0);
             }}
             onPage={proposals.isPlaceholderData ? null : setOffset}
+            layout={layout}
+            onLayout={(next) => {
+              // A view, not a place: it replaces the entry. A page of one size is not a page of the other, so it starts again.
+              setLayout(next, 'replace');
+              setOffset(0);
+            }}
+            summary={
+              <details className={styles.details} data-pass-summary="">
+                <summary>Сведения о проходе</summary>
+                <PassSummary pass={proposals.data.optimisation_pass} />
+              </details>
+            }
+            actions={
+              <ExportProposalsView
+                pending={exporter.isPending || workbook.isPending}
+                failure={exportFailure}
+                onDownload={exporter.download}
+                onDownloadXlsx={workbook.download}
+                importControl={canDecide ? <ImportProposalDecisions passId={passId} /> : null}
+                carryOverControl={
+                  canDecide ? <CarryOverProposalDecisions pass={proposals.data.optimisation_pass} passes={passes} /> : null
+                }
+              />
+            }
             sheet={sheet}
           />
         </>
@@ -341,13 +397,17 @@ export function OptimisationProposals({
           Обновить
         </button>
       </div>
-      <p className={styles.rule}>
-        Предложение — отдельная сущность рядом с замечаниями, со своими решениями экспертов,
-        счётчиками и выгрузкой. Оно появляется, когда строка спецификации однозначно сопоставлена с
-        позицией прайс-листа, а в том же прайс-листе есть более дешёвая позиция той же единицы
-        измерения и валюты от поставщика из вендор-листа раздела этого комплекта. Цены берутся
-        только из прайс-листа, экономия считается только при числовом количестве.
-      </p>
+      {/* `UI-PARITY-DENSE`: what a proposal is, one click away; it was a five-line paragraph above every list. */}
+      <details className={styles.details}>
+        <summary>Как строятся предложения</summary>
+        <p className={styles.rule}>
+          Предложение — отдельная сущность рядом с замечаниями, со своими решениями экспертов,
+          счётчиками и выгрузкой. Оно появляется, когда строка спецификации однозначно сопоставлена с
+          позицией прайс-листа, а в том же прайс-листе есть более дешёвая позиция той же единицы
+          измерения и валюты от поставщика из вендор-листа раздела этого комплекта. Цены берутся
+          только из прайс-листа, экономия считается только при числовом количестве.
+        </p>
+      </details>
       {!fixed && documents.isPending ? <LoadingState what="документов проекта" /> : null}
       {!fixed && documentsFailure !== null ? (
         <ErrorState
@@ -394,7 +454,7 @@ export function OptimisationProposals({
           ) : null}
           <PassList passes={list} active={activePass} onOpen={setChosenPass} />
           {activePass !== null ? (
-            <ActivePass key={activePass} passId={activePass} canDecide={roles.includes('expert')} />
+            <ActivePass key={activePass} passId={activePass} canDecide={roles.includes('expert')} passes={list} />
           ) : null}
         </>
       ) : null}

@@ -190,6 +190,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/upload-document/model/use-upload-document-version.ts': true,
   'src/features/cancel-run/model/use-cancel-run.ts': true,
   'src/features/reaudit-run/model/use-reaudit-run.ts': true,
+  // `UI-A-60` (`R-151i`): a run started from a stage is a new run, counted by the dashboard as a re-audit is.
+  'src/features/start-run-from-stage/model/use-start-run-from-stage.ts': true,
   'src/features/set-job-priority/model/use-set-job-priority.ts': false,
   'src/features/pause-execution/model/use-pause-execution.ts': false,
   // `W54-WORKERS-WEB`: a worker's intake switch changes no number the dashboard reads.
@@ -205,6 +207,10 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // reads (a proposal is not a finding); they invalidate the `optimisation` keys instead.
   'src/features/start-optimisation-pass/model/use-start-optimisation-pass.ts': false,
   'src/features/decide-optimisation-proposal/model/use-decide-optimisation-proposal.ts': false,
+  // `UI-B-15`: a workbook's decisions are decisions on proposals, which touch no finding and no dashboard count.
+  'src/features/import-proposal-decisions/model/use-import-proposal-decisions.ts': false,
+  // `UI-B-14`: a carried decision is a decision on a proposal, which touches no finding and no dashboard count.
+  'src/features/carry-over-proposal-decisions/model/use-carry-over-proposal-decisions.ts': false,
   // `W59-SECTION-UI-01` (integrator grant): confirming a version's stage and section. The
   // breakdown groups by the document's legacy `section` today, which a classification does
   // not write; the backend half of the window is still being written, so the hook

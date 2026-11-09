@@ -1,60 +1,34 @@
-/* A bounded dashboard presentation. Its light and dark tokens live in globals.css. */
+/*
+ * A bounded dashboard presentation. Its light and dark tokens live in globals.css. The card around
+ * it is the page's (`[data-dashboard-screen]` in globals.css: padding, border, radius, surface), so
+ * the widget draws none of its own — two lanes had each drawn one, a frame inside a frame.
+ */
 .showcase {
   min-width: 0;
-  padding: clamp(16px, 2.4vw, 32px);
-  border: 1px solid var(--am-line);
-  border-radius: 24px;
-  background: var(--am-surface);
   color: var(--am-ink);
-  box-shadow: var(--am-shadow-2);
 }
 
+/*
+ * `UI-PARITY-DENSE` (the original's overview opens on its table): the title and the scope in one line, where it was a
+ * 220px poster with an eyebrow, a lead and an orbit drawing.
+ */
 .hero {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 240px;
-  align-items: center;
-  min-height: 220px;
-  overflow: hidden;
-  margin-bottom: var(--am-gap-lg);
-  padding: clamp(24px, 3vw, 40px);
-  border: 1px solid var(--am-line);
-  border-radius: 22px;
-  background: radial-gradient(circle at 84% 50%, var(--am-accent-light), transparent 38%), var(--am-paper);
-}
-
-.heroCopy {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-}
-
-.eyebrow {
-  margin: 0 0 var(--am-gap);
-  color: var(--am-accent-strong);
-  font-size: var(--am-text-xs);
-  font-weight: 750;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin-bottom: var(--am-gap-sm);
 }
 
 .heroTitle {
-  max-width: 17ch;
-  margin: 0 0 var(--am-gap-sm);
+  min-width: 0;
+  margin: 0;
   padding: 0;
   border: 0;
   color: var(--am-ink);
-  font-size: clamp(28px, 3.2vw, 44px);
+  font-size: var(--am-text-lg);
   font-weight: 700;
-  letter-spacing: -0.04em;
-  line-height: 1.08;
-}
-
-.heroDescription {
-  max-width: 42ch;
-  margin: 0;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-base);
 }
 
 .scope {
@@ -62,7 +36,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--am-gap-sm);
-  margin: var(--am-gap) 0 0;
+  margin: 0;
   color: var(--am-ink-muted);
   font-size: var(--am-text-base);
 }
@@ -70,7 +44,7 @@
 .scopeKey {
   font-size: var(--am-text-xs);
   font-weight: 750;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--am-tracking-caps);
   text-transform: uppercase;
 }
 
@@ -85,46 +59,6 @@
   margin: var(--am-gap) 0 0;
 }
 
-.heroArt {
-  position: relative;
-  width: 220px;
-  height: 220px;
-  justify-self: end;
-  background: radial-gradient(circle, var(--am-accent-light) 0 22%, transparent 69%);
-}
-
-.orbitOuter,
-.orbitMiddle,
-.orbitInner,
-.orbitCore {
-  position: absolute;
-  display: block;
-  border-radius: 50%;
-}
-
-.orbitOuter {
-  inset: 7px;
-  border: 1px solid var(--am-line);
-}
-
-.orbitMiddle {
-  inset: 35px;
-  border: 1px solid var(--am-line);
-  transform: rotateX(58deg) rotate(-26deg);
-}
-
-.orbitInner {
-  inset: 62px;
-  border: 1px solid var(--am-accent);
-  transform: rotateY(57deg) rotate(32deg);
-}
-
-.orbitCore {
-  inset: 84px;
-  background: var(--am-accent);
-  box-shadow: 0 0 38px var(--am-accent);
-}
-
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -134,9 +68,9 @@
 
 .panel {
   min-width: 0;
-  padding: clamp(18px, 2vw, 28px);
+  padding: var(--am-gap);
   border: 1px solid var(--am-line);
-  border-radius: 20px;
+  border-radius: var(--am-radius);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }
@@ -147,19 +81,37 @@
 }
 
 .showcase .panel > h2 {
-  margin: 0 0 var(--am-gap);
-  padding-bottom: var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
+  padding-bottom: var(--am-gap-sm);
   border-color: var(--am-line-soft);
   color: var(--am-ink);
-  font-size: var(--am-text-xl);
+  font-size: var(--am-text-lg);
   font-weight: 650;
-  letter-spacing: -0.025em;
 }
 
+/*
+ * A project's row in «Документы по проектам»: the name and its count in one line (the global `li.am-state` is a card of
+ * its own, 12px of padding and a margin, which made a project cost three lines).
+ */
 .panel :global(li.am-state) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  margin-bottom: var(--am-gap-xs) !important;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   background: var(--am-surface-sunken);
   border-color: var(--am-line);
   box-shadow: none;
+}
+
+.panel :global(li.am-state .am-state__detail) {
+  margin-top: 0;
+}
+
+.panel :global(li.am-state .am-state__detail p) {
+  margin: 0;
 }
 
 .panel :global(tbody tr:hover) {
@@ -173,26 +125,13 @@
 }
 
 @media (max-width: 780px) {
-  .hero {
-    grid-template-columns: minmax(0, 1fr);
-    min-height: 0;
-  }
-
-  .heroArt {
-    position: absolute;
-    top: -60px;
-    right: -65px;
-    opacity: 0.3;
-  }
-
   .grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .panel,
-  .hero {
+  .panel {
     transition: box-shadow var(--am-motion-base) var(--am-ease);
   }
 

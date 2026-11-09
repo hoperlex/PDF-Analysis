@@ -29,15 +29,21 @@ export function NormReferencesSection({ runId }: NormReferencesSectionProps) {
     <section className={styles.section} aria-labelledby="norm-references-heading" data-norm-references="">
       <div className={styles.bar}>
         <h2 id="norm-references-heading" className={styles.heading}>Нормативные ссылки</h2>
-        <button type="button" className="am-button am-button--quiet" onClick={() => void references.refetch()}>
+        <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => void references.refetch()}>
           Обновить
         </button>
       </div>
       <p className={styles.rule}>
-        Ссылки на своды правил, стандарты, федеральные законы и постановления, найденные в
-        сохранённом тексте прогона, сопоставлены с нормативной базой, закреплённой за прогоном. Это
-        справка: она не создаёт замечаний и не меняет результат прогона.
+        Ссылки из текста проекта, сверенные с нормативной базой прогона. Справка: замечаний она не создаёт.
       </p>
+      <details className={styles.details} data-norm-references-about="">
+        <summary>Что это за список</summary>
+        <p className={styles.rule}>
+          Ссылки на своды правил, стандарты, федеральные законы и постановления, найденные в
+          сохранённом тексте прогона, сопоставлены с нормативной базой, закреплённой за прогоном. Это
+          справка: она не создаёт замечаний и не меняет результат прогона.
+        </p>
+      </details>
       {references.isPending ? <LoadingState what="нормативных ссылок" /> : null}
       {failure !== null ? (
         <ErrorState

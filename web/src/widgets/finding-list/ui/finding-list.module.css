@@ -10,20 +10,76 @@
   gap: var(--am-gap-xs);
 }
 
+/* The toolbar over the findings: its rows stand 8px apart, as the list's own do. */
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-sm);
+}
+
+/* The first row: the total, the severity chips and, at the right, the file actions; it wraps as a whole. */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.actions {
+  margin-left: auto;
+}
+
+/* The list's own rhythm: the rows of the toolbar and the groups stand 8px apart (the global gap is 16px). */
+.root.root {
+  gap: var(--am-gap-sm);
+}
+
 /* `UI-A-70`, `UI-A-71`: the run's verdicts at a glance and the filter by them. Tokens only. */
 .verdicts {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--am-gap-sm);
-  margin-bottom: var(--am-gap);
+  gap: var(--am-gap-xs) var(--am-gap-sm);
 }
 
 .tally {
   margin: 0;
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
+}
+
+/* The run's total, the original's «Всего: N», in the ink of the page, not of the counts after it. */
+.total {
+  color: var(--am-ink);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+/*
+ * The verdict on a list row: the original's green and red rows. A waiting row keeps the page's paper. The selected row
+ * keeps the selection's own tint over a verdict's, said by a rule of its own (the census does not evaluate `:not()`).
+ */
+.item[data-verdict-bucket='accepted'] > button[data-finding-uid] {
+  background: var(--am-ok-light);
+  box-shadow: inset 3px 0 0 var(--am-ok);
+}
+
+.item[data-verdict-bucket='rejected'] > button[data-finding-uid] {
+  background: var(--am-failed-light);
+  box-shadow: inset 3px 0 0 var(--am-failed);
+}
+
+.item[data-verdict-bucket] > button[data-finding-uid][aria-current='true'] {
+  background: var(--am-accent-light);
+  box-shadow:
+    inset 3px 0 0 var(--am-accent),
+    var(--am-shadow-2);
 }
 
 .filter {
@@ -45,6 +101,29 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-xs);
+}
+
+/*
+ * At a phone's width the `auto` column of ✓/✕ and its note (a refusal's reason runs long) took what the row's `1fr` could not
+ * give up: the row's button shrank to 22 px wide and 333 tall, its text starting at x = -7. The actions drop under the row
+ * instead, in a single track that may shrink.
+ */
+@media (max-width: 590px) {
+  .withActions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.rowAccept[aria-pressed='true'] {
+  border-color: var(--am-ok);
+  background: var(--am-ok-light);
+  color: var(--am-ok);
+}
+
+.rowReject[aria-pressed='true'] {
+  border-color: var(--am-failed);
+  background: var(--am-failed-light);
+  color: var(--am-failed);
 }
 
 .rowAccept:hover {
@@ -69,9 +148,10 @@
 
 /* `R-151j`: the severity strip -- the expert's decided severity as a filter, the model's proposal labelled apart. */
 .severities {
-  display: grid;
-  gap: var(--am-gap-xs);
-  margin-bottom: var(--am-gap);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
 }
 
 .stripLabel {
@@ -94,4 +174,33 @@
   border-radius: var(--am-radius-pill);
   color: var(--am-ok);
   font-size: var(--am-text-xs);
+}
+
+/* The merged count of a finding, beside its pages: the original's «×N». */
+.mergedMark {
+  color: var(--am-ink);
+  font-weight: 700;
+}
+
+/*
+ * The severity chips carry the original's colours as a bar on their left border (critical red, economic amber,
+ * operational blue, the rest grey), so the strip reads at a glance without the colour being the only statement:
+ * the name and the count stand in every chip.
+ */
+.severities [data-severity-filter='critical'] {
+  border-left: 3px solid var(--am-failed);
+}
+
+.severities [data-severity-filter='economic'] {
+  border-left: 3px solid var(--am-degraded);
+}
+
+.severities [data-severity-filter='operational'] {
+  border-left: 3px solid var(--am-accent);
+}
+
+.severities [data-severity-filter='recommendation'],
+.severities [data-severity-filter='check_adjacent'],
+.severities [data-severity-filter='undetermined'] {
+  border-left: 3px solid var(--am-inert);
 }

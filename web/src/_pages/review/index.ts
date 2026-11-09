@@ -30,3 +30,8 @@ export { PageBlocksStrip, ReviewPageBlocks } from './ui/page-blocks';
 export type { PageBlocksShown, PageBlocksStripProps, ReviewPageBlocksProps } from './ui/page-blocks';
 export { readPageBlocks, stripPageOf } from './model/page-blocks';
 export type { PageBlocksReading, PageBlocksSource } from './model/page-blocks';
+/** «Блоки замечания» under the page (`UI-PARITY-C6`), exported so the styling census renders its view. */
+export { FindingBlocksStrip, ReviewFindingBlocks } from './ui/finding-blocks';
+export type { FindingBlocksShown, FindingBlocksStripProps, ReviewFindingBlocksProps } from './ui/finding-blocks';
+export { readFindingBlocks } from './model/finding-blocks';
+export type { FindingBlocksReading, FindingBlocksSource } from './model/finding-blocks';

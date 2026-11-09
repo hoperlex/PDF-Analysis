@@ -124,7 +124,10 @@
   font-weight: 600;
 }
 
+/* The fold's caret is a 24 x 24 px target (it was 16 x 20.5). */
 .fold {
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
   padding: 0 var(--am-gap-xs);
   border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius);

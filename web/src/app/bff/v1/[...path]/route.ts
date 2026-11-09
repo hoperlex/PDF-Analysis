@@ -19,7 +19,7 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **295 operations across 267 paths**, which is what the
+ * Those figures are **303 operations across 275 paths**, which is what the
  * frozen document declares after `W59-ANALYSIS-SETTINGS-01` adds the read of the
  * analysis-profile registry, `W59-VERSION-UPLOAD-01` the upload of a further version of one
  * set, `W59-DECISION-CARRYOVER-01` the expert-confirmed carryover of a decision to the next
@@ -193,6 +193,14 @@ import {
   mintForwardCorrelationId,
   synthesizedEnvelope,
 } from '@/shared/api/credentialed-forward';
+import type { SessionEndReason } from '@/shared/lib/session-end-reason';
+import { SESSION_END_REASON_PARAM } from '@/shared/lib/session-end-reason';
+import {
+  clearedNoteCookie,
+  endNoteCookie,
+  guestSessionReasonFromHeader,
+  openNoteCookie,
+} from '../../session/end-note';
 import { admitGuest, guestClientKey } from '../../session/guest-throttle';
 import type { SessionAccount } from '../../session/store';
 import {
@@ -455,7 +463,12 @@ function staleSession(request: Request): Response {
       request.headers.get('x-correlation-id') ?? mintForwardCorrelationId(),
     ),
   );
-  response.headers.set('set-cookie', clearedSessionCookie(requestIsSecure(request)));
+  // «Сеанс недействителен»: the cookie named a session this tier does not hold, and nothing
+  // says more — it was closed elsewhere, or the register was lost, or the id is forged. The
+  // note lets the sign-in screen say that much and no more.
+  const secure = requestIsSecure(request);
+  response.headers.set('set-cookie', clearedSessionCookie(secure));
+  response.headers.append('set-cookie', endNoteCookie('invalid', secure));
   return response;
 }
 
@@ -549,15 +562,42 @@ function noSuchDoor(request: Request): Response {
 }
 
 /** A redirect the browser follows with a `GET`, carrying at most one cookie instruction. */
-function seeOther(location: string, cookie?: string): Response {
+function seeOther(location: string, cookie?: string | readonly string[]): Response {
   const headers = new Headers({ location });
-  if (cookie !== undefined) headers.set('set-cookie', cookie);
+  // One `Set-Cookie` header per cookie: the session cookie first, a note after it.
+  for (const one of cookie === undefined ? [] : typeof cookie === 'string' ? [cookie] : cookie) {
+    headers.append('set-cookie', one);
+  }
   return new Response(null, { status: 303, headers });
 }
 
 /** Back to the sign-in screen, saying which of the six refusals happened. */
 function withNext(path: string, next: string | null): string {
   return next === null ? path : `${path}${path.includes('?') ? '&' : '?'}${NEXT_FIELD}=${encodeURIComponent(next)}`;
+}
+
+/** `?reason=…` after whatever the address already carries (`next` stays first), or nothing. */
+function withReason(path: string, reason: SessionEndReason | null): string {
+  return reason === null
+    ? path
+    : `${path}${path.includes('?') ? '&' : '?'}${SESSION_END_REASON_PARAM}=${reason}`;
+}
+
+/**
+ * A post that needs a session found none: back to sign in, saying why where the cookies say.
+ *
+ * The reason is the guard's own (`guestSessionReasonFromHeader`): a cookie that names no
+ * session here is `invalid`, a lapsed one with the `open` note is `expired`, and a first
+ * visit says nothing. The session cookie is cleared as before; a reason the cookie would
+ * have carried (`ended`, `invalid`) is kept in the note, so the sign-in screen can still say
+ * it once the cookie is gone.
+ */
+function signInAgain(request: Request, next: string | null): Response {
+  const secure = requestIsSecure(request);
+  const reason = guestSessionReasonFromHeader(request.headers.get('cookie'));
+  const cookies = [clearedSessionCookie(secure)];
+  if (reason === 'ended' || reason === 'invalid') cookies.push(endNoteCookie(reason, secure));
+  return seeOther(withReason(withNext(SIGN_IN_SCREEN, next), reason), cookies);
 }
 
 function postedReturnPath(request: Request): string | null {
@@ -745,12 +785,22 @@ async function applicationIsPending(
  */
 function endedOn(request: Request, sessionId: string, answer: Response): Response {
   closeSession(sessionId);
-  answer.headers.set('set-cookie', clearedSessionCookie(requestIsSecure(request)));
+  // «Сеанс завершён»: the API stopped accepting a credential this tier held as live (or this
+  // tier could not rewrite the row), so the session is over. The API answers an ended
+  // account, a changed password, changed rights and an archived account alike, so the note
+  // says «ended» and nothing narrower.
+  const secure = requestIsSecure(request);
+  answer.headers.set('set-cookie', clearedSessionCookie(secure));
+  answer.headers.append('set-cookie', endNoteCookie('ended', secure));
   return answer;
 }
 
 /** Back to the password screen, saying how it ended. Carries a cookie only on success. */
-function reportChange(outcome: ChangeOutcome, cookie?: string, next: string | null = null): Response {
+function reportChange(
+  outcome: ChangeOutcome,
+  cookie?: string | readonly string[],
+  next: string | null = null,
+): Response {
   return seeOther(withNext(`${CHANGE_PASSWORD_SCREEN}?${OUTCOME_PARAM}=${outcome}`, next), cookie);
 }
 
@@ -910,7 +960,11 @@ async function openTheSession(request: Request): Promise<Response> {
       : !account.profileComplete && next !== null
         ? withNext('/account', next)
         : (next ?? AFTER_SIGN_IN),
-    sessionCookie(id, minted.expires_in, requestIsSecure(request)),
+    [
+      sessionCookie(id, minted.expires_in, requestIsSecure(request)),
+      // A session was opened in this browser: the note that lets a lapse be named «истёк».
+      openNoteCookie(minted.expires_in, requestIsSecure(request)),
+    ],
   );
 }
 
@@ -967,10 +1021,10 @@ async function changeThePassword(request: Request): Promise<Response> {
     // No live session: there is no credential to present and nothing to revoke. Back to the
     // sign-in screen rather than to the password screen, because signing in is the next
     // thing to do and a password screen with no session can only refuse.
-    return seeOther(withNext(SIGN_IN_SCREEN, next), clearedSessionCookie(requestIsSecure(request)));
+    return signInAgain(request, next);
   }
   const subject = subjectOf(sessionId);
-  if (subject === null) return seeOther(withNext(SIGN_IN_SCREEN, next), clearedSessionCookie(requestIsSecure(request)));
+  if (subject === null) return signInAgain(request, next);
 
   const passwords = await postedPasswords(request);
   if (passwords === null) return reportChange('validation', undefined, next);
@@ -1076,7 +1130,11 @@ async function changeThePassword(request: Request): Promise<Response> {
   // The old row last, and only once the new one exists. Deleting first would leave a window
   // in which a concurrent request from the same browser met `staleSession`.
   closeSession(sessionId);
-  const cookie = sessionCookie(replacement, minted.expires_in, requestIsSecure(request));
+  const secure = requestIsSecure(request);
+  const cookie = [
+    sessionCookie(replacement, minted.expires_in, secure),
+    openNoteCookie(minted.expires_in, secure),
+  ];
   if (next !== null) return seeOther(described.profileComplete ? next : withNext('/account', next), cookie);
   return reportChange(
     'changed',
@@ -1093,7 +1151,9 @@ async function changeThePassword(request: Request): Promise<Response> {
 function closeTheSession(request: Request): Response {
   if (isCrossSitePost(request)) return seeOther(AFTER_SIGN_IN);
   closeSession(readSessionId(request.headers.get('cookie')));
-  return seeOther(SIGN_IN_SCREEN, clearedSessionCookie(requestIsSecure(request)));
+  // An explicit sign-out is owed no explanation: the note goes with the session.
+  const secure = requestIsSecure(request);
+  return seeOther(SIGN_IN_SCREEN, [clearedSessionCookie(secure), clearedNoteCookie(secure)]);
 }
 
 /** What an application form carries, once checked. `middleName` is absent when left blank. */
@@ -1276,9 +1336,9 @@ async function setTheExecutorSecret(request: Request, connectionId: string): Pro
   const sessionId = readSessionId(request.headers.get('cookie'));
   const held = sessionId === null ? null : credentialOf(sessionId);
   if (held === null || subjectOf(sessionId) === null) {
-    return seeOther(
-      withNext(SIGN_IN_SCREEN, `${WORKERS_SCREEN}?tab=connections&${EXECUTOR_SECRET_CONNECTION_PARAM}=${connectionId}`),
-      clearedSessionCookie(requestIsSecure(request)),
+    return signInAgain(
+      request,
+      `${WORKERS_SCREEN}?tab=connections&${EXECUTOR_SECRET_CONNECTION_PARAM}=${connectionId}`,
     );
   }
 
@@ -1307,9 +1367,11 @@ async function setTheExecutorSecret(request: Request, connectionId: string): Pro
   // The credential no longer stands: the session is over here as well as there.
   if (answer.status === 401) {
     closeSession(sessionId);
+    // The API refused a credential this tier held as live: the same fact `endedOn` records.
+    const secure = requestIsSecure(request);
     return seeOther(
-      withNext(SIGN_IN_SCREEN, `${WORKERS_SCREEN}?tab=connections`),
-      clearedSessionCookie(requestIsSecure(request)),
+      withReason(withNext(SIGN_IN_SCREEN, `${WORKERS_SCREEN}?tab=connections`), 'ended'),
+      [clearedSessionCookie(secure), endNoteCookie('ended', secure)],
     );
   }
   if (answer.status === 201) return reportSecret(connectionId, 'saved');

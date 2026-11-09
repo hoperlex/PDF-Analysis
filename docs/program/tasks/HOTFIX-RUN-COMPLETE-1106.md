@@ -72,3 +72,16 @@ full-source behavior is frozen into fresh consent, never substituted into old pl
 
 - development_target: origin/main
 - origin_main_authority: delegated release integrator HOTFIX-RUN-COMPLETE-1106
+
+
+## Completion evidence
+
+Completed on 2026-11-06: production SHA `46b52dd068232236038d7ec4cbb0b13c63b9aa25`,
+verified deployment 42241699088; fresh unmetered run `run_01M6RQ9SZPB01G22AV6VQRHJHD`
+is published. All 7 procedures, 3 windows, 47 blocks, 30 pages and 1848 pairs completed;
+all 74 provider effects completed, 0 unresolved. Strict quote/numeric guards are unchanged;
+old partial runs are immutable. Build-only checks passed; no suites/gate under the explicit
+owner instruction. Detailed changed paths, checks, limitations, protected-path proof and
+integrator instructions are in `docs/program/HOTFIX-RUN-COMPLETE-1106.md` and the workspace
+receipt. Closure records publish to dev only; runtime main remains verified 46b.
+No tag/checkpoint or further model run.

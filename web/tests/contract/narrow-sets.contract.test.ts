@@ -143,7 +143,8 @@ describe('the query namespaces are the seam document, and the rule is checked', 
   function segmentsFromSeamDocument(): string[] {
     const found: string[] = [];
     for (const line of section().split('\n')) {
-      const match = /^\|\s*`queryKeys\.[^`]+`\s*\|\s*`\['([a-z]+)'/.exec(line.trim());
+      // A first segment may be kebab-case (`work-schedule`, `UI-PARITY-P0P`), like the deeper ones.
+      const match = /^\|\s*`queryKeys\.[^`]+`\s*\|\s*`\['([a-z]+(?:-[a-z]+)*)'/.exec(line.trim());
       if (match !== null && !found.includes(match[1] as string)) found.push(match[1] as string);
     }
     expect(found.length, 'no key shapes parsed out of the section 6 table').toBeGreaterThan(0);

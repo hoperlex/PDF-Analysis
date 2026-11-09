@@ -34,7 +34,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { FindingObservationId, FindingUid, ProjectUid, RunId, VersionUid } from '@/shared/api';
 import { getFinding, listDecisionHistory, queryKeys } from '@/shared/api';
@@ -44,9 +44,9 @@ import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { useMayActAsExpert } from '@/entities/account';
 import { ExportPanel } from '@/widgets/export-panel';
-import { sheetOfPage, useSheetLabels } from '@/entities/block';
-import { FindingList, filterBySeverity, filterGroups, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
-import type { SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
+import { blocksOfFinding, findingBlockIndex, sheetOfPage, useRunFindingBlocks, useSheetLabels } from '@/entities/block';
+import { FindingList, FindingToolbar, filterBySeverity, filterGroups, findingViewOf, findingsAsShown, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
+import type { FindingView, SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
 import { ExtendedReviewSummary } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
 import { useEvidenceDocument, useVersionBlockIndex } from '@/features/open-evidence';
@@ -65,6 +65,8 @@ import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
+import { ReviewFindingBlocks } from './finding-blocks';
+import { OpenedFinding } from './opened-finding';
 import { ReviewPageBlocks } from './page-blocks';
 import { ReviewRowActions } from './review-row-actions';
 import { ReviewViewerAside, ReviewViewerDialog } from './review-viewer-dialog';
@@ -89,24 +91,36 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const verdictFilter = verdictFilterOf(searchParams.get('verdict'));
   // `R-151j`: the severity filter lives in the address too (`?severity=`).
   const severityFilter = severityFilterOf(searchParams.get('severity'));
+  // `UI-A-68`: the findings as the list beside the open finding, or as the original's full-width table (`?view=table`).
+  const view = findingViewOf(searchParams.get('view'));
   const [selection, setSelectionState] = useState<ReviewSelection | null>(
     linkedFinding === null ? null : selectFinding(linkedFinding),
   );
-  const writeAddress = (key: 'finding' | 'verdict' | 'severity', value: string | null) => {
+  const writeAddress = (key: 'finding' | 'verdict' | 'severity' | 'view', value: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value === null) params.delete(key);
     else params.set(key, value);
     const query = params.toString();
     // Next keeps `usePathname`/`useSearchParams` in step with the native history API, so the address is
     // written without the app router -- and the page renders where no router is mounted (a static render).
-    window.history.replaceState(window.history.state, '', query === '' ? pathname : `${pathname}?${query}`);
+    // The data is `null`: Next's patch skips the sync for a state that carries its own marker, which is what
+    // `window.history.state` is, and the filters, the view and the finding would then never follow the URL
+    // (D-341; `tests/unit/review/review-address-sync.test.ts`).
+    window.history.replaceState(null, '', query === '' ? pathname : `${pathname}?${query}`);
   };
   // Choosing a finding writes it to the address; turning a page inside the same finding does not.
   const setSelection = (next: ReviewSelection | null | ((current: ReviewSelection | null) => ReviewSelection | null)) => {
-    if (typeof next !== 'function' && next !== null && next.findingUid !== selection?.findingUid) {
-      writeAddress('finding', next.findingUid);
+    if (typeof next !== 'function') {
+      if (next === null) {
+        if (selection !== null) writeAddress('finding', null);
+      } else if (next.findingUid !== selection?.findingUid) {
+        writeAddress('finding', next.findingUid);
+      }
     }
     setSelectionState(next);
+  };
+  const setView = (next: FindingView) => {
+    writeAddress('view', next === 'list' ? null : next);
   };
   const setVerdictFilter = (filter: VerdictFilter) => {
     writeAddress('verdict', filter === 'all' ? null : filter);
@@ -138,15 +152,28 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     [admitted.findings],
   );
 
-  const resolved = resolveSelection(selection, findingUids);
-  const selectedUid = resolved === null ? null : (resolved.findingUid as FindingUid);
-
-  // «Во весь экран»: ‹ › walk the findings in the order the list shows them under its filters.
+  // «Во весь экран»: ‹ › walk the findings in the order the list shows them under its filters (`UI-A-71`: pending,
+  // then accepted, then rejected; by category in the list, flat in the table).
   const [expanded, setExpanded] = useState(false);
   const shownFindings = useMemo(
-    () => filterBySeverity(filterGroups(groups, verdictFilter), severityFilter).flatMap((group) => group.findings),
-    [groups, verdictFilter, severityFilter],
+    () => findingsAsShown(filterBySeverity(filterGroups(groups, verdictFilter), severityFilter), view),
+    [groups, verdictFilter, severityFilter, view],
   );
+
+  // The list opens, until one is chosen, the first finding it SHOWS: the first still waiting for a decision (`D-401`).
+  // The table opens a row only when it is asked to, as the original's does, so it neither draws a page under its first
+  // row nor reads a finding nobody opened.
+  const resolved = view === 'table'
+    ? (selection !== null && findingUids.includes(selection.findingUid) ? selection : null)
+    : resolveSelection(selection, findingUids, shownFindings[0]?.finding_uid ?? null);
+  const selectedUid = resolved === null ? null : (resolved.findingUid as FindingUid);
+  // ...and keeps it open. A decision re-sorts the list, so a default that went on following the order would move to the
+  // next finding the moment the reader decided the one it opened. The default is therefore made the selection as soon as
+  // it is resolved, and written to the address as a chosen finding is, so a reload and a saved link keep it too.
+  const defaultedUid = resolved !== null && resolved.findingUid !== selection?.findingUid ? resolved.findingUid : null;
+  useEffect(() => {
+    if (defaultedUid !== null) setSelection(selectFinding(defaultedUid));
+  }, [defaultedUid]);
   const shownAt = selectedUid === null ? -1 : shownFindings.findIndex((finding) => finding.finding_uid === selectedUid);
   const stepTo = (at: number) => {
     const target = shownFindings[at];
@@ -177,6 +204,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   // The line geometry the viewer frames quotations with. Read here because this page owns the
   // queries; without it (not produced, failed, in flight) the viewer searches the page text.
   const blockIndex = useVersionBlockIndex(versionUid);
+  // `UI-A-74`: the table's count of the blocks that hold each finding's evidence, from the run's block links (one read
+  // per run, shared with the open finding's «Блоки замечания»). Not produced, not read yet or failed: no count.
+  const runFindingBlocks = useRunFindingBlocks(runId);
+  const blockLinks = useMemo(() => findingBlockIndex(runFindingBlocks.data), [runFindingBlocks.data]);
 
   // These three hooks cannot be called conditionally, so they are bound to the empty
   // identity when nothing is selected. Every control that could fire one of them is
@@ -237,11 +268,135 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       page={stripPage}
     />
   );
+  // `UI-PARITY-C6`: above it, the portal blocks that hold the finding's own evidence, when the server named any.
+  const findingBlocks = detail === null ? null : (
+    <ReviewFindingBlocks
+      key={detail.finding_uid}
+      projectUid={projectUid}
+      versionUid={detail.version_uid as VersionUid}
+      runId={runId}
+      findingUid={detail.finding_uid}
+    />
+  );
+  const blocksUnderThePage = (
+    <>
+      {findingBlocks}
+      {pageBlocks}
+    </>
+  );
   const decidedOrProposed = detail === null ? null
     : detail.decided_severity !== undefined ? SEVERITY_LABELS[detail.decided_severity]
     : detail.observation.proposed_severity !== undefined
       ? `${SEVERITY_LABELS[detail.observation.proposed_severity]} — предложено моделью`
       : null;
+
+  // The open finding, once: beside the list, or under its row of the table.
+  const detailContent = (
+    <>
+      {selectedUid === null ? null : detailQuery.isPending ? (
+        <LoadingState what="выбранная находка" />
+      ) : detailFailure !== null ? (
+        detailFailure
+      ) : detail === null ? null : (
+        <>
+          {/* The table's row already says the finding and its recommendation whole; only the list needs them again here. */}
+          {view === 'table' ? null : (
+            <article className={`am-review__finding ${styles.finding}`} data-finding-uid={detail.finding_uid}>
+              <h2 className={styles.findingTitle}>{detail.observation.finding_text}</h2>
+              <p className={`am-review__recommendation ${styles.recommendation}`}>
+                {detail.observation.recommendation_text}
+              </p>
+            </article>
+          )}
+
+          {expanded ? (
+            // One page drawn once: while the full-screen view is open it is the only viewer.
+            <p className="am-note" data-evidence-expanded="">
+              Страница открыта во весь экран.
+            </p>
+          ) : evidenceProps === null ? null : (
+            <LazyEvidenceViewer {...evidenceProps} onExpand={() => { setExpanded(true); }} />
+          )}
+
+          {expanded ? null : blocksUnderThePage}
+
+          {mayAct ? <DecisionPanel
+            currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
+            // D-343 (lane C4): the carried origin of the verdict the finding holds; a verdict the expert has just given
+            // here is direct, so the mark goes with it.
+            carriedFrom={verdict.result === null || verdict.result === undefined ? detail.current_verdict_carried_from : undefined}
+            observationId={detail.observation.finding_observation_id as FindingObservationId}
+            proposedSeverity={detail.observation.proposed_severity}
+            decidedSeverity={detail.decided_severity}
+            severityRefusal={verdict.refusal}
+            onSeverityChosen={verdict.clearRefusal}
+            onAccept={(observationId, decided) => {
+              verdict.record('accept', observationId, {
+                proposed: detail.observation.proposed_severity,
+                decided,
+              });
+            }}
+            onReject={(observationId) => {
+              verdict.record('reject', observationId);
+            }}
+            onComment={(text, observationId) => {
+              comment.append(text, observationId);
+            }}
+            pendingIntent={pendingIntent}
+            refusal={comment.refusal}
+            error={
+              presentFailureOrNull(verdict.error, {
+                title: 'Вердикт не записан',
+              }) ??
+              presentFailureOrNull(comment.error, {
+                title: 'Комментарий не добавлен',
+              })
+            }
+          /> : <p className="am-note" data-expert-only="DecisionPanel">Решения по находкам записывает эксперт.</p>}
+          {/* `R-151g`: what the designer did with an accepted finding, as the original's SU-10 badge. */}
+          {mayAct && (verdict.result?.current_verdict ?? detail.current_verdict) === 'accepted' ? (
+            <ExecutionStatusControl
+              key={detail.finding_uid}
+              findingUid={detail.finding_uid as FindingUid}
+              runId={runId}
+              status={detail.execution_status ?? null}
+            />
+          ) : null}
+
+          <DecisionHistory
+            events={historyQuery.data?.data.items ?? []}
+            isLoading={historyQuery.isPending}
+            error={presentFailureOrNull(historyQuery.error, {
+              title: 'Не удалось загрузить историю решений',
+              onRetry: () => {
+                void historyQuery.refetch();
+              },
+            })}
+          />
+        </>
+      )}
+    </>
+  );
+
+  const exportPanel = run === null ? (
+    <LoadingState what="прогон" />
+  ) : (
+    <ExportPanel
+      layout="bar"
+      runId={runId}
+      runState={run.state}
+      providerMode={run.provider_mode}
+      onExport={exporter.download}
+      isPending={exporter.isPending}
+      lastFileName={exporter.lastFileName}
+      mayImportDecisions={mayAct}
+      // `UI-A-76`: the run's ZIP, for the session that may export, of the version this run read.
+      auditPackage={mayAct ? { versionUid: run.version_uid } : undefined}
+      error={presentFailureOrNull(exporter.error, {
+        title: 'В выгрузке отказано',
+      })}
+    />
+  );
 
   return (
     <PageShell
@@ -284,18 +439,41 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     >
       <DocumentContext projectUid={projectUid} runId={runId} current="review" />
       <ExtendedReviewSummary projectUid={projectUid} runId={runId} />
-      <div className={`am-review ${styles.layout}`}>
-        <div className={`am-review__list ${styles.list}`}>
+      {/*
+        The filters, the tally and the file actions across the whole width over the list and the open finding, as the
+        original's top row: the total and the severity chips at the left, the file actions at the right. A run with no
+        findings has no toolbar, and its file actions stand on their own.
+      */}
+      {admitted.findings.length === 0 ? <div className={styles.exportAlone}>{exportPanel}</div> : null}
+      <FindingToolbar
+        groups={groups}
+        verdictFilter={verdictFilter}
+        onVerdictFilterChange={setVerdictFilter}
+        severityFilter={severityFilter}
+        onSeverityFilterChange={setSeverityFilter}
+        view={view}
+        onViewChange={setView}
+        actions={admitted.findings.length === 0 ? undefined : exportPanel}
+      />
+      <div className={view === 'table' ? `am-review ${styles.layout} ${styles.layoutTable}` : `am-review ${styles.layout}`}>
+        <div className={view === 'table' ? `am-review__list ${styles.list} ${styles.listTable}` : `am-review__list ${styles.list}`}>
           <FindingList
             groups={groups}
             verdictFilter={verdictFilter}
             onVerdictFilterChange={setVerdictFilter}
             severityFilter={severityFilter}
             onSeverityFilterChange={setSeverityFilter}
+            view={view}
+            onViewChange={setView}
+            toolbar="outside"
+            blockCountOf={blockLinks === null ? undefined : (findingUid) => blocksOfFinding(blockLinks, findingUid).length}
+            unlinkedPages={blockLinks === null ? undefined : blockLinks.unlinkedPages}
             selectedFindingUid={selectedUid}
             onSelect={(findingUid) => {
-              setSelection(selectFinding(findingUid));
+              // A second press on the open row of the table closes it, as the original's strip does.
+              setSelection(view === 'table' && findingUid === selectedUid ? null : selectFinding(findingUid));
             }}
+            renderExpansion={() => <OpenedFinding>{detailContent}</OpenedFinding>}
             sheetOf={(page) => sheetOfPage(sheetLabels.data, page)}
             // `R-151n`: ✓/✕ in each row, for a session that may decide.
             renderRowActions={mayAct ? (finding) => (
@@ -321,84 +499,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
           />
         </div>
 
-        <div className={`am-review__detail ${styles.detail}`}>
-          {selectedUid === null ? null : detailQuery.isPending ? (
-            <LoadingState what="выбранная находка" />
-          ) : detailFailure !== null ? (
-            detailFailure
-          ) : detail === null ? null : (
-            <>
-              <article className="am-review__finding" data-finding-uid={detail.finding_uid}>
-                <h2>{detail.observation.finding_text}</h2>
-                <p className="am-review__recommendation">
-                  {detail.observation.recommendation_text}
-                </p>
-              </article>
-
-              {expanded ? (
-                // One page drawn once: while the full-screen view is open it is the only viewer.
-                <p className="am-note" data-evidence-expanded="">
-                  Страница открыта во весь экран.
-                </p>
-              ) : evidenceProps === null ? null : (
-                <LazyEvidenceViewer {...evidenceProps} onExpand={() => { setExpanded(true); }} />
-              )}
-
-              {expanded ? null : pageBlocks}
-
-              {mayAct ? <DecisionPanel
-                currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
-                observationId={detail.observation.finding_observation_id as FindingObservationId}
-                proposedSeverity={detail.observation.proposed_severity}
-                decidedSeverity={detail.decided_severity}
-                severityRefusal={verdict.refusal}
-                onSeverityChosen={verdict.clearRefusal}
-                onAccept={(observationId, decided) => {
-                  verdict.record('accept', observationId, {
-                    proposed: detail.observation.proposed_severity,
-                    decided,
-                  });
-                }}
-                onReject={(observationId) => {
-                  verdict.record('reject', observationId);
-                }}
-                onComment={(text, observationId) => {
-                  comment.append(text, observationId);
-                }}
-                pendingIntent={pendingIntent}
-                refusal={comment.refusal}
-                error={
-                  presentFailureOrNull(verdict.error, {
-                    title: 'Вердикт не записан',
-                  }) ??
-                  presentFailureOrNull(comment.error, {
-                    title: 'Комментарий не добавлен',
-                  })
-                }
-              /> : <p className="am-note" data-expert-only="DecisionPanel">Решения по находкам записывает эксперт.</p>}
-              {/* `R-151g`: what the designer did with an accepted finding, as the original's SU-10 badge. */}
-              {mayAct && (verdict.result?.current_verdict ?? detail.current_verdict) === 'accepted' ? (
-                <ExecutionStatusControl
-                  key={detail.finding_uid}
-                  findingUid={detail.finding_uid as FindingUid}
-                  runId={runId}
-                  status={detail.execution_status ?? null}
-                />
-              ) : null}
-
-              <DecisionHistory
-                events={historyQuery.data?.data.items ?? []}
-                isLoading={historyQuery.isPending}
-                error={presentFailureOrNull(historyQuery.error, {
-                  title: 'Не удалось загрузить историю решений',
-                  onRetry: () => {
-                    void historyQuery.refetch();
-                  },
-                })}
-              />
-            </>
-          )}
-        </div>
+        {view === 'table' ? null : <div className={`am-review__detail ${styles.detail}`}>{detailContent}</div>}
       </div>
 
       {expanded ? (
@@ -439,7 +540,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                       }}
                     />
                   ) : null}
-                  blocks={pageBlocks}
+                  blocks={blocksUnderThePage}
                 />
               }
             />
@@ -447,29 +548,6 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         </ReviewViewerDialog>
       ) : null}
 
-      {/*
-        Outside `.am-review` on purpose: the list is `position: sticky`, and a sticky box is
-        bounded by its parent, not by its grid row. While the export sat in the same grid,
-        the list slid down over it on scroll.
-      */}
-      <div className={`am-review__export ${styles.export}`}>
-        {run === null ? (
-          <LoadingState what="прогон" />
-        ) : (
-          <ExportPanel
-            runId={runId}
-            runState={run.state}
-            providerMode={run.provider_mode}
-            onExport={exporter.download}
-            isPending={exporter.isPending}
-            lastFileName={exporter.lastFileName}
-            mayImportDecisions={mayAct}
-            error={presentFailureOrNull(exporter.error, {
-              title: 'В выгрузке отказано',
-            })}
-          />
-        )}
-      </div>
     </PageShell>
   );
 }

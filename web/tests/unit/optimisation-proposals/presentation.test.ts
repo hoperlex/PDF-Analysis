@@ -15,6 +15,7 @@ import {
 } from '@/shared/api';
 import {
   ANALOG_BASIS_LABELS,
+  DECISION_EVENT_LABELS,
   DECISION_STATES,
   DECISION_STATE_LABELS,
   MATCH_BASIS_LABELS,
@@ -35,6 +36,10 @@ describe('the label tables', () => {
   it('cover exactly the contract’s enums, so a new member is a type error and a red test', () => {
     expect(Object.keys(DECISION_STATE_LABELS).sort()).toEqual([...PROPOSAL_DECISION_STATE_VALUES].sort());
     expect(Object.keys(VERDICT_LABELS).sort()).toEqual([...PROPOSAL_VERDICT_VALUES].sort());
+    expect(Object.keys(DECISION_EVENT_LABELS).sort()).toEqual([...PROPOSAL_VERDICT_VALUES].sort());
+    expect([...PROPOSAL_VERDICT_VALUES].sort()).toEqual(['accept', 'reject', 'revise', 'revoke']);
+    // A withdrawal is an event and never a state of a proposal, which stands «не решено» again.
+    expect(Object.keys(DECISION_STATE_LABELS)).not.toContain('revoke');
     expect(Object.keys(MATCH_BASIS_LABELS).sort()).toEqual([...PROPOSAL_MATCH_BASIS_VALUES].sort());
     expect(Object.keys(ANALOG_BASIS_LABELS).sort()).toEqual([...PROPOSAL_ANALOG_BASIS_VALUES].sort());
     expect(Object.keys(VENDOR_LIST_SCOPE_LABELS).sort()).toEqual([...VENDOR_LIST_SCOPE_VALUES].sort());
@@ -45,6 +50,7 @@ describe('the label tables', () => {
     const all = [
       ...Object.values(DECISION_STATE_LABELS),
       ...Object.values(VERDICT_LABELS),
+      ...Object.values(DECISION_EVENT_LABELS),
       ...Object.values(MATCH_BASIS_LABELS),
       ...Object.values(ANALOG_BASIS_LABELS),
       ...Object.values(VENDOR_LIST_SCOPE_LABELS),

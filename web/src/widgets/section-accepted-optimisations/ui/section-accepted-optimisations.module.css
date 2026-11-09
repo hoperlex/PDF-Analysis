@@ -1,0 +1,39 @@
+/* «Принято» on «Оптимизация разделов» (`UI-B-27`). Reads the global tokens only; no length is spelled here. */
+
+.section {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rule {
+  margin: 0 0 var(--am-gap-sm);
+  color: var(--am-ink-muted);
+}
+
+.summary {
+  margin: 0 0 var(--am-gap-sm);
+  font-weight: 600;
+}
+
+.place {
+  display: block;
+  color: var(--am-ink-muted);
+}
+
+.change {
+  display: block;
+}
+
+.comment {
+  display: block;
+  margin-top: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin: var(--am-gap-sm) 0 0;
+}

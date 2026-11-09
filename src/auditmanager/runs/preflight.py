@@ -433,6 +433,11 @@ class RunCostPreflight:
         from .repository import RunRepository
         runs = RunRepository()
         source_run = runs.get(session, run_id)
+        # `AR-V3-OPT-IN` (Q4): the estimate of a repeat that the start would refuse is the same refusal, not a price.
+        from .analysis_kind import ANALYSIS_AR_V3_BETA, analysis_kind
+        from .v3_start_switch import refuse_member_repeat
+        if analysis_kind(source_run.analysis_profile_id, source_run.prompt_bundle_id) == ANALYSIS_AR_V3_BETA:
+            raise refuse_member_repeat()
         executor = runs.chosen_executor_connection(session, run_id)
         from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
         # `EXEC2-GROUP-RUN-01`: a re-audit keeps the kind of selector the original start used. A named connection stays
@@ -447,6 +452,33 @@ class RunCostPreflight:
         # A fresh approval is for this new re-audit, never the parent's paid work.
         authority["reaudit_of_run_id"] = run_id
         public = value.as_dict()
+        public["estimate_digest"] = _digest(authority)
+        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group)
+
+    def estimate_from_stage(self, session, *, run_id, start_stage_id, version_record=None, parse_native_text=True):
+        """`R-151i`: the price of a run started from ``start_stage_id`` of ``run_id``, for the stages it computes.
+
+        A run that reuses the stage outputs before the chosen stage prices only the stages from it on. Every model call of
+        a PC-01 run is made by ``text_analysis`` (and the extended review inside it), and a chosen stage is never after it,
+        so the priced work is that stage's: what changes is which stages are *not* done again, and the answer names both
+        (``reused_stage_ids``, ``computed_stage_ids``). The reuse rule is asked here, with this estimate's own extended-review
+        plan, so a stage that cannot be taken is refused as a price is asked and not after it is consented to. The consent is
+        bound to this source and stage: a digest from ``estimate_reaudit`` or from another stage is ``run_cost_estimate_stale``.
+        """
+        from .stage_reuse import plan_stage_reuse, require_startable_stage, visual_only_pages_allowed
+        require_startable_stage(start_stage_id)
+        value = self.estimate_reaudit(session, run_id=run_id, version_record=version_record,
+            parse_native_text=parse_native_text)
+        authority = json.loads(value.authority_json)
+        plan = plan_stage_reuse(session, source_run_id=run_id, start_stage_id=start_stage_id,
+            visual_only_pages=visual_only_pages_allowed(authority.get("extended_review")))
+        # Not a repeat of the parent: a new run that continues it.
+        authority.pop("reaudit_of_run_id")
+        authority["started_from"] = {"run_id": run_id, "stage_id": start_stage_id,
+            "reused": list(plan.reused_stage_ids)}
+        public = value.as_dict()
+        public.update(start_from_run_id=run_id, start_stage_id=start_stage_id,
+            reused_stage_ids=list(plan.reused_stage_ids), computed_stage_ids=list(plan.computed_stage_ids))
         public["estimate_digest"] = _digest(authority)
         return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group)
 

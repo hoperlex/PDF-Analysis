@@ -77,7 +77,7 @@ function runPage(items: RunStatus[]): RunStatusPage {
 
 function apiError(status: number, code: ErrorCode, retryable = false): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.42.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-cold-1',
@@ -86,7 +86,10 @@ function apiError(status: number, code: ErrorCode, retryable = false): ApiError 
   return new ApiError(status, envelope, 'cid-cold-1');
 }
 
-const DOCUMENTS_KEY = queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT);
+// `UI-PARITY-DOC-AUDIT`: the project screen reads the listing in the server's audit order.
+const DOCUMENTS_KEY = queryKeys.projects.documents(
+  PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit',
+);
 const VERSIONS_KEY = queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT);
 const RUNS_KEY = queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT);
 
@@ -128,6 +131,11 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
       PROJECT_UID.replace(/.$/, 'C'),
       undefined,
       DOCUMENT_PAGE_LIMIT,
+      undefined,
+      false,
+      undefined,
+      undefined,
+      'audit',
     );
     expect(pendingUnder(client, other)).toBe(false);
   });

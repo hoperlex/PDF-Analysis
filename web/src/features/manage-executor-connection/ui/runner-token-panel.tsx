@@ -42,6 +42,7 @@ import { formatInstant } from '@/shared/lib';
 import { useCommandKey } from '../model/use-command-key';
 import { useIssueRunnerToken, useRevokeRunnerToken } from '../model/use-manage-executor-connection';
 import { CommandFailure } from './command-failure';
+import styles from './runner-token-panel.module.css';
 
 /** The lifetime offered by default; the stand accepts 1 to 365 days. */
 export const DEFAULT_TOKEN_DAYS = 30;
@@ -133,26 +134,13 @@ function TokenRow({
   const state = runnerTokenState(token, nowMs);
   const online = runnerTokenIsOnline(token, nowMs);
   return (
-    <li data-executor-runner-token={token.token_id} data-executor-runner-token-state={state} data-executor-runner-token-online={online ? 'yes' : 'no'}>
-      <code>{token.token_prefix}…</code>{' '}
-      <span className={`am-badge am-badge--${state === 'active' ? 'ok' : 'inert'}`}>{RUNNER_TOKEN_STATE_LABELS[state]}</span>
-      {online ? <> <span className="am-badge am-badge--ok">на связи</span></> : null}
-      <br />
-      выпущен <Moment at={token.created_at} />, автор <code>{token.created_by}</code>; срок действия до{' '}
-      <Moment at={token.expires_at} />
-      {token.revoked_at !== undefined ? <>; отозван <Moment at={token.revoked_at} />{token.revoked_by !== undefined ? <>, автор <code>{token.revoked_by}</code></> : null}</> : null}
-      <br />
-      {token.last_seen_at !== undefined ? (
-        <>
-          последнее обращение <Moment at={token.last_seen_at} />
-          {token.last_seen_address !== undefined ? <>, с адреса <code>{token.last_seen_address}</code></> : null}
-        </>
-      ) : (
-        'обращений ещё не было'
-      )}
-      {canManage && runnerTokenIsLive(token, nowMs) ? (
-        <>
-          {' '}
+    <li className={styles.token} data-executor-runner-token={token.token_id} data-executor-runner-token-state={state} data-executor-runner-token-online={online ? 'yes' : 'no'}>
+      {/* The token, its states and the one command on it share a line; the facts under it run as one muted paragraph. */}
+      <span className={styles.head}>
+        <code>{token.token_prefix}…</code>{' '}
+        <span className={`am-badge am-badge--${state === 'active' ? 'ok' : 'inert'}`}>{RUNNER_TOKEN_STATE_LABELS[state]}</span>
+        {online ? <> <span className="am-badge am-badge--ok">на связи</span></> : null}
+        {canManage && runnerTokenIsLive(token, nowMs) ? (
           <button
             className="am-button am-button--quiet am-button--small"
             type="button"
@@ -162,8 +150,22 @@ function TokenRow({
           >
             Отозвать
           </button>
-        </>
-      ) : null}
+        ) : null}
+      </span>
+      <span className={styles.facts}>
+        выпущен <Moment at={token.created_at} />, автор <code>{token.created_by}</code>; срок действия до{' '}
+        <Moment at={token.expires_at} />
+        {token.revoked_at !== undefined ? <>; отозван <Moment at={token.revoked_at} />{token.revoked_by !== undefined ? <>, автор <code>{token.revoked_by}</code></> : null}</> : null}
+        {'; '}
+        {token.last_seen_at !== undefined ? (
+          <>
+            последнее обращение <Moment at={token.last_seen_at} />
+            {token.last_seen_address !== undefined ? <>, с адреса <code>{token.last_seen_address}</code></> : null}
+          </>
+        ) : (
+          'обращений ещё не было'
+        )}
+      </span>
     </li>
   );
 }
@@ -242,12 +244,15 @@ export function RunnerTokenPanel({ connection, detail, canManage, nowMs }: Runne
           : `Клиент не обращался к стенду последние ${RUNNER_ONLINE_WINDOW_MS / 1000} секунд.`}{' '}
         Заданий в очереди или в работе у клиента: <strong>{openTasks}</strong>.
       </p>
-      <p className="am-form__hint">
-        Состояние читается при открытии страницы, при возврате на вкладку и по кнопке «Обновить».
-        Пока клиент думает над заданием, единственный процесс стенда ждёт его ответа, и очередь за ним
-        ждёт тоже. Если никто не взял задание до конца срока ответа, обращение к модели завершается
-        ошибкой «ни один клиент не на связи» и не переходит на другое подключение.
-      </p>
+      <details className={styles.fold}>
+        <summary>Как читается состояние и что будет, если клиента нет</summary>
+        <p className="am-form__hint">
+          Состояние читается при открытии страницы, при возврате на вкладку и по кнопке «Обновить».
+          Пока клиент думает над заданием, единственный процесс стенда ждёт его ответа, и очередь за ним
+          ждёт тоже. Если никто не взял задание до конца срока ответа, обращение к модели завершается
+          ошибкой «ни один клиент не на связи» и не переходит на другое подключение.
+        </p>
+      </details>
 
       {shown !== null ? (
         <IssuedTokenView issued={shown} onClose={() => setShown(null)} />
@@ -256,7 +261,7 @@ export function RunnerTokenPanel({ connection, detail, canManage, nowMs }: Runne
       {tokens.length === 0 ? (
         <p data-executor-runner-tokens="none">Токенов ещё нет{canManage && !archived ? ': выпустите первый кнопкой ниже' : ''}.</p>
       ) : (
-        <ul aria-label="Выпущенные токены" data-executor-runner-tokens={tokens.length}>
+        <ul className={styles.tokens} aria-label="Выпущенные токены" data-executor-runner-tokens={tokens.length}>
           {tokens.map((token) => (
             <TokenRow
               key={token.token_id}

@@ -61,7 +61,8 @@ function UploadPanelInner({ projectUid, onUploaded }: UploadPanelProps) {
  * read the project page already makes (its first page; the form says when there are more).
  */
 function UploadMany({ projectUid }: { readonly projectUid: ProjectUid }) {
-  const documents = useDocumentList(projectUid);
+  // `UI-PARITY-DOC-AUDIT`: the project page reads the listing in the server's audit order; the same request, so the one cache entry.
+  const documents = useDocumentList(projectUid, undefined, undefined, false, undefined, { order: 'audit' });
   const items = documents.data?.items ?? [];
   return (
     <details data-upload-many-panel="">
@@ -110,27 +111,37 @@ function UploadVersionPanelInner({ projectUid, documentUid, onUploaded }: Upload
   );
 }
 
-/** The accepted envelope, before the picker; `children` closes it with what the upload does. */
+/**
+ * The accepted envelope, before the picker; `children` closes it with what the upload does.
+ *
+ * **Folded** (UI parity, density): the summary line states the two limits a reader needs before choosing a file, and the
+ * rules, the portal-package explanation and what the upload does open under it. The original's drop zone is one line of
+ * words; a block of six rules above every form was the largest thing on the project page.
+ */
 function EnvelopeNote({ children }: { readonly children: ReactNode }) {
   return (
-    <div className="am-state" role="note">
-      <p className="am-state__title">Что принимается</p>
-      <div className="am-state__detail">
-        <ul>
-          {UPLOAD_ENVELOPE_RULES.map((rule) => (
-            <li key={rule}>{rule}</li>
-          ))}
-        </ul>
-        <p>
-          Комплект получают из портала распознавания: он выгружает PDF вместе с файлами
-          блоков и распознанного текста одним ZIP-архивом. Файл за пределами этих
-          ограничений отклоняется с указанием причины на экране. Текст не
-          восстанавливается оптическим распознаванием, а частично читаемый документ
-          никогда не принимается молча. Ограничения: {PC01_UPLOAD_ENVELOPE.maxBytesLabel}{' '}
-          и {PC01_UPLOAD_ENVELOPE.maxPages} страниц.
-        </p>
-        {children}
-      </div>
+    <div className="am-state" role="note" data-upload-envelope="">
+      <details>
+        <summary className="am-state__title">
+          Что принимается: ZIP-архив комплекта, не более {PC01_UPLOAD_ENVELOPE.maxBytesLabel} и {PC01_UPLOAD_ENVELOPE.maxPages} страниц
+        </summary>
+        <div className="am-state__detail">
+          <ul>
+            {UPLOAD_ENVELOPE_RULES.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+          <p>
+            Комплект получают из портала распознавания: он выгружает PDF вместе с файлами
+            блоков и распознанного текста одним ZIP-архивом. Файл за пределами этих
+            ограничений отклоняется с указанием причины на экране. Текст не
+            восстанавливается оптическим распознаванием, а частично читаемый документ
+            никогда не принимается молча. Ограничения: {PC01_UPLOAD_ENVELOPE.maxBytesLabel}{' '}
+            и {PC01_UPLOAD_ENVELOPE.maxPages} страниц.
+          </p>
+          {children}
+        </div>
+      </details>
     </div>
   );
 }

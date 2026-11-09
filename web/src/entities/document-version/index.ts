@@ -106,6 +106,11 @@ export {
   useDocumentList,
   useDocumentTags,
 } from './api/use-document-list';
+// `R-151l`, `UI-A-28`: the documents of one section in the section page's order, one page or all of them.
+export type { SectionListingScope, SectionWalk } from './api/use-section-documents';
+export { sectionListingAudit, useSectionDocumentList, useSectionDocumentWalk } from './api/use-section-documents';
+export type { SectionPosition, SectionWalkStep } from './model/section-walk';
+export { advanceSectionWalk, sectionPosition } from './model/section-walk';
 export { VERSION_PAGE_LIMIT, useVersionList } from './api/use-version-list';
 
 export type { VersionRowProps } from './ui/version-row';
@@ -119,6 +124,41 @@ export { ClassificationBadges } from './ui/classification-badges';
 export type { ClassificationHistoryProps } from './ui/classification-history';
 export { ClassificationHistory } from './ui/classification-history';
 
+// `UI-PARITY-DOC-AUDIT` (UI-A-46, UI-A-49, UI-A-38): the audit state of a document, its chip and the section filter.
+export type {
+  ActiveRunMark,
+  ActiveRunState,
+  AuditChip as AuditChipModel,
+  AuditChipTone,
+  AuditStateCode,
+  SectionAuditFilter,
+} from './model/audit-state';
+export {
+  ACTIVE_RUN_LABEL,
+  ACTIVE_RUN_TITLE,
+  AUDIT_PARTIAL_MARK,
+  AUDIT_STATE_CODES,
+  NOT_RUN_EMPTY_TITLE,
+  SECTION_FILTER_PARAM,
+  SHOW_ALL_LABEL,
+  activeRunHref,
+  activeRunMark,
+  auditChip,
+  auditStateOf,
+  notRunFilterSentence,
+  parseSectionAuditFilter,
+  pluralRu,
+  withNotRunFilter,
+} from './model/audit-state';
+export type { AuditChipProps } from './ui/audit-chip';
+export { AuditChip } from './ui/audit-chip';
+
 // `R-151s` (UI-A-45): documents as a grid of cards.
 export type { DocumentCardAddresses, DocumentCardGridProps } from './ui/document-cards';
 export { DocumentCardGrid, documentCardTitle } from './ui/document-cards';
+
+// `UI-A-35`: the audit figures of a set of documents, in one row.
+export type { AuditTally, TallyPart, TallyTone } from './model/audit-tally';
+export { EMPTY_TALLY, auditTally, tallyOfCounts, tallyParts } from './model/audit-tally';
+export type { AuditTallyLineProps } from './ui/audit-tally-line';
+export { AuditTallyLine } from './ui/audit-tally-line';

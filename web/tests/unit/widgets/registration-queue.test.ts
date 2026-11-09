@@ -35,12 +35,30 @@ function queueMarkup(request: RegistrationRequest): string {
 
 function refusal(code: ErrorEnvelope['error_code']): ApiError {
   return new ApiError(409, {
-    contract_version: '1.33.0', error_code: code,
+    contract_version: '1.42.0', error_code: code,
     message: 'Refused', correlation_id: 'cid-request-1', retryable: false,
   }, 'cid-request-1');
 }
 
 describe('administrator registration queue', () => {
+  it('names the filter as chips, with the server\'s waiting count on the first and the pending chip pressed', () => {
+    const markup = queueMarkup(REQUEST);
+    expect(markup).toContain('data-registration-filter="pending"');
+    expect(markup).toContain('Ожидают решения (1)');
+    for (const chip of ['pending', 'approved', 'rejected', 'all']) expect(markup).toContain(`data-registration-filter-chip="${chip}"`);
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain('am-badge--degraded');
+  });
+
+  it('draws the submission time in UTC, the way the lists do, and a queue with nobody waiting says so', () => {
+    expect(queueMarkup(REQUEST)).toContain('2026-10-08 00:00:00 UTC');
+    const client = newClient();
+    client.setQueryData(queryKeys.registrations.list({ status: 'pending', limit: 50 }), { items: [], page: { next_cursor: null }, pending_total: 0 });
+    const empty = renderScreen(client, createElement(RegistrationQueue));
+    expect(empty).toContain('Заявок, ожидающих решения, нет.');
+    expect(empty).toContain('Все заявки рассмотрены');
+  });
+
   it('shows the global pending count and actions only for a pending request', () => {
     const markup = queueMarkup(REQUEST);
     expect(markup).toContain('data-pending-total="1"');
@@ -53,7 +71,8 @@ describe('administrator registration queue', () => {
     const rejected: RegistrationRequest = { ...REQUEST, status: 'rejected', decided_at: '2026-10-08T01:00:00Z', rejection_reason: 'Не прошла проверку.' };
     const markup = queueMarkup(rejected);
     expect(markup).toContain('Отклонена');
-    expect(markup).toContain('Причина отказа: Не прошла проверку.');
+    expect(markup).toContain('Причина отказа</dt>');
+    expect(markup).toContain('Не прошла проверку.');
     expect(markup).not.toContain('Одобрить заявку');
     expect(renderScreen(newClient(), createElement(RegistrationDecisionControls, { request: rejected }))).toBe('');
   });

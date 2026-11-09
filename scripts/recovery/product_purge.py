@@ -117,9 +117,63 @@ KEEP_EXECUTOR_TABLES = frozenset((
 KEEP_SCHEDULE_TABLES = frozenset((
     "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_calendar_event",
 ))
+#: `0059_decision_memory` (`ADR-0027`): the expert decision memory. Its case content is a primary record that outlives the project and
+#: the document it came from, so a purge of product data keeps it: no table here has a foreign key into a PRODUCT table (`source_decision_id`,
+#: `origin_*` are bare identities), and a crop's Blob stays by the rule that a Blob any KEEP table references stays. Guard
+#: ``memory-captured`` (G1) refuses a purge while an `accept` or `reject` event has no memory decision, because the memory is the only
+#: copy of its context once the product tables are truncated.
+KEEP_MEMORY_TABLES = frozenset((
+    "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
+    "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_status_event",
+))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
-    | KEEP_EXECUTOR_TABLES | KEEP_SCHEDULE_TABLES
+    | KEEP_EXECUTOR_TABLES | KEEP_SCHEDULE_TABLES | KEEP_MEMORY_TABLES
+)
+
+#: The ledger events the decision memory keeps (`Q8`: a comment is not a decision) that have no memory decision yet. Selecting from it
+#: with `count(*)` is guard G1 of both the purge and the project erase; the project erase adds the scope.
+UNCAPTURED_DECISION_EVENTS_SQL = (
+    "FROM public.expert_decision_event e WHERE e.event_type IN ('accept', 'reject') "
+    "AND NOT EXISTS (SELECT 1 FROM public.decision_memory_decision d WHERE d.source_decision_id = e.decision_id)"
+)
+
+#: Guard G1's way out (`--accept-memory-loss`): a capture that can never succeed (a version whose stored artifact is missing or damaged,
+#: an inconsistent citation partition) would otherwise keep the purge or the erase refused for ever. The default stays a refusal; the
+#: operator names one reason from this CLOSED list -- the project erase writes it into the durable `erasure.requested` event, and free
+#: text would put personal data there (`project_erase.REASON_CODES` is closed for the same reason).
+MEMORY_LOSS_REASONS = ("artifact_missing_or_damaged", "citation_partition_inconsistent", "test_data", "owner_decided")
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryLoss:
+    """Decisions the operator accepted to lose from the memory: the reason, how many, and a digest of which (identities, no content)."""
+
+    reason: str
+    events: int
+    events_sha256: str
+
+    def as_document(self) -> dict[str, Any]:
+        return {"reason_code": self.reason, "events": self.events, "events_sha256": self.events_sha256}
+
+
+def accepted_memory_loss(decision_ids: Sequence[str], accept: str | None) -> MemoryLoss | None:
+    """The loss the operator accepted, or ``None`` when no decision is uncaptured (the flag then changes nothing).
+
+    ``accept`` is ``None`` for the default, and then any uncaptured decision is the caller's refusal, not this function's.
+    """
+    if accept is not None and accept not in MEMORY_LOSS_REASONS:
+        raise PurgeRefused(f"--accept-memory-loss must be one of {list(MEMORY_LOSS_REASONS)}; free text is refused. Nothing was touched.")
+    if not decision_ids or accept is None:
+        return None
+    ordered = sorted(decision_ids)
+    return MemoryLoss(accept, len(ordered), hashlib.sha256("\n".join(ordered).encode("utf-8")).hexdigest())
+
+
+MEMORY_LOSS_HINT = (
+    "If the capture can never succeed (a stored artifact of the decision's version is missing or damaged), the operator may accept "
+    f"the loss with --accept-memory-loss <reason> ({', '.join(MEMORY_LOSS_REASONS)}); the loss is then written into the plan, "
+    "its digest and the tool's report."
 )
 
 MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
@@ -175,6 +229,9 @@ PRODUCT_EVENT_PREFIXES = (
 #: ``command_record.command_type``. A registration approval is account-side.
 KEEP_COMMAND_TYPES = frozenset((
     "approve_registration",
+    # Contract 1.36.0 (`UI-A-93`): an administrator ending an account's sessions is account-side, like the approval
+    # above; the ``access.sessions_ended`` event it journals is kept by the ``access.`` prefix.
+    "end_user_sessions",
     # `EXEC-SEAL-01`: the executor configuration commands, kept with the configuration.
     "archive_executor_connection", "create_executor_connection", "generate_executor_ssh_key",
     "request_executor_probe", "revise_executor_connection", "set_executor_route",
@@ -208,6 +265,17 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
     "set_worker_intake",
+    # Contract 1.42.0 (`UI-A-60`, `R-151i`): the receipt of a run started from a stage of an earlier run is about a project's
+    # runs, a product command like `reaudit_run`.
+    "start_run_from_stage",
+    # Contract 1.35.0 (`UI-B-15`): the receipt of a proposals workbook loaded back is about a pass's proposals, a product
+    # command like `decide_optimisation_proposal`. Lane C1 sealed it without classifying it; the classification test
+    # (`test_every_event_type_and_command_type_the_source_writes_is_classified`) found it on the 1.36.0 stand.
+    "import_optimisation_proposal_decisions",
+    # Contract 1.37.0 (`UI-B-14`): the receipt of a carryover request and the receipt of each decision it appends are about a
+    # pass's proposals, product commands like `decide_optimisation_proposal`; ``optimisation_proposal_decision.command_id``
+    # references the second, so it is deleted only after the decision table is truncated.
+    "carry_over_proposal_decisions", "carry_over_proposal_decision",
     # `0032_ar_v3_run_group`: the receipt of a group start. ``ar_v3_run_group.command_id``
     # references it, and it is deleted only after the group is truncated.
     "start_ar_v3_beta_group",
@@ -322,6 +390,8 @@ class Plan:
     queued: Mapping[str, int]
     database_bytes: int
     sha256: str
+    #: Decisions the operator accepted to lose from the memory (`--accept-memory-loss`); ``None`` when none.
+    memory_loss: MemoryLoss | None = None
 
     @property
     def rows_to_delete(self) -> int:
@@ -509,6 +579,26 @@ def check_row_classes(connection: Connection) -> None:
     # <<< guard: command-types-classified
 
 
+def check_memory_captured(connection: Connection, accept_loss: str | None = None) -> MemoryLoss | None:
+    """Guard G1 (`DECISION-MEMORY-01` section 4.4): every decision the memory keeps is in the memory before a purge deletes its source.
+
+    Refuses by default. With ``accept_loss`` (one of :data:`MEMORY_LOSS_REASONS`) the uncaptured decisions are not a refusal but a
+    recorded :class:`MemoryLoss`, which the plan prints and its digest covers.
+    """
+    ids = list(connection.execute(text(f"SELECT e.decision_id {UNCAPTURED_DECISION_EVENTS_SQL} ORDER BY 1")).scalars())
+    loss = accepted_memory_loss(ids, accept_loss)
+    # >>> guard: memory-captured
+    if ids and loss is None:
+        raise PurgeRefused(
+            f"{len(ids)} expert decision event(s) (accept or reject) have no decision-memory case. The purge truncates the "
+            "ledger, and the memory is the only copy of the context of those decisions afterwards. The worker's sweep captures "
+            "them within a minute or so (python -m auditmanager.workers serve); run the purge again once the count is zero. "
+            f"{MEMORY_LOSS_HINT} Nothing was touched."
+        )
+    # <<< guard: memory-captured
+    return loss
+
+
 # --- digests ----------------------------------------------------------------------------------
 
 def _event_keep() -> str:
@@ -670,17 +760,20 @@ def norm_owned_keys(connection: Connection, keep_pairs: Sequence[tuple[str, str]
 
 
 def _plan_digest(product: Mapping[str, tuple[int, str]], doomed: Mapping[str, tuple[int, str]],
-                 keys: Sequence[tuple[str, str, str]]) -> str:
-    document = {
+                 keys: Sequence[tuple[str, str, str]], memory_loss: MemoryLoss | None = None) -> str:
+    document: dict[str, Any] = {
         "product": {table: list(value) for table, value in sorted(product.items())},
         "mixed_delete": {table: list(value) for table, value in sorted(doomed.items())},
         "keys": [list(key) for key in keys],
     }
+    if memory_loss is not None:
+        # Only when a loss was accepted, so the digest of a plan without one is what it always was.
+        document["memory_loss"] = memory_loss.as_document()
     return hashlib.sha256(json.dumps(document, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def build_plan(connection: Connection, client: Any | None, *, database: str, bucket: str,
-               allow_running: bool) -> Plan:
+               allow_running: bool, accept_memory_loss: str | None = None) -> Plan:
     """Everything that can be decided without writing. Raises :class:`PurgeRefused`.
 
     ``client=None`` skips the bucket listing (sizes stay unknown): the transaction re-derives the
@@ -690,6 +783,7 @@ def build_plan(connection: Connection, client: Any | None, *, database: str, buc
         connection.execute(text(statement))
     head = check_schema(connection)
     check_row_classes(connection)
+    memory_loss = check_memory_captured(connection, accept_memory_loss)
 
     running = {}
     for table, states in RUNNING_STATES.items():
@@ -748,7 +842,7 @@ def build_plan(connection: Connection, client: Any | None, *, database: str, buc
         norm_owned_present=sum(1 for key in norm_keys if key in listing),
         unaccounted=dict(sorted(by_prefix.items())), unaccounted_total=len(stray),
         bucket_objects=len(listing), running=running, queued=queued, database_bytes=size,
-        sha256=_plan_digest(product_digests, doomed, keys),
+        sha256=_plan_digest(product_digests, doomed, keys, memory_loss), memory_loss=memory_loss,
     )
 
 
@@ -774,7 +868,7 @@ def render_plan(plan: Plan, *, dry_run: bool) -> str:
     out.append(f"  product objects to delete, by exact key: {len(present)} objects, "
                f"{sum(o.size or 0 for o in present)} bytes "
                f"({len(plan.objects) - len(present)} more keys are named by rows but not in the bucket)")
-    out.append(f"  norm-owned objects (the custody ledger's, never touched): {plan.norm_owned_present}")
+    out.append(f"  norm-owned objects (the custody ledger's and the decision memory's crops; never touched): {plan.norm_owned_present}")
     stray = ", ".join(f"{prefix} {count}" for prefix, count in plan.unaccounted.items()) or "none"
     out.append(f"  other objects (named by no row; never touched): {plan.unaccounted_total} ({stray})")
     out.append(f"  objects in the bucket: {plan.bucket_objects}")
@@ -784,10 +878,16 @@ def render_plan(plan: Plan, *, dry_run: bool) -> str:
                f"{'  (--allow-running given)' if plan.running else ''}")
     out.append(f"  queued, discarded with the rest: {plan.queued['audit_run']} runs, {plan.queued['job']} jobs")
     out.append("")
+    if plan.memory_loss is not None:
+        out.append("-- decision memory: LOSS ACCEPTED (--accept-memory-loss) --")
+        out.append(f"  {plan.memory_loss.events} expert decision event(s) have no memory case and are deleted with their source; "
+                   f"reason: {plan.memory_loss.reason}; events-sha256: {plan.memory_loss.events_sha256}")
+        out.append("")
     if plan.nothing_to_purge:
         out.append("nothing to purge: every product table is empty and no product object is in the bucket.")
     elif dry_run:
         out.append("--dry-run: NOTHING ABOVE WAS CHANGED.")
+    out.append(f"memory-loss-accepted: {'no' if plan.memory_loss is None else plan.memory_loss.events}")
     out.append(f"nothing-to-purge: {'yes' if plan.nothing_to_purge else 'no'}")
     out.append(f"database-bytes: {plan.database_bytes}")
     out.append(f"product-object-bytes: {sum(o.size or 0 for o in present)}")
@@ -944,7 +1044,7 @@ def delete_objects(engine: Engine, client: Any, *, bucket: str, objects: Sequenc
 
 
 def apply_purge(engine: Engine, *, database: str, bucket: str, expected_plan: str,
-                objects_file: Path | None, allow_running: bool) -> dict[str, Any]:
+                objects_file: Path | None, allow_running: bool, accept_memory_loss: str | None = None) -> dict[str, Any]:
     """ONE transaction. Any exception, including a keep-row mismatch, rolls all of it back."""
     with engine.begin() as connection:
         for statement in _SESSION:
@@ -965,7 +1065,8 @@ def apply_purge(engine: Engine, *, database: str, bucket: str, expected_plan: st
             raise
 
         # The plan again, under the locks: nothing can change from here to COMMIT.
-        plan = build_plan(connection, None, database=database, bucket=bucket, allow_running=allow_running)
+        plan = build_plan(connection, None, database=database, bucket=bucket, allow_running=allow_running,
+                          accept_memory_loss=accept_memory_loss)
 
         # >>> guard: plan-unchanged
         if plan.sha256 != expected_plan:
@@ -1037,6 +1138,10 @@ def render_applied(result: Mapping[str, Any]) -> str:
         out.append(f"  {kind} {table}  {before[table]} -> {after[table]}")
     out.append(f"  KEEP tables and keep rows verified unchanged inside the transaction: "
                f"{len(result['keep'])} fingerprints equal")
+    loss = result["plan"].memory_loss
+    if loss is not None:
+        out.append(f"  DECISION MEMORY LOSS ACCEPTED: {loss.events} expert decision event(s) were deleted without a memory case "
+                   f"(reason {loss.reason}, events-sha256 {loss.events_sha256})")
     return "\n".join(out)
 
 
@@ -1069,10 +1174,12 @@ def _typed_names(engine: Engine, s3: S3StorageSettings, database: str, bucket: s
     # <<< guard: names-match
 
 
-def _read_only_plan(engine: Engine, client: Any, database: str, bucket: str, allow_running: bool) -> Plan:
+def _read_only_plan(engine: Engine, client: Any, database: str, bucket: str, allow_running: bool,
+                    accept_memory_loss: str | None = None) -> Plan:
     with engine.connect() as connection:
         connection.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
-        return build_plan(connection, client, database=database, bucket=bucket, allow_running=allow_running)
+        return build_plan(connection, client, database=database, bucket=bucket, allow_running=allow_running,
+                          accept_memory_loss=accept_memory_loss)
 
 
 def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
@@ -1082,6 +1189,10 @@ def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
     parser.add_argument("--database", required=True)
     parser.add_argument("--bucket", required=True)
     parser.add_argument("--allow-running", action="store_true")
+    parser.add_argument("--accept-memory-loss", metavar="REASON", choices=MEMORY_LOSS_REASONS,
+                        help="plan, snapshot-objects, apply: do not refuse for expert decisions the memory has not captured "
+                             "(a capture that can never succeed); the loss is written into the plan and its digest. One of: "
+                             + ", ".join(MEMORY_LOSS_REASONS))
     parser.add_argument("--dry-run", action="store_true", help="plan: say that nothing was changed")
     parser.add_argument("--dump-dir", type=Path, help="snapshot-objects: where the object half goes")
     parser.add_argument("--objects-file", type=Path, help="apply, delete-objects: the dumped key list")
@@ -1102,10 +1213,10 @@ def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
         _typed_names(engine, s3, args.database, args.bucket)
         client = s3_client(s3)
         if args.command == "plan":
-            plan = _read_only_plan(engine, client, args.database, args.bucket, args.allow_running)
+            plan = _read_only_plan(engine, client, args.database, args.bucket, args.allow_running, args.accept_memory_loss)
             print(render_plan(plan, dry_run=args.dry_run), file=out)
         elif args.command == "snapshot-objects":
-            plan = _read_only_plan(engine, client, args.database, args.bucket, args.allow_running)
+            plan = _read_only_plan(engine, client, args.database, args.bucket, args.allow_running, args.accept_memory_loss)
             digest, count, size = snapshot_objects(plan, client, args.dump_dir)
             print(f"snapshot-objects: {count} objects, {size} bytes copied to {args.dump_dir}/objects", file=out)
             print(f"plan-sha256: {plan.sha256}", file=out)
@@ -1113,7 +1224,7 @@ def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
         elif args.command == "apply":
             result = apply_purge(engine, database=args.database, bucket=args.bucket,
                                  expected_plan=args.expect_plan, objects_file=args.objects_file,
-                                 allow_running=args.allow_running)
+                                 allow_running=args.allow_running, accept_memory_loss=args.accept_memory_loss)
             print(render_applied(result), file=out)
         else:
             objects = read_object_list(args.objects_file, args.objects_sha256)

@@ -40,6 +40,7 @@ describe('a same-application address passes, as it was given', () => {
     '/admin/users',
     `/admin/users/${A_USER}?tab=all`,
     '/admin/registrations',
+    '/admin/auth-events',
   ])('%s', (candidate) => {
     expect(safeReturnPath(candidate)).toBe(candidate);
   });
@@ -158,5 +159,6 @@ describe('/403 names the role the registry requires for from', () => {
     expect(requiredRolesFor('/admin/users')).toEqual(['admin']);
     expect(requiredRolesFor(`/admin/users/${A_USER}`)).toEqual(['admin']);
     expect(requiredRolesFor('/admin/registrations')).toEqual(['admin']);
+    expect(requiredRolesFor('/admin/auth-events')).toEqual(['admin']);
   });
 });

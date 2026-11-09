@@ -13,6 +13,8 @@ import type {
   OptimisationPass,
   OptimisationProposal,
   ProposalAnalogBasis,
+  ProposalDecision,
+  ProposalDecisionCarryoverReport,
   ProposalDecisionState,
   ProposalMatchBasis,
   ProposalVerdict,
@@ -36,6 +38,19 @@ export const VERDICT_LABELS: Readonly<Record<ProposalVerdict, string>> = {
   accept: 'Принять',
   reject: 'Отклонить',
   revise: 'На доработку',
+  revoke: 'Снять решение',
+};
+
+/**
+ * What a recorded decision event says, in the past: a history line, the proposal's decision line, the knowledge base.
+ * `revoke` (`UI-B-12`) is the withdrawal of the decision before it; it is an event, never a state of a proposal, which
+ * stands `pending` again.
+ */
+export const DECISION_EVENT_LABELS: Readonly<Record<ProposalVerdict, string>> = {
+  accept: 'принято',
+  reject: 'отклонено',
+  revise: 'на доработку',
+  revoke: 'решение снято',
 };
 
 export const MATCH_BASIS_LABELS: Readonly<Record<ProposalMatchBasis, string>> = {
@@ -80,6 +95,27 @@ export function describeSaving(proposal: OptimisationProposal): string {
   return `Экономия: ${formatAmount(proposal.saving, proposal.currency)}`;
 }
 
+/**
+ * `UI-B-07` (contract 1.40.0): the price difference the server computed, «−25 %». The text is the server's -- the share of
+ * the current unit price the proposed one saves, rounded to two decimals, a decimal point and no trailing zero -- and is
+ * only regrouped here (decimal comma). A percent that rounded to «0» has no sign: «−0 %» says nothing a «0 %» does not.
+ */
+export function formatSavingPercent(text: string): string {
+  const shown = formatDecimal(text);
+  return text === '0' ? `${shown} %` : `\u2212${shown} %`;
+}
+
+/**
+ * The percent as the card states it, «−25 % к цене в прайс-листе», or `null` when the proposal carries none (the field
+ * is absent when the current price is zero, and on a server that predates it). It is a difference of the two prices,
+ * not of the saving, so it stands where the saving is «не рассчитана» too. Never computed here: a client that divided
+ * two decimal strings would round them its own way.
+ */
+export function describeSavingPercent(proposal: Pick<OptimisationProposal, 'saving_percent'>): string | null {
+  const percent = proposal.saving_percent;
+  return percent === undefined ? null : `${formatSavingPercent(percent)} к цене в прайс-листе`;
+}
+
 /** Where in the drawings the specification row is: page, sheet, lines, position. */
 export function describeProvenance(proposal: OptimisationProposal): string {
   const parts = [`страница ${proposal.page_number}`];
@@ -103,4 +139,71 @@ export function describeCounts(pass: OptimisationPass): string {
 /** The suggested download name; the server's `Content-Disposition` wins if it sends one. */
 export function proposalsCsvFileName(passId: string): string {
   return `${passId}-proposals.csv`;
+}
+
+/** The suggested name of the pass's workbook (`UI-B-15`), from the pass identity alone. */
+export function proposalsXlsxFileName(passId: string): string {
+  return `${passId}-proposals.xlsx`;
+}
+
+/**
+ * `UI-B-14`: «↩ Перенесено из V2», the mark of a decision that an expert carried over from an earlier version's pass
+ * (the original's wording); `null` for a decision made directly. The ordinal is the version's display order, never an
+ * identity.
+ */
+export function carriedFromLabel(decision: Pick<ProposalDecision, 'carried_from'>): string | null {
+  return decision.carried_from === null ? null : `↩ Перенесено из V${decision.carried_from.version_ordinal}`;
+}
+
+/** One earlier version a pass's decisions can be carried from: its display ordinal, and the pass to carry them from. */
+export interface CarrySource {
+  readonly versionOrdinal: number;
+  readonly pass: OptimisationPass;
+}
+
+/** The decisions in force of a pass (`accept`, `reject` and `revise`); the pending ones carry nothing. */
+export function decidedCount(pass: OptimisationPass): number {
+  const counts = pass.decision_counts;
+  return counts.accept + counts.reject + counts.revise;
+}
+
+/**
+ * `UI-B-14`: the earlier versions whose decisions can be carried into `target`, newest version first, each with the pass
+ * to carry from. A pass is a source only when it belongs to an earlier version of the same document set (the server
+ * refuses any other); of several passes over one version the newest that holds a decision in force is offered, or the
+ * newest when none does. A version with no pass offers nothing, and a pass is never offered for itself.
+ */
+export function carrySources(passes: readonly OptimisationPass[], target: OptimisationPass): readonly CarrySource[] {
+  const byVersion = new Map<number, OptimisationPass[]>();
+  for (const pass of passes) {
+    if (pass.document_uid !== target.document_uid || pass.version_ordinal >= target.version_ordinal) continue;
+    byVersion.set(pass.version_ordinal, [...(byVersion.get(pass.version_ordinal) ?? []), pass]);
+  }
+  return [...byVersion.entries()]
+    .sort(([left], [right]) => right - left)
+    .map(([versionOrdinal, ofVersion]) => ({
+      versionOrdinal,
+      // `passes` is newest first, so the first with a decision is the newest with one.
+      pass: ofVersion.find((pass) => decidedCount(pass) > 0) ?? ofVersion[0]!,
+    }));
+}
+
+/**
+ * What a carryover did, in sentences: how many of the source's decisions were carried, then each reason the rest were
+ * not. Every source decision is in exactly one count, so the sentences add up to `source_decided`.
+ */
+export function describeCarryover(report: ProposalDecisionCarryoverReport): readonly string[] {
+  const version = `V${report.source_version_ordinal}`;
+  if (report.source_decided === 0) return [`В ${version} нет решений для переноса.`];
+  const lines = [`Перенесено ${report.carried} из ${report.source_decided} решений ${version}.`];
+  if (report.target_decided > 0) {
+    lines.push(`Уже решено в этом проходе, оставлено как есть: ${report.target_decided}.`);
+  }
+  if (report.ambiguous > 0) {
+    lines.push(`Не перенесено, потому что одинаковых предложений несколько: ${report.ambiguous}.`);
+  }
+  if (report.unmatched > 0) {
+    lines.push(`Не перенесено, потому что такого предложения в этом проходе нет: ${report.unmatched}.`);
+  }
+  return lines;
 }

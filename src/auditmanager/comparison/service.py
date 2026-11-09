@@ -160,8 +160,17 @@ class ComparisonIntegrityError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class RunCandidate:
+    """One run of a version as the analysis reader lists it.
+
+    ``standard_analysis`` (`AR-V3-OPT-IN`) is false for a run of the AR v3 beta analysis. The findings of the two
+    analyses are not the same kind of object, so a comparison reads the newest published **standard** run by default and
+    refuses a run the caller names that is not one (``analysis_not_comparable``); it never reads one in place of the
+    other. The default is true: a reader that knows of one analysis only lists runs of it.
+    """
+
     run_id: str
     state: str
+    standard_analysis: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -590,7 +599,11 @@ class VersionComparisonService:
     ) -> str:
         runs = tuple(self._analyses.runs_newest_first(session, version_uid=facts.version_uid))
         for run in runs:
-            if not isinstance(run, RunCandidate) or not isinstance(run.state, str):
+            if (
+                not isinstance(run, RunCandidate)
+                or not isinstance(run.state, str)
+                or type(run.standard_analysis) is not bool
+            ):
                 raise ComparisonIntegrityError("run_candidate_invalid")
             try:
                 RunId.parse(run.run_id)
@@ -600,10 +613,17 @@ class VersionComparisonService:
             chosen = next((run for run in runs if run.run_id == requested), None)
             if chosen is None:
                 raise _Refused("run_not_of_version", side)
+            # `AR-V3-OPT-IN` (Q5): by kind first -- a v3 run is not a candidate whatever its state, and saying «not
+            # finished» of one that is would send the caller to wait for a result that cannot be compared.
+            if not chosen.standard_analysis:
+                raise _Refused("analysis_not_comparable", side)
             if chosen.state != RUN_STATE_PUBLISHED:
                 raise _Refused("run_not_published", side)
             return chosen.run_id
-        newest = next((run for run in runs if run.state == RUN_STATE_PUBLISHED), None)
+        # `AR-V3-OPT-IN` (Q3): the version's result is its newest published run of the standard analysis.
+        newest = next(
+            (run for run in runs if run.state == RUN_STATE_PUBLISHED and run.standard_analysis), None,
+        )
         if newest is None:
             raise _Refused("analysis_missing", side)
         return newest.run_id

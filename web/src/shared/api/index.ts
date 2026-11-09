@@ -80,6 +80,7 @@ export { pollRunStatus } from './polling';
 
 export type {
   AssignmentListFilters,
+  AuthEventListFilters,
   DecisionJournalFilters,
   FindingListFilters,
   QueryNamespace,

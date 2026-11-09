@@ -19,13 +19,39 @@ from auditmanager.api.schemas.common import timestamp
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
+    "DecisionCarriedFromView",
     "DecisionEventView",
     "DecisionRecordView",
     "append_decision_body",
     "check_comment_is_present_for_a_comment_event",
+    "decision_carried_from_body",
     "decision_event_body",
     "decision_record_body",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionCarriedFromView:
+    """Exactly the frozen ``DecisionCarriedFrom`` (`UI-A-73`, contract 1.39.0): the source of a carried decision.
+
+    The decision, its finding and its version are identities; ``version_ordinal`` is the version's display order
+    («V2») and is never one.
+    """
+
+    decision_id: str
+    finding_uid: str
+    version_uid: str
+    version_ordinal: int
+
+
+def decision_carried_from_body(view: DecisionCarriedFromView) -> dict[str, Any]:
+    return {
+        "decision_id": view.decision_id,
+        "finding_uid": view.finding_uid,
+        "version_uid": view.version_uid,
+        "version_ordinal": view.version_ordinal,
+    }
+
 
 @dataclass(frozen=True, slots=True)
 class DecisionEventView:
@@ -40,6 +66,9 @@ class DecisionEventView:
     verdict: str | None = None
     comment: str | None = None
     severity: str | None = None
+    #: `UI-A-73`: where a carried decision came from. Omitted from the wire body, never sent as ``null``: absent means
+    #: the event was made directly (and every event written before migration ``0058`` reads that way).
+    carried_from: DecisionCarriedFromView | None = None
 
 
 def decision_event_body(view: DecisionEventView) -> dict[str, Any]:
@@ -57,6 +86,8 @@ def decision_event_body(view: DecisionEventView) -> dict[str, Any]:
     }
     if view.severity is not None:
         body["severity"] = view.severity
+    if view.carried_from is not None:
+        body["carried_from"] = decision_carried_from_body(view.carried_from)
     return body
 
 
@@ -94,6 +125,8 @@ class DecisionRecordView:
     #: Omitted from the wire body, never sent as ``null`` -- the convention ``DocumentVersion.section``
     #: and ``SectionDocumentCount.section`` already carry.
     section: str | None = None
+    #: `UI-A-73`: as on ``DecisionEventView``.
+    carried_from: DecisionCarriedFromView | None = None
 
 
 def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
@@ -124,6 +157,8 @@ def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
         body["severity"] = view.severity
     if view.section is not None:
         body["section"] = view.section
+    if view.carried_from is not None:
+        body["carried_from"] = decision_carried_from_body(view.carried_from)
     return body
 
 

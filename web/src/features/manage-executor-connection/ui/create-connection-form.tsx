@@ -99,7 +99,7 @@ export function CreateConnectionForm({ pinnedModels }: CreateConnectionFormProps
   }
 
   return (
-    <form className="am-form" key={generation} onSubmit={(event) => void submit(event)} data-executor-create-form>
+    <form className="am-form am-form--two" key={generation} onSubmit={(event) => void submit(event)} data-executor-create-form>
       <h2>Новое подключение</h2>
       {half !== null ? (
         <p className="am-note" role="status" data-executor-create-half>

@@ -39,6 +39,11 @@ account that holds or handed out work cannot be purged (archive remains).
   creation on an occupied scope is `conflict` with `conflict_reason: assignment_open`.
 - An exact repeat of a transition (same kind, reason and new assignee as the latest event)
   answers the current state and writes nothing.
+- The status counts (`queries.assignment_overview`, contract 1.36.0) are the dispatcher's state chips: every
+  status with its number of assignments, in the order of `STATUSES`, `0` for an empty one, over the same scope
+  as the listing (what the viewer may read, `mine`, `project_uid`) and never its `status` filter, so each count is
+  what choosing that status would list. One grouped statement over `work_assignment_current`; nothing is counted
+  from a page.
 - Refusals use the existing catalog: `validation_failed` (`constraint:
   active_expert_required`, `differs_from_current_assignee`, `required`, `not_allowed`,
   `max_length`, `enum`, `pattern`), `permission_denied` (`role:admin`, `role:expert`,

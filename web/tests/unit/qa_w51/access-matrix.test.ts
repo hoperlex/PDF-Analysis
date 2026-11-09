@@ -7,7 +7,7 @@ import { screenAt, screenDecision } from '@/shared/config';
 // escape routes need a session, and the three administration screens need admin.
 const PUBLIC = ['/login', '/register', '/register/submitted'] as const;
 const ACCOUNT = ['/account', '/account/password'] as const;
-const ADMIN = ['/admin/users', '/admin/users/[user_uid]', '/admin/registrations'] as const;
+const ADMIN = ['/admin/users', '/admin/users/[user_uid]', '/admin/registrations', '/admin/auth-events'] as const;
 
 const complete = (roles: readonly string[]): ScreenDecisionSubject => ({
   roles, isDefaultCredential: false, profileComplete: true,

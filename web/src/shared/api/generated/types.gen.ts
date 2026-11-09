@@ -6,21 +6,23 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.33.0 (OpenAPI 3.1.0)
- *   sha256 f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f
+ *   AuditManager PC-01 API 1.42.0 (OpenAPI 3.1.0)
+ *   sha256 8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.33.0';
+export const CONTRACT_VERSION = '1.42.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f';
+export const CONTRACT_DIGEST = '8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
+  'AcceptedOptimisationProposal',
+  'AcceptedOptimisationProposalPage',
   'Account',
   'AccountPage',
   'AgentPackageVersion',
@@ -67,11 +69,16 @@ export const SCHEMA_NAMES = [
   'AssignmentMove',
   'AssignmentPage',
   'AssignmentStatus',
+  'AssignmentStatusCount',
   'AssignmentTransitionKind',
   'AssignmentUid',
+  'AuthEvent',
+  'AuthEventPage',
+  'AuthEventType',
   'BlockGeometry',
   'CarryOverDecisionRequest',
   'CarryOverDecisionResponse',
+  'CarryOverProposalDecisionsRequest',
   'CarryoverCandidate',
   'CarryoverSourceDecision',
   'ChangePasswordRequest',
@@ -281,6 +288,7 @@ export const SCHEMA_NAMES = [
   'Cursor',
   'DashboardSummary',
   'DecideOptimisationProposalRequest',
+  'DecisionCarriedFrom',
   'DecisionEvent',
   'DecisionEventPage',
   'DecisionEventType',
@@ -292,6 +300,8 @@ export const SCHEMA_NAMES = [
   'DecisionRecord',
   'DecisionRecordPage',
   'DiffHunk',
+  'DocumentActiveRun',
+  'DocumentAudit',
   'DocumentAuditCounts',
   'DocumentTagCount',
   'DocumentTagList',
@@ -382,6 +392,7 @@ export const SCHEMA_NAMES = [
   'ExtendedRunReview',
   'FailExecutorTaskRequest',
   'Finding',
+  'FindingBlockLink',
   'FindingCategory',
   'FindingComparison',
   'FindingDetail',
@@ -396,6 +407,7 @@ export const SCHEMA_NAMES = [
   'GenerateComparisonSummaryRequest',
   'GenerateComparisonSummaryResponse',
   'IdempotencyKey',
+  'ImportProposalDecisionsRequest',
   'ImportRunDecisionsRequest',
   'InputManifestEntry',
   'IssueRunnerTokenRequest',
@@ -488,8 +500,13 @@ export const SCHEMA_NAMES = [
   'PromptBundleId',
   'ProposalAnalogBasis',
   'ProposalDecision',
+  'ProposalDecisionCarriedFrom',
+  'ProposalDecisionCarryoverReport',
   'ProposalDecisionCounts',
   'ProposalDecisionId',
+  'ProposalDecisionImportRefusal',
+  'ProposalDecisionImportReport',
+  'ProposalDecisionImportRow',
   'ProposalDecisionList',
   'ProposalDecisionRecord',
   'ProposalDecisionRecordPage',
@@ -526,6 +543,7 @@ export const SCHEMA_NAMES = [
   'RunCostEstimate',
   'RunCostEstimateRequest',
   'RunExecutor',
+  'RunFindingBlockLinks',
   'RunId',
   'RunNormReferences',
   'RunPreset',
@@ -685,6 +703,7 @@ export const SCHEMA_NAMES = [
   'StartComparisonAiJobRequest',
   'StartComparisonAiSheetChangesRequest',
   'StartComparisonSeriesRequest',
+  'StartRunFromStageRequest',
   'StartRunRequest',
   'StartStageChainBatchRequest',
   'StartStageChainRunRequest',
@@ -734,6 +753,50 @@ export const SCHEMA_NAMES = [
   'WorkerState',
 ] as const;
 
+/**
+ * `UI-B-27` (contract 1.35.0): one proposal whose decision in force is an acceptance, with where it belongs
+ * (project, document set, version, the version's section) and the acceptance itself.
+ *
+ * A row is named by its proposal's own identity (``optimisation_proposal_id``); ``page_number`` and ``row_position``
+ * locate it in the drawing and are never an identity. The prices and the saving are the proposal's own exact decimal
+ * text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number. `carried_from` (`D-335`, contract 1.39.0) is `null` for an acceptance an expert made directly and names the source decision -- with its pass, version and the version's display ordinal -- when the acceptance was carried over from an earlier version's pass (`UI-B-14`).
+ */
+export type AcceptedOptimisationProposal = {
+  actor_label: string;
+  carried_from: ProposalDecisionCarriedFrom | null;
+  comment: string | null;
+  currency: string;
+  current_unit_price: string;
+  decided_at: string;
+  document_name: string;
+  document_uid: DocumentUid;
+  matched_name: string;
+  optimisation_pass_id: OptimisationPassId;
+  optimisation_proposal_id: OptimisationProposalId;
+  page_number: number;
+  project_name: string;
+  project_uid: ProjectUid;
+  proposal_decision_id: ProposalDecisionId;
+  proposal_type: OptimisationProposalType;
+  proposed_name: string;
+  proposed_unit_price: string;
+  proposed_vendor: string;
+  quantity: string | null;
+  row_position: string | null;
+  row_text: string;
+  saving: string | null;
+  section?: ProjectSection;
+  unit: string;
+  version_uid: VersionUid;
+};
+
+/** `UI-B-27`: one page of the accepted proposals, newest acceptance first, and how many match the filters. */
+export type AcceptedOptimisationProposalPage = {
+  items: Array<AcceptedOptimisationProposal>;
+  page: PageInfo;
+  total: number;
+};
+
 /** One account, as the account itself reads it through `getMe` and an administrator reads it through the account operations. No credential material. */
 export type Account = {
   /** Null for an active account. An archived account cannot sign in and none of its credentials is accepted; an administrator may restore it. */
@@ -746,6 +809,8 @@ export type Account = {
   is_default_credential: boolean;
   /** Null until somebody gives the names. */
   last_name: string | null;
+  /** The instant of the account's latest successful sign-in, read from the access journal; null when none is recorded (the account never signed in, or signed in before the journal began). Present on every Account answer, including `getMe`. */
+  last_sign_in_at: string | null;
   /** The sign-in identifier: the normalised e-mail address (trimmed, lower-case, ASCII, an internationalised domain in its `xn--` form, at most 254 characters) once the profile is complete, or the legacy login an account created before the identity upgrade keeps until it completes its profile. Not an identity of this surface. */
   login: string;
   /** Optional; null when the person has none. */
@@ -830,7 +895,8 @@ export type AnalysisProfileSourceFile = {
  * ``draft``: a package ported from the legacy prompts, or authored in this repository, whose
  * open questions no lane has answered in writing. ``reviewed``: a package whose open questions a
  * lane answered in writing; no human review (`R-146ag`). Every status is executable; the status is
- * recorded, never hidden. The new original-source АР profile has ``draft`` status until expert review.
+ * recorded, never hidden. АР has no status because it has no text profile
+ * (`PROD-11-AR-V1-V2-REMOVAL-01`): its row carries ``profile: null``.
  */
 export const ANALYSIS_PROFILE_STATUS_VALUES = [
   'draft',
@@ -1029,6 +1095,8 @@ export type ArV3BetaPackStatus = {
   prompt_bundle_id?: PromptBundleId;
   review?: ArV3BetaPackReview;
   scope_ids?: Array<("F1" | "F2" | "A1" | "A2" | "S1" | "S2")>;
+  /** `AR-V3-OPT-IN` (contract 1.38.0): present exactly when `state` is `installed`. Whether this deployment allows a start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`, off unless set to `1`). Installed is the capability to execute, read and review; this is the separate permission to start. While it is false startArV3BetaGroup and estimateArV3GroupCost answer `409 conflict` (`ar_v3_start_not_enabled`) and runs already accepted finish. A screen offers AR v3 only when the pack is installed and this is true, and never makes it the default. */
+  start_allowed?: boolean;
   state: "installed" | "not_installed";
 };
 
@@ -1141,9 +1209,12 @@ export type AssignmentMove = {
   planned_on?: string;
 };
 
+/** Contract 1.36.0: one page of assignments, the number that match every filter of the request (`total`), and every status with its count over the scope filters only (`overview`). */
 export type AssignmentPage = {
   items: Array<Assignment>;
+  overview: Array<AssignmentStatusCount>;
   page: PageInfo;
+  total: number;
 };
 
 /**
@@ -1164,6 +1235,12 @@ export const ASSIGNMENT_STATUS_VALUES = [
 /** AssignmentStatus - the closed value set above. */
 export type AssignmentStatus = (typeof ASSIGNMENT_STATUS_VALUES)[number];
 
+/** Contract 1.36.0: how many assignments stand in one status. */
+export type AssignmentStatusCount = {
+  count: number;
+  status: AssignmentStatus;
+};
+
 /** `W61-DISPATCHER-01`. The events a transition may append: every kind but ``assigned``. */
 export const ASSIGNMENT_TRANSITION_KIND_VALUES = [
   'started',
@@ -1180,6 +1257,53 @@ export type AssignmentUid = string;
 
 /** The contract pattern for `AssignmentUid`. Anchored; use with `new RegExp()`. */
 export const ASSIGNMENT_UID_PATTERN = "^asg_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * Contract 1.36.0 (`UI-A-94`): one line of the access journal, as it was recorded; never changed.
+ *
+ * Never a password, a token, an address or a login as typed: the account is named by identity and by the label it has
+ * now, and an event about an account that has since been deleted keeps its identity with a null label.
+ */
+export type AuthEvent = {
+  actor_label: string | null;
+  actor_user_uid: UserUid | null;
+  default_credential: boolean | null;
+  event_id: string;
+  event_type: AuthEventType;
+  failures: number | null;
+  occurred_at: string;
+  role: Role | null;
+  source: "api" | "host_cli";
+  subject_label: string | null;
+  subject_user_uid: UserUid;
+};
+
+/** Contract 1.36.0 (`UI-A-94`): one page of the access journal, newest first. */
+export type AuthEventPage = {
+  items: Array<AuthEvent>;
+  page: PageInfo;
+};
+
+/**
+ * Contract 1.36.0 (`UI-A-94`): the kinds of line the access journal holds, the ``access.*`` events of its writer.
+ *
+ * ``sign_in_succeeded``; ``sign_in_blocked`` (a refused attempt that started a cooling-off period, at most one per
+ * account per period); ``password_changed`` (the account's own); ``password_reset`` (an administrator's temporary
+ * password); ``role_granted`` and ``role_revoked``; ``sessions_ended`` (an administrator ended every session of the
+ * account).
+ */
+export const AUTH_EVENT_TYPE_VALUES = [
+  'sign_in_succeeded',
+  'sign_in_blocked',
+  'password_changed',
+  'password_reset',
+  'role_granted',
+  'role_revoked',
+  'sessions_ended',
+] as const;
+
+/** AuthEventType - the closed value set above. */
+export type AuthEventType = (typeof AUTH_EVENT_TYPE_VALUES)[number];
 
 /** One derived block, one extracted text line. `block_id` is an anchor inside this artifact -- it matches `Evidence.block_id`'s pattern -- and is never a contract identifier. */
 export type BlockGeometry = {
@@ -1233,6 +1357,11 @@ export type CarryOverDecisionResponse = {
   source_version_ordinal: number;
   source_version_uid: VersionUid;
   target_version_uid: VersionUid;
+};
+
+/** `UI-B-14` (contract 1.37.0): the pass whose decisions in force are carried into the pass of the path. */
+export type CarryOverProposalDecisionsRequest = {
+  source_optimisation_pass_id: OptimisationPassId;
 };
 
 /**
@@ -2613,7 +2742,7 @@ export type ComparisonRasterSize = {
 
 /** Why two versions are not compared; ``side`` when the reason is one side's. */
 export type ComparisonRefusal = {
-  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
+  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "analysis_not_comparable" | "text_unavailable" | "text_too_large";
   side: "source" | "target" | null;
 };
 
@@ -3698,10 +3827,25 @@ export type DecideOptimisationProposalRequest = {
   verdict: ProposalVerdict;
 };
 
-/** One appended event. Never updated and never removed. */
+/**
+ * `UI-A-73` (contract 1.39.0): where a carried decision came from -- the decision of an earlier version's finding
+ * that an expert carried over to this finding (`W59-DECISION-CARRYOVER-01`).
+ *
+ * ``decision_id`` is the source decision's own identity and ``finding_uid`` and ``version_uid`` the finding and the
+ * version it was made on. ``version_ordinal`` is the version's display order («V2») and is never an identity.
+ */
+export type DecisionCarriedFrom = {
+  decision_id: DecisionId;
+  finding_uid: FindingUid;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/** One appended event. Never updated and never removed. `carried_from` (`UI-A-73`, contract 1.39.0) names the decision of an earlier version's finding that an expert carried over to this finding (`DecisionCarriedFrom`); it is absent for an event an expert made directly, and for every event written before migration `0058`, whose rendered `comment` still says where it came from. */
 export type DecisionEvent = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
   author_label: string;
+  carried_from?: DecisionCarriedFrom;
   comment?: string | null;
   decision_id: DecisionId;
   event_type: DecisionEventType;
@@ -3774,10 +3918,11 @@ export type DecisionImportRow = {
   row: number;
 };
 
-/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). */
+/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
   author_label: string;
+  carried_from?: DecisionCarriedFrom;
   category: FindingCategory;
   comment?: string | null;
   current_verdict: Verdict;
@@ -3823,6 +3968,47 @@ export type DiffHunk = {
   target_start: number;
 };
 
+/**
+ * `UI-A-47` (contract 1.40.0): the run of a version that is in flight -- admitted and not yet terminal.
+ *
+ * `state` is `queued` (waiting for an executor), `running` or `validating`; a `created` run has not been admitted and a terminal run is not active. Only the standard analysis is named here: a run of an AR v3 group is not (as it is never the version's result). No progress figure is carried: the run reports its stages, and a figure of «пакет n/m» would need a plan of its own (`D-345`).
+ */
+export type DocumentActiveRun = {
+  run_id: RunId;
+  state: "queued" | "running" | "validating";
+};
+
+/**
+ * The audit of one version, as `listDocuments` shows it on each document (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
+ *
+ * The per-document form of the counters of `DocumentAuditCounts`, read by the same rules (`R-150n`, `R-150p`,
+ * `R-150r`, `R-150s`, `R-150t`): the version's **result run** is its latest run in state `published` or `partial`,
+ * ordered by `(created_at, run_id)` as `listRuns` orders them. A newer run still in flight does not displace it,
+ * and a `failed` or `cancelled` run is not a result.
+ *
+ * `state` is one of four words. `not_run`: no result run (never run, run only to `failed` or `cancelled`, or only
+ * in flight); there is then no `result_run_id`, and a failed or cancelled latest run does not change that, so the
+ * chip «отказ» (`R-150r`) is a marking of the screen's own and not a fifth state. `clean`: a result run that
+ * published no finding, a state of its own (`R-150n`). `awaiting_decision`: a result run with at least one finding
+ * whose current verdict is undecided (`pending` or `needs_manual_review`). `checked`: a result run, every finding
+ * decided. `partial` is not a fifth state: it is true when the result run is `partial` and marks the document in
+ * any of the four states (`R-150s`).
+ *
+ * `finding_count` is the number of published findings of the result run and `undecided_finding_count` the number of
+ * those still undecided; both are zero when there is no result run. Optimisation proposals are not part of any
+ * figure (`R-150u`).
+ *
+ * `active_run` (`UI-A-47`, contract 1.40.0) names the version's run in flight -- its latest run of the standard analysis in state `queued`, `running` or `validating`, by the order of the result run -- and is absent when none is. It is a fact beside the four words and changes none of them: a document whose first run is in flight is still `not_run`, and a `checked` one with a re-run in flight is still `checked`.
+ */
+export type DocumentAudit = {
+  active_run?: DocumentActiveRun;
+  finding_count: number;
+  partial: boolean;
+  result_run_id?: RunId;
+  state: "not_run" | "clean" | "awaiting_decision" | "checked";
+  undecided_finding_count: number;
+};
+
 /** The audit-state counters of a set of documents (`UI-PARITY-P0B`, `R-150n` ... `R-150u`). Every figure counts documents by their **current version only** (`R-150p`) and reads that version's **result run**: its latest run in state `published` or `partial`, ordered by `(created_at, run_id)` as `listRuns` orders them; a newer run still in flight does not displace it, and a `failed` or `cancelled` run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`); AR v3 six-run groups follow the same per-run rule for now (`R-150t`). A document is in exactly one of four states, so `document_count` is `not_run + clean + awaiting_decision + checked`. `partial` is not a fifth state: it counts the documents, in any of the four, whose result run is `partial` (`R-150s`). */
 export type DocumentAuditCounts = {
   /** Documents with a result run and at least one finding whose current verdict is undecided (`pending` or `needs_manual_review`). The red badge «ждут решения» (`R-150o`). */
@@ -3860,6 +4046,7 @@ export const DOCUMENT_UID_PATTERN = "^doc_[0-9A-HJKMNP-TV-Z]{26}$";
 export type DocumentVersion = {
   /** `R-151a` (contract 1.22.0): when the document was archived; absent while it is in use. */
   archived_at?: string;
+  audit?: DocumentAudit;
   byte_size: number;
   classification?: VersionClassification;
   display_title?: string;
@@ -3941,7 +4128,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.33.0";
+  contract_version: "1.42.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4732,10 +4919,11 @@ export type FailExecutorTaskRequest = {
   reason: string;
 };
 
-/** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. */
+/** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. `current_verdict_carried_from` (`UI-A-73`, contract 1.39.0) names where the decision that carries `current_verdict` came from, when an expert carried it over from an earlier version's finding; it is absent when the verdict was decided directly, was withdrawn, or was carried before migration `0058`. A later verdict an expert gives the finding replaces it, and a comment leaves it standing. */
 export type Finding = {
   category: FindingCategory;
   current_verdict: Verdict;
+  current_verdict_carried_from?: DecisionCarriedFrom;
   decided_severity?: Severity;
   decision_recorded_at?: string | null;
   execution_status?: FindingExecutionStatus;
@@ -4754,6 +4942,12 @@ export type Finding = {
   /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
   stated_value?: string;
   version_uid: VersionUid;
+};
+
+/** `UI-PARITY-C6` (contract 1.41.0): the portal blocks that hold one finding's evidence. */
+export type FindingBlockLink = {
+  finding_uid: FindingUid;
+  portal_block_ids: Array<PortalBlockId>;
 };
 
 /** Closed finding categories: seven prior categories and five v3 normative categories. */
@@ -4784,10 +4978,11 @@ export type FindingComparison = {
   unavailable_reason: "findings_over_limit" | null;
 };
 
-/** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. */
+/** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. `current_verdict_carried_from` (`UI-A-73`) is as on `Finding`. */
 export type FindingDetail = {
   category: FindingCategory;
   current_verdict: Verdict;
+  current_verdict_carried_from?: DecisionCarriedFrom;
   decided_severity?: Severity;
   decision_event_count?: number;
   decision_recorded_at?: string | null;
@@ -4905,6 +5100,15 @@ export type IdempotencyKey = string;
 
 /** The contract pattern for `IdempotencyKey`. Anchored; use with `new RegExp()`. */
 export const IDEMPOTENCY_KEY_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$";
+
+/**
+ * `UI-B-15` (contract 1.35.0): the multipart body of ``importOptimisationProposalDecisions``.
+ *
+ * ``file`` is the pass's workbook as ``exportOptimisationProposalsXlsx`` produced it, edited, at most 10 MiB.
+ */
+export type ImportProposalDecisionsRequest = {
+  file: Blob;
+};
 
 /**
  * `R-151d` (contract 1.27.0): the multipart body of ``importRunDecisions``.
@@ -5314,6 +5518,9 @@ export type ObservationProvenance = {
  * One optimisation pass, pinned to everything it read: the version, its published run
  * and that run's text layer, the price-list revision and the vendor-list revision (global
  * or the project's own, ``vendor_list_source``), and the three algorithm versions.
+ *
+ * ``version_ordinal`` (contract 1.37.0, `UI-B-14`) is the display order of the version the pass was started over
+ * («V2»), so a screen can name an earlier version's pass; it is never an identity.
  */
 export type OptimisationPass = {
   decision_counts: ProposalDecisionCounts;
@@ -5335,6 +5542,7 @@ export type OptimisationPass = {
   text_layer_sha256: Sha256;
   vendor_list_id: VendorListId;
   vendor_list_source: VendorListScope;
+  version_ordinal: number;
   version_uid: VersionUid;
 };
 
@@ -5359,6 +5567,8 @@ export type OptimisationPassList = {
  * proposed_unit_price) × quantity`` and is ``null`` -- never ``0`` -- when ``quantity`` is
  * ``null`` because the row's quantity text is not a plain number. ``ordinal`` is a display
  * order inside the pass, never an identity.
+ *
+ * ``saving_percent`` (`UI-B-07`, contract 1.40.0) is the server's percent of the current unit price that the proposed price saves, to two decimals; optional and absent when the current unit price is zero.
  */
 export type OptimisationProposal = {
   analog_basis: ProposalAnalogBasis;
@@ -5385,6 +5595,8 @@ export type OptimisationProposal = {
   row_position: string | null;
   row_text: string;
   saving: string | null;
+  /** `UI-B-07` (contract 1.40.0): how much cheaper the proposed unit price is than the current one, in percent of the current unit price -- `(current_unit_price - proposed_unit_price) / current_unit_price * 100`, computed exactly and rounded half up to two decimals, written without a trailing zero (`25`, `33.33`). It is the share that `saving` is of the cost at the current price, in which the quantity cancels, so it is present where `saving` is `null` because the quantity is not a plain number; absent only when the current unit price is zero. The one figure of a proposal that is rounded. Never computed by a client. */
+  saving_percent?: string;
   sheet_label: string | null;
   spec_row_key: string;
   table_ordinal: number;
@@ -5810,15 +6022,55 @@ export const PROPOSAL_ANALOG_BASIS_VALUES = [
 /** ProposalAnalogBasis - the closed value set above. */
 export type ProposalAnalogBasis = (typeof PROPOSAL_ANALOG_BASIS_VALUES)[number];
 
-/** One appended expert decision. Never changed; the proposal's latest one is current. */
+/**
+ * One appended expert decision. Never changed; the proposal's latest one is current -- unless
+ * that is a ``revoke``, which withdrew the decision before it and left the proposal ``pending``.
+ *
+ * ``carried_from`` (`UI-B-14`) is ``null`` for a decision an expert made directly and names the source when the
+ * expert carried it over from an earlier version's pass; the decision is the confirming expert's own either way
+ * (``actor_user_uid``), and a later decision on the proposal supersedes it like any other.
+ */
 export type ProposalDecision = {
   actor_label: string;
   actor_user_uid: UserUid;
+  carried_from: ProposalDecisionCarriedFrom | null;
   comment: string | null;
   decided_at: string;
   optimisation_proposal_id: OptimisationProposalId;
   proposal_decision_id: ProposalDecisionId;
   verdict: ProposalVerdict;
+};
+
+/**
+ * `UI-B-14` (contract 1.37.0): where a carried decision came from -- the decision of an earlier version's pass
+ * that an expert carried over to this proposal.
+ *
+ * ``proposal_decision_id`` is the source decision's own identity and ``optimisation_pass_id`` and ``version_uid`` the
+ * pass and version it was made in. ``version_ordinal`` is the version's display order («V2») and is never an identity.
+ */
+export type ProposalDecisionCarriedFrom = {
+  optimisation_pass_id: OptimisationPassId;
+  proposal_decision_id: ProposalDecisionId;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/**
+ * `UI-B-14`: what a carryover did. Every decision in force of the source pass (``source_decided``) is counted in
+ * exactly one of four outcomes: ``carried`` (appended to the target pass), ``target_decided`` (the one proposal of the
+ * target with the same content already has an event, which stands), ``ambiguous`` (more than one proposal of either
+ * pass has that content, so nothing is guessed) or ``unmatched`` (no proposal of the target pass has it).
+ * ``source_version_ordinal`` is the display order of the source's version («V2»), never an identity.
+ */
+export type ProposalDecisionCarryoverReport = {
+  ambiguous: number;
+  carried: number;
+  optimisation_pass_id: OptimisationPassId;
+  source_decided: number;
+  source_optimisation_pass_id: OptimisationPassId;
+  source_version_ordinal: number;
+  target_decided: number;
+  unmatched: number;
 };
 
 /**
@@ -5836,6 +6088,36 @@ export type ProposalDecisionId = string;
 
 /** The contract pattern for `ProposalDecisionId`. Anchored; use with `new RegExp()`. */
 export const PROPOSAL_DECISION_ID_PATTERN = "^opd_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** Why a row of the proposals workbook was refused. */
+export const PROPOSAL_DECISION_IMPORT_REFUSAL_VALUES = [
+  'no_proposal_id',
+  'duplicate_proposal',
+  'unknown_proposal',
+  'unknown_decision',
+  'comment_required',
+  'comment_too_long',
+] as const;
+
+/** ProposalDecisionImportRefusal - the closed value set above. */
+export type ProposalDecisionImportRefusal = (typeof PROPOSAL_DECISION_IMPORT_REFUSAL_VALUES)[number];
+
+/** `UI-B-15`: what an import of edited proposal decisions did, row by row, in sheet order. */
+export type ProposalDecisionImportReport = {
+  optimisation_pass_id: OptimisationPassId;
+  recorded: number;
+  refused: number;
+  rows: Array<ProposalDecisionImportRow>;
+  unchanged: number;
+};
+
+/** `UI-B-15`: one row of «Предложения» that names an ID or a decision; the proposal's identity only for a proposal of the pass. */
+export type ProposalDecisionImportRow = {
+  optimisation_proposal_id?: OptimisationProposalId;
+  outcome: DecisionImportOutcome;
+  reason?: ProposalDecisionImportRefusal;
+  row: number;
+};
 
 /** Every decision of one proposal, oldest first; the last is current. */
 export type ProposalDecisionList = {
@@ -5914,12 +6196,16 @@ export type ProposalPosition = {
 
 /**
  * An expert's verdict on a proposal. ``revise`` says the analog is right in principle
- * and the proposal needs changing; its comment is required.
+ * and the proposal needs changing; its comment is required. ``revoke`` (`UI-B-12`, contract
+ * 1.35.0, «Снять решение») withdraws the decision in force: it is one more appended event, it
+ * takes the proposal back to ``pending``, and it is refused (``409 conflict``,
+ * ``conflict_reason`` ``no_decision_to_revoke``) when no decision stands.
  */
 export const PROPOSAL_VERDICT_VALUES = [
   'accept',
   'reject',
   'revise',
+  'revoke',
 ] as const;
 
 /** ProposalVerdict - the closed value set above. */
@@ -6141,6 +6427,7 @@ export type RunCostConsent = {
 export type RunCostEstimate = {
   billing: "metered" | "unmetered";
   calls: number;
+  computed_stage_ids?: Array<StageId>;
   connection_revision_id?: ExecutorRevisionId;
   currency: "USD";
   estimate_digest: Sha256;
@@ -6156,8 +6443,11 @@ export type RunCostEstimate = {
   provider_mode: ProviderMode;
   recommended_ceiling_micros: number;
   relaxed_limits: boolean;
+  reused_stage_ids?: Array<StageId>;
   routing_rule_revision_id?: ExecutorRoutingRuleRevisionId;
   scope: "run" | "ar_v3_group";
+  start_from_run_id?: RunId;
+  start_stage_id?: StageId;
   text_characters: number;
   version_uid: VersionUid;
   windows: number;
@@ -6169,6 +6459,8 @@ export type RunCostEstimateRequest = {
   preset_id?: PresetId;
   reaudit_of_run_id?: RunId;
   relaxed_limits?: boolean;
+  start_from_run_id?: RunId;
+  start_stage_id?: StageId;
   version_uid: VersionUid;
 };
 
@@ -6177,6 +6469,22 @@ export type RunExecutor = {
   connection_id: ExecutorConnectionId;
   display_name: string;
   pin_id: string;
+};
+
+/**
+ * `UI-PARITY-C6`: a run's findings and the portal blocks their evidence sits in, derived on read from the run's text
+ * layer geometry, its page inventory and the version's portal blocks (``docs/program/UI-PARITY-01.md``); nothing is
+ * stored and the evidence is not changed. One item per published finding of the run, ``portal_block_ids`` empty where
+ * no block holds the evidence. ``unlinked_pages`` are the pages of the portal geometry on which no link can be derived
+ * (the portal's raster does not describe the PDF page): a block of such a page is **unknown**, never "no findings".
+ * ``not_produced`` and no items while the run has no text-layer geometry or the version no portal geometry.
+ */
+export type RunFindingBlockLinks = {
+  items: Array<FindingBlockLink>;
+  run_id: RunId;
+  status: "produced" | "not_produced";
+  unlinked_pages: Array<number>;
+  version_uid: VersionUid;
 };
 
 export type RunId = string;
@@ -6239,7 +6547,13 @@ export type RunStateCount = {
 };
 
 export type RunStatus = {
+  /** `AR-V3-OPT-IN` (contract 1.38.0): which analysis produced the run -- `standard` (the text profile the section table routes the version to) or `ar_v3_beta` (one run of a six-run AR v3 group). Derived from the run's pinned profile and bundle pair and from nothing else. A run holds exactly one analysis; no field of a run mixes the results of the two. */
+  analysis_kind?: "standard" | "ar_v3_beta";
   analysis_profile_id?: AnalysisProfileId;
+  /** `AR-V3-OPT-IN`: the AR v3 group the run is one of; present for a member of a group only. */
+  ar_v3_group_id?: ArV3RunGroupId;
+  /** `AR-V3-OPT-IN`: the scope (`F1` .. `S2`) the run covers in its AR v3 group; present for a member of a group only. */
+  ar_v3_scope_id?: "F1" | "F2" | "A1" | "A2" | "S1" | "S2";
   /** `EXEC2-SEAL-2`: the connection revision and model dispatch bound the run to; present exactly when `binding_state` is `bound`. `executor` then names the same connection. */
   binding?: ExecutorBinding;
   /** `EXEC2-SEAL-2` (ADR-0026 decision 12): whether the run's executor was frozen at start (`frozen_at_start`), is still to be chosen (`pending`) or was chosen at dispatch (`bound`). Absent is read as `frozen_at_start`. */
@@ -6252,6 +6566,8 @@ export type RunStatus = {
   degradation_set?: Array<(StageId | ArV3BetaStageId)>;
   /** Ungrounded model items rejected by the grounding gate. They are not findings and appear in no finding list. */
   diagnostic_observation_count?: number;
+  /** `UI-A-65` / `UI-B-45` (contract 1.40.0): the run's estimated finish, by the rule and the function of `ExecutionQueueItem.estimated_finish_at` (`R-151u`) -- its job's first attempt plus the median duration of at least three recent completed runs of the same analysis profile and a page count within a quarter of its own. Present only while the run's job is leased or running and has started; absent for a queued, waiting or finished run, and without enough similar history. Never invented; the estimate can already lie in the past for a run that is taking longer than the usual one. */
+  estimated_finish_at?: string;
   /** EXEC-PAR-START-01: the executor the run froze at start, read-only: the connection, the name an administrator gave it and the model its frozen revision pins. Null (and omitted) for a run that froze no connection. Nothing about the connection's kind, address, key or probe. */
   executor?: RunExecutor | null;
   /** OD-10: a run left `running` by a crash is reconciled to `failed` with an explicit interrupted reason. There is no `interrupted` state. */
@@ -6275,9 +6591,11 @@ export type RunStatus = {
   reaudit_of_run_id?: RunId;
   run_id: RunId;
   stages: Array<StageState>;
+  start_stage_id?: StageId;
   /** `R-151v` (contract 1.21.0): the display label of the account that started the run; absent for a run created before migration 0051. */
   started_by_label?: string;
   started_by_user_uid?: UserUid;
+  started_from_run_id?: RunId;
   state: RunState;
   terminal_at?: string | null;
   /** D-46: safe scalar classifiers saying WHICH dependency a `failed` run terminated on, restricted to the `safe_detail_keys` the domain catalog declares for the code in `terminal_reason`. Present only beside a `terminal_reason`, because the allowlist that bounds these keys is a property of the reported code; absent when there is nothing to say, and never an empty object. The same shape and the same rule as `ErrorEnvelope.details`, applied to a 200 run reading rather than to a failure -- which is why it had to be added at all: a run reading is not an error envelope and carried no detail object. It classifies; it never identifies. No path, object key, URL, credential, token, prompt, payload or host appears here, and no error code was added to the catalog for it. */
@@ -7680,6 +7998,12 @@ export type StartComparisonAiSheetChangesRequest = {
 export type StartComparisonSeriesRequest = {
   base_order_revision_no?: number;
   restart?: boolean;
+};
+
+/** `R-151i` (contract 1.42.0): the first stage the new run computes; the earlier stages are taken from the run in the path. */
+export type StartRunFromStageRequest = {
+  cost_consent?: RunCostConsent;
+  stage_id: StageId;
 };
 
 export type StartRunRequest = {

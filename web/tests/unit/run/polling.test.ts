@@ -154,7 +154,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              contract_version: '1.33.0',
+              contract_version: '1.42.0',
               error_code: 'dependency_unavailable',
               message: 'A caller-safe sentence.',
               correlation_id: 'corr-poll',
@@ -183,7 +183,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            contract_version: '1.33.0',
+            contract_version: '1.42.0',
             error_code: 'not_found',
             message: 'A caller-safe sentence.',
             correlation_id: 'corr-poll',
@@ -222,7 +222,9 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
 });
 
 describe('this slice adds no second polling loop', () => {
-  const OWNED = ['_pages', 'widgets', 'features', 'entities'];
+  // `D-333`: `_app` is read too. The side menu's counters poll from there (`_app/use-menu-badges.ts`), and a walk that stopped at `entities`
+  // left them outside the census while the prose above said four reads poll.
+  const OWNED = ['_app', '_pages', 'widgets', 'features', 'entities'];
 
   const sources = OWNED.flatMap((layer) =>
     walkFiles(join(WEB_ROOT, 'src', layer), (p) => /\.(ts|tsx)$/.test(p)).map((path) => ({
@@ -281,6 +283,15 @@ describe('this slice adds no second polling loop', () => {
   ];
   const isAllowedComparisonPoll = ({ path }: { path: string }) =>
     ALLOWED_COMPARISON_POLLS.some((allowed) => path.endsWith(allowed));
+
+  // The pair-run summary hook of the stage pairs catalog (`UI-B-85`; lane D6 moved it out of `stage-run-controls.tsx`, lane F1 gave
+  // it its own rule). Lane D6 had listed it above with the review-cadence polls, which let a row of the catalog poll its pair at
+  // 1.5 s: with a hundred pairs, a hundred rows. It is not a review poll. The one pair the expert has open is polled at the review
+  // cadence by `StageRunControls`; a row of the catalog reads its pair only while it is in view, polls only while a run of the pair
+  // moves, and at the operational cadence (`OPERATIONAL_LIST_POLLING`, ten seconds). The source is held to that below: by the shape
+  // of the hook, and by every place that calls it per row.
+  const PAIR_ROW_POLL_HOOK = join('widgets', 'stage-run-controls', 'api', 'use-pair-run.ts');
+  const isPairRowPollHook = ({ path }: { path: string }) => path.endsWith(PAIR_ROW_POLL_HOOK);
 
   // `D-307`: every interval lives in `shared/config/polling.ts`. The values as the config exports them, so the table below is
   // also a check that the barrel exports what the file declares.
@@ -342,11 +353,31 @@ describe('this slice adds no second polling loop', () => {
     ALLOWED_EXTENDED_REVIEW_POLL.some((allowed) => path.endsWith(allowed));
 
   // The fourth named exception, the operational-list policy (`OPERATIONAL_LIST_POLLING`, `web/docs/PC01_UI_SEAM.md` §7.1). The
-  // execution queue, the execution journal and the «Исполнители» worker list refresh themselves. The option is written once, in
-  // `operational-poll.ts`, and applied by spread to those three queries only; the assertion further down holds the source to that shape.
+  // execution queue, the execution journal, the «Исполнители» worker list and the pause state refresh themselves. The option is written
+  // once, in `operational-poll.ts`, and applied by spread to those four queries only; the assertion further down holds the source to that
+  // shape. The side menu's counters (`_app/use-menu-badges.ts`: the queue, the knowledge base, the pending registrations) are the same
+  // policy's second home and are named below (`D-333`).
   const ALLOWED_OPERATIONAL_LIST_POLL = [join('entities', 'execution', 'api', 'operational-poll.ts')];
   const isAllowedOperationalListPoll = ({ path }: { path: string }) =>
     ALLOWED_OPERATIONAL_LIST_POLL.some((allowed) => path.endsWith(allowed));
+
+  // The operational-list policy's second home, `D-333`: the side menu's three counters (`_app/use-menu-badges.ts`). They follow the policy
+  // by SPREAD (`...OPERATIONAL_LIST_POLL`), which carries the one `refetchInterval` from `operational-poll.ts` into a query, so the token
+  // the sibling assertions search for never appears in the file. A guard that reads only the token therefore cannot see them; this one
+  // reads the spread. Where the spread may be written is a closed list, and a new consumer is a visible decision, not drift.
+  const ALLOWED_OPERATIONAL_SPREAD = [
+    join('entities', 'execution', 'api', 'operational-poll.ts'), // defines it
+    join('entities', 'execution', 'api', 'use-execution.ts'), // the queue, the journal, the worker list and the pause state (asserted below)
+    join('entities', 'execution', 'index.ts'), // re-exports it
+    join('_app', 'use-menu-badges.ts'), // the side menu's counters (asserted below)
+  ];
+  const MENU_COUNTERS = join('_app', 'use-menu-badges.ts');
+  /** The files that name the policy's spread (`OPERATIONAL_LIST_POLL`, not the config's `OPERATIONAL_LIST_POLLING`) outside the closed list. */
+  const operationalSpreadOutsideTheList = (files: readonly { path: string; text: string }[]): string[] =>
+    files
+      .filter((file) => /\bOPERATIONAL_LIST_POLL\b/.test(code(file)) && !ALLOWED_OPERATIONAL_SPREAD.some((allowed) => file.path.endsWith(allowed)))
+      .map((file) => file.path);
+  const spreadsIn = (text: string): number => (text.match(/\.\.\.OPERATIONAL_LIST_POLL\b/g) ?? []).length;
 
   it('schedules no interval and no timer of its own', () => {
     const offenders = sources.filter(
@@ -354,6 +385,7 @@ describe('this slice adds no second polling loop', () => {
         /setInterval\s*\(|refetchInterval|refetchIntervalInBackground/.test(code(file)) &&
         !isAllowedProbePoll(file) &&
         !isAllowedComparisonPoll(file) &&
+        !isPairRowPollHook(file) &&
         !isAllowedExtendedReviewPoll(file) &&
         !isAllowedOperationalListPoll(file),
     );
@@ -386,6 +418,93 @@ describe('this slice adds no second polling loop', () => {
       // And it never reaches the run endpoint.
       expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
     }
+  });
+
+  /**
+   * What is wrong with the source of the pair-row hook, as sentences (empty: nothing). The run-list read must poll through one
+   * `refetchInterval` that ends (`: false`) when no run moves and otherwise waits `OPERATIONAL_LIST_POLLING.intervalMs`; the hook must
+   * not name the review cadence or a number of its own; and its caller must say which rows are in view (`enabled: read`, a required
+   * `inView` parameter), so a row cannot read or poll unseen.
+   */
+  function pairRowPollProblems(text: string): string[] {
+    const problems: string[] = [];
+    const uses = refetchIntervalValues(text);
+    if (uses.length !== 1) problems.push(`${uses.length} refetchInterval options, expected the one of the run list`);
+    for (const use of uses) {
+      if (!/runActive/.test(use)) problems.push(`polls whatever the run list holds: ${use}`);
+      if (!/OPERATIONAL_LIST_POLLING\.intervalMs/.test(use)) problems.push(`not the operational cadence: ${use}`);
+      if (!/:\s*false\b/.test(use)) problems.push(`never stops: ${use}`);
+      if (carriesNumberOfItsOwn(use)) problems.push(`a number of its own: ${use}`);
+    }
+    if (/STAGE_REVIEW_POLL_MS|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_POLL_MS\b/.test(text)) problems.push('names a *_POLL_MS cadence (the review cadence is the open pair\'s)');
+    if (/setInterval\s*\(|setTimeout\s*\(|refetchIntervalInBackground/.test(text)) problems.push('a timer of its own');
+    if (!/enabled:\s*read\b/.test(text)) problems.push('the run-list read is not gated by `read`');
+    if (!/export function useLatestPairRun\(\s*pairId: string,\s*inView: boolean\s*\)/.test(text)) problems.push('useLatestPairRun does not require `inView`');
+    return problems;
+  }
+
+  /** The calls of `useLatestPairRun` that do not say which rows are in view: no second argument, or a literal `true` (every row, as before). */
+  function ungatedPairRowReads(files: readonly { path: string; text: string }[]): string[] {
+    return files.filter((file) => !isPairRowPollHook(file)).flatMap((file) =>
+      [...code(file).matchAll(/\buseLatestPairRun\(([^)]*)\)/g)]
+        .map((call) => (call[1] ?? '').split(',').map((argument) => argument.trim()))
+        .filter((args) => args.length < 2 || args[1] === '' || args[1] === 'true')
+        .map((args) => `${file.path}: useLatestPairRun(${args.join(', ')})`));
+  }
+
+  /** The row components of the catalog that are rendered without `inView={rowsInView.has(…)}`: a row that reads whatever its neighbours do. */
+  function rowsWithoutGate(text: string): string[] {
+    return [...text.matchAll(/<(PairRunCell|OpenButton|ManageButton)\s[\s\S]*?\/>/g)]
+      .filter((element) => !/inView=\{rowsInView\.has\(/.test(element[0]))
+      .map((element) => element[1] ?? '');
+  }
+
+  it('lets a row of the pairs catalog poll only while a run of its pair moves, at the operational cadence, and only when in view', () => {
+    const hook = sources.filter(isPairRowPollHook);
+    // The allowlist must not rot into a path that no longer exists.
+    expect(hook.map((file) => file.path)).toHaveLength(1);
+    expect(pairRowPollProblems(code(hook[0]!))).toEqual([]);
+  });
+
+  it('calls useLatestPairRun with the rows in view at every place, the catalog included', () => {
+    expect(ungatedPairRowReads(sources)).toEqual([]);
+    const catalog = sources.filter(({ path }) => path.endsWith(join('widgets', 'stage-pair-catalog', 'ui', 'stage-pair-catalog.tsx')));
+    expect(catalog).toHaveLength(1);
+    const text = code(catalog[0]!);
+    // It calls the hook (through its row components), so the check above is not a walk of nothing, and it gates every row component.
+    expect(text.match(/\buseLatestPairRun\(/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    expect(rowsWithoutGate(text)).toEqual([]);
+    expect(text.match(/<(?:PairRunCell|OpenButton|ManageButton)\s/g)?.length ?? 0).toBeGreaterThanOrEqual(7);
+  });
+
+  // The two guards above are not vacuous: each can fail, on the shapes lane D6 shipped and the ways a later change could return to them.
+  it('shows that the pair-row guards fail on a row polled at the review cadence, a row called per row, and a row left ungated', () => {
+    const gated = 'export function useLatestPairRun(pairId: string, inView: boolean) {}\n'
+      + 'const a = queryOptions({ enabled: read, refetchInterval: (query) => (query.state.data?.some(runActive) ? OPERATIONAL_LIST_POLLING.intervalMs : false) });';
+    expect(pairRowPollProblems(gated)).toEqual([]);
+    // The hook as lane D6 shipped it: the review cadence for every row, whatever the row's place on the screen.
+    const shipped = "import { STAGE_REVIEW_POLL_MS } from '@/shared/config';\n"
+      + 'export function useLatestPairRun(pairId: string) {\n'
+      + '  useQuery({ refetchInterval: (query) => (query.state.data?.some(runActive) ? STAGE_REVIEW_POLL_MS : false) });\n}';
+    const problems = pairRowPollProblems(shipped);
+    expect(problems.some((problem) => problem.startsWith('not the operational cadence'))).toBe(true);
+    expect(problems.some((problem) => problem.startsWith('names a *_POLL_MS cadence'))).toBe(true);
+    expect(problems).toContain('the run-list read is not gated by `read`');
+    expect(problems).toContain('useLatestPairRun does not require `inView`');
+    // A poll that never stops, one that polls anything, and one with a number of its own.
+    expect(pairRowPollProblems(gated.replace(': false)', ': 5000)')).some((problem) => problem.startsWith('never stops'))).toBe(true);
+    expect(pairRowPollProblems(gated.replace('(query.state.data?.some(runActive)', '(true')).some((problem) => problem.startsWith('polls whatever'))).toBe(true);
+    expect(pairRowPollProblems(gated.replace('OPERATIONAL_LIST_POLLING.intervalMs', '10_000')).some((problem) => problem.startsWith('a number of its own'))).toBe(true);
+    // Called per row: with no second argument, with a literal `true`, or with the rows in view.
+    const file = (text: string) => [{ path: join('widgets', 'stage-pair-catalog', 'ui', 'cell.tsx'), text }];
+    expect(ungatedPairRowReads(file('const { run } = useLatestPairRun(pairId);'))).toHaveLength(1);
+    expect(ungatedPairRowReads(file('const { run } = useLatestPairRun(pairId, true);'))).toHaveLength(1);
+    expect(ungatedPairRowReads(file('const { run } = useLatestPairRun(pair.pair_id , inView);'))).toEqual([]);
+    expect(ungatedPairRowReads(file('// useLatestPairRun(pairId)\nconst x = 1;'))).toEqual([]);
+    // A row component rendered without the gate.
+    expect(rowsWithoutGate('<PairRunCell pairId={pair.pair_id} cell="method" />')).toEqual(['PairRunCell']);
+    expect(rowsWithoutGate('<ManageButton pairId={id} open={a} onToggle={() => go(id)} />')).toEqual(['ManageButton']);
+    expect(rowsWithoutGate('<OpenButton pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} onRunChange={x} />')).toEqual([]);
   });
 
   // `D-307`: one source for every polling interval. Three halves, each with a case that shows it can fail (below).
@@ -475,7 +594,7 @@ describe('this slice adds no second polling loop', () => {
     }
   });
 
-  it('lets the operational lists poll only through the policy function, only while visible, and only the queue, the journal, the worker list and the pause state', () => {
+  it('lets the operational lists poll only through the policy function, only while visible, and only the queue, the journal, the worker list and the pause state (the menu’s counters are the next case)', () => {
     const named = sources.filter(isAllowedOperationalListPoll);
     expect(named.map((f) => f.path)).toHaveLength(ALLOWED_OPERATIONAL_LIST_POLL.length);
     for (const file of named) {
@@ -506,6 +625,64 @@ describe('this slice adds no second polling loop', () => {
     for (const hook of ['useExecutionQueue', 'useExecutionJournal', 'useWorkers', 'useWorkerLookup', 'useExecutionDispatch']) {
       expect(section(hook), hook).not.toMatch(/OPERATIONAL_LIST_POLL|refetchInterval/);
     }
+  });
+
+  it('applies the operational-list spread only in the closed list of files', () => {
+    expect(operationalSpreadOutsideTheList(sources)).toEqual([]);
+    // The list must not rot into paths that no longer exist or no longer name the policy.
+    for (const allowed of ALLOWED_OPERATIONAL_SPREAD) {
+      const file = sources.find((candidate) => candidate.path.endsWith(allowed));
+      expect(file, `${allowed} is read by the walk`).toBeDefined();
+      expect(/\bOPERATIONAL_LIST_POLL\b/.test(code(file!)), `${allowed} names the policy`).toBe(true);
+    }
+  });
+
+  it('can fail: a spread anywhere else is found, and a comment or the config’s name is not one', () => {
+    const probe = (path: string, text: string) => ({ path: join('widgets', 'probe', path), text });
+    expect(operationalSpreadOutsideTheList([probe('ui/poller.tsx', 'useQuery({ queryKey, ...OPERATIONAL_LIST_POLL })')])).toEqual([
+      join('widgets', 'probe', 'ui/poller.tsx'),
+    ]);
+    expect(operationalSpreadOutsideTheList([probe('ui/import.ts', "import { OPERATIONAL_LIST_POLL } from '@/entities/execution';")])).toHaveLength(1);
+    expect(operationalSpreadOutsideTheList([probe('ui/note.ts', '// follows OPERATIONAL_LIST_POLL\nconst x = 1;')])).toEqual([]);
+    expect(operationalSpreadOutsideTheList([probe('ui/display.ts', "import { OPERATIONAL_LIST_POLLING } from '@/shared/config';")])).toEqual([]);
+    expect(operationalSpreadOutsideTheList([{ path: join('_app', 'use-menu-badges.ts'), text: '...OPERATIONAL_LIST_POLL' }])).toEqual([]);
+    expect(spreadsIn('{ ...OPERATIONAL_LIST_POLL, a: 1 }, { ...OPERATIONAL_LIST_POLL }')).toBe(2);
+    expect(spreadsIn('{ ...OPERATIONAL_LIST_POLLING }')).toBe(0);
+  });
+
+  it('lets the side menu’s counters poll only by the policy’s spread, gated by the session’s menu, with no timer of their own', () => {
+    const named = sources.filter((file) => file.path.endsWith(MENU_COUNTERS));
+    expect(named, 'the walk reads _app/use-menu-badges.ts').toHaveLength(1);
+    const text = code(named[0]!);
+    // No schedule of its own: React Query owns it and the policy function answers "how long?".
+    expect(text).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchInterval|refetchIntervalInBackground/);
+    // Three places spell the spread: the knowledge base's total, the pending registrations and `queueCountOptions`, the one
+    // helper that both queue counters (the whole history, the last day) are built by; each also re-reads on the tab's return.
+    expect(spreadsIn(text)).toBe(3);
+    expect(text.match(/refetchOnWindowFocus:\s*'always'/g) ?? []).toHaveLength(3);
+    // The queue counters read one row each (`D-350`), through that helper, and are not the queue screen's own page of 25.
+    expect(text).toMatch(/useQuery<ExecutionQueuePage>\(queueCountOptions\('all',\s*sources\.has\('queue'\)\)\)/);
+    expect(text).toMatch(/useQuery<ExecutionQueuePage>\(queueCountOptions\('last-day',\s*sources\.has\('queue'\)\)\)/);
+    expect(text).toMatch(/QUEUE_PROBE\s*=\s*\{\s*limit:\s*1\s*\}/);
+    expect(text).not.toMatch(/queueQueryOptions/);
+    // Every counter is read only for a session whose menu holds the item it feeds.
+    expect(text.match(/enabled:\s*sources\.has\('(?:knowledge-base|registrations)'\)/g) ?? []).toHaveLength(2);
+    expect(text.match(/sources\.has\('queue'\)/g) ?? []).toHaveLength(2);
+    // The reads are list operations and none of them is the run endpoint.
+    expect(text).toMatch(/listExecutionQueue/);
+    expect(text).toMatch(/listKnowledgeBaseEntries/);
+    expect(text).toMatch(/listRegistrations/);
+    expect(text).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
+  });
+
+  it('can fail: the menu counters’ shape is read from the source, so a counter that polls on its own is found', () => {
+    const own = "useQuery({ queryKey, queryFn, refetchInterval: 5000, enabled: sources.has('registrations') })";
+    expect(/refetchInterval/.test(own)).toBe(true);
+    const ungated = "useQuery({ queryKey, queryFn, ...OPERATIONAL_LIST_POLL })";
+    expect(ungated.match(/enabled:\s*sources\.has\('(?:queue|knowledge-base|registrations)'\)/g) ?? []).toHaveLength(0);
+    // A queue counter built without the helper is not the shape this guard names.
+    expect(/useQuery<ExecutionQueuePage>\(queueCountOptions\('all',\s*sources\.has\('queue'\)\)\)/.test('useQuery<ExecutionQueuePage>({ ...queueQueryOptions(), enabled: true })')).toBe(false);
+    expect(spreadsIn(ungated)).toBe(1);
   });
 
   it('lets the named probe poll schedule only its bounded 3 s refetch, and nothing else', () => {
@@ -559,6 +736,9 @@ describe('this slice adds no second polling loop', () => {
     const ALLOWED_ONE_SHOT = [
       join('entities', 'audit-run', 'api', 'run-status-query.ts'),
       join('features', 'reaudit-run', 'model', 'use-reaudit-cost-approval.ts'),
+      // `UI-A-60` (`R-151i`): a start from a stage reads the ended source run once, as the re-audit above does, before it asks
+      // what the stages it computes cost. A one-shot read, no schedule.
+      join('features', 'start-run-from-stage', 'model', 'use-start-from-stage-cost-approval.ts'),
       // `8eb1f31f` (compare saved run results): reads each of the two runs once before its findings and once after,
       // and refuses the comparison when the run changed between the two reads. Two one-shot reads, no schedule.
       join('widgets', 'stage-comparison', 'api', 'read-saved-results.ts'),

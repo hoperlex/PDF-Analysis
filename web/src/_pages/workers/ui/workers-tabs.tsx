@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * The tabs of «Исполнители» (`EXEC-HTTP-01`, `EXEC2-WEB-GROUPS-01`): «Подключения», «Процессы», «Группы»,
- * «Правила», «Назначения».
+ * The tabs of «Исполнители» (`EXEC-HTTP-01`, `EXEC2-WEB-GROUPS-01`, `UI-PARITY` UI-B-63): «Обзор», «Подключения»,
+ * «Процессы», «Группы», «Правила», «Назначения».
  *
  * The WAI-ARIA tabs pattern with automatic activation, as the tabs of «Блоки» are: a `tablist`
  * of `tab` buttons, each naming the `tabpanel` it controls and saying whether it is the open

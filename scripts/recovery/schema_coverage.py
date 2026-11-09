@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0055_work_schedule"
+HEAD = "0060_run_from_stage"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -84,7 +84,11 @@ TABLES = frozenset((
     "optimisation_pass", "optimisation_proposal", "optimisation_proposal_decision", "price_list_position",
     "price_list_revision", "project", "provider_call_effect", "registration_request", "release",
     "release_revision", "stage_result", "vendor_list_entry", "vendor_list_revision", "work_assignment",
-    "work_assignment_event", "worker"
+    "work_assignment_event", "worker",
+    # `0059_decision_memory` (`ADR-0027`): the decision memory's eight append-only tables. None has a foreign key into a project,
+    # a document, a finding or the ledger; every one is `KEEP` in the purge.
+    "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
+    "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_status_event",
 ))
 
 #: Views at ``HEAD``. A view carries no rows; it is restored from the dump and checked by name.
@@ -292,6 +296,15 @@ TRIGGERS = (
     # `0043_stage_ai_generations`: a unit's generation is pinned once written.
     ("stage_ai_unit", "trg_stage_ai_generation_pin", "am_guard_frozen_columns", 19),
     ("contract_state_transition", "trg_contract_state_transition_immutable", "am_immutable_row", 31),
+    # `0059_decision_memory`: all eight tables are `am_immutable_row` (27 = ROW | BEFORE | DELETE | UPDATE).
+    ("decision_memory_case", "trg_decision_memory_case_immutable", "am_immutable_row", 27),
+    ("decision_memory_content", "trg_decision_memory_content_immutable", "am_immutable_row", 27),
+    ("decision_memory_crop", "trg_decision_memory_crop_immutable", "am_immutable_row", 27),
+    ("decision_memory_decision", "trg_decision_memory_decision_immutable", "am_immutable_row", 27),
+    ("decision_memory_decision_text", "trg_decision_memory_decision_text_immutable", "am_immutable_row", 27),
+    ("decision_memory_evidence", "trg_decision_memory_evidence_immutable", "am_immutable_row", 27),
+    ("decision_memory_norm_ref", "trg_decision_memory_norm_ref_immutable", "am_immutable_row", 27),
+    ("decision_memory_status_event", "trg_decision_memory_status_event_immutable", "am_immutable_row", 27),
     ("document_version", "trg_document_version_immutable", "am_immutable_row", 27),
     ("document_version_classification", "trg_document_version_classification_immutable", "am_immutable_row", 27),
     ("document_version_classification_correction", "trg_document_version_classification_correction_chain", "am_check_classification_correction_chain", 7),
@@ -438,7 +451,17 @@ SEQUENCES = {
 #: `0050_viewer_role` adds none. `0051`..`0054` (`UI-PARITY-P0F`..`P0I`) add c 7, f 6, p 2 (who started a run, the
 #: document's archive, the tag and execution-status tables) and `0055_work_schedule` adds c 17, f 8, p 5 (the five
 #: journals of «График работ»): c 1301, f 370, p 135, measured on a fresh database at ``0055`` on 2026-11-06.
-CONSTRAINT_COUNTS = {"c": 1301, "f": 370, "p": 135, "t": 10, "u": 129}
+#: `0056` replaces one check by a wider one under its name (no change) and `0057_decision_carryover` (`UI-B-14`) adds three
+#: checks (the identity's shape, not itself, never a withdrawal) and one foreign key (the source decision): c 1304, f 371,
+#: measured on a throwaway database at ``0057`` on 2026-11-07. `0058_finding_decision_origin` (`UI-A-73`) adds the same
+#: three kinds to ``expert_decision_event`` (the identity's shape, not itself, only an accept or a reject) and one foreign
+#: key: c 1307, f 372 measured on a throwaway database at ``0058`` on 2026-11-08. `0059_decision_memory` (`ADR-0027`) adds eight
+#: tables: 8 primary keys, 4 unique constraints (one case per observation, one decision per ledger event, two on a crop), 9 foreign
+#: keys (between memory tables, the crop's Blob and the status event's receipt) and 78 checks (the identity shapes, the closed
+#: vocabularies and the geometry): c 1385, f 381, p 143, u 133, t 10 (measured on a throwaway database at ``0059`` on 2026-11-09).
+#: `0060_run_from_stage` (`UI-A-60`, `R-151i`, chained after `0059`) adds, on ``audit_run``, four checks (the source's identity shape, not itself, the
+#: start stage, both-or-neither) and one foreign key (the run whose outputs are reused): c 1389, f 382 (measured on a throwaway database at ``0060``).
+CONSTRAINT_COUNTS = {"c": 1389, "f": 382, "p": 143, "t": 10, "u": 133}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -448,8 +471,10 @@ CONSTRAINT_COUNTS = {"c": 1301, "f": 370, "p": 135, "t": 10, "u": 129}
 #: keys, four unique constraints, the partial unique index of an active group name, and one index each on the member's
 #: connection and the rule's group revision); 0048 adds four (a group-revision index and a pending-work index on each of
 #: `audit_run` and `comparison_ai_job`); 0049 and 0050 add none; 0051..0054 add four (the two new tables' keys and one
-#: lookup each) and 0055 nine (five keys, four lookups): 463, measured at ``0055`` on 2026-11-06.
-INDEX_COUNT = 463
+#: lookup each) and 0055 nine (five keys, four lookups): 463, measured at ``0055`` on 2026-11-06; `0057` adds the partial
+#: index of the carried-from decision: 464, measured at ``0057`` on 2026-11-07; `0058` adds the same partial index on
+#: ``expert_decision_event``: 465; `0059` adds 17 (eight primary keys, four unique constraints and five lookups): 482; `0060` adds the partial index of the run a run was started from: 483.
+INDEX_COUNT = 483
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

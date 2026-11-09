@@ -86,9 +86,10 @@
  */
 
 import { createElement } from 'react';
-import type { ReactElement } from 'react';
+import type { ComponentType, ReactElement } from 'react';
 
 import { AccountPage } from '@/_pages/account';
+import { AdminAuthEventsPage } from '@/_pages/admin-auth-events';
 import { AdminRegistrationsPage } from '@/_pages/admin-registrations';
 import { AdminUserPage } from '@/_pages/admin-user';
 import { AdminUsersPage } from '@/_pages/admin-users';
@@ -120,6 +121,7 @@ import { StageComparePage } from '@/_pages/stage-compare';
 import { VersionComparePage } from '@/_pages/version-compare';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { WorkersPage } from '@/_pages/workers';
+import type { WorkersPageProps } from '@/_pages/workers';
 
 import { REPO_ROOT, repoRelative, walkFiles } from '../../guards/lib/repo';
 import { join } from 'node:path';
@@ -310,6 +312,12 @@ export const SEEDS: readonly Seed[] = [
     address: '/admin/registrations',
     name: 'admin-registrations',
     make: () => createElement(AdminRegistrationsPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/admin/auth-events',
+    name: 'admin-auth-events',
+    make: () => createElement(AdminAuthEventsPage, {}),
     discipline: {},
   },
   {
@@ -563,7 +571,10 @@ export const SEEDS: readonly Seed[] = [
   {
     address: '/workers',
     name: 'workers',
-    make: () => createElement(WorkersPage, {}),
+    // The screen opens on «Обзор» since the second UX pass; this seed stays on «Процессы» (`?tab=processes`) so every instrument still reads
+    // the worker list from the derived screen. The overview has its own seeds (the census' `WorkersPage overview tab`, the language guard's
+    // `workers-overview-sections-attention`).
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'processes' }),
     discipline: {},
   },
 ];

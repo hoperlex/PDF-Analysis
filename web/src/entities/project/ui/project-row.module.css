@@ -1,0 +1,57 @@
+/*
+ * One project in the list: name and creation time on the first line, the audit figures under them. Tokens only.
+ * Colour is not declared here; the figures' badges take theirs from `.am-badge--*`, where the contrast census reads it.
+ */
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap);
+  min-width: 0;
+  margin-bottom: var(--am-gap-xs);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+}
+
+.row:hover {
+  border-color: var(--am-line-strong);
+  box-shadow: var(--am-shadow-1);
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--am-text-base);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.name:hover {
+  text-decoration: underline;
+}
+
+.created {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  white-space: nowrap;
+}
+
+.figures {
+  grid-column: 1 / -1;
+  min-width: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+@media (max-width: 520px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .created {
+    white-space: normal;
+  }
+}

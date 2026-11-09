@@ -33,9 +33,13 @@
  * by the server, never answered with an empty file.
  *
  * «Загрузить решения из Excel» (`R-151d`) is the way back: the same workbook, edited, for an expert.
+ *
+ * «Скачать пакет аудита» (UI-A-76) is the original's archive of one run: the CSV, the extended review's reports when the run
+ * has them, the version's PDF and a manifest of digests, built in the browser by the evidence-package builder. It is offered
+ * where the page names the run's version and says the session may export (`auditPackage`).
  */
 
-import type { ProviderMode, RunId, RunState } from '@/shared/api';
+import type { ProviderMode, RunId, RunState, VersionUid } from '@/shared/api';
 import {
   ApiError,
   CSV_COLUMNS,
@@ -50,6 +54,9 @@ import { ImportDecisions } from '@/features/import-decisions';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
 
+import { AuditPackageDownload } from './audit-package-download';
+import styles from './export-panel.module.css';
+
 export interface ExportPanelProps {
   readonly runId: RunId;
   readonly runState: RunState;
@@ -60,6 +67,13 @@ export interface ExportPanelProps {
   readonly lastFileName?: string | null | undefined;
   /** `R-151d`: offer «Загрузить решения из Excel» — an expert's act, so the page says whether the caller is one. */
   readonly mayImportDecisions?: boolean | undefined;
+  /** `UI-A-76`: offer «Скачать пакет аудита» for the run's version; absent for a session that may not export. */
+  readonly auditPackage?: { readonly versionUid: VersionUid } | undefined;
+  /**
+   * `card` (the default) is the panel as it always was. `bar` is the original's toolbar: the title, the state and
+   * the three file actions in one row over the findings, the file description beside them.
+   */
+  readonly layout?: 'card' | 'bar' | undefined;
 }
 
 const UNKNOWN_RUN_STATE_TITLE = 'Прогон содержит неизвестное состояние.';
@@ -118,7 +132,10 @@ export function ExportPanel({
   error,
   lastFileName,
   mayImportDecisions,
+  auditPackage,
+  layout,
 }: ExportPanelProps) {
+  const bar = layout === 'bar';
   if (!(RUN_STATE_VALUES as readonly unknown[]).includes(runState)) {
     return (
       <section className="am-export" data-export-fault="closed-vocabulary">
@@ -133,8 +150,12 @@ export function ExportPanel({
   const exportable = isExportableRunState(runState);
 
   return (
-    <section className="am-export" data-run-id={runId} data-exportable={exportable ? 'true' : 'false'}>
-      <header className="am-export__header">
+    <section
+      className={bar ? `am-export ${styles.bar}` : 'am-export'}
+      data-run-id={runId}
+      data-exportable={exportable ? 'true' : 'false'}
+    >
+      <header className={bar ? `am-export__header ${styles.barHeader}` : 'am-export__header'}>
         <h3>Выгрузка</h3>
         <RunStateBadge state={runState} providerMode={providerMode} />
       </header>
@@ -154,6 +175,7 @@ export function ExportPanel({
             </button>
             <XlsxDownload runId={runId} />
             {mayImportDecisions === true ? <ImportDecisions runId={runId} /> : null}
+            {auditPackage === undefined ? null : <AuditPackageDownload runId={runId} versionUid={auditPackage.versionUid} />}
           </div>
           {/*
             `R-18` names the column names printed as a list — "documentation
@@ -162,14 +184,26 @@ export function ExportPanel({
             that describes them. The summary is the sentence this panel already had; no
             string is invented, and the disclosure is closed until a reader asks.
           */}
-          <details className="am-export__disclosure">
+          <details className={bar ? `am-export__disclosure ${styles.barDisclosure}` : 'am-export__disclosure'}>
             <summary>
-              <span className="am-export__encoding">
+              {bar ? (
+                // The bar keeps to one row: the summary names the file, the whole description opens with the columns.
+                <span className="am-export__encoding">О файле: колонок {CSV_COLUMNS.length}</span>
+              ) : (
+                <span className="am-export__encoding">
+                  Колонок: {CSV_COLUMNS.length}; кодировка {CSV_ENCODING.charset}
+                  {CSV_ENCODING.byteOrderMark ? ' с меткой порядка байтов' : ''}; экранирование по
+                  RFC 4180; одна строка на свидетельство.
+                </span>
+              )}
+            </summary>
+            {bar ? (
+              <p className="am-export__encoding">
                 Колонок: {CSV_COLUMNS.length}; кодировка {CSV_ENCODING.charset}
                 {CSV_ENCODING.byteOrderMark ? ' с меткой порядка байтов' : ''}; экранирование по
                 RFC 4180; одна строка на свидетельство.
-              </span>
-            </summary>
+              </p>
+            ) : null}
             <ol className="am-export__columns">
               {CSV_COLUMNS.map((column) => (
                 <li key={column} data-csv-column={column}>
@@ -179,8 +213,8 @@ export function ExportPanel({
             </ol>
           </details>
           {lastFileName !== undefined && lastFileName !== null ? (
-            <p className="am-export__last" data-last-file={lastFileName}>
-              Downloaded {lastFileName}
+            <p className={bar ? `am-export__last ${styles.barLast}` : 'am-export__last'} data-last-file={lastFileName}>
+              Скачан {lastFileName}
             </p>
           ) : null}
         </>

@@ -179,6 +179,14 @@ describe('the strip as a view', () => {
     expect(markup).toContain('Замечание указывает страницу PDF, а не блок портала, поэтому здесь все блоки этой страницы.');
   });
 
+  it('leads to the version’s whole «Блоки» tab when it is given the address, as the original’s thumbnails lead to its blocks', () => {
+    expect(html(stripProps())).not.toContain('data-page-blocks-all');
+    const markup = html(stripProps({ blocksHref: '/projects/prj_x/versions/ver_x/blocks' }));
+    expect(markup).toContain('data-page-blocks-all=""');
+    expect(markup).toContain('href="/projects/prj_x/versions/ver_x/blocks"');
+    expect(markup).toContain('Все блоки версии →');
+  });
+
   it('draws one thumbnail per block, the crop from the seam’s address and a quiet note where there is none', () => {
     const blocks = blocksOfThePages().slice(0, 2);
     const markup = html(stripProps({ reading: shown({ blocks }) }));
@@ -265,7 +273,7 @@ function seeded(...pages: ReturnType<typeof portalPage>[]) {
 
 function apiError(): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'cid-strip', retryable: true,
+    contract_version: '1.42.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'cid-strip', retryable: true,
   };
   return new ApiError(503, envelope, 'cid-strip');
 }
@@ -275,6 +283,11 @@ describe('the connected strip reads the «Блоки» tab’s own cache entry',
     const markup = connected(seeded(loadedUpTo(blocksOfThePages(), false)), 3);
     expect(markup).toContain('Блоки страницы 3 (2)');
     expect(markup).not.toContain('Блоки страницы 7');
+  });
+
+  it('links the strip to the version’s «Блоки» tab, the project and the version in its path', () => {
+    const markup = connected(seeded(loadedUpTo(blocksOfThePages(), false)), 3);
+    expect(markup).toMatch(/href="\/projects\/prj_[0-9A-Z]+\/versions\/ver_[0-9A-Z]+\/blocks"[^>]*data-page-blocks-all|data-page-blocks-all[^>]*href="\/projects\/prj_[0-9A-Z]+\/versions\/ver_[0-9A-Z]+\/blocks"/);
   });
 
   it('draws nothing while that read is in flight', () => {

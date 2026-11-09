@@ -717,7 +717,7 @@ def test_the_exclusion_listing_is_capped_and_its_count_complete(world: World, mo
 
 def test_roles_and_request_values(world: World) -> None:
     denied = _refused(ErrorCode.PERMISSION_DENIED, world.read, actor_roles=frozenset())
-    assert denied.detail_fields["required_capability"] == "role:admin|expert"
+    assert denied.detail_fields["required_capability"] == "role:admin|expert|viewer"
     assert world.read(actor_roles=frozenset({"admin"})).state == SECTION_STATE_READY
     for field_name, value in (
         ("section_code", "XX"), ("section_code", "ar"), ("section_code", None),

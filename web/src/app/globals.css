@@ -253,11 +253,19 @@
   --am-radius-pill: 999px;
 
   /* ---- spacing ----------------------------------------------------------------- */
+  --am-gap-2xs: 2px;
   --am-gap-xs: 4px;
   --am-gap-sm: 8px;
+  --am-gap-md: 12px;
   --am-gap: 16px;
   --am-gap-lg: 24px;
   --am-gap-xl: 32px;
+
+  /* The smallest size a pointer or touch target may have (WCAG 2.2 SC 2.5.8, 24 by 24 CSS px): `min-width` / `min-height` of a control, not spacing. */
+  --am-target-min: 24px;
+
+  /* The frame's sticky top strip (`.am-app__utility`); a pinned panel below it starts at this plus a gap. */
+  --am-strip-height: 44px;
 }
 
 /*
@@ -519,16 +527,16 @@
 /* The dashboard's own page frame shares the showcase palette with its widget. */
 [data-dashboard-screen] {
   min-width: 0;
-  padding: clamp(16px, 2vw, 28px);
+  padding: var(--am-gap-md);
   border: 1px solid var(--am-line);
-  border-radius: 24px;
+  border-radius: var(--am-radius);
   background: var(--am-surface);
 }
 
 [data-dashboard-screen] .am-page__title {
   color: var(--am-ink);
-  font-size: clamp(26px, 2.4vw, 34px);
-  letter-spacing: -0.03em;
+  font-size: var(--am-text-xl);
+  letter-spacing: -0.02em;
 }
 
 [data-dashboard-screen] .am-page__subtitle {
@@ -569,6 +577,17 @@ html,
 body {
   margin: 0;
   padding: 0;
+}
+
+/*
+ * Focus and anchor jumps clear the pinned furniture: the top strip at a desktop width (44 px) and the bar at a narrow one
+ * (about 48 px) are both sticky, and without this a control reached with Tab, or a `#fragment`, scrolled in under them.
+ */
+html {
+  scroll-padding-top: calc(var(--am-strip-height) + var(--am-gap-sm));
+  /* A phone turned sideways keeps the type size the stylesheet gave it. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -622,8 +641,8 @@ h4 {
 /* Inside a page body, `h2` is a section rule, not a title: the title is `am-page__title`. */
 .am-page__body > h2,
 .am-page__body h2 {
-  margin: var(--am-gap-lg) 0 var(--am-gap-sm);
-  padding-bottom: var(--am-gap-sm);
+  margin: var(--am-gap) 0 var(--am-gap-sm);
+  padding-bottom: var(--am-gap-xs);
   border-bottom: 1px solid var(--am-line-soft);
   font-size: var(--am-text-lg);
   letter-spacing: -0.005em;
@@ -662,6 +681,13 @@ a:hover {
   text-decoration-color: currentColor;
 }
 
+/* A disclosure's handle is a target: 24 px tall at the least (WCAG 2.5.8); they were 18.5 to 20.7 px. */
+summary {
+  min-height: 24px;
+  padding-block: var(--am-gap-2xs);
+  cursor: pointer;
+}
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
@@ -676,6 +702,17 @@ summary:focus-visible {
 code {
   font-family: var(--am-font-mono);
   font-size: 0.86em;
+}
+
+/*
+ * A dump (a JSON receipt, a code block of a report) is wider than a phone and than a narrow column. It scrolls inside
+ * its own box instead of pushing the page sideways; the words in it are not broken, because a hash is read whole.
+ */
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-sm);
 }
 
 /*
@@ -724,6 +761,12 @@ dd > p:last-child {
 }
 
 table {
+  /*
+   * The containing block of whatever is absolutely positioned inside it. A visually hidden label in a header cell (1 px, clipped,
+   * `position: absolute`) otherwise had the page as its containing block, so the scrolling wrapper around a wide table did not
+   * clip it and it stretched the page to 807 px on 23 comparison screens at 390 and 768 px.
+   */
+  position: relative;
   border-collapse: collapse;
   width: 100%;
   font-size: var(--am-text-sm);
@@ -797,6 +840,13 @@ input[type='number'],
 textarea,
 select {
   font: inherit;
+  /*
+   * A field never outgrows its column: a select with a long option, a textarea with a wide cols. `min-width: 0` is the half that
+   * matters in a grid or a flex row: the automatic minimum is the control's own intrinsic width (770 px for the routes select),
+   * and a track or a flex item will not shrink below it, so `max-width: 100%` alone has nothing to resolve against.
+   */
+  min-width: 0;
+  max-width: 100%;
   /* As tall as a button (34px), so a field and its button line up in one row, as in the original. */
   min-height: 34px;
   padding: 5px 10px;
@@ -871,8 +921,10 @@ input[type='file']::file-selector-button:hover {
 
 .am-app {
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: 214px minmax(0, 1fr);
   min-height: 100vh;
+  /* A phone's address bar takes part of 100vh; the dynamic unit is what is actually visible. */
+  min-height: 100dvh;
   background: var(--am-showcase-bg);
   transition: grid-template-columns var(--am-motion-base) var(--am-ease);
 }
@@ -883,29 +935,29 @@ input[type='file']::file-selector-button:hover {
 
 .am-app__bar {
   position: sticky;
-  top: 12px;
+  top: var(--am-gap-sm);
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 18px;
-  width: 212px;
-  height: calc(100vh - 24px);
+  gap: var(--am-gap-md);
+  width: 200px;
+  height: calc(100vh - 16px);
   min-height: 0;
-  margin: 12px 0 12px 12px;
-  padding: 16px 12px 14px;
+  margin: var(--am-gap-sm) 0 var(--am-gap-sm) var(--am-gap-sm);
+  padding: var(--am-gap-md) var(--am-gap-sm) var(--am-gap-sm);
   border: 1px solid color-mix(in srgb, var(--am-showcase-line) 38%, transparent);
-  border-radius: 22px;
+  border-radius: var(--am-radius);
   background: radial-gradient(circle at 10% 0%, var(--am-accent-light), transparent 36%), var(--am-paper);
-  box-shadow: 0 12px 36px color-mix(in srgb, var(--am-showcase-ink) 12%, transparent);
+  box-shadow: var(--am-shadow-2);
   transition: width var(--am-motion-base) var(--am-ease), padding var(--am-motion-base) var(--am-ease), margin var(--am-motion-base) var(--am-ease);
 }
 
 .am-app[data-sidebar='compact'] .am-app__bar {
   width: 56px;
-  height: calc(100vh - 20px);
-  margin: 10px 6px;
-  padding: 14px 5px 10px;
+  height: calc(100vh - 16px);
+  margin: var(--am-gap-sm) 6px;
+  padding: var(--am-gap-md) 5px var(--am-gap-sm);
 }
 
 .am-app__brand {
@@ -982,7 +1034,7 @@ input[type='file']::file-selector-button:hover {
 .am-app__main {
   flex: 1;
   min-width: 0;
-  padding: clamp(18px, 2vw, 32px);
+  padding: var(--am-gap) var(--am-gap-lg) var(--am-gap-lg);
 }
 
 .am-app__utility {
@@ -991,10 +1043,10 @@ input[type='file']::file-selector-button:hover {
   z-index: 9;
   display: flex;
   align-items: center;
-  gap: 16px;
-  min-height: 72px;
+  gap: var(--am-gap-md);
+  min-height: var(--am-strip-height);
   min-width: 0;
-  padding: 10px clamp(18px, 2vw, 32px);
+  padding: var(--am-gap-xs) var(--am-gap-lg);
   border-bottom: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent);
   background: var(--am-showcase-bg);
 }
@@ -1292,10 +1344,16 @@ input[type='file']::file-selector-button:hover {
   margin: 0;
 }
 
+/*
+ * A row is a flex line so that an item may carry a trailing cell (`am-menu__check`, `D-363`); an item without one is a single
+ * run of text, which a flex line draws as a block does.
+ */
 .am-menu__item {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: var(--am-gap-sm);
   width: 100%;
-  padding: 6px var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap-md);
   border: 0;
   background: none;
   color: var(--am-ink);
@@ -1317,13 +1375,25 @@ input[type='file']::file-selector-button:hover {
   outline-offset: -2px;
 }
 
+/*
+ * `D-363`, `D-396`: the mark of the choice made, as a column at the row's right end. The cell is drawn on every choice (empty on
+ * the others) so the column keeps its place and the labels wrap the same on every row.
+ */
+.am-menu__check {
+  flex: 0 0 1.2ch;
+  margin-left: auto;
+  color: var(--am-accent-strong);
+  font-weight: 650;
+  text-align: right;
+}
+
 .am-avatar {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   overflow: hidden;
   border-radius: 50%;
   font-size: var(--am-text-sm);
@@ -1407,7 +1477,7 @@ input[type='file']::file-selector-button:hover {
 
 
 .am-app__footer {
-  padding: var(--am-gap) var(--am-gap-xl);
+  padding: var(--am-gap-sm) var(--am-gap-lg);
   border-top: 1px solid var(--am-showcase-line);
   color: var(--am-showcase-soft);
   background: var(--am-showcase-bg);
@@ -1430,7 +1500,7 @@ input[type='file']::file-selector-button:hover {
     height: auto;
     min-height: 0;
     margin: 0;
-    padding: 12px 16px;
+    padding: var(--am-gap-sm) var(--am-gap);
     border: 0;
     border-bottom: 1px solid var(--am-line);
     border-radius: 0;
@@ -1441,28 +1511,43 @@ input[type='file']::file-selector-button:hover {
     width: auto;
     height: auto;
     margin: 0;
-    padding: 12px 16px;
+    padding: var(--am-gap-sm) var(--am-gap);
   }
 
   .am-app__main {
-    padding: 20px 16px;
+    padding: var(--am-gap-md) var(--am-gap);
   }
 
   .am-app__utility {
     position: relative;
-    min-height: 58px;
-    padding: 8px 16px;
+    min-height: var(--am-strip-height);
+    padding: var(--am-gap-xs) var(--am-gap);
   }
 
   .am-app__footer {
-    padding: 12px 16px;
+    padding: var(--am-gap-sm) var(--am-gap);
   }
 }
 
+/* A phone: the side gutters narrow from 16 px to 12 px, so a screen's content gains 8 px of the 390 it has. */
 @media (max-width: 590px) {
+  .am-app__bar,
+  .am-app[data-sidebar='compact'] .am-app__bar {
+    padding: var(--am-gap-sm) var(--am-gap-md);
+  }
+
   .am-app__utility {
     flex-wrap: wrap;
-    gap: 8px 12px;
+    gap: var(--am-gap-sm) var(--am-gap-md);
+    padding: var(--am-gap-xs) var(--am-gap-md);
+  }
+
+  .am-app__main {
+    padding: var(--am-gap-sm) var(--am-gap-md) var(--am-gap-md);
+  }
+
+  .am-app__footer {
+    padding: var(--am-gap-sm) var(--am-gap-md);
   }
 }
 
@@ -1486,21 +1571,29 @@ input[type='file']::file-selector-button:hover {
 
 .am-page__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 18px;
+  gap: var(--am-gap-sm) var(--am-gap-md);
+  margin-bottom: var(--am-gap-md);
+}
+
+/* The heading takes the line when the actions do not fit beside it, instead of being squeezed to a word a line. */
+.am-page__header > :first-child {
+  flex: 1 1 18rem;
+  min-width: 0;
 }
 
 .am-page__title {
   margin: 0;
-  font-size: clamp(24px, 2.1vw, 30px);
+  overflow-wrap: anywhere;
+  font-size: var(--am-text-xl);
   font-weight: 700;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.02em;
 }
 
 .am-page__subtitle {
-  margin: 6px 0 0;
+  margin: var(--am-gap-2xs) 0 0;
   max-width: 82ch;
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
@@ -1511,9 +1604,9 @@ input[type='file']::file-selector-button:hover {
   min-width: 0;
   background: var(--am-paper);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
-  padding: var(--am-gap);
-  box-shadow: var(--am-shadow-2);
+  border-radius: var(--am-radius);
+  padding: var(--am-gap-md);
+  box-shadow: var(--am-shadow-1);
 }
 
 .am-page__body--canvas {
@@ -1530,7 +1623,7 @@ input[type='file']::file-selector-button:hover {
   overflow-wrap: anywhere;
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
-  padding: 12px 14px;
+  padding: var(--am-gap-sm) var(--am-gap-md);
   background: var(--am-paper);
 }
 
@@ -1575,7 +1668,7 @@ input[type='file']::file-selector-button:hover {
   display: grid;
   gap: var(--am-gap-sm);
   width: min(100%, 28rem);
-  margin-top: var(--am-gap);
+  margin-top: var(--am-gap-sm);
 }
 
 .am-state__loading-lines > span {
@@ -1611,7 +1704,7 @@ input[type='file']::file-selector-button:hover {
 }
 
 .am-state__detail {
-  margin-top: var(--am-gap-sm);
+  margin-top: var(--am-gap-xs);
   color: var(--am-ink-muted);
   font-size: var(--am-text-md);
 }
@@ -1632,7 +1725,7 @@ input[type='file']::file-selector-button:hover {
 }
 
 .am-state__action {
-  margin-top: 12px;
+  margin-top: var(--am-gap-sm);
 }
 
 /*
@@ -1643,7 +1736,7 @@ input[type='file']::file-selector-button:hover {
  * is an `li`.
  */
 li.am-state {
-  margin-bottom: var(--am-gap-sm) !important;
+  margin-bottom: var(--am-gap-xs) !important;
   border-color: var(--am-line);
   border-radius: var(--am-radius);
   box-shadow: var(--am-shadow-1);
@@ -1684,15 +1777,32 @@ li.am-state .am-state__detail {
 .am-badge {
   display: inline-flex;
   align-items: baseline;
+  max-width: 100%;
   gap: 6px;
-  padding: 2px 9px;
+  padding: 1px var(--am-gap-sm);
   border-radius: var(--am-radius-pill);
   border: 1px solid transparent;
   font-size: var(--am-text-xs);
   font-family: var(--am-font-mono);
-  line-height: 1.7;
+  line-height: 1.5;
   white-space: nowrap;
   vertical-align: baseline;
+}
+
+/* A badge that is a link or a button is pressed, so it is a target: 24 px tall at the least (it was 21.3 and 22.5). */
+a.am-badge,
+button.am-badge {
+  align-items: center;
+  min-height: 24px;
+  cursor: pointer;
+}
+
+/* A status with a sentence in it (a reason, a key that is not ready) wraps at a phone width instead of running off it. */
+@media (max-width: 590px) {
+  .am-badge {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 .am-badge--pending,
@@ -1859,8 +1969,8 @@ li.am-state .am-state__detail {
 .am-review__list {
   min-width: 0;
   position: sticky;
-  top: 86px;
-  max-height: calc(100vh - 86px - var(--am-gap-lg));
+  top: calc(var(--am-strip-height) + var(--am-gap-md));
+  max-height: calc(100vh - var(--am-strip-height) - var(--am-gap-md) - var(--am-gap-lg));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -1924,13 +2034,6 @@ li.am-state .am-state__detail {
   background: var(--am-surface-sunken);
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
-}
-
-/* The export panel follows the review grid: it is about the run, not about the finding. */
-.am-review__export {
-  margin-top: var(--am-gap-lg);
-  padding-top: var(--am-gap);
-  border-top: 1px solid var(--am-line);
 }
 
 /* ---- the identifier line on a screen header -------------------------------------- */
@@ -2224,6 +2327,7 @@ li.am-state .am-state__detail {
   font-size: var(--am-text-base);
   line-height: var(--am-leading-relaxed);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .am-quotation__anchor {
@@ -2555,6 +2659,8 @@ li.am-state .am-state__detail {
 
 .am-form {
   display: grid;
+  /* One track that may shrink: an `auto` track is as wide as the widest select option (770 px at 390 on the routes form). */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--am-gap-sm);
   max-width: 44rem;
 }
@@ -2578,7 +2684,35 @@ li.am-state .am-state__detail {
 
 .am-form__field {
   display: grid;
-  gap: 6px;
+  /* The same one shrinking track inside a field: its select stays in the column instead of sizing the track to its longest option. */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: var(--am-gap-xs);
+}
+
+/*
+ * `am-form--two`: a form that opts into two columns. The short fields (a select, a port, a number of seconds) stand two to a
+ * row; what is long (a field marked `am-form__field--wide`, a heading, a hint, a note, the buttons) takes the whole row. The
+ * tracks are as many as fit at 17 rem each, so the form is one column wherever two would be squeezed, whatever the screen: a
+ * form in a narrow card falls back by itself, with no breakpoint to keep in step with the frame.
+ */
+.am-form--two {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  align-items: start;
+  column-gap: var(--am-gap);
+  max-width: 52rem;
+}
+
+.am-form--two > * {
+  grid-column: 1 / -1;
+}
+
+.am-form--two > .am-form__field {
+  grid-column: auto;
+}
+
+.am-form--two > .am-form__field--wide {
+  grid-column: 1 / -1;
 }
 
 .am-form__hint {
@@ -2618,7 +2752,7 @@ li.am-state .am-state__detail {
 /* ---- section wrappers ------------------------------------------------------------ */
 
 .am-section {
-  margin-top: var(--am-gap-xl);
+  margin-top: var(--am-gap-lg);
 }
 
 .am-section:first-child {
@@ -2626,8 +2760,8 @@ li.am-state .am-state__detail {
 }
 
 .am-note {
-  margin: var(--am-gap) 0 0;
-  padding: 10px 14px;
+  margin: var(--am-gap-sm) 0 0;
+  padding: var(--am-gap-xs) var(--am-gap-md);
   border-left: 3px solid var(--am-line-strong);
   border-radius: 0 var(--am-radius-sm) var(--am-radius-sm) 0;
   background: var(--am-surface);
@@ -2661,12 +2795,15 @@ span.am-note {
   align-items: center;
   gap: var(--am-gap-sm);
   flex-shrink: 0;
+  /* Capped at the line it stands on: its own links wrap inside it rather than leave the screen. */
+  max-width: 100%;
 }
 
 .am-page__actions a {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
+  min-height: 28px;
+  padding: var(--am-gap-2xs) var(--am-gap-md);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-sm);
   background: var(--am-paper);

@@ -42,7 +42,7 @@ from auditmanager.api.schemas.content import ByteRange, StreamedContent
 from auditmanager.api.security import RunnerIdentity
 from auditmanager.api.schemas.dashboard import DashboardSummaryView
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
-from auditmanager.api.schemas.documents import DocumentVersionView
+from auditmanager.api.schemas.documents import DocumentAuditView, DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.registrations import RegistrationListingView, RegistrationView
@@ -121,6 +121,15 @@ class ExecutionPort(Protocol):
         self, *, run_id: str, user_uid: str, idempotency_key: str,
         cost_consent: dict[str, Any] | None = None,
     ) -> RunStatusView: ...
+    def start_run_from_stage(
+        self, *, run_id: str, stage_id: str, user_uid: str, idempotency_key: str,
+        cost_consent: dict[str, Any] | None = None,
+    ) -> RunStatusView:
+        """`R-151i` (`UI-A-60`): a new run of the earlier run's version that reuses the earlier run's stage outputs before
+        ``stage_id`` and computes the rest. The earlier run is not changed; the answer is the new run (202), a replay of it
+        under the same key and payload, or a typed refusal -- ``analysis_input_invalid`` naming the stage and the reason
+        when an output cannot be taken. Nothing is recomputed in place of a refused one."""
+        ...
     def set_job_priority(
         self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
     ) -> models.ExecutionQueueItem: ...
@@ -383,9 +392,9 @@ class DocumentPort(Protocol):
 
     def list_documents(
         self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
-        tag: str | None = None,
+        tag: str | None = None, audit_state: str | None = None, order: str | None = None,
     ) -> Sequence[DocumentVersionView]:
-        """The current version of every document in one project, **newest first**.
+        """The current version of every document in one project, **newest first** unless ``order`` says otherwise.
 
         ``section_code`` (`UI-PARITY-P0E`, ruling `R-151l`) keeps the documents whose current
         version is confirmed for that section (its ``classification.section_code``); ``None``
@@ -394,6 +403,16 @@ class DocumentPort(Protocol):
 
         ``include_archived`` (`R-151a`): an archived document is left out unless asked for; when listed it carries
         its ``archived_at``.
+
+        ``audit_state`` (`UI-PARITY-DOC-AUDIT`, `UI-A-38`) keeps the documents whose current version is in that audit
+        state (``not_run``, ``clean``, ``awaiting_decision`` or ``checked``); ``None`` keeps every document. It is
+        applied here, on the whole filtered listing, so that the router's pages and their cursor are the pages of
+        the narrowed listing and not of the project with rows hidden afterwards. ``order`` is ``None`` (or
+        ``published``) for the order above, or ``audit`` (`UI-A-49`): checked first, then processed
+        (``clean`` or ``awaiting_decision``), then never audited, and within each the name in natural Russian
+        order (``auditmanager.dashboard.audit_order_key``). Either of the two reads the audit of every document
+        it considers, in one statement, and returns the views with ``audit`` attached; with neither, the views
+        carry none and the router asks :meth:`document_audits` for the page it cut.
 
         The order is part of this declaration for the reason ``list_projects`` gives: the
         router pages what this returns and never re-sorts it.
@@ -407,6 +426,21 @@ class DocumentPort(Protocol):
         Items are ``DocumentVersion`` because that is what ``upload_document`` publishes
         into this same collection. There is no ``Document`` shape in the frozen contract
         and this declaration does not invent one.
+        """
+
+    def document_audits(
+        self, *, version_uids: Sequence[str]
+    ) -> Mapping[str, DocumentAuditView]:
+        """The audit of each named version, **in one read** (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
+
+        ``listDocuments`` names the versions of the page it is about to return, so a page costs one statement and
+        not one per document. The audit is the one the counters of ``listProjects`` and the section panel are
+        tallies of (``dashboard.audit_state``): the same result-run rule, the same undecided rule, the same
+        classifying function.
+
+        **Every named version has an entry.** A name that is no version is ``not_found`` naming ``Version``,
+        never an absent key the caller would have to explain: the caller indexes the answer, and a missing
+        entry would be a silent ``not_run``. No names is an empty answer and no read.
         """
 
     def set_document_archived(
@@ -506,6 +540,15 @@ class BlockPort(Protocol):
 
     def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
         """`UI-PARITY-P0O`: each page's sheet label from the version's portal geometry."""
+
+    def list_run_finding_blocks(self, *, run_id: str) -> models.RunFindingBlockLinks:
+        """`UI-PARITY-C6`: the portal blocks that hold each published finding's evidence, derived on read.
+
+        One item per published finding of the run, **absent is not empty**: ``portal_block_ids`` is empty only when the
+        evidence lies on a page where a link can be derived and no block holds it, and the pages where none can be derived
+        are ``unlinked_pages``. ``not_produced`` (no items) when the run has no text-layer geometry or the version no portal
+        geometry. An unknown run is ``not_found``.
+        """
 
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         """Every portal block of one version's bundle, or its not-yet-produced status.
@@ -639,8 +682,12 @@ class ArV3GroupPort(Protocol):
         self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
+        started_by_user_uid: str | None = None,  # `R-151v`: the account whose request this is
     ) -> models.ArV3BetaGroup:
-        """Create six pinned runs, or replay the same group."""
+        """Create six pinned runs, or replay the same group.
+
+        `AR-V3-OPT-IN`: refused with ``409 conflict`` / ``ar_v3_start_not_enabled`` (nothing written) while a pack is
+        installed and the deployment has not allowed starts; an accepted key still replays."""
 
     def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
         """Read the six current child states without reselecting normative inputs."""
@@ -665,7 +712,9 @@ class RunPort(Protocol):
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
                           reaudit_of_run_id: str | None = None,
                           preset_id: str | None = None, relaxed_limits: bool = False,
-                          executor_group_id: str | None = None) -> models.RunCostEstimate: ...  # EXEC2-GROUP-RUN-01
+                          executor_group_id: str | None = None,  # EXEC2-GROUP-RUN-01
+                          start_from_run_id: str | None = None,  # `R-151i`: the price of a start from a stage
+                          start_stage_id: str | None = None) -> models.RunCostEstimate: ...
 
     def start_run(
         self,
@@ -1082,6 +1131,17 @@ class AccountPort(Protocol):
     ) -> AccountView:
         """Set a temporary password the account must change at its next sign-in."""
 
+    def end_account_sessions(
+        self, *, actor_uid: str, user_uid: str, idempotency_key: str
+    ) -> AccountView:
+        """End every session of the account (contract 1.36.0, `UI-A-93`): its credential epoch rises, so its next
+        request is unauthenticated. Keyed: an exact repeat answers the account unchanged. Not oneself
+        (``permission_denied``); an archived or missing account is ``not_found``."""
+
+    def list_auth_events(self, *, cursor: str | None, limit: int) -> models.AuthEventPage:
+        """The access journal, newest first, one page (contract 1.36.0, `UI-A-94`). The cursor is the last event's
+        identity and nothing else; an administrator's read, decided by the seam."""
+
 
 @runtime_checkable
 class RegistrationPort(Protocol):
@@ -1443,6 +1503,13 @@ class DispatchPort(Protocol):
         only the assignments currently given to them.
         """
 
+    def assignment_overview(
+        self, *, user_uid: str, mine: bool, project_uid: str | None
+    ) -> Sequence[models.AssignmentStatusCount]:
+        """Every status with the number of assignments in it, over the same scope as
+        :meth:`list_assignments` (``mine``, ``project_uid``, what the caller may read) and without its status
+        filter, in the order of the status vocabulary; a status with none is 0 (contract 1.36.0)."""
+
     def get_assignment(self, *, assignment_uid: str, user_uid: str) -> models.AssignmentDetail:
         """One assignment and its history; ``not_found`` when absent or not visible."""
 
@@ -1529,7 +1596,7 @@ class OptimisationPort(Protocol):
 
 @runtime_checkable
 class OptimisationProposalPort(Protocol):
-    """The six «Предложения» operations. `W60-OPT-PROPOSALS-01`.
+    """The «Предложения» operations. `W60-OPT-PROPOSALS-01`, and `UI-B-27`'s accepted list.
 
     A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
     Behind it: ``auditmanager.optimisation.proposals``. Every method reads the actor's role
@@ -1586,6 +1653,28 @@ class OptimisationProposalPort(Protocol):
         self, *, optimisation_pass_id: str, user_uid: str
     ) -> bytes:
         """The pass's proposals as the formula-escaped CSV bytes."""
+
+    def export_optimisation_proposals_xlsx(
+        self, *, optimisation_pass_id: str, user_uid: str
+    ) -> bytes:
+        """`UI-B-15`: the pass's proposals as the workbook the expert edits and loads back."""
+
+    def import_optimisation_proposal_decisions(
+        self, *, optimisation_pass_id: str, content: BinaryIO, idempotency_key: str, user_uid: str
+    ) -> models.ProposalDecisionImportReport:
+        """`UI-B-15`: read the edited workbook and append the decisions it changes, one keyed command, one report."""
+
+    def carry_over_proposal_decisions(
+        self, *, optimisation_pass_id: str, source_optimisation_pass_id: str, idempotency_key: str, user_uid: str
+    ) -> models.ProposalDecisionCarryoverReport:
+        """`UI-B-14`: carry the decisions in force of an earlier version's pass into this pass, matched by content,
+        one keyed command, one report."""
+
+    def list_accepted_optimisation_proposals(
+        self, *, project_uid: str | None, section_code: str | None, user_uid: str
+    ) -> Sequence[models.AcceptedOptimisationProposal]:
+        """`UI-B-27`: the proposals whose decision in force is an acceptance, newest acceptance first, optionally of
+        one project and one section; the edge pages them."""
 
 
 # --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------

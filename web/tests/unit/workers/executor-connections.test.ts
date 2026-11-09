@@ -46,7 +46,7 @@ import {
 } from './executor-fixtures';
 
 const ENVELOPE = (code: 'validation_failed' | 'conflict' | 'dependency_unavailable', details: Record<string, string>) => ({
-  contract_version: '1.33.0', error_code: code, message: 'Safe.', correlation_id: 'cid-executor-1', retryable: false, details,
+  contract_version: '1.42.0', error_code: code, message: 'Safe.', correlation_id: 'cid-executor-1', retryable: false, details,
 }) as const;
 
 function connections(roles: Role[], cases = ALL_CASES, extra: Partial<ExecutorConnectionsProps> = {}): string {
@@ -428,13 +428,15 @@ describe('the page', () => {
     return renderScreen(client, createElement(WorkersPage as ComponentType<WorkersPageProps>, props));
   }
 
-  it('opens on «Процессы» unless the address names a tab, with the three tabs in their order', () => {
+  it('opens on «Обзор» unless the address names a tab, with the tabs in their order', () => {
     const markup = page({});
-    expect(markup).toContain('data-workers-panel="processes"');
-    const order = ['connections', 'processes', 'routes'].map((tab) => markup.indexOf(`data-workers-tab="${tab}"`));
+    expect(markup).toContain('data-workers-panel="overview"');
+    expect(markup).not.toContain('data-workers-panel="processes"');
+    expect(page({ initialTab: 'processes' })).toContain('data-workers-panel="processes"');
+    const order = ['overview', 'connections', 'processes', 'routes'].map((tab) => markup.indexOf(`data-workers-tab="${tab}"`));
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    for (const label of ['Подключения', 'Процессы', 'Назначения']) expect(markup).toContain(`>${label}<`);
+    for (const label of ['Обзор', 'Подключения', 'Процессы', 'Назначения']) expect(markup).toContain(`>${label}<`);
   });
 
   it('opens the tab the address names, and draws nothing of the others', () => {

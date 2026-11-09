@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-295 operations, sealed. `A5` generates the typed client from this document; `B6`
+303 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1037,6 +1037,91 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-DOC-AUDIT` (contract `1.34.0`, no migration, no new operation) gives `listDocuments` the audit state of each
+document (`UI-A-46`): the optional `DocumentVersion.audit` (`DocumentAudit`), read for the page in one statement through
+`DocumentAuditReadModel.audits` by the rules the counters use, and on this operation only. The optional `audit_state`
+filter (`UI-A-38`, «не запускались» is `not_run`) and the `order` parameter (`published` or `audit`, `UI-A-49`) are applied
+by the adapter to the whole narrowed listing before the router cuts a page, so the ordering is the server's and holds
+across pages and the cursor is the one of the narrowed, ordered listing.
+
+`UI-PARITY-OPT-DECISIONS` (contract `1.35.0`, migration `0056_optimisation_decisions`) brings two decisions of the original's
+optimisation screen. `ProposalVerdict` gains `revoke` (`UI-B-12`, «Снять решение»): `decideOptimisationProposal` appends it
+as an ordinary keyed event that takes the proposal back to `pending` (the counts and `current_verdict` read a latest
+`revoke` as `pending`; `current_decision` still names it); it is refused as `conflict` / `no_decision_to_revoke` when no decision
+stands, and the migration widens the verdict CHECK, its downgrade refusing while a `revoke` exists. `listAcceptedOptimisationProposals`
+(`UI-B-27`, «Принято») lists the proposals whose decision in force is an acceptance, across every pass, by optional
+`project_uid` and `section_code`; a product read, cursor and `total`. `exportOptimisationProposalsXlsx` and the keyed
+`importOptimisationProposalDecisions` (`UI-B-15`, «Загрузить решения») are the pass's proposals as a workbook whose first
+column is the proposal's identity and the decisions loaded back from it by that identity: every changed row is an ordinary
+keyed decision event authored by the caller (`revoke` for «не решено» over a decision in force), and the report names every
+row that carries an ID or a decision.
+
+`AR-V3-OPT-IN` (contract `1.38.0`, no migration, no new operation) makes AR v3 an **opt-in** analysis beside the standard one
+(`docs/program/AR-V3-OPT-IN-01.md`; owner answers Q1 to Q7 of 2026-11-07). The standard (imported) analysis stays the default
+and `startRun` / `reauditRun` gain no path to v3; v3 remains its own operation, `startArV3BetaGroup`. Two layers, both off by
+default: the pack (`AR_V3_BETA_PACK_MANIFEST`) is the capability to execute, read and review; `AR_V3_BETA_START_ALLOWED=1`,
+read by the `api` service only, is the permission to start. While a pack is installed and the permission is off,
+`startArV3BetaGroup` and `estimateArV3GroupCost` answer `409 conflict` / `ar_v3_start_not_enabled` and write nothing; with no
+pack they answer the `dependency_unavailable` they always did; a repeat of an accepted key replays whatever the permission now
+is, and runs already accepted finish because the worker does not read the variable. `ArV3BetaPackStatus.start_allowed` (present
+exactly when installed) tells a screen which. `RunStatus.analysis_kind` (`standard` | `ar_v3_beta`, derived from the pinned
+profile and bundle pair, `runs/analysis_kind.py`) is sent on every run, with `ar_v3_group_id` and `ar_v3_scope_id` on a member;
+a member also records the account that started it (`R-151v`). **The result of a version is its newest published or partial run
+of the standard analysis** (`Q3`): the counters and `listDocuments`' audit state (`STANDARD_RUN_SQL`), the schedule's facts,
+the default run of a comparison and the text the optimisation reads. A v3 run named in a comparison is the refusal
+`analysis_not_comparable` (the findings of the two analyses are not the same kind of object; carry-over recomputes the
+comparison and inherits it); `reauditRun` (and `estimateRunCost` with `reaudit_of_run_id`) of a member is `409 conflict` /
+`ar_v3_member_not_repeatable` before the key is claimed, because the repeat would route by the section and silently become the
+other analysis.
+
+`UI-PARITY-OPT-CARRYOVER` (contract `1.37.0`, migration `0057_decision_carryover`) carries the decisions of an earlier version's
+optimisation pass over to the pass of a later version (`UI-B-14`, «Перенести решения из V#»). `carryOverProposalDecisions` is
+a keyed expert write: it matches the source pass's decisions in force to the target pass's proposals by **content** alone (the
+type, the specification row's text, the unit and currency, both positions by code, mark, name and supplier, both unit prices;
+never a display number, a name alone or a place in the drawing), appends each unambiguous match as an ordinary decision event
+authored by the confirming expert, only into a proposal that has no event at all, and reports every source decision as
+`carried`, `target_decided`, `ambiguous` or `unmatched`. The new nullable `optimisation_proposal_decision.carried_from_decision_id`
+(foreign key to the table itself, `opd_` shape, not itself, never a `revoke`) is the provenance; it reaches the wire as
+`ProposalDecision.carried_from` (the source decision, pass, version and the version's display ordinal) and is `null` for a
+decision made directly. `OptimisationPass.version_ordinal` names the version a pass was started over, so a screen can offer
+«Перенести решения из V2». The source must be a pass of the same document set over an earlier version (`conflict` /
+`carryover_source_unknown`, `carryover_source_is_target`, `carryover_source_other_document`, `carryover_source_not_earlier`).
+The migration's downgrade refuses while a carried decision exists. No counts were added for the tabs of «Оптимизация разделов»:
+`SectionSpecification.row_count` and `AcceptedOptimisationProposalPage.total` already are the server's figures for «Форма 7 · N»
+and «Принято N».
+
+`UI-PARITY-AUDIT-STATE` (contract `1.40.0`, no migration, no new operation) gives three screens the server data they lacked.
+`DocumentAudit.active_run` (`UI-A-47`) is the version's run in flight -- its latest run of the standard analysis in state `queued`,
+`running` or `validating`, in the result run's order -- read by `DocumentAuditReadModel.audits` in the same statement as the
+audit and rendered by `listDocuments` only; it changes none of the four audit words and the counters never read it, and a run
+of an AR v3 group is never an active run (as it is never a result). `RunStatus.estimated_finish_at` (`UI-A-65` / `UI-B-45`) is
+the queue item's estimate, from the one function `execution.eta.job_estimated_finish` (the queue calls it too; `run_estimated_finish`
+reads the same four facts for one run), present only while the run's job is leased or running and has started.
+`OptimisationProposal.saving_percent` (`UI-B-07`) is `(current - proposed) / current * 100` over the two stored unit prices, exact
+and rounded half up to two decimals, computed by `saving_percent_for` beside `saving_for`; the quantity cancels, so it exists where
+`saving` is `null`. Each of the three is optional and absent when it has nothing to say; the one new schema is `DocumentActiveRun`.
+
+`UI-PARITY-FINDING-ORIGIN` (contract `1.39.0`, migration `0058_finding_decision_origin`, no new operation) gives a carried finding
+decision a structured source (`UI-A-73`, the original's «↩ Перенесено из V1»). The new nullable
+`expert_decision_event.carried_from_decision_id` (foreign key to the table itself, `dec_` shape, not itself, only an `accept` or a
+`reject`, a partial index) is written by `carryOverDecision` in the same statement as the carried event; before it the source
+was only in the event's rendered comment, which stays and is never parsed back (events carried before the migration read as made
+directly, `D-342`). The one new schema `DecisionCarriedFrom` (the source decision, its finding, its version and the version's
+display ordinal) is the optional `carried_from` of `DecisionEvent` and `DecisionRecord` and the optional
+`current_verdict_carried_from` of `Finding` and `FindingDetail` -- the origin of the decision that carries the current verdict,
+which a later verdict of the expert replaces. `AcceptedOptimisationProposal.carried_from` (`D-335`, part) is the optimisation
+side's twin on the accepted list. The downgrade of `0058` refuses while a carried event exists.
+
+`UI-PARITY-ADMIN-C2` (contract `1.36.0`, no migration) brings the administrator's side of the original's «Пользователи»
+and the «Диспетчер» counts. `Account.last_sign_in_at` (`UI-A-92`, «Последний вход») is the instant of the account's latest
+`access.sign_in_succeeded` event, read from the access journal for the accounts an answer names and never by the seam's
+per-request standing read; `endUserSessions` (`UI-A-93`, «Завершить сеансы») is the keyed administrator write that raises
+an account's credential epoch and journals `access.sessions_ended` in the same transaction, so every credential the account
+holds is refused from its next request; `listAuthEvents` (`UI-A-94`, «Журнал входов») reads the same `audit_event` journal
+newest first with a cursor that is an event's own identity, an administrator's read that never sends the sequence and never
+holds a password, a token, an address or a login as typed. `listAssignments` answers `total` and the per-status `overview`
+the dispatcher's chips show, counted by the server over the scope filters and never from the page held.
+
 `UI-PARITY-KB-ALL` (contract `1.32.0`, no migration) adds `listKnowledgeBaseEntries` (`R-151h`, `D-317`): the knowledge
 base's «Все», both decision journals merged at the edge, newest first, each row naming its kind and carrying that
 journal's own record, so neither identity is replaced; a product read.
@@ -1045,6 +1130,13 @@ journal's own record, so neither identity is replaced; a product read.
 context `schedule`: the month read (plan and fact per active expert, fact from the last verdict of a checked document), the
 reserve read over `work_assignment_current`, and five keyed administrator commands. Every table is an append-only journal;
 moving an assignment to another expert goes through `dispatch`'s `transition_assignment`.
+
+`UI-PARITY-S2` (contract `1.42.0`, migration `0060`) adds `startRunFromStage`: a new run that reuses the completed stage outputs of an
+earlier run before the chosen stage (`docs/program/RUN-FROM-STAGE-01.md`); the earlier run is unchanged.
+
+`UI-PARITY-C6` (contract `1.41.0`, no migration) adds `listRunFindingBlocks`: the portal blocks that hold each published
+finding's evidence, derived on read from the run's text-layer block index and page inventory and the version's portal blocks
+(`analysis/geometry/finding_blocks.py`), so a finding can show the blocks it sits in and a block the findings in it.
 
 `UI-PARITY-P0O` (contract `1.30.0`, no migration) adds `listVersionSheetLabels`: each page's sheet label from the
 version's portal geometry, so a finding's page is shown with its sheet as in the original.
@@ -1119,9 +1211,15 @@ could.
 | `setFindingExecutionStatus` | `PUT /findings/{finding_uid}/execution-status` |
 | `listProposalDecisionJournal` | `GET /proposal-decisions` |
 | `listKnowledgeBaseEntries` | `GET /knowledge-base/entries` |
+| `listAcceptedOptimisationProposals` | `GET /optimisation-proposals/accepted` |
+| `exportOptimisationProposalsXlsx` | `GET /optimisation-passes/{optimisation_pass_id}/export.xlsx` |
+| `importOptimisationProposalDecisions` | `POST /optimisation-passes/{optimisation_pass_id}/decision-imports` |
+| `carryOverProposalDecisions` | `POST /optimisation-passes/{optimisation_pass_id}/decision-carryovers` |
 | `importRunDecisions` | `POST /runs/{run_id}/decision-imports` |
 | `getProject` | `GET /projects/{project_uid}` |
 | `listVersionSheetLabels` | `GET /versions/{version_uid}/sheet-labels` |
+| `listRunFindingBlocks` | `GET /runs/{run_id}/finding-blocks` |
+| `startRunFromStage` | `POST /runs/{run_id}/start-from-stage` |
 | `getWorkSchedule` | `GET /work-schedule` |
 | `getWorkScheduleReserve` | `GET /work-schedule/reserve` |
 | `setWorkScheduleSettings` | `PUT /work-schedule/settings` |
@@ -1165,6 +1263,8 @@ could.
 | `restoreUser` | `POST /users/{user_uid}/restore` |
 | `purgeUser` | `DELETE /users/{user_uid}` |
 | `resetUserPassword` | `POST /users/{user_uid}/password` |
+| `endUserSessions` | `POST /users/{user_uid}/sessions/end` |
+| `listAuthEvents` | `GET /auth-events` |
 | `getProductVersion` | `GET /system/version` |
 | `listReleases` | `GET /releases` |
 | `markReleaseNotesRead` | `PUT /me/release-notes` |
@@ -1408,9 +1508,9 @@ Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
-  `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
-  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
-  `importRunDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
+  `approveRegistration`, `cancelRun`, `reauditRun`, `startRunFromStage`, `setJobPriority`,
+  `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
+  `importRunDecisions`, `importOptimisationProposalDecisions`, `carryOverProposalDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
   `scheduleAssignments`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
@@ -1515,10 +1615,11 @@ Rules that hold across the whole surface:
   So an administrator takes back another account's credentials through `archiveUser`,
   `resetUserPassword` or a change of its role set in `updateUser`, each of which raises the
   generation, as `restoreUser` does. An administrator may not archive itself, reset its own
-  password or remove a role of its own, and the last active administrator can neither be
-  archived nor lose `admin` (`W49-PLAN.md` §3.2). There is still no operation whose only
-  effect is to revoke: taking credentials back from a shell — one account's, or everyone's —
-  remains an operator's action (`python -m auditmanager.access.revoke`).
+  password, end its own sessions or remove a role of its own, and the last active administrator
+  can neither be archived nor lose `admin` (`W49-PLAN.md` §3.2). Since contract `1.36.0`
+  (`UI-A-93`) one operation has no other effect than to revoke: `endUserSessions` ends every
+  session of one account and nothing else. Bulk revocation — everyone's credentials — remains an
+  operator's action from a shell (`python -m auditmanager.access.revoke`).
 
 ## 8. Owner decisions this seam register encodes
 

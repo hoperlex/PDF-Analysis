@@ -18,8 +18,12 @@ export {
 
 export { decisionCacheKeys } from './model/cache';
 
-export type { DecisionJournalQuery } from './api/use-decision-journal';
-export { JOURNAL_PAGE_LIMIT, useDecisionJournal, useKnowledgeBaseJournal, useProposalDecisionJournal } from './api/use-decision-journal';
+export { KNOWLEDGE_BASE_SCREEN } from './model/knowledge-base-screen';
+
+export type { DecisionJournalQuery, DecisionVerdictTotals } from './api/use-decision-journal';
+export {
+  JOURNAL_PAGE_LIMIT, useDecisionJournal, useDecisionVerdictTotals, useKnowledgeBaseJournal, useProposalDecisionJournal,
+} from './api/use-decision-journal';
 
 /** The Russian label for a verdict, so no consumer renders the contract value as prose. */
 export { VERDICT_LABELS } from './ui/verdict-badge';
@@ -35,3 +39,8 @@ export { intentSignature, resolveIntentKey } from './model/intent';
 
 export type { VerdictBadgeProps } from './ui/verdict-badge';
 export { VerdictBadge } from './ui/verdict-badge';
+
+/** `UI-A-73`: «↩ Перенесено из V2», the mark of a decision carried over from an earlier version. */
+export { carriedFromMark } from './model/carried-from';
+export type { CarriedMarkProps } from './ui/carried-mark';
+export { CarriedMark } from './ui/carried-mark';

@@ -236,3 +236,105 @@ def test_the_decision_journal_lists_every_decision_newest_first_and_narrows_to_a
     assert journal[0].document_uid == ready.document and journal[0].comment == "уточнить марку"
     assert unit(proposal_decision_journal, project_uid=cast.other_project) == ()
     assert len(unit(proposal_decision_journal)) >= 3
+
+
+# -- «Снять решение» (`UI-B-12`, contract 1.35.0) ----------------------------------------------
+
+
+def test_a_decision_is_withdrawn_by_an_appended_event_and_the_proposal_is_pending_again(
+    unit, factory, cast, started
+) -> None:
+    door, window, *_ = started["proposals"]
+    pass_id = started["pass"].optimisation_pass_id
+    # Nothing stands: a withdrawal of nothing is refused and leaves neither an event nor a claimed key.
+    with session_scope(factory) as session:
+        commands = int(session.execute(text("SELECT count(*) FROM command_record")).scalar_one())
+    nothing = _refused(ErrorCode.CONFLICT, _decide, unit, cast, door, "revoke", "r-0")
+    assert nothing.detail_fields["conflict_reason"] == "no_decision_to_revoke"
+    assert nothing.detail_fields["aggregate_type"] == "OptimisationProposal"
+    assert _decision_rows(factory) == 0
+    with session_scope(factory) as session:
+        assert int(session.execute(text("SELECT count(*) FROM command_record")).scalar_one()) == commands
+
+    _decide(unit, cast, door, "accept", "r-1", "подходит")
+    _decide(unit, cast, window, "reject", "r-2", "хуже")
+    withdrawn = _decide(unit, cast, door, "revoke", "r-3", "ошибся, пересмотрю", actor_uid=cast.other_expert)
+    assert (withdrawn.replayed, withdrawn.decision.verdict, withdrawn.decision.seq) == (False, "revoke", 2)
+    assert withdrawn.decision.actor_user_uid == cast.other_expert
+    assert withdrawn.decision.comment == "ошибся, пересмотрю"
+    # The latest event is the withdrawal; the decision it withdrew is not in force.
+    assert withdrawn.proposal.current_verdict == "pending"
+    assert withdrawn.proposal.current_decision == withdrawn.decision
+    history = unit(list_proposal_decisions, optimisation_proposal_id=door, actor_roles=frozenset({"admin"}))
+    assert [(entry.seq, entry.verdict) for entry in history] == [(1, "accept"), (2, "revoke")]
+
+    record = unit(get_optimisation_pass, optimisation_pass_id=pass_id, actor_roles=frozenset({"admin"}))
+    assert dict(record.decision_counts) == {"pending": 3, "accept": 0, "reject": 1, "revise": 0}
+    for decision, expected in (("pending", {door, *started["proposals"][2:]}), ("accept", set()), ("reject", {window})):
+        page = unit(list_optimisation_proposals, optimisation_pass_id=pass_id,
+                    actor_roles=frozenset({"expert"}), decision=decision)
+        assert {item.optimisation_proposal_id for item in page.items} == expected
+        assert page.total == len(expected)
+
+    # Nothing stands again: a second withdrawal is refused, and a new decision is welcome.
+    again = _refused(ErrorCode.CONFLICT, _decide, unit, cast, door, "revoke", "r-4")
+    assert again.detail_fields["conflict_reason"] == "no_decision_to_revoke"
+    redecided = _decide(unit, cast, door, "reject", "r-5", "дороже монтаж")
+    assert (redecided.decision.seq, redecided.proposal.current_verdict) == (3, "reject")
+    # The history kept every act, in order, and nothing was updated or deleted.
+    history = unit(list_proposal_decisions, optimisation_proposal_id=door, actor_roles=frozenset({"expert"}))
+    assert [entry.verdict for entry in history] == ["accept", "revoke", "reject"]
+
+
+def test_a_withdrawal_replays_by_its_key_and_only_an_expert_may_make_one(unit, factory, cast, started) -> None:
+    door = started["proposals"][0]
+    _decide(unit, cast, door, "accept", "w-1")
+    first = _decide(unit, cast, door, "revoke", "w-2")
+    replay = _decide(unit, cast, door, "revoke", "w-2")
+    assert replay.replayed and replay.decision == first.decision and first.decision.comment is None
+    assert _decision_rows(factory) == 2
+    # The same key for another verdict is a different payload.
+    _refused(ErrorCode.IDEMPOTENCY_KEY_REUSE, _decide, unit, cast, door, "accept", "w-2")
+    denied = _refused(ErrorCode.PERMISSION_DENIED, _decide, unit, cast, door, "revoke", "w-3",
+                      actor_uid=cast.admin)
+    assert denied.detail_fields["required_capability"] == "role:expert"
+    assert _decision_rows(factory) == 2
+
+
+def test_the_export_and_the_journal_tell_a_withdrawal_as_it_was(unit, cast, started, ready: World) -> None:
+    from auditmanager.optimisation.proposals.journal import proposal_decision_journal
+
+    door = started["proposals"][0]
+    _decide(unit, cast, door, "accept", "x-1", "берём")
+    _decide(unit, cast, door, "revoke", "x-2", "снимаю")
+    exported = unit(export_optimisation_proposals_csv,
+                    optimisation_pass_id=started["pass"].optimisation_pass_id,
+                    actor_roles=frozenset({"expert"}))
+    row = {r["optimisation_proposal_id"]: r for r in _rows(exported.content)}[door]
+    # No decision in force: the decision columns are those of a pending proposal.
+    assert (row["current_decision"], row["decision_comment"], row["decided_by_user_uid"], row["decided_at"]) == (
+        "pending", "", "", "",
+    )
+    journal = unit(proposal_decision_journal, project_uid=ready.project)
+    assert [(entry.verdict, entry.comment) for entry in journal] == [("revoke", "снимаю"), ("accept", "берём")]
+
+
+def test_the_database_refuses_a_verdict_outside_the_four(factory, cast, started) -> None:
+    """The widened CHECK still closes the vocabulary: ``pending`` is not a stored verdict."""
+    door = started["proposals"][0]
+    with pytest.raises(DBAPIError) as caught:
+        with session_scope(factory) as session:
+            command = session.execute(text(
+                "INSERT INTO command_record (command_id, command_type, idempotency_key, payload_fingerprint) "
+                "VALUES ('cmd_01M2545JSD15ETSNNV904XA0ZZ', 'decide_optimisation_proposal', 'raw-1', repeat('a', 64)) "
+                "RETURNING command_id"
+            )).scalar_one()
+            session.execute(
+                text(
+                    "INSERT INTO optimisation_proposal_decision (proposal_decision_id, optimisation_proposal_id, seq, "
+                    "verdict, comment, actor_user_uid, command_id) "
+                    "VALUES ('opd_01M2545JSD15ETSNNV904XA0ZZ', :p, 1, 'pending', NULL, :a, :c)"
+                ),
+                {"p": door, "a": cast.expert, "c": command},
+            )
+    assert "ck_optimisation_proposal_decision_verdict" in str(caught.value)

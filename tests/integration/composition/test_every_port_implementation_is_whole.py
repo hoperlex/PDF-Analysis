@@ -152,6 +152,8 @@ PORT_FOR_ARGUMENT = {
     "xlsx_exports": "XlsxExportPort",
     # `W61-DISPATCHER-01`.
     "dispatch": "DispatchPort",
+    # `UI-PARITY-P0P` (contract 1.31.0): «График работ». `build_router` took it without this guard knowing.
+    "schedule": "SchedulePort",
     # `W60-PRICE-LIST-01`.
     "optimisation": "OptimisationPort",
     # `W60-OPT-MATCH-01`.

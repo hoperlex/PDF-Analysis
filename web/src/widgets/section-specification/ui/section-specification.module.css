@@ -14,9 +14,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--am-gap);
-  margin: 0 0 var(--am-gap);
-  padding: var(--am-gap);
+  gap: var(--am-gap-sm) var(--am-gap);
+  max-width: none;
+  margin: 0 0 var(--am-gap-sm);
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);
@@ -27,12 +28,24 @@
   max-width: 100%;
 }
 
+.projects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr));
+  gap: var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+}
+
 .project {
-  margin: 0 0 var(--am-gap);
-  padding: var(--am-gap);
+  min-width: 0;
+  margin: 0;
+  padding: var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);
+}
+
+.project p {
+  margin: 0 0 var(--am-gap-xs);
 }
 
 .subheading {
@@ -84,6 +97,112 @@
   font-size: var(--am-text-sm);
 }
 
-.group {
+/* `UI-B-23`: the original's Form 7 — the nine graphs of the form, the rows grouped under a row per project that folds. */
+.center {
+  text-align: center;
+}
+
+.address {
+  display: block;
   color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.positionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-xs);
+}
+
+.allToggle {
+  display: inline-flex;
+  gap: var(--am-gap-2xs);
+}
+
+.allToggle button {
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.allToggle button:focus-visible,
+.groupToggle:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.columnNumbers th {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 400;
+  text-align: center;
+}
+
+.groupRow {
+  background: var(--am-surface-sunken);
+}
+
+.groupCell {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+}
+
+/* 24 px tall at the least (it was 18.5); `align-content` keeps the text in the middle of the taller box. */
+.groupToggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-content: center;
+  align-items: baseline;
+  gap: var(--am-gap-xs);
+  min-height: var(--am-target-min);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--am-ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.caret {
+  display: inline-block;
+  min-width: var(--am-gap);
+  text-align: center;
+}
+
+.groupName {
+  font-weight: 600;
+}
+
+.missing {
+  color: var(--am-failed);
+  font-weight: 600;
+}
+
+.noteRow td,
+.categoryRow td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+  color: var(--am-ink-muted);
+}
+
+.categoryRow td {
+  font-weight: 600;
+  background: var(--am-surface);
+  color: var(--am-ink);
+}
+
+.options {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
 }

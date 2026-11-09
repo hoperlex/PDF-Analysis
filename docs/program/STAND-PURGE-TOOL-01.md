@@ -62,7 +62,7 @@ purge-product-data: database <db> (migration head 0029_routing_refusal_codes), b
 
 -- objects in the bucket --
   product objects to delete, by exact key: 24 objects, 271448 bytes (9 more keys are named by rows but not in the bucket)
-  norm-owned objects (the custody ledger's, never touched): 2
+  norm-owned objects (the custody ledger's and the decision memory's crops; never touched): 3
   other objects (named by no row; never touched): 1 (blobs/ 1)
   objects in the bucket: 27
 

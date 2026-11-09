@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any
 
 from auditmanager.api.schemas.common import timestamp
+from auditmanager.api.schemas.decisions import DecisionCarriedFromView, decision_carried_from_body
 
 __all__ = [
     "EvidenceView",
@@ -110,6 +111,9 @@ class FindingView:
     #: `R-151g` (contract 1.24.0, migration 0054): what the designer did with the accepted finding, and when it was set.
     execution_status: str | None = None
     execution_status_at: datetime | None = None
+    #: `UI-A-73` (contract 1.39.0): where the decision that carries the current verdict came from, when an expert carried
+    #: it over from an earlier version. Omitted from the wire body when the verdict was decided directly.
+    current_verdict_carried_from: DecisionCarriedFromView | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +213,8 @@ def finding_body(view: FindingView) -> dict[str, Any]:
         body["execution_status"] = view.execution_status
         if view.execution_status_at is not None:
             body["execution_status_at"] = timestamp(view.execution_status_at)
+    if view.current_verdict_carried_from is not None:
+        body["current_verdict_carried_from"] = decision_carried_from_body(view.current_verdict_carried_from)
     for name in ("norm_citations", "required_value", "stated_value"):
         if name in body["observation"]:
             body[name] = body["observation"][name]

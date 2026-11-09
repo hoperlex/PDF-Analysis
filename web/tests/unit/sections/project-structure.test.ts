@@ -87,7 +87,9 @@ describe('the structure as a reader sees it', () => {
 
   it('counts the documents of each group and says when one is empty', () => {
     expect(group(markup, 'KJ')).toContain('data-section-documents="2"');
-    expect(group(markup, 'KJ')).toContain('документов: 2');
+    // `UI-A-35`: the count is the first part of the section's row of figures.
+    expect(group(markup, 'KJ')).toContain('data-audit-tally="2"');
+    expect(group(markup, 'KJ')).toMatch(/data-tally="documents"[^>]*>(<!-- -->)?<span[^>]*>2<\/span>/);
     expect(group(markup, 'GP')).toContain('data-section-documents="0"');
     expect(group(markup, 'GP')).toContain('документов нет');
     expect(group(markup, 'unclassified')).toContain('data-section-documents="1"');
@@ -100,12 +102,27 @@ describe('the structure as a reader sees it', () => {
     expect(group(markup, 'GP')).not.toMatch(/<details[^>]*open=""/);
   });
 
-  it('carries the stage on every classified row, and «Раздел не подтверждён» on the rest', () => {
+  it('makes the badge of a section that holds documents a link to its page, and leaves an empty one plain', () => {
+    expect(group(markup, 'AR')).toMatch(/<a [^>]*data-section-code-link="AR"[^>]*>/);
+    expect(group(markup, 'AR')).toContain(`/projects/${PROJECT_UID}/sections/AR`);
+    expect(group(markup, 'GP')).not.toContain('data-section-code-link');
+  });
+
+  it('draws a section that holds nothing as one short line, and one that holds documents as a card', () => {
+    expect(group(markup, 'GP')).toMatch(/class="[^"]*cardEmpty/);
+    expect(group(markup, 'AR')).not.toMatch(/class="[^"]*cardEmpty/);
+  });
+
+  it('carries the stage on every classified row; the group, not each card, says what the rest lack', () => {
     const kj = group(markup, 'KJ');
     expect(kj).toContain('Стадия: Р');
     expect(kj).toContain('Стадия: П');
     expect(group(markup, 'AR')).toContain('data-version-classification="P:AR"');
-    expect(group(markup, 'unclassified')).toContain('Раздел не подтверждён');
+    // `UI-A-45` (density): inside its section's group a card does not repeat the section, and the group of
+    // documents with no classification does not repeat «Раздел не подтверждён» on every card.
+    expect(group(markup, 'AR')).not.toContain('data-section-code=');
+    expect(group(markup, 'unclassified')).toContain('Не классифицировано');
+    expect(group(markup, 'unclassified')).not.toContain('Раздел не подтверждён');
     expect(group(markup, 'unclassified')).not.toContain('Стадия:');
   });
 
@@ -134,7 +151,10 @@ describe('the structure as a reader sees it', () => {
 });
 
 describe('the project screen', () => {
-  const key = queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT);
+  // `UI-PARITY-DOC-AUDIT`: the project screen reads the listing in the server's audit order.
+  const key = queryKeys.projects.documents(
+    PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit',
+  );
 
   it('groups the one listDocuments read and keeps the upload under it', () => {
     const client = newClient();

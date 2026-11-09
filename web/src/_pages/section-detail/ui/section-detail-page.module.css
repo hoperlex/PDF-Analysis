@@ -1,0 +1,33 @@
+/* The section page: the filters above the cards and the Σ card that opens the grid (UI-A-53). Tokens only. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap-sm);
+}
+
+
+.sigmaBadge {
+  align-self: flex-start;
+}
+
+.sigmaNote {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+/* `R-151c`: «Выбрать все» and the batch start, under the filters; the note beside them says what is being read or why it stopped. */
+.batchBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.batchNote {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}

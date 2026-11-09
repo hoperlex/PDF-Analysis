@@ -59,6 +59,7 @@ export function SignInForm({ refusal, next }: SignInFormProps) {
           name="login"
           type="text"
           autoComplete="username"
+          autoFocus
           required
           maxLength={320}
           placeholder="Почта или прежний логин"

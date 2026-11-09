@@ -91,6 +91,14 @@ describe('«Проекты и этапы»', () => {
     for (const legend of ['готово', 'есть что проверить', 'идёт', 'не запускалось', 'ошибка']) expect(t).toContain(legend);
   });
 
+  it('opens the estimate and consent dialog in a window over the table, and draws no window while none is open (UI-B-97)', () => {
+    const open = projects({ dialog: createElement('p', null, 'Оценка запуска'), onDialogClose: noop });
+    expect(open).toMatch(/<dialog[^>]*aria-label="Подтверждение запуска"[^>]*data-start-window=""/);
+    expect(text(open)).toContain('Оценка запуска');
+    expect(projects()).not.toContain('data-start-window');
+    expect(projects()).not.toContain('<dialog');
+  });
+
   it('shows the server\'s counters when nothing is searched and the visible sets\' counts when something is', () => {
     expect(projects()).toContain('<span class="');
     const all = projects();
@@ -418,10 +426,94 @@ describe('«Сравнение листов»', () => {
     expect(sheets()).not.toContain('data-pair-viewer');
   });
 
+  it('puts the opened pair in a window with its own «✕ Закрыть», and draws no window while none is open (UI-B-99)', () => {
+    const open = sheets({ viewer: createElement('p', null, 'Пара открыта'), viewerStatic: true, onCloseViewer: noop });
+    expect(open).toMatch(/<dialog[^>]*open=""[^>]*data-pair-viewer=""/);
+    expect(open).toContain('aria-label="Просмотр пары листов"');
+    expect(text(open)).toContain('✕ Закрыть');
+    expect(text(open)).toContain('Пара открыта');
+    expect(sheets()).not.toContain('<dialog');
+    // Not asked to be static: it opens itself with `showModal`, so the markup carries no `open` attribute.
+    expect(sheets({ viewer: createElement('p', null, 'x') })).toMatch(/<dialog(?![^>]*open=)/);
+  });
+
+  it('opens «Порядок версий» and «Сформировать PDF-отчёт…» in windows too, and draws none while they are closed (UI-B-98)', () => {
+    const open = sheets({
+      orderDialog: createElement('p', null, 'Диалог порядка'),
+      reportWindow: createElement('p', null, 'Окно отчёта'),
+      viewerStatic: true,
+      onCloseOrder: noop,
+      onCloseReport: noop,
+    });
+    expect(open).toMatch(/<dialog[^>]*open=""[^>]*aria-label="Порядок версий"[^>]*data-order-window=""/);
+    expect(open).toMatch(/<dialog[^>]*open=""[^>]*aria-label="Сформировать PDF-отчёт"[^>]*data-report-modal=""/);
+    expect(text(open)).toContain('Диалог порядка');
+    expect(text(open)).toContain('Окно отчёта');
+    expect(sheets()).not.toContain('data-order-window');
+    expect(sheets()).not.toContain('data-report-modal');
+  });
+
+  it('folds the pair choice and the blocks above the matrix with the caret of the header, and keeps the matrix (UI-B-98)', () => {
+    const shown = sheets();
+    expect(shown).toContain('data-sheets-top-toggle=""');
+    expect(shown).toContain('aria-expanded="true"');
+    expect(shown).toContain('data-sheets-top=""');
+    expect(shown).toContain('data-transition-summary');
+    expect(text(shown)).toContain('▼');
+    const folded = sheets({ topHidden: true });
+    expect(folded).toContain('aria-expanded="false"');
+    expect(folded).not.toContain('data-sheets-top=""');
+    expect(folded).not.toContain('data-transition-summary');
+    expect(folded).not.toContain('data-choose-two');
+    expect(text(folded)).toContain('▶');
+    expect(folded).toContain('title="Развернуть выбор пары и сводку переходов"');
+    // The matrix, the draft and the header's commands stay.
+    expect(folded).toContain('data-comparison-matrix');
+    expect(text(folded)).toContain('Порядок версий');
+    expect(text(folded)).toContain('· версий: 3');
+  });
+
+  it('says what the chosen pair adds up to, with the sheets only in one version (the counters of the original)', () => {
+    const markup = sheets();
+    expect(markup).toContain('data-pair-tally=""');
+    const t = text(markup);
+    expect(t).toContain('Пара №2 → №3: листов 8');
+    expect(t).toContain('с отличиями: 6');
+    expect(t).toContain('нужна проверка: 2');
+    expect(t).toContain('только в №2: 1');
+    expect(t).toContain('только в №3: 1');
+    expect(markup).toContain('data-tally-only="old"');
+    expect(markup).toContain('data-tally-only="new"');
+    // The «Состав» column of the transitions says what its «+N / −M» count.
+    expect(markup).toContain('data-composition=""');
+    expect(markup).toContain('Листов только в новой версии:');
+    expect(markup).toContain('Листов только в прежней:');
+    // No pairs, no numbers: the pair was not compared (the line would be invented).
+    expect(sheets({ pairs: null })).not.toContain('data-pair-tally');
+    expect(sheets({ pairs: [] })).not.toContain('data-pair-tally');
+  });
+
+  it('shows the file of each version under its name in the column head', () => {
+    const t = text(sheets());
+    expect(t).toContain('ЭМ-изм0.pdf');
+    expect(t).toContain('ЭМ-изм1.pdf');
+    expect(t).toContain('ЭМ-изм2.pdf');
+  });
+
+  it('always draws «Сформировать PDF-отчёт…»: off with the reason while the set has no series, on once it has one', () => {
+    const none = sheets({ series: null, pairs: null, sides: { a: V2, b: V2 } });
+    expect(none).toMatch(/<button[^>]*disabled=""[^>]*data-report-window-open=""/);
+    expect(none).toContain('сначала сравните соседние версии комплекта');
+    const ready = sheets({ onOpenReport: noop });
+    expect(ready).toMatch(/<button(?![^>]*disabled)[^>]*data-report-window-open=""/);
+  });
+
   it('writes no Latin word a reader would read', () => {
     const readable = text(sheets({ draft: DRAFT, dropped: [{ kind: 'unlink', page: page(V2, 40) }] }));
-    // «MD» is the original's name of the file of the summary (a permitted name of the language guard)
-    expect(readable.replace(/\(MD\)/g, '')).not.toMatch(LATIN);
+    // «MD» is the original's name of the file of the summary and «PDF» the name of the document format (both permitted names of the
+    // language guard; «Сформировать PDF-отчёт…» is drawn at all times now); a file name under a version in the column head is the
+    // reader's own data, not a word the screen writes.
+    expect(readable.replace(/\(MD\)/g, '').replace(/PDF/g, '').replace(/\S+\.pdf/g, '')).not.toMatch(LATIN);
   });
 });
 

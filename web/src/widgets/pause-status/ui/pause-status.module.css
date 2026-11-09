@@ -31,3 +31,11 @@
 .error {
   color: var(--am-failed);
 }
+
+/* The strip is 44 px: the switch and its confirmation are small buttons, as everywhere a control sits in a line of text. */
+.status :global(.am-button),
+.confirm :global(.am-button) {
+  min-height: 28px;
+  padding: var(--am-gap-2xs) var(--am-gap-md);
+  font-size: var(--am-text-sm);
+}

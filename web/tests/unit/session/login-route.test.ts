@@ -36,7 +36,7 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     jar.value = null;
     const element = await LoginRoute(query());
     expect(element.type).toBe(SignInPage);
-    expect(element.props).toEqual({ login: null, refusal: null, unknownRefusal: false, next: null });
+    expect(element.props).toEqual({ login: null, refusal: null, unknownRefusal: false, next: null, reason: null });
   });
 
   it('sends a live session to /, rendering nothing (W50-PLAN.md §3.2, decision five)', async () => {
@@ -68,7 +68,14 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     forgetEverySession();
     jar.value = '0'.repeat(64);
     const element = await LoginRoute(query());
-    expect(element.props).toEqual({ login: null, refusal: null, unknownRefusal: false, next: null });
+    // No session, and the screen says so: the cookie names none here (`reason: 'invalid'`).
+    expect(element.props).toEqual({
+      login: null,
+      refusal: null,
+      unknownRefusal: false,
+      next: null,
+      reason: 'invalid',
+    });
   });
 
   it('renders only a refusal the feature publishes, whatever the query string says', async () => {
@@ -79,6 +86,7 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
       refusal: 'credentials',
       unknownRefusal: false,
       next: null,
+      reason: null,
     });
     // The two values `W49-BFF-01` added reach the screen like the other four.
     for (const added of ['pending', 'throttled']) {
@@ -113,6 +121,6 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     forgetEverySession();
     jar.value = null;
     const element = await LoginRoute({});
-    expect(element.props).toEqual({ login: null, refusal: null, unknownRefusal: false, next: null });
+    expect(element.props).toEqual({ login: null, refusal: null, unknownRefusal: false, next: null, reason: null });
   });
 });

@@ -1,27 +1,51 @@
 /* `R-151h`: the decisions on optimisation proposals, dense rows as the original's knowledge base. Tokens only. */
 .list {
   display: grid;
-  gap: var(--am-gap-xs);
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/*
+ * `UI-PARITY-DENSE`: one row of the original's table per decision -- the verdict with who and when, the specification row
+ * with its comment, the vendor and the way to the document -- where it was a bordered card of four lines. The markup is
+ * unchanged; below 900px the parts stack.
+ */
 .row {
   display: grid;
-  gap: var(--am-gap-xs);
-  padding: var(--am-gap-sm);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
-  background: var(--am-paper);
+  grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr) minmax(12rem, 18rem);
+  grid-template-areas:
+    'head text meta'
+    'head comment meta';
+  align-items: start;
+  column-gap: var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-grid-line);
+}
+
+.row:hover {
+  background: var(--am-surface);
 }
 
 .head {
+  grid-area: head;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--am-gap-sm);
+  gap: 0 var(--am-gap-sm);
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
+}
+
+@media (max-width: 900px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'text'
+      'comment'
+      'meta';
+  }
 }
 
 .verdict {
@@ -30,17 +54,20 @@
 }
 
 .text {
+  grid-area: text;
   margin: 0;
   overflow-wrap: anywhere;
 }
 
 .meta {
+  grid-area: meta;
   margin: 0;
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
 }
 
 .comment {
+  grid-area: comment;
   margin: 0;
   font-size: var(--am-text-sm);
 }

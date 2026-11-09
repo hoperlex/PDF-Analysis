@@ -5,6 +5,11 @@ profile and a similar page count, shown as «≈ до ЧЧ:ММ»; without enoug
 invented one. A run's duration is from its first attempt to its terminal time (queue waiting excluded); "similar" is a
 page count within a quarter of the running one; "recent" is the latest completed runs, at most ``HISTORY``; at least
 ``MINIMUM_SAMPLES`` similar ones are needed. An estimate is a deterministic statistic of stored times, nothing else.
+
+**One rule, two readers.** The execution queue (``ExecutionQueueItem.estimated_finish_at``) and the run's own status
+(``RunStatus.estimated_finish_at``, `UI-A-65` / `UI-B-45`, contract 1.40.0) both answer through
+:func:`job_estimated_finish`: the same job states, the same history, the same statistic. The queue hands it the facts of
+a row it already read; :func:`run_estimated_finish` reads the same four facts for one run.
 """
 
 from __future__ import annotations
@@ -21,6 +26,10 @@ HISTORY = 200
 MINIMUM_SAMPLES = 3
 SIMILAR_PAGES = 0.25
 
+#: The job states in which a run is being worked on, and so has an estimate. A ``queued`` job has not started and a
+#: ``retry_wait`` one is between attempts; neither is estimated.
+RUNNING_JOB_STATES = ("leased", "running")
+
 _HISTORY = text(
     """
     SELECT r.analysis_profile_id, dv.page_count,
@@ -35,6 +44,22 @@ _HISTORY = text(
      WHERE r.state IN ('published', 'partial') AND r.terminal_at IS NOT NULL
      ORDER BY r.terminal_at DESC
      LIMIT :limit
+    """
+)
+
+
+#: The four facts the estimate is made of, for one run: its job's state, the creation of the job's first attempt, the
+#: run's analysis profile and its version's page count. The same expressions as the queue's ``_ITEM_COLUMNS`` and as
+#: ``_HISTORY`` above (``job.run_id`` is unique, so at most one row).
+_RUN_FACTS = text(
+    """
+    SELECT j.state,
+           (SELECT min(a.created_at) FROM attempt a WHERE a.job_id = j.job_id) AS started_at,
+           r.analysis_profile_id, dv.page_count
+      FROM job j
+      JOIN audit_run r ON r.run_id = j.run_id
+      JOIN document_version dv ON dv.version_uid = r.version_uid
+     WHERE j.run_id = :run_id
     """
 )
 
@@ -71,3 +96,31 @@ def estimated_finish(
         return None
     seconds = expected_seconds(samples, analysis_profile_id=analysis_profile_id, page_count=page_count)
     return None if seconds is None else started_at + timedelta(seconds=seconds)
+
+
+def job_estimated_finish(
+    samples: Sequence[Sample], *, job_state: str | None, started_at: datetime | None,
+    analysis_profile_id: str | None, page_count: int | None,
+) -> datetime | None:
+    """**The** estimate of a job's run: ``None`` unless the job is in :data:`RUNNING_JOB_STATES`, has started and has
+    enough similar history (:func:`estimated_finish`). Both the queue item and the run status call this."""
+    if job_state not in RUNNING_JOB_STATES or not samples:
+        return None
+    return estimated_finish(
+        samples, started_at=started_at, analysis_profile_id=analysis_profile_id, page_count=page_count,
+    )
+
+
+def run_estimated_finish(session: Session, run_id: str) -> datetime | None:
+    """The estimated finish of one run, from the same facts and the same rule as its queue item (`UI-A-65`).
+
+    The recent history (up to ``HISTORY`` rows) is read only when the run's job is running and has started: a queued,
+    waiting or finished run costs the one lean statement and no history read.
+    """
+    row = session.execute(_RUN_FACTS, {"run_id": run_id}).first()
+    if row is None or row[0] not in RUNNING_JOB_STATES or row[1] is None:
+        return None
+    return job_estimated_finish(
+        history(session), job_state=row[0], started_at=row[1],
+        analysis_profile_id=row[2], page_count=None if row[3] is None else int(row[3]),
+    )

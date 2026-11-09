@@ -134,6 +134,83 @@ function withoutCredentials(exchanges, mount) {
 }
 
 /**
+ * The release notes' «Что нового» card (`W52`, `web/src/_app/release-notices.tsx`).
+ *
+ * A session that has not read the newest release notes is shown a fixed, non-modal card at the lower left
+ * (`web/src/_app/release-notices.tsx`, `data-whats-new`). At the journey's 780 px it covers about 450 px of the
+ * screen, and a press at a control beneath it lands on the card: found 2026-11-06 on a fresh stand, where the
+ * upload form's «Загрузить» was pressed and sent nothing, because the card sat over it. A reader closes the card
+ * once, and closing it is what marks the notes read for the account, so the sign-in does the same -- through the
+ * card's own button, not a hand-built request -- and every later cold browser is handed a session whose notes are
+ * read. A stand with no release notes, or an account that has read them, shows no card and nothing is pressed.
+ *
+ * What it records, in the sign-in's envelope: whether the card was shown, the answer to the mark-read, and the
+ * versions the account had not read. It never fails the sign-in by itself; a card that will not close is a
+ * finding of the sign-in so a later "the press did nothing" is not left to be guessed.
+ */
+const RELEASE_NOTES_MARK_READ = { method: 'PUT', path: '/me/release-notes' };
+
+function pathOf(url) {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return null;
+  }
+}
+
+async function closeWhatsNew(page, manifest, failures) {
+  const releasesPath = `${manifest.api_prefix}/releases`;
+  const markPath = `${manifest.api_prefix}${RELEASE_NOTES_MARK_READ.path}`;
+  const answered = () => [...page.exchanges()].reverse().find(
+    (e) => e.method === 'GET' && pathOf(e.url) === releasesPath && typeof e.status === 'number',
+  );
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  let unread = null;
+  for (let waited = 0; waited <= 8000; waited += 250) {
+    if (await page.evaluate("document.querySelector('[data-whats-new]') !== null")) {
+      unread = unread ?? [];
+      break;
+    }
+    const listing = answered();
+    if (listing !== undefined) {
+      try {
+        const read = JSON.parse(listing.responseBody ?? '');
+        unread = Array.isArray(read.whats_new) ? read.whats_new : null;
+      } catch {
+        unread = null;
+      }
+      if (unread !== null && unread.length === 0) return { shown: false, unread: 0 };
+    }
+    await sleep(250);
+  }
+  if (!(await page.evaluate("document.querySelector('[data-whats-new]') !== null"))) {
+    return { shown: false, unread: unread === null ? null : unread.length };
+  }
+  const notice = { shown: true, unread: unread === null || unread.length === 0 ? null : unread.length };
+  await page.click('[data-whats-new] button', { text: 'Закрыть' });
+  for (let waited = 0; waited <= 10000; waited += 250) {
+    const sent = [...page.exchanges()].reverse().find(
+      (e) => e.method === RELEASE_NOTES_MARK_READ.method && pathOf(e.url) === markPath,
+    );
+    if (sent !== undefined && typeof sent.status === 'number') {
+      notice.markedRead = sent.status;
+      break;
+    }
+    await sleep(250);
+  }
+  await page.settle();
+  notice.stillShown = await page.evaluate("document.querySelector('[data-whats-new]') !== null");
+  if (notice.markedRead !== 204 || notice.stillShown) {
+    failures.push(
+      `session: the «Что нового» card was shown and closing it did not mark the notes read ` +
+        `(${RELEASE_NOTES_MARK_READ.method} ${markPath} answered ${notice.markedRead ?? 'nothing'}, ` +
+        `card ${notice.stillShown ? 'still' : 'no longer'} shown)`,
+    );
+  }
+  return notice;
+}
+
+/**
  * Drive the sign-in screen once and return the cookie every later browser is handed.
  *
  * Returns `{ ok, cookies, record, failures }`. It throws only when the credential is
@@ -232,6 +309,8 @@ export async function openSession({ origin, manifest, credentials = null }) {
       record.boundMs = waited.boundMs;
       record.readings = waited.readings;
       record.landedOn = await page.location();
+      // A card over the screen would take the presses of every later step that reuses this account.
+      if (landed) record.releaseNotice = await closeWhatsNew(page, manifest, failures);
 
       // The refusal the screen renders, by its own marker attribute. It is read whether or
       // not the landing arrived, because "it refused and said why" and "nothing happened"

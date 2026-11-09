@@ -125,6 +125,10 @@ class RunStatusView:
     model_call_count: int | None = None
     terminal_at: datetime | None = None
     reaudit_of_run_id: str | None = None
+    #: `R-151i` (contract 1.42.0): the earlier run whose stage outputs this run reuses and the first stage it computes;
+    #: both ``None`` (and both omitted) for a run that reuses nothing.
+    started_from_run_id: str | None = None
+    start_stage_id: str | None = None
     #: `W55A-SEAL-01` (R-113, CD-6). The norms snapshot the run pinned at creation, or
     #: ``None`` while no snapshot is current; rendered only when present.
     norms_snapshot_id: str | None = None
@@ -155,6 +159,15 @@ class RunStatusView:
     #: ``None`` for a run created before 0051, rendered only when present.
     started_by_user_uid: str | None = None
     started_by_label: str | None = None
+    #: `AR-V3-OPT-IN` (contract 1.38.0): which analysis produced the run -- ``standard`` or ``ar_v3_beta`` -- derived from the
+    #: pinned profile and bundle pair; and, for a member of an AR v3 group only, its group and scope. Each is rendered
+    #: only when set. A producer that does not know sets none (a stand-in older suites hand a port).
+    analysis_kind: str | None = None
+    ar_v3_group_id: str | None = None
+    ar_v3_scope_id: str | None = None
+    #: `UI-A-65` / `UI-B-45` (contract 1.40.0): the estimated finish of a run being worked on, by the queue item's own
+    #: rule (``execution.eta.job_estimated_finish``); ``None`` when the run has none, rendered only when present.
+    estimated_finish_at: datetime | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -186,6 +199,15 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
     }
     if view.reaudit_of_run_id is not None:
         body["reaudit_of_run_id"] = view.reaudit_of_run_id
+    if view.started_from_run_id is not None and view.start_stage_id is not None:
+        body["started_from_run_id"] = view.started_from_run_id
+        body["start_stage_id"] = view.start_stage_id
+    if view.analysis_kind is not None:
+        body["analysis_kind"] = view.analysis_kind
+        if view.ar_v3_group_id is not None:
+            body["ar_v3_group_id"] = view.ar_v3_group_id
+        if view.ar_v3_scope_id is not None:
+            body["ar_v3_scope_id"] = view.ar_v3_scope_id
     if view.analysis_profile_id is not None:
         body["analysis_profile_id"] = view.analysis_profile_id
     if view.prompt_bundle_id is not None:
@@ -249,6 +271,8 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         }
     if view.queue_reason is not None:
         body["queue_reason"] = view.queue_reason
+    if view.estimated_finish_at is not None:
+        body["estimated_finish_at"] = timestamp(view.estimated_finish_at)
     if view.started_by_user_uid is not None:
         body["started_by_user_uid"] = view.started_by_user_uid
         if view.started_by_label is not None:

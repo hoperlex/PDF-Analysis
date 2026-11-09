@@ -370,6 +370,48 @@ export function redactedExchange(exchange) {
 }
 
 /**
+ * The calls on the API seam an exchange list holds, as `METHOD /path -> status`, in the order they were made.
+ * `null` status means the request was sent and no answer was recorded (the browser went before it came).
+ */
+export function describeCalls(exchanges, apiPrefix) {
+  const calls = [];
+  for (const exchange of exchanges ?? []) {
+    let path;
+    try {
+      path = new URL(exchange.url).pathname;
+    } catch {
+      continue;
+    }
+    if (!path.startsWith(apiPrefix)) continue;
+    calls.push(`${exchange.method} ${path} -> ${typeof exchange.status === 'number' ? exchange.status : 'no answer'}`);
+  }
+  return calls;
+}
+
+/**
+ * `D-382`. A step that could not be driven (a control that is not there, a wait that ran out) threw inside the
+ * browser's callback, the browser was torn down with the exception, and the step's envelope kept `exchanges: []`:
+ * the findings then said "the browser made no API call at all" about a step whose page had asked for a dependency
+ * and been refused 503. This wraps the callback so that whatever the browser had done is copied into the step's
+ * record BEFORE the exception leaves it. The exception itself is rethrown unchanged.
+ */
+export async function keepingExchanges(record, page, fn) {
+  try {
+    return await fn();
+  } catch (error) {
+    try {
+      record.exchanges = page.exchanges().map(redactedExchange);
+      record.consoleErrors = page.consoleErrors();
+      record.pageErrors = page.pageErrors();
+      record.finalLocation = await page.location();
+    } catch {
+      // The browser itself is gone: there is nothing more to keep, and the driving error is the finding.
+    }
+    throw error;
+  }
+}
+
+/**
  * Drive the write half.
  *
  * Returns the step records, the findings, and what it captured. It throws only when the
@@ -540,6 +582,7 @@ export async function runWritePhase({
     const downloaded = new Map();
     try {
       await withColdBrowser(async (page) => {
+        return keepingExchanges(record, page, async () => {
         // `D-92`: every step of the write half POSTs, and the BFF answers 401 without a
         // session. The cookie is the one `session.mjs` obtained by driving `/login`, and
         // each step receives the SAME value rather than a jar carried on from the step
@@ -956,14 +999,22 @@ export async function runWritePhase({
             );
           }
         }
+      });
       }, { cookies: sessionCookies, viewport });
     } catch (error) {
       // The browser could not be driven through this step. That is a finding about the
       // application or the origin, not a reason to report nothing.
       ok = false;
-      fail(step.name, `could not be driven: ${error.message}`);
       record.drivingError = error.message;
       record.exchanges = record.exchanges ?? [];
+      // `D-382`: say what the browser DID call before it stopped, so the finding points at the refusal and not at a
+      // request that is "missing".
+      const calls = describeCalls(record.exchanges, API_PREFIX);
+      fail(
+        step.name,
+        `could not be driven: ${error.message}. Before it stopped the browser made ${calls.length} API call(s)` +
+          `${calls.length === 0 ? ' (none)' : `: ${calls.join(' | ')}`}`,
+      );
     }
 
     record.timingsMs.total = Date.now() - t0;

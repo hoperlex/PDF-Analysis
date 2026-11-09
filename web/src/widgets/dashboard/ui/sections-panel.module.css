@@ -8,7 +8,7 @@
   grid-template-columns: minmax(0, 1fr) auto 16px;
   align-items: end;
   gap: var(--am-gap-sm);
-  padding: var(--am-gap-sm) var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap);
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
   font-weight: 700;
@@ -28,8 +28,19 @@
   list-style: none;
 }
 
+/*
+ * A section row is a grid of its own: the section's button (badge and name), the five numbers and the arrow. The numbers
+ * are not inside the button, so «Не запускались» can be a link (`UI-A-38`): a link inside a button is not valid markup.
+ * The columns are the header's.
+ */
 .row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: var(--am-gap-sm);
   min-width: 0;
+  padding-block: var(--am-gap-xs);
+  padding-inline: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-sm);
   background: var(--am-paper);
@@ -46,18 +57,25 @@
   }
 }
 
-.rowButton,
-.unclassified {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto 16px;
-  align-items: center;
-  gap: var(--am-gap-sm);
-  width: 100%;
-  min-height: 44px;
-  padding: var(--am-gap-sm) var(--am-gap);
+.sectionRow:hover,
+.sectionRow[data-open='true'] {
+  background: var(--am-accent-light);
+}
+
+/* `UI-A-37`: the stretched link below is positioned against the row. */
+.sectionRow {
+  position: relative;
 }
 
 .rowButton {
+  min-height: var(--am-target-min);
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--am-gap-sm);
+  width: 100%;
+  padding-block: 0;
+  padding-inline: 0;
   border: 0;
   border-radius: inherit;
   background: transparent;
@@ -67,14 +85,45 @@
   cursor: pointer;
 }
 
-.rowButton:hover,
-.rowButton[aria-expanded='true'] {
-  background: var(--am-accent-light);
-}
-
 .rowButton:focus-visible {
   outline: 2px solid var(--am-accent);
   outline-offset: 2px;
+}
+
+/*
+ * `UI-A-37`: with a project chosen the name is a link and its box covers the whole row, so a click anywhere on the row opens
+ * the section, as the original's row does. What must stay a target of its own (the «Не запускались» figure, the toggle) is lifted
+ * above it with `z-index`; the figures that are plain numbers are covered, and a click on them opens the section too.
+ */
+a.rowLink {
+  text-decoration: none;
+}
+
+.rowLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  cursor: pointer;
+}
+
+/* Keyboard focus shows on the whole row, not on the name alone, because the whole row is what the link opens. */
+.rowLink:focus-visible {
+  outline: none;
+}
+
+.rowLink:focus-visible::after {
+  outline: 2px solid var(--am-accent);
+  outline-offset: -2px;
+}
+
+.unclassified {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  width: 100%;
+  padding: var(--am-gap-xs) var(--am-gap);
 }
 
 .badge {
@@ -93,13 +142,15 @@
 .name {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: var(--am-text-md);
-  font-weight: 600;
+  font-size: var(--am-text-base);
+  font-weight: 500;
 }
 
 .metric {
   text-align: center;
-  color: var(--am-accent-strong);
+  color: var(--am-ink);
+  font-size: var(--am-text-base);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -107,6 +158,53 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-lg);
   text-align: right;
+  text-decoration: none;
+}
+
+a.arrow:hover,
+.toggle:hover {
+  color: var(--am-accent-strong);
+}
+
+/* `UI-A-37`: the toggle of the panel under the list, in the arrow's place; it turns down while its panel is open. */
+.toggle {
+  position: relative;
+  z-index: 1;
+  /* A 24 x 24 px target centred on the arrow's 16 px (12 px on a phone) track; the row's padding holds the difference. */
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
+  justify-self: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--am-text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.toggle[aria-expanded='true'] {
+  transform: rotate(90deg);
+}
+
+.totalLabel {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+/* The original's total row: set off from the rows above by a heavier line, the figures in bold, no hover. */
+.totalRow {
+  margin-top: var(--am-gap-xs);
+  border-top: 2px solid var(--am-line-strong);
+  font-weight: 700;
 }
 
 .unclassified {
@@ -136,7 +234,17 @@
 }
 
 @media (max-width: 600px) {
-  .rowButton,
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto 12px;
+    gap: var(--am-gap-xs);
+    padding-inline: var(--am-gap-sm);
+  }
+
+  .rowButton {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: var(--am-gap-xs);
+  }
+
   .unclassified {
     grid-template-columns: 40px minmax(0, 1fr) auto 12px;
     gap: var(--am-gap-xs);
@@ -171,9 +279,37 @@
   text-align: center;
 }
 
-.metrics [data-attention='true'] {
+/* `UI-A-38`: «Не запускались» as a link to the narrowed section page; it keeps the figure's colour and is underlined. */
+.metricLink {
+  position: relative;
+  z-index: 1;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/*
+ * The original's colours by column (`dash-stat--todo/proc/done/total/find`): not run in the warning amber, without an
+ * expert decision in the accent, checked in green, all in the muted ink, remarks in red. Tokens, so both palettes.
+ */
+.notRun {
+  color: var(--am-degraded);
+}
+
+.awaiting {
+  color: var(--am-accent-strong);
+}
+
+.checked {
+  color: var(--am-ok);
+}
+
+.total {
+  color: var(--am-ink-muted);
+}
+
+.remarks {
   color: var(--am-failed);
-  font-weight: 650;
 }
 
 /* After the base rule, so a narrow screen's number columns win. */

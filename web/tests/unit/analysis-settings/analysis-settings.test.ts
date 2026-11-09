@@ -311,6 +311,48 @@ describe('what each row says', () => {
   });
 });
 
+describe('lane N1: the table reads at a glance', () => {
+  it('has a heading and a line that counts the sections, the profiles and the drafts', () => {
+    const markup = table();
+    const withProfile = ITEMS.filter((entry) => entry.profile !== null).length;
+    const drafts = ITEMS.filter((entry) => entry.profile?.status === 'draft').length;
+    expect(markup).toContain('>Профили по разделам</h2>');
+    expect(markup).toContain(`data-analysis-profiles-count="${withProfile}"`);
+    expect(markup).toContain(`Разделов: ${ITEMS.length}, с профилем: ${withProfile}`);
+    expect(markup).toContain(drafts === 0 ? 'с профилем' : `из них черновиков: ${drafts}`);
+    // Without a draft the line says no word about drafts.
+    const reviewed = ITEMS.map((entry) => entry.profile === null ? entry : { ...entry, profile: { ...entry.profile, status: 'reviewed' as const } });
+    expect(table(reviewed)).not.toContain('черновиков');
+  });
+
+  it('draws the status as a badge: a draft amber, a reviewed profile green, so the draft is seen in a column of fifteen', () => {
+    expect(row(table(withProfile('PS', { status: 'draft' })), 'PS')).toMatch(/am-badge am-badge--degraded[^>]*>черновик, требует/);
+    expect(row(table(withProfile('PS', { status: 'reviewed' })), 'PS')).toMatch(/am-badge am-badge--ok/);
+  });
+
+  it('names the last column for what it holds, so «Подробнее» is only the handle in each row', () => {
+    const markup = table();
+    expect(markup).toContain('>Источник и хэши</th>');
+    expect(markup).not.toContain('>Подробнее</th>');
+    expect(markup.match(/<summary>Подробнее<\/summary>/g)).toHaveLength(ITEMS.length);
+  });
+
+  it('puts the table in a named region Tab reaches, and keeps its own name for the journey', () => {
+    const markup = table();
+    expect(markup).toMatch(/<div[^>]*role="region"[^>]*aria-label="Профили анализа по разделам, таблица"[^>]*tabindex="0"/);
+    expect(markup).toContain('<table class="');
+    expect(markup).toContain('aria-label="Профили анализа по разделам"');
+  });
+
+  it('says the page in one sentence under its title', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.analysis.profiles(), { items: ITEMS });
+    const markup = renderScreen(client, createElement(AnalysisSettingsPage));
+    expect(markup).toContain('Профили здесь только показываются, изменить их нельзя.');
+    expect(markup).not.toContain('Пресеты запуска — сохранённый выбор исполнителя для прогона.');
+  });
+});
+
 describe('read-only', () => {
   it('offers no control that could write: no form, input, select or button in the table', () => {
     const markup = table();
@@ -344,7 +386,7 @@ describe('the page', () => {
   it('renders a refusal in Russian with its correlation id, and no table', () => {
     const client = newClient();
     seedError(client, queryKeys.analysis.profiles(), new ApiError(403, {
-      contract_version: '1.33.0', error_code: 'permission_denied',
+      contract_version: '1.42.0', error_code: 'permission_denied',
       message: 'permission denied', correlation_id: 'cid-analysis-settings-1', retryable: false,
     }, null));
     const markup = renderScreen(client, createElement(AnalysisSettingsPage));

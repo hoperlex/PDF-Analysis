@@ -1,7 +1,7 @@
 .panel {
   min-width: 0;
-  margin-top: var(--am-gap);
-  padding: var(--am-gap);
+  margin-top: var(--am-gap-sm);
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-paper);
@@ -15,4 +15,63 @@
 
 .panel > h2:first-child {
   margin-top: 0;
+}
+
+/* The two views and the snapshot they read, on one line; a refusal or a failed read takes the whole width under it. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  min-width: 0;
+  padding: var(--am-gap-xs) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
+}
+
+.status {
+  flex: 1 1 18rem;
+  margin: 0;
+  min-width: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.wide {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+/* Two section headings inside the administrator's panel: a heading of a block, not of the page. */
+.subheading {
+  margin: var(--am-gap-sm) 0 var(--am-gap-xs);
+  font-size: var(--am-text-lg);
+}
+
+.subheading:first-child {
+  margin-top: 0;
+}
+
+/* «Сделать текущим» asks once: the question and its two buttons on one line. The tint is the global warning state's. */
+.intent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin-top: var(--am-gap-sm);
+}
+
+.intent p {
+  flex: 1 1 24rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.intentActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
 }

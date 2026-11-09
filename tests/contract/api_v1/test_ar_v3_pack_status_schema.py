@@ -24,6 +24,7 @@ INSTALLED: dict[str, Any] = {
     "prompt_bundle_id": "pb_01M5M28ZCDVCR37BX1884JGSPM",
     "pack_sha256": "ab" * 32,
     "scope_ids": SCOPES,
+    "start_allowed": True,
     "review": {
         "reviewer": "Test Reviewer", "capacity": "expert", "reviewed_at": "2026-10-26",
         "decision_ref": "TEST-RULING-1", "scope_statement": "six synthetic scopes, test only",
@@ -48,6 +49,9 @@ def _without(*keys: str) -> dict[str, Any]:
 ACCEPTED = {
     "not_installed": {"state": "not_installed"},
     "installed": INSTALLED,
+    # `AR-V3-OPT-IN`: installed is the capability, `start_allowed` the separate permission to start.
+    "installed_and_starts_not_allowed": _with(start_allowed=False),
+    "installed_by_a_server_that_predates_the_allowance": _without("start_allowed"),
 }
 REFUSED = {
     "no_state": _without("state"),
@@ -67,6 +71,9 @@ REFUSED = {
     "review_date_is_not_a_date_shape": _with(review={**INSTALLED["review"], "reviewed_at": "26.10.2026"}),
     "review_value_is_not_a_string": _with(review={**INSTALLED["review"], "capacity": 7}),
     "null_instead_of_absent": _with(review=None),
+    "the_allowance_is_a_boolean": _with(start_allowed="1"),
+    "the_allowance_is_not_a_number": _with(start_allowed=1),
+    "a_null_allowance_is_not_absent": _with(start_allowed=None),
 }
 
 
@@ -98,6 +105,12 @@ def test_what_the_server_models_answer_with_passes_the_contract(
         "installed": models.ArV3BetaPackStatus.model_validate(INSTALLED).model_dump(
             mode="json", exclude_unset=True,
         ),
+        "installed_and_starts_not_allowed": models.ArV3BetaPackStatus.model_validate(
+            _with(start_allowed=False),
+        ).model_dump(mode="json", exclude_unset=True),
+        "installed_by_a_server_that_predates_the_allowance": models.ArV3BetaPackStatus.model_validate(
+            _without("start_allowed"),
+        ).model_dump(mode="json", exclude_unset=True),
     }
     assert served == ACCEPTED
     assert _verdicts(validate, openapi_document, served) == {name: True for name in served}
@@ -123,9 +136,10 @@ def test_the_operation_is_declared_the_way_the_group_reads_are(openapi_document:
 def test_the_pack_schemas_carry_no_identity_digest_or_path_property(openapi_document: dict[str, Any]) -> None:
     schemas = openapi_document["components"]["schemas"]
     assert set(schemas[SCHEMA]["properties"]) == {
-        "state", "analysis_profile_id", "prompt_bundle_id", "pack_sha256", "scope_ids", "review",
+        "state", "analysis_profile_id", "prompt_bundle_id", "pack_sha256", "scope_ids", "review", "start_allowed",
     }
     assert schemas[SCHEMA]["required"] == ["state"]
+    assert schemas[SCHEMA]["properties"]["start_allowed"]["type"] == "boolean"  # `AR-V3-OPT-IN`: the allowance, not a path
     assert set(schemas["ArV3BetaPackReview"]["properties"]) == {
         "reviewer", "capacity", "reviewed_at", "decision_ref", "scope_statement",
     }

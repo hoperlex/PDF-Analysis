@@ -1,0 +1,20 @@
+/*
+ * The preset form (`ANALYSIS-PRESETS-01`): the name and the executor side by side, the button and any outcome
+ * under them. Colour is absent: hints, notes and buttons take theirs from `globals.css`.
+ */
+
+.form {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  align-items: start;
+  column-gap: var(--am-gap);
+  max-width: 52rem;
+}
+
+/* The button, the loading line and the failure take a whole row; a field takes one column. */
+.form > * {
+  grid-column: 1 / -1;
+}
+
+.form > :global(.am-form__field) {
+  grid-column: auto;
+}

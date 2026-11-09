@@ -99,6 +99,9 @@ REQUIRED_OPERATIONS = {
     "restoreUser",
     "purgeUser",
     "resetUserPassword",
+    # `UI-PARITY-ADMIN-C2` (1.36.0), `UI-A-93`, `UI-A-94`. Ending an account's sessions, and the access journal.
+    "endUserSessions",
+    "listAuthEvents",
     "getProductVersion",
     "listReleases",
     "markReleaseNotesRead",
@@ -122,12 +125,23 @@ REQUIRED_OPERATIONS = {
     "listProposalDecisionJournal",
     # `UI-PARITY-KB-ALL`, `R-151h`, `D-317`. The knowledge base's «Все», both journals merged.
     "listKnowledgeBaseEntries",
+    # `UI-PARITY-OPT-DECISIONS`, `UI-B-27`. The accepted optimisation proposals of a section's projects.
+    "listAcceptedOptimisationProposals",
+    # `UI-PARITY-OPT-DECISIONS`, `UI-B-15`. The pass's proposals as a workbook, and the decisions loaded back from it.
+    "exportOptimisationProposalsXlsx",
+    "importOptimisationProposalDecisions",
+    # `UI-PARITY-OPT-CARRYOVER`, `UI-B-14`. The decisions of an earlier version's pass, carried into this one by content.
+    "carryOverProposalDecisions",
     # `UI-PARITY-P0L`, `R-151d`. Decisions loaded back from the run's own workbook.
     "importRunDecisions",
     # `UI-PARITY-P0N`. One project as the listing gives it.
     "getProject",
     # `UI-PARITY-P0O`. Each page's sheet label, from the portal geometry.
     "listVersionSheetLabels",
+    # `UI-PARITY-C6`. The portal blocks that hold each finding of a run.
+    "listRunFindingBlocks",
+    # `UI-PARITY-S2`, `R-151i`. A new run that reuses an earlier run's stage outputs before the chosen stage.
+    "startRunFromStage",
     # `UI-PARITY-P0P`, `R-152a`…`R-152h`. «График работ»: the month, the reserve, the administrator's writes.
     "getWorkSchedule",
     "getWorkScheduleReserve",
@@ -428,9 +442,12 @@ WRITE_OPERATIONS = {
     "approveRegistration",
     "cancelRun",
     "reauditRun",
+    "startRunFromStage",
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",
+    # `UI-A-93` (1.36.0): ending an account's sessions is keyed, so an exact repeat ends nothing more.
+    "endUserSessions",
     # `UI-PARITY-P0G`. Keyed like `setExecutionPaused`: a replay answers the same state and writes no second event.
     "setDocumentArchived",
     "renameDocument",
@@ -442,6 +459,10 @@ WRITE_OPERATIONS = {
     "setEngineerAbsences",
     "scheduleAssignments",
     # `UI-PARITY-P0L`. Appends decision events, so it is keyed like `appendDecision`; a replay answers the stored report.
+    # `UI-B-15` (1.35.0): the decisions of a proposals workbook are appended under one key, like `importRunDecisions`.
+    "importOptimisationProposalDecisions",
+    # `UI-B-14` (1.37.0): the carried decisions are appended under one key, each under a key derived from it.
+    "carryOverProposalDecisions",
     "importRunDecisions",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",

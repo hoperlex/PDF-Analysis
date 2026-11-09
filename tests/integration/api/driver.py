@@ -265,6 +265,14 @@ class SuiteAccountAdapter:
     def reset_password(self, **_: Any) -> Any:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
 
+    def end_account_sessions(self, **_: Any) -> Any:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
+
+    def list_auth_events(self, **_: Any) -> Any:
+        from auditmanager.api.schemas import models
+
+        return models.AuthEventPage(items=[], page=models.PageInfo(next_cursor=None))
+
 
 class SuiteRegistrationAdapter:
     """``RegistrationPort`` for this suite's seam tests, on the same terms as above.

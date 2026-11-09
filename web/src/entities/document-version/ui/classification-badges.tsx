@@ -30,9 +30,16 @@ export interface ClassificationBadgesProps {
    * registered for the confirmed section. Absent or `false` adds nothing.
    */
   readonly profileUnavailable?: boolean | undefined;
+  /**
+   * What to draw. A card that already stands inside its section's group (the project page, the section page) passes
+   * `'stage'`: the section is said by the group, and saying it again on every card is height spent on nothing.
+   * `'none'` is for the group of documents without a classification, which the group's own heading says.
+   */
+  readonly shown?: 'both' | 'stage' | 'none' | undefined;
 }
 
-export function ClassificationBadges({ classification, profileUnavailable }: ClassificationBadgesProps) {
+export function ClassificationBadges({ classification, profileUnavailable, shown = 'both' }: ClassificationBadgesProps) {
+  if (shown === 'none') return null;
   if (classification === null || classification === undefined) {
     return (
       <span className={styles.badges} data-version-classification="unclassified">
@@ -51,12 +58,14 @@ export function ClassificationBadges({ classification, profileUnavailable }: Cla
       >
         {stageBadgeText(classification.project_stage)}
       </span>
-      <span
-        className={`am-badge am-badge--ok ${styles.badge}`}
-        data-section-code={classification.section_code}
-      >
-        {sectionTitleOf(classification.section_code)}
-      </span>
+      {shown === 'stage' ? null : (
+        <span
+          className={`am-badge am-badge--ok ${styles.badge}`}
+          data-section-code={classification.section_code}
+        >
+          {sectionTitleOf(classification.section_code)}
+        </span>
+      )}
       {profileUnavailable === true ? (
         <span className={`am-badge am-badge--degraded ${styles.badge}`} data-profile-unavailable="">
           профиль анализа недоступен

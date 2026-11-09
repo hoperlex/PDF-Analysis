@@ -24,6 +24,7 @@ import { LoadingState } from '@/shared/ui';
 import { useCommandKey } from '../model/use-command-key';
 import { useCreateAnalysisPreset, useReviseAnalysisPreset } from '../model/use-manage-analysis-preset';
 import { PresetCommandFailure } from './preset-failure';
+import styles from './preset-form.module.css';
 
 export interface PresetFormProps {
   /** The preset to revise; absent for a new one. */
@@ -69,7 +70,7 @@ export function PresetForm({ preset, choices, onSaved }: PresetFormProps) {
 
   return (
     <form
-      className="am-form"
+      className={`am-form ${styles.form}`}
       data-preset-form={preset === undefined ? 'create' : 'revise'}
       onSubmit={(event) => {
         event.preventDefault();

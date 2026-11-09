@@ -15,7 +15,8 @@ this path knows a bucket or a key, and nothing on it holds the object whole.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Final
+from dataclasses import replace
+from typing import Annotated, Any, Final, Literal
 
 from fastapi import APIRouter, Depends, Form, Header, Path, Query, Response
 from pydantic import WithJsonSchema
@@ -102,6 +103,23 @@ SectionCodeFilterParam = Annotated[
     WithJsonSchema({"$ref": "#/components/schemas/ProjectSection"}),
     Query(json_schema_extra=optional_property),
 ]
+
+# `UI-PARITY-DOC-AUDIT` (contract 1.34.0, `UI-A-38`): the documents in one audit state. Inline, like the tag filter: the
+# four words are the `DocumentAudit.state` enum, and a parameter that named a component schema would add one.
+AuditStateFilterParam = Annotated[
+    Literal["not_run", "clean", "awaiting_decision", "checked"] | None,
+    WithJsonSchema({"type": "string", "enum": ["not_run", "clean", "awaiting_decision", "checked"]}),
+    Query(json_schema_extra=optional_property),
+]
+
+# `UI-PARITY-DOC-AUDIT` (`UI-A-49`): the order of the listing. `published` is the order the operation always had;
+# `audit` is the original's section order.
+DocumentOrderParam = Annotated[
+    Literal["published", "audit"],
+    WithJsonSchema({"type": "string", "enum": ["published", "audit"], "default": "published"}),
+    Query(json_schema_extra=optional_property),
+]
+
 
 def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
 
@@ -216,6 +234,8 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         section_code: SectionCodeFilterParam = None,  # type: ignore[assignment]
         include_archived: IncludeArchivedParam = False,
         tag: TagFilterParam = None,  # type: ignore[assignment]
+        audit_state: AuditStateFilterParam = None,  # type: ignore[assignment]
+        order: DocumentOrderParam = "published",
     ) -> WireResponse:
         # `GET` of the collection `uploadDocument` `POST`s into, returning a page of
         # exactly the resource that `POST` returns -- which is the rule `listProjects`
@@ -225,10 +245,25 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
             section_code=None if section_code is None else section_code.value,
             include_archived=include_archived,
             tag=tag,
+            audit_state=audit_state,
+            order=order,
         )
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_version_sort_key)
+        # `UI-PARITY-DOC-AUDIT` (`UI-A-46`): the audit of each item's version, attached on this operation only.
+        # When the audit filter or order was asked for, the port has read it for the whole listing and the items
+        # carry it; otherwise it is read here for the versions of the page just cut, in one statement, so a page
+        # of fifty costs one read of fifty -- never fifty reads and never the audits of documents the page did
+        # not return.
+        unread = [view.version_uid for view in page.items if view.audit is None]
+        audits = documents.document_audits(version_uids=unread)
         body = page_body(
-            [document_version_body(view) for view in page.items], page.next_cursor
+            [
+                document_version_body(
+                    view if view.audit is not None else replace(view, audit=audits[view.version_uid])
+                )
+                for view in page.items
+            ],
+            page.next_cursor,
         )
         return json_response(200, encode_json(body))
 

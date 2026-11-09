@@ -28,7 +28,7 @@ import { useMayActAsExpert } from '@/entities/account';
 import { DocumentLifecycle, DocumentTags } from '@/features/manage-document';
 import { UploadVersionPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
-import { DocumentContext } from '@/widgets/document-context';
+import { DocumentContext, SectionNeighbours } from '@/widgets/document-context';
 import { OptimisationProposals } from '@/widgets/optimisation-proposals';
 import styles from './document-detail-page.module.css';
 
@@ -40,12 +40,37 @@ export interface DocumentDetailPageProps {
 }
 
 /** `R-151r`: the document's tabs, in the address as `?tab=`; an absent or unknown value is «Версии». */
-type DocumentTab = 'versions' | 'optimisation';
+export type DocumentTab = 'versions' | 'optimisation';
 
 const DOCUMENT_TABS: readonly { readonly tab: DocumentTab; readonly label: string }[] = [
   { tab: 'versions', label: 'Версии' },
   { tab: 'optimisation', label: 'Оптимизация' },
 ];
+
+/**
+ * The address after choosing a tab: leaving «Оптимизация» drops what belongs to it — the pass, the proposals'
+ * layout and their decision filter (`UI-B-02`, `D-440`); other parameters stay.
+ */
+export function tabAddress(current: URLSearchParams | { toString(): string }, next: DocumentTab): URLSearchParams {
+  const params = new URLSearchParams(current.toString());
+  params.set('tab', next);
+  if (next !== 'optimisation') {
+    params.delete('pass');
+    params.delete('layout');
+    params.delete('decision');
+  }
+  return params;
+}
+
+/** The address after choosing a pass: another pass starts from «Все», so the decision filter goes (`D-440`). */
+export function passAddress(current: URLSearchParams | { toString(): string }, next: string | null): URLSearchParams {
+  const params = new URLSearchParams(current.toString());
+  params.set('tab', 'optimisation');
+  if (next === null) params.delete('pass');
+  else params.set('pass', next);
+  params.delete('decision');
+  return params;
+}
 
 export function documentTabOf(value: string | null): DocumentTab {
   return value === 'optimisation' ? 'optimisation' : 'versions';
@@ -60,24 +85,15 @@ export function DocumentDetailPage({ projectUid, documentUid, roles = [] }: Docu
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const tab = documentTabOf(searchParams.get('tab'));
   // `UI-B-02`: the chosen pass is in the address too (`?pass=`), so a link or a reload opens it. Only the
-  // optimisation tab reads it; leaving that tab drops it, because a pass belongs to that tab.
+  // optimisation tab reads it; leaving that tab drops it, because a pass belongs to that tab — and so do the
+  // proposals' layout (`?layout=`) and decision filter (`?decision=`). The decision filter belongs to the pass:
+  // another pass starts from «Все» (`D-440`), as it did while the filter was the widget's own state.
   const pass = searchParams.get('pass');
   const writeAddress = (params: URLSearchParams) => {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
-  const setTab = (next: DocumentTab) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', next);
-    if (next !== 'optimisation') params.delete('pass');
-    writeAddress(params);
-  };
-  const setPass = (next: string | null) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', 'optimisation');
-    if (next === null) params.delete('pass');
-    else params.set('pass', next);
-    writeAddress(params);
-  };
+  const setTab = (next: DocumentTab) => writeAddress(tabAddress(searchParams, next));
+  const setPass = (next: string | null) => writeAddress(passAddress(searchParams, next));
 
   if (!looksLikeProjectUid(projectUid) || !looksLikeDocumentUid(documentUid)) {
     return (
@@ -143,21 +159,32 @@ function DocumentScreen({
         </>
       }
     >
-      <DocumentContext projectUid={projectUid} documentUid={documentUid} current="document" />
-      {newest === undefined ? null : mayAct ? (
-        <DocumentLifecycle projectUid={projectUid} documentUid={documentUid} title={title} archived={archived} />
-      ) : archived ? (
-        <p className="am-note" role="status">Документ в архиве: его нет в списках проекта.</p>
-      ) : null}
-      {newest === undefined ? null : (
-        <DocumentTags projectUid={projectUid} documentUid={documentUid} tags={newest.tags ?? []} mayEdit={mayAct} />
-      )}
+      <DocumentContext
+        projectUid={projectUid}
+        documentUid={documentUid}
+        current="document"
+        // `UI-A-23`: the section the current version is confirmed for opens the strip, a link to the section page.
+        sectionCode={newest?.classification?.section_code}
+        // `UI-A-28`: between the documents of the section the current version is confirmed for.
+        aside={<SectionNeighbours projectUid={projectUid} documentUid={documentUid} sectionCode={newest?.classification?.section_code} />}
+      />
+      {/* The document's own controls share one row: rename and archive, and its tags. */}
+      <div className={styles.toolbar}>
+        {newest === undefined ? null : mayAct ? (
+          <DocumentLifecycle projectUid={projectUid} documentUid={documentUid} title={title} archived={archived} />
+        ) : archived ? (
+          <p className="am-note" role="status">Документ в архиве: его нет в списках проекта.</p>
+        ) : null}
+        {newest === undefined ? null : (
+          <DocumentTags projectUid={projectUid} documentUid={documentUid} tags={newest.tags ?? []} mayEdit={mayAct} />
+        )}
+      </div>
       <nav className={styles.tabs} aria-label="Разделы документа" data-document-tabs={tab}>
         {DOCUMENT_TABS.map((entry) => (
           <button
             key={entry.tab}
             type="button"
-            className={entry.tab === tab ? 'am-button' : 'am-button am-button--quiet'}
+            className={styles.tab}
             aria-pressed={entry.tab === tab}
             onClick={() => setTab(entry.tab)}
           >
@@ -179,7 +206,8 @@ function DocumentScreen({
       <div className={styles.stack}>
         <section className={styles.panel} aria-labelledby="document-versions-title">
           <h2 id="document-versions-title">Опубликованные версии</h2>
-          <VersionList projectUid={projectUid} documentUid={documentUid} />
+          {/* `UI-A-45`: the current version's audit chip comes from its section's listing, the one the strip above reads. */}
+          <VersionList projectUid={projectUid} documentUid={documentUid} sectionCode={newest?.classification?.section_code} />
         </section>
         <section className={styles.panel} aria-label="Загрузить новую версию">
           <UploadVersionPanel

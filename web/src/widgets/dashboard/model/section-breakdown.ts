@@ -44,8 +44,20 @@ export interface SectionAuditFigures {
   readonly findings: number;
 }
 
+/**
+ * `UI-A-36`: the original's «Σ Итого» row -- the column sums of the fifteen section rows above it, the same arithmetic the
+ * documents and verdicts panels already do over their rows. It is the sum of what the table shows, so «Без раздела» (a
+ * row of its own, never folded into a section) is not in it. The audit sums exist only when all fifteen rows carry
+ * `audit_counts`: one absent row makes them absent, not a smaller number.
+ */
+export interface SectionTotals {
+  readonly documents: number;
+  readonly audit: SectionAuditFigures | undefined;
+}
+
 export interface SectionBreakdownSummary {
   readonly byCode: Readonly<Record<ProjectSectionCode, number>>;
+  readonly totals: SectionTotals;
   readonly auditByCode: Readonly<Partial<Record<ProjectSectionCode, SectionAuditFigures>>>;
   /** Documents with no section at all. Never merged into any of the section codes. */
   readonly unclassifiedCount: number;
@@ -88,5 +100,18 @@ export function summarizeSectionBreakdown(
   if (unclassifiedCount === null || counts.size !== PROJECT_SECTIONS.length) return { ok: false };
 
   const byCode = Object.fromEntries(counts) as Record<ProjectSectionCode, number>;
-  return { ok: true, summary: { byCode, auditByCode: audits, unclassifiedCount } };
+  const figures = Object.values(audits);
+  const totals: SectionTotals = {
+    documents: [...counts.values()].reduce((sum, count) => sum + count, 0),
+    audit:
+      figures.length === PROJECT_SECTIONS.length
+        ? {
+            notRun: figures.reduce((sum, row) => sum + row.notRun, 0),
+            noExpertDecision: figures.reduce((sum, row) => sum + row.noExpertDecision, 0),
+            checked: figures.reduce((sum, row) => sum + row.checked, 0),
+            findings: figures.reduce((sum, row) => sum + row.findings, 0),
+          }
+        : undefined,
+  };
+  return { ok: true, summary: { byCode, totals, auditByCode: audits, unclassifiedCount } };
 }

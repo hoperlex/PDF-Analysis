@@ -38,7 +38,9 @@ __all__ = [
     "ID_COLUMN",
     "MAX_ROWS",
     "MAX_UPLOAD_BYTES",
+    "DecisionSheetRow",
     "SheetRow",
+    "read_decision_sheet",
     "read_findings_sheet",
 ]
 
@@ -60,6 +62,16 @@ class SheetRow:
 
     row: int
     finding_uid: str
+    decision: str
+    comment: str
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionSheetRow:
+    """One data row of any of our decision sheets: its sheet row number, the identity cell, the decision and the comment."""
+
+    row: int
+    key: str
     decision: str
     comment: str
 
@@ -210,18 +222,18 @@ def _rows(archive: zipfile.ZipFile, part: str, shared: tuple[str, ...]) -> Itera
             raise _unreadable("the sheet is damaged") from None
 
 
-def _findings_part(archive: zipfile.ZipFile) -> tuple[str, str | None]:
-    """The «Замечания» sheet's part and the shared-strings part, located by relationships."""
+def _findings_part(archive: zipfile.ZipFile, sheet_name: str = FINDINGS_SHEET) -> tuple[str, str | None]:
+    """The named sheet's part (the «Замечания» sheet by default) and the shared-strings part, located by relationships."""
     workbook = next((target for kind, target in _relationships(archive, "").values()
                      if kind.endswith("/officeDocument")), None)
     if workbook is None or workbook not in archive.NameToInfo:
         raise _unreadable("it holds no workbook")
     sheets = next((child for child in _parse(archive, workbook) if _local(child.tag) == "sheets"), None)
     sheet = None if sheets is None else next(
-        (child for child in sheets if _local(child.tag) == "sheet" and child.get("name") == FINDINGS_SHEET), None
+        (child for child in sheets if _local(child.tag) == "sheet" and child.get("name") == sheet_name), None
     )
     if sheet is None:
-        raise _refuse("not_our_export", f"The workbook has no «{FINDINGS_SHEET}» sheet of our run export.")
+        raise _refuse("not_our_export", f"The workbook has no «{sheet_name}» sheet of our export.")
     relation = next((value for key, value in sheet.attrib.items() if _local(key) == "id" and key != "id"), None)
     rels = _relationships(archive, workbook)
     if relation is None or relation not in rels or rels[relation][1] not in archive.NameToInfo:
@@ -232,8 +244,14 @@ def _findings_part(archive: zipfile.ZipFile) -> tuple[str, str | None]:
     return rels[relation][1], shared
 
 
-def read_findings_sheet(data: bytes) -> tuple[SheetRow, ...]:
-    """Every data row of the «Замечания» sheet of our run export, or a refusal of the whole file."""
+def read_decision_sheet(
+    data: bytes, *, sheet: str, id_column: str, decision_column: str, comment_column: str
+) -> tuple[DecisionSheetRow, ...]:
+    """Every data row of the named sheet of one of our exports, or a refusal of the whole file.
+
+    The three columns are found by their header, so a column the expert added or moved does not matter; a workbook with no
+    such sheet or without those headers is a foreign file (``not_our_export``).
+    """
     if len(data) > MAX_UPLOAD_BYTES:
         raise _refuse("too_large", "The file is larger than 10 MiB.")
     try:
@@ -243,23 +261,33 @@ def read_findings_sheet(data: bytes) -> tuple[SheetRow, ...]:
     with archive:
         if len(archive.infolist()) > _MAX_MEMBERS:
             raise _unreadable("the package has too many members")
-        part, shared_part = _findings_part(archive)
+        part, shared_part = _findings_part(archive, sheet)
         rows = _rows(archive, part, _shared_strings(archive, shared_part))
         where: dict[str, int] = {}
         for index, name in sorted(next(rows, (0, {}))[1].items()):
             where.setdefault(name, index)  # a repeated header: the leftmost column is the one read
-        if not all(column in where for column in (ID_COLUMN, DECISION_COLUMN, COMMENT_COLUMN)):
+        if not all(column in where for column in (id_column, decision_column, comment_column)):
             raise _refuse(
                 "not_our_export",
-                f"The «{FINDINGS_SHEET}» sheet does not name the columns «{ID_COLUMN}», «{DECISION_COLUMN}» "
-                f"and «{COMMENT_COLUMN}» of our run export.",
+                f"The «{sheet}» sheet does not name the columns «{id_column}», «{decision_column}» "
+                f"and «{comment_column}» of our export.",
             )
         return tuple(
-            SheetRow(
+            DecisionSheetRow(
                 row=number,
-                finding_uid=cells.get(where[ID_COLUMN], ""),
-                decision=cells.get(where[DECISION_COLUMN], ""),
-                comment=cells.get(where[COMMENT_COLUMN], ""),
+                key=cells.get(where[id_column], ""),
+                decision=cells.get(where[decision_column], ""),
+                comment=cells.get(where[comment_column], ""),
             )
             for number, cells in rows
         )
+
+
+def read_findings_sheet(data: bytes) -> tuple[SheetRow, ...]:
+    """Every data row of the «Замечания» sheet of our run export, or a refusal of the whole file."""
+    return tuple(
+        SheetRow(row=item.row, finding_uid=item.key, decision=item.decision, comment=item.comment)
+        for item in read_decision_sheet(
+            data, sheet=FINDINGS_SHEET, id_column=ID_COLUMN, decision_column=DECISION_COLUMN, comment_column=COMMENT_COLUMN
+        )
+    )

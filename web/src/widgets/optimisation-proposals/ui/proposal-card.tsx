@@ -17,35 +17,32 @@ import { formatInstant } from '@/shared/lib';
 import { pdfPageUrl } from '@/features/open-evidence';
 import {
   ANALOG_BASIS_LABELS,
+  DECISION_EVENT_LABELS,
   DECISION_STATE_LABELS,
   MATCH_BASIS_LABELS,
   VERDICT_LABELS,
+  carriedFromLabel,
   describeProvenance,
   describeQuantity,
   describeSaving,
+  describeSavingPercent,
   formatAmount,
   formatDecimal,
 } from '@/entities/optimisation-proposal';
 
 import styles from './optimisation-proposals.module.css';
 
-function PositionColumn({
-  title,
-  position,
-  vendor,
-  price,
-  unit,
-}: {
-  readonly title: string;
+interface PositionTextProps {
   readonly position: ProposalPosition;
   readonly vendor: string | null;
   readonly price: string;
   readonly unit: string;
-}) {
+}
+
+/** A price-list position as lines of text: its name, mark and code, its vendor and its unit price. Shared by the card and the table. */
+export function PositionText({ position, vendor, price, unit }: PositionTextProps) {
   return (
-    <td className={styles.cell}>
-      <strong>{title}</strong>
-      <br />
+    <>
       {position.name}
       {position.mark !== null ? <> · марка {position.mark}</> : null}
       {position.code !== null ? <> · код {position.code}</> : null}
@@ -53,6 +50,22 @@ function PositionColumn({
       Поставщик: {vendor ?? 'не указан'}
       <br />
       Цена за {unit}: <strong>{price}</strong>
+    </>
+  );
+}
+
+function PositionColumn({
+  title,
+  position,
+  vendor,
+  price,
+  unit,
+}: PositionTextProps & { readonly title: string }) {
+  return (
+    <td className={styles.cell}>
+      <strong>{title}</strong>
+      <br />
+      <PositionText position={position} vendor={vendor} price={price} unit={unit} />
     </td>
   );
 }
@@ -61,16 +74,29 @@ export interface ProposalDecisionLineProps {
   readonly decision: ProposalDecision | null;
 }
 
-/** «Решение: принято, Фамилия И., 2026-10-20 09:30:00 UTC» and its comment, or «не решено». */
+/**
+ * «Решение: принято, Фамилия И., 2026-10-20 09:30:00 UTC» and its comment, or «не решено». A withdrawn decision
+ * (`UI-B-12`) says so — «решение снято», by whom and when — and the proposal is `pending` again.
+ */
 export function ProposalDecisionLine({ decision }: ProposalDecisionLineProps) {
   if (decision === null) {
     return <p className={styles.decision}>Решение: {DECISION_STATE_LABELS.pending}.</p>;
   }
+  // `UI-B-14`: a decision carried over from an earlier version says so, as the original's «↩ Перенесено из V2».
+  const carried = carriedFromLabel(decision);
   return (
     <p className={styles.decision}>
-      Решение: <strong>{DECISION_STATE_LABELS[decision.verdict]}</strong>, {decision.actor_label},{' '}
+      Решение: <strong>{DECISION_EVENT_LABELS[decision.verdict]}</strong>, {decision.actor_label},{' '}
       {formatInstant(decision.decided_at)}
       {decision.comment !== null ? <> — {decision.comment}</> : null}
+      {carried === null ? null : (
+        <>
+          {' '}
+          <span className={styles.carried} data-carried-from={decision.carried_from?.version_ordinal}>
+            {carried}
+          </span>
+        </>
+      )}
     </p>
   );
 }
@@ -90,11 +116,16 @@ export function ProposalHistoryView({ items }: ProposalHistoryViewProps) {
         <li key={entry.proposal_decision_id}>
           {VERDICT_LABELS[entry.verdict]} — {entry.actor_label}, {formatInstant(entry.decided_at)}
           {entry.comment !== null ? <>: {entry.comment}</> : null}
+          {entry.carried_from === null ? null : <span className={styles.carried}> ({carriedFromLabel(entry)})</span>}
         </li>
       ))}
     </ol>
   );
 }
+
+/** The tooltip of the percent: what it is a percent of. */
+const SAVING_PERCENT_TITLE =
+  'На сколько процентов цена аналога ниже цены в прайс-листе. Не зависит от количества, поэтому есть и там, где экономия в рублях не рассчитана.';
 
 export interface ProposalCardProps {
   readonly proposal: OptimisationProposal;
@@ -107,6 +138,8 @@ export interface ProposalCardProps {
    * link; the list above says why (loading, or the refusal).
    */
   readonly documentUrl?: string | null | undefined;
+  /** `UI-B-09`: the block strip of the sheet, behind its own press; the container passes the live one. */
+  readonly blocks?: ReactNode;
 }
 
 /** The page a proposal names, when it names one a PDF reader can be pointed at. */
@@ -114,9 +147,67 @@ export function namedPage(proposal: OptimisationProposal): number | null {
   return Number.isInteger(proposal.page_number) && proposal.page_number >= 1 ? proposal.page_number : null;
 }
 
-export function ProposalCard({ proposal, controls, history, documentUrl }: ProposalCardProps) {
+export interface ProposalSheetLinkProps {
+  readonly proposal: OptimisationProposal;
+  /** The object URL of the pass's version PDF once it is fetched; absent or `null`, no link is drawn. */
+  readonly documentUrl?: string | null | undefined;
+}
+
+/**
+ * `UI-B-09`: the version's PDF on the proposal's page, in the browser's own reader (the review's «Открыть PDF ↗»), with the
+ * space that sets it off from the sentence before it. Nothing when the proposal names no page or the PDF is not there.
+ */
+export function ProposalSheetLink({ proposal, documentUrl }: ProposalSheetLinkProps) {
   const page = namedPage(proposal);
   const sheetUrl = documentUrl === undefined || documentUrl === null || page === null ? null : pdfPageUrl(documentUrl, page);
+  if (sheetUrl === null) return null;
+  return (
+    <>
+      {' '}
+      <a
+        href={sheetUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-open-sheet={page}
+        aria-label={`Открыть лист: PDF версии на странице ${page}, в новой вкладке`}
+      >
+        Открыть лист ↗
+      </a>
+    </>
+  );
+}
+
+/** The quantity, the saving and the server's percent, as one sentence. Shared by the card and the table. */
+export function ProposalFigures({ proposal }: { readonly proposal: OptimisationProposal }) {
+  const percent = describeSavingPercent(proposal);
+  return (
+    <>
+      Количество: {describeQuantity(proposal)}. {describeSaving(proposal)}
+      {percent === null ? null : (
+        <>
+          {' · '}
+          {/* `UI-B-07`: the server's percent of the price, beside the amount and where the amount is not computed. */}
+          <span data-saving-percent={proposal.saving_percent} title={SAVING_PERCENT_TITLE}>{percent}</span>
+        </>
+      )}
+    </>
+  );
+}
+
+/** How the row was matched, how the analog was chosen, and the server's rationale: two quiet paragraphs. */
+export function ProposalBasisNotes({ proposal }: { readonly proposal: OptimisationProposal }) {
+  return (
+    <>
+      <p className={styles.hint}>
+        Строка сопоставлена {MATCH_BASIS_LABELS[proposal.matched_basis]}; аналог выбран:{' '}
+        {ANALOG_BASIS_LABELS[proposal.analog_basis]}, доля общих слов {formatDecimal(proposal.name_similarity)}.
+      </p>
+      <p className={styles.hint}>{proposal.rationale}</p>
+    </>
+  );
+}
+
+export function ProposalCard({ proposal, controls, history, documentUrl, blocks }: ProposalCardProps) {
   const current = formatAmount(proposal.current_unit_price, proposal.currency);
   const proposed = formatAmount(proposal.proposed_unit_price, proposal.currency);
   return (
@@ -131,21 +222,7 @@ export function ProposalCard({ proposal, controls, history, documentUrl }: Propo
       </div>
       <p className={styles.provenance}>
         Спецификация: {describeProvenance(proposal)}.
-        {sheetUrl === null ? null : (
-          <>
-            {' '}
-            {/* `UI-B-09`: the version's PDF on the proposal's page, in the browser's own reader (the review's «Открыть PDF ↗»). */}
-            <a
-              href={sheetUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-open-sheet={page}
-              aria-label={`Открыть лист: PDF версии на странице ${page}, в новой вкладке`}
-            >
-              Открыть лист ↗
-            </a>
-          </>
-        )}
+        <ProposalSheetLink proposal={proposal} documentUrl={documentUrl} />
       </p>
       <blockquote className={styles.quote}>{proposal.row_text}</blockquote>
       <div className={styles.frame}>
@@ -170,17 +247,20 @@ export function ProposalCard({ proposal, controls, history, documentUrl }: Propo
           </tbody>
         </table>
       </div>
-      <p>
-        Количество: {describeQuantity(proposal)}. {describeSaving(proposal)}
+      <p className={styles.figures}>
+        <ProposalFigures proposal={proposal} />
       </p>
-      <p className={styles.hint}>
-        Строка сопоставлена {MATCH_BASIS_LABELS[proposal.matched_basis]}; аналог выбран:{' '}
-        {ANALOG_BASIS_LABELS[proposal.analog_basis]}, доля общих слов {formatDecimal(proposal.name_similarity)}.
-      </p>
-      <p className={styles.hint}>{proposal.rationale}</p>
-      <ProposalDecisionLine decision={proposal.current_decision} />
-      {controls}
-      {history}
+      <div className={styles.basis}>
+        <ProposalBasisNotes proposal={proposal} />
+      </div>
+      {/* The verdict, its form and its history in the last column (`UI-B-06`): the original's «Решение» column. */}
+      <div className={styles.judgement}>
+        <ProposalDecisionLine decision={proposal.current_decision} />
+        {controls}
+        {history}
+      </div>
+      {/* `UI-B-09`: the sheet's blocks, across the card under the row, behind their own press. */}
+      {blocks ?? null}
     </article>
   );
 }

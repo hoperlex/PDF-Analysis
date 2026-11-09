@@ -23,6 +23,10 @@
  * finding's version and is absent while that version is unclassified; the row then carries the
  * project and the document and no third part — no label is made up for the absence.
  *
+ * **A carried decision says where it came from** (`D-344`): a finding's row carries «↩ Перенесено из V#» beside the verdict when the
+ * record names a source (`carried_from`), in both views and in «Все». A proposal's row carries none -- its record has no
+ * `carried_from` yet (`D-335`).
+ *
  * Every row is one **event**, not one finding. A finding the reviewer returned to carries
  * two rows, and `decision_event_count` on each says so — which is the fact a knowledge
  * base is read for: that this question has been asked before.
@@ -30,7 +34,7 @@
 
 import Link from 'next/link';
 
-import type { DecisionRecord, DecisionEventType, KnowledgeBaseEntry, ProposalDecisionRecord } from '@/shared/api';
+import type { DecisionRecord, KnowledgeBaseEntry, ProposalDecisionRecord } from '@/shared/api';
 import {
   DECISION_EVENT_TYPE_VALUES,
   FINDING_CATEGORY_VALUES,
@@ -39,10 +43,14 @@ import {
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { formatInstant, routes } from '@/shared/lib';
-import { CATEGORY_LABELS, VERDICT_LABELS } from '@/entities/expert-decision';
-import { DECISION_STATE_LABELS } from '@/entities/optimisation-proposal';
+import { CATEGORY_LABELS, CarriedMark, VERDICT_LABELS } from '@/entities/expert-decision';
+import { DECISION_EVENT_LABELS } from '@/entities/optimisation-proposal';
 import { SeverityBadge } from '@/entities/finding';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
+
+import { EVENT_TYPE_LABELS, decisionCountWords } from '../model/labels';
+import { KnowledgeBaseTable } from './knowledge-base-table';
+import styles from './knowledge-base.module.css';
 
 /**
  * What narrows the list the reader is looking at, and the way back out of it (`D-313`). The page
@@ -57,7 +65,16 @@ export interface KnowledgeBaseNarrowing {
   readonly allProjectsHref?: string | undefined;
 }
 
+/**
+ * `UI-B-34`: how the decisions are drawn. `table` is the original's table, one row a decision with the project and the
+ * section in their own columns; `events` is the rows as events (the heading, the place under it, the gist, the comment, who
+ * and when). The widget draws `events` when it is not told, so every screen that renders the list as it always did keeps its
+ * markup; the knowledge-base page asks for `table` unless the reader chooses the events.
+ */
+export type KnowledgeBaseView = 'table' | 'events';
+
 export interface KnowledgeBaseProps {
+  readonly view?: KnowledgeBaseView | undefined;
   readonly records: readonly DecisionRecord[];
   /**
    * `D-317`: «Все» -- both journals merged, newest first. When present it is the list, and `records` is not read:
@@ -74,14 +91,6 @@ export interface KnowledgeBaseProps {
 // Category headings come from `CATEGORY_LABELS` in `entities/expert-decision`: the page's
 // filter reads the same table, and it moved there so the page keeps no static import of
 // this widget (`W50-LAZY-01`).
-
-/** Event labels, the same four `DecisionHistory` uses. */
-const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {
-  accept: 'приём',
-  reject: 'отклонение',
-  comment: 'комментарий',
-  revoke: 'отзыв',
-};
 
 function hasValue(values: readonly string[], value: unknown): boolean {
   return typeof value === 'string' && values.includes(value);
@@ -145,6 +154,12 @@ function FindingRecordItem({ record, kindLabel = false }: { readonly record: Dec
           </span>
         )}
         <span className="am-kb__event">{EVENT_TYPE_LABELS[record.event_type]}</span>
+        {/*
+         * `D-344`, `UI-A-73`: a decision carried over from an earlier version's finding says so, «↩ Перенесено из V2», beside the
+         * verdict; a decision made directly has no `carried_from` and draws nothing. The heading is a flex row, so the mark
+         * needs no spacing of its own.
+         */}
+        {record.carried_from === undefined ? null : <CarriedMark carriedFrom={record.carried_from} />}
       </p>
       <p className="am-kb__meta" data-record-place="true">
         {placeOf(record)}
@@ -163,9 +178,7 @@ function FindingRecordItem({ record, kindLabel = false }: { readonly record: Dec
          * ordinal.
          */}
         <span className="am-kb__events" data-event-count={record.decision_event_count}>
-          {record.decision_event_count === 1
-            ? 'одно решение по находке'
-            : `решений по находке: ${record.decision_event_count}`}
+          {decisionCountWords(record.decision_event_count)}
         </span>
         {/*
          * The way back to the finding. `ADR-0010`: the link is built from
@@ -202,7 +215,7 @@ function ProposalRecordItem({ record }: { readonly record: ProposalDecisionRecor
       <p className="am-kb__heading">
         <span className="am-kb__category">Предложение</span>
         <span className="am-kb__verdict" data-verdict={record.verdict}>
-          {DECISION_STATE_LABELS[record.verdict]}
+          {DECISION_EVENT_LABELS[record.verdict]}
         </span>
       </p>
       <p className="am-kb__meta" data-record-place="true">
@@ -223,7 +236,18 @@ function ProposalRecordItem({ record }: { readonly record: ProposalDecisionRecor
   );
 }
 
-export function KnowledgeBase({ records: findingRecords, entries, isLoading, error, narrowing }: KnowledgeBaseProps) {
+/** The header line of the table of rows (`UI-B-34`); the columns are the rows' own, in `knowledge-base.module.css`. */
+function Legend() {
+  return (
+    <div className={styles.legend} aria-hidden="true">
+      <span>Находка и решение</span>
+      <span>Суть и комментарий</span>
+      <span>Кто и когда</span>
+    </div>
+  );
+}
+
+export function KnowledgeBase({ records: findingRecords, entries, isLoading, error, narrowing, view = 'events' }: KnowledgeBaseProps) {
   if (isLoading === true) return <LoadingState what="базу знаний" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
   // In «Все» the findings' vocabulary is checked on the finding entries, as in «Замечания».
@@ -244,9 +268,17 @@ export function KnowledgeBase({ records: findingRecords, entries, isLoading, err
 
   // «Все» is empty only when neither journal has an entry: a page of proposals alone is a page, not «нет решений».
   if (entries !== undefined && entries.length > 0) {
+    if (view === 'table') {
+      return (
+        <section className="am-kb" data-record-count={entries.length} data-knowledge-base-kind="all" data-knowledge-base-view="table">
+          <KnowledgeBaseTable entries={entries} kindLabel />
+        </section>
+      );
+    }
     return (
       <section className="am-kb" data-record-count={entries.length} data-knowledge-base-kind="all">
-        <ol className="am-kb__records">
+        <Legend />
+        <ol className={`am-kb__records ${styles.records}`}>
           {entries.map((entry) =>
             entry.kind === 'finding' && entry.finding !== undefined ? (
               <FindingRecordItem key={`finding:${entry.finding.decision_id}`} record={entry.finding} kindLabel />
@@ -308,9 +340,20 @@ export function KnowledgeBase({ records: findingRecords, entries, isLoading, err
     );
   }
 
+  if (view === 'table') {
+    return (
+      <section className="am-kb" data-record-count={records.length} data-knowledge-base-view="table">
+        <KnowledgeBaseTable
+          entries={records.map((record): KnowledgeBaseEntry => ({ kind: 'finding', occurred_at: record.recorded_at, finding: record }))}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="am-kb" data-record-count={records.length}>
-      <ol className="am-kb__records">
+      <Legend />
+      <ol className={`am-kb__records ${styles.records}`}>
         {records.map((record) => (
           <FindingRecordItem key={record.decision_id} record={record} />
         ))}

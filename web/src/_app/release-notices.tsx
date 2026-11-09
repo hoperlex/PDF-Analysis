@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ReleaseList } from '@/shared/api';
 import { checkWebVersion, hasErrorCode, shouldShowUpdate, VersionCheckError } from '@/shared/api';
-import { getWebBuildId, MissingConfigurationError, SIGN_IN_SCREEN } from '@/shared/config';
+import { getWebBuildId, MissingConfigurationError, NEXT_PARAM, safeReturnPath, SIGN_IN_SCREEN } from '@/shared/config';
+import type { SessionEndReason } from '@/shared/lib';
+import { SESSION_END_REASON_PARAM } from '@/shared/lib';
 import { useReleases } from '@/entities/release';
 import { useMarkReleaseNotesRead } from '@/features/mark-release-notes-read';
 
@@ -14,48 +16,66 @@ import styles from './release-notices.module.css';
 const LATER_PREFIX = 'dismissed-update:';
 
 export function MarkFaultView() {
-  return <p className={styles.markFault} role="alert">Не удалось сохранить отметку о прочтении.</p>;
+  return <p className={`${styles.notice} ${styles.markFault}`} role="alert">Не удалось сохранить отметку о прочтении.</p>;
 }
 
+/**
+ * The notices are strips in the page's own flow, above the screen they belong to, in the manner of the original's
+ * `live-banner` and `queue-interrupted-banner`: one line, a coloured edge, buttons at the right. They are not floating
+ * cards. The «Что нового» card used to be fixed at the lower left and covered about 450 px of a 780 px screen, so a
+ * press under it landed on the card; a strip in the flow covers nothing and scrolls away with the page.
+ */
 export function UpdateBannerView({ onUpdate, onLater }: { readonly onUpdate: () => void; readonly onLater: () => void }) {
   return (
-    <aside className={styles.banner} role="status" data-update-banner="">
-      <span className={styles.bannerIcon} aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 7v5h-5M4 17v-5h5" />
-          <path d="M5.8 9a7 7 0 0 1 12.2-2l2 5M4 12l2 5a7 7 0 0 0 12.2-2" />
-        </svg>
-      </span>
-      <div className={styles.bannerCopy}>
-        <strong>Доступна новая версия</strong>
-        <span>Обновите страницу, чтобы увидеть изменения.</span>
-      </div>
-      <div className={styles.bannerActions}>
-        <button type="button" className={`am-button ${styles.updateButton}`} onClick={onUpdate}>Обновить <span aria-hidden="true">↗</span></button>
-        <button type="button" className={styles.laterButton} onClick={onLater}>Позже</button>
+    <aside className={styles.notice} role="status" data-update-banner="">
+      <p className={styles.text}>
+        <strong>Доступна новая версия.</strong> Обновите страницу, чтобы увидеть изменения.
+      </p>
+      <div className={styles.actions}>
+        <button type="button" className="am-button am-button--small" onClick={onUpdate}>Обновить <span aria-hidden="true">↗</span></button>
+        <button type="button" className="am-button am-button--quiet am-button--small" onClick={onLater}>Позже</button>
       </div>
     </aside>
   );
 }
 
+/**
+ * One line while closed: the name, the version, the first change and «Показать все». A native `<details>` opens the
+ * whole list in place, so the strip needs no state of its own and the full text is in the markup either way. «Закрыть»
+ * marks the notes read, as before.
+ */
 export function WhatsNewView({ listing, newest, onClose }: {
   readonly listing: ReleaseList;
   readonly newest: string;
   readonly onClose: () => void;
 }) {
+  const entries = listing.items.filter((item) => listing.whats_new.includes(item.version));
+  const total = entries.reduce((sum, entry) => sum + entry.items.length, 0);
+  const first = entries[0]?.items[0]?.text ?? null;
   return (
-    <aside className={styles.whatsNew} role="dialog" aria-label="Что нового" aria-modal="false" data-whats-new="">
-      <header className={styles.whatsNewHead}>
-        <h2>Что нового</h2>
-        <p>Версия {newest}</p>
-      </header>
-      {listing.items.filter((item) => listing.whats_new.includes(item.version)).map((entry) => (
-        <section key={entry.version}>
-          <h3>{entry.title} · {entry.version}</h3>
-          <ul>{entry.items.map((item, index) => <li key={`${entry.version}-${index}`}>{item.text}</li>)}</ul>
-        </section>
-      ))}
-      <button type="button" className={`am-button ${styles.closeButton}`} onClick={onClose}>Закрыть</button>
+    <aside className={styles.notice} role="region" aria-label="Что нового" data-whats-new="">
+      <details className={styles.details}>
+        <summary className={styles.summary}>
+          <strong>Что нового</strong>
+          <span className={styles.version}>версия {newest}</span>
+          {first === null ? null : <span className={styles.first}>{first}</span>}
+          <span className={styles.toggle}>
+            <span className={styles.whenClosed}>Показать все ({total})</span>
+            <span className={styles.whenOpen}>Свернуть</span>
+          </span>
+        </summary>
+        <div className={styles.body}>
+          {entries.map((entry) => (
+            <section key={entry.version}>
+              <h3>{entry.title} · {entry.version}</h3>
+              <ul>{entry.items.map((item, index) => <li key={`${entry.version}-${index}`}>{item.text}</li>)}</ul>
+            </section>
+          ))}
+        </div>
+      </details>
+      <div className={styles.actions}>
+        <button type="button" className="am-button am-button--small" onClick={onClose}>Закрыть</button>
+      </div>
     </aside>
   );
 }
@@ -123,6 +143,36 @@ export function listenForTabReturn(target: TabDocument, reads: NoticeReads): () 
   return () => target.removeEventListener('visibilitychange', onVisible);
 }
 
+/**
+ * Why this tier sends a browser to sign-in: the API answered an authenticated request with `401`.
+ * That is the closed list's `ended` (`@/shared/lib/session-end-reason`): the register still held the credential as
+ * live and the API no longer accepts it, and a `401` cannot say more. Typed against the list, so a word outside it
+ * does not compile.
+ */
+const REFUSED_BY_API: SessionEndReason = 'ended';
+
+/** The part of `window.location` the sign-in address is built from. */
+export interface HereOnTheScreen {
+  readonly pathname: string;
+  readonly search: string;
+}
+
+/**
+ * The address a `401` sends the browser to: `/login?next=<where it was>&reason=ended`.
+ *
+ * The same shape the server guard builds (`screen-lock.ts`, decision 1): `next` first, the reason after it and never
+ * instead of it. `next` is the page the browser is on, with its query and without its fragment, passed through the
+ * registry's one validator — a value it refuses is dropped, and the sign-in screen itself is never a `next`.
+ */
+export function signInAfterRefusal(here: HereOnTheScreen): string {
+  const next = here.pathname === SIGN_IN_SCREEN ? null : safeReturnPath(`${here.pathname}${here.search}`);
+  const query = [
+    ...(next === null ? [] : [`${NEXT_PARAM}=${encodeURIComponent(next)}`]),
+    `${SESSION_END_REASON_PARAM}=${REFUSED_BY_API}`,
+  ].join('&');
+  return `${SIGN_IN_SCREEN}?${query}`;
+}
+
 export function ReleaseNotices() {
   const buildId = bundleBuildId();
   const pathname = usePathname();
@@ -144,7 +194,7 @@ export function ReleaseNotices() {
     } catch (error) {
       setAvailable(null);
       if (error instanceof VersionCheckError && error.status === 401) {
-        window.location.assign(SIGN_IN_SCREEN);
+        window.location.assign(signInAfterRefusal(window.location));
       }
     }
   }, [buildId]);
@@ -164,7 +214,7 @@ export function ReleaseNotices() {
   // sign-in whichever trigger found it.
   useEffect(() => {
     if (hasErrorCode(releases.error, 'authentication_required')) {
-      window.location.assign(SIGN_IN_SCREEN);
+      window.location.assign(signInAfterRefusal(window.location));
     }
   }, [releases.error]);
 
@@ -186,9 +236,12 @@ export function ReleaseNotices() {
     mark.mutate(newest, { onError: () => setMarkFault(true), onSuccess: () => setMarkFault(false) });
   };
 
+  const bannerShown = showBanner && available !== null;
+  const whatsNewShown = showWhatsNew && newest !== null && releases.data !== undefined;
+  if (!bannerShown && !whatsNewShown && !markFault) return null;
   return (
-    <>
-      {showBanner && available !== null ? (
+    <div className={styles.notices}>
+      {bannerShown && available !== null ? (
         <UpdateBannerView
           onUpdate={() => window.location.reload()}
           onLater={() => {
@@ -197,10 +250,10 @@ export function ReleaseNotices() {
           }}
         />
       ) : null}
-      {showWhatsNew && newest !== null && releases.data !== undefined ? (
+      {whatsNewShown && newest !== null && releases.data !== undefined ? (
         <WhatsNewView listing={releases.data} newest={newest} onClose={closeWhatsNew} />
       ) : null}
       {markFault ? <MarkFaultView /> : null}
-    </>
+    </div>
   );
 }

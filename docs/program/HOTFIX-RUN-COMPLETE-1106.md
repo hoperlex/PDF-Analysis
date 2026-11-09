@@ -123,3 +123,44 @@ its saved refusals remain immutable. After its terminal state the deployment fol
 uses the ordinary unmetered re-audit of RJPR. The diagnostics workflow has an independent
 concurrency group: observation does not own the deployment lock. Release0.12.5revision3
 contains these repairs only; unpublished dev features remain outside this candidate.
+
+
+## Verified completion — 2026-11-06
+
+The fresh run **run_01M6RQ9SZPB01G22AV6VQRHJHD** reached `published`; its review/artifact,
+all seven procedures and all three windows are completed. All four execution stages
+succeeded. Coverage is **47/47 blocks, 30/30 pages, 165399/165399 text characters,
+86/86 passport pieces and 1848/1848 cross-window pairs**, with no remaining or omitted
+inputs. All **74 model calls and 74 provider effects completed**, with no unresolved
+reply refusals or ambiguous effects. Cost basis is unmetered, recorded cost 0.
+
+The passport accepts 307 strictly validated candidates; 80 unsupported candidates remain
+explicitly rejected in history and outside accepted facts. Three critic repairs retain
+all input identities: four unconfirmed quotes become model-produced requests for human
+review without claimed checked evidence; five inconsistent context decisions are repaired.
+The source validator is unchanged. All local/global critic inputs are accounted for.
+Conservative semantic/expert-certification flags remain false; this is complete execution
+of the accepted machine workflow, not an automatic expert approval.
+
+Production is **0.12.5 / 46b52dd068232236038d7ec4cbb0b13c63b9aa25**. Deployment
+[42241699088](https://github.com/hoperlex/PDF-Analysis/actions/runs/42241699088) succeeded;
+`verify-deployed.sh` printed `DEPLOY OK` for that exact SHA at 15:22:47 UTC. Public TLS
+application/auth smoke returned 200/401. Admission workflow 42242501352 created exactly
+one fresh unmetered child of RJPR; admission success was not used as completion evidence.
+Read-only observer 42242840634 supplied the terminal artifact. The local runner was updated
+while idle to 0.12.5 and remained active throughout the green run.
+
+Validation followed the owner's build-only exception: production web build, Python3.12
+source compilation and runtime imports, runner package build, workflow YAML/shell syntax,
+clean diff and exact-tree deployment verification. No behavioral suites/full gate, new
+contracts, migrations, root dependency changes, composition rewiring or global styles.
+The operator diagnostics' legacy `unresolved_rejection_codes` counts unrepaired raw
+passport history; authoritative completion uses `facts_rejections_unresolved=0` and
+explicit terminal validator dispositions. Memory-only local answers still do not survive
+a process restart; active workers require coordinated deployment/draining.
+
+Integrator: runtime deployment is complete; leave main at the verified SHA. Closure
+records are development-only. Dev also contains later unrelated contract/features requiring their
+own reviewed release; do not promote its entire tree as this hotfix. No tag/checkpoint.
+Full build logs and safe terminal evidence are in the workspace task receipt and
+`.local/handoff/HOTFIX-RUN-COMPLETE-1106-green.json`.

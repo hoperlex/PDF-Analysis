@@ -497,7 +497,9 @@ describe('the root layout wires the providers outside the frame', () => {
     expect(html.type).toBe('html');
     expect(html.props.lang).toBe('ru');
 
-    const body = html.props.children as { type: unknown; props: { children: unknown } };
+    // `P7-1`: `<head>` carries the one inline script (`theme-boot-script.test.ts` reads it);
+    // the body is still the nesting this test is about.
+    const [, body] = html.props.children as [unknown, { type: unknown; props: { children: unknown } }];
     expect(body.type).toBe('body');
 
     const providers = body.props.children as { type: unknown; props: { children: unknown } };
@@ -668,6 +670,8 @@ describe('every screen address is built once and matches a route file on disk', 
       version: routes.version(PROJECT_UID, VERSION_UID),
       // `R-151m`: the version page links its «Блоки» tab.
       versionBlocks: routes.versionBlocks(PROJECT_UID, VERSION_UID),
+      // `UI-A-53`: a confirmed section of the project structure links its optimisation. Markup writes `&` as `&amp;`.
+      sectionOptimisation: routes.sectionOptimisation('GP', PROJECT_UID).replace(/&/g, '&amp;'),
       // `W59-SECTION-UI-01`: an unclassified document in the project structure opens its
       // version at the stage-and-section panel, and so does the run control's refusal.
       versionClassification: routes.versionClassification(PROJECT_UID, VERSION_UID),
@@ -676,6 +680,8 @@ describe('every screen address is built once and matches a route file on disk', 
       review: routes.review(PROJECT_UID, RUN_ID),
       user: routes.user(A_USER),
       users: routes.users(),
+      // `UI-A-94`: the user list links the access journal beside it.
+      authEvents: routes.authEvents(),
       // `W55A-WEB-NORMS`: the search's own address, and a document as a result's title links it.
       norms: routes.norms(),
       normDocument: routes.normDocument(NORM_DOCUMENT_ID),

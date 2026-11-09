@@ -88,6 +88,8 @@ const IDENTIFIERS: Readonly<Record<string, string>> = {
   document_uid: 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
   version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8D',
   run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8E',
+  // `R-151l`: the section page's segment is a code of the fifteen-section vocabulary, not an identity.
+  section_code: 'KJ',
 };
 
 function segmentsOf(template: string): string[] {
@@ -160,7 +162,9 @@ describe('decision 1: a guest is sent to /login with the concrete path and its q
       const route = await routeAt(row.address);
       const { path, params } = filled(row.address);
       const location = await sentTo(route({ params: Promise.resolve(params), searchParams: Promise.resolve({}) }));
-      expect(location).toBe(`/login?next=${encodeURIComponent(path)}`);
+      // `next` is exactly what it is for a first visit; the one addition is the reason, after it:
+      // the browser presented a session cookie that names no session here (`P7`, sign-in hints).
+      expect(location).toBe(`/login?next=${encodeURIComponent(path)}&reason=invalid`);
     });
   }
 

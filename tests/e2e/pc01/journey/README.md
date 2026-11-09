@@ -107,6 +107,44 @@ finding and names the envelope file. `--phase read|write|all` selects; the defau
 **The origin must be one you may write to.** There is no default origin, and the write half
 creates real state.
 
+## A throwaway local stand (`local-stand.sh`, D-314, D-318)
+
+```sh
+npm --prefix web ci && NEXT_PUBLIC_API_BASE_URL=/bff/v1 NEXT_PUBLIC_WEB_BUILD_ID=local npm --prefix web run build   # once per tree
+LANE_STAND_DIR=<a directory of yours> flock <the host's run lock> bash tests/e2e/pc01/journey/local-stand.sh --hold-seconds 1500
+# while it prints STAND_READY (it writes $LANE_STAND_DIR/stand.env and tears everything down on exit or when $LANE_STAND_DIR/stop appears):
+. $LANE_STAND_DIR/stand.env && node tests/e2e/pc01/journey/journey.mjs --origin $ORIGIN --phase all --allow-spend --out <dir>
+```
+
+It starts a tmpfs PostgreSQL and MinIO (containers named after `LANE_PG_NAME` / `LANE_S3_NAME`, on `LANE_*_PORT`),
+migrates to head, seeds the norms, loads the release notes, starts the API (`EXECUTION_ROLE=api`), a worker
+(`EXECUTION_ROLE=worker`, `recorded`) and `next start` of the built `web/`, and takes the seeded administrator off the
+shipped password. `LANE_C4=1` also starts the test-owned synthetic worker for the `cmp-stage-*` steps (and turns the comparison
+modules off on the ordinary worker, as "CMP-JOURNEY-C4-01" above asks). Two settings are not obvious and each cost a red:
+
+* **`AUDITMANAGER_EXTENDED_ANALYSIS=0`.** The shipped plan is the extended review; the committed recordings answer the plain
+  analysis only, so under the default a recorded run fails `text_analysis` with `recording_missing`
+  (`tests/support/run_consent.py`, `plain_analysis_pricing`). `--allow-spend` is accepted here because the stand is `recorded`.
+* **The «Что нового» card.** An account that has not read the newest release notes sees a fixed, non-modal card at the lower
+  left that covers about 450 px of a 780 px screen, so a press under it lands on the card. `session.mjs` closes it once, through
+  its own button, in every sign-in (and records `releaseNotice` in the envelope).
+
+Also measured on this stand (lane V2, 2026-11-07, the 0.14.1 tree, ten fresh stands):
+
+* **Ports.** Lanes run side by side, so the script takes `LANE_PG_PORT`, `LANE_S3_PORT`, `LANE_API_PORT`, `LANE_HEALTH_PORT` and
+  `LANE_WEB_PORT` (defaults 55701–55705) as well as `LANE_PG_NAME` / `LANE_S3_NAME`.
+* **No priming sign-in.** The first sign-in after a fresh `next start` is the journey's own; since `D-329` it must record no page error
+  (`session.pageErrors` in the envelope), and it did on every stand.
+* **`--steps` is PARTIAL.** `--steps <the active, non-`cmp-*` write steps>` with `--phase all` ends `exit 3` however green it is; that is the
+  expected end of a lane run until the `cmp-*` steps (`D-330`, `D-341`) can run in the same journey.
+* **The comparison steps need more than the stand gives.** With the address writers fixed (`D-341`) the version chain runs by clicks
+  through `cmp-version-viewer-real-tiles`. `cmp-version-recorded-ai-consent` then meets `GET …/ai-sheet-changes/estimate` 503
+  («не выбрано подключение исполнителя») because no executor route is assigned to `comparison_sheet_changes` and no recorded worker
+  serves version AI (the recorded adapter for it is in-memory, in the tests); `cmp-version-summary-download` follows it. The `cmp-stage-*`
+  steps need `LANE_C4=1`: `cmp-stage-upload` and `cmp-stage-assembly` run through the real panels; `cmp-stage-swapped-map` waits for the
+  four stage documents' page profiles on the overview and reads `not_started … ready 0` after two minutes, because nothing enqueues the
+  profiles of a stage upload (`D-330`): the sheets answer 503 `comparison_stage_profiles` until something does.
+
 ## W51 identity continuation
 
 `identity.mjs` consumes the completed PC-01 write envelope so the newly approved expert can
@@ -349,6 +387,55 @@ injects exactly that on the live screens and **reads the computed style back on 
 sides** — `wrap`, then `nowrap` — which is what makes the scratch copy and the injection
 the same mutation rather than a claim that they are. It imports `width.mjs`, the
 journey's own assertion, rather than a second copy written to agree with it.
+
+**Other widths and other states are flags, not copies of the manifest** (lane J2, 2026-11-09, `D-380`). The journey declares one
+width and walks the quiet state, and a layout fault that needs a particular width or state to show is outside it: the frame's end
+group ended at 471 px only while dispatch was paused; the stage comparison's controls ended at 399 px only while the list held exactly
+one project (with two, the screen asks for a choice first); and its pair catalog ended at 839 px (843 px at the declared 780) only once a
+pair was confirmed, which the ordinary `--phase all` never does. Lane V3 found all three with a copy of the manifest whose `viewport` said
+390 x 844. The read walk now takes the width and the states as options:
+
+| option | what the read walk does | how a run is wrong |
+|---|---|---|
+| `--width <px>` (and `--height <px>`) | lays every route out at that viewport and holds it to `scrollWidth <= innerWidth` (240 to 3840; a missing height stays the manifest's 900). The write half keeps the declared viewport: its steps and refusals are specified at it | a finding per route: `the screen scrolls sideways at the requested width. scrollWidth 471 > innerWidth 390 ... overflowing by 81 px`, with the widest boxes crossing the edge; the envelope carries `read.viewport` and the per-route `width` |
+| `--paused` | pauses dispatch through the API as the administrator (`PUT /execution/dispatch`, `{"paused": true}`, an idempotency key, from a cold browser of the stand's origin), reads the state back, walks, and puts dispatch back **in a `finally`** (a stand found paused is left paused; a resume the API does not confirm is a finding) | a pause the API does not confirm blocks the walk; a route that asked `getExecutionDispatch` and whose strip (`[data-pause-status]`) does not say `paused` is a finding. `read.paused` in the envelope keeps the three answers of the pause and of the resume |
+| `--state <name>` | waits (under the state's `bound_ms`) until each route that declares `read_state.<name>` shows it, before the width is read. `confirmed_pair` is the stage catalog with a confirmed pair and its table (`[data-pair-counters]` counting a pair, the pair table drawn) | a route not in the state is a finding with the last reading and the words the screen showed; a name no route declares stops the run (exit 2) |
+
+A route's `query` (`stage-compare`: `{"project": "{project_uid}"}`) writes the journey's own project into the address, so
+`/stage-comparison` reads the same workspace whether the stand holds one project or several (`useAddressProject` reads `?project=`);
+before it, a stand with two projects drew only the chooser and the walk measured a screen nobody had meant to measure.
+
+```
+# 1280 and 390 px, and the paused state, on a stand that already holds a project, a document and a run
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 1280 --out <dir>
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 390 --height 844 --out <dir>
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 390 --height 844 --paused --out <dir>
+# the stage catalog with a confirmed pair (a LANE_C4=1 stand after cmp-stage-upload and cmp-stage-assembly)
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 390 --height 844 --state confirmed_pair --out <dir>
+```
+
+A route may also DECLARE a refusal the screen is known to meet in a state the walk holds (`optional_api` entry with `"refusal": true` and
+`"expect_status"`): the stage catalog with a confirmed pair asks for the pair's sheet map before any map exists and is answered
+`404 not_found` (`D-420`). Only that call with only that status is let through; the same call answering 500 is still a finding.
+The walk prefers the identity its own write half (or `--seed`) made to the first link a page renders (`pickFollowed`), because after
+the stage steps the project holds four more documents and the first document link is a stage document that never had a run; a page
+that does not offer the journey's own identity is a finding. A run that used `--seed` is `PARTIAL` (exit 3).
+
+Measured 2026-11-09, lane J2, on the 0.18.2 tree, one `LANE_C4=1` stand (`local-stand.sh`), after `--phase write --steps create-project,
+upload-document,classify-version,start-run,cmp-stage-upload,cmp-stage-assembly` (6 of 6 green, 35 s) with `--seed` of its captured
+identities: 35 of 35 routes clean, with 0 findings, 0 console errors, 0 page errors and 0 React #418, at 1280, at 390 px, at 390 px
+with dispatch paused and at 1280 px with dispatch paused; `confirmed_pair` reached on `stage-compare`; each walk takes about 45 s
+(a cold browser per route). Before the fix of «Оптимизация разделов» the 390 px walk read 31 of 35 (409 px on that route).
+
+`walk-options.mjs` holds the pure rules (the dimension parser, the viewport, the address query, the state expression and the
+paused-strip verdict) and `dispatch.mjs` the pause; `walk-options.test.mjs` and `dispatch.test.mjs` (`node --test`) hold them without a
+browser, and `test_pc01_journey_conformance.py` runs both and reads the manifest's `query` and `read_state` against `web/src`.
+
+**A step that could not be driven keeps what its browser did** (`D-382`). A control that is not there, or a wait that ran out, threw
+inside the browser's callback; the browser was torn down with the exception and the step's envelope kept `exchanges: []`, so the findings
+said "the browser made no API call at all" about a page that had asked for a dependency and been refused 503. `keepingExchanges` (in
+`write.mjs`) copies the exchanges, console errors, page errors and location into the step's record before the exception leaves, and the
+finding for `could not be driven` now ends with the calls the browser had made (`GET /bff/v1/... -> 503`). The error is rethrown unchanged.
 
 ## No dependency
 

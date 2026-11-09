@@ -10,6 +10,10 @@ export {
   selectorCount, startChoiceComplete, startSelectors,
 } from './model/start-mode';
 
+// `AR-V3-OPT-IN`: the radio that chooses the analysis of one start; the rules around it are the run list's.
+export type { AnalysisChoiceProps, AnalysisChoiceValue } from './ui/analysis-choice';
+export { ANALYSIS_CHOICE_LABEL, ANALYSIS_CHOICE_OPTIONS, AnalysisChoice } from './ui/analysis-choice';
+
 export type { StartRunControlProps } from './ui/start-run-control';
 export { StartRunControl } from './ui/start-run-control';
 

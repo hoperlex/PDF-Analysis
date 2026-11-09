@@ -445,7 +445,9 @@ def test_every_listed_step_is_marked_pending_and_no_other_is(manifest: dict) -> 
         step["name"] for step in write_steps(manifest)
         if "pending_v3_activation" in step and step["pending_v3_activation"] is not True
     ]
-    assert len(write_steps(manifest)) == 112, "no step was deleted to make the list shorter"
+    # 112 at PROD-11; later waves only added steps (126 by 2026-11-06), lane V the four read-only `schedule-*` (D-318),
+    # lane V2 `review-view-and-filter-follow-the-address` (D-341).
+    assert len(write_steps(manifest)) == 131, "no step was deleted to make the list shorter"
 
 
 def test_the_ar_bound_block_is_the_size_it_was_measured_at(manifest: dict) -> None:

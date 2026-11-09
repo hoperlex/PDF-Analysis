@@ -14,6 +14,7 @@
 }
 
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--am-gap-xs);
@@ -25,15 +26,58 @@
   box-shadow: var(--am-shadow-1);
 }
 
+.card:hover,
 .card:focus-within {
   border-color: var(--am-accent);
 }
 
+/*
+ * The whole card opens its version, as the original's does (`UI-A-45`): the title link is stretched over the card, and the
+ * card's other controls (the history link, the selection box, a chip that leads to «Разбор», a tag) sit above it.
+ */
+.title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.topEnd,
+.badges a,
+.tags {
+  position: relative;
+  z-index: 1;
+}
+
 .top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--am-gap-xs);
+  font-size: var(--am-text-xs);
+}
+
+.pages {
+  color: var(--am-ink-muted);
+}
+
+/* The history link and the selection box sit at the row's end; the row wraps on a narrow card. */
+.topEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin-left: auto;
+}
+
+/* `UI-A-53`: the Σ card that opens the grid, a control of the section and not a document. */
+.leading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+  padding: var(--am-gap-sm);
+  border: 1px dashed var(--am-accent);
+  border-radius: var(--am-radius);
+  background: var(--am-accent-light);
 }
 
 .ordinal {
@@ -53,17 +97,21 @@
 .title {
   margin: 0;
   overflow-wrap: anywhere;
+  font-size: var(--am-text-md);
   font-weight: 600;
+  line-height: var(--am-leading-tight);
 }
 
 .badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
   min-width: 0;
 }
 
-.meta {
-  margin: 0;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
+.badges:empty {
+  display: none;
 }
 
 /* `R-151a`: an archived document, listed only on request, says so and steps back. */
@@ -91,4 +139,11 @@
   border-radius: var(--am-radius-pill);
   color: var(--am-ink-soft);
   font-size: var(--am-text-xs);
+}
+
+/* The findings the result run published, beside the audit chip. */
+.findings {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
 }

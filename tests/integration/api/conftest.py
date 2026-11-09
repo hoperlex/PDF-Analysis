@@ -342,6 +342,11 @@ class IngestProjectAdapter:
     def __init__(self, ingest: IngestService) -> None:
         self._ingest = ingest
 
+    def get_project(self, *, project_uid: str) -> ProjectView | None:
+        """`UI-PARITY-P0N`: one project as ``list_projects`` gives it, or ``None`` -- the port's own definition, so no
+        second reading of the project table is written here."""
+        return next((view for view in self.list_projects() if view.project_uid == project_uid), None)
+
     def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
         record = self._ingest.create_project(name)
         return ProjectView(
@@ -393,6 +398,21 @@ class IngestDocumentAdapter:
     def __init__(self, ingest: IngestService, session: Session) -> None:
         self._ingest = ingest
         self._session = session
+
+    # `D-74`: the document operations below were added to `DocumentPort` after this stand-in was written. None of the
+    # suites that wire it drives them (the shipped `bootstrap.adapters.DocumentAdapter` is proved against its own
+    # tests), so each fails loudly if one starts to; a silent default would be a second, unreviewed implementation.
+    def set_document_archived(self, **_: Any) -> DocumentVersionView:  # pragma: no cover - never called
+        raise AssertionError("this stand-in does not drive setDocumentArchived")
+
+    def rename_document(self, **_: Any) -> DocumentVersionView:  # pragma: no cover - never called
+        raise AssertionError("this stand-in does not drive renameDocument")
+
+    def set_document_tags(self, **_: Any) -> DocumentVersionView:  # pragma: no cover - never called
+        raise AssertionError("this stand-in does not drive setDocumentTags")
+
+    def list_document_tags(self, **_: Any) -> Any:  # pragma: no cover - never called
+        raise AssertionError("this stand-in does not drive listDocumentTags")
 
     def _view(self, record: Any) -> DocumentVersionView:
         ordinal = self._session.execute(
@@ -494,7 +514,7 @@ class IngestDocumentAdapter:
 
     def list_documents(
         self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
-        tag: str | None = None,
+        tag: str | None = None, audit_state: str | None = None, order: str | None = None,
     ) -> tuple[DocumentVersionView, ...]:
         """`R-5`. Delegated, which is exactly what the shipped `DocumentAdapter` does.
 
@@ -505,10 +525,17 @@ class IngestDocumentAdapter:
         adapter's own: this delegates to it, as a copy here once kept the section filter and
         missed the other two.
         """
+        import contextlib
+
         from auditmanager.bootstrap.adapters import DocumentAdapter
 
-        return tuple(DocumentAdapter(self._ingest).list_documents(
+        # `UI-PARITY-DOC-AUDIT`: the audit filter and order read the audit of every document in one statement, so
+        # the delegate gets this double's own session, as `document_audits` below does.
+        return tuple(DocumentAdapter(
+            self._ingest, lambda: contextlib.nullcontext(self._session)  # type: ignore[arg-type]
+        ).list_documents(
             project_uid=project_uid, section_code=section_code, include_archived=include_archived, tag=tag,
+            audit_state=audit_state, order=order,
         ))
 
     def list_versions(self, *, document_uid: str) -> tuple[DocumentVersionView, ...]:
@@ -516,6 +543,17 @@ class IngestDocumentAdapter:
             self._view(record)
             for record in self._ingest.list_versions(DocumentUid(document_uid))
         )
+
+    def document_audits(self, *, version_uids: Any) -> Any:
+        """`UI-PARITY-DOC-AUDIT`. The shipped adapter's own body over this double's session, as for the uploads and
+        `stream_content`: the suite drives the shipped read and not a second implementation."""
+        import contextlib
+
+        from auditmanager.bootstrap.adapters import DocumentAdapter
+
+        return DocumentAdapter(
+            self._ingest, lambda: contextlib.nullcontext(self._session)  # type: ignore[arg-type]
+        ).document_audits(version_uids=version_uids)
 
 
 class DatabaseFindingAdapter:
@@ -528,6 +566,10 @@ class DatabaseFindingAdapter:
     in for a projection ``B4`` does not publish, and the gap is reported rather than
     patched into ``B4``.
     """
+
+    def set_execution_status(self, **_: Any) -> Any:  # pragma: no cover - never called
+        """`D-74`: added to ``FindingPort`` after this stand-in; no suite that wires it drives ``setFindingExecutionStatus``."""
+        raise AssertionError("this stand-in does not drive setFindingExecutionStatus")
 
     _FINDINGS = text(
         """
@@ -676,6 +718,10 @@ class LedgerDecisionAdapter:
     #: command handler section 7 says the router passes the key through to -- and it is
     #: `B1`'s `CommandRepository`, because `auditmanager.decisions` publishes none.
     COMMAND_TYPE = "append_expert_decision"
+
+    def proposal_decision_journal(self, **_: Any) -> Any:  # pragma: no cover - never called
+        """`D-74`: added to ``DecisionPort`` after this stand-in; no suite that wires it drives the proposals' journal."""
+        raise AssertionError("this stand-in does not drive listProposalDecisionJournal")
 
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -857,7 +903,7 @@ class SeamRunAdapter:
     def estimate_run_cost(
         self, *, version_uid: str, executor_connection_id: str | None = None,
         reaudit_of_run_id: str | None = None, preset_id: str | None = None, relaxed_limits: bool = False,
-        executor_group_id: str | None = None,
+        executor_group_id: str | None = None, start_from_run_id: str | None = None, start_stage_id: str | None = None,
     ) -> Any:
         """`D-74`. The port declares it; this stand-in prices nothing, and says which dependency is missing."""
         raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="run_cost_estimator")

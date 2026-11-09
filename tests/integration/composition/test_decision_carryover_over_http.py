@@ -224,6 +224,11 @@ def test_a_confirmed_carryover_over_http(world) -> None:
         target_uid, "accept", "accepted",
     )
     assert "severity" not in event
+    # `UI-A-73`: the answer names the source as a structured link, the same one the history and the finding carry.
+    origin = {
+        "decision_id": decision_id, "finding_uid": source_uid, "version_uid": world["v1"], "version_ordinal": 1,
+    }
+    assert event["carried_from"] == origin
     assert event["comment"].startswith("Решение перенесено из версии 1 (сравнение версий)")
     for identity in (decision_id, source_uid, world["v1"], world["v2"]):
         assert identity in event["comment"]
@@ -231,8 +236,25 @@ def test_a_confirmed_carryover_over_http(world) -> None:
 
     history = world["client"].get(f"/findings/{target_uid}/decisions", headers=world["auth"])
     assert [item["decision_id"] for item in history.json()["items"]] == [event["decision_id"]]
+    assert history.json()["items"][0]["carried_from"] == origin
     source_history = world["client"].get(f"/findings/{source_uid}/decisions", headers=world["auth"])
     assert [item["decision_id"] for item in source_history.json()["items"]] == [decision_id]
+    assert "carried_from" not in source_history.json()["items"][0], "the source was decided directly"
+    # The finding, listed and read alone, says where its current verdict came from; the source finding does not.
+    detail = world["client"].get(f"/findings/{target_uid}", headers=world["auth"]).json()
+    assert detail["current_verdict"] == "accepted" and detail["current_verdict_carried_from"] == origin
+    assert "current_verdict_carried_from" not in world["client"].get(
+        f"/findings/{source_uid}", headers=world["auth"]).json()
+    run_id = detail["run_id"]
+    listed = {
+        item["finding_uid"]: item
+        for item in world["client"].get(f"/runs/{run_id}/findings", headers=world["auth"]).json()["items"]
+    }
+    assert listed[target_uid]["current_verdict_carried_from"] == origin
+    # The journal (and the knowledge base's finding half) marks the carried event and no other.
+    journal = world["client"].get("/decisions", headers=world["auth"], params={"project_uid": world["project_uid"]}).json()
+    marked = {item["decision_id"]: item.get("carried_from") for item in journal["items"]}
+    assert marked[event["decision_id"]] == origin and marked[decision_id] is None
 
     repeat = _carry(world, body, _key(world, "carry-first-again"))
     assert repeat.status_code == 201, repeat.content

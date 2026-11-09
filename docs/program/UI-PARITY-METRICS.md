@@ -110,6 +110,7 @@ not by documents or findings.
 
 ## 6. Not in this slice
 
-The header selector and the columns (waves 1 and 2); a per-document state, the «отказ» chip that shows why a document with only
-failed runs is `not_run` (`R-150r`) and the per-document «частично» marker; the separate count of optimisation proposals
+The header selector and the columns (waves 1 and 2); the «отказ» chip that shows why a document with only failed runs is
+`not_run` (`R-150r`; the per-document state itself, with its `partial` flag, is `DocumentVersion.audit` of `listDocuments` since
+contract `1.34.0`, `UI-PARITY-DOC-AUDIT`); the separate count of optimisation proposals
 (`R-150u`); the AR v3 group rule (`R-150t`, `Q-MD-9`); the other open questions of `D-303` (`Q-MD-8`, `Q-MD-10` … `Q-MD-21`).

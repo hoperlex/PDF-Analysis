@@ -19,6 +19,7 @@ from auditmanager.access.audit import (
     correlation_scope,
     reset_correlation_id,
 )
+from auditmanager.access.journal import AccessEvent, last_sign_in_times, read_access_events
 from auditmanager.access.models import (
     EMAIL_LOGIN_PATTERN,
     MAX_EMAIL_LENGTH,
@@ -72,6 +73,7 @@ __all__ = [
     "SELF_ACTION",
     "USER_UID_PATTERN",
     "USER_UID_PREFIX",
+    "AccessEvent",
     "Account",
     "AccountInvariantViolation",
     "AccountReference",
@@ -88,9 +90,11 @@ __all__ = [
     "UserUid",
     "bind_correlation_id",
     "correlation_scope",
+    "last_sign_in_times",
     "name_label",
     "normalize_email",
     "normalize_login",
     "normalize_person_name",
+    "read_access_events",
     "reset_correlation_id",
 ]

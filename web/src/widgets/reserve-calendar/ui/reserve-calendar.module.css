@@ -33,6 +33,12 @@
   font-size: var(--am-text-sm);
 }
 
+/* The date fields were 21.3 px tall: 24 px at the least (WCAG 2.5.8). */
+.start input,
+.selection input {
+  min-height: var(--am-target-min);
+}
+
 .selection {
   padding: calc(var(--am-gap-sm) * 0.75) var(--am-gap-sm);
   border: 1px solid var(--am-accent);
@@ -164,7 +170,9 @@
   font-weight: 500;
 }
 
+/* «Передать сюда» was 19 px tall: 24 px at the least. */
 .assign {
+  min-height: var(--am-target-min);
   margin: calc(var(--am-gap-xs) * 0.75) 0 0 calc(var(--am-gap-lg) + var(--am-gap-xs));
   padding: 0 calc(var(--am-gap-sm) * 0.75);
   border: 1px dashed var(--am-accent);
@@ -215,6 +223,7 @@
   font-size: var(--am-text-xs);
   line-height: 1.35;
   text-align: left;
+  text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
@@ -234,7 +243,7 @@
   background: var(--am-degraded-light);
 }
 
-.point[aria-pressed='true'] {
+.point[aria-current='true'] {
   border-color: var(--am-accent-strong);
   box-shadow: 0 0 0 1px var(--am-accent-strong);
 }

@@ -22,6 +22,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any, BinaryIO, get_args
 
+from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
@@ -46,11 +47,17 @@ from auditmanager.api.schemas.dashboard import (
     VerdictCountView,
 )
 from auditmanager.api.schemas.decisions import (
+    DecisionCarriedFromView,
     DecisionEventView,
     DecisionRecordView,
     decision_event_body,
 )
-from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
+from auditmanager.api.schemas.documents import (
+    DocumentActiveRunView,
+    DocumentAuditView,
+    DocumentVersionView,
+    ManifestEntryView,
+)
 from auditmanager.api.schemas.findings import (
     EvidenceView,
     FindingDetailView,
@@ -195,13 +202,39 @@ def _with_execution_status(session: Session, views: Sequence[Any]) -> list[Any]:
     ]
 
 
-def _estimated_finish(row: Any, samples: Sequence[Any]) -> Any:
-    from auditmanager.execution.eta import estimated_finish
-
-    if getattr(row, "state", None) not in ("leased", "running") or not samples:
+def _carried_from_view(origin: Any) -> DecisionCarriedFromView | None:
+    """`UI-A-73`: the wire view of a carried decision's origin; ``None`` for a decision made directly."""
+    if origin is None:
         return None
-    return estimated_finish(
-        samples, started_at=getattr(row, "started_at", None),
+    return DecisionCarriedFromView(
+        decision_id=origin.decision_id, finding_uid=origin.finding_uid,
+        version_uid=origin.version_uid, version_ordinal=origin.version_ordinal,
+    )
+
+
+def _with_carried_origin(session: Session, views: Sequence[Any]) -> list[Any]:
+    """`UI-A-73`: each finding whose current verdict was carried over from an earlier version, with its origin.
+
+    One read for the whole list; a finding decided directly (or not at all) is returned unchanged.
+    """
+    from dataclasses import replace
+
+    from auditmanager.decisions.public import current_verdict_origins
+
+    origins = current_verdict_origins(session, [view.finding_uid for view in views])
+    return [
+        replace(view, current_verdict_carried_from=_carried_from_view(origins[view.finding_uid]))
+        if view.finding_uid in origins else view
+        for view in views
+    ]
+
+
+def _estimated_finish(row: Any, samples: Sequence[Any]) -> Any:
+    """`R-151u`: a queue item's estimate -- the one rule of ``execution.eta`` (the run status calls it too)."""
+    from auditmanager.execution.eta import job_estimated_finish
+
+    return job_estimated_finish(
+        samples, job_state=getattr(row, "state", None), started_at=getattr(row, "started_at", None),
         analysis_profile_id=getattr(row, "analysis_profile_id", None), page_count=getattr(row, "page_count", None),
     )
 
@@ -375,6 +408,40 @@ class ExecutionAdapter(_SessionHolder):
                                  group_admitter=getattr(self._runs, "group_admitter", None),
                                  started_by_user_uid=user_uid,  # `R-151v`
                                  **explicit)
+            return result.run_id, result.replayed, _run_status_view(session, result.run_id)
+        new_id, replayed, view = self._write(write)
+        if not replayed:
+            self._runs.submit_existing(new_id)
+        return view
+
+    def start_run_from_stage(self, *, run_id: str, stage_id: str, user_uid: str, idempotency_key: str,
+                             cost_consent: dict[str, Any] | None = None) -> RunStatusView:
+        """`R-151i` (`UI-A-60`): a new run of the source's version that reuses the source's stage outputs before ``stage_id``.
+
+        The configuration is today's, as for ``reaudit_run`` (the same run adapter holds it); the new run is queued in the
+        same transaction and handed to the carrier afterwards, exactly as a re-audit is."""
+        from auditmanager.runs.commands import start_run_from_stage
+
+        profile, bundle, mode = self._runs.current_configuration()
+        budget = self._runs.input_budget_characters
+        routes = self._runs.section_profiles
+        explicit: dict[str, Any] = (
+            {"analysis_profile_id": profile, "prompt_bundle_id": bundle}
+            if routes is None
+            else {"section_profiles": routes}
+        )
+
+        def write(session: Session) -> tuple[str, bool, RunStatusView]:
+            result = start_run_from_stage(
+                session, source_run_id=run_id, start_stage_id=stage_id,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                provider_mode=mode, input_budget_characters=budget,
+                connection_route=self._runs.route_freezer,
+                cost_preflight=self._runs.cost_preflight if self._runs.require_cost_consent or cost_consent is not None else None,
+                cost_consent=cost_consent, cost_actor_uid=user_uid,
+                group_admitter=getattr(self._runs, "group_admitter", None),
+                started_by_user_uid=user_uid,  # `R-151v`
+                **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
         if not replayed:
@@ -860,10 +927,17 @@ class SectionAdapter(_SessionHolder):
 
 
 class DocumentAdapter:
-    """Documents. Like :class:`ProjectAdapter`, the service owns its sessions."""
+    """Documents. Like :class:`ProjectAdapter`, the service owns its sessions.
 
-    def __init__(self, service: Any) -> None:
+    ``sessions`` is for the audit reads only (`UI-PARITY-DOC-AUDIT`): the audit of a version is a read of its own
+    over the same database, as ``ProjectAdapter``'s counters are. It is optional so that a double built to upload
+    or stream a document does not have to invent one; asking such an adapter for audits is a refusal that says so,
+    not an empty answer.
+    """
+
+    def __init__(self, service: Any, sessions: sessionmaker[Session] | None = None) -> None:
         self._service = service
+        self._sessions = sessions
 
     def upload_document(
         self,
@@ -968,7 +1042,7 @@ class DocumentAdapter:
 
     def list_documents(
         self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
-        tag: str | None = None,
+        tag: str | None = None, audit_state: str | None = None, order: str | None = None,
     ) -> Sequence[DocumentVersionView]:
         from dataclasses import replace
 
@@ -986,11 +1060,74 @@ class DocumentAdapter:
             # `R-151e`: a tag filter keeps the documents carrying that tag, regardless of case.
             and (wanted is None or wanted in {t.casefold() for t in tags.get(view.document_uid, ())})
         )
-        if section_code is None:
+        if section_code is not None:
+            # `UI-PARITY-P0E` (`R-151l`): the confirmed classification of the current version decides;
+            # the legacy `section` column and any suggestion never do.
+            views = tuple(view for view in views if _classified_section(view) == section_code)
+        return self._with_audit_filter_and_order(views, audit_state=audit_state, order=order)
+
+    def _with_audit_filter_and_order(
+        self, views: tuple[DocumentVersionView, ...], *, audit_state: str | None, order: str | None,
+    ) -> tuple[DocumentVersionView, ...]:
+        """`UI-PARITY-DOC-AUDIT` (`UI-A-38`, `UI-A-49`): the audit filter and order, over the whole narrowed listing.
+
+        Applied here, before the router cuts a page, so that the cursor, the end of the listing and every figure
+        a screen derives from it are those of the narrowed and ordered listing. With neither asked for, nothing is
+        read and the views are returned untouched (the router reads the audits of the page it cut).
+        """
+        from dataclasses import replace
+
+        from auditmanager.dashboard import AUDIT_STATES, audit_order_key
+
+        if audit_state is not None and audit_state not in AUDIT_STATES:
+            raise ValueError(f"{audit_state!r} is not an audit state")
+        if order not in (None, "published", "audit"):
+            raise ValueError(f"{order!r} is not a document order")
+        if audit_state is None and order != "audit":
             return views
-        # `UI-PARITY-P0E` (`R-151l`): the confirmed classification of the current version decides;
-        # the legacy `section` column and any suggestion never do.
-        return tuple(view for view in views if _classified_section(view) == section_code)
+        audits = self.document_audits(version_uids=[view.version_uid for view in views])
+        audited = [(view, audits[view.version_uid]) for view in views]
+        if audit_state is not None:
+            audited = [(view, audit) for view, audit in audited if audit.state == audit_state]
+        if order == "audit":
+            audited.sort(key=lambda pair: audit_order_key(pair[1].state, pair[0].display_title, pair[0].version_uid))
+        return tuple(replace(view, audit=audit) for view, audit in audited)
+
+    def document_audits(
+        self, *, version_uids: Sequence[str]
+    ) -> Mapping[str, DocumentAuditView]:
+        """`UI-A-46`: one statement for all the named versions (``DocumentAuditReadModel.audits``).
+
+        The record is copied field for field; the state and the flag are the read model's
+        ``audit_state`` and nothing is classified here. A name that is no version is ``not_found``.
+        """
+        from auditmanager.dashboard import DocumentAuditReadModel
+
+        names = tuple(dict.fromkeys(version_uids))
+        if not names:
+            return {}
+        if self._sessions is None:
+            raise RuntimeError(
+                "DocumentAdapter was built without a session factory, so it cannot read audits"
+            )
+        with self._sessions() as session:
+            records = DocumentAuditReadModel().audits(session, version_uids=names)
+        if any(name not in records for name in names):
+            raise _not_found("Version")
+        return {
+            name: DocumentAuditView(
+                state=record.state,
+                partial=record.partial,
+                result_run_id=record.result_run_id,
+                finding_count=record.finding_count,
+                undecided_finding_count=record.undecided_finding_count,
+                # `UI-A-47`: the run in flight, read in the same statement as the audit; absent when none.
+                active_run=None if record.active_run_id is None else DocumentActiveRunView(
+                    run_id=record.active_run_id, state=record.active_run_state,
+                ),
+            )
+            for name, record in records.items()
+        }
 
     def set_document_archived(
         self, *, project_uid: str, document_uid: str, archived: bool, user_uid: str, idempotency_key: str,
@@ -1113,8 +1250,16 @@ class RunAdapter(_SessionHolder):
         cost_preflight: Any = None,
         require_cost_consent: bool = False,
         group_admitter: Any = None,
+        ar_v3_start_allowed: bool = False,
     ) -> None:
         super().__init__(session_factory)
+        # `AR-V3-OPT-IN` (design 4.2). The deployment's allowance to **start** an AR v3 group or to ask what one costs
+        # (``AR_V3_BETA_START_ALLOWED``, read once by the composition root, ``False`` by default and for every bare
+        # adapter a test builds). The pack alone no longer allows a start; execution, reading and review need only the
+        # pack. ``test_composition_pins_the_v3_start_allowance`` pins what the root passes.
+        if type(ar_v3_start_allowed) is not bool:
+            raise ValueError("ar_v3_start_allowed must be a boolean")
+        self._ar_v3_start_allowed = ar_v3_start_allowed
         # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 13). Admits a start on an executor group, or by the routing rules
         # while the mode is `rules`, in the start's own transaction; ``None`` is the `environment` source (and the many
         # tests that build a bare adapter): a start that names a group is then refused, and one that names nothing is
@@ -1180,10 +1325,25 @@ class RunAdapter(_SessionHolder):
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
                           reaudit_of_run_id: str | None = None,
                           preset_id: str | None = None, relaxed_limits: bool = False,
-                          executor_group_id: str | None = None) -> models.RunCostEstimate:
+                          executor_group_id: str | None = None,
+                          start_from_run_id: str | None = None,
+                          start_stage_id: str | None = None) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
         def estimate(session):
+            if start_from_run_id is not None or start_stage_id is not None:
+                # `R-151i`: the price of the stages a run started from a stage of an earlier run computes. Both fields or
+                # neither, and nothing that chooses a route: the new run follows today's, as a re-audit does.
+                if start_from_run_id is None or start_stage_id is None:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="start_stage_id", constraint="start_from_pair")
+                if (reaudit_of_run_id is not None or executor_connection_id is not None or preset_id is not None
+                        or relaxed_limits or executor_group_id is not None):
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="start_from_run_id", constraint="server_selected_route")
+                value = self._cost_preflight.estimate_from_stage(
+                    session, run_id=start_from_run_id, start_stage_id=start_stage_id)
+                if value.as_dict()["version_uid"] != version_uid:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="version_uid", constraint="reaudit_source_version")
+                return value
             if reaudit_of_run_id is not None:
                 if (executor_connection_id is not None or preset_id is not None or relaxed_limits
                         or executor_group_id is not None):
@@ -1198,9 +1358,22 @@ class RunAdapter(_SessionHolder):
         value = self._read(estimate)
         return models.RunCostEstimate.model_validate(value.as_dict())
 
+    def _ar_v3_installed_pack_state(self) -> bool:
+        """Whether a reviewed pack is installed, as group start decides it (the registry, not the manifest record)."""
+        registry = self._ar_v3_pack_registry
+        return registry is not None and registry.select_beta() is not None
+
     def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        # `AR-V3-OPT-IN`: asked for a price the start would refuse, the answer is the start's refusal, not a figure. With no
+        # pack installed this passes and the estimate gives the answer it always gave (`dependency_unavailable`).
+        from auditmanager.runs.public import require_start_allowed
+
+        require_start_allowed(
+            pack_installed=self._ar_v3_installed_pack_state(),
+            start_allowed=self._ar_v3_start_allowed,
+        )
         value = self._read(lambda session: self._cost_preflight.estimate_group(session,
             version_uid=version_uid, relaxed_limits=relaxed_limits))
         return models.RunCostEstimate.model_validate(value.as_dict())
@@ -1209,6 +1382,7 @@ class RunAdapter(_SessionHolder):
         self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
+        started_by_user_uid: str | None = None,
     ) -> models.ArV3BetaGroup:
         """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
 
@@ -1240,6 +1414,10 @@ class RunAdapter(_SessionHolder):
                 cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
                 cost_consent=cost_consent,
                 cost_actor_uid=cost_actor_uid,
+                # `AR-V3-OPT-IN`: the allowance is checked inside the command, after the replay branches; the starter is
+                # recorded on each member as the ordinary start records it (`R-151v`).
+                start_allowed=self._ar_v3_start_allowed,
+                started_by_user_uid=started_by_user_uid,
             )
             if started.replayed:
                 return started
@@ -1287,6 +1465,8 @@ class RunAdapter(_SessionHolder):
         pack = installed.pack
         return models.ArV3BetaPackStatus(
             state="installed",
+            # `AR-V3-OPT-IN`: whether this deployment allows a start now (installed is capability; this is permission).
+            start_allowed=self._ar_v3_start_allowed,
             analysis_profile_id=pack.analysis_profile_id,
             prompt_bundle_id=pack.prompt_bundle_id,
             pack_sha256=pack.sha256,
@@ -1682,6 +1862,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         preset_of_revision,
         run_queue_reason,
     )
+    from auditmanager.execution.eta import run_estimated_finish
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
 
@@ -1712,10 +1893,22 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     # `stage_result.metrics` -- `D-15` measures that pair as a sum over attempts wearing
     # one attempt's provenance, and that ambiguity is not being inherited into a contract.
     cost = repository.cost(session, run_id)
+    # `AR-V3-OPT-IN` (design 4.4): which analysis produced the run, derived from its pinned pair (one definition,
+    # ``runs.analysis_kind``); a member of an AR v3 group also names its group and scope, read from the membership row.
+    from auditmanager.runs.public import ANALYSIS_AR_V3_BETA, analysis_kind, ar_v3_membership
+
+    kind = analysis_kind(run.analysis_profile_id, run.prompt_bundle_id)
+    membership = ar_v3_membership(session, run_id) if kind == ANALYSIS_AR_V3_BETA else None
     return RunStatusView(
+        analysis_kind=kind,
+        ar_v3_group_id=None if membership is None else membership[0],
+        ar_v3_scope_id=None if membership is None else membership[1],
         started_by_user_uid=started_by,
         started_by_label=started_by_label,
         reaudit_of_run_id=run.reaudit_of_run_id,
+        # `R-151i`: both or neither (the database holds the pair). ``getattr`` as for the starter above: a stand-in older
+        # suites hand this reader has neither.
+        started_from_run_id=getattr(run, "started_from_run_id", None), start_stage_id=getattr(run, "start_stage_id", None),
         # `W55A-PIN-01` (R-113). The snapshot the run pinned at creation, from the row;
         # `run_status_body` renders it only when one was pinned.
         norms_snapshot_id=run.norms_snapshot_id,
@@ -1766,6 +1959,11 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
             else None
         ),
         **_group_status_fields(session, run, chosen),  # EXEC2-GROUP-RUN-01
+        # `UI-A-65` / `UI-B-45`: the estimate of the queue item of this run, by the same function; asked only of a run
+        # that has been admitted and is not terminal (a finished run costs no query), absent without enough history.
+        estimated_finish_at=(
+            run_estimated_finish(session, run_id) if run.state in ("queued", "running", "validating") else None
+        ),
         stages=tuple(
             StageStateView(
                 stage_id=stage.stage_id,
@@ -1973,10 +2171,21 @@ class BlockAdapter(_SessionHolder):
     """
 
     def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        import threading
+        from collections import OrderedDict
+
         super().__init__(session_factory)
         self._blob_store = blob_store
+        # `listRunFindingBlocks`'s derived inputs, by the digests of the three documents they come from (see `_run_geometry`).
+        self._geometry_cache: "OrderedDict[tuple[Any, ...], tuple[BlockAdapter._RunGeometry, int]]" = OrderedDict()
+        self._geometry_cache_bytes = 0
+        self._geometry_cache_lock = threading.Lock()
 
     def get_block_index(self, *, version_uid: str) -> VersionBlockIndexView:
+        return self._read(lambda session: self.block_index_in(session, version_uid))
+
+    def block_index_in(self, session: Session, version_uid: str) -> VersionBlockIndexView:
+        """``getVersionBlocks`` over a session the caller owns (`ADR-0027`: the decision memory reads it in the decision's transaction)."""
         from auditmanager.analysis.ports.artifacts import ROLE_BLOCK_INDEX
         from auditmanager.api.schemas.blocks import (
             STATUS_NOT_PRODUCED,
@@ -1987,64 +2196,61 @@ class BlockAdapter(_SessionHolder):
         from auditmanager.runs import RunRepository
         from auditmanager.shared.identity import VersionUid
 
-        def work(session: Session) -> VersionBlockIndexView:
-            # Proves the parent exists before anything else is read, the same rule
-            # `RunAdapter.list_runs` follows for the same reason `D-67` states: an
-            # unknown version must answer `404`, never the empty-but-present shape below.
-            DocumentRepository().get_version(session, VersionUid.parse(version_uid))
+        # Proves the parent exists before anything else is read, the same rule
+        # `RunAdapter.list_runs` follows for the same reason `D-67` states: an
+        # unknown version must answer `404`, never the empty-but-present shape below.
+        DocumentRepository().get_version(session, VersionUid.parse(version_uid))
 
-            repository = RunRepository()
-            for run in repository.list_for_version(session, version_uid):
-                stage = next(
-                    (
-                        s
-                        for s in repository.stage_results(session, str(run.run_id))
-                        if s.stage_id == "page_geometry_extraction"
-                    ),
-                    None,
-                )
-                if stage is None or stage.status != "succeeded":
-                    continue
-                artifact = next(
-                    (a for a in stage.artifacts if a.get("role") == ROLE_BLOCK_INDEX),
-                    None,
-                )
-                if artifact is None:
-                    continue
-                document = self._read_artifact(artifact)
-                return VersionBlockIndexView(
-                    version_uid=version_uid,
-                    status=STATUS_PRODUCED,
-                    produced_by_run_id=str(run.run_id),
-                    text_layer_sha256=document.get("text_layer_sha256"),
-                    block_count=len(document.get("blocks", ())),
-                    blocks=tuple(
-                        BlockGeometryView(
-                            block_id=b["block_id"],
-                            page_number=b["page_number"],
-                            block_ordinal=b["block_ordinal"],
-                            bbox=b["bbox"],
-                            bbox_unit=b["bbox_unit"],
-                            bbox_origin=b["bbox_origin"],
-                            char_start=b["char_start"],
-                            char_end=b["char_end"],
-                        )
-                        for b in document.get("blocks", ())
-                    ),
-                )
-            # No run of this version ever reached page_geometry_extraction
-            # successfully -- absent, never rendered as the same bytes a version with
-            # genuinely zero blocks would answer.
+        repository = RunRepository()
+        for run in repository.list_for_version(session, version_uid):
+            stage = next(
+                (
+                    s
+                    for s in repository.stage_results(session, str(run.run_id))
+                    if s.stage_id == "page_geometry_extraction"
+                ),
+                None,
+            )
+            if stage is None or stage.status != "succeeded":
+                continue
+            artifact = next(
+                (a for a in stage.artifacts if a.get("role") == ROLE_BLOCK_INDEX),
+                None,
+            )
+            if artifact is None:
+                continue
+            document = self._read_artifact(artifact)
             return VersionBlockIndexView(
                 version_uid=version_uid,
-                status=STATUS_NOT_PRODUCED,
-                produced_by_run_id=None,
-                text_layer_sha256=None,
-                block_count=0,
-                blocks=(),
+                status=STATUS_PRODUCED,
+                produced_by_run_id=str(run.run_id),
+                text_layer_sha256=document.get("text_layer_sha256"),
+                block_count=len(document.get("blocks", ())),
+                blocks=tuple(
+                    BlockGeometryView(
+                        block_id=b["block_id"],
+                        page_number=b["page_number"],
+                        block_ordinal=b["block_ordinal"],
+                        bbox=b["bbox"],
+                        bbox_unit=b["bbox_unit"],
+                        bbox_origin=b["bbox_origin"],
+                        char_start=b["char_start"],
+                        char_end=b["char_end"],
+                    )
+                    for b in document.get("blocks", ())
+                ),
             )
-
-        return self._read(work)
+        # No run of this version ever reached page_geometry_extraction
+        # successfully -- absent, never rendered as the same bytes a version with
+        # genuinely zero blocks would answer.
+        return VersionBlockIndexView(
+            version_uid=version_uid,
+            status=STATUS_NOT_PRODUCED,
+            produced_by_run_id=None,
+            text_layer_sha256=None,
+            block_count=0,
+            blocks=(),
+        )
 
     # `W55B-GEOMETRY-01`. The two portal-block reads, which `W55B-SEAL-01` sealed as
     # stubs answering `503 dependency_unavailable`.
@@ -2089,43 +2295,126 @@ class BlockAdapter(_SessionHolder):
         ``page_geometry_extraction`` succeeded **and** published ``geometry.portal_blocks``:
         a run over a version without a bundle succeeds without it and is not portal geometry.
         """
+        return self._read(lambda session: self.portal_source_in(session, version_uid))
+
+    def portal_source_in(self, session: Session, version_uid: str) -> "BlockAdapter._PortalSource | None":
+        """:meth:`_portal_source` over a session the caller owns."""
+        from auditmanager.documents.repository import DocumentRepository
+        from auditmanager.runs import RunRepository
+        from auditmanager.shared.identity import VersionUid
+
+        DocumentRepository().get_version(session, VersionUid.parse(version_uid))
+        repository = RunRepository()
+        for run in repository.list_for_version(session, version_uid):
+            source = self._portal_source_of(repository, session, str(run.run_id))
+            if source is not None:
+                return source
+        return None
+
+    @staticmethod
+    def _portal_source_of(repository: Any, session: Session, run_id: str) -> "BlockAdapter._PortalSource | None":
+        """What the one run published as portal geometry, or ``None`` when its ``page_geometry_extraction`` did not succeed or
+        published no ``geometry.portal_blocks`` (a run over a version without a bundle succeeds without it)."""
         from auditmanager.analysis.public import (
             ROLE_PAGE_CROPS,
             ROLE_PORTAL_BLOCKS,
             ROLE_RECOGNISED_TEXT,
         )
-        from auditmanager.documents.repository import DocumentRepository
-        from auditmanager.runs import RunRepository
-        from auditmanager.shared.identity import VersionUid
 
-        def work(session: Session) -> BlockAdapter._PortalSource | None:
-            DocumentRepository().get_version(session, VersionUid.parse(version_uid))
-            repository = RunRepository()
-            for run in repository.list_for_version(session, version_uid):
-                stages = {
-                    stage.stage_id: stage
-                    for stage in repository.stage_results(session, str(run.run_id))
-                }
-                geometry = stages.get("page_geometry_extraction")
-                if geometry is None or geometry.status != "succeeded":
-                    continue
-                portal_blocks = self._artifact_reference(geometry.artifacts, ROLE_PORTAL_BLOCKS)
-                if portal_blocks is None:
-                    continue
-                preparation = stages.get("source_preparation")
-                return BlockAdapter._PortalSource(
-                    run_id=str(run.run_id),
-                    portal_blocks=portal_blocks,
-                    page_crops=self._artifact_reference(geometry.artifacts, ROLE_PAGE_CROPS),
-                    recognised_text=(
-                        None
-                        if preparation is None
-                        else self._artifact_reference(preparation.artifacts, ROLE_RECOGNISED_TEXT)
-                    ),
-                )
+        stages = {stage.stage_id: stage for stage in repository.stage_results(session, run_id)}
+        geometry = stages.get("page_geometry_extraction")
+        if geometry is None or geometry.status != "succeeded":
             return None
+        portal_blocks = BlockAdapter._artifact_reference(geometry.artifacts, ROLE_PORTAL_BLOCKS)
+        if portal_blocks is None:
+            return None
+        preparation = stages.get("source_preparation")
+        return BlockAdapter._PortalSource(
+            run_id=run_id,
+            portal_blocks=portal_blocks,
+            page_crops=BlockAdapter._artifact_reference(geometry.artifacts, ROLE_PAGE_CROPS),
+            recognised_text=(
+                None
+                if preparation is None
+                else BlockAdapter._artifact_reference(preparation.artifacts, ROLE_RECOGNISED_TEXT)
+            ),
+        )
 
-        return self._read(work)
+    def evidence_boxes_in(
+        self, session: Session, run_id: str
+    ) -> dict[str, tuple[tuple[float, float, float, float], str, str]]:
+        """The boxes of the text blocks of **the run's own** block index by block reference (``b_NNNNNN``): ``(x0, y0, x1, y1), unit, origin``.
+
+        A block reference is an anchor inside the artifact of the run that minted it (``page_geometry_extraction``'s ``_build_blocks``:
+        «never a foreign key»); two runs of one version may number their lines differently (other text extraction options), so the
+        evidence of a finding is looked up in the index of the run that published the finding, never in the version's newest run's.
+        Empty when that run produced no block index (its geometry stage did not succeed or published none): an absent box is NULL in
+        the memory, not another run's box. The document is read with the digest the run's ``stage_result`` recorded, as
+        :meth:`list_run_finding_blocks` reads it. For the decision memory (`ADR-0027`), over the caller's session.
+        """
+        from auditmanager.analysis.public import ROLE_BLOCK_INDEX
+        from auditmanager.runs import RunRepository
+
+        repository = RunRepository()
+        run = self._run_in(repository, session, run_id)
+        geometry = next(
+            (stage for stage in repository.stage_results(session, run_id) if stage.stage_id == "page_geometry_extraction"), None,
+        )
+        reference = (
+            None if geometry is None or geometry.status != "succeeded"
+            else self._artifact_reference(geometry.artifacts, ROLE_BLOCK_INDEX)
+        )
+        if reference is None:
+            return {}
+        index = self._portal_document(reference, ROLE_BLOCK_INDEX, run.version_uid)
+        return {
+            block["block_id"]: (
+                (block["bbox"]["x0"], block["bbox"]["y0"], block["bbox"]["x1"], block["bbox"]["y1"]),
+                block["bbox_unit"],
+                block["bbox_origin"],
+            )
+            for block in index["blocks"]
+        }
+
+    @staticmethod
+    def _run_in(repository: Any, session: Session, run_id: str) -> Any:
+        run = repository.find(session, run_id)
+        if run is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
+        return run
+
+    def portal_crops_in(self, session: Session, run_id: str) -> tuple[Mapping[str, Any], ...]:
+        """The crop records of **the run's own** portal geometry (``geometry.page_crops``), each with the portal's description of its
+        IMAGE block under ``portal_description`` when it has one; empty when that run produced no portal geometry or crops.
+
+        The run is the finding's run (as :meth:`evidence_boxes_in`): a run that published no portal geometry yields no crops, and the
+        crops of a later run of the version are not borrowed. Every artifact is read with the digest its ``stage_result`` recorded,
+        as :meth:`list_portal_blocks` reads it: a blob that is missing or differs is ``storage_integrity_error``, never a shorter
+        answer. An absent reference is an absent crop manifest (a run before the crop policy), which is an explicit empty answer and
+        not an error. For the decision memory (`ADR-0027`).
+        """
+        from auditmanager.analysis.public import KIND_PORTAL_DESCRIPTION, ROLE_PAGE_CROPS, ROLE_RECOGNISED_TEXT
+        from auditmanager.runs import RunRepository
+
+        repository = RunRepository()
+        run = self._run_in(repository, session, run_id)
+        version_uid = run.version_uid
+        source = self._portal_source_of(repository, session, run_id)
+        if source is None or source.page_crops is None:
+            return ()
+        manifest = self._portal_document(source.page_crops, ROLE_PAGE_CROPS, version_uid)
+        records = tuple(manifest["crops"])
+        if not records:
+            return ()
+        descriptions: dict[str, str] = {}
+        if source.recognised_text is not None:
+            recognised = self._portal_document(source.recognised_text, ROLE_RECOGNISED_TEXT, version_uid)
+            descriptions = {
+                entry["portal_block_id"]: entry["text"]
+                for entry in recognised["entries"]
+                if entry.get("kind") == KIND_PORTAL_DESCRIPTION and entry.get("text")
+            }
+        return tuple({**record, "portal_description": descriptions.get(record["portal_block_id"])} for record in records)
 
     def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
         """`UI-PARITY-P0O`: one read of the portal blocks document (not the crops, not the recognised text) folded into
@@ -2149,6 +2438,166 @@ class BlockAdapter(_SessionHolder):
                 **({"page_label": next(iter(labels[page]))} if len(labels[page]) == 1 else {}),
             }) for page in sorted(counts)],
         )
+
+    def list_run_finding_blocks(self, *, run_id: str) -> models.RunFindingBlockLinks:
+        """`UI-PARITY-C6`: the portal blocks that hold each published finding's evidence, derived on read.
+
+        Three saved documents are joined, each read with the digest its stage result recorded: the **run's** block
+        index (``geometry.block_index``, the line boxes the evidence's character spans index) and page inventory
+        (``prepared.page_inventory``, the page sizes), and the **version's** portal blocks (the document
+        ``listVersionPortalBlocks`` serves). The rule and its known misses are
+        ``analysis.geometry.finding_blocks``'s; nothing is stored and no evidence is changed.
+        """
+        from auditmanager.analysis.public import (
+            ROLE_BLOCK_INDEX,
+            ROLE_PAGE_INVENTORY,
+            EvidenceSpan,
+            link_evidence,
+        )
+        from auditmanager.findings import (
+            group_published_findings, published_finding_evidence, published_findings,
+        )
+        from auditmanager.runs import RunRepository
+
+        def read(session: Session) -> tuple[Any, Mapping[str, Any], Any, Any]:
+            repository = RunRepository()
+            run = repository.find(session, run_id)
+            if run is None:
+                raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
+            stages = {stage.stage_id: stage for stage in repository.stage_results(session, run_id)}
+            groups = group_published_findings(published_findings(session, run_id))
+            return run, stages, groups, published_finding_evidence(session, run_id)
+
+        run, stages, groups, evidence = self._read(read)
+
+        def absent() -> models.RunFindingBlockLinks:
+            return models.RunFindingBlockLinks(
+                run_id=run_id, version_uid=run.version_uid, status="not_produced", unlinked_pages=[], items=[],
+            )
+
+        geometry, preparation = stages.get("page_geometry_extraction"), stages.get("source_preparation")
+        index_ref = (
+            None if geometry is None or geometry.status != "succeeded"
+            else self._artifact_reference(geometry.artifacts, ROLE_BLOCK_INDEX)
+        )
+        inventory_ref = (
+            None if preparation is None or preparation.status != "succeeded"
+            else self._artifact_reference(preparation.artifacts, ROLE_PAGE_INVENTORY)
+        )
+        source = self._portal_source(run.version_uid)
+        if index_ref is None or inventory_ref is None or source is None:
+            return absent()
+
+        geometry_of_run = self._run_geometry(index_ref, inventory_ref, source.portal_blocks, run.version_uid)
+        pages, lines, boxes = geometry_of_run.pages, geometry_of_run.lines, geometry_of_run.boxes
+        items = []
+        for group in sorted(groups, key=lambda group: group.canonical.finding_uid):
+            canonical = group.canonical.finding_observation_id
+            spans = [
+                EvidenceSpan(item.page_number, item.char_start, item.char_end)
+                for item in evidence if item.finding_observation_id == canonical
+            ]
+            items.append(models.FindingBlockLink(
+                finding_uid=group.canonical.finding_uid,
+                portal_block_ids=list(link_evidence(spans, lines=lines, pages=pages, blocks=boxes)),
+            ))
+        return models.RunFindingBlockLinks(
+            run_id=run_id, version_uid=run.version_uid, status="produced",
+            unlinked_pages=list(geometry_of_run.unlinked_pages),
+            items=items,
+        )
+
+    class _RunGeometry:
+        """What :meth:`list_run_finding_blocks` derives from the run's block index and page inventory and the version's portal
+        blocks, and nothing else: immutable, so a cached copy can be shared by concurrent reads."""
+
+        __slots__ = ("pages", "lines", "boxes", "unlinked_pages")
+
+        def __init__(
+            self, *, pages: Mapping[int, tuple[float, float]], lines: Mapping[int, tuple[Any, ...]],
+            boxes: tuple[Any, ...], unlinked_pages: tuple[int, ...],
+        ) -> None:
+            self.pages, self.lines, self.boxes, self.unlinked_pages = pages, lines, boxes, unlinked_pages
+
+    #: How many runs' derived geometry one adapter keeps, and the most the three documents of all of them may declare together.
+    #: A document larger than the budget is read and derived as before, and not kept.
+    _GEOMETRY_CACHE_ENTRIES = 8
+    _GEOMETRY_CACHE_BYTES = 48 * 1024 * 1024
+
+    def _run_geometry(
+        self, index_ref: Mapping[str, Any], inventory_ref: Mapping[str, Any], portal_ref: Mapping[str, Any], version_uid: str,
+    ) -> "BlockAdapter._RunGeometry":
+        """The derived inputs of one run's relation, from a per-process cache when the same three documents were derived before.
+
+        The key is the version and the SHA-256 and size each ``stage_result`` recorded for the three artifacts, so a hit is the
+        very content a miss verified and parsed (the blob store is content-addressed, ``_verified_bytes`` holds every read to that
+        declaration): **a miss is the whole truth** and a hit changes no answer. The cache is lost with the process and is never
+        read by anything but this method. What a hit does not do is read the object store again, so an object that disappears
+        or is damaged afterwards is noticed by the next miss (another document, an eviction, a restart), not by a hit; the
+        findings and their evidence, which decide the answer, are read from the database on every call.
+        """
+        from types import MappingProxyType
+
+        from auditmanager.analysis.public import (
+            ROLE_BLOCK_INDEX,
+            ROLE_PAGE_INVENTORY,
+            ROLE_PORTAL_BLOCKS,
+            PortalBox,
+            TextLine,
+            linkable_pages,
+        )
+
+        declared = [
+            (role, reference.get("sha256"), reference.get("size_bytes"))
+            for role, reference in (
+                (ROLE_BLOCK_INDEX, index_ref), (ROLE_PAGE_INVENTORY, inventory_ref), (ROLE_PORTAL_BLOCKS, portal_ref),
+            )
+        ]
+        weight = sum(int(size) for _, sha, size in declared if sha is not None and size is not None)
+        key = (version_uid, *declared) if all(sha is not None and size is not None for _, sha, size in declared) else None
+        if key is not None:
+            with self._geometry_cache_lock:
+                hit = self._geometry_cache.get(key)
+                if hit is not None:
+                    self._geometry_cache.move_to_end(key)
+                    return hit[0]
+
+        portal = self._portal_document(portal_ref, ROLE_PORTAL_BLOCKS, version_uid)
+        index = self._portal_document(index_ref, ROLE_BLOCK_INDEX, version_uid)
+        inventory = self._portal_document(inventory_ref, ROLE_PAGE_INVENTORY, version_uid)
+        pages = linkable_pages(portal["pages"], {int(page["page_number"]): page for page in inventory["pages"]})
+        collected: dict[int, list[Any]] = {}
+        for block in index["blocks"]:
+            box = block["bbox"]
+            collected.setdefault(int(block["page_number"]), []).append(TextLine(
+                int(block["page_number"]), int(block["char_start"]), int(block["char_end"]),
+                float(box["x0"]), float(box["y0"]), float(box["x1"]), float(box["y1"]),
+            ))
+        built = BlockAdapter._RunGeometry(
+            pages=MappingProxyType(pages),
+            lines=MappingProxyType({page: tuple(page_lines) for page, page_lines in collected.items()}),
+            boxes=tuple(
+                PortalBox(
+                    block["portal_block_id"], int(block["page_number"]),
+                    float(block["bbox_norm"][0]), float(block["bbox_norm"][1]),
+                    float(block["bbox_norm"][2]), float(block["bbox_norm"][3]),
+                )
+                for block in portal["blocks"]
+            ),
+            unlinked_pages=tuple(sorted(int(page["page_number"]) for page in portal["pages"] if int(page["page_number"]) not in pages)),
+        )
+        if key is not None and weight <= self._GEOMETRY_CACHE_BYTES:
+            with self._geometry_cache_lock:
+                if key not in self._geometry_cache:
+                    self._geometry_cache[key] = (built, weight)
+                    self._geometry_cache_bytes += weight
+                while self._geometry_cache and (
+                    len(self._geometry_cache) > self._GEOMETRY_CACHE_ENTRIES
+                    or self._geometry_cache_bytes > self._GEOMETRY_CACHE_BYTES
+                ):
+                    _, (_, evicted) = self._geometry_cache.popitem(last=False)
+                    self._geometry_cache_bytes -= evicted
+        return built
 
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         from auditmanager.analysis.public import (
@@ -2367,7 +2816,7 @@ class FindingAdapter(_SessionHolder):
                 views = [v for v in views if v.category == category]
             if verdict is not None:
                 views = [v for v in views if v.current_verdict == verdict]
-            return tuple(_with_execution_status(session, views))
+            return tuple(_with_carried_origin(session, _with_execution_status(session, views)))
 
         return self._read(work)
 
@@ -2397,10 +2846,10 @@ class FindingAdapter(_SessionHolder):
             history = decision_history(session, finding_uid)
             comments = [e.comment for e in history if e.comment]
             return FindingDetailView(
-                finding=_with_execution_status(session, [_finding_view(
+                finding=_with_carried_origin(session, _with_execution_status(session, [_finding_view(
                     row, evidence, verdict, matches[0].merged,
                     _v3_beta_citations(session, members),
-                )])[0],
+                )]))[0],
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),
             )
@@ -2480,7 +2929,15 @@ class DecisionAdapter(_SessionHolder):
     def decision_history(self, *, finding_uid: str) -> Sequence[DecisionEventView]:
         from auditmanager.decisions import decision_history as history
 
-        return self._read(lambda s: tuple(_event_view(e) for e in history(s, finding_uid)))
+        from auditmanager.decisions.public import carried_origins
+
+        def work(session: Session) -> Sequence[DecisionEventView]:
+            events = history(session, finding_uid)
+            # `UI-A-73`: the source of each carried event, read once for the whole history.
+            origins = carried_origins(session, [e.decision_id for e in events if e.carried_from_decision_id])
+            return tuple(_event_view(e, origins.get(e.decision_id)) for e in events)
+
+        return self._read(work)
 
     def proposal_decision_journal(self, *, project_uid: str | None = None) -> Sequence[models.ProposalDecisionRecord]:
         """`R-151h`: the proposal decision journal, each actor named by the account's display label."""
@@ -2569,10 +3026,11 @@ def _record_view(entry: Any) -> DecisionRecordView:
         severity=entry.severity,
         comment=entry.comment,
         section=entry.section,
+        carried_from=_carried_from_view(entry.carried_from),
     )
 
 
-def _event_view(event: Any) -> DecisionEventView:
+def _event_view(event: Any, origin: Any = None) -> DecisionEventView:
     return DecisionEventView(
         decision_id=event.decision_id,
         finding_uid=event.finding_uid,
@@ -2583,6 +3041,7 @@ def _event_view(event: Any) -> DecisionEventView:
         verdict=event.verdict,
         severity=event.severity,
         comment=event.comment,
+        carried_from=_carried_from_view(origin),
     )
 
 
@@ -2599,6 +3058,265 @@ class _AppendedDecision:
     @property
     def current_verdict(self) -> str:
         return self._verdict
+
+
+#: `ADR-0027`: every case of the first phase is ``test`` -- the closed beta runs on test data, and ``test`` is the safe direction because
+#: an export defaults to ``real`` only. Phase M2 makes it an installation setting; that must land before real client data does (`D-390`).
+MEMORY_DATA_CLASS = "test"
+
+
+class MemoryCaptureAssembler:
+    """The decision memory's capture (`ADR-0027`, `DECISION-MEMORY-01` section 7): build one snapshot and hand it to the memory.
+
+    Registered as the :class:`~auditmanager.decisions.public.DecisionRecorded` port, so ``record_decision`` calls it after a new
+    event is inserted, in the caller's transaction; the sweep calls :meth:`capture` for events recorded before there was a memory.
+    It lives in the composition root because it reads five contexts (findings, documents, analysis geometry, decisions, the memory)
+    through their public modules, and none of them may import another.
+
+    ``geometry`` is anything with ``evidence_boxes_in(session, run_id)`` and ``portal_crops_in(session, run_id)`` --
+    :class:`BlockAdapter` in production. Both read **the run of the decided finding** (``b_NNNNNN`` is an anchor inside one run's
+    artifact, never a key across runs). The artifacts they read are only read for an observation that has no case yet; a later
+    decision on a known observation reads nothing outside the database.
+
+    A failure propagates (the decision fails loudly): nothing here falls back to a case without its crops or its citations.
+    """
+
+    def __init__(self, *, geometry: Any, data_class: str = MEMORY_DATA_CLASS) -> None:
+        from auditmanager.decision_memory.public import DATA_CLASSES, MemoryRepository
+
+        if data_class not in DATA_CLASSES:
+            raise ValueError(f"{data_class!r} is not a decision-memory data class")
+        self._geometry = geometry
+        self._data_class = data_class
+        self._repository = MemoryRepository()
+
+    def __call__(self, session: Session, event: Any, origin_kind: str) -> None:
+        self.capture(session, event, origin_kind)
+
+    def capture(self, session: Session, event: Any, origin_kind: str) -> Any:
+        """Capture one ledger event; ``None`` for an event the memory does not keep (a ``comment``, `Q8`)."""
+        from auditmanager.decision_memory.public import CAPTURED_EVENT_TYPES
+
+        if event.event_type not in CAPTURED_EVENT_TYPES:
+            return None
+        return self._repository.capture(session, self.assemble(session, event, origin_kind))
+
+    def assemble(self, session: Session, event: Any, origin_kind: str) -> Any:
+        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+        from auditmanager.decision_memory.public import (
+            CaptureSnapshot, CaseContent, CaseOrigin, DecisionFact, EvidenceItem, NormRef, select_page_image_crops,
+        )
+        from auditmanager.documents.public import DocumentRepository
+        from auditmanager.findings import finding_by_uid, published_finding_evidence, published_findings
+        from auditmanager.findings.public import CitationReadRefused, read_verified_citations
+        from auditmanager.shared.identity import VersionUid
+
+        head = finding_by_uid(session, event.finding_uid)
+        if head is None:
+            raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, message="the decided finding is not published")
+        row = next(
+            (
+                candidate for candidate in published_findings(session, head.run_id)
+                if candidate.finding_uid == event.finding_uid
+                and candidate.finding_observation_id == event.finding_observation_id
+            ),
+            None,
+        )
+        if row is None:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                message="the decided observation is not a published observation of its finding's run",
+            )
+        stored = sorted(
+            (item for item in published_finding_evidence(session, head.run_id)
+             if item.finding_observation_id == row.finding_observation_id),
+            key=lambda item: item.evidence_ordinal,
+        )
+
+        required_value = stated_value = None
+        references: list[Any] = []
+        if row.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID):
+            # The same certified-partition reader the finding views use; it fails closed on an inconsistent partition.
+            try:
+                certified = read_verified_citations(
+                    session, run_id=head.run_id, version_uid=head.version_uid,
+                    profile_id=str(AR_V3_BETA_PROFILE_ID), cite_stage_id="ar_v3_citation_review",
+                )
+            except CitationReadRefused as error:
+                raise DomainError(
+                    ErrorCode.STORAGE_INTEGRITY_ERROR,
+                    message="the certified citation partitions of the run are inconsistent",
+                ) from error
+            partition = next(
+                (
+                    candidate
+                    for finding in certified.findings
+                    for candidate in (finding.canonical, *finding.merged_observations)
+                    if candidate.finding_observation_id == row.finding_observation_id
+                ),
+                None,
+            )
+            if partition is not None:
+                required_value, stated_value = partition.required_value, partition.stated_value
+                references = list(partition.citations)
+
+        # The version carries its current classification (the section as of now, which is the section as of capture).
+        version = DocumentRepository().get_version(session, VersionUid.parse(head.version_uid))
+        classification = version.classification
+
+        # What lives in published artifacts is read only for an observation that has no case yet.
+        known = self._repository.case_content_digest(session, row.finding_observation_id) is not None
+        boxes: Mapping[str, Any] = {}
+        if not known and any(item.block_id for item in stored):
+            boxes = self._geometry.evidence_boxes_in(session, head.run_id)
+
+        def _item(item: Any) -> Any:
+            box = boxes.get(item.block_id) if item.block_id else None
+            return EvidenceItem(
+                ordinal=item.evidence_ordinal, page_number=item.page_number, quote=item.quote,
+                char_start=item.char_start, char_end=item.char_end, block_ref=item.block_id,
+                bbox=None if box is None else tuple(float(v) for v in box[0]),
+                bbox_unit=None if box is None else box[1],
+                bbox_origin=None if box is None else box[2],
+            )
+
+        evidence = tuple(_item(item) for item in stored)
+        crops = () if known else select_page_image_crops(evidence, self._geometry.portal_crops_in(session, head.run_id))
+
+        content = CaseContent(
+            category=row.category, finding_text=row.finding_text, recommendation_text=row.recommendation_text,
+            proposed_severity=row.proposed_severity, required_value=required_value, stated_value=stated_value,
+            stage_id=row.stage_id, analysis_profile_id=row.analysis_profile_id, prompt_bundle_id=row.prompt_bundle_id,
+            provider_mode=row.provider_mode, evidence=evidence,
+            norm_refs=tuple(
+                NormRef(
+                    ordinal=number, norms_snapshot_id=ref.norms_snapshot_id, norm_document_id=ref.norm_document_id,
+                    norm_paragraph_id=ref.norm_paragraph_id, designation=ref.designation, clause_number=ref.clause_number,
+                    page_label=ref.page_label, quote=ref.quote, citation_state=ref.state,
+                )
+                for number, ref in enumerate(references, start=1)
+            ),
+        )
+        return CaptureSnapshot(
+            origin=CaseOrigin(
+                observation_id=row.finding_observation_id, finding_uid=row.finding_uid, project_uid=head.project_uid,
+                document_uid=str(version.document_uid), version_uid=head.version_uid, run_id=head.run_id,
+            ),
+            content=content,
+            section_code=None if classification is None else classification.section_code,
+            data_class=self._data_class,
+            crops=crops,
+            decision=DecisionFact(
+                source_decision_id=event.decision_id, event_type=event.event_type, severity=event.severity,
+                # The memory keeps the expert's own words. A carried event's comment is the system sentence of
+                # `decisions.carryover.carryover_comment` (identities of the source decision, finding and versions): not theirs,
+                # and `origin_kind = carried` already says it came from an earlier version.
+                comment=None if origin_kind == "carried" else event.comment,
+                author_user_uid=event.author_user_uid, origin_kind=origin_kind, decided_at=event.recorded_at,
+            ),
+        )
+
+
+_UNCAPTURED_EVENTS = sql_text(
+    """
+    SELECT e.sequence_no, e.decision_id, e.finding_uid, e.finding_observation_id, e.event_type, e.verdict, e.severity,
+           e.comment, e.author_label, e.author_user_uid, e.command_id, e.recorded_at, e.carried_from_decision_id
+      FROM expert_decision_event e
+     WHERE e.event_type IN ('accept', 'reject') AND e.sequence_no > :after
+       AND NOT EXISTS (SELECT 1 FROM decision_memory_decision d WHERE d.source_decision_id = e.decision_id)
+     ORDER BY e.sequence_no
+     LIMIT :batch
+    """
+)
+
+
+class MemorySweepReport:
+    """What one sweep pass did: events captured, events that failed (they stay uncaptured and are retried)."""
+
+    __slots__ = ("captured", "failed")
+
+    def __init__(self, captured: int, failed: int) -> None:
+        self.captured, self.failed = captured, failed
+
+    def __repr__(self) -> str:
+        return f"MemorySweepReport(captured={self.captured}, failed={self.failed})"
+
+
+class MemoryCaptureSweep:
+    """Capture the ledger events that have no memory decision (`DECISION-MEMORY-01` section 7.2 point 4).
+
+    It is the first backfill of every decision taken before the memory existed, and the repair of a gap (a process that decided
+    without the port registered). The anti-join against ``decision_memory_decision`` is the whole state: nothing is remembered between
+    passes except a cursor that lets a pass move beyond events that keep failing instead of starving the ones behind them.
+
+    Each event is captured in a transaction of its own, so one failure never rolls back another. A failure is logged with the event's
+    identity and the error's type, the event stays uncaptured -- and guard G1 keeps an erase or a purge from deleting its source -- and
+    the next pass tries it again. Called as one pass of the worker's housekeeping loop (``__call__`` returns what it captured), at
+    most once per ``interval_seconds``.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        assembler: MemoryCaptureAssembler,
+        *,
+        batch: int = 50,
+        interval_seconds: float = 30.0,
+        clock: Any = None,
+    ) -> None:
+        import time
+
+        if batch < 1 or interval_seconds < 0:
+            raise ValueError("a sweep needs a positive batch and a non-negative interval")
+        self._sessions = session_factory
+        self._assembler = assembler
+        self._batch = batch
+        self._interval = interval_seconds
+        self._clock = clock or time.monotonic
+        self._next_at: float | None = None
+        self._after = 0
+
+    def __call__(self) -> int:
+        now = self._clock()
+        if self._next_at is not None and now < self._next_at:
+            return 0
+        self._next_at = now + self._interval
+        return self.run_once().captured
+
+    def run_once(self) -> MemorySweepReport:
+        from auditmanager.decisions.public import DecisionEvent
+
+        with self._sessions() as session:
+            rows = session.execute(_UNCAPTURED_EVENTS, {"after": self._after, "batch": self._batch}).mappings().all()
+        # A full batch means there may be more beyond the last one seen; a short one means the end was reached, so the next pass
+        # starts again from the beginning and retries what failed.
+        self._after = int(rows[-1]["sequence_no"]) if len(rows) == self._batch else 0
+        captured = failed = 0
+        for row in rows:
+            event = DecisionEvent(
+                decision_id=row["decision_id"], finding_uid=row["finding_uid"],
+                finding_observation_id=row["finding_observation_id"], event_type=row["event_type"], verdict=row["verdict"],
+                comment=row["comment"], author_label=row["author_label"], author_user_uid=row["author_user_uid"],
+                command_id=row["command_id"], recorded_at=row["recorded_at"], severity=row["severity"],
+                carried_from_decision_id=row["carried_from_decision_id"],
+            )
+            origin_kind = "carried" if event.carried_from_decision_id else "direct"
+            try:
+                with self._sessions() as session:
+                    result = self._assembler.capture(session, event, origin_kind)
+                    session.commit()
+            except Exception as error:  # noqa: BLE001 - one event's failure is reported and retried, never hidden
+                failed += 1
+                logging.getLogger(__name__).error(
+                    "decision memory: could not capture %s (%s); it stays uncaptured and is retried",
+                    event.decision_id, type(error).__name__,
+                )
+                continue
+            if result is not None and result.decision_created:
+                captured += 1
+        if captured:
+            logging.getLogger(__name__).info("decision memory: captured %d earlier decision(s)", captured)
+        return MemorySweepReport(captured, failed)
 
 
 class CsvExportAdapter(_SessionHolder):
@@ -2952,8 +3670,12 @@ def _seam_role(role: str) -> str:
 # --------------------------------------------------------------------------------------
 
 
-def _account_view(account: Any) -> AccountView:
-    """``auditmanager.access.models.Account`` as the frozen ``Account`` shape."""
+def _account_view(account: Any, last_sign_in_at: datetime | None) -> AccountView:
+    """``auditmanager.access.models.Account`` as the frozen ``Account`` shape.
+
+    ``last_sign_in_at`` is the access journal's answer for this account (`UI-A-92`), read by the caller for the whole
+    set of accounts it renders: ``get_account`` itself does not read the journal, because the seam calls it on every
+    request."""
     record = account.record
     return AccountView(
         user_uid=str(record.user_uid),
@@ -2966,6 +3688,7 @@ def _account_view(account: Any) -> AccountView:
         profile_complete=record.profile_complete,
         is_default_credential=record.is_default_credential,
         archived_at=record.archived_at,
+        last_sign_in_at=last_sign_in_at,
     )
 
 
@@ -3009,20 +3732,20 @@ class AccountAdapter(_SessionHolder):
         account = self._accounts.get_account(session, user_uid)
         if account is None:
             raise _not_found("User")
-        return _account_view(account)
+        return _account_view(account, _last_sign_ins(session, [account]).get(user_uid))
 
     def get_account(self, *, user_uid: str) -> AccountView:
         return self._read(lambda session: self._view_of(session, user_uid))
 
     def list_accounts(self, *, include_archived: bool) -> Sequence[AccountView]:
-        return self._read(
-            lambda session: tuple(
-                _account_view(account)
-                for account in self._accounts.list_accounts(
-                    session, include_archived=include_archived
-                )
+        def work(session: Session) -> tuple[AccountView, ...]:
+            listed = self._accounts.list_accounts(session, include_archived=include_archived)
+            last = _last_sign_ins(session, listed)
+            return tuple(
+                _account_view(account, last.get(str(account.record.user_uid))) for account in listed
             )
-        )
+
+        return self._read(work)
 
     def update_my_profile(
         self,
@@ -3081,7 +3804,7 @@ class AccountAdapter(_SessionHolder):
             account = self._accounts.get_account(session, user_uid)
             if account is None or account.record.archived:
                 raise _not_found("User")
-            return _account_view(account)
+            return _account_view(account, _last_sign_ins(session, [account]).get(user_uid))
 
         return self._write(work)
 
@@ -3120,10 +3843,120 @@ class AccountAdapter(_SessionHolder):
 
         return self._write(work)
 
+    def end_account_sessions(
+        self, *, actor_uid: str, user_uid: str, idempotency_key: str
+    ) -> AccountView:
+        """``endUserSessions`` (contract 1.36.0, `UI-A-93`): the key is claimed in the transaction of the epoch's raise.
+
+        An exact repeat of the key (same account, same administrator) answers the account as it now stands and raises
+        nothing; another account or another administrator under the key is ``idempotency_key_reuse``. The rules --
+        not oneself, no archived or missing account -- are ``auditmanager.access``'s, checked on a first use only.
+        """
+        from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
+
+        def work(session: Session) -> AccountView:
+            commands = CommandRepository()
+            claim = commands.begin(
+                session,
+                command_type=END_USER_SESSIONS_COMMAND,
+                idempotency_key=idempotency_key,
+                fingerprint=payload_fingerprint(
+                    {"command": "end_user_sessions.v1", "user_uid": user_uid, "actor_uid": actor_uid}
+                ),
+            )
+            if isinstance(claim, CommandReplay):
+                return self._view_of(session, user_uid)
+            self._accounts.end_sessions(session, actor_uid=actor_uid, user_uid=user_uid)
+            commands.succeed(session, claim.command_id, {"user_uid": user_uid})
+            return self._view_of(session, user_uid)
+
+        return self._write(work)
+
+    def list_auth_events(self, *, cursor: str | None, limit: int) -> models.AuthEventPage:
+        """``listAuthEvents``: the access journal, newest first. The cursor is an event identity (``evt_``)."""
+        from auditmanager.access.public import read_access_events
+
+        def work(session: Session) -> models.AuthEventPage:
+            after = _auth_event_cursor(cursor)
+            rows = read_access_events(session, after_event_id=after, limit=limit + 1)
+            items = rows[:limit]
+            labels = _JournalLabels(session, self._accounts)
+            return models.AuthEventPage(
+                items=[
+                    models.AuthEvent(
+                        event_id=row.event_id,
+                        event_type=models.AuthEventType(row.event_type.removeprefix("access.")),
+                        occurred_at=row.occurred_at,
+                        subject_user_uid=row.subject_uid,
+                        subject_label=labels.of(row.subject_uid),
+                        actor_user_uid=row.actor_uid,
+                        actor_label=None if row.actor_uid is None else labels.of(row.actor_uid),
+                        source=row.source,
+                        role=None if row.role is None else models.Role(row.role),
+                        failures=row.failures,
+                        default_credential=row.default_credential,
+                    )
+                    for row in items
+                ],
+                page=models.PageInfo(
+                    next_cursor=encode_cursor((items[-1].event_id,)) if len(rows) > limit else None
+                ),
+            )
+
+        return self._read(work)
+
+
+class _JournalLabels:
+    """Display labels for the accounts a journal page names, each read once. Unlike ``_Labels`` an account that
+    no longer exists is not a fault here: the journal outlives its accounts (a purge deletes the row, not the
+    trail), so such an identity has a ``None`` label."""
+
+    __slots__ = ("_accounts", "_known", "_session")
+
+    def __init__(self, session: Session, accounts: Any) -> None:
+        self._session = session
+        self._accounts = accounts
+        self._known: dict[str, str | None] = {}
+
+    def of(self, user_uid: str) -> str | None:
+        if user_uid not in self._known:
+            account = self._accounts.get_account(self._session, user_uid)
+            self._known[user_uid] = None if account is None else account.record.display_label
+        return self._known[user_uid]
+
+
+def _last_sign_ins(session: Session, accounts: Sequence[Any]) -> Mapping[str, datetime]:
+    """The latest successful sign-in of each of ``accounts``, one journal read for the set (`UI-A-92`)."""
+    from auditmanager.access.public import last_sign_in_times
+
+    return last_sign_in_times(session, [str(account.record.user_uid) for account in accounts])
+
+
+_AUTH_EVENT_ID = re.compile(r"^evt_[0-9A-HJKMNP-TV-Z]{26}$")
+
+
+def _auth_event_cursor(raw: str | None) -> str | None:
+    """The event identity a ``listAuthEvents`` cursor carries, or a typed refusal for anything else."""
+    if raw is None:
+        return None
+    parts = decode_cursor(raw)
+    if len(parts) != 1 or not _AUTH_EVENT_ID.fullmatch(parts[0]):
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="The cursor parameter is not a continuation token from this API.",
+            field="cursor",
+            constraint="format",
+        )
+    return parts[0]
+
 
 #: `W49-SEAL-01`. The command type an approval claims its idempotency key under, beside
 #: `append_decision` and the run and upload commands that share `command_record`.
 APPROVE_REGISTRATION_COMMAND = "approve_registration"
+
+#: Contract 1.36.0. The command type ``endUserSessions`` claims its idempotency key under; an account-side receipt, so
+#: ``scripts/recovery/product_purge.py`` keeps it with the access journal.
+END_USER_SESSIONS_COMMAND = "end_user_sessions"
 
 
 class RegistrationAdapter(_SessionHolder):
@@ -3808,9 +4641,15 @@ class ComparisonAdapter(_SessionHolder):
                 ErrorCode.INTERNAL_ERROR,
                 message="the stored comparison inputs contradict their own constraints",
             ) from exc
+        # `UI-A-73`: the carried event names its source as the history will -- from the link the ledger holds, so an event
+        # carried before migration 0058 (no link; an exact repeat answers it) is answered as the history shows it.
+        origin = None if outcome.event.carried_from_decision_id is None else DecisionCarriedFromView(
+            decision_id=outcome.source_decision.decision_id, finding_uid=outcome.source_finding_uid,
+            version_uid=outcome.source_version_uid, version_ordinal=outcome.source_version_ordinal,
+        )
         return models.CarryOverDecisionResponse(
             event=models.DecisionEvent.model_validate(
-                decision_event_body(_event_view(outcome.event))
+                decision_event_body(_event_view(outcome.event, origin))
             ),
             current_verdict=models.Verdict(outcome.target_current_verdict),
             replayed=outcome.replayed,
@@ -4082,8 +4921,16 @@ class _AnalysisReader:
         from auditmanager.comparison.public import RunCandidate
         from auditmanager.runs import RunRepository
 
+        from auditmanager.runs.public import ANALYSIS_STANDARD, analysis_kind
+
+        # `AR-V3-OPT-IN` (design 4.4): every run is listed, each saying whether it is of the standard analysis. The
+        # consumers choose «the result of a version» among the standard ones; a run the caller names that is not one is
+        # refused by the comparison, not silently replaced.
         return tuple(
-            RunCandidate(str(run.run_id), run.state)
+            RunCandidate(
+                str(run.run_id), run.state,
+                analysis_kind(run.analysis_profile_id, run.prompt_bundle_id) == ANALYSIS_STANDARD,
+            )
             for run in RunRepository().list_for_version(session, version_uid)
         )
 
@@ -4258,7 +5105,7 @@ class _SpecificationTextReader:
         from auditmanager.optimisation.public import RunCandidate
 
         return tuple(
-            RunCandidate(run.run_id, run.state)
+            RunCandidate(run.run_id, run.state, run.standard_analysis)
             for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
         )
 
@@ -4735,6 +5582,26 @@ class DispatchAdapter(_SessionHolder):
             )
             labels = _Labels(session, accounts)
             return [_assignment_view(record, labels) for record in records]
+
+        return self._read(work)
+
+    def assignment_overview(
+        self, *, user_uid: str, mine: bool, project_uid: str | None
+    ) -> Sequence[models.AssignmentStatusCount]:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import assignment_overview
+
+        def work(session: Session) -> list[models.AssignmentStatusCount]:
+            return [
+                models.AssignmentStatusCount(status=models.AssignmentStatus(status), count=count)
+                for status, count in assignment_overview(
+                    session,
+                    viewer_uid=user_uid,
+                    viewer_roles=AccountRepository().roles_of(session, user_uid),
+                    mine=mine,
+                    project_uid=project_uid,
+                )
+            ]
 
         return self._read(work)
 
@@ -5462,6 +6329,137 @@ class OptimisationProposalAdapter(_SessionHolder):
 
         return self._read(read)
 
+    def export_optimisation_proposals_xlsx(self, *, optimisation_pass_id: str, user_uid: str) -> bytes:
+        """`UI-B-15`: the pass's workbook, computed from the stored rows."""
+        from auditmanager.exports import export_proposals_xlsx
+
+        return self._read(
+            lambda s: export_proposals_xlsx(
+                s, optimisation_pass_id=optimisation_pass_id, actor_roles=self._roles(s, user_uid)
+            )
+        )
+
+    def import_optimisation_proposal_decisions(
+        self, *, optimisation_pass_id: str, content: BinaryIO, idempotency_key: str, user_uid: str
+    ) -> models.ProposalDecisionImportReport:
+        """`UI-B-15`: one write transaction; the file is read once, one byte past its bound."""
+        from auditmanager.exports import DECISION_IMPORT_MAX_BYTES, import_proposal_decisions
+
+        data = content.read(DECISION_IMPORT_MAX_BYTES + 1)
+        report = self._write(
+            lambda s: import_proposal_decisions(
+                s,
+                optimisation_pass_id=optimisation_pass_id,
+                content=data,
+                idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+                actor_roles=self._roles(s, user_uid),
+            )
+        )
+        return models.ProposalDecisionImportReport(
+            optimisation_pass_id=report.optimisation_pass_id,
+            recorded=report.count("recorded"),
+            unchanged=report.count("unchanged"),
+            refused=report.count("refused"),
+            rows=[
+                models.ProposalDecisionImportRow(
+                    **{
+                        key: value
+                        for key, value in (
+                            ("row", row.row),
+                            ("outcome", row.outcome),
+                            ("optimisation_proposal_id", row.optimisation_proposal_id),
+                            ("reason", row.reason),
+                        )
+                        if value is not None
+                    }
+                )
+                for row in report.rows
+            ],
+        )
+
+    def carry_over_proposal_decisions(
+        self, *, optimisation_pass_id: str, source_optimisation_pass_id: str, idempotency_key: str, user_uid: str
+    ) -> models.ProposalDecisionCarryoverReport:
+        """`UI-B-14`: one write transaction; the role set is read inside it."""
+        from auditmanager.optimisation.public import carry_over_proposal_decisions
+
+        report = self._write(
+            lambda s: carry_over_proposal_decisions(
+                s,
+                optimisation_pass_id=optimisation_pass_id,
+                source_optimisation_pass_id=source_optimisation_pass_id,
+                idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+                actor_roles=self._roles(s, user_uid),
+            )
+        )
+        return models.ProposalDecisionCarryoverReport(
+            optimisation_pass_id=report.optimisation_pass_id,
+            source_optimisation_pass_id=report.source_optimisation_pass_id,
+            source_version_ordinal=report.source_version_ordinal,
+            source_decided=report.source_decided,
+            carried=report.carried,
+            target_decided=report.target_decided,
+            ambiguous=report.ambiguous,
+            unmatched=report.unmatched,
+        )
+
+    def list_accepted_optimisation_proposals(
+        self, *, project_uid: str | None, section_code: str | None, user_uid: str
+    ) -> Sequence[models.AcceptedOptimisationProposal]:
+        """`UI-B-27`: the accepted proposals, each acceptance's author named by the account's display label."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import list_accepted_proposals
+
+        def read(session: Session) -> Sequence[models.AcceptedOptimisationProposal]:
+            accounts = AccountRepository()
+            rows = list_accepted_proposals(
+                session,
+                actor_roles=accounts.roles_of(session, user_uid),
+                project_uid=project_uid,
+                section=section_code,
+            )
+            labels = _Labels(session, accounts)
+            return tuple(
+                models.AcceptedOptimisationProposal(
+                    optimisation_proposal_id=row.optimisation_proposal_id,
+                    optimisation_pass_id=row.optimisation_pass_id,
+                    proposal_decision_id=row.proposal_decision_id,
+                    proposal_type=models.OptimisationProposalType(row.proposal_type),
+                    project_uid=row.project_uid,
+                    project_name=row.project_name,
+                    document_uid=row.document_uid,
+                    document_name=row.document_name,
+                    version_uid=row.version_uid,
+                    **({} if row.section is None else {"section": models.ProjectSection(row.section)}),
+                    page_number=row.page_number,
+                    row_position=row.row_position,
+                    row_text=row.row_text,
+                    matched_name=row.matched_name,
+                    proposed_name=row.proposed_name,
+                    proposed_vendor=row.proposed_vendor,
+                    unit=row.unit,
+                    quantity=_optional_decimal(row.quantity),
+                    current_unit_price=_plain_decimal(row.current_unit_price),
+                    proposed_unit_price=_plain_decimal(row.proposed_unit_price),
+                    currency=row.currency,
+                    saving=_optional_decimal(row.saving),
+                    comment=row.comment,
+                    actor_label=labels.of(row.actor_user_uid),
+                    decided_at=row.decided_at,
+                    carried_from=None if row.carried_from is None else models.ProposalDecisionCarriedFrom(
+                        proposal_decision_id=row.carried_from.proposal_decision_id,
+                        optimisation_pass_id=row.carried_from.optimisation_pass_id,
+                        version_uid=row.carried_from.version_uid,
+                        version_ordinal=row.carried_from.version_ordinal,
+                    ),
+                )
+                for row in rows
+            )
+
+        return self._read(read)
+
 
 class _ProposalTextReader:
     """The optimisation context's ``SavedTextReader`` over the comparison's run reader."""
@@ -5473,7 +6471,7 @@ class _ProposalTextReader:
         from auditmanager.optimisation.public import RunCandidate
 
         return tuple(
-            RunCandidate(run.run_id, run.state)
+            RunCandidate(run.run_id, run.state, run.standard_analysis)
             for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
         )
 
@@ -5501,6 +6499,7 @@ def _optimisation_pass_view(record: Any, labels: "_Labels") -> models.Optimisati
         project_uid=record.project_uid,
         document_uid=record.document_uid,
         version_uid=record.version_uid,
+        version_ordinal=record.version_ordinal,
         run_id=record.run_id,
         text_layer_sha256=record.text_layer_sha256,
         price_list_id=record.price_list_id,
@@ -5534,6 +6533,14 @@ def _proposal_decision_view(record: Any, labels: "_Labels") -> models.ProposalDe
         actor_user_uid=record.actor_user_uid,
         actor_label=labels.of(record.actor_user_uid),
         decided_at=record.decided_at,
+        carried_from=None
+        if record.carried_from is None
+        else models.ProposalDecisionCarriedFrom(
+            proposal_decision_id=record.carried_from.proposal_decision_id,
+            optimisation_pass_id=record.carried_from.optimisation_pass_id,
+            version_uid=record.carried_from.version_uid,
+            version_ordinal=record.carried_from.version_ordinal,
+        ),
     )
 
 
@@ -5581,6 +6588,8 @@ def _optimisation_proposal_view(record: Any, labels: "_Labels") -> models.Optimi
         proposed_unit_price=_plain_decimal(record.proposed_unit_price),
         currency=record.currency,
         saving=_optional_decimal(record.saving),
+        # `UI-B-07`: the percent is the server's arithmetic over the stored prices; absent when it has no base.
+        **_unset_none(saving_percent=_optional_decimal(record.saving_percent)),
         rationale=record.rationale,
         current_verdict=models.ProposalDecisionState(record.current_verdict),
         current_decision=None

@@ -34,6 +34,16 @@
   border-color: var(--am-accent);
 }
 
+/* A section holding nothing is one short line: there is nothing to open, and fifteen tall cards for an empty project were the page. */
+.cardEmpty > .cardHeader {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  cursor: default;
+}
+
+.cardEmpty .chevron {
+  display: none;
+}
+
 .cardHeader {
   display: flex;
   align-items: center;
@@ -50,6 +60,12 @@
 .cardHeader:focus-visible {
   outline: 2px solid var(--am-accent);
   outline-offset: 2px;
+}
+
+/* The section badge as a link: the badge keeps its look and the link adds no underline. */
+.codeLink {
+  display: inline-flex;
+  text-decoration: none;
 }
 
 .code {
@@ -80,6 +96,13 @@
   padding: 0 var(--am-gap) var(--am-gap);
 }
 
+/* The section's name and, under it, its row of figures. */
+.headText {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
 .heading {
   margin: 0;
   min-width: 0;
@@ -99,6 +122,30 @@
   font-size: var(--am-text-sm);
 }
 
+/* `R-151c`: «Выбрать все» and the batch start, under the filters. */
+.batchBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin: 0 0 var(--am-gap-sm);
+}
+
+/* `UI-A-36`: the original's total row: across the grid, set off by a heavier line, the figures as the rows' own, not opened. */
+.totalCard {
+  grid-column: 1 / -1;
+}
+
+.totalBody {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  height: auto;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-top: 2px solid var(--am-line-strong);
+  box-shadow: none;
+}
+
 @media (max-width: 780px) {
   .sections {
     grid-template-columns: minmax(0, 1fr);
@@ -106,9 +153,10 @@
 }
 
 .rule {
-  margin: 0 0 var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
   max-width: 82ch;
-  font-size: var(--am-text-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
   line-height: var(--am-leading-base);
 }
 
@@ -116,9 +164,14 @@
 .titleRow {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap-xs);
+}
+
+/* The title takes the row; the toggle and «Обновить» sit at its end. */
+.titleRow > h2 {
+  margin: 0 auto 0 0;
 }
 
 /* `R-151a`: the archive toggle beside «Обновить». */

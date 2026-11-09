@@ -22,6 +22,7 @@ import { ErrorState } from '@/shared/ui';
 
 import { approvalIntentSignature, approvedRoles, rejectionReason } from '../model/validation';
 import { useDecideRegistration } from '../model/use-decide-registration';
+import styles from './registration-decision-controls.module.css';
 
 export function RegistrationDecisionControls({ request }: { readonly request: RegistrationRequest }) {
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
@@ -67,26 +68,29 @@ export function RegistrationDecisionControls({ request }: { readonly request: Re
   const failure = decision.isError ? registrationFailure(decision.error) : null;
   return (
     <div>
-      <form className="am-form" onSubmit={approve}>
-        <fieldset>
-          <legend>Роли новой учётной записи</legend>
-          {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><span><input type="checkbox" checked={selectedRoles.includes(role)} onChange={(event) => toggleRole(role, event.target.checked)} /> {roleLabels([role])[0]}</span></label>)}
-        </fieldset>
-        <button className="am-button" type="submit" disabled={decision.isPending}>Одобрить заявку</button>
-      </form>
-      <form className="am-form" onSubmit={reject}>
-        <div className="am-form__field"><label htmlFor={`reject-${request.request_id}`}><strong>Причина отказа для администратора</strong></label><textarea id={`reject-${request.request_id}`} value={reason} onChange={(event) => { setReason(event.target.value); setLocalFailure(null); setConfirmReject(null); decision.reset(); }} required minLength={1} maxLength={256} /></div>
-        <p className="am-form__hint">Причина остаётся доступна администраторам и не показывается заявителю.</p>
-        {confirmReject === null ? (
-          <button className="am-button am-button--quiet" type="submit" disabled={decision.isPending}>Отклонить заявку</button>
-        ) : (
-          <div role="group" aria-label="Подтверждение отклонения">
-            <p className="am-note">Отклонить заявку {request.login}? Учётная запись не будет создана, а решение нельзя будет изменить.</p>
-            <button className="am-button" type="button" disabled={decision.isPending} onClick={confirmRejection}>Подтвердить отклонение</button>
-            <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmReject(null)}>Отмена</button>
-          </div>
-        )}
-      </form>
+      <div className={styles.decision}>
+        <form className="am-form" onSubmit={approve}>
+          <fieldset className={styles.roles}>
+            <legend>Роли новой учётной записи</legend>
+            {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><span><input type="checkbox" checked={selectedRoles.includes(role)} onChange={(event) => toggleRole(role, event.target.checked)} /> {roleLabels([role])[0]}</span></label>)}
+          </fieldset>
+          <p className="am-form__hint">Одобрение создаёт учётную запись с выбранными ролями: выберите хотя бы одну.</p>
+          <button className="am-button" type="submit" disabled={decision.isPending}>Одобрить заявку</button>
+        </form>
+        <form className="am-form" onSubmit={reject}>
+          <div className="am-form__field"><label htmlFor={`reject-${request.request_id}`}><strong>Причина отказа для администратора</strong></label><textarea id={`reject-${request.request_id}`} value={reason} onChange={(event) => { setReason(event.target.value); setLocalFailure(null); setConfirmReject(null); decision.reset(); }} required minLength={1} maxLength={256} /></div>
+          <p className="am-form__hint">Причина остаётся доступна администраторам и не показывается заявителю.</p>
+          {confirmReject === null ? (
+            <button className="am-button am-button--quiet" type="submit" disabled={decision.isPending}>Отклонить заявку</button>
+          ) : (
+            <div role="group" aria-label="Подтверждение отклонения">
+              <p className="am-note">Отклонить заявку {request.login}? Учётная запись не будет создана, а решение нельзя будет изменить.</p>
+              <button className="am-button" type="button" disabled={decision.isPending} onClick={confirmRejection}>Подтвердить отклонение</button>
+              <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmReject(null)}>Отмена</button>
+            </div>
+          )}
+        </form>
+      </div>
       {localFailure === 'roles' ? <div data-registration-decision-failure="roles"><ErrorState title="Заявка не одобрена" detail="Выберите хотя бы одну роль. Запрос не отправлен." /></div> : null}
       {localFailure === 'viewer' ? <div data-registration-decision-failure="viewer_exclusive"><ErrorState title="Заявка не одобрена" detail="Роль «Наблюдатель» не сочетается с другими ролями. Запрос не отправлен." /></div> : null}
       {localFailure === 'reason' ? <div data-registration-decision-failure="reason"><ErrorState title="Заявка не отклонена" detail="Причина должна содержать от 1 до 256 символов. Запрос не отправлен." /></div> : null}

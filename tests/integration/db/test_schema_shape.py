@@ -126,6 +126,13 @@ IMMUTABLE_TABLES = {
     # written once, and a changed group is a new revision. The group row itself is never deleted (``am_immutable_row``
     # guards DELETE only; its name and creation are frozen, its archive is write-once and its rotation cursor advances).
     "executor_group", "executor_group_revision", "executor_group_member",
+    # `0055_work_schedule` (`UI-PARITY-P0P`): the five journals of «График работ» are `am_immutable_row` (this set lacked them).
+    "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_assignment_schedule_event",
+    "work_calendar_event",
+    # `0059_decision_memory` (`ADR-0027`): the case of a decision and everything it keeps are written once; a later decision on the
+    # same observation is a new `decision_memory_decision` row, and a withdrawal is a status event.
+    "decision_memory_case", "decision_memory_decision", "decision_memory_decision_text", "decision_memory_status_event",
+    "decision_memory_content", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_crop",
 }
 
 
@@ -286,6 +293,8 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     "scope_id",
     "sequence_no",
     "stage_id",
+    # `0060_run_from_stage`: the first stage a run computes, a registry name like ``stage_id``.
+    "start_stage_id",
     "user_uid",
     # `0030_executor_connections`: ``pin_id`` names a model of the provider lock
     # (``claude-opus-5``), not an entity this product mints.
@@ -312,6 +321,10 @@ PREFIX_BY_TABLE_COLUMN = {
     ("executor_group", "group_id"): "exg",
     ("executor_group_revision", "group_id"): "exg",
     ("stage_link_repair_event", "revision_id"): "slk",
+    # `0057_decision_carryover` and `0058_finding_decision_origin`: the decision a carried decision was carried from -- an optimisation
+    # proposal decision (`opd`) in the first, an expert decision event (`dec`) in the second (this map lacked both).
+    ("optimisation_proposal_decision", "carried_from_decision_id"): "opd",
+    ("expert_decision_event", "carried_from_decision_id"): "dec",
 }
 
 #: ``stage_ai_*.group_id`` is not an entity identity: it is the stage AI's own grouping label -- ``grp:`` plus the first 24 hex
@@ -345,6 +358,8 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "group_id": "arg",
         "allocated_by_run_id": "run",
         "reaudit_of_run_id": "run",
+        # `0060_run_from_stage` (`R-151i`): the run whose stage outputs a run reuses.
+        "started_from_run_id": "run",
         "command_id": "cmd",
         "analysis_profile_id": "ap",
         "prompt_bundle_id": "pb",
@@ -562,6 +577,28 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "carried_from_verdict_id": "cdv",
         "stage_chain_batch_id": "scb",
         "stage_chain_batch_item_id": "scbi",
+        # `0059_decision_memory` (`ADR-0027`): the memory's four identities and the bare identities of where a case came from
+        # (no foreign key: they resolve nowhere once the project is erased). ``case_id`` is a foreign key between memory tables.
+        "case_id": "dmc",
+        "memory_decision_id": "dmd",
+        "status_event_id": "dmw",
+        "crop_id": "dmx",
+        "origin_observation_id": "fobs",
+        "origin_finding_uid": "fnd",
+        "origin_project_uid": "prj",
+        "origin_document_uid": "doc",
+        "origin_version_uid": "ver",
+        "origin_run_id": "run",
+        "source_decision_id": "dec",
+        # `0052_document_archive` (`UI-PARITY-P0G`): who archived a document (this map lacked it).
+        "archived_by_user_uid": "usr",
+        # `0055_work_schedule` (`UI-PARITY-P0P`): the five journals are identified by an event identity and name accounts.
+        "setting_event_id": "evt",
+        "plan_event_id": "evt",
+        "calendar_event_id": "evt",
+        "absence_event_id": "evt",
+        "schedule_event_id": "evt",
+        "engineer_user_uid": "usr",
     }
     assert (set(prefix_by_column.values()) | set(PREFIX_BY_TABLE_COLUMN.values())) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

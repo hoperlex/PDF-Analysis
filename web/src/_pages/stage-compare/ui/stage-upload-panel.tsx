@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { ProjectUid, StageUpload, StageUploadCandidate, StageUploadFile } from '@/shared/api';
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/shared/api';
 import { PROJECT_SECTIONS } from '@/entities/project';
 import { STAGE_PAIR_KEYS } from '@/entities/stage-pair';
+import { formatInstant, routes } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 
 import { hashStageFile } from '../model/hash';
@@ -27,14 +28,35 @@ function kindOf(file: File): 'pdf' | 'zip' | null {
   return null;
 }
 
-function CandidateDecision({ candidate, mayAct, refresh }: {
+/** A chosen file with the digest its declaration carries; the name is the path the browser reports (a folder keeps its structure). */
+interface Entry {
+  readonly file: File;
+  readonly kind: 'pdf' | 'zip';
+  readonly name: string;
+  readonly digest: string;
+}
+
+const MAX_NAME = 255;
+function declaredName(file: File): string {
+  const relative = (file as File & { readonly webkitRelativePath?: string }).webkitRelativePath;
+  const path = relative !== undefined && relative !== '' ? relative : file.name;
+  return path.length <= MAX_NAME ? path : path.slice(path.length - MAX_NAME);
+}
+
+const CANDIDATE_STATES: Readonly<Record<StageUploadCandidate['state'], string>> = {
+  proposed: 'ожидает решения', confirmed: 'подтверждён', admitting: 'проверяется', published: 'версия сохранена', rejected: 'отклонён', failed: 'ошибка',
+};
+
+function CandidateDecision({ projectUid, candidate, mayAct, refresh }: {
+  readonly projectUid: ProjectUid;
   readonly candidate: StageUploadCandidate;
   readonly mayAct: boolean;
   readonly refresh: () => Promise<void>;
 }) {
-  const [stage, setStage] = useState<'' | 'P' | 'R'>('');
-  const [section, setSection] = useState('');
-  const [designation, setDesignation] = useState('');
+  // The stamp's proposal is where the expert starts, not what is saved: nothing is stored until «Подтвердить документ».
+  const [stage, setStage] = useState<'' | 'P' | 'R'>(candidate.proposed_stage ?? '');
+  const [section, setSection] = useState(PROJECT_SECTIONS.some((item) => item.code === candidate.proposed_section) ? (candidate.proposed_section ?? '') : '');
+  const [designation, setDesignation] = useState(candidate.designation ?? '');
   const [existing, setExisting] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown | null>(null);
@@ -84,8 +106,12 @@ function CandidateDecision({ candidate, mayAct, refresh }: {
   return (
     <article className={styles.card}>
       <strong>{candidate.display_name}</strong>
-      <span>Кандидат {candidate.member_number} · {candidate.state === 'published' ? 'версия сохранена' : candidate.state === 'proposed' ? 'ожидает решения' : candidate.state}</span>
-      {candidate.document_uid === undefined ? null : <code>{candidate.document_uid}</code>}
+      <span>Кандидат {candidate.member_number} · {CANDIDATE_STATES[candidate.state]}</span>
+      {candidate.state === 'proposed' && (candidate.proposed_stage !== undefined || candidate.proposed_section !== undefined || candidate.designation !== undefined)
+        ? <span>По штампу предложено: {[candidate.proposed_stage === undefined ? null : `стадия ${candidate.proposed_stage === 'P' ? 'П' : 'Р'}`,
+          candidate.proposed_section === undefined ? null : `раздел ${candidate.proposed_section}`,
+          candidate.designation === undefined ? null : `шифр ${candidate.designation}`].filter((part) => part !== null).join(', ')}. Решение за вами.</span> : null}
+      {candidate.document_uid === undefined ? null : <a href={routes.document(projectUid, candidate.document_uid)}>Открыть документ</a>}
       {candidate.state === 'proposed' && mayAct ? (
         <div className={styles.form}>
           <label>Стадия
@@ -119,18 +145,34 @@ function CandidateDecision({ candidate, mayAct, refresh }: {
   );
 }
 
+const FILE_STATES: Readonly<Record<StageUploadFile['state'], string>> = {
+  declared: 'объявлен', receiving: 'принимается', received: 'получен', admitting: 'проверяется', ready: 'готов', failed: 'ошибка', cancelled: 'отменён',
+};
+const UPLOAD_STATES: Readonly<Record<StageUpload['state'], string>> = {
+  uploading: 'передача', paused: 'приостановлен', admitting: 'проверка', completed: 'принят', failed: 'ошибка', cancelled: 'отменён',
+};
+
 function FileRow({ file }: { readonly file: StageUploadFile }) {
-  return <div className={styles.file}><span>{file.declaration.display_name}</span><span>{file.state} · {file.received_bytes} / {file.declaration.size_bytes} байт</span></div>;
+  return <div className={styles.file}><span>{file.declaration.display_name}</span><span>{FILE_STATES[file.state]} · {file.received_bytes} / {file.declaration.size_bytes} байт</span></div>;
 }
 
-export function StageUploadPanel({ projectUid, mayAct }: {
+/**
+ * The sets of PDF and ZIP files of the project and the form that adds one. The original opens its upload in a dialog from the button
+ * «Загрузить проекты» at the right of the steps bar; here the same button opens this panel, which stays closed until it is asked for
+ * — except that a set with documents waiting for the expert's word opens it once, since those decisions would otherwise hide.
+ */
+export function StageUploadPanel({ projectUid, mayAct, open = true, onOpenChange = () => undefined }: {
   readonly projectUid: ProjectUid;
   readonly mayAct: boolean;
+  /** Drawn when true (the default, for a panel mounted alone); the workspace closes it until «Загрузить проекты» asks. */
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
 }) {
   const cache = useQueryClient();
   const [cursor, setCursor] = useState('');
   const [pages, setPages] = useState<string[]>([]);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [skipped, setSkipped] = useState(0);
   const [activeUploadId, setActiveUploadId] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
   const [busy, setBusy] = useState(false);
@@ -145,6 +187,15 @@ export function StageUploadPanel({ projectUid, mayAct }: {
     })).data,
     retry: false,
   });
+
+  const waiting = mayAct && (uploads.data?.items.some((upload) => upload.candidates.some((candidate) => candidate.state === 'proposed')) ?? false);
+  const announced = useRef(false);
+  useEffect(() => {
+    if (waiting && !announced.current) {
+      announced.current = true;
+      onOpenChange(true);
+    }
+  }, [waiting, onOpenChange]);
 
   const keyFor = (action: string) => {
     const existing = keys.current.get(action);
@@ -169,11 +220,20 @@ export function StageUploadPanel({ projectUid, mayAct }: {
       cache.invalidateQueries({ queryKey: ['stage-text-evidence'] }),
     ]);
   };
-  const transfer = async (upload: StageUpload, chosen: File, digest: string) => {
-    const declared = upload.files[0];
-    if (declared === undefined || upload.files.length !== 1
-        || declared.declaration.sha256 !== digest || declared.declaration.size_bytes !== chosen.size) {
-      throw new LocalProblem('Выбранный файл не совпадает с объявленным набором.');
+  const transfer = async (upload: StageUpload, entries: readonly Entry[]) => {
+    if (upload.state !== 'uploading' && upload.state !== 'paused') {
+      throw new LocalProblem('Этот набор уже завершён или отменён.');
+    }
+    // The files still to send; a file already received or admitted is not sent again. Each is found among the chosen ones by its
+    // digest and size — the declaration, not the name, is what ties a chosen file to the set.
+    const waiting = upload.files.filter((declared) => declared.state === 'declared' || declared.state === 'receiving');
+    const matched = waiting.map((declared) => ({
+      declared,
+      entry: entries.find((item) => item.digest === declared.declaration.sha256 && item.file.size === declared.declaration.size_bytes),
+    }));
+    const missing = matched.find((item) => item.entry === undefined);
+    if (missing !== undefined) {
+      throw new LocalProblem(`Среди выбранных нет файла «${missing.declared.declaration.display_name}». Выберите те же файлы и продолжите набор.`);
     }
     if (upload.state === 'paused') {
       await resumeStageUpload({
@@ -181,24 +241,24 @@ export function StageUploadPanel({ projectUid, mayAct }: {
         idempotencyKey: keyFor(`resume:${upload.upload_id}`),
       });
     }
-    if (upload.state !== 'uploading' && upload.state !== 'paused') {
-      throw new LocalProblem('Этот набор уже завершён или отменён.');
-    }
-    const count = Math.ceil(chosen.size / PART_BYTES);
-    for (let number = 1; number <= count; number += 1) {
-      const start = (number - 1) * PART_BYTES;
-      setProgress(`Передача части ${number} из ${count}`);
-      await uploadStageUploadPart({
+    for (const [index, { declared, entry }] of matched.entries()) {
+      const chosen = entry!.file;
+      const count = Math.ceil(chosen.size / PART_BYTES);
+      for (let number = 1; number <= count; number += 1) {
+        const start = (number - 1) * PART_BYTES;
+        setProgress(`Файл ${index + 1} из ${matched.length}: передача части ${number} из ${count}`);
+        await uploadStageUploadPart({
+          path: { stage_upload_id: upload.upload_id, stage_upload_file_id: declared.file_id },
+          query: { part_number: number }, body: chosen.slice(start, Math.min(start + PART_BYTES, chosen.size)),
+          idempotencyKey: keyFor(`part:${upload.upload_id}:${declared.file_id}:${number}`),
+        });
+      }
+      setProgress(`Файл ${index + 1} из ${matched.length}: проверка PDF и состава ZIP`);
+      await completeStageUploadFile({
         path: { stage_upload_id: upload.upload_id, stage_upload_file_id: declared.file_id },
-        query: { part_number: number }, body: chosen.slice(start, Math.min(start + PART_BYTES, chosen.size)),
-        idempotencyKey: keyFor(`part:${upload.upload_id}:${number}`),
+        idempotencyKey: keyFor(`complete:${upload.upload_id}:${declared.file_id}`),
       });
     }
-    setProgress('Проверка PDF и состава ZIP');
-    await completeStageUploadFile({
-      path: { stage_upload_id: upload.upload_id, stage_upload_file_id: declared.file_id },
-      idempotencyKey: keyFor(`complete:${upload.upload_id}`),
-    });
     setActiveUploadId(null);
     setProgress('Набор принят. Подтвердите документы ниже.');
     setPages([]);
@@ -207,27 +267,30 @@ export function StageUploadPanel({ projectUid, mayAct }: {
   };
 
   const send = async (resume: StageUpload | null) => {
-    if (file === null) return;
+    if (files.length === 0) return;
     setError(null);
     setProblem(null);
     setBusy(true);
     let createdAction: string | null = null;
     try {
-      const kind = kindOf(file);
-      if (kind === null || file.size < 1) {
-        throw new LocalProblem('Выберите непустой PDF или ZIP.');
+      const kinds = files.map(kindOf);
+      if (kinds.some((kind) => kind === null) || files.some((item) => item.size < 1)) {
+        throw new LocalProblem('Выберите непустые PDF или ZIP.');
       }
-      setProgress('Расчёт SHA-256');
-      const digest = await hashStageFile(file, (read) => setProgress(`Хэширование: ${read} / ${file.size} байт`));
+      const entries: Entry[] = [];
+      for (const [index, item] of files.entries()) {
+        const digest = await hashStageFile(item, (read) => setProgress(`Файл ${index + 1} из ${files.length}: хэширование, ${read} / ${item.size} байт`));
+        entries.push({ file: item, kind: kindOf(item)!, name: declaredName(item), digest });
+      }
       let upload = resume;
       if (upload === null) {
-        const signature = `${projectUid}|${file.name}|${digest}|${file.size}|${kind}`;
+        const signature = `${projectUid}|${entries.map((item) => `${item.name}|${item.digest}|${item.file.size}|${item.kind}`).join(';')}`;
         createdAction = `create:${signature}`;
         upload = (await createStageUpload({
           path: { project_uid: projectUid },
-          body: { files: [{
-            display_name: file.name, media_kind: kind, size_bytes: file.size, sha256: digest,
-          }] },
+          body: { files: entries.map((item) => ({
+            display_name: item.name, media_kind: item.kind, size_bytes: item.file.size, sha256: item.digest,
+          })) },
           idempotencyKey: keyFor(createdAction),
         })).data;
       }
@@ -238,16 +301,23 @@ export function StageUploadPanel({ projectUid, mayAct }: {
         await refresh();
         return;
       }
-      await transfer(upload, file, digest);
+      await transfer(upload, entries);
       forgetCreateKeys();
     } catch (failure) {
       if (failure instanceof LocalProblem) setProblem(failure.message);
       else setError(failure);
-      setProgress('Передача остановлена. Выберите тот же файл и продолжите набор.');
+      setProgress('Передача остановлена. Выберите те же файлы и продолжите набор.');
       await refresh();
     } finally {
       setBusy(false);
     }
+  };
+
+  const pick = (list: FileList | null) => {
+    const all = Array.from(list ?? []);
+    const wanted = all.filter((item) => kindOf(item) !== null);
+    setFiles(wanted);
+    setSkipped(all.length - wanted.length);
   };
 
   const cancel = async (uploadId: string) => {
@@ -271,17 +341,24 @@ export function StageUploadPanel({ projectUid, mayAct }: {
   const failure = error === null ? null : failureMessage(error);
   const readFailure = uploads.error === null ? null : failureMessage(uploads.error);
   return (
-    <section aria-labelledby="stage-upload-heading" className={styles.panel}>
-      <h2 id="stage-upload-heading">Наборы PDF и ZIP</h2>
-      <p>Файлы ZIP проверяются целиком. Каждый PDF становится кандидатом; эксперт отдельно подтверждает стадию, раздел и документ.</p>
+    <section aria-labelledby="stage-upload-heading" className={styles.panel} id="stage-upload-panel" hidden={!open}>
+      <div className={styles.heading}>
+        <h2 id="stage-upload-heading">Наборы PDF и ZIP</h2>
+        <button type="button" className="am-button am-button--quiet" onClick={() => onOpenChange(false)}>Свернуть</button>
+      </div>
+      <p>Файлы ZIP проверяются целиком. Каждый PDF, в том числе из выбранной папки, становится кандидатом; эксперт отдельно подтверждает стадию, раздел и документ.</p>
       {mayAct ? (
         <div className={styles.form}>
-          <label>PDF или ZIP
-            <input type="file" accept=".pdf,.zip,application/pdf,application/zip" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+          <label>PDF или ZIP (можно несколько)
+            <input type="file" multiple accept=".pdf,.zip,application/pdf,application/zip" onChange={(event) => pick(event.target.files)} />
           </label>
+          <label>Папка с проектами
+            <input type="file" multiple {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} onChange={(event) => pick(event.target.files)} />
+          </label>
+          {files.length === 0 && skipped === 0 ? null : <p role="status">Выбрано файлов: {files.length}{skipped === 0 ? '' : ` · пропущено не PDF и не ZIP: ${skipped}`}</p>}
           <div className={styles.actions}>
-            <button type="button" className="am-button" disabled={busy || file === null || activeUploadId !== null} onClick={() => void send(null)}>Загрузить новый набор</button>
-            {activeUploadId === null ? null : <button type="button" className="am-button" disabled={busy || file === null} onClick={() => {
+            <button type="button" className="am-button" disabled={busy || files.length === 0 || activeUploadId !== null} onClick={() => void send(null)}>Загрузить новый набор</button>
+            {activeUploadId === null ? null : <button type="button" className="am-button" disabled={busy || files.length === 0} onClick={() => {
               void getStageUpload({ path: { stage_upload_id: activeUploadId } })
                 .then((answer) => send(answer.data)).catch(setError);
             }}>Продолжить передачу</button>}
@@ -296,15 +373,15 @@ export function StageUploadPanel({ projectUid, mayAct }: {
       {uploads.data?.items.length === 0 ? <EmptyState title="Наборов пока нет" detail="Загрузите PDF или ZIP, затем подтвердите кандидатов." /> : null}
       {uploads.data?.items.map((upload) => (
         <article className={styles.batch} key={upload.upload_id}>
-          <div className={styles.heading}><strong>Набор <code>{upload.upload_id}</code></strong><span>{upload.state}</span></div>
+          <div className={styles.heading}><strong title={upload.upload_id}>Набор от {formatInstant(upload.created_at)} · файлов {upload.files.length}</strong><span>{UPLOAD_STATES[upload.state]}</span></div>
           {upload.files.map((item) => <FileRow key={item.file_id} file={item} />)}
           {mayAct && (upload.state === 'uploading' || upload.state === 'paused') ? (
             <div className={styles.actions}>
-              <button type="button" className="am-button" disabled={busy || file === null} onClick={() => void send(upload)}>Продолжить с выбранным файлом</button>
+              <button type="button" className="am-button" disabled={busy || files.length === 0} onClick={() => void send(upload)}>Продолжить с выбранными файлами</button>
               <button type="button" className="am-button" disabled={busy} onClick={() => void cancel(upload.upload_id)}>Отменить набор</button>
             </div>
           ) : null}
-          {upload.candidates.map((candidate) => <CandidateDecision key={candidate.candidate_id} candidate={candidate} mayAct={mayAct} refresh={refresh} />)}
+          {upload.candidates.map((candidate) => <CandidateDecision key={candidate.candidate_id} projectUid={projectUid} candidate={candidate} mayAct={mayAct} refresh={refresh} />)}
         </article>
       ))}
       {uploads.data === undefined ? null : <nav className={styles.actions} aria-label="Страницы наборов стадий">

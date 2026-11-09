@@ -593,7 +593,13 @@ class TestN1ComponentReferenceResolution:
         # `UI-PARITY-P0N` adds one: `getProject` addresses a project.
         # `UI-PARITY-P0O` adds one: `listVersionSheetLabels` addresses a version.
         # `UI-PARITY-P0P` adds one: `scheduleAssignments` names assignments that may not exist.
-        assert len(report) == 218, report
+        # `UI-PARITY-OPT-DECISIONS` adds two: `exportOptimisationProposalsXlsx` and `importOptimisationProposalDecisions`
+        # address a pass by identity. (`listAcceptedOptimisationProposals` names no parent and declares no `404`.)
+        # `UI-PARITY-ADMIN-C2` adds one: `endUserSessions` addresses an account by identity. (`listAuthEvents` names no parent.)
+        # `UI-PARITY-OPT-CARRYOVER` adds one: `carryOverProposalDecisions` addresses the target pass by identity.
+        # `UI-PARITY-C6` adds one: `listRunFindingBlocks` addresses a run.
+        # `UI-PARITY-S2` adds one: `startRunFromStage` addresses a run.
+        assert len(report) == 224, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

@@ -1,4 +1,5 @@
-"""`PROD-06`: the six ``access.*`` audit events (ADR-0023 section 4, ``R-146n`` item 6, ``AD-10``).
+"""`PROD-06`: the seven ``access.*`` audit events (ADR-0023 section 4, ``R-146n`` item 6, ``AD-10``; the
+seventh, ``sessions_ended``, is contract 1.36.0's).
 
 Real PostgreSQL, a private migrated clone per test. What is asserted is read back from
 ``audit_event`` over a **separate connection**, so a row counts only if it is committed.
@@ -502,7 +503,7 @@ def _bearer(token: str) -> dict[str, str]:
 
 
 def _walk_through_every_event_type(client: TestClient, engine: Engine) -> list[str]:
-    """Drive all six types through the served API; returns every token it was handed."""
+    """Drive all seven types through the served API; returns every token it was handed."""
     tokens: list[str] = []
 
     # The seeded administrator has no names yet, and the seam refuses an incomplete profile
@@ -552,6 +553,10 @@ def _walk_through_every_event_type(client: TestClient, engine: Engine) -> list[s
         f"/users/{applicant_uid}/password", headers=_bearer(admin),
         json={"temporary_password": TEMPORARY_PASSWORD})
     assert reset.status_code == 200, reset.text
+    ended = client.post(                                                    # sessions_ended
+        f"/users/{applicant_uid}/sessions/end",
+        headers={**_bearer(admin), "Idempotency-Key": f"prod06-{secrets.token_hex(6)}"})
+    assert ended.status_code == 200, ended.text
 
     for _ in range(FAILED_SIGN_IN_ALLOWANCE):                               # sign_in_blocked (once)
         assert _sign_in(client, APPLICANT, WRONG_PASSWORD) is None
@@ -559,7 +564,7 @@ def _walk_through_every_event_type(client: TestClient, engine: Engine) -> list[s
 
 
 class TestTheServedApi:
-    def test_all_six_types_are_written_by_the_served_operations_in_their_commit(
+    def test_all_seven_types_are_written_by_the_served_operations_in_their_commit(
         self, client: TestClient, migrated_engine: Engine
     ) -> None:
         _walk_through_every_event_type(client, migrated_engine)
@@ -569,7 +574,8 @@ class TestTheServedApi:
         assert set(by_type) == set(audit.ACCESS_EVENT_TYPES)
         assert {t: len(v) for t, v in by_type.items()} == {
             "access.sign_in_succeeded": 2, "access.sign_in_blocked": 1, "access.role_granted": 2,
-            "access.role_revoked": 1, "access.password_changed": 1, "access.password_reset": 1}
+            "access.role_revoked": 1, "access.password_changed": 1, "access.password_reset": 1,
+            "access.sessions_ended": 1}
         flags = [e["payload"]["default_credential"] for e in by_type["access.sign_in_succeeded"]]
         assert flags == [True, False]  # the seeded password, then the one the administrator chose
         assert all(e["aggregate_type"] == "Account" for e in _events(migrated_engine))
@@ -642,7 +648,7 @@ class TestNoSecretAndNoAddressIsEverStored:
             whole_rows = [r[0] for r in connection.execute(text(
                 "SELECT concat_ws('|', aggregate_type, aggregate_id, correlation_id, payload::text) "
                 "FROM audit_event WHERE starts_with(event_type, 'access.')"))]
-        assert len(whole_rows) == 8
+        assert len(whole_rows) == 9
 
         forbidden: dict[str, str] = {
             "seeded password": SEED_PASSWORD, "new admin password": ADMIN_NEW_PASSWORD,

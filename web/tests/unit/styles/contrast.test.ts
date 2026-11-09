@@ -955,11 +955,12 @@ describe('the register is held to the census in both directions, and in both pal
  * Raising this number is the only way to add a pending pair, which makes adding one a visible
  * act in a diff; lowering it is required the moment a row is deleted. 72 rows on 2026-11-02
  * after the link-button hover repair: 67 borders (the translucent `color-mix` borders and the
- * 2.995 near-miss), 4 graphics, 1 text.
+ * 2.995 near-miss), 4 graphics, 1 text. 62 on 2026-11-07 (lane D5): the denser frame dropped the sidebar's tree guide, the
+ * update notice's accent border, and two translucent card borders, which left five pairs in both palettes.
  */
-const PENDING_PAIR_ROWS = 72;
+const PENDING_PAIR_ROWS = 62;
 /** Likewise for the colour rules no screen reaches. */
-const PENDING_UNREACHED_ROWS = 61;
+const PENDING_UNREACHED_ROWS = 53; // 61 at the base; lane D5 removed one row, lane D1 three, lane P2 three (the home page at `/` joined the census loaded), lane N1 one (the catalogue's `.filters` lost its box: the form is a line, the layout carries no colour)
 
 describe('the pending list is a ratchet: it may only shrink, and nothing on it may get worse', () => {
   const rows = PENDING_PAIRS.flatMap((row) => row.themes.map((theme) => ({ row, theme })));

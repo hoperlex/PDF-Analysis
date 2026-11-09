@@ -28,7 +28,7 @@ from typing import Any, Final
 from sqlalchemy.orm import Session
 
 from ..matching import canonical_amount
-from .policy import AGGREGATE_OPTIMISATION_PROPOSAL, require_reader
+from .policy import AGGREGATE_OPTIMISATION_PROPOSAL, DECISION_PENDING, require_reader
 from .queries import get_optimisation_pass
 from .repository import OptimisationPassRecord, OptimisationProposalRecord, ProposalRepository
 
@@ -126,7 +126,9 @@ def _cell(value: Any) -> str:
 
 
 def _row(header: OptimisationPassRecord, item: OptimisationProposalRecord) -> tuple[str, ...]:
-    matched, proposed, decision = item.matched_position, item.proposed_position, item.current_decision
+    matched, proposed = item.matched_position, item.proposed_position
+    # A withdrawn decision (`UI-B-12`) is no decision in force: its columns are empty, like a pending proposal's.
+    decision = None if item.current_verdict == DECISION_PENDING else item.current_decision
     values = (
         header.optimisation_pass_id,
         header.project_uid,

@@ -25,6 +25,11 @@
  * `?project=` is «Все проекты». The screen says which of the two it shows, and how many entries
  * match (`total` of the page, not the length of the page on screen).
  *
+ * **The verdict chips** (`UI-B-32`) above the list -- «Принято», «Отклонено», «Не решено», «Все» -- set the same `verdict` the
+ * select below them sets, and carry the server's count of that verdict (`useDecisionVerdictTotals`: `total` of
+ * `listDecisions` read with `limit=1`, under the same project and category). The page counts nothing itself; a count the
+ * server has not answered is drawn «—», not a zero.
+ *
  * The two filters are the contract's own `category` and `verdict`, and they mean what the
  * contract says they mean: the **finding's** category, and the verdict that now stands for
  * it. Neither filters the event, so a comment left on a finding that was later accepted is
@@ -33,48 +38,30 @@
  */
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
 
 import type { ErrorStateProps } from '@/shared/ui';
-import type { FindingCategory, ProjectUid, Verdict } from '@/shared/api';
+import type { ProjectUid } from '@/shared/api';
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
-import { readProjectContext, switchProject } from '@/shared/lib';
+import { readProjectContext, switchProject, useAddressState } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
+import type { DecisionVerdictTotals } from '@/entities/expert-decision';
 import {
-  CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useKnowledgeBaseJournal, useProposalDecisionJournal,
+  CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useDecisionVerdictTotals, useKnowledgeBaseJournal,
+  useProposalDecisionJournal,
 } from '@/entities/expert-decision';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { useProjectList } from '@/entities/project';
 
+import {
+  CATEGORY_CHOICES, VERDICT_CHOICES, readKbAddress, writeKbAddress,
+} from '../model/address';
+import type { CategoryChoice, KbAddress, KbView, VerdictChoice } from '../model/address';
+import { NO_CURSORS, useCursorWalk } from '../model/use-cursor-walk';
 import { LazyKnowledgeBase } from './lazy-knowledge-base';
 import styles from './knowledge-base-page.module.css';
 
-/** `Все` is the absence of the parameter, never a value sent to the server. */
-type CategoryChoice = FindingCategory | 'all';
-type VerdictChoice = Verdict | 'all';
-
-const CATEGORY_CHOICES: readonly CategoryChoice[] = [
-  'all',
-  'internal_contradiction',
-  'explicit_placeholder',
-  'dimensions',
-  'layout',
-  'facade',
-  'roof',
-  'documentation',
-  'evacuation',
-  'fire_safety',
-  'accessibility',
-  'insulation',
-  'sound',
-];
-
-/**
- * `needs_manual_review` is in the contract's closed union and has no PC-01 producer, so it
- * is deliberately not offered: a filter that can only ever return an empty page teaches a
- * reviewer that the knowledge base is empty.
- */
-const VERDICT_CHOICES: readonly VerdictChoice[] = ['all', 'accepted', 'rejected', 'pending'];
+/** `UI-B-34`: the labels of how the decisions are drawn (the choice itself is in the address, `model/address.ts`). */
+const VIEW_LABELS: Readonly<Record<KbView, string>> = { table: 'Таблица', events: 'События' };
 
 const VERDICT_CHOICE_LABELS: Readonly<Record<VerdictChoice, string>> = {
   all: 'Любой вердикт',
@@ -83,6 +70,18 @@ const VERDICT_CHOICE_LABELS: Readonly<Record<VerdictChoice, string>> = {
   rejected: 'Отклонено',
   needs_manual_review: 'Нужен ручной разбор',
 };
+
+/**
+ * `UI-B-32`: the verdict chips above the list, in the order of the original's cards -- decided for, decided against,
+ * undecided, everything. A chip sets the same verdict the «Вердикт» select sets; its number is the server's count of
+ * that verdict over the journal (`useDecisionVerdictTotals`), never the length of the page on screen.
+ */
+const VERDICT_CHIPS: readonly { readonly choice: VerdictChoice; readonly label: string; readonly total: keyof DecisionVerdictTotals }[] = [
+  { choice: 'accepted', label: 'Принято', total: 'accepted' },
+  { choice: 'rejected', label: 'Отклонено', total: 'rejected' },
+  { choice: 'pending', label: 'Не решено', total: 'pending' },
+  { choice: 'all', label: 'Все', total: 'all' },
+];
 
 const CATEGORY_CHOICE_LABELS: Readonly<Record<CategoryChoice, string>> = {
   all: 'Любая категория',
@@ -97,20 +96,6 @@ const KNOWLEDGE_BASE_ADDRESS = '/knowledge-base';
 
 /** The scope the screen states when no project is chosen. */
 const ALL_PROJECTS = 'Все проекты';
-
-/**
- * The cursors of the pages walked past, oldest first, and the project they were issued under. The
- * server's cursors are opaque and belong to the filters they came with, so a stack whose project is
- * not the address's project is not read at all: the first page is asked for. That is derived on
- * every render (and the stale stack is then dropped during the render, not in an effect), so a
- * request with the old project's cursor and the new project is never made, not even for one render.
- */
-interface CursorWalk {
-  readonly project: ProjectUid | null;
-  readonly cursors: readonly string[];
-}
-
-const NO_CURSORS: readonly string[] = [];
 
 /**
  * The project's name, for the scope line. From the records the server just sent when there are
@@ -174,27 +159,21 @@ export function KnowledgeBasePage() {
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const { projectUid } = readProjectContext(pathname ?? '', searchParams);
 
-  const [category, setCategory] = useState<CategoryChoice>('all');
-  const [verdict, setVerdict] = useState<VerdictChoice>('all');
-  // `R-151h`: «Тип» -- the decisions on findings, or on optimisation proposals, as the original's knowledge base, or
-  // both as one journal («Все», `D-317`). «Замечания» stays the first screen, as it was before «Все».
-  const [kind, setKind] = useState<'all' | 'findings' | 'proposals'>('findings');
-  const [proposalCursors, setProposalCursors] = useState<readonly string[]>(NO_CURSORS);
-  const [allCursors, setAllCursors] = useState<readonly string[]>(NO_CURSORS);
+  // The type, the view and the two filters are in the address (`?kind=&view=&category=&verdict=`, `D-372`), so a link, a reload and the
+  // side menu's «База знаний» (no query) return to the same filter. A choice REPLACES the entry: a filter is not a place to go Back to.
+  // `R-151h`: «Тип» -- the decisions on findings, or on optimisation proposals, as the original's knowledge base, or both as one
+  // journal («Все», `D-317`). «Замечания» stays the first screen, as it was before «Все».
+  const [address, setAddress] = useAddressState(readKbAddress, writeKbAddress);
+  const { kind, view, category, verdict } = address;
+  const choose = (patch: Partial<KbAddress>) => setAddress({ ...address, ...patch }, 'replace');
   /*
-   * The cursors of the pages walked past, oldest first; the last one is the page on screen
-   * and an empty stack is the first page. The server's cursors are opaque and one-way, so
-   * «Назад» is a pop, not a computation. The same construction as the execution journal, with
-   * the project it was walked under beside it: a stack of another project is an empty one.
+   * The cursors of the pages walked past (see `useCursorWalk`). A cursor belongs to the filters it was issued under, so each stack
+   * carries them: the decisions on findings walk under the project, the category and the verdict; the other two under the project.
    */
-  const [walk, setWalk] = useState<CursorWalk>({ project: projectUid, cursors: NO_CURSORS });
-  const cursors = walk.project === projectUid ? walk.cursors : NO_CURSORS;
+  const [cursors, setCursors] = useCursorWalk(`${projectUid ?? ''}|${category}|${verdict}`);
+  const [proposalCursors, setProposalCursors] = useCursorWalk(projectUid ?? '');
+  const [allCursors, setAllCursors] = useCursorWalk(projectUid ?? '');
   const cursor = cursors.at(-1);
-  // Forget a stack of another project instead of only ignoring it: going back to that project
-  // (Back, a pasted link) must open its first page, because a cursor is not in the address and the
-  // address is the only thing that restores a screen. React re-renders at once, before anything
-  // is drawn or requested.
-  if (walk.project !== projectUid) setWalk({ project: projectUid, cursors: NO_CURSORS });
 
   const proposals = useProposalDecisionJournal(
     {
@@ -216,6 +195,14 @@ export function KnowledgeBasePage() {
     ...(verdict === 'all' ? {} : { verdict }),
     ...(cursor === undefined ? {} : { cursor }),
   });
+  // `UI-B-32`: the chips' numbers follow the project and the category, and are read only where the chips are drawn.
+  const verdictTotals = useDecisionVerdictTotals(
+    {
+      ...(projectUid === null ? {} : { project_uid: projectUid }),
+      ...(category === 'all' ? {} : { category }),
+    },
+    kind === 'findings',
+  );
   const next = journal.data?.page.next_cursor ?? null;
   const total = journal.data?.total;
   const first = journal.data?.items[0];
@@ -234,11 +221,7 @@ export function KnowledgeBasePage() {
       : {
           ...(filtered
             ? {
-                onResetFilters: () => {
-                  setCategory('all');
-                  setVerdict('all');
-                  setWalk({ project: projectUid, cursors: NO_CURSORS });
-                },
+                onResetFilters: () => choose({ category: 'all', verdict: 'all' }),
               }
             : {}),
           ...(projectUid === null
@@ -265,24 +248,36 @@ export function KnowledgeBasePage() {
               className={kind === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
               aria-pressed={kind === value}
               data-kb-kind={value}
-              onClick={() => { setKind(value); setProposalCursors(NO_CURSORS); setAllCursors(NO_CURSORS); }}
+              onClick={() => { choose({ kind: value }); setProposalCursors(NO_CURSORS); setAllCursors(NO_CURSORS); }}
             >
               {KIND_LABELS[value]}
             </button>
           ))}
         </div>
+        {kind === 'proposals' ? null : (
+          <div className="am-kb__filter" role="group" aria-label="Вид списка">
+            <span>Вид</span>
+            {(['table', 'events'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={view === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
+                aria-pressed={view === value}
+                data-kb-view={value}
+                onClick={() => choose({ view: value })}
+              >
+                {VIEW_LABELS[value]}
+              </button>
+            ))}
+          </div>
+        )}
         {kind !== 'findings' ? null : <>
         <div className="am-kb__filter">
           <label htmlFor="kb-filter-category">Категория</label>
           <select
             id="kb-filter-category"
             value={category}
-            onChange={(event) => {
-              // A cursor belongs to the filter it was issued under: a new filter starts at
-              // the first page.
-              setCategory(event.target.value as CategoryChoice);
-              setWalk({ project: projectUid, cursors: NO_CURSORS });
-            }}
+            onChange={(event) => choose({ category: event.target.value as CategoryChoice })}
           >
             {CATEGORY_CHOICES.map((choice) => (
               <option key={choice} value={choice}>
@@ -296,10 +291,7 @@ export function KnowledgeBasePage() {
           <select
             id="kb-filter-verdict"
             value={verdict}
-            onChange={(event) => {
-              setVerdict(event.target.value as VerdictChoice);
-              setWalk({ project: projectUid, cursors: NO_CURSORS });
-            }}
+            onChange={(event) => choose({ verdict: event.target.value as VerdictChoice })}
           >
             {VERDICT_CHOICES.map((choice) => (
               <option key={choice} value={choice}>
@@ -355,6 +347,7 @@ export function KnowledgeBasePage() {
             </p>
           )}
           <LazyKnowledgeBase
+            view={view}
             records={[]}
             entries={everything.data?.items ?? []}
             isLoading={everything.isPending}
@@ -390,6 +383,26 @@ export function KnowledgeBasePage() {
         </div>
       ) : null}
       {kind !== 'findings' ? null : <div className={styles.results}>
+        {/* `UI-B-32`: the original's verdict cards as chips with the server's counts; a chip sets the «Вердикт» filter. */}
+        <div className={styles.chips} role="group" aria-label="Решения по вердикту" data-kb-verdict-chips="">
+          {VERDICT_CHIPS.map(({ choice, label, total: figure }) => {
+            const count = verdictTotals[figure];
+            return (
+              <button
+                key={choice}
+                type="button"
+                className={verdict === choice ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
+                aria-pressed={verdict === choice}
+                data-kb-verdict={choice}
+                data-kb-verdict-total={count}
+                // A cursor belongs to the filter it was issued under: a new verdict starts at the first page (`useCursorWalk`).
+                onClick={() => choose({ verdict: choice })}
+              >
+                {label} <span className={styles.chipCount}>{count ?? '—'}</span>
+              </button>
+            );
+          })}
+        </div>
         <p className={styles.scope} data-journal-scope={projectUid === null ? 'all' : 'project'}>
           <span className={styles.scopeKey}>Охват</span>
           <strong className={styles.scopeValue}>
@@ -402,6 +415,7 @@ export function KnowledgeBasePage() {
           )}
         </p>
         <LazyKnowledgeBase
+          view={view}
           records={journal.data?.items ?? []}
           isLoading={journal.isPending}
           narrowing={narrowing}
@@ -417,7 +431,7 @@ export function KnowledgeBasePage() {
               type="button"
               className="am-button am-button--quiet"
               disabled={cursors.length === 0}
-              onClick={() => setWalk({ project: projectUid, cursors: cursors.slice(0, -1) })}
+              onClick={() => setCursors(cursors.slice(0, -1))}
             >
               Назад
             </button>
@@ -426,7 +440,7 @@ export function KnowledgeBasePage() {
               className="am-button am-button--quiet"
               disabled={next === null}
               onClick={() => {
-                if (next !== null) setWalk({ project: projectUid, cursors: [...cursors, next] });
+                if (next !== null) setCursors([...cursors, next]);
               }}
             >
               Далее

@@ -265,11 +265,25 @@ describe('deciding a proposal', () => {
     );
   });
 
-  it('tells the pass’s proposals, every pass’s counts and the proposal’s history only', () => {
+  /** `UI-B-12`: «Снять решение» is the same keyed command with a fourth verdict, and its comment is optional. */
+  it('sends a withdrawal as a verdict, under its own key, with or without a comment', async () => {
+    vi.mocked(decideOptimisationProposal).mockResolvedValue({ data: {} } as never);
+    await decideHook().mutationFn({ ...DECIDE, verdict: 'revoke' });
+    await decideHook().mutationFn({ ...DECIDE, verdict: 'revoke', comment: 'Ошибся.' });
+    const sent = vi.mocked(decideOptimisationProposal).mock.calls.map((call) => call[0]);
+    expect(sent[0]?.body).toEqual({ verdict: 'revoke' });
+    expect(sent[1]?.body).toEqual({ verdict: 'revoke', comment: 'Ошибся.' });
+    const mock = vi.mocked(decideOptimisationProposal);
+    expect(keyOf(mock, 1)).not.toBe(keyOf(mock, 0));
+    expect(decisionSignature({ ...DECIDE, verdict: 'revoke' })).not.toBe(decisionSignature(DECIDE));
+  });
+
+  it('tells the pass’s proposals, every pass’s counts, the accepted lists and the proposal’s history only', () => {
     decideHook().onSuccess?.({ decision: decision(), proposal: proposal() }, DECIDE);
     expect(calls.invalidations).toEqual([
       [{ queryKey: queryKeys.optimisation.proposalsOf(PASS_ID) }],
       [{ queryKey: queryKeys.optimisation.allPasses() }],
+      [{ queryKey: queryKeys.optimisation.allAccepted() }],
       [{ queryKey: queryKeys.optimisation.proposalDecisions(DOOR_PROPOSAL) }],
     ]);
     for (const entry of calls.invalidations) {

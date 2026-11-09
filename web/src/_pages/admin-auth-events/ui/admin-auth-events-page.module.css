@@ -1,0 +1,7 @@
+.panel {
+  min-width: 0;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+}

@@ -175,7 +175,7 @@ export function GroupForm({ group, candidates, pinnedModels, onSaved }: GroupFor
 
   return (
     <form
-      className="am-form"
+      className="am-form am-form--two"
       data-group-form={revising ? 'revise' : 'create'}
       onSubmit={(event) => {
         event.preventDefault();

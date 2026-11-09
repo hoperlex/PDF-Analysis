@@ -8,32 +8,43 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--am-gap-sm);
+  gap: var(--am-gap-xs);
 }
 
+/* A worker is two lines, as the original's server card is: who it is and what it does, then its runs and its controls. */
 .row {
   min-width: 0;
   max-width: 100%;
-  padding: var(--am-gap-sm) var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-sm);
   overflow-wrap: anywhere;
 }
 
-.row p {
-  margin-bottom: var(--am-gap-xs);
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--am-gap);
+  min-width: 0;
 }
 
-/* The worker's facts, as many to a row as the panel holds. */
-.facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
-  gap: 2px var(--am-gap);
-  margin-bottom: var(--am-gap-xs);
-}
-
-.facts > p {
+.line > p,
+.end p {
   margin: 0;
+}
+
+.end {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  margin-left: auto;
+}
+
+.quiet {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
 }
 
 .identity code {
@@ -41,25 +52,20 @@
   overflow-wrap: anywhere;
 }
 
-.heading,
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--am-gap-sm);
   align-items: center;
   justify-content: space-between;
-}
-
-.runs {
-  margin: 0;
-  padding-left: 1.25rem;
+  margin-top: var(--am-gap-sm);
 }
 
 .offline {
-  margin-top: 1rem;
+  margin-top: var(--am-gap-sm);
 }
 
 .offline summary {
   cursor: pointer;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--am-gap-sm);
 }

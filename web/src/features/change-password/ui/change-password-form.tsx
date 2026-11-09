@@ -63,6 +63,7 @@ export function ChangePasswordForm({ outcome, next }: ChangePasswordFormProps) {
           name="current_password"
           type="password"
           autoComplete="current-password"
+          autoFocus
           required
           maxLength={1024}
           placeholder="Текущий пароль"

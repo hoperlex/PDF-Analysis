@@ -29,18 +29,25 @@ export function selectPage(current: ReviewSelection | null, page: number): Revie
 }
 
 /**
- * The finding actually shown: the selected one when it is still in the list, otherwise the
- * first one.
+ * The finding actually shown: the selected one when it is still in the run, otherwise the one the screen opens by
+ * itself (`openingUid`).
  *
- * The containment check matters after a refetch. If the list changes under a selection —
- * a filter applied, a page of results replaced — a selection pointing at a finding that is
- * no longer there would leave the panels showing a finding the list does not offer.
+ * The containment check matters after a refetch. If the list changes under a selection -- a page of results replaced,
+ * a stale link -- a selection pointing at a finding that is no longer there would leave the panels showing a finding
+ * the list does not offer.
+ *
+ * `D-401`: what opens by itself is the first finding the screen SHOWS, the first one still waiting for a decision, not
+ * the first of the run's own order. That one moves when a decision re-sorts the list, so the page pins it (it becomes the
+ * selection, and the address says so) the moment it is resolved. Without `openingUid` the run's first finding opens, which
+ * is what a caller that has no order of its own gets. `null` opens nothing: the list shows no row to open.
  */
 export function resolveSelection(
   selection: ReviewSelection | null,
   findingUids: readonly string[],
+  openingUid: string | null = findingUids[0] ?? null,
 ): ReviewSelection | null {
   if (findingUids.length === 0) return null;
   if (selection !== null && findingUids.includes(selection.findingUid)) return selection;
-  return selectFinding(findingUids[0] as string);
+  if (openingUid === null || !findingUids.includes(openingUid)) return null;
+  return selectFinding(openingUid);
 }

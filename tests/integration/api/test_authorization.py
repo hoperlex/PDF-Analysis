@@ -150,6 +150,8 @@ GUARDED = (
     ("restoreUser", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/restore"),
     ("purgeUser", "DELETE", "/users/usr_01M2545JSD15ETSNNV904X991S"),
     ("resetUserPassword", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/password"),
+    ("endUserSessions", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/sessions/end"),
+    ("listAuthEvents", "GET", "/auth-events"),
     # W52 release reads and the signed-in account's own mark are guarded.
     ("getProductVersion", "GET", "/system/version"),
     ("listReleases", "GET", "/releases"),
@@ -161,6 +163,7 @@ GUARDED = (
     ("listExecutionJournal", "GET", "/execution/journal"),
     ("cancelRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
     ("reauditRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
+    ("startRunFromStage", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/start-from-stage"),
     (
         "setJobPriority", "PUT",
         "/execution/queue/job_01M2545JSD15ETSNNV904X991K/priority",
@@ -549,9 +552,15 @@ GUARDED = (
     ("setFindingExecutionStatus", "PUT", "/findings/fnd_01M2545JSD15ETSNNV904X991K/execution-status"),
     ("listProposalDecisionJournal", "GET", "/proposal-decisions"),
     ("listKnowledgeBaseEntries", "GET", "/knowledge-base/entries"),
+    ("listAcceptedOptimisationProposals", "GET", "/optimisation-proposals/accepted"),
+    ("exportOptimisationProposalsXlsx", "GET", "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/export.xlsx"),
+    ("importOptimisationProposalDecisions", "POST", "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/decision-imports"),
+    ("carryOverProposalDecisions", "POST", "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/decision-carryovers"),
     ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
     ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
     ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),
+    # `UI-PARITY-C6` (contract 1.41.0) left this sweep without its read; the register was one short.
+    ("listRunFindingBlocks", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/finding-blocks"),
     # `UI-PARITY-P0P` (contract 1.31.0): «График работ».
     ("getWorkSchedule", "GET", "/work-schedule?month=2026-11"),
     ("getWorkScheduleReserve", "GET", "/work-schedule/reserve?start=2026-11-02"),

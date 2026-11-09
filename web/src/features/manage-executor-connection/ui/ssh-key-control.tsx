@@ -76,7 +76,7 @@ export function SshKeyControl({ connectionId, hasKey }: SshKeyControlProps) {
   return (
     <>
       <button
-        className="am-button am-button--quiet"
+        className="am-button am-button--quiet am-button--small"
         type="button"
         data-executor-ssh-key={connectionId}
         disabled={generate.isPending}

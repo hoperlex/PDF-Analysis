@@ -555,3 +555,241 @@ def test_the_csv_is_escaped_complete_and_separate_from_findings(world, expert, a
     malformed_proposal = client.get("/optimisation-proposals/opp_not_a_proposal/decisions", headers=expert)
     assert malformed_proposal.status_code == 404
     assert malformed_proposal.json()["details"] == {"aggregate_type": "OptimisationProposal"}
+
+
+def test_a_decision_is_withdrawn_and_the_accepted_list_follows_the_decisions_in_force(
+    world, expert, admin, started
+) -> None:
+    """`UI-B-12` and `UI-B-27` (contract 1.35.0): «Снять решение» is an appended `revoke` that makes the proposal
+    pending again, and «Принято» lists exactly the proposals whose decision in force is an acceptance."""
+    client, pass_id, project = world["client"], started["body"]["optimisation_pass_id"], world["project"]
+    items = client.get(f"/optimisation-passes/{pass_id}/proposals", headers=expert).json()["items"]
+    door, _anchor, tape = (item["optimisation_proposal_id"] for item in items)
+    accepted = "/optimisation-proposals/accepted"
+
+    def listed(**query: Any) -> dict[str, Any]:
+        answer = client.get(accepted, params={"project_uid": project, **query}, headers=expert)
+        assert answer.status_code == 200, answer.content
+        return answer.json()
+
+    # Nothing is accepted yet in this project (the decisions above are a revise, a reject and none).
+    assert listed()["total"] == 0 and listed()["items"] == []
+
+    # A withdrawal of nothing is a conflict that names why, and leaves the history empty.
+    nothing = client.post(f"/optimisation-proposals/{tape}/decisions", json={"verdict": "revoke"},
+                          headers=expert | _key("revoke-nothing"))
+    assert nothing.status_code == 409, nothing.content
+    assert nothing.json()["error_code"] == "conflict"
+    assert nothing.json()["details"]["conflict_reason"] == "no_decision_to_revoke"
+    assert client.get(f"/optimisation-proposals/{tape}/decisions", headers=expert).json() == {"items": []}
+
+    for proposal, tag in ((door, "door"), (tape, "tape")):
+        accept = client.post(f"/optimisation-proposals/{proposal}/decisions",
+                             json={"verdict": "accept", "comment": f"берём {tag}"},
+                             headers=expert | _key(f"accept-{tag}"))
+        assert accept.status_code == 201, accept.content
+
+    # Newest acceptance first; a page is a page, `total` counts every match, the cursor resumes.
+    whole = listed()
+    assert [row["optimisation_proposal_id"] for row in whole["items"]] == [tape, door]
+    assert whole["total"] == 2 and whole["page"] == {"next_cursor": None}
+    first = listed(limit=1)
+    assert [row["optimisation_proposal_id"] for row in first["items"]] == [tape]
+    assert first["total"] == 2 and first["page"]["next_cursor"]
+    second = listed(limit=1, cursor=first["page"]["next_cursor"])
+    assert [row["optimisation_proposal_id"] for row in second["items"]] == [door]
+    assert second["total"] == 2 and second["page"]["next_cursor"] is None
+    row = whole["items"][0]
+    _exact_keys(row, "AcceptedOptimisationProposal")
+    assert (row["project_uid"], row["document_uid"], row["version_uid"], row["section"]) == (
+        project, world["ar"]["document_uid"], world["ar"]["version_uid"], "AR",
+    )
+    assert row["optimisation_pass_id"] == pass_id and row["comment"] == "берём tape" and row["actor_label"]
+    # The tape's quantity is a dash: both prices are shown and the saving is absent, never "0".
+    assert (row["current_unit_price"], row["proposed_unit_price"], row["quantity"], row["saving"]) == (
+        "450", "300", None, None,
+    )
+    assert whole["items"][1]["saving"] == "16000" and whole["items"][1]["proposed_vendor"] == "Кнауф Гипс"
+
+    # Filters narrow and are never parents: another section or project is an empty `200`.
+    assert listed(section_code="AR")["total"] == 2
+    assert listed(section_code="KJ")["total"] == 0
+    assert client.get(accepted, params={"project_uid": world["foreign_project"]}, headers=expert).json()["total"] == 0
+    assert client.get(accepted, params={"project_uid": UNKNOWN_PROJECT}, headers=expert).json()["items"] == []
+    for query in ({"section_code": "ZZ"}, {"project_uid": "nope"}, {"limit": 0}, {"limit": 201}):
+        assert client.get(accepted, params=query, headers=expert).status_code == 422, query
+    # Any one role reads; a request with no credential does not.
+    assert client.get(accepted, params={"project_uid": project}, headers=admin).status_code == 200
+    assert client.get(accepted, params={"project_uid": project}).status_code in (401, 403)
+
+    # «Снять решение»: the expert alone, keyed; an appended event; the proposal is pending again and leaves the list.
+    path = f"/optimisation-proposals/{tape}/decisions"
+    assert client.post(path, json={"verdict": "revoke"}, headers=admin | _key("revoke-admin")).status_code == 403
+    assert client.post(path, json={"verdict": "revoke"}, headers=expert).status_code == 422  # no Idempotency-Key
+    key = f"w60p-revoke-{world['tag']}"
+    revoke = client.post(path, json={"verdict": "revoke", "comment": "ошибся"},
+                         headers=expert | {IDEMPOTENCY_HEADER: key})
+    assert revoke.status_code == 201, revoke.content
+    result = revoke.json()
+    _exact_keys(result, "ProposalDecisionResult")
+    assert (result["decision"]["verdict"], result["decision"]["comment"]) == ("revoke", "ошибся")
+    assert result["proposal"]["current_verdict"] == "pending"
+    assert result["proposal"]["current_decision"] == result["decision"]
+    replay = client.post(path, json={"verdict": "revoke", "comment": "ошибся"},
+                         headers=expert | {IDEMPOTENCY_HEADER: key})
+    assert replay.status_code == 201 and replay.json()["decision"] == result["decision"]
+    again = client.post(path, json={"verdict": "revoke"}, headers=expert | _key("revoke-again"))
+    assert again.status_code == 409 and again.json()["details"]["conflict_reason"] == "no_decision_to_revoke"
+
+    history = client.get(path, headers=admin).json()["items"]
+    assert [entry["verdict"] for entry in history] == ["accept", "revoke"]
+    assert [row["optimisation_proposal_id"] for row in listed()["items"]] == [door]
+    counts = client.get(f"/optimisation-passes/{pass_id}/proposals", headers=expert).json()
+    assert counts["optimisation_pass"]["decision_counts"] == {"pending": 1, "accept": 1, "reject": 1, "revise": 0}
+    pending = client.get(f"/optimisation-passes/{pass_id}/proposals", params={"decision": "pending"}, headers=expert)
+    assert tape in [item["optimisation_proposal_id"] for item in pending.json()["items"]]
+    # The knowledge base tells the withdrawal as it was recorded.
+    journal = client.get("/proposal-decisions", params={"project_uid": project}, headers=expert).json()["items"]
+    assert [entry["verdict"] for entry in journal if entry["optimisation_proposal_id"] == tape] == ["revoke", "accept"]
+
+
+def _edited_workbook(rows: list[tuple[str, str, str]]) -> bytes:
+    """The pass's workbook shape with the given identity, decision and comment cells, as an expert's spreadsheet would save it."""
+    import io
+    import zipfile
+
+    from auditmanager.exports.xlsx import proposals as sheet
+    from auditmanager.exports.xlsx.writer import _Cells, _row, _sheet
+
+    cells = _Cells()
+    columns = sheet.PROPOSAL_COLUMNS
+    body = [_row(1, columns, 1, cells)]
+    for index, (identity, decision, comment) in enumerate(rows, start=2):
+        values: list[str | int] = [""] * len(columns)
+        values[0] = identity
+        values[columns.index(sheet.DECISION_COLUMN)] = decision
+        values[columns.index(sheet.COMMENT_COLUMN)] = comment
+        body.append(_row(index, tuple(values), 0, cells))
+    parts = sheet._single_sheet_parts(_sheet(body, sheet._WIDTHS))
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        for name in sheet._PARTS:
+            archive.writestr(name, parts[name])
+    return output.getvalue()
+
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def test_the_workbook_is_exported_and_the_edited_decisions_are_loaded_back_by_proposal_identity(
+    world, expert, admin, started
+) -> None:
+    """`UI-B-15` (contract 1.35.0): export the pass as a workbook, load decisions back by the proposal's identity."""
+    import io
+    import zipfile
+
+    client, pass_id = world["client"], started["body"]["optimisation_pass_id"]
+    items = client.get(f"/optimisation-passes/{pass_id}/proposals", headers=expert).json()["items"]
+    door, anchor, tape = (item["optimisation_proposal_id"] for item in items)
+
+    export = client.get(f"/optimisation-passes/{pass_id}/export.xlsx", headers=admin)
+    assert export.status_code == 200, export.content
+    assert export.headers["content-type"] == XLSX
+    assert export.headers["content-disposition"] == f'attachment; filename="{pass_id}.xlsx"'
+    with zipfile.ZipFile(io.BytesIO(export.content)) as archive:
+        assert "xl/worksheets/sheet1.xml" in archive.namelist()
+        assert "Предложения" in archive.read("xl/workbook.xml").decode("utf-8")
+    assert client.get(f"/optimisation-passes/{pass_id}/export.xlsx", headers=expert).content == export.content
+    assert client.get(f"/optimisation-passes/{UNKNOWN_PASS}/export.xlsx", headers=expert).status_code == 404
+    assert client.get(f"/optimisation-passes/{pass_id}/export.xlsx").status_code in (401, 403)
+
+    path = f"/optimisation-passes/{pass_id}/decision-imports"
+    edited = _edited_workbook([
+        (tape, "принято", "берём ленту"),
+        (anchor, "не решено", "снимаю отказ"),
+        (door, "", ""),
+        (UNKNOWN_PROPOSAL, "отклонено", ""),
+    ])
+    key = f"w60p-import-{world['tag']}"
+
+    def load(content: bytes, headers: dict[str, str]) -> Any:
+        return client.post(path, files={"file": ("Решения.xlsx", content, XLSX)}, headers=headers)
+
+    imported = load(edited, expert | {IDEMPOTENCY_HEADER: key})
+    assert imported.status_code == 200, imported.content
+    report = imported.json()
+    _exact_keys(report, "ProposalDecisionImportReport")
+    for row in report["rows"]:
+        assert {"row", "outcome"} <= set(row) <= set(_schema("ProposalDecisionImportRow")["properties"])
+    assert (report["optimisation_pass_id"], report["recorded"], report["unchanged"], report["refused"]) == (pass_id, 2, 1, 1)
+    assert [(row["row"], row["outcome"], row.get("optimisation_proposal_id"), row.get("reason")) for row in report["rows"]] == [
+        (2, "recorded", tape, None),
+        (3, "recorded", anchor, None),
+        (4, "unchanged", door, None),
+        (5, "refused", None, "unknown_proposal"),
+    ]
+    # The events are the history: the importer's acceptance and the withdrawal of the earlier rejection.
+    assert [entry["verdict"] for entry in client.get(f"/optimisation-proposals/{tape}/decisions", headers=expert).json()["items"]][-1] == "accept"
+    anchor_history = client.get(f"/optimisation-proposals/{anchor}/decisions", headers=expert).json()["items"]
+    assert [entry["verdict"] for entry in anchor_history] == ["reject", "revoke"]
+    counts = client.get(f"/optimisation-passes/{pass_id}/proposals", headers=expert).json()["optimisation_pass"]["decision_counts"]
+    assert counts == {"pending": 1, "accept": 2, "reject": 0, "revise": 0}
+
+    # A repeat of the key answers the stored report and appends nothing; another file under it is a conflict.
+    replay = load(edited, expert | {IDEMPOTENCY_HEADER: key})
+    assert replay.status_code == 200 and replay.json() == report
+    assert len(client.get(f"/optimisation-proposals/{anchor}/decisions", headers=expert).json()["items"]) == 2
+    other = load(_edited_workbook([(door, "отклонено", "")]), expert | {IDEMPOTENCY_HEADER: key})
+    assert other.status_code == 409 and other.json()["error_code"] == "idempotency_key_reuse"
+
+    # Who may load, and what is refused whole.
+    assert load(edited, admin | _key("import-admin")).status_code == 403
+    assert client.post(path, files={"file": ("Решения.xlsx", edited, XLSX)}, headers=expert).status_code == 422  # no key
+    assert client.post(
+        f"/optimisation-passes/{UNKNOWN_PASS}/decision-imports",
+        files={"file": ("Решения.xlsx", edited, XLSX)}, headers=expert | _key("import-missing"),
+    ).status_code == 404
+    foreign = load(b"not a workbook", expert | _key("import-garbage"))
+    assert foreign.status_code == 422 and foreign.json()["details"] == {"field": "file", "constraint": "unreadable"}
+    assert client.get(f"/optimisation-proposals/{door}/decisions", headers=expert).json()["items"][-1]["verdict"] == "accept"
+
+
+def test_carrying_decisions_over_is_an_experts_keyed_act_and_refuses_what_it_cannot_use(
+    world, expert, admin, started, kj_started
+) -> None:
+    """`UI-B-14` (contract 1.37.0), the refusals over HTTP. The happy path needs a second version of a set with its own
+    published run and is held against the database in ``tests/integration/optimisation/proposals/test_carryover.py``;
+    here the route, the role, the key, the body and every conflict a source can raise are proved, and each leaves the
+    pass's history as it was."""
+    client, pass_id = world["client"], started["body"]["optimisation_pass_id"]
+    kj_pass = kj_started["answer"].json()["optimisation_pass_id"]
+    path = f"/optimisation-passes/{pass_id}/decision-carryovers"
+    before = client.get(f"/optimisation-passes/{pass_id}/proposals", headers=expert).json()
+    # The pass says which version it was started over, and a decision made directly names no source.
+    assert before["optimisation_pass"]["version_ordinal"] == 1
+    _exact_keys(before["optimisation_pass"], "OptimisationPass")
+    decided = next(item["current_decision"] for item in before["items"] if item["current_decision"] is not None)
+    _exact_keys(decided, "ProposalDecision")
+    assert decided["carried_from"] is None
+
+    def carry(source: str, headers: dict[str, str], tag: str = "carry") -> Any:
+        return client.post(path, json={"source_optimisation_pass_id": source}, headers=headers | _key(tag))
+
+    assert carry(pass_id, admin).status_code == 403  # an administrator who is not an expert
+    assert client.post(path, json={"source_optimisation_pass_id": pass_id}, headers=expert).status_code == 422  # no key
+    assert carry("not-a-pass", expert).status_code == 422
+    assert client.post(path, json={}, headers=expert | _key("carry-empty")).status_code == 422
+    assert client.post(
+        f"/optimisation-passes/{UNKNOWN_PASS}/decision-carryovers",
+        json={"source_optimisation_pass_id": pass_id}, headers=expert | _key("carry-missing"),
+    ).status_code == 404
+    for source, reason, tag in (
+        (pass_id, "carryover_source_is_target", "carry-itself"),
+        (UNKNOWN_PASS, "carryover_source_unknown", "carry-unknown"),
+        (kj_pass, "carryover_source_other_document", "carry-other-set"),
+    ):
+        refused = carry(source, expert, tag)
+        assert refused.status_code == 409, refused.content
+        assert refused.json()["error_code"] == "conflict"
+        assert refused.json()["details"]["conflict_reason"] == reason
+    assert client.get(f"/optimisation-passes/{pass_id}/proposals", headers=expert).json() == before

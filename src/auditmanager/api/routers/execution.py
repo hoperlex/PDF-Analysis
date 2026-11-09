@@ -102,6 +102,40 @@ def build_execution_routes(router: APIRouter, execution: ExecutionPort) -> None:
         )
         return json_response(202, encode_json(run_status_body(view)))
 
+    @router.post(
+        "/runs/{run_id}/start-from-stage", operation_id="startRunFromStage", tags=["execution"],
+        status_code=202, response_model=models.RunStatus,
+        responses={**success(202, "The newly accepted run that reuses the earlier run's stage outputs, or a replayed result."),
+                   **envelope_responses(401, 403, 404, 409, 422, 500, 503)},
+        description=(
+            "`R-151i` (`UI-A-60`): a NEW run of the earlier run's document version that reuses the earlier run's completed "
+            "outputs of every PC-01 stage before `stage_id` and computes `stage_id` and the stages after it. The earlier "
+            "run is immutable history and is not changed; the new run is linked to it by `started_from_run_id` and "
+            "`start_stage_id` on its `RunStatus` (not by `reaudit_of_run_id`) and records today's configuration, exactly as "
+            "a re-audit does (R-82). `stage_id` is one of `page_geometry_extraction`, `document_context_build` or "
+            "`text_analysis`: the first stage reuses nothing (`422 validation_failed`, `field` `stage_id`, `constraint` "
+            "`nothing_to_reuse`; use `reauditRun`) and any other stage is not startable (`constraint` `stage_not_startable`). "
+            "The earlier run must have ended (`409 state_transition_not_allowed`) and be a run of the standard analysis "
+            "(a member of an AR v3 group is `409 conflict`, `conflict_reason` `ar_v3_member_not_repeatable`). A stage output "
+            "that cannot be taken is `422 analysis_input_invalid` with `details.stage_id` (the first stage that cannot) and "
+            "`details.reason`: `source_stage_not_completed`, `source_stage_version_changed`, `source_stage_output_incomplete`, "
+            "`source_artifact_unavailable`, `source_artifact_changed` or `source_stage_inputs_changed`. Nothing is "
+            "recomputed in place of a refused output and nothing is written. Served starts require fresh confirmed cost "
+            "consent from estimateRunCost with `start_from_run_id` and `start_stage_id`: the price is for the stages the "
+            "new run computes, and the digest is bound to this earlier run and stage. While a run from this earlier run and "
+            "stage has not ended, a second is `409 conflict`. Accepted keys replay their recorded outcome."),
+    )
+    def start_run_from_stage(
+        subject: CurrentSubject, run_id: Annotated[models.RunId, Path()],
+        idempotency_key: RequiredIdempotencyKey,
+        body: models.StartRunFromStageRequest,
+    ) -> WireResponse:
+        view = execution.start_run_from_stage(
+            run_id=run_id, stage_id=body.stage_id.value, user_uid=subject.user_uid, idempotency_key=idempotency_key,
+            **({"cost_consent": body.cost_consent.model_dump(mode="json")} if body.cost_consent is not None else {}),
+        )
+        return json_response(202, encode_json(run_status_body(view)))
+
     @router.put(
         "/execution/queue/{job_id}/priority", operation_id="setJobPriority",
         tags=["execution"], response_model=models.ExecutionQueueItem,

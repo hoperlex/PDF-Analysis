@@ -18,7 +18,9 @@ import { LoadingState } from '@/shared/ui';
 
 const RunProgressChunk = dynamic(
   () => import('@/widgets/run-progress').then((widget) => widget.RunProgress),
-  { loading: () => <LoadingState /> },
+  // `ssr: false`: the server always sends the fallback, never the widget (`D-329`, argued in
+  // `_pages/dashboard/ui/lazy-dashboard.tsx`).
+  { ssr: false, loading: () => <LoadingState /> },
 );
 
 type RunProgressProps = ComponentProps<typeof RunProgressChunk>;

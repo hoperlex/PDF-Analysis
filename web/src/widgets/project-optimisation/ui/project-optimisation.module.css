@@ -36,3 +36,12 @@
   margin: 0;
   padding-left: calc(var(--am-gap) + var(--am-gap-xs));
 }
+
+.details {
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.details > summary {
+  cursor: pointer;
+  font-weight: 600;
+}

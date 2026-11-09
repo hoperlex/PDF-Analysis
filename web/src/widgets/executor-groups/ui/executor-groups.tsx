@@ -80,7 +80,10 @@ export function ExecutorGroups({ roles }: ExecutorGroupsProps) {
   return (
     <div className={styles.panel} data-executor-groups>
       <p className="am-note" data-executor-groups-notice="client-documents">{CLIENT_DOCUMENTS_NOTICE}</p>
-      <p className="am-note" data-executor-groups-notice="binding">{GROUP_BINDING_SENTENCE} {STRATEGY_SENTENCE}</p>
+      <details className={styles.about} data-executor-groups-notice="binding">
+        <summary>Как работа попадает в группу</summary>
+        <p className="am-note">{GROUP_BINDING_SENTENCE} {STRATEGY_SENTENCE}</p>
+      </details>
       {connectionsFailure === null ? null : (
         <p className="am-note" role="status" data-executor-groups-connections-failure>
           Подключения не прочитаны, поэтому состав групп назван неполно, а форма группы недоступна. {connectionsFailure.detail}

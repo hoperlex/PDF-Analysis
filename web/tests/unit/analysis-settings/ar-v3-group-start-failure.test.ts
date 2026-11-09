@@ -37,7 +37,7 @@ function refusal(
   options: { details?: Record<string, string | number | boolean | null>; retryable?: boolean } = {},
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.42.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-group',
@@ -74,6 +74,11 @@ const SPECIFIC: ReadonlyArray<readonly [string, ApiError, ArV3GroupStartFailureK
   ['the version does not exist', refusal(404, 'not_found'), 'not_found'],
   ['the caller is not signed in', refusal(401, 'authentication_required'), 'not_authenticated'],
   ['the caller may not start it', refusal(403, 'permission_denied'), 'not_permitted'],
+  [
+    'the server does not allow starts of AR v3',
+    refusal(409, 'conflict', { details: { conflict_reason: 'ar_v3_start_not_enabled' } }),
+    'start_not_allowed',
+  ],
 ];
 
 describe('every refusal the six-check start raises is told as itself', () => {
@@ -102,6 +107,7 @@ describe('every refusal the six-check start raises is told as itself', () => {
       'norm_unavailable',
       'pack_unavailable',
       'section_not_ar',
+      'start_not_allowed',
       'version_unclassified',
     ]);
     // The pack refusal says retry is pointless even though the envelope marks a 503 retryable.
@@ -185,7 +191,9 @@ describe('the control shows each refusal with only the actions that can help', (
     expect(markup).not.toContain('<select');
     expect(markup).not.toContain('type="radio"');
     expect(markup).toContain('type="checkbox"');
-    expect(markup).toContain('Ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.');
+    // 0976d3a63 (the run hotfix of 2026-11-06) removed the answer cap, so no token ceiling is promised any more.
+    expect(markup).toContain('Лимит стоимости подтверждается отдельно.');
+    expect(markup).not.toContain('16 000 токенов');
     expect(markup).not.toContain('data-ar-v3-group-failure');
     expect(markup.match(/<button\b/g)).toHaveLength(2);
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Запустить шесть проверок АР v3<\/button>/);

@@ -49,10 +49,21 @@ function label(page: StageSheetPassport): string {
     + `${page.floor === undefined ? '' : ` · ${page.floor}`}`;
 }
 
-function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, onClearFocus, onReviewCreated }: {
+type RowConfidence = StageLinkRevision['items'][number]['confidence'];
+const CONFIDENCE_WORDS: Readonly<Record<RowConfidence, string>> = {
+  high: 'Высокая', manual: 'Ручная', review: 'Проверить', automatic_repair: 'Исправлено автоматически', unpaired: 'Нет пары',
+};
+const CONFIDENCE_BADGES: Readonly<Record<RowConfidence, string>> = {
+  high: 'ok', manual: 'active', review: 'degraded', automatic_repair: 'ok', unpaired: 'pending',
+};
+/** `scSheetMapStatus` of the original: a row without a pair, or one the algorithm was not sure of, needs a look. */
+const needsCheck = (confidence: RowConfidence): boolean => confidence === 'review' || confidence === 'unpaired';
+
+function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, onClearFocus, onReviewCreated, rowsOpen: controlledRowsOpen, onRowsOpenChange }: {
   readonly pairId: string; readonly mayAct: boolean; readonly textProvider: PageTextProvider | undefined;
   readonly runId: string | undefined; readonly focus: StageMapFocus | undefined; readonly onClearFocus: (() => void) | undefined;
   readonly onReviewCreated: ((card: StageChangeCard) => void) | undefined;
+  readonly rowsOpen: boolean | undefined; readonly onRowsOpenChange: ((open: boolean) => void) | undefined;
 }) {
   const cache = useQueryClient();
   const passports = useQuery({
@@ -88,6 +99,11 @@ function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, on
   const [leftSearch, setLeftSearch] = useState('');
   const [rightSearch, setRightSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const [rowFilter, setRowFilter] = useState<'all' | 'review'>('all');
+  // `UI-B-93`: the fold of the map's rows is the page's to keep (in the address) when it hands the choice in; else it is this map's own.
+  const [ownRowsOpen, setOwnRowsOpen] = useState(true);
+  const rowsOpen = controlledRowsOpen ?? ownRowsOpen;
+  const setRowsOpen = (next: boolean) => { if (onRowsOpenChange === undefined) setOwnRowsOpen(next); else onRowsOpenChange(next); };
   const [commandError, setCommandError] = useState<unknown | null>(null);
   const held = useRef<{ signature: string; key: string } | null>(null);
   const [focus, setFocus] = useState<StageViewerFocus | undefined>();
@@ -133,6 +149,9 @@ function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, on
     }
     // External navigation is an event; manual page selections do not reapply it.
   }, [externalFocus]);
+  // Opening a place from a card shows its row even when the filter would hide it.
+  // A place opened from the changes shows its row: the filter is lifted and a folded map opens, as the original unfolds it (`UI-B-93`).
+  useEffect(() => { if (externalFocus !== undefined) { setRowFilter('all'); if (!rowsOpen) setRowsOpen(true); } }, [externalFocus?.token]);
   useEffect(() => { if (selectedRow !== undefined) rowNodes.current.get(selectedRow)?.scrollIntoView?.({ block: 'nearest' }); }, [selectedRow, externalFocus?.token, displayRows.length]);
   const leftStored = useQuery({ queryKey: ['stage-view-profile', left || 'none'],
     queryFn: async () => (await getVersionPageProfile({ path: { comparison_page_profile_id: left } })).data,
@@ -177,6 +196,20 @@ function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, on
   const readFailure = failure === null ? null : failureMessage(failure);
   const actFailure = commandError === null ? null : failureMessage(commandError);
 
+  // The word on a row: what the saved map said of it, else «Нет пары» for a lone sheet, the algorithm's confidence for a pair it
+  // suggested, and «Ручная» for the rest (an expert made it).
+  const confidenceOf = (row: { relation: StageLinkInput['relation']; left_profile_id?: string | undefined; right_profile_id?: string | undefined }): RowConfidence => {
+    const saved = current.data?.items.find((item) => item.relation === row.relation
+      && item.left_profile_id === row.left_profile_id && item.right_profile_id === row.right_profile_id);
+    if (saved !== undefined) return saved.confidence;
+    if (row.relation !== 'paired') return 'unpaired';
+    const hint = suggestions.data?.items.find((item) => item.left_profile_id === row.left_profile_id && item.right_profile_id === row.right_profile_id);
+    return hint === undefined ? 'manual' : hint.confidence === 'high' ? 'high' : 'review';
+  };
+  const rowConfidences = displayRows.map(confidenceOf);
+  const reviewRows = rowConfidences.filter(needsCheck).length;
+  const pendingHigh = (suggestions.data?.items ?? []).filter((item) => item.confidence === 'high'
+    && !draft.some((row) => row.relation === 'paired' && row.left_profile_id === item.left_profile_id && row.right_profile_id === item.right_profile_id)).length;
   const add = (row: StageLinkInput) => {
     if (draft.some((item) => item.left_profile_id === row.left_profile_id
       && item.right_profile_id === row.right_profile_id && item.relation === row.relation)) return;
@@ -227,6 +260,50 @@ function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, on
     {passports.isPending || suggestions.isPending || current.isPending
       ? <LoadingState what="листы пары стадий" /> : null}
     {readFailure === null ? null : <ErrorState title="Карта листов не открылась" detail={readFailure.detail} correlationId={readFailure.correlationId} />}
+    {/* `UI-B-90`: the map comes first, with its head — the count, the filter «Все / Требуют проверки (N)», «Принять предложенные (N)», «Свернуть» — as the original's `sc-sheet-map`; the two panes and the viewer follow. */}
+    <section className={styles.map} aria-label="Карта листов" data-stage-sheet-map="">
+      <div className={styles.mapHead}>
+        <strong>Карта листов</strong>
+        <span>{displayRows.length} связей и несопоставленных листов</span>
+        <span className={styles.spacer} />
+        <div role="group" aria-label="Фильтр листов" className={styles.actions}>
+          <button type="button" className={rowFilter === 'all' ? 'am-button' : 'am-button am-button--quiet'} aria-pressed={rowFilter === 'all'} onClick={() => setRowFilter('all')}>Все</button>
+          <button type="button" className={rowFilter === 'review' ? 'am-button' : 'am-button am-button--quiet'} aria-pressed={rowFilter === 'review'} onClick={() => setRowFilter('review')}>Требуют проверки ({reviewRows})</button>
+        </div>
+        {mayAct && !historical && current.isSuccess && passports.isSuccess ? <button type="button" className="am-button" disabled={pendingHigh === 0} onClick={() => {
+          const high = suggestions.data?.items.filter((item) => item.confidence === 'high') ?? [];
+          if (high.length === 0) return;
+          let accepted: StageLinkInput[] = high.map((item) => ({ relation: 'paired', left_profile_id: item.left_profile_id, right_profile_id: item.right_profile_id }));
+          for (const page of passports.data ?? []) accepted = addUnpaired(accepted, page.side, page.profile_id);
+          setDraft(accepted);
+          setDirty(true);
+        }}>Принять предложенные ({pendingHigh})</button> : null}
+        <button type="button" className="am-button am-button--quiet" aria-expanded={rowsOpen} onClick={() => setRowsOpen(!rowsOpen)}>{rowsOpen ? 'Свернуть' : 'Развернуть'}</button>
+      </div>
+      <p>Подсказки не меняют карту. Высокая уверенность: {suggestions.data?.items.filter((item) => item.confidence === 'high').length ?? 0}; проверить: {suggestions.data?.items.filter((item) => item.confidence === 'review').length ?? 0}.</p>
+      {draft.length === 0 ? <EmptyState title="Карта листов пока пуста" detail="Выберите листы и подтвердите первую связь." /> : null}
+      {rowsOpen ? <ol className={styles.rows}>
+        {displayRows.map((row, index) => rowFilter === 'review' && !needsCheck(rowConfidences[index]!) ? null : <li key={`${index}:${row.left_profile_id ?? ''}:${row.right_profile_id ?? ''}`} className={styles.row}
+          ref={(node) => { if (node === null) rowNodes.current.delete(index); else rowNodes.current.set(index, node); }}
+          data-stage-map-row={index} data-stage-focused-row={index === selectedRow ? 'true' : undefined}>
+          <span>П: {row.left_profile_id === undefined ? 'Пусто' : names.get(row.left_profile_id) ?? row.left_profile_id}</span>
+          <span>Р: {row.right_profile_id === undefined ? 'Пусто' : names.get(row.right_profile_id) ?? row.right_profile_id}</span>
+          <span className={`am-badge am-badge--${CONFIDENCE_BADGES[rowConfidences[index]!]}`} data-row-confidence={rowConfidences[index]}>{CONFIDENCE_WORDS[rowConfidences[index]!]}</span>
+          {mayAct && !historical ? <div className={styles.actions}>
+            <button type="button" className="am-button" onClick={() => focusPages(row.left_profile_id, row.right_profile_id)}>Открыть связь ↗</button>
+            <button type="button" className="am-button" disabled={left === ''} onClick={() => { setDraft((items) => moveSheet(addUnpaired(items, 'left', left), 'left', left, index)); setDirty(true); }}>Перенести П сюда</button>
+            <button type="button" className="am-button" disabled={right === ''} onClick={() => { setDraft((items) => moveSheet(addUnpaired(items, 'right', right), 'right', right, index)); setDirty(true); }}>Перенести Р сюда</button>
+            <button type="button" className="am-button" disabled={row.relation !== 'paired'} onClick={() => { setDraft((items) => unlinkRow(items, index)); setDirty(true); }}>Удалить связь</button>
+          </div> : <button type="button" className="am-button" onClick={() => focusPages(row.left_profile_id, row.right_profile_id)}>Открыть связь ↗</button>}
+        </li>)}
+      </ol> : null}
+      {mayAct && !historical ? <button type="button" className="am-button" disabled={!dirty || saving || draft.length === 0} onClick={() => void save()}>Сохранить решение эксперта</button> : null}
+      {actFailure === null ? null : <ErrorState title="Карта не сохранена" detail={actFailure.detail} correlationId={actFailure.correlationId} />}
+      <p>Текущая ревизия: {current.data?.revision_no ?? 'нет'}.</p>
+      {history.data?.items.length ? <details><summary>История карты</summary><ol>
+        {history.data.items.map((item) => <li key={item.revision_id}>Ревизия {item.revision_no} · {item.items.length} строк</li>)}
+      </ol></details> : null}
+    </section>
     <div className={styles.panes}>
       <div className={styles.pane}>
         <label>Лист П
@@ -254,37 +331,7 @@ function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, on
       <button type="button" className="am-button" disabled={left === '' || right === ''} onClick={() => add({ relation: 'paired', left_profile_id: left, right_profile_id: right })}>Добавить связь</button>
       <button type="button" className="am-button" disabled={left === ''} onClick={() => { setDraft((items) => addUnpaired(items, 'left', left)); setDirty(true); }}>Без пары слева</button>
       <button type="button" className="am-button" disabled={right === ''} onClick={() => { setDraft((items) => addUnpaired(items, 'right', right)); setDirty(true); }}>Без пары справа</button>
-      <button type="button" className="am-button" disabled={suggestions.data?.items.length === 0} onClick={() => {
-        const high = suggestions.data?.items.filter((item) => item.confidence === 'high') ?? [];
-        if (high.length === 0) return;
-        let accepted: StageLinkInput[] = high.map((item) => ({ relation: 'paired', left_profile_id: item.left_profile_id, right_profile_id: item.right_profile_id }));
-        for (const page of passports.data ?? []) accepted = addUnpaired(accepted, page.side, page.profile_id);
-        setDraft(accepted);
-        setDirty(true);
-      }}>Принять видимые точные подсказки</button>
     </div> : null}
-    <p>Подсказки не меняют карту. Высокая уверенность: {suggestions.data?.items.filter((item) => item.confidence === 'high').length ?? 0}; проверить: {suggestions.data?.items.filter((item) => item.confidence === 'review').length ?? 0}.</p>
-    {draft.length === 0 ? <EmptyState title="Карта листов пока пуста" detail="Выберите листы и подтвердите первую связь." /> : null}
-    <ol className={styles.rows}>
-      {displayRows.map((row, index) => <li key={`${index}:${row.left_profile_id ?? ''}:${row.right_profile_id ?? ''}`} className={styles.row}
-        ref={(node) => { if (node === null) rowNodes.current.delete(index); else rowNodes.current.set(index, node); }}
-        data-stage-map-row={index} data-stage-focused-row={index === selectedRow ? 'true' : undefined}>
-        <span>П: {row.left_profile_id === undefined ? 'Пусто' : names.get(row.left_profile_id) ?? row.left_profile_id}</span>
-        <span>Р: {row.right_profile_id === undefined ? 'Пусто' : names.get(row.right_profile_id) ?? row.right_profile_id}</span>
-        {mayAct && !historical ? <div className={styles.actions}>
-          <button type="button" className="am-button" onClick={() => focusPages(row.left_profile_id, row.right_profile_id)}>Открыть связь ↗</button>
-          <button type="button" className="am-button" disabled={left === ''} onClick={() => { setDraft((items) => moveSheet(addUnpaired(items, 'left', left), 'left', left, index)); setDirty(true); }}>Перенести П сюда</button>
-          <button type="button" className="am-button" disabled={right === ''} onClick={() => { setDraft((items) => moveSheet(addUnpaired(items, 'right', right), 'right', right, index)); setDirty(true); }}>Перенести Р сюда</button>
-          <button type="button" className="am-button" disabled={row.relation !== 'paired'} onClick={() => { setDraft((items) => unlinkRow(items, index)); setDirty(true); }}>Удалить связь</button>
-        </div> : <button type="button" className="am-button" onClick={() => focusPages(row.left_profile_id, row.right_profile_id)}>Открыть связь ↗</button>}
-      </li>)}
-    </ol>
-    {mayAct && !historical ? <button type="button" className="am-button" disabled={!dirty || saving || draft.length === 0} onClick={() => void save()}>Сохранить решение эксперта</button> : null}
-    {actFailure === null ? null : <ErrorState title="Карта не сохранена" detail={actFailure.detail} correlationId={actFailure.correlationId} />}
-    <p>Текущая ревизия: {current.data?.revision_no ?? 'нет'}.</p>
-    {history.data?.items.length ? <details><summary>История карты</summary><ol>
-      {history.data.items.map((item) => <li key={item.revision_id}>Ревизия {item.revision_no} · {item.items.length} строк</li>)}
-    </ol></details> : null}
     {aiIds.length === 0 ? null : <p>Совпадения после ИИ-ревизии: {aiIds.length} фрагментов. Исходные различия доступны ниже.</p>}
     <StageTextEvidence revisionId={evidenceRevisionId} mayAct={mayAct && !historical} dirty={dirty || historical}
       evidence={text.data} loading={text.isFetching} needsRecompute={evidenceNeedsRecompute(text.error)}
@@ -311,9 +358,12 @@ export interface StageSheetMapProps {
   readonly focus?: StageMapFocus;
   readonly onClearFocus?: () => void;
   readonly onReviewCreated?: (card: StageChangeCard) => void;
+  /** `UI-B-93`: whether the map's rows are open, when the page keeps the fold in the address; absent, the map keeps it itself. */
+  readonly rowsOpen?: boolean;
+  readonly onRowsOpenChange?: (open: boolean) => void;
 }
 
-export function StageSheetMap({ projectUid, mayAct, textProvider, pairId: controlledPairId, onPairChange, runId, focus, onClearFocus, onReviewCreated }: StageSheetMapProps) {
+export function StageSheetMap({ projectUid, mayAct, textProvider, pairId: controlledPairId, onPairChange, runId, focus, onClearFocus, onReviewCreated, rowsOpen, onRowsOpenChange }: StageSheetMapProps) {
   const [pages, setPages] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
   const pairs = useStagePairs(controlledPairId === undefined ? projectUid : null, pages.at(-1));
@@ -341,6 +391,6 @@ export function StageSheetMap({ projectUid, mayAct, textProvider, pairId: contro
     {focus !== undefined && (focus.pairId !== pairId || (runId !== undefined && focus.runId !== runId))
       ? <ErrorState title="Свидетельство относится к другому сравнению" detail="Выберите запуск и откройте место заново." /> : null}
     {pairId === '' ? <EmptyState title="Выберите пару стадий" detail="Карта листов относится к одной подтверждённой паре." />
-      : <PairMap key={pairId} pairId={pairId} mayAct={mayAct} textProvider={textProvider} runId={runId} focus={focus?.pairId === pairId && (runId === undefined || focus.runId === runId) ? focus : undefined} onClearFocus={onClearFocus} onReviewCreated={onReviewCreated} />}
+      : <PairMap key={pairId} pairId={pairId} mayAct={mayAct} textProvider={textProvider} runId={runId} focus={focus?.pairId === pairId && (runId === undefined || focus.runId === runId) ? focus : undefined} onClearFocus={onClearFocus} onReviewCreated={onReviewCreated} rowsOpen={rowsOpen} onRowsOpenChange={onRowsOpenChange} />}
   </section>;
 }

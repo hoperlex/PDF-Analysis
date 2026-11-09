@@ -46,3 +46,17 @@ export function useArV3PackStatus(): { readonly view: ArV3PackView; readonly ref
       : { phase: 'loading' };
   return { view, refetch: () => void query.refetch() };
 }
+
+/**
+ * Whether this deployment allows a start of AR v3 now (`AR-V3-OPT-IN`): the pack reads as installed **and** says
+ * `start_allowed`. It is `false` on every other answer -- loading, a failed read (also a failed re-read that still holds an
+ * earlier body), not installed, a contract fault, an installed pack that does not say -- so a screen offers the choice of
+ * v3 on one answer only. A screen that has no use for the answer (a version that is not АР) does not MOUNT this hook: a
+ * disabled query still attaches an observer, and «does not ask» means no observer at all.
+ */
+export function useArV3StartAllowed(): boolean {
+  const query = useQuery<ArV3BetaPackStatus>(arV3PackStatusQueryOptions());
+  if (!query.isSuccess) return false;
+  const reading = readArV3PackStatus(query.data);
+  return reading.kind === 'installed' && reading.startAllowed;
+}

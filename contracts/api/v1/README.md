@@ -11,12 +11,307 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.33.0` (`HOTFIX-RUN-PARTIAL-1106`)
+## Current contract `1.42.0` (`UI-PARITY-S2`)
 
-Removes the application character ceiling on runner answer text. Request/response fields,
-paths and operations are unchanged. Analysis and event families share the new seal.
+Slice for register row `UI-A-60` (ruling `R-151i`, debt `D-301`): «Запустить с этапа». **One operation, one migration (`0060_run_from_stage`),
+no error code.** One new schema, `StartRunFromStageRequest`; optional properties on `RunStatus`, `RunCostEstimateRequest` and
+`RunCostEstimate`. The design, with the reuse rule and the idempotency key, is `docs/program/RUN-FROM-STAGE-01.md`.
 
-## Previous contract `1.32.0` (`UI-PARITY-KB-ALL`)
+- **`startRunFromStage`** (`POST /runs/{run_id}/start-from-stage`, `expert` or `admin`, keyed, `202`): a **new** run of the earlier
+  run's document version that reuses the earlier run's completed outputs of every PC-01 stage before `stage_id` and computes
+  `stage_id` and the stages after it. The earlier run is immutable history and is not changed. `stage_id` is one of
+  `page_geometry_extraction`, `document_context_build`, `text_analysis` (the first stage reuses nothing: `422 validation_failed`,
+  `constraint` `nothing_to_reuse`, use `reauditRun`; any other is `stage_not_startable`). The new run records today's configuration
+  exactly as a re-audit does (`R-82`).
+- **A stage output that cannot be taken** is `422 analysis_input_invalid` with `details.stage_id` (the first stage that cannot) and
+  `details.reason`: `source_stage_not_completed`, `source_stage_version_changed`, `source_stage_output_incomplete`,
+  `source_artifact_unavailable`, `source_artifact_changed`, `source_stage_inputs_changed`. Nothing is recomputed in its place and
+  nothing is written. The earlier run must have ended (`409 state_transition_not_allowed`) and be a standard run (an AR v3 member:
+  `409 conflict`, `ar_v3_member_not_repeatable`).
+- **`RunStatus`** gains the optional `started_from_run_id` and `start_stage_id` (both or neither; absent for a run started from a
+  version or as a re-audit, which keeps `reaudit_of_run_id`). **`estimateRunCost`** takes the optional `start_from_run_id` and
+  `start_stage_id` (both, and nothing that chooses a route) and **`RunCostEstimate`** answers `start_from_run_id`, `start_stage_id`,
+  `reused_stage_ids` and `computed_stage_ids`: the price is for the computed stages, and the digest is bound to the earlier run and
+  stage, so a digest of a re-audit or of another stage is `run_cost_estimate_stale`.
+- **Idempotency.** The caller's `Idempotency-Key`; the fingerprint is the earlier run, the stage, the earlier run's stored digest and
+  the consent. The same key with the same request replays the run; with another stage it is `idempotency_key_reuse`. While a run
+  from the same earlier run and stage has not ended, a second is `409 conflict`.
+- **Not changed.** `reauditRun`, `startRun`, the stage vocabulary, the error catalogue and every other operation.
+
+The API now has 275 paths, 303 operations and 730 schemas (the new schema is `StartRunFromStageRequest`); migration head `0060`
+(chained after `0059_decision_memory`). The domain catalogs are at candidate revision 59.
+
+## Contract `1.41.0` (`UI-PARITY-C6`, historical)
+
+Slice for register rows `UI-A-74`, `UI-A-82` and `UI-A-84` (the portal blocks that hold a finding's evidence: the thumbnails under an
+opened finding, the number of findings on a block tile, «Без сущностей»). **One operation, no migration, no error code** (head stays
+`0058`). Two new schemas, `FindingBlockLink` and `RunFindingBlockLinks`.
+
+- **`listRunFindingBlocks`** (`GET /runs/{run_id}/finding-blocks`, any one role): one item per published finding of the run, with
+  `portal_block_ids`, the portal blocks that hold the finding's canonical observation's evidence, in the portal list's order. A
+  **derivation on read**, nothing stored and no evidence changed: the evidence's characters are located on their page by the
+  run's own text-layer block index (the line boxes, `geometry.block_index`) and page inventory (`prepared.page_inventory`), the
+  evidence's box is the part of the line its characters occupy, and a portal block (the version's `geometry.portal_blocks`, the
+  document `listVersionPortalBlocks` serves) holds the evidence when it covers at least half of that box. The rule, with its known
+  misses, is `analysis/geometry/finding_blocks.py`; no model and no text search is involved.
+- **Absent is not empty.** `status: "not_produced"` (and no items) when the run has no text-layer geometry or the version no portal
+  geometry; with `produced`, a finding whose evidence no block holds has an empty `portal_block_ids`. `unlinked_pages` are the
+  pages of the portal geometry on which no link can be derived (the portal's raster does not describe the PDF page: a
+  `geometry_mismatch`, or an aspect or rotation the text layer's page does not share): a block on such a page is unknown, never
+  «no findings». An unknown run is `404`.
+- **Not changed.** `Finding`, `Evidence`, `PortalBlock` and `listRunFindings` are as they were; the link is a separate read so that a
+  link that cannot be derived never takes the findings list down with it.
+
+The API then had 274 paths, 302 operations and 729 schemas (the new schemas were `FindingBlockLink` and `RunFindingBlockLinks`);
+migration head `0058`. The domain catalogs were at candidate revision 58.
+
+## Contract `1.40.0` (`UI-PARITY-AUDIT-STATE`, historical)
+
+Slice for register rows `UI-A-47` (the original's «идёт аудит» strip on a document), `UI-A-65` / `UI-B-45` (the estimated finish
+on the run page) and `UI-B-07` (the percent beside a proposal's saving). **No operation, no error code, no migration** (head
+stays `0058`). One new schema, `DocumentActiveRun`; three optional properties, each absent when it has nothing to say.
+
+- **A document names the run in flight.** `DocumentAudit.active_run` (`listDocuments` only, read in the same statement as the
+  audit, one statement for the page) is `{run_id, state}` of the version's latest run of the standard analysis in state
+  `queued`, `running` or `validating`, ordered by `(created_at, run_id)` as the result run is; absent when none is. It is a fact
+  beside the four words and changes none of them: a document whose first run is in flight is still `not_run`, and a `checked` one
+  with a re-run in flight is still `checked`; the counters (`DocumentAuditCounts`, the dashboard) do not read it. A `created`
+  run is not active (not yet admitted); a run of an AR v3 group never is, as it is never a result (`AR-V3-OPT-IN`, `Q3`). **No
+  progress figure** («пакет n/m»): the run status reports stages and the server holds no plan of packages to count against
+  (`D-345`); the card says «идёт аудит» with the state and links to the run page, where the stages are.
+- **The run page has the estimate the queue has.** `RunStatus.estimated_finish_at` is the value of
+  `ExecutionQueueItem.estimated_finish_at` (`R-151u`) for the run's job, from **one function**
+  (`execution.eta.job_estimated_finish`, which the queue item calls too): the job's first attempt plus the median duration of at
+  least three similar recent completed runs. Present only while the run's job is leased or running and has started; absent for a
+  queued, waiting or finished run and without enough history; never invented. It can already lie in the past for a run that is
+  taking longer than the usual one; the screen says what the time is and not that it will be met.
+- **A proposal's percent.** `OptimisationProposal.saving_percent` is how much cheaper the proposed unit price is than the
+  current one, in percent of the current unit price: `(current - proposed) / current * 100`, exact rational arithmetic, rounded
+  half up to two decimals and written without a trailing zero (`25`, `33.33`; pattern `^(0|100|(0|[1-9][0-9]?)\.[0-9]?[1-9]|[1-9][0-9]?)$`).
+  It is the share the `saving` is of the cost at the current price, with the quantity cancelled, so it is present where `saving` is
+  `null` for want of a numeric quantity; absent only when the current unit price is zero. The one figure of a proposal that is
+  rounded; never computed by a client. The proposals' CSV and workbook and `AcceptedOptimisationProposal` do not carry it (`D-346`).
+- **Not changed.** The four audit states, `ExecutionQueueItem`, the counters, every operation's request.
+
+The API then had 273 paths, 301 operations and 727 schemas (the new schema was `DocumentActiveRun`); migration head `0058`. The
+domain catalogs were at candidate revision 57.
+
+## Contract `1.39.0` (`UI-PARITY-FINDING-ORIGIN`, historical)
+
+Slice for register row `UI-A-73` (the original's «↩ Перенесено из V1» on a finding whose verdict an expert carried over from an
+earlier version) and `D-335`, migration `0058_finding_decision_origin`. **No operation, no error code.** One new schema,
+`DecisionCarriedFrom`.
+
+- **A carried finding decision names its source.** `carryOverDecision` (`W59-DECISION-CARRYOVER-01`) already appended the
+  confirming expert's verdict to the target finding as an ordinary event, and kept where it came from only in the event's
+  rendered `comment`. The new nullable `expert_decision_event.carried_from_decision_id` (migration `0058`: foreign key to the
+  table itself, `dec_` shape, not its own source, only an `accept` or a `reject`, a partial index) is written by the same
+  statement as the event. `DecisionCarriedFrom` (`decision_id`, `finding_uid`, `version_uid`, `version_ordinal`) is that link as
+  the wire shows it: the source decision, its finding and version, and the version's display order («V2», never an identity).
+- **The decision history and the journal.** `DecisionEvent.carried_from` (`listDecisionHistory`, `appendDecision`) and
+  `DecisionRecord.carried_from` (`listDecisions`, and the finding half of `listKnowledgeBaseEntries`) are **optional**: absent
+  for an event an expert made directly, and for every event written before the migration. They are not required-nullable like
+  `ProposalDecision.carried_from`, because the finding ledger's shapes predate the field, `appendDecision` answers a direct event
+  by construction, and the ledger's attributes (`severity`, `section`, `decided_severity`) are omitted when empty.
+- **The origin of a finding's current verdict.** `Finding.current_verdict_carried_from` and
+  `FindingDetail.current_verdict_carried_from` (`listRunFindings`, `getFinding`) carry the same object for the decision that
+  carries `current_verdict` -- the latest verdict-bearing event, as the projection reads it: a comment appended after a carried
+  acceptance leaves it standing, an expert's own verdict after it replaces it, and a withdrawal leaves none. Optional, absent
+  unless carried. A small object and not a bare ordinal, so the same shape names the source on all four reads and a screen that
+  wants the source finding does not read the whole history.
+- **`D-335` (part).** `AcceptedOptimisationProposal.carried_from` (required, nullable `ProposalDecisionCarriedFrom`, as on
+  `ProposalDecision`) lets «Принято» show the mark of an acceptance carried over from an earlier version's pass. The proposals'
+  CSV and workbook, the proposal-decision journal (`ProposalDecisionRecord`) and the knowledge base's «Предложения» still show
+  a carried decision as an ordinary one (`D-335`, narrowed).
+- **Not changed.** An event carried before `0058` has the comment and no link (the ledger is append-only); it reads as made
+  directly (`D-342`). The downgrade of `0058` refuses while a carried event exists.
+
+The API now has 273 paths, 301 operations and 726 schemas (the new schema is `DecisionCarriedFrom`); migration head `0058`. The
+domain catalogs are at candidate revision 56.
+
+## Contract `1.38.0` (`AR-V3-OPT-IN`, historical)
+
+AR v3 as an **opt-in mode** (`docs/program/AR-V3-OPT-IN-01.md`; owner words of 2026-11-07: «реализуй как переключаемую
+функцию -- по умолчанию используется импортированный вариант»). **No operation, no schema, no error code, no migration.**
+
+- **The allowance.** `ArV3BetaPackStatus.start_allowed` (optional; present exactly when `state` is `installed`) says whether
+  the deployment allows a start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`, read by the `api` service, off unless `1`,
+  anything but absent, blank, `0` or `1` refuses the process start). The pack is the capability to execute, read and review;
+  this is the separate permission to start. While a pack is installed and it is false, `startArV3BetaGroup` and
+  `estimateArV3GroupCost` answer `409 conflict` with `conflict_reason` `ar_v3_start_not_enabled` and write nothing; a repeat of
+  an accepted key still replays its group; runs already accepted finish. With no pack the answers are what they were.
+- **Which analysis produced a run.** `RunStatus.analysis_kind` (`standard` | `ar_v3_beta`) is derived from the pinned profile
+  and bundle pair and sent on every run; `ar_v3_group_id` and `ar_v3_scope_id` name the group and scope of a member only. Each
+  member records the account that started it (`started_by_user_uid`, `R-151v`).
+- **The result of a version** is its newest published or partial run **of the standard analysis**: the audit state of a document
+  and every counter read off it, the schedule's facts, the default run of a comparison and the text the optimisation reads. A
+  published v3 member never displaces it (`Q3`).
+- **Refusals.** `reauditRun` (and `estimateRunCost` with `reaudit_of_run_id`) of a member of an AR v3 group is `409 conflict`
+  with `conflict_reason` `ar_v3_member_not_repeatable`, before the key is claimed (`Q4`); a v3 run named as `source_run_id` or
+  `target_run_id` of a comparison is the refusal `analysis_not_comparable` (new reason of `ComparisonRefusal`, with its side;
+  `Q5`), checked after `run_not_of_version` and before `run_not_published`.
+
+The API keeps 273 paths, 301 operations and 725 schemas; migration head `0057`. The domain catalogs are at candidate
+revision 55.
+
+## Contract `1.37.0` (`UI-PARITY-OPT-CARRYOVER`, historical)
+
+Slice for register row `UI-B-14` (carry the decisions of an earlier version's optimisation pass over to a later one, the
+original's «↩ Перенесено из V2»), migration `0057_decision_carryover`, and two corrections:
+
+- **«Перенести решения из V#»** (`UI-B-14`). `carryOverProposalDecisions`
+  (`POST /optimisation-passes/{optimisation_pass_id}/decision-carryovers`, body `source_optimisation_pass_id`, `expert`,
+  keyed) carries the decisions in force of the source pass into the pass of the path. The source must be a pass of the same
+  document set started over an earlier version; otherwise `409 conflict` with `conflict_reason` `carryover_source_unknown`,
+  `carryover_source_is_target`, `carryover_source_other_document` or `carryover_source_not_earlier`, and nothing is written.
+  A source decision (`accept`, `reject` or `revise`; a proposal nobody decided, or whose decision was withdrawn, carries
+  nothing) is matched to a proposal of the target pass by **content only** -- the type, the specification row's text, the
+  unit and the currency, the matched and the proposed position by code, mark, name and supplier, and both exact unit prices;
+  never a display number, a name alone, a place in the drawing, a price-list identity or the quantity -- and only when
+  exactly one proposal of each pass has that content and the target proposal has no event at all (a decision or a
+  withdrawal there is an expert's act and stands). Each match is appended as an ordinary decision event of the target
+  proposal: the source's verdict and comment, authored by the caller, with `carried_from` naming the source; a later decision
+  on the proposal supersedes it like any other. The answer (`ProposalDecisionCarryoverReport`) counts every decision in force
+  of the source (`source_decided`) in exactly one of `carried`, `target_decided`, `ambiguous` (more than one proposal of
+  either pass has that content) and `unmatched`, and names the source version's display ordinal. An exact repeat of the key
+  answers the stored report and appends nothing; the key for another source or caller is `409 idempotency_key_reuse`; a new
+  key repeats the matching and carries nothing more once the targets are decided. The migration adds the nullable
+  `optimisation_proposal_decision.carried_from_decision_id` (foreign key to the table itself, the `opd_` shape, not its own
+  source, never a `revoke`) and a partial index; its downgrade refuses while a carried decision exists.
+- **`ProposalDecision.carried_from`** is a required, nullable `ProposalDecisionCarriedFrom` (`proposal_decision_id`,
+  `optimisation_pass_id`, `version_uid`, `version_ordinal`): `null` for a decision made directly and for every decision
+  recorded before the migration. It is on every `ProposalDecision` (`decideOptimisationProposal`, `listProposalDecisions`
+  and the `current_decision` of each proposal).
+- **`OptimisationPass.version_ordinal`** is the required display order of the version the pass was started over («V2»), so a
+  screen can name an earlier version's pass; it is never an identity.
+- **The tabs of «Оптимизация разделов»** need no new field: `SectionSpecification.row_count` (every row in scope, apart from
+  the text search) and `AcceptedOptimisationProposalPage.total` are the server's figures for «Форма 7 · N» and «Принято N»,
+  and the screen never counts rows.
+- **`AnalysisProfileStatus`** (`D-223`): the description now says what `R-146ag` and `A-7` say -- `reviewed` is a package whose
+  open questions a lane answered in writing, with no human review -- and no longer that an expert reviewed it or that the
+  original-source АР profile is `draft` until expert review (АР has no profile status at all: its row carries `profile: null`).
+
+The API now has 273 paths, 301 operations and 725 schemas (the three new schemas are `CarryOverProposalDecisionsRequest`,
+`ProposalDecisionCarriedFrom` and `ProposalDecisionCarryoverReport`); migration head `0057`. The domain catalogs are at
+candidate revision 54. No error code is added.
+
+## Contract `1.36.0` (`UI-PARITY-ADMIN-C2`, historical)
+
+Slice for register rows `UI-A-92`, `UI-A-93` and `UI-A-94` (the administrator's side of the original's «Пользователи»)
+and the «Диспетчер» counts, **no migration** (head stays `0056`): the access journal already is the append-only
+`audit_event` table, written in the transaction of the change it describes (`PROD-06`, ADR-0023 section 4), so this slice
+reads it and adds one event type.
+
+- **«Последний вход»** (`UI-A-92`). `Account` gains the required, nullable `last_sign_in_at`: the instant of the
+  account's latest `access.sign_in_succeeded` event, `null` when none is recorded (it never signed in, or signed in before
+  the journal began). It is on every `Account` answer (`listUsers`, `getUser`, `getMe` and the account writes). It is read
+  from the journal for the accounts an answer names, in one statement for the page; the seam's own per-request standing
+  read does not touch the journal.
+- **«Завершить сеансы»** (`UI-A-93`). `endUserSessions` (`POST /users/{user_uid}/sessions/end`, `admin`, keyed) raises the
+  account's credential epoch, the mechanism archive, reset and a role change already use, so every credential the account
+  holds is refused from its next request (`401 authentication_required`) and it signs in again; the password, the roles and
+  the sign-in brake are untouched. It answers the `Account`. Not oneself (`403 permission_denied`: an administrator ends
+  their own sessions by changing their password); an archived or missing account is `404 not_found`. The key is claimed in
+  the transaction of the raise: an exact repeat answers the account unchanged and ends nothing more, the key under another
+  account or administrator is `409 idempotency_key_reuse`. A new event type, `access.sessions_ended`, is journalled in
+  that transaction (the seventh; the command type `end_user_sessions` is an account-side receipt the purge keeps).
+- **«Журнал входов»** (`UI-A-94`). `listAuthEvents` (`GET /auth-events`, `admin`, cursor) is the access journal, newest
+  first. Each row is an `AuthEvent`: its identity (`evt_`), `event_type` (`AuthEventType`: `sign_in_succeeded`,
+  `sign_in_blocked`, `password_changed`, `password_reset`, `role_granted`, `role_revoked`, `sessions_ended`), `occurred_at`,
+  the account it is about (`subject_user_uid` and `subject_label`, the label it has now, `null` once the account has been
+  deleted), the administrator who acted (`actor_user_uid`, `actor_label`; `null` for a sign-in, a refusal and a grant by the
+  host command), `source` (`api` or `host_cli`), and the three facts a type may carry (`role`, `failures`,
+  `default_credential`; `null` otherwise). The order is `(occurred_at, sequence)` and the cursor is the last event's own
+  identity; the sequence is never sent. **What the journal holds is what its writer allows**: identities, a role, a source
+  word, one boolean and one count -- never a password, a token, an address or a login as typed. **A refused sign-in is
+  journalled as `sign_in_blocked`, once per account per cooling-off period (ADR-0023 section 4); a refusal that starts none
+  and an attempt on an unknown login are not journalled** (an unknown login has no identity to name, and a row per guess
+  would let a guesser grow the table). **Sign-out is not journalled**: the web tier closes its own session and the API is
+  not told; an event for it needs an operation of its own.
+- **«Диспетчер»: the numbers of the state chips.** `AssignmentPage` gains the required `total` (the assignments the caller
+  may read under every filter of the request, the status included) and `overview` (`AssignmentStatusCount`: every one of
+  the five statuses with its count, in the order of `AssignmentStatus`, `0` for a status none is in) over the scope
+  filters only (`project_uid`, `mine` and what the caller may read), not the `status` filter, the way the execution queue's
+  `overview` counts its states: each count is what choosing that status would list. The numbers are the server's, never a
+  count of the page held.
+
+The API now has 272 paths, 300 operations and 722 schemas (the four new schemas are `AssignmentStatusCount`, `AuthEvent`,
+`AuthEventPage` and `AuthEventType`); migration head `0056`. The domain catalogs are at candidate revision 53. No error
+code is added.
+
+## Contract `1.35.0` (`UI-PARITY-OPT-DECISIONS`, historical)
+
+Slice for register rows `UI-B-12`, `UI-B-27` and `UI-B-15` (the optimisation decisions of the original that ours lacked),
+migration `0056_optimisation_decisions`:
+
+- **«Снять решение»** (`UI-B-12`). `ProposalVerdict` gains `revoke`: `decideOptimisationProposal` accepts it as a fourth
+  verdict. A withdrawal is one more appended event on the append-only decision history, never an update or a deletion, and
+  it takes the proposal back to `pending`: `OptimisationProposal.current_verdict` and the pass's `decision_counts` count a
+  proposal whose latest event is a `revoke` as `pending`, and `current_decision` still names that latest event, so a screen can
+  say who withdrew the decision and when. `listProposalDecisions`, `listProposalDecisionJournal` and `listKnowledgeBaseEntries`
+  show the `revoke` event as it was recorded. A `revoke` over a proposal with no decision in force (none yet, or the latest
+  event is already a `revoke`) is `409 conflict` with `conflict_reason` `no_decision_to_revoke`; the comment of a `revoke` is
+  optional. The operation stays keyed and `expert`-only. Migration `0056` widens `ck_optimisation_proposal_decision_verdict`;
+  its downgrade refuses while any `revoke` event exists.
+- **«Принято»** (`UI-B-27`). `listAcceptedOptimisationProposals` (`GET /optimisation-proposals/accepted`, a product read,
+  optional `project_uid` and `section_code` filters, cursor and `total`) lists the proposals whose decision in force is an
+  acceptance, across every pass, newest acceptance first. Each row is an `AcceptedOptimisationProposal`: its proposal and
+  pass identities, where it belongs (project, document set, version and the version's section), the row's place and text,
+  both position names, the proposed vendor, the exact prices and the saving (`null`, never `0`, when the quantity is not a
+  number), and the acceptance (decision id, comment, author, time). Neither filter is a parent: a project or a section with no
+  acceptance is an empty page. A rejection, a revision request, a withdrawal or no decision is not listed.
+
+- **«Загрузить решения»** (`UI-B-15`). `exportOptimisationProposalsXlsx` (`GET /optimisation-passes/{optimisation_pass_id}/export.xlsx`,
+  any one role) is the pass's proposals as a workbook with one sheet, «Предложения»: the first column, «ID предложения», is
+  the proposal's own identity, then the specification row, both positions, the exact prices and the saving (empty, never `0`,
+  when absent), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено`, `на доработку`)
+  and «Комментарий», filled with the decision in force. `importOptimisationProposalDecisions`
+  (`POST /optimisation-passes/{optimisation_pass_id}/decision-imports`, multipart `file`, at most 10 MiB, keyed, `expert`)
+  reads it back by proposal identity, never by «№», and only into proposals of that pass: a row that differs from the decision
+  in force appends one ordinary event authored by the caller (`accept`, `reject`, `revise` with its comment, or `revoke` for
+  «не решено» over a decision in force); a blank decision cell keeps the decision in force; the report
+  (`ProposalDecisionImportReport`) names every row that carries an ID or a decision as `recorded`, `unchanged` or `refused`
+  with one of six reasons. A workbook without the «Предложения» sheet and its three columns is `422 validation_failed`
+  (`field: file`, `constraint: not_our_export`; also `unreadable`, `too_large`, `too_many_rows`). An exact repeat of the key
+  answers the stored report; another file under it is `409 idempotency_key_reuse`.
+
+The API now has 270 paths, 298 operations and 718 schemas (the six new schemas are `AcceptedOptimisationProposal`,
+`AcceptedOptimisationProposalPage`, `ImportProposalDecisionsRequest`, `ProposalDecisionImportRefusal`,
+`ProposalDecisionImportReport` and `ProposalDecisionImportRow`); migration head `0056`. The domain catalogs are at candidate
+revision 52.
+
+## Contract `1.34.0` (`UI-PARITY-DOC-AUDIT`, historical)
+
+Slice for register rows `UI-A-46`, `UI-A-49` and `UI-A-38`: each document's audit state on `listDocuments`, so a section
+orders its documents as the original does and filters «не запускались». No new operation, no migration, no error code.
+
+- `DocumentVersion.audit` (new optional `DocumentAudit`: `state` `not_run`, `clean`, `awaiting_decision` or `checked`;
+  `partial`; `result_run_id`, absent exactly when the state is `not_run`; `finding_count`; `undecided_finding_count`) is
+  the audit of the version the item shows, by the rules of the counters of `DocumentAuditCounts` (`R-150n`…`R-150u`).
+  It is on the items of `listDocuments` only, read for the page in one statement and never one request per document;
+  every other answer carrying a `DocumentVersion` omits it.
+- `listDocuments` gains the optional `audit_state` filter (the four states; every document when absent) and the `order`
+  parameter (`published`, the default and the order the operation always had, newest first; or `audit`). Both are applied
+  by the server to the whole listing before it is paged, so the cursor, the end of the listing and the number of
+  documents a screen counts by following the cursors are those of the narrowed, ordered listing.
+- **Ordering is decided by the server, not by each page.** `order=audit` is the original's `projectOrderRank`: documents
+  the expert has checked (`checked`) first, then documents processed and not yet decided on (`clean`,
+  `awaiting_decision`), then documents never audited (`not_run`); within each group by `display_title` in natural Russian
+  order (runs of digits compare as numbers, case and the marks on a letter such as «ё» are ignored), and by `version_uid`
+  among equal names. A client that sorted a page would order a section differently on each page; the cursor is built on
+  the identity and resumes after its row in the ordered listing; because the order follows the audit state at the time of each
+  request, a document that changes state between two pages can appear on both or on neither, and a screen that needs the whole
+  listing reads it again from the first page.
+
+The API then had 267 paths, 295 operations and 712 schemas (the one new schema is `DocumentAudit`); migration head `0055`.
+The domain catalogs were at candidate revision 51.
+
+## Contract `1.33.0` (`HOTFIX-RUN-PARTIAL-1106`, historical)
+
+Removed the application character ceiling on runner answer text. Request/response fields,
+paths and operations were unchanged. Analysis and event families share the seal.
+
+## Contract `1.32.0` (`UI-PARITY-KB-ALL`, historical)
 
 Slice for ruling `R-151h` and debt `D-317`: the knowledge base's «Все». `listKnowledgeBaseEntries` (`GET /knowledge-base/entries`,
 a product read, optional `project_uid` filter, cursor and `total`) lists the decisions on findings and on optimisation
@@ -24,7 +319,7 @@ proposals as one journal, newest first. Each row is a `KnowledgeBaseEntry`: its 
 `occurred_at`, and exactly the record its kind names (`DecisionRecord` or `ProposalDecisionRecord`), so each keeps its own
 identity; the order and the cursor are the record's time, the kind and that record's id. `listDecisions` and
 `listProposalDecisionJournal` stay the «Замечания» and «Предложения» halves. No migration, no error code.
-The API now has 267 paths, 295 operations and 711 schemas; migration head `0055`. The domain catalogs are at candidate revision 50.
+The API then had 267 paths, 295 operations and 711 schemas; migration head `0055`. The domain catalogs were at candidate revision 50.
 
 ## Contract `1.31.0` (`UI-PARITY-P0P`, historical)
 

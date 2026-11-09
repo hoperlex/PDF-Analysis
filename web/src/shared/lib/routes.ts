@@ -81,6 +81,15 @@ export const routes = {
     `/projects/${projectUid}/sections/${sectionCode}`,
 
   /**
+   * «Оптимизация разделов» for one section (`UI-A-53`), and, with a project, that project in the address as the header keeps
+   * it (`?project=`; the screen's class is `optional`). The screen opens on both (`UI-B-20`); a value it cannot read is
+   * dropped and said so, and the screen opens on its default section with every project of it.
+   */
+  sectionOptimisation: (sectionCode: string, projectUid?: string): string =>
+    `/section-optimisation?section=${encodeURIComponent(sectionCode)}` +
+    (projectUid === undefined ? '' : `&project=${encodeURIComponent(projectUid)}`),
+
+  /**
    * One document and its versions.
    *
    * Through this surface a document has exactly one version today, because
@@ -141,4 +150,7 @@ export const routes = {
 
   /** One account, addressed by its opaque identity rather than its display name. */
   user: (userUid: string): string => `/admin/users/${userUid}`,
+
+  /** The access journal: sign-ins and what changes an account's access (`UI-A-94`). */
+  authEvents: (): string => '/admin/auth-events',
 } as const;

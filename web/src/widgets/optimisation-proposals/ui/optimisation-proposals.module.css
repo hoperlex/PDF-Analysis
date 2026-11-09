@@ -22,6 +22,15 @@
   color: var(--am-ink-muted);
 }
 
+.details {
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.details > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
 .chooser {
   margin: 0 0 var(--am-gap-sm);
 }
@@ -30,9 +39,10 @@
   max-width: 100%;
 }
 
+/* Two label-and-value pairs to a line (it was one, seven lines tall for seven facts). */
 .facts {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
   gap: 0 var(--am-gap-sm);
   margin: 0 0 var(--am-gap-sm);
 }
@@ -72,6 +82,31 @@
   border-bottom: 1px solid var(--am-line-soft);
 }
 
+/*
+ * `UI-B-05`: the original's strip -- the counts by decision, and the buttons beside them. The filter keeps its place at
+ * the left and the actions stand at the right; they wrap under it on a narrow screen.
+ */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.strip > .filters {
+  margin: 0;
+}
+
+.strip > [data-proposals-export] {
+  min-width: 0;
+}
+
+.strip > [data-proposals-export] p {
+  margin: 0;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -79,24 +114,97 @@
   margin: 0 0 var(--am-gap-sm);
 }
 
+/*
+ * `UI-PARITY-DENSE`, `UI-B-06`: a proposal is a row of the original's table -- the source and the figures on the left, the
+ * specification row with the two positions in the middle, the verdict with its form in the last column -- where it was a
+ * card of ten lines stacked. The same elements are placed on a grid; below 1100px they stack in their old order.
+ */
 .card {
-  margin: 0 0 var(--am-gap-sm);
-  padding: var(--am-gap-sm);
+  display: grid;
+  grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr) minmax(16rem, 26rem);
+  grid-template-rows: auto auto 1fr auto;
+  grid-template-areas:
+    'head quote judgement'
+    'prov frame judgement'
+    'figs basis judgement'
+    'blocks blocks blocks';
+  align-items: start;
+  column-gap: var(--am-gap);
+  margin: 0 0 var(--am-gap-xs);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line-soft);
   background: var(--am-surface);
   min-width: 0;
 }
 
 .cardHead {
+  grid-area: head;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--am-gap-sm);
+  gap: var(--am-gap-xs) var(--am-gap-sm);
 }
 
 .cardTitle {
   margin: 0;
+}
+
+.figures {
+  grid-area: figs;
+  margin: 0;
+}
+
+.basis {
+  grid-area: basis;
+  min-width: 0;
+}
+
+.basis > p {
+  margin: 0;
+}
+
+.judgement {
+  grid-area: judgement;
+  min-width: 0;
+}
+
+.judgement > p {
+  margin-top: 0;
+}
+
+/* The form in the last column: a tighter stack and its two hints at the small size, so the column is not the tallest part. */
+.judgement :global(.am-form) {
+  gap: var(--am-gap-xs);
+  max-width: none;
+}
+
+.judgement :global(.am-form__hint) {
+  margin: 0;
+  font-size: var(--am-text-xs);
+}
+
+@media (max-width: 1100px) {
+  .card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'head'
+      'prov'
+      'quote'
+      'frame'
+      'figs'
+      'basis'
+      'judgement'
+      'blocks';
+  }
+}
+
+/* `UI-B-09`: the strip of the sheet's blocks takes the card's full width under the row. */
+.sheetBlocks {
+  grid-area: blocks;
+  min-width: 0;
+  margin-top: var(--am-gap-xs);
 }
 
 .state {
@@ -105,17 +213,20 @@
 }
 
 .provenance {
-  margin: var(--am-gap-xs) 0;
+  grid-area: prov;
+  margin: 0;
   color: var(--am-ink-muted);
 }
 
 .quote {
-  margin: var(--am-gap-xs) 0 var(--am-gap-sm);
+  grid-area: quote;
+  margin: 0 0 var(--am-gap-xs);
   padding-left: var(--am-gap-sm);
   border-left: 3px solid var(--am-line-soft);
 }
 
 .frame {
+  grid-area: frame;
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
@@ -145,10 +256,60 @@
 }
 
 .decision {
-  margin: var(--am-gap-sm) 0;
+  margin: 0 0 var(--am-gap-xs);
+}
+
+/* `UI-B-14`: «↩ Перенесено из V2» -- the mark of a decision carried over from an earlier version. */
+.carried {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  white-space: nowrap;
 }
 
 .history {
   margin: var(--am-gap-sm) 0;
   padding-left: calc(var(--am-gap) + var(--am-gap-xs));
+}
+
+/*
+ * `UI-B-06`: the table layout, the original's `optimization-table`. Tokens only; the header, the cell padding and the hairlines are the
+ * global table's, and a row's verdict is the stripe at its left edge, as the knowledge base's table draws it. The frame scrolls sideways
+ * on a narrow screen rather than squeezing seven columns, and the decision column keeps the width its form needs.
+ */
+.tableFrame {
+  max-width: 100%;
+  margin: 0 0 var(--am-gap-sm);
+  overflow-x: auto;
+}
+
+.proposalTable td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.proposalTable tbody tr[data-decision='accept'] > :first-child {
+  box-shadow: inset 3px 0 0 var(--am-ok);
+}
+
+.proposalTable tbody tr[data-decision='reject'] > :first-child {
+  box-shadow: inset 3px 0 0 var(--am-failed);
+}
+
+.proposalTable tbody tr:hover {
+  background: var(--am-surface);
+}
+
+/* The number over the state: the state is the quieter second line, as the original's decision cell has it. */
+.numberCell {
+  white-space: nowrap;
+}
+
+.numberCell > .state {
+  display: block;
+  margin-top: var(--am-gap-xs);
+  white-space: normal;
+}
+
+.proposalTable .judgement {
+  min-width: 14rem;
 }

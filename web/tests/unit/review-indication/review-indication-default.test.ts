@@ -41,7 +41,7 @@ describe('the beta default', () => {
   it('the profile status «reviewed» shows the contract word, which claims nothing about who', () => {
     expect(analysisProfileStatusLabel('reviewed')).toBe('проверен');
     const markup = profileTable('reviewed');
-    expect(markup).toContain('data-profile-status="reviewed">проверен</td>');
+    expect(markup).toContain('data-profile-status="reviewed"><span class="am-badge am-badge--ok">проверен</span></td>');
     expect(markup).not.toContain('проверка человеком не проводилась');
     expect(visible(markup)).not.toMatch(REMOVED);
   });

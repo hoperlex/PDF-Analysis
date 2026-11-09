@@ -247,14 +247,15 @@ describe('decision 1: a guest is sent to sign in, carrying the address it asked 
   });
 
   it('reads a cookie the register does not hold, and a closed session, as no session', async () => {
+    // A guest either way; the cookie names no session here, which the redirect says after `next`.
     jar.value = '0'.repeat(64);
     expect(await sentTo(requireScreen('/projects', props()))).toBe(
-      `/login?next=${encodeURIComponent('/projects')}`,
+      `/login?next=${encodeURIComponent('/projects')}&reason=invalid`,
     );
     const id = signIn();
     closeSession(id); // what the BFF does on an upstream 401
     expect(await sentTo(requireScreen('/projects', props()))).toBe(
-      `/login?next=${encodeURIComponent('/projects')}`,
+      `/login?next=${encodeURIComponent('/projects')}&reason=invalid`,
     );
   });
 });
@@ -297,6 +298,7 @@ describe('decision 4: a session lacking every role a screen lists is sent to /40
     ['/admin/users', {}],
     ['/admin/users/[user_uid]', { user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F' }],
     ['/admin/registrations', {}],
+    ['/admin/auth-events', {}],
   ] as const;
 
   it('applies the live admin rows to expert, empty, unknown and admin sessions', async () => {

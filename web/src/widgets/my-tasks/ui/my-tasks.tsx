@@ -14,7 +14,7 @@
 import Link from 'next/link';
 
 import type { Assignment, Role } from '@/shared/api';
-import { routes } from '@/shared/lib';
+import { formatInstant, routes } from '@/shared/lib';
 import { ErrorState, LoadingState } from '@/shared/ui';
 import {
   AssignmentStatusLabel,
@@ -48,7 +48,7 @@ export function MyTasksView({ items, roles }: MyTasksViewProps) {
   if (open.length === 0) {
     return (
       <p className="am-note" data-my-tasks="none">
-        Открытых задач нет.
+        Открытых задач нет: всё назначенное вам выполнено или передано дальше.
       </p>
     );
   }
@@ -60,6 +60,9 @@ export function MyTasksView({ items, roles }: MyTasksViewProps) {
             <Link href={href(assignment)}>{assignmentScope(assignment)}</Link>
             <AssignmentStatusLabel status={assignment.status} />
           </div>
+          <span className="am-note" data-my-task-meta="">
+            Назначил: {assignment.created_by_label} · обновлено {formatInstant(assignment.updated_at)}
+          </span>
           {assignment.note === null ? null : <p className={styles.text}>{assignment.note}</p>}
           {assignment.status === 'returned' ? (
             <p className={styles.text}>Возвращено вами; ждёт решения администратора.</p>
@@ -97,9 +100,13 @@ export function MyTasks({ roles, listHref }: MyTasksProps) {
   } else {
     body = <MyTasksView items={query.data.items} roles={roles} />;
   }
+  const openCount = query.isSuccess ? query.data.items.filter((assignment) => isOpenAssignment(assignment.status)).length : 0;
   return (
     <section className="am-section" data-home-block="my-tasks">
-      <h2>Мои задачи</h2>
+      <h2>
+        Мои задачи
+        {openCount > 0 ? <> <span className="am-badge am-badge--active" data-my-tasks-open={openCount}>{openCount}</span></> : null}
+      </h2>
       {body}
       <p className={styles.more}>
         <Link href={listHref}>Все назначения</Link>

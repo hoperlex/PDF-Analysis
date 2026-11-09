@@ -20,9 +20,13 @@ generator runs and the pass and every proposal are inserted in this transaction.
 :func:`decide_optimisation_proposal` -- ``expert`` (``admin`` alone is
 ``permission_denied``). The verdict and comment are validated (``revise`` requires a
 comment); the key is claimed (same payload answers the stored decision); the proposal must
-exist (``not_found`` ``OptimisationProposal``); under the proposal's advisory lock the next
-``seq`` is appended. Every call under a new key appends a new event -- the history is the
-record, the latest event is the current decision.
+exist (``not_found`` ``OptimisationProposal``); under the pass's advisory lock (which a carry-over holds for its whole
+request) and then the proposal's the next ``seq`` is appended; a ``seq`` another writer took anyway is the typed ``conflict``
+``proposal_decision_raced`` and not a ``500`` (`D-348`). Every call under a new key appends a new event -- the history is the
+record, the latest event is the current decision. ``revoke`` (`UI-B-12`) withdraws the standing
+decision as one more event: under the same lock it is refused (``conflict`` /
+``no_decision_to_revoke``) when the latest event is absent or is itself a ``revoke``, so the
+journal never holds a withdrawal of nothing.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from auditmanager.documents.public import DocumentRepository
@@ -64,7 +69,10 @@ from .policy import (
     AGGREGATE_OPTIMISATION_PROPOSAL,
     COMMAND_TYPE_DECIDE_PROPOSAL,
     COMMAND_TYPE_START_PASS,
+    REFUSAL_DECISION_RACED,
+    REFUSAL_NOTHING_TO_REVOKE,
     REFUSAL_VENDOR_LIST_MISSING,
+    VERDICT_REVOKE,
     normalize_comment,
     parse_verdict,
     require_expert,
@@ -349,19 +357,44 @@ def decide_optimisation_proposal(
         return ProposalDecision(stored, current, replayed=True)
     assert isinstance(claim, CommandStarted)
 
-    if repository.get_proposal(session, proposal) is None:
+    existing = repository.get_proposal(session, proposal)
+    if existing is None:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type=AGGREGATE_OPTIMISATION_PROPOSAL)
+    # `D-348`: the pass's lock first (a carry-over into this pass holds it for its whole request, so its carried event is
+    # committed and visible to the ``seq`` read below, or not yet begun), then the proposal's.
+    repository.lock_pass_decisions(session, existing.optimisation_pass_id)
     repository.lock_proposal(session, proposal)
-    decision = repository.insert_decision(
-        session,
-        decision_id=ProposalDecisionId.new(),
-        proposal_id=proposal,
-        seq=repository.next_seq(session, proposal),
-        verdict=chosen,
-        comment=cleaned,
-        actor_user_uid=actor_uid,
-        command_id=str(claim.command_id),
-    )
+    if chosen == VERDICT_REVOKE:
+        latest = repository.latest_decision(session, proposal)
+        if latest is None or latest.verdict == VERDICT_REVOKE:
+            raise DomainError(
+                ErrorCode.CONFLICT,
+                message="the proposal has no decision to withdraw",
+                aggregate_type=AGGREGATE_OPTIMISATION_PROPOSAL,
+                conflict_reason=REFUSAL_NOTHING_TO_REVOKE,
+            )
+    try:
+        decision = repository.insert_decision(
+            session,
+            decision_id=ProposalDecisionId.new(),
+            proposal_id=proposal,
+            seq=repository.next_seq(session, proposal),
+            verdict=chosen,
+            comment=cleaned,
+            actor_user_uid=actor_uid,
+            command_id=str(claim.command_id),
+        )
+    except IntegrityError as refused:
+        if "uq_optimisation_proposal_decision_seq" not in str(refused.orig):
+            raise
+        # The backstop (`D-348`): another writer took this ``seq`` without the locks above. The caller rolls the
+        # transaction back, so the claim of the key goes with it and the same request can simply be repeated.
+        raise DomainError(
+            ErrorCode.CONFLICT,
+            message="the proposal's decisions changed while this one was written; repeat it",
+            aggregate_type=AGGREGATE_OPTIMISATION_PROPOSAL,
+            conflict_reason=REFUSAL_DECISION_RACED,
+        ) from None
     commands.succeed(
         session, claim.command_id, {"proposal_decision_id": decision.proposal_decision_id}
     )

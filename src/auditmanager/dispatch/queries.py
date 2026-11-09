@@ -20,6 +20,8 @@ from auditmanager.access.public import ROLE_ADMIN
 from auditmanager.dispatch.identity import AssignmentUid
 from auditmanager.dispatch.policy import (
     AGGREGATE_TYPE,
+    STATUS_AFTER,
+    STATUSES,
     can_read,
     kinds_with_status,
     require_reader,
@@ -32,7 +34,7 @@ from auditmanager.dispatch.repository import (
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdentityError, ProjectUid
 
-__all__ = ["AssignmentDetail", "get_assignment", "list_assignments"]
+__all__ = ["AssignmentDetail", "assignment_overview", "get_assignment", "list_assignments"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +66,44 @@ def list_assignments(
     roles = frozenset(viewer_roles)
     require_reader(roles)
     kinds = None if status is None else kinds_with_status(status)
+    assignee, project = _scope(viewer_uid, roles, mine=mine, project_uid=project_uid)
+    return (repository or AssignmentRepository()).list(
+        session, assignee_user_uid=assignee, project_uid=project, kinds=kinds
+    )
+
+
+def assignment_overview(
+    session: Session,
+    *,
+    viewer_uid: str,
+    viewer_roles: frozenset[str],
+    mine: bool = False,
+    project_uid: str | None = None,
+    repository: AssignmentRepository | None = None,
+) -> tuple[tuple[str, int], ...]:
+    """Every status with the number of assignments in it, over :func:`list_assignments`'s scope.
+
+    The scope is the listing's -- what the viewer may read, ``mine``, ``project_uid`` -- and the
+    listing's status filter is deliberately absent: each count is what choosing that status
+    would list. All five statuses are answered, in :data:`~.policy.STATUSES` order, ``0`` for one
+    that no assignment is in (contract 1.36.0).
+    """
+    roles = frozenset(viewer_roles)
+    require_reader(roles)
+    assignee, project = _scope(viewer_uid, roles, mine=mine, project_uid=project_uid)
+    by_kind = (repository or AssignmentRepository()).counts_by_kind(
+        session, assignee_user_uid=assignee, project_uid=project
+    )
+    counts = dict.fromkeys(STATUSES, 0)
+    for kind, count in by_kind.items():
+        counts[STATUS_AFTER[kind]] += count
+    return tuple(counts.items())
+
+
+def _scope(
+    viewer_uid: str, roles: frozenset[str], *, mine: bool, project_uid: str | None
+) -> tuple[str | None, str | None]:
+    """``(assignee filter, project filter)``: the narrowing both reads apply."""
     project = None
     if project_uid is not None:
         try:
@@ -73,9 +113,7 @@ def list_assignments(
                 ErrorCode.VALIDATION_FAILED, field="project_uid", constraint="pattern"
             ) from None
     assignee = viewer_uid if (mine or ROLE_ADMIN not in roles) else None
-    return (repository or AssignmentRepository()).list(
-        session, assignee_user_uid=assignee, project_uid=project, kinds=kinds
-    )
+    return assignee, project
 
 
 def get_assignment(

@@ -30,3 +30,37 @@ def test_fewer_samples_than_the_minimum_give_no_estimate() -> None:
 def test_the_finish_is_the_start_plus_the_expected_duration_and_needs_a_start() -> None:
     assert estimated_finish(SAMPLES, started_at=START, analysis_profile_id="ar", page_count=10) == START + timedelta(seconds=600)
     assert estimated_finish(SAMPLES, started_at=None, analysis_profile_id="ar", page_count=10) is None
+
+
+def test_the_queue_and_the_run_status_answer_through_one_rule() -> None:
+    """`UI-A-65` / `UI-B-45` (contract 1.40.0): the job's state decides first, then the same statistic as above."""
+    from auditmanager.bootstrap.adapters import _estimated_finish
+    from auditmanager.execution.eta import RUNNING_JOB_STATES, job_estimated_finish
+
+    assert RUNNING_JOB_STATES == ("leased", "running")
+    wanted = START + timedelta(seconds=600)
+    for state in RUNNING_JOB_STATES:
+        assert job_estimated_finish(
+            SAMPLES, job_state=state, started_at=START, analysis_profile_id="ar", page_count=10
+        ) == wanted
+    for state in ("queued", "retry_wait", "succeeded", "failed", "cancelled", "dead_letter", None):
+        assert job_estimated_finish(
+            SAMPLES, job_state=state, started_at=START, analysis_profile_id="ar", page_count=10
+        ) is None, state
+    assert job_estimated_finish(
+        (), job_state="running", started_at=START, analysis_profile_id="ar", page_count=10
+    ) is None, "no history is no estimate"
+    assert job_estimated_finish(
+        SAMPLES, job_state="running", started_at=None, analysis_profile_id="ar", page_count=10
+    ) is None, "a job that has not started has none"
+
+    class _Row:
+        state = "running"
+        started_at = START
+        analysis_profile_id = "ar"
+        page_count = 10
+
+    # The queue item's own helper is that function, not a second spelling of the rule.
+    assert _estimated_finish(_Row(), SAMPLES) == wanted
+    _Row.state = "queued"
+    assert _estimated_finish(_Row(), SAMPLES) is None

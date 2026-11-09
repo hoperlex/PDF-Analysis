@@ -79,7 +79,8 @@ def _client(sessions: sessionmaker[Session], blob_store: Any) -> TestClient:
     registry = load_text_profile_registry()
     router = build_router(
         projects=None,  # type: ignore[arg-type]
-        documents=DocumentAdapter(IngestService(blob_store, session_factory=sessions)),
+        # `UI-PARITY-DOC-AUDIT`: `listDocuments` reads each item's audit, so the adapter is given the session factory.
+        documents=DocumentAdapter(IngestService(blob_store, session_factory=sessions), sessions),
         runs=None,  # type: ignore[arg-type]
         findings=None,  # type: ignore[arg-type]
         decisions=None,  # type: ignore[arg-type]

@@ -99,8 +99,16 @@ _POSITION_CHUNK: Final[int] = 5000
 
 @dataclass(frozen=True, slots=True)
 class RunCandidate:
+    """One run of a version as the saved-text reader lists it.
+
+    ``standard_analysis`` (`AR-V3-OPT-IN`) is false for a run of the AR v3 beta analysis. The specification is read from
+    the version's newest published run of the **standard** analysis; a published v3 member never takes its place
+    (`Q3`). The default is true: a reader that knows of one analysis only lists runs of it.
+    """
+
     run_id: str
     state: str
+    standard_analysis: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,13 +219,19 @@ def _positions(
 def _newest_published(reader: SavedTextReader, session: Session, version_uid: str) -> str | None:
     runs = tuple(reader.runs_newest_first(session, version_uid=version_uid))
     for run in runs:
-        if not isinstance(run, RunCandidate) or not isinstance(run.state, str):
+        if (
+            not isinstance(run, RunCandidate)
+            or not isinstance(run.state, str)
+            or type(run.standard_analysis) is not bool
+        ):
             raise _integrity("a run candidate is malformed")
         try:
             RunId.parse(run.run_id)
         except (IdentityError, TypeError):
             raise _integrity("a run candidate is malformed") from None
-    return next((run.run_id for run in runs if run.state == RUN_STATE_PUBLISHED), None)
+    return next(
+        (run.run_id for run in runs if run.state == RUN_STATE_PUBLISHED and run.standard_analysis), None,
+    )
 
 
 def _checked_text(text: object, *, run_id: str, page_count: int) -> SavedPageText:

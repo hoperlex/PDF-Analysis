@@ -76,11 +76,13 @@ import type {
   StageStatus,
   VersionClassification as VersionClassificationRecord,
   Assignment,
+  AuthEvent,
   AssignmentDetail,
   VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
 import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, classifyRunFailure } from '@/entities/audit-run';
+import { AUTH_EVENT_PAGE_LIMIT } from '@/entities/auth-event';
 import { USER_PAGE_LIMIT } from '@/entities/user';
 import { ASSIGNMENT_PAGE_LIMIT } from '@/entities/assignment';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
@@ -104,13 +106,18 @@ import { SpecificationPricesAnswer, SpecificationPricesSection } from '@/widgets
 import { NormReferencesAnswer, NormReferencesSection } from '@/widgets/norm-references';
 import { SPECIFICATION_ROW_LIMIT } from '@/entities/specification-price';
 import { SectionSpecificationAnswer, SectionSpecificationSection } from '@/widgets/section-specification';
+import { SectionBatchBar } from '@/_pages/section-detail';
 import { SECTION_ROW_LIMIT } from '@/entities/section-specification';
 import { SECTION_NO_ROWS, sectionAnswer, sectionKey, sectionPagedAnswer } from '../unit/section-specification/fixtures';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
 import { UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
 import { FrameNavigationView } from '@/_app/frame-navigation';
+import { menuBadgesOf } from '@/_app/menu-badges';
 import { buildNavigation } from '@/_app/navigation';
+import { sectionNavigationOf } from '@/_app/section-navigation';
+import { SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
+import { AuditTallyLine } from '@/entities/document-version';
 import type { DisclosureProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
@@ -130,6 +137,9 @@ import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
+import { ExportPanel } from '@/widgets/export-panel';
+import { FindingList, FindingRowActions } from '@/widgets/finding-list';
+import { groupByCategory } from '@/entities/finding';
 import { ArV3BetaReview, RunFindings } from '@/widgets/ar-v3-beta-review';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import {
@@ -138,7 +148,7 @@ import {
 import type { StartArV3GroupViewProps } from '@/features/start-ar-v3-group';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
-import { WorkerList } from '@/widgets/worker-list';
+import { WorkerList, WorkersOverviewSections } from '@/widgets/worker-list';
 import { WorkersPage } from '@/_pages/workers';
 import type { WorkersPageProps } from '@/_pages/workers';
 import {
@@ -158,6 +168,7 @@ import { STAGE_RUN_KEYS } from '@/widgets/stage-run-controls/model/runs';
 import { StageSheetMap } from '@/widgets/stage-sheet-map';
 import { StageTextEvidence } from '@/widgets/stage-text-evidence';
 import { STAGE_PAIR_KEYS } from '@/entities/stage-pair';
+import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { StageUploadPanel } from '@/_pages/stage-compare/ui/stage-upload-panel';
 import { StageWorkspace } from '@/_pages/stage-compare/ui/stage-workspace';
 import { StageComparePage } from '@/_pages/stage-compare';
@@ -180,7 +191,7 @@ import {
 } from '../unit/workers/executor-fixtures';
 import { RunWorkerLine, WORKER_PAGE_LIMIT } from '@/entities/execution';
 import type { ExecutionWorker } from '@/shared/api';
-import { EvidenceViewer } from '@/widgets/evidence-viewer';
+import { DocumentViewer, EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
 import {
@@ -216,7 +227,7 @@ import {
   AVAILABLE_RUN_ID, accountFixture, runFindingsPage, v3FindingFixture,
 } from '../unit/analysis-settings/ar-v3-beta-review-fixtures';
 import { optimisationShapes } from '../unit/optimisation/fixtures';
-import { proposalShapes } from '../unit/optimisation-proposals/fixtures';
+import { carryOverShapes, proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
 import {
   ADMIN_AND_EXPERT,
@@ -363,6 +374,13 @@ function projectSectionCodes(): readonly string[] {
  * on a screen" is an offence being laundered, and the next reader should delete it.
  */
 const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] = [
+  {
+    word: 'Alt',
+    why:
+      'The legend printed on a keyboard key, said in the queue\'s hint for moving a waiting job by keyboard (`UI-B-52`, ' +
+      '«Alt+↑», «Alt+↓»). A key is named as it is engraved, on a Russian keyboard too; no contract declares a key name ' +
+      'and the hint would name no key without it.',
+  },
   {
     word: 'AuditManager',
     why:
@@ -1078,7 +1096,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.42.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1090,7 +1108,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.42.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1204,8 +1222,10 @@ const KEYS = {
   projects: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT),
   project: queryKeys.projects.detail(PROJECT_UID),
   documents: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT),
-  // `R-151l`: the section page's own read, `listDocuments` with `section_code` (the route seeds `AR`).
-  sectionDocuments: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR'),
+  // `UI-PARITY-DOC-AUDIT`: the project screen reads the listing in the server's audit order, a cache entry of its own.
+  projectDocuments: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit'),
+  // `R-151l`: the section page's own read, `listDocuments` with `section_code` (the route seeds `AR`), in the audit order.
+  sectionDocuments: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR', false, undefined, undefined, 'audit'),
   versions: queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT),
   version: queryKeys.versions.detail(VERSION_UID),
   // `W59-SECTION-UI-01`: the version screen's stage-and-section panel.
@@ -1244,6 +1264,8 @@ const KEYS = {
   account: queryKeys.account.me(),
   users: queryKeys.users.list({ includeArchived: false, limit: USER_PAGE_LIMIT }),
   user: queryKeys.users.detail('usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F'),
+  // Contract 1.36.0 (`UI-A-94`): «Журнал входов», seeded loaded, empty and (through `failedClient`) refused.
+  authEvents: queryKeys.users.authEvents({ limit: AUTH_EVENT_PAGE_LIMIT }),
   registrations: queryKeys.registrations.list({ limit: REGISTRATION_PAGE_LIMIT, status: 'pending' }),
   // `W55A-WEB-NORMS`: the «Нормы» screens' reads, under the keys their seeds ask for. The PDF
   // bytes (`norms.content`) are not seeded, so the document view's PDF panel reads pending.
@@ -1289,6 +1311,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.projects, { items: [project()], page });
   client.setQueryData(KEYS.project, project());
   client.setQueryData(KEYS.documents, { items: [version()], page });
+  client.setQueryData(KEYS.projectDocuments, { items: [version()], page });
   client.setQueryData(KEYS.sectionDocuments, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.version, version());
@@ -1354,6 +1377,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.pendingRegistrations, { items: [], page, pending_total: 2 });
   client.setQueryData(KEYS.account, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.users, { items: [ADMIN_USER_ACCOUNT], page });
+  client.setQueryData(KEYS.authEvents, { items: AUTH_EVENTS, page });
   client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.registrations, { items: [QUEUE_REQUEST], page, pending_total: 1 });
   client.setQueryData(KEYS.executionQueue, {
@@ -1400,8 +1424,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.normDocument, normDocument());
   client.setQueryData(KEYS.normParagraphs, { items: NORM_PARAGRAPHS, page, source_attribution: 'consultant_plus' });
   client.setQueryData(KEYS.normCatalogue, NORM_CATALOGUE_PAGE);
-  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
-  client.setQueryData(KEYS.myTasks, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page, total: ASSIGNMENTS.length, overview: ASSIGNMENT_OVERVIEW });
+  client.setQueryData(KEYS.myTasks, { items: [...ASSIGNMENTS], page, total: ASSIGNMENTS.length, overview: ASSIGNMENT_OVERVIEW });
   client.setQueryData(KEYS.assignment, ASSIGNMENT_DETAIL);
   return client;
 }
@@ -1451,6 +1475,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.projects, { items: [], page });
   client.setQueryData(KEYS.project, project());
   client.setQueryData(KEYS.documents, { items: [], page });
+  client.setQueryData(KEYS.projectDocuments, { items: [], page });
   client.setQueryData(KEYS.sectionDocuments, { items: [], page });
   client.setQueryData(KEYS.versions, { items: [], page });
   client.setQueryData(KEYS.version, version());
@@ -1461,6 +1486,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.journal, { items: [], page, total: 0 });
   client.setQueryData(KEYS.account, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.users, { items: [], page });
+  client.setQueryData(KEYS.authEvents, { items: [], page });
   client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.registrations, { items: [], page, pending_total: 0 });
   client.setQueryData(KEYS.executionQueue, { items: [], page, paused: false });
@@ -1478,8 +1504,8 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.normSearch, { items: [], page });
   client.setQueryData(KEYS.normDocument, normDocument({ unreliable_paragraph_count: 0, paragraph_count: 0 }));
   client.setQueryData(KEYS.normParagraphs, { items: [], page, source_attribution: 'consultant_plus' });
-  client.setQueryData(KEYS.assignments, { items: [], page });
-  client.setQueryData(KEYS.myTasks, { items: [], page });
+  client.setQueryData(KEYS.assignments, { items: [], page, total: 0, overview: ASSIGNMENT_OVERVIEW_EMPTY });
+  client.setQueryData(KEYS.myTasks, { items: [], page, total: 0, overview: ASSIGNMENT_OVERVIEW_EMPTY });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1518,10 +1544,11 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   const page = { next_cursor: 'Y3Vyc29y' } as { next_cursor: string };
   client.setQueryData(KEYS.projects, { items: [project()], page });
   client.setQueryData(KEYS.documents, { items: [version()], page });
+  client.setQueryData(KEYS.projectDocuments, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.runs, { items: [run()], page });
   client.setQueryData(KEYS.journal, { items: [record()], page, total: 1 });
-  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page, total: ASSIGNMENTS.length, overview: ASSIGNMENT_OVERVIEW });
   return client;
 }
 
@@ -1849,6 +1876,7 @@ const ADMIN_USER_ACCOUNT: Account = {
   first_name: 'Анна',
   is_default_credential: false,
   last_name: 'Проверкина',
+  last_sign_in_at: '2026-11-05T09:30:15Z',
   login: 'проверкина@пример.испытание',
   middle_name: 'Сергеевна',
   profile_complete: true,
@@ -1882,6 +1910,14 @@ function assignment(letter: string, status: Assignment['status'], over: Partial<
   };
 }
 
+/** One line of each kind of the access journal (contract 1.36.0), one of them about an account since deleted. */
+const AUTH_EVENTS: readonly AuthEvent[] = [
+  { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', event_type: 'sessions_ended', occurred_at: '2026-11-05T09:40:00Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', subject_label: 'Экспертова Д. Д.', actor_user_uid: ADMIN_USER_ACCOUNT.user_uid, actor_label: ADMIN_USER_ACCOUNT.display_label, source: 'api', role: null, failures: null, default_credential: null },
+  { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', event_type: 'sign_in_succeeded', occurred_at: '2026-11-05T09:30:15Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', subject_label: 'Экспертова Д. Д.', actor_user_uid: null, actor_label: null, source: 'api', role: null, failures: null, default_credential: true },
+  { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', event_type: 'sign_in_blocked', occurred_at: '2026-11-05T09:20:00Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', subject_label: 'Экспертова Д. Д.', actor_user_uid: null, actor_label: null, source: 'api', role: null, failures: 5, default_credential: null },
+  { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', event_type: 'role_granted', occurred_at: '2026-11-05T09:10:00Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', subject_label: null, actor_user_uid: null, actor_label: null, source: 'host_cli', role: 'admin', failures: null, default_credential: null },
+];
+
 const ASSIGNMENTS: readonly Assignment[] = [
   assignment('A', 'assigned', { note: 'Проверить армирование до пятницы' }),
   assignment('B', 'in_progress', { document_uid: DOCUMENT_UID, document_title: 'Пояснительная записка' }),
@@ -1893,6 +1929,14 @@ const ASSIGNMENTS: readonly Assignment[] = [
   assignment('D', 'done', { assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', assignee_label: 'Экспертова Д. Д.' }),
   assignment('E', 'cancelled', { status_reason: 'Проект закрыт' }),
 ];
+
+/** The dispatcher's server counts for `ASSIGNMENTS` (contract 1.36.0), one assignment in each status. */
+const ASSIGNMENT_OVERVIEW: readonly { readonly status: Assignment['status']; readonly count: number }[] = [
+  { status: 'assigned', count: 1 }, { status: 'in_progress', count: 1 }, { status: 'done', count: 1 },
+  { status: 'returned', count: 1 }, { status: 'cancelled', count: 1 },
+];
+const ASSIGNMENT_OVERVIEW_EMPTY: readonly { readonly status: Assignment['status']; readonly count: number }[] =
+  ASSIGNMENT_OVERVIEW.map(({ status }) => ({ status, count: 0 }));
 
 const ASSIGNMENT_DETAIL: AssignmentDetail = {
   assignment: ASSIGNMENTS[2] as Assignment,
@@ -1931,7 +1975,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.42.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1962,6 +2006,7 @@ function startGroupViews(): ReactElement {
     startRefusal(404, 'not_found'),
     startRefusal(401, 'authentication_required'),
     startRefusal(403, 'permission_denied'),
+    startRefusal(409, 'conflict', { conflict_reason: 'ar_v3_start_not_enabled' }),
     startRefusal(500, 'internal_error'),
     new TransportError('Запрос не дошёл.', { retryable: true }),
   ].map(classifyArV3GroupStartFailure);
@@ -2139,7 +2184,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.33.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.42.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2190,6 +2235,52 @@ function seedPresets(items: readonly Record<string, unknown>[]): (client: Return
 }
 
 const EXTRA_SHAPES: readonly ScreenCase[] = [
+  // `UI-A-68`: the findings table at full width -- a decided severity beside a proposal, a verified norm with its
+  // clause, a merged count, the verdict on each row and a finding opened under its row -- and the export bar over it.
+  {
+    name: 'finding-table-and-export-bar',
+    make: () => createElement('div', null,
+      createElement(ExportPanel, {
+        layout: 'bar', runId: RUN_ID, runState: 'published', providerMode: 'recorded', onExport: () => undefined, mayImportDecisions: true,
+      }),
+      createElement(FindingList, {
+        view: 'table',
+        groups: groupByCategory([
+          finding({
+            current_verdict: 'accepted',
+            decided_severity: 'critical',
+            merged_observations: [finding().observation, finding().observation],
+            observation: {
+              ...finding().observation,
+              proposed_severity: 'critical',
+              norm_citations: [{
+                clause_number: '7.1.4',
+                designation: 'СП 1.13130.2020',
+                norm_document_id: `ndoc_${ULID}`,
+                norm_paragraph_id: `npar_${ULID}`,
+                norms_snapshot_id: `ns_${ULID}`,
+                page_label: 12,
+                quote: 'Ширина эвакуационного выхода должна быть не менее 0,8 м.',
+                source_attribution: 'consultant_plus',
+                state: 'rebound',
+                title: 'Эвакуационные пути и выходы',
+              }],
+            },
+          }),
+          finding({
+            finding_uid: `fnd_${ULID.slice(0, -1)}9`,
+            category: 'explicit_placeholder',
+            current_verdict: 'rejected',
+            observation: { ...finding().observation, category: 'explicit_placeholder', proposed_severity: 'economic', norm_citations: [] },
+          }),
+        ]),
+        selectedFindingUid: FINDING_UID,
+        onSelect: () => undefined,
+        renderRowActions: (row: { readonly current_verdict: Finding['current_verdict'] }) =>
+          createElement(FindingRowActions, { verdict: row.current_verdict, sending: null, note: null, onAccept: () => undefined, onReject: () => undefined }),
+        renderExpansion: () => createElement('p', null, 'Открытая находка.'),
+      })),
+  },
   {
     name: 'start-run-control',
     make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
@@ -2345,6 +2436,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   ...optimisationShapes(),
   // `W60-OPT-PROPOSALS-01`: «Предложения» in every branch its widget, features and entity have.
   ...proposalShapes(),
+  // `UI-B-14`: «Перенести решения из V#» in every state and a carried decision (kept apart so the contrast census's sampling holds).
+  ...carryOverShapes(),
   {
     name: 'update-banner',
     make: () => createElement(UpdateBannerView, { onUpdate: () => undefined, onLater: () => undefined }),
@@ -2444,6 +2537,94 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       }),
   },
   /*
+   * `UI-A-04`: the current project's «Разделы» in the menu -- the list (marks, names, counts) and the two sentences of a
+   * group that has none. A list built from the contract's fifteen sections, so every name the menu says is judged.
+   */
+  ...(['listed', 'loading', 'failed'] as const).map((state) => ({
+    name: `app-frame-navigation-sections-${state}`,
+    make: () =>
+      createElement(FrameNavigationView, {
+        navigation: buildNavigation(ADMIN_AND_EXPERT),
+        pathname: `/projects/${PROJECT_UID}/sections/KJ`,
+        projectUid: PROJECT_UID,
+        sections:
+          state === 'listed'
+            ? sectionNavigationOf(
+              PROJECT_SECTIONS.map((section) => ({ section: section.code, document_count: 3, ...sectionAudit(3) })),
+              PROJECT_UID,
+              `/projects/${PROJECT_UID}/sections/KJ`,
+            )
+            : { status: state },
+        disclosure: (props: DisclosureProps) =>
+          createElement(DisclosureView, { ...props, open: true, panelId: `language-sections-${state}-${props.label}` }),
+      }),
+  })),
+  /*
+   * `UI-A-05`, `UI-A-06`, `UI-A-91`: the counters beside the menu's items and the section's red number, as an administrator's
+   * menu draws them -- the names the links carry (aria-label) and the tooltips (title) are the sentences this judges.
+   */
+  {
+    name: 'app-frame-navigation-badges',
+    make: () =>
+      createElement(FrameNavigationView, {
+        navigation: buildNavigation(ADMIN_AND_EXPERT),
+        pathname: `/projects/${PROJECT_UID}/sections/KJ`,
+        projectUid: PROJECT_UID,
+        sections: sectionNavigationOf(
+          PROJECT_SECTIONS.map((section) => ({ section: section.code, document_count: 3, ...sectionAudit(3, { awaiting_decision: 2 }) })),
+          PROJECT_UID,
+          `/projects/${PROJECT_UID}/sections/KJ`,
+        ),
+        badges: menuBadgesOf({
+          queueOverview: [{ state: 'queued', count: 2 }, { state: 'running', count: 1 }],
+          queueRecentOverview: [{ state: 'failed', count: 2 }],
+          knowledgeBaseTotal: 140,
+          pendingRegistrations: 5,
+        }),
+        disclosure: (props: DisclosureProps) =>
+          createElement(DisclosureView, { ...props, open: true, panelId: `language-badges-${props.label}` }),
+      }),
+  },
+  /*
+   * `UI-A-28`: «‹ Предыдущий · N из M · Следующий ›» between the documents of a section. The document page draws it only
+   * once the whole section has been read, which one static pass never reaches, so the strip is rendered from a position.
+   */
+  {
+    name: 'section-neighbours-between',
+    make: () =>
+      createElement(SectionNeighboursView, {
+        projectUid: PROJECT_UID,
+        section: projectSectionOf('AR'),
+        place: {
+          position: 2,
+          total: 3,
+          previous: version({ document_uid: `doc_${ULID.slice(0, -1)}A`, display_title: 'Комплект АР, часть 1' }),
+          next: version({ document_uid: `doc_${ULID.slice(0, -1)}C`, display_title: 'Комплект АР, часть 3' }),
+        },
+      }),
+  },
+  /**
+   * `UI-A-35`: the original's row of numbers for a set of documents -- every state a badge names, the findings, and the
+   * note that a page of a longer list was counted.
+   */
+  {
+    name: 'audit-tally-line',
+    make: () =>
+      createElement(AuditTallyLine, {
+        tally: { documents: 12, notRun: 3, awaitingDecision: 2, checked: 5, clean: 2, findings: 27 },
+        partial: true,
+        label: 'АР Архитектурные решения',
+      }),
+  },
+  /** `UI-A-22`: the version's tabs, the open one, a link with its finding count, one that is not a link, and the document's. */
+  {
+    name: 'version-tabs',
+    make: () =>
+      createElement(VersionTabsView, {
+        tabs: versionTabs({ projectUid: PROJECT_UID, versionUid: VERSION_UID, documentUid: DOCUMENT_UID, current: 'version', runs: [] }),
+      }),
+  },
+  /*
    * The sign-in screen's two OTHER shapes. The credentials form itself is derived, because
    * `/login` is an address; these two are not, because a refusal and a signed-in panel are
    * selected by props the address does not carry.
@@ -2459,6 +2640,14 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
    */
   { name: 'sign-in-refused', make: () => createElement(SignInPage, { refusal: 'credentials' }) },
   { name: 'sign-in-unknown-refusal', make: () => createElement(SignInPage, { unknownRefusal: true }) },
+  /*
+   * The three sentences above the form when the server knows why there is no session
+   * (`/login?reason=…`, `shared/lib/session-end-reason.ts`): selected by a prop the address
+   * does not carry, so a pass over the registry's addresses never renders them.
+   */
+  { name: 'sign-in-session-expired', make: () => createElement(SignInPage, { reason: 'expired' }) },
+  { name: 'sign-in-session-ended', make: () => createElement(SignInPage, { reason: 'ended' }) },
+  { name: 'sign-in-session-invalid', make: () => createElement(SignInPage, { reason: 'invalid' }) },
   { name: 'sign-in-open', make: () => createElement(SignInPage, { login: 'проверяющий' }) },
   { name: 'registration-refused', make: () => createElement(RegisterPage, { refusal: 'validation' }) },
   { name: 'registration-unknown-refusal', make: () => createElement(RegisterPage, { unknownRefusal: true }) },
@@ -2559,6 +2748,76 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
       onPriority: () => {}, onNext: null, onPrevious: null,
     }),
+  },
+  {
+    // `UI-B-52`: two waiting jobs and a handle to move each, the hint that names the keys and the polite note under the list.
+    name: 'execution-queue-admin-reorder',
+    make: () => createElement(ExecutionQueue, {
+      items: (['A', 'B'] as const).map((suffix, index) => ({
+        job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${suffix}`,
+        run_id: RUN_ID,
+        state: 'queued',
+        priority: 2 - index,
+        created_at: '2026-10-09T10:00:00Z',
+        available_at: '2026-10-09T10:00:00Z',
+        ...QUEUE_WORK,
+      })),
+      roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
+      busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
+      onPriority: () => {}, onReorder: () => {}, reorderNote: 'Задача перемещена на место 1: приоритет 3. Порядок определил сервер.',
+      onNext: null, onPrevious: null,
+    }),
+  },
+  {
+    // `UI-PARITY-QUEUE-A`: the queue's one-line job with its timing and its reason.
+    name: 'execution-queue-finished-with-timing',
+    make: () => createElement(ExecutionQueue, {
+      items: [{
+        job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+        run_id: RUN_ID,
+        state: 'failed',
+        priority: 0,
+        created_at: '2026-10-09T10:00:00Z',
+        available_at: '2026-10-09T10:00:00Z',
+        started_at: '2026-10-09T10:01:00Z',
+        finished_at: '2026-10-09T10:09:30Z',
+        error_code: 'analysis_failed',
+        ...QUEUE_WORK,
+      }],
+      roles: ['admin'], asOf: Date.parse('2026-10-09T10:15:00Z'),
+      busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
+      onPriority: () => {}, onNext: null, onPrevious: null,
+    }),
+  },
+  {
+    // `UI-B-64`: the blocks under the tiles of «Обзор», with a silent server and a job that ended badly.
+    name: 'workers-overview-sections-attention',
+    make: () => createElement(WorkersOverviewSections, {
+      workers: [{
+        worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: true, slots: 2, version: '0.5.0',
+        started_at: '2026-10-09T10:00:00Z', heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [],
+      }],
+      workersPartial: true,
+      jobs: [{
+        job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', run_id: RUN_ID, state: 'failed', priority: 0,
+        created_at: '2026-10-09T10:00:00Z', available_at: '2026-10-09T10:00:00Z', error_code: 'analysis_failed', ...QUEUE_WORK,
+      }],
+      jobsPartial: true,
+      processesHref: '?tab=processes',
+    }),
+  },
+  /*
+   * `UI-A-27` «Просмотр PDF»: the version page's drawer is mounted by a press, so it is rendered here on its own -- the bytes on their
+   * way (the viewer's loading sentence) and the read refused (its typed error).
+   */
+  {
+    name: 'version-pdf-drawer-loading',
+    make: () => createElement(DocumentViewer, { versionUid: VERSION_UID, title: 'Комплект АР · Версия 1', pageCount: 3, onClose: () => undefined }),
+  },
+  {
+    name: 'version-pdf-drawer-failed',
+    make: () => createElement(DocumentViewer, { versionUid: VERSION_UID, title: 'Комплект АР · Версия 1', pageCount: 3, onClose: () => undefined }),
+    seedClient: (client) => seedError(client, queryKeys.versions.content(VERSION_UID), apiError(503, 'dependency_unavailable')),
   },
   /*
    * `CMP-SEAL-C3`/`C4`: «Сравнение стадий», widget by widget. See STAGE_PAIR_ID above for why each has its own seed.
@@ -2663,6 +2922,39 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       }]);
       client.setQueryData(['stage-full-runs', STAGE_PAIR_ID], [stageRun()]);
       client.setQueryData(['stage-full-run', STAGE_RUN_ID], stageRun({ pair_id: STAGE_OTHER_PAIR_ID }));
+    },
+  },
+  {
+    // `UI-B-88`: the rail of seven steps under the bar of the second step, a run that has reached the fifth; the catalog names the
+    // pair by its documents. One pass cannot press a chip, so the description of a step stays in `UNREACHABLE_IN_ONE_PASS`.
+    name: 'stage-workspace-rail',
+    make: () => createElement(SearchParamsContext.Provider, { value: new URLSearchParams('tab=sheets') },
+      createElement(StageWorkspace, { projectUid: PROJECT_UID, mayAct: false })),
+    seedClient: (client) => {
+      const pair = {
+        pair_id: STAGE_PAIR_ID, project_uid: PROJECT_UID, state: 'confirmed', completeness: 'unknown',
+        left_document_uid: DOCUMENT_UID, right_document_uid: DOCUMENT_UID, created_at: '2026-10-09T10:00:00Z',
+      };
+      const run = stageRun({
+        state: 'running',
+        steps: [1, 2, 3, 4, 5, 6, 7].map((no) => ({ step_id: `cst_01J9ZQ8K7NHVXW3T2R5M6P4Q8${no}`, step_no: no, state: no < 5 ? 'completed' : no === 5 ? 'running' : 'queued', counts: {} })),
+      });
+      client.setQueryData([...STAGE_PAIR_KEYS.projectPairs(PROJECT_UID), 'workspace'], [pair]);
+      client.setQueryData(['stage-full-runs', STAGE_PAIR_ID], [run]);
+      client.setQueryData(['stage-full-run', STAGE_RUN_ID], run);
+    },
+  },
+  {
+    name: 'stage-pair-catalog-rows',
+    make: () => createElement(StagePairCatalog, { projectUid: PROJECT_UID, mayAct: false }),
+    seedClient: (client) => {
+      client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [{
+        pair_id: STAGE_PAIR_ID, project_uid: PROJECT_UID, state: 'confirmed', completeness: 'partial',
+        left_document_uid: DOCUMENT_UID, right_document_uid: DOCUMENT_UID, created_at: '2026-10-09T10:00:00Z',
+      }], page: STAGE_PAGE });
+      client.setQueryData(STAGE_PAIR_KEYS.suggestions(PROJECT_UID), { items: [], page: STAGE_PAGE });
+      client.setQueryData(['stage-full-runs', STAGE_PAIR_ID], [stageRun()]);
+      client.setQueryData(['stage-run-card-counts', STAGE_RUN_ID], { total: 4, review: 1, project_changes: 3 });
     },
   },
   {
@@ -3204,6 +3496,37 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       }),
   },
   /*
+   * `D-344`, `UI-A-73`. The knowledge base beside a decision carried over from an earlier version: «↩ Перенесено из V2» and its
+   * tooltip, in the table (the page's default view, which no other entry of this matrix draws) and in the events. The page is
+   * read cold here, so the populated widget is a hand-written entry; the second record is a direct decision, so the matrix
+   * judges a row with the mark and a row without it.
+   */
+  ...(['table', 'events'] as const).map((view): ScreenCase => ({
+    name: `knowledge-base-${view}-carried-decision`,
+    make: () =>
+      createElement(KnowledgeBase, {
+        view,
+        records: [
+          record({
+            section: 'AR',
+            severity: 'critical',
+            carried_from: {
+              decision_id: `dec_${ULID.slice(0, -1)}C`,
+              finding_uid: `fnd_${ULID.slice(0, -1)}C`,
+              version_uid: `ver_${ULID.slice(0, -1)}C`,
+              version_ordinal: 2,
+            },
+          }),
+          record({
+            decision_id: `dec_${ULID.slice(0, -1)}D`,
+            event_type: 'reject',
+            verdict: 'rejected',
+            current_verdict: 'rejected',
+          }),
+        ],
+      }),
+  })),
+  /*
    * `D-313`. The knowledge base's empty page under a category, a verdict or a project: a branch the page chooses
    * from its own state (`filtered`, a project in the address), which a static pass over an address cannot select.
    * Both ways out are drawn, so the reset button and the «Все проекты» link are judged too.
@@ -3522,6 +3845,24 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'section-specification-ready',
     make: () => createElement(SectionSpecificationAnswer, { answer: sectionAnswer(), onPage: () => undefined, onSelectProject: () => undefined }),
+  },
+  // `UI-A-35`: the row that chooses documents across a whole section, while the pages are read and when one could not be.
+  ...(['pending', 'failed'] as const).map((status) => ({
+    name: `section-batch-bar-${status}`,
+    make: () => createElement(SectionBatchBar, {
+      projectUid: PROJECT_UID as never,
+      selection: {
+        selection: { selected: new Set<string>(), onToggle: () => undefined },
+        chosenCount: 0, batch: null, choose: () => undefined, clear: () => undefined, openBatch: () => undefined, closeBatch: () => undefined,
+      },
+      pageDocuments: [],
+      walk: status === 'pending' ? { status } : { status, retry: () => undefined },
+    }),
+  })),
+  {
+    // `UI-B-23`: the same answer with the price match asked for — the form's nine graphs and the four columns beside them.
+    name: 'section-specification-ready-priced',
+    make: () => createElement(SectionSpecificationAnswer, { answer: sectionAnswer(), columns: 'priced', onPage: () => undefined, onSelectProject: () => undefined }),
   },
   {
     name: 'section-specification-paged',
@@ -4108,7 +4449,8 @@ describe('the guard reads a contract rather than a list of words', () => {
   it('keeps the hand-written residue small, and every entry reasoned', () => {
     // 25 since `D-292`: four format and sheet names of the comparison exports (`XLSX`, `JSON`, `HTML`, `RawJSON`), each
     // with its reason. It was 21.
-    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(25);
+    // 26 since `UI-B-52`: `Alt`, the legend engraved on a keyboard key, said in the queue's hint for moving a waiting job.
+    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(26);
     for (const { word, why } of NOT_DERIVABLE) {
       expect(why.length, `${word} has no reason`).toBeGreaterThan(60);
     }
@@ -4179,7 +4521,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.33.0',
+            contract_version: '1.42.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4201,7 +4543,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.33.0',
+            contract_version: '1.42.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -5061,6 +5403,13 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
           'pressing a row action: «Отменить прогон», «Повторный аудит» or the priority form. `intent` is a `useState` and one ' +
           'static pass presses nothing. «Исполнители» and «Нормы» confirm the same way, behind their own press.',
       },
+      {
+        text: 'Возобновить выдачу',
+        why:
+          'The queue header\'s switch (`queue-page.tsx`) reads «Возобновить выдачу» only while the dispatcher is paused, and ' +
+          'the journey reaches that state by pressing «Приостановить выдачу» first (lane V2, 2026-11-08, presses both by ' +
+          'their words). The static seed draws the unpaused queue, so one pass carries only «Приостановить выдачу».',
+      },
     ];
     const excused = new Set(PRESSED_BEFORE_IT_EXISTS.map((entry) => entry.text));
     const missing = [...new Set(texts)].filter((text) => !carried(text));
@@ -5173,6 +5522,14 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  * red rather than leaving a stale excuse in place.
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Загрузка: блоки листа…',
+    why: 'UI-B-09: the block strip of a proposal\'s sheet reads the version and its blocks only after «Блоки листа» is pressed on a proposal card; one static pass renders the closed strip. tests/unit/optimisation-proposals/sheet-blocks.test.ts renders the loading branch of the open strip.',
+  },
+  {
+    label: 'Версия не прочитана: блоков листа нет',
+    why: 'UI-B-09: the open strip of a proposal\'s sheet says this only when the read of the pass\'s version was refused, after «Блоки листа» is pressed; one static pass cannot press it. tests/unit/optimisation-proposals/sheet-blocks.test.ts seeds the refusal and renders the branch.',
+  },
   {
     label: 'Загрузка: решения по предложениям…',
     why: 'R-151h: the knowledge base reads the proposal journal only after «Тип: Предложения» is pressed; one static pass renders «Замечания». tests/unit/knowledge-base/proposal-journal.test.ts renders the loading branch of ProposalDecisions.',
@@ -5394,6 +5751,20 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       "`DocumentChooser`'s empty answer, reached only once a project is chosen and that " +
       'project turns out to have published nothing. Same mechanism: the component that ' +
       'would render it is never mounted by a single static pass.',
+  },
+  {
+    label: 'На этой странице ничего не нашлось.',
+    why:
+      "«Диспетчер»'s answer when the typed search leaves nothing of the page already read " +
+      '(`UI-PARITY` P5). The search text is a `useState` the administrator fills, so one static pass starts ' +
+      'with it empty and the page whole; the pure narrowing is held by `filterAssignments` in `tests/unit/dispatcher`.',
+  },
+  {
+    label: 'Под фильтр ничего не подошло.',
+    why:
+      "«Журнал входов»'s answer when the kind, name or day filters leave nothing of the events " +
+      'already read (`UI-A-94`). The filters are a `useState` the administrator sets, so one static pass starts with ' +
+      'them empty and every event shown; the pure narrowing is held by `filterAuthEvents` in `tests/unit/auth-events`.',
   },
 ];
 

@@ -17,19 +17,25 @@
 import { createElement } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 
+import { HomePage } from '@/_pages/home';
 import { ProjectsPage } from '@/_pages/projects';
-import { PageBlocksStrip, ReviewPage, ReviewPageBlocks, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
+import { FindingBlocksStrip, PageBlocksStrip, ReviewFindingBlocks, ReviewPage, ReviewPageBlocks, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
 import { MarkFaultView, UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
 import { FrameNavigationView } from '@/_app/frame-navigation';
+import { menuBadgesOf } from '@/_app/menu-badges';
 import { buildNavigation } from '@/_app/navigation';
+import { sectionNavigationOf } from '@/_app/section-navigation';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { SignInPage } from '@/_pages/sign-in';
 import { ManageUserControls } from '@/features/manage-user';
+import { AuthEventList } from '@/widgets/auth-event-list';
+import { UserCard } from '@/widgets/user-card';
 import { UserList } from '@/widgets/user-list';
+import { AdminAreaTabsView } from '@/entities/user';
 import { RegistrationQueue } from '@/widgets/registration-queue';
 import { VersionHistoryView } from '@/widgets/version-history';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
@@ -37,16 +43,17 @@ import { Dashboard } from '@/widgets/dashboard';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { DocumentList } from '@/widgets/document-list';
-import { EvidenceViewer, QuotationCard } from '@/widgets/evidence-viewer';
+import { DocumentViewerView, EvidenceViewer, QuotationCard } from '@/widgets/evidence-viewer';
 import { PageViewerView } from '@/features/open-evidence';
 import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
-import { ExecutionQueue } from '@/widgets/execution-queue';
-import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
+import { ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
+import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersPage } from '@/_pages/workers';
+import { SectionFilterBar, SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
@@ -58,6 +65,7 @@ import { OptimisationByDocument, ProposalSetChooser } from '@/widgets/optimisati
 import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
+import { SectionAcceptedList } from '@/widgets/section-accepted-optimisations';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
@@ -74,6 +82,9 @@ import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
+import { SectionDetailPage } from '@/_pages/section-detail';
+import { ProjectDetailPage } from '@/_pages/project-detail';
+import { DocumentDetailPage } from '@/_pages/document-detail';
 import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
 import { ReserveCalendarView } from '@/widgets/reserve-calendar';
 import { NO_ENGINEER_FILTER } from '@/entities/work-schedule';
@@ -85,15 +96,16 @@ import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
-import { DocumentContext } from '@/widgets/document-context';
+import { DocumentContext, SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
-import { BlockImageFailure, CropFigureView, PortalBlockCard, PortalBlockListView, findingsByPage } from '@/widgets/portal-blocks';
+import { BlockImageFailure, CropFigureView, PortalBlockCard, PortalBlockListView, findingsByBlock, findingsByPage } from '@/widgets/portal-blocks';
+import type { PageFindingsReading } from '@/widgets/portal-blocks';
 import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
-import { ProjectStructureView } from '@/widgets/project-sections';
+import { ProjectStructureView, sectionFigures } from '@/widgets/project-sections';
 import { VersionClassificationView } from '@/widgets/version-classification';
-import { portalBlocksQueryOptions } from '@/entities/block';
+import { findingBlockIndex, portalBlocksQueryOptions } from '@/entities/block';
 import type {
   DashboardSummary,
   DecisionEvent,
@@ -106,18 +118,19 @@ import type {
   RunStatus,
 } from '@/shared/api';
 import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
-import type { Account } from '@/shared/api';
+import type { Account, AnalysisPreset, AnalysisProfileListItem } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
+import { routes } from '@/shared/lib';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
-import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { PauseStatusView } from '@/widgets/pause-status';
-import { UpdateTime } from '@/entities/execution';
+import { UpdateTime, WORKER_PAGE_LIMIT } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
   DOCUMENT_PAGE_LIMIT,
@@ -145,11 +158,36 @@ import { addedPair, comparedPair } from '../comparison/viewer/viewer-fixtures';
 import { description as aiDescription } from '../version-compare/ai-fixtures';
 import { COMPARISON_SHAPES, panelProps } from '../version-compare/shapes';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
+import {
+  ADMIN as HOME_ADMIN, EXPERT as HOME_EXPERT, LABEL as HOME_LABEL, PROJECTS as HOME_PROJECTS, loaded as loadedHome, projectPage as homeProjectPage,
+} from '../screens/home-fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
-  NORM_CATALOGUE_ITEMS, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
+  NORM_CATALOGUE_ITEMS, NORM_CATALOGUE_PAGE, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
   normDocument,
 } from '../norms/fixtures';
+import { NormsPage, NormDocumentPage } from '@/_pages/norms';
+import {
+  NORM_CATALOGUE_PAGE_LIMIT, NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT, NORM_SNAPSHOT_LIMIT,
+} from '@/entities/norms';
+import { ExecutorGroups } from '@/widgets/executor-groups';
+import { ExecutorRules } from '@/widgets/executor-rules';
+import { AnalysisPresets } from '@/widgets/analysis-presets';
+import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
+import {
+  ARCHIVED_GROUP, MAIN_GROUP, ROUTED_GROUP, ruleOf, seedGroups, seedRules,
+} from '../executor-groups/executor-groups-fixtures';
+import {
+  AgentSetup, ConnectWizard, EnrollmentCommandView, OpenRouterKeyStep, OpenRouterSetup, SshInstallForm,
+} from '@/features/connect-remote-agent';
+import { IssuedTokenView, RunnerTokenPanel } from '@/features/manage-executor-connection';
+import { CutOverPreviewTable, GroupForm } from '@/features/manage-executor-group';
+import { memberCandidates } from '@/entities/executor-group';
+import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
+import { PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
+import { CONNECTION_CASES, PREVIEW as CUT_OVER_PREVIEW } from '../executor-groups/executor-groups-fixtures';
+import { issued as issuedEnrollment } from '../workers/connect-remote-agent-fixtures';
+import { PULL_ONLINE } from '../workers/executor-fixtures';
 
 import {
   BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blockId, blocksOnFivePages, blocksVersion, everyKindOfBlock,
@@ -160,8 +198,9 @@ import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixt
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY, seedExecutors,
 } from '../workers/executor-fixtures';
-import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
+import { carryOverShapes, proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
+import { ACCEPTED_PROJECT_A, acceptedPage } from '../section-optimisation/fixtures';
 import {
   AVAILABLE_RUN_ID, GROUP_ID, accountFixture, groupReviewFixture, runFindingsPage, v3FindingFixture,
 } from '../analysis-settings/ar-v3-beta-review-fixtures';
@@ -179,7 +218,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.42.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -222,6 +261,8 @@ const project = (): Project => ({
   name: 'Договор поставки',
   created_at: '2026-09-10T08:00:00.000Z',
   document_count: 2,
+  // `UI-A-10`, `UI-A-35`: the counters `listProjects` and `getProject` carry, so the list row and the project's figures are drawn.
+  audit_counts: auditCounts(6, { not_run: 2, awaiting_decision: 2, checked: 1, clean: 1, no_expert_decision: 4 }),
 });
 
 const version = (): DocumentVersion => ({
@@ -306,6 +347,11 @@ function populatedClient() {
   client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), { items: [project()], page });
   client.setQueryData(queryKeys.projects.detail(PROJECT_UID), project());
   client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), { items: [version()], page });
+  // `UI-PARITY-DOC-AUDIT`: the project screen reads the listing in the server's audit order, an entry of its own.
+  client.setQueryData(
+    queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit'),
+    { items: [version()], page },
+  );
   client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), { items: [version()], page });
   client.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
   client.setQueryData(queryKeys.versions.sectionReview(VERSION_UID), sectionReview());
@@ -418,6 +464,7 @@ const USER_ACCOUNT: Account = {
   first_name: 'Анна',
   is_default_credential: false,
   last_name: 'Проверкина',
+  last_sign_in_at: '2026-11-05T09:30:15Z',
   login: 'proverkina@example.org',
   middle_name: 'Сергеевна',
   profile_complete: true,
@@ -565,6 +612,11 @@ export function screens(): Screen[] {
         'AppFrame, the project selector open on an optional screen, the project named, rows and the first-page note',
         seeded('/dashboard', `project=${SWITCHER_UID}`, SWITCHER_PAGE, null),
       );
+      // `D-363`: the ✓ of the project that is open, on the row with the 200-character name (the cell keeps its column while the name wraps).
+      add(
+        'AppFrame, the project selector open, the project with the long name marked current',
+        seeded('/dashboard', 'project=prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', SWITCHER_PAGE, null),
+      );
       add('AppFrame, the project selector open on a global screen, muted, the list loading', seeded('/queue', '', undefined, null));
       add(
         'AppFrame, the project selector open, the read failed',
@@ -606,6 +658,24 @@ export function screens(): Screen[] {
       })),
     );
     add(
+      'Whats New dialog, two versions',
+      render(createElement(WhatsNewView, {
+        newest: '0.3.1', onClose: () => undefined,
+        listing: { whats_new: ['0.3.1', '0.3.0'], items: [{
+          version: '0.3.1', revision: 1, date: '2026-10-09', title: 'Небольшие улучшения',
+          is_archive: false, range_label: null,
+          items: [
+            { kind: 'improved', screen: 'home', where: 'Работа › Главная', text: 'Плитки главной стали плотнее.' },
+            { kind: 'fixed', screen: 'home', where: 'Работа › Главная', text: 'Счётчик на плитке больше не прыгает.' },
+          ],
+        }, {
+          version: '0.3.0', revision: 1, date: '2026-10-08', title: 'Новые возможности',
+          is_archive: false, range_label: null,
+          items: [{ kind: 'new', screen: 'home', where: 'Работа › Главная', text: 'Открыта история версий.' }],
+        }] },
+      })),
+    );
+    add(
       'Release history, long item at narrow width',
       render(createElement(VersionHistoryView, {
         version: '0.3.0', loading: false, error: null,
@@ -634,6 +704,66 @@ export function screens(): Screen[] {
         ),
       );
     }
+
+    /*
+     * `UI-A-04`: the current project's «Разделы» -- the mark with its count badge, the section page being shown current
+     * (the `.sectionMark` and `.sectionCount` rules, and the hover/current rules of the links they sit in), and the
+     * notes of a group that has no list yet (`.sectionNote`).
+     */
+    const sectionRows = PROJECT_SECTIONS.map((section) => {
+      const documents = section.code === 'AR' ? 4 : section.code === 'KJ' ? 12 : 0;
+      return { section: section.code, document_count: documents, ...sectionAudit(documents) };
+    });
+    const sectionPage = routes.projectSection(PROJECT_UID, 'KJ');
+    for (const [label, sections] of [
+      ['listed, КЖ current', sectionNavigationOf(sectionRows, PROJECT_UID, sectionPage)],
+      ['loading', { status: 'loading' }],
+      ['failed', { status: 'failed' }],
+    ] as const) {
+      add(
+        `AppFrame, the navigation open, the project's sections ${label}`,
+        inBar(
+          createElement(FrameNavigationView, {
+            navigation: buildNavigation(FRAME_ADMIN),
+            pathname: sectionPage,
+            projectUid: PROJECT_UID,
+            sections,
+            disclosure: drawnOpen,
+          }),
+        ),
+      );
+    }
+
+    /*
+     * `UI-A-05`, `UI-A-06`, `UI-A-91`: the counters beside the items -- the section's red number of documents no expert has
+     * checked next to its count (and the same sum on the «Разделы» group's own button, `D-360`), and the pills of «Очередь», «База знаний» and «Заявки на регистрацию» in the bar, on the
+     * rail's glyphs and in the stacked menu (`.itemBadges`, `.badge`, `.badgeCount`, `.badgeAlert`, `.railBadges`). One
+     * figure is past two digits, so the `99+` form is measured too.
+     */
+    const waitingRows = PROJECT_SECTIONS.map((section) => {
+      const documents = section.code === 'AR' ? 4 : section.code === 'KJ' ? 120 : 0;
+      const waiting = section.code === 'AR' ? 3 : section.code === 'KJ' ? 120 : 0;
+      return { section: section.code, document_count: documents, ...sectionAudit(documents, { awaiting_decision: waiting }) };
+    });
+    add(
+      'AppFrame, the navigation open, the counters beside the items and the sections\' red number',
+      inBar(
+        createElement(FrameNavigationView, {
+          navigation: buildNavigation(FRAME_ADMIN),
+          pathname: sectionPage,
+          projectUid: PROJECT_UID,
+          sections: sectionNavigationOf(waitingRows, PROJECT_UID, sectionPage),
+          badges: menuBadgesOf({
+            queueOverview: [{ state: 'queued', count: 2 }, { state: 'running', count: 1 }],
+            // `D-331`: the red mark beside the count on «Очередь».
+            queueRecentOverview: [{ state: 'failed', count: 2 }],
+            knowledgeBaseTotal: 140,
+            pendingRegistrations: 5,
+          }),
+          disclosure: drawnOpen,
+        }),
+      ),
+    );
   }
 
   /*
@@ -722,6 +852,19 @@ export function screens(): Screen[] {
     runScreen('partial', { degradation_set: ['text_analysis'], published_finding_count: 1 }),
   );
   add('RunProgress failed', runScreen('failed', { terminal_reason: 'analysis_failed' as ErrorCode }));
+  // `UI-A-65`: the rail states how long each stage took, and an open run draws its live line (below).
+  add(
+    'RunProgress published with stage times',
+    runScreen('published', {
+      published_finding_count: 2,
+      stages: [
+        { stage_id: 'source_preparation', status: 'succeeded', error_code: null, started_at: '2026-09-10T08:00:00.000Z', finished_at: '2026-09-10T08:00:00.030Z' },
+        { stage_id: 'page_geometry_extraction', status: 'succeeded', error_code: null, started_at: '2026-09-10T08:00:00.030Z', finished_at: '2026-09-10T08:00:01.400Z' },
+        { stage_id: 'document_context_build', status: 'partial', error_code: 'analysis_input_budget_exceeded', started_at: '2026-09-10T08:00:01.400Z', finished_at: '2026-09-10T08:01:12.000Z' },
+        { stage_id: 'text_analysis', status: 'failed', error_code: 'analysis_failed', started_at: '2026-09-10T08:01:12.000Z', finished_at: '2026-09-10T08:01:13.250Z' },
+      ],
+    }),
+  );
   add('RunProgress validating', runScreen('validating'));
   add('RunProgress queued', runScreen('queued'));
   add('RunProgress cancelled', runScreen('cancelled'));
@@ -768,6 +911,37 @@ export function screens(): Screen[] {
       'DocumentContext, a version of two, with more history',
       renderScreen(client, createElement(DocumentContext, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID, current: 'version' })),
     );
+  }
+  // `UI-A-28`: «‹ Предыдущий · N из M · Следующий ›» between the documents of a section -- the strip's own rules.
+  {
+    const neighbour = (suffix: string) => ({ ...version(), document_uid: `${DOCUMENT_UID.slice(0, -1)}${suffix}` as DocumentVersion['document_uid'], display_title: `Документ ${suffix}` });
+    add(
+      'SectionNeighbours, the second of three',
+      render(createElement(SectionNeighboursView, {
+        projectUid: PROJECT_UID,
+        section: PROJECT_SECTIONS[0] as (typeof PROJECT_SECTIONS)[number],
+        place: { position: 2, total: 3, previous: neighbour('A'), next: neighbour('C') },
+      })),
+    );
+    add(
+      'SectionNeighbours, the first of three',
+      render(createElement(SectionNeighboursView, {
+        projectUid: PROJECT_UID,
+        section: PROJECT_SECTIONS[0] as (typeof PROJECT_SECTIONS)[number],
+        place: { position: 1, total: 3, previous: null, next: neighbour('B') },
+      })),
+    );
+  }
+  // `UI-A-22`: the version's tabs -- the open one, a link with the finding count, a tab that is not a link yet, and the
+  // document's optimisation -- so the row's current, off and count rules are measured where they are drawn.
+  {
+    const base = { projectUid: PROJECT_UID, versionUid: VERSION_UID, documentUid: DOCUMENT_UID, current: 'version' as const };
+    add('VersionTabs, a result run to open', render(createElement(VersionTabsView, {
+      tabs: versionTabs({ ...base, runs: [runStatus({ run_id: RUN_ID, published_finding_count: 7 })] }),
+    })));
+    add('VersionTabs, no result run yet, on «Блоки»', render(createElement(VersionTabsView, {
+      tabs: versionTabs({ ...base, current: 'blocks', runs: [] }),
+    })));
   }
   add('ExecutionJournal loaded', withRouter(createElement(ExecutionJournal, {
     entries: [{
@@ -824,6 +998,59 @@ export function screens(): Screen[] {
     busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
     onPriority: noop, onNext: null, onPrevious: null,
   })));
+  // `UI-B-52`: two waiting jobs, each with the drag handle, the hint that names the keys and the note under the list.
+  add('ExecutionQueue, waiting jobs with a handle to move each', withRouter(createElement(ExecutionQueue, {
+    items: ['A', 'B'].map((suffix, index) => ({
+      job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${suffix}`,
+      run_id: RUN_ID, state: 'queued', priority: 2 - index,
+      created_at: '2026-10-09T10:00:00Z',
+      available_at: '2026-10-09T10:00:00Z',
+      ...QUEUE_WORK,
+    })),
+    roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
+    busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
+    onPriority: noop, onReorder: noop, reorderNote: 'Задача перемещена на место 1: приоритет 3. Порядок определил сервер.',
+    onNext: null, onPrevious: null,
+  })));
+  // `UI-PARITY-QUEUE-A`, the queue as a line per job: a finished job with its timing, its reason and its muted facts.
+  add('ExecutionQueue finished, its timing and its reason', withRouter(createElement(ExecutionQueue, {
+    items: [{
+      job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      run_id: RUN_ID, state: 'failed', priority: 2,
+      created_at: '2026-10-09T10:00:00Z',
+      available_at: '2026-10-09T10:00:00Z',
+      started_at: '2026-10-09T10:01:00Z',
+      finished_at: '2026-10-09T10:09:30Z',
+      error_code: 'analysis_failed',
+      attempt_count: 3,
+      ...QUEUE_WORK,
+    }],
+    roles: ['admin'], asOf: Date.parse('2026-10-09T10:15:00Z'),
+    busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
+    onPriority: noop, onNext: null, onPrevious: null,
+  })));
+  // `UI-B-64`: the blocks under the tiles of «Обзор» -- the servers, the nearest queued jobs, a silent server and a job that ended badly.
+  {
+    const at = '2026-10-09T10:05:00Z';
+    const job = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
+      job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${id}`, run_id: RUN_ID, state, priority: 0, created_at: at, available_at: at, ...QUEUE_WORK, ...extra,
+    });
+    add('WorkersOverviewSections with attention', withRouter(createElement(WorkersOverviewSections, {
+      workers: [
+        { worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true, slots: 4, version: '0.5.0',
+          started_at: at, heartbeat_at: at, current_run_ids: [RUN_ID] },
+        { worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: true, slots: 2, version: '0.5.0',
+          started_at: at, heartbeat_at: at, current_run_ids: [] },
+      ],
+      workersPartial: true,
+      jobs: [job('1', 'queued', { queue_position: 1 }), job('2', 'failed', { error_code: 'analysis_failed' })],
+      jobsPartial: true,
+      processesHref: '?tab=processes',
+    } as unknown as Parameters<typeof WorkersOverviewSections>[0])));
+    add('WorkersOverviewSections with nothing to attend to', withRouter(createElement(WorkersOverviewSections, {
+      workers: [], workersPartial: false, jobs: [],
+    })));
+  }
   // The «Обновлено» line of the queue and the journal: current, and out of date (a note on the surface tint).
   add('UpdateTime fresh', withRouter(createElement(UpdateTime, {
     dataUpdatedAt: Date.parse('2026-10-09T10:05:00Z'), failed: false, now: Date.parse('2026-10-09T10:05:04Z'),
@@ -935,6 +1162,17 @@ export function screens(): Screen[] {
   add('SectionSpecificationAnswer ready', render(createElement(SectionSpecificationAnswer, {
     answer: sectionAnswer(), onPage: noop, onSelectProject: noop,
   })));
+  add('SectionSpecificationAnswer ready, with the price match', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer(), onPage: noop, onSelectProject: noop, columns: 'priced',
+  })));
+  // `UI-B-23`: a project with no specification keeps its group, said in the red of the original's «Спецификация отсутствует».
+  add('SectionSpecificationAnswer, a project without a specification', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer({
+      projects: sectionAnswer().projects.map((item, index) => (index === 1 ? { ...item, row_count: 0 } : item)),
+      rows: { ...sectionAnswer().rows!, items: sectionAnswer().rows!.items.slice(0, 4), total: 4 },
+    }),
+    onPage: noop, onSelectProject: noop,
+  })));
   add('SectionSpecificationAnswer too large', render(createElement(SectionSpecificationAnswer, {
     answer: sectionAnswer({
       ...SECTION_NO_ROWS, state: 'section_too_large', limit_reason: 'sources',
@@ -947,6 +1185,28 @@ export function screens(): Screen[] {
       })),
     }),
     onPage: null, onSelectProject: noop,
+  })));
+  // `UI-B-27`: «Принято» — the filters with the project the address names, a page with a saving and one without,
+  // the empty page, and a page that has a page before and after it.
+  // The page: its tabs (the open one by `aria-selected`) and the notice for an address it could not read.
+  add('SectionOptimisationPage specification tab', withRouter(createElement(SectionOptimisationPage, {
+    initial: readSectionOptimisationAddress({ section: 'KJ' }),
+  })));
+  add('SectionOptimisationPage accepted tab, an address it could not read', withRouter(createElement(SectionOptimisationPage, {
+    initial: readSectionOptimisationAddress({ section: 'ZZ', tab: 'accepted' }),
+  })));
+  add('SectionFilterBar', render(createElement(SectionFilterBar, {
+    sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_A as never,
+    options: [{ projectUid: ACCEPTED_PROJECT_A as never, name: 'Школа на пятьсот мест' }], onSection: noop, onProject: noop,
+  })));
+  add('SectionAcceptedList ready', render(createElement(SectionAcceptedList, {
+    page: acceptedPage(), hasPrevious: false, onPrevious: noop, onNext: noop,
+  })));
+  add('SectionAcceptedList paged', render(createElement(SectionAcceptedList, {
+    page: acceptedPage({ page: { next_cursor: 'c2' }, total: 41 }), hasPrevious: true, onPrevious: noop, onNext: noop,
+  })));
+  add('SectionAcceptedList empty', render(createElement(SectionAcceptedList, {
+    page: acceptedPage({ items: [], total: 0 }), hasPrevious: false, onPrevious: noop, onNext: noop,
   })));
   add('AnalysisProfileTable loaded', render(createElement(AnalysisProfileTable, {
     items: [
@@ -1073,15 +1333,41 @@ export function screens(): Screen[] {
     shape.seedClient?.(client);
     add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
   }
-  // M-17 (`R-151t`): the overview tiles over «Процессы», with servers not online and a partial registry.
+  // M-17 (`R-151t`), UI-B-63: the overview tiles of «Обзор», with servers not online and a partial registry, the
+  // queue's line, and the links from the tiles to «Процессы» and «Очередь» (the rules `.link` and `.queueLine`).
+  const OVERVIEW_QUEUE = [
+    { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 },
+    { state: 'retry_wait', count: 0 }, { state: 'succeeded', count: 12 }, { state: 'failed', count: 2 },
+    { state: 'cancelled', count: 0 }, { state: 'dead_letter', count: 0 },
+  ] as const;
   add('WorkersOverview with the queue', render(createElement(WorkersOverviewView, {
     workers: { online: 1, total: 3, onlineSlots: 4, freeSlots: 2, partial: true },
-    queue: [
-      { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 },
-      { state: 'retry_wait', count: 0 }, { state: 'succeeded', count: 12 }, { state: 'failed', count: 2 },
-      { state: 'cancelled', count: 0 }, { state: 'dead_letter', count: 0 },
-    ],
+    queue: OVERVIEW_QUEUE,
+    processesHref: '?tab=processes',
   })));
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT), {
+      items: [
+        {
+          worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true,
+          slots: 4, version: '0.5.0', started_at: '2026-10-09T10:00:00Z',
+          heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [RUN_ID, RUN_ID],
+        },
+        {
+          worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', state: 'offline', intake_enabled: true,
+          slots: 1, version: '0.4.0', started_at: '2026-10-08T09:00:00Z',
+          heartbeat_at: '2026-10-08T12:00:00Z', current_run_ids: [],
+        },
+      ],
+      page: { next_cursor: null },
+    });
+    client.setQueryData(queryKeys.execution.queue(undefined, {}), {
+      items: [], page: { next_cursor: null }, paused: false, overview: OVERVIEW_QUEUE,
+    });
+    client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
+    add('WorkersPage overview tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'overview' }>, { initialTab: 'overview' })));
+  }
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {
@@ -1190,6 +1476,24 @@ export function screens(): Screen[] {
       add('PortalBlockListView, one page chosen, no run', tiles({ initialPage: 2, pageFindings: { kind: 'none' } }));
       add('PortalBlockListView, the run published no findings', tiles({ pageFindings: { kind: 'no-result', runId: BLOCKS_RUN_ID } }));
       add('PortalBlockListView, the findings could not be read', tiles({ pageFindings: { kind: 'unreadable', runId: BLOCKS_RUN_ID } }));
+      // `UI-PARITY-C6`: the same list numbered by BLOCK (the server's block links), «Без сущностей» with its two lists, and the
+      // block view with the block's own findings. Page 3 is unlinked: its blocks carry no number and are in neither list.
+      const found = runFindings();
+      const heldBy = [[blockId(1)], [blockId(1), blockId(2), blockId(4)], [blockId(4)], [], []];
+      const linkIndex = findingBlockIndex({
+        run_id: BLOCKS_RUN_ID, version_uid: BLOCKS_VERSION_UID, status: 'produced', unlinked_pages: [3],
+        items: found.map((finding, at) => ({ finding_uid: finding.finding_uid, portal_block_ids: heldBy[at] ?? [] })),
+      });
+      if (linkIndex === null) throw new Error('the census links must be produced');
+      const byBlock: PageFindingsReading = {
+        kind: 'read', runId: BLOCKS_RUN_ID, byPage: findingsByPage(found),
+        blocks: { byBlock: findingsByBlock(found, linkIndex), unlinkedPages: linkIndex.unlinkedPages },
+      };
+      add('PortalBlockListView, tiles numbered by block', tiles({ pageFindings: byBlock }));
+      add('PortalBlockListView, «Без сущностей»', tiles({ pageFindings: byBlock, initialPage: 'empty' }));
+      add('Block view open on a block with its own findings', tiles({ pageFindings: byBlock, initialOpen: 0, staticOpen: true }));
+      add('Block view open on a block no finding holds', tiles({ pageFindings: byBlock, initialOpen: 8, staticOpen: true }));
+      add('Block view open on «Без сущностей»', tiles({ pageFindings: byBlock, initialPage: 'empty', initialOpen: 2, staticOpen: true }));
       add('Block view open on an image of a page with findings', tiles({ initialOpen: 1, staticOpen: true }));
       add('Block view open on a text with flags', tiles({ initialOpen: 0, staticOpen: true }));
       add('Block view open on a stamp', tiles({ initialOpen: 2, staticOpen: true }));
@@ -1258,6 +1562,92 @@ export function screens(): Screen[] {
     items: NORM_CATALOGUE_ITEMS, total: 2, filtered: false, onFirst: null, onNext: noop,
   })));
 
+  /*
+   * Lane N1: the whole of «Нормы» and of one norm document, as the pages draw them over seeded caches: the snapshot
+   * strip, the two views, the search with its results, the catalogue, and an administrator's snapshots and history.
+   */
+  {
+    const snapshots = queryKeys.norms.snapshots(undefined, NORM_SNAPSHOT_LIMIT);
+    const events = queryKeys.norms.events(undefined, NORM_EVENT_PAGE_LIMIT);
+    const last = { next_cursor: null };
+    const seed = (): ReturnType<typeof newClient> => {
+      const client = newClient();
+      client.setQueryData(snapshots, { items: NORM_SNAPSHOTS, page: last });
+      client.setQueryData(events, { items: NORM_EVENTS, page: last });
+      return client;
+    };
+    const searched = seed();
+    searched.setQueryData(queryKeys.norms.search('высота помещений', undefined, NORM_SEARCH_PAGE_LIMIT), {
+      items: NORM_HITS, page: { next_cursor: 'c2VhcmNoLW5leHQ' },
+    });
+    add('NormsPage, search results, administrator', renderScreen(searched, createElement(NormsPage, {
+      roles: ['admin'], query: 'высота помещений',
+    })));
+    add('NormsPage, no search yet, expert', renderScreen(seed(), createElement(NormsPage, { roles: ['expert'] })));
+    const catalogued = seed();
+    catalogued.setQueryData(
+      queryKeys.norms.catalogue(undefined, undefined, undefined, NORM_CATALOGUE_PAGE_LIMIT), NORM_CATALOGUE_PAGE,
+    );
+    add('NormsPage, catalogue, expert', renderScreen(catalogued, createElement(NormsPage, {
+      roles: ['expert'], catalogue: { q: null, kind: null },
+    })));
+    const narrowed = seed();
+    narrowed.setQueryData(queryKeys.norms.catalogue('нет такого', 'СП', undefined, NORM_CATALOGUE_PAGE_LIMIT), {
+      ...NORM_CATALOGUE_PAGE, items: [], total: 0, page: { next_cursor: null },
+    });
+    add('NormsPage, catalogue narrowed to nothing', renderScreen(narrowed, createElement(NormsPage, {
+      roles: ['expert'], catalogue: { q: 'нет такого', kind: 'СП' },
+    })));
+    const bare = newClient();
+    bare.setQueryData(snapshots, { items: [], page: last });
+    add('NormsPage, no current snapshot', renderScreen(bare, createElement(NormsPage, { roles: ['expert'] })));
+    const opened = newClient();
+    opened.setQueryData(queryKeys.norms.document(NORM_DOCUMENT_ID), normDocument());
+    opened.setQueryData(queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, NORM_PARAGRAPH_PAGE_LIMIT), {
+      items: NORM_PARAGRAPHS, page: { next_cursor: 'cGFyYWdyYXBocy1uZXh0' }, source_attribution: 'consultant_plus',
+    });
+    add('NormDocumentPage, a page of paragraphs', renderScreen(opened, createElement(NormDocumentPage, {
+      normDocumentId: NORM_DOCUMENT_ID, page: null,
+    })));
+  }
+
+  /*
+   * Lane N1: «Группы», «Правила» (both modes) and «Пресеты запуска», which no other census screen reaches: a group with its
+   * members and capacity, an archived one, the table of rules, and the presets with a version, a blocker and the archive.
+   */
+  {
+    const groups = newClient();
+    seedGroups(groups, [MAIN_GROUP, ROUTED_GROUP, ARCHIVED_GROUP]);
+    add('ExecutorGroups administrator', renderScreen(groups, createElement(ExecutorGroups, { roles: ['admin'] })));
+    const rulesLegacy = newClient();
+    seedGroups(rulesLegacy, [MAIN_GROUP, ROUTED_GROUP]);
+    seedRules(rulesLegacy, 'legacy', [ruleOf('text_analysis', ROUTED_GROUP, 1)]);
+    add('ExecutorRules legacy mode, administrator', renderScreen(rulesLegacy, createElement(ExecutorRules, { roles: ['admin'] })));
+    const rulesOn = newClient();
+    seedGroups(rulesOn, [MAIN_GROUP, ROUTED_GROUP]);
+    seedRules(rulesOn, 'rules', [ruleOf('text_analysis', ROUTED_GROUP, 1), ruleOf('comparison_spec', MAIN_GROUP, 2)]);
+    add('ExecutorRules rules mode, expert', renderScreen(rulesOn, createElement(ExecutorRules, { roles: ['expert'] })));
+
+    const preset = (n: number, over: Partial<AnalysisPreset> = {}): AnalysisPreset => ({
+      preset_id: `evt_01M2545JSD15ETSNNV904X${String(n).padStart(4, '0')}`,
+      revision_id: `evt_01M2545JSD15ETSNNV904X${String(n + 100).padStart(4, '0')}`,
+      revision_no: 1,
+      name: `Быстрый черновик ${n}`,
+      executor_connection_id: EXECUTOR_READY.connection.connection_id,
+      state: 'active',
+      created_at: '2026-10-27T10:00:00Z',
+      revised_at: '2026-10-27T11:00:00Z',
+      revised_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      ...over,
+    });
+    const presets = newClient();
+    seedExecutors(presets, EXECUTOR_CASES);
+    presets.setQueryData(ANALYSIS_PRESETS_KEY, {
+      items: [preset(1, { revision_no: 3 }), preset(2), preset(3, { state: 'archived' })],
+    });
+    add('AnalysisPresets administrator', renderScreen(presets, createElement(AnalysisPresets, { roles: ['admin'] })));
+  }
+
   // The finding list, with a row SELECTED — `aria-current='true'` is the only place
   // `ink-soft` meets `accent-light`.
   add(
@@ -1293,8 +1683,8 @@ export function screens(): Screen[] {
   // `R-151g`: an accepted finding's execution status in its row, and the control with a refusal.
   add('FindingList with an execution status', render(createElement(FindingList, {
     groups: groupByCategory(FINDINGS.map((finding, index) => index === 0
-      ? { ...finding, current_verdict: 'accepted' as const, execution_status: 'amended' as const }
-      : finding)),
+      ? { ...finding, current_verdict: 'accepted' as const, execution_status: 'amended' as const, merged_observations: [V2_OBSERVATION, V2_SIBLING] }
+      : { ...finding, current_verdict: 'rejected' as const })),
     selectedFindingUid: null,
     onSelect: noop,
   })));
@@ -1315,6 +1705,43 @@ export function screens(): Screen[] {
     onChoose: noop,
   })));
   // `R-151n`: ✓/✕ in each row, with the three notes a press can leave: recorded, refused, sending.
+  // `UI-A-68`: the full-width table -- verdict tints, a decided severity beside a proposal, norms, merged count -- with
+  // the selected finding opened under its row.
+  add(
+    'FindingList, table view with an opened row',
+    render(
+      createElement(FindingList, {
+        view: 'table',
+        groups: groupByCategory([
+          finding({
+            finding_uid: FINDING_UID,
+            category: 'internal_contradiction',
+            current_verdict: 'accepted',
+            decided_severity: 'critical',
+            execution_status: 'amended',
+            observation: V2_OBSERVATION,
+            merged_observations: [V2_OBSERVATION, V2_SIBLING],
+          }),
+          finding({ finding_uid: `${FINDING_UID.slice(0, -1)}C`, category: 'explicit_placeholder', current_verdict: 'rejected' }),
+          finding({
+            finding_uid: `${FINDING_UID.slice(0, -1)}D`,
+            category: 'explicit_placeholder',
+            current_verdict: 'pending',
+            observation: observation({ proposed_severity: 'economic', norm_citations: [] }),
+          }),
+        ]),
+        selectedFindingUid: FINDING_UID,
+        onSelect: noop,
+        // `UI-A-74`: the count of the portal blocks beside the number, for the one finding the run's links name.
+        blockCountOf: (findingUid: string) => (findingUid === FINDING_UID ? 3 : undefined),
+        renderRowActions: (row: { readonly current_verdict: Verdict }) =>
+          createElement(FindingRowActions, {
+            verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop,
+          }),
+        renderExpansion: () => createElement('p', null, 'Открытая находка: цитата на странице и решение эксперта.'),
+      }),
+    ),
+  );
   add(
     'FindingList with row actions, recorded and refused',
     render(
@@ -1353,10 +1780,71 @@ export function screens(): Screen[] {
   {
     const client = newClient();
     client.setQueryData(queryKeys.projects.tags(PROJECT_UID), { items: [{ tag: 'Корпус 1', document_count: 3 }] });
-    client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), {
-      items: [{ ...version(), tags: ['Корпус 1'] }], page: { next_cursor: null },
-    });
+    client.setQueryData(
+      queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit'),
+      { items: [{ ...version(), tags: ['Корпус 1'] }], page: { next_cursor: null } },
+    );
     add('ProjectSections with a tag filter', renderScreen(client, createElement(ProjectSections, { projectUid: PROJECT_UID })));
+  }
+  // `UI-PARITY-DOC-AUDIT`: the chip of each audit state on a card, a partial result's mark beside it, a never-run document
+  // and a card whose item carries no audit; and the section page narrowed to the documents never run (`?filter=not_run`),
+  // so the chips' tones, the page's note and its «Показать все» are reached by the census.
+  {
+    const runId = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+    const audited = (n: string, state: 'not_run' | 'clean' | 'awaiting_decision' | 'checked', partial = false) => ({
+      ...version(),
+      document_uid: `doc_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      version_uid: `ver_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      display_title: `Документ ${n}`,
+      audit: {
+        state, partial,
+        ...(state === 'not_run' ? {} : { result_run_id: runId }),
+        finding_count: state === 'not_run' || state === 'clean' ? 0 : 3,
+        undecided_finding_count: state === 'awaiting_decision' ? 2 : 0,
+      },
+    });
+    const cards = [
+      audited('A1', 'checked'), audited('A2', 'awaiting_decision', true), audited('A3', 'clean'), audited('A4', 'not_run'),
+      { ...version(), document_uid: 'doc_01J9ZQ8K7NHVXW3T2R5M6P4QA5' as never, version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4QA5' as never },
+    ];
+    add('DocumentCardGrid with the four audit states', render(createElement(DocumentCardGrid, {
+      documents: cards,
+      addresses: () => ({ href: '/projects', documentHref: '/projects' }),
+      reviewAddress: (id) => `/projects/${PROJECT_UID}/runs/${id}/review`,
+    })));
+    const narrowed = newClient();
+    narrowed.setQueryData(
+      queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR', false, undefined, 'not_run', 'audit'),
+      { items: [audited('A4', 'not_run')], page: { next_cursor: 'Y3Vyc29y' } },
+    );
+    add('SectionDetailPage narrowed to the documents never run', renderScreen(narrowed, createElement(SectionDetailPage, {
+      projectUid: PROJECT_UID, sectionCode: 'AR', filter: 'not_run',
+    })));
+  }
+  // `UI-A-47`: the mark of a run in flight beside the audit chip, in each of the three states of such a run, so the pending
+  // badge on a card is reached by the census (a re-run over a result, a first run, a run being validated).
+  {
+    const runId = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+    const running = (
+      n: string,
+      state: 'queued' | 'running' | 'validating',
+      audit: { state: 'not_run' | 'awaiting_decision' | 'checked'; result_run_id?: string; finding_count?: number; undecided_finding_count?: number },
+    ) => ({
+      ...version(),
+      document_uid: `doc_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      version_uid: `ver_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      display_title: `Документ ${n}`,
+      audit: { partial: false, finding_count: 0, undecided_finding_count: 0, ...audit, active_run: { run_id: `run_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}`, state } },
+    });
+    add('DocumentCardGrid with a run in flight', render(createElement(DocumentCardGrid, {
+      documents: [
+        running('B1', 'queued', { state: 'checked', result_run_id: runId, finding_count: 3 }),
+        running('B2', 'running', { state: 'not_run' }),
+        running('B3', 'validating', { state: 'awaiting_decision', result_run_id: runId, finding_count: 3, undecided_finding_count: 2 }),
+      ],
+      addresses: () => ({ href: '/projects', documentHref: '/projects' }),
+      reviewAddress: (id) => `/projects/${PROJECT_UID}/runs/${id}/review`,
+    })));
   }
   add('DocumentCardGrid with an archived document', render(createElement(DocumentCardGrid, {
     documents: [{ ...version(), archived_at: '2026-11-06T09:00:00Z', tags: ['Корпус 1'] }],
@@ -1706,7 +2194,50 @@ export function screens(): Screen[] {
       add('RunList table states', renderScreen(runsClient, createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
     }
     add('ProjectsPage loaded', at(createElement(ProjectsPage, {})));
+    // `UI-A-35`, `UI-A-22`: the project's page with its figures and tabs, and the document's page with its tabs and
+    // neighbours strip over the same populated client.
+    add('ProjectDetailPage loaded', at(createElement(ProjectDetailPage, { projectUid: PROJECT_UID, roles: ['expert'] })));
+    add('DocumentDetailPage loaded', at(createElement(DocumentDetailPage, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, roles: ['expert'] })));
     add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
+    /*
+     * `UI-A-27` «Просмотр PDF»: the drawer is mounted by a press, which a one-pass render cannot make, so its view is drawn open from plain
+     * data -- on the first page (‹ disabled, the bytes here and «Открыть PDF ↗» offered) and on the last with the bytes not yet here
+     * (› disabled, no link), the two states the bar's colours branch on.
+     */
+    add('VersionDetailPage PDF drawer open', withRouter(createElement(DocumentViewerView, {
+      title: 'АР-1 · Версия 3', page: 1, pageCount: 5, onPage: () => undefined,
+      externalHref: 'blob:http://web.test/0a1b2c3d#page=1', onClose: () => undefined,
+      children: createElement(LoadingState, { what: 'PDF версии' }),
+    })));
+    add('VersionDetailPage PDF drawer on the last page, document not read', withRouter(createElement(DocumentViewerView, {
+      title: 'АР-1 · Версия 3', page: 5, pageCount: 5, onPage: () => undefined,
+      externalHref: null, onClose: () => undefined,
+      children: createElement(ErrorState, { title: 'PDF не удалось открыть', detail: 'Байты документа не пришли.' }),
+    })));
+    /*
+     * The home page at `/` (`W50-HOME-01`). The derived screens above render it COLD, where it draws only its loading states; the tiles, the
+     * recent projects, the expert's own work and the administrator's pending-requests tile exist only over answered reads, which are seeded
+     * as `tests/unit/screens/home.test.ts` seeds them (`home-fixtures.ts` is the one set).
+     */
+    add('HomePage loaded, expert', renderScreen(loadedHome(), createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_EXPERT })));
+    add('HomePage loaded, administrator with requests waiting', renderScreen(loadedHome({ pending: 3 }), createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_ADMIN })));
+    add('HomePage loaded, administrator with none waiting', renderScreen(loadedHome({ pending: 0 }), createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_ADMIN })));
+    // `UI-A-10`: «Последние проекты» over items that carry `audit_counts` (the line of badges under a project's name), a project that
+    // waits for decisions, one that was checked and one with no documents, so the tile's figures are measured where they are drawn.
+    add(
+      'HomePage loaded, recent projects with their audit figures',
+      renderScreen(
+        loadedHome({
+          projects: homeProjectPage(HOME_PROJECTS.slice(0, 5).map((project, index) => ({
+            ...project,
+            audit_counts: index === 0
+              ? auditCounts(8, { not_run: 3, awaiting_decision: 2, checked: 2, clean: 1, no_expert_decision: 5 })
+              : index === 1 ? auditCounts(4, { not_run: 0, checked: 4, no_expert_decision: 0 }) : auditCounts(index === 2 ? 0 : 2),
+          }))),
+        }),
+        createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_EXPERT }),
+      ),
+    );
     // `CMP-VERSION-MARK-01`: the same four screens over a version admitted for comparison only
     // (`upload_kind` `comparison_pdf`): the mark on a row and in the panel, and the run list with
     // its disabled start — over a list with a run and over an empty one — so the badge's tone, the
@@ -1791,6 +2322,21 @@ export function screens(): Screen[] {
             version(),
           ],
           hasNextPage: true,
+        }),
+      ),
+    );
+    // `UI-A-36`: the same structure with the server's figures of every section, so the «Σ Итого» card is drawn.
+    add(
+      'ProjectStructureView with the total',
+      at(
+        createElement(ProjectStructureView, {
+          projectUid: PROJECT_UID,
+          items: [version()],
+          hasNextPage: false,
+          figures: sectionFigures([
+            ...PROJECT_SECTION_VALUES.map((section) => ({ section, document_count: 2, ...sectionAudit(2) })),
+            { document_count: 1, ...sectionAudit(1) },
+          ]),
         }),
       ),
     );
@@ -1989,6 +2535,30 @@ export function screens(): Screen[] {
           }),
         ),
       );
+      // `UI-PARITY-C6`: the finding's own blocks, connected through the run's links and the version's blocks, with the block
+      // view open over them, and the strip with a block not yet loaded and the next portion on its way.
+      const withLinks = (more: boolean) => {
+        const client = withBlocks(more);
+        client.setQueryData(queryKeys.runs.findingBlocks(RUN_ID), {
+          run_id: RUN_ID, version_uid: VERSION_UID, status: 'produced', unlinked_pages: [],
+          items: [{ finding_uid: FINDING_UID, portal_block_ids: [blockId(61), blockId(62)] }],
+        });
+        return client;
+      };
+      const ownBlocks = (over: Partial<Parameters<typeof ReviewFindingBlocks>[0]> = {}) =>
+        createElement(ReviewFindingBlocks, { projectUid: PROJECT_UID, versionUid: VERSION_UID, runId: RUN_ID, findingUid: FINDING_UID, ...over });
+      add('ReviewFindingBlocks, the finding’s own blocks', renderScreen(withLinks(false), ownBlocks()));
+      add('Block view open from «Блоки замечания» on «Разбор»', renderScreen(withLinks(false), ownBlocks({ initialOpen: 1, staticOpen: true })));
+      add(
+        'FindingBlocksStrip, a block not yet loaded, the next portion on its way',
+        renderScreen(
+          newClient(),
+          createElement(FindingBlocksStrip, {
+            reading: { kind: 'blocks', blocks: onPage7, missing: 2, complete: false }, versionUid: VERSION_UID,
+            onOpen: noop, onMore: noop, loadingMore: true, moreFailed: false,
+          }),
+        ),
+      );
       add(
         'PageBlocksStrip, the blocks could not be read',
         renderScreen(
@@ -2112,6 +2682,50 @@ export function screens(): Screen[] {
   add('KnowledgeBase', render(createElement(KnowledgeBase, { records: RECORDS })));
   // `UI-PARITY-P0A`: the place line of a record of a classified version (the rows above carry none).
   add('KnowledgeBase with a place line', render(createElement(KnowledgeBase, { records: RECORDS.map((row) => ({ ...row, section: 'AR' as const })) })));
+  // `D-317`, `UI-B-34`: «Все» -- a finding's row and a proposal's row on the same three columns, under the legend.
+  add('KnowledgeBase all kinds', render(createElement(KnowledgeBase, {
+    records: [],
+    entries: [
+      ...RECORDS.slice(0, 2).map((row) => ({ kind: 'finding' as const, occurred_at: row.recorded_at, finding: { ...row, section: 'AR' as const } })),
+      {
+        kind: 'proposal' as const,
+        occurred_at: '2026-11-06T09:00:00Z',
+        proposal: {
+          proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D',
+          optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', verdict: 'accept' as const, comment: 'Аналог подходит по характеристикам.',
+          actor_label: 'Иванова А. С.', decided_at: '2026-11-06T09:00:00Z', project_uid: PROJECT_UID, project_name: 'Мост через Неву',
+          document_uid: DOCUMENT_UID, document_name: 'Архитектурные решения', version_uid: VERSION_UID, section: 'AR' as const,
+          row_text: 'Дверь металлическая ДМ-1', proposed_vendor: 'ООО «Двери»', unit: 'шт',
+        },
+      },
+    ],
+  })));
+  // `UI-B-34`: the original's table, the page's own default view: project, section, severity, verdict, reason and date by column.
+  add('KnowledgeBase table', render(createElement(KnowledgeBase, {
+    view: 'table', records: RECORDS.map((row) => ({ ...row, section: 'AR' as const })),
+  })));
+  // The table's quiet cells: a decision with no comment, and «Все» with a proposal (no severity of its own).
+  add('KnowledgeBase table without comments', render(createElement(KnowledgeBase, {
+    view: 'table', records: RECORDS.map((row) => ({ ...row, comment: null })),
+  })));
+  add('KnowledgeBase table all kinds', render(createElement(KnowledgeBase, {
+    view: 'table',
+    records: [],
+    entries: [
+      { kind: 'finding' as const, occurred_at: RECORDS[0]!.recorded_at, finding: { ...RECORDS[0]!, section: 'AR' as const } },
+      {
+        kind: 'proposal' as const,
+        occurred_at: '2026-11-06T09:00:00Z',
+        proposal: {
+          proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4Q8E',
+          optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', verdict: 'reject' as const, comment: null,
+          actor_label: 'Иванова А. С.', decided_at: '2026-11-06T09:00:00Z', project_uid: PROJECT_UID, project_name: 'Мост через Неву',
+          document_uid: DOCUMENT_UID, document_name: 'Архитектурные решения', version_uid: VERSION_UID, section: 'AR' as const,
+          row_text: 'Дверь металлическая ДМ-1', proposed_vendor: 'ООО «Двери»', unit: 'шт',
+        },
+      },
+    ],
+  })));
   add('KnowledgeBase empty', render(createElement(KnowledgeBase, { records: [] })));
   // `D-313`: an empty page under a category, a verdict or a project says so, with both ways out on the surface.
   add('KnowledgeBase empty under a filter', render(createElement(KnowledgeBase, {
@@ -2157,6 +2771,11 @@ export function screens(): Screen[] {
    */
   add('SignInPage refused', render(createElement(SignInPage, { refusal: 'credentials' })));
   add('SignInPage open', render(createElement(SignInPage, { login: 'проверяющий' })));
+  // The sentence above the form when the server knows why there is no session
+  // (`/login?reason=…`): a rule of its own in `sign-in-page.module.css`, so the census must reach it.
+  for (const reason of ['expired', 'ended', 'invalid'] as const) {
+    add(`SignInPage session ${reason}`, render(createElement(SignInPage, { reason })));
+  }
   add('ChangePasswordPage', render(createElement(ChangePasswordPage, { login: 'проверяющий' })));
   add(
     'ChangePasswordPage refused',
@@ -2173,6 +2792,24 @@ export function screens(): Screen[] {
       items: [USER_ACCOUNT], page: { next_cursor: null },
     });
     add('UserList populated', renderScreen(client, createElement(UserList)));
+    // `UI-A-92`: the row open beside the list is tinted, and the card stands in its panel variant.
+    add('UserList with an open row', renderScreen(client, createElement(UserList, { selectedUid: USER_ACCOUNT.user_uid, onSelect: () => undefined })));
+    client.setQueryData(queryKeys.users.detail(USER_ACCOUNT.user_uid), { ...USER_ACCOUNT, is_default_credential: true });
+    add('UserCard panel', renderScreen(client, createElement(UserCard, { userUid: USER_ACCOUNT.user_uid, variant: 'panel', onClose: () => undefined })));
+    add('UserCard page', renderScreen(client, createElement(UserCard, { userUid: USER_ACCOUNT.user_uid })));
+    add('AdminAreaTabs with waiting requests', renderScreen(client, createElement(AdminAreaTabsView, { active: 'registrations', pendingTotal: 2 })));
+  }
+  {
+    // Contract 1.36.0 (`UI-A-94`): «Журнал входов», with a line that carries a detail and one about a deleted account.
+    const client = newClient();
+    client.setQueryData(queryKeys.users.authEvents({ limit: 200 }), {
+      items: [
+        { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', event_type: 'sign_in_succeeded', occurred_at: '2026-11-05T09:30:15Z', subject_user_uid: USER_ACCOUNT.user_uid, subject_label: USER_ACCOUNT.display_label, actor_user_uid: null, actor_label: null, source: 'api', role: null, failures: null, default_credential: true },
+        { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', event_type: 'role_revoked', occurred_at: '2026-11-05T09:20:00Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', subject_label: null, actor_user_uid: USER_ACCOUNT.user_uid, actor_label: USER_ACCOUNT.display_label, source: 'api', role: 'expert', failures: null, default_credential: null },
+      ],
+      page: { next_cursor: 'cursor-next-1' },
+    });
+    add('AuthEventList populated', renderScreen(client, createElement(AuthEventList)));
   }
   add('ManageUserControls active', renderScreen(newClient(), createElement(ManageUserControls, { account: USER_ACCOUNT })));
   add('ManageUserControls archived', renderScreen(newClient(), createElement(ManageUserControls, { account: { ...USER_ACCOUNT, archived_at: '2026-10-08T00:00:00Z' } })));
@@ -2492,5 +3129,141 @@ export function screens(): Screen[] {
    * -- the one that says "no retry will help" -- was never measured in either palette. An
    * address that is not an identifier is the one way one static pass reaches it.
    */
+
+  /*
+   * `UI-B-14`: «Перенести решения из V#» in every state, and a card whose decision was carried over. They stand at the very end,
+   * because the census's index test samples every 25th screen and a screen inserted earlier shifts which screens it samples.
+   */
+  for (const shape of carryOverShapes()) {
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
+  }
+  // `UI-A-73`: «↩ Перенесено из V2» beside the verdict of a finding carried over from an earlier version, in the list and
+  // in the table. Also at the very end, for the reason above.
+  const carriedFrom = {
+    decision_id: 'dec_01J9ZQ8K7NHVXW3T2R5M6P4Q9A', finding_uid: 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q9B',
+    version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q9C', version_ordinal: 2,
+  };
+  for (const view of ['list', 'table'] as const) {
+    add(`FindingList ${view} with a carried verdict`, render(createElement(FindingList, {
+      groups: groupByCategory(FINDINGS.map((finding, index) => index === 0
+        ? { ...finding, current_verdict: 'accepted' as const, current_verdict_carried_from: carriedFrom }
+        : { ...finding, current_verdict: 'rejected' as const })),
+      selectedFindingUid: null,
+      onSelect: noop,
+      view,
+    })));
+  }
+  // `D-344`: the knowledge base beside a decision carried over from an earlier version -- «↩ Перенесено из V2» after the event
+  // label in the table (the `.carried` margin) and in the heading of an event row. The first record carries it, the rest do not,
+  // so the census measures the mark on the table's cell and on a row without one. At the very end, for the reason above.
+  const carriedRecords = RECORDS.map((row, index) => ({
+    ...row, section: 'AR' as const, ...(index === 0 ? { carried_from: carriedFrom } : {}),
+  }));
+  add('KnowledgeBase table with a carried decision', render(createElement(KnowledgeBase, { view: 'table', records: carriedRecords })));
+  add('KnowledgeBase with a carried decision', render(createElement(KnowledgeBase, { records: carriedRecords })));
+  // `UI-B-51`, `UI-B-69`: the queue's strip of the original's three groups over the job states, one state pressed (the caption of each
+  // group is the muted ink the census measures). At the very end, for the reason above.
+  add('QueueStateStrip with counts', render(createElement(QueueStateStrip, {
+    overview: [
+      { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 }, { state: 'retry_wait', count: 0 },
+      { state: 'succeeded', count: 12 }, { state: 'cancelled', count: 0 }, { state: 'failed', count: 2 }, { state: 'dead_letter', count: 0 },
+    ],
+    selected: 'failed',
+    onSelect: noop,
+  })));
+  /*
+   * Lane N2: the screens the density pass of «Исполнители» and «Настройки анализа» measures and that no other census screen
+   * draws open. The forms stand as the views the pages open them as (a closed `<details>` hides its form from a browser's layout,
+   * so the group form is rendered by itself); the wizard in its steps (the kind of connection, the agent's name and model with the
+   * two ways to install, the SSH form, the one command shown once, OpenRouter, and the key step after it); the runner-token
+   * panel of a connection with tokens, and the box a fresh token appears in; the cut-over proposal as its table; and
+   * «Настройки анализа» with the registry of every section read. At the very end, for the reason above.
+   */
+  {
+    const wizardClient = (): ReturnType<typeof newClient> => {
+      const client = newClient();
+      seedExecutors(client, EXECUTOR_CASES);
+      client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+      return client;
+    };
+    add('ConnectWizard, the kind of connection', renderScreen(wizardClient(), createElement(ConnectWizard, { pinnedModels: EXECUTOR_PINNED })));
+    add('ConnectWizard, the agent: name, model and the two ways to install', renderScreen(wizardClient(), createElement(AgentSetup, {
+      pinnedModels: EXECUTOR_PINNED, onBack: noop,
+    })));
+    add('ConnectWizard, the agent over SSH', renderScreen(wizardClient(), createElement(SshInstallForm, {
+      pending: false, problem: null, failure: null, onSubmit: noop, onBack: noop,
+    })));
+    add('ConnectWizard, the agent: the command shown once', renderScreen(wizardClient(), createElement(EnrollmentCommandView, {
+      issued: issuedEnrollment(EXECUTOR_READY.connection.connection_id), replaced: false, pending: false, failure: null,
+      onNewCommand: noop, onClose: noop,
+    })));
+    add('ConnectWizard, OpenRouter', renderScreen(wizardClient(), createElement(OpenRouterSetup, {
+      pinnedModels: EXECUTOR_PINNED, onBack: noop,
+    })));
+    add('ConnectWizard, OpenRouter: the key step', renderScreen(wizardClient(), createElement(OpenRouterKeyStep, {
+      connectionId: EXECUTOR_READY.connection.connection_id, name: 'OpenRouter',
+    })));
+
+    const NOW_MS = Date.now();
+    add('RunnerTokenPanel, a client with live, revoked and expired tokens, administrator', renderScreen(wizardClient(), createElement(RunnerTokenPanel, {
+      connection: PULL_ONLINE.connection, detail: PULL_ONLINE.detail, canManage: true, nowMs: NOW_MS,
+    })));
+    add('RunnerTokenPanel, expert', renderScreen(wizardClient(), createElement(RunnerTokenPanel, {
+      connection: PULL_ONLINE.connection, detail: PULL_ONLINE.detail, canManage: false, nowMs: NOW_MS,
+    })));
+    add('RunnerTokenPanel, the box of a fresh token', renderScreen(wizardClient(), createElement(IssuedTokenView, {
+      issued: {
+        token: 'токен-одноразовый-9f8e',
+        runner_token: PULL_ONLINE.detail.runner_tokens?.[0] as NonNullable<typeof PULL_ONLINE.detail.runner_tokens>[number],
+      },
+      onClose: noop,
+    })));
+
+    const groupClient = (): ReturnType<typeof newClient> => {
+      const client = newClient();
+      seedGroups(client, [MAIN_GROUP, ROUTED_GROUP]);
+      return client;
+    };
+    const candidates = memberCandidates(
+      CONNECTION_CASES.map((one) => one.connection),
+      new Map(CONNECTION_CASES.map((one) => [one.connection.connection_id, one.detail] as const)),
+    );
+    add('GroupForm, a new group', renderScreen(groupClient(), createElement(GroupForm, {
+      candidates, pinnedModels: EXECUTOR_PINNED,
+    })));
+    add('GroupForm, a new revision of a group', renderScreen(groupClient(), createElement(GroupForm, {
+      group: ROUTED_GROUP, candidates, pinnedModels: EXECUTOR_PINNED,
+    })));
+    add('CutOverPreviewTable, the proposal', renderScreen(groupClient(), createElement(CutOverPreviewTable, {
+      preview: CUT_OVER_PREVIEW, connections: CONNECTION_CASES.map((one) => one.connection),
+    })));
+
+    const settings = newClient();
+    settings.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+    seedExecutors(settings, EXECUTOR_CASES);
+    settings.setQueryData(ANALYSIS_PRESETS_KEY, { items: [] });
+    settings.setQueryData(queryKeys.analysis.profiles(), {
+      items: PROJECT_STRUCTURE_ORDER.map((code, index): AnalysisProfileListItem => {
+        const digit = (index % 10).toString();
+        return {
+          section_code: code,
+          section_name: projectSectionOf(code).name,
+          profile: index === 3 ? null : {
+            analysis_profile_id: `ap_01M5AXG1K22R027A33VTKZ468${digit}`,
+            prompt_bundle_id: `pb_01M5AXG1K2JQQH7R4ACTBW897${digit}`,
+            profile_version: '1.0.0',
+            status: index % 2 === 0 ? 'draft' : 'reviewed',
+            prompt_bundle_sha256: digit.repeat(64),
+            content_sha256: 'e'.repeat(63) + digit,
+            source: null,
+          },
+        };
+      }),
+    });
+    add('AnalysisSettingsPage, the registry of every section read', renderScreen(settings, createElement(AnalysisSettingsPage, {})));
+  }
+
   return out;
 }

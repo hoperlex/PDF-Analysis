@@ -40,6 +40,7 @@ import {
 import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
 import { PROJECT_UID, RUN_ID, finding, observation, runStatus } from './fixtures';
+import { RoutedReviewAddress, resetRoutedAddress } from './routed-review-address';
 
 const list = vi.mocked(listRunFindings);
 
@@ -86,7 +87,7 @@ function serverError(): ApiError {
   return new ApiError(
     503,
     {
-      contract_version: '1.33.0',
+      contract_version: '1.42.0',
       error_code: 'dependency_unavailable' as ErrorCode,
       message: 'A caller-safe sentence.',
       correlation_id: 'cid-page-2',
@@ -216,6 +217,7 @@ describe('the review screen shows the complete list, or the error, and never a p
   afterEach(async () => {
     await live?.unmount();
     live = null;
+    resetRoutedAddress();
   });
 
   async function mount(): Promise<LiveRender> {
@@ -229,7 +231,13 @@ describe('the review screen shows the complete list, or the error, and never a p
       createElement(
         QueryClientProvider,
         { client },
-        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+        // `D-401`: the page opens the first finding that waits and writes it to the address when the list arrives, so the window it
+        // is mounted in needs an address to write to.
+        createElement(
+          RoutedReviewAddress,
+          { pathname: `/projects/${PROJECT_UID}/runs/${RUN_ID}/review`, query: '' },
+          createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+        ),
       ),
     );
     await settled(live);

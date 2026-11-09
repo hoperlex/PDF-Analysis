@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { PageShell } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { CancelRunControl } from '@/features/cancel-run';
+import { StartRunFromStageControl } from '@/features/start-run-from-stage';
 
 import { LazyRunProgress } from './lazy-run-progress';
 import { RunEvents } from './run-events';
@@ -45,7 +46,8 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
       <DocumentContext projectUid={projectUid} runId={runId} current="run" />
       <div className={styles.content}>
         {/* «Отменить прогон» sits in the head beside the stages, as the original's «Отменить» on its pipeline card. */}
-        <LazyRunProgress projectUid={projectUid} runId={runId} actions={<CancelRunControl runId={runId} />} />
+        {/* «Запустить с этапа» (`UI-A-60`) is the ended run's counterpart: it is drawn only once the run has stopped. */}
+        <LazyRunProgress projectUid={projectUid} runId={runId} actions={<><CancelRunControl runId={runId} /><StartRunFromStageControl runId={runId} /></>} />
         <RunEvents runId={runId} />
       </div>
     </PageShell>

@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.33.0 (OpenAPI 3.1.0)
- *   sha256 f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f
+ *   AuditManager PC-01 API 1.42.0 (OpenAPI 3.1.0)
+ *   sha256 8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -62,6 +62,8 @@ import type {
   CancelStageUploadResult,
   CarryOverDecisionInput,
   CarryOverDecisionResult,
+  CarryOverProposalDecisionsInput,
+  CarryOverProposalDecisionsResult,
   ChangePasswordInput,
   ChangePasswordResult,
   ClaimExecutorTaskInput,
@@ -118,6 +120,8 @@ import type {
   DequeueComparisonAiSheetChangesResult,
   DownloadAgentPackageInput,
   DownloadAgentPackageResult,
+  EndUserSessionsInput,
+  EndUserSessionsResult,
   EnqueueComparisonLaunchInput,
   EnqueueComparisonLaunchResult,
   EstimateArV3GroupCostInput,
@@ -138,6 +142,8 @@ import type {
   ExcludeComparisonUploadSetResult,
   ExportOptimisationProposalsCsvInput,
   ExportOptimisationProposalsCsvResult,
+  ExportOptimisationProposalsXlsxInput,
+  ExportOptimisationProposalsXlsxResult,
   ExportRunCsvInput,
   ExportRunCsvResult,
   ExportRunXlsxInput,
@@ -270,6 +276,8 @@ import type {
   GetWorkScheduleReserveResult,
   ImportComparisonZipInput,
   ImportComparisonZipResult,
+  ImportOptimisationProposalDecisionsInput,
+  ImportOptimisationProposalDecisionsResult,
   ImportRunDecisionsInput,
   ImportRunDecisionsResult,
   IssueExecutorEnrollmentInput,
@@ -278,12 +286,16 @@ import type {
   IssueRunnerTokenResult,
   IssueTokenInput,
   IssueTokenResult,
+  ListAcceptedOptimisationProposalsInput,
+  ListAcceptedOptimisationProposalsResult,
   ListAnalysisPresetsInput,
   ListAnalysisPresetsResult,
   ListAnalysisProfilesInput,
   ListAnalysisProfilesResult,
   ListAssignmentsInput,
   ListAssignmentsResult,
+  ListAuthEventsInput,
+  ListAuthEventsResult,
   ListComparisonAiLinksInput,
   ListComparisonAiLinksResult,
   ListComparisonAiPairHintsInput,
@@ -356,6 +368,8 @@ import type {
   ListRegistrationsResult,
   ListReleasesInput,
   ListReleasesResult,
+  ListRunFindingBlocksInput,
+  ListRunFindingBlocksResult,
   ListRunFindingsInput,
   ListRunFindingsResult,
   ListRunsInput,
@@ -546,6 +560,8 @@ import type {
   StartOptimisationPassResult,
   StartRunInput,
   StartRunResult,
+  StartRunFromStageInput,
+  StartRunFromStageResult,
   StartStageChainBatchInput,
   StartStageChainBatchResult,
   StartStageChainRunInput,
@@ -873,6 +889,18 @@ export function carryOverDecision(
   options?: RequestOptions,
 ): Promise<ApiResponse<CarryOverDecisionResult>> {
   return request<CarryOverDecisionResult>(OPERATIONS.carryOverDecision, input, options);
+}
+
+/**
+ * Carry Over Proposal Decisions
+ *
+ * `POST /optimisation-passes/{optimisation_pass_id}/decision-carryovers` - a write; carries a required Idempotency-Key.
+ */
+export function carryOverProposalDecisions(
+  input: CarryOverProposalDecisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CarryOverProposalDecisionsResult>> {
+  return request<CarryOverProposalDecisionsResult>(OPERATIONS.carryOverProposalDecisions, input, options);
 }
 
 /**
@@ -1212,6 +1240,18 @@ export function downloadAgentPackage(
 }
 
 /**
+ * End every session of an account.
+ *
+ * `POST /users/{user_uid}/sessions/end` - a write; carries a required Idempotency-Key.
+ */
+export function endUserSessions(
+  input: EndUserSessionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EndUserSessionsResult>> {
+  return request<EndUserSessionsResult>(OPERATIONS.endUserSessions, input, options);
+}
+
+/**
  * Queue document sets and steps.
  *
  * `POST /projects/{project_uid}/comparison-launch-queue/entries` - a write; carries a required Idempotency-Key.
@@ -1329,6 +1369,18 @@ export function exportOptimisationProposalsCsv(
   options?: RequestOptions,
 ): Promise<ApiResponse<ExportOptimisationProposalsCsvResult>> {
   return request<ExportOptimisationProposalsCsvResult>(OPERATIONS.exportOptimisationProposalsCsv, input, options);
+}
+
+/**
+ * Export Optimisation Proposals Xlsx
+ *
+ * `GET /optimisation-passes/{optimisation_pass_id}/export.xlsx`.
+ */
+export function exportOptimisationProposalsXlsx(
+  input: ExportOptimisationProposalsXlsxInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExportOptimisationProposalsXlsxResult>> {
+  return request<ExportOptimisationProposalsXlsxResult>(OPERATIONS.exportOptimisationProposalsXlsx, input, options);
 }
 
 /**
@@ -2124,6 +2176,18 @@ export function importComparisonZip(
 }
 
 /**
+ * Import Optimisation Proposal Decisions
+ *
+ * `POST /optimisation-passes/{optimisation_pass_id}/decision-imports` - a write; carries a required Idempotency-Key.
+ */
+export function importOptimisationProposalDecisions(
+  input: ImportOptimisationProposalDecisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ImportOptimisationProposalDecisionsResult>> {
+  return request<ImportOptimisationProposalDecisionsResult>(OPERATIONS.importOptimisationProposalDecisions, input, options);
+}
+
+/**
  * Import Run Decisions
  *
  * `POST /runs/{run_id}/decision-imports` - a write; carries a required Idempotency-Key.
@@ -2172,6 +2236,18 @@ export function issueToken(
 }
 
 /**
+ * List Accepted Optimisation Proposals
+ *
+ * `GET /optimisation-proposals/accepted`.
+ */
+export function listAcceptedOptimisationProposals(
+  input: ListAcceptedOptimisationProposalsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAcceptedOptimisationProposalsResult>> {
+  return request<ListAcceptedOptimisationProposalsResult>(OPERATIONS.listAcceptedOptimisationProposals, input, options);
+}
+
+/**
  * List the analysis presets.
  *
  * `GET /analysis/presets`.
@@ -2205,6 +2281,18 @@ export function listAssignments(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListAssignmentsResult>> {
   return request<ListAssignmentsResult>(OPERATIONS.listAssignments, input, options);
+}
+
+/**
+ * List the access journal.
+ *
+ * `GET /auth-events`.
+ */
+export function listAuthEvents(
+  input: ListAuthEventsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAuthEventsResult>> {
+  return request<ListAuthEventsResult>(OPERATIONS.listAuthEvents, input, options);
 }
 
 /**
@@ -2637,6 +2725,18 @@ export function listReleases(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListReleasesResult>> {
   return request<ListReleasesResult>(OPERATIONS.listReleases, input, options);
+}
+
+/**
+ * List Run Finding Blocks
+ *
+ * `GET /runs/{run_id}/finding-blocks`.
+ */
+export function listRunFindingBlocks(
+  input: ListRunFindingBlocksInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListRunFindingBlocksResult>> {
+  return request<ListRunFindingBlocksResult>(OPERATIONS.listRunFindingBlocks, input, options);
 }
 
 /**
@@ -3780,6 +3880,18 @@ export function startRun(
 }
 
 /**
+ * Start Run From Stage
+ *
+ * `POST /runs/{run_id}/start-from-stage` - a write; carries a required Idempotency-Key.
+ */
+export function startRunFromStage(
+  input: StartRunFromStageInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartRunFromStageResult>> {
+  return request<StartRunFromStageResult>(OPERATIONS.startRunFromStage, input, options);
+}
+
+/**
  * Start Batch
  *
  * `POST /projects/{project_uid}/stage-chain-batches` - a write; carries a required Idempotency-Key.
@@ -4178,6 +4290,7 @@ export const apiClient = {
   cancelStageChainRun,
   cancelStageUpload,
   carryOverDecision,
+  carryOverProposalDecisions,
   changePassword,
   claimExecutorTask,
   classifyDocumentVersion,
@@ -4206,6 +4319,7 @@ export const apiClient = {
   deleteComparisonReport,
   dequeueComparisonAiSheetChanges,
   downloadAgentPackage,
+  endUserSessions,
   enqueueComparisonLaunch,
   estimateArV3GroupCost,
   estimateComparisonAiPairCheck,
@@ -4216,6 +4330,7 @@ export const apiClient = {
   estimateStageChainRun,
   excludeComparisonUploadSet,
   exportOptimisationProposalsCsv,
+  exportOptimisationProposalsXlsx,
   exportRunCsv,
   exportRunXlsx,
   extendExecutorTaskClaim,
@@ -4282,13 +4397,16 @@ export const apiClient = {
   getWorkSchedule,
   getWorkScheduleReserve,
   importComparisonZip,
+  importOptimisationProposalDecisions,
   importRunDecisions,
   issueExecutorEnrollment,
   issueRunnerToken,
   issueToken,
+  listAcceptedOptimisationProposals,
   listAnalysisPresets,
   listAnalysisProfiles,
   listAssignments,
+  listAuthEvents,
   listComparisonAiLinks,
   listComparisonAiPairHints,
   listComparisonMatrixEdits,
@@ -4325,6 +4443,7 @@ export const apiClient = {
   listProposalDecisions,
   listRegistrations,
   listReleases,
+  listRunFindingBlocks,
   listRunFindings,
   listRuns,
   listStageAiReviews,
@@ -4420,6 +4539,7 @@ export const apiClient = {
   startComparisonSpecification,
   startOptimisationPass,
   startRun,
+  startRunFromStage,
   startStageChainBatch,
   startStageChainRun,
   streamComparisonPairTile,

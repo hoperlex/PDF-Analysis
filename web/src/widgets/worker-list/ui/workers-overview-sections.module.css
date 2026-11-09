@@ -1,0 +1,73 @@
+/* The blocks under the tiles of «Обзор»: dense lines, the original's overview. Tokens only. */
+.sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: var(--am-gap-sm);
+  align-items: start;
+}
+
+.block {
+  min-width: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-xs);
+  font-size: var(--am-text-md);
+}
+
+.more {
+  font-size: var(--am-text-sm);
+  font-weight: 400;
+}
+
+.rows {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--am-gap-sm);
+  min-width: 0;
+  padding: var(--am-gap-xs) 0;
+  border-top: 1px solid var(--am-line-soft);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.id {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.work {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.quiet {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.empty,
+.ok {
+  margin: 0;
+  font-size: var(--am-text-sm);
+}

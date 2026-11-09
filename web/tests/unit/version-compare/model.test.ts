@@ -18,6 +18,7 @@ import {
   COMPARISON_CONSTRAINT_SENTENCES,
   COMPARISON_DEPENDENCY_SENTENCES,
   EMPTY_DRAFT,
+  INITIAL_VIEW,
   NO_REFERENCE_SHEET,
   SOLE_SHEET,
   WRONG_COLUMN,
@@ -36,6 +37,7 @@ import {
   dragPayload,
   dropOnCell,
   groupOf,
+  isChangedPair,
   isSoleSheet,
   isStale,
   linkCandidate,
@@ -45,13 +47,16 @@ import {
   nextSort,
   nextStepSentence,
   pairOfRow,
+  pairTally,
   parseDragged,
+  parseStoredView,
   rebase,
   referencePage,
   removeAt,
   removeLast,
   requestOf,
   splitDirection,
+  storedViewOf,
   canRestart,
   continueOf,
   hasLeftovers,
@@ -75,7 +80,7 @@ function envelope(code: ApiError['errorCode'], details: Record<string, string>, 
   return new ApiError(
     code === 'dependency_unavailable' ? 503 : code === 'conflict' ? 409 : 422,
     {
-      contract_version: '1.33.0',
+      contract_version: '1.42.0',
       error_code: code,
       message: 'A caller-safe sentence in English.',
       correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -406,6 +411,26 @@ describe('the search, the mark and the sorts of the overview', () => {
   });
 });
 
+describe('what the table keeps between visits (UI-B-97: vc-projects:filter|mark|sort|dir)', () => {
+  it('keeps the tile, the mark and the order, and not the search', () => {
+    const view: OverviewView = { query: 'ЭМ', mark: 'ЭМ', filter: 'waiting', sort: { key: 'series', direction: 'desc' } };
+    expect(parseStoredView(storedViewOf(view))).toEqual({ query: '', mark: 'ЭМ', filter: 'waiting', sort: { key: 'series', direction: 'desc' } });
+    expect(storedViewOf(view)).not.toContain('query');
+    expect(parseStoredView(null)).toEqual(INITIAL_VIEW);
+  });
+
+  it('starts from the initial view on anything it does not say rightly', () => {
+    for (const raw of ['', 'not json', 'null', '42', '"waiting"', '[]', '{}']) {
+      expect(parseStoredView(raw), raw).toEqual(INITIAL_VIEW);
+    }
+    // an unknown tile or an unknown sort key is dropped, the rest is kept
+    expect(parseStoredView('{"mark":"ТХ","filter":"nonsense","sort":{"key":"code","direction":"asc"}}')).toEqual({ ...INITIAL_VIEW, mark: 'ТХ' });
+    expect(parseStoredView('{"filter":"failed","sort":{"key":"nonsense","direction":"asc"}}')).toEqual({ ...INITIAL_VIEW, filter: 'failed' });
+    expect(parseStoredView('{"filter":"failed","sort":{"key":"code","direction":"sideways"}}')).toEqual({ ...INITIAL_VIEW, filter: 'failed' });
+    expect(parseStoredView('{"mark":7,"filter":"ready"}')).toEqual({ ...INITIAL_VIEW, filter: 'ready' });
+  });
+});
+
 describe('the verdict of a transition, in the original\'s words (series.py:54-62)', () => {
   const summary = (over: Partial<ComparisonTransitionSummary> = {}): ComparisonTransitionSummary => ({
     sheets: 10, compared: 10, same: 4, zones_only: 1, different: 3, style_only: 0, needs_review: 2, added: 1, removed: 2, failed: 1, ...over,
@@ -478,6 +503,16 @@ describe('the matrix as the screen reads it', () => {
     ]);
     const none: readonly ComparisonSheetPair[] = [];
     expect(changedRows(rows, sides, none)).toEqual([]);
+  });
+
+  it('counts the sheets of the chosen transition, and those that stand in one version only (UI-B-98)', () => {
+    const list = pairs();
+    expect(pairTally(list)).toEqual({ sheets: 8, onlyOld: 1, onlyNew: 1, changed: 6, needsReview: 2 });
+    expect(pairTally([])).toEqual({ sheets: 0, onlyOld: 0, onlyNew: 0, changed: 0, needsReview: 0 });
+    // The two that «Только изменённые листы» drops are the same one and the one that differs in service zones only.
+    expect(list.filter((pair) => !isChangedPair(pair)).map((pair) => pair.status)).toEqual(['same', 'same_zones_changed']);
+    // A pair that has no status yet (not computed) is neither changed nor unchanged: the filter keeps none of them.
+    expect(isChangedPair({ ...(list[0] as ComparisonSheetPair), status: undefined } as unknown as ComparisonSheetPair)).toBe(false);
   });
 
   it('gives the second part of a split sheet its own pair although the older sheet stands in both (CMP-SERIES-01)', () => {

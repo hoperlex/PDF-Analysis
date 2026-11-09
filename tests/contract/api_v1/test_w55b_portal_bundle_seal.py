@@ -212,8 +212,9 @@ def test_portal_block_id_is_an_external_identifier_and_not_one_of_the_identities
     # its stage review (the 88 above grew to 100 at contract 1.13.0; re-measured by `REVIEW-FIX-TESTS-1102`);
     # EXEC2-SEAL-1 adds two (`exen_` the enrollment grant, `exai_` the agent install) and EXEC2-SEAL-2 four
     # (`exg_`, `exgr_`, `exrr_`, `exrm_`: a group, its revision, a routing rule revision, a routing mode event),
-    # so 106 at contract 1.16.0.
-    assert len(IDENTIFIERS["identifiers"]) == 106
+    # so 106 at contract 1.16.0; the decision memory (`ADR-0027`, migration `0059`) adds four (`dmc_` a case, `dmd_` a
+    # decision, `dmw_` a status event, `dmx_` a crop reference), so 110.
+    assert len(IDENTIFIERS["identifiers"]) == 110
     assert {
         "executor_enrollment_id", "executor_agent_install_id", "executor_group_id", "executor_group_revision_id",
         "executor_routing_rule_revision_id", "executor_routing_mode_event_id",

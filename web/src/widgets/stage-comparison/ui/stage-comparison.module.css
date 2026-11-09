@@ -45,10 +45,17 @@
   background: var(--am-paper);
 }
 
+/*
+ * A chooser is as wide as its longest run's label (387 px): at 390 px its box ended at 434. It keeps that width where the line has
+ * room (no `flex-grow`: two choosers do not stretch across a desktop) and is capped at the box's width where it has none, the
+ * select then taking the label's width (the column's cross axis stretches it).
+ */
 .choice {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  max-width: 100%;
   font-size: var(--am-text-xs);
   text-transform: uppercase;
   letter-spacing: var(--am-tracking-caps);

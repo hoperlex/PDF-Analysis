@@ -66,7 +66,7 @@ _RUN_COLUMNS = (
     "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id, "
     "connection_revision_id, norm_retrieval_set_id, preset_revision_id, "
     "binding_state, executor_group_revision_id, routing_rule_revision_id, wait_reason, waiting_since, "
-    "started_by_user_uid"
+    "started_by_user_uid, started_from_run_id, start_stage_id"
 )
 
 _INSERT_RUN = text(
@@ -75,12 +75,14 @@ _INSERT_RUN = text(
         run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id,
         norms_snapshot_id, provider_mode, frozen_input_digest, command_id,
         reaudit_of_run_id, connection_revision_id, norm_retrieval_set_id, preset_revision_id,
-        binding_state, executor_group_revision_id, routing_rule_revision_id, started_by_user_uid
+        binding_state, executor_group_revision_id, routing_rule_revision_id, started_by_user_uid,
+        started_from_run_id, start_stage_id
     ) VALUES (
         :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
         :prompt_bundle_id, :norms_snapshot_id, :provider_mode, :frozen_input_digest, :command_id,
         :reaudit_of_run_id, :connection_revision_id, :norm_retrieval_set_id, :preset_revision_id,
-        :binding_state, :executor_group_revision_id, :routing_rule_revision_id, :started_by_user_uid
+        :binding_state, :executor_group_revision_id, :routing_rule_revision_id, :started_by_user_uid,
+        :started_from_run_id, :start_stage_id
     )
     """
 )
@@ -315,6 +317,11 @@ class RunRow:
     waiting_since: datetime | None = None
     #: `R-151v` (migration 0051): the account whose command created the run; ``None`` before 0051. Frozen.
     started_by_user_uid: str | None = None
+    #: `R-151i` (migration 0060): the terminal run whose completed stage outputs this run reuses, and the first stage it
+    #: computes itself; both ``None`` for a run started from a version or as a re-audit (never one without the other).
+    #: Frozen. Not ``reaudit_of_run_id``: a re-audit recomputes every stage.
+    started_from_run_id: str | None = None
+    start_stage_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -383,6 +390,8 @@ def _run_row(row: Any) -> RunRow:
         wait_reason,
         waiting_since,
         started_by_user_uid,
+        started_from_run_id,
+        start_stage_id,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -411,6 +420,8 @@ def _run_row(row: Any) -> RunRow:
         wait_reason=wait_reason,
         waiting_since=waiting_since,
         started_by_user_uid=started_by_user_uid,
+        started_from_run_id=started_from_run_id,
+        start_stage_id=start_stage_id,
     )
 
 
@@ -451,10 +462,16 @@ class RunRepository:
         executor_group_revision_id: str | None = None,
         routing_rule_revision_id: str | None = None,
         started_by_user_uid: str | None = None,
+        started_from_run_id: str | None = None,
+        start_stage_id: str | None = None,
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
 
         ``started_by_user_uid`` (`R-151v`, migration 0051) is the account whose command created the run; frozen.
+
+        ``started_from_run_id`` and ``start_stage_id`` (`R-151i`, migration 0060) are given together by
+        ``start_run_from_stage`` and by nothing else: the terminal run whose stage outputs this run reuses and the first
+        stage it computes. The executor reads them back from the row; the database refuses one without the other.
 
         ``norms_snapshot_id`` is the snapshot the creating command pinned
         (`W55A-PIN-01`): ``start_audit_run`` and ``reaudit_run`` read the current one in
@@ -497,6 +514,8 @@ class RunRepository:
                     "executor_group_revision_id": executor_group_revision_id,
                     "routing_rule_revision_id": routing_rule_revision_id,
                     "started_by_user_uid": started_by_user_uid,
+                    "started_from_run_id": started_from_run_id,
+                    "start_stage_id": start_stage_id,
                 },
             )
         except DBAPIError as exc:

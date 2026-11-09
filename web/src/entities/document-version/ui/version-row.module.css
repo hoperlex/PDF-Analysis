@@ -1,0 +1,56 @@
+/* One version in a list: a line of title and badges over a line of facts (UI-A-24). Tokens only. */
+
+.row {
+  min-width: 0;
+  margin-bottom: var(--am-gap-xs);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+}
+
+.row:hover {
+  border-color: var(--am-line-strong);
+  box-shadow: var(--am-shadow-1);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  min-width: 0;
+}
+
+.ordinal {
+  padding: 0 var(--am-gap-xs);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+}
+
+.title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--am-text-base);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.title:hover {
+  text-decoration: underline;
+}
+
+.secondary {
+  margin-left: auto;
+  font-size: var(--am-text-sm);
+}
+
+.facts {
+  margin: var(--am-gap-xs) 0 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  overflow-wrap: anywhere;
+}

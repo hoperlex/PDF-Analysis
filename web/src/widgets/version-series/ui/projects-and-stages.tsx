@@ -43,7 +43,7 @@ import {
   RESTART_CONFIRM_LABELS,
   useReportCommand,
   COLUMN_SELECT_TITLE,
-  INITIAL_VIEW,
+  STORED_VIEW_KEY,
   OVERVIEW_FILTERS,
   SELECTABLE_STEPS,
   SELECTION_CLEAR_LABEL,
@@ -75,10 +75,12 @@ import {
   inScope,
   marksOf,
   nextSort,
+  parseStoredView,
   nextStepSentence,
   parseSort,
   sortValue,
   stepActions,
+  storedViewOf,
   stepView,
   useComparisonOverview,
   usePrepareMatrix,
@@ -91,6 +93,7 @@ import type { AiActRequest, AiRow } from './ai-step-cell';
 import { AiStepCellView, SelectBox, useAiRow } from './ai-step-cell';
 import type { AiStartDialogProps } from './ai-dialogs';
 import { AiStartDialog, ReportDraftDialog, SelectionDialog } from './ai-dialogs';
+import { ModalWindow } from './modal-window';
 import { AiQueueStrip, LaunchQueueStrip } from './queue-strips';
 import { SpecificationPanel } from './specification-panel';
 import type { LaunchAct } from './queue-strips';
@@ -151,8 +154,10 @@ export interface ProjectsAndStagesViewProps {
   readonly aiQueue: ComparisonAiQueue | undefined;
   readonly onAiAct: (request: AiActRequest) => void;
   readonly onSummary: (seriesId: string) => void;
-  /** The open estimate dialog, or `null`. */
+  /** The open estimate dialog, or `null`; it opens in a window over the table, as the original's `vcp-dlg` does. */
   readonly dialog: ReactNode;
+  /** Esc on that window: what the dialog's own «Отмена» does. */
+  readonly onDialogClose?: () => void;
 }
 
 function Chip({ set }: { readonly set: ComparisonOverviewSet }) {
@@ -282,39 +287,43 @@ function SetRow(props: ProjectsAndStagesViewProps & { readonly set: ComparisonOv
   }, [reachKey]);
   return (
     <tr className={styles.row} data-document-uid={set.document_uid} onClick={() => onOpen(set.document_uid)}>
-      <th scope="row" className={styles.code}>
-        <button
-          type="button"
-          className={styles.open}
-          title="Открыть сравнение листов этого комплекта."
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen(set.document_uid);
-          }}
-        >
-          {codeOf(set) === '' ? 'Комплект без шифра' : codeOf(set)}
-        </button>
-        <Chip set={set} />
-        {row.summaryReady && row.seriesId !== null ? (
+      <th scope="row" className={styles.codeCell}>
+        <div className={styles.code}>
           <button
             type="button"
-            className="am-button am-button--small am-button--quiet"
-            title="Скачать «Сводку изменений (MD)»: все изменения комплекта от первой версии до последней одним файлом."
-            data-summary-md=""
+            className={styles.open}
+            title="Открыть сравнение листов этого комплекта."
             onClick={(event) => {
               event.stopPropagation();
-              onSummary(row.seriesId as string);
+              onOpen(set.document_uid);
             }}
           >
-            Сводка изменений (MD)
+            {codeOf(set) === '' ? 'Комплект без шифра' : codeOf(set)}
           </button>
-        ) : null}
-        {row.seriesId === null ? null : <div onClick={(event) => event.stopPropagation()} data-technical-downloads="">
-          <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'xlsx', fileName: 'comparison-technical.xlsx' })}>Технический XLSX</button>
-          <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'html', fileName: 'comparison-technical-html.zip' })}>HTML с изображениями (ZIP)</button>
-          <p className={styles.note}>Выгрузки включают полные сохранённые позиции СО, в том числе неизменённые, и покрытие извлечения. В XLSX полные данные — на листе RawJSON; в ZIP — JSON/CSV и манифест. Неполное или отсутствующее извлечение остаётся явно отмеченным. Новые обращения к модели не выполняются.</p>
-          {technical.error === null ? null : <p role="alert">{comparisonFailure(technical.error).detail}</p>}
-        </div>}
+          <Chip set={set} />
+          {row.summaryReady && row.seriesId !== null ? (
+            <button
+              type="button"
+              className="am-button am-button--small am-button--quiet"
+              title="Скачать «Сводку изменений (MD)»: все изменения комплекта от первой версии до последней одним файлом."
+              data-summary-md=""
+              onClick={(event) => {
+                event.stopPropagation();
+                onSummary(row.seriesId as string);
+              }}
+            >
+              Сводка изменений (MD)
+            </button>
+          ) : null}
+          {/* The original has no such exports (its reports are backend only); here they are folded under one line so that the row stays the original's height. */}
+          {row.seriesId === null ? null : <details className={styles.history} onClick={(event) => event.stopPropagation()} data-technical-downloads="">
+            <summary title="Полные сохранённые данные сравнения для проверки: XLSX и HTML с изображениями.">Технические выгрузки</summary>
+            <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'xlsx', fileName: 'comparison-technical.xlsx' })}>Технический XLSX</button>
+            <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'html', fileName: 'comparison-technical-html.zip' })}>HTML с изображениями (ZIP)</button>
+            <p className={styles.note}>Выгрузки включают полные сохранённые позиции СО, в том числе неизменённые, и покрытие извлечения. В XLSX полные данные — на листе RawJSON; в ZIP — JSON/CSV и манифест. Неполное или отсутствующее извлечение остаётся явно отмеченным. Новые обращения к модели не выполняются.</p>
+            {technical.error === null ? null : <p role="alert">{comparisonFailure(technical.error).detail}</p>}
+          </details>}
+        </div>
       </th>
       <td>
         <span>{set.version_count}</span>
@@ -497,7 +506,11 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
         </div>
       )}
 
-      {dialog}
+      {dialog === null || dialog === undefined ? null : (
+        <ModalWindow label="Подтверждение запуска" className={styles.modalWindow} onClose={props.onDialogClose} markers={{ 'data-start-window': '' }}>
+          {dialog}
+        </ModalWindow>
+      )}
 
       {total === 0 ? null : (
         <div className={aiStyles.selectionBar} role="group" aria-label="Выбор шагов" data-selection-bar={total}>
@@ -527,7 +540,7 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
           }
         />
       ) : (
-        <div className={styles.scroller}>
+        <div className={styles.tableBox}>
           <table className={styles.table}>
             <thead>
               <tr>
@@ -620,6 +633,8 @@ export interface ProjectsAndStagesProps {
   /** An expert; the buttons of the steps are drawn for nobody else. */
   readonly mayAct: boolean;
   readonly onOpen: (documentUid: DocumentUid) => void;
+  /** The page draws the installation's AI queue above the tabs (`AiQueueNotice`), so the table does not draw it a second time. */
+  readonly queueOnPage?: boolean;
 }
 
 type OpenDialog =
@@ -631,11 +646,33 @@ type OpenDialog =
 const QUEUE_STOPPED_NOTE = 'Очередь запуска сейчас остановлена — выбранное встанет в неё и начнётся после «Продолжить очередь».';
 const QUEUE_BUSY_NOTE = 'В очереди запуска уже идут другие шаги — выбранное начнётся после них.';
 
-export function ProjectsAndStages({ projectUid, mayAct, onOpen }: ProjectsAndStagesProps) {
+function readStoredView(): string | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(STORED_VIEW_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredView(value: string): void {
+  try {
+    window.localStorage.setItem(STORED_VIEW_KEY, value);
+  } catch {
+    // Storage is blocked or full: the choice holds for this visit only.
+  }
+}
+
+export function ProjectsAndStages({ projectUid, mayAct, onOpen, queueOnPage = false }: ProjectsAndStagesProps) {
   const overview = useComparisonOverview(projectUid);
   const launch = useLaunchQueue(projectUid);
   const aiQueue = useAiQueue();
-  const [view, setView] = useState<OverviewView>(INITIAL_VIEW);
+  // The tile, the mark and the order are kept between visits as the original keeps them; the page is not rendered on a server,
+  // and a browser without storage (or a refusing one) starts from the initial view.
+  const [view, setViewState] = useState<OverviewView>(() => parseStoredView(readStoredView()));
+  const setView = (next: OverviewView): void => {
+    setViewState(next);
+    writeStoredView(storedViewOf(next));
+  };
   const [confirming, setConfirming] = useState<ComparisonOverviewSet | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [selectableAi, setSelectableAi] = useState<ReadonlySet<string>>(new Set());
@@ -883,12 +920,13 @@ export function ProjectsAndStages({ projectUid, mayAct, onOpen }: ProjectsAndSta
           openStep(set, entry.step, entry.series_id ?? null, entry.restart);
         }
       }}
-      aiQueue={aiQueue.data}
+      aiQueue={queueOnPage ? undefined : aiQueue.data}
       onAiAct={onAiAct}
       onSummary={(seriesId) =>
         download.mutate({ kind: 'summary-md', seriesId: seriesId as ComparisonSeriesId, fileName: 'svodka-izmeneniy.md' })
       }
       dialog={dialogNode}
+      onDialogClose={close}
     />
   );
 }

@@ -3,8 +3,9 @@
 /**
  * `/workers` — «Исполнители» (`W54-WORKERS-WEB`, plan §3.7; the tabs `EXEC-HTTP-01`).
  *
- * Five tabs. «Процессы» is the screen as `W54-WORKERS-WEB` graduated it from the W43
- * placeholder: since `W54-WORKER-01` runs execute in a separate worker service and
+ * Six tabs. «Обзор» (`UI-PARITY` UI-B-63, UI-B-64) is the first: the tiles and the queue line that sat over
+ * «Процессы», each tile linking to the tab or the screen it summarises. «Процессы» is the screen as
+ * `W54-WORKERS-WEB` graduated it from the W43 placeholder: since `W54-WORKER-01` runs execute in a separate worker service and
  * `listWorkers` answers its registry. Any account holding a role reads it (`R-80`); an
  * administrator may stop a worker taking new runs, or allow it again, after a confirmation
  * step whose idempotency key is minted once per intent and reused on an explicit repeat.
@@ -17,10 +18,10 @@
  * of «Назначения» are drawn read-only inside «Правила» while the mode is `legacy` (the slot below), and
  * become history on their own tab once rules are in force.
  *
- * The screen opens on «Процессы», as it always has, unless the address names a tab (`?tab=`):
- * the redirect from the key form names «Подключения». The worker list of «Процессы» refreshes
- * itself under the operational-list policy (`OPERATIONAL_LIST_POLLING`, `web/docs/PC01_UI_SEAM.md`
- * §7.1) while the browser tab is visible, as the queue and the journal do, and says when it was last
+ * The screen opens on «Обзор», as the original's dispatcher does, unless the address names a tab (`?tab=`):
+ * the redirect from the key form names «Подключения», a link to the worker list names `processes`. The overview and the
+ * worker list of «Процессы» refresh themselves under the operational-list policy (`OPERATIONAL_LIST_POLLING`,
+ * `web/docs/PC01_UI_SEAM.md` §7.1) while the browser tab is visible, as the queue and the journal do, and says when it was last
  * read («Обновлено ЧЧ:ММ:СС», or that the data may be out of date). Everything is also refreshed on
  * tab return, after a command, and by «Обновить», which reads again whatever the open tab shows.
  *
@@ -42,15 +43,17 @@ import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorGroups } from '@/widgets/executor-groups';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { ExecutorRules } from '@/widgets/executor-rules';
-import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
+import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widgets/worker-list';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 
 import { DEFAULT_WORKERS_TAB, WORKERS_TAB_PARAM } from '../model/tabs';
 import type { WorkersTab } from '../model/tabs';
 import { WorkersTabs } from './workers-tabs';
 
+import styles from './workers-page.module.css';
+
 export interface WorkersPageProps {
-  /** The tab the address named; the screen opens on «Процессы» when it names none. */
+  /** The tab the address named; the screen opens on «Обзор» when it names none. */
   readonly initialTab?: WorkersTab | undefined;
   /** The connection the key form was opened for, from the address. */
   readonly secretConnectionId?: string | null | undefined;
@@ -88,8 +91,9 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
   const [completed, setCompleted] = useState(false);
   const sequence = useRef(0);
   const cursor = cursors.at(-1);
-  // The list is read, and polled, only while its own tab is open.
-  const workers = useWorkers(cursor, tab === 'processes');
+  // The list is read, and polled, only while a tab that shows it is open: «Процессы» pages through it, «Обзор» counts
+  // the first page.
+  const workers = useWorkers(tab === 'processes' ? cursor : undefined, tab === 'processes' || tab === 'overview');
   const account = useMe();
   const client = useQueryClient();
   const intake = useSetWorkerIntake();
@@ -98,8 +102,9 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
   const readFailure = workers.error === null ? null : executionFailure(workers.error, false);
   const accountFailure = account.error === null ? null : executionFailure(account.error, false);
   const next = workers.data?.page.next_cursor ?? null;
-  // M-17 (`R-151t`): the queue's counts for the overview tiles, read only while «Процессы» is open.
-  const queueOverview = useQuery({ ...queueQueryOptions(undefined, {}), enabled: tab === 'processes' }).data?.overview;
+  // M-17 (`R-151t`): the queue's counts for the overview tiles and line, read only while «Обзор» is open.
+  const queue = useQuery({ ...queueQueryOptions(undefined, {}), enabled: tab === 'overview' });
+  const queueFailure = queue.error === null ? null : executionFailure(queue.error, false);
 
   function select(worker: ExecutionWorker, enabled: boolean) {
     sequence.current += 1;
@@ -135,13 +140,66 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
     }
   }
 
+  // What «Обзор» and «Процессы» both say about the read of the registry.
+  const updateTime = <UpdateTime dataUpdatedAt={workers.dataUpdatedAt} failed={workers.isError} />;
+  const workersLoading = workers.isPending ? <LoadingState what="исполнителей" /> : null;
+  /*
+   * A failed read with no data is «не прочитаны». A failed read after a successful one keeps
+   * the last list on screen under the stale line (`UpdateTime`), as on the queue: a periodic
+   * read that blinked must not erase the registry; the failure is still said, never swallowed.
+   */
+  const workersFailure = readFailure === null ? null : (
+    <div data-workers-read-failure={readFailure.kind}>
+      <ErrorState title={workers.data === undefined ? 'Исполнители не прочитаны' : 'Исполнители не обновились'} detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={() => void workers.refetch()} />
+    </div>
+  );
+
   return (
     <PageShell
       title="Исполнители"
-      subtitle="Подключения к моделям, процессы, которые выполняют прогоны, группы исполнителей, правила и назначения. Список процессов обновляется автоматически, пока вкладка открыта; остальные данные — при возврате на вкладку, после команды и по запросу."
+      subtitle="Обзор и очередь, подключения к моделям, процессы, группы, правила и назначения."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void client.invalidateQueries({ queryKey: queryKeys.execution.all() })}>Обновить</button>}
     >
+      {/* What the one-sentence subtitle leaves out, one line away: what the six tabs hold and when each one refreshes. */}
+      <details className={styles.about} data-workers-about>
+        <summary>Что на экране и как обновляются данные</summary>
+        <p className="am-note">
+          Обзор исполнителей и очереди, подключения к моделям, процессы, которые выполняют прогоны, группы исполнителей, правила и назначения.
+          Обзор и список процессов обновляются автоматически, пока вкладка открыта; остальные данные — при возврате на вкладку, после команды и по запросу.
+        </p>
+      </details>
       <WorkersTabs active={tab} onSelect={openTab}>
+        {tab === 'overview' ? (<>
+        {updateTime}
+        {workersLoading}
+        {workersFailure}
+        {workers.data !== undefined ? (
+          <WorkersOverviewView
+            workers={workersOverview(workers.data.items, next !== null)}
+            queue={queue.data?.overview}
+            processesHref={`?${WORKERS_TAB_PARAM}=processes`}
+            onOpenProcesses={() => openTab('processes')}
+          />
+        ) : null}
+        {/* The servers, the nearest queued jobs and what needs attention, from the two first pages the tiles already read. */}
+        {workers.data !== undefined ? (
+          <WorkersOverviewSections
+            workers={workers.data.items}
+            workersPartial={next !== null}
+            jobs={queue.data?.items}
+            jobsPartial={(queue.data?.page.next_cursor ?? null) !== null}
+            processesHref={`?${WORKERS_TAB_PARAM}=processes`}
+            onOpenProcesses={() => openTab('processes')}
+          />
+        ) : null}
+        {/* The queue's figures are read apart from the registry's, so a failed queue read leaves the servers on screen and says so. */}
+        {queue.isPending ? <LoadingState what="очередь" /> : null}
+        {queueFailure !== null ? (
+          <div data-workers-queue-failure={queueFailure.kind}>
+            <ErrorState title={queue.data === undefined ? 'Очередь не прочитана' : 'Очередь не обновилась'} detail={queueFailure.detail} correlationId={queueFailure.correlationId} onRetry={() => void queue.refetch()} />
+          </div>
+        ) : null}
+        </>) : null}
         {tab === 'connections' ? (
           <ExecutorConnections roles={roles} secretConnectionId={secretConnectionId} secretForm={secretForm} />
         ) : null}
@@ -149,7 +207,7 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
         {tab === 'rules' ? <ExecutorRules roles={roles} legacyRoutes={<ExecutorRoutes roles={roles} history />} /> : null}
         {tab === 'routes' ? <ExecutorRoutes roles={roles} /> : null}
         {tab === 'processes' ? (<>
-        <UpdateTime dataUpdatedAt={workers.dataUpdatedAt} failed={workers.isError} />
+        {updateTime}
         {account.isPending ? <LoadingState what="права на управление исполнителями" /> : null}
         {accountFailure !== null ? (
           <div data-workers-account-failure={accountFailure.kind}>
@@ -157,24 +215,12 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
             <ErrorState title="Права на управление исполнителями не прочитаны" detail={accountFailure.detail} correlationId={accountFailure.correlationId} onRetry={() => void account.refetch()} />
           </div>
         ) : null}
-        {workers.isPending ? <LoadingState what="исполнителей" /> : null}
-        {/*
-          * A failed read with no data is «не прочитаны». A failed read after a successful one keeps
-          * the last list on screen under the stale line (`UpdateTime`), as on the queue: a periodic
-          * read that blinked must not erase the registry; the failure is still said, never swallowed.
-          */}
-        {readFailure !== null ? (
-          <div data-workers-read-failure={readFailure.kind}>
-            <ErrorState title={workers.data === undefined ? 'Исполнители не прочитаны' : 'Исполнители не обновились'} detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={() => void workers.refetch()} />
-          </div>
-        ) : null}
+        {workersLoading}
+        {workersFailure}
         {/*
           * As on the queue (`C-27`): the rows do not wait for `getMe`. Until the roles are
           * read, or when that read fails, `roles` is empty and no switch is drawn.
           */}
-        {workers.data !== undefined ? (
-          <WorkersOverviewView workers={workersOverview(workers.data.items, next !== null)} queue={queueOverview} />
-        ) : null}
         {workers.data !== undefined ? (
           <WorkerList
             items={workers.data.items}

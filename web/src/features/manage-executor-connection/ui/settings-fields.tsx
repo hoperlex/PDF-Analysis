@@ -53,6 +53,7 @@ import {
   initialSettings,
 } from '../model/settings';
 
+
 export interface SettingsFieldsProps {
   readonly kind: ExecutorKind;
   readonly pinnedModels: readonly ExecutorPinnedModel[];
@@ -87,7 +88,7 @@ export function SettingsFields({ kind, pinnedModels, initial, idPrefix }: Settin
     <>
       {kind === 'http_api' ? (
         <>
-          <div className="am-form__field">
+          <div className="am-form__field am-form__field--wide">
             <label htmlFor={id('base-url')}>Адрес</label>
             <input
               id={id('base-url')}
@@ -160,7 +161,7 @@ export function SettingsFields({ kind, pinnedModels, initial, idPrefix }: Settin
             <label htmlFor={id('ssh-user')}>Пользователь SSH</label>
             <input id={id('ssh-user')} name={FIELD_NAMES.sshUser} type="text" autoComplete="off" spellCheck={false} required maxLength={64} defaultValue={start.sshUser} />
           </div>
-          <div className="am-form__field">
+          <div className="am-form__field am-form__field--wide">
             <label htmlFor={id('host-key')}>Отпечаток узла (необязательно)</label>
             <input id={id('host-key')} name={FIELD_NAMES.hostKey} type="text" autoComplete="off" spellCheck={false} maxLength={2048} defaultValue={start.hostKey} placeholder="Строка открытого ключа узла" />
             <p className="am-form__hint">
@@ -201,7 +202,7 @@ export function SettingsFields({ kind, pinnedModels, initial, idPrefix }: Settin
         </select>
         <p className="am-form__hint">{rateSentence(pinned)}</p>
       </div>
-      <div className="am-form__field">
+      <div className="am-form__field am-form__field--wide">
         <label htmlFor={id('gateway')}>Имя модели на шлюзе</label>
         <input id={id('gateway')} name={FIELD_NAMES.gatewayModel} type="text" autoComplete="off" spellCheck={false} required maxLength={200} value={gatewayModel} onChange={(event) => setGatewayModel(event.target.value)} />
         <p className="am-form__hint">
@@ -217,7 +218,7 @@ export function SettingsFields({ kind, pinnedModels, initial, idPrefix }: Settin
           <input id={id('parallel')} name={FIELD_NAMES.maxParallelCalls} type="number" required min={1} max={PARALLEL_MAX} defaultValue={start.maxParallelCalls} />
         </div>
       ) : null}
-      <div className="am-form__field" data-executor-capacity-field={kind}>
+      <div className="am-form__field am-form__field--wide" data-executor-capacity-field={kind}>
         <label htmlFor={id('active-runs')}>{CAPACITY_FIELD_LABEL}</label>
         <input
           id={id('active-runs')}
@@ -241,7 +242,7 @@ export function SettingsFields({ kind, pinnedModels, initial, idPrefix }: Settin
         <label htmlFor={id('timeout')}>Время ожидания ответа, секунд</label>
         <input id={id('timeout')} name={FIELD_NAMES.timeoutSeconds} type="number" required min={1} max={TIMEOUT_MAX_SECONDS} defaultValue={start.timeoutSeconds} />
       </div>
-      <div className="am-form__field">
+      <div className="am-form__field am-form__field--wide">
         <label htmlFor={id('billing')}>Тарификация</label>
         <select id={id('billing')} name={FIELD_NAMES.billing} defaultValue={start.billing}>
           {EXECUTOR_BILLING_VALUES.map((billing) => (
@@ -254,7 +255,7 @@ export function SettingsFields({ kind, pinnedModels, initial, idPrefix }: Settin
           {kind === 'pull' ? ' Для сеанса на подписке выберите «Не тарифицируется»: стенд не знает стоимости ответа клиента и не выдумывает её.' : ''}
         </p>
       </div>
-      <label className="am-form__field">
+      <label className="am-form__field am-form__field--wide">
         <span>
           <input type="checkbox" name={FIELD_NAMES.allowClientDocuments} defaultChecked={start.allowClientDocuments} />{' '}
           Разрешить отправлять документы заказчика

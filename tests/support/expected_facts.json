@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 267,
+    "path_count": 275,
     "operations": [
       [
         "DELETE",
@@ -42,6 +42,11 @@
         "GET",
         "/assignments/{assignment_uid}",
         "getAssignment"
+      ],
+      [
+        "GET",
+        "/auth-events",
+        "listAuthEvents"
       ],
       [
         "GET",
@@ -320,8 +325,18 @@
       ],
       [
         "GET",
+        "/optimisation-passes/{optimisation_pass_id}/export.xlsx",
+        "exportOptimisationProposalsXlsx"
+      ],
+      [
+        "GET",
         "/optimisation-passes/{optimisation_pass_id}/proposals",
         "listOptimisationProposals"
+      ],
+      [
+        "GET",
+        "/optimisation-proposals/accepted",
+        "listAcceptedOptimisationProposals"
       ],
       [
         "GET",
@@ -522,6 +537,11 @@
         "GET",
         "/runs/{run_id}/extended-review",
         "getExtendedRunReview"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/finding-blocks",
+        "listRunFindingBlocks"
       ],
       [
         "GET",
@@ -1055,6 +1075,16 @@
       ],
       [
         "POST",
+        "/optimisation-passes/{optimisation_pass_id}/decision-carryovers",
+        "carryOverProposalDecisions"
+      ],
+      [
+        "POST",
+        "/optimisation-passes/{optimisation_pass_id}/decision-imports",
+        "importOptimisationProposalDecisions"
+      ],
+      [
+        "POST",
         "/optimisation-proposals/{optimisation_proposal_id}/decisions",
         "decideOptimisationProposal"
       ],
@@ -1265,6 +1295,11 @@
       ],
       [
         "POST",
+        "/runs/{run_id}/start-from-stage",
+        "startRunFromStage"
+      ],
+      [
+        "POST",
         "/stage-assemblies/{stage_assembly_id}/members",
         "reviseStageAssembly"
       ],
@@ -1375,6 +1410,11 @@
       ],
       [
         "POST",
+        "/users/{user_uid}/sessions/end",
+        "endUserSessions"
+      ],
+      [
+        "POST",
         "/work-schedule/reserve/moves",
         "scheduleAssignments"
       ],
@@ -1480,6 +1520,8 @@
       ]
     ],
     "schema_names": [
+      "AcceptedOptimisationProposal",
+      "AcceptedOptimisationProposalPage",
       "Account",
       "AccountPage",
       "AgentPackageVersion",
@@ -1526,11 +1568,16 @@
       "AssignmentMove",
       "AssignmentPage",
       "AssignmentStatus",
+      "AssignmentStatusCount",
       "AssignmentTransitionKind",
       "AssignmentUid",
+      "AuthEvent",
+      "AuthEventPage",
+      "AuthEventType",
       "BlockGeometry",
       "CarryOverDecisionRequest",
       "CarryOverDecisionResponse",
+      "CarryOverProposalDecisionsRequest",
       "CarryoverCandidate",
       "CarryoverSourceDecision",
       "ChangePasswordRequest",
@@ -1740,6 +1787,7 @@
       "Cursor",
       "DashboardSummary",
       "DecideOptimisationProposalRequest",
+      "DecisionCarriedFrom",
       "DecisionEvent",
       "DecisionEventPage",
       "DecisionEventType",
@@ -1751,6 +1799,8 @@
       "DecisionRecord",
       "DecisionRecordPage",
       "DiffHunk",
+      "DocumentActiveRun",
+      "DocumentAudit",
       "DocumentAuditCounts",
       "DocumentTagCount",
       "DocumentTagList",
@@ -1841,6 +1891,7 @@
       "ExtendedRunReview",
       "FailExecutorTaskRequest",
       "Finding",
+      "FindingBlockLink",
       "FindingCategory",
       "FindingComparison",
       "FindingDetail",
@@ -1855,6 +1906,7 @@
       "GenerateComparisonSummaryRequest",
       "GenerateComparisonSummaryResponse",
       "IdempotencyKey",
+      "ImportProposalDecisionsRequest",
       "ImportRunDecisionsRequest",
       "InputManifestEntry",
       "IssueRunnerTokenRequest",
@@ -1947,8 +1999,13 @@
       "PromptBundleId",
       "ProposalAnalogBasis",
       "ProposalDecision",
+      "ProposalDecisionCarriedFrom",
+      "ProposalDecisionCarryoverReport",
       "ProposalDecisionCounts",
       "ProposalDecisionId",
+      "ProposalDecisionImportRefusal",
+      "ProposalDecisionImportReport",
+      "ProposalDecisionImportRow",
       "ProposalDecisionList",
       "ProposalDecisionRecord",
       "ProposalDecisionRecordPage",
@@ -1985,6 +2042,7 @@
       "RunCostEstimate",
       "RunCostEstimateRequest",
       "RunExecutor",
+      "RunFindingBlockLinks",
       "RunId",
       "RunNormReferences",
       "RunPreset",
@@ -2144,6 +2202,7 @@
       "StartComparisonAiJobRequest",
       "StartComparisonAiSheetChangesRequest",
       "StartComparisonSeriesRequest",
+      "StartRunFromStageRequest",
       "StartRunRequest",
       "StartStageChainBatchRequest",
       "StartStageChainRunRequest",
@@ -2197,6 +2256,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0055_work_schedule",
-  "contract_version": "1.32.0"
+  "migration_head": "0060_run_from_stage",
+  "contract_version": "1.42.0"
 }

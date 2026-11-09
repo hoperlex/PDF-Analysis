@@ -72,7 +72,8 @@ describe('release history presentation', () => {
     }));
     expect(html).toContain('История улучшений');
     expect(html).not.toContain('Прототип и альфа');
-    expect(html).toContain('aria-modal="false"');
+    expect(html).toContain('role="region"');
+    expect(html).toContain('<details');
     const banner = renderToStaticMarkup(createElement(UpdateBannerView, { onUpdate: noop, onLater: noop }));
     expect(banner).toContain('role="status"');
     expect(banner).toContain('Доступна новая версия');

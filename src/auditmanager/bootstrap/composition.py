@@ -63,6 +63,8 @@ from auditmanager.bootstrap.adapters import (
     ExecutorEnrollmentAdapter,
     ExecutorGroupAdapter,
     FindingAdapter,
+    MemoryCaptureAssembler,
+    MemoryCaptureSweep,
     NormContentAdapter,
     NormsSearchAdapter,
     OptimisationAdapter,
@@ -95,6 +97,7 @@ from auditmanager.bootstrap.adapters import (
     XlsxExportAdapter,
     resolve_analysis_preset,
 )
+from auditmanager.decisions.public import register_decision_recorded
 from auditmanager.ingest.comparison_batch.public import BATCH_HANDLER_FACTORIES, ComparisonBatchService
 from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ComparisonVersionOrderService
 from auditmanager.jobs.public import JobRepository
@@ -102,12 +105,14 @@ from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import (
     PACK_MANIFEST_ENV,
+    START_ALLOWED_ENV,
     DurableCarrier,
     PackManifestRefused,
     ParsedPackManifest,
     ReclaimingCarrier,
     TrustedPackRegistry,
     load_manifest,
+    parse_start_allowed,
     run_to_terminal,
 )
 from auditmanager.sections.public import SECTION_CODES, section_names
@@ -175,6 +180,27 @@ def _ar_v3_installed_pack(env: dict[str, str]) -> ParsedPackManifest | None:
         raise ConfigurationError(
             f"{PACK_MANIFEST_ENV} names a reviewed-pack manifest the server refuses: {exc}"
         ) from exc
+
+
+def _ar_v3_start_allowed(env: dict[str, str], installed: ParsedPackManifest | None) -> bool:
+    """`AR-V3-OPT-IN` (design 4.2): the deployment's allowance to start AR v3, read once, strictly, by the ``api`` build.
+
+    Absent, blank or ``0`` is off (the default); ``1`` is on; anything else refuses the start of the process, because a
+    value that silently read as «on» would be a permission nobody gave. The worker build does not call this: it executes
+    what was accepted whether or not the allowance is still on. The value and the pack state are logged once, here, so an
+    operator can see at start-up what the deployment will accept.
+    """
+    try:
+        allowed = parse_start_allowed(env.get(START_ALLOWED_ENV))
+    except ValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+    _log.info(
+        "AR v3 beta: pack %s, starts %s (%s)",
+        "installed" if installed is not None else "not installed",
+        "allowed" if allowed else "not allowed",
+        START_ALLOWED_ENV,
+    )
+    return allowed
 
 
 def _registry_of(installed: ParsedPackManifest | None) -> TrustedPackRegistry:
@@ -443,7 +469,12 @@ def build_worker_runtime(
         # per `PROTOTYPE_PROFILE.md` section 2, which is today's behaviour and the rollback.
         slots=resolved.worker_slots,
         state_dir=None if resolved.worker_state_dir is None else Path(resolved.worker_state_dir),
-        probe_runner=_passes(probe_runner, install_runner),
+        # `ADR-0027`: the decision memory's sweep rides the same housekeeping pass (throttled inside), so a decision recorded before
+        # there was a memory, or by a process without the port, is captured within a minute or so.
+        probe_runner=_passes(
+            probe_runner, install_runner,
+            MemoryCaptureSweep(sessions, MemoryCaptureAssembler(geometry=BlockAdapter(sessions, blob_store=store))),
+        ),
         comparison_work=build_comparison_work(
             sessions=sessions, engine=engine, blob_store=store, environ=env, ring=resolved.secrets_private_ring,
             dispatch_groups=dispatch_groups,
@@ -609,6 +640,8 @@ def build_application(
         ar_v3_pack_registry=_registry_of(ar_v3_installed_pack),
         # `AR-V3-BETA-PACK-STATUS-API-01`: the same load, with the attestation that came with it.
         ar_v3_installed_pack=ar_v3_installed_pack,
+        # `AR-V3-OPT-IN`: permission to start, separate from the capability above, off unless the environment says `1`.
+        ar_v3_start_allowed=_ar_v3_start_allowed(env, ar_v3_installed_pack),
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)
@@ -617,9 +650,14 @@ def build_application(
     # children it starts are bounded by its slots (``TILE_SLOTS``) and not by two renderers' worth.
     tile_renderer = TileRenderer()
 
+    block_adapter = BlockAdapter(sessions, blob_store=store)
+    # `ADR-0027`: every decision this process records is copied into the decision memory in its own transaction. The port is
+    # process-wide; a process that decides without it captures nothing, which the worker's sweep repairs and guard G1 makes visible.
+    register_decision_recorded(MemoryCaptureAssembler(geometry=block_adapter))
+
     router = build_router(
         projects=ProjectAdapter(ingest, sessions),
-        documents=DocumentAdapter(ingest),
+        documents=DocumentAdapter(ingest, sessions),
         runs=run_adapter,
         ar_v3_groups=run_adapter,
         findings=FindingAdapter(sessions),
@@ -633,7 +671,7 @@ def build_application(
         ),
         # `W45-BLOCKS`. Reads the same store and session factory as everything else here;
         # nothing new is opened for it.
-        blocks=BlockAdapter(sessions, blob_store=store),
+        blocks=block_adapter,
         # `W46-SEAL`, `R-44`. Reads the same session factory too.
         dashboard=DashboardAdapter(sessions),
         # `W49-SEAL-01`. The account itself, account management and registration.

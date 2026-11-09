@@ -244,6 +244,34 @@ Use P04 evidence to choose, reject or simplify the old backlog. Candidate work i
 
 The output is a new beta/v1 roadmap with estimates based on actual P01–P04 throughput.
 
+### Owner goals of 2026-11-07 (after the beta-bound product work)
+
+Set by the owner on 2026-11-07. They come after the functional and navigational likeness to the
+original and the active product tasks around the beta, and are built when those leave room:
+
+1. **AR v3 as an opt-in mode.** The imported (current) analysis stays the default; v3 is
+   switched on per deployment or per run, never replacing the default silently. *Built switched off on 2026-11-08*
+   (P1 to P3 of `AR-V3-OPT-IN-01.md`, contract `1.38.0`); P4 and P5 are `D-338`.
+2. **Expert decision memory.** Every expert decision is kept together with the crop or crops it
+   concerns in a vectorised segment of PostgreSQL (pgvector, as the normative corpus already
+   uses), so that it can feed fine-tuning data, dynamic prompts and hints to an expert facing a
+   similar case. The memory outlives its sources: deleting a project or a document must not lose
+   the context of decisions already taken, so the crops and the decision's own record are copied
+   into the memory when the decision is taken and the product purge keeps them. The stored
+   decision is the expert's recorded fact (AGENTS.md §4: model output is never the canonical
+   decision); a hint drawn from it is labelled as a hint.
+3. **Normative crops for an external executor.** When a task needs normative text, the crops of
+   the normative base it needs are delivered to the external executor with the job, dynamically
+   and within the executor's consent and custody rules, instead of the executor holding the
+   whole corpus.
+
+Each becomes its own design task with a contract slice; none is started before the beta-bound
+work, unless the lanes of that work run out.
+
+Design of items 2 and 3: [DECISION-MEMORY-01](DECISION-MEMORY-01.md) (design only; the questions only the owner can answer are in its section 9).
+
+Design of item 1: [AR-V3-OPT-IN-01](AR-V3-OPT-IN-01.md) (design only; a deployment allow switch, a per-start choice and provenance on every run; the questions only the owner can answer are in its section 9).
+
 ## Normative corpus — PostgreSQL authority, pgvector retrieval, S3 custody
 
 **Owner direction, 2026-10-01.** [ADR-0020](../architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md)

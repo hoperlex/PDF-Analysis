@@ -28,7 +28,10 @@ from auditmanager.dashboard.audit_state import (
     UNDECIDED_VERDICTS,
     AuditCountsRecord,
     AuditGroupRecord,
+    DocumentAuditRecord,
     DocumentAuditState,
+    audit_order_key,
+    audit_order_rank,
     audit_state,
     awaiting_decision_findings,
     counts_by_project,
@@ -232,3 +235,92 @@ def test_the_three_outputs_tally_the_same_groups_the_same_way() -> None:
     assert sum(c.awaiting_decision for c in counts_by_project(groups).values()) == whole.awaiting_decision
     assert sum(c.counts.partial for c in counts_by_section(groups).values()) == whole.partial == 2
     assert awaiting_decision_findings(groups) == 1
+
+
+# --- the audit of one listed version and the order of a listing (`UI-PARITY-DOC-AUDIT`) -----------------
+
+
+def test_the_two_statements_share_one_copy_of_the_rules() -> None:
+    """The per-document read is the counters' rules with another scope, not a second copy of them (`UI-A-46`)."""
+    groups = " ".join(str(module._AUDIT_GROUPS).split())
+    audits = " ".join(str(module._DOCUMENT_AUDITS).split())
+    tail = " ".join(module._RESULT_RUN_RULES.split())
+    assert tail in groups and tail in audits, "the result-run rule and the undecided rule are written once"
+    assert "r.state IN ('published', 'partial')" in audits
+    assert "cv.current_verdict IN ('pending', 'needs_manual_review')" in audits
+    assert "ORDER BY r.version_uid, r.created_at DESC, r.run_id DESC" in audits
+    # The scope differs exactly where it should: the counters leave an archived document out, a listing that was
+    # asked to show one says what state it is in.
+    assert "archived_at IS NULL" in groups and "archived_at" not in audits
+    # (the compiled statement spells the expanding bind its own way, so the scope is read from its source)
+    assert "v.version_uid IN :version_uids" in " ".join(module._CURRENT_DOCS_OF_VERSIONS.split())
+    assert "project_uid" not in audits
+
+
+def _record(result: str | None, findings: int = 0, undecided: int = 0) -> DocumentAuditRecord:
+    return DocumentAuditRecord(
+        version_uid="ver_x",
+        result_state=result,
+        result_run_id=None if result is None else "run_x",
+        finding_count=findings,
+        undecided_finding_count=undecided,
+    )
+
+
+def test_a_document_audit_record_classifies_through_the_one_function() -> None:
+    assert (_record(None).state, _record(None).partial) == ("not_run", False)
+    assert (_record("published").state, _record("published").partial) == ("clean", False)
+    assert (_record("published", 3, 1).state, _record("published", 3, 1).partial) == ("awaiting_decision", False)
+    assert (_record("published", 3, 0).state, _record("published", 3, 0).partial) == ("checked", False)
+    assert (_record("partial", 2, 0).state, _record("partial", 2, 0).partial) == ("checked", True)
+    assert (_record("partial").state, _record("partial").partial) == ("clean", True)
+    for result, findings, undecided in (("published", 2, 1), ("partial", 0, 0), (None, 0, 0)):
+        record = _record(result, findings, undecided)
+        assert record.audit == audit_state(result, findings > 0, undecided > 0)
+
+
+def test_the_order_ranks_are_the_originals_projectorderrank() -> None:
+    """0 checked by the expert, 1 processed without every verdict (clean or awaiting), 2 never audited (`UI-A-49`)."""
+    assert [audit_order_rank(state) for state in AUDIT_STATES] == [2, 1, 1, 0]
+    with pytest.raises(ValueError):
+        audit_order_rank("failed")
+
+
+def _ordered(rows: list[tuple[str, str | None]]) -> list[str | None]:
+    keyed = [(audit_order_key(state, name, f"ver_{index:02d}"), name) for index, (state, name) in enumerate(rows)]
+    return [name for _, name in sorted(keyed)]
+
+
+def test_the_rank_decides_before_the_name() -> None:
+    rows = [
+        ("not_run", "А"),
+        ("clean", "Б"),
+        ("checked", "Я"),
+        ("awaiting_decision", "В"),
+        ("not_run", "Б"),
+        ("checked", "Г"),
+    ]
+    assert _ordered(rows) == ["Г", "Я", "Б", "В", "А", "Б"]
+    states = [state for state, _ in sorted(rows, key=lambda row: audit_order_key(row[0], row[1], row[1] or ""))]
+    assert states == ["checked", "checked", "clean", "awaiting_decision", "not_run", "not_run"]
+
+
+def test_names_compare_the_way_the_original_collator_does() -> None:
+    """``Intl.Collator('ru', {numeric: true, sensitivity: 'base'})``: digits as numbers, case and accents ignored."""
+    assert _ordered([("clean", "АР1-10"), ("clean", "АР1-2"), ("clean", "АР1-1")]) == ["АР1-1", "АР1-2", "АР1-10"]
+    assert _ordered([("clean", "Лист 10"), ("clean", "лист 9"), ("clean", "Лист 100")]) == ["лист 9", "Лист 10", "Лист 100"]
+    # Case is ignored, so a lower-case name does not sort after every capital.
+    assert _ordered([("clean", "бетон"), ("clean", "Арматура"), ("clean", "Вода")]) == ["Арматура", "бетон", "Вода"]
+    # «ё» is «е» and «й» is «и»: neither is sorted to the end of the alphabet.
+    assert _ordered([("clean", "Жук"), ("clean", "Ёлка"), ("clean", "Елка а"), ("clean", "Ёж")]) == ["Ёж", "Ёлка", "Елка а", "Жук"]
+    assert _ordered([("clean", "Йод"), ("clean", "Икс"), ("clean", "Кит")]) == ["Икс", "Йод", "Кит"]
+    # A digit run sorts before a letter run; Latin before Cyrillic.
+    assert _ordered([("clean", "Альфа"), ("clean", "Alpha"), ("clean", "1 лист")]) == ["1 лист", "Alpha", "Альфа"]
+
+
+def test_a_name_the_collator_calls_equal_still_has_one_total_order() -> None:
+    """The cursor of the listing is built on the identity, so two equal names must not be left to chance."""
+    first = audit_order_key("clean", "АР1", "ver_a")
+    second = audit_order_key("clean", "ар1", "ver_b")
+    assert first < second and first[:2] == second[:2]
+    assert audit_order_key("clean", None, "ver_a")[:2] == audit_order_key("clean", "", "ver_b")[:2]

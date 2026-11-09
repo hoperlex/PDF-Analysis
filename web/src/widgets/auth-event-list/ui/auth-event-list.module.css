@@ -1,0 +1,40 @@
+.tableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+.table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.table th, .table td { padding: var(--am-gap-xs) var(--am-gap-sm); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.when { white-space: nowrap; }
+.detail { display: block; color: var(--am-ink-muted); font-size: var(--am-text-sm); }
+
+/* The filters on one line: each label centres its control on its own text. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm) var(--am-gap);
+  align-items: center;
+  margin-bottom: var(--am-gap);
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+.filter { display: inline-flex; align-items: center; gap: var(--am-gap-sm); }
+.filter select, .filter input[type='search'], .filter input[type='date'] {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+  font-weight: 400;
+}
+
+/* A date field is not in the global field rule: it takes the same ink, tint and edge. */
+.filter input[type='date'] {
+  min-height: 34px;
+  color: var(--am-ink);
+  background: var(--am-paper);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+  font-family: inherit;
+}

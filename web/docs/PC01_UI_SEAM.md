@@ -315,6 +315,9 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.norms.content(normDocumentId)` | `['norms','content',id]` | `W55A-WEB-NORMS` |
 | `queryKeys.analysis.all()` | `['analysis']` | `W59-ANALYSIS-SETTINGS-01` |
 | `queryKeys.analysis.profiles()` | `['analysis','profiles']` | `W59-ANALYSIS-SETTINGS-01` |
+| `queryKeys.workSchedule.all()` | `['work-schedule']` | `UI-PARITY-P0P` |
+| `queryKeys.workSchedule.month(month)` | `['work-schedule','month',month]` | `UI-PARITY-P0P` |
+| `queryKeys.workSchedule.reserve(start, days)` | `['work-schedule','reserve',{start,days}]` | `UI-PARITY-P0P` |
 | `queryKeys.assignments.all()` | `['assignments']` | `W61-DISPATCHER-01` |
 | `queryKeys.assignments.list(filters?)` | `['assignments','list',filters]` | `W61-DISPATCHER-01` |
 | `queryKeys.assignments.detail(assignmentUid)` | `['assignments','detail',uid]` | `W61-DISPATCHER-01` |

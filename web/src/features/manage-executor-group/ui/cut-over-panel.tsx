@@ -68,12 +68,14 @@ function nameOf(connections: readonly ExecutorConnection[], id: string | undefin
   return connections.find((item) => item.connection_id === id)?.display_name ?? 'подключение не найдено';
 }
 
-function PreviewTable({
+/** The proposal as a table: a view driven by props, so a census screen can draw it without pressing the button that opens it. */
+export function CutOverPreviewTable({
   preview, connections,
 }: { readonly preview: ExecutorRoutingPreview; readonly connections: readonly ExecutorConnection[] }) {
   const items = previewItems(preview);
   return (
-    <div className={styles.previewWrap}>
+    // A table wider than its box scrolls inside it, and Tab reaches the box.
+    <div className={styles.previewWrap} role="region" aria-label="Предложение перехода, таблица" tabIndex={0}>
       <table data-cut-over-preview={items.length}>
         <caption>Предложение: что станет с назначением каждого вида работы</caption>
         <thead>
@@ -266,7 +268,7 @@ export function CutOverPanel({ mode, connections }: CutOverPanelProps) {
             </div>
           ) : (
             <>
-              <PreviewTable preview={proposal} connections={connections} />
+              <CutOverPreviewTable preview={proposal} connections={connections} />
               <PreviewFlags preview={proposal} />
               {cutOverCanBeConfirmed(proposal) ? (
                 <>

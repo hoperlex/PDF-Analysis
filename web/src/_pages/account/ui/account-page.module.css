@@ -1,13 +1,62 @@
+/*
+ * The profile card. `.profile` is the only rule here that carries a colour: the census does not reach it (the page is read cold
+ * there, `PENDING_UNREACHED`), so the facts and the section are laid out with layout properties and the global `am-form__hint`
+ * for the muted terms, and add no rule the census would have to reach.
+ */
+
 .profile {
   width: min(100%, 760px);
   min-width: 0;
-  padding: var(--am-gap);
+  padding: var(--am-gap-md);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);
   box-shadow: var(--am-shadow-1);
 }
 
-.profile > p {
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-md);
+  margin-bottom: var(--am-gap);
+}
+
+.name {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
   overflow-wrap: anywhere;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0 0 var(--am-gap);
+}
+
+.facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.login {
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-sm);
+}
+
+.section > h2 {
+  margin-top: 0;
+}
+
+.leave {
+  margin: var(--am-gap) 0 0;
+}
+
+@media (max-width: 520px) {
+  .facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

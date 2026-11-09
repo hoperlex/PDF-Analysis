@@ -16,14 +16,16 @@ import { ASSIGNMENT_STATUS_VALUES, ApiError, queryKeys } from '@/shared/api';
 import {
   ASSIGNMENT_PAGE_LIMIT,
   ASSIGNMENT_STATUS_LABELS,
+  ASSIGNMENT_STATUS_TONES,
   assignmentFailure,
   assignmentScope,
   canAssignWork,
+  emptyAssignmentsTitle,
   isOpenAssignment,
   movesFor,
 } from '@/entities/assignment';
 import { USER_PAGE_LIMIT } from '@/entities/user';
-import { AssignmentRows } from '@/widgets/assignment-board';
+import { AssignmentRows, AssignmentStatusChips, filterAssignments } from '@/widgets/assignment-board';
 
 import { newClient, renderScreen } from '../screens/harness';
 
@@ -92,7 +94,7 @@ describe('the moves offered mirror the server table', () => {
 
 function refusal(code: ErrorEnvelope['error_code'], details: NonNullable<ErrorEnvelope['details']>): ApiError {
   return new ApiError(409, {
-    contract_version: '1.33.0',
+    contract_version: '1.42.0',
     error_code: code,
     message: 'raw server message',
     correlation_id: 'cid-dispatch-1',
@@ -128,6 +130,7 @@ function account(roles: Role[], over: Partial<Account> = {}): Account {
     profile_complete: true,
     is_default_credential: false,
     archived_at: null,
+    last_sign_in_at: null,
     ...over,
   };
 }
@@ -152,6 +155,15 @@ describe('the dispatcher screen', () => {
   const page: AssignmentPage = {
     items: [assignment('assigned'), assignment('returned', { assignee_user_uid: OTHER, assignee_label: 'Экспертова Д. Д.', status_reason: 'Не мой раздел' })],
     page: { next_cursor: null },
+    total: 2,
+    // The server's counts, deliberately not the page's: 7 assigned are not the 1 the page holds.
+    overview: [
+      { status: 'assigned', count: 7 },
+      { status: 'in_progress', count: 3 },
+      { status: 'done', count: 11 },
+      { status: 'returned', count: 1 },
+      { status: 'cancelled', count: 0 },
+    ],
   };
 
   function seeded(roles: Role[]) {
@@ -183,6 +195,44 @@ describe('the dispatcher screen', () => {
     expect(markup).not.toContain('data-assignment-move="reassigned"');
   });
 
+  it('the state chips carry the server\'s numbers, not a count of the page held (contract 1.36.0)', () => {
+    const markup = renderScreen(seeded(['admin']), createElement(DispatcherPage, { roles: ['admin'] }));
+    expect(markup).toContain('data-assignment-status-filter="all"');
+    expect(markup).toContain('Все (22)'); // 7 + 3 + 11 + 1 + 0
+    for (const [status, label, count] of [
+      ['assigned', 'Назначено', 7], ['in_progress', 'В работе', 3], ['done', 'Выполнено', 11],
+      ['returned', 'Возвращено', 1], ['cancelled', 'Отменено', 0],
+    ] as const) {
+      expect(markup).toContain(`data-assignment-status-chip="${status}"`);
+      expect(markup).toContain(`${label} (${count})`);
+    }
+    expect(markup).toContain('data-assignment-total="2"');
+    expect(markup).toContain('Найдено: 2');
+    // the chips replaced the state select (the creation form's own selects are another matter)
+    expect(markup).not.toMatch(/Состояние\s*<select/);
+    // an expert reads the same chips over what the server lets them read
+    expect(renderScreen(seeded(['expert']), createElement(DispatcherPage, { roles: ['expert'] }))).toContain('Назначено (7)');
+  });
+
+  it('the chips press the chosen status, say «Все» otherwise, and call back with the status', () => {
+    const overview = page.overview;
+    const pressed = (selected: AssignmentStatus | ''): string =>
+      renderScreen(newClient(), createElement(AssignmentStatusChips, { overview, selected, onSelect: () => undefined }));
+    const all = pressed('');
+    expect(all).toMatch(/aria-pressed="true"[^>]*data-assignment-status-chip="all"/);
+    expect(all.match(/aria-pressed="true"/g)).toHaveLength(1);
+    const returned = pressed('returned');
+    expect(returned).toMatch(/aria-pressed="true"[^>]*data-assignment-status-chip="returned"/);
+    expect(returned).toContain('data-assignment-status-filter="returned"');
+    expect(returned.match(/aria-pressed="true"/g)).toHaveLength(1);
+    // a status the answer lacks is 0, never absent or NaN
+    const sparse = renderScreen(newClient(), createElement(AssignmentStatusChips, {
+      overview: [{ status: 'done', count: 4 }], selected: '', onSelect: () => undefined,
+    }));
+    expect(sparse).toContain('Все (4)');
+    expect(sparse).toContain('Назначено (0)');
+  });
+
   it('the rows link the project and the document', () => {
     const markup = renderScreen(
       newClient(),
@@ -197,3 +247,57 @@ describe('the dispatcher screen', () => {
     expect(markup).toContain('data-assignment-move="completed"');
   });
 });
+
+describe('the dispatcher\'s polish (`UI-PARITY` P5)', () => {
+  it('gives every status a tone and draws the badge in it', () => {
+    expect(Object.keys(ASSIGNMENT_STATUS_TONES).sort()).toEqual([...ASSIGNMENT_STATUS_VALUES].sort());
+    const markup = renderScreen(newClient(), createElement(AssignmentRows, {
+      items: [assignment('returned'), assignment('in_progress'), assignment('done')], roles: ['admin'], viewerUid: ME, experts: [],
+    }));
+    expect(markup).toContain('am-badge--degraded');
+    expect(markup).toContain('am-badge--active');
+    expect(markup).toContain('am-badge--ok');
+  });
+
+  it('marks the viewer\'s own rows, and only those', () => {
+    const markup = renderScreen(newClient(), createElement(AssignmentRows, {
+      items: [assignment('assigned'), assignment('returned', { assignee_user_uid: OTHER, assignee_label: 'Экспертова Д. Д.' })],
+      roles: ['admin'], viewerUid: ME, experts: [],
+    }));
+    expect(markup.match(/ \(вы\)/g)).toHaveLength(1);
+    expect(markup).toContain('aria-expanded="false"');
+  });
+
+  it('names the filter that made the list empty, and never calls an empty filter an empty system', () => {
+    expect(emptyAssignmentsTitle('returned', false)).toBe('Назначений в состоянии «Возвращено» нет.');
+    expect(emptyAssignmentsTitle('', true)).toBe('Вам не назначено ничего.');
+    expect(emptyAssignmentsTitle('', false)).toBe('Назначений нет.');
+  });
+
+  it('narrows a page by the words of the project, document, expert, assigning administrator, note or reason', () => {
+    const items = [
+      assignment('assigned', { project_name: 'Школа', note: 'срочно' }),
+      assignment('returned', { project_name: 'Больница', document_title: 'КЖ-1', assignee_label: 'Экспертова Д. Д.', status_reason: 'Не мой раздел' }),
+    ];
+    expect(filterAssignments(items, '')).toEqual(items);
+    expect(filterAssignments(items, '   ')).toEqual(items);
+    expect(filterAssignments(items, 'ШКОЛА срочно')).toEqual([items[0]]);
+    expect(filterAssignments(items, 'экспертова кж')).toEqual([items[1]]);
+    expect(filterAssignments(items, 'раздел')).toEqual([items[1]]);
+    expect(filterAssignments(items, 'иванов')).toEqual(items);
+    expect(filterAssignments(items, 'нет такого')).toEqual([]);
+  });
+
+  it('draws the search beside «Только мои» for an administrator and alone for an expert', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.assignments.list({ limit: ASSIGNMENT_PAGE_LIMIT }), { items: [assignment('assigned')], page: { next_cursor: null }, total: 1, overview: [] });
+    client.setQueryData(queryKeys.account.me(), account(['expert'], { user_uid: ME }));
+    const expert = renderScreen(client, createElement(DispatcherPage, { roles: ['expert'] }));
+    expect(expert).toContain('data-assignment-search=""');
+    expect(expert).not.toContain('Только мои');
+    const admin = renderScreen(client, createElement(DispatcherPage, { roles: ['admin'] }));
+    expect(admin).toContain('data-assignment-search=""');
+    expect(admin).toContain('Только мои');
+  });
+});
+

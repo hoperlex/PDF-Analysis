@@ -1,7 +1,11 @@
-"""The access journal: six ``access.*`` events in ``audit_event`` (`PROD-06`, ADR-0023 section 4).
+"""The access journal: seven ``access.*`` events in ``audit_event`` (`PROD-06`, ADR-0023 section 4).
 
 `R-146n` item 6, `AD-10`: sign-in, role grant and password change leave a row in the
-append-only ``audit_event`` table, **in the transaction of the change they describe**. A
+append-only ``audit_event`` table, **in the transaction of the change they describe**. The
+seventh type, ``access.sessions_ended`` (contract 1.36.0, `UI-A-93`), is an administrator
+ending every session of an account; the journal is read back by ``listAuthEvents``
+(:mod:`auditmanager.access.journal`) and the last ``access.sign_in_succeeded`` of an account
+is the ``last_sign_in_at`` of its read model. A
 writer that opened its own connection, or that swallowed its own failure, would let the
 change commit without its event, or the event commit without its change; this one takes the
 caller's :class:`~sqlalchemy.orm.Session` and lets every error propagate, so the two commit
@@ -66,6 +70,7 @@ __all__ = [
     "record_password_reset",
     "record_role_granted",
     "record_role_revoked",
+    "record_sessions_ended",
     "record_sign_in_blocked",
     "record_sign_in_succeeded",
     "reset_correlation_id",
@@ -80,7 +85,7 @@ SOURCE_HOST_CLI: Final[str] = "host_cli"
 _SOURCES: Final[frozenset[str]] = frozenset({SOURCE_API, SOURCE_HOST_CLI})
 
 #: ``event_type`` -> (keys that must be present, keys that may be present). The union over all
-#: six is the allow-list a test scans the stored payloads against; the writer enforces the
+#: seven is the allow-list a test scans the stored payloads against; the writer enforces the
 #: per-type one.
 PAYLOAD_KEYS: Final[Mapping[str, tuple[frozenset[str], frozenset[str]]]] = {
     "access.sign_in_succeeded": (
@@ -108,9 +113,14 @@ PAYLOAD_KEYS: Final[Mapping[str, tuple[frozenset[str], frozenset[str]]]] = {
         frozenset({"subject_uid", "actor_uid", "source"}),
         frozenset(),
     ),
+    # Contract 1.36.0: an administrator ended every session of ``subject_uid`` (the epoch rose).
+    "access.sessions_ended": (
+        frozenset({"subject_uid", "actor_uid", "source"}),
+        frozenset(),
+    ),
 }
 
-#: The six event types, in the order ADR-0023 section 4 lists them.
+#: The seven event types: the six of ADR-0023 section 4, in its order, then the one contract 1.36.0 adds.
 ACCESS_EVENT_TYPES: Final[tuple[str, ...]] = tuple(PAYLOAD_KEYS)
 
 _INSERT = text(
@@ -271,5 +281,15 @@ def record_password_reset(session: Session, *, subject_uid: str, actor_uid: str)
     _append(
         session,
         event_type="access.password_reset",
+        payload={"subject_uid": subject_uid, "actor_uid": actor_uid, "source": SOURCE_API},
+    )
+
+
+def record_sessions_ended(session: Session, *, subject_uid: str, actor_uid: str) -> None:
+    """``endUserSessions``: an administrator raised the account's credential epoch, so every
+    credential it held is refused from its next request."""
+    _append(
+        session,
+        event_type="access.sessions_ended",
         payload={"subject_uid": subject_uid, "actor_uid": actor_uid, "source": SOURCE_API},
     )

@@ -34,6 +34,9 @@ export {
   stageRows,
 } from './model/run-presentation';
 
+export type { RunFinishEstimate } from './model/run-estimate';
+export { formatClockTime, runFinishEstimate } from './model/run-estimate';
+
 export type { ComparedFact, ComparedStage, Comparison, FactId, StageSide } from './model/run-comparison';
 export {
   comparableCostMicros,
@@ -51,6 +54,15 @@ export {
 export type { TerminalReasonNote } from './model/terminal-reason';
 export { ABSENT_SENTENCE, UNDESCRIBED_PREFIX, terminalReasonNote } from './model/terminal-reason';
 export { arV3GroupReviewAddress, looksLikeArV3GroupId } from './model/ar-v3-group-id';
+
+export type { RunAnalysis, RunAnalysisFields, RunAnalysisKind } from './model/run-analysis';
+export {
+  AR_V3_ANALYSIS_LABEL,
+  STANDARD_ANALYSIS_LABEL,
+  runAnalysis,
+  runAnalysisKind,
+  runAnalysisLabel,
+} from './model/run-analysis';
 
 export type { ArV3PackFaultReason, ArV3PackReading, ArV3PackScopeId } from './model/ar-v3-pack-status';
 export { AR_V3_PACK_SCOPE_IDS, readArV3PackStatus } from './model/ar-v3-pack-status';
@@ -73,6 +85,8 @@ export type { RunPresetLine } from './model/run-preset';
 export { runPresetLine, runPresetSentence, runPresetValue } from './model/run-preset';
 
 export { QUEUE_REASON_LABELS, knownQueueReason, runQueueReason, runQueueReasonLabel } from './model/run-queue-reason';
+export type { RunNextTask, RunNextTaskSource } from './model/run-next-task';
+export { nextTaskPlace, nextTaskWhy, nextTaskWork, runNextTask } from './model/run-next-task';
 
 export type { QueueItemWaitingReading } from './model/queue-item-waiting';
 export { queueItemWaiting } from './model/queue-item-waiting';
@@ -99,7 +113,7 @@ export { RUN_PAGE_LIMIT, runListQueryOptions, useRunList } from './api/use-run-l
 export { runStatusQueryOptions } from './api/run-status-query';
 
 export type { ArV3PackView } from './api/use-ar-v3-pack-status';
-export { arV3PackStatusQueryOptions, useArV3PackStatus } from './api/use-ar-v3-pack-status';
+export { arV3PackStatusQueryOptions, useArV3PackStatus, useArV3StartAllowed } from './api/use-ar-v3-pack-status';
 
 export type { RunStatusPolling } from './api/use-run-status';
 export { useRunStatus } from './api/use-run-status';

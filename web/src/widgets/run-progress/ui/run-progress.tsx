@@ -80,12 +80,15 @@ import {
 } from '@/shared/ui';
 import styles from './run-progress.module.css';
 import { PdfPrecheckProgress } from './pdf-precheck-progress';
+import { RunLiveLine } from './run-live-line';
+import { RunNextTask } from './run-next-task';
 import { ExtendedReview } from '@/widgets/extended-review';
+import { startedFrom, type StartedFrom } from '../model/started-from';
 
 import {
-  AR_V3_BETA_PROFILE_ID,
   StageTable,
   type StageRow,
+  arV3GroupReviewAddress,
   badgeProviderMode,
   costBasisCaption,
   diagnosticObservationCount,
@@ -95,7 +98,10 @@ import {
   hasKnownRunVocabulary,
   interruptedReason,
   isRunAnimating,
+  looksLikeArV3GroupId,
   providerModeCaption,
+  runAnalysis,
+  runAnalysisKind,
   runCost,
   runExecutorLine,
   runExecutorValue,
@@ -107,6 +113,7 @@ import {
   runWaitingSentence,
   stageRows,
   terminalReasonNote,
+  useArV3StartAllowed,
   useRunStatus,
 } from '@/entities/audit-run';
 
@@ -126,7 +133,7 @@ function RunHolder({ runId }: { readonly runId: string }) {
 const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное значение.';
 
 /** The original-style rail displays only stages reported or scheduled for this Run. */
-function PipelineRail({ rows }: { readonly rows: readonly StageRow[] }) {
+function PipelineRail({ rows, reused }: { readonly rows: readonly StageRow[]; readonly reused?: ReadonlySet<string> }) {
   return (
     <div className={styles.pipeline} role="list" aria-label="Этапы этого прогона" data-run-pipeline="">
       {rows.map((row, index) => (
@@ -135,12 +142,19 @@ function PipelineRail({ rows }: { readonly rows: readonly StageRow[] }) {
             className={styles.pipelineStage}
             data-pipeline-stage={row.stageId}
             data-pipeline-status={row.status ?? 'not-reported'}
+            {...(reused?.has(row.stageId) ? { 'data-pipeline-reused': '' } : {})}
           >
             <span className={styles.pipelineOrdinal}>{row.ordinal === null ? '—' : String(row.ordinal).padStart(2, '0')}</span>
             <span className={styles.pipelineName}>{runStageLabel(row.stageId)}</span>
             <span className={styles.pipelineStatus}>
               {row.status === null ? 'Не начинался' : <StageStatusBadge status={row.status} errorCode={row.errorCode} />}
             </span>
+            {/* `R-151i`: a stage taken from the earlier run took no time here; the rail says where it came from instead. */}
+            {reused?.has(row.stageId) ? <span className={styles.pipelineTook}>из прогона</span> : elapsedMs(row.startedAt, row.finishedAt) === null ? null : (
+              <span className={styles.pipelineTook} data-pipeline-took={formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}>
+                {formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}
+              </span>
+            )}
           </div>
           {index === rows.length - 1 ? null : <span className={styles.pipelineArrow} aria-hidden="true">→</span>}
         </div>
@@ -173,9 +187,60 @@ function V3PublishedSentence({ findingCount }: { readonly findingCount: number |
   );
 }
 
+/**
+ * `AR-V3-OPT-IN`: «Анализ» in the run's facts -- which analysis produced it. A run of AR v3 (beta) always says so, with its
+ * scope, and links to the review of its group; a standard run says «Стандартный» only where the deployment allows a
+ * start of v3 (`start_allowed`), so a deployment with one analysis shows no line about the other. Only a standard run asks
+ * the server whether v3 is allowed; a v3 run needs no answer.
+ */
+/**
+ * `R-151i` («Запущен с этапа N из прогона …»): the earlier run this one took its first stages from, linked. Nothing for a run
+ * that was not started from a stage.
+ */
+function StartedFromFact({ status, from }: { readonly status: RunStatus; readonly from: StartedFrom }) {
+  return (
+    <>
+      <dt>Запущен с этапа</dt>
+      <dd data-run-started-from={from.sourceRunId} data-run-start-stage={from.stageId}>
+        {from.ordinal}. {runStageLabel(from.stageId)} из прогона{' '}
+        <Link href={routes.run(status.project_uid, from.sourceRunId)}><code>{from.sourceRunId}</code></Link>
+      </dd>
+    </>
+  );
+}
+
+function AnalysisFact({ status }: { readonly status: RunStatus }) {
+  return runAnalysisKind(status) === 'standard' ? <StandardAnalysisFact status={status} /> : <AnalysisLine status={status} />;
+}
+
+/** The only run page that asks the server: a standard run, to learn whether there is another analysis to tell it from. */
+function StandardAnalysisFact({ status }: { readonly status: RunStatus }) {
+  return useArV3StartAllowed() ? <AnalysisLine status={status} /> : null;
+}
+
+function AnalysisLine({ status }: { readonly status: RunStatus }) {
+  const analysis = runAnalysis(status);
+  return (
+    <>
+      <dt>Анализ</dt>
+      <dd data-run-analysis={analysis.kind} data-run-scope={analysis.scope ?? undefined}>
+        {analysis.label}
+        {looksLikeArV3GroupId(analysis.groupId) ? (
+          <>
+            {' · '}
+            <Link href={arV3GroupReviewAddress(analysis.groupId)} data-run-group-review>
+              шесть проверок группы
+            </Link>
+          </>
+        ) : null}
+      </dd>
+    </>
+  );
+}
+
 function Outcome({ status }: { readonly status: RunStatus }) {
   const outcome = runOutcome(status);
-  const v3Beta = status.analysis_profile_id === AR_V3_BETA_PROFILE_ID;
+  const v3Beta = runAnalysisKind(status) === 'ar_v3_beta';
 
   switch (outcome.kind) {
     case 'in_flight':
@@ -446,7 +511,8 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
   const preset = runPresetLine(status);
   const waiting = executor === null ? null : runWaitingSentence(executor);
 
-  const v3Beta = status.analysis_profile_id === AR_V3_BETA_PROFILE_ID;
+  const from = startedFrom(status);
+  const v3Beta = runAnalysisKind(status) === 'ar_v3_beta';
   const reviewable = !v3Beta && runHasPublishedResult(status.state, status.analysis_profile_id);
 
   return (
@@ -471,8 +537,10 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
                 : 'Опрос остановлен, показание окончательное.'}
           </p>
         </div>
+        {/* `UI-A-65`: the open run's live line -- the stage it is on and how long it has been going. */}
+        {animating ? <RunLiveLine status={status} rows={stageRows(status)} /> : null}
         <div className={styles.headBody}>
-          <PipelineRail rows={stageRows(status)} />
+          <PipelineRail rows={stageRows(status)} {...(from === null ? {} : { reused: from.reusedStageIds })} />
           {reviewable || actions !== undefined ? (
             <div className={styles.headActions}>
               {reviewable ? (
@@ -491,9 +559,21 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
         </div>
       </section>
 
+      {/* `R-151i`: a run started from a stage says so under its head, with the way back to the run it took the first stages from. */}
+      {from === null ? null : (
+        <p className={styles.caption} data-run-started-from-note={from.stageId}>
+          Запущен с этапа {from.ordinal} «{runStageLabel(from.stageId)}» из прогона{' '}
+          <Link href={routes.run(status.project_uid, from.sourceRunId)}><code>{from.sourceRunId}</code></Link>:
+          результаты предыдущих этапов взяты из него, этот этап и следующие выполнены заново.
+        </p>
+      )}
+
       <Figures status={status} />
 
       <Outcome status={status} />
+
+      {/* `UI-B-70`: a run that waits in the queue says what goes first and why it waits, as the original's «Следующая задача». */}
+      {status.state === 'queued' ? <RunNextTask status={status} /> : null}
 
       <div className={styles.columns}>
         <section className={styles.panel} aria-label="Сведения о прогоне">
@@ -508,6 +588,8 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
                 <code>{status.version_uid}</code>
               </Link>
             </dd>
+            <AnalysisFact status={status} />
+            {from === null ? null : <StartedFromFact status={status} from={from} />}
             {executor === null ? null : <><dt>Исполнитель</dt><dd data-run-executor>{runExecutorValue(executor)}</dd></>}
             {preset === null ? null : <><dt>Пресет</dt><dd data-run-preset>{runPresetValue(preset)}</dd></>}
             {/* `R-151v`: who started the run; a run created before contract 1.21.0 does not know. */}
@@ -587,8 +669,16 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
           would be a claim about a run that has not got that far. */}
       {isTerminalRunState(status.state) ? <NormReferencesSection runId={status.run_id} /> : null}
 
+      {/*
+        The sentences that qualify the figures stay on the screen and are read when asked for, as the CSV columns are
+        on the export bar (`R-18`). They open by themselves when the cost cannot be read, because that sentence is
+        the only place the screen says why no figure is shown.
+      */}
       <section className={styles.notes} aria-label="Пояснения к цифрам">
-        <Recorded status={status} />
+        <details open={runCost(status).kind === 'unreadable'} data-run-notes="">
+          <summary className={styles.notesSummary}>Пояснения к цифрам</summary>
+          <Recorded status={status} />
+        </details>
       </section>
 
       {failure !== null ? (

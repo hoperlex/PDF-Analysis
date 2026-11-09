@@ -99,6 +99,8 @@ def test_the_migration_checks_name_the_same_identity_patterns(migration: ModuleT
         (policy.require_reader, frozenset(), False),
         (policy.require_reader, frozenset({"expert"}), True),
         (policy.require_reader, frozenset({"admin"}), True),
+        # `R-150e`: «Наблюдатель» reads product data too.
+        (policy.require_reader, frozenset({"viewer"}), True),
     ],
 )
 def test_reading_needs_any_one_role(check, roles: frozenset[str], allowed: bool) -> None:
@@ -108,7 +110,7 @@ def test_reading_needs_any_one_role(check, roles: frozenset[str], allowed: bool)
     with pytest.raises(DomainError) as caught:
         check(roles, aggregate_type="PriceList")
     assert caught.value.code is ErrorCode.PERMISSION_DENIED
-    assert caught.value.detail_fields["required_capability"] == "role:admin|expert"
+    assert caught.value.detail_fields["required_capability"] == "role:admin|expert|viewer"
 
 
 @pytest.mark.parametrize(

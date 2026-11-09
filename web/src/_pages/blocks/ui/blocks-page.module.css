@@ -15,21 +15,19 @@
   min-width: 0;
 }
 
+/* An underlined row, as the original's tabs and the version's own: no bordered panel round two buttons. */
 .tablist {
   display: flex;
   flex-wrap: wrap;
   gap: var(--am-gap-xs);
-  padding: var(--am-gap-sm);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
-  background: var(--am-paper);
+  border-bottom: 1px solid var(--am-line);
 }
 
 .tab {
   margin: 0;
-  padding: 8px 14px;
-  border: 1px solid var(--am-line-soft);
-  border-radius: var(--am-radius);
+  padding: var(--am-gap-xs) var(--am-gap);
+  border: 0;
+  border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--am-ink-muted);
   font: inherit;
@@ -47,8 +45,7 @@
 }
 
 .tab[aria-selected='true'] {
-  border-color: var(--am-accent);
-  background: var(--am-accent-light);
+  border-bottom-color: var(--am-accent);
   color: var(--am-ink);
   font-weight: 600;
 }
@@ -64,7 +61,7 @@
 }
 
 .panel {
-  padding-top: var(--am-gap);
+  padding-top: var(--am-gap-sm);
   min-width: 0;
 }
 

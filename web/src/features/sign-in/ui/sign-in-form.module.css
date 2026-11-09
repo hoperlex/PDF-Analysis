@@ -1,16 +1,16 @@
-.form { display: grid; gap: 13px; }
-.field { display: grid; gap: 6px; }
-.field label { color: var(--am-showcase-ink); font-size: 11px; font-weight: 700; }
+.form { display: grid; gap: var(--am-gap-md); }
+.field { display: grid; gap: var(--am-gap-xs); }
+.field label { color: var(--am-showcase-ink); font-size: var(--am-text-xs); font-weight: 700; }
 .field input {
   box-sizing: border-box;
   width: 100%;
-  min-height: 46px;
-  padding: 11px 13px;
+  min-height: 34px;
+  padding: var(--am-gap-xs) var(--am-gap-md);
   border: 1px solid color-mix(in srgb, var(--am-showcase-line) 40%, transparent);
-  border-radius: 10px;
+  border-radius: var(--am-radius-sm);
   background: var(--am-showcase-card-alt);
   color: var(--am-showcase-ink);
-  font-size: 13px;
+  font-size: var(--am-text-md);
   transition: border-color var(--am-motion-base) var(--am-ease), box-shadow var(--am-motion-base) var(--am-ease);
 }
 .field input::placeholder { color: var(--am-showcase-soft); }
@@ -19,20 +19,20 @@
   position: relative;
   justify-content: flex-start;
   width: 100%;
-  min-height: 46px;
-  margin-top: 7px;
-  padding: 10px 42px 10px 16px;
+  min-height: 34px;
+  margin-top: var(--am-gap-xs);
+  padding: var(--am-gap-xs) var(--am-gap-xl) var(--am-gap-xs) var(--am-gap-md);
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--am-radius-sm);
   background: linear-gradient(105deg, var(--am-showcase-accent-strong), var(--am-showcase-accent));
   color: var(--am-showcase-bg);
-  font-size: 13px;
+  font-size: var(--am-text-md);
   font-weight: 750;
   text-align: left;
   transition: filter var(--am-motion-base) var(--am-ease), transform var(--am-motion-base) var(--am-ease);
 }
-.form .submit::after { position: absolute; right: 17px; top: 50%; content: '→'; font-size: 19px; font-weight: 400; transform: translateY(-50%); }
+.form .submit::after { position: absolute; right: var(--am-gap-md); top: 50%; content: '→'; font-size: var(--am-text-xl); font-weight: 400; transform: translateY(-50%); }
 .form .submit:hover { background: linear-gradient(105deg, var(--am-showcase-accent-strong), var(--am-showcase-accent)); filter: brightness(1.06); transform: translateY(-1px); }
 .form .submit:focus-visible { outline: 2px solid var(--am-showcase-accent-strong); outline-offset: 3px; }
 .form .submit:disabled { transform: none; opacity: 0.7; }
-.hint { margin: 0; color: var(--am-showcase-soft); font-size: 10px; line-height: 1.45; }
+.hint { margin: 0; color: var(--am-showcase-soft); font-size: var(--am-text-xs); line-height: 1.45; }

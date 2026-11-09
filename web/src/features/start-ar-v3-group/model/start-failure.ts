@@ -25,9 +25,11 @@ import {
   failureMessage,
 } from '@/shared/api';
 import { inputBudgetSentence } from '@/entities/audit-run';
+import { AR_V3_START_NOT_ENABLED_TEXT, arV3ConflictSentence } from '@/entities/execution';
 
 export type ArV3GroupStartFailureKind =
   | 'pack_unavailable'
+  | 'start_not_allowed'
   | 'provider_unavailable'
   | 'norm_unavailable'
   | 'version_unclassified'
@@ -89,6 +91,20 @@ function fromApiError(error: ApiError): ArV3GroupStartFailure | null {
         detail:
           `${NOTHING_CREATED} Повтор использует тот же ключ идемпотентности, и шесть проверок не ` +
           'запускаются вместо этого в другом режиме провайдера.',
+      };
+    case 'conflict':
+      // `AR-V3-OPT-IN` (contract 1.38.0): the pack is installed and the server does not allow starts; the catalog's own sentence for
+      // `conflict` speaks of a lost parallel write and is not this. Any other conflict is the generic reading.
+      if (arV3ConflictSentence(error) !== AR_V3_START_NOT_ENABLED_TEXT) return null;
+      return {
+        ...base,
+        kind: 'start_not_allowed',
+        presentation: 'unsupported',
+        retryable: false,
+        title: AR_V3_START_NOT_ENABLED_TEXT,
+        detail:
+          `${NOTHING_CREATED} Тот же запрос будет отклонён снова, пока запуск не разрешён на сервере; ` +
+          'уже принятые прогоны завершаются.',
       };
     case 'required_norm_unavailable':
       return {

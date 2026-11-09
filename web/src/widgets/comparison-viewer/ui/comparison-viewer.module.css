@@ -17,6 +17,8 @@
   min-width: 0;
   max-width: 100%;
   color: var(--am-ink);
+  /* The island focuses the root so that the arrows work at once; the focus is not a thing to draw round the whole viewer. */
+  outline: none;
 }
 
 .header {
@@ -243,9 +245,11 @@
   font-size: var(--am-text-sm);
 }
 
+/* The swipe's range is a 24 px target at the least (it was 16 tall). */
 .slider {
   flex: 1 1 12rem;
   min-width: 8rem;
+  min-height: var(--am-target-min);
   accent-color: var(--am-accent);
 }
 

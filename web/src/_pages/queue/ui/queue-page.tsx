@@ -1,24 +1,28 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import type { ExecutionQueueItem, RunStatus } from '@/shared/api';
 import { ApiError, newIdempotencyKey } from '@/shared/api';
-import { routes } from '@/shared/lib';
+import { routes, useAddressState } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
-  QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueOverviewLine, queueStateCount,
+  QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueStateCount,
   runWorker, useExecutionQueue,
   useWorkerLookup,
 } from '@/entities/execution';
-import type { ExecutionFailure, ExecutionQueueFilter, ExecutionQueueState } from '@/entities/execution';
+import type { ExecutionFailure, ExecutionQueueFilter } from '@/entities/execution';
 import { useCancelRun } from '@/features/cancel-run';
 import { useReauditCostApproval, useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
-import { ComparisonQueueBlock, ExecutionQueue } from '@/widgets/execution-queue';
+import { ComparisonQueueBlock, ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
 import { CostApproval, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import { EMPTY_QUEUE_ADDRESS, readQueueAddress, writeQueueAddress } from '../model/address';
+import type { QueueAddress } from '../model/address';
+import { QUEUE_PERIOD_OPTIONS, isQueuePeriod, queuePeriodStart } from '../model/period';
+import type { QueuePeriod } from '../model/period';
 import styles from './queue-page.module.css';
 
 interface RunIntent {
@@ -55,17 +59,43 @@ export function intentLabel(intent: Intent): string {
   }
 }
 
-export function QueuePage() {
-  const [cursors, setCursors] = useState<string[]>([]);
-  // `UI-PARITY-QUEUE-A`: the state the list is narrowed to; '' is every state.
-  const [stateFilter, setStateFilter] = useState<ExecutionQueueState | ''>('');
+export interface QueuePageProps {
+  /**
+   * The filter the address named, read on the server by the route, so the first read of the queue is already the filtered one.
+   * Inside the app router the address itself is the source and this is what it said; a static render starts from it.
+   */
+  readonly initialAddress?: QueueAddress | undefined;
+}
+
+export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePageProps = {}) {
+  // The state and the period are in the address (`?state=&period=`), so a link opens the queue filtered, a reload keeps the filter and
+  // the side menu's «Очередь» (no query) clears it. A choice REPLACES the entry: a filter is not a place to go Back to.
+  const [address, setAddress] = useAddressState(readQueueAddress, writeQueueAddress, initialAddress);
+  const stateFilter = address.state;
+  const filterKey = `${address.state}|${address.period}`;
+  // A cursor belongs to the filter it was issued under (the server refuses it under another), so the pages walked are held with
+  // the filter they were walked under and forgotten when the filter is anything else -- including a change the address made.
+  const [paging, setPaging] = useState<{ readonly key: string; readonly cursors: readonly string[] }>({ key: filterKey, cursors: [] });
+  const cursors = paging.key === filterKey ? paging.cursors : [];
+  const setCursors = (update: readonly string[] | ((current: readonly string[]) => readonly string[])) => {
+    setPaging({ key: filterKey, cursors: typeof update === 'function' ? update(cursors) : update });
+  };
+  // The instant the period begins at, taken when the period is chosen (or the page opened on it) and held: the filter, its cursors
+  // and its cache key do not slide under a person who is reading a page.
+  const periodFrom = useMemo(() => queuePeriodStart(address.period, new Date()), [address.period]);
+  const period = { value: address.period, from: periodFrom };
   const [intent, setIntent] = useState<Intent | null>(null);
   const [commandFailure, setCommandFailure] = useState<ExecutionFailure | null>(null);
   const [lastRun, setLastRun] = useState<RunStatus | null>(null);
   const [completed, setCompleted] = useState(false);
+  // `UI-B-52`: what the last drag or Alt+arrow move of a waiting job came to; read out by the list's polite live region.
+  const [reorderNote, setReorderNote] = useState<string | null>(null);
   const sequence = useRef(0);
   const cursor = cursors.at(-1);
-  const filter: ExecutionQueueFilter = stateFilter === '' ? {} : { state: stateFilter };
+  const filter: ExecutionQueueFilter = {
+    ...(stateFilter === '' ? {} : { state: stateFilter }),
+    ...(period.from === undefined ? {} : { createdFrom: period.from }),
+  };
   const queue = useExecutionQueue(cursor, filter);
   // `W54-WORKERS-WEB`: the worker registry is read only while a listed Job holds a Lease.
   const holdsLease = queue.data?.items.some((item) => jobHoldsLease(item.state)) ?? false;
@@ -87,12 +117,39 @@ export function QueuePage() {
   const asOf = queue.dataUpdatedAt > 0 ? queue.dataUpdatedAt : null;
   const costFailure = reauditCost.error === null ? null : executionFailure(reauditCost.error, false);
 
-  // A cursor belongs to the filter it was issued under (the server refuses it under another), so the
-  // cursors and the filter move together: choosing a state returns to the first page of that state.
   function chooseState(next: string) {
     const known = QUEUE_STATE_OPTIONS.find((option) => option.value === next);
-    setStateFilter(known === undefined ? '' : known.value);
-    setCursors([]);
+    setAddress({ state: known === undefined ? '' : known.value, period: address.period }, 'replace');
+  }
+
+  function choosePeriod(chosen: string) {
+    const value: QueuePeriod = isQueuePeriod(chosen) ? chosen : 'all';
+    setAddress({ state: address.state, period: value }, 'replace');
+  }
+
+  /**
+   * `UI-B-52`: one move of a waiting job is one priority command, sent at once (a priority is a reversible setting, and the
+   * original applies a drop as it is made). Nothing is moved on the screen first: the list is read again after the server
+   * answers and shows where the job stands, so a refused or unknown move leaves the row where it was and says so.
+   */
+  async function reorder(item: ExecutionQueueItem, value: number, place: number | null) {
+    const what = `${item.document_name}, версия ${item.version_ordinal}`;
+    setReorderNote(`Перемещаю задачу «${what}»: приоритет ${item.priority} → ${value}.`);
+    setCompleted(false);
+    try {
+      await priority.mutateAsync({ jobId: item.job_id, priority: value, idempotencyKey: newIdempotencyKey() });
+      setReorderNote(
+        `Задача «${what}» перемещена${place === null ? '' : ` на место ${place}`}: приоритет ${value}. Порядок определил сервер.`,
+      );
+    } catch (error) {
+      const failure = executionFailure(error, true);
+      setReorderNote(
+        failure.kind === 'unknown_outcome'
+          ? `Исход перемещения задачи «${what}» неизвестен. Очередь прочитана заново: посмотрите её порядок и повторите перемещение, если задача не сдвинулась.`
+          : `Сервер не принял перемещение задачи «${what}»: ${failure.detail} Задача осталась на прежнем месте.`,
+      );
+      void queue.refetch();
+    }
   }
 
   function select(nextIntent: NewIntent) {
@@ -144,10 +201,16 @@ export function QueuePage() {
     <PageShell
       title="Очередь"
       subtitle="Устойчивые задачи прогонов. Данные обновляются автоматически, пока вкладка открыта, и по запросу."
-      actions={<button className="am-button am-button--quiet" type="button" onClick={() => { void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>}
+      actions={(
+        <>
+          {/* The original's «+ Добавить проекты»: work enters the queue from a project's documents, so the way there is one click. */}
+          <Link href={routes.projects()} title="Выберите проект и запустите аудит его документов" data-queue-add>+ Добавить проекты</Link>
+          <button className="am-button am-button--quiet" type="button" onClick={() => { void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>
+        </>
+      )}
     >
       <UpdateTime dataUpdatedAt={queue.dataUpdatedAt} failed={queue.isError} />
-      <p>
+      <div className={styles.toolbar}>
         <label>
           Состояние задачи{' '}
           <select
@@ -164,21 +227,28 @@ export function QueuePage() {
             })}
           </select>
         </label>
-        {queueOverviewLine(queue.data?.overview) === null ? null : (
-          <>{' '}<span className="am-note" data-queue-overview>{queueOverviewLine(queue.data?.overview)}</span></>
+        <label>
+          Период{' '}
+          <select name="queue-period" data-queue-period-filter value={period.value} onChange={(event) => choosePeriod(event.currentTarget.value)}>
+            {QUEUE_PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        {/* `UI-B-51`, `UI-B-69`: the original's «Активные / Завершённые / Ошибки» with their counts; a press sets the state filter above. */}
+        {queue.data?.overview === undefined ? null : (
+          <QueueStateStrip overview={queue.data.overview} selected={stateFilter} onSelect={chooseState} />
         )}
-      </p>
+        {account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
+          <button
+            type="button"
+            className="am-button am-button--quiet am-button--small"
+            disabled={busy}
+            onClick={() => select({ kind: 'pause', paused: !queue.data.paused })}
+          >
+            {queue.data.paused ? 'Возобновить выдачу' : 'Приостановить выдачу'}
+          </button>
+        ) : null}
+      </div>
       {queue.data?.paused === true ? <p role="status" className="am-note" data-execution-paused>Выдача задач приостановлена.</p> : null}
-      {account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
-        <button
-          type="button"
-          className="am-button am-button--quiet"
-          disabled={busy}
-          onClick={() => select({ kind: 'pause', paused: !queue.data.paused })}
-        >
-          {queue.data.paused ? 'Возобновить выдачу' : 'Приостановить выдачу'}
-        </button>
-      ) : null}
       {account.isPending ? <LoadingState what="права на управление очередью" /> : null}
       {accountFailure !== null ? (
         <div data-execution-account-failure={accountFailure.kind}>
@@ -205,11 +275,13 @@ export function QueuePage() {
             roles={roles}
             asOf={asOf}
             busy={busy}
-            filtered={stateFilter !== ''}
+            filtered={stateFilter !== '' || period.from !== undefined}
             workerOf={(runId) => runWorker(workers.data, workers.error !== null, runId)}
             onCancel={(item) => select({ kind: 'cancel', item })}
             onReaudit={(item) => select({ kind: 'reaudit', item })}
             onPriority={(item, value) => select({ kind: 'priority', item, priority: value })}
+            onReorder={(item, value, place) => void reorder(item, value, place)}
+            reorderNote={reorderNote}
             onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
             onNext={next === null ? null : () => setCursors((current) => [...current, next])}
           />

@@ -390,6 +390,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listVersionPortalBlocks": _PRODUCT_READ,
         # `UI-PARITY-P0O`: the sheet of each page, from the same geometry.
         "listVersionSheetLabels": _PRODUCT_READ,
+        # `UI-PARITY-C6`: which portal blocks hold a finding's evidence.
+        "listRunFindingBlocks": _PRODUCT_READ,
         "streamVersionPortalBlockCrop": _PRODUCT_READ,
         "listVersions": _PRODUCT_READ,
         "listRuns": _PRODUCT_READ,
@@ -629,6 +631,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listOptimisationProposals": _PRODUCT_READ,
         "listProposalDecisions": _PRODUCT_READ,
         "exportOptimisationProposalsCsv": _PRODUCT_READ,
+        # `UI-B-27` (contract 1.35.0): the accepted list is a product read like the journal.
+        "listAcceptedOptimisationProposals": _PRODUCT_READ,
+        # `UI-B-15`: the workbook of a pass's proposals is a product download like the CSV.
+        "exportOptimisationProposalsXlsx": _PRODUCT_READ,
         # `W63-SECTION-FORM7-01`. A read of current versions' rows across projects.
         "getSectionSpecification": _PRODUCT_READ,
         # `NORM-REFS-RUN-01`. The norms a run's saved text cites, read per request; writes nothing.
@@ -660,6 +666,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "correctVersionClassification": _EXPERT,
         "cancelRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
+        # `R-151i`: a new run that continues an earlier one; the same hands as a re-audit.
+        "startRunFromStage": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "appendDecision": _EXPERT,
         # `W59-DECISION-CARRYOVER-01`. A carried decision is a verdict like any other: only an
         # expert confirms it, and the command re-reads the role set in its own transaction.
@@ -682,6 +690,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # commands re-read the role set in their own transaction.
         "startOptimisationPass": _EXPERT,
         "decideOptimisationProposal": _EXPERT,
+        # `UI-B-15`: loading edited decisions back appends decisions, so it is an expert's act like `decideOptimisationProposal`.
+        "importOptimisationProposalDecisions": _EXPERT,
+        # `UI-B-14` (contract 1.37.0): carrying decisions over from an earlier version appends decisions, an expert's act.
+        "carryOverProposalDecisions": _EXPERT,
         "exportRunCsv": _EXPERT_OR_VIEWER,
         # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook is the CSV's sibling: the same role.
         "exportRunXlsx": _EXPERT_OR_VIEWER,
@@ -699,6 +711,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "restoreUser": _ADMIN,
         "purgeUser": _ADMIN,
         "resetUserPassword": _ADMIN,
+        # Contract 1.36.0 (`UI-A-93`, `UI-A-94`): ending an account's sessions and reading the access journal are an
+        # administrator's, like every other account operation.
+        "endUserSessions": _ADMIN,
+        "listAuthEvents": _ADMIN,
         "setJobPriority": _ADMIN,
         "setExecutionPaused": _ADMIN,
         "setWorkerIntake": _ADMIN,

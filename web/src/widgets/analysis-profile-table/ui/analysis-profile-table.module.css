@@ -1,14 +1,31 @@
 /* «Настройки анализа» (`W59-ANALYSIS-SETTINGS-01`). Consumes the global tokens only. */
 
+.heading {
+  margin: 0 0 var(--am-gap-xs);
+  font-size: var(--am-text-lg);
+}
+
+.count {
+  margin: 0 0 var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
 .frame {
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
 }
 
+.frame:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: -2px;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
+  font-size: var(--am-text-sm);
 }
 
 .cell {
@@ -21,6 +38,15 @@
 
 .section span {
   font-weight: normal;
+}
+
+/*
+ * The badge says "черновик, требует экспертной проверки": on a phone the global badge wraps its words, and a row of one line
+ * became four. It stays on its line and the table scrolls in its region instead.
+ */
+.state :global(.am-badge) {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .details summary {

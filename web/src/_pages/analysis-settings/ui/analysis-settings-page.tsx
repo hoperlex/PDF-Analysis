@@ -31,20 +31,20 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
   return (
     <PageShell
       title="Настройки анализа"
-      subtitle="Профиль анализа каждого раздела: с ним сервер выполняет прогон версии, раздел которой подтвердил эксперт. Профили экран только показывает — изменить их здесь нельзя. Пресеты запуска — сохранённый выбор исполнителя для прогона."
+      subtitle="Профиль анализа каждого раздела, с которым сервер выполняет прогон, и пресеты запуска. Профили здесь только показываются, изменить их нельзя."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void profiles.refetch()}>Обновить</button>}
     >
       <div className={styles.stack}>
-        <section className={styles.panel} aria-label="Состояние анализа АР v3">
+        <section className={styles.panel} role="region" aria-label="Состояние анализа АР v3" tabIndex={0}>
           <ArV3BetaStatus />
         </section>
-        <section className={styles.panel} aria-label="Пакет анализа АР v3">
+        <section className={styles.panel} role="region" aria-label="Пакет анализа АР v3" tabIndex={0}>
           <ArV3BetaPack />
         </section>
-        <section className={styles.panel} aria-label="Разбор анализа АР v3">
+        <section className={styles.panel} role="region" aria-label="Разбор анализа АР v3" tabIndex={0}>
           <ArV3BetaReview groupId={groupId} />
         </section>
-        <section className={styles.panel} aria-label="Пресеты запуска">
+        <section className={styles.panel} role="region" aria-label="Пресеты запуска" tabIndex={0}>
           <AnalysisPresets roles={me.data?.roles ?? []} />
         </section>
       </div>
@@ -60,7 +60,8 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
         </div>
       ) : null}
       {profiles.data !== undefined && failure === null ? (
-        <div className={styles.panel}>
+        // The table keeps its own region Tab reaches, so this box does not scroll a second time.
+        <div className={`${styles.panel} ${styles.flush}`}>
           <AnalysisProfileTable items={profiles.data.items} />
         </div>
       ) : null}

@@ -25,8 +25,12 @@ import {
 } from '@/entities/optimisation-proposal';
 import { ProposalDecisionForm } from '@/features/decide-optimisation-proposal';
 
+import { PROPOSAL_LAYOUTS, PROPOSAL_LAYOUT_LABELS } from '../model/layout';
+import type { ProposalLayout } from '../model/layout';
 import styles from './optimisation-proposals.module.css';
-import { ProposalCard, ProposalHistoryView } from './proposal-card';
+import { ProposalCard, ProposalHistoryView, namedPage } from './proposal-card';
+import { ProposalSheetBlocks } from './proposal-sheet-blocks';
+import { ProposalTable } from './proposal-table';
 
 export interface DecisionFilterProps {
   readonly selected: ProposalDecisionState | null;
@@ -56,6 +60,33 @@ export function DecisionFilter({ selected, counts, total, onSelect }: DecisionFi
           onClick={() => onSelect(state)}
         >
           {DECISION_STATE_LABELS[state]} ({counts[state]})
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+export interface LayoutSwitchProps {
+  readonly selected: ProposalLayout;
+  readonly onSelect: (layout: ProposalLayout) => void;
+}
+
+/**
+ * `UI-B-06`: «Карточки» and «Таблица», the two ways the same page of proposals is drawn. The choice is the screen's address
+ * (`?layout=`), written by the container; this draws the two buttons from state already in hand.
+ */
+export function LayoutSwitch({ selected, onSelect }: LayoutSwitchProps) {
+  return (
+    <nav className={styles.filters} aria-label="Раскладка предложений" data-proposal-layout={selected}>
+      {PROPOSAL_LAYOUTS.map((layout) => (
+        <button
+          key={layout}
+          type="button"
+          className={selected === layout ? 'am-button' : 'am-button am-button--quiet'}
+          aria-pressed={selected === layout}
+          onClick={() => onSelect(layout)}
+        >
+          {PROPOSAL_LAYOUT_LABELS[layout]}
         </button>
       ))}
     </nav>
@@ -166,8 +197,21 @@ export interface ProposalListViewProps {
   /** Draw the controls of one proposal; the container passes the live form. */
   readonly controlsFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
   readonly historyFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
+  /** `UI-B-09`: the block strip of the sheet a proposal names; the container passes the live one. */
+  readonly blocksFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
   /** `UI-B-09`: the pass's version PDF; absent, the cards offer no «Открыть лист». */
   readonly sheet?: SheetDocument | undefined;
+  /**
+   * `UI-B-05`/`UI-B-16`: the pass's actions (the export, the import of decisions). The original puts its counts by
+   * decision and its buttons in one strip above the table; they stand beside the decision filter here.
+   */
+  readonly actions?: ReactNode;
+  /** The pass's facts, between the strip and the proposals (`UI-B-05`). */
+  readonly summary?: ReactNode;
+  /** `UI-B-06`: how the page is drawn; «Карточки» when absent. */
+  readonly layout?: ProposalLayout | undefined;
+  /** `UI-B-06`: the reader chose a layout. Absent, the strip offers no switch. */
+  readonly onLayout?: ((layout: ProposalLayout) => void) | undefined;
 }
 
 export function ProposalListView({
@@ -177,17 +221,27 @@ export function ProposalListView({
   onPage,
   controlsFor,
   historyFor,
+  blocksFor,
   sheet,
+  actions,
+  summary,
+  layout = 'cards',
+  onLayout,
 }: ProposalListViewProps) {
   const pass = page.optimisation_pass;
   return (
     <div data-proposal-list={page.total}>
-      <DecisionFilter
-        selected={page.decision}
-        counts={pass.decision_counts}
-        total={pass.proposal_count}
-        onSelect={onDecision}
-      />
+      <div className={styles.strip}>
+        <DecisionFilter
+          selected={page.decision}
+          counts={pass.decision_counts}
+          total={pass.proposal_count}
+          onSelect={onDecision}
+        />
+        {onLayout === undefined ? null : <LayoutSwitch selected={layout} onSelect={onLayout} />}
+        {actions ?? null}
+      </div>
+      {summary ?? null}
       {sheet === undefined ? null : <SheetDocumentNote sheet={sheet} />}
       {page.items.length === 0 ? (
         <EmptyState
@@ -202,6 +256,15 @@ export function ProposalListView({
               : 'Выберите другое состояние или «Все».'
           }
         />
+      ) : layout === 'table' ? (
+        <ProposalTable
+          items={page.items}
+          canDecide={canDecide}
+          controlsFor={controlsFor}
+          historyFor={historyFor}
+          blocksFor={blocksFor}
+          documentUrl={sheet?.url ?? null}
+        />
       ) : (
         page.items.map((proposal) => (
           <ProposalCard
@@ -209,6 +272,7 @@ export function ProposalListView({
             proposal={proposal}
             controls={canDecide ? (controlsFor?.(proposal) ?? null) : null}
             history={historyFor?.(proposal) ?? null}
+            blocks={blocksFor?.(proposal) ?? null}
             documentUrl={sheet?.url ?? null}
           />
         ))
@@ -245,10 +309,27 @@ export interface ProposalListProps {
   readonly onPage: ((offset: number) => void) | null;
   /** `UI-B-09`: the pass's version PDF; the container reads it once for every card. */
   readonly sheet?: SheetDocument | undefined;
+  /** The pass's export and import, beside the decision filter (`UI-B-05`). */
+  readonly actions?: ReactNode;
+  /** The pass's facts, between the strip and the proposals (`UI-B-05`). */
+  readonly summary?: ReactNode;
+  /** `UI-B-06`: how the page is drawn, and the reader's choice of it. */
+  readonly layout?: ProposalLayout | undefined;
+  readonly onLayout?: ((layout: ProposalLayout) => void) | undefined;
 }
 
 /** The live list: decision forms for an expert and a lazily read history under each card. */
-export function ProposalList({ page, canDecide, onDecision, onPage, sheet }: ProposalListProps) {
+export function ProposalList({
+  page,
+  canDecide,
+  onDecision,
+  onPage,
+  sheet,
+  actions,
+  summary,
+  layout,
+  onLayout,
+}: ProposalListProps) {
   return (
     <ProposalListView
       page={page}
@@ -256,10 +337,22 @@ export function ProposalList({ page, canDecide, onDecision, onPage, sheet }: Pro
       onDecision={onDecision}
       onPage={onPage}
       sheet={sheet}
+      actions={actions}
+      summary={summary}
+      layout={layout}
+      onLayout={onLayout}
       controlsFor={(proposal) => (
         <ProposalDecisionForm passId={page.optimisation_pass.optimisation_pass_id} proposal={proposal} />
       )}
       historyFor={(proposal) => <ProposalHistory proposal={proposal} />}
+      blocksFor={(proposal) => {
+        // A proposal that names no page has no sheet to show the blocks of.
+        const sheetPage = namedPage(proposal);
+        const pass = page.optimisation_pass;
+        return sheetPage === null ? null : (
+          <ProposalSheetBlocks projectUid={pass.project_uid} versionUid={pass.version_uid} page={sheetPage} />
+        );
+      }}
     />
   );
 }

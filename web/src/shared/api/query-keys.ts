@@ -95,6 +95,8 @@ export const QUERY_NAMESPACES = [
   'analysis',
   'assignments',
   'optimisation',
+  // `UI-PARITY-P0P`: «График работ», one root so a schedule command refreshes the month and the reserve.
+  'work-schedule',
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
@@ -116,6 +118,12 @@ export interface DecisionJournalFilters {
 /** Filters that make a page of `listUsers` a distinct cache entry. */
 export interface UserListFilters {
   readonly includeArchived?: boolean;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+/** Filters that make a page of `listAuthEvents` (the access journal, `UI-A-94`) a distinct cache entry. */
+export interface AuthEventListFilters {
   readonly cursor?: string;
   readonly limit?: number;
 }
@@ -205,6 +213,21 @@ export const queryKeys = {
     ) => ['optimisation', 'proposals', passId, { decision, offset, limit }] as const,
     proposalDecisions: (proposalId: OptimisationProposalId) =>
       ['optimisation', 'proposal-decisions', proposalId] as const,
+    /** Every proposal's history: what a workbook loaded back (`UI-B-15`) may have appended to many proposals at once. */
+    allProposalDecisions: () => ['optimisation', 'proposal-decisions'] as const,
+    /**
+     * `UI-B-27` (contract 1.35.0): one page of `listAcceptedOptimisationProposals`, by its filters. A decision on any
+     * proposal can add a row or take one away, so a decision invalidates the whole `allAccepted` prefix.
+     */
+    accepted: (
+      filters: {
+        readonly project_uid?: ProjectUid;
+        readonly section_code?: ProjectSection;
+        readonly cursor?: string;
+        readonly limit?: number;
+      } = {},
+    ) => ['optimisation', 'accepted', filters] as const,
+    allAccepted: () => ['optimisation', 'accepted'] as const,
     /**
      * One page of `getSectionSpecification` (`W63-SECTION-FORM7-01`): a section's combined
      * Form-7 specification across projects. The section is a filter, the project filter and
@@ -298,6 +321,14 @@ export const queryKeys = {
     journal: (runId?: RunId, cursor?: string) =>
       ['execution', 'journal', { runId, cursor }] as const,
     /**
+     * The side menu's counters over the queue (`D-350`, `D-331`): `listExecutionQueue` read with `limit: 1`, because the
+     * figure is the page's `overview` and not its rows. `all` is the whole history (the jobs still open, whenever they were
+     * accepted), `last-day` the jobs accepted in the last 24 hours (the failures that make the red badge). A key of its own:
+     * the queue screen's pages (above) hold 25 rows with their ETA, which a counter read on every screen does not need.
+     * Under `execution`, so every command that changes the queue (`execution.all()`) refreshes it.
+     */
+    queueCount: (period: 'all' | 'last-day') => ['execution', 'queue-count', period] as const,
+    /**
      * `getExecutionDispatch` (`UI-PARITY-P0E`, `R-151f`): the installation's pause state, read by the top
      * strip on every screen. Under `execution`, so pausing or resuming (which invalidates `execution.all`)
      * refreshes it at once.
@@ -341,9 +372,12 @@ export const queryKeys = {
      */
     documents: (
       projectUid: ProjectUid, cursor?: string, limit?: number, sectionCode?: string, archived?: boolean, tag?: string,
+      auditState?: string, order?: string,
     ) =>
       ['projects', 'documents', projectUid, {
         cursor, limit, section: sectionCode, archived: archived === true ? true : undefined, tag,
+        // `UI-PARITY-DOC-AUDIT`: the audit filter and order change the listing, so they are part of its key.
+        audit: auditState, order,
       }] as const,
     /** `R-151e`: the project's tag catalogue (`listDocumentTags`). Under `projects`, so a tag change re-reads it. */
     tags: (projectUid: ProjectUid) => ['projects', 'tags', projectUid] as const,
@@ -460,6 +494,8 @@ export const queryKeys = {
       ['runs', 'list', versionUid, { cursor, limit }] as const,
     findings: (runId: RunId, filters: FindingListFilters = {}) =>
       ['runs', 'findings', runId, filters] as const,
+    /** `UI-PARITY-C6`: the portal blocks that hold each of the run's findings (`listRunFindingBlocks`). */
+    findingBlocks: (runId: RunId) => ['runs', 'finding-blocks', runId] as const,
     /**
      * `getRunNormReferences` (`NORM-REFS-RUN-01`): the norms one run's saved text cites,
      * checked against the snapshot that run pinned. Under `runs` so that
@@ -561,6 +597,12 @@ export const queryKeys = {
     all: () => ['users'] as const,
     list: (filters: UserListFilters = {}) => ['users', 'list', filters] as const,
     detail: (userUid: UserUid) => ['users', 'detail', userUid] as const,
+    /**
+     * `listAuthEvents` (contract 1.36.0): the access journal. Under `users` and not a root of its own, because what
+     * writes it is an act on an account (a sign-in, a reset, ending the sessions), so a user command that
+     * invalidates `users.all()` refreshes the journal with it.
+     */
+    authEvents: (filters: AuthEventListFilters = {}) => ['users', 'auth-events', filters] as const,
   },
   /**
    * `listRegistrations` — the requests waiting for, or past, an administrator's decision

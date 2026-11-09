@@ -110,12 +110,21 @@ Then install and apply:
 ```bash
 install -m 0644 "$WORK/out/pack.json" infra/deploy/ar-v3-pack/pack.json   # readable by uid 10001; the directory is bind-mounted read-only at /run/ar-v3 in api AND worker
 #   in infra/deploy/env/alpha.env:   AR_V3_BETA_PACK_MANIFEST=/run/ar-v3/pack.json
+#   AND, only when starts should be allowed (`AR-V3-OPT-IN`):   AR_V3_BETA_START_ALLOWED=1   (blank or 0 keeps v3 un-startable)
 $DC up -d --no-deps api worker        # NOT «restart»: see below
 $DC ps api worker                     # both running, freshly created
 $DC exec -T api python -m auditmanager.runs.v3_pack_cli verify --manifest /run/ar-v3/pack.json
 ```
 
 **`docker compose restart` re-reads no environment**: a container's environment is fixed when it is created, and `restart` re-creates nothing, so after editing `alpha.env` only `up -d` (which recreates a service whose configuration changed) applies the variable; the same holds for removing it in the rollback below. A manifest the server refuses stops the container with `ConfigurationError: AR_V3_BETA_PACK_MANIFEST names a reviewed-pack manifest the server refuses: <reason>` (`AR-V3-BETA-PACK-INSTALL-01.md` section «Operator runbook», step 5); read `$DC logs api worker`, correct the file, run `up -d` again. Then open «Настройки анализа»: the pack panel must show the six scopes and the attestation exactly as sealed (the system displays it verbatim and states that it does not check it).
+
+### Stop new starts without withdrawing the pack (`AR-V3-OPT-IN`)
+
+Installing the pack is the capability to execute, read and review; **starting** needs the separate permission `AR_V3_BETA_START_ALLOWED=1` (read by `api` only; blank or `0`, the default, refuses every start and every price of a group with `409 conflict / ar_v3_start_not_enabled`, and the form offers the imported analysis only). To stop v3 **to stop new starts, switch the permission off; withdraw the pack only when no v3 run is in flight**:
+
+1. Set `AR_V3_BETA_START_ALLOWED` blank or `0` in `infra/deploy/env/alpha.env`; apply it with `$DC up -d --no-deps api` — **not** `restart`, which re-reads no environment, and **not** `worker`: the worker does not read the variable, so it keeps executing what was accepted.
+2. What this does: new starts and estimates refuse; a retry of an **accepted** key still replays its group; runs queued or running **finish**; the group review, findings, verdicts and exports are unchanged (they read the database); the form loses the choice of AR v3 at its next read of the pack status (`start_allowed: false`).
+3. Where `EXECUTION_ROLE=all` the `api` process executes runs itself, so recreating it interrupts them as any restart does; look at «Очередь» first.
 
 ### Rollback (withdraw the pack)
 

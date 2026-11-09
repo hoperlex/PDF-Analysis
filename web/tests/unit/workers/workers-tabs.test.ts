@@ -14,24 +14,27 @@ import {
 import { WorkersTabs } from '@/_pages/workers/ui/workers-tabs';
 
 describe('the tabs', () => {
-  it('are «Подключения», «Процессы», «Группы», «Правила», «Назначения», in that order, and open on «Процессы»', () => {
+  it('are «Обзор», «Подключения», «Процессы», «Группы», «Правила», «Назначения», in that order, and open on «Обзор»', () => {
     // `EXEC2-WEB-GROUPS-01` adds «Группы» and «Правила»; «Назначения» stays last as the legacy editor and history.
-    expect([...WORKERS_TABS]).toEqual(['connections', 'processes', 'groups', 'rules', 'routes']);
-    expect(WORKERS_TABS.map((tab) => WORKERS_TAB_LABELS[tab])).toEqual(['Подключения', 'Процессы', 'Группы', 'Правила', 'Назначения']);
-    expect(DEFAULT_WORKERS_TAB).toBe('processes');
+    // UI-B-63 puts «Обзор» first; the second UX pass (2026-11-07) makes it the one the screen opens on, as the original's dispatcher does.
+    expect([...WORKERS_TABS]).toEqual(['overview', 'connections', 'processes', 'groups', 'rules', 'routes']);
+    expect(WORKERS_TABS.map((tab) => WORKERS_TAB_LABELS[tab])).toEqual(['Обзор', 'Подключения', 'Процессы', 'Группы', 'Правила', 'Назначения']);
+    expect(DEFAULT_WORKERS_TAB).toBe('overview');
     expect(WORKERS_TAB_PARAM).toBe('tab');
   });
 
   it('are recognised by exact name only', () => {
     expect(isWorkersTab('routes')).toBe(true);
+    expect(isWorkersTab('overview')).toBe(true);
     for (const other of ['', 'Routes', 'route', 'workers', null, undefined, 3]) expect(isWorkersTab(other)).toBe(false);
   });
 
   it('move with the arrow keys, wrapping at the ends, and with Home and End', () => {
     expect(tabAfterKey('connections', 'ArrowRight')).toBe('processes');
-    expect(tabAfterKey('routes', 'ArrowRight')).toBe('connections');
-    expect(tabAfterKey('connections', 'ArrowLeft')).toBe('routes');
-    expect(tabAfterKey('processes', 'Home')).toBe('connections');
+    expect(tabAfterKey('routes', 'ArrowRight')).toBe('overview');
+    expect(tabAfterKey('overview', 'ArrowLeft')).toBe('routes');
+    expect(tabAfterKey('connections', 'ArrowLeft')).toBe('overview');
+    expect(tabAfterKey('processes', 'Home')).toBe('overview');
     expect(tabAfterKey('processes', 'End')).toBe('routes');
     expect(tabAfterKey('processes', 'Enter')).toBeNull();
     expect(tabAfterKey('processes', 'a')).toBeNull();

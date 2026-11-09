@@ -216,13 +216,25 @@ describe('the section', () => {
     expect(text(markup)).toContain('она не создаёт замечаний');
   });
 
+  it('says the rule in a line and folds the long explanation, and draws the table in a focusable, named region', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.normReferences(RUN), answer());
+    const markup = renderScreen(client, createElement(NormReferencesSection, { runId: RUN }));
+    expect(markup).toMatch(/<details[^>]*data-norm-references-about=""[^>]*><summary>Что это за список<\/summary>/);
+    expect(text(markup)).toContain('Справка: замечаний она не создаёт.');
+    expect(markup).toMatch(/<div[^>]*role="region"[^>]*aria-label="Нормативные ссылки, таблица"[^>]*tabindex="0"/);
+    // A state with no table draws no region.
+    const stopped = render({ run_id: RUN, version_uid: VERSION, state: 'text_unavailable', page_count: 8 });
+    expect(stopped).not.toContain('role="region"');
+  });
+
   it('says a failure with its correlation id and a retry', () => {
     const client = newClient();
     seedError(
       client,
       queryKeys.runs.normReferences(RUN),
       new ApiError(404, {
-        contract_version: '1.33.0', error_code: 'not_found', message: 'Нет такого прогона.',
+        contract_version: '1.42.0', error_code: 'not_found', message: 'Нет такого прогона.',
         correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false,
       }, '0f0e9d8c-7b6a-4948-b726-150413021100'),
     );

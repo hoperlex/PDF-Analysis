@@ -27,7 +27,7 @@
 
 import { useState } from 'react';
 
-import type { FindingObservationId, Severity, Verdict } from '@/shared/api';
+import type { DecisionCarriedFrom, FindingObservationId, Severity, Verdict } from '@/shared/api';
 import { SEVERITY_VALUES } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState } from '@/shared/ui';
@@ -35,7 +35,7 @@ import type { CommentRefusal } from '@/features/append-comment';
 import { commentRefusalMessage } from '@/features/append-comment';
 import type { VerdictRefusal } from '@/features/record-verdict';
 import { verdictRefusalMessage } from '@/features/record-verdict';
-import { VerdictBadge } from '@/entities/expert-decision';
+import { CarriedMark, VerdictBadge } from '@/entities/expert-decision';
 import { SEVERITY_LABELS, SeverityBadge } from '@/entities/finding';
 
 import { chosenSeverity, draftFromControl } from '../model/severity-draft';
@@ -74,6 +74,11 @@ export interface DecisionPanelProps {
   readonly proposedSeverity?: Severity | undefined;
   /** The severity the expert decided, as the server's projection serves it. */
   readonly decidedSeverity?: Severity | undefined;
+  /**
+   * `UI-A-73`: where the decision that carries the current verdict came from, when an expert carried it over from an
+   * earlier version (`Finding.current_verdict_carried_from`); absent when it was decided directly.
+   */
+  readonly carriedFrom?: DecisionCarriedFrom | undefined;
   /** Set when the browser refused to send an accept; rendered on presence. */
   readonly severityRefusal?: VerdictRefusal | null | undefined;
   /**
@@ -96,6 +101,7 @@ export function DecisionPanel({
   refusal,
   proposedSeverity,
   decidedSeverity,
+  carriedFrom,
   severityRefusal,
   onSeverityChosen,
 }: DecisionPanelProps) {
@@ -105,11 +111,17 @@ export function DecisionPanel({
   const busy = pendingIntent !== undefined && pendingIntent !== null;
 
   return (
-    <section className="am-decision" data-observation-id={observationId}>
-      <header className="am-decision__header">
+    <section className={`am-decision ${styles.panel}`} data-observation-id={observationId}>
+      <header className={`am-decision__header ${styles.header}`}>
         <h3>Решение</h3>
         <span className="am-decision__current">
           текущий вердикт <VerdictBadge verdict={currentVerdict} />
+          {carriedFrom === undefined ? null : (
+            <>
+              {' '}
+              <CarriedMark carriedFrom={carriedFrom} />
+            </>
+          )}
           {decidedSeverity === undefined ? null : (
             <span className={styles.decided} data-decided-severity={decidedSeverity}>
               важность <SeverityBadge severity={decidedSeverity} title="Важность, решённая экспертом" />
@@ -160,7 +172,7 @@ export function DecisionPanel({
         </div>
       )}
 
-      <div className="am-decision__verdicts">
+      <div className={`am-decision__verdicts ${styles.verdicts}`}>
         <button
           type="button"
           className="am-button"
@@ -185,7 +197,7 @@ export function DecisionPanel({
         </button>
       </div>
 
-      <div className="am-decision__comment">
+      <div className={`am-decision__comment ${styles.comment}`}>
         <label htmlFor="am-decision-comment">Добавить комментарий</label>
         <textarea
           id="am-decision-comment"
@@ -219,7 +231,11 @@ export function DecisionPanel({
         ) : null}
       </div>
 
-      {error !== undefined && error !== null ? <ErrorState {...error} /> : null}
+      {error !== undefined && error !== null ? (
+        <div className={styles.full}>
+          <ErrorState {...error} />
+        </div>
+      ) : null}
     </section>
   );
 }

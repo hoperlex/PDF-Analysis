@@ -67,11 +67,11 @@ export function ArchiveGroupControl({ group }: ArchiveGroupControlProps) {
             Убрать группу «{group.display_name}» в архив насовсем? Новых версий, правил и прогонов на неё больше не
             будет. Работа, которую уже приняли на группу, дойдёт до конца. Группа не удаляется, а её название освободится.
           </p>
-          <button className="am-button" type="button" disabled={archive.isPending} onClick={() => void confirm()}>
+          <button className="am-button am-button--small" type="button" disabled={archive.isPending} onClick={() => void confirm()}>
             {failure?.kind === 'unknown_outcome' ? 'Повторить с тем же ключом' : 'Подтвердить архивирование'}
           </button>{' '}
           <button
-            className="am-button am-button--quiet"
+            className="am-button am-button--quiet am-button--small"
             type="button"
             disabled={archive.isPending}
             onClick={() => {
@@ -84,7 +84,7 @@ export function ArchiveGroupControl({ group }: ArchiveGroupControlProps) {
           </button>
         </div>
       ) : (
-        <button className="am-button am-button--quiet" type="button" onClick={() => setAsking(true)}>
+        <button className="am-button am-button--quiet am-button--small" type="button" onClick={() => setAsking(true)}>
           В архив
         </button>
       )}

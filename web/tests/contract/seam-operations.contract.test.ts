@@ -149,6 +149,8 @@ describe('the seam operations', () => {
       'cancelStageUpload',
       // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
       'carryOverDecision',
+      // `UI-B-14` (contract 1.37.0): the carried decisions of a pass are appended under one key.
+      'carryOverProposalDecisions',
       'clearComparisonLaunchQueue',
       'completeComparisonUploadFile',
       'completeStageUploadFile',
@@ -173,6 +175,8 @@ describe('the seam operations', () => {
       'decideOptimisationProposal',
       'deleteComparisonReport',
       'dequeueComparisonAiSheetChanges',
+      // `UI-A-93` (contract 1.36.0): ending an account's sessions is keyed, so an exact repeat ends nothing more.
+      'endUserSessions',
       'enqueueComparisonLaunch',
       'excludeComparisonUploadSet',
       'finishComparisonAiSheetChanges',
@@ -181,6 +185,9 @@ describe('the seam operations', () => {
       'generateComparisonSummary',
       'generateExecutorSshKey',
       'importComparisonZip',
+      // `UI-B-15` (contract 1.35.0): the decisions of a proposals workbook are appended under one key, like `importRunDecisions`.
+      'importOptimisationProposalDecisions',
+      'importRunDecisions',
       'issueExecutorEnrollment',
       // `EXEC-PULL-01`: issuing and revoking a runner token are administrator commands, keyed like
       // the other executor writes. The runner's own four operations (claim, extend, answer, fail)
@@ -200,6 +207,7 @@ describe('the seam operations', () => {
       'recomputeStageTextEvidence',
       'rejectStageUploadCandidate',
       'removeComparisonLaunchEntry',
+      'renameDocument',
       'requestExecutorProbe',
       'resumeComparisonAiPairCheck',
       'resumeComparisonAiSheetChanges',
@@ -216,14 +224,22 @@ describe('the seam operations', () => {
       'reviseExecutorGroup',
       'reviseStageAssembly',
       'revokeRunnerToken',
+      'scheduleAssignments',
+      'setDocumentArchived',
+      'setDocumentTags',
+      'setEngineerAbsences',
       'setExecutionPaused',
       'setExecutorIntegrationAuthorisation',
       'setExecutorRoute',
       'setExecutorRoutingMode',
       'setExecutorRoutingRule',
       'setExecutorSecret',
+      'setFindingExecutionStatus',
       'setJobPriority',
       'setStagePairCompleteness',
+      'setWorkCalendarDays',
+      'setWorkSchedulePlans',
+      'setWorkScheduleSettings',
       // `W54-SEAL-01`: the worker intake switch is keyed like the other execution controls.
       'setWorkerIntake',
       'startArV3BetaGroup',
@@ -236,6 +252,8 @@ describe('the seam operations', () => {
       'startComparisonSpecification',
       'startOptimisationPass',
       'startRun',
+      // `UI-PARITY-S2` (contract 1.42.0): a run started from a stage is a keyed expert command, like `reauditRun`.
+      'startRunFromStage',
       'startStageChainBatch',
       'startStageChainRun',
       'undoComparisonMatrixEdit',

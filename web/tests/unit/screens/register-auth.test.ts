@@ -17,6 +17,14 @@ describe('registration screens', () => {
     }
   });
 
+  it('starts on the first field, ties the password fields to their hint, and leads back to sign-in as the original does', () => {
+    const markup = render(createElement(RegisterPage));
+    expect(markup).toMatch(/<input[^>]*id="register-last"[^>]*autofocus=""/);
+    expect(markup).toContain('id="register-hint"');
+    expect(markup.match(/aria-describedby="register-hint"/g)).toHaveLength(1);
+    expect(markup).toMatch(/<a href="\/login">Вернуться ко входу<\/a>/);
+  });
+
   it.each(REGISTRATION_REFUSALS)('renders the typed %s refusal', (refusal) => {
     const markup = render(createElement(RegisterPage, { refusal }));
     expect(markup).toContain(`data-registration-refusal="${refusal}"`);

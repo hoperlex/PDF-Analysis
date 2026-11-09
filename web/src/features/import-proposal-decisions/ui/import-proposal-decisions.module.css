@@ -1,0 +1,42 @@
+/* `UI-B-15`: «Загрузить решения» beside the proposals’ exports. Tokens only. */
+.control {
+  display: grid;
+  gap: var(--am-gap-xs);
+  justify-items: start;
+}
+
+.pick {
+  position: relative;
+  cursor: pointer;
+}
+
+.pick[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/* The file input stays focusable and clickable over the whole label; the label is what is seen. */
+.input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.counts {
+  margin: 0;
+  font-size: var(--am-text-sm);
+  color: var(--am-ink-muted);
+}
+
+.refused {
+  margin: 0;
+  padding-left: var(--am-gap);
+  font-size: var(--am-text-sm);
+}
+
+.error {
+  margin: 0;
+  color: var(--am-failed);
+  font-size: var(--am-text-sm);
+}

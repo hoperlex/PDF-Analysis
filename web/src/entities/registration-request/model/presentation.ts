@@ -9,6 +9,21 @@ export const REGISTRATION_STATUS_LABELS: Readonly<Record<RegistrationStatus, str
   rejected: 'Отклонена',
 };
 
+/** The tone of a status badge (`UI-A-90`): a waiting request is amber, an approved one green, a rejected one red. */
+export const REGISTRATION_STATUS_TONES: Readonly<Record<RegistrationStatus, 'degraded' | 'ok' | 'failed'>> = {
+  pending: 'degraded',
+  approved: 'ok',
+  rejected: 'failed',
+};
+
+/** The filter chips of the queue: the original's tab says «Заявки (N)», here «Ожидают» says it and the others name what they hold. */
+export const REGISTRATION_FILTER_LABELS: Readonly<Record<RegistrationStatus | 'all', string>> = {
+  pending: 'Ожидают решения',
+  approved: 'Одобрены',
+  rejected: 'Отклонены',
+  all: 'Все',
+};
+
 export interface RegistrationFailure {
   readonly kind: string;
   readonly detail: string;

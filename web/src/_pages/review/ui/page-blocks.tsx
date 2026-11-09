@@ -17,11 +17,13 @@
  * one static pass draw the markup the screen draws.
  */
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 import type { PortalBlock, ProjectUid, VersionUid } from '@/shared/api';
 import { portalBlockCropUrl } from '@/shared/api';
-import { portalBlockTypeLabel, usePortalBlocks } from '@/entities/block';
+import { routes } from '@/shared/lib';
+import { RECOGNISED_MARKER, portalBlockTypeLabel, textExcerpt, usePortalBlocks } from '@/entities/block';
 import { PortalBlockViewer } from '@/widgets/portal-blocks';
 
 import { readPageBlocks } from '../model/page-blocks';
@@ -40,16 +42,30 @@ export interface PageBlocksStripProps {
   readonly onMore: () => void;
   readonly loadingMore: boolean;
   readonly moreFailed: boolean;
+  /**
+   * The version's whole «Блоки» tab, where the original's thumbnails lead (`/project/<id>/blocks`). Absent, the strip
+   * offers no way out, as the census and the unit suite draw it.
+   */
+  readonly blocksHref?: string | undefined;
 }
 
-function Thumb({
+/** A recognised text's beginning on a thumbnail that has no picture: a thumbnail is 112 px wide. */
+const THUMB_EXCERPT_LIMIT = 60;
+
+/**
+ * One block as a thumbnail. `excerpt` (the finding's own blocks, `UI-PARITY-C6`) shows a TEXT block's recognised text
+ * where it has no picture, marked as recognised; the page strip leaves it off and says «Без изображения».
+ */
+export function BlockThumb({
   block,
   versionUid,
   onOpen,
+  excerpt = false,
 }: {
   readonly block: PortalBlock;
   readonly versionUid: VersionUid;
   readonly onOpen: () => void;
+  readonly excerpt?: boolean | undefined;
 }) {
   // Per thumbnail and per mount: a crop that fails to load says so instead of a broken-image icon.
   const [failed, setFailed] = useState(false);
@@ -79,7 +95,13 @@ function Thumb({
             }}
           />
         ) : (
-          <span className={styles.thumbNote}>{failed ? 'Не загрузилось' : 'Без изображения'}</span>
+          <span className={styles.thumbNote}>
+            {failed
+              ? 'Не загрузилось'
+              : excerpt && block.recognised_text !== undefined
+                ? `${RECOGNISED_MARKER}: ${textExcerpt(block.recognised_text.text, THUMB_EXCERPT_LIMIT)}`
+                : 'Без изображения'}
+          </span>
         )}
       </span>
       <span className={styles.thumbType}>{typeLabel}</span>
@@ -87,7 +109,7 @@ function Thumb({
   );
 }
 
-export function PageBlocksStrip({ reading, versionUid, onOpen, onMore, loadingMore, moreFailed }: PageBlocksStripProps) {
+export function PageBlocksStrip({ reading, versionUid, onOpen, onMore, loadingMore, moreFailed, blocksHref }: PageBlocksStripProps) {
   if (reading.kind === 'unreadable') {
     return (
       <p className={`${styles.note} ${styles.alone}`} data-page-blocks="unreadable">
@@ -108,6 +130,14 @@ export function PageBlocksStrip({ reading, versionUid, onOpen, onMore, loadingMo
     >
       <h3 className={styles.title}>
         {reading.kind === 'blocks' ? `Блоки страницы ${reading.page} (${blocks.length})` : `Блоки страницы ${reading.page}`}
+        {blocksHref === undefined ? null : (
+          <>
+            {' '}
+            <Link className={styles.all} href={blocksHref} data-page-blocks-all="">
+              Все блоки версии →
+            </Link>
+          </>
+        )}
       </h3>
       {blocks.length === 0 ? null : (
         <>
@@ -116,7 +146,7 @@ export function PageBlocksStrip({ reading, versionUid, onOpen, onMore, loadingMo
               // The portal's id is an external identifier: a key here and nothing else. The position keeps a
               // block a server repeated across a cursor from colliding.
               <li key={`${at}:${block.portal_block_id}`} className={styles.item}>
-                <Thumb
+                <BlockThumb
                   block={block}
                   versionUid={versionUid}
                   onOpen={() => {
@@ -182,6 +212,7 @@ export function ReviewPageBlocks({ projectUid, versionUid, page, initialOpen, st
         onMore={() => void query.fetchNextPage()}
         loadingMore={query.isFetchingNextPage}
         moreFailed={query.isFetchNextPageError}
+        blocksHref={routes.versionBlocks(projectUid, versionUid)}
       />
       {openAt === null || walk[openAt] === undefined ? null : (
         <PortalBlockViewer

@@ -37,6 +37,8 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.decisions.carryover import CarriedOrigin
+
 __all__ = ["JournalEntry", "decision_journal"]
 
 #: Newest first, and the order is part of what this module returns rather than a detail of
@@ -92,7 +94,11 @@ _JOURNAL = text(
         o.category,
         o.finding_text,
         v.current_verdict,
-        v.decision_event_count
+        v.decision_event_count,
+        cs.decision_id AS carried_decision_id,
+        cs.finding_uid AS carried_finding_uid,
+        cf.version_uid AS carried_version_uid,
+        cv.version_ordinal AS carried_version_ordinal
     FROM expert_decision_event e
     JOIN finding f ON f.finding_uid = e.finding_uid
     JOIN finding_observation o ON o.finding_observation_id = e.finding_observation_id
@@ -101,6 +107,9 @@ _JOURNAL = text(
     JOIN document_version dv ON dv.version_uid = f.version_uid
     JOIN document d ON d.document_uid = dv.document_uid
     LEFT JOIN version_classification_current c ON c.version_uid = f.version_uid
+    LEFT JOIN expert_decision_event cs ON cs.decision_id = e.carried_from_decision_id
+    LEFT JOIN finding cf ON cf.finding_uid = cs.finding_uid
+    LEFT JOIN document_version cv ON cv.version_uid = cf.version_uid
     WHERE (CAST(:category AS text) IS NULL OR o.category = CAST(:category AS text))
       AND (CAST(:verdict AS text) IS NULL OR v.current_verdict = CAST(:verdict AS text))
       AND (CAST(:project_uid AS text) IS NULL OR f.project_uid = CAST(:project_uid AS text))
@@ -148,6 +157,9 @@ class JournalEntry:
     severity: str | None = None
     #: The version's confirmed section code, or ``None`` for a version no expert has classified.
     section: str | None = None
+    #: `UI-A-73` (migration ``0058``): where a carried event came from, or ``None`` for an event made directly (and for
+    #: every event written before the migration).
+    carried_from: CarriedOrigin | None = None
 
 
 def decision_journal(
@@ -212,6 +224,12 @@ def decision_journal(
             finding_text=row["finding_text"],
             current_verdict=row["current_verdict"],
             decision_event_count=row["decision_event_count"],
+            carried_from=(
+                None if row["carried_decision_id"] is None else CarriedOrigin(
+                    decision_id=row["carried_decision_id"], finding_uid=row["carried_finding_uid"],
+                    version_uid=row["carried_version_uid"], version_ordinal=int(row["carried_version_ordinal"]),
+                )
+            ),
         )
         for row in rows
     )

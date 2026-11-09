@@ -2,13 +2,15 @@
 
 /**
  * The decision controls of one proposal (`W60-OPT-PROPOSALS-01`): «Принять», «Отклонить» and
- * «На доработку», with a comment that «На доработку» requires.
+ * «На доработку», with a comment that «На доработку» requires, and «Снять решение» (`UI-B-12`).
  *
  * Offered to an expert only (an administrator reads the decisions and does not make them,
  * `R-60`); the API checks again. A decision is appended, never changed: pressing a verdict
  * again adds a new event, and the proposal shows the latest. The button of the verdict that
  * is already current, with the same comment, is disabled — pressing it would only append a
- * duplicate.
+ * duplicate. «Снять решение» appends a withdrawal, which takes the proposal back to «не решено»
+ * and keeps the decision it withdrew in the history; it is offered only while a decision is in
+ * force, and its comment is optional.
  */
 
 import { useState } from 'react';
@@ -21,6 +23,11 @@ import { COMMENT_REQUIRED_TEXT, VERDICT_LABELS, decideFailureMessage } from '@/e
 import { useDecideOptimisationProposal } from '../model/use-decide-optimisation-proposal';
 
 const VERDICTS: readonly ProposalVerdict[] = ['accept', 'reject', 'revise'];
+
+/** Whether a decision is in force on the proposal: the latest event exists and is not a withdrawal. */
+export function decisionInForce(current: OptimisationProposal['current_decision']): boolean {
+  return current !== null && current.verdict !== 'revoke';
+}
 
 /** The comment as it is sent: trimmed, `null` when empty. */
 export function normalisedComment(text: string): string | null {
@@ -60,7 +67,7 @@ export function ProposalDecisionFormView({
         value={comment}
         onChange={(event) => onComment(event.target.value)}
       />
-      <p className="am-form__hint">Для решения «На доработку» комментарий обязателен.</p>
+      <p className="am-form__hint">Для решения «На доработку» комментарий обязателен, для остальных — нет.</p>
       <div className="am-form__row">
         {VERDICTS.map((verdict) => {
           const repeats = current !== null && current.verdict === verdict && current.comment === sent;
@@ -69,7 +76,7 @@ export function ProposalDecisionFormView({
             <button
               key={verdict}
               type="button"
-              className={verdict === 'accept' ? 'am-button' : 'am-button am-button--quiet'}
+              className={verdict === 'accept' ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
               disabled={pending || repeats || blocked}
               aria-pressed={current !== null && current.verdict === verdict}
               onClick={() => onDecide(verdict)}
@@ -78,6 +85,16 @@ export function ProposalDecisionFormView({
             </button>
           );
         })}
+        {/* `UI-B-12`: appended like any decision; offered while one is in force. */}
+        <button
+          type="button"
+          className="am-button am-button--quiet am-button--small"
+          disabled={pending || !decisionInForce(current)}
+          data-revoke-decision={proposalId}
+          onClick={() => onDecide('revoke')}
+        >
+          {VERDICT_LABELS.revoke}
+        </button>
       </div>
       {reviseWithoutComment ? (
         <p className="am-form__hint" data-revise-hint="">
