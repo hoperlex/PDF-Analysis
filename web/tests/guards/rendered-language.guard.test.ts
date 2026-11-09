@@ -4588,19 +4588,6 @@ const TRANSLATED_SCHEMAS = [
   'ComparisonReportUnitMark',
   'ComparisonLaunchQueueState',
   'ComparisonLaunchEntryState',
-  // `HOSTS-WEB-01` (ADR-0028): «Исполнители» and «Модели по этапам» say a server's state, a model's availability, the access, the
-  // effort and the row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. Two of them are named in
-  // `NOT_YET_ON_A_SCREEN`: no screen of this wave can show them.
-  'StageRowKey',
-  'StageCellRole',
-  'StageModelKit',
-  'ModelEffort',
-  'ExecutorModelAccess',
-  'ProviderAuthState',
-  'ModelProbeState',
-  'ExecutorHostState',
-  'ModelUnavailableReason',
-  'RunStartRoute',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
