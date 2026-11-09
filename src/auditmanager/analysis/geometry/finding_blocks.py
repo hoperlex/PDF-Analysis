@@ -39,7 +39,9 @@ The rule
    The comparison is over words: case, ``ё``/``е``, soft and end-of-line hyphens, runs of
    whitespace and punctuation are folded away (:func:`fold_text`), and the quotation's words must be a contiguous run of the
    block's words. A line some block holds is never given to the witness: geometry that proves containment is not second-guessed
-   by a reading.
+   by a reading. The shipped caller (``BlockAdapter.list_run_finding_blocks``) does not hand the text over yet (`D-590`): until it does,
+   the witness is never asked and the relation is steps 1 to 4.
+
 What the rule does not claim
 ----------------------------
 It claims containment, which the geometry proves, and nothing more. Known misses, each of them a **missing** link:
