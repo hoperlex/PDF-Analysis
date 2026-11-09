@@ -693,10 +693,10 @@ def test_a_delete_that_reaches_outside_the_chosen_cases_rolls_the_forget_back(st
                   "INSERT INTO public.decision_memory_evidence (case_id, revision, ordinal, page_number, quote, char_start, char_end) "
                   f"VALUES ('{memory.b2}', 1, 5, 1, 'quote', 0, 5) ON CONFLICT DO NOTHING; RETURN NULL;")   # a row appears in a case that is not forgotten
     code, out, err = invoke(tool, stand, *argv)
-    assert refused(code, err, "change data outside the chosen cases") and "decision_memory_evidence:outside" in err, (code, out, err)
+    assert refused(code, err, "changed data outside the chosen cases") and "decision_memory_evidence:outside" in err, (code, out, err)
     assert a_content(stand, memory) == 3 and count(stand, "decision_memory_evidence", "case_id = :c", c=memory.b2) == 1
     code, out, err = invoke(mutant("keep-unchanged"), stand, *argv)
-    assert "change data outside" not in err and a_content(stand, memory) == 0, (code, out, err)
+    assert "changed data outside" not in err and a_content(stand, memory) == 0, (code, out, err)
     assert count(stand, "decision_memory_evidence", "case_id = :c", c=memory.b2) == 2      # the stray row stayed in another project's case
 
 
