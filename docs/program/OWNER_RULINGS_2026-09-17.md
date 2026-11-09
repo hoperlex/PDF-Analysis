@@ -1965,7 +1965,7 @@ its history and where the schedule lives.
 The owner asked for a large rework of «Исполнители», the run start and the run screen (`R-153a`). The planning session answered with
 a plan, checked it in two rounds of independent read-only judges, and put four questions by direct poll; the answers below are the
 options the owner selected. The architecture is `ADR-0028`, the wave plan is `docs/program/dispatch/HOSTS-PLAN.md`, and the debts
-the answers leave open are `D-498`…`D-501`.
+the answers leave open are `D-498`, `D-499`, `D-540`, `D-541`.
 
 | Ruling | Owner's request or answer | Consequence |
 | --- | --- | --- |

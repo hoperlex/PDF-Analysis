@@ -138,7 +138,7 @@ The code on `origin/dev` `8f76b4ed6` (VERSION 0.20.0, contract 1.44.0, migration
     - The original sends a *capability* and each worker maps it by its local policy. Here the agent receives the exact `model_id` and `effort` from the catalogue; the stand decides, the host only executes.
     - The original distributes work per call; here distribution is per run (decision 5).
     - The original has no «Комплексная сверка» row; it is valued by analogy with its «Свод».
-19. **Out of scope of this ADR.** The five `comparison_*` kinds stay on legacy routing until `HOSTS-CMP-01` (`D-501`), AR v3 keeps its own path, and optimisation calls no model. `--upgrade` of a pull agent whose connection is used by rules or comparisons is refused until `HOSTS-CMP-01`. The SSH connection «kzSonnet» on production is untouched; during the transition it shares the `adm1.hlab.kz` Claude subscription outside the capacity pool (`D-500`). There is no reserve set when a quota runs out (`R-153e`, `D-498`).
+19. **Out of scope of this ADR.** The five `comparison_*` kinds stay on legacy routing until `HOSTS-CMP-01` (`D-541`), AR v3 keeps its own path, and optimisation calls no model. `--upgrade` of a pull agent whose connection is used by rules or comparisons is refused until `HOSTS-CMP-01`. The SSH connection «kzSonnet» on production is untouched; during the transition it shares the `adm1.hlab.kz` Claude subscription outside the capacity pool (`D-540`). There is no reserve set when a quota runs out (`R-153e`, `D-498`).
 
 ## What ADR-0028 changes in ADR-0026
 

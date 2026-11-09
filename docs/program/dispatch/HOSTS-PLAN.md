@@ -3,7 +3,7 @@
 - Date: 2026-11-09
 - Integrator: the planning session, after the owner's approval (`R-153c`). Executors never merge or push.
 - Architecture: `docs/architecture/adr/ADR-0028-hosts-and-stage-models.md`. Tasks cite «ADR-0028 decision n». It amends `ADR-0026` (table in the ADR).
-- Owner inputs: `R-153a`…`R-153f` (`OWNER_RULINGS_2026-09-17.md` §3.53). Debts: `D-498`…`D-501`; `D-291` (client documents) still applies.
+- Owner inputs: `R-153a`…`R-153f` (`OWNER_RULINGS_2026-09-17.md` §3.53). Debts: `D-498`, `D-499`, `D-540`, `D-541`; `D-291` (client documents) still applies.
 - Base: `origin/dev` `8f76b4ed6daadad95f9c001e2c2c0dca717aad2d` — VERSION 0.20.0, API contract 1.44.0 with 280 paths / 308 operations / 744 schemas, migration head `0061_decision_memory_m2`.
 - The original application: `/root/projects/PDF-proverka` at `dd974b2b`. Its sets are in `docs/claude_only_mode.md` and `docs/codex_only_mode.md`.
 - The owner-facing Russian plan is a local file (`.local/reports/executors-runs-rework-plan-2026-11-09.md`) and is not part of the repository; this file and the ADR hold what the tasks need.
@@ -57,7 +57,7 @@ Task files are `docs/program/tasks/HOSTS-*.md`. The six of waves 0–1 are writt
 
 | Task | Outcome | Depends on | Estimate |
 |---|---|---|---|
-| `HOSTS-ADR-01` | `ADR-0028`, `R-153a`…`R-153f`, this plan, the six task files, debts `D-498`…`D-501` | owner answers (`R-153*`) | 2 h |
+| `HOSTS-ADR-01` | `ADR-0028`, `R-153a`…`R-153f`, this plan, the six task files, debts `D-498`, `D-499`, `D-540`, `D-541` | owner answers (`R-153*`) | 2 h |
 | `HOSTS-PIN-01` | The four pins in `docs/program/P02_LOCK.json` with rates from the providers' price lists; closed-set tests moved | `HOSTS-ADR-01` | 1 h |
 | `HOSTS-SEAL-1` | Contract 1.45.0, migration 0062, models and client, pins, inventories, stub modules; the catalogue file | `HOSTS-ADR-01`, `HOSTS-PIN-01` | 5 h |
 
@@ -87,8 +87,8 @@ Task files are `docs/program/tasks/HOSTS-*.md`. The six of waves 0–1 are writt
 | Task | Outcome | Depends on | Estimate |
 |---|---|---|---|
 | `HOSTS-SEAL-3` | Contract 1.47.0: comparison rows in the layout | `HOSTS-INT-2` | 2 h |
-| `HOSTS-CMP-01` | The five `comparison_*` kinds through the system groups and comparison rows; closes `D-501` | `HOSTS-SEAL-3` | 6 h |
-| `HOSTS-CUTOVER-01` | Operator guide: host agent on `adm1.hlab.kz`, the set, the switch, «kzSonnet» archived; closes `D-500` | `HOSTS-CMP-01` | 3 h |
+| `HOSTS-CMP-01` | The five `comparison_*` kinds through the system groups and comparison rows; closes `D-541` | `HOSTS-SEAL-3` | 6 h |
+| `HOSTS-CUTOVER-01` | Operator guide: host agent on `adm1.hlab.kz`, the set, the switch, «kzSonnet» archived; closes `D-540` | `HOSTS-CMP-01` | 3 h |
 | `HOSTS-INT-3` | Merge, `origin/dev` | wave 3 | 3 h |
 
 ## 4. Hotspot ownership
@@ -133,8 +133,8 @@ Lanes write their code into the stub modules `HOSTS-SEAL-1` creates under exact 
 | H1 | Subscriptions are used only through the official CLIs under the owner's login (`R-149b`) | Probe calls are rare (every 6 h per model); no credential copying |
 | H2 | Distribution per run holds a subscription slot to the end of a long run | Accepted; `D-499`; no new mid-run state |
 | H3 | A direct-API key file is a new outward path of a document's text | `R-153d`; keys never leave the VPS file; `D-291` warning shown; the subscription path is the default |
-| H4 | «kzSonnet» shares the `adm1.hlab.kz` subscription outside the pool during the transition | `D-500`; `--upgrade` refused for such an agent until `HOSTS-CMP-01`; archived by `HOSTS-CUTOVER-01` |
-| H5 | The comparison kinds stay on legacy routing until wave 3 | `D-501` |
+| H4 | «kzSonnet» shares the `adm1.hlab.kz` subscription outside the pool during the transition | `D-540`; `--upgrade` refused for such an agent until `HOSTS-CMP-01`; archived by `HOSTS-CUTOVER-01` |
+| H5 | The comparison kinds stay on legacy routing until wave 3 | `D-541` |
 | H6 | No reserve set when a quota ends | `R-153e`; `D-498`; the run waits 30 minutes then «Запустить снова» |
 | H7 | A new pin or model with wrong rates changes every estimate | `HOSTS-PIN-01` cites the price page and the date in the lock's `$comment`; the estimate tests move with it |
 | H8 | A missed literal pin turns a guard red after the reseal (about 20 were missed in EXEC-2) | `HOSTS-SEAL-1` lists 83 test files and the prose files from a tree census |
