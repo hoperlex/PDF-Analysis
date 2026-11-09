@@ -11,12 +11,10 @@ export { ANALYSIS_CHOICE_LABEL, ANALYSIS_CHOICE_OPTIONS, AnalysisChoice } from '
 export type { StartRunControlProps } from './ui/start-run-control';
 export { DEFAULT_READINESS_NOTE, StartRunControl, UNCAPPED_START_LABEL } from './ui/start-run-control';
 
-// `RUN-START-ONE-01a`: the one dialog of a start that can charge money, and the rules of the one-button start.
-export type { StartRunCostDialogProps, StartRunCostDialogViewProps } from './ui/start-run-cost-dialog';
-export { StartRunCostDialog, StartRunCostDialogView, UNCAPPED_MEANING } from './ui/start-run-cost-dialog';
-export {
-  automaticConsent, chargesMoney, dialogConsent, estimateChanged, initialCeiling,
-} from './model/one-click-start';
+// `RUN-START-ONE-01a`: the one dialog of a start that can charge money (the control mounts it; the view is public for the
+// contrast census and the language guard, which draw it open).
+export type { StartRunCostDialogViewProps } from './ui/start-run-cost-dialog';
+export { StartRunCostDialogView } from './ui/start-run-cost-dialog';
 
 export type { StartRunFailureViewProps } from './ui/start-run-failure';
 export { StartRunFailureView } from './ui/start-run-failure';
