@@ -21,6 +21,7 @@ from auditmanager.optimisation.proposals.export import (
     render_proposals_csv,
 )
 from auditmanager.optimisation.proposals.repository import (
+    CarriedFromRecord,
     OptimisationPassRecord,
     OptimisationProposalRecord,
     PositionSummary,
@@ -160,3 +161,123 @@ def test_a_pass_without_proposals_is_the_header_alone_and_rendering_is_determini
     assert empty == BOM + (",".join(COLUMNS) + "\r\n").encode("utf-8")
     one = render_proposals_csv(PASS, (_proposal(),))
     assert one == render_proposals_csv(PASS, (_proposal(),))
+
+
+# -- `D-346` (contract 1.43.0): the percent of the price, in the CSV and in the workbook -----------------------------------
+
+
+def test_the_new_csv_columns_come_last_so_no_column_before_them_moves() -> None:
+    """`D-346`, `D-335`: the file is read by position by whoever scripts against it, so the new columns take the end."""
+    assert COLUMNS[-2:] == ("saving_percent", "decision_carried_from_version")
+    # Every column that was there keeps its place: the new ones are appended after the decision's four, not set beside `saving`.
+    assert COLUMNS.index("saving") == 36 and COLUMNS[-6:-2] == (
+        "current_decision", "decision_comment", "decided_by_user_uid", "decided_at",
+    )
+    assert len(COLUMNS) == 44
+
+
+def test_a_row_states_the_server_percent_exactly_and_without_a_trailing_zero() -> None:
+    # 25000 -> 19500.50 saves 21.998 %, which is 22 to the hundredth: the cell says `22`, not `22.00` and not a float.
+    (row,) = _parsed(render_proposals_csv(PASS, (_proposal(),)))
+    assert row["saving_percent"] == "22"
+    (third,) = _parsed(render_proposals_csv(PASS, (_proposal(current_unit_price=Decimal("450"), proposed_unit_price=Decimal("300")),)))
+    assert third["saving_percent"] == "33.33"
+
+
+def test_the_percent_stands_where_the_saving_is_absent_and_is_empty_only_without_a_base() -> None:
+    # The quantity is not a number: there is no saving, and there is still a price difference.
+    (tape,) = _parsed(render_proposals_csv(PASS, (_proposal(quantity=None, quantity_text="-", saving=None),)))
+    assert tape["saving"] == "" and tape["saving_percent"] == "22"
+    # A zero current price has no base to be a share of: an empty cell, never `0`.
+    (free,) = _parsed(render_proposals_csv(
+        PASS, (_proposal(quantity=None, quantity_text="-", saving=None, current_unit_price=Decimal("0"), proposed_unit_price=Decimal("0")),),
+    ))
+    assert free["saving_percent"] == ""
+
+
+def _workbook_rows(content: bytes) -> list[list[str]]:
+    from auditmanager.exports.xlsx import proposals as workbook
+    from auditmanager.exports.xlsx.reader import _findings_part, _rows, _shared_strings
+    import zipfile
+
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        part, shared = _findings_part(archive, workbook.PROPOSALS_SHEET)
+        found = [cells for _number, cells in _rows(archive, part, _shared_strings(archive, shared))]
+    width = len(workbook.PROPOSAL_COLUMNS)
+    return [[cells.get(column, "") for column in range(width)] for cells in found]
+
+
+def test_the_workbook_has_the_percent_beside_the_saving_and_is_still_read_back_by_its_headers() -> None:
+    from auditmanager.exports.xlsx import proposals as workbook
+    from auditmanager.exports.xlsx.reader import read_decision_sheet
+
+    columns = workbook.PROPOSAL_COLUMNS
+    assert columns[columns.index("Экономия") + 1] == "Экономия, %"
+    assert len(columns) == 17 and len(workbook._WIDTHS) == len(columns)
+    assert columns[-3:] == (workbook.DECISION_COLUMN, workbook.COMMENT_COLUMN, workbook.CARRIED_COLUMN), "the new last column moves no edited one"
+    content = workbook.render_proposals_xlsx((_proposal(), _proposal(quantity=None, quantity_text="-", saving=None)))
+    header, with_amount, without_amount = _workbook_rows(content)
+    assert header == list(columns)
+    saving, percent = columns.index("Экономия"), columns.index("Экономия, %")
+    assert (with_amount[saving], with_amount[percent]) == ("21998", "22")
+    # No amount, and still the price difference.
+    assert (without_amount[saving], without_amount[percent]) == ("", "22")
+    # The way back finds its three columns by their headers, wherever the new one stands.
+    read = read_decision_sheet(
+        content, sheet=workbook.PROPOSALS_SHEET, id_column=workbook.ID_COLUMN,
+        decision_column=workbook.DECISION_COLUMN, comment_column=workbook.COMMENT_COLUMN,
+    )
+    assert [row.key for row in read] == ["opr_01M2545JSD15ETSNNV904XA001"] * 2
+    assert [row.decision for row in read] == ["не решено", "не решено"]
+
+
+# -- `D-335` (contract 1.43.0): a decision carried over from an earlier version's pass says so in both exports ---------------
+
+
+def _carried(verdict: str = "accept", ordinal: int = 2) -> ProposalDecisionRecord:
+    return ProposalDecisionRecord(
+        "opd_01M2545JSD15ETSNNV904XA003",
+        "opr_01M2545JSD15ETSNNV904XA001",
+        1,
+        verdict,
+        "подходит",
+        "usr_01M2545JSD15ETSNNV904XA002",
+        datetime(2026, 10, 20, 9, 30, tzinfo=timezone.utc),
+        CarriedFromRecord(
+            proposal_decision_id="opd_01M2545JSD15ETSNNV904XA002",
+            optimisation_pass_id="opp_01M2545JSD15ETSNNV904XA002",
+            version_uid="ver_01M2545JSD15ETSNNV904XA002",
+            version_ordinal=ordinal,
+        ),
+    )
+
+
+def test_a_carried_decision_in_force_names_the_source_version_in_the_csv_and_a_direct_one_names_none() -> None:
+    (carried,) = _parsed(render_proposals_csv(PASS, (_proposal(current_decision=_carried(ordinal=3)),)))
+    assert (carried["current_decision"], carried["decision_carried_from_version"]) == ("accept", "3")
+    direct = ProposalDecisionRecord(
+        "opd_01M2545JSD15ETSNNV904XA004", "opr_01M2545JSD15ETSNNV904XA001", 1, "accept", None,
+        "usr_01M2545JSD15ETSNNV904XA002", datetime(2026, 10, 20, 9, 30, tzinfo=timezone.utc),
+    )
+    (made_directly,) = _parsed(render_proposals_csv(PASS, (_proposal(current_decision=direct),)))
+    assert made_directly["current_decision"] == "accept" and made_directly["decision_carried_from_version"] == ""
+    (pending,) = _parsed(render_proposals_csv(PASS, (_proposal(),)))
+    assert pending["decision_carried_from_version"] == ""
+
+
+def test_a_withdrawn_carried_decision_is_no_decision_in_force_and_names_no_source() -> None:
+    """A withdrawal (`revoke`) is the latest event, so nothing is in force: the carried mark goes with the decision."""
+    (row,) = _parsed(render_proposals_csv(PASS, (_proposal(current_decision=_carried("revoke")),)))
+    assert row["current_decision"] == "pending" and row["decision_carried_from_version"] == ""
+
+
+def test_the_workbook_ends_with_the_carried_column_and_still_reads_its_edited_columns_by_header() -> None:
+    from auditmanager.exports.xlsx import proposals as workbook
+
+    columns = workbook.PROPOSAL_COLUMNS
+    content = workbook.render_proposals_xlsx((_proposal(current_decision=_carried()), _proposal()))
+    _header, carried, plain = _workbook_rows(content)
+    last = columns.index(workbook.CARRIED_COLUMN)
+    assert last == len(columns) - 1 and workbook.CARRIED_COLUMN == "Перенесено из версии"
+    assert (carried[last], plain[last]) == ("V2", "")
+    assert (carried[columns.index(workbook.DECISION_COLUMN)], carried[columns.index(workbook.COMMENT_COLUMN)]) == ("принято", "подходит")

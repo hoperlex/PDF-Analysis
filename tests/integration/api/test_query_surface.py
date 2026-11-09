@@ -1172,8 +1172,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listRegistrations": {"status", "cursor", "limit"},
         "listUsers": {"include_archived", "cursor", "limit"},
         "listAuthEvents": {"cursor", "limit"},
-        # `UI-PARITY-QUEUE-A` (contract 1.18.0): the state and the half-open period over `created_at`.
-        "listExecutionQueue": {"cursor", "limit", "state", "created_from", "created_to"},
+        # `UI-PARITY-QUEUE-A` (contract 1.18.0): the state and the half-open period over `created_at`;
+        # `D-370` (contract 1.43.0): `state_group`, the whole of one of the three groups of states.
+        "listExecutionQueue": {"cursor", "limit", "state", "state_group", "created_from", "created_to"},
         "listExecutionJournal": {"run_id", "cursor", "limit"},
         "listWorkers": {"cursor", "limit"},
         "searchNorms": {"q", "norms_snapshot_id", "cursor", "limit"},
@@ -1518,6 +1519,13 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             cancelled = ok(get(surface, f"{target}{sep}state=cancelled&limit=200"))
             if ours & runs_of(cancelled) or {i["state"] for i in cancelled["items"]} - {"cancelled"}:
                 inert.setdefault(operation_id, []).append("state=cancelled")
+            # `D-370`: a group lists every job of its states -- ours are queued, so they are in `active` and in neither other group.
+            active = ok(get(surface, f"{target}{sep}state_group=active&limit=200"))
+            if not ours <= runs_of(active) or {i["state"] for i in active["items"]} - {"queued", "leased", "running", "retry_wait"}:
+                inert.setdefault(operation_id, []).append("state_group=active")
+            for other in ("completed", "errors"):
+                if ours & runs_of(ok(get(surface, f"{target}{sep}state_group={other}&limit=200"))):
+                    inert.setdefault(operation_id, []).append(f"state_group={other}")
 
             mine = sorted((i for i in baseline["items"] if i["run_id"] in ours), key=at)
             assert len(mine) == 3 and at(mine[0]) < at(mine[2]), "the three Jobs must differ in creation instant"

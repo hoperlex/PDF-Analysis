@@ -8,7 +8,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { QUEUE_STATE_OPTIONS, jobStateLabel } from '@/entities/execution';
+import { QUEUE_STATE_GROUPS, QUEUE_STATE_OPTIONS, jobStateLabel } from '@/entities/execution';
 import { REPO_ROOT, readJson } from '../guards/lib/repo';
 
 interface Parameter {
@@ -46,6 +46,24 @@ describe('listExecutionQueue declares its filters', () => {
     for (const state of queryOf('state')?.schema?.enum ?? []) {
       expect(jobStateLabel(state), state).not.toBeNull();
     }
+  });
+
+  it('D-370: declares `state_group`, optional, and the strip\'s three groups are its values', () => {
+    expect(queryOf('state_group')).toBeDefined();
+    expect(queryOf('state_group')?.required ?? false).toBe(false);
+    expect(queryOf('state_group')?.schema?.enum).toEqual(QUEUE_STATE_GROUPS.map((group) => group.key));
+    // The groups hold every declared state once: a group\'s press and the eight single states cannot disagree.
+    expect(QUEUE_STATE_GROUPS.flatMap((group) => [...group.states]).sort()).toEqual([...(queryOf('state')?.schema?.enum ?? [])].sort());
+  });
+});
+
+describe('ExecutionQueuePage carries the counts the menu and the strip read', () => {
+  const page = contract.components.schemas.ExecutionQueuePage;
+
+  it('D-395: has `live_failure_count`, an optional count', () => {
+    expect(page?.properties).toHaveProperty('live_failure_count');
+    expect(page?.required).not.toContain('live_failure_count');
+    expect(page?.properties).toHaveProperty('overview');
   });
 });
 

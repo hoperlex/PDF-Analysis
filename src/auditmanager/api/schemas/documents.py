@@ -52,7 +52,8 @@ class DocumentAuditView:
     Nothing is decided here: the read model (``auditmanager.dashboard.audit_state``) classifies and the adapter
     copies its record field for field. ``result_run_id`` is ``None`` exactly when ``state`` is ``not_run`` and is
     then omitted on the wire. ``active_run`` (`UI-A-47`) is ``None`` when no run of the version is in flight and is
-    then omitted too.
+    then omitted too. The optimisation counts (`D-361`) are ``None`` when no pass was started over the version and are
+    then omitted as well; they are both present or both absent.
     """
 
     state: str
@@ -61,6 +62,10 @@ class DocumentAuditView:
     finding_count: int
     undecided_finding_count: int
     active_run: DocumentActiveRunView | None = None
+    #: `D-361` (contract 1.43.0): the proposals of the version's latest optimisation pass and how many have no decision in
+    #: force; ``None`` when no pass was started over it, and then omitted on the wire.
+    optimisation_proposal_count: int | None = None
+    optimisation_undecided_count: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +120,9 @@ def document_audit_body(view: DocumentAuditView) -> dict[str, Any]:
         body["result_run_id"] = view.result_run_id
     if view.active_run is not None:
         body["active_run"] = {"run_id": view.active_run.run_id, "state": view.active_run.state}
+    if view.optimisation_proposal_count is not None:
+        body["optimisation_proposal_count"] = view.optimisation_proposal_count
+        body["optimisation_undecided_count"] = view.optimisation_undecided_count
     return body
 
 

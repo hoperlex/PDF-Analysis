@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.42.0 (OpenAPI 3.1.0)
- *   sha256 8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a
+ *   AuditManager PC-01 API 1.43.0 (OpenAPI 3.1.0)
+ *   sha256 8cb5ce4bbf64e8429108d7e66cc8d30b1da03bb6f1cd6698106d700b8f50e75e
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.42.0';
+export const CONTRACT_VERSION = '1.43.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a';
+export const CONTRACT_DIGEST = '8cb5ce4bbf64e8429108d7e66cc8d30b1da03bb6f1cd6698106d700b8f50e75e';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -759,7 +759,7 @@ export const SCHEMA_NAMES = [
  *
  * A row is named by its proposal's own identity (``optimisation_proposal_id``); ``page_number`` and ``row_position``
  * locate it in the drawing and are never an identity. The prices and the saving are the proposal's own exact decimal
- * text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number. `carried_from` (`D-335`, contract 1.39.0) is `null` for an acceptance an expert made directly and names the source decision -- with its pass, version and the version's display ordinal -- when the acceptance was carried over from an earlier version's pass (`UI-B-14`).
+ * text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number. `carried_from` (`D-335`, contract 1.39.0) is `null` for an acceptance an expert made directly and names the source decision -- with its pass, version and the version's display ordinal -- when the acceptance was carried over from an earlier version's pass (`UI-B-14`). `saving_percent` (`D-346`, contract 1.43.0) is the proposals read's percent of the current unit price, present where `saving` is `null` too.
  */
 export type AcceptedOptimisationProposal = {
   actor_label: string;
@@ -785,6 +785,8 @@ export type AcceptedOptimisationProposal = {
   row_position: string | null;
   row_text: string;
   saving: string | null;
+  /** `D-346` (contract 1.43.0): how much cheaper the proposed unit price is than the current one, in percent of the current unit price -- the very figure `listOptimisationProposals` states for the proposal (`OptimisationProposal.saving_percent`): computed exactly and rounded half up to two decimals, written without a trailing zero (`25`, `33.33`). It is present where `saving` is `null` because the quantity is not a plain number; absent only when the current unit price is zero. Never computed by a client. */
+  saving_percent?: string;
   section?: ProjectSection;
   unit: string;
   version_uid: VersionUid;
@@ -3999,10 +4001,14 @@ export type DocumentActiveRun = {
  * figure (`R-150u`).
  *
  * `active_run` (`UI-A-47`, contract 1.40.0) names the version's run in flight -- its latest run of the standard analysis in state `queued`, `running` or `validating`, by the order of the result run -- and is absent when none is. It is a fact beside the four words and changes none of them: a document whose first run is in flight is still `not_run`, and a `checked` one with a re-run in flight is still `checked`.
+ *
+ * `optimisation_proposal_count` and `optimisation_undecided_count` (`D-361`, contract 1.43.0) are the proposals of the version's latest optimisation pass and how many of them have no decision in force (none, or a withdrawn one) -- the original's «Оптимизация N» pill. Both are present when a pass was started over the version and both are absent when none was: absent is "no optimisation read", never zero. They are a fact beside the four words and change none of them (`R-150u`).
  */
 export type DocumentAudit = {
   active_run?: DocumentActiveRun;
   finding_count: number;
+  optimisation_proposal_count?: number;
+  optimisation_undecided_count?: number;
   partial: boolean;
   result_run_id?: RunId;
   state: "not_run" | "clean" | "awaiting_decision" | "checked";
@@ -4128,7 +4134,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.42.0";
+  contract_version: "1.43.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4201,6 +4207,8 @@ export type ExecutionQueueItem = {
 
 export type ExecutionQueuePage = {
   items: Array<ExecutionQueueItem>;
+  /** `D-395` (contract 1.43.0): how many failed jobs (`failed` or `dead_letter`) nothing has answered yet -- those with no later job for a run of the same document version and the same analysis (the standard analysis, or the AR v3 beta one) -- over all history, whatever the period or state filter of this page. The original's «ошибки» figure: a failure drops out by being retried or superseded, not by ageing. Independent of the filters, so a one-row page carries it too. */
+  live_failure_count?: number;
   overview?: Array<ExecutionQueueStateCount>;
   page: PageInfo;
   paused: boolean;
@@ -6124,9 +6132,16 @@ export type ProposalDecisionList = {
   items: Array<ProposalDecision>;
 };
 
-/** `R-151h` (contract 1.25.0): one expert decision on an optimisation proposal, with where it belongs and what it decided about -- the knowledge base's «Предложения» half, as `DecisionRecord` is its «Замечания» half. */
+/**
+ * `R-151h` (contract 1.25.0): one expert decision on an optimisation proposal, with where it belongs and what it
+ * decided about -- the knowledge base's «Предложения» half, as ``DecisionRecord`` is its «Замечания» half.
+ *
+ * ``carried_from`` (`D-335`, contract 1.43.0) is present only for a decision an expert carried over from an earlier
+ * version's pass, and names the source; it is absent for a decision made directly.
+ */
 export type ProposalDecisionRecord = {
   actor_label: string;
+  carried_from?: ProposalDecisionCarriedFrom;
   comment: string | null;
   decided_at: string;
   document_name: string;

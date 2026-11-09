@@ -48,6 +48,8 @@ export function acceptedRow(over: Partial<AcceptedOptimisationProposal> = {}): A
     proposed_unit_price: '21000',
     currency: 'RUB',
     saving: '16000',
+    // `D-346`: 25000 → 21000 is 16 % of the price.
+    saving_percent: '16',
     comment: 'Подходит по огнестойкости.',
     actor_label: 'Петрова А.',
     decided_at: '2026-11-06T09:30:00Z',
@@ -70,6 +72,8 @@ export function acceptedTape(): AcceptedOptimisationProposal {
     current_unit_price: '450',
     proposed_unit_price: '300',
     saving: null,
+    // 450 → 300 is a third; it stands where the amount cannot be computed.
+    saving_percent: '33.33',
     comment: null,
     decided_at: '2026-11-06T09:40:00Z',
   });

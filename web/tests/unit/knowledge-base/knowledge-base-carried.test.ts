@@ -8,8 +8,8 @@
  * What is held, in BOTH views the screen has (the table and the events) and on BOTH tabs that carry findings («Замечания» and
  * «Все»): the mark is drawn in the row of a carried decision and in no other; in the table it stands in the decision's own
  * cell; the ordinal in it is the source version's display order, and nothing of the source's identity is printed. The
- * «Предложения» half is NOT covered and says so: `ProposalDecisionRecord` has no `carried_from` yet (`D-335`), so its row draws
- * no mark, and that is asserted as the present state rather than left silent.
+ * «Предложения» half is covered at the end: since contract 1.43.0 (`D-335`) `ProposalDecisionRecord.carried_from` names the
+ * source of a carried proposal decision, and its row (in «Все», the table and the events) draws the same mark.
  *
  * Every positive assertion below fails on the widget as it was before this change: it drew none of these marks.
  */
@@ -186,14 +186,60 @@ describe('where the mark stands', () => {
   });
 });
 
-describe('the proposals half is out of this change (`D-335`)', () => {
-  it('draws no mark on a proposal’s row: its record has no `carried_from` to draw from', () => {
-    const table = renderToStaticMarkup(createElement(KnowledgeBase, { view: 'table', records: [], entries: [PROPOSAL] }));
-    const events = renderToStaticMarkup(createElement(KnowledgeBase, { records: [], entries: [PROPOSAL] }));
-    for (const markup of [table, events]) {
+describe('the proposals half (`D-335`, contract 1.43.0)', () => {
+  /** The source the contract names for a proposal decision: the decision, its pass and version, and the version's display ordinal. */
+  const proposalSource = (ordinal: number) => ({
+    proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
+    optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
+    version_uid: `ver_${OTHER}`,
+    version_ordinal: ordinal,
+  });
+  const carriedProposal = (ordinal: number): KnowledgeBaseEntry => ({
+    ...PROPOSAL,
+    proposal: { ...PROPOSAL.proposal!, carried_from: proposalSource(ordinal) },
+  });
+  const draw = (view: View, entry: KnowledgeBaseEntry) =>
+    renderToStaticMarkup(createElement(KnowledgeBase, { view: view === 'table' ? 'table' : 'events', records: [], entries: [entry] }));
+
+  for (const view of ['table', 'events'] as const) {
+    it(`draws «↩ Перенесено из V#» on the row of a carried proposal decision in the ${view}`, () => {
+      const markup = draw(view, carriedProposal(2));
+      expect(markup).toContain('data-proposal-decision-id=');
+      expect(markup).toContain(MARK);
+      expect(markup).toContain('data-carried-from="2"');
+      expect(markup.match(/↩/g) ?? []).toHaveLength(1);
+    });
+
+    it(`draws nothing on a proposal decision made directly in the ${view}`, () => {
+      const markup = draw(view, PROPOSAL);
       expect(markup).toContain('data-proposal-decision-id=');
       expect(markup).not.toContain('Перенесено');
       expect(markup).not.toContain('data-carried-from');
-    }
+    });
+
+    it(`names the source version by its display ordinal only and prints nothing of its identity in the ${view}`, () => {
+      const markup = draw(view, carriedProposal(3));
+      expect(markup).toContain('↩ Перенесено из V3');
+      for (const identity of [proposalSource(3).proposal_decision_id, proposalSource(3).optimisation_pass_id, proposalSource(3).version_uid]) {
+        expect(markup).not.toContain(identity);
+      }
+    });
+  }
+
+  it('stands in the verdict cell of the table, after the verdict, and wraps nothing for a direct decision', () => {
+    const cell = (entry: KnowledgeBaseEntry) =>
+      cellsOf(draw('table', entry).match(/<tr\b[^>]*data-proposal-decision-id=[\s\S]*?<\/tr>/)?.[0] ?? '')[4] ?? '';
+    const carried = cell(carriedProposal(2));
+    expect(carried).toContain(MARK);
+    expect(carried.indexOf('принято')).toBeGreaterThanOrEqual(0);
+    expect(carried.indexOf('принято')).toBeLessThan(carried.indexOf(MARK));
+    expect(cell(PROPOSAL)).not.toContain('Перенесено');
+  });
+
+  it('keeps the finding rows of «Все» as they were: one mark for the one carried finding decision, one for the carried proposal', () => {
+    const markup = renderToStaticMarkup(
+      createElement(KnowledgeBase, { records: [], entries: [...asEntries([CARRIED, DIRECT]), carriedProposal(2)] }),
+    );
+    expect(markup.match(/data-carried-from=/g) ?? []).toHaveLength(2);
   });
 });

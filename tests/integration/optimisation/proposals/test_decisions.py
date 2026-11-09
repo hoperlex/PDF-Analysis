@@ -338,3 +338,41 @@ def test_the_database_refuses_a_verdict_outside_the_four(factory, cast, started)
                 {"p": door, "a": cast.expert, "c": command},
             )
     assert "ck_optimisation_proposal_decision_verdict" in str(caught.value)
+
+
+# -- «Оптимизация N» on a document (`D-361`, contract 1.43.0) ---------------------------------------------------------
+
+
+def test_a_documents_audit_names_the_proposals_of_its_latest_pass_and_those_still_undecided(
+    unit, cast, started, ready: World
+) -> None:
+    """The count is the pass's own and moves with the decisions in force: a withdrawn decision is undecided again, and
+    the audit state itself (the four words) is the one it was."""
+    from auditmanager.dashboard import DocumentAuditReadModel
+
+    door, window, *_ = started["proposals"]
+
+    def audit():
+        return unit(DocumentAuditReadModel().audits, version_uids=[ready.version])[ready.version]
+
+    before = audit()
+    assert (before.optimisation_proposal_count, before.optimisation_undecided_count) == (len(started["proposals"]), len(started["proposals"]))
+    _decide(unit, cast, door, "accept", "o-1")
+    _decide(unit, cast, window, "reject", "o-2", "хуже")
+    after = audit()
+    total = len(started["proposals"])
+    assert (after.optimisation_proposal_count, after.optimisation_undecided_count) == (total, total - 2)
+    _decide(unit, cast, door, "revoke", "o-3")  # a withdrawal leaves the proposal undecided again
+    assert audit().optimisation_undecided_count == total - 1
+    # A fact beside the audit state: it moves none of the four words nor the findings' figures.
+    assert (after.state, after.partial, after.finding_count, after.undecided_finding_count) == (
+        before.state, before.partial, before.finding_count, before.undecided_finding_count,
+    )
+
+
+def test_a_version_no_pass_was_started_over_has_no_optimisation_counts(unit, ready: World) -> None:
+    from auditmanager.dashboard import DocumentAuditReadModel
+
+    audit = unit(DocumentAuditReadModel().audits, version_uids=[ready.version])[ready.version]
+    # `ready` has no pass yet: absent is "no optimisation read", never a zero.
+    assert (audit.optimisation_proposal_count, audit.optimisation_undecided_count) == (None, None)

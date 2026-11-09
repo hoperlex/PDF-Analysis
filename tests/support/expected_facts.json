@@ -2257,5 +2257,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0060_run_from_stage",
-  "contract_version": "1.42.0"
+  "contract_version": "1.43.0"
 }

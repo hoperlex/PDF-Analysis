@@ -8,7 +8,7 @@ import { ApiError, newIdempotencyKey } from '@/shared/api';
 import { routes, useAddressState } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
-  QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueStateCount,
+  QUEUE_STATE_GROUPS, QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueStateCount,
   runWorker, useExecutionQueue,
   useWorkerLookup,
 } from '@/entities/execution';
@@ -72,7 +72,8 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
   // the side menu's «Очередь» (no query) clears it. A choice REPLACES the entry: a filter is not a place to go Back to.
   const [address, setAddress] = useAddressState(readQueueAddress, writeQueueAddress, initialAddress);
   const stateFilter = address.state;
-  const filterKey = `${address.state}|${address.period}`;
+  const groupFilter = address.group ?? '';
+  const filterKey = `${address.state}|${groupFilter}|${address.period}`;
   // A cursor belongs to the filter it was issued under (the server refuses it under another), so the pages walked are held with
   // the filter they were walked under and forgotten when the filter is anything else -- including a change the address made.
   const [paging, setPaging] = useState<{ readonly key: string; readonly cursors: readonly string[] }>({ key: filterKey, cursors: [] });
@@ -94,6 +95,7 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
   const cursor = cursors.at(-1);
   const filter: ExecutionQueueFilter = {
     ...(stateFilter === '' ? {} : { state: stateFilter }),
+    ...(groupFilter === '' ? {} : { stateGroup: groupFilter }),
     ...(period.from === undefined ? {} : { createdFrom: period.from }),
   };
   const queue = useExecutionQueue(cursor, filter);
@@ -122,9 +124,18 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
     setAddress({ state: known === undefined ? '' : known.value, period: address.period }, 'replace');
   }
 
+  /** `D-370`: a group's press lists the whole group (the server takes `state_group`); it replaces a state, and a state replaces it. */
+  function chooseGroup(next: string) {
+    const known = QUEUE_STATE_GROUPS.find((group) => group.key === next);
+    setAddress(
+      known === undefined ? { state: '', period: address.period } : { state: '', group: known.key, period: address.period },
+      'replace',
+    );
+  }
+
   function choosePeriod(chosen: string) {
     const value: QueuePeriod = isQueuePeriod(chosen) ? chosen : 'all';
-    setAddress({ state: address.state, period: value }, 'replace');
+    setAddress({ state: address.state, ...(address.group === undefined ? {} : { group: address.group }), period: value }, 'replace');
   }
 
   /**
@@ -233,9 +244,15 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
             {QUEUE_PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </label>
-        {/* `UI-B-51`, `UI-B-69`: the original's «Активные / Завершённые / Ошибки» with their counts; a press sets the state filter above. */}
+        {/* `UI-B-51`, `UI-B-69`, `D-370`: the original's «Активные / Завершённые / Ошибки» with their counts; a group's press lists the whole group, a state's sets the state filter above. */}
         {queue.data?.overview === undefined ? null : (
-          <QueueStateStrip overview={queue.data.overview} selected={stateFilter} onSelect={chooseState} />
+          <QueueStateStrip
+            overview={queue.data.overview}
+            selected={stateFilter}
+            selectedGroup={groupFilter}
+            onSelect={chooseState}
+            onSelectGroup={chooseGroup}
+          />
         )}
         {account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
           <button
@@ -275,7 +292,7 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
             roles={roles}
             asOf={asOf}
             busy={busy}
-            filtered={stateFilter !== '' || period.from !== undefined}
+            filtered={stateFilter !== '' || groupFilter !== '' || period.from !== undefined}
             workerOf={(runId) => runWorker(workers.data, workers.error !== null, runId)}
             onCancel={(item) => select({ kind: 'cancel', item })}
             onReaudit={(item) => select({ kind: 'reaudit', item })}
