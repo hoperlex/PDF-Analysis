@@ -117,6 +117,7 @@ __all__ = [
     "host_claim_limit",
     "host_details",
     "issue_host_enrollment",
+    "issue_host_grant",
     "model_availability",
     "read_hosts",
     "record_task_failure",
@@ -423,6 +424,40 @@ def issue_host_enrollment(
     return IssuedEnrollment(
         record=record, secret=value, package=package,
         command=install_command(origin=origin, package=package, secret=value))
+
+
+def issue_host_grant(
+    session: Session, *, host_id: str, roles: Iterable[str], idempotency_key: str, actor_uid: str,
+    configured_origin: str | None, hosts: HostRepository | None = None, grants: EnrollmentRepository | None = None,
+    commands: CommandRepository | None = None, package_source: Callable[[], AgentPackage] = latest_package,
+    journal: Journal = append_execution_event,
+) -> IssuedEnrollment:
+    """The one-time grant of an **existing** host: what the install worker (``agent_install_runner``) issues for a host's install session, under
+    the session's own idempotency key and the ledger's command type ``issue_executor_enrollment`` (the one a connection's grant uses), so a worker
+    that lost the race finds the grant already taken (``conflict`` / ``enrollment_shown_once``). The earlier unredeemed grant of the host is revoked."""
+    _admin(roles)
+    origin = resolve_origin(configured_origin)
+    store, grant_store, ledger = hosts or HostRepository(), grants or EnrollmentRepository(), commands or CommandRepository()
+    claimed = _begin(session, ledger, "issue_executor_enrollment", idempotency_key, {"host_id": host_id})
+    if isinstance(claimed, CommandReplay):
+        raise _conflict(CONFLICT_ENROLLMENT_SHOWN_ONCE, "the secret was shown once and cannot be shown again")
+    host = _live_host(session, store, host_id, lock=True)
+    package = package_source()
+    for revoked_id, was_live in grant_store.revoke_unredeemed_for_host(session, host.host_id, actor_uid=actor_uid):
+        if was_live:
+            journal(
+                session, event_type="executor.enrollment_revoked", aggregate_type=_AGGREGATE_ENROLLMENT,
+                aggregate_id=revoked_id, payload={"host_id": host.host_id, "actor_uid": actor_uid, "reason": "superseded"})
+    value, prefix = generate_enrollment_secret()
+    record = grant_store.insert_enrollment(
+        session, host_id=host.host_id, secret_prefix=prefix, secret_hash=hash_enrollment_secret(value),
+        lifetime_seconds=ENROLLMENT_LIFETIME_SECONDS, actor_uid=actor_uid)
+    journal(
+        session, event_type="executor.enrollment_issued", aggregate_type=_AGGREGATE_ENROLLMENT,
+        aggregate_id=record.enrollment_id, payload={"host_id": host.host_id, "actor_uid": actor_uid})
+    ledger.succeed(session, claimed.command_id, {"enrollment_id": record.enrollment_id, "host_id": host.host_id})
+    return IssuedEnrollment(
+        record=record, secret=value, package=package, command=install_command(origin=origin, package=package, secret=value))
 
 
 # --- the install session over SSH (path A), for a host ---------------------------------------------------------------

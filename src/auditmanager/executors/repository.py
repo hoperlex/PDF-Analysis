@@ -342,9 +342,10 @@ class ExecutorRepository:
     def sealed_secret(
         self, session: Session, secret_id: str
     ) -> tuple[str, str, str, bytes] | None:
-        """``(connection_id, purpose, kid, ciphertext)`` for the worker's ``open_secret`` only."""
+        """``(owner id, purpose, kid, ciphertext)`` for the worker's ``open_secret`` only. The owner is the connection, or -- the sealed key of a
+        host's install session (`HOSTS-BACKEND-01`, ``executor_secret.host_id``) -- the host; it is what the secret was sealed to."""
         row = session.execute(text(
-            "SELECT connection_id, purpose, kid, ciphertext FROM executor_secret "
+            "SELECT COALESCE(connection_id, host_id), purpose, kid, ciphertext FROM executor_secret "
             "WHERE secret_id = :id"
         ), {"id": secret_id}).first()
         if row is None:
