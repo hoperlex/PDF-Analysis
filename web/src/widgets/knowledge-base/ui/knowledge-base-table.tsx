@@ -132,6 +132,16 @@ function ProposalRow({ record }: { readonly record: ProposalDecisionRecord }) {
         <span className="am-kb__verdict" data-verdict={record.verdict}>
           {DECISION_EVENT_LABELS[record.verdict]}
         </span>
+        {/*
+         * `D-335`, `UI-B-14`: a decision the expert carried over from an earlier version's pass says so, «↩ Перенесено из V2», beside
+         * the verdict as a finding's does. `carried_from` is the record's own (the server's structured link); a decision made
+         * directly has none and draws nothing -- not an empty wrapper either.
+         */}
+        {record.carried_from === undefined ? null : (
+          <span className={styles.carried}>
+            <CarriedMark carriedFrom={record.carried_from} />
+          </span>
+        )}
       </td>
       <td>
         {record.row_text} · поставщик {record.proposed_vendor} · ед. {record.unit}

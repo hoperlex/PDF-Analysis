@@ -124,6 +124,45 @@ export function activeRunHref(version: Pick<DocumentVersion, 'project_uid' | 'au
   return run === undefined ? undefined : routes.run(version.project_uid, run.run_id);
 }
 
+// ---- the optimisation of the document (`D-361`, contract 1.43.0) -------------------------------------------------------
+
+export const OPTIMISATION_PILL_LABEL = 'Оптимизация';
+
+/** The original's second pill on a document card, «Оптимизация N [метка]». */
+export interface OptimisationPill {
+  /** The proposals of the version's latest optimisation pass. Always at least 1: a pass with none draws no pill. */
+  readonly count: number;
+  /** Of those, the proposals with no decision in force (none, or a withdrawn one). */
+  readonly undecided: number;
+  /** «Оптимизация 7». */
+  readonly text: string;
+  /** The marker: «3 не решено» while an expert still has proposals to decide, `null` when every one is decided. */
+  readonly mark: string | null;
+  readonly title: string;
+}
+
+/**
+ * The pill, or `null` when there is nothing to say: the answer carried no audit, the server read no optimisation for the
+ * version (no pass was started over it: the counts are absent, never zero) or its latest pass produced no proposal. Both
+ * counts are the server's -- `optimisation_proposal_count` and `optimisation_undecided_count` -- and are only worded here.
+ * A fact beside the audit chip, as «Замечания N» is: it never changes the chip (`R-150u`).
+ */
+export function optimisationPill(audit: DocumentAudit | undefined): OptimisationPill | null {
+  const count = audit?.optimisation_proposal_count;
+  const undecided = audit?.optimisation_undecided_count;
+  if (count === undefined || undecided === undefined || count === 0) return null;
+  return {
+    count,
+    undecided,
+    text: `${OPTIMISATION_PILL_LABEL} ${count}`,
+    mark: undecided === 0 ? null : `${undecided} не решено`,
+    title:
+      `Предложений по оптимизации в последнем проходе: ${count}` +
+      (undecided === 0 ? ', по всем есть решение эксперта.' : `, без решения эксперта: ${undecided}.`) +
+      ' Состояние аудита слева от них не зависит.',
+  };
+}
+
 /** The audit state of a document, or `null` when its answer carried none. */
 export function auditStateOf(version: Pick<DocumentVersion, 'audit'>): AuditStateCode | null {
   return version.audit?.state ?? null;

@@ -61,7 +61,7 @@ function WorkerRow({
           <span className={styles.identity} data-worker-runs={worker.current_run_ids.length}>
             Текущие прогоны:{' '}
             {worker.current_run_ids.map((runId, index) => (
-              <span key={runId}>{index === 0 ? '' : ', '}<a href={routes.logs(runId)}><code>{runId}</code></a></span>
+              <span key={runId}>{index === 0 ? '' : ', '}<a className={styles.runLink} href={routes.logs(runId)}><code>{runId}</code></a></span>
             ))}
           </span>
         )}

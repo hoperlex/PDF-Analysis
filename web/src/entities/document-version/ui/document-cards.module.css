@@ -147,3 +147,19 @@
   font-size: var(--am-text-xs);
   font-variant-numeric: tabular-nums;
 }
+
+/* The proposals of the document's latest optimisation pass (`D-361`), beside the findings. */
+.optimisation {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The marker while some proposals still wait for an expert: set off, and not a colour alone. */
+.optimisationMark {
+  margin-left: var(--am-gap-xs);
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-pill);
+  color: var(--am-ink-soft);
+}

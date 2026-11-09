@@ -3,6 +3,10 @@
 Every case states the geometry in points on a 600 x 800 page (so 0.1 of the width is 60 points and 0.1 of the
 height 80) and the blocks as fractions of the page; the expected ids are literals, never read back from the
 function under test.
+
+The rule claims containment and nothing more (module docstring): a block holds the evidence of a line only when it extends over
+the line's whole width, because where along a line the evidence stands is not in the data. The cases that fail on the
+proportional cut this rule had before are marked ``F1`` / ``F2`` (`D-353`, judge J3 2026-11-09).
 """
 
 from __future__ import annotations
@@ -39,42 +43,81 @@ def test_an_evidence_inside_one_block_is_linked_to_it_and_to_no_other():
     assert link([EvidenceSpan(1, 3, 9)], [LINE], [AROUND_LINE, other]) == ("blk_a",)
 
 
-def test_a_block_covering_most_of_the_evidence_holds_it():
-    # The block ends at x = 0.3: of the line's 0.1667..0.3333 it covers 0.1333 / 0.1667 = 0.8.
-    assert link([EvidenceSpan(1, 0, 20)], [LINE], [box("blk_a", 0.0, 0.0, 0.3, 1.0)]) == ("blk_a",)
+def test_a_block_that_stops_short_of_the_line_does_not_hold_the_evidence_though_it_covers_most_of_the_line():
+    # F1. The block ends at x = 0.3: of the line's 0.1667..0.3333 it covers 0.8, but the evidence is somewhere on the whole line.
+    assert link([EvidenceSpan(1, 0, 20)], [LINE], [box("blk_a", 0.0, 0.0, 0.3, 1.0)]) == ()
+    assert link([EvidenceSpan(1, 3, 9)], [LINE], [box("blk_a", 0.0, 0.0, 0.3, 1.0)]) == ()
 
 
-def test_a_block_covering_less_than_half_of_the_evidence_does_not_hold_it():
+def test_a_block_covering_less_than_half_of_the_line_does_not_hold_the_evidence():
     # The block ends at x = 0.24: it covers 0.0733 / 0.1667 = 0.44.
     assert link([EvidenceSpan(1, 0, 20)], [LINE], [box("blk_a", 0.0, 0.0, 0.24, 1.0)]) == ()
 
 
-def test_exactly_half_holds_it_the_threshold_is_at_least_half():
-    # A 1024 pt wide page makes the arithmetic exact: the line is x 128..256 = 0.125..0.25, the block ends at 0.1875.
+def test_a_block_may_fall_short_of_the_line_by_the_edge_tolerance_and_no_more():
+    # F1. A 1024 pt wide page makes the arithmetic exact: the line is x 128..256 = 0.125..0.25; the tolerance is 0.005 of the width.
     line = TextLine(1, 0, 20, 128.0, 90.0, 256.0, 102.0)
-    block = box("blk_a", 0.0, 0.0, 0.1875, 1.0)
-    assert link([EvidenceSpan(1, 0, 20)], [line], [block], pages={1: (1024.0, 800.0)}) == ("blk_a",)
-    just_less = box("blk_a", 0.0, 0.0, 0.1874, 1.0)
-    assert link([EvidenceSpan(1, 0, 20)], [line], [just_less], pages={1: (1024.0, 800.0)}) == ()
+    pages = {1: (1024.0, 800.0)}
+    within = box("blk_a", 0.0, 0.0, 0.25 - 0.004, 1.0)
+    beyond = box("blk_a", 0.0, 0.0, 0.25 - 0.006, 1.0)
+    assert link([EvidenceSpan(1, 0, 20)], [line], [within], pages=pages) == ("blk_a",)
+    assert link([EvidenceSpan(1, 0, 20)], [line], [beyond], pages=pages) == ()
+    same_at_the_left = box("blk_a", 0.125 + 0.006, 0.0, 1.0, 1.0)
+    assert link([EvidenceSpan(1, 0, 20)], [line], [same_at_the_left], pages=pages) == ()
 
 
-def test_a_line_across_two_columns_is_cut_at_the_evidence_not_taken_whole():
+def test_the_block_must_cover_at_least_half_of_the_lines_height_exactly_half_holds_it():
+    # A 1024 pt high page: the line is y 128..256 = 0.125..0.25; the block ends at 0.1875, half of the line's height.
+    line = TextLine(1, 0, 20, 100.0, 128.0, 200.0, 256.0)
+    pages = {1: (600.0, 1024.0)}
+    assert link([EvidenceSpan(1, 0, 20)], [line], [box("blk_a", 0.0, 0.0, 1.0, 0.1875)], pages=pages) == ("blk_a",)
+    assert link([EvidenceSpan(1, 0, 20)], [line], [box("blk_a", 0.0, 0.0, 1.0, 0.1874)], pages=pages) == ()
+    assert link([EvidenceSpan(1, 0, 20)], [line], [box("blk_a", 0.0, 0.2501, 1.0, 1.0)], pages=pages) == ()
+
+
+def test_a_line_across_two_columns_holds_its_evidence_in_neither_column_the_cut_is_not_a_place():
+    # F1. The line crosses both columns; the characters say nothing of where the gap is, so neither half is "the left column".
     left, right = box("blk_l", 0.0, 0.2, 0.5, 0.3), box("blk_r", 0.5, 0.2, 1.0, 0.3)
-    # Characters 100..120 are the first half of the line: x 50..300 = 0.0833..0.5, the left column.
-    assert link([EvidenceSpan(1, 100, 120)], [WIDE], [left, right]) == ("blk_l",)
-    # Characters 125..140 are the last of it: x 362.5..550 = 0.6042..0.9167, the right column.
-    assert link([EvidenceSpan(1, 125, 140)], [WIDE], [left, right]) == ("blk_r",)
+    assert link([EvidenceSpan(1, 100, 120)], [WIDE], [left, right]) == ()
+    assert link([EvidenceSpan(1, 125, 140)], [WIDE], [left, right]) == ()
+    assert link([EvidenceSpan(1, 100, 140)], [WIDE], [left, right]) == ()
 
 
-def test_an_evidence_over_the_whole_of_a_line_is_held_by_every_block_covering_half_of_it():
-    # The line is x 0.0833..0.9167; the left block covers up to 0.6 (0.62 of it), the right one from 0.4 (0.62 of it).
-    left, right = box("blk_l", 0.0, 0.2, 0.6, 0.3), box("blk_r", 0.4, 0.2, 1.0, 0.3)
+def test_a_label_and_its_value_on_one_line_do_not_move_the_value_to_the_labels_block():
+    # F1, the judge's reproducer. "Итого" at x 20, a 300 pt gap carrying one space, then a phrase at x 330: one line of 36
+    # characters over x 20..520. The first ten characters of the phrase (6..16) stand in the right column, and the proportional
+    # cut put them at x 93..242, in the left one.
+    line = TextLine(1, 0, 36, 20.0, 200.0, 520.0, 212.0)
+    left, right = box("blk_left", 0.0, 0.2, 0.5, 0.3), box("blk_right", 0.5, 0.2, 1.0, 0.3)
+    assert link([EvidenceSpan(1, 6, 16)], [line], [left, right]) == ()
+    assert link([EvidenceSpan(1, 0, 5)], [line], [left, right]) == ()
+
+
+def test_a_line_inside_one_column_is_linked_to_that_column_wherever_the_evidence_stands_in_it():
+    line = TextLine(1, 0, 36, 330.0, 200.0, 520.0, 212.0)
+    left, right = box("blk_left", 0.0, 0.2, 0.5, 0.3), box("blk_right", 0.5, 0.2, 1.0, 0.3)
+    for span in (EvidenceSpan(1, 0, 5), EvidenceSpan(1, 12, 20), EvidenceSpan(1, 30, 36), EvidenceSpan(1, 0, 36)):
+        assert link([span], [line], [left, right]) == ("blk_right",)
+
+
+def test_an_evidence_over_a_line_is_held_by_every_block_that_extends_over_the_whole_of_it():
+    # The line is x 0.0833..0.9167; both blocks cover all of it (the portal's rectangles may overlap).
+    left, right = box("blk_l", 0.0, 0.2, 0.95, 0.3), box("blk_r", 0.05, 0.2, 1.0, 0.3)
     assert link([EvidenceSpan(1, 100, 140)], [WIDE], [left, right]) == ("blk_l", "blk_r")
+    assert link([EvidenceSpan(1, 100, 110)], [WIDE], [left, right]) == ("blk_l", "blk_r")
 
 
 def test_a_block_inside_another_block_holds_the_evidence_with_it():
     drawing, table = box("blk_d", 0.0, 0.0, 1.0, 1.0), box("blk_t", 0.1, 0.1, 0.4, 0.2)
     assert link([EvidenceSpan(1, 0, 20)], [LINE], [drawing, table]) == ("blk_d", "blk_t")
+
+
+def test_an_evidence_on_a_page_with_a_line_outside_it_has_no_block_even_if_the_caller_listed_the_page():
+    # F2. The text layer's coordinates are not the page's (the extractor's boxes are shifted by a MediaBox origin): the evidence
+    # line is above the page, the block that happens to sit under the shifted box would be a wrong one.
+    shifted = [TextLine(1, 0, 20, 100.0, -31.7, 200.0, -19.7), TextLine(1, 21, 41, 100.0, 90.0, 200.0, 102.0)]
+    assert link([EvidenceSpan(1, 21, 41)], shifted, [AROUND_LINE]) == ()
+    assert link([EvidenceSpan(1, 21, 41)], shifted[1:], [AROUND_LINE]) == ("blk_a",)
 
 
 def test_the_blocks_come_in_the_portal_order_not_the_order_of_the_evidence():
@@ -153,3 +196,29 @@ def test_a_quarter_turn_both_sides_agree_on_is_linkable():
 
 def test_a_page_the_inventory_does_not_hold_is_not_linkable():
     assert linkable_pages([portal_page(2)], {1: inventory_page()}) == {}
+
+
+def line_at(x0: float, y0: float, x1: float, y1: float) -> TextLine:
+    return TextLine(1, 0, 10, x0, y0, x1, y1)
+
+
+def test_a_page_with_a_line_above_the_page_is_not_linkable_the_origin_of_the_mediabox_is_not_zero():
+    # F2, the judge's row B: MediaBox [100 50 700 850], text 50 pt from the top; the extractor reports top -31.7.
+    lines = {1: [line_at(150.0, -31.7, 441.2, 8.3)]}
+    assert linkable_pages([portal_page()], {1: inventory_page()}) == {1: (600.0, 800.0)}
+    assert linkable_pages([portal_page()], {1: inventory_page()}, lines) == {}
+
+
+def test_a_page_with_a_line_past_its_right_or_bottom_edge_is_not_linkable():
+    # F2, the judge's row G: a rotated page whose line reaches x 831.7 on an 800 pt wide page.
+    assert linkable_pages([portal_page(width=1600, height=1200, rotation=90)], {1: inventory_page(800.0, 600.0, 90)},
+                          {1: [line_at(791.7, 0.0, 831.7, 81.2)]}) == {}
+    assert linkable_pages([portal_page()], {1: inventory_page()}, {1: [line_at(100.0, 790.0, 200.0, 801.5)]}) == {1: (600.0, 800.0)}, (
+        "a hair past the edge is the glyph box of a font, not a shift"
+    )
+    assert linkable_pages([portal_page()], {1: inventory_page()}, {1: [line_at(100.0, 790.0, 200.0, 808.0)]}) == {}
+
+
+def test_a_page_whose_lines_all_lie_inside_it_stays_linkable_and_other_pages_lines_do_not_count():
+    lines = {1: [line_at(50.0, 68.3, 341.2, 108.3)], 2: [line_at(0.0, -99.0, 10.0, 10.0)]}
+    assert linkable_pages([portal_page()], {1: inventory_page()}, lines) == {1: (600.0, 800.0)}

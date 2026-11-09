@@ -26,14 +26,19 @@ export const EXECUTION_PAGE_LIMIT = 25;
 /** The job states `listExecutionQueue` filters by, as the contract declares them. */
 export type ExecutionQueueState = NonNullable<NonNullable<ListExecutionQueueInput['query']>['state']>;
 
+/** `D-370` (contract 1.43.0): the queue's three groups of states, as `listExecutionQueue` names them (`state_group`). */
+export type ExecutionQueueStateGroup = NonNullable<NonNullable<ListExecutionQueueInput['query']>['state_group']>;
+
 /**
- * What narrows the queue (`UI-PARITY-QUEUE-A`). `state` keeps the jobs in one state; the period
+ * What narrows the queue (`UI-PARITY-QUEUE-A`). `state` keeps the jobs in one state and `stateGroup` (`D-370`) the jobs in any
+ * state of one group — the server refuses the two together, so a filter holds one of them; the period
  * `[createdFrom, createdTo)` keeps the jobs accepted in it, both as instants with an offset. Unset means no
  * filter. The server binds a cursor to the filters it was issued under, so a filter and its cursors
  * change together (the page resets its cursors when the filter moves) and are one cache key.
  */
 export interface ExecutionQueueFilter {
   readonly state?: ExecutionQueueState;
+  readonly stateGroup?: ExecutionQueueStateGroup;
   readonly createdFrom?: string;
   readonly createdTo?: string;
 }
@@ -46,6 +51,7 @@ export function queueQueryOptions(cursor?: string, filter: ExecutionQueueFilter 
         limit: EXECUTION_PAGE_LIMIT,
         ...(cursor === undefined ? {} : { cursor }),
         ...(filter.state === undefined ? {} : { state: filter.state }),
+        ...(filter.stateGroup === undefined ? {} : { state_group: filter.stateGroup }),
         ...(filter.createdFrom === undefined ? {} : { created_from: filter.createdFrom }),
         ...(filter.createdTo === undefined ? {} : { created_to: filter.createdTo }),
       },

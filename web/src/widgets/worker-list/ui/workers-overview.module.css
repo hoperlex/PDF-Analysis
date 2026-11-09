@@ -41,9 +41,16 @@
   font-size: var(--am-text-xs);
 }
 
+/*
+ * `D-431`: a tile's link is a 24 px target (it was 17). The extra height sits in the gap above it and the tile's padding below it
+ * (`1lh` is this link's own line), so the tile keeps the height it had.
+ */
 .link {
+  display: inline-flex;
+  align-items: center;
   justify-self: start;
-  margin-top: var(--am-gap-xs);
+  min-height: var(--am-target-min);
+  margin-block: calc(var(--am-gap-xs) + (1lh - var(--am-target-min)) / 2) calc((1lh - var(--am-target-min)) / 2);
   font-size: var(--am-text-xs);
 }
 

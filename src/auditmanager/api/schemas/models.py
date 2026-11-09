@@ -1050,7 +1050,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.42.0"]
+    contract_version: Literal["1.43.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1302,6 +1302,11 @@ class DocumentAudit(_Object):
     analysis in state `queued`, `running` or `validating`, by the order of the result run -- and is absent when none
     is. It is a fact beside the four words and changes none of them: a document whose first run is in flight is still
     `not_run`, and a `checked` one with a re-run in flight is still `checked`.
+
+    `optimisation_proposal_count` and `optimisation_undecided_count` (`D-361`, contract 1.43.0) are the proposals of the
+    version's latest optimisation pass and how many of them have no decision in force (none, or a withdrawn one) -- the
+    original's «Оптимизация N» pill. Both are present when a pass was started over the version and both are absent when none
+    was; they are a fact beside the four words and change none of them (`R-150u`).
     """
 
     state: Literal["not_run", "clean", "awaiting_decision", "checked"]
@@ -1311,6 +1316,13 @@ class DocumentAudit(_Object):
     finding_count: Annotated[int, Field(ge=0)]
     undecided_finding_count: Annotated[int, Field(ge=0)]
     active_run: DocumentActiveRun = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `D-361` (contract 1.43.0): the proposals of the version's latest optimisation pass and, of those, how many have no
+    #: decision in force (none, or a withdrawn one). Both are present when a pass was started over the version and both are
+    #: absent when none was: absent is "no optimisation read", never zero. A fact beside the four words (`R-150u`).
+    optimisation_proposal_count: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    optimisation_undecided_count: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class DocumentVersion(_Object):
@@ -1929,6 +1941,12 @@ class ExecutionQueuePage(_Object):
     #: `UI-PARITY-P0M` (contract 1.28.0): every job state with its count over the period filter (not the state
     #: filter), in the queue's state order, as the original's «N / M» and «N ✓ M ✗» line; a state with no job is 0.
     overview: list[ExecutionQueueStateCount] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    #: `D-395` (contract 1.43.0): how many failed jobs (`failed` or `dead_letter`) nothing has answered yet -- those with no
+    #: later job for a run of the same document version and the same analysis -- over all history, whatever the period or
+    #: state filter of this page. The original's «ошибки» figure: a failure drops out by being retried or superseded, not by
+    #: ageing. Independent of the filters, so a one-row page carries it too.
+    live_failure_count: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
 
 
@@ -2735,9 +2753,26 @@ class DecisionRecordPage(_Object):
     total: Annotated[int, Field(ge=0)]
 
 
+class ProposalDecisionCarriedFrom(_Object):
+    """`UI-B-14` (contract 1.37.0): where a carried decision came from -- the decision of an earlier version's pass
+    that an expert carried over to this proposal.
+
+    ``proposal_decision_id`` is the source decision's own identity and ``optimisation_pass_id`` and ``version_uid`` the
+    pass and version it was made in. ``version_ordinal`` is the version's display order («V2») and is never an identity.
+    """
+
+    proposal_decision_id: ProposalDecisionId
+    optimisation_pass_id: OptimisationPassId
+    version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
+
+
 class ProposalDecisionRecord(_Object):
     """`R-151h` (contract 1.25.0): one expert decision on an optimisation proposal, with where it belongs and what it
-    decided about -- the knowledge base's «Предложения» half, as ``DecisionRecord`` is its «Замечания» half."""
+    decided about -- the knowledge base's «Предложения» half, as ``DecisionRecord`` is its «Замечания» half.
+
+    ``carried_from`` (`D-335`, contract 1.43.0) is present only for a decision an expert carried over from an earlier
+    version's pass, and names the source; it is absent for a decision made directly."""
 
     proposal_decision_id: ProposalDecisionId
     optimisation_proposal_id: OptimisationProposalId
@@ -2755,6 +2790,10 @@ class ProposalDecisionRecord(_Object):
     row_text: Annotated[str, Field(min_length=1)]
     proposed_vendor: Annotated[str, Field(min_length=1)]
     unit: Annotated[str, Field(min_length=1)]
+    #: `D-335` (contract 1.43.0): as on ``ProposalDecision`` -- present only for a decision an expert carried over from
+    #: an earlier version's pass, naming the source decision, its pass and its version (with the display ordinal);
+    #: absent for one made directly.
+    carried_from: ProposalDecisionCarriedFrom = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class ProposalDecisionRecordPage(_Object):
@@ -4470,20 +4509,6 @@ class ProposalPosition(_Object):
     vendor: Annotated[str, Field(min_length=1, max_length=500)] | None
 
 
-class ProposalDecisionCarriedFrom(_Object):
-    """`UI-B-14` (contract 1.37.0): where a carried decision came from -- the decision of an earlier version's pass
-    that an expert carried over to this proposal.
-
-    ``proposal_decision_id`` is the source decision's own identity and ``optimisation_pass_id`` and ``version_uid`` the
-    pass and version it was made in. ``version_ordinal`` is the version's display order («V2») and is never an identity.
-    """
-
-    proposal_decision_id: ProposalDecisionId
-    optimisation_pass_id: OptimisationPassId
-    version_uid: VersionUid
-    version_ordinal: Annotated[int, Field(ge=1)]
-
-
 class ProposalDecision(_Object):
     """One appended expert decision. Never changed; the proposal's latest one is current -- unless
     that is a ``revoke``, which withdrew the decision before it and left the proposal ``pending``.
@@ -4614,7 +4639,9 @@ class AcceptedOptimisationProposal(_Object):
 
     A row is named by its proposal's own identity (``optimisation_proposal_id``); ``page_number`` and ``row_position``
     locate it in the drawing and are never an identity. The prices and the saving are the proposal's own exact decimal
-    text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number."""
+    text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number. ``saving_percent``
+    (`D-346`, contract 1.43.0) is the proposals read's percent of the current unit price, present where ``saving`` is
+    ``null`` too."""
 
     optimisation_proposal_id: OptimisationProposalId
     optimisation_pass_id: OptimisationPassId
@@ -4645,6 +4672,12 @@ class AcceptedOptimisationProposal(_Object):
     #: source decision (with its pass, version and the version's display ordinal) for one carried over from an earlier
     #: version's pass.
     carried_from: ProposalDecisionCarriedFrom | None
+    #: `D-346` (contract 1.43.0): as on ``OptimisationProposal`` -- how much cheaper the proposed unit price is than the
+    #: current one, in percent of the current unit price, rounded half up to two decimals; the same figure the proposals
+    #: read states. It does not wait for a numeric quantity, so it is present where ``saving`` is ``null``; absent only when
+    #: the current unit price is zero.
+    saving_percent: Annotated[str, Field(pattern=_PERCENT)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class AcceptedOptimisationProposalPage(_Object):

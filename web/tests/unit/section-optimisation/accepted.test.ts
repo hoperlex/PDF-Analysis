@@ -91,6 +91,24 @@ describe('the rows', () => {
     expect(text(tape)).toContain('не рассчитана');
   });
 
+  it('D-346: state the server\'s percent of the price under the amount, as the proposal card does, also where the amount is not computed', () => {
+    const MINUS = '\u2212';
+    const markup = list();
+    expect(text(markup)).toContain(`${MINUS}16 % к цене в прайс-листе`);
+    expect(markup).toContain('data-saving-percent="16"');
+    // The tape has no amount and has its percent: a price difference, worded as one.
+    const tape = list({ page: acceptedPage({ items: [acceptedTape()], total: 1 }) });
+    expect(text(tape)).toContain('не рассчитана');
+    expect(text(tape)).toContain(`${MINUS}33,33 % к цене в прайс-листе`);
+    expect(tape).toContain('data-saving-percent="33.33"');
+    // A row that carries none (a zero current price, or a server that predates it) draws no percent and no empty wrapper.
+    const { saving_percent: _omitted, ...bare } = acceptedRow();
+    void _omitted;
+    const none = list({ page: acceptedPage({ items: [bare], total: 1 }) });
+    expect(none).not.toContain('data-saving-percent');
+    expect(text(none)).not.toContain('к цене в прайс-листе');
+  });
+
   it('name the section by its title, and leave a code this build does not know as it was sent', () => {
     expect(acceptedSectionTitle('AR')).toBe('Архитектурные решения (АР)');
     expect(acceptedSectionTitle('XX')).toBe('XX');
@@ -161,7 +179,7 @@ describe('the tab as a screen', () => {
     const client = newClient();
     const correlation = '0f0e9d8c-7b6a-4948-b726-150413021100';
     seedError(client, acceptedKey({ sectionCode: 'AR' }), new ApiError(503, {
-      contract_version: '1.42.0', error_code: 'dependency_unavailable',
+      contract_version: '1.43.0', error_code: 'dependency_unavailable',
       message: 'Сообщение об отказе.', correlation_id: correlation, retryable: false,
     }, correlation));
     const markup = renderScreen(

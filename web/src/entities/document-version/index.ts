@@ -131,6 +131,7 @@ export type {
   AuditChip as AuditChipModel,
   AuditChipTone,
   AuditStateCode,
+  OptimisationPill,
   SectionAuditFilter,
 } from './model/audit-state';
 export {
@@ -139,6 +140,7 @@ export {
   AUDIT_PARTIAL_MARK,
   AUDIT_STATE_CODES,
   NOT_RUN_EMPTY_TITLE,
+  OPTIMISATION_PILL_LABEL,
   SECTION_FILTER_PARAM,
   SHOW_ALL_LABEL,
   activeRunHref,
@@ -146,6 +148,7 @@ export {
   auditChip,
   auditStateOf,
   notRunFilterSentence,
+  optimisationPill,
   parseSectionAuditFilter,
   pluralRu,
   withNotRunFilter,

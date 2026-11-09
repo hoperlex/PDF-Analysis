@@ -8,6 +8,10 @@ which is a filter and not a parent: a project nothing was decided in yields noth
 
 The decisions are read as appended: a later decision on the same proposal is another row, and the proposal's current
 verdict is its latest one, as everywhere in the optimisation context.
+
+A decision an expert **carried over** from an earlier version's pass (`UI-B-14`) names its source (`D-335`, contract
+1.43.0): the source decision, the pass and the version it was made in, and the version's display ordinal -- read by the
+same join the accepted list uses, and ``None`` for a decision made directly.
 """
 
 from __future__ import annotations
@@ -18,15 +22,23 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from .repository import CarriedFromRecord
+
 _JOURNAL = text(
     """
     SELECT
         d.proposal_decision_id, d.optimisation_proposal_id, d.verdict, d.comment, d.actor_user_uid, d.decided_at,
         p.optimisation_pass_id, p.row_text, p.proposed_vendor, p.unit,
         s.project_uid, pr.name AS project_name, s.document_uid, doc.display_title AS document_name, s.version_uid,
-        c.section_code
+        c.section_code,
+        cd.proposal_decision_id AS carried_decision_id, cq.optimisation_pass_id AS carried_pass_id,
+        cp.version_uid AS carried_version_uid, cv.version_ordinal AS carried_version_ordinal
     FROM optimisation_proposal_decision d
     JOIN optimisation_proposal p ON p.optimisation_proposal_id = d.optimisation_proposal_id
+    LEFT JOIN optimisation_proposal_decision cd ON cd.proposal_decision_id = d.carried_from_decision_id
+    LEFT JOIN optimisation_proposal cq ON cq.optimisation_proposal_id = cd.optimisation_proposal_id
+    LEFT JOIN optimisation_pass cp ON cp.optimisation_pass_id = cq.optimisation_pass_id
+    LEFT JOIN document_version cv ON cv.version_uid = cp.version_uid
     JOIN optimisation_pass s ON s.optimisation_pass_id = p.optimisation_pass_id
     JOIN project pr ON pr.project_uid = s.project_uid
     JOIN document doc ON doc.document_uid = s.document_uid
@@ -55,6 +67,8 @@ class ProposalJournalEntry:
     document_name: str
     version_uid: str
     section: str | None
+    #: `D-335`: where a decision carried over from an earlier version's pass came from; ``None`` for one made directly.
+    carried_from: CarriedFromRecord | None = None
 
 
 def proposal_decision_journal(session: Session, *, project_uid: str | None = None) -> tuple[ProposalJournalEntry, ...]:
@@ -78,6 +92,12 @@ def proposal_decision_journal(session: Session, *, project_uid: str | None = Non
             document_name=row["document_name"],
             version_uid=row["version_uid"],
             section=row["section_code"],
+            carried_from=(
+                None if row["carried_decision_id"] is None else CarriedFromRecord(
+                    proposal_decision_id=row["carried_decision_id"], optimisation_pass_id=row["carried_pass_id"],
+                    version_uid=row["carried_version_uid"], version_ordinal=int(row["carried_version_ordinal"]),
+                )
+            ),
         )
         for row in rows
     )

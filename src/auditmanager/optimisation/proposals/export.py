@@ -12,7 +12,10 @@ altered by the rule.
 
 One row per proposal in ordinal order, the pass's identities repeated on each row; the
 header is written even for a pass with no proposals. A saving that is absent is an empty
-cell -- never ``0``. Two exports of one pass with no new decision are byte-identical:
+cell -- never ``0``; the same goes for ``saving_percent`` (`D-346`, the share of the current unit price the
+proposed one saves, which stands where ``saving`` is absent for want of a numeric quantity, and is empty only at a zero
+current price). ``decision_carried_from_version`` (`D-335`) is the source version's display ordinal for a decision in force that
+an expert carried over from an earlier version's pass, and an empty cell otherwise. Two exports of one pass with no new decision are byte-identical:
 nothing here reads a clock, a locale or a random source.
 """
 
@@ -86,6 +89,12 @@ COLUMNS: Final[tuple[str, ...]] = (
     "decision_comment",
     "decided_by_user_uid",
     "decided_at",
+    # `D-346`, `D-335` (contract 1.43.0): appended, not placed beside ``saving`` or the decision. The file is read by position
+    # by whoever scripts against it, so a column inserted in the middle would shift every one after it; the two new ones take
+    # the end. ``decision_carried_from_version`` is the display ordinal of the earlier version's pass the decision in force
+    # was carried over from, empty for one made directly and for a proposal with no decision in force.
+    "saving_percent",
+    "decision_carried_from_version",
 )
 
 BOM: Final[bytes] = b"\xef\xbb\xbf"
@@ -172,6 +181,8 @@ def _row(header: OptimisationPassRecord, item: OptimisationProposalRecord) -> tu
         None if decision is None else decision.comment,
         None if decision is None else decision.actor_user_uid,
         None if decision is None else decision.decided_at,
+        item.saving_percent,
+        None if decision is None or decision.carried_from is None else decision.carried_from.version_ordinal,
     )
     return tuple(_cell(value) for value in values)
 

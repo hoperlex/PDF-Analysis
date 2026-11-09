@@ -3,7 +3,7 @@ import { ERROR_CODE_VALUES, RUN_STATE_VALUES } from '@/shared/api';
 import { STATE_LABELS } from '@/shared/ui';
 import { terminalReasonNote } from '@/entities/audit-run';
 
-import type { ExecutionQueueState } from '../api/use-execution';
+import type { ExecutionQueueState, ExecutionQueueStateGroup } from '../api/use-execution';
 
 export type ExecutionAction = 'cancel' | 'reaudit' | 'priority' | 'pause' | 'intake' | 'connections';
 
@@ -57,7 +57,8 @@ export const QUEUE_STATE_OPTIONS: readonly { readonly value: ExecutionQueueState
 
 /** A group of the original's task sub-tabs («Активные», «Завершённые», «Ошибки») over this queue's states. */
 export interface QueueStateGroup {
-  readonly key: 'active' | 'completed' | 'errors';
+  /** The group's name on the wire: `state_group` of `listExecutionQueue` (`D-370`), which the contract types. */
+  readonly key: ExecutionQueueStateGroup;
   readonly label: string;
   readonly states: readonly ExecutionQueueState[];
 }
@@ -68,8 +69,9 @@ export interface QueueStateGroup {
  * person) is **completed**; one that ended in failure, or stopped after its retries, is an **error**. Every state is in exactly one
  * group (a test holds it), so the group counts add up to the queue's total.
  *
- * The server filters by ONE state (`state` of `listExecutionQueue`), so a group is a heading over its states' counts and not a
- * filter of its own; listing a whole group at once needs the server to accept a set of states (`D-370`).
+ * A group is also a filter (`D-370`, contract 1.43.0): `listExecutionQueue` takes `state_group` and lists every job in any state of
+ * the group, one paged and counted list. The server holds the same three sets (`execution.public.QUEUE_STATE_GROUPS`); a test here
+ * and one there hold them equal, so a group's press lists exactly the jobs its counts add up.
  */
 export const QUEUE_STATE_GROUPS: readonly QueueStateGroup[] = [
   { key: 'active', label: 'Активные', states: ['queued', 'leased', 'running', 'retry_wait'] },

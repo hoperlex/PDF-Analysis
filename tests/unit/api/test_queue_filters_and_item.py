@@ -47,6 +47,27 @@ def test_no_filter_is_no_scope_and_a_filter_is_three_words() -> None:
     )
 
 
+def test_a_group_is_the_first_word_of_the_scope_and_a_state_never_looks_like_one() -> None:
+    """`D-370`: a group rides the state's slot as `group:<name>`, so the cursor format is the one it always was."""
+    assert _queue_scope(None, None, None, "errors") == ("group:errors", "", "")
+    assert _queue_scope(None, CREATED, None, "active") == ("group:active", "2026-11-04T09:30:00+00:00", "")
+    # Another group, a state of that group, and no group are each another list.
+    assert len({_queue_scope(None, None, None, name) for name in ("active", "completed", "errors")}) == 3
+    assert _queue_scope(None, None, None, "errors") != _queue_scope("failed", None, None)
+    assert _queue_scope(None, None, None, "errors") != _queue_scope(None, None, None)
+    assert all(not state.startswith("group:") for state in ("queued", "leased", "running", "retry_wait", "succeeded", "failed", "cancelled", "dead_letter"))
+
+
+def test_a_group_cursor_is_read_only_under_its_own_group() -> None:
+    scope = _queue_scope(None, None, None, "errors")
+    assert scope is not None
+    cursor = encode_cursor(("q2", *scope, *COORDINATES))
+    position = _queue_cursor(cursor, scope)
+    assert position is not None and position.job_id == JOB
+    for other in (_queue_scope(None, None, None, "active"), _queue_scope("failed", None, None), _queue_scope(None, CREATED, None, "errors"), None):
+        _refused(cursor, other, "scope")
+
+
 def test_one_instant_sent_with_two_offsets_is_one_scope() -> None:
     plus_five = datetime(2026, 11, 4, 14, 30, tzinfo=timezone(timedelta(hours=5)))
     assert plus_five == CREATED
@@ -190,11 +211,13 @@ def _declared(operation: dict) -> dict[str, dict]:
     return {p["name"]: p for p in operation["parameters"] if p.get("in") == "query"}
 
 
-def test_the_operation_declares_the_three_optional_filters() -> None:
+def test_the_operation_declares_the_optional_filters() -> None:
     declared = _declared(_operation())
-    assert set(declared) == {"cursor", "limit", "state", "created_from", "created_to"}
-    for name in ("state", "created_from", "created_to"):
+    # `D-370` (contract 1.43.0) adds `state_group` beside `state` and the period.
+    assert set(declared) == {"cursor", "limit", "state", "state_group", "created_from", "created_to"}
+    for name in ("state", "state_group", "created_from", "created_to"):
         assert declared[name].get("required", False) is False, name
+    assert declared["state_group"]["schema"]["enum"] == ["active", "completed", "errors"]
     for name in ("created_from", "created_to"):
         schema = declared[name]["schema"]
         assert (schema["type"], schema["format"]) == ("string", "date-time"), name
