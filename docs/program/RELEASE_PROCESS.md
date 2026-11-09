@@ -83,9 +83,10 @@ a list a person works through; there is no CI and no machine that checks them
 8. The tag and the `RELEASES.md` row only after lines 6 and 7.
 
 Outside the eight lines, a precondition of real data and not of a release (`D-490`): before the first real client document is uploaded,
-and with `memory_setting show` printing `uncaptured-decisions: 0`, the operator runs `memory_setting set data_class real --actor <admin>`
-(`DEPLOYMENT_RUNBOOK.md` section 20) and writes the output and the date in the release record. The release record of the release that first
-carries real client data names that line; `show` must read `data_class: real` there. A case captured as `test` stays `test`.
+and with `infra/deploy/memory-setting.sh --database <db> show` printing `uncaptured-decisions: 0`, the operator runs
+`infra/deploy/memory-setting.sh --database <db> set data_class real --actor <admin>` (`DEPLOYMENT_RUNBOOK.md` section 20), and writes the
+output and the date in the release record. The release record of the release that first carries real client data names that line; `show`
+must read `data_class: real` there. A case captured as `test` stays `test`.
 
 ### The manual scan (line 3)
 

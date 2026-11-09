@@ -41,6 +41,8 @@ down`. This is the deployed stack.
 | `deploy.sh` | `PA-01` criterion 1 — bring this clone up, and refuse to call it deployed until the stack has answered |
 | `reset.sh` | `T-5` — the guarded wipe, and the restore of its own dump |
 | `purge-product-data.sh` | `STAND-PURGE-TOOL-01` — delete the stand's product data (projects, documents, runs, findings, decisions, price lists, their objects) and **keep the accounts and the norm corpus**; dumps and verifies first. Since `PROD-04` it runs the python half as the owner (`MIGRATOR_DATABASE_URL`). `docs/program/STAND-PURGE-TOOL-01.md` |
+| `memory-setting.sh` | `D-511` — show and change the decision memory's installation settings (`data_class`, `training_use`) through `scripts/recovery/memory_setting.py` in a one-off `api` container as the owner; looks, makes the operator retype the new value, writes, reads it back. Runbook §20 |
+| `memory-forget.sh` | `D-511` — make the decision memory forget cases (`--case`, `--origin-project`, `--all`) through `scripts/recovery/memory_forget.py`: dry run, apply with the owner's permission and two retyped answers, resume; takes no dump. Runbook §21 |
 | `verify-deployed.sh` | `D-27` — is the stack in front of you this tree? |
 | `reload-proxy.sh` | `D-27` — the step after a rebuild that everyone forgets |
 | `object_attrs.py` | the third part of a dump: each object's S3 attributes |

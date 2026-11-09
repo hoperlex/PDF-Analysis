@@ -677,6 +677,65 @@ def test_a_writer_that_does_not_let_go_is_a_refusal_with_words_not_a_database_er
     assert a_content(stand, memory) == 3
 
 
+def fill_the_lock_table(stand: Stand, leave: int) -> Callable[[], None]:
+    """Take session-level advisory locks (one lock-table slot each) until the server has none left, then give back ``leave`` of them.
+
+    The lock table is server-wide, so this is what a forget of a great many cases runs into, made small: ``D-497`` item 6. The
+    locks belong to a session of their own and outlive its transactions; the returned function lets them go."""
+    holder = stand.engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+
+    def release() -> None:
+        holder.execute(text("SELECT pg_advisory_unlock_all()"))
+        holder.close()
+
+    try:
+        try:
+            holder.execute(text("SELECT count(pg_advisory_lock(g)) FROM generate_series(1, 400000) g"))
+        except Exception as error:  # noqa: BLE001
+            assert getattr(getattr(error, "orig", None), "sqlstate", "") == "53200", error
+        else:
+            pytest.fail("the lock table did not fill: this server's lock table is larger than the test can fill")
+        held = int(holder.execute(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()")).scalar_one())
+        assert held > leave, held
+        holder.execute(text("SELECT count(pg_advisory_unlock(g)) FROM generate_series(CAST(:first AS bigint), CAST(:last AS bigint)) g"),
+                       {"first": held - leave + 1, "last": held})
+    except BaseException:
+        release()          # a table left full would fail every test after this one for a reason that is not theirs
+        raise
+    return release
+
+
+def test_a_selection_too_large_for_the_servers_lock_table_is_a_refusal_with_numbers_and_changes_nothing(
+    stand: Stand, tmp_path: Path
+) -> None:
+    """``D-497`` item 6. A forget holds one advisory lock per case until it commits (the status guard takes it on the INSERT, so it cannot be
+    skipped), and the lock table is shared by the whole server. Here the table is filled by another session until 250 slots are left and 500
+    cases are asked for: the tool must say so in words, with the numbers, change nothing, and go through once the slots are back."""
+    with stand.engine.begin() as connection:
+        for _ in range(500):
+            seed_case(connection, project=PROJECT_A)
+    code, out, err = invoke(tool, stand, "--all")
+    assert code == 0 and _line(out, "cases") == "500", (out, err)
+    argv = ["--all", *flags(_line(out, "plan-sha256"), tmp_path)]
+    before = state_of(stand)
+    release = fill_the_lock_table(stand, leave=250)
+    try:
+        code, out, err = invoke(tool, stand, *argv)
+        assert refused(code, err, "the server's lock table ran out"), (code, out, err)
+        assert "500 cases need one advisory lock each" in err and "max_locks_per_transaction" in err and "Nothing was changed" in err
+        assert "out of shared memory" not in err, "the operator reads words, not the database's error"
+        taken = int(re.search(r"ran out after (\d+)", err).group(1))  # type: ignore[union-attr]
+        assert 0 < taken < 500 and f"at most {taken // 2} cases" in err, err
+        code, out, err = invoke(mutant("lock-table-room"), stand, *argv)
+        assert code == tool.EXIT_FAILED and "out of shared memory" in err, (code, out, err)   # without the guard: the raw database error
+    finally:
+        release()
+    assert state_of(stand) == before, "the refusal rolled everything back"
+    code, out, err = invoke(tool, stand, *argv)                                  # the same plan, once the slots are back: it was the lock table
+    assert code == 0, (code, out, err)
+    assert forgets(stand) == 500 and count(stand, "decision_memory_content") == 0
+
+
 def test_a_blob_that_would_not_move_to_erasure_pending_rolls_the_forget_back(stand: Stand, memory: Memory, tmp_path: Path) -> None:
     argv = apply_args(stand, tmp_path)
     install_fault(stand, "aa_fault_skip_pending", "blob", "BEFORE", "UPDATE", "RETURN NULL;", "WHEN (NEW.state = 'erasure_pending')")
@@ -891,7 +950,8 @@ GUARDS_WITH_A_SCENARIO = (
     # the catalog and the plan
     "head-is-declared", "forget-guard-installed", "blob-columns-closed", "owner-may-write", "no-pending-erasure", "blobs-available",
     # the transaction
-    "forget-lock-free", "lock-available", "plan-unchanged", "blobs-pending", "keep-unchanged", "content-emptied", "triggers-restored",
+    "forget-lock-free", "lock-available", "lock-table-room", "plan-unchanged", "blobs-pending", "keep-unchanged", "content-emptied",
+    "triggers-restored",
     # the objects and the finish
     "object-key-shape", "objects-unreferenced", "objects-gone", "finish-matches-manifest", "pending-unreferenced", "pending-cleared",
     # the resume
@@ -904,5 +964,5 @@ def test_every_guard_of_the_tool_has_a_scenario_above() -> None:
     source = SOURCE.read_text(encoding="utf-8")
     opened = re.findall(r"^[ \t]*# >>> guard: ([a-z0-9-]+)$", source, flags=re.MULTILINE)
     closed = re.findall(r"^[ \t]*# <<< guard: ([a-z0-9-]+)$", source, flags=re.MULTILINE)
-    assert opened == closed and len(opened) == 32
+    assert opened == closed and len(opened) == 33
     assert sorted(opened) == sorted(GUARDS_WITH_A_SCENARIO)
