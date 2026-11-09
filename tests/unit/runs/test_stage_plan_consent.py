@@ -185,6 +185,28 @@ def test_the_preflight_reads_the_seam_it_was_built_with_unless_told_the_answer(r
     assert estimate(policy, plan=None).stage_plan is None and len(asked) == 1, "None is an answer: the seam is not asked again"
 
 
+def test_a_repeat_under_the_layout_asks_nothing_of_the_sources_executor(registry, monkeypatch):
+    asked = []
+
+    class Runs:
+        def get(self, session, run_id):
+            return NS(analysis_profile_id="ap_01M5M28ZCDD8VPSP1BTAEW92YF", prompt_bundle_id="pb_01M5M28ZCDVCR37BX1884JGSPN",
+                      version_uid=VERSION)
+
+        def chosen_executor_connection(self, session, run_id):
+            asked.append(run_id)
+            return "exc_01M2545JSD15ETSNNV904X991K"
+
+    monkeypatch.setattr("auditmanager.runs.repository.RunRepository", Runs)
+    policy = service(registry)
+    planned = policy.estimate_reaudit(None, run_id="run_01M2545JSD15ETSNNV904X991K", stage_plan=draft())
+    assert planned.stage_plan is not None and asked == [], "the stand chooses the servers: the source's named connection is not read"
+    assert planned.as_dict()["version_uid"] == VERSION and "reaudit_of_run_id" in json.loads(planned.authority_json)
+    with pytest.raises(DomainError):
+        policy.estimate_reaudit(None, run_id="run_01M2545JSD15ETSNNV904X991K", stage_plan=None)
+    assert asked == ["run_01M2545JSD15ETSNNV904X991K"], "with the layout off the source's executor is read, as it always was"
+
+
 # --- consent v2 -----------------------------------------------------------------------------------------------------------------
 
 

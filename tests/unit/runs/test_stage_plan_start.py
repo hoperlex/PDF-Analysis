@@ -224,14 +224,18 @@ def test_a_cell_with_no_server_refuses_the_start_and_nothing_is_substituted() ->
 
 
 @pytest.mark.parametrize("command", [_repeat, _from_stage])
-def test_a_repeat_and_a_start_from_a_stage_take_today_s_plan_and_ignore_the_source_s_executor(command) -> None:
-    ledger, runs, session, freezer, admitter, preflight, stage_plans = (
-        Ledger(), Runs(source(), CONNECTION), Session(), Freezer(), Admitter(mode="rules"), Preflight(), Layout())
+@pytest.mark.parametrize("route", ["freezer", "environment"])
+def test_a_repeat_and_a_start_from_a_stage_take_today_s_plan_and_ignore_the_source_s_executor(command, route) -> None:
+    # with no route freezer (the environment source) a source that named a connection is refused on the legacy route; under the layout the
+    # connection is not carried over, so there is nothing to serve and nothing to refuse
+    freezer = Freezer() if route == "freezer" else None
+    ledger, runs, session, admitter, preflight, stage_plans = (
+        Ledger(), Runs(source(), CONNECTION), Session(), Admitter(mode="rules"), Preflight(), Layout())
     command(ledger, runs, session, stage_plans=stage_plans, preflight=preflight, freezer=freezer, admitter=admitter)
     (row,) = runs.created
     assert row["binding_state"] == "pending" and row["stage_plan"]["layout_revision_id"] == REVISION
     assert row.get("connection_revision_id") is None
-    assert freezer.calls == [] and admitter.calls == [], "the source's named connection is not carried over"
+    assert (freezer is None or freezer.calls == []) and admitter.calls == [], "the source's named connection is not carried over"
     ((kind, kwargs),) = preflight.calls
     assert kind in {"reaudit", "from_stage"} and kwargs["stage_plan"] is stage_plans._draft
     (event,) = session.events

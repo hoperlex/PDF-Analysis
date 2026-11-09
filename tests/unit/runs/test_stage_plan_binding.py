@@ -467,6 +467,21 @@ def test_another_reported_model_is_refused_and_a_listed_name_is_accepted(monkeyp
     assert refused(Harness(monkeypatch).call, silent, request).detail_fields["reason"] == "extended_model_identity_mismatch"
 
 
+def test_a_phase_is_called_on_the_cell_of_its_row_and_a_phase_without_a_row_is_refused() -> None:
+    source, runs, _ = providers()
+    run_level = source.resolve(None, runs.run())
+    expected = {"blocks:0": "blocks:main", "blocks:b002": "blocks:main", "comprehensive": "cross_check:main",
+                "comprehensive_analysis:b001": "cross_check:main", "norm_verification:b003:repair:1": "norms:main",
+                "critic": "review:main", "finding_review:b001:repair:1": "review:main", "corrector": "correction:main"}
+    for identity_, cell_key in expected.items():
+        assert review._phase_binding(run_level, identity_).call.cell_key == cell_key, identity_
+    for modelless in ("merge", "report", "unknown:b001"):
+        error = refused(review._phase_binding, run_level, modelless)
+        assert error.detail_fields["reason"] == "extended_phase_has_no_cell"
+    legacy = ProviderBinding(adapter=Adapter("m"), config=base_config(), call=CallBinding(expected_model="m", check_identity=True))
+    assert review._phase_binding(legacy, "merge") is legacy and review._phase_binding(legacy, "blocks:0") is legacy
+
+
 def test_the_phase_dictionary_maps_every_call_identity_of_the_workflow_to_one_row() -> None:
     expected = {
         "blocks:3": "blocks", "blocks:b002": "blocks", "comprehensive": "cross_check", "comprehensive:2": "cross_check",
