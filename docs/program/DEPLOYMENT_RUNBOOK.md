@@ -2463,7 +2463,17 @@ the journal; it needs no plan digest and asks nothing.
 A forget holds **one advisory lock per case until it commits** (the database's own status guard takes it on each tombstone, so it cannot be
 left out), and the server's lock table is shared by every session: `max_locks_per_transaction x (max_connections +
 max_prepared_transactions)` slots in all, `64 x (100 + 0) = 6400` on the production compose (the settings are PostgreSQL's defaults).
-<<MEASURED>>
+Measured on a PostgreSQL with those defaults (`.local/evidence/lane-mem-ops-d511/measure-locks.sh`, 2026-11-09, tree `3f4f0702b`, nothing else
+running): the table filled at **13056** advisory locks, about twice the 6400 the formula gives (PostgreSQL rounds the shared memory up).
+`memory_forget --all` over **12000** cases went through; over **14000** it stopped after **13011** locks and changed nothing. So on the
+production compose a forget of up to about **13000** cases is one run, with `api` and `worker` stopped; the formula is what to read when the
+server's settings are not the defaults. Past the limit the tool refuses, in words and with the numbers (`the lock table ran out after N`),
+and there are two ways out: split the selection (one project at a time with `--origin-project`, or `--case` in batches well below the number
+the message names), or raise `max_locks_per_transaction` in the server's configuration and restart it (`compose.server.yml` sets no `command:`
+for `postgres` today, so that is a change to the compose file, the owner's). A forget of thousands of cases holds a large part of the shared
+table until it commits, and a statement of any other session that needs a lock while the table is full fails with `out of shared memory`:
+this is one more reason `api` and `worker` are stopped for the run. The dry run does not say how near a selection is to the limit; the
+operator who knows the memory holds more than a few thousand cases reads this paragraph first (`D-516`).
 
 ### What the script's guards are
 
