@@ -9,8 +9,9 @@
  *
  * The limits of a cell (answer tokens, timeout) are today's constants of the code (ADR-0028: 16000, 6000 and 12000 tokens);
  * a revision in force keeps its own limits for a cell the form changes, and these apply only to a cell the revision has not
- * got. The timeout has no constant in the code to copy for the new kinds of cell; the default is the ceiling of one attempt
- * of the proxy path (`DEFAULT_TIMEOUT_SECONDS`) and the server bounds it (1 to 7200).
+ * got. The timeout has no constant in the code to copy for the new kinds of cell; the default is 1800 seconds
+ * (`DEFAULT_TIMEOUT_SECONDS`, the same as the server's default of a cell, `HOSTS-LAYOUT-01`) and the server bounds it
+ * (1 to 7200).
  */
 
 import type {
@@ -22,7 +23,7 @@ import type {
 } from '@/shared/api';
 import { STAGE_ROW_KEY_VALUES } from '@/shared/api';
 
-export const DEFAULT_TIMEOUT_SECONDS = 600;
+export const DEFAULT_TIMEOUT_SECONDS = 1800;
 
 /** The answer limits that are constants of the code today. */
 export const DEFAULT_ANSWER_TOKENS: Readonly<Record<StageRowKey, number>> = {

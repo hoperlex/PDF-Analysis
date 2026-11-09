@@ -106,7 +106,7 @@ export const CATALOGUE: ModelCatalogue = {
 };
 
 export function cell(row: StageLayoutCell['row'], model: string, effort: StageLayoutCell['effort'] = 'medium', role: StageLayoutCell['role'] = 'main'): StageLayoutCell {
-  return { cell_key: `${row}:${role}`, row, role, model_id: model, effort, max_output_tokens: 6000, timeout_seconds: 600 };
+  return { cell_key: `${row}:${role}`, row, role, model_id: model, effort, max_output_tokens: 6000, timeout_seconds: 1800 };
 }
 
 export const LAYOUT_CELLS: StageLayoutCell[] = [
