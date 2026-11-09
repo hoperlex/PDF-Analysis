@@ -11,7 +11,40 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.46.0` (`HOSTS-SEAL-2`)
+## Current contract `1.47.0` (`HOSTS-SEAL-3`)
+
+Slice for `HOSTS-SEAL-3` with `HOSTS-CMP-01` (ADR-0028 decision 19; decisions of the HOSTS integrator, 2026-11-10): **the comparison of versions on the stage
+layout**. **No operation, two new schemas, three widened ones, no migration, no new error code, no state machine and no identity prefix**; migration head
+stays `0062`. The paths and operations are those of `1.46.0`.
+
+- **The cells.** The four kinds of comparison work that call a model -- `comparison_pair_check`, `comparison_sheet_changes`, `comparison_spec` and
+  `comparison_report` (the new enum `ComparisonLayoutKind`; `comparison_stage_review` has no handler and is not offered) -- each get one cell of the
+  layout, `StageComparisonCell`: `work_kind`, `model_id`, `effort`, `max_output_tokens` (1 to 65536) and `timeout_seconds` (1 to 7200). The model and the
+  effort are a pair of `listModelCatalogue`, as for a row. The analysis rows (`StageRowKey`, `StageLayoutCell`) are unchanged: no existing reader changes.
+- **The layout.** `ReviseStageModelLayoutRequest.comparison_cells` is **optional**: the four cells, each kind once. A named kit
+  (`claude_only`, `codex_only`) must have the models and efforts of its table (a limit or a timeout may be longer or shorter, as for the rows); `custom`
+  may name any pair of the catalogue. `StageLayoutRevision.comparison_cells` returns the cells **in force**: what the revision stored, else the table
+  of its kit -- so a revision made before this seal serves with the kit's defaults. It is absent only for a `custom` revision that stored none: its
+  comparison kinds have no cell, and a comparison is refused (`503 dependency_unavailable`, `executor_route_missing`), never served by a model nobody
+  chose. `StageModelLayout.unavailable_cell_keys` also names a comparison cell (`comparison_pair_check:main`) whose model no server serves.
+- **The tables** (the original's `version_comparison_ai` settings mapped onto the catalogue; the original's `gpt-6-luna` is not a pin, so it is
+  `gpt-6-astra`): « Только Codex » -- pair check `gpt-6-astra` high, 1200 tokens, 900 s; sheet changes `gpt-6.1-sol` high, 8192, 1800 s; specification
+  `gpt-6-astra` high, 32000, 900 s; report `gpt-6.1-sol` high, 8000, 2400 s. « Только Claude » -- `claude-sonnet-5-5` high for all four, with the same
+  limits and windows.
+- **The route.** `ComparisonAiRoute.cell` (optional) is the cell a comparison job froze. While the layout is switched on, an estimate or a start of one
+  of the four kinds is served by the system group of the cell's model (a subscription before an API key; the group revision, not a connection, is the
+  route), so it is a route of the group shape (`executor_group_id`, `executor_group_revision_id`, no `routing_rule_revision_id`) with the `cell`. **The
+  estimate digest binds the cell**: the consent names what will run. A kind whose model no server serves is refused at the estimate and at the start with
+  `503 dependency_unavailable`, `executor_route_missing`; it is not routed to a legacy connection or a rule. With the layout switched off the route is
+  what it was.
+- **The call.** The cell's effort replaces the module's, its limit is a ceiling over the module's own (`min(module limit, cell limit)`, also in the
+  estimate's `output_tokens`) and its timeout is the window of the call to the server. A job admitted by the legacy route or by a rule keeps today's
+  values.
+- **Not changed.** Every operation, every other schema, the stage plan a run freezes (it holds the six rows only) and every error code.
+
+The API has 296 paths, 324 operations and 796 schemas; migration head `0062`. The domain catalogs are at candidate revision 64.
+
+## Contract `1.46.0` (`HOSTS-SEAL-2`, historical)
 
 Slice for `HOSTS-SEAL-2` with `RUN-STAGES-01` (ADR-0028; plan section 9.4 of the owner-approved plan of 2026-11-09): **the stages of a run, plan and
 fact**. **One operation, seven schemas, no migration, no new error code, no state machine and no identity prefix**; migration head stays `0062`.

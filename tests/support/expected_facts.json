@@ -1749,6 +1749,7 @@
       "ComparisonLaunchQueueCounts",
       "ComparisonLaunchQueueState",
       "ComparisonLayer",
+      "ComparisonLayoutKind",
       "ComparisonMatrix",
       "ComparisonMatrixCandidate",
       "ComparisonMatrixCell",
@@ -2309,6 +2310,7 @@
       "StageChangeCategory",
       "StageChangeJournal",
       "StageClassificationCard",
+      "StageComparisonCell",
       "StageGraphicEvidence",
       "StageGraphicEvidenceId",
       "StageGraphicEvidencePage",
@@ -2426,5 +2428,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0062_hosts_stage_models",
-  "contract_version": "1.46.0"
+  "contract_version": "1.47.0"
 }

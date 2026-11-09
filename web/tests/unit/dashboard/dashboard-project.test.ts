@@ -68,7 +68,7 @@ const ONLY_B = summaryOf({ uid: B, name: 'Проект Бета', documents: 5 }
 
 function notFound(): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.46.0',
+    contract_version: '1.47.0',
     error_code: 'not_found',
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-dashboard-404',
