@@ -339,7 +339,7 @@ def test_the_settings_journal_is_closed_immutable_and_an_on_names_the_owners_per
     for over, constraint in [
         ({"n": "retention"}, "ck_decision_memory_setting_event_setting_name"),
         ({"v": "production"}, "ck_decision_memory_setting_event_value"),
-        ({"v": "on"}, "ck_decision_memory_setting_event_value_for_name"),              # on is not a data class
+        ({"v": "on", "ref": REF}, "ck_decision_memory_setting_event_value_for_name"),  # on is not a data class
         ({"n": "training_use", "v": "real"}, "ck_decision_memory_setting_event_value_for_name"),
         ({"n": "training_use", "v": "on"}, "ck_decision_memory_setting_event_on_needs_permission"),
         ({"r": 0}, "ck_decision_memory_setting_event_revision"),

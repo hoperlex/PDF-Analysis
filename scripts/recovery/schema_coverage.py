@@ -468,7 +468,11 @@ SEQUENCES = {
 #: vocabularies and the geometry): c 1385, f 381, p 143, u 133, t 10 (measured on a throwaway database at ``0059`` on 2026-11-09).
 #: `0060_run_from_stage` (`UI-A-60`, `R-151i`, chained after `0059`) adds, on ``audit_run``, four checks (the source's identity shape, not itself, the
 #: start stage, both-or-neither) and one foreign key (the run whose outputs are reused): c 1389, f 382 (measured on a throwaway database at ``0060``).
-CONSTRAINT_COUNTS = {"c": 1389, "f": 382, "p": 143, "t": 10, "u": 133}
+#: `0061_decision_memory_m2` (`DECISION-MEMORY-01` phase M2) adds, on ``decision_memory_status_event``, the actor's foreign key (to ``app_user``) and
+#: two checks (the forgotten content's digest: its shape, and exactly on a forget), and the table ``decision_memory_setting_event``: a primary key, a
+#: foreign key (the actor) and seven checks (name, revision, value, the actor's identity shape, the permission reference, value-for-name, an ``on``
+#: names the owner's permission): c 1398, f 384, p 144, t 10, u 133 (measured on a throwaway database at ``0061``, 2026-11-09).
+CONSTRAINT_COUNTS = {"c": 1398, "f": 384, "p": 144, "t": 10, "u": 133}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -480,8 +484,9 @@ CONSTRAINT_COUNTS = {"c": 1389, "f": 382, "p": 143, "t": 10, "u": 133}
 #: `audit_run` and `comparison_ai_job`); 0049 and 0050 add none; 0051..0054 add four (the two new tables' keys and one
 #: lookup each) and 0055 nine (five keys, four lookups): 463, measured at ``0055`` on 2026-11-06; `0057` adds the partial
 #: index of the carried-from decision: 464, measured at ``0057`` on 2026-11-07; `0058` adds the same partial index on
-#: ``expert_decision_event``: 465; `0059` adds 17 (eight primary keys, four unique constraints and five lookups): 482; `0060` adds the partial index of the run a run was started from: 483.
-INDEX_COUNT = 483
+#: ``expert_decision_event``: 465; `0059` adds 17 (eight primary keys, four unique constraints and five lookups): 482; `0060` adds the partial index of the run a run was started from: 483;
+#: `0061` adds the settings table's primary key: 484 (measured on a throwaway database at ``0061``, 2026-11-09).
+INDEX_COUNT = 484
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((
