@@ -123,7 +123,7 @@ def test_every_cell_gets_its_own_adapter_and_a_call_binding_held_to_its_model() 
         assert one.config.model_id == cell.model_id and one.config.cell_settings == cell
         assert one.adapter.reply_model == cell.model_id
         seen[cell.cell_key] = one
-    assert seen["blocks:main"].call.expected_model == "claude-opus-5-5", "the blocks cell is not the text cell's model"
+    assert seen["blocks:leg1"].call.expected_model == "claude-opus-5-5", "the blocks cell is not the text cell's model"
     assert len({id(one.adapter) for one in seen.values()}) == len(seen)
     # a cell is built once per resolve: a second ask is the same binding, and the binder was asked once per cell
     assert binding.cells("norms:main") is seen["norms:main"]
@@ -146,7 +146,7 @@ def test_an_api_cell_is_metered_and_a_member_that_disagrees_is_refused() -> None
 
 
 def test_a_cell_with_no_binding_row_a_foreign_cell_and_a_run_without_a_plan_are_refused() -> None:
-    source, runs, _ = providers(Runs(bound_cells=("text:main", "blocks:main")))
+    source, runs, _ = providers(Runs(bound_cells=("text:main", "blocks:leg1")))
     assert refused(source.resolve, None, runs.run()).detail_fields["reason"] == "cell_not_bound"
     source, runs, _ = providers()
     binding = source.resolve(None, runs.run())
@@ -167,7 +167,7 @@ def test_the_cell_binding_carries_the_consent_of_the_run() -> None:
     run_level = replace(source.resolve(None, runs.run()), config=replace(source.resolve(None, runs.run()).config,
                         **{k: getattr(approved_config(), k) for k in (
                             "approved_cost_ceiling", "approved_models", "approved_stage_plan_digest", "approved_window_characters")}))
-    one = cell_binding(run_level, "blocks:main")
+    one = cell_binding(run_level, "blocks:leg1")
     assert one.config.model_id == "claude-opus-5-5" and one.config.approved_cost_ceiling is True
     assert one.config.approved_models == approved_config().approved_models and one.config.approved_stage_plan_digest == "d" * 64
     assert one.config.approved_window_characters == 1234 and one.cells is None
@@ -176,7 +176,7 @@ def test_the_cell_binding_carries_the_consent_of_the_run() -> None:
 
 def test_a_run_that_is_not_planned_has_one_binding_for_every_call() -> None:
     legacy = ProviderBinding(adapter=Adapter("m"), config=base_config(), call=CallBinding(expected_model="m", check_identity=True))
-    assert cell_binding(legacy, "blocks:main") is legacy and cell_binding(legacy, "anything") is legacy
+    assert cell_binding(legacy, "blocks:leg1") is legacy and cell_binding(legacy, "anything") is legacy
 
 
 @pytest.mark.parametrize("resolved", [
@@ -186,21 +186,21 @@ def test_a_run_that_is_not_planned_has_one_binding_for_every_call() -> None:
     ProviderBinding(adapter=Adapter("m"), config=base_config(cell_settings=layout.preset_cells("claude_only")[1]),
                     call=CallBinding(expected_model="claude-opus-5-5", check_identity=True, cell_key="norms:main", access="api")),
     ProviderBinding(adapter=Adapter("m"), config=base_config(), call=CallBinding(
-        expected_model="claude-opus-5-5", check_identity=True, cell_key="blocks:main", access="api")),
+        expected_model="claude-opus-5-5", check_identity=True, cell_key="blocks:leg1", access="api")),
 ])
 def test_a_cell_that_comes_back_without_its_call_binding_is_refused_never_skipped(resolved) -> None:
     run_level = ProviderBinding(adapter=Adapter("m"), config=approved_config(), call=None, cells=lambda key: resolved)
-    error = refused(cell_binding, run_level, "blocks:main")
+    error = refused(cell_binding, run_level, "blocks:leg1")
     assert error.code is ErrorCode.ANALYSIS_INPUT_INVALID and error.detail_fields["reason"] == "cell_call_binding_missing"
 
 
 def test_a_cell_call_binding_cannot_be_built_without_the_identity_check() -> None:
     with pytest.raises(ValueError):
-        CallBinding(expected_model="claude-opus-5-5", check_identity=False, cell_key="blocks:main", access="api")
+        CallBinding(expected_model="claude-opus-5-5", check_identity=False, cell_key="blocks:leg1", access="api")
     with pytest.raises(ValueError):
-        CallBinding(check_identity=True, cell_key="blocks:main", access="api")
+        CallBinding(check_identity=True, cell_key="blocks:leg1", access="api")
     with pytest.raises(ValueError):
-        CallBinding(expected_model="claude-opus-5-5", check_identity=True, cell_key="blocks:main")
+        CallBinding(expected_model="claude-opus-5-5", check_identity=True, cell_key="blocks:leg1")
 
 
 def test_the_executor_hands_the_consent_to_a_planned_binding_and_keeps_its_cells() -> None:
@@ -368,8 +368,8 @@ def cell_of(source: StagePlanProviders, runs: Runs, key: str) -> ProviderBinding
 def test_the_key_of_a_planned_call_has_neither_the_host_nor_the_connection_revision(monkeypatch) -> None:
     harness = Harness(monkeypatch)
     request = request_for("claude-opus-5-5")
-    on_a = cell_of(*providers(Runs(), Binder(HOST_A))[:2], "blocks:main")
-    on_b = cell_of(*providers(Runs(), Binder(HOST_B))[:2], "blocks:main")
+    on_a = cell_of(*providers(Runs(), Binder(HOST_A))[:2], "blocks:leg1")
+    on_b = cell_of(*providers(Runs(), Binder(HOST_B))[:2], "blocks:leg1")
     moved = replace(on_b, call=replace(on_b.call, connection_revision_id="excr_" + "Z" * 26))
     keys = []
     for binding in (on_a, on_b, moved):
@@ -386,11 +386,11 @@ def test_the_key_of_a_planned_call_has_neither_the_host_nor_the_connection_revis
 def test_a_replay_on_another_host_finds_the_saved_answer_and_calls_nothing(monkeypatch) -> None:
     harness = Harness(monkeypatch)
     request = request_for("claude-opus-5-5")
-    first = cell_of(*providers(Runs(), Binder(HOST_A))[:2], "blocks:main")
+    first = cell_of(*providers(Runs(), Binder(HOST_A))[:2], "blocks:leg1")
     response, reused = harness.call(first, request)
     assert reused is False and len(first.adapter.calls) == 1
     harness.remember(first, request, response)
-    second = cell_of(*providers(Runs(), Binder(HOST_B))[:2], "blocks:main")
+    second = cell_of(*providers(Runs(), Binder(HOST_B))[:2], "blocks:leg1")
     again, reused = harness.call(second, request)
     assert reused is True and again.output_text == response.output_text and second.adapter.calls == []
     assert harness.last_jobs.prepared == [], "nothing is journalled and nothing is paid for a saved reply"
@@ -453,16 +453,16 @@ def test_a_call_made_on_the_run_level_binding_of_a_planned_run_is_refused(monkey
 def test_another_reported_model_is_refused_and_a_listed_name_is_accepted(monkeypatch) -> None:
     harness = Harness(monkeypatch)
     request = request_for("claude-opus-5-5")
-    wrong = cell_of(*providers(Runs(), Binder(reply_model="claude-sonnet-5-5"))[:2], "blocks:main")
+    wrong = cell_of(*providers(Runs(), Binder(reply_model="claude-sonnet-5-5"))[:2], "blocks:leg1")
     error = refused(harness.call, wrong, request)
     assert error.detail_fields["reason"] == "extended_model_identity_mismatch"
-    alias = cell_of(*providers(Runs(), Binder(reply_model="claude-opus-5-5[1m]"))[:2], "blocks:main")
+    alias = cell_of(*providers(Runs(), Binder(reply_model="claude-opus-5-5[1m]"))[:2], "blocks:leg1")
     harness2 = Harness(monkeypatch)
     response, reused = harness2.call(alias, request)
     assert reused is False and response.model == "claude-opus-5-5[1m]"
-    outside = cell_of(*providers(Runs(), Binder(reply_model="claude-opus-5-5-20261001"))[:2], "blocks:main")
+    outside = cell_of(*providers(Runs(), Binder(reply_model="claude-opus-5-5-20261001"))[:2], "blocks:leg1")
     assert refused(Harness(monkeypatch).call, outside, request).detail_fields["reason"] == "extended_model_identity_mismatch"
-    silent = cell_of(*providers(Runs(), Binder())[:2], "blocks:main")
+    silent = cell_of(*providers(Runs(), Binder())[:2], "blocks:leg1")
     silent.adapter.reply_model = None
     assert refused(Harness(monkeypatch).call, silent, request).detail_fields["reason"] == "extended_model_identity_mismatch"
 
@@ -470,11 +470,16 @@ def test_another_reported_model_is_refused_and_a_listed_name_is_accepted(monkeyp
 def test_a_phase_is_called_on_the_cell_of_its_row_and_a_phase_without_a_row_is_refused() -> None:
     source, runs, _ = providers()
     run_level = source.resolve(None, runs.run())
-    expected = {"blocks:0": "blocks:main", "blocks:b002": "blocks:main", "comprehensive": "cross_check:main",
+    expected = {"blocks:0:leg1": "blocks:leg1", "blocks:b002:judge": "blocks:judge", "blocks:0:leg1:repair:1": "blocks:leg1",
+                "blocks:b001:judge:repair:1": "blocks:judge", "comprehensive": "cross_check:main",
                 "comprehensive_analysis:b001": "cross_check:main", "norm_verification:b003:repair:1": "norms:main",
                 "critic": "review:main", "finding_review:b001:repair:1": "review:main", "corrector": "correction:main"}
     for identity_, cell_key in expected.items():
         assert review._phase_binding(run_level, identity_).call.cell_key == cell_key, identity_
+    # the plan's blocks row is an ensemble: a blocks call that names no leg or judge has no cell to run on, and is refused, not skipped
+    # (the Claude ensemble has no second leg either)
+    for no_cell in ("blocks:0", "blocks:b002:repair:1", "blocks:0:leg2"):
+        assert refused(review._phase_binding, run_level, no_cell).detail_fields["reason"] == "cell_not_in_plan", no_cell
     for modelless in ("merge", "report", "unknown:b001"):
         error = refused(review._phase_binding, run_level, modelless)
         assert error.detail_fields["reason"] == "extended_phase_has_no_cell"
@@ -484,7 +489,7 @@ def test_a_phase_is_called_on_the_cell_of_its_row_and_a_phase_without_a_row_is_r
 
 def test_the_phase_dictionary_maps_every_call_identity_of_the_workflow_to_one_row() -> None:
     expected = {
-        "blocks:3": "blocks", "blocks:b002": "blocks", "comprehensive": "cross_check", "comprehensive:2": "cross_check",
+        "blocks:3": "blocks", "blocks:b002": "blocks", "blocks:3:leg1": "blocks", "blocks:3:leg2": "blocks", "blocks:3:judge": "blocks", "comprehensive": "cross_check", "comprehensive:2": "cross_check",
         "comprehensive_analysis:b001": "cross_check", "norm_verification": "norms", "norm_verification:b004": "norms",
         "critic": "review", "finding_review:b001": "review", "corrector": "correction", "finding_correction:b003": "correction",
         "project_parameters": "cross_check", "text_analysis": "text",
