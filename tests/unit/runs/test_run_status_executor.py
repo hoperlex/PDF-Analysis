@@ -61,6 +61,10 @@ def _view(monkeypatch: pytest.MonkeyPatch, revision: str | None, answers: dict[s
         return answers.get(revision_id)
 
     monkeypatch.setattr(runs_package, "RunRepository", _Repository)
+    # Contract 1.40.0 (`UI-B-45`): the view reads an active run's estimated finish from the database; these cases stub
+    # the session, so the estimate is stubbed too (its own cases are tests/unit/execution/test_eta.py).
+    import auditmanager.execution.eta as eta
+    monkeypatch.setattr(eta, "run_estimated_finish", lambda session, run_id: None)
     monkeypatch.setattr(findings, "published_finding_count", lambda session, run_id: 0)
     monkeypatch.setattr(findings, "diagnostics", lambda session, run_id: ())
     monkeypatch.setattr(executors_public, "executor_of_revision", executor_of_revision)
