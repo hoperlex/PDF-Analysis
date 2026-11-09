@@ -1077,7 +1077,7 @@ def _execute_run_body(
         # approved cost authority pins the same one for the call-time guard. Everything before this line (the budget,
         # the ceiling, the profile) was decided from the group revision's pin, which every member serves.
         run = run_repo.get(session, run_id)
-        planned = run.stage_plan is not None
+        planned = getattr(run, "stage_plan", None) is not None
         # A planned run (`HOSTS-LAYOUT-01`) has no connection of its own: dispatch bound **every cell** of its plan, in the claim's
         # transaction, and the cells are read through ``audit_run_cell_binding`` when the provider is bound below.
         if run.binding_state != "bound" or (run.connection_revision_id is None and not planned):
