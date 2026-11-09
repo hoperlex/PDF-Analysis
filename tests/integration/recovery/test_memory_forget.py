@@ -18,12 +18,17 @@ Shown, for the plan, the apply and the resume:
   only, and writes the plan and the manifest files whose digests the events carry;
 * a crash after the commit leaves the Blobs in ``erasure_pending`` and ``--resume`` completes it; a finished forget is "nothing to do";
 * every guard is shown able to fail: ``# >>> guard: <name>`` blocks are deleted one at a time from a COPY of the source, and the copy must
-  no longer refuse (and, where the harm is a delete, must do it).
+  no longer refuse (and, where the harm is a delete, must do it). The guards that only a fault inside the transaction or a fault in the
+  bucket can trigger get the fault injected -- a trigger that skips a row, a trigger that inserts outside the scope, a trigger that
+  switches another trigger off, a role that owns nothing, a lock held by another session, a bucket that does not delete -- and the last
+  test of the file holds the list of the tool's guards to the list of the scenarios (`D-492`).
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import re
 import secrets
@@ -40,6 +45,7 @@ from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.storage import S3StorageSettings
 from auditmanager.storage.public import canonical_object_key_for_recovery, derive_blob_id
 from scripts.recovery import memory_forget as tool
+from scripts.recovery import project_erase as erase
 from tests.integration.recovery.purge_seed import bucket_profile, digest_of, s3
 from tests.integration.recovery.purge_stand import Stand, _empty_and_delete, _line, invoke
 from tests.support.memory_seed import seed_case
@@ -504,3 +510,390 @@ def test_every_guard_marker_is_a_balanced_block() -> None:
     assert opened == closed and len(set(opened)) == len(opened) and len(opened) >= 25
     for name in opened:                                                        # each deletes to a module that still compiles
         mutant(name)
+
+
+# --- D-492: the guards no scenario above had shown able to fail ----------------------------------------------------------
+#
+# Each test makes the fault the guard exists for, runs the real tool (which refuses, and leaves the data as it was), then runs a copy
+# with that one block deleted (which does not say what the guard says and, where the guard protects data, does the harm).
+
+
+def install_fault(stand: Stand, name: str, table: str, timing: str, event: str, body: str, when: str = "") -> None:
+    """A row trigger on ``table`` that runs ``body``. Its name sorts before ``trg_*``, so a BEFORE trigger answers first."""
+    with stand.engine.begin() as connection:
+        connection.execute(text(f"CREATE FUNCTION public.{name}_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN {body} END $$"))
+        connection.execute(text(f"CREATE TRIGGER {name} {timing} {event} ON public.{table} FOR EACH ROW {when} EXECUTE FUNCTION public.{name}_fn()"))
+
+
+def apply_args(stand: Stand, tmp_path: Path) -> list[str]:
+    sha = _line(invoke(tool, stand, *A_PROJECT)[1], "plan-sha256")
+    return [*A_PROJECT, *flags(sha, tmp_path)]
+
+
+def a_content(stand: Stand, memory: Memory) -> int:
+    return count(stand, "decision_memory_content", "case_id = ANY(:c)", c=memory.a_cases)
+
+
+def forgets(stand: Stand) -> int:
+    return count(stand, "decision_memory_status_event", "kind = 'forget'")
+
+
+def _after(module: types.ModuleType, name: str, action: Callable[[], None]) -> Callable[[], None]:
+    """Run ``action`` right after ``module.<name>`` returns: a fault that arrives between two phases."""
+    real = getattr(module, name)
+
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        result = real(*args, **kwargs)
+        action()
+        return result
+
+    setattr(module, name, wrapped)
+    return lambda: setattr(module, name, real)
+
+
+def pend(stand: Stand, blob_id: str) -> None:
+    with stand.engine.begin() as connection:
+        connection.execute(text("UPDATE blob SET state = 'erasure_pending' WHERE blob_id = :b"), {"b": blob_id})
+
+
+def crashed_forget(stand: Stand, tmp_path: Path) -> tuple[str, list[str]]:
+    """A forget that committed and whose objects phase crashed: its id and the arguments that resume it."""
+    restore = _crash(tool, "delete_objects")
+    try:
+        _, out, _ = plan_and_apply(tool, stand, tmp_path)
+    finally:
+        restore()
+    erase_id = _line(out, "forget-id")
+    return erase_id, ["--resume", erase_id, "--actor", ADMIN, "--owner-permission-ref", REFERENCE, "--dump-dir", str(tmp_path)]
+
+
+def new_role(stand: Stand) -> str:
+    name = f"forget_probe_{secrets.token_hex(4)}"
+    with stand.engine.begin() as connection:
+        connection.execute(text(f"CREATE ROLE {name} LOGIN PASSWORD 'probe-password'"))
+        connection.execute(text(f'GRANT CONNECT ON DATABASE "{stand.database}" TO {name}'))
+        connection.execute(text(f"GRANT USAGE ON SCHEMA public TO {name}"))
+        connection.execute(text(f"GRANT SELECT ON ALL TABLES IN SCHEMA public TO {name}"))
+    return name
+
+
+def invoke_bucket(module: types.ModuleType, stand: Stand, bucket: str, *argv: str) -> tuple[int, str, str]:
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stderr(err):
+        code = module.run([*argv, "--database", stand.database, "--bucket", bucket], out=out)
+    return code, out.getvalue(), err.getvalue()
+
+
+def test_a_database_at_another_migration_is_refused(stand: Stand, memory: Memory) -> None:
+    with stand.engine.begin() as connection:
+        connection.execute(text("UPDATE public.alembic_version SET version_num = '0099_a_future_head'"))
+    code, out, err = invoke(tool, stand, *A_PROJECT)
+    assert refused(code, err, "the tool was written for") and "0099_a_future_head" in err, (code, out, err)
+    code, out, err = invoke(mutant("head-is-declared"), stand, *A_PROJECT)
+    assert code == 0 and _line(out, "cases") == "3", (code, out, err)         # without the guard it plans against a schema it was not written for
+
+
+def test_a_blob_column_the_registry_does_not_know_stops_the_forget(stand: Stand, memory: Memory) -> None:
+    with stand.engine.begin() as connection:                                   # a new place a Blob can be referenced from, unclassified
+        connection.execute(text("ALTER TABLE public.decision_memory_status_event ADD COLUMN stray_blob_id text"))
+    code, out, err = invoke(tool, stand, *A_PROJECT)
+    assert refused(code, err, "differ from the registry") and "stray_blob_id" in err, (code, out, err)
+    code, out, err = invoke(mutant("blob-columns-closed"), stand, *A_PROJECT)
+    assert code == 0, (code, out, err)                                         # without it a Blob a new column holds could be deleted
+
+
+def test_a_role_that_does_not_own_the_tables_cannot_forget(stand: Stand, memory: Memory, monkeypatch: pytest.MonkeyPatch) -> None:
+    role = new_role(stand)
+    try:
+        monkeypatch.setenv("DATABASE_URL", stand.settings.url.set(username=role, password="probe-password").render_as_string(hide_password=False))
+        code, out, err = invoke(tool, stand, *A_PROJECT)
+        assert refused(code, err, "does not own") and role in err, (code, out, err)
+        code, out, err = invoke(mutant("owner-may-write"), stand, *A_PROJECT)
+        assert code == 0, (code, out, err)                                     # the dry run only reads; the apply would meet the grants instead
+    finally:
+        with stand.engine.begin() as connection:
+            connection.execute(text(f"DROP OWNED BY {role}"))
+            connection.execute(text(f"DROP ROLE {role}"))
+
+
+def test_the_typed_database_and_bucket_must_be_the_connected_ones(stand: Stand, memory: Memory) -> None:
+    code, out, err = invoke(tool, stand, *A_PROJECT, database="not_this_database")
+    assert refused(code, err, "typed names are not the connected ones") and "not_this_database" in err, (code, out, err)
+    code, out, err = invoke_bucket(tool, stand, "not-this-bucket", *A_PROJECT)
+    assert refused(code, err, "typed names are not the connected ones") and "not-this-bucket" in err, (code, out, err)
+    assert invoke(mutant("names-match"), stand, *A_PROJECT, database="not_this_database")[0] == 0
+    assert invoke_bucket(mutant("names-match"), stand, "not-this-bucket", *A_PROJECT)[0] == 0
+
+
+def test_a_libpq_variable_that_could_redirect_the_connection_is_refused(stand: Stand, memory: Memory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``PGCONNECT_TIMEOUT`` redirects nothing, so the copy without the guard can be run without harm."""
+    monkeypatch.setenv("PGCONNECT_TIMEOUT", "5")
+    code, out, err = invoke(tool, stand, *A_PROJECT)
+    assert refused(code, err, "can redirect the connection") and "PGCONNECT_TIMEOUT" in err, (code, out, err)
+    assert invoke(mutant("no-ambient-libpq"), stand, *A_PROJECT)[0] == 0
+
+
+def test_another_forget_holding_the_lock_stops_this_one(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    argv = apply_args(stand, tmp_path)
+    holder = stand.engine.connect()
+    try:
+        holder.execute(text("SELECT pg_advisory_lock(hashtextextended(:name, 0))"), {"name": tool.ADVISORY_LOCK_NAME})
+        holder.commit()                                                        # a session lock outlives the transaction: the other forget
+        before = state_of(stand)
+        code, out, err = invoke(tool, stand, *argv)
+        assert refused(code, err, "another forget holds the lock"), (code, out, err)
+        assert state_of(stand) == before and a_content(stand, memory) == 3
+        code, out, err = invoke(mutant("forget-lock-free"), stand, *argv)
+        assert code == 0 and a_content(stand, memory) == 0, (code, out, err)  # without the guard two forgets run side by side
+    finally:
+        holder.execute(text("SELECT pg_advisory_unlock_all()"))
+        holder.close()
+
+
+def test_a_writer_that_does_not_let_go_is_a_refusal_with_words_not_a_database_error(
+    stand: Stand, memory: Memory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    argv = apply_args(stand, tmp_path)
+    monkeypatch.setattr(tool, "LOCK_TIMEOUT", "1s")
+    monkeypatch.setenv("MEMORY_FORGET_LOCK_TIMEOUT", "1s")                      # read by the copy when it is built
+    copy = mutant("lock-available")
+    writer = stand.engine.connect()
+    try:
+        writer.execute(text("LOCK TABLE public.decision_memory_decision IN ROW EXCLUSIVE MODE"))   # what a capture in flight holds
+        code, out, err = invoke(tool, stand, *argv)
+        assert refused(code, err, "could not lock the tables within 1s"), (code, out, err)
+        code, out, err = invoke(copy, stand, *argv)
+        assert code == tool.EXIT_FAILED and "could not lock the tables" not in err and "lock timeout" in err, (code, out, err)
+    finally:
+        writer.rollback()
+        writer.close()
+    assert a_content(stand, memory) == 3
+
+
+def test_a_blob_that_would_not_move_to_erasure_pending_rolls_the_forget_back(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    argv = apply_args(stand, tmp_path)
+    install_fault(stand, "aa_fault_skip_pending", "blob", "BEFORE", "UPDATE", "RETURN NULL;", "WHEN (NEW.state = 'erasure_pending')")
+    code, out, err = invoke(tool, stand, *argv)
+    assert refused(code, err, "exclusive Blob(s) moved to erasure_pending; rolled back"), (code, out, err)
+    assert a_content(stand, memory) == 3 and forgets(stand) == 0               # all of it rolled back
+    code, out, err = invoke(mutant("blobs-pending"), stand, *argv)
+    assert "moved to erasure_pending" not in err and a_content(stand, memory) == 0 and forgets(stand) == 3, (code, out, err)   # it committed
+
+
+def test_a_delete_that_reaches_outside_the_chosen_cases_rolls_the_forget_back(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    argv = apply_args(stand, tmp_path)
+    install_fault(stand, "zz_fault_outside", "decision_memory_crop", "AFTER", "DELETE",
+                  "INSERT INTO public.decision_memory_evidence (case_id, revision, ordinal, page_number, quote, char_start, char_end) "
+                  f"VALUES ('{memory.b2}', 1, 5, 1, 'quote', 0, 5); RETURN NULL;")     # a row appears in a case that is not being forgotten
+    code, out, err = invoke(tool, stand, *argv)
+    assert refused(code, err, "change data outside the chosen cases") and "decision_memory_evidence:outside" in err, (code, out, err)
+    assert a_content(stand, memory) == 3 and count(stand, "decision_memory_evidence", "case_id = :c", c=memory.b2) == 1
+    code, out, err = invoke(mutant("keep-unchanged"), stand, *argv)
+    assert "change data outside" not in err and a_content(stand, memory) == 0, (code, out, err)
+    assert count(stand, "decision_memory_evidence", "case_id = :c", c=memory.b2) == 2      # the stray row stayed in another project's case
+
+
+def test_content_that_a_delete_did_not_remove_is_not_forgotten_by_the_tombstone(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    argv = apply_args(stand, tmp_path)
+    install_fault(stand, "aa_fault_skip_norm_ref", "decision_memory_norm_ref", "BEFORE", "DELETE", "RETURN NULL;")
+    code, out, err = invoke(tool, stand, *argv)
+    assert refused(code, err, "content of the chosen cases remains"), (code, out, err)
+    assert a_content(stand, memory) == 3 and forgets(stand) == 0
+    code, out, err = invoke(mutant("content-emptied"), stand, *argv)
+    assert "content of the chosen cases remains" not in err and forgets(stand) == 3, (code, out, err)
+    assert count(stand, "decision_memory_norm_ref", "case_id = ANY(:c)", c=memory.a_cases) == 3     # tombstoned, and the quotes are still there
+
+
+def test_a_trigger_the_forget_left_switched_off_rolls_it_back(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    argv = apply_args(stand, tmp_path)
+    guard = "trg_decision_memory_setting_event_immutable"
+    install_fault(stand, "zz_fault_trigger_off", "decision_memory_crop", "AFTER", "DELETE",
+                  f"ALTER TABLE public.decision_memory_setting_event DISABLE TRIGGER {guard}; RETURN NULL;")
+
+    def state() -> str:
+        return scalars(stand, "SELECT tgenabled::text FROM pg_trigger WHERE tgname = :n", n=guard)[0]
+
+    code, out, err = invoke(tool, stand, *argv)
+    assert refused(code, err, "a trigger's state differs after the forget; rolled back"), (code, out, err)
+    assert state() == "O" and a_content(stand, memory) == 3
+    code, out, err = invoke(mutant("triggers-restored"), stand, *argv)
+    assert "a trigger's state differs" not in err and forgets(stand) == 3, (code, out, err)
+    assert state() == "D"                                                      # a guard of the schema stayed off after the "forget"
+
+
+def test_an_object_list_with_a_key_the_tool_cannot_derive_deletes_nothing(stand: Stand, memory: Memory) -> None:
+    victim = "somebody-elses/keep-me.bin"
+    stand.client.put_object(Bucket=stand.bucket, Key=victim, Body=b"not a Blob of this memory")
+    blob = str(derive_blob_id(sha256="e" * 64, size=7))
+    listed = [erase.PlanObject(victim, "canonical", blob, None)]               # a key that is not the canonical key of the Blob it names
+
+    def exists() -> bool:
+        return any(i["Key"] == victim for p in stand.client.get_paginator("list_objects_v2").paginate(Bucket=stand.bucket)
+                   for i in p.get("Contents", []))
+
+    with pytest.raises(tool.ForgetRefused, match="is not exactly the key"):
+        tool.delete_objects(stand.engine, stand.client, bucket=stand.bucket, objects=listed, blob_ids=[blob])
+    assert exists()
+    result = mutant("object-key-shape").delete_objects(stand.engine, stand.client, bucket=stand.bucket, objects=listed, blob_ids=[blob])
+    assert result["deleted"] == 1 and not exists()                             # without the guard a list can name any key
+
+
+class _KeepsEverything:
+    """A bucket that answers every delete with success and keeps the object."""
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def delete_object(self, **kwargs: Any) -> dict[str, Any]:
+        return {}
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._client, name)
+
+
+def test_an_object_that_is_still_there_after_its_delete_is_not_counted_as_deleted(stand: Stand, memory: Memory) -> None:
+    blob = _blob(stand, b"a crop the bucket will not let go" * 10)
+    listed = [erase.PlanObject(tool.purge.canonical_key(blob), "canonical", blob, None)]
+    keeper = _KeepsEverything(stand.client)
+    with pytest.raises(tool.ForgetFailed, match="is still in the bucket after its delete"):
+        tool.delete_objects(stand.engine, keeper, bucket=stand.bucket, objects=listed, blob_ids=[blob])
+    result = mutant("objects-gone").delete_objects(stand.engine, keeper, bucket=stand.bucket, objects=listed, blob_ids=[blob])
+    assert result["deleted"] == 1 and object_exists(stand, blob)               # without the check the summary says deleted of an object that is there
+
+
+@pytest.mark.parametrize("without", [False, True], ids=["tool", "guard-deleted"])
+def test_pending_blobs_that_are_not_the_manifest_are_not_deleted_at_the_finish(
+    stand: Stand, memory: Memory, tmp_path: Path, without: bool
+) -> None:
+    module = mutant("finish-matches-manifest") if without else tool
+    orphan = _blob(stand, b"a Blob another erasure left pending" * 10)
+    restore = _after(module, "delete_objects", lambda: pend(stand, orphan))    # it arrives between the objects phase and the finish
+    try:
+        code, out, err = plan_and_apply(module, stand, tmp_path)
+    finally:
+        restore()
+    says = "are not the manifest of era_"
+    assert code == tool.EXIT_FAILED, (code, out, err)
+    if not without:
+        assert says in err and [e[0] for e in forget_events(stand)] == ["memory.forget_requested"], err
+    else:
+        assert says not in err, err                                            # the copy goes on to the next net (pending-cleared)
+        assert "still pending; rolled back" in err and [e[0] for e in forget_events(stand)] == ["memory.forget_requested"]
+
+
+@pytest.mark.parametrize("without", [False, True], ids=["tool", "guard-deleted"])
+def test_a_finish_that_could_not_delete_the_blob_rows_does_not_write_forget_completed(
+    stand: Stand, memory: Memory, tmp_path: Path, without: bool
+) -> None:
+    install_fault(stand, "aa_fault_keep_blob_row", "blob", "BEFORE", "DELETE", "RETURN NULL;", "WHEN (OLD.state = 'erasure_pending')")
+    module = mutant("pending-cleared") if without else tool
+    code, out, err = plan_and_apply(module, stand, tmp_path)
+    events = [e[0] for e in forget_events(stand)]
+    if not without:
+        assert code == tool.EXIT_FAILED and "0 of 1 Blob row(s) deleted, 1 still pending; rolled back" in err, (code, out, err)
+        assert events == ["memory.forget_requested"]
+    else:
+        assert code == 0 and events == ["memory.forget_requested", "memory.forget_completed"], (code, out, err)
+        assert scalars(stand, "SELECT blob_id FROM blob WHERE state = 'erasure_pending'") == [memory.only_a]   # "completed", and the row is there
+
+
+@pytest.mark.parametrize("without", [False, True], ids=["tool", "guard-deleted"])
+def test_a_reference_that_arrives_before_the_finish_stops_the_blob_rows_going(
+    stand: Stand, memory: Memory, tmp_path: Path, without: bool
+) -> None:
+    module = mutant("pending-unreferenced") if without else tool
+
+    def late_reference() -> None:
+        with stand.engine.begin() as connection:
+            connection.execute(text(
+                "INSERT INTO input_manifest_entry (version_uid, role, blob_id, sha256, size_bytes, media_type) "
+                "SELECT 'ver_01ARZ3NDEKTSV4RRFFQ69G5FAC', 'zz_late', blob_id, sha256, size_bytes, media_type FROM blob WHERE blob_id = :b"),
+                {"b": memory.only_a})
+
+    restore = _after(module, "delete_objects", late_reference)
+    try:
+        code, out, err = plan_and_apply(module, stand, tmp_path)
+    finally:
+        restore()
+    assert code == tool.EXIT_FAILED, (code, out, err)
+    assert [e[0] for e in forget_events(stand)] == ["memory.forget_requested"]
+    assert ("referenced again" in err) is (not without), err                   # the copy is stopped by the foreign key instead, in other words
+
+
+def test_the_guard_that_stops_the_object_deletion_is_not_the_only_net(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    """`objects-unreferenced` alone: the object of a late-bound Blob is deleted, and the finish still refuses (`pending-unreferenced`)."""
+    erase_id, resume = crashed_forget(stand, tmp_path)
+    with stand.engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO input_manifest_entry (version_uid, role, blob_id, sha256, size_bytes, media_type) "
+            "SELECT 'ver_01ARZ3NDEKTSV4RRFFQ69G5FAC', 'zz_late', blob_id, sha256, size_bytes, media_type FROM blob WHERE blob_id = :b"),
+            {"b": memory.only_a})
+    code, out, err = invoke(mutant("objects-unreferenced"), stand, *resume)
+    assert not object_exists(stand, memory.only_a), (code, out, err)           # the first net is gone: the object a row references was deleted
+    assert code == tool.EXIT_FAILED and "referenced again" in err              # the second net held: no completion, the Blob row stays
+    assert [e[0] for e in forget_events(stand)] == ["memory.forget_requested"] and erase_id in err
+
+
+def test_resuming_a_forget_the_database_does_not_know_is_refused(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    unknown = "era_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+    resume = ["--resume", unknown, "--actor", ADMIN, "--owner-permission-ref", REFERENCE, "--dump-dir", str(tmp_path)]
+    code, out, err = invoke(tool, stand, *resume)
+    assert refused(code, err, "has no memory.forget_requested event"), (code, out, err)
+    code, out, err = invoke(mutant("forget-id-known"), stand, *resume)
+    assert "has no memory.forget_requested event" not in err and code != 0, (code, out, err)     # an IndexError, not a refusal
+
+
+def test_a_resume_argument_that_is_not_an_identity_is_refused_before_the_database(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    resume = ["--resume", "not-an-identity", "--actor", ADMIN, "--owner-permission-ref", REFERENCE, "--dump-dir", str(tmp_path)]
+    code, out, err = invoke(tool, stand, *resume)
+    assert refused(code, err, "--resume must be a forget identity"), (code, out, err)
+    code, out, err = invoke(mutant("resume-id-shape"), stand, *resume)
+    assert "--resume must be a forget identity" not in err and "not-an-identity has no memory.forget_requested" in err, (code, out, err)
+
+
+def test_pending_blobs_that_are_not_the_ones_the_forget_committed_stop_the_resume(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    _, resume = crashed_forget(stand, tmp_path)
+    orphan = _blob(stand, b"a Blob another erasure left pending" * 10)
+    pend(stand, orphan)
+    code, out, err = invoke(tool, stand, *resume)
+    assert refused(code, err, "are not the manifest"), (code, out, err)
+    assert object_exists(stand, memory.only_a)
+    code, out, err = invoke(mutant("resume-manifest-matches"), stand, *resume)
+    assert "are not the manifest" not in err and "differs from the manifest" in err, (code, out, err)   # the file on disk is the next net
+    assert object_exists(stand, memory.only_a)
+
+
+def test_a_manifest_file_that_was_changed_stops_the_resume_and_the_guard_can_fail(stand: Stand, memory: Memory, tmp_path: Path) -> None:
+    erase_id, resume = crashed_forget(stand, tmp_path)
+    manifest = tmp_path / erase_id / "manifest.json"
+    original = manifest.read_bytes()
+    manifest.write_bytes(original + b" ")
+    code, out, err = invoke(tool, stand, *resume)
+    assert refused(code, err, "differs from the manifest") and object_exists(stand, memory.only_a), (code, out, err)
+    code, out, err = invoke(mutant("resume-manifest-file-matches"), stand, *resume)
+    assert code == 0 and not object_exists(stand, memory.only_a), (code, out, err)     # finished against a record that no longer matches
+    assert manifest.read_bytes() == original + b" "
+
+
+GUARDS_WITH_A_SCENARIO = (
+    # arguments and the selector
+    "one-selector", "identity-shape", "resume-id-shape", "owner-permission-ref", "dump-dir-required", "plan-digest-required",
+    "reason-closed-list", "cases-exist", "names-match", "no-ambient-libpq",
+    # the catalog and the plan
+    "head-is-declared", "forget-guard-installed", "blob-columns-closed", "owner-may-write", "no-pending-erasure", "blobs-available",
+    # the transaction
+    "forget-lock-free", "lock-available", "plan-unchanged", "blobs-pending", "keep-unchanged", "content-emptied", "triggers-restored",
+    # the objects and the finish
+    "object-key-shape", "objects-unreferenced", "objects-gone", "finish-matches-manifest", "pending-unreferenced", "pending-cleared",
+    # the resume
+    "forget-id-known", "resume-manifest-matches", "resume-manifest-file-matches",
+)
+
+
+def test_every_guard_of_the_tool_has_a_scenario_above() -> None:
+    """A guard added to the tool without a test that deletes it fails here, which is the reminder to write one (`D-492`)."""
+    source = SOURCE.read_text(encoding="utf-8")
+    opened = re.findall(r"^[ \t]*# >>> guard: ([a-z0-9-]+)$", source, flags=re.MULTILINE)
+    closed = re.findall(r"^[ \t]*# <<< guard: ([a-z0-9-]+)$", source, flags=re.MULTILINE)
+    assert opened == closed and len(opened) == 32
+    assert sorted(opened) == sorted(GUARDS_WITH_A_SCENARIO)

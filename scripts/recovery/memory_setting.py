@@ -12,6 +12,15 @@ Two settings, kept as the append-only journal ``decision_memory_setting_event`` 
 The application only reads the journal. This operator tool writes it, as the table owner (the migrator), naming an ADMIN account: the
 journal holds that account's ``usr_`` identity, never its login. Setting a value that is already in force records nothing.
 
+A CHANGE OF ``data_class`` IS REFUSED WHILE THE MEMORY HAS NOT CAPTURED EVERY LEDGER DECISION (`D-496`). The capture reads ``data_class``
+when it runs, and the worker's sweep runs it for every accept or reject event that has no memory decision yet (a decision of the time
+before the memory, or one whose capture failed and is retried). Such an event captured after the flip would take the NEW class for good
+(the column is immutable) although it was decided under the old one, so the tool counts them -- by the sweep's own predicate -- and
+refuses with the count when there are any: let the sweep finish, then run it again. There is no override option. The count and the
+journal write are one transaction that holds a ``SHARE ROW EXCLUSIVE`` lock on the ledger table, so a decision being written while the
+flip runs either commits first (and is counted, or already captured) or waits until the flip has committed (and is captured under the
+new class, as it should be). ``MEMORY_SETTING_LOCK_TIMEOUT`` (default ``15s``) bounds that wait; a timeout is a refusal that changed nothing.
+
 USAGE (``DATABASE_URL`` is the owner role's; no ``PG*`` variable):
 
     python -m scripts.recovery.memory_setting --database D show
@@ -30,9 +39,17 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import Engine, text
+from sqlalchemy import Connection, Engine, text
+from sqlalchemy.exc import DBAPIError
 
-from auditmanager.decision_memory.public import SETTING_DEFAULTS, SETTING_NAMES, SETTING_VALUES, MemoryReader
+from auditmanager.decision_memory.public import (
+    CAPTURED_EVENT_TYPES,
+    SETTING_DATA_CLASS,
+    SETTING_DEFAULTS,
+    SETTING_NAMES,
+    SETTING_VALUES,
+    MemoryReader,
+)
 from auditmanager.shared.db.config import load_settings
 from auditmanager.shared.db.engine import create_database_engine
 from scripts.recovery import project_erase as erase
@@ -41,6 +58,16 @@ from scripts.recovery.schema_coverage import HEAD
 EXIT_OK, EXIT_USAGE, EXIT_REFUSED, EXIT_FAILED = 0, 2, 3, 4
 ADVISORY_LOCK_NAME = "auditmanager.memory_setting"
 PERMISSION_REF_MAX = erase.PERMISSION_REF_MAX
+LOCK_TIMEOUT_DEFAULT = "15s"
+
+#: The ledger events the memory has not captured: the predicate of ``MemoryCaptureSweep`` (``_UNCAPTURED_EVENTS`` in
+#: ``bootstrap/adapters.py``, which this tool may not import) minus its batch and cursor -- an accept or reject event with no
+#: ``decision_memory_decision`` whose ``source_decision_id`` is its ``decision_id``. ``tests/integration/recovery/test_memory_setting.py``
+#: holds the two to the same number on the same data, and runs the real sweep against this count.
+_UNCAPTURED = text(
+    "SELECT count(*) FROM public.expert_decision_event e WHERE e.event_type = ANY(CAST(:types AS text[])) "
+    "AND NOT EXISTS (SELECT 1 FROM public.decision_memory_decision d WHERE d.source_decision_id = e.decision_id)"
+)
 
 
 class SettingRefused(Exception):
@@ -91,36 +118,80 @@ def _check_head(engine: Engine, database: str) -> None:
     # <<< guard: head-is-declared
 
 
+def uncaptured_decisions(connection: Connection) -> int:
+    """How many accept or reject events of the ledger the memory has not captured: the backlog of the worker's sweep."""
+    return int(connection.execute(_UNCAPTURED, {"types": sorted(CAPTURED_EVENT_TYPES)}).scalar_one())
+
+
+def _lock_timeout() -> str:
+    return os.environ.get("MEMORY_SETTING_LOCK_TIMEOUT", LOCK_TIMEOUT_DEFAULT)
+
+
 def show(engine: Engine, out: Any) -> None:
     with engine.connect() as connection:
         settings = MemoryReader().settings(connection)  # type: ignore[arg-type]
+        backlog = uncaptured_decisions(connection)
     for name, value, revision in (("data_class", settings.data_class, settings.data_class_revision),
                                   ("training_use", settings.training_use, settings.training_use_revision)):
         origin = "default" if revision == 0 else f"revision {revision}"
         print(f"{name}: {value} ({origin}; default {SETTING_DEFAULTS[name]})", file=out)
+    print(f"uncaptured-decisions: {backlog} (ledger accept/reject events with no memory decision; "
+          "a data_class change is refused until this is 0)", file=out)
+
+
+def _quiesce_decisions(connection: Connection) -> None:
+    """Hold the ledger still while the count and the journal write are made (see the module docstring)."""
+    # >>> guard: decisions-quiesced
+    connection.execute(text("LOCK TABLE public.expert_decision_event IN SHARE ROW EXCLUSIVE MODE"))
+    # <<< guard: decisions-quiesced
+
+
+def _refuse_backlog(connection: Connection) -> None:
+    backlog = uncaptured_decisions(connection)
+    # >>> guard: no-uncaptured-decisions
+    if backlog:
+        raise SettingRefused(
+            f"{backlog} accept/reject decision(s) of the ledger are not captured by the decision memory yet. The capture gives a case "
+            "the data_class in force when it runs and the column is immutable, so changing data_class now would give these decisions "
+            "the new class although they were decided under the old one. Let the worker's sweep finish (it needs the worker running; "
+            "`memory_setting show` prints this count), then run this again. There is no override. Nothing was changed.")
+    # <<< guard: no-uncaptured-decisions
 
 
 def apply_setting(engine: Engine, args: argparse.Namespace, out: Any) -> int:
     reference = (args.owner_permission_ref or "").strip() or None
-    with engine.begin() as connection:
-        try:
-            actor = erase.resolve_actor(connection, args.actor)  # an active account that holds admin; its usr_ identity is journalled
-        except erase.EraseRefused as error:
-            raise SettingRefused(str(error).replace("erase a project", "change a setting")) from error
-        connection.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:name, 0))"), {"name": ADVISORY_LOCK_NAME})
-        row = connection.execute(text(
-            "SELECT value, revision FROM public.decision_memory_setting_event WHERE setting_name = :name "
-            "ORDER BY revision DESC LIMIT 1"), {"name": args.name}).one_or_none()
-        current, revision = (SETTING_DEFAULTS[args.name], 0) if row is None else (str(row[0]), int(row[1]))
-        if current == args.value:
-            print(f"memory-setting: {args.name} is already {current}; nothing to do.", file=out)
-            return EXIT_OK
-        connection.execute(text(
-            "INSERT INTO public.decision_memory_setting_event (setting_name, revision, value, actor_user_uid, owner_permission_ref) "
-            "VALUES (:name, :revision, :value, :actor, :ref)"),
-            {"name": args.name, "revision": revision + 1, "value": args.value, "actor": actor, "ref": reference})
+    timeout = _lock_timeout()
+    try:
+        with engine.begin() as connection:
+            try:
+                actor = erase.resolve_actor(connection, args.actor)  # an active account that holds admin; its usr_ identity is journalled
+            except erase.EraseRefused as error:
+                raise SettingRefused(str(error).replace("erase a project", "change a setting")) from error
+            connection.execute(text("SELECT set_config('lock_timeout', :timeout, true)"), {"timeout": timeout})
+            connection.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:name, 0))"), {"name": ADVISORY_LOCK_NAME})
+            row = connection.execute(text(
+                "SELECT value, revision FROM public.decision_memory_setting_event WHERE setting_name = :name "
+                "ORDER BY revision DESC LIMIT 1"), {"name": args.name}).one_or_none()
+            current, revision = (SETTING_DEFAULTS[args.name], 0) if row is None else (str(row[0]), int(row[1]))
+            if current == args.value:
+                print(f"memory-setting: {args.name} is already {current}; nothing to do.", file=out)
+                return EXIT_OK
+            if args.name == SETTING_DATA_CLASS:
+                _quiesce_decisions(connection)
+                _refuse_backlog(connection)
+            connection.execute(text(
+                "INSERT INTO public.decision_memory_setting_event (setting_name, revision, value, actor_user_uid, owner_permission_ref) "
+                "VALUES (:name, :revision, :value, :actor, :ref)"),
+                {"name": args.name, "revision": revision + 1, "value": args.value, "actor": actor, "ref": reference})
+    except DBAPIError as error:
+        # >>> guard: lock-available
+        if getattr(getattr(error, "orig", None), "sqlstate", "") == "55P03":
+            raise SettingRefused(f"could not lock within {timeout}: another memory_setting run, or a decision being written, holds "
+                                 "the lock. Run it again in a moment. Nothing was changed.") from error
+        # <<< guard: lock-available
+        raise
     print(f"memory-setting: {args.name}: {current} -> {args.value} (revision {revision + 1}).", file=out)
-    if args.name == "data_class":
+    if args.name == SETTING_DATA_CLASS:
         print("  Cases already captured keep the class they were captured with; the new value applies to the next capture.", file=out)
     return EXIT_OK
 
