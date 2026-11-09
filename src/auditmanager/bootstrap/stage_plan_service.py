@@ -102,6 +102,14 @@ class StagePlanService:
         #: ``start_run_from_stage`` (``stage_plans=service.freezer``) and to ``RunCostPreflight``.
         self.freezer = StagePlanFreezer(store=self._store, availability=availability, provider_source=self._provider_source)
 
+    def attach_cost_preflight(self, cost_preflight: Any) -> None:
+        """`HOSTS-INT-WIRE-01`: the cost preflight is built by the run adapter, which needs ``freezer`` first -- so the root hands the service its
+        preflight once, after the adapter exists. A second, different object is refused: the readiness a user reads and the estimate a start
+        binds must be one policy."""
+        if self._cost_preflight is not None and self._cost_preflight is not cost_preflight:
+            raise ValueError("the stage plan service already holds a cost preflight")
+        self._cost_preflight = cost_preflight
+
     # -- reads -----------------------------------------------------------------------------------------------------------------
 
     def get_layout(self) -> dict[str, Any]:
@@ -185,8 +193,14 @@ class StagePlanService:
                     raise no_layout_revision()
             if self._store.enabled(session) != enabled:
                 self._store.append_switch(session, enabled=enabled, set_by=user_uid)
+                # The journal names an aggregate by an identity (``ck_audit_event_aggregate_id``): the switch concerns the layout revision in
+                # force. (`HOSTS-INT-WIRE-01`: the literal ``default`` this line used to carry is no identity and the database refused every
+                # change of the switch.) A switch that is on has a revision, and one that goes off was on.
+                revision = self._store.current_revision(session)
+                assert revision is not None
                 append_execution_event(
-                    session, event_type="stage_layout.switched", aggregate_type="StageLayout", aggregate_id="default",
+                    session, event_type="stage_layout.switched", aggregate_type="StageLayoutRevision",
+                    aggregate_id=revision.layout_revision_id,
                     payload={"actor_uid": user_uid, "state": "on" if enabled else "off"},
                 )
             self._commands.succeed(session, claimed.command_id, {"enabled": enabled})

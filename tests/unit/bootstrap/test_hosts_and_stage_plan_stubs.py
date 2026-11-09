@@ -1,8 +1,10 @@
-"""`HOSTS-SEAL-1`: the stubs the wave-1 lanes replace refuse, every one, with a typed ``503 dependency_unavailable``. (`HOSTS-LAYOUT-01` has filled the
-stage-layout service and the providers of a planned run: their cases are now `test_stage_plan_service.py` and `test_stage_plan_binding.py`.)
+"""`HOSTS-SEAL-1` shipped the two adapters as stubs that refused with a typed ``503 dependency_unavailable``; `HOSTS-BACKEND-01` and `HOSTS-LAYOUT-01` filled
+the services behind them and `HOSTS-INT-WIRE-01` wired them. What this module now holds: **the adapters are the seam and decide nothing** -- every call of
+each reaches its service with the request's values, and each adapter carries the whole of its port. (The cases of the services are
+`test_stage_plan_service.py`, `test_stage_plan_binding.py` and `tests/unit/executors/test_hosts_*`; the served answers are
+`tests/integration/api/test_hosts_stage_models_surface.py`.)
 
-No database, no network: nothing is read, written or sent to a model. A stub that answered with an empty body would be a silent fallback
-(AGENTS section 4); a stub that raised ``NotImplementedError`` would be an untyped 500. Each module names the dependency it stands for.
+No database, no network: nothing is read, written or sent to a model. An adapter that answered by itself would hide a service nobody wrote.
 """
 
 from __future__ import annotations
@@ -14,10 +16,8 @@ import pytest
 
 from auditmanager.api.routers.hosts_ports import ExecutorHostPort, StageModelPort
 from auditmanager.api.schemas import models
-from auditmanager.bootstrap import hosts_dispatch
 from auditmanager.bootstrap.hosts_adapter import ExecutorHostAdapter
 from auditmanager.bootstrap.stage_plan_adapter import StageModelAdapter
-from auditmanager.shared.errors import DomainError, ErrorCode
 
 HOST = "exh_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 INSTALL = "exai_01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -51,31 +51,35 @@ STAGE_CALLS: list[tuple[str, dict[str, Any]]] = [
 ]
 
 
-def _refusal(call: Any) -> DomainError:
-    with pytest.raises(DomainError) as refused:
-        call()
-    assert refused.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE
-    return refused.value
-
-
-@pytest.mark.parametrize(("method", "kwargs"), HOST_CALLS, ids=[name for name, _ in HOST_CALLS])
-def test_every_server_call_of_the_shipped_adapter_refuses_naming_executor_hosts(method: str, kwargs: dict[str, Any]) -> None:
-    adapter = ExecutorHostAdapter(None)  # type: ignore[arg-type]
-    assert _refusal(lambda: getattr(adapter, method)(**kwargs)).detail_fields["dependency"] == "executor_hosts"
-
-
 class _Reached(Exception):
     """Raised by the stand-in service: the adapter got as far as the service."""
 
 
 class _Service:
-    """`HOSTS-LAYOUT-01` filled ``StagePlanService``: the adapter is its seam and decides nothing, so each call must arrive at it."""
+    """``StagePlanService`` and ``HostsService``: the adapter is their seam and decides nothing, so each call must arrive at them."""
 
     def __getattr__(self, name: str) -> Any:
         def reached(**kwargs: Any) -> Any:
             raise _Reached(name)
 
         return reached
+
+
+@pytest.mark.parametrize(("method", "kwargs"), HOST_CALLS, ids=[name for name, _ in HOST_CALLS])
+def test_every_server_call_of_the_adapter_is_the_services(method: str, kwargs: dict[str, Any]) -> None:
+    adapter = ExecutorHostAdapter(None, service=_Service())  # type: ignore[arg-type]
+    with pytest.raises(_Reached):
+        getattr(adapter, method)(**kwargs)
+
+
+def test_the_host_tokens_two_calls_are_the_services_too() -> None:
+    """``redeem_host_enrollment`` and ``report_host_health`` are not on the port: the enrollment adapter calls them for a host token."""
+    adapter = ExecutorHostAdapter(None, service=_Service())  # type: ignore[arg-type]
+    with pytest.raises(_Reached):
+        adapter.redeem_host_enrollment(enrollment=object(), runner_instance_id="agent-instance-0001")
+    with pytest.raises(_Reached):
+        adapter.report_host_health(runner=object(), body=models.ReportRunnerHealthRequest.model_validate({
+            "agent_version": "0.21.0", "clis": [], "concurrency": 1, "execution_profile": "command", "features": []}))
 
 
 @pytest.mark.parametrize(("method", "kwargs"), STAGE_CALLS, ids=[name for name, _ in STAGE_CALLS])
@@ -96,10 +100,3 @@ def test_the_two_adapters_carry_the_whole_of_their_ports() -> None:
     assert {name for name, _ in HOST_CALLS} == {n for n, m in inspect.getmembers(ExecutorHostPort, inspect.isfunction) if not n.startswith("_")}
     assert {name for name, _ in STAGE_CALLS} == {n for n, m in inspect.getmembers(StageModelPort, inspect.isfunction) if not n.startswith("_")}
 
-
-@pytest.mark.parametrize(("call", "dependency"), [
-    (lambda: hosts_dispatch.bind_planned_run(None, run_id="run_x"), "executor_host_dispatch"),  # type: ignore[arg-type]
-    (lambda: hosts_dispatch.claim_for_host_token(None, token_id="ern_x", runner_instance_id=None, wait_seconds=0), "executor_host_dispatch"),  # type: ignore[arg-type]
-])
-def test_the_seams_of_dispatch_and_providers_refuse_the_same_way(call: Any, dependency: str) -> None:
-    assert _refusal(call).detail_fields["dependency"] == dependency
