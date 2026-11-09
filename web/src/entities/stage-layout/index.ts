@@ -3,6 +3,7 @@
  * rules that turn the layout into the table, the sets and the checks of a draft.
  *
  * `RUN-START-ONE-01` and `RUN-SCREEN-01` (wave 2) read the layout only through the generated client and this entity.
+ * `READINESS-WEB-01` adds the plan of a start (`./model/plan.ts`): the cells `getRunStartReadiness` names, read as rows.
  * Nothing here writes. The commands are in `features/manage-stage-layout`.
  */
 
@@ -16,6 +17,8 @@ export {
   DEFAULT_ANSWER_TOKENS, DEFAULT_TIMEOUT_SECONDS, NAMED_KITS, cellKeyOf, effortsOf, isNamedKit, kitCells, kitIsOffered,
   kitModelIds, pairIsInCatalogue,
 } from './model/kits';
+export type { PlanCell, PlanRow } from './model/plan';
+export { missingModelSentences, readinessPlan } from './model/plan';
 export type { CellReading, TableRow } from './model/table';
 export { cellText, layoutTable, rowCells, rowOfStageKey } from './model/table';
 export {

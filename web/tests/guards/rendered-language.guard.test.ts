@@ -160,7 +160,7 @@ import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
 import { ExecutorStageModels } from '@/widgets/executor-stage-models';
 import { ProcessesSection } from '@/_pages/workers/ui/processes-section';
 import { executorHostDetailsKey, executorHostsKey } from '@/entities/executor-host';
-import { stageLayoutKey } from '@/entities/stage-layout';
+import { readinessPlan, stageLayoutKey } from '@/entities/stage-layout';
 import { LayoutEditorView } from '@/features/manage-stage-layout';
 import { HostDetailsView } from '@/features/manage-executor-host';
 import { StageModelsTable } from '@/widgets/executor-stage-models';
@@ -177,7 +177,9 @@ import {
   SettingsFields, SshKeyControl,
 } from '@/features/manage-executor-connection';
 import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
-import { StartRunControl, StartRunCostDialogView, StartRunFailureView } from '@/features/start-run';
+import { StartRunControl, StartRunCostDialogView, StartRunFailureView, runStartReadinessKey } from '@/features/start-run';
+import { StartRunWithReadiness } from '@/widgets/run-list';
+import { PlanStagesDialog } from '@/widgets/run-stages-dialog';
 import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
 import { AnalysisPresets } from '@/widgets/analysis-presets';
 import { StageChanges, StageJournal } from '@/widgets/stage-changes';
@@ -202,6 +204,10 @@ import {
   ARCHIVED_GROUP, MAIN_GROUP, ROUTED_GROUP, capacityOf, ruleList, ruleOf,
 } from '../unit/executor-groups/executor-groups-fixtures';
 import { costEstimate } from '../unit/analysis-settings/cost-estimate-fixtures';
+import {
+  CLAUDE_CELLS as READINESS_CLAUDE_CELLS, ENSEMBLE_CELLS as READINESS_ENSEMBLE_CELLS, READINESS_API, READINESS_LEGACY, READINESS_MIXED,
+  blockedReadiness, modelLines as readinessModelLines, readiness as readinessAnswer,
+} from '../unit/start-run/readiness-fixtures';
 import { connectionId as executorConnectionId } from '../unit/workers/executor-fixtures';
 import { install as agentInstall } from '../unit/workers/connect-remote-agent-fixtures';
 import {
@@ -2262,6 +2268,8 @@ function startRunCostDialogShapes(): ReactElement {
       changed: true, ceiling: '0',
       estimate: { ...estimate, billing: 'unmetered', estimated_cost_micros: 0, recommended_ceiling_micros: 0 },
     }),
+    // `READINESS-WEB-01`, consent v2: one line per model, with how it is paid, and the total.
+    view('by-model', { estimate: { ...estimate, billing: 'mixed', models: readinessModelLines() } }),
   );
 }
 
@@ -2333,6 +2341,53 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'start-run-control',
     make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+  },
+  // `READINESS-WEB-01`: the line under «Запустить» in each state a read leaves (the set and its access, a part by API, the old
+  // route, a model no server has for an expert and for an administrator, a typed 503, a refusal, nothing answered yet), and
+  // the stage window in plan mode.
+  ...([
+    ['subscription', ['expert'], readinessAnswer()],
+    ['part-by-api', ['expert'], READINESS_MIXED],
+    ['by-api', ['expert'], READINESS_API],
+    ['legacy', ['expert'], READINESS_LEGACY],
+    ['blocked-expert', ['expert'], blockedReadiness()],
+    ['blocked-admin', ['admin', 'expert'], blockedReadiness()],
+  ] as const).map(([name, roles, answer]) => ({
+    name: `start-run-readiness-${name}`,
+    make: () => createElement(StartRunWithReadiness, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    seedClient: (client: ReturnType<typeof newClient>) => {
+      client.setQueryData(queryKeys.account.me(), { roles: [...roles] });
+      client.setQueryData(runStartReadinessKey(VERSION_UID), answer);
+    },
+  })),
+  ...([['no-layout', 503, 'dependency_unavailable'], ['not-read', 500, 'internal_error']] as const).map(([name, status, code]) => ({
+    name: `start-run-readiness-${name}`,
+    make: () => createElement(StartRunWithReadiness, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    seedClient: (client: ReturnType<typeof newClient>) => {
+      client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
+      seedError(client, runStartReadinessKey(VERSION_UID), apiError(status, code));
+    },
+  })),
+  {
+    name: 'start-run-readiness-checking',
+    make: () => createElement(StartRunWithReadiness, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    seedClient: (client: ReturnType<typeof newClient>) => { client.setQueryData(queryKeys.account.me(), { roles: ['expert'] }); },
+  },
+  {
+    name: 'plan-stages-dialog-administrator',
+    make: () => createElement(PlanStagesDialog, {
+      rows: readinessPlan(READINESS_CLAUDE_CELLS), kit: 'Только Claude', onClose: () => undefined, editHref: '/workers?tab=models', staticOpen: true,
+    }),
+  },
+  {
+    name: 'plan-stages-dialog-scheme-and-gap',
+    make: () => createElement('div', null,
+      createElement(PlanStagesDialog, {
+        rows: readinessPlan(READINESS_ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks')), kit: 'Только Claude', onClose: () => undefined, staticOpen: true,
+      }),
+      createElement(PlanStagesDialog, {
+        rows: readinessPlan(blockedReadiness().cells.filter((cell) => cell.row === 'blocks')), kit: null, onClose: () => undefined, staticOpen: true,
+      })),
   },
   // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» of «Настройки анализа», in the states a default cache does not
   // select (the preset select of the start control was removed by `RUN-START-ONE-01a`).

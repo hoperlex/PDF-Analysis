@@ -24,6 +24,12 @@
   left: 0;
 }
 
+/* `READINESS-WEB-01`: why the start is not possible; the rule at the left says it is a stop, the words stay in the ink colour. */
+.blocked {
+  border-left-color: var(--am-failed);
+  color: var(--am-ink);
+}
+
 /* The dialog of a start that can charge money: a native modal, sized by its text. */
 .dialog {
   width: max-content;
@@ -40,6 +46,11 @@
 .dialogTitle {
   margin: 0 0 var(--am-gap-sm);
   font-size: var(--am-text-md);
+}
+
+.dialogModels {
+  margin: 0 0 var(--am-gap-sm);
+  padding-left: var(--am-gap-lg);
 }
 
 .dialogField {

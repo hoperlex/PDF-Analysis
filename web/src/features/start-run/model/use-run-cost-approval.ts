@@ -10,7 +10,8 @@
  *    agreement, and «Отмена» sends nothing.
  * 4. A start the server refuses because the estimate or its binding changed
  *    (`run_cost_estimate_stale`, `cost_estimate_binding_changed`) is estimated again and shown in the
- *    dialog, whatever the new figure: the person sees what changed before anything is sent.
+ *    dialog, whatever the new figure: the person sees what changed before anything is sent. The readiness line
+ *    under the button is read again at the same moment (`READINESS-WEB-01`): the access it states may be what changed.
  *
  * **One key per intent.** The intent is the version, the limit choice and the consent it carries
  * (`startRunIntent`). The key is held by `resolveIntentKey`, the rule every write feature uses: the same
@@ -25,7 +26,7 @@
  * so an answer that arrives for another version finds no observer.
  */
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 
 import type { RunCostEstimate, RunStatus, VersionUid } from '@/shared/api';
@@ -39,6 +40,7 @@ import {
 } from './one-click-start';
 import type { RunCostConsent, StartRunCommand } from './start-run-intent';
 import { startRunIntent } from './start-run-intent';
+import { runStartReadinessKey } from './use-run-start-readiness';
 import { useStartRun } from './use-start-run';
 
 /** What the dialog shows: the estimate asked about, the kind of start, and the ceiling being typed. */
@@ -53,6 +55,7 @@ export interface RunCostDialog {
 
 export function useRunCostApproval(versionUid: VersionUid, onStarted?: ((run: RunStatus) => void) | undefined) {
   const start = useStartRun();
+  const queryClient = useQueryClient();
   const [dialog, setDialog] = useState<RunCostDialog | null>(null);
   const held = useRef<IntentRecord | null>(null);
   const last = useRef<StartRunCommand | null>(null);
@@ -78,7 +81,10 @@ export function useRunCostApproval(versionUid: VersionUid, onStarted?: ((run: Ru
       onError: (error) => {
         setDialog(null);
         // The answer to a changed estimate is a new estimate, shown. Anything else stays beside the button.
-        if (estimateChanged(error)) estimate(relaxed, true);
+        if (estimateChanged(error)) {
+          void queryClient.invalidateQueries({ queryKey: runStartReadinessKey(versionUid) });
+          estimate(relaxed, true);
+        }
       },
     });
   }
