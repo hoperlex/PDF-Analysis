@@ -90,6 +90,7 @@ import {
   elapsedMs,
   formatCostMicros,
   formatElapsed,
+  groupDigits,
   hasKnownRunVocabulary,
   interruptedReason,
   isRunAnimating,
@@ -442,14 +443,14 @@ function SpendTile({ status }: { readonly status: RunStatus }) {
         <p className={styles.spend}>
           <span className={styles.spendFigure} data-spend-micros={cost.micros}>{`$${microsAsUsd(cost.micros)}`}</span>
           <span className={styles.spendNote}>
-            вызовов {cost.callCount}
+            вызовов {groupDigits(cost.callCount)}
             {cost.basis === null ? '' : cost.basis === 'unrecognized' ? ' · основание: неизвестное значение' : ` · ${COST_BASIS_LABELS[cost.basis]}`}
           </span>
         </p>
       ) : cost.kind === 'unmetered' ? (
         <p className={styles.spendNote}>
           По подписке. {costBasisCaption('unmetered')}
-          {cost.callCount === null ? '' : ` Вызовов: ${cost.callCount}.`}
+          {cost.callCount === null ? '' : ` Вызовов: ${groupDigits(cost.callCount)}.`}
         </p>
       ) : cost.kind === 'unreadable' ? (
         <p className={styles.spendNote}>Стоимость прочитать нельзя; причина — в «Подробнее», «Пояснения к цифрам».</p>

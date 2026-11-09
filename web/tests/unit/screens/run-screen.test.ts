@@ -307,6 +307,12 @@ describe('the tiles', () => {
     expect(spend(6_120_000)).toContain('· измерено');
   });
 
+  it('«Расход» groups the calls it sums by threes with a narrow no-break space (RUN-SCREEN-FIX-01)', () => {
+    const markup = screen({ state: 'published', cost_micros: 1_000_000, cost_basis: 'measured', model_call_count: 12_345 });
+    expect(markup).toContain('вызовов 12\u202F345 · измерено');
+    expect(markup).not.toContain('вызовов 12345');
+  });
+
   it('«Расход» says «по подписке» for an unmetered run with no figure, and that a run that called no provider did not', () => {
     const subscription = screen({ state: 'published', cost_basis: 'unmetered' as never, cost_micros: 0, model_call_count: 2 });
     expect(subscription).toContain('data-run-spend="unmetered"');
