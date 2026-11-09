@@ -3,7 +3,7 @@ export {
   dispatchQueryOptions, journalQueryOptions, queueQueryOptions, workersQueryOptions,
   useExecutionDispatch, useExecutionJournal, useExecutionQueue, useWorkerLookup, useWorkers,
 } from './api/use-execution';
-export type { ExecutionQueueFilter, ExecutionQueueState } from './api/use-execution';
+export type { ExecutionQueueFilter, ExecutionQueueState, ExecutionQueueStateGroup } from './api/use-execution';
 /** The operational-list refresh options, for a read outside this entity that follows the same cadence (the menu's badges). */
 export { OPERATIONAL_LIST_POLL } from './api/operational-poll';
 export { journalCopyLine, journalCopyText } from './model/journal-copy';

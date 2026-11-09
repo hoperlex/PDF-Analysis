@@ -314,9 +314,11 @@ export const queryKeys = {
      */
     queue: (
       cursor?: string,
-      filter?: { readonly state?: string; readonly createdFrom?: string; readonly createdTo?: string },
+      filter?: {
+        readonly state?: string; readonly stateGroup?: string; readonly createdFrom?: string; readonly createdTo?: string;
+      },
     ) => ['execution', 'queue', {
-      cursor, state: filter?.state, createdFrom: filter?.createdFrom, createdTo: filter?.createdTo,
+      cursor, state: filter?.state, stateGroup: filter?.stateGroup, createdFrom: filter?.createdFrom, createdTo: filter?.createdTo,
     }] as const,
     journal: (runId?: RunId, cursor?: string) =>
       ['execution', 'journal', { runId, cursor }] as const,
