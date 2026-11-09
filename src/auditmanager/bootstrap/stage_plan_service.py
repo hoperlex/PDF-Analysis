@@ -1,47 +1,199 @@
-"""The stage layout, the catalogue and the readiness of a start, as a service: the stub `HOSTS-SEAL-1` ships and `HOSTS-LAYOUT-01` replaces.
+"""The stage layout, the catalogue and the readiness of a start, as a service (`HOSTS-LAYOUT-01`, ADR-0028 decisions 8, 12-14).
 
-``StagePlanService`` is what ``bootstrap/stage_plan_adapter.py`` delegates to. It will hold, over ``stage_layout*`` (migration ``0062``) and
-``contracts/analysis/v1/model-catalogue.json``: the layout and its revisions (a pair of the catalogue per cell, the closed list of block schemes,
-the kits «Только Claude» and «Только Codex»), the switch and its journal, the freezing of ``audit_run.stage_plan`` at the start of a run
-(access: a subscription when an agent with one is on line, else an API key; no substitution mid-run), the consent v2 (the digest of the plan and
-the model -> rate digest and access map), and the readiness the one button shows. The adapter parses nothing and decides nothing.
+``StagePlanService`` is what ``bootstrap/stage_plan_adapter.py`` delegates to. It holds, over ``stage_layout*`` (migration ``0062``) and
+``contracts/analysis/v1/model-catalogue.json``:
 
-Every method refuses with ``503 dependency_unavailable`` (``dependency`` ``stage_models``) until the lane replaces its body: nothing is read,
-written or sent to a model, and there is no fallback (AGENTS section 4).
+* the **layout** and its revisions -- a pair of the catalogue per cell, the closed list of block schemes, the sets « Только Claude » and
+  « Только Codex » (``runs/stage_layout.py`` holds the tables, this module only applies them). Only an administrator revises it; the role
+  set is re-read in the command's own transaction. An expert reads it through the router; the viewer is closed by ``api/security.py``;
+* the **switch** and its journal: on, runs started from now on freeze a ``stage_plan``; off, they follow the legacy route. It needs a
+  revision and ``AUDITMANAGER_PROVIDER_SOURCE=database``, is read only when a run starts (``runs/stage_plan.py``), and every change is an
+  append-only event with its author;
+* the **catalogue** read of ``listModelCatalogue``;
+* the **readiness** the one button shows (``getRunStartReadiness``): what a start would freeze, the access of each cell, the cells no
+  server can serve and the digest of the estimate to confirm.
+
+The adapter parses nothing and decides nothing. Nothing here calls a model; no answer of a model chooses a model or an effort.
 """
 
 from __future__ import annotations
 
-from typing import Any, Final, NoReturn
+import os
+from typing import Any, Final, Iterable, Mapping
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.analysis.public import CellSettings, FORBIDDEN_EFFORTS, ModelCatalogue, model_catalogue
+from auditmanager.ingest.public import CommandReplay, CommandRepository, CommandStarted, payload_fingerprint
+from auditmanager.jobs.public import append_execution_event
+from auditmanager.runs.public import (
+    KIT_CUSTOM, LayoutRevisionRow, ModelAvailabilityPort, PROVIDER_SOURCE_DATABASE, SqlStageLayoutStore, StageLayoutStore,
+    StagePlanFreezer, SwitchEventRow, cells_to_wire, no_layout_revision, provider_source_not_database, require_valid_layout,
+)
 from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.shared.identity import IdempotencyKey
 
-__all__ = ["DEPENDENCY", "StagePlanService"]
+__all__ = ["COMMAND_TYPE_REVISE", "COMMAND_TYPE_SWITCH", "DEPENDENCY", "StagePlanService"]
 
 DEPENDENCY: Final[str] = "stage_models"
+COMMAND_TYPE_REVISE: Final[str] = "revise_stage_layout"
+COMMAND_TYPE_SWITCH: Final[str] = "set_stage_layout_enabled"
+_HISTORY_LIMIT: Final[int] = 50
 
 
-def _not_implemented() -> NoReturn:
-    raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=DEPENDENCY)
+def _admin(roles: Iterable[str]) -> None:
+    if "admin" not in set(roles):
+        raise DomainError(ErrorCode.PERMISSION_DENIED, required_capability="role:admin")
+
+
+def _roles(session: Session, user_uid: str) -> frozenset[str]:
+    from auditmanager.access.public import AccountRepository
+
+    return AccountRepository().roles_of(session, user_uid)
+
+
+def _value(member: Any) -> Any:
+    return getattr(member, "value", member)
+
+
+def _revision_view(row: LayoutRevisionRow) -> dict[str, Any]:
+    return {
+        "layout_revision_id": row.layout_revision_id, "revision_no": row.revision_no, "kit": row.kit,
+        "cells": cells_to_wire(row.cells), "created_at": row.created_at, "created_by": row.created_by,
+    }
+
+
+def _event_view(row: SwitchEventRow) -> dict[str, Any]:
+    return {"enabled": row.enabled, "set_at": row.set_at, "set_by": row.set_by}
+
+
+def _cells_of(body: Any) -> tuple[CellSettings, ...]:
+    """The cells of a request as the domain reads them. A cell whose key is not its row and role is refused here: the wire carries the
+    three and they must agree."""
+    cells = []
+    for item in body.cells:
+        key, row, role = str(item.cell_key), str(_value(item.row)), str(_value(item.role))
+        if key != f"{row}:{role}":
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cells", constraint="cell_key_mismatch")
+        cells.append(CellSettings(
+            cell_key=key, model_id=str(item.model_id), effort=str(_value(item.effort)),
+            max_output_tokens=int(item.max_output_tokens), timeout_seconds=int(item.timeout_seconds),
+        ))
+    return tuple(cells)
 
 
 class StagePlanService:
-    def __init__(self, *, session_factory: sessionmaker[Session]) -> None:
+    def __init__(
+        self, *, session_factory: sessionmaker[Session], store: StageLayoutStore | None = None,
+        availability: ModelAvailabilityPort | None = None, provider_source: str | None = None,
+        cost_preflight: Any = None, catalogue: ModelCatalogue | None = None, commands: CommandRepository | None = None,
+    ) -> None:
         self._sessions = session_factory
+        self._store: StageLayoutStore = store or SqlStageLayoutStore()
+        self._catalogue = catalogue
+        self._commands = commands or CommandRepository()
+        self._provider_source = (
+            provider_source if provider_source is not None
+            else os.environ.get("AUDITMANAGER_PROVIDER_SOURCE", "environment").strip() or "environment"
+        )
+        self._cost_preflight = cost_preflight
+        #: The seam the start commands call; the integrator hands this same object to ``start_audit_run``, ``reaudit_run`` and
+        #: ``start_run_from_stage`` (``stage_plans=service.freezer``) and to ``RunCostPreflight``.
+        self.freezer = StagePlanFreezer(store=self._store, availability=availability, provider_source=self._provider_source)
 
-    def get_layout(self) -> Any:
-        _not_implemented()
+    # -- reads -----------------------------------------------------------------------------------------------------------------
 
-    def revise_layout(self, *, body: Any, user_uid: str, idempotency_key: str) -> Any:
-        _not_implemented()
+    def get_layout(self) -> dict[str, Any]:
+        with self._sessions() as session:
+            return self._layout(session)
 
-    def set_layout_enabled(self, *, enabled: bool, user_uid: str, idempotency_key: str) -> Any:
-        _not_implemented()
+    def _layout(self, session: Session) -> dict[str, Any]:
+        history = list(self._store.history(session, limit=_HISTORY_LIMIT))
+        result: dict[str, Any] = {
+            "enabled": self._store.enabled(session),
+            "history": [_revision_view(row) for row in history],
+            "switch_journal": [_event_view(row) for row in self._store.switch_journal(session, limit=_HISTORY_LIMIT)],
+            "unavailable_cell_keys": [],
+        }
+        if history:
+            result["current"] = _revision_view(history[0])
+            draft = self.freezer.draft_of(session, history[0])
+            result["unavailable_cell_keys"] = [cell.cell_key for cell in draft.unavailable({cell.row for cell in draft.cells})]
+        return result
 
-    def list_catalogue(self) -> Any:
-        _not_implemented()
+    def list_catalogue(self) -> dict[str, Any]:
+        catalogue = self._catalogue or model_catalogue()
+        return {
+            "contract_version": catalogue.contract_version,
+            "items": [
+                {"provider": entry.provider, "model_id": entry.model_id, "access": list(entry.access),
+                 "efforts": [effort for effort in entry.efforts if effort not in FORBIDDEN_EFFORTS],
+                 "accepted_reported": list(entry.accepted_reported)}
+                for entry in catalogue.entries
+            ],
+        }
+
+    # -- writes ----------------------------------------------------------------------------------------------------------------
+
+    def revise_layout(self, *, body: Any, user_uid: str, idempotency_key: str) -> dict[str, Any]:
+        """A new immutable revision. Refusals precede the key's claim and write nothing: ``permission_denied``, then
+        ``validation_failed`` (a cell outside the catalogue, a block scheme not on the list, a set named for cells that are not its)."""
+        kit = str(_value(body.kit))
+        cells = _cells_of(body)
+        with self._sessions() as session:
+            _admin(_roles(session, user_uid))
+            ordered = require_valid_layout(kit, cells, catalogue=self._catalogue)
+            claimed = self._commands.begin(
+                session, command_type=COMMAND_TYPE_REVISE, idempotency_key=IdempotencyKey(idempotency_key),
+                fingerprint=payload_fingerprint({"actor_uid": user_uid, "kit": kit, "cells": cells_to_wire(ordered)}),
+            )
+            if isinstance(claimed, CommandReplay):
+                return self._layout(session)
+            assert isinstance(claimed, CommandStarted)
+            self._store.lock(session)
+            row = self._store.append_revision(session, kit=kit, cells=ordered, created_by=user_uid)
+            append_execution_event(
+                session, event_type="stage_layout.revised", aggregate_type="StageLayoutRevision",
+                aggregate_id=row.layout_revision_id,
+                payload={"revision_id": row.layout_revision_id, "revision_no": row.revision_no, "actor_uid": user_uid,
+                         "state": "custom" if kit == KIT_CUSTOM else kit},
+            )
+            self._commands.succeed(session, claimed.command_id, {"layout_revision_id": row.layout_revision_id})
+            view = self._layout(session)
+            session.commit()
+            return view
+
+    def set_layout_enabled(self, *, enabled: bool, user_uid: str, idempotency_key: str) -> dict[str, Any]:
+        """Put the layout in force for runs started from now on, or take it out. Switching on needs a revision and the database provider
+        source (``409 conflict``: ``no_layout_revision``, ``provider_source_not_database``); switching off needs nothing and breaks no run in
+        progress, which froze its plan. A request for the state already in force records nothing."""
+        with self._sessions() as session:
+            _admin(_roles(session, user_uid))
+            claimed = self._commands.begin(
+                session, command_type=COMMAND_TYPE_SWITCH, idempotency_key=IdempotencyKey(idempotency_key),
+                fingerprint=payload_fingerprint({"actor_uid": user_uid, "enabled": enabled}),
+            )
+            if isinstance(claimed, CommandReplay):
+                return self._layout(session)
+            assert isinstance(claimed, CommandStarted)
+            self._store.lock(session)
+            if enabled:
+                if self._provider_source != PROVIDER_SOURCE_DATABASE:
+                    raise provider_source_not_database()
+                if self._store.current_revision(session) is None:
+                    raise no_layout_revision()
+            if self._store.enabled(session) != enabled:
+                self._store.append_switch(session, enabled=enabled, set_by=user_uid)
+                append_execution_event(
+                    session, event_type="stage_layout.switched", aggregate_type="StageLayout", aggregate_id="default",
+                    payload={"actor_uid": user_uid, "state": "on" if enabled else "off"},
+                )
+            self._commands.succeed(session, claimed.command_id, {"enabled": enabled})
+            view = self._layout(session)
+            session.commit()
+            return view
+
+    # -- the one button --------------------------------------------------------------------------------------------------------
 
     def get_start_readiness(self, *, body: Any) -> Any:
-        _not_implemented()
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=DEPENDENCY)
