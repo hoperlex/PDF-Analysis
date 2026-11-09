@@ -209,7 +209,15 @@ describe('review is offered only by a run that published a result (U-03)', () =>
         : {}),
     });
     expect(markup).not.toContain(`/runs/${RUN_ID}/review`);
-    expect(markup).toContain('Разбирать нечего.');
+    // `RUN-SCREEN-FIX-01`: «Разбирать нечего.» is what a run that ENDED without a result says; a run that is still open has not got
+    // one yet and says that instead.
+    if (state === 'failed' || state === 'cancelled') {
+      expect(markup).toContain('Разбирать нечего.');
+      expect(markup).not.toContain('Появятся по ходу прогона.');
+    } else {
+      expect(markup).toContain('Появятся по ходу прогона.');
+      expect(markup).not.toContain('Разбирать нечего.');
+    }
     // Used to assert `<code>${state}</code>`. Under the owner's 2026-09-22 ruling the state
     // is rendered as its Russian label, and the contract value keeps its home in
     // `data-run-state` -- which is what `PA-01` criterion 4 was re-driven against, so the

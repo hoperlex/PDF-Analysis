@@ -336,7 +336,9 @@ function Recorded({ status }: { readonly status: RunStatus }) {
       </p>
 
       <h2>Стоимость</h2>
-      {cost.kind === 'absent' ? (
+      {cost.kind === 'absent' && !isTerminalRunState(status.state) ? (
+        <p data-run-cost="pending">Стоимость появится по ходу прогона.</p>
+      ) : cost.kind === 'absent' ? (
         <p data-run-cost="absent">
           Прогон не обращался к провайдеру, поэтому сообщать о стоимости нечего. Это не
           нулевая стоимость: здесь ничего не потрачено, потому что ничего не вызывалось,
@@ -454,8 +456,11 @@ function SpendTile({ status }: { readonly status: RunStatus }) {
         </p>
       ) : cost.kind === 'unreadable' ? (
         <p className={styles.spendNote}>Стоимость прочитать нельзя; причина — в «Подробнее», «Пояснения к цифрам».</p>
-      ) : (
+      ) : isTerminalRunState(status.state) ? (
         <p className={styles.spendNote}>Прогон не обращался к провайдеру.</p>
+      ) : (
+        // An open run has not finished calling: «не обращался» is a claim about a finished run (`RUN-SCREEN-FIX-01`).
+        <p className={styles.spendNote} data-run-spend-pending="">Появится по ходу прогона.</p>
       )}
     </section>
   );
@@ -535,6 +540,9 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
                   </p>
                 }
               />
+            ) : !isTerminalRunState(status.state) ? (
+              // An open run has no result yet; «Разбирать нечего» is the sentence of a run that ended without one (`RUN-SCREEN-FIX-01`).
+              <p className={styles.spendNote} data-run-findings-pending="">Появятся по ходу прогона.</p>
             ) : (
               <NotApplicableState
                 title="Разбирать нечего."

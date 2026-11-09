@@ -321,6 +321,29 @@ describe('the tiles', () => {
     expect(screen({ state: 'published' })).toContain('Прогон не обращался к провайдеру.');
   });
 
+  it('an open run says what it has not got yet, and not what a finished run says (RUN-SCREEN-FIX-01)', () => {
+    for (const state of ['created', 'queued', 'running', 'validating'] as const) {
+      const markup = screen({ state, terminal_at: null });
+      expect(markup).toMatch(/data-run-findings-tile=""[\s\S]*?Появятся по ходу прогона\./);
+      expect(markup).toMatch(/data-run-spend="absent"[\s\S]*?Появится по ходу прогона\./);
+      expect(markup).not.toContain('Разбирать нечего.');
+      expect(markup).not.toContain('Прогон не обращался к провайдеру');
+      expect(markup).not.toContain('поэтому сообщать о стоимости нечего');
+    }
+  });
+
+  it('an open run that already carries a spend still prints it, and a finished run keeps its sentences (RUN-SCREEN-FIX-01)', () => {
+    const running = screen({ state: 'running', terminal_at: null, cost_micros: 6_120_000, cost_basis: 'estimated', model_call_count: 2 });
+    expect(running).toContain('data-run-spend="reported"');
+    expect(running).toContain('>$6.12<');
+    expect(running).not.toContain('Появится по ходу прогона.');
+    for (const state of ['published', 'partial', 'failed', 'cancelled'] as const) {
+      expect(screen({ state })).toContain('Прогон не обращался к провайдеру.');
+      expect(screen({ state })).not.toContain('по ходу прогона');
+    }
+    expect(screen({ state: 'failed', terminal_reason: 'analysis_failed' })).toContain('Разбирать нечего.');
+  });
+
   it('«Расход» refuses a figure whose calls it cannot see and sends the reader to the notes, which open themselves', () => {
     const markup = screen({ state: 'published', cost_micros: 900 as never, cost_basis: 'estimated' as never });
     expect(markup).toContain('data-run-spend="unreadable"');
