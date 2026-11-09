@@ -423,8 +423,9 @@ describe('«Этапы анализа раздела»', () => {
   it('labels the model as the run\'s, with the server, and the fact rows that exist', () => {
     const markup = runDialog(status({ stages: [...PREP, 'text_analysis' as const].map((id) => ok(id, { started_at: '2026-11-08T10:00:00.000Z', finished_at: '2026-11-08T10:00:03.000Z' })) }), { selected: 'text' });
     expect(markup).toContain('Модель (прогона)');
-    expect(markup).toContain('<strong>Opus 5.5</strong>');
-    expect(markup).toContain('title="Идентификатор модели прогона">claude-opus-5-5<');
+    // The short name only; the pin is the tooltip, never a second chip beside it (the owner's minimisation priority).
+    expect(markup).toContain('<strong title="claude-opus-5-5">Opus 5.5</strong>');
+    expect(markup).not.toContain('<code');
     expect(markup).toMatch(/data-plan-row="server"[\s\S]*?adm1\.hlab\.kz/);
     for (const row of ['state', 'started', 'finished', 'elapsed']) expect(markup).toContain(`data-fact-row="${row}"`);
     expect(markup).toContain('<th scope="row">Длительность</th><td>3 с</td>');
@@ -456,14 +457,16 @@ describe('«Этапы анализа раздела»', () => {
     expect(steps).toContain('data-step-result=""');
   });
 
-  it('hides the executor row from the read-only role and keeps the preset and the model', () => {
+  it('has no executor line for anybody, hides the server from the read-only role, and keeps the preset and the model', () => {
     const withPreset = status({ preset: { preset_id: 'pre_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', revision_no: 2, name: 'Быстрый черновик' } as never });
     const operator = runDialog(withPreset, { selected: 'text' });
     expect(operator).toContain('<dt>Пресет</dt>');
-    expect(operator).toContain('<dt>Исполнитель</dt>');
+    expect(operator).not.toContain('<dt>Исполнитель</dt>');
+    expect(operator).toMatch(/data-plan-row="server"[\s\S]*?adm1\.hlab\.kz/);
     const viewer = runDialog(withPreset, { selected: 'text', showServer: false });
     expect(viewer).toContain('<dt>Пресет</dt>');
     expect(viewer).not.toContain('<dt>Исполнитель</dt>');
+    expect(viewer).not.toContain('data-plan-row="server"');
     expect(viewer).not.toContain('adm1.hlab.kz');
     expect(viewer).toContain('Opus 5.5');
   });

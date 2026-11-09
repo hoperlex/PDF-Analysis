@@ -196,14 +196,16 @@ describe('the run table row', () => {
 });
 
 describe('the run page', () => {
-  it('says the executor is busy in the waiting line, and the dialog keeps the executor’s own row', () => {
+  it('says the executor is busy in the waiting line, and the dialog names the executor once, as the server of the plan', () => {
     const run = queued({ queue_reason: 'executor_at_capacity' });
     const markup = page(run);
     expect(markup).toMatch(new RegExp(`<span data-run-executor-waiting="true">${BUSY}\\.</span>`));
     expect(markup).not.toContain('Ждёт исполнителя');
-    const dialog = runDialog(run);
-    expect(dialog).toContain('<dt>Исполнитель</dt>');
-    expect(dialog).toMatch(/<dd data-run-executor="true">«Основной шлюз», модель «модель-основная»<\/dd>/);
+    const dialog = runDialog(run, { selected: 'text' });
+    expect(dialog).not.toContain('<dt>Исполнитель</dt>');
+    expect(dialog).not.toContain('data-run-executor');
+    expect(dialog).toContain('<strong title="модель-основная">модель-основная</strong>');
+    expect(dialog).toMatch(/data-plan-row="server"[\s\S]*?Основной шлюз/);
   });
 
   it('says the runner is not online', () => {

@@ -112,11 +112,13 @@ describe('the stage table of a run started from a stage, in «Этапы ана�
   });
 
   it('keeps the measured duration of the stage this run computed', () => {
-    const cells = row(dialog({ ...FROM, stages: STAGES }, 'text'), 'text_analysis');
-    expect(cells).toContain('data-stage-elapsed="2500"');
-    expect(cells).toContain('2.5 s');
-    expect(cells).not.toContain('data-stage-reused');
-    expect(cells).not.toContain('из прогона');
+    // «Текст» has one code stage, so the window draws no table of stages for it (`RUN-STAGES-WEB-01`): the measured duration is the
+    // chip's own fact, and it is not «из прогона».
+    const markup = dialog({ ...FROM, stages: STAGES }, 'text');
+    expect(markup).not.toContain('data-stage-id=');
+    const duration = /data-fact-row="elapsed"[^>]*><th scope="row">Длительность<\/th><td>([^<]*)<\/td>/.exec(markup)?.[1];
+    expect(duration).toBe('2,5 с');
+    expect(markup).not.toContain('data-stage-reused');
   });
 
   it('marks only the stages before the start stage when the run started from an earlier one', () => {

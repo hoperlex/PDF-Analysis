@@ -113,10 +113,12 @@ describe('the run table row', () => {
 });
 
 describe('the run page', () => {
-  it('names the executor in «Этапы анализа раздела», among the run’s facts', () => {
-    const markup = runDialog(runStatus({ executor: EXECUTOR }));
-    expect(markup).toContain('<dt>Исполнитель</dt>');
-    expect(markup).toMatch(/<dd data-run-executor="true">«Основной шлюз», модель «модель-основная»<\/dd>/);
+  it('names the executor and its model once in «Этапы анализа раздела», in the plan rows, with no line of its own above them', () => {
+    const markup = runDialog(runStatus({ executor: EXECUTOR }), { selected: 'text' });
+    expect(markup).not.toContain('<dt>Исполнитель</dt>');
+    expect(markup).not.toContain('data-run-executor="true"');
+    expect(markup).toContain('<strong title="модель-основная">модель-основная</strong>');
+    expect(markup).toMatch(/data-plan-row="server"[\s\S]*?Основной шлюз/);
     expect(markup).not.toContain('data-run-executor-waiting');
   });
 

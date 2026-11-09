@@ -231,22 +231,27 @@ describe('the run table row and the run page', () => {
     expect(markup).toContain(`Исполнитель «Основной шлюз», модель «${MODEL}»`);
   });
 
-  it('put the plan among the facts of «Этапы анализа раздела», and the reason it waits in the live line', () => {
+  it('put the plan in the plan rows of «Этапы анализа раздела» (no executor line above them), and the reason it waits in the live line', () => {
     const markup = page(pending());
     expect(markup).toContain('data-run-executor-waiting');
     expect(markup).toContain('В очереди: исполнитель занят.');
     expect(markup).toContain(`Ждёт с ${formatInstant(SINCE)}.`);
     expect(markup).not.toContain('Основной шлюз');
-    const dialog = runDialog(pending());
-    expect(dialog).toContain('<dt>Исполнитель</dt>');
-    expect(dialog).toMatch(new RegExp(`<dd data-run-executor="true">Плановая модель «${MODEL}», ${PLANNED_TAIL}</dd>`));
+    const dialog = runDialog(pending(), { selected: 'text' });
+    // The model and the server are said once, in the plan rows; the window has no «Исполнитель» line of its own.
+    expect(dialog).not.toContain('<dt>Исполнитель</dt>');
+    expect(dialog).not.toContain('data-run-executor');
+    expect(dialog).toContain(`<strong title="${MODEL}">${MODEL}</strong>`);
+    expect(dialog).toMatch(/data-plan-row="server"[\s\S]*?будет выбран при отправке в работу/);
     expect(dialog).not.toContain('Основной шлюз');
   });
 
-  it('put the binding among the facts of «Этапы анализа раздела» once dispatch has bound it', () => {
+  it('put the binding in the plan rows of «Этапы анализа раздела» once dispatch has bound it', () => {
     const run = bound({ state: 'published', terminal_at: '2026-09-10T08:04:00.000Z' });
-    const dialog = runDialog(run);
-    expect(dialog).toMatch(new RegExp(`<dd data-run-executor="true">Фактическая модель «${MODEL}», подключение «Основной шлюз»</dd>`));
+    const dialog = runDialog(run, { selected: 'text' });
+    expect(dialog).toContain(`<strong title="${MODEL}">${MODEL}</strong>`);
+    expect(dialog).toMatch(/data-plan-row="server"[\s\S]*?Основной шлюз/);
+    expect(dialog).not.toContain('data-run-executor');
     expect(dialog).not.toContain('Плановая модель');
     const markup = page(run);
     expect(markup).not.toContain('data-run-executor-waiting');

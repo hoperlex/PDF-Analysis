@@ -74,8 +74,10 @@ describe('the plan of a chip with a blocks ensemble (a run that froze its stage 
   });
 
   it('says the model, the effort and the answer limit of each cell, and the server and access of the ones that have them', () => {
-    expect(markup).toContain('<strong title="claude-opus-5-5">Opus 5.5</strong> <code title="Идентификатор модели">claude-opus-5-5</code>');
-    expect(markup).toContain('<strong title="claude-sonnet-5-5">Sonnet 5.5</strong>');
+    // The short name only; the pin is the tooltip, never a second chip beside it.
+    expect(markup).toContain('<strong title="claude-opus-5-5">Opus 5.5</strong> · усилие');
+    expect(markup).toContain('<strong title="claude-sonnet-5-5">Sonnet 5.5</strong> · усилие');
+    expect(markup).not.toContain('<code');
     expect(markup).toContain(`усилие: среднее · ответ до 6${G}000 токенов · сервер adm1.hlab.kz · по подписке`);
     // The judge is bound to no server yet: its access is said and the server is said not to be chosen, nothing is invented.
     expect(markup).toContain(`ответ до 12${G}000 токенов · по ключу API · сервер не назначен`);
@@ -202,6 +204,61 @@ describe('the facts of other kinds of chip', () => {
     const own = dialog(stages([stage('text', [cell('main', 'claude-sonnet-5-5')], { started_at: '2026-11-10T09:00:00Z', finished_at: '2026-11-10T09:00:42Z' })]), {}, { selected: 'text' });
     expect(own).not.toContain('взят из исходного прогона');
     expect(own).toMatch(/data-fact-row="elapsed"[\s\S]*?<td>42 с<\/td>/);
+  });
+});
+
+/**
+ * The owner's minimisation priority: the right side says a thing once. The executor is the plan's model and server (no line of its
+ * own above the table), the model is its short name, the table of code stages is for a chip that has several, and the one-line list of
+ * procedures that only repeats the chip's own state is left out once the stages are read.
+ */
+describe('nothing is said twice', () => {
+  const EXECUTOR = { connection_id: 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', display_name: 'adm1.hlab.kz', pin_id: 'claude-opus-5-5' };
+  const PROCEDURES = [{ id: 'block_analysis', title: 'Анализ блоков', status: 'completed' as const, reason: null, dependency: null, errorCode: null }];
+
+  it('has no «Исполнитель» line above «План + Факт», with or without the stages, and the server is in the plan', () => {
+    for (const view of [undefined, stages([BLOCKS_ENSEMBLE]), { phase: 'error' } as RunStagesView]) {
+      const markup = dialog(view, { executor: EXECUTOR, state: 'published', terminal_at: '2026-09-10T08:04:00.000Z' }, { selected: 'blocks' });
+      expect(markup).not.toContain('Исполнитель');
+      expect(markup).not.toContain('data-run-executor');
+      expect(markup).not.toContain('<code');
+    }
+    const fallback = dialog(undefined, { executor: EXECUTOR }, { selected: 'text' });
+    expect(fallback).toContain('<strong title="claude-opus-5-5">Opus 5.5</strong>');
+    expect(fallback).toMatch(/data-plan-row="server"[\s\S]*?adm1\.hlab\.kz/);
+  });
+
+  it('keeps the preset line, which is nowhere else', () => {
+    const preset = { preset_id: 'pre_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', revision_no: 2, name: 'Быстрый черновик' } as never;
+    expect(dialog(undefined, { preset }, { selected: 'text' })).toContain('<dt>Пресет</dt>');
+  });
+
+  it('draws the table of code stages only for a chip that has two or more', () => {
+    const several = dialog(undefined, {}, { selected: 'preparation' });
+    expect(several).toContain('Подробности этапов');
+    expect(several).toContain('data-stage-id="source_preparation"');
+    for (const selected of ['text', 'blocks'] as const) {
+      const one = dialog(undefined, {}, { selected });
+      expect(one, selected).not.toContain('Подробности этапов');
+      expect(one, selected).not.toContain('data-stage-id=');
+      expect(one, selected).toContain('data-fact-row="state"');
+    }
+  });
+
+  it('leaves out the one-line procedure list where the read stages say the same, and keeps it where they are not read', () => {
+    const read = dialog(stages([BLOCKS_ENSEMBLE]), {}, { selected: 'blocks', procedures: PROCEDURES });
+    expect(read).not.toContain('data-extended-procedure-plan');
+    for (const view of [undefined, { phase: 'loading' } as RunStagesView, { phase: 'error' } as RunStagesView]) {
+      const markup = dialog(view, {}, { selected: 'blocks', procedures: PROCEDURES });
+      expect(markup).toContain('data-extended-procedure-plan');
+      expect(markup).toContain('data-extended-procedure="block_analysis"');
+    }
+  });
+
+  it('keeps «Как устроен этап» collapsed', () => {
+    const markup = dialog(stages([BLOCKS_ENSEMBLE]), {}, { selected: 'blocks' });
+    expect(markup).toMatch(/<details[^>]*data-stage-algorithm="blocks"[^>]*><summary>Как устроен этап<\/summary>/);
+    expect(markup).not.toMatch(/<details[^>]*data-stage-algorithm[^>]*open/);
   });
 });
 

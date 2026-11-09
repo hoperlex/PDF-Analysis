@@ -14,9 +14,14 @@
  * A run that froze no stage plan (`plan_source` `run_binding`) has one line, **the run's model**, labelled so as it always was;
  * and while the stages are still being read, or could not be, the window draws what it drew before the answer existed: the run's
  * model, the executor and the chip's own state and times from the run reading. It never draws a blank or a figure it was not
- * told; when the read failed it says so in a line. Under the table, what the run reported for the chip's code stages
- * (`StageTable`) and the extended review's planned procedures («План полного анализа», moved here from the review panel),
- * the memo «Как устроен этап» (collapsed), and «Запустить с этого этапа» for the stages a new run may be started from.
+ * told; when the read failed it says so in a line.
+ *
+ * **Nothing is said twice** (the owner's minimisation priority). The model is its short name, with the pin in the tooltip, and no
+ * executor line above the table: the plan rows already say the model and the server. Under the table, the table of the chip's code
+ * stages (`StageTable`) is drawn only for a chip that has two or more (the preparation has three); a chip with one has its state and
+ * its times in «Факт» already. The extended review's planned procedures («План полного анализа», moved here from the review panel)
+ * keep their place, and are left out only where the answer is read and there is a single procedure, which «Факт» says as well. The
+ * memo «Как устроен этап» is collapsed, and «Запустить с этого этапа» is for the stages a new run may be started from.
  *
  * A native modal `<dialog>`, as the pair viewer and the review's full-screen view are: the browser keeps focus inside, Esc closes it
  * (the `close` event calls `onClose`), the page behind is inert, and focus returns to the chip that opened it. Where `showModal` is
@@ -38,7 +43,6 @@ import {
   formatElapsed,
   groupDigits,
   runExecutorLine,
-  runExecutorValue,
   runPresetLine,
   runPresetValue,
   shortModelName,
@@ -101,7 +105,7 @@ function PlanRows({ chip, status, showServer }: { readonly chip: RunChip; readon
             ? 'этап не вызывает модель'
             : short === null || model === null
               ? '—'
-              : <><strong>{short}</strong> <code title="Идентификатор модели прогона">{model}</code></>}
+              : <strong title={model}>{short}</strong>}
         </td>
       </tr>
       {chip.definition.callsModel && showServer ? (
@@ -162,7 +166,6 @@ function PlanCellRows({ stage, showServer }: { readonly stage: RunStage; readonl
             <th scope="row">{line.roleLabel}</th>
             <td>
               {line.model === null ? '—' : <strong title={line.pin ?? undefined}>{line.model}</strong>}
-              {line.pin === null || line.pin === line.model ? null : <> <code title="Идентификатор модели">{line.pin}</code></>}
               {parts.length === 0 ? null : ` · ${parts.join(' · ')}`}
             </td>
           </tr>
@@ -244,7 +247,6 @@ export function RunStagesDialog({ status, chips, selected, onSelect, onClose, re
   const chipTitleId = useId();
 
   const chip = chips.find((candidate) => candidate.definition.id === selected) ?? chips[0] ?? null;
-  const executor = showServer ? runExecutorLine(status) : null;
   const preset = runPresetLine(status);
   const algorithm = chip === null ? null : CHIP_ALGORITHMS[chip.definition.id];
   // What the answer says of this chip: its plan cells and its facts. `null` while it is not read, or where it does not list the chip.
@@ -301,10 +303,10 @@ export function RunStagesDialog({ status, chips, selected, onSelect, onClose, re
             <h3 id={chipTitleId} className={styles.chipTitle}>{chip.definition.full}</h3>
             <p className={styles.summary}>{algorithm.summary}</p>
 
-            {executor === null && preset === null ? null : (
+            {preset === null ? null : (
               <dl className={styles.facts}>
-                {executor === null ? null : <><dt>Исполнитель</dt><dd data-run-executor>{runExecutorValue(executor)}</dd></>}
-                {preset === null ? null : <><dt>Пресет</dt><dd data-run-preset>{runPresetValue(preset)}</dd></>}
+                <dt>Пресет</dt>
+                <dd data-run-preset>{runPresetValue(preset)}</dd>
               </dl>
             )}
 
@@ -322,12 +324,12 @@ export function RunStagesDialog({ status, chips, selected, onSelect, onClose, re
               <p className={styles.note}>Время и токены по этому этапу сервер пока не передаёт.</p>
             )}
 
-            {chip.stages.length === 0 ? null : (
+            {chip.stages.length < 2 ? null : (
               <section aria-label="Подробности этапов">
                 <StageTable rows={chip.stages} {...(reusedStageIds === undefined ? {} : { reused: reusedStageIds })} />
               </section>
             )}
-            <Procedures procedures={chip.procedures} />
+            {stage !== null && chip.procedures.length === 1 ? null : <Procedures procedures={chip.procedures} />}
 
             <details className={styles.how} data-stage-algorithm={chip.definition.id}>
               <summary>Как устроен этап</summary>
