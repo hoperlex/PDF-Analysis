@@ -524,6 +524,7 @@
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
         {"method": "GET", "path": "/versions/{version_uid}/portal-blocks", "operationId": "listVersionPortalBlocks", "$why_optional": "the evidence viewer's block index, read only for a version whose run read portal blocks"},
+        {"method": "GET", "path": "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop", "operationId": "streamVersionPortalBlockCrop", "$why_optional": "lane J4 (0.19.1 walk, 1280 and 390 px): the viewer loads the crop of an IMAGE block lazily as it is scrolled to, only for a finding anchored in such a block"},
         {"method": "GET", "path": "/runs/{run_id}/finding-blocks", "operationId": "listRunFindingBlocks", "$why_optional": "UI-PARITY-C6 (contract 1.41.0): «Блоки замечания» and the table's block count (UI-A-74) read which blocks hold each finding, once the run's findings are read; no finding needs to be open"},
         {"method": "GET", "path": "/versions/{version_uid}/blocks", "operationId": "getVersionBlocks", "$why_optional": "the evidence viewer's text-line index, read only for a version a run has read"},
         {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
@@ -1312,6 +1313,7 @@
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/system/version", "operationId": "getProductVersion", "$why_optional": "the module set rides the product version; an old server omits the field and the screen then asks the operations themselves"},
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "D-421: with `?project=` in the address the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
         {"method": "GET", "path": "/projects/{project_uid}/comparison-overview", "operationId": "getComparisonOverview", "$why_optional": "read once a project is chosen: the route's `query` names the journey's own project (D-421)"},
         {"method": "GET", "path": "/projects/{project_uid}/comparison-uploads", "operationId": "listComparisonUploads", "$why_optional": "read only while the upload dialog is open"},
         {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix", "operationId": "getComparisonMatrix", "$why_optional": "the tab «Сравнение листов» is opened by a click"},

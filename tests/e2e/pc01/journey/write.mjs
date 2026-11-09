@@ -296,8 +296,11 @@ async function approveRunCost(page, action, expectedVersion, allowSpend, sourceR
       && (sourceRunId === null || (fromStage
         ? decodeJson(e.requestBody)?.start_from_run_id === sourceRunId && decodeJson(e.requestBody)?.start_stage_id === action.stage_id
         : decodeJson(e.requestBody)?.reaudit_of_run_id === sourceRunId)));
+    // The source Run's status as the API answered it: a page of the app that ends in the same path (Next's prefetch of the run's
+    // link, `?_rsc=`) is not it, and answers text that is no Run (found by lane J4: it made `queue-reaudit-the-cancelled-run` red).
     source = sourceRunId === null ? null : page.exchanges().find((e) => e.method === 'GET'
-      && new URL(e.url).pathname.endsWith(`/runs/${sourceRunId}`) && e.status !== null && e.responseBody !== null);
+      && new URL(e.url).pathname.endsWith(`/runs/${sourceRunId}`) && e.status !== null && e.responseBody !== null
+      && decodeJson(e.responseBody)?.run_id === sourceRunId);
     if (observed !== undefined && (sourceRunId === null || source !== undefined)) break;
     await new Promise((done) => setTimeout(done, 100));
   }
