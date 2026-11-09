@@ -269,6 +269,10 @@ def _view(monkeypatch: pytest.MonkeyPatch, run: Any, *, executor: Any = None) ->
         group_id=GROUP, group_revision_id=GROUP_REVISION, pin_id=PIN.model_id, gateway_model="claude-sonnet-5",
         billing="not_metered")
     monkeypatch.setattr(runs_package, "RunRepository", _Repository)
+    # Contract 1.40.0 (`UI-B-45`): the view reads an active run's estimated finish from the database; these cases stub
+    # the session, so the estimate is stubbed too (its own cases are tests/unit/execution/test_eta.py).
+    import auditmanager.execution.eta as eta
+    monkeypatch.setattr(eta, "run_estimated_finish", lambda session, run_id: None)
     monkeypatch.setattr(findings, "published_finding_count", lambda session, run_id: 0)
     monkeypatch.setattr(findings, "diagnostics", lambda session, run_id: ())
     monkeypatch.setattr(executors_public, "executor_of_revision", lambda session, revision_id: executor)
@@ -356,6 +360,10 @@ def test_a_queue_item_of_a_group_run_carries_binding_state_and_the_wait_and_an_o
             return {"run_a": ("pending", "executor_at_capacity"), "run_b": ("bound", None), "run_c": ("pending", None)}
 
     monkeypatch.setattr(runs_package, "RunRepository", _Repository)
+    # Contract 1.40.0 (`UI-B-45`): the view reads an active run's estimated finish from the database; these cases stub
+    # the session, so the estimate is stubbed too (its own cases are tests/unit/execution/test_eta.py).
+    import auditmanager.execution.eta as eta
+    monkeypatch.setattr(eta, "run_estimated_finish", lambda session, run_id: None)
     facts = adapters._queue_binding_facts(None, ["run_a", "run_b", "run_c", "run_d"])  # type: ignore[arg-type]
     assert facts == {
         "run_a": {"binding_state": "pending", "wait_reason": "executor_at_capacity"},

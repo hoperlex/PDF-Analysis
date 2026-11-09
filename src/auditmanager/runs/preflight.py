@@ -455,6 +455,33 @@ class RunCostPreflight:
         public["estimate_digest"] = _digest(authority)
         return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group)
 
+    def estimate_from_stage(self, session, *, run_id, start_stage_id, version_record=None, parse_native_text=True):
+        """`R-151i`: the price of a run started from ``start_stage_id`` of ``run_id``, for the stages it computes.
+
+        A run that reuses the stage outputs before the chosen stage prices only the stages from it on. Every model call of
+        a PC-01 run is made by ``text_analysis`` (and the extended review inside it), and a chosen stage is never after it,
+        so the priced work is that stage's: what changes is which stages are *not* done again, and the answer names both
+        (``reused_stage_ids``, ``computed_stage_ids``). The reuse rule is asked here, with this estimate's own extended-review
+        plan, so a stage that cannot be taken is refused as a price is asked and not after it is consented to. The consent is
+        bound to this source and stage: a digest from ``estimate_reaudit`` or from another stage is ``run_cost_estimate_stale``.
+        """
+        from .stage_reuse import plan_stage_reuse, require_startable_stage, visual_only_pages_allowed
+        require_startable_stage(start_stage_id)
+        value = self.estimate_reaudit(session, run_id=run_id, version_record=version_record,
+            parse_native_text=parse_native_text)
+        authority = json.loads(value.authority_json)
+        plan = plan_stage_reuse(session, source_run_id=run_id, start_stage_id=start_stage_id,
+            visual_only_pages=visual_only_pages_allowed(authority.get("extended_review")))
+        # Not a repeat of the parent: a new run that continues it.
+        authority.pop("reaudit_of_run_id")
+        authority["started_from"] = {"run_id": run_id, "stage_id": start_stage_id,
+            "reused": list(plan.reused_stage_ids)}
+        public = value.as_dict()
+        public.update(start_from_run_id=run_id, start_stage_id=start_stage_id,
+            reused_stage_ids=list(plan.reused_stage_ids), computed_stage_ids=list(plan.computed_stage_ids))
+        public["estimate_digest"] = _digest(authority)
+        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group)
+
     def estimate_group(self, session, *, version_uid, relaxed_limits=False, version_record=None):
         from .v3_group import _validate_pack
         if type(relaxed_limits) is not bool:

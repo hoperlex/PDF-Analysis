@@ -147,15 +147,17 @@ def test_status_codes_map_to_exception_classes_and_the_envelope_is_read():
         assert caught.value.error_code is None and caught.value.message == "HTTP 502"
 
 
-def test_oversized_requests_and_bad_task_ids_never_leave_the_machine():
+def test_bad_task_ids_never_leave_the_machine_and_an_answer_is_not_capped():
+    """`0976d3a63` («remove Codex answer delivery caps») exempts `/answer` from the 1 MiB local refusal on purpose:
+    a long answer reaches the server, which owns the limit. Bad task ids still never leave the machine."""
     with S.FakeRunner() as runner:
         client = rc.RunnerClient(runner.origin, S.TOKEN)
-        with pytest.raises(rc.RunnerRejected, match="1 MiB"):
-            client.answer("ext_T", "x" * (rc.MAX_REQUEST_BYTES + 1), "claude-opus-5")
         for bad in ("", "a/b", "a b", "x" * 65, "ext_T?q=1", "..", None):
             with pytest.raises(rc.RunnerRejected):
                 client.extend(bad)
         assert runner.requests == []
+        client.answer("ext_T", "x" * (rc.MAX_REQUEST_BYTES + 1), "claude-opus-5")
+        assert len(runner.of_kind("answer")) == 1
 
 
 def test_fail_reason_is_cut_to_512_characters_and_never_empty():

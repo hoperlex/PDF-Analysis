@@ -163,6 +163,7 @@ GUARDED = (
     ("listExecutionJournal", "GET", "/execution/journal"),
     ("cancelRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
     ("reauditRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
+    ("startRunFromStage", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/start-from-stage"),
     (
         "setJobPriority", "PUT",
         "/execution/queue/job_01M2545JSD15ETSNNV904X991K/priority",
@@ -558,6 +559,8 @@ GUARDED = (
     ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
     ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
     ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),
+    # `UI-PARITY-C6` (contract 1.41.0) left this sweep without its read; the register was one short.
+    ("listRunFindingBlocks", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/finding-blocks"),
     # `UI-PARITY-P0P` (contract 1.31.0): «График работ».
     ("getWorkSchedule", "GET", "/work-schedule?month=2026-11"),
     ("getWorkScheduleReserve", "GET", "/work-schedule/reserve?start=2026-11-02"),

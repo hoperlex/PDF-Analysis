@@ -154,7 +154,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              contract_version: '1.41.0',
+              contract_version: '1.42.0',
               error_code: 'dependency_unavailable',
               message: 'A caller-safe sentence.',
               correlation_id: 'corr-poll',
@@ -183,7 +183,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            contract_version: '1.41.0',
+            contract_version: '1.42.0',
             error_code: 'not_found',
             message: 'A caller-safe sentence.',
             correlation_id: 'corr-poll',
@@ -736,6 +736,9 @@ describe('this slice adds no second polling loop', () => {
     const ALLOWED_ONE_SHOT = [
       join('entities', 'audit-run', 'api', 'run-status-query.ts'),
       join('features', 'reaudit-run', 'model', 'use-reaudit-cost-approval.ts'),
+      // `UI-A-60` (`R-151i`): a start from a stage reads the ended source run once, as the re-audit above does, before it asks
+      // what the stages it computes cost. A one-shot read, no schedule.
+      join('features', 'start-run-from-stage', 'model', 'use-start-from-stage-cost-approval.ts'),
       // `8eb1f31f` (compare saved run results): reads each of the two runs once before its findings and once after,
       // and refuses the comparison when the run changed between the two reads. Two one-shot reads, no schedule.
       join('widgets', 'stage-comparison', 'api', 'read-saved-results.ts'),

@@ -40,6 +40,7 @@ import {
   COMMAND_SHOWN_TITLE,
 } from '../model/words';
 import { CopyBox } from './copy-box';
+import styles from './connect-remote-agent.module.css';
 
 export interface EnrollmentCommandViewProps {
   readonly issued: IssuedExecutorEnrollment;
@@ -63,17 +64,23 @@ export function EnrollmentCommandView({
       <CopyBox value={issued.command} label={COMMAND_FIELD_LABEL} variant="block" name="enrollment-command" />
       <p className="am-form__hint">
         Действует до <time dateTime={issued.enrollment.expires_at}>{formatInstant(issued.enrollment.expires_at)}</time>{' '}
-        и только один раз. Версия пакета агента <code>{issued.package_version}</code>, контрольная сумма
-        SHA-256 <code>{issued.package_sha256}</code> проверяется самой командой.
+        и только один раз.
       </p>
-      <p className="am-form__hint">{COMMAND_NO_SECRET_NOTE}</p>
+      <details className={styles.fold}>
+        <summary>Версия пакета и проверка</summary>
+        <p className="am-form__hint">
+          Версия пакета агента <code>{issued.package_version}</code>, контрольная сумма
+          SHA-256 <code>{issued.package_sha256}</code> проверяется самой командой.
+        </p>
+        <p className="am-form__hint">{COMMAND_NO_SECRET_NOTE}</p>
+      </details>
       <div className="am-form__row">
         <button className="am-button am-button--quiet" type="button" disabled={pending} data-agent-command-new onClick={onNewCommand}>
           {COMMAND_NEW_LABEL}
         </button>
+        <button className="am-button" type="button" data-agent-command-close onClick={onClose}>{COMMAND_CLOSE_LABEL}</button>
         <span className="am-form__hint">{COMMAND_NEW_HINT}</span>
       </div>
-      <button className="am-button" type="button" data-agent-command-close onClick={onClose}>{COMMAND_CLOSE_LABEL}</button>
       {failure !== null ? <CommandFailure failure={failure} /> : null}
     </section>
   );

@@ -121,6 +121,15 @@ class ExecutionPort(Protocol):
         self, *, run_id: str, user_uid: str, idempotency_key: str,
         cost_consent: dict[str, Any] | None = None,
     ) -> RunStatusView: ...
+    def start_run_from_stage(
+        self, *, run_id: str, stage_id: str, user_uid: str, idempotency_key: str,
+        cost_consent: dict[str, Any] | None = None,
+    ) -> RunStatusView:
+        """`R-151i` (`UI-A-60`): a new run of the earlier run's version that reuses the earlier run's stage outputs before
+        ``stage_id`` and computes the rest. The earlier run is not changed; the answer is the new run (202), a replay of it
+        under the same key and payload, or a typed refusal -- ``analysis_input_invalid`` naming the stage and the reason
+        when an output cannot be taken. Nothing is recomputed in place of a refused one."""
+        ...
     def set_job_priority(
         self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
     ) -> models.ExecutionQueueItem: ...
@@ -703,7 +712,9 @@ class RunPort(Protocol):
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
                           reaudit_of_run_id: str | None = None,
                           preset_id: str | None = None, relaxed_limits: bool = False,
-                          executor_group_id: str | None = None) -> models.RunCostEstimate: ...  # EXEC2-GROUP-RUN-01
+                          executor_group_id: str | None = None,  # EXEC2-GROUP-RUN-01
+                          start_from_run_id: str | None = None,  # `R-151i`: the price of a start from a stage
+                          start_stage_id: str | None = None) -> models.RunCostEstimate: ...
 
     def start_run(
         self,

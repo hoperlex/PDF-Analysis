@@ -91,6 +91,7 @@ def served(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(composition_module, "SectionAdapter", SectionAdapterSpy)
     monkeypatch.setattr(runs_package, "start_audit_run", spy)
     monkeypatch.setattr(commands_module, "reaudit_run", spy)
+    monkeypatch.setattr(commands_module, "start_run_from_stage", spy)  # `R-151i`
     monkeypatch.setattr(
         adapters_module.ExecutionAdapter, "_roles", staticmethod(lambda _s, _u: frozenset({"expert"}))
     )
@@ -142,6 +143,24 @@ def test_reaudit_passes_the_section_table_and_no_profile(served: Any) -> None:
     kwargs = seen.value.kwargs
     assert "analysis_profile_id" not in kwargs and "prompt_bundle_id" not in kwargs
     assert dict(kwargs["section_profiles"]) == _registry_table()
+
+
+def test_start_run_from_stage_passes_the_section_table_the_budget_and_the_actor(served: Any) -> None:
+    """`R-151i`: a run started from a stage is configured as a re-audit is -- today's table, today's budget, no pair of its own."""
+    _, built = served
+    with pytest.raises(_Captured) as seen:
+        built["execution"].start_run_from_stage(
+            run_id="run_00000000000000000000000000",
+            stage_id="text_analysis",
+            user_uid="usr_00000000000000000000000000",
+            idempotency_key="route-probe-from-stage",
+        )
+    kwargs = seen.value.kwargs
+    assert "analysis_profile_id" not in kwargs and "prompt_bundle_id" not in kwargs
+    assert dict(kwargs["section_profiles"]) == _registry_table()
+    assert (kwargs["source_run_id"], kwargs["start_stage_id"]) == ("run_00000000000000000000000000", "text_analysis")
+    assert kwargs["input_budget_characters"] == built["runs"].input_budget_characters
+    assert kwargs["started_by_user_uid"] == "usr_00000000000000000000000000"
 
 
 def test_the_executor_and_the_section_port_get_the_registry(served: Any) -> None:

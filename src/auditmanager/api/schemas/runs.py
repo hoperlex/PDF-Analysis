@@ -125,6 +125,10 @@ class RunStatusView:
     model_call_count: int | None = None
     terminal_at: datetime | None = None
     reaudit_of_run_id: str | None = None
+    #: `R-151i` (contract 1.42.0): the earlier run whose stage outputs this run reuses and the first stage it computes;
+    #: both ``None`` (and both omitted) for a run that reuses nothing.
+    started_from_run_id: str | None = None
+    start_stage_id: str | None = None
     #: `W55A-SEAL-01` (R-113, CD-6). The norms snapshot the run pinned at creation, or
     #: ``None`` while no snapshot is current; rendered only when present.
     norms_snapshot_id: str | None = None
@@ -195,6 +199,9 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
     }
     if view.reaudit_of_run_id is not None:
         body["reaudit_of_run_id"] = view.reaudit_of_run_id
+    if view.started_from_run_id is not None and view.start_stage_id is not None:
+        body["started_from_run_id"] = view.started_from_run_id
+        body["start_stage_id"] = view.start_stage_id
     if view.analysis_kind is not None:
         body["analysis_kind"] = view.analysis_kind
         if view.ar_v3_group_id is not None:

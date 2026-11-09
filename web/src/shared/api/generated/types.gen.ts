@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.41.0 (OpenAPI 3.1.0)
- *   sha256 ca4e3dd68f57c7ae1bccdafe15a04149e1f69ce65975dcfbc6e50b50c1c2dd44
+ *   AuditManager PC-01 API 1.42.0 (OpenAPI 3.1.0)
+ *   sha256 8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.41.0';
+export const CONTRACT_VERSION = '1.42.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'ca4e3dd68f57c7ae1bccdafe15a04149e1f69ce65975dcfbc6e50b50c1c2dd44';
+export const CONTRACT_DIGEST = '8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -703,6 +703,7 @@ export const SCHEMA_NAMES = [
   'StartComparisonAiJobRequest',
   'StartComparisonAiSheetChangesRequest',
   'StartComparisonSeriesRequest',
+  'StartRunFromStageRequest',
   'StartRunRequest',
   'StartStageChainBatchRequest',
   'StartStageChainRunRequest',
@@ -4127,7 +4128,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.41.0";
+  contract_version: "1.42.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -6426,6 +6427,7 @@ export type RunCostConsent = {
 export type RunCostEstimate = {
   billing: "metered" | "unmetered";
   calls: number;
+  computed_stage_ids?: Array<StageId>;
   connection_revision_id?: ExecutorRevisionId;
   currency: "USD";
   estimate_digest: Sha256;
@@ -6441,8 +6443,11 @@ export type RunCostEstimate = {
   provider_mode: ProviderMode;
   recommended_ceiling_micros: number;
   relaxed_limits: boolean;
+  reused_stage_ids?: Array<StageId>;
   routing_rule_revision_id?: ExecutorRoutingRuleRevisionId;
   scope: "run" | "ar_v3_group";
+  start_from_run_id?: RunId;
+  start_stage_id?: StageId;
   text_characters: number;
   version_uid: VersionUid;
   windows: number;
@@ -6454,6 +6459,8 @@ export type RunCostEstimateRequest = {
   preset_id?: PresetId;
   reaudit_of_run_id?: RunId;
   relaxed_limits?: boolean;
+  start_from_run_id?: RunId;
+  start_stage_id?: StageId;
   version_uid: VersionUid;
 };
 
@@ -6584,9 +6591,11 @@ export type RunStatus = {
   reaudit_of_run_id?: RunId;
   run_id: RunId;
   stages: Array<StageState>;
+  start_stage_id?: StageId;
   /** `R-151v` (contract 1.21.0): the display label of the account that started the run; absent for a run created before migration 0051. */
   started_by_label?: string;
   started_by_user_uid?: UserUid;
+  started_from_run_id?: RunId;
   state: RunState;
   terminal_at?: string | null;
   /** D-46: safe scalar classifiers saying WHICH dependency a `failed` run terminated on, restricted to the `safe_detail_keys` the domain catalog declares for the code in `terminal_reason`. Present only beside a `terminal_reason`, because the allowlist that bounds these keys is a property of the reported code; absent when there is nothing to say, and never an empty object. The same shape and the same rule as `ErrorEnvelope.details`, applied to a 200 run reading rather than to a failure -- which is why it had to be added at all: a run reading is not an error envelope and carried no detail object. It classifies; it never identifies. No path, object key, URL, credential, token, prompt, payload or host appears here, and no error code was added to the catalog for it. */
@@ -7989,6 +7998,12 @@ export type StartComparisonAiSheetChangesRequest = {
 export type StartComparisonSeriesRequest = {
   base_order_revision_no?: number;
   restart?: boolean;
+};
+
+/** `R-151i` (contract 1.42.0): the first stage the new run computes; the earlier stages are taken from the run in the path. */
+export type StartRunFromStageRequest = {
+  cost_consent?: RunCostConsent;
+  stage_id: StageId;
 };
 
 export type StartRunRequest = {

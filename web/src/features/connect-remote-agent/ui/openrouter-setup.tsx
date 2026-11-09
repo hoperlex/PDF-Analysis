@@ -47,6 +47,7 @@ import {
   WIZARD_BACK_LABEL,
 } from '../model/words';
 import { IdentityFields } from './identity-fields';
+import styles from './connect-remote-agent.module.css';
 
 export interface OpenRouterSetupProps {
   readonly pinnedModels: readonly ExecutorPinnedModel[];
@@ -56,7 +57,7 @@ export interface OpenRouterSetupProps {
 /** The facts the preset fixes, printed so nothing about the connection is hidden. */
 export function OpenRouterFixedFacts() {
   return (
-    <dl aria-label={OPENROUTER_FIXED_TITLE} data-openrouter-fixed>
+    <dl className={styles.facts} aria-label={OPENROUTER_FIXED_TITLE} data-openrouter-fixed>
       <dt>Адрес</dt>
       <dd><code>{OPENROUTER_BASE_URL}</code></dd>
       <dt>Формат запросов</dt>
@@ -119,7 +120,7 @@ export function OpenRouterSetup({ pinnedModels, onBack }: OpenRouterSetupProps) 
 
   return (
     <section aria-label={OPENROUTER_TITLE} data-wizard-step="api">
-      <form className="am-form" onSubmit={(event) => void submit(event)} data-openrouter-form>
+      <form className={`am-form am-form--two ${styles.form}`} onSubmit={(event) => void submit(event)} data-openrouter-form>
         <h3>{OPENROUTER_TITLE}</h3>
         <p className="am-form__hint">{OPENROUTER_INTRO}</p>
         <OpenRouterFixedFacts />

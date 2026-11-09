@@ -6,23 +6,27 @@
  * `am-badge`; this file only arranges them, and every class below is read by a component.
  */
 
+/* One track that may shrink: an `auto` track is as wide as the widest content, and a two-column form inside it was 768 px wide on a phone. */
 .wizard {
   min-width: 0;
   display: grid;
-  gap: var(--am-gap);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--am-gap-sm);
   overflow-wrap: anywhere;
 }
 
 .group {
   min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--am-gap-sm);
 }
 
-/* The two choices of a pair are stacked and identical, so neither reads as the first-class one. */
+/* The two choices of a pair are the same card side by side (one above the other where two would be narrower than 17 rem), so neither reads as the first-class one. */
 .choices {
   display: grid;
-  gap: var(--am-gap);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: var(--am-gap-sm);
 }
 
 .choice {
@@ -31,7 +35,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--am-gap-sm);
+  gap: var(--am-gap-xs);
 }
 
 .choice p {
@@ -95,4 +99,41 @@
 .copy {
   min-width: 0;
   font-family: var(--am-font-mono);
+}
+
+/* The headings of a step stand at the top of their grid, without the margin that separates them from a paragraph above. */
+.group > h3,
+.form > h3,
+.form > h4 {
+  margin: 0;
+}
+
+/* The facts the OpenRouter preset fixes: two pairs to a row, as a connection's settings are, one pair under a wide row. */
+.facts {
+  grid-template-columns:
+    minmax(8rem, max-content) minmax(0, 1fr)
+    minmax(8rem, max-content) minmax(0, 1fr);
+  column-gap: var(--am-gap);
+  margin: 0;
+}
+
+.facts > dt,
+.facts > dd {
+  grid-column: auto;
+}
+
+@media (max-width: 900px) {
+  .facts {
+    grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  }
+}
+
+/* A hint that matters to few: one muted line, opened on request. */
+.fold {
+  min-width: 0;
+}
+
+.fold > summary {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
 }

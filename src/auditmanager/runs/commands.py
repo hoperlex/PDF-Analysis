@@ -153,6 +153,7 @@ from auditmanager.runs.provider import (
     RouteFreezer,
 )
 from auditmanager.runs.repository import EXECUTOR_CHOSEN_EVENT, RunRepository, RunRow
+from auditmanager.runs.stage_reuse import plan_stage_reuse, require_startable_stage, visual_only_pages_allowed
 from auditmanager.sections.public import route_classified_version
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
@@ -166,6 +167,9 @@ from auditmanager.shared.identity import (
 
 #: Matches ``ck_command_record_command_type``: lowercase snake_case, 3-64 characters.
 COMMAND_TYPE_START_RUN: Final[str] = "start_audit_run"
+
+#: `R-151i`: a new run that reuses the completed stage outputs of an earlier one before the chosen stage.
+COMMAND_TYPE_START_RUN_FROM_STAGE: Final[str] = "start_run_from_stage"
 
 #: The manifest role whose bytes ``source_preparation`` consumes.
 # Imported, not restated. This was the third spelling of one concept in three trees: the
@@ -1241,8 +1245,185 @@ def reaudit_run(
     return StartedRun(new_id, str(claimed.command_id), False)
 
 
+def start_run_from_stage(
+    session: Session, *, source_run_id: str, start_stage_id: str, roles: frozenset[str],
+    idempotency_key: str, analysis_profile_id: str | None = None,
+    prompt_bundle_id: str | None = None,
+    provider_mode: str, runs: RunRepository | None = None,
+    jobs: JobRepository | None = None, commands: CommandRepository | None = None,
+    documents: DocumentRepository | None = None,
+    norms_snapshot: NormsSnapshotReader = current_norms_snapshot,
+    input_budget_characters: int | None = None,
+    section_profiles: SectionProfiles | None = None,
+    connection_route: RouteFreezer | None = None,
+    cost_preflight: Any = None,
+    cost_consent: Mapping[str, Any] | None = None,
+    cost_actor_uid: str | None = None,
+    group_admitter: GroupAdmitter | None = None,
+    started_by_user_uid: str | None = None,
+) -> StartedRun:
+    """Create one new run of a terminal source's document version that reuses the source's stage outputs before ``start_stage_id``.
+
+    `R-151i` (`UI-A-60`, `D-301`; ``docs/program/RUN-FROM-STAGE-01.md``). The new run is a **new** aggregate: the source is
+    never changed and is linked only by ``started_from_run_id`` and ``start_stage_id`` (migration 0060), not by
+    ``reaudit_of_run_id`` -- a re-audit recomputes everything and this does not. The configuration is today's, exactly as
+    for ``reaudit_run`` (`R-82`, `W55A-PIN-01`, `W59-SECTION-SEAL-01`, `EXEC-PAR-START-01`, `EXEC2-GROUP-RUN-01`,
+    `W55B-BUDGET-01`): the stages it reuses read none of it, and ``text_analysis``, which does, is always computed.
+
+    The reuse is decided by :func:`~auditmanager.runs.stage_reuse.plan_stage_reuse` before the key is claimed, so a refusal
+    (``analysis_input_invalid`` with ``stage_id`` and ``reason``) writes nothing; the executor decides it again when it
+    materialises the reuse. Only the stages from ``start_stage_id`` are priced: with a cost preflight the estimate and the
+    consent are those of the remaining stages and bound to this source and stage.
+
+    **The idempotency key** is the caller's ``Idempotency-Key``, as for every run start; the fingerprint is the request --
+    the source run, the chosen stage, the source's stored digest and the cost consent -- so the same key with another stage
+    is ``idempotency_key_reuse`` and a retry replays the run the first acceptance created. Two different keys for the same
+    source and stage are two decisions, but not two in flight: while a run from this source and stage has not ended, a
+    second is ``conflict`` (as a second re-audit of one source is).
+    """
+    _require_run_control_role(roles)
+    start_stage_id = require_startable_stage(start_stage_id)
+    _explicit_or_routed(analysis_profile_id, prompt_bundle_id, section_profiles)
+    budget = _checked_budget(input_budget_characters)
+    repository = runs or RunRepository()
+    ledger = commands or CommandRepository()
+    document_repo = documents or DocumentRepository()
+    session.execute(text(
+        "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
+    ), {"run_id": source_run_id}).scalar_one_or_none()
+    source = repository.get(session, source_run_id)
+    # `AR-V3-OPT-IN` (Q4), as for a re-audit: a member of an AR v3 group has no stages of the standard chain to reuse, and
+    # starting the standard analysis from it would silently turn one analysis into the other.
+    if analysis_kind(source.analysis_profile_id, source.prompt_bundle_id) == ANALYSIS_AR_V3_BETA:
+        raise refuse_member_repeat()
+    source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
+    key = IdempotencyKey(idempotency_key)
+    frozen: FrozenRoute | None = None
+    admitted: AdmittedGroup | None = None
+    approved_cost = None
+    if ledger.find(session, command_type=COMMAND_TYPE_START_RUN_FROM_STAGE, idempotency_key=key) is None:
+        # A run that has not ended has no finished stages to take; say so before the reuse rule is asked.
+        if source.state not in _TERMINAL_RUN_STATES:
+            raise DomainError(
+                ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+                machine="audit_run", current_state=source.state, requested_state="start_from_stage",
+            )
+        if section_profiles is not None:
+            routed = route_classified_version(source_version, section_profiles)
+            analysis_profile_id = routed.analysis_profile_id
+            prompt_bundle_id = routed.prompt_bundle_id
+        chosen_connection_id = repository.chosen_executor_connection(session, source_run_id)
+        if chosen_connection_id is not None and connection_route is None:
+            raise _chosen_executor_unserved()
+        if cost_preflight is not None:
+            estimate = cost_preflight.estimate_from_stage(
+                session, run_id=source_run_id, start_stage_id=start_stage_id, version_record=source_version,
+                parse_native_text=False)
+            approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
+            frozen = estimate.frozen_route
+            admitted = getattr(estimate, "admitted_group", None)
+            budget = approved_cost["window_characters"]
+        elif cost_consent is not None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        else:
+            admitted = admit_group_for_start(
+                session, group_admitter,
+                executor_group_id=_named_group_of(session, source, chosen_connection_id, group_admitter),
+                executor_connection_id=chosen_connection_id, preset_id=None,
+            )
+            if admitted is not None:
+                budget = admitted.input_budget_characters
+            elif connection_route is not None:
+                frozen = _freeze_for(session, connection_route, chosen_connection_id)
+                budget = frozen.input_budget_characters
+        # The same rule the estimate applied, now against the consent actually accepted (its extended-review plan is the
+        # new run's flag); a refusal here, like the one above, precedes the claim and writes nothing.
+        plan_stage_reuse(
+            session, source_run_id=source_run_id, start_stage_id=start_stage_id,
+            visual_only_pages=visual_only_pages_allowed(
+                None if approved_cost is None else approved_cost.get("extended_review")),
+            runs=repository,
+        )
+        if budget is not None and approved_cost is None:
+            _refuse_over_window_budget(source_version.text_character_count, budget)
+    claimed = ledger.begin(
+        session, command_type=COMMAND_TYPE_START_RUN_FROM_STAGE, idempotency_key=key,
+        fingerprint=payload_fingerprint({
+            "started_from_run_id": source_run_id,
+            "start_stage_id": start_stage_id,
+            "frozen_input_digest": source.frozen_input_digest,
+            **({"cost_consent": dict(cost_consent)} if cost_consent is not None else {}),
+        }),
+    )
+    if isinstance(claimed, CommandReplay):
+        replay_run_id = claimed.outcome.get("run_id")
+        if not isinstance(replay_run_id, str):
+            raise DomainError(ErrorCode.IDEMPOTENCY_KEY_STALE, command_type=COMMAND_TYPE_START_RUN_FROM_STAGE)
+        return StartedRun(replay_run_id, str(claimed.command_id), True)
+    assert isinstance(claimed, CommandStarted)
+    if source.state not in _TERMINAL_RUN_STATES:
+        raise DomainError(
+            ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+            machine="audit_run", current_state=source.state, requested_state="start_from_stage",
+        )
+    busy = session.execute(text(
+        "SELECT 1 FROM audit_run WHERE started_from_run_id = :source AND start_stage_id = :stage "
+        "AND state NOT IN ('published', 'partial', 'failed', 'cancelled') LIMIT 1"
+    ), {"source": source_run_id, "stage": start_stage_id}).scalar_one_or_none()
+    if busy is not None:
+        raise DomainError(ErrorCode.CONFLICT, message="a run from this stage of this source is in progress")
+    version_uid = VersionUid.parse(source.version_uid)
+    if section_profiles is not None and analysis_profile_id is None:
+        # Defensive, as in ``reaudit_run``: the key was unknown to the pre-claim read and yet replayed nothing.
+        routed = route_classified_version(source_version, section_profiles)
+        analysis_profile_id = routed.analysis_profile_id
+        prompt_bundle_id = routed.prompt_bundle_id
+    assert analysis_profile_id is not None and prompt_bundle_id is not None
+    _version, blob_ids = _resolve_references(
+        session,
+        version_uid=version_uid,
+        analysis_profile_id=analysis_profile_id,
+        prompt_bundle_id=prompt_bundle_id,
+        documents=document_repo,
+        version=source_version,
+    )
+    snapshot = norms_snapshot(session)
+    digest = frozen_input_digest(
+        version_uid=str(version_uid),
+        blob_ids=blob_ids,
+        analysis_profile_id=analysis_profile_id,
+        prompt_bundle_id=prompt_bundle_id,
+        norms_snapshot_id=snapshot,
+    )
+    new_id = str(RunId.new())
+    repository.create(
+        session, run_id=new_id, project_uid=source.project_uid,
+        version_uid=source.version_uid,
+        analysis_profile_id=analysis_profile_id,
+        prompt_bundle_id=prompt_bundle_id,
+        provider_mode=provider_mode,
+        frozen_input_digest=digest,
+        command_id=str(claimed.command_id),
+        started_from_run_id=source_run_id, start_stage_id=start_stage_id,
+        norms_snapshot_id=snapshot,
+        connection_revision_id=None if frozen is None else frozen.revision_id,
+        started_by_user_uid=started_by_user_uid,  # `R-151v`
+        **_admission_columns(admitted),
+    )
+    _journal_standby(session, new_id, frozen)
+    _journal_executor_choice(session, new_id, frozen)
+    _journal_admission(session, new_id, admitted)
+    repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
+    (jobs or JobRepository()).enqueue(session, run_id=new_id)
+    ledger.succeed(session, claimed.command_id, {"run_id": new_id,
+        "started_from_run_id": source_run_id, "start_stage_id": start_stage_id,
+        **({"cost_consent": approved_cost} if approved_cost is not None else {})})
+    return StartedRun(new_id, str(claimed.command_id), False)
+
+
 __all__ = [
     "COMMAND_TYPE_START_RUN",
+    "COMMAND_TYPE_START_RUN_FROM_STAGE",
     "NormsSnapshotReader",
     "SectionProfiles",
     "COMPARISON_ONLY_VERSION_REASON",
@@ -1258,5 +1439,6 @@ __all__ = [
     "refuse_comparison_only_version",
     "refuse_group_conflicts",
     "start_audit_run",
+    "start_run_from_stage",
     "start_run_fingerprint",
 ]

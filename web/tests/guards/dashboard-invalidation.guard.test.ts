@@ -190,6 +190,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/upload-document/model/use-upload-document-version.ts': true,
   'src/features/cancel-run/model/use-cancel-run.ts': true,
   'src/features/reaudit-run/model/use-reaudit-run.ts': true,
+  // `UI-A-60` (`R-151i`): a run started from a stage is a new run, counted by the dashboard as a re-audit is.
+  'src/features/start-run-from-stage/model/use-start-run-from-stage.ts': true,
   'src/features/set-job-priority/model/use-set-job-priority.ts': false,
   'src/features/pause-execution/model/use-pause-execution.ts': false,
   // `W54-WORKERS-WEB`: a worker's intake switch changes no number the dashboard reads.

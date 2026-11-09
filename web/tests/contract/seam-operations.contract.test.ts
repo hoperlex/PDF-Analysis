@@ -252,6 +252,8 @@ describe('the seam operations', () => {
       'startComparisonSpecification',
       'startOptimisationPass',
       'startRun',
+      // `UI-PARITY-S2` (contract 1.42.0): a run started from a stage is a keyed expert command, like `reauditRun`.
+      'startRunFromStage',
       'startStageChainBatch',
       'startStageChainRun',
       'undoComparisonMatrixEdit',

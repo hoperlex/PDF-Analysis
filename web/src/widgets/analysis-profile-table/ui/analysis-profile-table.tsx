@@ -83,7 +83,7 @@ function SectionRow({ item }: { readonly item: AnalysisProfileListItem }) {
       ) : (
         <>
           <td className={styles.cell}>версия {profile.profile_version}</td>
-          <td className={styles.cell} data-profile-status={profile.status}>
+          <td className={`${styles.cell} ${styles.state}`} data-profile-status={profile.status}>
             <span className={`am-badge ${STATUS_TONES[profile.status] ?? 'am-badge--inert'}`}>{analysisProfileStatusLabel(profile.status)}</span>
           </td>
           <td className={styles.cell}><code title={profile.prompt_bundle_sha256}>{shortDigest(profile.prompt_bundle_sha256)}</code></td>

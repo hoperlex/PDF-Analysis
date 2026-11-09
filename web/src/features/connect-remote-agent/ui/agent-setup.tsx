@@ -87,7 +87,7 @@ export function AgentSetup({ pinnedModels, onBack }: AgentSetupProps) {
         <p className="am-note" role="status" data-agent-no-models>{NO_PINNED_MODELS}</p>
       ) : (
         <>
-          <form className="am-form" ref={form} onSubmit={ignore} data-agent-identity-form>
+          <form className={`am-form am-form--two ${styles.form}`} ref={form} onSubmit={ignore} data-agent-identity-form>
             <h4>{IDENTITY_TITLE}</h4>
             <IdentityFields
               pinnedModels={pinnedModels}

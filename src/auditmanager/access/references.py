@@ -25,6 +25,19 @@ Three kinds of entry, by what the database does when the account row is deleted:
 ``app_user`` from ``pg_constraint`` and asserts they equal this register, entry for entry
 and action for action. So a new column naming an account that is not registered here is a
 red test, and the database refuses a purge that this register would have allowed.
+
+**Columns that name an account and are deliberately NOT here: no foreign key**
+(``DECISION-MEMORY-01`` section 3.3, ``ADR-0027``). The decision memory outlives its source,
+so the one account column it copies -- ``decision_memory_decision.author_user_uid``, written
+since phase M1 from the deciding ledger event's author -- is an opaque ``usr_...`` identity
+with **no** foreign key to ``app_user`` (open question Q7): ``purgeUser`` stays possible, and
+the id then becomes an orphan the memory never resolves. The same holds for
+``decision_memory_status_event.actor_user_uid`` until the operations that write it arrive
+(``D-393``). Such a
+column is not a register entry (it is not a foreign key, so ``purge_account`` cannot see it and
+the register-equals-schema test above does not list it); it is named in this header instead, and
+``test_every_memory_column_that_names_an_account_without_a_foreign_key_is_named_in_this_header``
+fails when a ``decision_memory_*`` column of that kind exists and is not named here.
 """
 
 from __future__ import annotations

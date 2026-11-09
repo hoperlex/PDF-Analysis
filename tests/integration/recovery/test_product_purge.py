@@ -271,6 +271,51 @@ def test_the_purge_survives_a_second_pass_through_the_same_dumped_list(stand: St
 # --- the schema guards ------------------------------------------------------------------------
 
 
+def test_an_operator_may_accept_the_loss_of_a_memory_that_can_never_be_captured_and_the_default_still_refuses(
+    stand: Stand, tmp_path: Path
+) -> None:
+    """J3 F6: guard G1 refused for ever when a capture could never succeed (a damaged artifact). The way out is explicit, closed,
+    recorded in the plan, its digest and the report, and the purge keeps the memory it did capture."""
+    _an_uncaptured_decision(stand)
+    refused = invoke(tool, stand, "plan")
+    assert refused[0] == tool.EXIT_REFUSED and "have no decision-memory case" in refused[2]
+    assert "--accept-memory-loss" in refused[2]                       # the message names the way out
+    with pytest.raises(SystemExit):                                   # a closed list: free text would reach the durable record
+        invoke(tool, stand, "plan", "--accept-memory-loss", "because I said so")
+
+    flags = ("--accept-memory-loss", "artifact_missing_or_damaged")
+    before = digest_of(stand.engine, "decision_memory_case")
+    steps = full_purge(tool, stand, tmp_path, *flags)
+    assert steps["apply"][0] == 0, steps["apply"]
+    assert "-- decision memory: LOSS ACCEPTED" in steps["plan"][1] and "memory-loss-accepted: 1" in steps["plan"][1]
+    assert "reason: artifact_missing_or_damaged" in steps["plan"][1]
+    assert "DECISION MEMORY LOSS ACCEPTED: 1 expert decision event(s)" in steps["apply"][1]
+    assert digest_of(stand.engine, "project")[0] == 0 and digest_of(stand.engine, "expert_decision_event")[0] == 0
+    assert digest_of(stand.engine, "decision_memory_case") == before   # what was captured stays
+
+
+def test_the_accepted_loss_is_part_of_the_plan_the_apply_must_match(stand: Stand, tmp_path: Path) -> None:
+    _an_uncaptured_decision(stand)
+    by_reason = {reason: _line(invoke(tool, stand, "plan", "--accept-memory-loss", reason)[1], "plan-sha256")
+                 for reason in ("artifact_missing_or_damaged", "owner_decided")}
+    assert len(set(by_reason.values())) == 2                          # the reason is what the plan approves
+    before = state_of(stand)
+    sha = by_reason["artifact_missing_or_damaged"]
+    without = invoke(tool, stand, "apply", "--expect-plan", sha)
+    assert without[0] == tool.EXIT_REFUSED and "have no decision-memory case" in without[2]
+    other = invoke(tool, stand, "apply", "--expect-plan", sha, "--accept-memory-loss", "owner_decided")
+    assert other[0] == tool.EXIT_REFUSED and "changed since the plan" in other[2]
+    assert state_of(stand) == before                                  # both refusals changed nothing
+
+
+def test_the_flag_changes_nothing_when_no_decision_is_uncaptured(stand: Stand) -> None:
+    plain = invoke(tool, stand, "plan")
+    flagged = invoke(tool, stand, "plan", "--accept-memory-loss", "test_data")
+    assert plain[0] == flagged[0] == 0
+    assert _line(plain[1], "plan-sha256") == _line(flagged[1], "plan-sha256")
+    assert "memory-loss-accepted: no" in flagged[1] and "LOSS ACCEPTED" not in flagged[1]
+
+
 def test_the_live_schema_passes_every_catalog_guard(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as connection:
         assert tool.check_schema(connection) == head_revision()
