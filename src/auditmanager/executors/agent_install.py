@@ -306,13 +306,14 @@ def expire_overdue_installs(
     key. Idempotent: once finished, a session is no longer overdue and nothing is written. The number of
     sessions it ended is returned."""
     ended = 0
+    owner: dict[str, str] = {"host_id": host_id} if host_id is not None else {}
     for overdue in installs.overdue_installs(
-        session, connection_id=connection_id, host_id=host_id, install_id=install_id, seconds=INSTALL_SESSION_SECONDS,
+        session, connection_id=connection_id, install_id=install_id, seconds=INSTALL_SESSION_SECONDS, **owner,
     ):
         reason = FAILURE_NO_WORKER if overdue.state == "requested" else FAILURE_TIMED_OUT
         if not installs.fail_install(
-            session, install_id=overdue.install_id, connection_id=connection_id, host_id=host_id,
-            from_state=overdue.state, reason=reason,
+            session, install_id=overdue.install_id, connection_id=connection_id,
+            from_state=overdue.state, reason=reason, **owner,
         ):
             continue
         ended += 1

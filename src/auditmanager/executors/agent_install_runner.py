@@ -1075,8 +1075,9 @@ class AgentInstallRunner:
                 if grant is None or grant.redeemed_at is None:
                     reason, state = FAILURE_ENROLLMENT_FAILED, "failed"
             ended = self._installs.finish_install(
-                session, install_id=record.install_id, connection_id=record.connection_id, host_id=record.host_id,
+                session, install_id=record.install_id, connection_id=record.connection_id,
                 from_state=work.from_state, state=state, reason=reason,
+                **({} if record.host_id is None else {"host_id": record.host_id}),
             )
             if ended:
                 self._journal_end(session, record, state, reason, work.from_state, key_line)

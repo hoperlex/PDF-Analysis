@@ -581,9 +581,10 @@ def _poll(
                     max_images=max_images, runner_instance_id=runner_instance_id)
             if row is None and store.held_claims(session, principal.token_id) < limit:
                 row = store.claim_next(
-                    session, connection_id=principal.connection_id, host_id=principal.host_id,
-                    token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS,
-                    max_images=max_images, runner_instance_id=runner_instance_id)
+                    session, token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS,
+                    max_images=max_images, runner_instance_id=runner_instance_id,
+                    **({"host_id": principal.host_id} if principal.host_id is not None
+                       else {"connection_id": principal.connection_id}))
             session.commit()
         if row is not None:
             return _claimed(row)

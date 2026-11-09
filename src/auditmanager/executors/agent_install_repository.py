@@ -56,9 +56,9 @@ class InstallRecord:
     public half."""
 
     install_id: str
-    #: Exactly one of ``connection_id`` and ``host_id`` is set (`HOSTS-SEAL-1`, ``ck_executor_agent_install_target``).
+    #: Exactly one of ``connection_id`` and ``host_id`` is set (`HOSTS-SEAL-1`, ``ck_executor_agent_install_target``; the host's is ``host_id``,
+    #: below, last with a default so a record written for a connection reads as it always did).
     connection_id: str | None
-    host_id: str | None
     state: str
     access: str
     ssh_host: str
@@ -78,6 +78,7 @@ class InstallRecord:
     created_by: str
     updated_at: datetime
     finished_at: datetime | None
+    host_id: str | None = None
 
 
 def _record(row: Mapping[str, Any]) -> InstallRecord:

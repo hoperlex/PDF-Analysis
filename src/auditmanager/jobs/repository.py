@@ -76,9 +76,6 @@ _LOCK_CONNECTION = text(
 _LOCK_POOL = text(
     "SELECT pg_advisory_xact_lock(hashtextextended('auditmanager.executor_connection|' || :pool, 0))"
 )
-#: `HOSTS-BACKEND-01`. What the claim needs to know of a Run's plan before it takes any lock: its binding state and its frozen ``stage_plan``
-#: (``NULL`` for every Run that is not planned). An unlocked read, read again under the Run lock (:data:`_RUN_BINDING`).
-_CLAIM_PLAN = text("SELECT binding_state, stage_plan FROM audit_run WHERE run_id = :run_id")
 #: The one write that binds a planned Run: ``pending`` -> ``bound`` after every cell has its ``audit_run_cell_binding`` row (the database
 #: refuses the move otherwise, ``am_guard_audit_run_frozen``). The Run keeps no group, connection or preset of its own. The wait is over, so it is
 #: cleared with it.
@@ -91,7 +88,7 @@ _BIND_PLANNED_RUN = text(
 #: any lock: the state, and the group revision a ``pending`` Run was admitted on. An unlocked read -- the Run lock comes
 #: later, in the claim's order -- so it is read again under that lock (:data:`_RUN_BINDING`) and compared.
 _CLAIM_BINDING = text(
-    "SELECT binding_state, executor_group_revision_id FROM audit_run WHERE run_id = :run_id"
+    "SELECT binding_state, executor_group_revision_id, stage_plan FROM audit_run WHERE run_id = :run_id"
 )
 _RUN_BINDING = text(
     "SELECT binding_state, executor_group_revision_id, connection_revision_id FROM audit_run WHERE run_id = :run_id"
@@ -269,7 +266,7 @@ _NEXT_JOB = text(
     "AND j.run_id <> ALL (CAST(:submitted AS text[])) "
     "AND ("
     # frozen_at_start and bound: the connection test, exactly as it was (a NULL revision is the environment source).
-    "(r.binding_state <> 'pending' AND r.stage_plan IS NULL AND NOT EXISTS (SELECT 1 FROM executor_connection_revision mine "
+    "(r.stage_plan IS NULL AND r.binding_state <> 'pending' AND NOT EXISTS (SELECT 1 FROM executor_connection_revision mine "
     "JOIN loaded ON loaded.connection_id = mine.connection_id "
     "WHERE mine.revision_id = r.connection_revision_id "
     "AND loaded.units >= COALESCE((SELECT current_revision.max_active_runs "
@@ -1160,9 +1157,8 @@ class JobRepository:
         # connection of its own, so neither of the two paths below fits it. ``pending``, it takes the planned dispatch path (every pool its
         # cells might be bound in is locked, in ascending order, and every cell is bound or none is); ``bound``, its retry holds the pools it
         # was bound in. The read is unlocked and read again under the Run lock.
-        plan_state, stage_plan = self._claim_plan(session, run_id=run_id)
+        plan_state, pending_revision, stage_plan = self._claim_view(session, run_id=run_id)
         planned_pending = stage_plan is not None and plan_state == "pending"
-        pending_revision = None if stage_plan is not None else self._pending_group_revision(session, run_id=run_id)
         if (pending_revision is not None or planned_pending) and not self._dispatch_groups:
             # A process that does not serve the `database` provider source cannot bind a member (decision 12): the
             # `environment` source would run the Run on its own adapter, or fail it `executor_route_missing` after the claim
@@ -1354,13 +1350,21 @@ class JobRepository:
         return str(row[1])
 
     @staticmethod
-    def _claim_plan(session: Session, *, run_id: str) -> tuple[str | None, Mapping[str, Any] | None]:
-        """``(binding_state, stage_plan)`` of the Run, the plan ``None`` for every Run that froze none. An unlocked read."""
-        row = session.execute(_CLAIM_PLAN, {"run_id": run_id}).first()
+    def _claim_view(session: Session, *, run_id: str) -> tuple[str | None, str | None, Mapping[str, Any] | None]:
+        """What the claim reads of the Run's binding before any lock, in one statement: ``(binding_state, the group revision a pending Run was
+        admitted on, the frozen stage plan)``. The group revision is ``None`` for any Run that is not a ``pending`` group Run (what
+        :meth:`_pending_group_revision` answers); the plan is ``None`` for every Run that froze none (`HOSTS-BACKEND-01`: a planned Run is bound by
+        cell and has no group). An unlocked read, read again under the Run lock."""
+        row = session.execute(_CLAIM_BINDING, {"run_id": run_id}).first()
         if row is None:
-            return None, None
-        plan = row[1]
-        return str(row[0]), (json.loads(plan) if isinstance(plan, str) else plan)
+            return None, None, None
+        plan = row[2] if len(row) > 2 else None
+        plan = json.loads(plan) if isinstance(plan, str) else plan
+        if row[0] != "pending" or plan is not None:
+            return str(row[0]), None, plan
+        if row[1] is None:  # the database's shape check forbids it; a Run that says otherwise is not dispatched
+            raise DomainError(ErrorCode.INTERNAL_ERROR, message="a pending run has no group revision")
+        return str(row[0]), str(row[1]), None
 
     @staticmethod
     def _require_still_pending(session: Session, *, run_id: str, group_revision_id: str | None) -> None:

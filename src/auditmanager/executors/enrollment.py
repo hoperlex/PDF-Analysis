@@ -508,8 +508,9 @@ def _mint(
         return None
     value, prefix = pair
     record = tokens.insert_token(
-        session, connection_id=grant.connection_id, host_id=grant.host_id, token_prefix=prefix,
+        session, connection_id=grant.connection_id, token_prefix=prefix,
         token_hash=hash_token(value), expires_in_days=DEFAULT_TOKEN_DAYS, actor_uid=grant.created_by,
+        **({} if grant.host_id is None else {"host_id": grant.host_id}),
     )
     return RedeemedToken(record=record, value=value)
 
