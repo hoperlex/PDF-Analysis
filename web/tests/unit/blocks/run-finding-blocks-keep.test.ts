@@ -3,8 +3,8 @@
  *
  * The review screen mounts a new «Блоки замечания» strip for every finding the reader opens, and each strip observes the run's
  * one query. With the app's `staleTime` of 30 s every observer that mounted on older data read the server again, and the server
- * joins three whole documents per read. The cases drive real observers of the app's own query client (its defaults), with fake
- * timers and a stand-in `fetch` that counts the requests: a walk at human pace over a run that has ended costs one read; the
+ * joins three whole documents per read. The cases drive real observers of the app's own query client (its defaults), with a
+ * fake clock (only `Date`: staleness is read from it) and a stand-in `fetch` that counts the requests: a walk at human pace over a run that has ended costs one read; the
  * answers that can still change (a run that has not ended, a run whose state is not known, `not_produced`) still cost one per
  * mount after 30 s, because they are not a fact yet.
  */
@@ -44,7 +44,7 @@ beforeEach(() => {
     reads += 1;
     return new Response(JSON.stringify(answer), { status: 200, headers: { 'Content-Type': 'application/json' } });
   });
-  vi.useFakeTimers();
+  vi.useFakeTimers({ toFake: ['Date'] });
 });
 
 afterEach(() => {
@@ -53,18 +53,26 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** One strip of the review screen: mounts, reads what is there, goes when the reader opens another finding. */
+/** The reader takes this long over a finding; the app's default would have called every earlier answer stale by then. */
+const READING_TIME_MS = 45_000;
+const later = (milliseconds: number): void => {
+  vi.setSystemTime(new Date(Date.now() + milliseconds));
+};
+
+/** One strip of the review screen: mounts, reads what is there (or waits for the read it started), goes when the reader opens another finding. */
 async function openAFinding(client: QueryClient, runId: RunId = RUN_ID as RunId): Promise<void> {
   const observer = new QueryObserver(client, runFindingBlocksQueryOptions(runId, client));
   const stop = observer.subscribe(() => {});
-  await vi.advanceTimersByTimeAsync(0);
+  await vi.waitFor(() => {
+    expect(observer.getCurrentResult().isFetching).toBe(false);
+  });
   stop();
 }
 
 async function walk(client: QueryClient, findings: number): Promise<void> {
   for (let opened = 0; opened < findings; opened += 1) {
     await openAFinding(client);
-    await vi.advanceTimersByTimeAsync(45_000); // the reader takes longer than the app's 30 s over each finding
+    later(READING_TIME_MS);
   }
 }
 
@@ -113,7 +121,7 @@ describe('what is not yet a fact is still read again after the default 30 s', ()
   it('and not before the 30 s are out, for any of them', async () => {
     const client = withRun('running');
     await openAFinding(client);
-    await vi.advanceTimersByTimeAsync(10_000);
+    later(10_000);
     await openAFinding(client);
     expect(reads).toBe(1);
   });
