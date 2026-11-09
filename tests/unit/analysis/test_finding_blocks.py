@@ -19,7 +19,7 @@ from auditmanager.analysis.geometry import (
     link_evidence,
     linkable_pages,
 )
-from auditmanager.analysis.geometry.finding_blocks import WITNESS_MIN_CHARACTERS, fold_text
+from auditmanager.analysis.geometry.finding_blocks import WITNESS_MIN_CHARACTERS, _close, _near_copy, fold_text
 
 PAGE = {1: (600.0, 800.0), 2: (600.0, 800.0)}
 
@@ -243,6 +243,9 @@ def witness(quote, texts, blocks=(LEFT, RIGHT), *, span=(100, 140), line=WIDE, *
     return link_evidence(spans, lines={1: [line], 2: []}, pages=PAGE, blocks=list(blocks), block_texts=texts, **options)
 
 
+TEXTS = {"blk_l": LEFT_TEXT, "blk_r": RIGHT_TEXT}
+
+
 def test_w_a_line_across_two_blocks_is_linked_to_the_one_whose_text_contains_the_quotation():
     assert witness(QUOTE, {"blk_l": LEFT_TEXT, "blk_r": RIGHT_TEXT}) == ("blk_r",)
     assert witness(QUOTE, {"blk_l": RIGHT_TEXT, "blk_r": LEFT_TEXT}) == ("blk_l",)
@@ -373,3 +376,57 @@ def test_w_fold_text_is_the_words_in_lower_case_with_single_spaces():
     assert fold_text("строи-\n  тельство") == "строительство"
     assert fold_text("светло-серый") == "светло серый", "a hyphen inside a line is a separator, not a break"
     assert fold_text("") == fold_text(" ,.;") == ""
+
+
+def test_w_a_doubtful_reading_of_any_crossed_block_makes_the_witness_abstain():
+    # The quotation may stand in the block whose reading failed; the other block's match would then be a wrong link.
+    assert witness(QUOTE, TEXTS) == ("blk_r",)
+    assert witness(QUOTE, TEXTS, doubtful_blocks={"blk_l"}) == (), "the left block's reading is flagged; the right one's match is not trusted"
+    assert witness(QUOTE, TEXTS, doubtful_blocks={"blk_r"}) == (), "the block that matches is itself flagged"
+    assert witness(QUOTE, {"blk_r": RIGHT_TEXT}, doubtful_blocks=["blk_l"]) == (), "a block with no text at all (nothing recognised) is a doubtful one"
+
+
+def test_w_a_doubtful_block_the_line_does_not_cross_changes_nothing():
+    far, other_page = box("blk_far", 0.0, 0.6, 1.0, 0.7), box("blk_p2", 0.0, 0.2, 1.0, 0.3, page=2)
+    texts = {**TEXTS, "blk_far": "x", "blk_p2": "y"}
+    assert witness(QUOTE, texts, blocks=(LEFT, RIGHT, far, other_page), doubtful_blocks={"blk_far", "blk_p2"}) == ("blk_r",)
+
+
+def test_w_a_doubtful_reading_does_not_touch_the_geometry_links():
+    holder = box("blk_all", 0.0, 0.2, 1.0, 0.3)
+    assert witness(QUOTE, TEXTS, blocks=(holder, LEFT, RIGHT), doubtful_blocks={"blk_l", "blk_r"}) == ("blk_all",)
+    assert link_evidence([EvidenceSpan(1, 0, 20)], lines={1: [LINE]}, pages=PAGE, blocks=[AROUND_LINE], doubtful_blocks={"blk_a"}) == ("blk_a",)
+
+
+def test_w_a_near_copy_of_the_quotation_in_another_crossed_block_makes_the_witness_abstain():
+    # The right block holds the quotation exactly; the left one holds the same phrase with a word read one letter short.
+    # The quotation may stand in the left block, whose reading is damaged (no quality flag), so the right one is not trusted.
+    damaged = "Огнестойкость узла не менее R3"
+    assert witness(QUOTE, {"blk_l": damaged, "blk_r": RIGHT_TEXT}) == ()
+    assert witness(QUOTE, {"blk_l": "Огнестойкость узла не менее R30 и", "blk_r": "Огнестойкость узла не менее R30"}) == (), "an exact copy too"
+    assert witness(QUOTE, {"blk_l": "Огнестойкость узла", "blk_r": RIGHT_TEXT}) == ("blk_r",), "half of the words are not a near copy"
+
+
+def test_w_a_near_copy_is_a_run_of_as_many_words_with_a_quarter_of_them_wrong_at_most():
+    assert _near_copy(["не", "нормируется", "п", "5"], ["не", "нормируется", "п", "6"]) is True, "one of four: allowed"
+    assert _near_copy(["не", "нормируется", "п", "5"], ["не", "нормируется", "р", "6"]) is False, "two of four"
+    assert _near_copy(["огнестойкость", "узла"], ["огнестойкость", "стен"]) is False, "no miss is allowed in two words"
+    assert _near_copy(["огнестойкость", "узла"], ["огнестоикость", "узла"]) is True, "one letter wrong in a long word is the same word"
+    assert _near_copy(["a" * 8], ["x", "a" * 8, "y"]) is True and _near_copy(["a" * 8], ["x", "y"]) is False
+    assert _near_copy(["a" * 8, "b" * 8], ["a" * 8]) is False, "a text shorter than the quotation holds no run"
+
+
+def test_w_close_words_differ_by_one_letter_and_only_from_four_letters():
+    assert _close("нормируется", "нормируется") and _close("нормируется", "нормируеться") and _close("нормируется", "нормируетс")
+    assert _close("нормируется", "нормирется") and _close("слово", "слова")
+    assert not _close("слово", "слава"), "two letters"
+    assert not _close("слово", "стали") and not _close("слово", "словарь")
+    assert not _close("шт", "шт1") and not _close("да", "нет") and not _close("п5", "п6"), "short words are the same word or not"
+    assert not _close("слов", "сло"), "under four letters on one side"
+
+
+def test_w_a_near_copy_in_a_block_the_line_does_not_cross_or_in_a_block_without_text_changes_nothing():
+    damaged = "Огнестойкость узла не менее R3"
+    far = box("blk_far", 0.0, 0.6, 1.0, 0.7)
+    assert witness(QUOTE, {**TEXTS, "blk_far": damaged}, blocks=(LEFT, RIGHT, far)) == ("blk_r",)
+    assert witness(QUOTE, {"blk_r": RIGHT_TEXT, "blk_l": ""}) == ("blk_r",)

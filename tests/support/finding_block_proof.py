@@ -21,7 +21,7 @@ import io
 import re
 import unicodedata
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,6 +34,7 @@ from auditmanager.analysis.geometry.finding_blocks import (
     PortalBox,
     link_evidence,
 )
+from auditmanager.analysis.recognised.flags import flags_for
 from auditmanager.analysis.stages.extraction import TEXT_OPTIONS
 
 Box = tuple[float, float, float, float]
@@ -163,16 +164,19 @@ HOMOGLYPHS = str.maketrans("аеорсхАЕОРСХ", "aeopcxAEOPCX")
 NOISE_RATES = (0.1, 0.3)
 
 
-def degrade(block_id: str, text: str, rate: float) -> str:
-    """The recognised text as a damaging reading gives it: a deterministic ``rate`` of its words with a look-alike Latin letter
-    (or, with none to swap, a letter short; a one-letter word becomes a bar). Nothing is added to the text: damage makes a word
-    stop matching the quotation's."""
+def degrade(block_id: str, text: str, rate: float, *, flaggable: bool = True) -> str:
+    """The recognised text as a damaging reading gives it: a deterministic ``rate`` of its words damaged.
+
+    A damaged word has a Cyrillic letter written as its Latin look-alike (``flaggable``: a damage the quality flags can see,
+    ``mixed_script`` / ``homoglyph``) or, with none to swap or with ``flaggable=False``, a letter short (a damage no flag names;
+    a one-letter word becomes a bar). Nothing is added to the text: damage makes a word stop matching the quotation's.
+    """
     pieces = []
     for number, piece in enumerate(re.split(r"(\s+)", text)):
         if piece.strip():
             draw = int(hashlib.sha256(f"{block_id}:{number}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
             if draw < rate:
-                swapped = piece.translate(HOMOGLYPHS)
+                swapped = piece.translate(HOMOGLYPHS) if flaggable else piece
                 piece = swapped if swapped != piece else (piece[:-1] or "|")
         pieces.append(piece)
     return "".join(pieces)
@@ -192,9 +196,19 @@ class MemoOracle:
         return self._memo[key]
 
 
+def doubtful_blocks(blocks: Sequence[BlockFact], texts: Mapping[str, str]) -> set[str]:
+    """The text blocks whose reading ``texts`` may have wrong: a quality flag (``analysis.recognised.flags``) on it, or nothing
+    recognised. A block that is not a text block (an image) is never doubtful: it is not read."""
+    return {
+        block.portal_block_id for block in blocks
+        if block.block_type == "text" and (not texts.get(block.portal_block_id) or flags_for(texts[block.portal_block_id]))
+    }
+
+
 def rule_links(
     evidence: Sequence[EvidenceFact], lines: Sequence[Any], sizes: Mapping[int, tuple[float, float]], blocks: Sequence[BlockFact],
     unlinked: set[int], texts: Mapping[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS,
+    doubtful: Collection[str] = (),
 ) -> list[str]:
     """``finding_blocks.link_evidence`` over the stored documents: the shipped rule, called as the adapter calls it, with the
     recognised text (the second witness) when ``texts`` is given. ``unlinked`` are the adapter's ``unlinked_pages``."""
@@ -205,7 +219,8 @@ def rule_links(
     spans = [EvidenceSpan(f.page_number, f.char_start, f.char_end, f.quote) for f in evidence if f.page_number not in unlinked]
     pages = {n: size for n, size in sizes.items() if n not in unlinked}
     return list(link_evidence(
-        spans, lines=by_page, pages=pages, blocks=boxes, block_texts=texts, witness_min_characters=min_characters,
+        spans, lines=by_page, pages=pages, blocks=boxes, block_texts=texts, doubtful_blocks=doubtful,
+        witness_min_characters=min_characters,
     ))
 
 

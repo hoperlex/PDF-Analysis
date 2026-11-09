@@ -28,10 +28,15 @@ The rule
 5. **The second witness** (`D-450`). For a line of the evidence that **no** block holds (step 3), and only when the caller hands
    over the recognised text of the portal's text blocks (``block_texts``) and the evidence's quotation (``EvidenceSpan.quote``):
    the **candidates** are the blocks of the page the line crosses (more than :data:`EDGE_TOLERANCE` of the page's width across
-   the line's box and at least :data:`COVERAGE` of its height) that have recognised text; the line's block is the candidate whose
+   the line's box and at least :data:`COVERAGE` of its height); the line's block is the candidate whose recognised
    text **contains the whole quotation**, and the link is made only when **exactly one** candidate does. Ambiguity (two
    candidates contain it), no match, a quotation of fewer than :data:`WITNESS_MIN_CHARACTERS` characters once folded, and a
-   missing quotation or text give no link. The comparison is over words: case, ``ё``/``е``, soft and end-of-line hyphens, runs of
+   missing quotation or text give no link. **The witness also abstains when any candidate's reading is doubtful**
+   (``doubtful_blocks``: the caller names the text blocks whose recognised text carries a quality flag or is empty): the
+   quotation may stand in exactly the block whose reading failed, and a match in another candidate would then be a wrong link.
+   It abstains as well when **another candidate holds a near copy** of the quotation (a run of as many words, all but a quarter of
+   them the same word or the same word with one letter wrong): a damaged reading that no flag names looks exactly so.
+   The comparison is over words: case, ``ё``/``е``, soft and end-of-line hyphens, runs of
    whitespace and punctuation are folded away (:func:`fold_text`), and the quotation's words must be a contiguous run of the
    block's words. A line some block holds is never given to the witness: geometry that proves containment is not second-guessed
    by a reading.
@@ -57,10 +62,14 @@ portal rasterises what a viewer shows). :func:`linkable_pages` refuses such a pa
 which proves the shift, but a page whose shifted lines still fall inside it passes (`D-353`).
 
 What the second witness can get wrong, and the geometry cannot: it trusts the portal's reading. A quotation that stands in a crossed
-block whose recognised text garbled it, and that a **different** crossed block's text repeats, is linked to the latter: the one
-way a link of this rule can be wrong. It is bounded (the candidates are only the blocks the line crosses, the text must contain
-all of a quotation of at least :data:`WITNESS_MIN_CHARACTERS` characters, two matches give nothing), not excluded. The recognised
-text must be the reading of **text** blocks: the portal's description of an image is not what the page says and is never passed.
+block whose recognised text garbled it **beyond a near copy** (more than a quarter of its words, or a word by more than one letter) and
+**in a way no quality flag names**, and that a **different** crossed block's text repeats, is linked to the latter: the one way a
+link of this rule can be wrong. It is bounded (the candidates are only the blocks the line crosses, the text must contain all of a
+quotation of at least :data:`WITNESS_MIN_CHARACTERS` characters, two matches give nothing, a flagged or empty reading of any
+candidate and a near copy in any other make the witness abstain), not excluded. Note that the evidence of a quotation that a
+page repeats is the **first** occurrence (``resolve_anchor`` takes ``page.text.find``): a later copy in a crossed block is a match
+for the text and not for the place. The recognised text must be the reading of **text** blocks: the portal's description of an image
+is not what the page says and is never passed.
 
 A link by geometry is a containment the arithmetic proves; a link by the witness is a choice among the blocks a line crosses and is
 as good as the recognised text. The stored evidence is never touched, and no evidence is linked to a block its line does not
@@ -71,7 +80,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -100,6 +109,9 @@ EDGE_TOLERANCE: Final[float] = 0.005
 #: A short quotation (a unit, a mark, a number) repeats across the cells of a row, and a reading's one wrong character in the
 #: block that really holds it would hand the link to the block that happens to repeat it.
 WITNESS_MIN_CHARACTERS: Final[int] = 8
+
+#: How many of a quotation's words (a quarter of them, rounded down) another crossed block may differ in and still be a near copy of it.
+NEAR_COPY_MISSES_PER_WORDS: Final[int] = 4
 
 #: How far a line may lie outside its page before the page is taken to be shifted, in points: the glyph boxes of a font may
 #: reach a hair past the edge of the page they are set on.
@@ -239,6 +251,35 @@ def fold_text(text: str) -> str:
     return " ".join(_WORD.findall(_HYPHEN_AT_LINE_END.sub("", text)))
 
 
+def _close(first: str, second: str) -> bool:
+    """Two folded words that are one word read with at most one letter wrong, extra or missing (words of four letters and more)."""
+    if first == second:
+        return True
+    if len(first) < 4 or len(second) < 4 or abs(len(first) - len(second)) > 1:
+        return False
+    if len(first) == len(second):
+        return sum(a != b for a, b in zip(first, second)) == 1
+    shorter, longer = sorted((first, second), key=len)
+    return any(longer[:at] + longer[at + 1:] == shorter for at in range(len(longer)))
+
+
+def _near_copy(quotation: Sequence[str], words: Sequence[str]) -> bool:
+    """Whether ``words`` hold a run as long as the quotation whose words are the quotation's, up to a quarter of them wrong
+    (:func:`_close`): what the same quotation looks like in a reading that damaged some of it."""
+    length = len(quotation)
+    allowed = length // NEAR_COPY_MISSES_PER_WORDS
+    for start in range(len(words) - length + 1):
+        misses = 0
+        for wanted, found in zip(quotation, words[start:start + length]):
+            if not _close(wanted, found):
+                misses += 1
+                if misses > allowed:
+                    break
+        else:
+            return True
+    return False
+
+
 def link_evidence(
     evidence: Sequence[EvidenceSpan],
     *,
@@ -246,6 +287,7 @@ def link_evidence(
     pages: Mapping[int, tuple[float, float]],
     blocks: Sequence[PortalBox],
     block_texts: Mapping[str, str] | None = None,
+    doubtful_blocks: Collection[str] = (),
     witness_min_characters: int = WITNESS_MIN_CHARACTERS,
 ) -> tuple[str, ...]:
     """The ids of the portal blocks that hold any of ``evidence``, in the order of ``blocks``.
@@ -257,12 +299,14 @@ def link_evidence(
     ``block_texts`` (the recognised text of the portal's **text** blocks by block id) switches the second witness on (step 5 of
     the module's rule): for a line of an evidence whose ``quote`` is given and that no block holds, the one crossed block whose
     text contains the quotation is linked. ``None`` (the default) is the geometry alone, as before. ``witness_min_characters``
-    is the shortest folded quotation the witness is asked about.
+    is the shortest folded quotation the witness is asked about. ``doubtful_blocks`` are the blocks whose recognised text may be
+    wrong (a quality flag on it, or nothing recognised in a text block): a line that crosses any of them is left to the geometry.
     """
     by_page: dict[int, list[PortalBox]] = {}
     for block in blocks:
         by_page.setdefault(block.page_number, []).append(block)
     folded: dict[str, str] = {}
+    doubtful = frozenset(doubtful_blocks)
 
     def text_of(block: PortalBox) -> str | None:
         """The block's folded recognised text padded with a space at both ends (a word-aligned containment test), if any."""
@@ -277,7 +321,7 @@ def link_evidence(
         if size is None or _shifted(lines.get(span.page_number, ()), size[0], size[1]):
             continue
         quotation = fold_text(span.quote) if block_texts and span.quote else ""
-        asked = len(quotation) >= witness_min_characters
+        asked = bool(quotation) and len(quotation) >= witness_min_characters
         for line in lines.get(span.page_number, ()):
             if line.char_end <= span.char_start or line.char_start >= span.char_end:
                 continue
@@ -292,10 +336,14 @@ def link_evidence(
             if not asked:
                 continue
             needle = f" {quotation} "
-            matching = [
-                block.portal_block_id for block in on_page
-                if _crosses(box, block) and (text := text_of(block)) is not None and needle in text
-            ]
-            if len(matching) == 1:
-                held.update(matching)
+            crossed = [block for block in on_page if _crosses(box, block)]
+            if any(block.portal_block_id in doubtful for block in crossed):
+                continue
+            matching = [block for block in crossed if (text := text_of(block)) is not None and needle in text]
+            if len(matching) != 1:
+                continue
+            others = [text for block in crossed if block is not matching[0] and (text := text_of(block)) is not None]
+            if any(_near_copy(quotation.split(), text.split()) for text in others):
+                continue
+            held.add(matching[0].portal_block_id)
     return tuple(block.portal_block_id for block in blocks if block.portal_block_id in held)

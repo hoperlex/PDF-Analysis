@@ -96,3 +96,26 @@ def build() -> bytes:
     page.showPage()
     page.save()
     return buffer.getvalue()
+
+
+def build_repeated() -> tuple[bytes, list[tuple[int, str]]]:
+    """A one-page schedule whose every row repeats one phrase in two of its cells, and the phrases as ``(page, phrase)`` (D-450).
+
+    ``Поз. n`` at x 56, the phrase at x 150 and again at x 330, ``n шт.`` at x 500: a schedule's "same in every column" cells. The row
+    number is inside the phrase, so a phrase stands in exactly one row, twice; a quotation of it is resolved by the chain to its FIRST
+    occurrence (``page.text.find``), the left cell, while the right cell's text repeats it.
+    """
+    pdfmetrics.registerFont(TTFont("StressSans", font_path()))
+    buffer = io.BytesIO()
+    page = canvas.Canvas(buffer, pagesize=A4, invariant=True)
+    page.setFont("StressSans", SIZE)
+    phrases: list[tuple[int, str]] = []
+    for n in range(1, ROWS + 1):
+        phrase = f"Не нормируется, п. {n}"
+        phrases.append((1, phrase))
+        y = TOP - n * LEADING
+        for x, text in ((56, f"Поз. {n}"), (150, phrase), (330, phrase), (500, f"{n} шт.")):
+            page.drawString(x, y, text)
+    page.showPage()
+    page.save()
+    return buffer.getvalue(), phrases

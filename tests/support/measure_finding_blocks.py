@@ -25,12 +25,16 @@ Scenarios (each prints one JSON block and writes ``<out>/<name>.json`` plus ``<o
 **The second witness (`D-450`).** Each result also carries the relation as ``link_evidence`` computes it with the recognised text of the
 portal's text blocks (``figures_with_the_witness``), over the same stored documents, with three sensitivity runs: the shortest
 quotation the witness is asked about set to 1 (``..._min1``), and the recognised text damaged the way a reading damages it (a word
-in ten, in three, written with a look-alike Latin letter or a letter short; ``..._noise10`` and ``..._noise30``). The shipped adapter
+in ten, in three, written with a look-alike Latin letter or a letter short; ``..._noise10`` and ``..._noise30``, each also without
+the witness's abstention on a block whose reading carries a quality flag, ``..._without_the_doubtful_guard``; and the damage no flag
+names, a letter short, ``..._dropped10`` and ``..._dropped30``). The shipped adapter
 does not hand the text to the rule (that wiring is in ``bootstrap/adapters.py``, `D-590`), so this reproduction calls the rule
 itself, and **fails the scenario** unless the same call without the text gives exactly the adapter's answer for every finding.
 The blocks' text of the ``pz_*`` and ``stress_*`` scenarios is what the PDF's own characters inside the block read as (an exact
 reading); the quotations of the sweeps are unique on their page, so with an exact reading a wrong link needs overlapping
-blocks and the noise runs show what a damaged reading costs in coverage, not what it costs in wrong links (`D-590`).
+blocks and the noise runs of those sets show what a damaged reading costs in coverage, not in wrong links. ``repeat_sweep_cells``
+is the set that can show the wrong link (`D-590`): a schedule whose rows repeat one phrase in two cells, quoted by an authored
+finding whose evidence is the FIRST occurrence (what the chain's anchor resolution gives), with cell blocks.
 
 **What is authored.** The model's reply is never live: it is an authored recording (``recording_document``, token counts invented
 and small, keyed by the request checksum the real chain computes), so a finding here is "a quotation somebody chose", not a
@@ -80,6 +84,7 @@ from tests.support.finding_block_proof import (  # noqa: E402
     PdfOracle,
     analyse,
     degrade,
+    doubtful_blocks,
     figures,
     require_same_links,
     rule_links,
@@ -343,15 +348,26 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
         texts = {b.portal_block_id: b.text for b in blocks if b.text}
         memo = MemoOracle(oracle)
 
-        def witnessed(texts_given: dict[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS) -> dict[str, Any]:
-            result = [(uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters), labels[uid]) for uid, facts in usable]
+        def witnessed(
+            texts_given: dict[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS, *, guarded: bool = True,
+        ) -> dict[str, Any]:
+            doubtful = doubtful_blocks(blocks, texts_given) if guarded and texts_given else set()
+            result = [
+                (uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters, doubtful), labels[uid])
+                for uid, facts in usable
+            ]
             return analyse(items=result, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=memo)
 
         with_witness = witnessed(texts)
         sensitivity = {"min1": witnessed(texts, 1)}
         for rate in NOISE_RATES:
             damaged = {key: degrade(key, text, rate) for key, text in texts.items()}
-            sensitivity[f"noise{round(rate * 100)}"] = witnessed(damaged)
+            name = f"noise{round(rate * 100)}"
+            sensitivity[name] = witnessed(damaged)
+            sensitivity[f"{name}_without_the_doubtful_guard"] = witnessed(damaged, guarded=False)
+            # Damage no quality flag names (a letter short): the guard cannot see it.
+            unseen = {key: degrade(key, text, rate, flaggable=False) for key, text in texts.items()}
+            sensitivity[f"dropped{round(rate * 100)}"] = witnessed(unseen)
         before_pairs = {(p["finding_uid"], p["portal_block_id"]) for p in now["pairs"]}
         added = Counter(p["geometry"] for p in with_witness["pairs"] if (p["finding_uid"], p["portal_block_id"]) not in before_pairs)
         lost = sorted(before_pairs - {(p["finding_uid"], p["portal_block_id"]) for p in with_witness["pairs"]})
@@ -486,6 +502,19 @@ def build_scenarios(pz_pdf: Path | None, work: Path, only: set[str], cap: int) -
                 f"crosses a place a portal cuts), blocks from an XY-cut of the page raster at {layout.name} level "
                 f"(gap {layout.gap_x_pt} pt across, {layout.gap_y_pt} pt down): an authored finding per unit of the text layer.",
                 bundle, directory, skipped, len(sweep)))
+    if not only or "repeat_sweep_cells" in only:
+        pdf, phrases = stress_layout_pdf.build_repeated()
+        oracle = PdfOracle(pdf)
+        name = "repeat_sweep_cells"
+        units = [Unit("rep", page, phrase) for page, phrase in phrases]
+        directory = work / name
+        author_recording(oracle, directory, observations([[u] for u in units]), "authored sweep over the repeated-phrase PDF")
+        bundle = raster_bundle(pdf, "repeat_cells", CELLS, oracle)
+        oracle.close()
+        scenarios.append(Scenario(
+            name, "tests/support/stress_layout_pdf.py build_repeated (a schedule whose every row repeats one phrase in two cells): an authored "
+            f"finding per row quoting the phrase, whose evidence is its first occurrence; blocks from an XY-cut at {CELLS.name} level.",
+            bundle, directory, Counter(), len(units)))
     return scenarios
 
 

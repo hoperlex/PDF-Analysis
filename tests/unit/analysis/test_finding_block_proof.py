@@ -16,6 +16,7 @@ from tests.support.finding_block_proof import (
     analyse,
     covered_share,
     degrade,
+    doubtful_blocks,
     figures,
     normalise_text,
     require_same_links,
@@ -171,3 +172,32 @@ def test_the_memo_oracle_asks_the_pdf_once_per_placement():
     assert memo.quote_boxes(1, 5, "x") == memo.quote_boxes(1, 5, "x") and Counting.calls == 1
     memo.quote_boxes(1, 6, "x")
     assert Counting.calls == 2
+
+
+def test_degrade_without_the_look_alikes_damages_what_no_quality_flag_names():
+    from auditmanager.analysis.recognised.flags import flags_for
+
+    seen = degrade("blk", TEXT, 1.0)
+    unseen = degrade("blk", TEXT, 1.0, flaggable=False)
+    assert flags_for(seen), "the look-alike damage is one a flag names (mixed script, homoglyph)"
+    assert not flags_for(unseen) and unseen != TEXT, "the letter-short damage is not"
+
+
+def test_a_text_block_is_doubtful_when_its_reading_is_flagged_or_empty_and_an_image_never():
+    blocks = [
+        BlockFact("blk_ok", 1, "text", (0.0, 0.0, 0.5, 0.5), "Огнестойкость узла"),
+        BlockFact("blk_flag", 1, "text", (0.5, 0.0, 1.0, 0.5), "Огнестойкоcть узла"),  # a Latin c in a Cyrillic word
+        BlockFact("blk_empty", 1, "text", (0.0, 0.5, 0.5, 1.0), None),
+        BlockFact("blk_image", 1, "image", (0.5, 0.5, 1.0, 1.0), None),
+    ]
+    texts = {b.portal_block_id: b.text for b in blocks if b.text}
+    assert doubtful_blocks(blocks, texts) == {"blk_flag", "blk_empty"}
+
+
+def test_rule_links_passes_the_doubtful_blocks_to_the_rule():
+    line = TextLine(1, 100, 140, 50.0, 200.0, 550.0, 212.0)
+    blocks = [BlockFact("blk_l", 1, "text", (0.0, 0.2, 0.5, 0.3), "Итого"), BlockFact("blk_r", 1, "text", (0.5, 0.2, 1.0, 0.3), None)]
+    quote = "Огнестойкость узла не менее R30"
+    fact, sizes, texts = EvidenceFact(1, 100, 140, quote), {1: (600.0, 800.0)}, {"blk_r": quote}
+    assert rule_links([fact], [line], sizes, blocks, set(), texts, doubtful={"blk_l"}) == []
+    assert rule_links([fact], [line], sizes, blocks, set(), texts, doubtful=set()) == ["blk_r"]
