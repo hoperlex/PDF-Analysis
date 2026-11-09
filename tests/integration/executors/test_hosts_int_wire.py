@@ -6,8 +6,11 @@ One throwaway database, committed rows (the claim, the binding, the pull task an
    redeemed through ``ExecutorEnrollmentAdapter`` -> ``ExecutorHostAdapter`` (the host token, its host and the catalogue), the token authenticates as a
    ``RunnerIdentity`` that names the host, and a health report with ``providers[]`` and ``slots`` goes through ``report_health`` to the host adapter: the
    host has two members (Opus and Sonnet by subscription);
-2. **the layout is on** -- an administrator revises it and switches it on through ``StagePlanService``; the freezer reads the servers through
-   ``HostModelAvailability`` and freezes a plan, every cell on a subscription;
+2. **the layout is on** -- an administrator revises it and switches it on through ``StagePlanService`` (its journal is the database's: the event's identity
+   is held to ``ck_audit_event_aggregate_id``, which is how this test found the literal the service used to write there); the freezer reads the servers
+   through ``HostModelAvailability`` and freezes a plan, every cell on a subscription. The layout's **store** is the in-memory one of
+   ``tests/unit/runs/stage_layout_fakes.py`` on purpose: revisions are immutable rows, and ``tests/integration/runs/test_stage_plan_db.py`` (the SQL store's
+   own cases) starts from an empty store -- a committed revision of this test would break it whenever it runs after;
 3. **the run is bound** -- the claim binds every cell to a member of the host, once;
 4. **each cell is called by its own model** -- ``DatabaseProviders.resolve`` of the planned run answers one adapter and one ``CallBinding`` per cell;
    the call is written as a task carrying the seven members of *its* cell, claimed through the host token, and journaled on the member that serves it;
@@ -19,11 +22,13 @@ The same suite proves the sources: with the switch off a start reads no plan (th
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import threading
 import time
 import uuid
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -80,8 +85,7 @@ def admin(sessions: sessionmaker[Session]) -> str:
 
 @pytest.fixture(autouse=True)
 def _isolated(sessions: sessionmaker[Session], admin: str) -> Iterator[None]:
-    """No live job and no live host before and after, and the layout switched off again after: the switch is a journal, a later test of the same
-    database must not find a start that reads a plan."""
+    """No live job and no live host before and after, so the system group of a (model, access) pair is the test's alone."""
     def clean() -> None:
         with sessions() as s:
             for (run_id,) in s.execute(text("SELECT run_id FROM job WHERE state NOT IN ('succeeded', 'failed', 'cancelled', 'dead_letter')")).all():
@@ -95,8 +99,6 @@ def _isolated(sessions: sessionmaker[Session], admin: str) -> Iterator[None]:
     clean()
     yield
     clean()
-    service = StagePlanService(session_factory=sessions, availability=HostModelAvailability(), provider_source="database")
-    service.set_layout_enabled(enabled=False, user_uid=admin, idempotency_key=_key())
 
 
 def _report(*models_: tuple[str, str]) -> dict[str, Any]:
@@ -141,8 +143,20 @@ class Server:
         return RunnerPrincipal(token_id=self.identity.token_id, connection_id=None, host_id=self.host_id)
 
 
+def _layout_fakes() -> Any:
+    path = Path(__file__).resolve().parents[2] / "unit" / "runs" / "stage_layout_fakes.py"
+    spec = importlib.util.spec_from_file_location("hosts_int_wire_stage_layout_fakes", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _enable_layout(sessions: sessionmaker[Session], admin: str) -> StagePlanService:
-    service = StagePlanService(session_factory=sessions, availability=HostModelAvailability(), provider_source="database")
+    fakes = _layout_fakes()
+    service = StagePlanService(
+        session_factory=sessions, store=fakes.MemoryStore(), commands=fakes.MemoryCommands(), availability=HostModelAvailability(),
+        provider_source="database")
     body = models.ReviseStageModelLayoutRequest.model_validate({"kit": "claude_only", "cells": layout.cells_to_wire(layout.preset_cells("claude_only"))})
     service.revise_layout(body=body, user_uid=admin, idempotency_key=_key())
     assert service.set_layout_enabled(enabled=True, user_uid=admin, idempotency_key=_key())["enabled"] is True
@@ -165,6 +179,32 @@ def _planned_run(sessions: sessionmaker[Session], plan: dict[str, Any]) -> str:
         JobRepository().enqueue(s, run_id=ids["run"])
         s.commit()
     return ids["run"]
+
+
+class Call:
+    """One model call in a daemon thread: a failing test must not wait out the call's deadline (half an hour) when the interpreter exits."""
+
+    def __init__(self, adapter: Any, request: ModelRequest) -> None:
+        self.response: Any = None
+        self.error: BaseException | None = None
+        self._thread = threading.Thread(target=self._run, args=(adapter, request), daemon=True)
+        self._thread.start()
+
+    def _run(self, adapter: Any, request: ModelRequest) -> None:
+        try:
+            self.response = adapter.complete(request)
+        except BaseException as failure:  # noqa: BLE001 - handed to the test thread
+            self.error = failure
+
+    def done(self) -> bool:
+        return not self._thread.is_alive()
+
+    def result(self, timeout: float) -> Any:
+        self._thread.join(timeout)
+        assert self.done(), "the call is still waiting for its answer"
+        if self.error is not None:
+            raise self.error
+        return self.response
 
 
 def _request(cell_model: str) -> ModelRequest:
@@ -231,45 +271,41 @@ def test_a_run_on_the_stage_layout_is_bound_called_by_each_cells_model_and_held_
         assert one.config.model_id == cell.model_id and one.config.cell_settings == cell
     assert by_cell["text:main"].call.expected_model == SONNET and by_cell["blocks:leg1"].call.expected_model == OPUS, "not one model for the run"
 
-    pool = ThreadPoolExecutor(max_workers=2)
-    try:
-        for cell_key, model in (("text:main", SONNET), ("blocks:leg1", OPUS)):
-            cell = next(item for item in plan.cells if item.cell_key == cell_key)
-            one = by_cell[cell_key]
-            with sessions() as s:  # the journal, as the runs layer writes it: the columns the call binding names
-                call_id = JobRepository().prepare_provider_call(
-                    s, authority, provider=one.call.provider_label, model_identity=model, provider_mode="live", parameters={},
-                    request_sha256=uuid.uuid4().hex + uuid.uuid4().hex, connection_revision_id=one.call.connection_revision_id,
-                    identity_basis=one.call.identity_basis, **call_journal_columns(one.call))
-                s.commit()
-                row = s.execute(text("SELECT host_id, access, stage_key, connection_revision_id, identity_basis FROM provider_call_effect "
-                                     "WHERE model_call_id = :c"), {"c": str(call_id)}).one()
-            assert tuple(row) == (server.host_id, "subscription", cell_key.partition(":")[0], bound[cell_key].connection_revision_id, "declared")
+    for cell_key, model in (("text:main", SONNET), ("blocks:leg1", OPUS)):
+        cell = next(item for item in plan.cells if item.cell_key == cell_key)
+        one = by_cell[cell_key]
+        with sessions() as s:  # the journal, as the runs layer writes it: the columns the call binding names
+            call_id = JobRepository().prepare_provider_call(
+                s, authority, provider=one.call.provider_label, model_identity=model, provider_mode="live", parameters={},
+                request_sha256=uuid.uuid4().hex + uuid.uuid4().hex, connection_revision_id=one.call.connection_revision_id,
+                identity_basis=one.call.identity_basis, **call_journal_columns(one.call))
+            s.commit()
+            row = s.execute(text("SELECT host_id, access, stage_key, connection_revision_id, identity_basis FROM provider_call_effect "
+                                 "WHERE model_call_id = :c"), {"c": str(call_id)}).one()
+        assert tuple(row) == (server.host_id, "subscription", cell_key.partition(":")[0], bound[cell_key].connection_revision_id, "declared")
 
-            waiting = pool.submit(one.adapter.complete, _request(model))
-            claimed = _claim_one(sessions, server)
-            assert (claimed.provider, claimed.access, claimed.model_id, claimed.effort, claimed.max_output_tokens, claimed.cell_key) == (
-                "claude_code", "subscription", model, cell.effort, cell.max_output_tokens, cell_key), "the task carries the cell's own settings"
-            assert claimed.model == model and claimed.timeout_seconds == cell.timeout_seconds
+        waiting = Call(one.adapter, _request(model))
+        claimed = _claim_one(sessions, server)
+        assert (claimed.provider, claimed.access, claimed.model_id, claimed.effort, claimed.max_output_tokens, claimed.cell_key) == (
+            "claude_code", "subscription", model, cell.effort, cell.max_output_tokens, cell_key), "the task carries the cell's own settings"
+        assert claimed.model == model and claimed.timeout_seconds == cell.timeout_seconds
 
-            # 5. the identity check: another model is refused and the task keeps its claim; a declared model that is not the task's is refused
-            other = SONNET if model == OPUS else OPUS
-            with pytest.raises(ModelNotTheTasks):
-                _answer(server, claimed.task_id, model=model, reported=other)
-            with pytest.raises(ModelNotTheTasks):
-                _answer(server, claimed.task_id, model=other, reported=model)
-            with sessions() as s:
-                assert s.execute(text("SELECT state FROM executor_task WHERE task_id = :t"), {"t": claimed.task_id}).scalar_one() == "claimed"
-            assert not waiting.done(), "a refused answer ends nothing: the call still waits for the member's answer"
+        # 5. the identity check: another model is refused and the task keeps its claim; a declared model that is not the task's is refused
+        other = SONNET if model == OPUS else OPUS
+        with pytest.raises(ModelNotTheTasks):
+            _answer(server, claimed.task_id, model=model, reported=other)
+        with pytest.raises(ModelNotTheTasks):
+            _answer(server, claimed.task_id, model=other, reported=model)
+        with sessions() as s:
+            assert s.execute(text("SELECT state FROM executor_task WHERE task_id = :t"), {"t": claimed.task_id}).scalar_one() == "claimed"
+        assert not waiting.done(), "a refused answer ends nothing: the call still waits for the member's answer"
 
-            alias = f"{model}[1m]"
-            assert accepted_reported(model, alias), "the alias is on the catalogue's list for this model"
-            assert _answer(server, claimed.task_id, model=model, reported=alias).state.value == "answered"
-            response = waiting.result(timeout=30)
-            assert response.model == alias and accepted_reported(one.call.expected_model, response.model)
-            assert (response.input_tokens, response.output_tokens) == (120, 30)
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
+        alias = f"{model}[1m]"
+        assert accepted_reported(model, alias), "the alias is on the catalogue's list for this model"
+        assert _answer(server, claimed.task_id, model=model, reported=alias).state.value == "answered"
+        response = waiting.result(timeout=30)
+        assert response.model == alias and accepted_reported(one.call.expected_model, response.model)
+        assert (response.input_tokens, response.output_tokens) == (120, 30)
 
 
 def test_with_the_switch_off_a_start_reads_no_plan_and_the_environment_source_refuses_a_planned_run(
