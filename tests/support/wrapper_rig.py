@@ -28,6 +28,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_DIR = ROOT / "scripts/recovery"
+#: What an operator may set to make the module wait longer for a lock; each wrapper hands its own to the container (`D-515`).
+LOCK_TIMEOUT_VARIABLES = ("MEMORY_SETTING_LOCK_TIMEOUT", "MEMORY_FORGET_LOCK_TIMEOUT")
 
 STUB = r'''#!{python}
 import json, os, sys
@@ -152,6 +154,8 @@ class Rig:
         counts = Path(str(self.config) + ".counts")
         counts.unlink(missing_ok=True)
         environment = dict(os.environ)
+        for ambient in LOCK_TIMEOUT_VARIABLES:  # an operator's shell must not decide what a test passes to the container (`D-515`)
+            environment.pop(ambient, None)
         environment.update(
             PATH=f"{self.bin}{os.pathsep}{environment['PATH']}", ALPHA_ENV_FILE=str(self.env_file),
             ALPHA_DUMP_ROOT=str(self.dumps), STUB_LOG=str(self.log), STUB_CONFIG=str(self.config),
@@ -193,6 +197,24 @@ def env_without(env_text: str, *names: str) -> str:
 
 def guard_names(script: Path) -> set[str]:
     return set(re.findall(r"^ *# >>> guard: ([a-z0-9-]+)$", script.read_text(encoding="utf-8"), re.MULTILINE))
+
+
+def runbook_guards_text(section: int) -> str:
+    """The text under ``### What the script's guards are`` in section ``section`` of ``DEPLOYMENT_RUNBOOK.md``."""
+    text = (ROOT / "docs/program/DEPLOYMENT_RUNBOOK.md").read_text(encoding="utf-8")
+    start = re.search(rf"^## {section}\. ", text, re.MULTILINE)
+    assert start is not None, f"runbook section {section} is not there"
+    rest = text[start.end():]
+    following = re.search(r"^## ", rest, re.MULTILINE)
+    body = rest[: following.start()] if following else rest
+    listing = re.search(r"^### What the script's guards are\n(.*?)(?=^### |\Z)", body, re.DOTALL | re.MULTILINE)
+    assert listing is not None, f"runbook section {section} has no 'What the script's guards are'"
+    return listing.group(1)
+
+
+def guard_names_in(text: str) -> set[str]:
+    """The guard names a runbook paragraph spells out: back-quoted words with a hyphen (a file or a module has a dot or an underscore)."""
+    return set(re.findall(r"`([a-z][a-z0-9]*(?:-[a-z0-9]+)+)`", text))
 
 
 def modules_imported_by(module: str) -> set[str]:

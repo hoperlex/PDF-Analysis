@@ -9,7 +9,8 @@ rest with status 99 (a new docker call in a wrapper cannot pass unnoticed):
   --entrypoint python api -m <module> <args>`` -> the repository's interpreter, in a sandbox that is built the way the container is: ONLY the
   files that were mounted exist under ``<sandbox>/purge``, the working directory holds nothing else, ``PYTHONPATH`` is the repository's ``src``
   plus that directory, and the environment is the container's (``DATABASE_URL`` from the environment of the compose process, which is where the
-  wrapper puts the owner's url; ``S3_*`` from the ``--env-file``, which is where compose reads them; nothing else, so no ``PG*`` variable). A
+  wrapper puts the owner's url; ``S3_*`` from the ``--env-file``, which is where compose reads them; the ``-e NAME=VALUE`` of the call, which
+  is where the wrapper puts the operator's lock timeout; nothing else, so no ``PG*`` variable). A
   module that imports a file the wrapper did not mount fails here exactly as it fails in the image. Container paths in the arguments
   (``/dump``) are mapped back to the ``-v`` host paths;
 * ``compose ... ps --status running --services`` -> the names in ``$SHIM_RUNNING`` (comma separated);
@@ -101,6 +102,8 @@ def main(argv: list[str]) -> int:
         container_env = {"PATH": os.environ["PATH"], "HOME": str(sandbox), "PYTHONPATH": f"{repository}/src:{sandbox}/purge",
                          "DATABASE_URL": os.environ.get("DATABASE_URL") or configured.get("DATABASE_URL", "")}
         container_env.update({name: value for name, value in configured.items() if name.startswith("S3_")})
+        # every `-e NAME=VALUE` of `compose run` is in the container's environment (`PYTHONPATH` above is built from the sandbox instead)
+        container_env.update({name: value for name, value in environment.items() if name != "PYTHONPATH"})
         translated = []
         for item in tool_args:
             for container, host in mounts.items():

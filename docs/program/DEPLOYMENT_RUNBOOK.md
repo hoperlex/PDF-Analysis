@@ -2009,13 +2009,16 @@ directory and checks them against the journal; it needs no plan digest and asks 
 
 ### What the script's guards are
 
-Twenty-three marked guards, each shown failing by `tests/integration/composition/test_erase_project_script.py`: the option
-shapes (`known-options`, `one-mode`, `stop-worker-needs-a-write-mode`, `options-match-the-mode`, `names-required`,
-`project-identity-shape`, `erase-identity-shape`,
-`actor-required`, `reason-closed-list`, `owner-permission-ref`, `plan-digest-shape`), the instance (`env-file-present`,
-`instance-configured`, `migrator-url-configured`, `database-matches`, `bucket-matches`, `compose-file-present`,
-`modules-present`, `dump-dir-writable`), and the sequence (`preflight-ran`, `plan-approved`, `retyped-confirmation`,
-`manifest-verified`). The tool behind it has 44 more.
+Every guard of the script is a block between `# >>> guard: <name>` and `# <<< guard: <name>` markers, and each is shown failing by
+`tests/integration/composition/test_erase_project_script.py` (`test_every_guard_in_the_script_has_a_case_here` fails on a marker with no
+case). The names below are held to the script's markers by `test_the_runbook_names_every_guard_of_the_script` in the same file, so this
+list cannot lose a guard unnoticed, and no count is written here that could go stale (`D-513`). The option shapes (`known-options`,
+`one-mode`, `stop-worker-needs-a-write-mode`, `options-match-the-mode`, `memory-loss-reason`, `memory-loss-not-with-resume`,
+`names-required`, `project-identity-shape`, `erase-identity-shape`, `actor-required`, `reason-closed-list`, `owner-permission-ref`,
+`plan-digest-shape`), the instance (`env-file-present`, `instance-configured`, `migrator-url-configured`, `database-matches`,
+`bucket-matches`, `compose-file-present`, `modules-present`, `dump-dir-writable`), and the sequence (`preflight-ran`, `plan-approved`,
+`retyped-confirmation`, `manifest-verified`). The tool behind it carries its own marked guards, each shown failing by
+`tests/integration/recovery/test_project_erase.py`.
 
 ### Why this script is not in the copy key's file list (section 13)
 
@@ -2276,9 +2279,11 @@ hands it to the container as `DATABASE_URL` through the environment of the `dock
 files the module imports mounted read-only (`memory_setting`, `project_erase`, `product_purge`, `schema_coverage`, `blob_reference_audit`: the
 `api` image does not carry `scripts/recovery`; a test holds the list to the module's own imports). It refuses before any connection what can be
 refused without one (an option it does not know, a setting or value outside the closed lists, an actor that is not one word, `training_use on`
-without `--owner-permission-ref`, a typed database that is not the configured one, a missing environment file or owner url) and names an
-administrator's login in `--actor` (the journal records the account's `usr_` identity, never the login). It stops no service: the worker must be
-**running**, because its sweep is what empties the backlog the tool counts. All commands run from the repository root, as the operator who keeps
+without `--owner-permission-ref`, a `MEMORY_SETTING_LOCK_TIMEOUT` that is not a duration, a typed database that is not the configured one, a
+missing environment file or owner url) and names an
+administrator's login in `--actor` (the journal records the account's `usr_` identity, never the login). It reads the module's `show --json` (one line, `memory_setting.SHOW_JSON_KEYS`) and nothing else of its
+output, decides the "nothing to do" and the read-back from it and prints the screen below from the same line (`D-517`). It stops no service: the
+worker must be **running**, because its sweep is what empties the backlog the tool counts. All commands run from the repository root, as the operator who keeps
 the release record:
 
 1. **Look.**
@@ -2319,9 +2324,10 @@ the release record:
 **What it says when it stops (exit `3`, nothing changed; `4` is a failure, see below).** The tool's own words are printed first, then the
 script's line `the change was refused (reason above)`. `N accept/reject decision(s) of the ledger are not captured by the decision
 memory yet ... There is no override.`: step 1 above. `could not lock within 15s`: a decision was being written (the tool holds the ledger
-still for the count and the write, so a decision cannot slip between them); run it again in a moment, or set
-`MEMORY_SETTING_LOCK_TIMEOUT` (default `15s`; the tool reads `MEMORY_SETTING_LOCK_TIMEOUT`, which the script does not pass to the container, so the
-default is what applies). `the database is at migration X, the tool was written for Y`: the tool is older than the schema; use the tool of the
+still for the count and the write, so a decision cannot slip between them); run it again in a moment, or wait longer by
+setting `MEMORY_SETTING_LOCK_TIMEOUT` in the environment of the command (`MEMORY_SETTING_LOCK_TIMEOUT=60s infra/deploy/memory-setting.sh ...`;
+default `15s`; the script hands the variable to the one-off container, and refuses before any connection a value that is not a positive number of
+`ms`, `s` or `min`, `D-515`). `the database is at migration X, the tool was written for Y`: the tool is older than the schema; use the tool of the
 tree that is deployed. `what was retyped is not the new value`: nothing was written; run it again and type the value. Exit `4`
 (`the change failed`) means the connection or the container failed; the write is one transaction, so the settings in force say whether it was
 made: run `show`.
@@ -2334,7 +2340,7 @@ repeat step 1 to 3 after it, before real data. It is not one of the copy key's f
 an administrator.
 
 **What has and has not been run (`D-511`).** The script's guards, order and exit codes are shown by `tests/integration/composition/
-test_memory_setting_script.py` (sixteen marked guards, each shown failing, with a stub in place of `docker`), and the script is run against a
+test_memory_setting_script.py` (every marked guard shown failing, with a stub in place of `docker`), and the script is run against a
 real PostgreSQL, the real ledger and the real sweep, with the module executed in a sandbox that holds only the five mounted files, by
 `tests/integration/recovery/test_memory_ops_wrappers.py`. What neither has run is the real `docker compose run` with the production `api` image
 (the flags, `/app/src` in the image, the operator's uid reading the mounts): that is first exercised by the rehearsal on a restored copy
@@ -2387,7 +2393,9 @@ refused: identities only.
    Expected: three lines (`instance`, `database`, `bucket`), then the plan: the cases (and how many were forgotten already and are
    skipped), the rows to delete by table, the crop Blobs only these cases reference (they go) and those another case, a document or the norm
    corpus also references (they stay), the object keys, then `cases: <n>`, `plan-sha256: <64 hex>`, and the script's closing text
-   `dry run. NOTHING ABOVE WAS CHANGED` with the options an apply needs. Exit 0. A selection with nothing left to forget says `nothing to do`
+   `dry run. NOTHING ABOVE WAS CHANGED` with the options an apply needs. Between the plan's tables and that line is the lock-table statement
+   (below, "Large selections"): the advisory locks the selection needs, the server's lock table size, and a `WARNING` above 80 % of it. Exit 0.
+   A selection with nothing left to forget says `nothing to do`
    (exit 0). A case that is not in this memory is a refusal (exit 3).
 2. **Show the plan to the owner**, get the permission for **that** plan, and record its `plan-sha256` with the permission. A plan is the memory
    as it is now: a case captured after the dry run changes the digest.
@@ -2445,7 +2453,7 @@ refused: identities only.
 | `REFUSED: [migrator_url_unset]` (3) | `alpha.env` has no owner url | section 16 |
 | `REFUSED: the plan the memory has now is not the plan you approved` (3) | the memory changed after the dry run | read the new plan; get the owner's permission for it; run again with its digest |
 | `REFUSED: what was retyped is not the number of cases and the plan above` (3) | a wrong or missing answer | nothing changed; run again and type both |
-| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-services`; then look for another writer (a second operator session, a restore) |
+| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-services`; then look for another writer (a second operator session, a restore); to wait longer than `15s` set `MEMORY_FORGET_LOCK_TIMEOUT` (for example `60s`; the script hands it to the container and refuses a value that is not a positive number of `ms`, `s` or `min`) |
 | tool: `another forget holds the lock` (3) | a second forget is running | wait for it to finish |
 | tool: `the lock table ran out` (3) | the selection is too large for one transaction | see "Large selections" below |
 | tool: `Blob row(s) are in erasure_pending` (3) | an earlier erase or forget committed and did not finish | find its id in the event that began it (`erasure.requested` for a project erase, `memory.forget_requested` for a forget) and finish that one with `--resume` (a forget: this script; an erase: `erase-project.sh`) |
@@ -2472,17 +2480,40 @@ and there are two ways out: split the selection (one project at a time with `--o
 the message names), or raise `max_locks_per_transaction` in the server's configuration and restart it (`compose.server.yml` sets no `command:`
 for `postgres` today, so that is a change to the compose file, the owner's). A forget of thousands of cases holds a large part of the shared
 table until it commits, and a statement of any other session that needs a lock while the table is full fails with `out of shared memory`:
-this is one more reason `api` and `worker` are stopped for the run. The dry run does not say how near a selection is to the limit; the
-operator who knows the memory holds more than a few thousand cases reads this paragraph first (`D-516`).
+this is one more reason `api` and `worker` are stopped for the run.
+
+**The dry run says how near the selection is** (`D-516`): after the table of Blobs it prints
+
+```
+-- advisory locks (the apply holds them until it commits) --
+  needed: <cases + 1> (<cases> cases, one lock each, and one that says a forget is running)
+  server lock table: max_locks_per_transaction 64 x (max_connections 100 + max_prepared_transactions 0) = 6400 slots, shared by every session
+```
+
+read from the server's own settings, and, when the need is above **80 %** of that documented size, a `WARNING` line with the percentage. The
+documented size is the cautious figure (PostgreSQL rounds the table up; about twice fitted on the defaults), so a warning is not a prediction
+that the apply will be refused: it is the moment to split the selection or to raise the setting *before* the apply, with the owner's
+permission for the plan still being asked for. These lines are not part of the plan and not part of its digest. With the production compose's
+defaults the warning starts above 5119 cases and the measured refusal at about 13000.
+
+**What raising the setting costs, measured** (`D-516`; the production `postgres` image, every other setting at its default, `show
+shared_memory_size`, 2026-11-10, `.local/evidence/lane-ops-polish/shmem-measure.txt`): 143 MB at `max_locks_per_transaction = 64`, 146 MB at 128,
+152 MB at 256 and 164 MB at 512, so 256 (a documented table of 25600 slots, four times today's) costs about 9 MB of shared memory. The compose
+file is left as it is: nothing needs the room yet, and the value is set with `command: ["postgres", "-c", "max_locks_per_transaction=256"]` on the
+`postgres` service, a deploy-config change that restarts `postgres` on the next deploy and is the owner's. Do it before a forget the dry run
+warns about, not after a refusal.
 
 ### What the script's guards are
 
-Twenty-four marked guards, each shown failing by `tests/integration/composition/test_memory_forget_script.py`: the option shapes
+Every guard of the script is a block between `# >>> guard: <name>` and `# <<< guard: <name>` markers, each shown failing by
+`tests/integration/composition/test_memory_forget_script.py`; the names below are held to the script's markers by
+`test_the_runbook_names_every_guard_of_the_script` in the same file, and no count is written here (`D-513`). The option shapes
 (`known-options`, `one-mode`, `stop-services-needs-a-write-mode`, `options-match-the-mode`, `names-required`, `one-selector`,
-`selector-identity-shape`, `forget-identity-shape`, `actor-required`, `reason-closed-list`, `owner-permission-ref`, `plan-digest-shape`), the
-instance (`env-file-present`, `instance-configured`, `migrator-url-configured`, `database-matches`, `bucket-matches`,
+`selector-identity-shape`, `forget-identity-shape`, `actor-required`, `reason-closed-list`, `owner-permission-ref`, `plan-digest-shape`,
+`lock-timeout-shape`), the instance (`env-file-present`, `instance-configured`, `migrator-url-configured`, `database-matches`, `bucket-matches`,
 `compose-file-present`, `modules-present`, `dump-dir-writable`), and the sequence (`preflight-ran`, `plan-approved`,
-`retyped-confirmation`, `manifest-verified`). The tool behind it has 33 more, shown failing by `tests/integration/recovery/test_memory_forget.py`.
+`retyped-confirmation`, `manifest-verified`). The tool behind it carries its own marked guards, shown failing by
+`tests/integration/recovery/test_memory_forget.py`.
 The five mounted files (`memory_forget`, `project_erase`, `product_purge`, `schema_coverage`, `blob_reference_audit`) are held to the
 module's own imports by a test, and the closure is shown to be the whole of it by running the module in a sandbox that holds only them
 (`tests/integration/recovery/test_memory_ops_wrappers.py`).

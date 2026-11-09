@@ -36,10 +36,12 @@
 
 import type { DataTag } from '@tanstack/react-query';
 
+import type { ListDecisionMemoryCasesInput } from './generated/operations.gen';
 import type {
   ArV3RunGroupId,
   AssignmentStatus,
   AssignmentUid,
+  DecisionMemoryCaseId,
   DocumentUid,
   PriceListId,
   FindingCategory,
@@ -114,6 +116,9 @@ export interface DecisionJournalFilters {
   readonly cursor?: string;
   readonly limit?: number;
 }
+
+/** Filters that make a page of `listDecisionMemoryCases` a distinct cache entry (`D-495`); absent is «все». */
+export type DecisionMemoryListFilters = NonNullable<ListDecisionMemoryCasesInput['query']>;
 
 /** Filters that make a page of `listUsers` a distinct cache entry. */
 export interface UserListFilters {
@@ -533,6 +538,15 @@ export const queryKeys = {
     /** `D-317`: one page of the knowledge base's «Все» (`listKnowledgeBaseEntries`), both journals merged, by its filters. */
     knowledgeBase: (filters: { readonly project_uid?: string; readonly cursor?: string; readonly limit?: number } = {}) =>
       ['findings', 'knowledge-base', filters] as const,
+    /**
+     * `D-495`: the decision memory's three reads, under `findings` for the reason `journal` is (a decision taken
+     * is a case captured). A page of `listDecisionMemoryCases` by its filters (`origin_project_uid` is the screen's
+     * `?project=`); one case (`getDecisionMemoryCase`); the administrator's counts and settings
+     * (`getDecisionMemoryStatus`). A withdraw or a restore invalidates the three by their prefix.
+     */
+    memoryCases: (filters: DecisionMemoryListFilters = {}) => ['findings', 'memory-cases', filters] as const,
+    memoryCase: (caseId: DecisionMemoryCaseId) => ['findings', 'memory-case', caseId] as const,
+    memoryStatus: () => ['findings', 'memory-status'] as const,
   },
   /**
    * `getDashboardSummary`. `W46-WIRE`.
