@@ -8,16 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import {
-  MENU_GROUPS,
-  MENU_GROUP_LABELS,
-  MenuAddressError,
-  buildNavigation,
-  currentScreen,
-  projectEntryItem,
-  projectEntryOf,
-  withProjectEntry,
-} from '@/_app/navigation';
+import { MENU_GROUPS, MENU_GROUP_LABELS, MenuAddressError, buildNavigation, currentScreen } from '@/_app/navigation';
 import type { Navigation } from '@/_app/navigation';
 import { FrameNavigationView } from '@/_app/frame-navigation';
 import { NAVIGATION_GLYPH_LABELS, NavigationGlyph } from '@/_app/navigation-glyph';
@@ -35,8 +26,6 @@ import {
   UNKNOWN_ROLE,
 } from './subjects';
 
-/** `R-150w`: a role that opens the queue's neighbours but not every screen; it holds a role, so it opens both project screens. */
-const VIEWER = { ...EXPERT, roles: ['viewer'] };
 
 /** The menu as plain text: `Группа: пункт, пункт`. The brand links home separately. */
 function outline(navigation: Navigation): string[] {
@@ -49,7 +38,7 @@ function outline(navigation: Navigation): string[] {
  * `R-66` with the two comparison modules added in their menu order, written independently of the
  * registry — and without «Проекты», which `R-150b` moved out of the menu rows into the project selector
  * of the top strip. `R-153h` brings «Проект» / «Проекты» back as the first item of «Работа», but not as a
- * row: it is the navigation's `projectEntry`, tested below, so `buildNavigation`'s groups stay as they were.
+ * row: it is the navigation's `projectEntry`, tested in `project-entry.test.ts`, so `buildNavigation`'s groups stay as they were.
  */
 const R66 = [
   // `R-152a`: «График работ» after «Диспетчер», as in the original's menu (expert and admin).
