@@ -209,9 +209,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.chipTook {
-  font-family: var(--am-font-mono);
-}
+/* The time a chip took is body text like the state beside it; tabular figures (above) keep the digits aligned without a second face. */
 
 /* ---- the live line of an open run (`UI-A-65`) --------------------------------------------------- */
 
