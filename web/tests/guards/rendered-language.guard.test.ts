@@ -4322,19 +4322,6 @@ const TRANSLATED_SCHEMAS = [
   'ExecutorIdentityBasis',
   'ExecutorRateCheck',
   'ExecutorWorkKind',
-  // `HOSTS-SEAL-1` (ADR-0028): «Исполнители» and «Модели по этапам» say the state of a server, a model and a provider's login, the
-  // access, the effort and the row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. `review`,
-  // `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid` and `online` are plain English words and must not be permitted bare.
-  'StageRowKey',
-  'StageCellRole',
-  'StageModelKit',
-  'ModelEffort',
-  'ExecutorModelAccess',
-  'ProviderAuthState',
-  'ModelProbeState',
-  'ExecutorHostState',
-  'ModelUnavailableReason',
-  'RunStartRoute',
   // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
   // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
   // `queued`, `running`, `stale`, `failed`, `done`), which must not be permitted bare. `ComparisonLayer` and `ComparisonChannelState`
@@ -4396,7 +4383,7 @@ const TRANSLATED_SCHEMAS = [
 function translatedVocabulary(): ReadonlySet<string> {
   const openapi = readJson<OpenApi>(CONTRACT_PATH);
   const values = new Set<string>();
-  for (const name of TRANSLATED_SCHEMAS) {
+  for (const name of [...TRANSLATED_SCHEMAS, ...RESERVED_TRANSLATED_SCHEMAS]) {
     const schema = openapi.components.schemas[name];
     if (schema === undefined) {
       throw new Error(
@@ -4408,6 +4395,29 @@ function translatedVocabulary(): ReadonlySet<string> {
   }
   return values;
 }
+
+/**
+ * `HOSTS-SEAL-1` (ADR-0028, contract 1.45.0): enumerations of the servers and the stage layout that no screen renders yet.
+ *
+ * «Исполнители» and «Модели по этапам» will say the state of a server, a model and a provider's login, the access, the effort and the
+ * row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. Several of those values are plain English
+ * words (`review`, `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid`, `online`). They leave the permitted vocabulary NOW, so the
+ * guard keeps reddening `review` as it did before the contract carried it as a bare value (`StageRowKey`), but they are not yet
+ * `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries, and none does. `HOSTS-WEB-01` moves each
+ * schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empties this list.
+ */
+const RESERVED_TRANSLATED_SCHEMAS = [
+  'StageRowKey',
+  'StageCellRole',
+  'StageModelKit',
+  'ModelEffort',
+  'ExecutorModelAccess',
+  'ProviderAuthState',
+  'ModelProbeState',
+  'ExecutorHostState',
+  'ModelUnavailableReason',
+  'RunStartRoute',
+] as const;
 
 const TRANSLATED = translatedVocabulary();
 
