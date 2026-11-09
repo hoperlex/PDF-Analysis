@@ -4535,6 +4535,20 @@ const TRANSLATED_SCHEMAS = [
   'ExecutorIdentityBasis',
   'ExecutorRateCheck',
   'ExecutorWorkKind',
+  // `HOSTS-SEAL-1` (ADR-0028): «Исполнители» and «Модели по этапам» say the state of a server, a model and a provider's login, the
+  // access, the effort and the row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. `review`,
+  // `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid` and `online` are plain English words and must not be permitted bare.
+  // `HOSTS-WEB-01` renders them (the markers are in `SCHEMA_MARKERS` below; `ModelProbeState` and `RunStartRoute` wait in `NOT_YET_ON_A_SCREEN`).
+  'StageRowKey',
+  'StageCellRole',
+  'StageModelKit',
+  'ModelEffort',
+  'ExecutorModelAccess',
+  'ProviderAuthState',
+  'ModelProbeState',
+  'ExecutorHostState',
+  'ModelUnavailableReason',
+  'RunStartRoute',
   // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
   // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
   // `queued`, `running`, `stale`, `failed`, `done`), which must not be permitted bare. `ComparisonLayer` and `ComparisonChannelState`
@@ -4610,26 +4624,13 @@ function translatedVocabulary(): ReadonlySet<string> {
 }
 
 /**
- * `HOSTS-SEAL-1` (ADR-0028, contract 1.45.0): enumerations of the servers and the stage layout that no screen renders yet.
+ * Enumerations that no screen renders yet (`HOSTS-SEAL-1` reserved ten, `HOSTS-WEB-01` rendered them and moved them into `TRANSLATED_SCHEMAS`).
  *
- * «Исполнители» and «Модели по этапам» will say the state of a server, a model and a provider's login, the access, the effort and the
- * row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. Several of those values are plain English
- * words (`review`, `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid`, `online`). They leave the permitted vocabulary NOW, so the
- * guard keeps reddening `review` as it did before the contract carried it as a bare value (`StageRowKey`), but they are not yet
- * `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries, and none does. `HOSTS-WEB-01` and `RUN-SCREEN-01` move each
- * schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empty this list.
+ * They leave the permitted vocabulary NOW, so the guard keeps reddening a plain English word of the contract (`review`, `text`, `done`) as it did
+ * before the contract carried it, but they are not yet `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries,
+ * and none does. `RUN-SCREEN-01` moves each schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empties this list.
  */
 const RESERVED_TRANSLATED_SCHEMAS = [
-  'StageRowKey',
-  'StageCellRole',
-  'StageModelKit',
-  'ModelEffort',
-  'ExecutorModelAccess',
-  'ProviderAuthState',
-  'ModelProbeState',
-  'ExecutorHostState',
-  'ModelUnavailableReason',
-  'RunStartRoute',
   // `HOSTS-SEAL-2` (contract 1.46.0): the window «Этапы анализа раздела» will say a chip, its state and where its plan comes from in Russian, with the
   // contract value in a `data-` attribute (`RUN-SCREEN-01`). `text`, `blocks`, `merge`, `norms`, `review`, `done` and `preparation` are plain English words.
   'RunStageChip',
