@@ -1,4 +1,4 @@
-"""The expert decision memory (`DECISION-MEMORY-01` phase M2, contract 1.44.0): five operations.
+"""The expert decision memory (`DECISION-MEMORY-01` phase M2, contract 1.44.0): five routes.
 
 * ``listDecisionMemoryCases`` -- ``GET /decision-memory/cases`` (``expert`` or ``admin``): the cases, newest capture first, filtered by
   section, category, the verdict of the latest decision, standing, data class and the project they came from.

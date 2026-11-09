@@ -977,6 +977,7 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 #: rather than a drift nobody notices. Moves on a reseal that adds or removes every
 #: parameter, header and body an operation takes.
 INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
+    # `DECISION-MEMORY-M2` (1.44.0) adds ``getDecisionMemoryStatus``: the counts and the settings take no input.
     # `W59-ANALYSIS-SETTINGS-01` adds ``listAnalysisProfiles``: the registry takes no input.
     # `EXEC-SEAL-01` adds the two executor lists: a connection list and a route list take no input.
     # `AR-V3-BETA-PACK-STATUS-API-01` adds ``getArV3BetaPackStatus``: it reads the server's own
@@ -993,7 +994,7 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
      "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
      "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue",
      "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting",
-     "getExecutionDispatch"}
+     "getExecutionDispatch", "getDecisionMemoryStatus"}
 )
 
 
