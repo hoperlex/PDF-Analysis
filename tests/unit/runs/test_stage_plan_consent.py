@@ -67,6 +67,14 @@ def draft(served: dict[str, ModelAvailability] | None = None, kit: str = "claude
     return StagePlanDraft(REVISION, kit, cells, served)
 
 
+def single_blocks_draft(kit: str = "claude_only") -> StagePlanDraft:
+    """The set with one model on the blocks row (gpt-6-astra, the single scheme the original allows): one call per batch, as before the
+    ensemble. What the legacy estimate prices."""
+    base = draft(kit=kit)
+    cells = tuple(c for c in base.cells if c.row != "blocks") + (layout.CellSettings("blocks:main", "gpt-6-astra", "medium", 6000, 1800),)
+    return replace(base, cells=tuple(sorted(cells, key=layout._position)), availability={**base.availability, "gpt-6-astra": SUBSCRIPTION})
+
+
 def with_limits(base: StagePlanDraft, **limits: int) -> StagePlanDraft:
     return replace(base, cells=tuple(replace(c, max_output_tokens=limits.get(c.row, c.max_output_tokens)) for c in base.cells))
 
@@ -100,7 +108,7 @@ def test_with_todays_constants_the_plan_prices_the_same_work_as_the_legacy_estim
     monkeypatch.setenv(PLAN_ENV, plan_env)
     policy = service(registry)
     Preflight.version = source_version(section, count, pages)
-    legacy, planned = estimate(policy, None), estimate(policy, draft())
+    legacy, planned = estimate(policy, None), estimate(policy, single_blocks_draft())
     # One difference, by design: the parameter passport's calls carry the cross-check cell's answer limit (6000) and not the consented
     # policy's 8000, so the plan prices what the request will carry. Everything else is the legacy estimate's, call for call.
     parameters = project_parameters_policy(section, full_coverage=True, candidate_refusals=True)
@@ -111,6 +119,33 @@ def test_with_todays_constants_the_plan_prices_the_same_work_as_the_legacy_estim
     lines = planned.as_dict()["models"]
     assert {line["model_id"] for line in lines} == set(planned.stage_plan.models)
     assert (sum(l["calls"] for l in lines), sum(l["input_tokens"] for l in lines), sum(l["output_tokens"] for l in lines)) == totals(planned)
+
+
+@pytest.mark.parametrize("plan_env", ["v3", "v2"])
+def test_an_ensemble_prices_every_block_batch_once_per_leg_and_once_for_the_judge(registry, monkeypatch, plan_env):
+    """The estimate counts the base batches times the cells of the blocks row, and the consent digest holds that count."""
+    monkeypatch.setenv(PLAN_ENV, plan_env)
+    policy = service(registry)
+    single = estimate(policy, single_blocks_draft())
+    claude, codex = estimate(policy, draft()), estimate(policy, draft(kit="codex_only"))
+    lines = lambda value: {line["model_id"]: (line["calls"], line["input_tokens"], line["output_tokens"]) for line in value.as_dict()["models"]}
+    base = lines(single)["gpt-6-astra"]                         # the blocks row alone: every batch once
+    assert base[0] > 0
+    assert totals(claude)[0] == totals(single)[0] + base[0], "one leg and a judge: the batches twice"
+    assert totals(codex)[0] == totals(single)[0] + 2 * base[0], "two legs and a judge: the batches three times"
+    # the leg is the blocks row's own work at its own limit; the judge is the same work again, on the judge's model
+    assert lines(claude)[OPUS] == base
+    sonnet = tuple(a - b for a, b in zip(lines(claude)[SONNET], lines(single)[SONNET]))
+    assert sonnet == base, "the judge's calls, input and answer tokens"
+    # a judge with another answer limit moves the estimate by exactly that
+    wide = estimate(policy, replace(draft(), cells=tuple(replace(c, max_output_tokens=12_000) if c.cell_key == "blocks:judge" else c
+                                                          for c in draft().cells)))
+    assert wide.as_dict()["output_tokens"] - claude.as_dict()["output_tokens"] > 0
+    assert len({single.estimate_digest, claude.estimate_digest, codex.estimate_digest, wide.estimate_digest}) == 4, \
+        "the number of calls and the plan are in the digest the person confirms"
+    assert {line["model_id"] for line in codex.as_dict()["models"]} == {"gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol"}
+    approved = claude.approve(confirm(claude, 0), actor_user_uid="usr_01M2545JSD15ETSNNV904X991J")
+    assert set(approved["models"]) == {SONNET, OPUS} and approved["stage_plan_digest"] == claude.stage_plan.digest
 
 
 def test_the_rows_a_run_calls_are_the_rows_of_its_plan(registry, monkeypatch):
@@ -384,8 +419,8 @@ def test_the_readiness_names_the_set_the_access_of_each_cell_and_the_digest_to_c
     parsed = models.RunStartReadiness.model_validate(answer)
     assert answer["route"] == "stage_plan" and answer["ready"] is True and answer["kit"] == "claude_only" and answer["access"] == "mixed"
     cells = {c["cell_key"]: c for c in answer["cells"]}
-    assert list(cells) == [f"{row}:main" for row in layout.STAGE_ROWS]
-    assert {k: c["access"] for k, c in cells.items()} == {k: ("api" if k == "blocks:main" else "subscription") for k in cells}
+    assert list(cells) == [c.cell_key for c in layout.preset_cells("claude_only")]
+    assert {k: c["access"] for k, c in cells.items()} == {k: ("api" if k == "blocks:leg1" else "subscription") for k in cells}
     assert all(c["available"] and c["reasons"] == [] for c in cells.values())
     value = estimate(policy, draft({SONNET: SUBSCRIPTION, OPUS: API_ONLY}))
     assert answer["estimate_digest"] == value.estimate_digest and answer["stage_plan_digest"] == value.stage_plan.digest
@@ -407,7 +442,7 @@ def test_a_cell_with_no_model_on_any_server_makes_the_start_not_ready_and_prices
     for key in ("estimate_digest", "stage_plan_digest", "estimated_cost_micros", "access"):
         assert key not in answer
     blocked = [c for c in answer["cells"] if not c["available"]]
-    assert [c["cell_key"] for c in blocked] == ["blocks:main"] and blocked[0]["reasons"] == ["host_offline"] and "access" not in blocked[0]
+    assert [c["cell_key"] for c in blocked] == ["blocks:leg1"] and blocked[0]["reasons"] == ["host_offline"] and "access" not in blocked[0]
     absent = start_readiness(policy, None, draft({SONNET: SUBSCRIPTION}), version_uid=VERSION)
     assert [c["reasons"] for c in absent["cells"] if not c["available"]] == [["not_on_any_server"]]
 
@@ -419,7 +454,7 @@ def test_a_row_the_run_will_not_call_does_not_block_it(registry, monkeypatch):
         replace(c, model_id="gpt-6-sol", effort="medium") if c.row in {"review", "correction"} else c for c in draft().cells)),
         version_uid=VERSION)
     assert answer["ready"] is True and [c["cell_key"] for c in answer["cells"]] == [
-        "text:main", "blocks:main", "cross_check:main", "norms:main"]
+        "text:main", "blocks:leg1", "blocks:judge", "cross_check:main", "norms:main"]
 
 
 def test_the_readiness_refuses_an_explicit_selector_under_the_layout(registry):

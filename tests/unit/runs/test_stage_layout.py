@@ -10,14 +10,18 @@ from auditmanager.analysis.public import CellSettings, accepted_reported, model_
 from auditmanager.runs import stage_layout as layout
 from auditmanager.shared.errors import DomainError, ErrorCode
 
+# The sets of ADR-0028 decision 12, cell by cell: row -> (role, model, effort) of each of its cells. The blocks row is an ensemble.
 CLAUDE = {
-    "text": ("claude-sonnet-5-5", "medium"), "blocks": ("claude-opus-5-5", "medium"),
-    "cross_check": ("claude-sonnet-5-5", "medium"), "norms": ("claude-sonnet-5-5", "medium"),
-    "review": ("claude-sonnet-5-5", "medium"), "correction": ("claude-sonnet-5-5", "medium"),
+    "text": [("main", "claude-sonnet-5-5", "medium")],
+    "blocks": [("leg1", "claude-opus-5-5", "medium"), ("judge", "claude-sonnet-5-5", "medium")],
+    "cross_check": [("main", "claude-sonnet-5-5", "medium")], "norms": [("main", "claude-sonnet-5-5", "medium")],
+    "review": [("main", "claude-sonnet-5-5", "medium")], "correction": [("main", "claude-sonnet-5-5", "medium")],
 }
 CODEX = {
-    "text": ("gpt-6.1-sol", "medium"), "blocks": ("gpt-6-astra", "medium"), "cross_check": ("gpt-6-sol", "medium"),
-    "norms": ("gpt-6-astra", "medium"), "review": ("gpt-6-sol", "medium"), "correction": ("gpt-6.1-sol", "medium"),
+    "text": [("main", "gpt-6.1-sol", "medium")],
+    "blocks": [("leg1", "gpt-6-astra", "medium"), ("leg2", "gpt-6-sol", "medium"), ("judge", "gpt-6.1-sol", "medium")],
+    "cross_check": [("main", "gpt-6-sol", "medium")], "norms": [("main", "gpt-6-astra", "medium")],
+    "review": [("main", "gpt-6-sol", "medium")], "correction": [("main", "gpt-6.1-sol", "medium")],
 }
 
 
@@ -37,7 +41,7 @@ def test_the_rows_are_the_six_in_order():
 def test_a_set_is_the_adr_table_cell_by_cell(kit, table):
     cells = layout.preset_cells(kit)
     assert [(c.cell_key, c.model_id, c.effort) for c in cells] == [
-        (f"{row}:main", *table[row]) for row in layout.STAGE_ROWS]
+        (f"{row}:{role}", model, effort) for row in layout.STAGE_ROWS for role, model, effort in table[row]]
     assert layout.kit_of(cells) == kit
     layout.require_valid_layout(kit, cells)
 
@@ -49,9 +53,9 @@ def test_the_default_limits_are_the_code_constants():
     assert {c.timeout_seconds for c in cells.values()} == {1800}
 
 
-def test_the_claude_set_is_named_without_a_judge_until_the_ensemble_lands():
-    assert layout.BLOCKS_ENSEMBLE_LANDED is False
-    assert layout.KIT_LABELS["claude_only"] == "Только Claude (блоки без судьи)"
+def test_the_claude_set_is_named_plainly_now_that_the_ensemble_has_landed():
+    assert layout.BLOCKS_ENSEMBLE_LANDED is True
+    assert layout.KIT_LABELS["claude_only"] == "Только Claude"
     assert layout.KIT_LABELS["codex_only"] == "Только Codex" and layout.KIT_LABELS["custom"] == "Свой набор"
 
 
@@ -65,7 +69,15 @@ def test_every_phase_has_one_row_and_one_label():
 
 
 def _edited(kit, row, **changes):
+    """The set with every cell of ``row`` changed (the blocks row of an ensemble has two or three)."""
     return tuple(replace(c, **changes) if c.row == row else c for c in layout.preset_cells(kit))
+
+
+def _blocks_as(kit, *cells):
+    """The set with its blocks cells replaced by ``cells`` (role, model, effort)."""
+    others = tuple(c for c in layout.preset_cells(kit) if c.row != "blocks")
+    return tuple(sorted(others + tuple(CellSettings(f"blocks:{role}", model, effort, 6000, 1800) for role, model, effort in cells),
+                        key=layout._position))
 
 
 @pytest.mark.parametrize("row,changes,constraint", [
@@ -73,7 +85,7 @@ def _edited(kit, row, **changes):
     ("text", {"model_id": "claude-sonnet-5"}, "model_not_in_catalogue"),      # an older pin, never offered
     ("text", {"effort": "xhigh"}, "effort_not_offered_for_model"),
     ("text", {"effort": "max"}, "effort_not_offered_for_model"),
-    ("blocks", {"effort": "low"}, "effort_not_offered_for_model"),             # Opus low
+    ("blocks", {"effort": "low"}, "effort_not_offered_for_model"),             # Opus low (the leg of the Claude ensemble)
     ("norms", {"effort": "ultra"}, "effort_not_offered_for_model"),
     ("text", {"max_output_tokens": 0}, "limit_out_of_range"),
     ("text", {"max_output_tokens": 65537}, "limit_out_of_range"),
@@ -88,19 +100,44 @@ def test_opus_low_is_refused_but_sonnet_low_is_not():
 
 
 def test_the_blocks_row_is_a_listed_scheme_only():
-    # A single Sonnet on the blocks is not offered, even in a custom set; the Astra single is.
+    # A single Claude on the blocks is never offered, even in a custom set; the Astra single is, as the original allows it.
+    for model in ("claude-sonnet-5-5", "claude-opus-5-5"):
+        _refused("block_scheme_not_listed", layout.validate_cells, _blocks_as("claude_only", ("main", model, "medium")))
+    _refused("block_scheme_not_listed", layout.validate_cells, _blocks_as("claude_only", ("main", "gpt-6-sol", "medium")))
+    assert [c.cell_key for c in layout.validate_cells(_blocks_as("claude_only", ("main", "gpt-6-astra", "medium")))] == [
+        "text:main", "blocks:main", "cross_check:main", "norms:main", "review:main", "correction:main"]
+    # the legs and the judge are not edited one by one: every scheme is whole, in its models and its efforts
     _refused("block_scheme_not_listed", layout.validate_cells, _edited("claude_only", "blocks", model_id="claude-sonnet-5-5"))
-    _refused("block_scheme_not_listed", layout.validate_cells, _edited("claude_only", "blocks", model_id="gpt-6-sol"))
-    layout.validate_cells(_edited("claude_only", "blocks", model_id="gpt-6-astra"))
+    _refused("block_scheme_not_listed", layout.validate_cells, _blocks_as(
+        "claude_only", ("leg1", "claude-opus-5-5", "medium"), ("judge", "claude-sonnet-5-5", "high")))
+    _refused("block_scheme_not_listed", layout.validate_cells, _blocks_as("claude_only", ("leg1", "claude-opus-5-5", "medium")))
+    _refused("block_scheme_not_listed", layout.validate_cells, _blocks_as(
+        "claude_only", ("leg1", "claude-opus-5-5", "medium"), ("leg2", "claude-opus-5-5", "medium"), ("judge", "claude-sonnet-5-5", "medium")))
+    _refused("block_scheme_not_listed", layout.validate_cells, _blocks_as(
+        "codex_only", ("leg1", "gpt-6-sol", "medium"), ("leg2", "gpt-6-astra", "medium"), ("judge", "gpt-6.1-sol", "medium")))   # legs swapped
+    _refused("block_scheme_not_listed", layout.validate_cells, _blocks_as(
+        "codex_only", ("main", "gpt-6-astra", "medium"), ("judge", "gpt-6.1-sol", "medium")))
+    # the same cells given in another order are the same scheme
+    shuffled = tuple(reversed(layout.preset_cells("codex_only")))
+    assert [c.cell_key for c in layout.validate_cells(shuffled) if c.row == "blocks"] == ["blocks:leg1", "blocks:leg2", "blocks:judge"]
+    assert layout.kit_of(shuffled) == "codex_only"
+    for kit in ("claude_only", "codex_only"):        # both ensembles of the sets are on the list
+        layout.require_valid_layout(kit, layout.preset_cells(kit))
 
 
-def test_the_cells_are_exactly_the_six_main_cells():
+def test_the_cells_are_the_main_cell_of_each_row_and_the_cells_of_one_blocks_scheme():
     cells = layout.preset_cells("claude_only")
-    _refused("cell_missing", layout.validate_cells, cells[:-1])
+    _refused("cell_missing", layout.validate_cells, tuple(c for c in cells if c.row != "norms"))
+    _refused("cell_missing", layout.validate_cells, tuple(c for c in cells if c.row != "blocks"))
     _refused("cell_repeated", layout.validate_cells, cells + (cells[0],))
+    _refused("cell_repeated", layout.validate_cells, cells + (cells[1],))
     _refused("unknown_cell", layout.validate_cells, cells + (CellSettings("nothing:main", "claude-sonnet-5-5", "low", 1, 1),))
-    _refused("role_not_offered", layout.validate_cells,
-             cells + (CellSettings("blocks:judge", "claude-sonnet-5-5", "medium", 6000, 1800),))
+    _refused("unknown_cell", layout.validate_cells, cells + (CellSettings("blocks:third", "claude-sonnet-5-5", "low", 1, 1),))
+    # only the blocks row has legs and a judge; every other row is one `main` cell
+    for role in ("judge", "leg1", "leg2"):
+        _refused("role_not_offered", layout.validate_cells, cells + (CellSettings(f"text:{role}", "claude-sonnet-5-5", "medium", 6000, 1800),))
+    _refused("block_scheme_not_listed", layout.validate_cells,
+             cells + (CellSettings("blocks:main", "gpt-6-astra", "medium", 6000, 1800),))
 
 
 def test_a_named_kit_must_match_its_table_and_anything_else_is_custom():
@@ -125,7 +162,7 @@ def test_the_plan_round_trips_and_its_digest_follows_every_cell():
     other = layout.FrozenStagePlan(plan.layout_revision_id, plan.kit, tuple(
         replace(c, effort="high") if c.row == "text" else c for c in plan.cells))
     assert other.digest != plan.digest
-    assert plan.models == ("claude-sonnet-5-5", "claude-opus-5-5")
+    assert plan.models == ("claude-sonnet-5-5", "claude-opus-5-5")        # the judge is Sonnet too: three cells' worth of models is two
     assert plan.access == "subscription"
 
 
@@ -189,9 +226,10 @@ def test_a_plan_cell_carries_exactly_the_keys_the_readers_take_and_the_stage_key
     assert {tuple(sorted(cell)) for cell in document["cells"]} == {
         ("access", "cell_key", "effort", "max_output_tokens", "model_id", "timeout_seconds")}
     seen = _plan_cells(document)       # the reader of `getRunStages` accepts it and reads every field
-    assert sorted(cell["cell_key"] for views in seen.values() for cell in views) == sorted(f"{row}:main" for row in layout.STAGE_ROWS)
+    assert sorted(cell["cell_key"] for views in seen.values() for cell in views) == sorted(c.cell_key for c in layout.preset_cells("claude_only"))
+    assert [cell["cell_key"] for cell in seen["blocks"]] == ["blocks:leg1", "blocks:judge"], "a chip lists its cells in role order"
     for views in seen.values():
         for view in views:
             assert {"model_id", "effort", "max_output_tokens", "timeout_seconds", "access"} <= set(view)
-    for row in layout.STAGE_ROWS:
-        assert CallBinding(expected_model="m", check_identity=True, cell_key=f"{row}:main", access="api").stage_key == row
+    for cell in layout.preset_cells("codex_only"):
+        assert CallBinding(expected_model="m", check_identity=True, cell_key=cell.cell_key, access="api").stage_key == cell.row

@@ -385,6 +385,10 @@ def _build_items(
     for work_kind in WORK_KINDS:
         route = routes.get(work_kind)
         connection = None if route is None else connections.get(route.primary_connection_id)
+        if connection is not None and connection.system_managed:
+            # `HOSTS-BACKEND-01`: the stand's own system connections are never a cut-over candidate. No route can name one (``set_route`` refuses it);
+            # this is the guard, and such a route is read as no route.
+            route = connection = None
         revision = None if route is None else revisions.get(route.primary_connection_id)
         served = connection is not None and revision is not None and is_served(connection, revision)
         item = classify_route(work_kind, route, connection, revision, served=served)

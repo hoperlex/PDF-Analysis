@@ -499,6 +499,30 @@ def build_extended_request_v3(**kwargs):
 __all__.append("build_extended_request_v3")
 
 
+def build_block_judge_request(**kwargs):
+    """`HOSTS-ENSEMBLE-01`: the judge's request for one block batch of the blocks ensemble."""
+    from auditmanager.analysis.extended.block_ensemble import build_block_judge_request as build
+    return build(**kwargs)
+
+
+def parse_block_judge_reply(*args, **kwargs):
+    from auditmanager.analysis.extended.block_ensemble import parse_block_judge_reply as parse
+    return parse(*args, **kwargs)
+
+
+def reconcile_block_batch(**kwargs):
+    from auditmanager.analysis.extended.block_ensemble import reconcile_block_batch as reconcile
+    return reconcile(**kwargs)
+
+
+def block_leg_refs(legs):
+    from auditmanager.analysis.extended.block_ensemble import leg_refs
+    return leg_refs(legs)
+
+
+__all__.extend(["build_block_judge_request", "parse_block_judge_reply", "reconcile_block_batch", "block_leg_refs"])
+
+
 def empty_native_text_observations(**kwargs):
     from auditmanager.analysis.text.artifact import empty_native_text_observations as empty
     return empty(**kwargs)

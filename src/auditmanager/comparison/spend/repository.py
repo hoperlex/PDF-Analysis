@@ -40,7 +40,9 @@ __all__ = ["ACTIVE_JOB_STATES", "ComparisonSpendRepository", "CONNECTION_LOCK_KE
 
 #: The key of the advisory lock a connection's single user is decided under: the one ``jobs``
 #: takes for a Run's claim (``jobs.repository._LOCK_CONNECTION``). A comparison call takes the same
-#: lock, so a Run's claim and a comparison call cannot both pass their check at once.
+#: lock, so a Run's claim and a comparison call cannot both pass their check at once. `HOSTS-BACKEND-01` (ADR-0028 decision 4): the key
+#: is the connection's ``capacity_pool`` when it has one (a system connection of a host: ``<host_id>:<provider>``), its own id otherwise,
+#: so a call on a pooled connection and a planned Run's claim or cell binding in that pool take one lock.
 CONNECTION_LOCK_KEY: Final[str] = "auditmanager.executor_connection|"
 #: The installation-wide lock the ceilings are decided under, so two workers cannot both fit one more
 #: call under a ceiling that only one of them fits.
@@ -133,8 +135,12 @@ _CONNECTION_OF = text(
     "SELECT connection_id FROM executor_connection_revision WHERE revision_id = :revision_id"
 )
 _LOCK_CONNECTION = text(
-    f"SELECT pg_advisory_xact_lock(hashtextextended('{CONNECTION_LOCK_KEY}' || :connection_id, 0))"
+    f"SELECT pg_advisory_xact_lock(hashtextextended('{CONNECTION_LOCK_KEY}' || "
+    "COALESCE((SELECT capacity_pool FROM executor_connection WHERE connection_id = :connection_id), :connection_id), 0))"
 )
+#: The same lock taken from a pool, spelled as ``jobs.repository._LOCK_POOL`` spells it (a test holds the two equal).
+_LOCK_POOL = text(f"SELECT pg_advisory_xact_lock(hashtextextended('{CONNECTION_LOCK_KEY}' || :pool, 0))")
+_POOL_OF = text("SELECT capacity_pool FROM executor_connection WHERE connection_id = :connection_id")
 _LOCK_DAY = text(f"SELECT pg_advisory_xact_lock(hashtextextended('{DAY_LOCK_KEY}', 0))")
 #: `EXEC2-GROUP-CMP-01`. The group's row lock (the first lock of decision 14's order, the one a Run's claim takes before it
 #: and an administrator's revision takes) and, read under it, the persisted tie-break rotation of ``least_loaded``.
@@ -169,6 +175,35 @@ _CONNECTION_HAS_FREE_UNIT = text(
     "COALESCE((SELECT current_revision.max_active_runs FROM executor_connection_revision current_revision "
     "WHERE current_revision.connection_id = :connection_id "
     "ORDER BY current_revision.revision_no DESC LIMIT 1), 1)"
+)
+#: `HOSTS-BACKEND-01` (ADR-0028 decision 4). The same question for a **pooled** connection: the units in use in its pool -- the active Runs bound
+#: in it (by cell, or by the revision they froze) and the active comparison calls of every connection of the pool, each Run once however many cells
+#: it has there -- below the pool's slots. The mirror of ``executors.host_repository.POOL_UNITS`` and ``POOL_SLOTS`` and of the planned branch
+#: of ``jobs.repository._NEXT_JOB``; a test holds the three equal.
+_POOL_HAS_FREE_UNIT = text(
+    "WITH active AS (SELECT j.run_id, r.connection_revision_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
+    f"WHERE j.state IN {_ACTIVE_STATES_SQL}) "
+    "SELECT ((SELECT count(*) FROM ("
+    "SELECT a.run_id FROM active a JOIN audit_run_cell_binding b ON b.run_id = a.run_id "
+    "JOIN executor_connection_revision rev ON rev.revision_id = b.connection_revision_id "
+    "JOIN executor_connection c ON c.connection_id = rev.connection_id WHERE c.capacity_pool = :pool "
+    "UNION "
+    "SELECT a.run_id FROM active a JOIN executor_connection_revision rev ON rev.revision_id = a.connection_revision_id "
+    "JOIN executor_connection c ON c.connection_id = rev.connection_id WHERE c.capacity_pool = :pool) units) "
+    "+ (SELECT count(*) FROM comparison_model_call active_call "
+    "JOIN comparison_work_attempt active_attempt "
+    "ON active_attempt.comparison_work_attempt_id = active_call.comparison_work_attempt_id "
+    "JOIN executor_connection_revision call_peer ON call_peer.revision_id = active_call.connection_revision_id "
+    "JOIN executor_connection call_connection ON call_connection.connection_id = call_peer.connection_id "
+    "WHERE call_connection.capacity_pool = :pool AND active_call.state IN ('prepared', 'sent') "
+    "AND active_attempt.state IN ('created', 'leased', 'running'))) < "
+    "COALESCE((SELECT slot_event.slots FROM executor_host_slot_event slot_event "
+    "WHERE slot_event.host_id = split_part(:pool, ':', 1) AND slot_event.provider = split_part(:pool, ':', 2) "
+    "ORDER BY slot_event.event_no DESC LIMIT 1), "
+    "(SELECT CASE reported.provider_item ->> 'access' WHEN 'api' THEN 2 ELSE 1 END "
+    "FROM (SELECT jsonb_array_elements(host_report.providers) AS provider_item "
+    "FROM executor_host_report host_report WHERE host_report.host_id = split_part(:pool, ':', 1)) reported "
+    "WHERE reported.provider_item ->> 'provider' = split_part(:pool, ':', 2) LIMIT 1), 1)"
 )
 _OPEN_OF_OTHER_ATTEMPTS = text(
     "SELECT count(*) FROM comparison_model_call WHERE comparison_work_id = :work_id "
@@ -280,8 +315,13 @@ class ComparisonSpendRepository:
         return session.execute(_CONNECTION_OF, {"revision_id": revision_id}).scalar_one_or_none()
 
     def lock_connection(self, session: Session, connection_id: str) -> None:
-        """Take the connection's advisory lock to the end of the transaction (the Run claim's key)."""
+        """Take the connection's advisory lock to the end of the transaction (the Run claim's key): the lock of its capacity pool when it has
+        one, so every connection of a host's provider takes the same lock."""
         session.execute(_LOCK_CONNECTION, {"connection_id": connection_id})
+
+    def lock_pool(self, session: Session, pool: str) -> None:
+        """Take a pool's advisory lock to the end of the transaction: the lock of every connection of the pool (`HOSTS-BACKEND-01`)."""
+        session.execute(_LOCK_POOL, {"pool": pool})
 
     def lock_day(self, session: Session) -> None:
         """Take the installation's spend lock to the end of the transaction."""
@@ -304,7 +344,13 @@ class ComparisonSpendRepository:
         """`EXEC2-CAP-01`. Is the connection's use (active Runs plus active calls) below its capacity?
 
         Asked after :meth:`lock_connection`. With the default capacity of one it answers ``False`` exactly
-        when :meth:`connection_has_active_run` or :meth:`connection_has_active_call` answers ``True``."""
+        when :meth:`connection_has_active_run` or :meth:`connection_has_active_call` answers ``True``.
+
+        A connection with a capacity pool (`HOSTS-BACKEND-01`, ADR-0028 decision 4) is counted in its **pool**: the active Runs bound in it, each
+        once, and the active calls of every connection of it, below the slots of the provider on the host."""
+        pool = session.execute(_POOL_OF, {"connection_id": connection_id}).scalar_one_or_none()
+        if pool is not None:
+            return bool(session.execute(_POOL_HAS_FREE_UNIT, {"pool": pool}).scalar_one())
         return bool(session.execute(_CONNECTION_HAS_FREE_UNIT, {"connection_id": connection_id}).scalar_one())
 
     def open_calls_of_other_attempts(self, session: Session, *, work_id: str, attempt_id: str) -> int:

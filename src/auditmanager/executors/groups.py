@@ -114,6 +114,8 @@ class GroupRecord:
     created_by: str
     archived_at: datetime | None = None
     archived_by: str | None = None
+    #: `HOSTS-BACKEND-01` (ADR-0028 decision 3): the group of a (model, access) pair, kept by the stand; never revised or archived by hand.
+    system_managed: bool = False
 
 
 @dataclass(frozen=True, slots=True)

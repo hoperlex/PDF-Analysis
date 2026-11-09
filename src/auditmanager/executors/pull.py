@@ -63,6 +63,7 @@ from auditmanager.shared.errors import ErrorCode
 
 __all__ = [
     "DEADLINE_MARGIN_SECONDS",
+    "HostCall",
     "PROBE_ANSWER_SECONDS",
     "PROBE_CLAIM_SECONDS",
     "PullAdapter",
@@ -92,6 +93,31 @@ _ECHO_SYSTEM: Final[str] = (
     "You are answering a connection check for an audit application. Reply with one JSON "
     "document that has the single field \"echo\" set to the exact text you were given."
 )
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class HostCall:
+    """What a call to a host agent asks for beyond the prompt (`HOSTS-BACKEND-01`, ADR-0028 decisions 5 and 9, RUNNER_API 10.4): the exact
+    provider, access, model and effort of the cell the call belongs to, the ceiling of the answer, the cell's timeout and the cell key.
+    ``timeout_seconds`` is the cell's own limit; the task carries the smaller of it and what the watchdog leaves
+    (:func:`answer_window`). The caller -- the layout's ``binding_for(cell)`` -- builds it from the frozen ``stage_plan`` and the member the
+    cell was bound to."""
+
+    provider: str
+    access: str
+    model_id: str
+    effort: str
+    max_output_tokens: int
+    timeout_seconds: int
+    cell_key: str
+
+    def members(self, window_seconds: float) -> dict[str, Any]:
+        """The seven members of ``payload.host``; the timeout is the window the task is given, within the contract's 1 to 7200."""
+        return {
+            "provider": self.provider, "access": self.access, "model_id": self.model_id, "effort": self.effort,
+            "max_output_tokens": self.max_output_tokens,
+            "timeout_seconds": max(1, min(7200, int(window_seconds))), "cell_key": self.cell_key,
+        }
 
 
 def answer_window(revision_deadline_seconds: int, context: Any | None) -> float | None:
@@ -215,17 +241,20 @@ class PullAdapter:
     #: Recorded on the call row: the model is the runner's assertion, not the response's word.
     identity_basis: Final[str] = "declared"
 
-    __slots__ = ("_context", "_engine", "_monotonic", "_poll", "_repository", "_revision",
+    __slots__ = ("_context", "_engine", "_host_call", "_monotonic", "_poll", "_repository", "_revision",
                  "_sessions")
 
     def __init__(
         self, *, session_factory: Callable[[], Session], revision: RevisionRecord,
         context: Any | None, engine: Engine | None = None,
         repository: RunnerRepository | None = None, poll_seconds: float = _POLL_SECONDS,
-        monotonic: Callable[[], float] = time.monotonic,
+        monotonic: Callable[[], float] = time.monotonic, host_call: HostCall | None = None,
     ) -> None:
         if revision.settings.answer_deadline_seconds is None:
             raise ValueError("a pull revision carries an answer deadline")
+        if host_call is not None and host_call.model_id != revision.settings.gateway_model:
+            raise ValueError("a host call names the model of the connection it is made on")
+        self._host_call = host_call
         self._sessions = session_factory
         self._revision = revision
         self._context = context
@@ -241,7 +270,9 @@ class PullAdapter:
     def complete(self, request: ModelRequest) -> ModelResponse:
         settings = self._revision.settings
         assert settings.answer_deadline_seconds is not None
-        window = answer_window(settings.answer_deadline_seconds, self._context)
+        # A call of a stage cell is held to the cell's timeout, cut to what the watchdog leaves minus the margin; any other to the revision's.
+        window = answer_window(
+            settings.answer_deadline_seconds if self._host_call is None else self._host_call.timeout_seconds, self._context)
         if window is None:
             raise _error("not_sent", _DEPENDENCY_DEADLINE,
                          "the attempt has too little time left to wait for a runner")
@@ -255,6 +286,8 @@ class PullAdapter:
         # What is written, served to the runner and held against its answer is the wire form
         # (`AR-V3-WIRE-SCHEMA-01`); the refusal above was judged on the sealed schema, unchanged.
         payload = {**payload, "output_schema": to_wire_schema(payload["output_schema"])}
+        if self._host_call is not None:
+            payload["host"] = self._host_call.members(window)
         started = self._monotonic()
         task = self._write_task(payload, window)
         _log.info("executor task=%s run=%s request_sha256=%s deadline_seconds=%.1f",
@@ -289,9 +322,12 @@ class PullAdapter:
     def _await(self, task: TaskRecord, started: float, window: float) -> ModelResponse:
         waiter = TaskWaiter(self._engine)
         stop = started + window
+        seen_lease: Any = None
         try:
             while True:
                 current = self._read(task.task_id)
+                if current is not None and self._host_call is not None and current.state == "claimed":
+                    seen_lease = self._sign_of_life(current, seen_lease)
                 if current is not None and current.state == "answered":
                     return self._response(current, started)
                 if current is not None and current.state == "failed":
@@ -307,6 +343,17 @@ class PullAdapter:
             raise
         finally:
             waiter.close()
+
+    def _sign_of_life(self, task: TaskRecord, seen_lease: Any) -> Any:
+        """A claim or an extension of it is a sign of life (`AttemptContext.progress`, ADR-0028 decision 9). A host agent extends only while its
+        CLI produced output in the last 120 s, so an extension is the proof the model is working, and a hung CLI -- whose claim lapses -- stops
+        signalling and lets the stall window fence the Attempt. ``seen_lease`` is the lease as last read; the new one is returned."""
+        lease = task.claim_expires_at
+        if lease is not None and lease != seen_lease:
+            progress = getattr(self._context, "progress", None)
+            if callable(progress):
+                progress()
+        return lease
 
     def _read(self, task_id: str) -> TaskRecord | None:
         try:
@@ -384,13 +431,13 @@ class PullAdapter:
 
 def build_pull_adapter(
     *, session_factory: Callable[[], Session], revision: RevisionRecord, context: Any | None,
-    engine: Engine | None = None,
+    engine: Engine | None = None, host_call: HostCall | None = None,
 ) -> PullAdapter:
     """The adapter of one ``pull`` revision for one Attempt: what the resolver's kind table
     calls, as ``build_http_adapter`` is for ``http_api``. ``engine`` is the source of the
     ``LISTEN`` connection; without it the wait is a poll."""
     return PullAdapter(
-        session_factory=session_factory, revision=revision, context=context, engine=engine)
+        session_factory=session_factory, revision=revision, context=context, engine=engine, host_call=host_call)
 
 
 def probe_pull(

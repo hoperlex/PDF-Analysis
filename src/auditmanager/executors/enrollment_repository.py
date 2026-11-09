@@ -37,7 +37,7 @@ __all__ = [
 ]
 
 _COLUMNS: Final = (
-    "enrollment_id, connection_id, secret_prefix, created_at, created_by, expires_at, "
+    "enrollment_id, connection_id, host_id, secret_prefix, created_at, created_by, expires_at, "
     "redeemed_at, runner_token_id, revoked_at, revoked_by, clock_timestamp() AS read_at"
 )
 
@@ -60,7 +60,8 @@ class EnrollmentRecord:
     """A grant's metadata. Neither the secret nor its hash is a field."""
 
     enrollment_id: str
-    connection_id: str
+    #: Exactly one of ``connection_id`` and ``host_id`` is set (`HOSTS-SEAL-1`, ``ck_executor_enrollment_target``).
+    connection_id: str | None
     secret_prefix: str
     created_at: datetime
     created_by: str
@@ -71,6 +72,7 @@ class EnrollmentRecord:
     revoked_by: str | None
     #: The database clock when the row was read.
     read_at: datetime
+    host_id: str | None = None
 
     @property
     def state(self) -> str:
@@ -100,7 +102,7 @@ class TokenHealth:
 
 def _record(row: Mapping[str, Any]) -> EnrollmentRecord:
     return EnrollmentRecord(**{name: row[name] for name in (
-        "enrollment_id", "connection_id", "secret_prefix", "created_at", "created_by",
+        "enrollment_id", "connection_id", "host_id", "secret_prefix", "created_at", "created_by",
         "expires_at", "redeemed_at", "runner_token_id", "revoked_at", "revoked_by", "read_at")})
 
 
@@ -114,15 +116,17 @@ class EnrollmentRepository:
     # -- grants ----------------------------------------------------------------------------
 
     def insert_enrollment(
-        self, session: Session, *, connection_id: str, secret_prefix: str, secret_hash: bytes,
-        lifetime_seconds: int, actor_uid: str,
+        self, session: Session, *, connection_id: str | None = None, secret_prefix: str, secret_hash: bytes,
+        lifetime_seconds: int, actor_uid: str, host_id: str | None = None,
     ) -> EnrollmentRecord:
+        if (connection_id is None) == (host_id is None):
+            raise ValueError("a grant names exactly one of a connection and a host")
         row = session.execute(text(
-            "INSERT INTO executor_enrollment (enrollment_id, connection_id, secret_prefix, "
-            "secret_hash, created_by, expires_at) VALUES (:id, :c, :prefix, :hash, :actor, "
+            "INSERT INTO executor_enrollment (enrollment_id, connection_id, host_id, secret_prefix, "
+            "secret_hash, created_by, expires_at) VALUES (:id, :c, :h, :prefix, :hash, :actor, "
             "clock_timestamp() + make_interval(secs => :ttl)) "
             f"RETURNING {_COLUMNS}"
-        ), {"id": str(ExecutorEnrollmentId.new()), "c": connection_id, "prefix": secret_prefix,
+        ), {"id": str(ExecutorEnrollmentId.new()), "c": connection_id, "h": host_id, "prefix": secret_prefix,
             "hash": secret_hash, "actor": actor_uid, "ttl": lifetime_seconds}).mappings().one()
         return _record(row)
 
@@ -138,6 +142,17 @@ class EnrollmentRepository:
             "WHERE connection_id = :c AND redeemed_at IS NULL AND revoked_at IS NULL "
             "RETURNING enrollment_id, (expires_at > clock_timestamp()) AS was_live"
         ), {"c": connection_id, "actor": actor_uid}).all()
+        return [(str(row[0]), bool(row[1])) for row in rows]
+
+    def revoke_unredeemed_for_host(
+        self, session: Session, host_id: str, *, actor_uid: str
+    ) -> list[tuple[str, bool]]:
+        """The same as :meth:`revoke_unredeemed` for a host's grant (at most one is pending per host)."""
+        rows = session.execute(text(
+            "UPDATE executor_enrollment SET revoked_at = clock_timestamp(), revoked_by = :actor "
+            "WHERE host_id = :h AND redeemed_at IS NULL AND revoked_at IS NULL "
+            "RETURNING enrollment_id, (expires_at > clock_timestamp()) AS was_live"
+        ), {"h": host_id, "actor": actor_uid}).all()
         return [(str(row[0]), bool(row[1])) for row in rows]
 
     def get_enrollment(

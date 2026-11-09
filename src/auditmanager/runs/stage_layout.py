@@ -7,8 +7,8 @@ This module is pure: no database, no clock, no environment. It is the single def
 * the **sets** « Только Claude » and « Только Codex », model · effort exactly as ADR-0028 decision 12 and plan section 4.3 print them,
   and the rule that anything else an administrator saves is « Свой набор »;
 * the **block schemes**, a closed list: the legs and the judge of an ensemble are never edited one by one, and the block row is one of
-  the listed schemes or nothing. Until the ensemble lands (``HOSTS-ENSEMBLE-01``) the only schemes are the two temporary single
-  models the two sets carry;
+  the listed schemes or nothing. The list is the two ensembles of the sets (legs and a judge, ``HOSTS-ENSEMBLE-01``) and a single
+  Astra, which the original allows; a single Claude is never on it;
 * the **validation** of a layout against the catalogue (``contracts/analysis/v1/model-catalogue.json``): only a pair the file offers,
   never a Haiku, an effort above ``high`` or ``low`` for Opus;
 * the **plan** (:class:`FrozenStagePlan`): the cells of a layout revision with the access chosen for each model when a run starts, its
@@ -31,10 +31,10 @@ from auditmanager.analysis.public import (
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
-    "BLOCK_SCHEMES", "BLOCKS_ENSEMBLE_LANDED", "BlockScheme", "CELL_ROLES", "FrozenStagePlan", "KITS", "KIT_CLAUDE_ONLY",
+    "BLOCK_SCHEMES", "BLOCKS_ENSEMBLE_LANDED", "BlockScheme", "CELL_ROLES", "ENSEMBLE_ROLES", "ENSEMBLE_ROW", "FrozenStagePlan", "ROLE_ORDER", "KITS", "KIT_CLAUDE_ONLY",
     "KIT_CODEX_ONLY", "KIT_CUSTOM", "KIT_LABELS", "MODELLESS_PHASES", "PHASE_ALIASES", "PHASE_LABELS", "PHASE_ROWS", "PLAN_FORMAT", "PRESET_CELLS",
     "ROW_LABELS", "ROW_PHASES", "STAGE_ROWS", "cell_key", "cells_to_wire", "kit_of", "parse_plan", "preset_cells", "require_valid_layout",
-    "row_of_phase", "rows_in_use", "validate_cells",
+    "role_of_phase", "row_of_phase", "rows_in_use", "validate_cells",
 ]
 
 #: The six rows, in the order the owner sees them. ``git grep -n "STAGE_ROWS" -- src`` is the totality query of this set.
@@ -45,9 +45,13 @@ ROW_LABELS: Final[Mapping[str, str]] = {
     "review": "Критик", "correction": "Уточнение",
 }
 
-#: The roles of a cell. This wave offers ``main`` only: the legs and the judge of an ensemble belong to ``HOSTS-ENSEMBLE-01``.
+#: The roles of a cell: the single answer of a row, and the two legs and the judge of the blocks ensemble (ADR-0028 decision 11).
 CELL_ROLES: Final[tuple[str, ...]] = ("main", "leg1", "leg2", "judge")
-_OFFERED_ROLES: Final[tuple[str, ...]] = ("main",)
+#: The order a row's cells are kept in: ``main``, the legs, the judge.
+ROLE_ORDER: Final[Mapping[str, int]] = {role: position for position, role in enumerate(CELL_ROLES)}
+#: Every row has one ``main`` cell, except the blocks row, which is one of the :data:`BLOCK_SCHEMES` (an ensemble has no ``main``).
+ENSEMBLE_ROW: Final[str] = "blocks"
+ENSEMBLE_ROLES: Final[tuple[str, ...]] = ("leg1", "leg2", "judge")
 
 #: Code phase -> row. A phase is what the code runs; a row is what the owner sees. ``text_analysis`` is the PC-01 stage; the others
 #: are the procedures of the extended review (``phase_call_limits`` of the coverage policy) and the parameter passport.
@@ -95,6 +99,15 @@ def row_of_phase(phase: str) -> str | None:
     return PHASE_ROWS.get(PHASE_ALIASES.get(name, name))
 
 
+def role_of_phase(phase: str) -> str:
+    """The role of the cell a call identity runs on: ``leg1``, ``leg2`` or ``judge`` for ``blocks:3:leg1`` (and for its semantic repair
+    ``blocks:3:leg1:repair:1``, which runs on the cell it repairs), else ``main``. Only the blocks identities of an ensemble carry a role."""
+    parts = phase.split(":")
+    if len(parts) >= 3 and PHASE_ALIASES.get(parts[0], parts[0]) == "block_analysis" and parts[2] in ENSEMBLE_ROLES:
+        return parts[2]
+    return "main"
+
+
 def cell_key(row: str, role: str = "main") -> str:
     return f"{row}:{role}"
 
@@ -106,9 +119,9 @@ KIT_CODEX_ONLY: Final[str] = "codex_only"
 KIT_CUSTOM: Final[str] = "custom"
 KITS: Final[tuple[str, ...]] = (KIT_CLAUDE_ONLY, KIT_CODEX_ONLY, KIT_CUSTOM)
 
-#: ``True`` once ``HOSTS-ENSEMBLE-01`` has landed: the blocks row is then two legs and a judge. Until then the Claude set runs blocks on
-#: one model and says so in its name (plan sections 4.3 and 4.6).
-BLOCKS_ENSEMBLE_LANDED: Final[bool] = False
+#: ``True`` once ``HOSTS-ENSEMBLE-01`` has landed: the blocks row is then two legs and a judge (one leg and a judge for the Claude set).
+#: Before it the Claude set ran blocks on one model and said so in its name (plan sections 4.3 and 4.6); production waited for the ensemble.
+BLOCKS_ENSEMBLE_LANDED: Final[bool] = True
 
 KIT_LABELS: Final[Mapping[str, str]] = {
     KIT_CLAUDE_ONLY: "Только Claude" if BLOCKS_ENSEMBLE_LANDED else "Только Claude (блоки без судьи)",
@@ -119,47 +132,76 @@ KIT_LABELS: Final[Mapping[str, str]] = {
 _OPUS, _SONNET = "claude-opus-5-5", "claude-sonnet-5-5"
 _SOL61, _SOL, _ASTRA = "gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra"
 
-#: Model · effort of every row of each set, exactly the table of ADR-0028 decision 12 / plan section 4.3. The blocks entry is the
-#: temporary single model of this wave (the original allows it; the Claude set's leg is Opus 5.5 · medium, the Codex set's is Astra).
-PRESET_CELLS: Final[Mapping[str, Mapping[str, tuple[str, str]]]] = {
-    KIT_CLAUDE_ONLY: {
-        "text": (_SONNET, "medium"), "blocks": (_OPUS, "medium"), "cross_check": (_SONNET, "medium"),
-        "norms": (_SONNET, "medium"), "review": (_SONNET, "medium"), "correction": (_SONNET, "medium"),
-    },
-    KIT_CODEX_ONLY: {
-        "text": (_SOL61, "medium"), "blocks": (_ASTRA, "medium"), "cross_check": (_SOL, "medium"),
-        "norms": (_ASTRA, "medium"), "review": (_SOL, "medium"), "correction": (_SOL61, "medium"),
-    },
-}
-
 
 @dataclass(frozen=True, slots=True)
 class BlockScheme:
-    """One entry of the closed list a blocks row is chosen from: the (role, model, effort) triples that make it up."""
+    """One entry of the closed list a blocks row is chosen from: the (role, model, effort) triples that make it up, in role order.
+
+    A scheme with a ``judge`` is an ensemble: each leg reads the block batch alone, then the judge reads the batch again with the legs'
+    observations, reconciles the legs (one leg has nothing to compare with) and searches for what they missed (``gap_search``).
+    """
 
     scheme_id: str
     label: str
     cells: tuple[tuple[str, str, str], ...]
 
+    @property
+    def roles(self) -> tuple[str, ...]:
+        return tuple(role for role, _, _ in self.cells)
 
-#: The closed list of block schemes of this wave: the temporary single model of each set. The ensembles (leg + leg + judge) join it in
-#: ``HOSTS-ENSEMBLE-01``; a single Claude Sonnet is not on it and never will be (the original forbids it, ``config.py:734-741``).
+    @property
+    def legs(self) -> tuple[str, ...]:
+        """The roles that read the batch alone: ``leg1`` and ``leg2``, or ``main`` for a single model."""
+        return tuple(role for role in self.roles if role != "judge")
+
+    @property
+    def is_ensemble(self) -> bool:
+        return "judge" in self.roles
+
+
+#: The closed list of block schemes (plan section 4.3, ADR-0028 decisions 11 and 12). The Claude ensemble is one leg and a judge
+#: (the original's ``claude_only`` mode: a second Opus leg adds mostly medium findings); the Codex ensemble is two legs and a judge. A single
+#: Astra stays: the original allows it. A single Claude is not on the list and never will be (the original forbids it, ``config.py:734-741``).
 BLOCK_SCHEMES: Final[tuple[BlockScheme, ...]] = (
-    BlockScheme("claude_opus_single", "Opus 5.5 · medium (без судьи)", (("main", _OPUS, "medium"),)),
+    BlockScheme("claude_opus_judge_sonnet", "Opus 5.5 · medium + судья Sonnet 5.5 · medium, с поиском пропусков",
+                (("leg1", _OPUS, "medium"), ("judge", _SONNET, "medium"))),
+    BlockScheme("codex_astra_sol_judge", "gpt-6-astra · medium + gpt-6-sol · medium, судья gpt-6.1-sol · medium, с поиском пропусков",
+                (("leg1", _ASTRA, "medium"), ("leg2", _SOL, "medium"), ("judge", _SOL61, "medium"))),
     BlockScheme("codex_astra_single", "gpt-6-astra · medium", (("main", _ASTRA, "medium"),)),
 )
 
+#: Model · effort of every row of each set, exactly the table of ADR-0028 decision 12 / plan section 4.3: row -> the (role, model, effort)
+#: of its cells. A row has one ``main`` cell; the blocks row is the scheme of the set.
+PRESET_CELLS: Final[Mapping[str, Mapping[str, tuple[tuple[str, str, str], ...]]]] = {
+    KIT_CLAUDE_ONLY: {
+        "text": (("main", _SONNET, "medium"),), "blocks": BLOCK_SCHEMES[0].cells, "cross_check": (("main", _SONNET, "medium"),),
+        "norms": (("main", _SONNET, "medium"),), "review": (("main", _SONNET, "medium"),), "correction": (("main", _SONNET, "medium"),),
+    },
+    KIT_CODEX_ONLY: {
+        "text": (("main", _SOL61, "medium"),), "blocks": BLOCK_SCHEMES[1].cells, "cross_check": (("main", _SOL, "medium"),),
+        "norms": (("main", _ASTRA, "medium"),), "review": (("main", _SOL, "medium"),), "correction": (("main", _SOL61, "medium"),),
+    },
+}
+if any(table["blocks"] not in {scheme.cells for scheme in BLOCK_SCHEMES} for table in PRESET_CELLS.values()):  # pragma: no cover
+    raise AssertionError("the blocks row of a set is a listed scheme")
+
 
 def preset_cells(kit: str) -> tuple[CellSettings, ...]:
-    """The cells of a set with the default answer limits and timeout. ``custom`` has no table: it is whatever was saved."""
+    """The cells of a set with the default answer limits and timeout, in row order and, inside a row, in role order (``main``, the legs,
+    the judge). ``custom`` has no table: it is whatever was saved."""
     table = PRESET_CELLS.get(kit)
     if table is None:
         raise ValueError("only the two sets have a table of cells")
     return tuple(
-        CellSettings(cell_key=cell_key(row), model_id=table[row][0], effort=table[row][1],
+        CellSettings(cell_key=cell_key(row, role), model_id=model, effort=effort,
                      max_output_tokens=ROW_DEFAULT_MAX_OUTPUT_TOKENS[row], timeout_seconds=DEFAULT_TIMEOUT_SECONDS)
-        for row in STAGE_ROWS
+        for row in STAGE_ROWS for role, model, effort in table[row]
     )
+
+
+def _position(cell: CellSettings) -> tuple[int, int]:
+    """Where a cell stands in a layout: its row, then its role."""
+    return (STAGE_ROWS.index(cell.row) if cell.row in STAGE_ROWS else len(STAGE_ROWS), ROLE_ORDER.get(cell.role, len(ROLE_ORDER)))
 
 
 def _model_effort(cells: Iterable[CellSettings]) -> tuple[tuple[str, str, str], ...]:
@@ -169,8 +211,7 @@ def _model_effort(cells: Iterable[CellSettings]) -> tuple[tuple[str, str, str], 
 def kit_of(cells: Sequence[CellSettings]) -> str:
     """The set whose model · effort table the cells follow exactly, else « Свой набор ». Limits and timeouts are not part of a set: an
     administrator who only lengthens a timeout still has the set's models, and the kit says so."""
-    ordered = sorted(cells, key=lambda cell: STAGE_ROWS.index(cell.row) if cell.row in STAGE_ROWS else len(STAGE_ROWS))
-    mine = _model_effort(ordered)
+    mine = _model_effort(sorted(cells, key=_position))
     for kit in (KIT_CLAUDE_ONLY, KIT_CODEX_ONLY):
         if mine == _model_effort(preset_cells(kit)):
             return kit
@@ -184,11 +225,15 @@ def _invalid(constraint: str, field: str = "cells") -> DomainError:
 
 
 def validate_cells(cells: Sequence[CellSettings], *, catalogue: ModelCatalogue | None = None) -> tuple[CellSettings, ...]:
-    """Check a layout and return its cells in row order, or raise ``validation_failed`` naming the first thing wrong.
+    """Check a layout and return its cells in row order (and, inside a row, in role order), or raise ``validation_failed`` naming the first
+    thing wrong.
 
-    * every cell key is ``row:role`` of a known row and an offered role, none repeated, none missing: exactly the six ``row:main``;
+    * every cell key is ``row:role`` of a known row and an offered role, none repeated: a row has a ``main`` cell, and only the blocks row
+      may hold ``leg1``, ``leg2`` and ``judge`` instead;
+    * every row has its cells: ``row:main`` for each row but blocks, and the cells of one scheme for blocks;
     * every (model, effort) pair is one the catalogue offers (so never a Haiku, ``xhigh``, ``max`` or Opus ``low``);
-    * the blocks row is one scheme of the closed list, whole;
+    * the blocks row is one scheme of the closed list, whole, and its roles are the scheme's: the legs and the judge are not edited
+      one by one;
     * a limit and a timeout are integers inside the wire's bounds.
     """
     catalogue = catalogue or model_catalogue()
@@ -197,23 +242,24 @@ def validate_cells(cells: Sequence[CellSettings], *, catalogue: ModelCatalogue |
         row, separator, role = cell.cell_key.partition(":")
         if not separator or row not in STAGE_ROWS or role not in CELL_ROLES:
             raise _invalid("unknown_cell")
-        if role not in _OFFERED_ROLES:
+        if row != ENSEMBLE_ROW and role != "main":
             raise _invalid("role_not_offered")
         if cell.cell_key in by_key:
             raise _invalid("cell_repeated")
         by_key[cell.cell_key] = cell
-    if any(cell_key(row) not in by_key for row in STAGE_ROWS):
+    if any(cell_key(row) not in by_key for row in STAGE_ROWS if row != ENSEMBLE_ROW) or not any(
+            cell.row == ENSEMBLE_ROW for cell in by_key.values()):
         raise _invalid("cell_missing")
-    for key in (cell_key(row) for row in STAGE_ROWS):
-        cell = by_key[key]
+    ordered = tuple(sorted(by_key.values(), key=_position))
+    for cell in ordered:
         catalogue.require_pair(cell.model_id, cell.effort)
         if (type(cell.max_output_tokens) is not int or not 1 <= cell.max_output_tokens <= 65_536
                 or type(cell.timeout_seconds) is not int or not 1 <= cell.timeout_seconds <= 7_200):
             raise _invalid("limit_out_of_range")
-    blocks = tuple((cell.role, cell.model_id, cell.effort) for cell in cells if cell.row == "blocks")
-    if blocks not in {scheme.cells for scheme in BLOCK_SCHEMES}:
+    if tuple((cell.role, cell.model_id, cell.effort) for cell in ordered if cell.row == ENSEMBLE_ROW) not in {
+            scheme.cells for scheme in BLOCK_SCHEMES}:
         raise _invalid("block_scheme_not_listed")
-    return tuple(by_key[cell_key(row)] for row in STAGE_ROWS)
+    return ordered
 
 
 def require_valid_layout(
@@ -296,6 +342,13 @@ class FrozenStagePlan:
 
     def has_cell(self, key: str) -> bool:
         return any(cell.cell_key == key for cell in self.cells)
+
+    def cells_of_row(self, row: str) -> tuple[CellSettings, ...]:
+        """The cells of one row in role order: one ``main`` cell, or the legs and the judge of the blocks ensemble."""
+        return tuple(sorted((cell for cell in self.cells if cell.row == row), key=_position))
+
+    def roles_of_row(self, row: str) -> tuple[str, ...]:
+        return tuple(cell.role for cell in self.cells_of_row(row))
 
     @property
     def rows(self) -> tuple[str, ...]:
