@@ -1,0 +1,83 @@
+/*
+ * «Модели по этапам» (`HOSTS-WEB-01`): the set segments and the editor. Layout only; colour is read from the tokens.
+ * Every rule is reached by a screen in `tests/unit/styles/screens.ts`.
+ */
+
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+  margin: var(--am-gap-sm) 0;
+}
+
+.segment {
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-md);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: transparent;
+  color: var(--am-ink-muted);
+  font: inherit;
+  font-size: var(--am-text-md);
+  cursor: pointer;
+}
+
+.segment[aria-checked='true'] {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.fold {
+  margin: var(--am-gap-sm) 0;
+}
+
+.fold summary {
+  cursor: pointer;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.limits {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: var(--am-gap-xs) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.limit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0;
+}
+
+.number {
+  width: 6.5rem;
+}
+
+.journal {
+  display: grid;
+  gap: var(--am-gap-2xs);
+  margin: var(--am-gap-xs) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.problem {
+  color: var(--am-failed);
+}

@@ -1,0 +1,158 @@
+/*
+ * «Серверы» and the window «Подключить сервер» (`HOSTS-WEB-01`). Layout only; colour is read from the tokens, none is declared.
+ * Every rule is reached by a screen in `tests/unit/styles/screens.ts`.
+ */
+
+.window {
+  width: min(40rem, calc(100vw - 2 * var(--am-gap)));
+  max-width: none;
+  max-height: 94vh;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  overflow: auto;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--am-text-lg);
+}
+
+.tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+  margin: var(--am-gap-sm) 0;
+}
+
+.tab {
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-md);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: transparent;
+  color: var(--am-ink-muted);
+  font: inherit;
+  font-size: var(--am-text-md);
+  cursor: pointer;
+}
+
+.tab[aria-selected='true'] {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.panel {
+  min-width: 0;
+}
+
+.status {
+  margin: var(--am-gap-sm) 0 0;
+  font-size: var(--am-text-md);
+}
+
+.fold {
+  margin: var(--am-gap-xs) 0;
+}
+
+.fold summary {
+  cursor: pointer;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.steps {
+  display: grid;
+  gap: var(--am-gap-2xs);
+  margin: var(--am-gap-sm) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  gap: var(--am-gap-sm);
+  align-items: baseline;
+  margin: 0;
+}
+
+.stepMark {
+  min-width: var(--am-gap);
+  text-align: center;
+  font-weight: 600;
+}
+
+.stepDone {
+  color: var(--am-ok);
+}
+
+.stepFailed {
+  color: var(--am-failed);
+}
+
+.stepCurrent {
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+.stepTodo {
+  color: var(--am-ink-muted);
+}
+
+/* The row of a server and «Подробнее». */
+.details {
+  display: grid;
+  gap: var(--am-gap-sm);
+  margin: var(--am-gap-xs) 0 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.detailsTitle {
+  margin: 0;
+  font-size: var(--am-text-md);
+  font-weight: 600;
+}
+
+.plain {
+  display: grid;
+  gap: var(--am-gap-2xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.slotInput {
+  width: 4.5rem;
+}
