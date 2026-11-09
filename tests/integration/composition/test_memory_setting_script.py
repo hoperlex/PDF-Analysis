@@ -17,6 +17,7 @@ behind a `docker` shim, is `tests/integration/recovery/test_memory_ops_wrappers.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -49,13 +50,22 @@ SET_TRAINING = (*DB, "set", "training_use", "on", "--actor", ACTOR, "--owner-per
 TYPED_REAL = "real\n"
 
 
-def screen(*, data_class: str = "test", training: str = "off", backlog: int = 0) -> str:
-    """What `memory_setting show` prints (`scripts/recovery/memory_setting.py`)."""
-    def line(name: str, value: str, default: str) -> str:
-        return f"{name}: {value} ({'default' if value == default else 'revision 1'}; default {default})"
-    return (f"{line('data_class', data_class, 'test')}\n{line('training_use', training, 'off')}\n"
-            f"uncaptured-decisions: {backlog} (ledger accept/reject events with no memory decision; "
-            "a data_class change is refused until this is 0)\n")
+SHOW_MEMBERS = ("data_class", "data_class_revision", "data_class_default", "training_use", "training_use_revision", "training_use_default",
+                "uncaptured_decisions")
+
+
+def screen(*, data_class: str = "test", training: str = "off", backlog: int = 0, data_class_revision: int | None = None,
+           training_revision: int | None = None) -> str:
+    """What `memory_setting show --json` prints (`scripts/recovery/memory_setting.py`, `SHOW_JSON_KEYS`): ONE line. A revision of 0 is
+    "nothing journalled yet", which is what a value equal to its default means unless a revision is given."""
+    def revision(value: str, default: str, given: int | None) -> int:
+        return given if given is not None else (0 if value == default else 1)
+    members = {"data_class": data_class, "data_class_revision": revision(data_class, "test", data_class_revision),
+               "data_class_default": "test", "training_use": training,
+               "training_use_revision": revision(training, "off", training_revision), "training_use_default": "off",
+               "uncaptured_decisions": backlog}
+    assert tuple(members) == SHOW_MEMBERS
+    return json.dumps(members) + "\n"
 
 
 WRITTEN = "memory-setting: data_class: test -> real (revision 1).\n  Cases already captured keep the class they were captured with.\n"
@@ -191,8 +201,10 @@ def test_show_is_one_read_only_call_that_asks_nothing(rig: Rig) -> None:
     completed = rig.run(*DB, "show")
     assert completed.returncode == 0, completed.stderr
     assert len(rig.calls) == 1
-    assert rig.tool_args(rig.tool_calls()[0]) == ["--database", DATABASE, "show"]
-    assert "data_class: test (default; default test)" in completed.stdout and "uncaptured-decisions: 0" in completed.stdout
+    assert rig.tool_args(rig.tool_calls()[0]) == ["--database", DATABASE, "show", "--json"]
+    assert completed.stdout.splitlines()[2:] == [
+        "data_class: test (default; default test)", "training_use: off (default; default off)",
+        "uncaptured-decisions: 0 (ledger accept/reject events with no memory decision; a data_class change is refused until this is 0)"]
     assert f"database   {DATABASE}" in completed.stdout and "retype" not in completed.stdout
 
 
@@ -213,9 +225,9 @@ def test_a_set_looks_first_asks_for_the_value_writes_and_looks_again(rig: Rig) -
     completed = rig.run(*SET_CLASS, typed=TYPED_REAL)
     assert completed.returncode == 0, (completed.stdout, completed.stderr)
     first, second, third = rig.tool_calls()
-    assert rig.tool_args(first) == ["--database", DATABASE, "show"]
+    assert rig.tool_args(first) == ["--database", DATABASE, "show", "--json"]
     assert rig.tool_args(second) == ["--database", DATABASE, "set", "data_class", "real", "--actor", ACTOR]
-    assert rig.tool_args(third) == ["--database", DATABASE, "show"]
+    assert rig.tool_args(third) == ["--database", DATABASE, "show", "--json"]
     assert len(rig.calls) == 3, rig.calls
     out = completed.stdout
     assert out.index("in force now") < out.index("retype the new value of data_class") < out.index("changing data_class to real")
@@ -270,11 +282,63 @@ def test_the_answer_comes_from_the_keyboard_not_from_the_command_line(rig: Rig) 
     assert not any("set" in rig.tool_args(call) for call in rig.tool_calls())
 
 
-def test_a_screen_that_does_not_say_what_the_setting_is_stops_before_anything_is_asked(rig: Rig) -> None:
-    rig.answers["show"] = {"stdout": "some other screen\n"}
+GOOD = json.loads(screen())
+NOT_THE_LINE = {
+    "some-other-screen": "some other screen\n",
+    "the-text-screen-of-before": ("data_class: test (default; default test)\ntraining_use: off (default; default off)\n"
+                                  "uncaptured-decisions: 0 (ledger accept/reject events with no memory decision)\n"),
+    "two-lines": screen() + screen(),
+    "empty": "",
+    "no-uncaptured-count": json.dumps({k: v for k, v in GOOD.items() if k != "uncaptured_decisions"}) + "\n",
+    "no-data-class": json.dumps({k: v for k, v in GOOD.items() if k != "data_class"}) + "\n",
+    "a-revision-that-is-a-word": json.dumps({**GOOD, "data_class_revision": "one"}) + "\n",
+    "a-negative-count": json.dumps({**GOOD, "uncaptured_decisions": -1}) + "\n",
+    "a-value-in-capitals": json.dumps({**GOOD, "data_class": "REAL"}) + "\n",
+}
+
+
+@pytest.mark.parametrize("printed", NOT_THE_LINE.values(), ids=NOT_THE_LINE.keys())
+def test_a_look_that_is_not_the_one_line_the_script_reads_stops_before_anything_is_asked(printed: str, rig: Rig) -> None:
+    """`D-517`: the wrapper decides from the members of the module's `show --json` and from nothing else; a look it cannot read is a failure,
+    not a guess, and it is one before the operator is asked to retype anything."""
+    rig.answers["show"] = {"stdout": printed}
     completed = rig.run(*SET_CLASS, typed=TYPED_REAL)
-    assert completed.returncode == FAILED and "does not say what data_class is" in completed.stderr
+    assert completed.returncode == FAILED and "did not print the settings in the form this script reads" in completed.stderr, completed.stderr
+    assert "Nothing was changed" in completed.stderr
     assert len(rig.tool_calls()) == 1 and "retype" not in completed.stdout
+    shown = rig.run(*DB, "show")
+    assert shown.returncode == FAILED and "did not print the settings in the form this script reads" in shown.stderr
+
+
+def test_a_read_back_that_is_not_the_line_is_a_failure_that_says_the_change_may_have_been_made(rig: Rig) -> None:
+    rig.answers["show"] = [{"stdout": screen()}, {"stdout": NOT_THE_LINE["the-text-screen-of-before"]}]
+    completed = rig.run(*SET_CLASS, typed=TYPED_REAL)
+    assert completed.returncode == FAILED and "the show after the change did not print the settings" in completed.stderr
+    assert "The change may have been made" in completed.stderr and "Nothing was changed" not in completed.stderr
+    assert "done. data_class is now real" not in completed.stdout
+
+
+def test_the_screen_is_printed_from_the_members_that_were_read_and_each_member_is_read(rig: Rig) -> None:
+    """Every member of the line reaches the screen: a revision, a default, a backlog and both values, each different from its neighbours, so a
+    parse that swapped two members would print the wrong word."""
+    rig.answers["show"] = {"stdout": json.dumps({
+        "data_class": "real", "data_class_revision": 7, "data_class_default": "test",
+        "training_use": "on", "training_use_revision": 3, "training_use_default": "off", "uncaptured_decisions": 12345}) + "\n"}
+    completed = rig.run(*DB, "show")
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.splitlines()[2:] == [
+        "data_class: real (revision 7; default test)", "training_use: on (revision 3; default off)",
+        "uncaptured-decisions: 12345 (ledger accept/reject events with no memory decision; a data_class change is refused until this is 0)"]
+
+
+def test_the_members_the_wrapper_reads_are_the_ones_the_module_prints_and_the_check_can_fail() -> None:
+    """`D-517`: the module's `SHOW_JSON_KEYS` and the wrapper's `SHOW_MEMBERS` are one list, and this test's own `screen()` prints it too."""
+    from scripts.recovery import memory_setting
+
+    text = SCRIPT.read_text(encoding="utf-8")
+    declared = tuple(re.search(r"^SHOW_MEMBERS=\(([^)]*)\)", text, re.MULTILINE).group(1).split())  # type: ignore[union-attr]
+    assert declared == memory_setting.SHOW_JSON_KEYS == SHOW_MEMBERS == tuple(GOOD)
+    assert declared[:-1] != memory_setting.SHOW_JSON_KEYS, "the comparison cannot tell a list that lacks a member from the module's"
 
 
 # --- the tool's own refusals and failures ------------------------------------------------------
@@ -367,6 +431,61 @@ def test_the_owner_url_assertion_can_fail_without_the_environment_prefix(rig: Ri
     assert {r["database_url"] for r in broken.tool_calls()} == {ambient}
 
 
+# --- the lock timeout the operator sets (`D-515`) ---------------------------------------------------
+
+
+def lock_timeout_items(call: dict[str, object]) -> list[str]:
+    argv = [str(item) for item in call["argv"]]  # type: ignore[attr-defined]
+    return [item for item in argv if item.startswith("MEMORY_") and "_LOCK_TIMEOUT" in item]
+
+
+def test_the_lock_timeout_the_operator_sets_is_handed_to_every_container_run_and_the_other_wrappers_is_not(rig: Rig) -> None:
+    completed = rig.run(*SET_CLASS, env={"MEMORY_SETTING_LOCK_TIMEOUT": "45s", "MEMORY_FORGET_LOCK_TIMEOUT": "99s"}, typed=TYPED_REAL)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert len(rig.tool_calls()) == 3
+    for call in rig.tool_calls():
+        argv = [str(item) for item in call["argv"]]
+        assert lock_timeout_items(call) == ["MEMORY_SETTING_LOCK_TIMEOUT=45s"], argv
+        assert argv[argv.index("MEMORY_SETTING_LOCK_TIMEOUT=45s") - 1] == "-e", "a variable of the one-off container is an -e of `compose run`"
+        # an option of `compose run` after the service name would be the tool's argument
+        assert argv.index("MEMORY_SETTING_LOCK_TIMEOUT=45s") < argv.index("--entrypoint")
+
+
+def test_no_lock_timeout_is_passed_when_the_operator_set_none_and_the_default_stays_the_modules(rig: Rig) -> None:
+    completed = rig.run(*SET_CLASS, env={"MEMORY_FORGET_LOCK_TIMEOUT": "99s"}, typed=TYPED_REAL)  # the other wrapper's variable is not ours
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert all(lock_timeout_items(call) == [] for call in rig.tool_calls()), [lock_timeout_items(c) for c in rig.tool_calls()]
+
+
+def test_the_pass_through_of_the_lock_timeout_can_fail(rig: Rig) -> None:
+    broken = rig.edited('"${LOCK_TIMEOUT_ENV[@]+"${LOCK_TIMEOUT_ENV[@]}"}" ', "")
+    completed = broken.run(*SET_CLASS, env={"MEMORY_SETTING_LOCK_TIMEOUT": "45s"}, typed=TYPED_REAL)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert all(lock_timeout_items(call) == [] for call in broken.tool_calls()), (
+        "with the pass-through removed the value still reached the container: the test above would prove nothing")
+
+
+@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s"),
+                         ids=lambda v: repr(v))
+def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_connection_and_the_guard_can_fail(value: str, rig: Rig) -> None:
+    completed = rig.run(*DB, "show", env={"MEMORY_SETTING_LOCK_TIMEOUT": value})
+    assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+    assert "MEMORY_SETTING_LOCK_TIMEOUT must be a positive number of ms, s or min" in completed.stderr, completed.stderr
+    assert not rig.log.exists(), f"refused, but only after running docker: {rig.calls}"
+    broken = rig.mutant("lock-timeout-shape")
+    completed = broken.run(*DB, "show", env={"MEMORY_SETTING_LOCK_TIMEOUT": value})
+    assert "must be a positive number" not in completed.stderr
+    assert broken.log.exists() and any("MEMORY_SETTING_LOCK_TIMEOUT=" + value in item for call in broken.tool_calls() for item in call["argv"]), (
+        "with the guard gone the bad value goes into the container as it is: this is why the guard exists")
+
+
+@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999s"), ids=lambda v: repr(v))
+def test_a_lock_timeout_that_is_a_positive_duration_goes_through(value: str, rig: Rig) -> None:
+    completed = rig.run(*SET_CLASS, env={"MEMORY_SETTING_LOCK_TIMEOUT": value}, typed=TYPED_REAL)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert all(lock_timeout_items(call) == ["MEMORY_SETTING_LOCK_TIMEOUT=" + value] for call in rig.tool_calls())
+
+
 def test_docker_never_reads_the_answer_the_operator_types(rig: Rig) -> None:
     """`docker compose run` forwards stdin to the container, so a pipe feeding the retype would be eaten by the first look: the stub reads
     whatever stdin it is given, and must be given none."""
@@ -426,7 +545,7 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     me = Path(__file__).read_text(encoding="utf-8")
     missing = sorted(name for name in markers if f'"{name}"' not in me)
     assert not missing, f"guards with no case: {missing}"
-    assert len(markers) == 16, sorted(markers)
+    assert len(markers) == 17, sorted(markers)
     text = SCRIPT.read_text(encoding="utf-8")
     for name in markers:
         assert len(re.findall(rf"^ *# <<< guard: {re.escape(name)}$", text, re.MULTILINE)) == 1

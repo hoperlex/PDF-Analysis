@@ -24,9 +24,15 @@ new class, as it should be). ``MEMORY_SETTING_LOCK_TIMEOUT`` (default ``15s``) b
 USAGE (``DATABASE_URL`` is the owner role's; no ``PG*`` variable):
 
     python -m scripts.recovery.memory_setting --database D show
+    python -m scripts.recovery.memory_setting --database D show --json
     python -m scripts.recovery.memory_setting --database D set data_class real --actor <admin login>
     python -m scripts.recovery.memory_setting --database D set training_use on --actor <admin login> \\
         --owner-permission-ref "<where the owner's permission is recorded>"
+
+``show --json`` prints the same facts as ONE line of JSON (``SHOW_JSON_KEYS``, in that order; strings and non-negative integers only), which
+is what ``infra/deploy/memory-setting.sh`` reads (`D-517`): the wrapper never reads the text screen, so a change of the screen's wording
+cannot change what the wrapper decides. A key added here is a key the wrapper's list of members must name
+(``tests/integration/composition/test_memory_setting_script.py`` holds the two lists together).
 
 Exit codes: 0 done (or nothing to do), 2 usage, 3 REFUSED (nothing was changed), 4 FAILED.
 """
@@ -34,6 +40,7 @@ Exit codes: 0 done (or nothing to do), 2 usage, 3 REFUSED (nothing was changed),
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from collections.abc import Sequence
@@ -59,6 +66,9 @@ EXIT_OK, EXIT_USAGE, EXIT_REFUSED, EXIT_FAILED = 0, 2, 3, 4
 ADVISORY_LOCK_NAME = "auditmanager.memory_setting"
 PERMISSION_REF_MAX = erase.PERMISSION_REF_MAX
 LOCK_TIMEOUT_DEFAULT = "15s"
+#: The members of ``show --json``, in the order they are printed: for each setting its value, its revision (0: nothing journalled yet) and
+#: its default, then the backlog of the capture sweep. ``infra/deploy/memory-setting.sh`` reads exactly these.
+SHOW_JSON_KEYS = tuple(key for name in SETTING_NAMES for key in (name, f"{name}_revision", f"{name}_default")) + ("uncaptured_decisions",)
 
 #: The ledger events the memory has not captured: the predicate of ``MemoryCaptureSweep`` (``_UNCAPTURED_EVENTS`` in
 #: ``bootstrap/adapters.py``, which this tool may not import) minus its batch and cursor -- an accept or reject event with no
@@ -127,15 +137,31 @@ def _lock_timeout() -> str:
     return os.environ.get("MEMORY_SETTING_LOCK_TIMEOUT", LOCK_TIMEOUT_DEFAULT)
 
 
-def show(engine: Engine, out: Any) -> None:
+def settings_in_force(engine: Engine) -> dict[str, str | int]:
+    """The settings in force and the sweep's backlog, as the members of ``show --json`` (``SHOW_JSON_KEYS``)."""
     with engine.connect() as connection:
         settings = MemoryReader().settings(connection)  # type: ignore[arg-type]
         backlog = uncaptured_decisions(connection)
-    for name, value, revision in (("data_class", settings.data_class, settings.data_class_revision),
-                                  ("training_use", settings.training_use, settings.training_use_revision)):
+    values = {"data_class": (settings.data_class, settings.data_class_revision),
+              "training_use": (settings.training_use, settings.training_use_revision)}
+    view: dict[str, str | int] = {}
+    for name in SETTING_NAMES:
+        value, revision = values[name]
+        view.update({name: value, f"{name}_revision": revision, f"{name}_default": SETTING_DEFAULTS[name]})
+    view["uncaptured_decisions"] = backlog
+    return view
+
+
+def show(engine: Engine, out: Any, *, as_json: bool = False) -> None:
+    view = settings_in_force(engine)
+    if as_json:
+        print(json.dumps(view), file=out)
+        return
+    for name in SETTING_NAMES:
+        revision = view[f"{name}_revision"]
         origin = "default" if revision == 0 else f"revision {revision}"
-        print(f"{name}: {value} ({origin}; default {SETTING_DEFAULTS[name]})", file=out)
-    print(f"uncaptured-decisions: {backlog} (ledger accept/reject events with no memory decision; "
+        print(f"{name}: {view[name]} ({origin}; default {view[f'{name}_default']})", file=out)
+    print(f"uncaptured-decisions: {view['uncaptured_decisions']} (ledger accept/reject events with no memory decision; "
           "a data_class change is refused until this is 0)", file=out)
 
 
@@ -201,7 +227,8 @@ def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
     parser = argparse.ArgumentParser(prog="memory_setting", description=__doc__.split("\n", 1)[0])
     parser.add_argument("--database", required=True, help="the typed name of the connected database")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("show", help="print the settings in force")
+    display = commands.add_parser("show", help="print the settings in force")
+    display.add_argument("--json", action="store_true", help="one line of JSON (SHOW_JSON_KEYS) instead of the screen")
     change = commands.add_parser("set", help="journal a new value")
     change.add_argument("name", help=f"one of {', '.join(SETTING_NAMES)}")
     change.add_argument("value")
@@ -215,7 +242,7 @@ def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
         engine = create_database_engine(load_settings())
         _check_head(engine, args.database)
         if args.command == "show":
-            show(engine, out)
+            show(engine, out, as_json=args.json)
             return EXIT_OK
         return apply_setting(engine, args, out)
     except SettingRefused as error:

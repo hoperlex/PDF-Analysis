@@ -220,6 +220,69 @@ def test_the_dry_run_changes_nothing_and_says_what_the_apply_would_do(stand: Sta
     assert int(_line(out, "rows-to-delete")) == 3 * 4 + 2 + 1 + 1
 
 
+def server_setting(stand: Stand, name: str) -> int:
+    with stand.engine.connect() as connection:
+        return int(connection.execute(text(f"SELECT current_setting('{name}')")).scalar_one())
+
+
+def test_the_dry_run_says_how_many_advisory_locks_the_selection_needs_and_the_size_of_the_servers_lock_table(stand: Stand, memory: Memory) -> None:
+    """`D-516`: the numbers are the server's own (read here with the test's own query), and 3 cases against a table of thousands is no warning."""
+    per, connections, prepared = (server_setting(stand, name) for name in ("max_locks_per_transaction", "max_connections", "max_prepared_transactions"))
+    code, out, err = invoke(tool, stand, *A_PROJECT)
+    assert code == 0 and err == "", (out, err)
+    assert "-- advisory locks (the apply holds them until it commits) --" in out
+    assert "  needed: 4 (3 cases, one lock each, and one that says a forget is running)" in out
+    assert (f"  server lock table: max_locks_per_transaction {per} x (max_connections {connections} + max_prepared_transactions {prepared}) "
+            f"= {per * (connections + prepared)} slots, shared by every session") in out
+    assert "WARNING" not in out, out
+    assert out.index("-- advisory locks") < out.index("--dry-run: NOTHING ABOVE WAS CHANGED.") < out.index("cases: 3") < out.index("plan-sha256: ")
+    assert _line(out, "cases") == "3" and out.rstrip().splitlines()[-1].startswith("plan-sha256: "), "the wrapper's parse of the summary lines is unmoved"
+
+
+def test_the_dry_run_warns_above_80_percent_of_the_lock_table_and_says_it_does_not_change_the_plan(
+    stand: Stand, memory: Memory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`D-516`: 3 cases need 4 locks. Against a table of 5 slots that is 80 %, which is not above the line; of 4 slots it is 100 %; of 6 it is 67 %. The
+    figures are made up by replacing the reading of the server's settings, because the table of a real server is too large to fill with cases."""
+    def table(per: int, connections: int, prepared: int) -> None:
+        monkeypatch.setattr(tool, "lock_table_settings", lambda connection: (per, connections, prepared))
+
+    digests = set()
+    for (per, connections, prepared), warned in (((5, 1, 0), False), ((2, 2, 0), True), ((1, 5, 1), False), ((1, 4, 0), True), ((1, 1, 2), True)):
+        table(per, connections, prepared)
+        code, out, err = invoke(tool, stand, *A_PROJECT)
+        assert code == 0 and err == "", (out, err)
+        assert ("WARNING: this selection needs " in out) is warned, (per, connections, prepared, out)
+        digests.add(_line(out, "plan-sha256"))
+    assert len(digests) == 1, "what the dry run says about the lock table is not part of the plan that the owner approves"
+    table(1, 4, 0)
+    out = invoke(tool, stand, *A_PROJECT)[1]
+    assert "needs 100 % of that size (the warning starts above 80 %)" in out and "= 4 slots" in out
+    assert "api and worker stopped" in out and "runbook section 21" in out and "changes nothing" in out
+
+
+def test_a_server_that_will_not_say_its_lock_table_is_said_so_in_the_dry_run(stand: Stand, memory: Memory, monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(connection: Any) -> tuple[int, int, int]:
+        raise RuntimeError("no such setting")
+
+    monkeypatch.setattr(tool, "lock_table_settings", broken)
+    code, out, err = invoke(tool, stand, *A_PROJECT)
+    assert code == 0 and err == "", (out, err)
+    assert "  needed: 4 (3 cases" in out and "server lock table: its size could not be read (RuntimeError)" in out
+    assert _line(out, "cases") == "3" and re.fullmatch(r"[0-9a-f]{64}", _line(out, "plan-sha256"))
+
+
+def test_the_lock_room_figures_are_the_cautious_ones_at_the_boundary() -> None:
+    """The boundary is integer arithmetic on `cases + 1` against `per x (connections + prepared)`; `D-516`'s own default figures included."""
+    def says_warning(cases: int, **table: int) -> bool:
+        return any("WARNING" in line for line in tool.lock_room_lines(cases, **table))
+
+    default = {"per": 64, "connections": 100, "prepared": 0}
+    assert not says_warning(5119, **default) and says_warning(5120, **default)    # 5120 + 1 locks > 80 % of 6400
+    assert says_warning(12000, **default) and "needs 188 %" in tool.lock_room_lines(12000, **default)[-1]
+    assert not says_warning(0, **default) and not says_warning(1, per=10, connections=1, prepared=0)
+
+
 # --- the apply ----------------------------------------------------------------------------------------------------------
 
 
@@ -297,6 +360,7 @@ def test_a_finished_forget_run_again_is_nothing_to_do(stand: Stand, memory: Memo
     # the dry run of a project with nothing left to forget says so too, and has no digest to approve
     code, dry, _ = invoke(tool, stand, *A_PROJECT)
     assert code == 0 and "nothing to do" in dry and _line(dry, "cases") == "0"
+    assert "advisory locks" not in dry, "a selection with no case needs no lock: nothing to say about the table"
 
 
 def test_one_case_by_identity_and_everything_by_all(stand: Stand, memory: Memory, tmp_path: Path) -> None:
