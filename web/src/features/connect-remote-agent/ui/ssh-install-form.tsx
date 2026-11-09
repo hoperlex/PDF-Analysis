@@ -32,6 +32,7 @@ import {
   SSH_USER_LABEL,
   WIZARD_BACK_LABEL,
 } from '../model/words';
+import styles from './connect-remote-agent.module.css';
 
 export interface SshInstallFormProps {
   readonly pending: boolean;
@@ -50,11 +51,14 @@ export function SshInstallForm({ pending, problem, failure, onSubmit, onBack }: 
   }
 
   return (
-    <form className="am-form" onSubmit={submit} data-agent-ssh-form>
+    <form className={`am-form am-form--two ${styles.form}`} onSubmit={submit} data-agent-ssh-form>
       <h3>{SSH_FORM_TITLE}</h3>
       <p className="am-form__hint">{SSH_FORM_INTRO}</p>
-      <p className="am-form__hint" data-agent-private-range-hint>{SSH_PRIVATE_RANGE_HINT}</p>
-      <div className="am-form__field">
+      <details className={styles.fold}>
+        <summary>Если сервер в частной сети</summary>
+        <p className="am-form__hint" data-agent-private-range-hint>{SSH_PRIVATE_RANGE_HINT}</p>
+      </details>
+      <div className="am-form__field am-form__field--wide">
         <label htmlFor="agent-ssh-host">{SSH_HOST_LABEL}</label>
         <input id="agent-ssh-host" name={FIELD_NAMES.sshHost} type="text" required maxLength={253} autoComplete="off" spellCheck={false} />
       </div>

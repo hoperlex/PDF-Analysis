@@ -118,7 +118,7 @@ import type {
   RunStatus,
 } from '@/shared/api';
 import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
-import type { Account, AnalysisPreset } from '@/shared/api';
+import type { Account, AnalysisPreset, AnalysisProfileListItem } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import { routes } from '@/shared/lib';
@@ -177,6 +177,17 @@ import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
 import {
   ARCHIVED_GROUP, MAIN_GROUP, ROUTED_GROUP, ruleOf, seedGroups, seedRules,
 } from '../executor-groups/executor-groups-fixtures';
+import {
+  AgentSetup, ConnectWizard, EnrollmentCommandView, OpenRouterKeyStep, OpenRouterSetup, SshInstallForm,
+} from '@/features/connect-remote-agent';
+import { IssuedTokenView, RunnerTokenPanel } from '@/features/manage-executor-connection';
+import { CutOverPreviewTable, GroupForm } from '@/features/manage-executor-group';
+import { memberCandidates } from '@/entities/executor-group';
+import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
+import { PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
+import { CONNECTION_CASES, PREVIEW as CUT_OVER_PREVIEW } from '../executor-groups/executor-groups-fixtures';
+import { issued as issuedEnrollment } from '../workers/connect-remote-agent-fixtures';
+import { PULL_ONLINE } from '../workers/executor-fixtures';
 
 import {
   BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blockId, blocksOnFivePages, blocksVersion, everyKindOfBlock,
@@ -3162,5 +3173,97 @@ export function screens(): Screen[] {
     selected: 'failed',
     onSelect: noop,
   })));
+  /*
+   * Lane N2: the screens the density pass of «Исполнители» and «Настройки анализа» measures and that no other census screen
+   * draws open. The forms stand as the views the pages open them as (a closed `<details>` hides its form from a browser's layout,
+   * so the group form is rendered by itself); the wizard in its steps (the kind of connection, the agent's name and model with the
+   * two ways to install, the SSH form, the one command shown once, OpenRouter, and the key step after it); the runner-token
+   * panel of a connection with tokens, and the box a fresh token appears in; the cut-over proposal as its table; and
+   * «Настройки анализа» with the registry of every section read. At the very end, for the reason above.
+   */
+  {
+    const wizardClient = (): ReturnType<typeof newClient> => {
+      const client = newClient();
+      seedExecutors(client, EXECUTOR_CASES);
+      client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+      return client;
+    };
+    add('ConnectWizard, the kind of connection', renderScreen(wizardClient(), createElement(ConnectWizard, { pinnedModels: EXECUTOR_PINNED })));
+    add('ConnectWizard, the agent: name, model and the two ways to install', renderScreen(wizardClient(), createElement(AgentSetup, {
+      pinnedModels: EXECUTOR_PINNED, onBack: noop,
+    })));
+    add('ConnectWizard, the agent over SSH', renderScreen(wizardClient(), createElement(SshInstallForm, {
+      pending: false, problem: null, failure: null, onSubmit: noop, onBack: noop,
+    })));
+    add('ConnectWizard, the agent: the command shown once', renderScreen(wizardClient(), createElement(EnrollmentCommandView, {
+      issued: issuedEnrollment(EXECUTOR_READY.connection.connection_id), replaced: false, pending: false, failure: null,
+      onNewCommand: noop, onClose: noop,
+    })));
+    add('ConnectWizard, OpenRouter', renderScreen(wizardClient(), createElement(OpenRouterSetup, {
+      pinnedModels: EXECUTOR_PINNED, onBack: noop,
+    })));
+    add('ConnectWizard, OpenRouter: the key step', renderScreen(wizardClient(), createElement(OpenRouterKeyStep, {
+      connectionId: EXECUTOR_READY.connection.connection_id, name: 'OpenRouter',
+    })));
+
+    const NOW_MS = Date.now();
+    add('RunnerTokenPanel, a client with live, revoked and expired tokens, administrator', renderScreen(wizardClient(), createElement(RunnerTokenPanel, {
+      connection: PULL_ONLINE.connection, detail: PULL_ONLINE.detail, canManage: true, nowMs: NOW_MS,
+    })));
+    add('RunnerTokenPanel, expert', renderScreen(wizardClient(), createElement(RunnerTokenPanel, {
+      connection: PULL_ONLINE.connection, detail: PULL_ONLINE.detail, canManage: false, nowMs: NOW_MS,
+    })));
+    add('RunnerTokenPanel, the box of a fresh token', renderScreen(wizardClient(), createElement(IssuedTokenView, {
+      issued: {
+        token: 'токен-одноразовый-9f8e',
+        runner_token: PULL_ONLINE.detail.runner_tokens?.[0] as NonNullable<typeof PULL_ONLINE.detail.runner_tokens>[number],
+      },
+      onClose: noop,
+    })));
+
+    const groupClient = (): ReturnType<typeof newClient> => {
+      const client = newClient();
+      seedGroups(client, [MAIN_GROUP, ROUTED_GROUP]);
+      return client;
+    };
+    const candidates = memberCandidates(
+      CONNECTION_CASES.map((one) => one.connection),
+      new Map(CONNECTION_CASES.map((one) => [one.connection.connection_id, one.detail] as const)),
+    );
+    add('GroupForm, a new group', renderScreen(groupClient(), createElement(GroupForm, {
+      candidates, pinnedModels: EXECUTOR_PINNED,
+    })));
+    add('GroupForm, a new revision of a group', renderScreen(groupClient(), createElement(GroupForm, {
+      group: ROUTED_GROUP, candidates, pinnedModels: EXECUTOR_PINNED,
+    })));
+    add('CutOverPreviewTable, the proposal', renderScreen(groupClient(), createElement(CutOverPreviewTable, {
+      preview: CUT_OVER_PREVIEW, connections: CONNECTION_CASES.map((one) => one.connection),
+    })));
+
+    const settings = newClient();
+    settings.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+    seedExecutors(settings, EXECUTOR_CASES);
+    settings.setQueryData(ANALYSIS_PRESETS_KEY, { items: [] });
+    settings.setQueryData(queryKeys.analysis.profiles(), {
+      items: PROJECT_STRUCTURE_ORDER.map((code, index): AnalysisProfileListItem => {
+        const digit = (index % 10).toString();
+        return {
+          section_code: code,
+          section_name: projectSectionOf(code).name,
+          profile: index === 3 ? null : {
+            analysis_profile_id: `ap_01M5AXG1K22R027A33VTKZ468${digit}`,
+            prompt_bundle_id: `pb_01M5AXG1K2JQQH7R4ACTBW897${digit}`,
+            profile_version: '1.0.0',
+            status: index % 2 === 0 ? 'draft' : 'reviewed',
+            prompt_bundle_sha256: digit.repeat(64),
+            content_sha256: 'e'.repeat(63) + digit,
+            source: null,
+          },
+        };
+      }),
+    });
+    add('AnalysisSettingsPage, the registry of every section read', renderScreen(settings, createElement(AnalysisSettingsPage, {})));
+  }
+
   return out;
 }

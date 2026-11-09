@@ -50,6 +50,8 @@ import { DEFAULT_WORKERS_TAB, WORKERS_TAB_PARAM } from '../model/tabs';
 import type { WorkersTab } from '../model/tabs';
 import { WorkersTabs } from './workers-tabs';
 
+import styles from './workers-page.module.css';
+
 export interface WorkersPageProps {
   /** The tab the address named; the screen opens on «Обзор» when it names none. */
   readonly initialTab?: WorkersTab | undefined;
@@ -155,9 +157,17 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
   return (
     <PageShell
       title="Исполнители"
-      subtitle="Обзор исполнителей и очереди, подключения к моделям, процессы, которые выполняют прогоны, группы исполнителей, правила и назначения. Обзор и список процессов обновляются автоматически, пока вкладка открыта; остальные данные — при возврате на вкладку, после команды и по запросу."
+      subtitle="Обзор и очередь, подключения к моделям, процессы, группы, правила и назначения."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void client.invalidateQueries({ queryKey: queryKeys.execution.all() })}>Обновить</button>}
     >
+      {/* What the one-sentence subtitle leaves out, one line away: what the six tabs hold and when each one refreshes. */}
+      <details className={styles.about} data-workers-about>
+        <summary>Что на экране и как обновляются данные</summary>
+        <p className="am-note">
+          Обзор исполнителей и очереди, подключения к моделям, процессы, которые выполняют прогоны, группы исполнителей, правила и назначения.
+          Обзор и список процессов обновляются автоматически, пока вкладка открыта; остальные данные — при возврате на вкладку, после команды и по запросу.
+        </p>
+      </details>
       <WorkersTabs active={tab} onSelect={openTab}>
         {tab === 'overview' ? (<>
         {updateTime}
