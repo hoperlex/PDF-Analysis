@@ -18,6 +18,7 @@
 import { useEffect, useId, useRef } from 'react';
 import type { ReactNode, Ref } from 'react';
 
+import { shortModelName } from '@/entities/audit-run';
 import type { RunCostEstimate } from '@/shared/api';
 import { ceilingMicros, microsAsUsd } from '@/shared/ui';
 
@@ -77,7 +78,7 @@ export function StartRunCostDialogView({
         <p className="am-note">Тестовый режим: сохранённые ответы. Оценка не является фактическим расходом.</p>
       ) : null}
       <p>
-        Модель: {estimate.model_id}. Страниц: {estimate.page_count}; символов: {estimate.text_characters}; окон: {estimate.windows};{' '}
+        Модель: {shortModelName(estimate.model_id) ?? estimate.model_id}. Страниц: {estimate.page_count}; символов: {estimate.text_characters}; окон: {estimate.windows};{' '}
         {relaxed ? 'начальная оценка вызовов' : 'вызовов'}: {estimate.calls}.
       </p>
       <p>Оценка входных токенов: {estimate.input_tokens}.</p>
