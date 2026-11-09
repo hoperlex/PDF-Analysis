@@ -135,11 +135,16 @@ export function widthFindings(where, measurement, declared) {
  * ## The reading, stated once
  *
  * A visible leaf box (its children, if any, are inline) that holds at least `COLLAPSED_MIN_TEXT` characters of text,
- * is narrower than `COLLAPSED_MAX_WIDTH` px and taller than `COLLAPSED_MIN_HEIGHT` px. Ten characters in a box under
- * 90 px wide wrap in two lines at most unless the box is squeezed (a 16 px line is about 8 px per character, so ten
- * characters need 80 px on one line), and a box over 70 px tall holds four lines or more at the dense line height.
- * A word that is simply long (`Администратор` in a narrow chip) is one line and therefore short, so it does not read.
- * Vertical writing is skipped: a rotated label is narrow and tall by design.
+ * is narrower than `COLLAPSED_MAX_WIDTH` px (a box of width 0 included: the extreme case is a track squeezed to nothing) and
+ * whose text is taller than `COLLAPSED_MIN_HEIGHT` px. Ten characters in a box under 90 px wide wrap in two lines at most
+ * unless the box is squeezed (a 16 px line is about 8 px per character, so ten characters need 80 px on one line), and text
+ * over 70 px tall is four lines or more at the dense line height. A word that is simply long (`Администратор` in a narrow
+ * chip) is one line and therefore short, so it does not read. The height asked is the text's own (a range over the box's
+ * contents), not the box's: a table cell is as tall as its row, and a narrow cell of one line in a tall row is a symptom of
+ * a squeezed neighbour, which is named on its own. Vertical writing is skipped: a rotated label is narrow and tall by design.
+ *
+ * The first version of this reading (WALK-V5, 2026-11-10, a live proof on a stand) missed the very layout it was written for: the
+ * name button of `D-560` was 12 px wide and its name box 0 px, and a box of width 0 was not read.
  *
  * The page of WALK-V4 gave 16 hits on «Главная» at 390 px and 15 at 1440 px before the fix and none after; one true
  * hit was left (`D-563`, the author cell of the runs' table).
@@ -156,15 +161,24 @@ export const COLLAPSED_READING = `(() => {
     const tag = el.tagName.toLowerCase();
     if (el.closest('svg') && tag !== 'svg') continue;
     const r = el.getBoundingClientRect();
-    if (!(r.width > 0 && r.height > 0)) continue;
+    // A box of width 0 is the extreme case (a grid track squeezed to nothing), so only the height and a width under the limit are asked here;
+    // what is not drawn at all is filtered by its computed style below.
     if (!(r.width < MAX_WIDTH && r.height > MIN_HEIGHT)) continue;
     const cs = getComputedStyle(el);
-    if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) <= 0) continue;
+    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.display === 'contents' || Number(cs.opacity) <= 0) continue;
     if (typeof cs.writingMode === 'string' && cs.writingMode.startsWith('vertical')) continue;
     const text = (el.innerText ?? el.textContent ?? '').trim().replace(/\\s+/g, ' ');
     if (text.length < MIN_TEXT) continue;
     const leaf = Array.from(el.children).every((c) => { const d = getComputedStyle(c).display; return d === 'inline' || d === 'none'; });
     if (!leaf) continue;
+    // The box of a table cell is as tall as its row, so a narrow cell of one line in a tall row is not a squeezed one: ask the text's own height.
+    let textHeight = r.height;
+    if (typeof document.createRange === 'function') {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      textHeight = range.getBoundingClientRect().height;
+    }
+    if (!(textHeight > MIN_HEIGHT)) continue;
     count += 1;
     if (hits.length >= 8) continue;
     const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3;
@@ -173,8 +187,8 @@ export const COLLAPSED_READING = `(() => {
       className: typeof el.className === 'string' ? el.className.trim().slice(0, 120) : null,
       id: el.id || null,
       width: Math.round(r.width),
-      height: Math.round(r.height),
-      lines: Math.round(r.height / lineHeight),
+      height: Math.round(textHeight),
+      lines: Math.round(textHeight / lineHeight),
       text: text.slice(0, 50),
     });
   }

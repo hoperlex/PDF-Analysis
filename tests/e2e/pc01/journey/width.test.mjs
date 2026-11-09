@@ -21,8 +21,9 @@ import {
 } from './width.mjs';
 
 /** A box of the fake page. `display` is the computed display; `inline` children keep the parent a leaf. */
-function box(text, w, h, { tag = 'div', className = '', display = 'block', visibility = 'visible', opacity = '1', writingMode = 'horizontal-tb', children = [], inSvg = false, lineHeight = '20px' } = {}) {
+function box(text, w, h, { tag = 'div', className = '', display = 'block', visibility = 'visible', opacity = '1', writingMode = 'horizontal-tb', children = [], inSvg = false, lineHeight = '20px', textHeight = h } = {}) {
   const el = {
+    textHeight,
     tagName: tag.toUpperCase(),
     className,
     id: '',
@@ -37,7 +38,14 @@ function box(text, w, h, { tag = 'div', className = '', display = 'block', visib
 
 function read(...elements) {
   const sandbox = {
-    document: { querySelectorAll: () => elements },
+    document: {
+      querySelectorAll: () => elements,
+      // The text's own box: the fake box says how tall its text is (a cell in a tall row holds one line).
+      createRange: () => {
+        let target = null;
+        return { selectNodeContents: (el) => { target = el; }, getBoundingClientRect: () => ({ height: target.textHeight }) };
+      },
+    },
     getComputedStyle: (el) => el.style,
   };
   return runInNewContext(COLLAPSED_READING, sandbox);
@@ -113,4 +121,20 @@ test('D-565: a page that does not scroll sideways passes the width assertion whi
   const declared = { width: 1280, height: 900, requested: true };
   assert.deepEqual(widthFindings('root', page, declared), [], 'scrollWidth <= innerWidth cannot see a collapsed column');
   assert.equal(collapsedFindings('root', read(box(NAME, 12, 787, { tag: 'button' })), declared).length, 1);
+});
+
+test('D-565: a box of width 0 with its text is the extreme case and is read (the name of D-560 was 0 px wide in a 12 px button)', () => {
+  const reading = read(box(NAME, 0, 787, { tag: 'span', className: 'name' }));
+  assert.equal(reading.count, 1);
+  assert.equal(reading.hits[0].width, 0);
+  assert.equal(read(box(NAME, 0, 787, { display: 'none' })).count, 0, 'a box that is not drawn is not read, whatever its rectangle says');
+  assert.equal(read(box(NAME, 0, 787, { display: 'contents' })).count, 0, '`display: contents` has no box of its own');
+  assert.equal(read(box(NAME, 0, 20)).count, 0, 'an empty-looking zero-width box one line tall is not a column');
+});
+
+test('D-565: a narrow cell of one line in a tall row is not squeezed, its text is the measure (the box is as tall as the row)', () => {
+  const cell = box('версия 1.2.0', 87, 83, { tag: 'td', textHeight: 19 });
+  assert.equal(read(cell).count, 0, 'twelve characters on one line in 87 px, in a row of 83 px because of a neighbour');
+  const squeezed = box('версия 1.2.0 и ещё слова', 58, 107, { tag: 'td', textHeight: 107 });
+  assert.equal(read(squeezed).count, 1, 'the same cell with its text broken into six lines');
 });
