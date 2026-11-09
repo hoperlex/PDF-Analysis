@@ -138,7 +138,7 @@ import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { PauseStatusView } from '@/widgets/pause-status';
-import { UpdateTime, WORKER_PAGE_LIMIT } from '@/entities/execution';
+import { UpdateTime } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
   DOCUMENT_PAGE_LIMIT,
@@ -1426,8 +1426,8 @@ export function screens(): Screen[] {
   for (const state of ['requested', 'awaiting_host_key', 'installing', 'succeeded', 'failed'] as const) {
     add(`InstallSessionView ${state}`, renderScreen(newClient(), createElement(InstallSessionView, {
       install: hostsInstall({
-        state, ...(state === 'failed' ? { failure_reason: 'host_unreachable' as const } : {}),
-        ...(state === 'succeeded' ? { authorized_keys_line: undefined, key_removed_at: '2026-11-09T11:05:00Z' } : {}),
+        state, ...(state === 'failed' ? { failure_reason: 'ssh_refused' as const } : {}),
+        ...(state === 'succeeded' ? { key_removed_at: '2026-11-09T11:05:00Z' } : {}),
       }),
       confirming: false, confirmFailure: null, onConfirm: noop, onRetry: noop, children: createElement('p', null, 'найдено: Opus 5.5'),
     })));

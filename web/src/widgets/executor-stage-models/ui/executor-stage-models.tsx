@@ -68,9 +68,15 @@ export function StageModelsTable({ layout, admin, onEdit }: StageModelsTableProp
               cell: (row) => (
                 <>
                   <ul className={styles.cells}>
-                    {row.cells.map((cell) => <li key={cell.cellKey} className={styles.cell} data-layout-cell={cell.cellKey}>{cell.text}</li>)}
+                    {row.cells.map((cell) => (
+                      <li key={cell.cellKey} className={styles.cell} data-layout-cell={cell.cellKey} data-stage-row={row.row} data-stage-role={cell.role} data-model-effort={cell.effort}>
+                        {cell.text}
+                      </li>
+                    ))}
                   </ul>
-                  {row.problem ? <span className={styles.missing} title={NOT_ON_SERVERS_HINT} data-layout-missing={row.row}>{NOT_ON_SERVERS}</span> : null}
+                  {row.problem ? (
+                    <span className={styles.missing} title={NOT_ON_SERVERS_HINT} data-layout-missing={row.row} data-host-reason="not_on_any_server">{NOT_ON_SERVERS}</span>
+                  ) : null}
                 </>
               ),
             },

@@ -370,6 +370,8 @@ describe('this slice adds no second polling loop', () => {
     join('entities', 'execution', 'api', 'use-execution.ts'), // the queue, the journal, the worker list and the pause state (asserted below)
     join('entities', 'execution', 'index.ts'), // re-exports it
     join('_app', 'use-menu-badges.ts'), // the side menu's counters (asserted below)
+    // `HOSTS-WEB-01` (plan 2026-11-09 §6: the web polls the servers every 10 s while the screen is open): the list of servers.
+    join('entities', 'executor-host', 'api', 'use-executor-hosts.ts'),
   ];
   const MENU_COUNTERS = join('_app', 'use-menu-badges.ts');
   /** The files that name the policy's spread (`OPERATIONAL_LIST_POLL`, not the config's `OPERATIONAL_LIST_POLLING`) outside the closed list. */
@@ -625,6 +627,17 @@ describe('this slice adds no second polling loop', () => {
     for (const hook of ['useExecutionQueue', 'useExecutionJournal', 'useWorkers', 'useWorkerLookup', 'useExecutionDispatch']) {
       expect(section(hook), hook).not.toMatch(/OPERATIONAL_LIST_POLL|refetchInterval/);
     }
+  });
+
+  it('lets the list of servers poll by the policy’s spread, once, with no timer and no interval of its own', () => {
+    const named = sources.filter((file) => file.path.endsWith(join('entities', 'executor-host', 'api', 'use-executor-hosts.ts')));
+    expect(named, 'the walk reads the servers\' hooks').toHaveLength(1);
+    const text = code(named[0]!);
+    expect(spreadsIn(text)).toBe(1);
+    expect(text).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchInterval|refetchIntervalInBackground/);
+    expect(text).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
+    // The details of one server are read once and again on request, never on a timer.
+    expect(text.split('export function executorHostDetailsQueryOptions')[1] ?? '').not.toContain('OPERATIONAL_LIST_POLL');
   });
 
   it('applies the operational-list spread only in the closed list of files', () => {

@@ -59,7 +59,7 @@ function stageText(stageKey: string): string {
 
 function ProviderBlock({ provider }: { readonly provider: ExecutorHostProviderDetail }) {
   return (
-    <li className={styles.item} data-host-provider={provider.provider} data-host-access={provider.access}>
+    <li className={styles.item} data-host-provider={provider.provider} data-host-access={provider.access} data-host-auth={provider.auth_state}>
       <strong>{PROVIDER_LABELS[provider.provider]}</strong> · {ACCESS_LABELS[provider.access]} · {AUTH_STATE_LABELS[provider.auth_state]}
       {provider.cli_version === undefined ? null : <> · версия <code>{provider.cli_version}</code></>}
       <ul className={styles.plain}>
@@ -68,7 +68,10 @@ function ProviderBlock({ provider }: { readonly provider: ExecutorHostProviderDe
             {modelLabel(model.model_id)} — {MODEL_STATE_LABELS[model.state]}
             {model.reasons.length === 0 ? null : (
               <span className={styles.reason} data-host-model-reasons>
-                {': '}{model.reasons.map((reason) => UNAVAILABLE_REASON_SENTENCES[reason]).join('; ')}
+                {': '}
+                {model.reasons.map((reason, at) => (
+                  <span key={reason} data-host-reason={reason}>{at === 0 ? '' : '; '}{UNAVAILABLE_REASON_SENTENCES[reason]}</span>
+                ))}
               </span>
             )}
           </li>

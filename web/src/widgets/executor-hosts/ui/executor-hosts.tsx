@@ -67,7 +67,7 @@ export function HostRow({ host, admin, initialPanel = null }: HostRowProps) {
   const [panel, setPanel] = useState<'details' | 'delete' | null>(initialPanel);
 
   return (
-    <li className={`${styles.row} ${reading.noContact ? styles.rowOffline : ''}`} data-host-row={reading.hostId} data-host-tone={reading.tone}>
+    <li className={`${styles.row} ${reading.noContact ? styles.rowOffline : ''}`} data-host-row={reading.hostId} data-host-state={host.state} data-host-tone={reading.tone}>
       <span className={`${styles.dot} ${TONE_CLASS[reading.tone]}`} role="img" aria-label={HOST_STATE_LABELS[host.state]}>●</span>
       <span className={styles.name}>{reading.name}</span>
       {admin ? <HostEnabledSwitch hostId={host.host_id} name={reading.name} enabled={reading.enabled} /> : null}

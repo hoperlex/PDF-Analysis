@@ -77,7 +77,3 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }
-
-.problem {
-  color: var(--am-failed);
-}

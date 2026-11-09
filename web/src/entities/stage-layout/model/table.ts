@@ -19,6 +19,7 @@ const ROLE_ORDER = ['main', 'leg1', 'leg2', 'judge'] as const;
 export interface CellReading {
   readonly cellKey: string;
   readonly role: StageLayoutCell['role'];
+  readonly effort: StageLayoutCell['effort'];
   /** «Opus 5.5 · среднее», with the role in front when the row has several cells. */
   readonly text: string;
   readonly unavailable: boolean;
@@ -58,6 +59,7 @@ export function layoutTable(layout: StageModelLayout): readonly TableRow[] {
       return {
         cellKey: cell.cell_key,
         role: cell.role,
+        effort: cell.effort,
         text: several && role !== '' ? `${role}: ${cellText(cell)}` : cellText(cell),
         unavailable: unavailable.has(cell.cell_key),
       };

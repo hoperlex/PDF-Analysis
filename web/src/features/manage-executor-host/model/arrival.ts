@@ -9,6 +9,7 @@
 
 import type { ExecutorHost, ExecutorHostId, ExecutorHostList } from '@/shared/api';
 import { modelChips } from '@/entities/executor-host';
+import { hostHasReported } from '@/features/connect-remote-agent';
 
 import { FOUND_NO_MODELS, WAITING_STATUS, foundStatus } from './words';
 
@@ -22,9 +23,7 @@ export function hostOf(list: ExecutorHostList | undefined, hostId: ExecutorHostI
 }
 
 export function arrivalOf(host: ExecutorHost | undefined): Arrival {
-  if (host === undefined || host.last_seen_at === undefined || host.state === 'offline') {
-    return { arrived: false, text: WAITING_STATUS };
-  }
+  if (host === undefined || !hostHasReported(host)) return { arrived: false, text: WAITING_STATUS };
   const chips = modelChips(host.models);
   return {
     arrived: true,

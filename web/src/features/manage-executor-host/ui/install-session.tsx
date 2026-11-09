@@ -13,14 +13,10 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { useQuery } from '@tanstack/react-query';
-
 import type { ExecutorAgentInstall, ExecutorHostId } from '@/shared/api';
-import { getExecutorHostAgentInstall, queryKeys } from '@/shared/api';
-import { AGENT_INSTALL_POLL_MS } from '@/shared/config';
 import type { ExecutionFailure } from '@/entities/execution';
 import { hostFailure } from '@/entities/executor-host';
-import { CopyBox, INSTALL_FAILURE_SENTENCES } from '@/features/connect-remote-agent';
+import { CopyBox, INSTALL_FAILURE_SENTENCES, useHostInstall } from '@/features/connect-remote-agent';
 import { useCommandKey } from '@/features/manage-executor-connection';
 
 import {
@@ -45,10 +41,10 @@ import { HostFailure } from './host-failure';
 import styles from './manage-executor-host.module.css';
 
 const STEP_CLASS: Readonly<Record<InstallStepState, string>> = {
-  done: styles.stepDone,
-  current: styles.stepCurrent,
-  todo: styles.stepTodo,
-  failed: styles.stepFailed,
+  done: styles.stepDone ?? '',
+  current: styles.stepCurrent ?? '',
+  todo: styles.stepTodo ?? '',
+  failed: styles.stepFailed ?? '',
 };
 
 export interface InstallSessionViewProps {
@@ -139,20 +135,10 @@ export interface InstallSessionProps {
   readonly children?: ReactNode | undefined;
 }
 
-function installIsMoving(install: ExecutorAgentInstall | undefined): boolean {
-  return install !== undefined && (install.state === 'requested' || install.state === 'scanning' || install.state === 'installing');
-}
-
 export function InstallSession({ hostId, initial, onRetry, children }: InstallSessionProps) {
   // Re-read while the worker moves, from the answer of the command that created the session; it stops by itself at the
   // person's step and at the end.
-  const read = useQuery<ExecutorAgentInstall>({
-    queryKey: [...queryKeys.execution.all(), 'host-install', initial.install_id],
-    queryFn: async () => (await getExecutorHostAgentInstall({ path: { host_id: hostId, install_id: initial.install_id } })).data,
-    initialData: initial,
-    staleTime: 0,
-    refetchInterval: (query) => (installIsMoving(query.state.data) ? AGENT_INSTALL_POLL_MS : false),
-  });
+  const read = useHostInstall(hostId, initial.install_id, initial);
   const confirm = useConfirmExecutorHostAgentInstallHostKey();
   const keys = useCommandKey();
   const [failure, setFailure] = useState<ExecutionFailure | null>(null);

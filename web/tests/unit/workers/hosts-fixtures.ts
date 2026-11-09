@@ -37,7 +37,7 @@ function host(over: Partial<ExecutorHost> & Pick<ExecutorHost, 'host_id' | 'disp
 }
 
 export const SERVER_ONLINE = host({
-  host_id: HOST_A, display_name: 'adm1.hlab.kz', slots_in_use: 2, slots_total: 3,
+  host_id: HOST_A, display_name: 'основной', slots_in_use: 2, slots_total: 3,
   models: [
     { provider: 'claude_code', access: 'subscription', model_id: 'claude-opus-5-5', state: 'available' },
     { provider: 'claude_code', access: 'subscription', model_id: 'claude-sonnet-5-5', state: 'available' },
@@ -75,8 +75,23 @@ export const HOST_DETAILS: ExecutorHostDetails = {
       provider: 'codex', access: 'api', auth_state: 'login_required',
       models: [{ model_id: 'gpt-6-sol', state: 'unavailable', reasons: ['login_required', 'model_not_verified'] }],
     },
+    {
+      provider: 'openrouter_api', access: 'api', auth_state: 'unknown',
+      models: [{ model_id: 'gpt-6-astra', state: 'busy', reasons: [] }],
+    },
   ],
   tasks: [{ task_id: TASK, run_id: RUN, stage_key: 'blocks:3', model_id: 'claude-opus-5-5', provider: 'claude_code', since: '2026-11-09T10:45:00Z' }],
+};
+
+/** A server that is switched off and out of contact: every model is unavailable for the two reasons that name it. */
+export const HOST_DETAILS_OFF: ExecutorHostDetails = {
+  host: { ...SERVER_OFFLINE, enabled: false },
+  slots: [],
+  providers: [{
+    provider: 'claude_code', access: 'subscription', auth_state: 'valid',
+    models: [{ model_id: 'claude-opus-5-5', state: 'unavailable', reasons: ['host_disabled', 'host_offline'] }],
+  }],
+  tasks: [],
 };
 
 export const CATALOGUE: ModelCatalogue = {
@@ -115,6 +130,25 @@ export const LAYOUT: StageModelLayout = {
   unavailable_cell_keys: ['review:main'],
 };
 
+/** The blocks row as an ensemble scheme (two legs and a judge), every effort of the catalogue on some cell. */
+export const LAYOUT_ENSEMBLE: StageModelLayout = {
+  ...LAYOUT,
+  current: {
+    ...LAYOUT.current!,
+    cells: [
+      cell('text', 'claude-sonnet-5-5', 'low'),
+      cell('blocks', 'claude-opus-5-5', 'high', 'leg1'),
+      cell('blocks', 'gpt-6-astra', 'medium', 'leg2'),
+      cell('blocks', 'claude-sonnet-5-5', 'medium', 'judge'),
+      cell('cross_check', 'claude-sonnet-5-5'),
+      cell('norms', 'claude-sonnet-5-5'),
+      cell('review', 'claude-sonnet-5-5'),
+      cell('correction', 'claude-sonnet-5-5'),
+    ],
+  },
+  unavailable_cell_keys: [],
+};
+
 export const LAYOUT_OFF: StageModelLayout = { ...LAYOUT, enabled: false, switch_journal: [], unavailable_cell_keys: [] };
 export const LAYOUT_EMPTY: StageModelLayout = { enabled: false, history: [], switch_journal: [], unavailable_cell_keys: [] };
 
@@ -130,12 +164,15 @@ export const ISSUED: IssuedExecutorEnrollment = {
 };
 
 export function install(over: Partial<ExecutorAgentInstall> = {}): ExecutorAgentInstall {
-  return {
-    install_id: `exai_${ULID}A`, host_id: HOST_C, access: 'generated_key', state: 'awaiting_host_key', ssh_host: 'adm2.hlab.kz', ssh_port: 22,
-    ssh_user: 'deploy', created_at: NOW, updated_at: NOW, created_by: USER,
-    authorized_keys_line: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample стенд', public_key: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample',
-    observed_host_key_fingerprint: 'SHA256:abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG', ...over,
+  const made: ExecutorAgentInstall = {
+    install_id: `exai_${ULID}A`, host_id: HOST_C, access: 'generated_key', state: 'awaiting_host_key', ssh_host: 'узел.пример', ssh_port: 22,
+    ssh_user: 'установщик', created_at: NOW, updated_at: NOW, created_by: USER,
+    authorized_keys_line: 'строка-ключа-для-файла', public_key: 'открытый-ключ-стенда',
+    observed_host_key_fingerprint: 'отпечаток-ключа-сервера', ...over,
   };
+  // A finished install has no line to add any more: the stand removed its key from the server.
+  if (over.state === 'succeeded' || over.state === 'failed') delete made.authorized_keys_line;
+  return made;
 }
 
 /** The reads of the two tabs, seeded the way the cache holds them after the first read. */

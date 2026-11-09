@@ -40,10 +40,11 @@ export const MENU_DELETE = 'Удалить';
 /** «нет связи с 14:02», or that the server has never been in touch. */
 export function noContactSentence(lastSeen: string | undefined): string {
   if (lastSeen === undefined) return 'нет связи: сервер ещё не выходил на связь';
-  const at = new Date(lastSeen);
-  if (Number.isNaN(at.getTime())) return 'нет связи';
-  const two = (value: number): string => String(value).padStart(2, '0');
-  return `нет связи с ${two(at.getHours())}:${two(at.getMinutes())}`;
+  const moment = new Date(lastSeen);
+  if (Number.isNaN(moment.getTime())) return 'нет связи';
+  const hours = String(moment.getHours()).padStart(2, '0');
+  const minutes = String(moment.getMinutes()).padStart(2, '0');
+  return `нет связи с ${hours}:${minutes}`;
 }
 
 /** «На связи 2 из 3 · свободно 3 из 5». */

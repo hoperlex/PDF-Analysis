@@ -226,7 +226,7 @@ describe('a server row has exactly the controls the plan names, for those it nam
   it('asks before deleting, and says what it does', () => {
     const markup = rowOf(true, 'delete');
     expect(markup).toContain('data-host-delete');
-    expect(markup).toContain('Удалить сервер «adm1.hlab.kz»?');
+    expect(markup).toContain('Удалить сервер «основной»?');
     expect(markup).toContain('Это необратимо');
   });
 
@@ -257,7 +257,7 @@ describe('the viewer sees none of the new reads', () => {
       expect(markup, tab).not.toContain('data-hosts-summary');
       expect(markup, tab).not.toContain('data-host-row');
       expect(markup, tab).not.toContain('data-layout-cell');
-      expect(markup, tab).not.toContain('adm1.hlab.kz');
+      expect(markup, tab).not.toContain('основной');
       expect(markup, tab).toContain('data-workers-panel');
     }
   });
@@ -343,7 +343,9 @@ describe('«Подключить сервер» never asks for a model', () => {
 
   it('says «найдено: …» once the server has reported, and waits while it has not', () => {
     expect(arrivalOf(undefined)).toEqual({ arrived: false, text: 'ждём сервер…' });
-    expect(arrivalOf({ ...SERVER_EMPTY, last_seen_at: undefined }).arrived).toBe(false);
+    const unseen: ExecutorHost = { ...SERVER_EMPTY };
+    delete unseen.last_seen_at;
+    expect(arrivalOf(unseen).arrived).toBe(false);
     expect(arrivalOf({ ...SERVER_ONLINE, state: 'offline' }).arrived).toBe(false);
     expect(arrivalOf(SERVER_ONLINE)).toEqual({ arrived: true, text: 'найдено: Opus 5.5, Sonnet 5.5, gpt-6-sol' });
     expect(arrivalOf(SERVER_EMPTY).text).toContain('моделей пока нет');
@@ -410,13 +412,13 @@ describe('the install over SSH: three steps, the fingerprint by value', () => {
     expect(markup.match(/data-install-step=/g)).toHaveLength(3);
     expect(markup).toContain('data-install-key-line');
     expect(markup).toContain('data-install-fingerprint-value');
-    expect(markup).toContain('SHA256:abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG');
+    expect(markup).toContain('отпечаток-ключа-сервера');
     expect(markup).toMatch(/data-install-fingerprint-confirm[^>]*disabled=""|disabled=""[^>]*data-install-fingerprint-confirm/);
     expect(markup).not.toContain('data-after');
   });
 
   it('shows the server\'s status only after the install has succeeded, and a failure in words', () => {
-    const done = view({ state: 'succeeded', authorized_keys_line: undefined, key_removed_at: '2026-11-09T11:05:00Z' });
+    const done = view({ state: 'succeeded', key_removed_at: '2026-11-09T11:05:00Z' });
     expect(done).toContain('data-after');
     expect(done).not.toContain('data-install-key-line');
     expect(done).not.toContain('data-install-fingerprint');

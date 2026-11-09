@@ -108,7 +108,7 @@ function RowEditor({ row, cells, ...props }: {
         onChange={(event) => props.onEffort(cell.cell_key, event.currentTarget.value as ModelEffort)}
       >
         {(efforts.includes(cell.effort) ? efforts : [cell.effort, ...efforts]).map((effort) => (
-          <option key={effort} value={effort}>{STAGE_EFFORT_LABELS[effort]}</option>
+          <option key={effort} value={effort} data-model-effort={effort}>{STAGE_EFFORT_LABELS[effort]}</option>
         ))}
       </select>
     </span>
