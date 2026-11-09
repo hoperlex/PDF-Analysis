@@ -62,7 +62,7 @@ SMALL = snapshot_of([["ширина прохода 100 мм"]], [["ширина 
 
 def test_the_first_estimate_of_a_windowed_run_is_one_catalogue_call_independent_of_the_text_volume(monkeypatch):
     short = method(SMALL, WINDOWED, monkeypatch).counts(None, request())
-    long_source = snapshot_of([["я" * 90_000]], [["я" * 90_000]])
+    long_source = snapshot_of([["я" * 35_000]], [["я" * 35_000]])               # within the legacy plan's 80,000 as well
     long = method(long_source, WINDOWED, monkeypatch).counts(None, request())
     for counts in (short, long):
         assert len(counts.groups) == 1 and counts.groups[0].calls == 1 and counts.groups[0].output_tokens == 8000
@@ -71,7 +71,7 @@ def test_the_first_estimate_of_a_windowed_run_is_one_catalogue_call_independent_
     legacy_short = method(SMALL, None, monkeypatch).counts(None, request())
     legacy_long = method(long_source, None, monkeypatch).counts(None, request())
     assert legacy_short.groups[0].output_tokens == 4000
-    assert legacy_long.groups[0].prompt_chars > legacy_short.groups[0].prompt_chars + 100_000     # the legacy plan sends the text
+    assert legacy_long.groups[0].prompt_chars > legacy_short.groups[0].prompt_chars + 60_000      # the legacy plan sends the text
 
 
 def test_the_estimate_grows_with_the_number_of_pages_the_catalogue_lists(monkeypatch):
