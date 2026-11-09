@@ -16,7 +16,6 @@ from auditmanager.api.schemas import models
 from auditmanager.bootstrap import hosts_dispatch, stage_plan_providers
 from auditmanager.bootstrap.hosts_adapter import ExecutorHostAdapter
 from auditmanager.bootstrap.stage_plan_adapter import StageModelAdapter
-from auditmanager.runs import stage_facts
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 HOST = "exh_01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -86,7 +85,6 @@ def test_the_two_adapters_carry_the_whole_of_their_ports() -> None:
     (lambda: hosts_dispatch.bind_planned_run(None, run_id="run_x"), "executor_host_dispatch"),  # type: ignore[arg-type]
     (lambda: hosts_dispatch.claim_for_host_token(None, token_id="ern_x", runner_instance_id=None, wait_seconds=0), "executor_host_dispatch"),  # type: ignore[arg-type]
     (lambda: stage_plan_providers.StagePlanProviders().binding_for(None, run_id="run_x", cell_key="text:main"), "stage_plan_providers"),  # type: ignore[arg-type]
-    (lambda: stage_facts.read_run_stage_facts(None, run_id="run_x"), "run_stage_facts"),  # type: ignore[arg-type]
 ])
-def test_the_seams_of_dispatch_providers_and_stage_facts_refuse_the_same_way(call: Any, dependency: str) -> None:
+def test_the_seams_of_dispatch_and_providers_refuse_the_same_way(call: Any, dependency: str) -> None:
     assert _refusal(call).detail_fields["dependency"] == dependency

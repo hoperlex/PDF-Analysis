@@ -665,6 +665,13 @@ __all__ = [
     "StageModelKit",
     "StageModelLayout",
     "StageRowKey",
+    "RunStage",
+    "RunStageCell",
+    "RunStageChip",
+    "RunStageFacts",
+    "RunStagePlanSource",
+    "RunStageState",
+    "RunStages",
 ]
 
 
@@ -1118,7 +1125,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.45.0"]
+    contract_version: Literal["1.46.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -9614,3 +9621,216 @@ class RunStartReadiness(_Object):
         default=None, json_schema_extra=optional_property
     )
     cells: Annotated[list[RunStartReadinessCell], Field(max_length=32)]
+
+
+# --- the stages of a run: plan and fact (`HOSTS-SEAL-2`, ADR-0028, contract 1.46.0) ----------------------------------------
+#
+# One read, ``getRunStages``, answers the window «Этапы анализа раздела»: for each chip the run has, what it was planned to run
+# on and what happened. It joins three places -- the PC-01 ``stage_result`` rows, the extended review's procedures and
+# ``phase_coverage``, and the call journal (``model_call`` and ``provider_call_effect``) -- and invents nothing: a figure the
+# journal does not hold is absent, not zero, and a chip no place mentions is not listed.
+
+
+class RunStageChip(str, enum.Enum):
+    """A chip of a run: a reader's name for the phase or phases of code that do one kind of work. The eight chips in the order the
+    rail draws them -- `preparation` (the three PC-01 preparation stages), `text` (analysis of the text), `blocks` (analysis of the
+    blocks), `cross_check` (the complex cross-check and the parameter passport), `merge` (the deterministic merge), `norms` (the
+    norms), `review` (the critic) and `correction` (the refinement) -- and `ar_v3`, the one stage of the separate AR v3 profile.
+    A chip order is a display order, not the order of the stage graph."""
+
+    PREPARATION = "preparation"
+    TEXT = "text"
+    BLOCKS = "blocks"
+    CROSS_CHECK = "cross_check"
+    MERGE = "merge"
+    NORMS = "norms"
+    REVIEW = "review"
+    CORRECTION = "correction"
+    AR_V3 = "ar_v3"
+
+
+class RunStageState(str, enum.Enum):
+    """How a chip stands. `pending`: not started. `running`: the work is under way (a stage or procedure running, or a call in flight).
+    `done`: completed. `partial`: completed with a typed shortfall. `failed`: refused. `skipped`: not run by decision. `unavailable`:
+    could not run (for example, the corpus is missing)."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    UNAVAILABLE = "unavailable"
+
+
+class RunStagePlanSource(str, enum.Enum):
+    """Where the plan of the chips comes from. `stage_plan`: the plan the run froze at its start, one cell per row and role.
+    `run_binding`: the run froze none (it started on the route as before), so each chip that calls a model has one line, «модель
+    прогона», from the run's binding -- or from the journal when it has none."""
+
+    STAGE_PLAN = "stage_plan"
+    RUN_BINDING = "run_binding"
+
+
+class RunStageCell(_Object):
+    """One line of a chip's plan: the part it plays (`main`, `leg1`, `leg2`, `judge`), the model, the effort, the answer limit and the
+    timeout the run froze, and -- for an expert and an administrator -- the access and the server the cell is bound to. Of a run
+    without a stage plan the line has `role` `main`, the model of the run's binding and nothing else it does not know.
+    `access` and `server` are omitted for the viewer («Наблюдатель», `R-150w`); `server` is also absent while the cell is not bound."""
+
+    cell_key: StageCellKey = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    role: StageCellRole
+    model_id: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    effort: ModelEffort = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    max_output_tokens: Annotated[int, Field(ge=1, le=65536)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    timeout_seconds: Annotated[int, Field(ge=1, le=7200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    access: ExecutorModelAccess = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    server: Annotated[str, Field(min_length=1, max_length=120)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class RunStageFacts(_Object):
+    """What happened on a chip. `started_at` and `finished_at` are the earliest and the latest call of a chip that calls a model, or
+    the times of its stage results (`finished_at` only once the chip has finished, and never from a stage taken from an earlier
+    run). `calls_succeeded` and `calls_failed` count the calls the journal ended, `calls_retried` the calls that repeated an earlier
+    call of the same request (a reply replayed from custody is not a call). `input_tokens`, `output_tokens` and `cost_micros` are
+    the totals of the journal; `subscription_input_tokens` and `subscription_output_tokens` are the part of the tokens served by a
+    subscription (not metered, never in `cost_micros`). `planned` and `completed` are the batches of the extended review's
+    `phase_coverage` and are absent where the review keeps none. `last_error_code` is the code of the stage result that failed or,
+    else, of the latest failed call; `reason` the extended review's reason a procedure did not complete."""
+
+    state: RunStageState
+    started_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    finished_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    calls_succeeded: Annotated[int, Field(ge=0)]
+    calls_failed: Annotated[int, Field(ge=0)]
+    calls_retried: Annotated[int, Field(ge=0)]
+    input_tokens: Annotated[int, Field(ge=0)]
+    output_tokens: Annotated[int, Field(ge=0)]
+    subscription_input_tokens: Annotated[int, Field(ge=0)]
+    subscription_output_tokens: Annotated[int, Field(ge=0)]
+    cost_micros: Annotated[int, Field(ge=0)]
+    last_error_code: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{2,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    reason: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    planned: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    completed: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reused_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class RunStage(_Object):
+    """One chip of the run: the code stage and procedure ids it covers, its plan (empty for a chip that calls no model) and its facts."""
+
+    chip: RunStageChip
+    stage_ids: Annotated[list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")]], Field(min_length=1, max_length=8)]
+    plan: Annotated[list[RunStageCell], Field(max_length=16)]
+    facts: RunStageFacts
+
+
+_RUN_STAGES_EXAMPLES: list[dict[str, Any]] = [
+    {
+        "run_id": "run_01M2545JSD15ETSNNV904X991K",
+        "state": "running",
+        "plan_source": "stage_plan",
+        "items": [
+            {
+                "chip": "preparation",
+                "stage_ids": ["source_preparation", "page_geometry_extraction", "document_context_build"],
+                "plan": [],
+                "facts": {
+                    "state": "done", "started_at": "2026-11-10T09:00:03Z", "finished_at": "2026-11-10T09:01:12Z",
+                    "calls_succeeded": 0, "calls_failed": 0, "calls_retried": 0, "input_tokens": 0, "output_tokens": 0,
+                    "subscription_input_tokens": 0, "subscription_output_tokens": 0, "cost_micros": 0,
+                },
+            },
+            {
+                "chip": "text",
+                "stage_ids": ["text_analysis"],
+                "plan": [{
+                    "cell_key": "text:main", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium",
+                    "max_output_tokens": 16000, "timeout_seconds": 1200, "access": "subscription", "server": "adm1.hlab.kz",
+                }],
+                "facts": {
+                    "state": "done", "started_at": "2026-11-10T09:01:13Z", "finished_at": "2026-11-10T09:06:40Z",
+                    "calls_succeeded": 5, "calls_failed": 1, "calls_retried": 1, "input_tokens": 61240, "output_tokens": 9310,
+                    "subscription_input_tokens": 61240, "subscription_output_tokens": 9310, "cost_micros": 0,
+                    "last_error_code": "dependency_unavailable",
+                },
+            },
+            {
+                "chip": "blocks",
+                "stage_ids": ["block_analysis"],
+                "plan": [{
+                    "cell_key": "blocks:main", "role": "main", "model_id": "claude-opus-5-5", "effort": "medium",
+                    "max_output_tokens": 6000, "timeout_seconds": 900, "access": "subscription", "server": "adm1.hlab.kz",
+                }],
+                "facts": {
+                    "state": "running", "started_at": "2026-11-10T09:06:41Z",
+                    "calls_succeeded": 12, "calls_failed": 0, "calls_retried": 0, "input_tokens": 102400, "output_tokens": 18800,
+                    "subscription_input_tokens": 102400, "subscription_output_tokens": 18800, "cost_micros": 0,
+                    "planned": 40, "completed": 12,
+                },
+            },
+        ],
+    },
+    {
+        "run_id": "run_01M2545JSD15ETSNNV904X991K",
+        "state": "published",
+        "plan_source": "stage_plan",
+        "items": [{
+            "chip": "norms",
+            "stage_ids": ["norm_verification"],
+            "plan": [{
+                "cell_key": "norms:main", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium",
+                "max_output_tokens": 6000, "timeout_seconds": 900,
+            }],
+            "facts": {
+                "state": "done", "started_at": "2026-11-10T09:30:00Z", "finished_at": "2026-11-10T09:41:10Z",
+                "calls_succeeded": 8, "calls_failed": 0, "calls_retried": 0, "input_tokens": 48000, "output_tokens": 7200,
+                "subscription_input_tokens": 0, "subscription_output_tokens": 0, "cost_micros": 412000,
+                "planned": 8, "completed": 8,
+            },
+        }],
+    },
+    {
+        "run_id": "run_01M2545JSD15ETSNNV904X991K",
+        "state": "published",
+        "plan_source": "run_binding",
+        "items": [{
+            "chip": "text",
+            "stage_ids": ["text_analysis"],
+            "plan": [{"role": "main", "model_id": "claude-sonnet-5", "access": "subscription", "server": "kzSonnet"}],
+            "facts": {
+                "state": "done", "started_at": "2026-11-09T11:00:00Z", "finished_at": "2026-11-09T11:03:30Z",
+                "calls_succeeded": 3, "calls_failed": 0, "calls_retried": 0, "input_tokens": 30100, "output_tokens": 4200,
+                "subscription_input_tokens": 30100, "subscription_output_tokens": 4200, "cost_micros": 0,
+            },
+        }],
+    },
+]
+
+
+class RunStages(_Object):
+    """The stages of a run, plan and fact (`HOSTS-SEAL-2`, ADR-0028): each chip the run has, in the order the rail draws them, with
+    what it was planned to run on and what the journal and the stage results say happened. A chip that no stage result, procedure,
+    plan cell or call mentions is not listed. `state` is the run's own, so a reader knows whether a chip that is `running` is still
+    being worked on. `plan_source` says whether the plans are the run's frozen `stage_plan` or the one line of its binding. The
+    examples are: a run in progress on the stage layout; a finished run's norms chip as the viewer reads it (no `access`, no
+    `server`); and a run that started on the route as before."""
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": _RUN_STAGES_EXAMPLES})
+
+    run_id: RunId
+    state: RunState
+    plan_source: RunStagePlanSource
+    items: Annotated[list[RunStage], Field(max_length=9)]

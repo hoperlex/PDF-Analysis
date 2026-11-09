@@ -393,6 +393,8 @@ REQUIRED_OPERATIONS = {
     "setStageModelLayoutEnabled",
     "listModelCatalogue",
     "getRunStartReadiness",
+    # `HOSTS-SEAL-2` (contract 1.46.0): the stages of a run, plan and fact -- a read, so neither keyed nor in the writes below.
+    "getRunStages",
     # `CMP-SEAL-C3`: stage intake, pairs, sheet map, raw text and chain runs.
     "listStagePairs", "confirmStagePair", "getStagePair", "listStagePairSuggestions",
     "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",

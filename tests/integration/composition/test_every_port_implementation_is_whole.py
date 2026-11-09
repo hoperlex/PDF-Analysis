@@ -162,6 +162,9 @@ PORT_FOR_ARGUMENT = {
     # `bootstrap/stage_plan_adapter.py`.
     "executor_hosts": "ExecutorHostPort",
     "stage_models": "StageModelPort",
+    # `HOSTS-SEAL-2` (contract 1.46.0): the stages of a run. The Protocol is in `hosts_ports.py` too; the implementation is
+    # `bootstrap/run_stage_adapter.py::RunStageAdapter` over `runs/stage_facts.py`.
+    "run_stages": "RunStagePort",
     # `W60-PRICE-LIST-01`.
     "optimisation": "OptimisationPort",
     # `W60-OPT-MATCH-01`.

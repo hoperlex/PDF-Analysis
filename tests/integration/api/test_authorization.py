@@ -577,6 +577,8 @@ GUARDED = (
     ("setStageModelLayoutEnabled", "PUT", "/model-layout/enabled"),
     ("listModelCatalogue", "GET", "/model-catalogue"),
     ("getRunStartReadiness", "POST", "/runs/start-readiness"),
+    # `HOSTS-SEAL-2` (contract 1.46.0): the stages of a run; a product read, so the viewer is let in and only the server and the access leave the answer.
+    ("getRunStages", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/stages"),
     ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
     ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
     ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),
