@@ -88,7 +88,7 @@ Task files are `docs/program/tasks/HOSTS-*.md`. The six of waves 0–1 are writt
 |---|---|---|---|
 | `HOSTS-SEAL-3` | Contract 1.47.0: comparison rows in the layout | `HOSTS-INT-2` | 2 h |
 | `HOSTS-CMP-01` | The five `comparison_*` kinds through the system groups and comparison rows; closes `D-541` | `HOSTS-SEAL-3` | 6 h |
-| `HOSTS-CUTOVER-01` | Operator guide: host agent on `adm1.hlab.kz`, the set, the switch, «kzSonnet» archived; closes `D-540` | `HOSTS-CMP-01` | 3 h |
+| `HOSTS-CUTOVER-01` | Operator guide `docs/manual-tests/HOSTS-CUTOVER.md`: host agent on `adm1.hlab.kz`, the set, the switch, «kzSonnet» archived; closes `D-540` | `HOSTS-CMP-01` | 3 h |
 | `HOSTS-INT-3` | Merge, `origin/dev` | wave 3 | 3 h |
 
 ## 4. Hotspot ownership
@@ -163,6 +163,8 @@ Lanes write their code into the stub modules `HOSTS-SEAL-1` creates under exact 
 | Places that show stage state | 5 | 2: the rail and the window |
 
 ## 10. Owner acts
+
+The step-by-step guide for acts 3–5 and for archiving «kzSonnet» is `docs/manual-tests/HOSTS-CUTOVER.md` (`HOSTS-CUTOVER-01`).
 
 1. Agree the contract and migration slot with its holder before `HOSTS-SEAL-1` (the integrator does this; the owner only rules on a conflict).
 2. Optional: provide the key file contents on the VPS if a direct-API path is wanted (`R-153d`); without it the agent serves the subscriptions only.
