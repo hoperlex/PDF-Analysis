@@ -66,7 +66,7 @@ describe('the wording', () => {
 
   it('says who is refused to read the journal', () => {
     const envelope: ErrorEnvelope = {
-      contract_version: '1.44.0', error_code: 'permission_denied', message: 'Refused', correlation_id: 'cid-ae-1', retryable: false,
+      contract_version: '1.45.0', error_code: 'permission_denied', message: 'Refused', correlation_id: 'cid-ae-1', retryable: false,
     };
     const failure = authEventFailure(new ApiError(403, envelope, 'cid-ae-1'));
     expect(failure.kind).toBe('permission_denied');

@@ -3,7 +3,7 @@
 /** Pure presentation shared by the two start forms; no routing, pricing or API calls. */
 export interface CostApprovalEstimate {
   readonly estimate_digest: string;
-  readonly billing: 'metered' | 'unmetered';
+  readonly billing: 'metered' | 'unmetered' | 'mixed';
   readonly provider_mode: 'live' | 'recorded';
   readonly currency: 'USD';
   readonly model_id: string;
@@ -37,7 +37,7 @@ export function microsAsUsd(value: number): string {
 export function usableCostEstimate(value: CostApprovalEstimate): boolean {
   return value !== null && typeof value === 'object'
     && /^[0-9a-f]{64}$/.test(value.estimate_digest)
-    && ['metered', 'unmetered'].includes(value.billing)
+    && ['metered', 'unmetered', 'mixed'].includes(value.billing)
     && ['live', 'recorded'].includes(value.provider_mode)
     && value.currency === 'USD' && typeof value.model_id === 'string' && value.model_id.length > 0
     && [value.text_characters, value.page_count, value.windows, value.calls, value.input_tokens,
@@ -57,7 +57,7 @@ export interface CostApprovalProps {
 }
 
 export function CostApproval({ estimate, ceiling, approved, disabled, uncapped = false, onCeilingChange, onApprovedChange }: CostApprovalProps) {
-  const sufficient = uncapped || ceilingMicros(ceiling, Math.max(estimate.billing === 'metered' ? 1 : 0, estimate.estimated_cost_micros)) !== null;
+  const sufficient = uncapped || ceilingMicros(ceiling, Math.max(estimate.billing !== 'unmetered' ? 1 : 0, estimate.estimated_cost_micros)) !== null;
   return <fieldset disabled={disabled} data-cost-approval>
     <legend>Стоимость перед запуском</legend>
     <p>{estimate.billing === 'unmetered'

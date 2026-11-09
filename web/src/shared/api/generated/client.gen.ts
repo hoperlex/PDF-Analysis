@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.44.0 (OpenAPI 3.1.0)
- *   sha256 cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6
+ *   AuditManager PC-01 API 1.45.0 (OpenAPI 3.1.0)
+ *   sha256 18c65278583577736de4de6278fe9c1fa6e2748dd2e239f5180dda3d38e1ef90
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -38,6 +38,8 @@ import type {
   ArchiveExecutorConnectionResult,
   ArchiveExecutorGroupInput,
   ArchiveExecutorGroupResult,
+  ArchiveExecutorHostInput,
+  ArchiveExecutorHostResult,
   ArchiveUserInput,
   ArchiveUserResult,
   CancelComparisonAiPairCheckInput,
@@ -82,6 +84,8 @@ import type {
   ConfirmComparisonUploadSetResult,
   ConfirmExecutorAgentInstallHostKeyInput,
   ConfirmExecutorAgentInstallHostKeyResult,
+  ConfirmExecutorHostAgentInstallHostKeyInput,
+  ConfirmExecutorHostAgentInstallHostKeyResult,
   ConfirmStagePairInput,
   ConfirmStagePairResult,
   ConfirmStageUploadCandidateInput,
@@ -104,6 +108,8 @@ import type {
   CreateExecutorConnectionResult,
   CreateExecutorGroupInput,
   CreateExecutorGroupResult,
+  CreateExecutorHostAgentInstallInput,
+  CreateExecutorHostAgentInstallResult,
   CreateProjectInput,
   CreateProjectResult,
   CreateStageAssemblyInput,
@@ -218,6 +224,12 @@ import type {
   GetExecutorGroupResult,
   GetExecutorGroupCapacityInput,
   GetExecutorGroupCapacityResult,
+  GetExecutorHostInput,
+  GetExecutorHostResult,
+  GetExecutorHostAgentInstallInput,
+  GetExecutorHostAgentInstallResult,
+  GetExecutorHostDetailsInput,
+  GetExecutorHostDetailsResult,
   GetExecutorTaskImageInput,
   GetExecutorTaskImageResult,
   GetExtendedRunReviewInput,
@@ -236,6 +248,8 @@ import type {
   GetRunNormReferencesResult,
   GetRunNormVerificationInput,
   GetRunNormVerificationResult,
+  GetRunStartReadinessInput,
+  GetRunStartReadinessResult,
   GetRunStatusInput,
   GetRunStatusResult,
   GetSectionSpecificationInput,
@@ -252,6 +266,8 @@ import type {
   GetStageChangeCardResult,
   GetStageChangeJournalInput,
   GetStageChangeJournalResult,
+  GetStageModelLayoutInput,
+  GetStageModelLayoutResult,
   GetStagePairInput,
   GetStagePairResult,
   GetStageProfileTextInput,
@@ -286,6 +302,8 @@ import type {
   ImportRunDecisionsResult,
   IssueExecutorEnrollmentInput,
   IssueExecutorEnrollmentResult,
+  IssueExecutorHostEnrollmentInput,
+  IssueExecutorHostEnrollmentResult,
   IssueRunnerTokenInput,
   IssueRunnerTokenResult,
   IssueTokenInput,
@@ -342,12 +360,16 @@ import type {
   ListExecutorConnectionsResult,
   ListExecutorGroupsInput,
   ListExecutorGroupsResult,
+  ListExecutorHostsInput,
+  ListExecutorHostsResult,
   ListExecutorRoutesInput,
   ListExecutorRoutesResult,
   ListExecutorRoutingRulesInput,
   ListExecutorRoutingRulesResult,
   ListKnowledgeBaseEntriesInput,
   ListKnowledgeBaseEntriesResult,
+  ListModelCatalogueInput,
+  ListModelCatalogueResult,
   ListNormDocumentsInput,
   ListNormDocumentsResult,
   ListNormParagraphsInput,
@@ -506,6 +528,8 @@ import type {
   ReviseExecutorGroupResult,
   ReviseStageAssemblyInput,
   ReviseStageAssemblyResult,
+  ReviseStageModelLayoutInput,
+  ReviseStageModelLayoutResult,
   RevokeRunnerTokenInput,
   RevokeRunnerTokenResult,
   ScheduleAssignmentsInput,
@@ -522,6 +546,10 @@ import type {
   SetEngineerAbsencesResult,
   SetExecutionPausedInput,
   SetExecutionPausedResult,
+  SetExecutorHostEnabledInput,
+  SetExecutorHostEnabledResult,
+  SetExecutorHostSlotsInput,
+  SetExecutorHostSlotsResult,
   SetExecutorIntegrationAuthorisationInput,
   SetExecutorIntegrationAuthorisationResult,
   SetExecutorRouteInput,
@@ -540,6 +568,8 @@ import type {
   SetJobPriorityResult,
   SetProjectVendorListInput,
   SetProjectVendorListResult,
+  SetStageModelLayoutEnabledInput,
+  SetStageModelLayoutEnabledResult,
   SetStagePairCompletenessInput,
   SetStagePairCompletenessResult,
   SetWorkCalendarDaysInput,
@@ -755,6 +785,18 @@ export function archiveExecutorGroup(
   options?: RequestOptions,
 ): Promise<ApiResponse<ArchiveExecutorGroupResult>> {
   return request<ArchiveExecutorGroupResult>(OPERATIONS.archiveExecutorGroup, input, options);
+}
+
+/**
+ * Archive Executor Host
+ *
+ * `POST /executor-hosts/{host_id}/archive` - a write; carries a required Idempotency-Key.
+ */
+export function archiveExecutorHost(
+  input: ArchiveExecutorHostInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ArchiveExecutorHostResult>> {
+  return request<ArchiveExecutorHostResult>(OPERATIONS.archiveExecutorHost, input, options);
 }
 
 /**
@@ -1022,6 +1064,18 @@ export function confirmExecutorAgentInstallHostKey(
 }
 
 /**
+ * Confirm Executor Host Agent Install Host Key
+ *
+ * `POST /executor-hosts/{host_id}/agent-installs/{install_id}/confirm-host-key` - a write; carries a required Idempotency-Key.
+ */
+export function confirmExecutorHostAgentInstallHostKey(
+  input: ConfirmExecutorHostAgentInstallHostKeyInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ConfirmExecutorHostAgentInstallHostKeyResult>> {
+  return request<ConfirmExecutorHostAgentInstallHostKeyResult>(OPERATIONS.confirmExecutorHostAgentInstallHostKey, input, options);
+}
+
+/**
  * Confirm Stage Pair
  *
  * `POST /projects/{project_uid}/stage-pairs` - a write; carries a required Idempotency-Key.
@@ -1151,6 +1205,18 @@ export function createExecutorGroup(
   options?: RequestOptions,
 ): Promise<ApiResponse<CreateExecutorGroupResult>> {
   return request<CreateExecutorGroupResult>(OPERATIONS.createExecutorGroup, input, options);
+}
+
+/**
+ * Create Executor Host Agent Install
+ *
+ * `POST /executor-hosts/agent-installs` - a write; carries a required Idempotency-Key.
+ */
+export function createExecutorHostAgentInstall(
+  input: CreateExecutorHostAgentInstallInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateExecutorHostAgentInstallResult>> {
+  return request<CreateExecutorHostAgentInstallResult>(OPERATIONS.createExecutorHostAgentInstall, input, options);
 }
 
 /**
@@ -1838,6 +1904,42 @@ export function getExecutorGroupCapacity(
 }
 
 /**
+ * Get Executor Host
+ *
+ * `GET /executor-hosts/{host_id}`.
+ */
+export function getExecutorHost(
+  input: GetExecutorHostInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutorHostResult>> {
+  return request<GetExecutorHostResult>(OPERATIONS.getExecutorHost, input, options);
+}
+
+/**
+ * Get Executor Host Agent Install
+ *
+ * `GET /executor-hosts/{host_id}/agent-installs/{install_id}`.
+ */
+export function getExecutorHostAgentInstall(
+  input: GetExecutorHostAgentInstallInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutorHostAgentInstallResult>> {
+  return request<GetExecutorHostAgentInstallResult>(OPERATIONS.getExecutorHostAgentInstall, input, options);
+}
+
+/**
+ * Get Executor Host Details
+ *
+ * `GET /executor-hosts/{host_id}/details`.
+ */
+export function getExecutorHostDetails(
+  input: GetExecutorHostDetailsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutorHostDetailsResult>> {
+  return request<GetExecutorHostDetailsResult>(OPERATIONS.getExecutorHostDetails, input, options);
+}
+
+/**
  * Get Executor Task Image
  *
  * `GET /runner/tasks/{task_id}/images/{blob_id}`.
@@ -1946,6 +2048,18 @@ export function getRunNormVerification(
 }
 
 /**
+ * Get Run Start Readiness
+ *
+ * `POST /runs/start-readiness`.
+ */
+export function getRunStartReadiness(
+  input: GetRunStartReadinessInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetRunStartReadinessResult>> {
+  return request<GetRunStartReadinessResult>(OPERATIONS.getRunStartReadiness, input, options);
+}
+
+/**
  * Read run state and per-stage state.
  *
  * `GET /runs/{run_id}`.
@@ -2039,6 +2153,18 @@ export function getStageChangeJournal(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetStageChangeJournalResult>> {
   return request<GetStageChangeJournalResult>(OPERATIONS.getStageChangeJournal, input, options);
+}
+
+/**
+ * Get Stage Model Layout
+ *
+ * `GET /stage-model-layout`.
+ */
+export function getStageModelLayout(
+  input: GetStageModelLayoutInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageModelLayoutResult>> {
+  return request<GetStageModelLayoutResult>(OPERATIONS.getStageModelLayout, input, options);
 }
 
 /**
@@ -2243,6 +2369,18 @@ export function issueExecutorEnrollment(
   options?: RequestOptions,
 ): Promise<ApiResponse<IssueExecutorEnrollmentResult>> {
   return request<IssueExecutorEnrollmentResult>(OPERATIONS.issueExecutorEnrollment, input, options);
+}
+
+/**
+ * Issue Executor Host Enrollment
+ *
+ * `POST /executor-hosts/enrollments` - a write; carries a required Idempotency-Key.
+ */
+export function issueExecutorHostEnrollment(
+  input: IssueExecutorHostEnrollmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<IssueExecutorHostEnrollmentResult>> {
+  return request<IssueExecutorHostEnrollmentResult>(OPERATIONS.issueExecutorHostEnrollment, input, options);
 }
 
 /**
@@ -2582,6 +2720,18 @@ export function listExecutorGroups(
 }
 
 /**
+ * List Executor Hosts
+ *
+ * `GET /executor-hosts`.
+ */
+export function listExecutorHosts(
+  input: ListExecutorHostsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListExecutorHostsResult>> {
+  return request<ListExecutorHostsResult>(OPERATIONS.listExecutorHosts, input, options);
+}
+
+/**
  * List Executor Routes
  *
  * `GET /executor-routes`.
@@ -2615,6 +2765,18 @@ export function listKnowledgeBaseEntries(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListKnowledgeBaseEntriesResult>> {
   return request<ListKnowledgeBaseEntriesResult>(OPERATIONS.listKnowledgeBaseEntries, input, options);
+}
+
+/**
+ * List Model Catalogue
+ *
+ * `GET /model-catalogue`.
+ */
+export function listModelCatalogue(
+  input: ListModelCatalogueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListModelCatalogueResult>> {
+  return request<ListModelCatalogueResult>(OPERATIONS.listModelCatalogue, input, options);
 }
 
 /**
@@ -3566,6 +3728,18 @@ export function reviseStageAssembly(
 }
 
 /**
+ * Revise Stage Model Layout
+ *
+ * `POST /stage-model-layout/revisions` - a write; carries a required Idempotency-Key.
+ */
+export function reviseStageModelLayout(
+  input: ReviseStageModelLayoutInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ReviseStageModelLayoutResult>> {
+  return request<ReviseStageModelLayoutResult>(OPERATIONS.reviseStageModelLayout, input, options);
+}
+
+/**
  * Revoke Runner Token
  *
  * `POST /executor-connections/{connection_id}/runner-tokens/{token_id}/revoke` - a write; carries a required Idempotency-Key.
@@ -3659,6 +3833,30 @@ export function setExecutionPaused(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetExecutionPausedResult>> {
   return request<SetExecutionPausedResult>(OPERATIONS.setExecutionPaused, input, options);
+}
+
+/**
+ * Set Executor Host Enabled
+ *
+ * `PUT /executor-hosts/{host_id}/enabled` - a write; carries a required Idempotency-Key.
+ */
+export function setExecutorHostEnabled(
+  input: SetExecutorHostEnabledInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetExecutorHostEnabledResult>> {
+  return request<SetExecutorHostEnabledResult>(OPERATIONS.setExecutorHostEnabled, input, options);
+}
+
+/**
+ * Set Executor Host Slots
+ *
+ * `PUT /executor-hosts/{host_id}/slots` - a write; carries a required Idempotency-Key.
+ */
+export function setExecutorHostSlots(
+  input: SetExecutorHostSlotsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetExecutorHostSlotsResult>> {
+  return request<SetExecutorHostSlotsResult>(OPERATIONS.setExecutorHostSlots, input, options);
 }
 
 /**
@@ -3767,6 +3965,18 @@ export function setProjectVendorList(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetProjectVendorListResult>> {
   return request<SetProjectVendorListResult>(OPERATIONS.setProjectVendorList, input, options);
+}
+
+/**
+ * Set Stage Model Layout Enabled
+ *
+ * `PUT /stage-model-layout/enabled` - a write; carries a required Idempotency-Key.
+ */
+export function setStageModelLayoutEnabled(
+  input: SetStageModelLayoutEnabledInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetStageModelLayoutEnabledResult>> {
+  return request<SetStageModelLayoutEnabledResult>(OPERATIONS.setStageModelLayoutEnabled, input, options);
 }
 
 /**
@@ -4348,6 +4558,7 @@ export const apiClient = {
   archiveAnalysisPreset,
   archiveExecutorConnection,
   archiveExecutorGroup,
+  archiveExecutorHost,
   archiveUser,
   cancelComparisonAiPairCheck,
   cancelComparisonAiSheetChanges,
@@ -4370,6 +4581,7 @@ export const apiClient = {
   completeStageUploadFile,
   confirmComparisonUploadSet,
   confirmExecutorAgentInstallHostKey,
+  confirmExecutorHostAgentInstallHostKey,
   confirmStagePair,
   confirmStageUploadCandidate,
   continueComparisonReport,
@@ -4381,6 +4593,7 @@ export const apiClient = {
   createExecutorAgentInstall,
   createExecutorConnection,
   createExecutorGroup,
+  createExecutorHostAgentInstall,
   createProject,
   createStageAssembly,
   createStageReviewCard,
@@ -4438,6 +4651,9 @@ export const apiClient = {
   getExecutorConnection,
   getExecutorGroup,
   getExecutorGroupCapacity,
+  getExecutorHost,
+  getExecutorHostAgentInstall,
+  getExecutorHostDetails,
   getExecutorTaskImage,
   getExtendedRunReview,
   getFinding,
@@ -4447,6 +4663,7 @@ export const apiClient = {
   getProject,
   getRunNormReferences,
   getRunNormVerification,
+  getRunStartReadiness,
   getRunStatus,
   getSectionSpecification,
   getSpecificationPrices,
@@ -4455,6 +4672,7 @@ export const apiClient = {
   getStageChainRun,
   getStageChangeCard,
   getStageChangeJournal,
+  getStageModelLayout,
   getStagePair,
   getStageProfileText,
   getStageSheetMap,
@@ -4472,6 +4690,7 @@ export const apiClient = {
   importOptimisationProposalDecisions,
   importRunDecisions,
   issueExecutorEnrollment,
+  issueExecutorHostEnrollment,
   issueRunnerToken,
   issueToken,
   listAcceptedOptimisationProposals,
@@ -4500,9 +4719,11 @@ export const apiClient = {
   listExecutionQueue,
   listExecutorConnections,
   listExecutorGroups,
+  listExecutorHosts,
   listExecutorRoutes,
   listExecutorRoutingRules,
   listKnowledgeBaseEntries,
+  listModelCatalogue,
   listNormDocuments,
   listNormParagraphs,
   listNormSnapshotEvents,
@@ -4582,6 +4803,7 @@ export const apiClient = {
   reviseExecutorConnection,
   reviseExecutorGroup,
   reviseStageAssembly,
+  reviseStageModelLayout,
   revokeRunnerToken,
   scheduleAssignments,
   searchNorms,
@@ -4590,6 +4812,8 @@ export const apiClient = {
   setDocumentTags,
   setEngineerAbsences,
   setExecutionPaused,
+  setExecutorHostEnabled,
+  setExecutorHostSlots,
   setExecutorIntegrationAuthorisation,
   setExecutorRoute,
   setExecutorRoutingMode,
@@ -4599,6 +4823,7 @@ export const apiClient = {
   setGlobalVendorList,
   setJobPriority,
   setProjectVendorList,
+  setStageModelLayoutEnabled,
   setStagePairCompleteness,
   setWorkCalendarDays,
   setWorkSchedulePlans,

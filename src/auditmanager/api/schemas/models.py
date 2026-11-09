@@ -647,6 +647,7 @@ __all__ = [
     "ReviseStageModelLayoutRequest",
     "RunCostModelLine",
     "RunStartReadiness",
+    "RunnerKeyFileReport",
     "RunStartReadinessCell",
     "RunStartRoute",
     "RunnerCatalogueEntry",
@@ -1117,7 +1118,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.44.0"]
+    contract_version: Literal["1.45.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -5799,7 +5800,7 @@ class RunnerCatalogueEntry(_Object):
     and the exact strings an answer may report as its model (no prefix or date-suffix rule)."""
 
     provider: ExecutorProvider
-    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    model_id: Annotated[str, Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$")]
     efforts: Annotated[list[ModelEffort], Field(min_length=1, max_length=3)]
     accepted_reported: Annotated[list[Annotated[str, Field(min_length=1, max_length=200)]], Field(min_length=1, max_length=4)]
 
@@ -5818,7 +5819,14 @@ class RunnerProviderModelState(_Object):
 
 class RunnerProviderReport(_Object):
     """One provider found on the host: how it is paid for, where its client is and which version, whether it is logged in and
-    the state of each model of the catalogue on it. No secret, no key and no path to a credential."""
+    the state of each model of the catalogue on it. No secret, no key and no path to a credential.
+
+    `access` of a command-line client is read from the client's own status command: a subscription login is `subscription`, a
+    login with an API key is `api`; a client that is not signed in is reported `subscription` with `auth_state` `login_required`,
+    and one signed in by a method the agent does not recognise `api` with `auth_state` `unknown` and no verified model. A direct
+    API provider is always `api`: its `auth_state` is `valid` once a model has been verified, `login_required` when the provider
+    refused the key, else `unknown`. `cli_path` is left out unless the operator opted in. `accept_images` says whether the
+    provider can take a task that carries images on this host."""
 
     provider: ExecutorProvider
     access: ExecutorModelAccess
@@ -5829,7 +5837,19 @@ class RunnerProviderReport(_Object):
         default=None, json_schema_extra=optional_property
     )
     auth_state: ProviderAuthState
+    accept_images: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     models: Annotated[list[RunnerProviderModelState], Field(max_length=16)]
+
+
+class RunnerKeyFileReport(_Object):
+    """What the agent found of the service key file of the direct API providers (diagnostics for the server's details; no key and
+    no path): `ok` (read), `absent` (no file) or `ignored` (the file exists but was not read), with a lower-case `reason` code
+    when it was ignored (`mode_is_not_0600`, `not_owned_by_the_service_user`, `not_a_regular_file`, `unreadable`, `too_large`)."""
+
+    state: Literal["ok", "absent", "ignored"]
+    reason: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ExecutorHostSlots(_Object):
@@ -5910,7 +5930,8 @@ class IssuedRunnerToken(_Object):
     token: Annotated[str, Field(min_length=56, max_length=56)] = Field(
         json_schema_extra={"readOnly": True}
     )
-    runner_token: RunnerTokenMetadata
+    #: Always present for a token of a ``pull`` connection; optional in a host document (`HOSTS-SEAL-1`).
+    runner_token: RunnerTokenMetadata = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     #: `HOSTS-SEAL-1`: present when the exchange was made with the grant of a host. The token is then bound to this host, and
     #: `catalogue` is the list of models the agent may be asked for, with their efforts and accepted reported strings.
     host_id: ExecutorHostId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -5977,7 +5998,8 @@ class ClaimedExecutorTask(_Object):
     images: Annotated[list[RunnerImage], Field(max_length=8)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
-    #: `HOSTS-SEAL-1`: present on a task claimed with a host token. The agent runs exactly this provider, access, model and
+    #: `HOSTS-SEAL-1`: present on a task claimed with a host token -- all seven members (`provider`, `access`, `model_id`, `effort`,
+    #: `max_output_tokens`, `timeout_seconds`, `cell_key`) or none. The agent runs exactly this provider, access, model and
     #: effort and refuses a model it does not report as verified (`failExecutorTask`, code `model_not_available`); `model` is
     #: then equal to `model_id`.
     provider: ExecutorProvider = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -6013,9 +6035,9 @@ class SubmitExecutorTaskAnswerRequest(_Object):
     output_tokens: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
-    #: `HOSTS-SEAL-1`: the answer of a host agent also names the provider and the access it was produced with, the **exact**
-    #: model string the provider reported (held against the catalogue's `accepted_reported`, never trimmed) and the call's
-    #: usage. `model` stays the model the agent was asked for.
+    #: `HOSTS-SEAL-1`: the answer of a host agent carries `model` (the task's `model_id`), `provider` and `access` (the task's),
+    #: the **exact** model string the provider reported (held against `model_id` and the catalogue's `accepted_reported`, never
+    #: trimmed) and, when the provider gave a count, `usage`; it sends no top-level token counts.
     provider: ExecutorProvider = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     access: ExecutorModelAccess = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     reported_model: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
@@ -6159,6 +6181,7 @@ class ReportRunnerHealthRequest(_Object):
         default=None, json_schema_extra=optional_property
     )
     slots: ExecutorHostSlots = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    key_file: RunnerKeyFileReport = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class RunnerHealthAck(_Object):

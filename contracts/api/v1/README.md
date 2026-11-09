@@ -11,7 +11,46 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.44.0` (`DECISION-MEMORY-M2`)
+## Current contract `1.45.0` (`HOSTS-SEAL-1`)
+
+Slice for `HOSTS-SEAL-1` (ADR-0028; the owner-approved plan of 2026-11-09): **servers** (hosts) and **the models of the analysis stages**.
+**Fifteen operations, forty-three schemas, one parameter, no new error code and no new state machine**; migration `0062_hosts_stage_models`; five
+identity prefixes (`exh`, `exhu`, `exhs`, `slr`, `sls`). Nothing behaves differently until the wave-1 lanes implement an operation: the shipped
+adapters answer `503 dependency_unavailable`.
+
+- **Servers** (`execution`). `listExecutorHosts` (`GET /executor-hosts`) and `getExecutorHost` (`GET /executor-hosts/{host_id}`) --
+  `role:admin|expert`, the viewer denied (`R-150w`); `getExecutorHostDetails` (`GET .../details`, `role:admin`): slots, the reasons a model is
+  unavailable (`host_disabled`, `host_offline`, `login_required`, `model_not_verified`, `model_cooling_down`) and the tasks running;
+  `setExecutorHostEnabled` (`PUT .../enabled`, the «Использовать» switch) and `setExecutorHostSlots` (`PUT .../slots`) -- `role:admin`, keyed,
+  each change an append-only event with its author; `archiveExecutorHost` (`POST .../archive`, one-way, not deletion).
+- **Connecting a server** (`role:admin`, keyed, no model). `issueExecutorHostEnrollment` (`POST /executor-hosts/enrollments`),
+  `createExecutorHostAgentInstall` (`POST /executor-hosts/agent-installs`), `getExecutorHostAgentInstall` and
+  `confirmExecutorHostAgentInstallHostKey` (under `/executor-hosts/{host_id}/agent-installs/{install_id}`) are the host-targeted forms of
+  `issueExecutorEnrollment`, `createExecutorAgentInstall`, `getExecutorAgentInstall` and `confirmExecutorAgentInstallHostKey`, which are
+  **unchanged** and stay the forms for a `pull` connection until the comparison routes move to the hosts. `RunnerTokenMetadata`,
+  `ExecutorEnrollmentMetadata` and `ExecutorAgentInstall` name exactly one of `connection_id` and `host_id`.
+- **The stage layout.** `getStageModelLayout` (`GET /stage-model-layout`, `role:admin|expert`), `reviseStageModelLayout`
+  (`POST .../revisions`, an immutable revision with its author) and `setStageModelLayoutEnabled` (`PUT .../enabled`, the switch and its journal) --
+  the writes `role:admin`, keyed; `listModelCatalogue` (`GET /model-catalogue`, `role:admin|expert`), the content of
+  `contracts/analysis/v1/model-catalogue.json`; `getRunStartReadiness` (`POST /runs/start-readiness`, a read with the body of `estimateRunCost`,
+  `role:admin|expert`): the route, every cell of the plan a start would freeze with its access, whether the start is possible and the digest of
+  the estimate to confirm.
+- **The runner protocol, host mode** (a token bound to a connection keeps the earlier wire). `redeemExecutorEnrollment` answers `token`, `host_id`
+  and `catalogue` (and `runner_token` is optional); `reportRunnerHealth` carries `providers[]`, `slots` and `key_file` and is answered with
+  `catalogue` and `enabled`; a claimed task carries `provider`, `access`, `model_id`, `effort`, `max_output_tokens`, `timeout_seconds` and
+  `cell_key` (all seven or none) and `model` equals `model_id`; `extendExecutorTaskClaim` is sent only while the call has produced output in the
+  last 120 s; `submitExecutorTaskAnswer` carries `provider`, `access`, `reported_model` (the exact string, held against `accepted_reported`) and
+  `usage`. `RunnerExecutionProfile` gains no value and `clis` stays required. The text is `tools/executor-runner/RUNNER_API.md` section 10.
+- **Runs and the estimate.** `RunQueueReason` gains `model_unavailable`; `ExecutorGroupMemberIssue` gains `host_disabled`, `model_not_verified` and
+  `model_cooling_down`. `RunCostEstimate.billing` gains `mixed`, and the estimate carries `stage_plan_digest` and `models` (a line per model:
+  the digest of its rates, its access, calls, tokens and cost) -- the consent v2. `RunCostConsent` is unchanged and gains examples. With the layout
+  switched on the explicit executor selectors of `startRun` and `estimateRunCost` are `422 validation_failed`; `reauditRun` and `startRunFromStage`
+  take today's layout.
+- **Not changed.** Every other operation, schema and error code. No page calls the new operations yet.
+
+The API has 295 paths, 323 operations and 787 schemas; migration head `0062`. The domain catalogs are at candidate revision 62.
+
+## Contract `1.44.0` (`DECISION-MEMORY-M2`, historical)
 
 Slice for `DECISION-MEMORY-01` phase M2 (`ADR-0027`): the expert decision memory, the copy of what an expert saw and said when a decision was
 taken, which outlives its project and document. **Five operations, fourteen schemas, no new error code and no new identity prefix** (migration

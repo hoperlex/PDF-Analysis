@@ -1,4 +1,4 @@
-"""The 308 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 323 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the forty-three router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -52,6 +52,8 @@ from auditmanager.api.routers.export import build_export_routes
 from auditmanager.api.routers.execution import build_execution_routes
 from auditmanager.api.routers.executor_enrollment import build_enrollment_routes
 from auditmanager.api.routers.executor_groups import build_executor_group_routes  # EXEC2-GROUP-STORE-01
+from auditmanager.api.routers.hosts import build_host_routes  # HOSTS-SEAL-1
+from auditmanager.api.routers.hosts_ports import ExecutorHostPort, StageModelPort  # HOSTS-SEAL-1
 from auditmanager.api.routers.executors import build_executor_routes
 from auditmanager.api.routers.runner import build_runner_routes
 from auditmanager.api.routers.findings import build_finding_routes
@@ -152,6 +154,7 @@ from auditmanager.api.routers.projects import build_project_routes
 from auditmanager.api.routers.registrations import build_registration_routes
 from auditmanager.api.routers.runs import build_run_routes
 from auditmanager.api.routers.sections import build_section_routes
+from auditmanager.api.routers.stage_models import build_stage_model_routes  # HOSTS-SEAL-1
 from auditmanager.api.routers.users import build_user_routes
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 
@@ -211,6 +214,8 @@ __all__ = [
     "DocumentPort",
     "ExecutionPort",
     "ExecutorGroupPort",
+    "ExecutorHostPort",
+    "StageModelPort",
     "ExecutorPort",
     "RunnerPort",
     "EnrollmentPort",
@@ -271,7 +276,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.44.0"
+CONTRACT_VERSION: Final[str] = "1.45.0"
 
 
 def build_router(
@@ -306,6 +311,8 @@ def build_router(
     runner: RunnerPort | None = None,
     enrollment: EnrollmentPort | None = None,
     executor_groups: ExecutorGroupPort | None = None,
+    executor_hosts: ExecutorHostPort | None = None,
+    stage_models: StageModelPort | None = None,
     ar_v3_groups: ArV3GroupPort | None = None,
     comparison_uploads: ComparisonUploadPort | None = None,
     comparison_version_orders: ComparisonVersionOrderPort | None = None,
@@ -326,7 +333,7 @@ def build_router(
     comparison_stage_runs: ComparisonStageRunPort | None = None,
     comparison_stage_c4: ComparisonStageC4Port | None = None,
 ) -> Router:
-    """Assemble the 308 operations, from the router modules -- ``me``,
+    """Assemble the 323 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -439,6 +446,13 @@ def build_router(
     # in the same module). Optional with a default, for the reason `blocks` gives; declared whatever the port, answerable
     # only with one.
     build_executor_group_routes(router, executor_groups)  # type: ignore[arg-type]
+    # `HOSTS-SEAL-1` (ADR-0028, contract 1.45.0). The servers (hosts): list, read, details, the «Использовать» switch, slots, archive and
+    # the host-targeted enrollment and install; and the models of the analysis stages: the layout, the catalogue and the readiness of a
+    # start. Optional with a default, for the reason `blocks` gives; declared whatever the port, answerable only with one. The shipped
+    # implementations are the stubs of `bootstrap/hosts_adapter.py` and `bootstrap/stage_plan_adapter.py` (`503 dependency_unavailable`);
+    # the integrator wires them into the composition root.
+    build_host_routes(router, executor_hosts)  # type: ignore[arg-type]
+    build_stage_model_routes(router, stage_models)  # type: ignore[arg-type]
     # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,
     # sealed as stubs answering `503 dependency_unavailable` until `CMP-INGEST-01`,
     # `CMP-INGEST-02` and `CMP-PROFILE-01` wire their ports. Optional with a default, for the

@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 280,
+    "path_count": 295,
     "operations": [
       [
         "DELETE",
@@ -265,6 +265,26 @@
       ],
       [
         "GET",
+        "/executor-hosts",
+        "listExecutorHosts"
+      ],
+      [
+        "GET",
+        "/executor-hosts/{host_id}",
+        "getExecutorHost"
+      ],
+      [
+        "GET",
+        "/executor-hosts/{host_id}/agent-installs/{install_id}",
+        "getExecutorHostAgentInstall"
+      ],
+      [
+        "GET",
+        "/executor-hosts/{host_id}/details",
+        "getExecutorHostDetails"
+      ],
+      [
+        "GET",
         "/executor-routes",
         "listExecutorRoutes"
       ],
@@ -297,6 +317,11 @@
         "GET",
         "/me",
         "getMe"
+      ],
+      [
+        "GET",
+        "/model-catalogue",
+        "listModelCatalogue"
       ],
       [
         "GET",
@@ -677,6 +702,11 @@
         "GET",
         "/stage-link-revisions/{stage_link_revision_id}/text-hints",
         "listStageTextHints"
+      ],
+      [
+        "GET",
+        "/stage-model-layout",
+        "getStageModelLayout"
       ],
       [
         "GET",
@@ -1090,6 +1120,26 @@
       ],
       [
         "POST",
+        "/executor-hosts/agent-installs",
+        "createExecutorHostAgentInstall"
+      ],
+      [
+        "POST",
+        "/executor-hosts/enrollments",
+        "issueExecutorHostEnrollment"
+      ],
+      [
+        "POST",
+        "/executor-hosts/{host_id}/agent-installs/{install_id}/confirm-host-key",
+        "confirmExecutorHostAgentInstallHostKey"
+      ],
+      [
+        "POST",
+        "/executor-hosts/{host_id}/archive",
+        "archiveExecutorHost"
+      ],
+      [
+        "POST",
         "/executor-routing/mode",
         "setExecutorRoutingMode"
       ],
@@ -1305,6 +1355,11 @@
       ],
       [
         "POST",
+        "/runs/start-readiness",
+        "getRunStartReadiness"
+      ],
+      [
+        "POST",
         "/runs/{run_id}/cancel",
         "cancelRun"
       ],
@@ -1372,6 +1427,11 @@
         "POST",
         "/stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation",
         "recomputeStageTextEvidence"
+      ],
+      [
+        "POST",
+        "/stage-model-layout/revisions",
+        "reviseStageModelLayout"
       ],
       [
         "POST",
@@ -1465,6 +1525,16 @@
       ],
       [
         "PUT",
+        "/executor-hosts/{host_id}/enabled",
+        "setExecutorHostEnabled"
+      ],
+      [
+        "PUT",
+        "/executor-hosts/{host_id}/slots",
+        "setExecutorHostSlots"
+      ],
+      [
+        "PUT",
         "/executor-routes",
         "setExecutorRoute"
       ],
@@ -1512,6 +1582,11 @@
         "PUT",
         "/projects/{project_uid}/vendor-lists/{section_code}",
         "setProjectVendorList"
+      ],
+      [
+        "PUT",
+        "/stage-model-layout/enabled",
+        "setStageModelLayoutEnabled"
       ],
       [
         "PUT",
@@ -1805,6 +1880,7 @@
       "CreateExecutorAgentInstallRequest",
       "CreateExecutorConnectionRequest",
       "CreateExecutorGroupRequest",
+      "CreateExecutorHostAgentInstallRequest",
       "CreateProjectRequest",
       "CreateStageAssemblyRequest",
       "CreateStageReviewCardRequest",
@@ -1888,15 +1964,28 @@
       "ExecutorGroupRevision",
       "ExecutorGroupRevisionId",
       "ExecutorGroupStrategy",
+      "ExecutorHost",
+      "ExecutorHostDetails",
+      "ExecutorHostId",
+      "ExecutorHostList",
+      "ExecutorHostModel",
+      "ExecutorHostModelStatus",
+      "ExecutorHostProviderDetail",
+      "ExecutorHostSlotUse",
+      "ExecutorHostSlots",
+      "ExecutorHostState",
+      "ExecutorHostTask",
       "ExecutorIdentityBasis",
       "ExecutorIntegrationAuthorisation",
       "ExecutorKind",
+      "ExecutorModelAccess",
       "ExecutorOccupancy",
       "ExecutorPinnedModel",
       "ExecutorProbe",
       "ExecutorProbeId",
       "ExecutorProbeOutcome",
       "ExecutorProbeState",
+      "ExecutorProvider",
       "ExecutorPullClient",
       "ExecutorRateCheck",
       "ExecutorRevision",
@@ -1924,6 +2013,7 @@
       "ExecutorTaskAck",
       "ExecutorTaskId",
       "ExecutorTaskState",
+      "ExecutorTaskUsage",
       "ExecutorTransport",
       "ExecutorWorkKind",
       "ExtendedExecutorTaskClaim",
@@ -1948,6 +2038,7 @@
       "ImportProposalDecisionsRequest",
       "ImportRunDecisionsRequest",
       "InputManifestEntry",
+      "IssueExecutorHostEnrollmentRequest",
       "IssueRunnerTokenRequest",
       "IssueTokenRequest",
       "IssueTokenResponse",
@@ -1958,6 +2049,11 @@
       "KnowledgeBaseEntryPage",
       "MarkReleaseNotesReadRequest",
       "ModelCallId",
+      "ModelCatalogue",
+      "ModelCatalogueEntry",
+      "ModelEffort",
+      "ModelProbeState",
+      "ModelUnavailableReason",
       "NormBuildState",
       "NormCatalogueEntry",
       "NormCatalogueEntryPage",
@@ -2053,6 +2149,7 @@
       "ProposalMatchBasis",
       "ProposalPosition",
       "ProposalVerdict",
+      "ProviderAuthState",
       "ProviderMode",
       "ReauditRunRequest",
       "RedeemExecutorEnrollmentRequest",
@@ -2074,22 +2171,28 @@
       "ReviseExecutorConnectionRequest",
       "ReviseExecutorGroupRequest",
       "ReviseStageAssemblyRequest",
+      "ReviseStageModelLayoutRequest",
       "Role",
       "RunActivity",
       "RunActivitySpend",
       "RunCostConsent",
       "RunCostEstimate",
       "RunCostEstimateRequest",
+      "RunCostModelLine",
       "RunExecutor",
       "RunFindingBlockLinks",
       "RunId",
       "RunNormReferences",
       "RunPreset",
       "RunQueueReason",
+      "RunStartReadiness",
+      "RunStartReadinessCell",
+      "RunStartRoute",
       "RunState",
       "RunStateCount",
       "RunStatus",
       "RunStatusPage",
+      "RunnerCatalogueEntry",
       "RunnerCliAuthState",
       "RunnerCliHealth",
       "RunnerCliName",
@@ -2098,6 +2201,9 @@
       "RunnerHealthAck",
       "RunnerImage",
       "RunnerImageBlobId",
+      "RunnerKeyFileReport",
+      "RunnerProviderModelState",
+      "RunnerProviderReport",
       "RunnerTokenMetadata",
       "SaveAnalysisPresetRequest",
       "ScheduleAssignmentsRequest",
@@ -2117,6 +2223,8 @@
       "SetDocumentTagsRequest",
       "SetEngineerAbsencesRequest",
       "SetExecutionPausedRequest",
+      "SetExecutorHostEnabledRequest",
+      "SetExecutorHostSlotsRequest",
       "SetExecutorIntegrationAuthorisationRequest",
       "SetExecutorRouteRequest",
       "SetExecutorRoutingModeRequest",
@@ -2126,6 +2234,7 @@
       "SetGlobalVendorListRequest",
       "SetJobPriorityRequest",
       "SetProjectVendorListRequest",
+      "SetStageModelLayoutEnabledRequest",
       "SetStagePairCompletenessRequest",
       "SetWorkCalendarDaysRequest",
       "SetWorkSchedulePlansRequest",
@@ -2170,6 +2279,8 @@
       "StageCardVerdictId",
       "StageCardVerdictInput",
       "StageCardVerdictPage",
+      "StageCellKey",
+      "StageCellRole",
       "StageChainBatch",
       "StageChainBatchId",
       "StageChainBatchItem",
@@ -2190,6 +2301,10 @@
       "StageGraphicEvidenceId",
       "StageGraphicEvidencePage",
       "StageId",
+      "StageLayoutCell",
+      "StageLayoutRevision",
+      "StageLayoutRevisionId",
+      "StageLayoutSwitchEvent",
       "StageLinkInput",
       "StageLinkItem",
       "StageLinkItemId",
@@ -2199,6 +2314,8 @@
       "StageLinkRevision",
       "StageLinkRevisionId",
       "StageLinkRevisionPage",
+      "StageModelKit",
+      "StageModelLayout",
       "StagePair",
       "StagePairId",
       "StagePairPage",
@@ -2207,6 +2324,7 @@
       "StageProfileText",
       "StageProfileWord",
       "StageReviewDecision",
+      "StageRowKey",
       "StageSheetPassport",
       "StageSheetPassportPage",
       "StageSheetSuggestion",
@@ -2296,5 +2414,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0062_hosts_stage_models",
-  "contract_version": "1.44.0"
+  "contract_version": "1.45.0"
 }

@@ -769,6 +769,26 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "setExecutorRoutingRule": _ADMIN,
         "previewExecutorRouting": _ADMIN,
         "setExecutorRoutingMode": _ADMIN,
+        # `HOSTS-SEAL-1` (ADR-0028, contract 1.45.0). The servers and the models of the analysis stages. An expert and an administrator
+        # read the servers, the layout, the catalogue and the readiness of a start; the viewer («Наблюдатель», `R-150w`) reads none of
+        # them (`_ANY_ROLE` is deliberately not widened). Every write, a server's details (they show why a model is unavailable and
+        # what runs on it) and the host-targeted enrollment and install are the administrator's; the commands re-read the role set in
+        # their own transaction.
+        "listExecutorHosts": _ANY_ROLE,
+        "getExecutorHost": _ANY_ROLE,
+        "getExecutorHostDetails": _ADMIN,
+        "setExecutorHostEnabled": _ADMIN,
+        "setExecutorHostSlots": _ADMIN,
+        "archiveExecutorHost": _ADMIN,
+        "issueExecutorHostEnrollment": _ADMIN,
+        "createExecutorHostAgentInstall": _ADMIN,
+        "getExecutorHostAgentInstall": _ADMIN,
+        "confirmExecutorHostAgentInstallHostKey": _ADMIN,
+        "getStageModelLayout": _ANY_ROLE,
+        "reviseStageModelLayout": _ADMIN,
+        "setStageModelLayoutEnabled": _ADMIN,
+        "listModelCatalogue": _ANY_ROLE,
+        "getRunStartReadiness": _ANY_ROLE,
         # `W55A-SEAL-01` (R-113). Who designated which snapshot, and the designation itself.
         "listNormSnapshotEvents": _ADMIN,
         "setCurrentNormSnapshot": _ADMIN,

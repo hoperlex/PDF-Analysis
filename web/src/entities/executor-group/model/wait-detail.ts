@@ -40,6 +40,9 @@ export const WAIT_CAUSE_SENTENCES: Readonly<Record<ExecutorGroupMemberIssue, str
   probe_not_ok: 'проверка связи не пройдена',
   runner_offline: 'агент офлайн',
   at_capacity: 'все места подключения заняты',
+  host_disabled: 'сервер выключен',
+  model_not_verified: 'модель на сервере не подтверждена',
+  model_cooling_down: 'сервер временно снял модель',
 };
 
 /** The work was accepted on an earlier revision of the group than the one the capacity describes; what follows describes the current one. */

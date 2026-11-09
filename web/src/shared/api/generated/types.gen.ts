@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.44.0 (OpenAPI 3.1.0)
- *   sha256 cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6
+ *   AuditManager PC-01 API 1.45.0 (OpenAPI 3.1.0)
+ *   sha256 18c65278583577736de4de6278fe9c1fa6e2748dd2e239f5180dda3d38e1ef90
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.44.0';
+export const CONTRACT_VERSION = '1.45.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6';
+export const CONTRACT_DIGEST = '18c65278583577736de4de6278fe9c1fa6e2748dd2e239f5180dda3d38e1ef90';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -281,6 +281,7 @@ export const SCHEMA_NAMES = [
   'CreateExecutorAgentInstallRequest',
   'CreateExecutorConnectionRequest',
   'CreateExecutorGroupRequest',
+  'CreateExecutorHostAgentInstallRequest',
   'CreateProjectRequest',
   'CreateStageAssemblyRequest',
   'CreateStageReviewCardRequest',
@@ -364,15 +365,28 @@ export const SCHEMA_NAMES = [
   'ExecutorGroupRevision',
   'ExecutorGroupRevisionId',
   'ExecutorGroupStrategy',
+  'ExecutorHost',
+  'ExecutorHostDetails',
+  'ExecutorHostId',
+  'ExecutorHostList',
+  'ExecutorHostModel',
+  'ExecutorHostModelStatus',
+  'ExecutorHostProviderDetail',
+  'ExecutorHostSlotUse',
+  'ExecutorHostSlots',
+  'ExecutorHostState',
+  'ExecutorHostTask',
   'ExecutorIdentityBasis',
   'ExecutorIntegrationAuthorisation',
   'ExecutorKind',
+  'ExecutorModelAccess',
   'ExecutorOccupancy',
   'ExecutorPinnedModel',
   'ExecutorProbe',
   'ExecutorProbeId',
   'ExecutorProbeOutcome',
   'ExecutorProbeState',
+  'ExecutorProvider',
   'ExecutorPullClient',
   'ExecutorRateCheck',
   'ExecutorRevision',
@@ -400,6 +414,7 @@ export const SCHEMA_NAMES = [
   'ExecutorTaskAck',
   'ExecutorTaskId',
   'ExecutorTaskState',
+  'ExecutorTaskUsage',
   'ExecutorTransport',
   'ExecutorWorkKind',
   'ExtendedExecutorTaskClaim',
@@ -424,6 +439,7 @@ export const SCHEMA_NAMES = [
   'ImportProposalDecisionsRequest',
   'ImportRunDecisionsRequest',
   'InputManifestEntry',
+  'IssueExecutorHostEnrollmentRequest',
   'IssueRunnerTokenRequest',
   'IssueTokenRequest',
   'IssueTokenResponse',
@@ -434,6 +450,11 @@ export const SCHEMA_NAMES = [
   'KnowledgeBaseEntryPage',
   'MarkReleaseNotesReadRequest',
   'ModelCallId',
+  'ModelCatalogue',
+  'ModelCatalogueEntry',
+  'ModelEffort',
+  'ModelProbeState',
+  'ModelUnavailableReason',
   'NormBuildState',
   'NormCatalogueEntry',
   'NormCatalogueEntryPage',
@@ -529,6 +550,7 @@ export const SCHEMA_NAMES = [
   'ProposalMatchBasis',
   'ProposalPosition',
   'ProposalVerdict',
+  'ProviderAuthState',
   'ProviderMode',
   'ReauditRunRequest',
   'RedeemExecutorEnrollmentRequest',
@@ -550,22 +572,28 @@ export const SCHEMA_NAMES = [
   'ReviseExecutorConnectionRequest',
   'ReviseExecutorGroupRequest',
   'ReviseStageAssemblyRequest',
+  'ReviseStageModelLayoutRequest',
   'Role',
   'RunActivity',
   'RunActivitySpend',
   'RunCostConsent',
   'RunCostEstimate',
   'RunCostEstimateRequest',
+  'RunCostModelLine',
   'RunExecutor',
   'RunFindingBlockLinks',
   'RunId',
   'RunNormReferences',
   'RunPreset',
   'RunQueueReason',
+  'RunStartReadiness',
+  'RunStartReadinessCell',
+  'RunStartRoute',
   'RunState',
   'RunStateCount',
   'RunStatus',
   'RunStatusPage',
+  'RunnerCatalogueEntry',
   'RunnerCliAuthState',
   'RunnerCliHealth',
   'RunnerCliName',
@@ -574,6 +602,9 @@ export const SCHEMA_NAMES = [
   'RunnerHealthAck',
   'RunnerImage',
   'RunnerImageBlobId',
+  'RunnerKeyFileReport',
+  'RunnerProviderModelState',
+  'RunnerProviderReport',
   'RunnerTokenMetadata',
   'SaveAnalysisPresetRequest',
   'ScheduleAssignmentsRequest',
@@ -593,6 +624,8 @@ export const SCHEMA_NAMES = [
   'SetDocumentTagsRequest',
   'SetEngineerAbsencesRequest',
   'SetExecutionPausedRequest',
+  'SetExecutorHostEnabledRequest',
+  'SetExecutorHostSlotsRequest',
   'SetExecutorIntegrationAuthorisationRequest',
   'SetExecutorRouteRequest',
   'SetExecutorRoutingModeRequest',
@@ -602,6 +635,7 @@ export const SCHEMA_NAMES = [
   'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
   'SetProjectVendorListRequest',
+  'SetStageModelLayoutEnabledRequest',
   'SetStagePairCompletenessRequest',
   'SetWorkCalendarDaysRequest',
   'SetWorkSchedulePlansRequest',
@@ -646,6 +680,8 @@ export const SCHEMA_NAMES = [
   'StageCardVerdictId',
   'StageCardVerdictInput',
   'StageCardVerdictPage',
+  'StageCellKey',
+  'StageCellRole',
   'StageChainBatch',
   'StageChainBatchId',
   'StageChainBatchItem',
@@ -666,6 +702,10 @@ export const SCHEMA_NAMES = [
   'StageGraphicEvidenceId',
   'StageGraphicEvidencePage',
   'StageId',
+  'StageLayoutCell',
+  'StageLayoutRevision',
+  'StageLayoutRevisionId',
+  'StageLayoutSwitchEvent',
   'StageLinkInput',
   'StageLinkItem',
   'StageLinkItemId',
@@ -675,6 +715,8 @@ export const SCHEMA_NAMES = [
   'StageLinkRevision',
   'StageLinkRevisionId',
   'StageLinkRevisionPage',
+  'StageModelKit',
+  'StageModelLayout',
   'StagePair',
   'StagePairId',
   'StagePairPage',
@@ -683,6 +725,7 @@ export const SCHEMA_NAMES = [
   'StageProfileText',
   'StageProfileWord',
   'StageReviewDecision',
+  'StageRowKey',
   'StageSheetPassport',
   'StageSheetPassportPage',
   'StageSheetSuggestion',
@@ -1428,13 +1471,20 @@ export type ClaimExecutorTaskRequest = {
  * document-derived text. ``model`` is the pinned gateway model the answer must declare.
  */
 export type ClaimedExecutorTask = {
+  access?: ExecutorModelAccess;
+  cell_key?: StageCellKey;
   claim_expires_at: string;
   deadline_at: string;
+  effort?: ModelEffort;
   images?: Array<RunnerImage>;
+  max_output_tokens?: number;
   model: string;
+  model_id?: string;
   output_schema: Record<string, never>;
+  provider?: ExecutorProvider;
   system: string;
   task_id: ExecutorTaskId;
+  timeout_seconds?: number;
   user_text: string;
 };
 
@@ -3802,6 +3852,19 @@ export type CreateExecutorGroupRequest = {
   strategy?: ExecutorGroupStrategy;
 };
 
+/**
+ * A new server and an install session of the agent over SSH (path A). As `CreateExecutorAgentInstallRequest`, with a name and
+ * no model: `private_key` is required for `pasted_key` and refused for `generated_key`, sealed and never returned.
+ */
+export type CreateExecutorHostAgentInstallRequest = {
+  access: ExecutorAgentInstallAccess;
+  display_name: string;
+  private_key?: string;
+  ssh_host: string;
+  ssh_port: number;
+  ssh_user: string;
+};
+
 export type CreateProjectRequest = {
   /** Display label. Not unique and not an identity. */
   name: string;
@@ -4291,7 +4354,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.44.0";
+  contract_version: "1.45.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4394,15 +4457,24 @@ export type ExecutionWorkerPage = {
   page: PageInfo;
 };
 
-/** One install session of the universal agent over SSH (path A, `EXEC2-SEAL-1`, ADR-0026 decision 7). For `generated_key` access it carries the public half and its `authorized_keys` line, which the administrator adds to the host; the private half is sealed and never returned. `observed_host_key_fingerprint` is what the worker saw (derived from the stored key line, as `ExecutorRevision.host_key_fingerprint` is); the install does not proceed until the administrator confirms exactly that fingerprint. `key_removed_at` is when the stand's key was removed from the host and its sealed secret destroyed. */
+/**
+ * One install session of the universal agent over SSH (path A, `EXEC2-SEAL-1`, ADR-0026 decision 7).
+ * For `generated_key` access it carries the public half and its `authorized_keys` line, which the
+ * administrator adds to the host; the private half is sealed and never returned.
+ * `observed_host_key_fingerprint` is what the worker saw (derived from the stored key line, as
+ * `ExecutorRevision.host_key_fingerprint` is); the install does not proceed until the administrator
+ * confirms exactly that fingerprint. `key_removed_at` is when the stand's key was removed from the
+ * host and its sealed secret destroyed.
+ */
 export type ExecutorAgentInstall = {
   access: ExecutorAgentInstallAccess;
   authorized_keys_line?: string;
-  connection_id: ExecutorConnectionId;
+  connection_id?: ExecutorConnectionId;
   created_at: string;
   created_by: UserUid;
   failure_reason?: ExecutorAgentInstallFailure;
   finished_at?: string;
+  host_id?: ExecutorHostId;
   host_key_confirmed_at?: string;
   host_key_confirmed_by?: UserUid;
   install_id: ExecutorAgentInstallId;
@@ -4550,13 +4622,18 @@ export type ExecutorEnrollmentId = string;
 /** The contract pattern for `ExecutorEnrollmentId`. Anchored; use with `new RegExp()`. */
 export const EXECUTOR_ENROLLMENT_ID_PATTERN = "^exen_[0-9A-HJKMNP-TV-Z]{26}$";
 
-/** What the API ever says about an enrollment grant after it was issued (`EXEC2-SEAL-1`, ADR-0026 decision 4): that it exists, its non-secret prefix, its derived state and its dates. The secret and its hash are never returned. */
+/**
+ * What the API ever says about an enrollment grant after it was issued (`EXEC2-SEAL-1`, ADR-0026
+ * decision 4): that it exists, its non-secret prefix, its derived state and its dates. The secret and
+ * its hash are never returned.
+ */
 export type ExecutorEnrollmentMetadata = {
-  connection_id: ExecutorConnectionId;
+  connection_id?: ExecutorConnectionId;
   created_at: string;
   created_by: UserUid;
   enrollment_id: ExecutorEnrollmentId;
   expires_at: string;
+  host_id?: ExecutorHostId;
   redeemed_at?: string;
   revoked_at?: string;
   revoked_by?: UserUid;
@@ -4620,7 +4697,15 @@ export type ExecutorGroupMember = {
   tie_break_order?: number;
 };
 
-/** `EXEC2-SEAL-2` (ADR-0026 decision 14): why a group member would not be chosen by dispatch right now. `revision_changed`: the connection's current revision is not the snapshot the group revision holds. `connection_archived`: the connection is archived. `not_served`: this release does not serve the connection. `probe_not_ok`: the probe of the current key is not `ok`. `runner_offline`: a `pull` connection has no runner online. `at_capacity`: every unit of the connection is in use. */
+/**
+ * `EXEC2-SEAL-2` (ADR-0026 decision 14): why a group member would not be chosen by dispatch right now.
+ * `revision_changed`: the connection's current revision is not the snapshot the group revision holds.
+ * `connection_archived`: the connection is archived. `not_served`: this release does not serve the
+ * connection. `probe_not_ok`: the probe of the current key is not `ok`. `runner_offline`: a `pull`
+ * connection has no runner online. `at_capacity`: every unit of the connection is in use. `HOSTS-SEAL-1` (ADR-0028):
+ * `host_disabled`: the member's host is switched off. `model_not_verified`: the agent of the host has not reported the
+ * model as verified. `model_cooling_down`: the host took the model out of availability after a real refusal.
+ */
 export const EXECUTOR_GROUP_MEMBER_ISSUE_VALUES = [
   'revision_changed',
   'connection_archived',
@@ -4628,6 +4713,9 @@ export const EXECUTOR_GROUP_MEMBER_ISSUE_VALUES = [
   'probe_not_ok',
   'runner_offline',
   'at_capacity',
+  'host_disabled',
+  'model_not_verified',
+  'model_cooling_down',
 ] as const;
 
 /** ExecutorGroupMemberIssue - the closed value set above. */
@@ -4682,6 +4770,118 @@ export const EXECUTOR_GROUP_STRATEGY_VALUES = [
 /** ExecutorGroupStrategy - the closed value set above. */
 export type ExecutorGroupStrategy = (typeof EXECUTOR_GROUP_STRATEGY_VALUES)[number];
 
+/**
+ * A server (ADR-0028): its name, the «Использовать» switch, whether it is on line, the models it can serve now and its slots.
+ * `models` holds only what can be used (an unavailable model is not listed); the reasons are in `ExecutorHostDetails`.
+ */
+export type ExecutorHost = {
+  agent_version?: string;
+  archived_at?: string;
+  created_at: string;
+  created_by: UserUid;
+  display_name: string;
+  enabled: boolean;
+  host_id: ExecutorHostId;
+  last_seen_at?: string;
+  models: Array<ExecutorHostModel>;
+  slots_in_use: number;
+  slots_total: number;
+  state: ExecutorHostState;
+};
+
+/**
+ * «Подробнее» of a server (administrator): its slots, each provider with the reasons its models cannot be used, and the
+ * tasks running on it.
+ */
+export type ExecutorHostDetails = {
+  host: ExecutorHost;
+  providers: Array<ExecutorHostProviderDetail>;
+  slots: Array<ExecutorHostSlotUse>;
+  tasks: Array<ExecutorHostTask>;
+};
+
+export type ExecutorHostId = string;
+
+/** The contract pattern for `ExecutorHostId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_HOST_ID_PATTERN = "^exh_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** The servers, newest first, with the summary line of the screen: servers on line of all, free slots of all. */
+export type ExecutorHostList = {
+  items: Array<ExecutorHost>;
+  online: number;
+  slots_free: number;
+  slots_total: number;
+  total: number;
+};
+
+/** A model the host can serve now: `available` or, with every slot of its provider in use, `busy`. */
+export type ExecutorHostModel = {
+  access: ExecutorModelAccess;
+  model_id: string;
+  provider: ExecutorProvider;
+  state: "available" | "busy";
+};
+
+/** One model of a provider on a host with the reasons it cannot be used, if it cannot (administrator's view). */
+export type ExecutorHostModelStatus = {
+  cooldown_until?: string;
+  model_id: string;
+  reasons: Array<ModelUnavailableReason>;
+  state: "available" | "busy" | "unavailable";
+};
+
+/** A provider found on the host: its access, its login, its client version and its models. */
+export type ExecutorHostProviderDetail = {
+  access: ExecutorModelAccess;
+  auth_state: ProviderAuthState;
+  cli_version?: string;
+  models: Array<ExecutorHostModelStatus>;
+  provider: ExecutorProvider;
+};
+
+/** The slots of a provider on a host: how many may run at once and how many do. */
+export type ExecutorHostSlotUse = {
+  access: ExecutorModelAccess;
+  in_use: number;
+  provider: ExecutorProvider;
+  slots: number;
+};
+
+/**
+ * How many calls of a provider the host may run at once (1 to 16). A provider that is absent has its default: 1 for a
+ * subscription, 2 for an API key.
+ */
+export type ExecutorHostSlots = {
+  anthropic_api?: number;
+  claude_code?: number;
+  codex?: number;
+  openai_api?: number;
+  openrouter_api?: number;
+};
+
+/**
+ * `online`: the agent reported within the last 120 seconds and a free slot exists. `busy`: online, every slot is in use.
+ * `offline`: no report within the last 120 seconds (or never).
+ */
+export const EXECUTOR_HOST_STATE_VALUES = [
+  'online',
+  'busy',
+  'offline',
+] as const;
+
+/** ExecutorHostState - the closed value set above. */
+export type ExecutorHostState = (typeof EXECUTOR_HOST_STATE_VALUES)[number];
+
+/** A call running on the host now: the run, the stage and since when. */
+export type ExecutorHostTask = {
+  model_id: string;
+  provider: ExecutorProvider;
+  run_id: RunId;
+  since: string;
+  stage_key?: string;
+  task_id: ExecutorTaskId;
+};
+
 /** ``reported``: the response named the model. ``declared``: the executor asserted it. */
 export const EXECUTOR_IDENTITY_BASIS_VALUES = [
   'reported',
@@ -4709,6 +4909,15 @@ export const EXECUTOR_KIND_VALUES = [
 
 /** ExecutorKind - the closed value set above. */
 export type ExecutorKind = (typeof EXECUTOR_KIND_VALUES)[number];
+
+/** How a call is paid: `subscription` (an account, not metered) or `api` (an API key, billed per token). */
+export const EXECUTOR_MODEL_ACCESS_VALUES = [
+  'subscription',
+  'api',
+] as const;
+
+/** ExecutorModelAccess - the closed value set above. */
+export type ExecutorModelAccess = (typeof EXECUTOR_MODEL_ACCESS_VALUES)[number];
 
 /** Used and total capacity of a connection (`EXEC2-SEAL-1`, ADR-0026 decision 1), derived from the database at read time and stored nowhere. `capacity` is `max_active_runs` of the current revision (1 when absent); `active_runs` counts the connection's Runs in `leased`, `running` or `retry_wait`; `active_calls` counts its comparison model calls in `prepared` or `sent` whose attempt is live. Each counts one unit, so the connection is full when their sum reaches `capacity`. */
 export type ExecutorOccupancy = {
@@ -4788,6 +4997,22 @@ export const EXECUTOR_PROBE_STATE_VALUES = [
 
 /** ExecutorProbeState - the closed value set above. */
 export type ExecutorProbeState = (typeof EXECUTOR_PROBE_STATE_VALUES)[number];
+
+/**
+ * Where a model answer comes from. `claude_code` and `codex` are the command-line clients installed on the host (logged in
+ * with an account, or with an API key); `anthropic_api`, `openai_api` and `openrouter_api` are direct calls with a key from the
+ * service key file of the host.
+ */
+export const EXECUTOR_PROVIDER_VALUES = [
+  'claude_code',
+  'codex',
+  'anthropic_api',
+  'openai_api',
+  'openrouter_api',
+] as const;
+
+/** ExecutorProvider - the closed value set above. */
+export type ExecutorProvider = (typeof EXECUTOR_PROVIDER_VALUES)[number];
 
 /** ExecutorPullClient. */
 export const EXECUTOR_PULL_CLIENT_VALUES = [
@@ -5039,6 +5264,12 @@ export const EXECUTOR_TASK_STATE_VALUES = [
 
 /** ExecutorTaskState - the closed value set above. */
 export type ExecutorTaskState = (typeof EXECUTOR_TASK_STATE_VALUES)[number];
+
+/** The token counts of the call that produced an answer, as the agent measured them. */
+export type ExecutorTaskUsage = {
+  input_tokens: number;
+  output_tokens: number;
+};
 
 /** ExecutorTransport. */
 export const EXECUTOR_TRANSPORT_VALUES = [
@@ -5292,6 +5523,11 @@ export type InputManifestEntry = {
   size_bytes: number;
 };
 
+/** A new server and its one-time grant. The name is the administrator's; no model is asked for. */
+export type IssueExecutorHostEnrollmentRequest = {
+  display_name: string;
+};
+
 /** ``expires_in_days`` defaults to 30 when absent. */
 export type IssueRunnerTokenRequest = {
   expires_in_days?: number;
@@ -5327,7 +5563,9 @@ export type IssuedExecutorEnrollment = {
  * can return it again. Copy it now; a lost value is revoked and replaced.
  */
 export type IssuedRunnerToken = {
-  runner_token: RunnerTokenMetadata;
+  catalogue?: Array<RunnerCatalogueEntry>;
+  host_id?: ExecutorHostId;
+  runner_token?: RunnerTokenMetadata;
   token: string;
 };
 
@@ -5367,6 +5605,69 @@ export type ModelCallId = string;
 
 /** The contract pattern for `ModelCallId`. Anchored; use with `new RegExp()`. */
 export const MODEL_CALL_ID_PATTERN = "^mc_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * The models the layout may name. Only pins of the provider lock; Haiku, the efforts above `high` and `low` for Opus are
+ * never offered.
+ */
+export type ModelCatalogue = {
+  contract_version: string;
+  items: Array<ModelCatalogueEntry>;
+};
+
+/**
+ * One model and one provider that may serve it: the accesses it can be served with, the efforts that may be asked for and the
+ * exact strings an answer may report (`contracts/analysis/v1/model-catalogue.json`).
+ */
+export type ModelCatalogueEntry = {
+  accepted_reported: Array<string>;
+  access: Array<ExecutorModelAccess>;
+  efforts: Array<ModelEffort>;
+  model_id: string;
+  provider: ExecutorProvider;
+};
+
+/**
+ * The reasoning effort a model is asked for. Only these three are ever offered: `xhigh` and `max` are not, and `low` is
+ * not offered for Opus (`contracts/analysis/v1/model-catalogue.json`).
+ */
+export const MODEL_EFFORT_VALUES = [
+  'low',
+  'medium',
+  'high',
+] as const;
+
+/** ModelEffort - the closed value set above. */
+export type ModelEffort = (typeof MODEL_EFFORT_VALUES)[number];
+
+/**
+ * What the agent knows of one model: `verified` by a minimal call that answered with an accepted model string,
+ * `not_verified` (not checked yet) or `failed` (the check ended in a refusal, with a code).
+ */
+export const MODEL_PROBE_STATE_VALUES = [
+  'verified',
+  'not_verified',
+  'failed',
+] as const;
+
+/** ModelProbeState - the closed value set above. */
+export type ModelProbeState = (typeof MODEL_PROBE_STATE_VALUES)[number];
+
+/**
+ * Why a model cannot be used on a host, or anywhere, right now. Lists of servers and models hide what is unavailable; the
+ * reasons are shown only where an action is blocked or a run waits, and to the administrator in a server's details.
+ */
+export const MODEL_UNAVAILABLE_REASON_VALUES = [
+  'host_disabled',
+  'host_offline',
+  'login_required',
+  'model_not_verified',
+  'model_cooling_down',
+  'not_on_any_server',
+] as const;
+
+/** ModelUnavailableReason - the closed value set above. */
+export type ModelUnavailableReason = (typeof MODEL_UNAVAILABLE_REASON_VALUES)[number];
 
 /** The snapshot's ``bge-m3-dense-v1`` build (D-127) over its reliability-aware chunks. */
 export const NORM_BUILD_STATE_VALUES = [
@@ -6383,6 +6684,16 @@ export const PROPOSAL_VERDICT_VALUES = [
 /** ProposalVerdict - the closed value set above. */
 export type ProposalVerdict = (typeof PROPOSAL_VERDICT_VALUES)[number];
 
+/** What the agent knows of a provider's login on the host: `valid`, `login_required` or `unknown`. */
+export const PROVIDER_AUTH_STATE_VALUES = [
+  'valid',
+  'login_required',
+  'unknown',
+] as const;
+
+/** ProviderAuthState - the closed value set above. */
+export type ProviderAuthState = (typeof PROVIDER_AUTH_STATE_VALUES)[number];
+
 /** Whether the model call was made live or replayed from a recording. Visible in the UI and in the CSV, because a recorded run is not evidence of a live one. */
 export const PROVIDER_MODE_VALUES = [
   'live',
@@ -6498,14 +6809,20 @@ export type RenameDocumentRequest = {
   display_title: string;
 };
 
-/** An agent's health report (`EXEC2-SEAL-1`, ADR-0026 decision 5): sanitised enumerations and bounded strings only. */
+/**
+ * An agent's health report (`EXEC2-SEAL-1`, ADR-0026 decision 5): sanitised enumerations and bounded
+ * strings only.
+ */
 export type ReportRunnerHealthRequest = {
   agent_version: string;
   clis: Array<RunnerCliHealth>;
   concurrency: number;
   execution_profile: RunnerExecutionProfile;
   features: Array<RunnerFeature>;
+  key_file?: RunnerKeyFileReport;
+  providers?: Array<RunnerProviderReport>;
   runner_instance_id?: string;
+  slots?: ExecutorHostSlots;
 };
 
 export type ResetUserPasswordRequest = {
@@ -6567,6 +6884,15 @@ export type ReviseStageAssemblyRequest = {
   remove_document_uids: Array<DocumentUid>;
 };
 
+/**
+ * A new revision: the kit and every cell. Only pairs of the catalogue are accepted; a row of the closed list of block schemes
+ * is chosen as a whole.
+ */
+export type ReviseStageModelLayoutRequest = {
+  cells: Array<StageLayoutCell>;
+  kit: StageModelKit;
+};
+
 /** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. `viewer` (R-150e, R-150x, shown as «Наблюдатель») reads and downloads product data and changes nothing; it does not read the execution queue, journal, workers or executors (R-150w), and it is the only role of an account that holds it: a role set combining it with `expert` or `admin` is refused as `validation_failed` (`constraint: viewer_exclusive`). Reading product data needs one of these roles (R-80): an active account whose role set is empty is suspended and reads only its own account, the product version and the release notes. */
 export const ROLE_VALUES = [
   'expert',
@@ -6590,6 +6916,13 @@ export type RunActivitySpend = {
   model_call_count: number;
 };
 
+/**
+ * The expert confirms a fresh estimate (`HOSTS-SEAL-1`, consent v2). The body is the same whatever the route: the digest of
+ * the estimate that was shown, the ceiling the person approves and `confirmed`. When every cell of a run on the stage layout
+ * runs on a subscription the estimate is 0 and pressing the button that says so is the consent, with `ceiling_micros` 0. The
+ * consent the stand stores is built from the estimate the digest names and adds to it the digest of the stage plan and, per
+ * model, the digest of the rates and the access it was priced at; a start whose plan or access differs from them is refused.
+ */
 export type RunCostConsent = {
   ceiling_micros: number;
   confirmed: boolean;
@@ -6597,7 +6930,7 @@ export type RunCostConsent = {
 };
 
 export type RunCostEstimate = {
-  billing: "metered" | "unmetered";
+  billing: "metered" | "unmetered" | "mixed";
   calls: number;
   computed_stage_ids?: Array<StageId>;
   connection_revision_id?: ExecutorRevisionId;
@@ -6608,6 +6941,7 @@ export type RunCostEstimate = {
   executor_group_revision_id?: ExecutorGroupRevisionId;
   input_tokens: number;
   model_id: string;
+  models?: Array<RunCostModelLine>;
   output_tokens: number;
   page_count: number;
   pin_id?: string;
@@ -6618,6 +6952,7 @@ export type RunCostEstimate = {
   reused_stage_ids?: Array<StageId>;
   routing_rule_revision_id?: ExecutorRoutingRuleRevisionId;
   scope: "run" | "ar_v3_group";
+  stage_plan_digest?: Sha256;
   start_from_run_id?: RunId;
   start_stage_id?: StageId;
   text_characters: number;
@@ -6634,6 +6969,20 @@ export type RunCostEstimateRequest = {
   start_from_run_id?: RunId;
   start_stage_id?: StageId;
   version_uid: VersionUid;
+};
+
+/**
+ * One model of a run on the stage layout, priced (`HOSTS-SEAL-1`, consent v2): the digest of the rates it was priced at and
+ * the access, so a start that finds another rate or another access refuses with `cost_estimate_binding_changed`.
+ */
+export type RunCostModelLine = {
+  access: ExecutorModelAccess;
+  calls: number;
+  estimated_cost_micros: number;
+  input_tokens: number;
+  model_id: string;
+  output_tokens: number;
+  rate_sha256: Sha256;
 };
 
 /** EXEC-PAR-START-01: which executor a run is on. Identity, display name and pinned model only; never a secret, an address or a probe. */
@@ -6687,15 +7036,66 @@ export type RunPreset = {
   revision_no: number;
 };
 
-/** `EXEC2-SEAL-1` (ADR-0026 decisions 1 and 5), widened by `EXEC2-SEAL-2` (decisions 14 and 15): why work is not running. `executor_at_capacity`: every unit of its executor connection (for a pending group Run or job: of every eligible member) is in use. `runner_offline`: the connection is a `pull` connection and no runner of it is online (for a group: no eligible member has one). `needs_reconsent`: dispatch found the consent envelope no longer holds and called nothing; a new consent is needed. The persisted `wait_reason` of pending work uses the same words. */
+/**
+ * `EXEC2-SEAL-1` (ADR-0026 decisions 1 and 5), widened by `EXEC2-SEAL-2` (decisions 14 and 15): why work
+ * is not running. `executor_at_capacity`: every unit of its executor connection (of every eligible member of
+ * its group) is in use. `runner_offline`: the connection is a `pull` connection and no runner of it is online
+ * (no eligible member has one). `needs_reconsent`: dispatch found the consent envelope no longer holds and
+ * called nothing. `model_unavailable` (`HOSTS-SEAL-1`, ADR-0028 decision 15): a run started on the stage layout waits
+ * because no available server can serve a model that one of its cells needs. The persisted `wait_reason` of pending
+ * work uses the same words.
+ */
 export const RUN_QUEUE_REASON_VALUES = [
   'executor_at_capacity',
   'runner_offline',
   'needs_reconsent',
+  'model_unavailable',
 ] as const;
 
 /** RunQueueReason - the closed value set above. */
 export type RunQueueReason = (typeof RUN_QUEUE_REASON_VALUES)[number];
+
+/**
+ * What the one button «Запустить» says (ADR-0028): the route, the kit, every cell with its access, whether the start is
+ * possible and, when it is, the digest of the estimate to confirm. `access` is the total: all cells on a subscription (the
+ * estimate is 0 and the press of the button is the consent), all on an API key, or mixed (one dialog with the estimate by
+ * model). An unavailable cell makes `ready` false and names itself in `cells`.
+ */
+export type RunStartReadiness = {
+  access?: "subscription" | "api" | "mixed";
+  cells: Array<RunStartReadinessCell>;
+  estimate_digest?: Sha256;
+  estimated_cost_micros?: number;
+  kit?: StageModelKit;
+  ready: boolean;
+  recommended_ceiling_micros?: number;
+  route: RunStartRoute;
+  stage_plan_digest?: Sha256;
+};
+
+/**
+ * One cell of the plan a start would freeze, with the access it would run with (absent when no server can serve it) and
+ * why it cannot be served, if it cannot.
+ */
+export type RunStartReadinessCell = {
+  access?: ExecutorModelAccess;
+  available: boolean;
+  cell_key: StageCellKey;
+  effort: ModelEffort;
+  model_id: string;
+  reasons: Array<ModelUnavailableReason>;
+  role: StageCellRole;
+  row: StageRowKey;
+};
+
+/** `stage_plan`: the run takes the layout. `legacy`: the layout is off and the run follows the automatic route as before. */
+export const RUN_START_ROUTE_VALUES = [
+  'stage_plan',
+  'legacy',
+] as const;
+
+/** RunStartRoute - the closed value set above. */
+export type RunStartRoute = (typeof RUN_START_ROUTE_VALUES)[number];
 
 /** The audit_run states of contracts/domain/v1/state-machines.json. The success terminal is `published`; there is no `succeeded` run state. `created` is transient and rarely observed by a client. `cancelled` is declared by the contract and is unreachable in PC-01, which has no cancel command. */
 export const RUN_STATE_VALUES = [
@@ -6790,6 +7190,17 @@ export type RunStatusPage = {
   page: PageInfo;
 };
 
+/**
+ * One model the stand offers and one provider that may serve it, as handed to an agent: the efforts it may be asked for
+ * and the exact strings an answer may report as its model (no prefix or date-suffix rule).
+ */
+export type RunnerCatalogueEntry = {
+  accepted_reported: Array<string>;
+  efforts: Array<ModelEffort>;
+  model_id: string;
+  provider: ExecutorProvider;
+};
+
 /** The authentication state of a client, read only through its official mechanism and reported as a closed enumeration: `valid`, `login_required`, or `unknown` (not installed, or the client offers no official way to tell). Never a credential, a path or an account name. */
 export const RUNNER_CLI_AUTH_STATE_VALUES = [
   'valid',
@@ -6834,8 +7245,13 @@ export const RUNNER_FEATURE_VALUES = [
 /** RunnerFeature - the closed value set above. */
 export type RunnerFeature = (typeof RUNNER_FEATURE_VALUES)[number];
 
-/** The report was stored on the calling runner token. */
+/**
+ * The report was stored on the calling runner token. A host token also gets the catalogue it should check and whether the
+ * host is switched on («Использовать»).
+ */
 export type RunnerHealthAck = {
+  catalogue?: Array<RunnerCatalogueEntry>;
+  enabled?: boolean;
   recorded_at: string;
 };
 
@@ -6855,6 +7271,48 @@ export type RunnerImageBlobId = string;
 export const RUNNER_IMAGE_BLOB_ID_PATTERN = "^blob_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /**
+ * What the agent found of the service key file of the direct API providers (diagnostics for the server's details; no key and
+ * no path): `ok` (read), `absent` (no file) or `ignored` (the file exists but was not read), with a lower-case `reason` code
+ * when it was ignored (`mode_is_not_0600`, `not_owned_by_the_service_user`, `not_a_regular_file`, `unreadable`, `too_large`).
+ */
+export type RunnerKeyFileReport = {
+  reason?: string;
+  state: "ok" | "absent" | "ignored";
+};
+
+/**
+ * One model of a provider as the agent last checked it. `failure_code` is a lower-case code (`login_required`,
+ * `quota_exceeded`, `model_not_found`, ...), never the provider's text.
+ */
+export type RunnerProviderModelState = {
+  checked_at: string;
+  failure_code?: string;
+  model_id: string;
+  state: ModelProbeState;
+};
+
+/**
+ * One provider found on the host: how it is paid for, where its client is and which version, whether it is logged in and
+ * the state of each model of the catalogue on it. No secret, no key and no path to a credential.
+ *
+ * `access` of a command-line client is read from the client's own status command: a subscription login is `subscription`, a
+ * login with an API key is `api`; a client that is not signed in is reported `subscription` with `auth_state` `login_required`,
+ * and one signed in by a method the agent does not recognise `api` with `auth_state` `unknown` and no verified model. A direct
+ * API provider is always `api`: its `auth_state` is `valid` once a model has been verified, `login_required` when the provider
+ * refused the key, else `unknown`. `cli_path` is left out unless the operator opted in. `accept_images` says whether the
+ * provider can take a task that carries images on this host.
+ */
+export type RunnerProviderReport = {
+  accept_images?: boolean;
+  access: ExecutorModelAccess;
+  auth_state: ProviderAuthState;
+  cli_path?: string;
+  cli_version?: string;
+  models: Array<RunnerProviderModelState>;
+  provider: ExecutorProvider;
+};
+
+/**
  * What the API ever says about a runner token after it was issued: that it exists, its
  * non-secret prefix, when it expires or was revoked, and when and from where it was last seen.
  * The value and its hash are never returned.
@@ -6865,13 +7323,14 @@ export type RunnerTokenMetadata = {
   agent_version?: string;
   clis?: Array<RunnerCliHealth>;
   concurrency?: number;
-  connection_id: ExecutorConnectionId;
+  connection_id?: ExecutorConnectionId;
   created_at: string;
   created_by: UserUid;
   execution_profile?: RunnerExecutionProfile;
   expires_at: string;
   features?: Array<RunnerFeature>;
   health_reported_at?: string;
+  host_id?: ExecutorHostId;
   last_seen_address?: string;
   last_seen_at?: string;
   online?: boolean;
@@ -7094,6 +7553,16 @@ export type SetExecutionPausedRequest = {
   paused: boolean;
 };
 
+/** `true` switches the server on, `false` off. A server that is off takes no new run; runs already bound to it finish. */
+export type SetExecutorHostEnabledRequest = {
+  enabled: boolean;
+};
+
+/** The providers whose slots change; at least one. Each change is a journalled event with its author. */
+export type SetExecutorHostSlotsRequest = {
+  slots: ExecutorHostSlots;
+};
+
 /** `true` sets the mark, `false` clears it. Setting an already set mark or clearing an absent one answers the connection as it stands. */
 export type SetExecutorIntegrationAuthorisationRequest = {
   authorised: boolean;
@@ -7153,6 +7622,14 @@ export type SetProjectVendorListRequest = {
   entries: Array<VendorListEntry>;
   expected_vendor_list_id?: VendorListId | null;
   mode: VendorListMode;
+};
+
+/**
+ * `true` puts the layout in force for runs started from now on (it needs a revision and the database provider source);
+ * `false` takes it out. Runs already started keep the plan they froze.
+ */
+export type SetStageModelLayoutEnabledRequest = {
+  enabled: boolean;
 };
 
 export type SetStagePairCompletenessRequest = {
@@ -7555,6 +8032,22 @@ export type StageCardVerdictPage = {
   page: PageInfo;
 };
 
+export type StageCellKey = string;
+
+/** The contract pattern for `StageCellKey`. Anchored; use with `new RegExp()`. */
+export const STAGE_CELL_KEY_PATTERN = "^[a-z][a-z0-9_]{0,63}:(main|leg1|leg2|judge)$";
+
+/** The part of a row a cell plays: `main` (the single answer), `leg1` and `leg2` (the two legs of an ensemble) and `judge`. */
+export const STAGE_CELL_ROLE_VALUES = [
+  'main',
+  'leg1',
+  'leg2',
+  'judge',
+] as const;
+
+/** StageCellRole - the closed value set above. */
+export type StageCellRole = (typeof STAGE_CELL_ROLE_VALUES)[number];
+
 export type StageChainBatch = {
   batch_id: StageChainBatchId;
   counts: {
@@ -7773,6 +8266,42 @@ export const STAGE_ID_VALUES = [
 /** StageId - the closed value set above. */
 export type StageId = (typeof STAGE_ID_VALUES)[number];
 
+/**
+ * The settings of one cell (a row and a role): model, effort, the output limit in tokens and the timeout in seconds. The
+ * model and the effort must be a pair of `listModelCatalogue`.
+ */
+export type StageLayoutCell = {
+  cell_key: StageCellKey;
+  effort: ModelEffort;
+  max_output_tokens: number;
+  model_id: string;
+  role: StageCellRole;
+  row: StageRowKey;
+  timeout_seconds: number;
+};
+
+/** One immutable revision of the layout: the kit and every cell, with its author and time. */
+export type StageLayoutRevision = {
+  cells: Array<StageLayoutCell>;
+  created_at: string;
+  created_by: UserUid;
+  kit: StageModelKit;
+  layout_revision_id: StageLayoutRevisionId;
+  revision_no: number;
+};
+
+export type StageLayoutRevisionId = string;
+
+/** The contract pattern for `StageLayoutRevisionId`. Anchored; use with `new RegExp()`. */
+export const STAGE_LAYOUT_REVISION_ID_PATTERN = "^slr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** One change of the switch «Модели по этапам: включены», with its author. */
+export type StageLayoutSwitchEvent = {
+  enabled: boolean;
+  set_at: string;
+  set_by: UserUid;
+};
+
 export type StageLinkInput = {
   left_profile_id?: ComparisonPageProfileId;
   relation: "paired" | "only_left" | "only_right";
@@ -7834,6 +8363,30 @@ export const STAGE_LINK_REVISION_ID_PATTERN = "^slk_[0-9A-HJKMNP-TV-Z]{26}$";
 export type StageLinkRevisionPage = {
   items: Array<StageLinkRevision>;
   page: PageInfo;
+};
+
+/** The set the layout is based on: `claude_only`, `codex_only`, or `custom` (any edit of a set). */
+export const STAGE_MODEL_KIT_VALUES = [
+  'claude_only',
+  'codex_only',
+  'custom',
+] as const;
+
+/** StageModelKit - the closed value set above. */
+export type StageModelKit = (typeof STAGE_MODEL_KIT_VALUES)[number];
+
+/**
+ * The layout of models over the analysis stages (ADR-0028). `enabled`: runs started now take the layout; off, they follow
+ * the route as before. `current` is the revision in force (absent before the first), `history` the revisions newest first and
+ * `switch_journal` the switch events newest first. `unavailable_cell_keys` are the cells of `current` whose model no server can
+ * serve now (shown as «нет на серверах»).
+ */
+export type StageModelLayout = {
+  current?: StageLayoutRevision;
+  enabled: boolean;
+  history: Array<StageLayoutRevision>;
+  switch_journal: Array<StageLayoutSwitchEvent>;
+  unavailable_cell_keys: Array<StageCellKey>;
 };
 
 export type StagePair = {
@@ -7900,6 +8453,23 @@ export type StageReviewDecision = {
   status: "SAME" | "MOVED" | "CHANGED" | "REMOVED" | "ADDED" | "UNCERTAIN";
   summary: string;
 };
+
+/**
+ * A row of the stage layout: the analysis stage whose model is chosen. `text` (analysis of the text), `blocks` (analysis of
+ * the blocks), `cross_check` (the complex cross-check and the parameter passport), `norms` (the norms), `review` (the critic)
+ * and `correction` (the refinement).
+ */
+export const STAGE_ROW_KEY_VALUES = [
+  'text',
+  'blocks',
+  'cross_check',
+  'norms',
+  'review',
+  'correction',
+] as const;
+
+/** StageRowKey - the closed value set above. */
+export type StageRowKey = (typeof STAGE_ROW_KEY_VALUES)[number];
 
 export type StageSheetPassport = {
   building?: string;
@@ -8215,10 +8785,14 @@ export type StartStageChainRunRequest = {
  * The token counts are the runner's own; the call is recorded as unmetered.
  */
 export type SubmitExecutorTaskAnswerRequest = {
+  access?: ExecutorModelAccess;
   input_tokens?: number;
   model: string;
   output_text: string;
   output_tokens?: number;
+  provider?: ExecutorProvider;
+  reported_model?: string;
+  usage?: ExecutorTaskUsage;
 };
 
 /** An application for an account. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied. */

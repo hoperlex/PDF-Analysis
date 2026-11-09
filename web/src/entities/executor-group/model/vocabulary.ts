@@ -33,6 +33,9 @@ export const MEMBER_ISSUE_SENTENCES: Readonly<Record<ExecutorGroupMemberIssue, s
   probe_not_ok: 'у текущего ключа нет успешной проверки',
   runner_offline: 'клиент подключения не на связи',
   at_capacity: 'все места подключения заняты',
+  host_disabled: 'сервер выключен переключателем «Использовать»',
+  model_not_verified: 'агент сервера не подтвердил эту модель',
+  model_cooling_down: 'сервер временно снял модель после отказа',
 };
 
 /** The mode in words; the machine value stays in `data-routing-mode`. */
