@@ -27,7 +27,9 @@ portal's text blocks (``figures_with_the_witness``), over the same stored docume
 quotation the witness is asked about set to 1 (``..._min1``), and the recognised text damaged the way a reading damages it (a word
 in ten, in three, written with a look-alike Latin letter or a letter short; ``..._noise10`` and ``..._noise30``, each also without
 the witness's abstention on a block whose reading carries a quality flag, ``..._without_the_doubtful_guard``; and the damage no flag
-names, a letter short, ``..._dropped10`` and ``..._dropped30``). The shipped adapter
+names, a letter short, ``..._dropped10`` and ``..._dropped30``; and the **naive witness**, with neither the abstention on a doubtful reading
+nor the one on a near copy, on the exact and the damaged readings, ``..._naive_*``: an ablation that patches the rule's near-copy test
+out for the call, to show what the two abstentions are worth). The shipped adapter
 does not hand the text to the rule (that wiring is in ``bootstrap/adapters.py``, `D-590`), so this reproduction calls the rule
 itself, and **fails the scenario** unless the same call without the text gives exactly the adapter's answer for every finding.
 The blocks' text of the ``pz_*`` and ``stress_*`` scenarios is what the PDF's own characters inside the block read as (an exact
@@ -47,6 +49,7 @@ Not product code; never run against a live provider (the recorded adapter has no
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -56,12 +59,14 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT / "tools" / "fixtures"))  # portal_bundle, ar_corpus
 
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
+from auditmanager.analysis.geometry import finding_blocks as rule_module  # noqa: E402
 from auditmanager.analysis.geometry.finding_blocks import COVERAGE, WITNESS_MIN_CHARACTERS  # noqa: E402
 from auditmanager.analysis.stages.extraction import NORMALIZATION_DESCRIPTION  # noqa: E402
 from auditmanager.analysis.text import ProviderConfig, ProviderMode, RecordedAdapter  # noqa: E402
@@ -350,12 +355,16 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
 
         def witnessed(
             texts_given: dict[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS, *, guarded: bool = True,
+            veto: bool = True,
         ) -> dict[str, Any]:
+            """The relation with the witness; ``guarded=False`` drops the doubtful-reading abstention and ``veto=False`` the near-copy
+            one (patched out of the rule for this call: an ablation, to see what each is worth, never the shipped rule)."""
             doubtful = doubtful_blocks(blocks, texts_given) if guarded and texts_given else set()
-            result = [
-                (uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters, doubtful), labels[uid])
-                for uid, facts in usable
-            ]
+            with contextlib.nullcontext() if veto else mock.patch.object(rule_module, "_near_copy", lambda *_a, **_k: False):
+                result = [
+                    (uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters, doubtful), labels[uid])
+                    for uid, facts in usable
+                ]
             return analyse(items=result, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=memo)
 
         with_witness = witnessed(texts)
@@ -368,6 +377,10 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             # Damage no quality flag names (a letter short): the guard cannot see it.
             unseen = {key: degrade(key, text, rate, flaggable=False) for key, text in texts.items()}
             sensitivity[f"dropped{round(rate * 100)}"] = witnessed(unseen)
+            # The naive witness (neither abstention), on the damaged readings: what the two are worth.
+            sensitivity[f"naive_noise{round(rate * 100)}"] = witnessed(damaged, guarded=False, veto=False)
+            sensitivity[f"naive_dropped{round(rate * 100)}"] = witnessed(unseen, guarded=False, veto=False)
+        sensitivity["naive_exact"] = witnessed(texts, guarded=False, veto=False)
         before_pairs = {(p["finding_uid"], p["portal_block_id"]) for p in now["pairs"]}
         added = Counter(p["geometry"] for p in with_witness["pairs"] if (p["finding_uid"], p["portal_block_id"]) not in before_pairs)
         lost = sorted(before_pairs - {(p["finding_uid"], p["portal_block_id"]) for p in with_witness["pairs"]})
