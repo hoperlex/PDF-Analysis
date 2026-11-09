@@ -200,7 +200,10 @@ APPEND_ONLY = frozenset((
     "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_assignment_schedule_event",
     "work_calendar_event",
     # `0059_decision_memory` (`ADR-0027`): the decision memory is inserted into by `record_decision`'s port and by the worker's
-    # sweep, and nothing updates or deletes a row (`am_immutable_row` on all eight). The forget tool of phase M2 runs as the owner.
+    # sweep, and nothing updates or deletes a row (`am_immutable_row` on the three identity tables, `am_guard_decision_memory_forget`
+    # on the five content tables since `0061`, which refuses a DELETE that is not beside a forget event of the same transaction). The
+    # application role holds no DELETE on any of them; the forget tool of phase M2 runs as the owner (`scripts/recovery/memory_forget.py`).
+    # `decision_memory_status_event` is written by withdraw and restore (`decision_memory/service.py`).
     "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
     "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_status_event",
 ))
@@ -233,9 +236,6 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # `executor_routing_mode_event` left it when `EXEC2-CUTOVER-01` wrote the routing-mode journal
     # (`GroupRepository.insert_mode_event`). The scan counts INSERT, UPDATE, DELETE and LOCK statements, so a table that
     # is only selected is still never written.
-    # `0059_decision_memory` (`ADR-0027`): `decision_memory_status_event` is a table of withdraw, restore and forget events that no
-    # code writes before phase M2; it leaves the set when M2 writes it (the test is red until it does).
-    "decision_memory_status_event",
 ))
 
 #: Writes whose table name is not a literal in the SQL text, so :func:`observed_statements` cannot read it from the string: an f-string
@@ -258,6 +258,9 @@ READ_ONLY = frozenset((
     "alembic_version",            # only the migrator moves the head
     "contract_state_transition",  # seeded by migration 0002; the code reads the topology
     "norm_embedding_profile",     # seeded by migration 0013; no INSERT in the code
+    # `0061_decision_memory_m2`: the decision memory's installation settings (`data_class`, `training_use`). The capture reads the
+    # latest row; only the operator tool `scripts/recovery/memory_setting.py` writes one, as the owner.
+    "decision_memory_setting_event",
 ))
 
 #: Not even ``SELECT``. Empty at head.

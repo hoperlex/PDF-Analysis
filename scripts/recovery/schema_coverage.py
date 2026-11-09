@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0060_run_from_stage"
+HEAD = "0061_decision_memory_m2"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -89,11 +89,13 @@ TABLES = frozenset((
     # a document, a finding or the ledger; every one is `KEEP` in the purge.
     "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
     "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_status_event",
+    # `0061_decision_memory_m2` (`DECISION-MEMORY-01` phase M2): the installation settings' journal (`data_class`, `training_use`).
+    "decision_memory_setting_event",
 ))
 
 #: Views at ``HEAD``. A view carries no rows; it is restored from the dump and checked by name.
 VIEWS = frozenset((
-    "executor_route_current", "finding_current_verdict", "version_classification_current",
+    "decision_memory_case_current", "executor_route_current", "finding_current_verdict", "version_classification_current",
     "version_classification_revision", "work_assignment_current",
 ))
 
@@ -296,15 +298,20 @@ TRIGGERS = (
     # `0043_stage_ai_generations`: a unit's generation is pinned once written.
     ("stage_ai_unit", "trg_stage_ai_generation_pin", "am_guard_frozen_columns", 19),
     ("contract_state_transition", "trg_contract_state_transition_immutable", "am_immutable_row", 31),
-    # `0059_decision_memory`: all eight tables are `am_immutable_row` (27 = ROW | BEFORE | DELETE | UPDATE).
+    # `0059_decision_memory`: the three identity tables are `am_immutable_row` (27 = ROW | BEFORE | DELETE | UPDATE). `0061_decision_memory_m2`
+    # (`D-394`) replaces that guard on the five content tables with `am_guard_decision_memory_forget` (same mask: UPDATE is refused, DELETE
+    # only beside a `forget` event of the same case inserted by the same transaction), puts the transition rule on the status event's
+    # INSERT (7 = ROW | BEFORE | INSERT) and makes the settings' journal immutable.
     ("decision_memory_case", "trg_decision_memory_case_immutable", "am_immutable_row", 27),
-    ("decision_memory_content", "trg_decision_memory_content_immutable", "am_immutable_row", 27),
-    ("decision_memory_crop", "trg_decision_memory_crop_immutable", "am_immutable_row", 27),
+    ("decision_memory_content", "trg_decision_memory_content_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_crop", "trg_decision_memory_crop_forget_guard", "am_guard_decision_memory_forget", 27),
     ("decision_memory_decision", "trg_decision_memory_decision_immutable", "am_immutable_row", 27),
-    ("decision_memory_decision_text", "trg_decision_memory_decision_text_immutable", "am_immutable_row", 27),
-    ("decision_memory_evidence", "trg_decision_memory_evidence_immutable", "am_immutable_row", 27),
-    ("decision_memory_norm_ref", "trg_decision_memory_norm_ref_immutable", "am_immutable_row", 27),
+    ("decision_memory_decision_text", "trg_decision_memory_decision_text_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_evidence", "trg_decision_memory_evidence_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_norm_ref", "trg_decision_memory_norm_ref_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_setting_event", "trg_decision_memory_setting_event_immutable", "am_immutable_row", 27),
     ("decision_memory_status_event", "trg_decision_memory_status_event_immutable", "am_immutable_row", 27),
+    ("decision_memory_status_event", "trg_decision_memory_status_event_transition", "am_guard_decision_memory_status", 7),
     ("document_version", "trg_document_version_immutable", "am_immutable_row", 27),
     ("document_version_classification", "trg_document_version_classification_immutable", "am_immutable_row", 27),
     ("document_version_classification_correction", "trg_document_version_classification_correction_chain", "am_check_classification_correction_chain", 7),
@@ -479,6 +486,8 @@ INDEX_COUNT = 483
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((
     "am_immutable_row", "am_append_only", "am_guard_release_append_only",
+    # `0061_decision_memory_m2`: the decision memory's content tables are immutable except through a forget (`D-394`).
+    "am_guard_decision_memory_forget",
 ))
 
 _IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*\Z")

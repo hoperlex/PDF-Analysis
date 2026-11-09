@@ -3060,11 +3060,6 @@ class _AppendedDecision:
         return self._verdict
 
 
-#: `ADR-0027`: every case of the first phase is ``test`` -- the closed beta runs on test data, and ``test`` is the safe direction because
-#: an export defaults to ``real`` only. Phase M2 makes it an installation setting; that must land before real client data does (`D-390`).
-MEMORY_DATA_CLASS = "test"
-
-
 class MemoryCaptureAssembler:
     """The decision memory's capture (`ADR-0027`, `DECISION-MEMORY-01` section 7): build one snapshot and hand it to the memory.
 
@@ -3072,6 +3067,10 @@ class MemoryCaptureAssembler:
     event is inserted, in the caller's transaction; the sweep calls :meth:`capture` for events recorded before there was a memory.
     It lives in the composition root because it reads five contexts (findings, documents, analysis geometry, decisions, the memory)
     through their public modules, and none of them may import another.
+
+    ``data_class`` (``test`` or ``real``) is read **at every capture** from the installation setting
+    (:class:`~auditmanager.decision_memory.public.MemoryReader.settings`, `D-390`); nothing journalled means ``test``, the safe direction
+    because an export defaults to ``real`` only. A caller that passes ``data_class`` pins it (the tests do); the composition root does not.
 
     ``geometry`` is anything with ``evidence_boxes_in(session, run_id)`` and ``portal_crops_in(session, run_id)`` --
     :class:`BlockAdapter` in production. Both read **the run of the decided finding** (``b_NNNNNN`` is an anchor inside one run's
@@ -3081,14 +3080,15 @@ class MemoryCaptureAssembler:
     A failure propagates (the decision fails loudly): nothing here falls back to a case without its crops or its citations.
     """
 
-    def __init__(self, *, geometry: Any, data_class: str = MEMORY_DATA_CLASS) -> None:
-        from auditmanager.decision_memory.public import DATA_CLASSES, MemoryRepository
+    def __init__(self, *, geometry: Any, data_class: str | None = None) -> None:
+        from auditmanager.decision_memory.public import DATA_CLASSES, MemoryReader, MemoryRepository
 
-        if data_class not in DATA_CLASSES:
+        if data_class is not None and data_class not in DATA_CLASSES:
             raise ValueError(f"{data_class!r} is not a decision-memory data class")
         self._geometry = geometry
-        self._data_class = data_class
+        self._pinned_data_class = data_class
         self._repository = MemoryRepository()
+        self._reader = MemoryReader()
 
     def __call__(self, session: Session, event: Any, origin_kind: str) -> None:
         self.capture(session, event, origin_kind)
@@ -3204,7 +3204,7 @@ class MemoryCaptureAssembler:
             ),
             content=content,
             section_code=None if classification is None else classification.section_code,
-            data_class=self._data_class,
+            data_class=self._pinned_data_class or self._reader.settings(session).data_class,
             crops=crops,
             decision=DecisionFact(
                 source_decision_id=event.decision_id, event_type=event.event_type, severity=event.severity,
@@ -3317,6 +3317,89 @@ class MemoryCaptureSweep:
         if captured:
             logging.getLogger(__name__).info("decision memory: captured %d earlier decision(s)", captured)
         return MemorySweepReport(captured, failed)
+
+
+#: The command types of the keyed status operations. The product purge keeps both (`KEEP_COMMAND_TYPES`): a status event, a KEEP row,
+#: references the receipt.
+COMMAND_TYPE_WITHDRAW_MEMORY_CASE = "withdraw_decision_memory_case"
+COMMAND_TYPE_RESTORE_MEMORY_CASE = "restore_decision_memory_case"
+
+
+class DecisionMemoryAdapter(_SessionHolder):
+    """Withdraw and restore a decision-memory case under an idempotency key, and read the memory (`DECISION-MEMORY-01` section 7.3).
+
+    The composition root owns the claim of the command (the memory imports neither ``ingest`` nor ``decisions``): the key and the
+    payload are claimed first, the status event is written with the receipt's ``command_id``, and a replay answers the event the first
+    call wrote. Who may call is the API layer's decision (``admin``); the memory only records the actor.
+    """
+
+    def withdraw_case(self, *, case_id: str, reason_code: str, actor_user_uid: str, idempotency_key: str) -> Any:
+        return self._keyed(COMMAND_TYPE_WITHDRAW_MEMORY_CASE, "withdraw", case_id, reason_code, actor_user_uid, idempotency_key)
+
+    def restore_case(self, *, case_id: str, reason_code: str, actor_user_uid: str, idempotency_key: str) -> Any:
+        return self._keyed(COMMAND_TYPE_RESTORE_MEMORY_CASE, "restore", case_id, reason_code, actor_user_uid, idempotency_key)
+
+    def _keyed(
+        self, command_type: str, operation: str, case_id: str, reason_code: str, actor_user_uid: str, idempotency_key: str
+    ) -> Any:
+        from auditmanager.decision_memory.public import restore_case, withdraw_case
+        from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
+        from auditmanager.shared.identity import IdempotencyKey
+
+        change = {"withdraw": withdraw_case, "restore": restore_case}[operation]
+
+        def work(session: Session) -> Any:
+            commands = CommandRepository()
+            claimed = commands.begin(
+                session, command_type=command_type, idempotency_key=IdempotencyKey(idempotency_key),
+                fingerprint=payload_fingerprint({
+                    "command": f"{command_type}.v1", "case_id": case_id, "reason_code": reason_code,
+                    "actor_user_uid": actor_user_uid,
+                }),
+            )
+            if isinstance(claimed, CommandReplay):
+                event_id = claimed.outcome.get("status_event_id")
+                found = None if not isinstance(event_id, str) else session.execute(
+                    sql_text(
+                        "SELECT case_id, status_event_id, kind, reason_code, created_at FROM decision_memory_status_event "
+                        "WHERE status_event_id = :id"
+                    ), {"id": event_id},
+                ).mappings().one_or_none()
+                if found is None:
+                    raise DomainError(ErrorCode.IDEMPOTENCY_KEY_STALE, command_type=command_type)
+                from auditmanager.decision_memory.public import StatusChange, status_after_events
+
+                return StatusChange(
+                    case_id=found["case_id"], status_event_id=found["status_event_id"], kind=found["kind"],
+                    status=status_after_events(found["kind"]), reason_code=found["reason_code"], changed_at=found["created_at"],
+                )
+            result = change(
+                session, case_id=case_id, actor_user_uid=actor_user_uid, reason_code=reason_code,
+                command_id=str(claimed.command_id),
+            )
+            commands.succeed(session, command_id=claimed.command_id, outcome={"status_event_id": result.status_event_id})
+            return result
+
+        return self._write(work)
+
+    def get_case(self, *, case_id: str) -> Any:
+        from auditmanager.decision_memory.public import MemoryReader
+
+        return self._read(lambda session: MemoryReader().get_case(session, case_id))
+
+    def list_cases(self, **filters: Any) -> Any:
+        from auditmanager.decision_memory.public import MemoryReader
+
+        return self._read(lambda session: MemoryReader().list_cases(session, **filters))
+
+    def status(self) -> Any:
+        from auditmanager.decision_memory.public import MemoryReader
+
+        def work(session: Session) -> Any:
+            reader = MemoryReader()
+            return reader.settings(session), reader.counts(session)
+
+        return self._read(work)
 
 
 class CsvExportAdapter(_SessionHolder):

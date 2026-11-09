@@ -122,9 +122,12 @@ KEEP_SCHEDULE_TABLES = frozenset((
 #: `origin_*` are bare identities), and a crop's Blob stays by the rule that a Blob any KEEP table references stays. Guard
 #: ``memory-captured`` (G1) refuses a purge while an `accept` or `reject` event has no memory decision, because the memory is the only
 #: copy of its context once the product tables are truncated.
+#: `0061_decision_memory_m2` adds the installation settings' journal (`data_class`, `training_use`): an installation fact like the
+#: schedule's settings, never reset by a purge of product data.
 KEEP_MEMORY_TABLES = frozenset((
     "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
-    "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_status_event",
+    "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_setting_event",
+    "decision_memory_status_event",
 ))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
@@ -221,7 +224,10 @@ PRODUCT_TABLES = frozenset((
 #: (`PROD-06`; kept "forever", ADR-0023 section 4), ``erasure.`` the record of a project erase
 #: (`PROD-07a`, ADR-0022 section 3: who, when, what, hashes). Both the keep and the delete
 #: predicate of ``audit_event`` are built from this tuple (``_event_keep``).
-KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.")
+#: ``memory.`` is the decision memory's forget tool (`DECISION-MEMORY-01` section 4.5): ``memory.forget_requested`` and
+#: ``memory.forget_completed`` record who made the memory forget what, with identities, counts and digests only; they are kept for
+#: the same reason ``erasure.`` is.
+KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.", "memory.")
 PRODUCT_EVENT_PREFIXES = (
     "artifact.", "attempt.", "audit_run.", "comparison.", "execution.", "findings.", "job.",
     "provider.", "stage.",
@@ -250,6 +256,9 @@ KEEP_COMMAND_TYPES = frozenset((
     "archive_analysis_preset", "create_analysis_preset", "revise_analysis_preset",
     # `UI-PARITY-P0P`: «График работ»'s settings, plans, calendar and absences are kept with their journals.
     "set_engineer_absences", "set_schedule_plans", "set_schedule_settings", "set_work_calendar_days",
+    # `DECISION-MEMORY-01` phase M2: a withdrawn or restored memory case. The receipt is referenced by the status event
+    # (`decision_memory_status_event.command_id`), a KEEP row, so it is kept with it.
+    "restore_decision_memory_case", "withdraw_decision_memory_case",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
     # `UI-PARITY-P0G`..`P0L`, `P0P`: a document archived, renamed or tagged, an execution status, decisions imported from

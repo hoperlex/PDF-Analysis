@@ -70,6 +70,8 @@ BUCKET=""
 PURGE=no
 DRY_RUN=no
 ALLOW_RUNNING=no
+ACCEPT_MEMORY_LOSS=""
+MEMORY_LOSS_GIVEN=no
 FINISH=""
 
 refuse() {
@@ -100,6 +102,11 @@ usage: purge-product-data.sh --database <name> --bucket <name>
                                delete every object: delete the rest, from that run's dumped list.
   --allow-running              purge although a run or a job is executing (it is discarded
                                from under the worker). Default: refuse.
+  --accept-memory-loss <why>   do not refuse for expert decisions the decision memory has not
+                               captured (a capture that can never succeed). <why> is one of:
+                               artifact_missing_or_damaged, citation_partition_inconsistent,
+                               test_data, owner_decided. The loss is written into the plan and
+                               its digest. Default: refuse (guard G1). Not with --finish-objects.
   --env-file <path>            default: infra/deploy/env/alpha.env
 USAGE
     exit 2
@@ -123,6 +130,7 @@ while [ "$#" -gt 0 ]; do
         --dry-run) DRY_RUN=yes; shift ;;
         --yes-purge-product-data) PURGE=yes; shift ;;
         --allow-running) ALLOW_RUNNING=yes; shift ;;
+        --accept-memory-loss) ACCEPT_MEMORY_LOSS="${2:-}"; MEMORY_LOSS_GIVEN=yes; shift 2 ;;
         --finish-objects) FINISH="${2:-}"; shift 2 ;;
         -h|--help) usage ;;
         *) refuse "unrecognised option: $1" \
@@ -150,6 +158,27 @@ if [ "$modes" -gt 1 ]; then
            "They are different things to do to one instance. Choose one."
 fi
 # <<< guard: one-mode
+
+# >>> guard: memory-loss-reason
+# The way out of guard G1 (`--accept-memory-loss`) names one reason from the tool's CLOSED list (free text would put personal data into
+# the plan, and a plan that is written into `erasure` records). The tool refuses an unknown one too; the wrapper refuses first, and an
+# option that lost its value (it would swallow the next word, or be empty and read as "not given") is an unknown reason too.
+if [ "$MEMORY_LOSS_GIVEN" = yes ]; then
+    case "$ACCEPT_MEMORY_LOSS" in
+        artifact_missing_or_damaged|citation_partition_inconsistent|test_data|owner_decided) ;;
+        *) refuse "--accept-memory-loss must be one of: artifact_missing_or_damaged, citation_partition_inconsistent, test_data, owner_decided." \
+                  "  given: ${ACCEPT_MEMORY_LOSS:-<nothing>}" "Nothing was read and nothing was touched." ;;
+    esac
+fi
+# <<< guard: memory-loss-reason
+
+# >>> guard: memory-loss-not-with-finish
+# `--finish-objects` only deletes what an earlier run already decided; the loss was accepted in that run's plan.
+if [ -n "$FINISH" ] && [ "$MEMORY_LOSS_GIVEN" = yes ]; then
+    refuse "--accept-memory-loss does not go with --finish-objects." \
+           "The objects to delete are the ones the earlier run's plan listed; the loss, if any, was accepted there. Nothing was deleted."
+fi
+# <<< guard: memory-loss-not-with-finish
 
 # >>> guard: names-required
 if [ -z "$DATABASE" ] || [ -z "$BUCKET" ]; then
@@ -287,6 +316,7 @@ echo "purge-product-data.sh: bucket     $BUCKET"
 
 FLAGS=()
 [ "$ALLOW_RUNNING" = yes ] && FLAGS+=(--allow-running)
+[ -n "$ACCEPT_MEMORY_LOSS" ] && FLAGS+=(--accept-memory-loss "$ACCEPT_MEMORY_LOSS")
 DRY_FLAG=()
 [ "$DRY_RUN" = yes ] && DRY_FLAG+=(--dry-run)
 

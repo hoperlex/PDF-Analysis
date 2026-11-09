@@ -129,7 +129,7 @@ _GUARDS = text("""
       JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
       JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid
      WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
-       AND p.proname IN ('am_immutable_row', 'am_append_only', 'am_guard_release_append_only')
+       AND p.proname IN ('am_immutable_row', 'am_append_only', 'am_guard_release_append_only', 'am_guard_decision_memory_forget')
      ORDER BY sort_key, guard
 """)
 

@@ -235,6 +235,11 @@ CASES: tuple[tuple[str, tuple[str, ...], str, bool], ...] = (
      "belong to --apply (or --resume), and no --apply", True),
     ("options-match-the-mode", (*RESUME, "--plan-sha256", SHA), "belong to --apply; a --resume finishes", True),
     ("options-match-the-mode", (*RESUME, "--reason", "test_data"), "belong to --apply; a --resume finishes", True),
+    # `D-470`: the way out of guard G1 is a closed reason, forwarded to the dry run and the apply and never to a resume.
+    ("memory-loss-reason", (*PLAN, "--accept-memory-loss", "because they asked"), "--accept-memory-loss must be one of", True),
+    ("memory-loss-reason", (*PLAN, "--accept-memory-loss", ""), "--accept-memory-loss must be one of", True),
+    ("memory-loss-reason", (*PLAN, "--accept-memory-loss", "--dry-run"), "--accept-memory-loss must be one of", True),
+    ("memory-loss-not-with-resume", (*RESUME, "--accept-memory-loss", "test_data"), "does not go with --resume", True),
     ("names-required", ("--project", PROJECT), "--database and --bucket are both required", False),
     ("project-identity-shape", (*COMMON, "--project", "Kindergarten Sunshine"), "never a name", True),
     ("project-identity-shape", (*COMMON, "--project", "prj_" + "a" * 26), "never a name", True),
@@ -459,6 +464,34 @@ def test_the_order_is_plan_then_retype_then_apply_with_no_dump_anywhere(rig: Rig
     # ... and nothing but the module was ever run: no dump, no restore, no mirror, no listing of the bucket.
     assert len(rig.calls) == 2, rig.calls
     assert not any(runs_a_dump_a_mirror_or_a_shell_in_a_container(record["argv"]) for record in rig.records)  # type: ignore[arg-type]
+
+
+def test_the_accepted_memory_loss_reaches_the_dry_run_and_the_apply_and_nothing_else(rig: Rig) -> None:
+    """`D-470`: the wrapper forwards `--accept-memory-loss <reason>` to the plan and to the apply, in that order, and says in the dry
+    run's hint that the apply must carry it; without the option no tool call mentions it."""
+    completed = rig.run(*APPLY, "--accept-memory-loss", "citation_partition_inconsistent", typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    plan_call, apply_call = rig.tool_calls()
+    loss = ["--accept-memory-loss", "citation_partition_inconsistent"]
+    assert rig.tool_args(plan_call) == ["--database", DATABASE, "--bucket", BUCKET, "--project", PROJECT, *loss]
+    assert rig.tool_args(apply_call)[-2:] == loss and "--apply" in rig.tool_args(apply_call)
+
+    plain = Rig(rig.tmp / "plain")
+    assert plain.run(*APPLY, typed=TYPED).returncode == 0
+    assert not any("--accept-memory-loss" in plain.tool_args(call) for call in plain.tool_calls())
+
+    hinted = Rig(rig.tmp / "hinted")
+    dry = hinted.run(*PLAN, "--accept-memory-loss", "test_data")
+    assert dry.returncode == 0, (dry.stdout, dry.stderr)
+    assert "--accept-memory-loss test_data" in dry.stdout and "the apply must too" in dry.stdout
+
+
+def test_the_memory_loss_forwarding_can_fail(rig: Rig) -> None:
+    broken = rig.edited('[ "$MEMORY_LOSS_GIVEN" = yes ] && LOSS_FLAGS+=(--accept-memory-loss "$ACCEPT_MEMORY_LOSS")', ":")
+    completed = broken.run(*APPLY, "--accept-memory-loss", "test_data", typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert not any("--accept-memory-loss" in broken.tool_args(call) for call in broken.tool_calls()), (
+        "with the forwarding removed the option still reached the tool: the test above would prove nothing")
 
 
 def runs_a_dump_a_mirror_or_a_shell_in_a_container(argv: list[str]) -> bool:
@@ -820,6 +853,6 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     me = Path(__file__).read_text(encoding="utf-8")
     missing = sorted(name for name in markers if f'"{name}"' not in me)
     assert not missing, f"guards with no case: {missing}"
-    assert len(markers) == 23, sorted(markers)
+    assert len(markers) == 25, sorted(markers)
     for name in markers:
         assert len(re.findall(rf"^ *# <<< guard: {re.escape(name)}$", text, re.MULTILINE)) == 1
