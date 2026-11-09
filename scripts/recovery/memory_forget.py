@@ -89,6 +89,8 @@ STATUS_LOCK_PREFIX = "decision_memory_status:"
 LOCK_TIMEOUT = os.environ.get("MEMORY_FORGET_LOCK_TIMEOUT", "15s")
 PLAN_FILE_VERSION = 1
 PERMISSION_REF_MAX = erase.PERMISSION_REF_MAX
+#: ``out of shared memory``: what PostgreSQL answers when the server-wide lock table has no slot left for one more lock.
+SQLSTATE_OUT_OF_SHARED_MEMORY = "53200"
 
 #: The content side, in the order the rows are deleted (the foreign keys point at ``decision_memory_content``), with the predicate that
 #: selects a case's rows; ``:cases`` is the case-id list.
@@ -462,6 +464,29 @@ def resolve_actor(connection: Connection, login: str | None) -> str:
 # --- phase 2: the transaction -----------------------------------------------------------------
 
 
+def lock_table_message(engine: Engine, *, wanted: int, taken: int) -> str:
+    """The refusal for a selection too large for the server's lock table (`D-497` item 6): numbers, and the two ways out.
+
+    Every case needs one advisory lock until the single transaction commits, and the lock table is shared by every session of the server:
+    ``max_locks_per_transaction`` x (``max_connections`` + ``max_prepared_transactions``) slots in all (default ``64`` x ``100``). The
+    transaction was rolled back, so it is read on a connection of its own.
+    """
+    capacity = "unknown"
+    try:
+        with engine.connect() as connection:
+            per, connections, prepared = (int(connection.execute(text(f"SELECT current_setting('{name}')")).scalar_one())
+                                          for name in ("max_locks_per_transaction", "max_connections", "max_prepared_transactions"))
+        capacity = f"{per} x ({connections} + {prepared}) = {per * (connections + prepared)}"
+    except Exception:  # noqa: BLE001 - the numbers are help; the refusal stands without them
+        pass
+    batch = max(1, taken // 2)
+    return (f"{wanted} cases need one advisory lock each inside the single transaction of a forget, and the server's lock table ran out "
+            f"after {taken} (max_locks_per_transaction x (max_connections + max_prepared_transactions) = {capacity} slots for every session "
+            f"together). Nothing was changed. Forget fewer at a time -- one project (--origin-project) or at most {batch} cases "
+            "(--case, repeated) per run -- with api and worker stopped, which frees the slots they hold; or raise "
+            "max_locks_per_transaction in the server's configuration and restart it.")
+
+
 def _verification(connection: Connection, cases: Sequence[str]) -> dict[str, tuple[int, str]]:
     """What must not move: the case and decision tables whole, the content tables outside the scope, the status events' old rows."""
     facts = {table: erase.fingerprint(connection, table) for table in UNCHANGED}
@@ -539,14 +564,26 @@ def phase_commit(engine: Engine, *, database: str, bucket: str, selector: Select
             events_before = int(connection.execute(text("SELECT count(*) FROM public.decision_memory_status_event")).scalar_one())
             triggers_before = purge._trigger_state(connection)
 
-            for case_id, content_sha256 in plan.cases:
-                # one writer per case, the key of the transition guard and of the product's withdraw and restore
-                connection.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": STATUS_LOCK_PREFIX + case_id})
-                connection.execute(text(
-                    "INSERT INTO public.decision_memory_status_event (status_event_id, case_id, kind, reason_code, actor_user_uid, "
-                    "owner_permission_ref, forgotten_content_sha256) VALUES (:id, :case, 'forget', :reason, :actor, :ref, :digest)"
-                ), {"id": DecisionMemoryStatusEventId.new().value, "case": case_id, "reason": reason, "actor": actor_uid,
-                    "ref": permission_ref, "digest": content_sha256})
+            taken = 0
+            try:
+                for case_id, content_sha256 in plan.cases:
+                    # one writer per case, the key of the transition guard and of the product's withdraw and restore. The guard takes the
+                    # same lock again on the INSERT below, so this one cannot be dropped to save a slot: a forget holds one advisory lock
+                    # per case until it commits (`D-497` item 6).
+                    connection.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                                       {"key": STATUS_LOCK_PREFIX + case_id})
+                    taken += 1
+                    connection.execute(text(
+                        "INSERT INTO public.decision_memory_status_event (status_event_id, case_id, kind, reason_code, actor_user_uid, "
+                        "owner_permission_ref, forgotten_content_sha256) VALUES (:id, :case, 'forget', :reason, :actor, :ref, :digest)"
+                    ), {"id": DecisionMemoryStatusEventId.new().value, "case": case_id, "reason": reason, "actor": actor_uid,
+                        "ref": permission_ref, "digest": content_sha256})
+            except Exception as error:
+                # >>> guard: lock-table-room
+                if getattr(getattr(error, "orig", None), "sqlstate", "") == SQLSTATE_OUT_OF_SHARED_MEMORY:
+                    raise ForgetRefused(lock_table_message(engine, wanted=len(plan.cases), taken=taken)) from error
+                # <<< guard: lock-table-room
+                raise
             moved = connection.execute(text(
                 "UPDATE public.blob SET state = 'erasure_pending' WHERE blob_id = ANY(CAST(:ids AS text[])) AND state = 'available'"
             ), {"ids": list(blob_ids)}).rowcount
