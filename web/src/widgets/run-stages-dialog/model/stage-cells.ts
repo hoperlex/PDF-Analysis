@@ -9,7 +9,8 @@
  */
 
 import type { RunStageCell, RunStageFacts, StageCellRole } from '@/shared/api';
-import { formatCostMicros, groupDigits, shortModelName } from '@/entities/audit-run';
+import { groupDigits, shortModelName } from '@/entities/audit-run';
+import { microsAsUsd } from '@/shared/ui';
 import { ACCESS_LABELS } from '@/entities/executor-host';
 import { STAGE_EFFORT_LABELS, STAGE_ROLE_LABELS } from '@/entities/stage-layout';
 
@@ -77,12 +78,12 @@ export function tokensText(facts: RunStageFacts): string {
 /**
  * The cost of the chip, or `null` for no row. A chip served wholly by a subscription has no price, and says so instead of «0»
  * (a subscription's tokens are never in `cost_micros`); a chip with no call has no cost to state. Otherwise the figure is the
- * entity's own decimal rendering of the integer millionths, which never passes through a float.
+ * dollar figure of the integer millionths as the «Расход» tile draws it (`microsAsUsd`), which never passes through a float.
  */
 export function costText(facts: RunStageFacts): string | null {
   const total = facts.input_tokens + facts.output_tokens;
   const subscription = facts.subscription_input_tokens + facts.subscription_output_tokens;
   if (facts.cost_micros === 0 && total > 0 && subscription >= total) return 'по подписке, не считается';
   if (facts.cost_micros === 0 && !hasModelWork(facts)) return null;
-  return `${formatCostMicros(facts.cost_micros)} единиц валюты провайдера`;
+  return `$${microsAsUsd(facts.cost_micros)}`;
 }

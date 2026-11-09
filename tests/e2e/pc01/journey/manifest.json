@@ -9124,7 +9124,7 @@
             "as": [
               "source_finding_count"
             ],
-            "matches": "Опубликованных находок:\\s*([1-9][0-9]*)",
+            "matches": "Прогон опубликован:\\s*([1-9][0-9]*)\\s+наход",
             "bound_ms": 30000,
             "when": "before_actions",
             "$why": "the finding count the source run published, read off its own page; a count of zero or one the screen does not report cannot stand for 'the same'"
@@ -9313,7 +9313,7 @@
           },
           {
             "selector": "[data-run-outcome=\"published\"]",
-            "text_matches": "Опубликованных находок: {source_finding_count}$",
+            "text_matches": "Прогон опубликован: {source_finding_count} наход[а-я]*\\.$",
             "$why": "as many findings as the source run published; the outcome is one paragraph now, so the figure ends the block's text"
           }
         ],
@@ -9366,7 +9366,7 @@
         "expects_present": [
           {
             "selector": "[data-run-outcome=\"published\"]",
-            "text_matches": "Опубликованных находок: {source_finding_count}$"
+            "text_matches": "Прогон опубликован: {source_finding_count} наход[а-я]*\\.$"
           },
           {
             "selector": "[data-run-rail] [data-run-chip][data-chip-state=\"done\"]",
