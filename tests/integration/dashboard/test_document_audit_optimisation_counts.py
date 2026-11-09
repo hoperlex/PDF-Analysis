@@ -17,6 +17,7 @@ asks for. The database is a fresh clone of the migrated template.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import random
 from collections.abc import Iterator
 
@@ -46,6 +47,7 @@ from tests.integration.db.conftest import (  # type: ignore[import-not-found]  #
 from tests.integration.documents.seeding import Seeder
 
 model = DocumentAuditReadModel()
+module = importlib.import_module("auditmanager.dashboard.audit_state")
 
 #: The decision history of one proposal, oldest first. Each shape the table can hold, and the answer it must give.
 HISTORIES: tuple[tuple[tuple[str, ...], bool], ...] = (
@@ -303,3 +305,27 @@ def test_the_counts_are_a_fact_beside_the_audit_state(session: Session) -> None:
     record = model.audits(session, version_uids=[version])[version]
     assert (record.optimisation_proposal_count, record.optimisation_undecided_count) == (2, 1)
     assert (record.state, record.partial) == ("not_run", False)  # the run was never walked to a result
+
+
+def test_the_comparison_can_fail(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A guard needs a way to fail: the shipped statement with its one rule bent -- a withdrawal counted as a decision in force --
+    answers differently from the replayed histories, so the comparison above is not satisfied by any statement that merely runs."""
+    scaffold = Scaffold(session)
+    project = scaffold.seed.project("Проект")
+    document = scaffold.seed.document(project, "АР")
+    version = scaffold.seed.version(document, classified=("R", "AR"))
+    run = scaffold.run(project, version)
+    histories = ((), ("accept",), ("accept", "revoke"), ("accept", "revoke", "accept"), ("revoke",))
+    scaffold.pass_(project, document, version, run, histories, started="2026-11-02T10:00:00+00", generator="gen-2")
+    session.commit()
+
+    honest = model.audits(session, version_uids=[version])[version]
+    assert (honest.optimisation_proposal_count, honest.optimisation_undecided_count) == (5, _expected_undecided(histories)) == (5, 3)
+
+    original = str(module._DOCUMENT_AUDITS)
+    assert "cur.verdict <> 'revoke'" in original
+    bent = original.replace("cur.verdict <> 'revoke'", "cur.verdict IS NOT NULL")  # any decision, a withdrawal included, is "decided"
+    monkeypatch.setattr(module, "_DOCUMENT_AUDITS", text(bent).bindparams(bindparam("version_uids", expanding=True)))
+    wrong = model.audits(session, version_uids=[version])[version]
+    assert wrong.optimisation_undecided_count == 1  # only the never-decided proposal: the two withdrawn ones are miscounted
+    assert wrong.optimisation_undecided_count != honest.optimisation_undecided_count

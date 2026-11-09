@@ -194,7 +194,8 @@ _ACTIVE_RUN_RULE = f""",
 #: database's own rule (``am_require_optimisation_proposals``: a pass is refused at commit unless exactly that many proposals name
 #: it, and both tables are immutable), which is also the figure this statement returns beside it. The answers are equal, proposal
 #: for proposal, to the per-proposal form (``tests/integration/dashboard/test_document_audit_optimisation_counts.py`` replays
-#: every history shape and runs the old statement as the reference).
+#: every history shape and runs the old statement as the reference). The same page's counts now cost 0.31 s of its 0.45 s; what remains is
+#: proportional to the proposals and decisions of those passes and only a stored per-pass tally removes it (`D-570`).
 _OPTIMISATION_RULE = """,
     latest_pass AS (
         SELECT DISTINCT ON (p.version_uid) p.version_uid, p.optimisation_pass_id, p.proposal_count
