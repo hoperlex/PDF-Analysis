@@ -101,6 +101,31 @@
       "input_per_mtok_usd": 2.0,
       "output_per_mtok_usd": 10.0
     },
+    "claude_opus_5_5": {
+      "$comment": "HOSTS-PIN-01 (owner poll answer to question 1 of 2026-11-09 ('yes, all four'); R-143g lifted for this work). Standard API rates read on 2026-11-09 from the Anthropic pricing page https://platform.claude.com/docs/en/about-claude/pricing (Claude Opus 5.5: $4 / MTok base input, $20 / MTok output). Subscription calls through Claude Code are not metered; the rates are the reference and the API-access rate.",
+      "model_id": "claude-opus-5-5",
+      "context": "1M",
+      "input_per_mtok_usd": 4.0,
+      "output_per_mtok_usd": 20.0
+    },
+    "claude_sonnet_5_5": {
+      "$comment": "HOSTS-PIN-01 (owner poll answer to question 1 of 2026-11-09). Standard API rates read on 2026-11-09 from https://platform.claude.com/docs/en/about-claude/pricing (Claude Sonnet 5.5: $2 / MTok base input, $10 / MTok output).",
+      "model_id": "claude-sonnet-5-5",
+      "input_per_mtok_usd": 2.0,
+      "output_per_mtok_usd": 10.0
+    },
+    "codex_gpt_6_1_sol": {
+      "$comment": "HOSTS-PIN-01 (owner poll answer to question 1 of 2026-11-09). A reference only, not_metered for subscription calls through the pull agent; Standard text-token rates read on 2026-11-09 from https://developers.openai.com/api/docs/models/gpt-6.1-sol ($2 input / $10 output per 1M tokens; context window 1,050,000).",
+      "model_id": "gpt-6.1-sol",
+      "input_per_mtok_usd": 2.0,
+      "output_per_mtok_usd": 10.0
+    },
+    "codex_gpt_6_astra": {
+      "$comment": "HOSTS-PIN-01 (owner poll answer to question 1 of 2026-11-09). A reference only, not_metered for subscription calls through the pull agent; Standard text-token rates read on 2026-11-09 from https://developers.openai.com/api/docs/models/gpt-6-astra ($10 input / $50 output per 1M tokens; context window 1,050,000).",
+      "model_id": "gpt-6-astra",
+      "input_per_mtok_usd": 10.0,
+      "output_per_mtok_usd": 50.0
+    },
     "run_cost_ceiling_usd": 1.0
   },
   "provider_configuration": {
