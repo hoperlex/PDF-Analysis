@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 from collections.abc import Iterator
 from typing import Any
 
@@ -43,6 +44,7 @@ PACKAGE = AgentPackage(version="0.9.0", sha256="a" * 64, size_bytes=1, path=None
 OPUS, SONNET = "claude-opus-5-5", "claude-sonnet-5-5"
 GPT_SOL, GPT_ASTRA, GPT_6 = "gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol"
 _counter = iter(range(1, 10_000))
+_RUN = uuid.uuid4().hex[:10]  # idempotency keys outlive the process in the database: a second run in the same database must not reuse one
 
 
 @pytest.fixture
@@ -69,7 +71,7 @@ def _isolated(sessions: sessionmaker[Session]) -> Iterator[None]:
 
 
 def _key() -> str:
-    return f"hosts-backend-{next(_counter):08d}"
+    return f"hosts-backend-{_RUN}-{next(_counter):06d}"
 
 
 def _report(provider: str = "codex", access: str = "subscription", *models: tuple[str, str], auth: str = "valid",
