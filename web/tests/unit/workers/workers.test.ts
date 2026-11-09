@@ -276,7 +276,7 @@ describe('«Процессы» on the advanced page', () => {
     const markup = advancedPage(['admin']);
     expect(markup).not.toContain('data-route="/workers/advanced"');
     expect(markup).not.toContain('в альфе');
-    expect(markup).toContain('Исполнители: расширенные');
+    expect(markup).toContain('Расширенные исполнители');
     expect(markup).toContain('>Обновить</button>');
     expect(markup).toContain(ONLINE.worker_id);
     expect(markup).toContain('Не брать новые');

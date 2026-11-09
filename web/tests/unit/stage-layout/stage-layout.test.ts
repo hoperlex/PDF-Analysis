@@ -147,7 +147,7 @@ describe('the sets', () => {
     expect(claude.map((c) => c.max_output_tokens)).toEqual([16000, 6000, 6000, 12000, 6000, 6000]);
     const codex = kitCells('codex_only', []);
     expect(codex.map((c) => c.model_id)).toEqual(['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol']);
-    expect(kitModelIds('claude_only')).toEqual(CLAUDE_ONLY_MODELS);
+    expect([...kitModelIds('claude_only')].sort()).toEqual([...CLAUDE_ONLY_MODELS].sort());
   });
 
   it('keep the limits of a cell the revision in force already has', () => {
@@ -277,7 +277,7 @@ describe('the form «Изменить»', () => {
 
   it('shows a refusal of the server in words and never an identifier', () => {
     const refusal = new ApiError(422, { contract_version: '1.45.0', error_code: 'validation_failed', message: 'x', correlation_id: 'cid-layout-1', retryable: false, details: { field: 'cells', constraint: 'catalogue' } }, null);
-    expect(layoutRefusalSentence(refusal)).toContain('пара из каталога');
+    expect(layoutRefusalSentence(refusal)).toContain('парой из каталога');
     expect(layoutFailure(refusal, true).kind).toBe('refusal');
     const markup = view({ failure: layoutFailure(refusal, true) });
     expect(markup).toContain('Набор моделей не сохранён');

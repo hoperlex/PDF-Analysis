@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `/workers/advanced` — «Исполнители: расширенные» (`HOSTS-WEB-01`, plan 2026-11-09 §7.5), for an administrator.
+ * `/workers/advanced` — «Расширенные исполнители» (`HOSTS-WEB-01`, plan 2026-11-09 §7.5), for an administrator.
  *
  * What «Исполнители» had before it became two tabs, kept whole and folded, one disclosure each, **reused and not rewritten**:
  * «Подключения» (with the key form the address may name), «Группы», «Правила» (with the legacy routes), «Назначения»,
@@ -98,7 +98,7 @@ export function WorkersAdvancedPage({ initialTab, secretConnectionId = null, sec
 
   return (
     <PageShell
-      title="Исполнители: расширенные"
+      title="Расширенные исполнители"
       subtitle="Подключения, группы, правила, назначения, процессы, пресеты анализа и включение набора моделей. Обычная работа — на экране «Исполнители»."
       actions={(
         <>

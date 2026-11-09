@@ -451,7 +451,7 @@ describe('the advanced page', () => {
   });
 
   it('opens «Подключения» when the address names a connection for the key form', () => {
-    const markup = page({ secretConnectionId: 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', secretForm: createElement('p', { 'data-test-key-form': '' }, 'форма') });
+    const markup = page({ secretConnectionId: READY.connection.connection_id, secretForm: createElement('p', { 'data-test-key-form': '' }, 'форма') });
     expect(markup).toContain('data-executor-connections');
     expect(markup).toContain('data-test-key-form');
   });

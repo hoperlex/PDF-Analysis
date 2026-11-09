@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import type { Role } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { ADVANCED_SECTIONS, WorkersAdvancedPage } from '@/_pages/workers';
+import { ExecutorGroups } from '@/widgets/executor-groups';
 import type { AdvancedSection, WorkersAdvancedPageProps } from '@/_pages/workers';
 
 import { newClient, renderScreen } from '../screens/harness';
@@ -72,15 +73,19 @@ describe('the advanced page', () => {
   it('opens exactly the section the address named, and mounts nothing of the closed ones', () => {
     for (const name of ADVANCED_SECTIONS) {
       const markup = page(tab(name), ['admin'], 'legacy');
-      expect(markup.match(/<details[^>]*open=""/g), name).toHaveLength(1);
-      expect(markup).toMatch(new RegExp(`<details[^>]*open=""[^>]*data-advanced-section="${name}"|<details[^>]*data-advanced-section="${name}"[^>]*open=""`));
+      const sections = [...markup.matchAll(/<details[^>]*data-advanced-section="([a-z]+)"[^>]*>/g)];
+      expect(sections.map((entry) => entry[1])).toEqual([...ADVANCED_SECTIONS]);
+      expect(sections.filter((entry) => (entry[0] ?? '').includes(' open=""')).map((entry) => entry[1]), name).toEqual([name]);
     }
   });
 
   it('shows the groups to every role and the controls to an administrator only', () => {
     const group = MAIN_GROUP.display_name;
     const admin = page(tab('groups'), ['admin']);
-    const reader = page(tab('groups'), ['expert']);
+    // The page is the administrator's; an expert reads the list through the widget the section holds.
+    const readerClient = newClient();
+    seedGroups(readerClient);
+    const reader = renderScreen(readerClient, createElement(ExecutorGroups, { roles: ['expert'] }));
     expect(admin).toContain(group);
     expect(reader).toContain(group);
     expect(admin).toContain('data-executor-group-create');
