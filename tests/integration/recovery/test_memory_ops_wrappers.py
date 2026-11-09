@@ -95,10 +95,10 @@ class Operator:
         return subprocess.run(["bash", str(self.deploy / script), *database, *bucket, *args], input=typed, capture_output=True, text=True,
                               env={**os.environ, **self.env, **extra}, timeout=600)
 
-    def run_script(self, script: str, source: str, *args: str, typed: str = "") -> subprocess.CompletedProcess[str]:
+    def run_script(self, script: str, source: str, *args: str, typed: str = "", **extra: str) -> subprocess.CompletedProcess[str]:
         """The same, around a copy of the script whose text is ``source``."""
         (self.deploy / script).write_text(source, encoding="utf-8")
-        return self.run(script, *args, typed=typed)
+        return self.run(script, *args, typed=typed, **extra)
 
     @property
     def calls(self) -> list[str]:
