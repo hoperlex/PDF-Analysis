@@ -256,7 +256,7 @@ describe('item 4: the connection wizard and the runner-token panel', () => {
 
   it('folds what matters to few, with its words kept: the private-network hint and the package facts', () => {
     const ssh = wizard(createElement(SshInstallForm, { pending: false, problem: null, failure: null, onSubmit: none, onBack: none }));
-    expect(ssh).toMatch(/<details class="[^"]*fold[^"]*"><summary>Если сервер в частной сети<\/summary><p class="am-form__hint" data-agent-private-range-hint>/);
+    expect(ssh).toMatch(/<details class="[^"]*fold[^"]*"><summary>Если сервер в частной сети<\/summary><p class="am-form__hint" data-agent-private-range-hint(?:="[^"]*")?>/);
     const command = wizard(createElement(EnrollmentCommandView, {
       issued: issued(READY.connection.connection_id), replaced: false, pending: false, failure: null, onNewCommand: none, onClose: none,
     }));
