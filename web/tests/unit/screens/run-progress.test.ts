@@ -380,7 +380,7 @@ describe('the three terminals are three different claims', () => {
 
   it('published states its finding count in one short sentence, with the Russian plural of the count', () => {
     const sentence = (count: number) => screen({ state: 'published', published_finding_count: count })
-      .match(/data-run-outcome="published"[\s\S]*?<\/p>/)?.[0].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+      .match(/data-run-outcome="published"[^>]*><p>([\s\S]*?)<\/p>/)?.[1]?.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
     expect(sentence(25)).toBe('Прогон опубликован: 25 находок.');
     expect(sentence(7)).toBe('Прогон опубликован: 7 находок.');
     // 1, 2 to 4, 5 and 11 to 14 take three different forms, and zero is a count, not an absence.

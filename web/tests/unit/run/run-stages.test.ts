@@ -74,7 +74,8 @@ describe('the line a chip carries on the rail', () => {
 
 describe('the cadence: the stages are asked about when the run is, and by nobody else', () => {
   const status = (state: RunStatus['state']) => runStatus({ state, terminal_at: state === 'running' ? null : '2026-09-10T08:04:00.000Z' });
-  const keysOf = (spy: ReturnType<typeof vi.spyOn>) => spy.mock.calls.map((call) => (call[0] as { queryKey: unknown }).queryKey);
+  const keysOf = (spy: { readonly mock: { readonly calls: ReadonlyArray<ReadonlyArray<unknown>> } }) =>
+    spy.mock.calls.map((call) => (call[0] as { queryKey: unknown }).queryKey);
 
   it('files a reading of the run and marks the stages and the journal stale, and the dashboard only at the terminal one', () => {
     const client = newClient();

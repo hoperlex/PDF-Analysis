@@ -965,6 +965,11 @@ export function screens(): Screen[] {
         status, chips, selected, onSelect: () => undefined, onClose: () => undefined, showServer: true, staticOpen: true, stages,
       }));
     };
+    // The preset line is the one `dl` of the window (`.facts dt`, `.facts dd`): a run started from a preset says which.
+    add('RunStagesDialog, a run started from a preset: the preset line', dialog(
+      { state: 'published', stages: prepared, executor: EXECUTOR, preset: { preset_id: 'pre_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', revision_no: 2, name: 'Быстрый черновик' } as never },
+      'text',
+    ));
     add('RunStagesDialog, a queued run: the chip that waits', dialog({ state: 'queued', terminal_at: null, stages: [], executor: EXECUTOR, queue_reason: 'executor_at_capacity' }, 'preparation'));
     add('RunStagesDialog, every state of a chip, the plan list and the start', dialog(
       {

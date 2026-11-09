@@ -140,7 +140,10 @@ describe('the run page', () => {
     expect(markup).toMatch(/<span data-run-executor-waiting="true">Ждёт исполнителя «Основной шлюз»\.<\/span>/);
     expect(markup).toContain('data-run-live="waiting"');
     expect(markup).not.toContain('data-run-live-server');
-    expect(runDialog(runStatus({ state: 'queued', terminal_at: null, executor: EXECUTOR }))).toContain('<dt>Исполнитель</dt>');
+    // The window has no executor line of its own (the plan rows say the model and the server); a queued run's server is not chosen yet.
+    const dialog = runDialog(runStatus({ state: 'queued', terminal_at: null, executor: EXECUTOR }), { selected: 'text' });
+    expect(dialog).not.toContain('<dt>Исполнитель</dt>');
+    expect(dialog).toMatch(/data-plan-row="server"[\s\S]*?Основной шлюз/);
   });
 
   it('shows the read-only role the model and the stages, and no server', () => {
