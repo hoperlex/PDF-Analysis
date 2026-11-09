@@ -169,15 +169,15 @@ export function KnowledgeBaseTable({ entries, kindLabel = false }: KnowledgeBase
       <table className={styles.table} data-knowledge-base-table="" aria-label="Решения проверяющего, новые сверху">
         <thead>
           <tr>
-            <th scope="col">Тип</th>
-            <th scope="col">Проект</th>
-            <th scope="col">Раздел</th>
-            <th scope="col">Важность</th>
-            <th scope="col">Решение</th>
-            <th scope="col">Суть</th>
-            <th scope="col">Причина решения</th>
-            <th scope="col">Дата</th>
-            <th scope="col">Находка</th>
+            <th scope="col" className={styles.colType}>Тип</th>
+            <th scope="col" className={styles.colPlace}>Проект</th>
+            <th scope="col" className={styles.colSection}>Раздел</th>
+            <th scope="col" className={styles.colSeverity}>Важность</th>
+            <th scope="col" className={styles.colVerdict}>Решение</th>
+            <th scope="col" className={styles.colText}>Суть</th>
+            <th scope="col" className={styles.colReason}>Причина решения</th>
+            <th scope="col" className={styles.colDate}>Дата</th>
+            <th scope="col" className={styles.colLink}>Находка</th>
           </tr>
         </thead>
         <tbody>

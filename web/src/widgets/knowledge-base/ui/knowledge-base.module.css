@@ -100,6 +100,24 @@ ol.records {
   font-size: var(--am-text-sm);
 }
 
+/*
+ * `WALK-V5`: no column of the table is narrower than its own words need. `td { overflow-wrap: anywhere }` lets a cell shrink to one
+ * character, so with `width: 100%` the browser did squeeze the nine columns instead of letting the frame scroll: measured on a built
+ * stand the type cell was 53 px wide and 202 px tall at 1280 (11 lines of «Внутреннее противоречие»), the project 69 x 93, the date
+ * 41 x 71 and the table 706 px wide in a 303 px frame at 360 px. Each column now has a floor (the header's nowrap labels already gave
+ * it a width, but not a readable one for the cells below); the table is wider than the frame only where the nine floors do not fit,
+ * and the frame, not the cells, takes the difference.
+ */
+.colType { min-width: 6.5rem; }
+.colPlace { min-width: 7.5rem; }
+.colSection { min-width: 3.5rem; }
+.colSeverity { min-width: 4.5rem; }
+.colVerdict { min-width: 6.5rem; }
+.colText { min-width: 8rem; }
+.colReason { min-width: 6.5rem; }
+.colDate { min-width: 6.5rem; }
+.colLink { min-width: 6rem; }
+
 .table th {
   padding: var(--am-gap-xs) var(--am-gap-sm);
   border-bottom: 1px solid var(--am-line-strong);

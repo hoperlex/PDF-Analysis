@@ -234,13 +234,17 @@ a.arrow:hover,
 }
 
 /*
+ * `WALK-V5`: the two lines hold up to 1100 px, not 600. At 768 px the five numbers (456 px) left the name 87 px and the rows were 83
+ * to 104 px tall (four lines of «Отопление, вентиляция и кондиционирование»); at 1024 px the name had about 113 px. From 1101 px
+ * the name has 200 px and more and the row is one line.
+ *
  * `WALK-V4`: on a phone a section row is two lines: the name (with the badge and the arrow) on the first, the five numbers on
  * the second, each under its column label in the header. Before, the five numbers took 216 px of a 291 px row and left the
  * name 37 px (0 px after the badge and the gap): measured on a built stand at 390 px the rows were up to 797 px tall and
  * «Дашборд» 9855 px. The header keeps the label of each column over the numbers of every row (same five tracks, same
  * paddings: the row's border is drawn on the header too, transparent), and drops «Раздел» and the empty cell of the arrow.
  */
-@media (max-width: 600px) {
+@media (max-width: 1100px) {
   .row {
     grid-template-columns: minmax(0, 1fr) var(--am-target-min);
     column-gap: var(--am-gap-xs);
@@ -351,7 +355,7 @@ a.arrow:hover,
 }
 
 /* After the base rule, so a narrow screen's number columns win. */
-@media (max-width: 600px) {
+@media (max-width: 1100px) {
   .metrics {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
