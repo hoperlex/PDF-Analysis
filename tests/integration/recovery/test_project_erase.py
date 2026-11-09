@@ -1519,9 +1519,10 @@ def _prepare_an_uncaptured_decision(s: Stand, h: Harness) -> None:
         s, "SELECT d.memory_decision_id FROM decision_memory_decision d "
            "JOIN expert_decision_event e ON e.decision_id = d.source_decision_id "
            "JOIN finding f ON f.finding_uid = e.finding_uid WHERE f.project_uid = :p", p=h.target)[0]
-    for table in ("decision_memory_decision_text", "decision_memory_decision"):
-        switched_off(s, table, f"trg_{table}_immutable", f'DELETE FROM public."{table}" WHERE memory_decision_id = :d',
-                     d=decision)
+    # `0061_decision_memory_m2`: the comment's table carries the forget guard (`trg_<table>_forget_guard`), the decision's the plain one.
+    for table, trigger in (("decision_memory_decision_text", "trg_decision_memory_decision_text_forget_guard"),
+                           ("decision_memory_decision", "trg_decision_memory_decision_immutable")):
+        switched_off(s, table, trigger, f'DELETE FROM public."{table}" WHERE memory_decision_id = :d', d=decision)
 
 
 def _prepare_delete_trigger(s: Stand, h: Harness) -> None:
