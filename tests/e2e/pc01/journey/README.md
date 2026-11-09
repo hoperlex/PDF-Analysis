@@ -692,6 +692,15 @@ same number of findings as the source. The refusal drives the dialog on the run 
 but it never began a stage, so the server refuses the price (`source_stage_not_completed` on `source_preparation`); the first stage cannot be
 tried because the dialog does not offer it.
 
+Measured 2026-11-09, lane J4, the 0.19.1 tree plus the lane, one `local-stand.sh` stand (no `LANE_C4`), `--phase write --steps <every step not
+named `cmp-*`>` (87 of 134 checked, 33 pending, 14 `cmp-*` left out, 0 findings, about 3 minutes): the three steps are green, the new run published
+**3 findings, as the source**, its rail marked three stages and the details table read «из прогона» for them; then, with a SECOND project made through
+the API (`D-421`), the read walk at 1280 px and at 390 px: 35 of 35 routes clean each, 0 console errors, 0 React #418, no overflow
+(`.local/evidence/lane-j4-walk-2026-11-09/final2`). Two things the first walk of the lane found and the code now carries: the driver took Next's RSC
+prefetch of the source run's link (`GET /projects/.../runs/<id>?_rsc=`) for the run's status, which made `queue-reaudit-the-cancelled-run` red on any
+built stand (it now takes the exchange whose body is that run); and `version-comparison` (the side menu's `/dashboard` with `?project=`) and `review`
+(the lazy crop of an image block) made calls the routes did not declare.
+
 ### The journey's section, and the steps that stay on АР (`PROD-10B-JOURNEY-REBASE-01`)
 
 `PROD-11` removes the АР v1 run, so the journey stopped confirming its sets as АР. The main flow (the three
