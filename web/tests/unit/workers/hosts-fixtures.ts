@@ -109,9 +109,10 @@ export function cell(row: StageLayoutCell['row'], model: string, effort: StageLa
   return { cell_key: `${row}:${role}`, row, role, model_id: model, effort, max_output_tokens: 6000, timeout_seconds: 1800 };
 }
 
+/** The blocks row is a scheme of the closed list (`HOSTS-ENSEMBLE-01`): one Astra. A single Claude is refused by the server. */
 export const LAYOUT_CELLS: StageLayoutCell[] = [
   cell('text', 'claude-sonnet-5-5'),
-  cell('blocks', 'claude-opus-5-5'),
+  cell('blocks', 'gpt-6-astra'),
   cell('cross_check', 'claude-sonnet-5-5'),
   cell('norms', 'claude-sonnet-5-5'),
   cell('review', 'gpt-6-astra'),

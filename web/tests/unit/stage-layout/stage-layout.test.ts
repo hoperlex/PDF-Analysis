@@ -12,13 +12,14 @@ import { describe, expect, it } from 'vitest';
 import type { ModelCatalogue, Role, StageModelLayout } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import {
-  DEFAULT_TIMEOUT_SECONDS, NAMED_KITS, cellText, effortsOf, kitCells, kitIsOffered, kitModelIds, layoutFailure, layoutRefusalSentence, layoutTable, pairIsInCatalogue,
+  BLOCK_SCHEMES, DEFAULT_TIMEOUT_SECONDS, NAMED_KITS, blockSchemeOf, cellText, effortsOf, kitCells, kitIsOffered, kitModelIds, layoutFailure, layoutRefusalSentence, layoutTable, pairIsInCatalogue,
   rowOfStageKey,
 } from '@/entities/stage-layout';
 import {
-  LayoutEditorView, LayoutSwitchView, chooseKit, draftChanged, draftProblem, draftRequest, initialDraft, modelOptions, offeredKits,
-  setCellEffort, setCellModel,
+  LayoutEditorView, LayoutSwitchView, chooseKit, draftChanged, draftProblem, draftRequest, initialDraft, modelOptions, offeredBlockSchemes,
+  offeredKits, setBlockScheme, setCellEffort, setCellModel,
 } from '@/features/manage-stage-layout';
+import type { LayoutDraft as LayoutDraftType } from '@/features/manage-stage-layout';
 import { WorkersPage } from '@/_pages/workers';
 import type { WorkersPageProps } from '@/_pages/workers';
 import { ExecutorStageModels, LayoutHistoryView, StageLayoutAdvanced, StageModelsTable } from '@/widgets/executor-stage-models';
@@ -42,7 +43,7 @@ describe('the table of six rows', () => {
     const rows = layoutTable(LAYOUT);
     expect(rows.map((row) => row.row)).toEqual(['text', 'blocks', 'cross_check', 'norms', 'review', 'correction']);
     expect(rows.map((row) => row.cells.map((c) => c.text))).toEqual([
-      ['Sonnet 5.5 · среднее'], ['Opus 5.5 · среднее'], ['Sonnet 5.5 · среднее'], ['Sonnet 5.5 · среднее'], ['gpt-6-astra · среднее'], ['Sonnet 5.5 · среднее'],
+      ['Sonnet 5.5 · среднее'], ['gpt-6-astra · среднее'], ['Sonnet 5.5 · среднее'], ['Sonnet 5.5 · среднее'], ['gpt-6-astra · среднее'], ['Sonnet 5.5 · среднее'],
     ]);
     expect(cellText({ model_id: 'gpt-6-sol', effort: 'high' })).toBe('gpt-6-sol · высокое');
   });
@@ -88,7 +89,7 @@ describe('the expert reads the table and has no control', () => {
     expect(markup.match(/data-layout-missing=/g)).toHaveLength(1);
     expect(markup).toContain('data-layout-missing="review"');
     expect(markup).toContain('⚠ нет на серверах');
-    expect(markup).toContain('Opus 5.5 · среднее');
+    expect(markup).toContain('gpt-6-astra · среднее');
   });
 
   it('draws no control to an expert: no button, no select, no input', () => {
@@ -138,37 +139,56 @@ describe('the expert reads the table and has no control', () => {
 });
 
 describe('the sets', () => {
-  it('are the two tables of the original, six rows each, with today\'s answer limits for a cell the revision does not have', () => {
+  it('are the two tables of the original, the blocks row a scheme, with today\'s answer limits for a cell the revision does not have', () => {
     const claude = kitCells('claude_only', []);
-    expect(claude.map((c) => [c.row, c.model_id, c.effort])).toEqual([
-      ['text', 'claude-sonnet-5-5', 'medium'], ['blocks', 'claude-opus-5-5', 'medium'], ['cross_check', 'claude-sonnet-5-5', 'medium'],
-      ['norms', 'claude-sonnet-5-5', 'medium'], ['review', 'claude-sonnet-5-5', 'medium'], ['correction', 'claude-sonnet-5-5', 'medium'],
+    expect(claude.map((c) => [c.cell_key, c.model_id, c.effort])).toEqual([
+      ['text:main', 'claude-sonnet-5-5', 'medium'],
+      ['blocks:leg1', 'claude-opus-5-5', 'medium'], ['blocks:judge', 'claude-sonnet-5-5', 'medium'],
+      ['cross_check:main', 'claude-sonnet-5-5', 'medium'], ['norms:main', 'claude-sonnet-5-5', 'medium'],
+      ['review:main', 'claude-sonnet-5-5', 'medium'], ['correction:main', 'claude-sonnet-5-5', 'medium'],
     ]);
-    expect(claude.map((c) => c.max_output_tokens)).toEqual([16000, 6000, 6000, 12000, 12000, 12000]);
+    // Review and correction follow the backend's `ROW_DEFAULT_MAX_OUTPUT_TOKENS`: 12000, not 6000; the legs and the judge take the row's 6000.
+    expect(claude.map((c) => c.max_output_tokens)).toEqual([16000, 6000, 6000, 6000, 12000, 12000, 12000]);
     const codex = kitCells('codex_only', []);
-    expect(codex.map((c) => c.model_id)).toEqual(['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol']);
+    expect(codex.map((c) => [c.cell_key, c.model_id])).toEqual([
+      ['text:main', 'gpt-6.1-sol'],
+      ['blocks:leg1', 'gpt-6-astra'], ['blocks:leg2', 'gpt-6-sol'], ['blocks:judge', 'gpt-6.1-sol'],
+      ['cross_check:main', 'gpt-6-sol'], ['norms:main', 'gpt-6-astra'], ['review:main', 'gpt-6-sol'], ['correction:main', 'gpt-6.1-sol'],
+    ]);
+    expect(codex.map((c) => c.max_output_tokens)).toEqual([16000, 6000, 6000, 6000, 6000, 12000, 12000, 12000]);
+    expect(codex.every((c) => c.effort === 'medium')).toBe(true);
     expect([...kitModelIds('claude_only')].sort()).toEqual([...CLAUDE_ONLY_MODELS].sort());
+    // The legs and the judge are models of the set: «Только Codex» names all three Codex pins, the judge's among them.
+    expect([...kitModelIds('codex_only')].sort()).toEqual(['gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol']);
   });
 
   it('give a cell the revision does not have the timeout the server defaults to: 1800 seconds, not 600', () => {
     expect(DEFAULT_TIMEOUT_SECONDS).toBe(1800);
     for (const kit of NAMED_KITS) {
-      expect(kitCells(kit, []).map((c) => c.timeout_seconds)).toEqual([1800, 1800, 1800, 1800, 1800, 1800]);
+      expect(kitCells(kit, []).every((c) => c.timeout_seconds === 1800)).toBe(true);
     }
     // A cell the revision has keeps its own timeout, so the default reaches only a cell with none.
     const onlyText = LAYOUT_CELLS.filter((c) => c.row === 'text').map((c) => ({ ...c, timeout_seconds: 99 }));
-    expect(kitCells('claude_only', onlyText).map((c) => c.timeout_seconds)).toEqual([99, 1800, 1800, 1800, 1800, 1800]);
+    expect(kitCells('claude_only', onlyText).map((c) => c.timeout_seconds)).toEqual([99, 1800, 1800, 1800, 1800, 1800, 1800]);
   });
 
-  it('keep the limits of a cell the revision in force already has', () => {
+  it('keep the limits of a cell the revision in force already has, the legs and the judge each its own', () => {
     const current = LAYOUT_CELLS.map((c) => ({ ...c, max_output_tokens: 1234, timeout_seconds: 99 }));
-    expect(kitCells('codex_only', current).every((c) => c.max_output_tokens === 1234 && c.timeout_seconds === 99)).toBe(true);
+    // «Только Codex» has a leg and a judge the revision has no cell for: they take the row's defaults, not another cell's limits.
+    const cells = kitCells('codex_only', [...current, cell('blocks', 'gpt-6-astra', 'medium', 'leg1')].map((c) => (c.cell_key === 'blocks:leg1' ? { ...c, max_output_tokens: 777 } : c)));
+    expect(cells.find((c) => c.cell_key === 'blocks:leg1')?.max_output_tokens).toBe(777);
+    expect(cells.find((c) => c.cell_key === 'blocks:leg2')?.max_output_tokens).toBe(6000);
+    expect(cells.find((c) => c.cell_key === 'blocks:judge')?.timeout_seconds).toBe(1800);
+    expect(cells.filter((c) => c.row !== 'blocks').every((c) => c.max_output_tokens === 1234 && c.timeout_seconds === 99)).toBe(true);
   });
 
   it('are offered only when every model they name can be served, and every pair is in the catalogue', () => {
     expect(kitIsOffered('claude_only', CATALOGUE, CLAUDE_ONLY_MODELS)).toBe(true);
     expect(kitIsOffered('codex_only', CATALOGUE, CLAUDE_ONLY_MODELS)).toBe(false);
     expect(kitIsOffered('codex_only', CATALOGUE, ALL_MODELS)).toBe(true);
+    // The judge counts: a Codex server that serves the legs but not `gpt-6.1-sol` does not offer the set, though no other row but the text needs it.
+    expect(kitIsOffered('codex_only', CATALOGUE, ALL_MODELS.filter((id) => id !== 'gpt-6.1-sol'))).toBe(false);
+    expect(kitIsOffered('claude_only', CATALOGUE, ['claude-opus-5-5'])).toBe(false);
     const noOpusMedium: ModelCatalogue = { ...CATALOGUE, items: CATALOGUE.items.map((e) => (e.model_id === 'claude-opus-5-5' ? { ...e, efforts: ['high'] } : e)) };
     expect(kitIsOffered('claude_only', noOpusMedium, ALL_MODELS)).toBe(false);
     expect(NAMED_KITS).toEqual(['claude_only', 'codex_only']);
@@ -241,10 +261,79 @@ describe('the draft of a revision', () => {
   });
 });
 
+describe('the blocks row is one of three schemes (`HOSTS-ENSEMBLE-01`)', () => {
+  const start = () => initialDraft(LAYOUT, CATALOGUE, ALL_MODELS)!;
+
+  it('has the three schemes of the server\'s closed list, each named by its models', () => {
+    expect(BLOCK_SCHEMES.map((scheme) => scheme.id)).toEqual(['claude_opus_judge_sonnet', 'codex_astra_sol_judge', 'codex_astra_single']);
+    expect(BLOCK_SCHEMES.map((scheme) => scheme.label)).toEqual([
+      'Opus 5.5, судья Sonnet 5.5', 'gpt-6-astra + gpt-6-sol, судья gpt-6.1-sol', 'gpt-6-astra, без судьи',
+    ]);
+  });
+
+  it('reads a scheme off the blocks cells by role, model and effort, and says none for anything else', () => {
+    expect(blockSchemeOf(LAYOUT_CELLS)?.id).toBe('codex_astra_single');
+    expect(blockSchemeOf(kitCells('claude_only', []))?.id).toBe('claude_opus_judge_sonnet');
+    expect(blockSchemeOf(kitCells('codex_only', []))?.id).toBe('codex_astra_sol_judge');
+    // A single Claude, the Claude ensemble at another effort, and the legs without their judge are not on the list.
+    expect(blockSchemeOf([cell('blocks', 'claude-opus-5-5')])).toBeNull();
+    expect(blockSchemeOf([cell('blocks', 'claude-opus-5-5', 'high', 'leg1'), cell('blocks', 'claude-sonnet-5-5', 'medium', 'judge')])).toBeNull();
+    expect(blockSchemeOf([cell('blocks', 'claude-opus-5-5', 'medium', 'leg1')])).toBeNull();
+    expect(blockSchemeOf([cell('text', 'claude-sonnet-5-5')])).toBeNull();
+  });
+
+  it('chooses the whole row at once: the other rows stay, the cells become the scheme\'s, each keeps the limits it had', () => {
+    const tuned = { ...start(), cells: start().cells.map((c) => (c.row === 'blocks' ? { ...c, max_output_tokens: 4321 } : c.row === 'text' ? { ...c, max_output_tokens: 999 } : c)) };
+    const chosen = setBlockScheme(tuned, 'claude_opus_judge_sonnet');
+    expect(chosen.kit).toBe('custom');
+    expect(chosen.cells.map((c) => c.cell_key)).toEqual(['text:main', 'blocks:leg1', 'blocks:judge', 'cross_check:main', 'norms:main', 'review:main', 'correction:main']);
+    expect(blockSchemeOf(chosen.cells)?.id).toBe('claude_opus_judge_sonnet');
+    // The old `blocks:main` is gone; the new cells had no saved limits, so they take the row's 6000.
+    expect(chosen.cells.filter((c) => c.row === 'blocks').map((c) => c.max_output_tokens)).toEqual([6000, 6000]);
+    expect(chosen.cells.find((c) => c.row === 'text')?.max_output_tokens).toBe(999);
+    // Choosing again a scheme that keeps a cell key keeps that cell's limits.
+    const back = setBlockScheme(chosen, 'codex_astra_sol_judge');
+    expect(back.cells.filter((c) => c.row === 'blocks').map((c) => c.cell_key)).toEqual(['blocks:leg1', 'blocks:leg2', 'blocks:judge']);
+    expect(draftProblem(back, CATALOGUE)).toBeNull();
+  });
+
+  it('offers a scheme only when every model of it is served, and always the one the row already is', () => {
+    expect(offeredBlockSchemes(start(), CATALOGUE, ALL_MODELS).map((s) => s.id)).toEqual(['claude_opus_judge_sonnet', 'codex_astra_sol_judge', 'codex_astra_single']);
+    expect(offeredBlockSchemes(start(), CATALOGUE, CLAUDE_ONLY_MODELS).map((s) => s.id)).toEqual(['claude_opus_judge_sonnet', 'codex_astra_single']);
+    expect(offeredBlockSchemes(setBlockScheme(start(), 'claude_opus_judge_sonnet'), CATALOGUE, ['gpt-6-astra']).map((s) => s.id)).toEqual(['claude_opus_judge_sonnet', 'codex_astra_single']);
+    expect(offeredBlockSchemes(start(), CATALOGUE, []).map((s) => s.id)).toEqual(['codex_astra_single']);
+  });
+
+  it('refuses to save a blocks row that is none of the schemes, as the server does', () => {
+    const single = { ...start(), cells: start().cells.map((c) => (c.row === 'blocks' ? { ...c, model_id: 'claude-opus-5-5' } : c)) };
+    expect(draftProblem(single, CATALOGUE)).toContain('схем');
+    expect(draftProblem(start(), CATALOGUE)).toBeNull();
+    expect(draftProblem(chooseKit(start(), 'claude_only'), CATALOGUE)).toBeNull();
+    expect(draftProblem(chooseKit(start(), 'codex_only'), CATALOGUE)).toBeNull();
+  });
+
+  it('is one select in the form and replaces the model and the effort of the row; a stored pairing off the list says so', () => {
+    const view = (draft: LayoutDraftType) => renderScreen(newClient(), createElement(LayoutEditorView, {
+      draft, catalogue: CATALOGUE, availableModelIds: ALL_MODELS, currentKit: 'custom', pending: false, problem: null, failure: null,
+      onKit: () => {}, onModel: () => {}, onScheme: () => {}, onEffort: () => {}, onLimit: () => {}, onSave: () => {}, onCancel: () => {},
+    }));
+    const markup = view(setBlockScheme(start(), 'codex_astra_sol_judge'));
+    const select = markup.match(/<select[^>]*data-layout-scheme="blocks"[^>]*>[\s\S]*?<\/select>/)?.[0] ?? '';
+    expect(select).toMatch(/<option value="codex_astra_sol_judge"[^>]*selected=""|<option[^>]*selected=""[^>]*value="codex_astra_sol_judge"/);
+    for (const label of ['Opus 5.5, судья Sonnet 5.5', 'gpt-6-astra + gpt-6-sol, судья gpt-6.1-sol', 'gpt-6-astra, без судьи']) expect(select).toContain(label);
+    expect(select).not.toContain('не из списка');
+    // The limits of the legs and the judge are in «Дополнительно», one entry per cell, each named by its part.
+    expect(markup.match(/data-layout-limits="blocks:/g)).toHaveLength(3);
+    expect(markup).toContain('Анализ блоков · судья');
+    const legacy = { ...start(), cells: start().cells.map((c) => (c.row === 'blocks' ? { ...c, model_id: 'claude-opus-5-5' } : c)) };
+    expect(view(legacy)).toContain('не из списка');
+  });
+});
+
 describe('the form «Изменить»', () => {
   const view = (over: Partial<Parameters<typeof LayoutEditorView>[0]> = {}) => renderScreen(newClient(), createElement(LayoutEditorView, {
     draft: initialDraft(LAYOUT, CATALOGUE, ALL_MODELS)!, catalogue: CATALOGUE, availableModelIds: ALL_MODELS, currentKit: 'custom',
-    pending: false, problem: null, failure: null, onKit: () => {}, onModel: () => {}, onEffort: () => {}, onLimit: () => {},
+    pending: false, problem: null, failure: null, onKit: () => {}, onModel: () => {}, onScheme: () => {}, onEffort: () => {}, onLimit: () => {},
     onSave: () => {}, onCancel: () => {}, ...over,
   }));
 
@@ -253,8 +342,12 @@ describe('the form «Изменить»', () => {
     expect(markup).toContain('>Только Claude<');
     expect(markup).toContain('>Только Codex<');
     expect(markup).toContain('>Свой набор<');
-    expect(markup.match(/data-layout-model=/g)).toHaveLength(6);
-    expect(markup.match(/data-layout-effort=/g)).toHaveLength(6);
+    // Five rows are a model and an effort; the blocks row is one select of three schemes (`HOSTS-ENSEMBLE-01`).
+    expect(markup.match(/data-layout-model=/g)).toHaveLength(5);
+    expect(markup.match(/data-layout-effort=/g)).toHaveLength(5);
+    expect(markup.match(/data-layout-scheme="blocks"/g)).toHaveLength(1);
+    expect(markup.match(/data-layout-scheme-id=/g)).toHaveLength(3);
+    expect(markup).not.toContain('data-layout-model="blocks"');
     expect(markup).toMatch(/<details[^>]*><summary>Дополнительно<\/summary>/);
     expect(markup).toContain('Ответ, токенов');
     expect(markup).toContain('Таймаут, с');
@@ -271,11 +364,11 @@ describe('the form «Изменить»', () => {
   });
 
   it('offers an effort only from the model\'s list: Opus has no «низкое»', () => {
-    const markup = view();
-    const blocks = markup.match(/<select[^>]*data-layout-effort="blocks"[^>]*>[\s\S]*?<\/select>/)?.[0] ?? '';
-    expect(blocks).toContain('среднее');
-    expect(blocks).toContain('высокое');
-    expect(blocks).not.toContain('низкое');
+    const draft = setCellModel(initialDraft(LAYOUT, CATALOGUE, ALL_MODELS)!, 'norms:main', 'claude-opus-5-5', CATALOGUE);
+    const norms = view({ draft }).match(/<select[^>]*data-layout-effort="norms"[^>]*>[\s\S]*?<\/select>/)?.[0] ?? '';
+    expect(norms).toContain('среднее');
+    expect(norms).toContain('высокое');
+    expect(norms).not.toContain('низкое');
   });
 
   it('says why there is nothing to choose from, and disables saving while a problem stands', () => {
