@@ -142,6 +142,9 @@ READ_WRITE = frozenset((
     # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): a group is archived once and its dispatch rotation cursor advances; the
     # guard triggers pin the rest. `EXEC2-GROUP-STORE-01` writes it (`group_repository.py`).
     "executor_group",
+    # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): a host is archived once (`trg_executor_host_no_delete` refuses a DELETE), its latest report
+    # is replaced when it changes, and a cooldown row is replaced by the next refusal and removed when it lapses. No statement exists yet.
+    "executor_host", "executor_host_report", "executor_model_cooldown",
     "executor_probe",
     "executor_runner_token",
     "executor_secret",
@@ -206,6 +209,10 @@ APPEND_ONLY = frozenset((
     # `decision_memory_status_event` is written by withdraw and restore (`decision_memory/service.py`).
     "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
     "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_status_event",
+    # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): the host's two journals and the stage layout's revisions and switch are `am_append_only`;
+    # a cell binding is `am_immutable_row` (written once, in the transaction that binds the run).
+    "audit_run_cell_binding", "executor_host_slot_event", "executor_host_use_event", "stage_layout_revision",
+    "stage_layout_switch_event",
 ))
 
 #: The ``append-only`` tables that no trigger protects, and the evidence that the code only inserts.
@@ -236,6 +243,10 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # `executor_routing_mode_event` left it when `EXEC2-CUTOVER-01` wrote the routing-mode journal
     # (`GroupRepository.insert_mode_event`). The scan counts INSERT, UPDATE, DELETE and LOCK statements, so a table that
     # is only selected is still never written.
+    # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): the host, its journals and report, the cooldown, the stage layout's revisions and switch
+    # and the cell binding, until `HOSTS-BACKEND-01` and `HOSTS-LAYOUT-01` write them. `stage_layout` is seeded by the migration and read only.
+    "audit_run_cell_binding", "executor_host", "executor_host_report", "executor_host_slot_event", "executor_host_use_event",
+    "executor_model_cooldown", "stage_layout_revision", "stage_layout_switch_event",
 ))
 
 #: Writes whose table name is not a literal in the SQL text, so :func:`observed_statements` cannot read it from the string: an f-string
@@ -261,6 +272,8 @@ READ_ONLY = frozenset((
     # `0061_decision_memory_m2`: the decision memory's installation settings (`data_class`, `training_use`). The capture reads the
     # latest row; only the operator tool `scripts/recovery/memory_setting.py` writes one, as the owner.
     "decision_memory_setting_event",
+    # `0062_hosts_stage_models`: the one row (key `default`) the migration seeds; the layout's revisions and switch carry the changes.
+    "stage_layout",
 ))
 
 #: Not even ``SELECT``. Empty at head.

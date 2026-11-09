@@ -41,9 +41,12 @@ BANNED_COLUMN_NAMES = {
 # `0030_executor_connections`: the route of each kind of model work is appended, never edited.
 # `0047_executor_groups_rules` (`EXEC2-SEAL-2`, ADR-0026 decisions 11 and 17): a rule revision and a routing-mode change
 # are appended, never edited; the current rule and the current mode are queries over them.
+# `0062_hosts_stage_models` (`HOSTS-SEAL-1`): a host's «Использовать» switch and slots, a stage layout revision and the layout's switch are
+# appended, never edited; the switch in force, the slots in force and the revision in force are queries over them.
 APPEND_ONLY_TABLES = {
     "expert_decision_event", "audit_event", "executor_route_event",
     "executor_routing_rule_revision", "executor_routing_mode_event",
+    "executor_host_use_event", "executor_host_slot_event", "stage_layout_revision", "stage_layout_switch_event",
 }
 
 IMMUTABLE_TABLES = {
@@ -134,6 +137,9 @@ IMMUTABLE_TABLES = {
     # content tables (content, the expert's comment, evidence, normative references, crops) left this list: since `0061` their guard is
     # `am_guard_decision_memory_forget` (UPDATE refused, DELETE only beside a same-transaction forget event), see FORGET_GUARDED_TABLES.
     "decision_memory_case", "decision_memory_decision", "decision_memory_status_event", "decision_memory_setting_event",
+    # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): the one seeded stage layout row and a cell binding are written once and never changed or removed;
+    # a host row is never deleted (``am_immutable_row`` guards its DELETE only: its name is frozen and its archive write-once).
+    "stage_layout", "audit_run_cell_binding", "executor_host",
 }
 
 
@@ -326,6 +332,8 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     # (``runner_instance_id``), 8 to 64 characters of ``A-Za-z0-9_-`` -- the agent's own random string, not an
     # entity this product mints; ``ck_executor_task_claimed_by_instance_id`` checks its shape.
     "claimed_by_instance_id",
+    # `0062_hosts_stage_models`: ``model_id`` of a cooldown names a model of the catalogue (``claude-opus-5-5``), as ``pin_id`` does.
+    "model_id",
 }
 
 #: A column name that two tables use for two different identities (or for a label) cannot carry one prefix in the
@@ -573,6 +581,14 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "rule_revision_id": "exrr",
         "routing_rule_revision_id": "exrr",
         "mode_event_id": "exrm",
+        # `HOSTS-SEAL-1`, migration 0062 (ADR-0028): a host (the key of a token, a grant, an install session, a system connection,
+        # a report, a cooldown and the journals; on a call a bare identity), its two journals, a stage layout revision and the
+        # layout's switch.
+        "host_id": "exh",
+        "use_event_id": "exhu",
+        "slot_event_id": "exhs",
+        "layout_revision_id": "slr",
+        "switch_event_id": "sls",
         # `CMP-SEAL-C4`, migration 0042 (the stage review, ADR-0025): the stage AI's unit and its review, classification and
         # synthesis answers, the graphic evidence, a link repair with its events and the two link revisions it names, the run
         # a repair's recompute started, a change card with its evidence and its verdicts (a verdict can carry a previous one

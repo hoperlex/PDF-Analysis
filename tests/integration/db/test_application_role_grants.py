@@ -422,8 +422,9 @@ def test_append_only_tables_refuse_update_and_delete_by_privilege(applied: Stand
     # and 0047 four (``executor_group_revision``, ``executor_group_member``, ``executor_routing_rule_revision``,
     # ``executor_routing_mode_event``; ``executor_group`` is read-write: its rotation cursor advances and its archive is
     # write-once): 55 + 9 + 4 = 68; 0053-0055 add five append-only tables (`len(grants.APPEND_ONLY)` is 73, measured
-    # 2026-11-08): 68 + 5 = 73; `0059_decision_memory` adds eight (all immutable): 73 + 8 = 81.
-    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 81
+    # 2026-11-08): 68 + 5 = 73; `0059_decision_memory` adds eight (all immutable): 73 + 8 = 81; `0062_hosts_stage_models` adds five (the host's use
+    # and slot journals, the stage layout's revisions and switch, and the cell binding): 81 + 5 = 86.
+    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 86
 
 
 def test_read_only_tables_refuse_every_write(applied: Stand) -> None:

@@ -138,7 +138,12 @@
     "decision_memory_case_id": "dmc",
     "decision_memory_decision_id": "dmd",
     "decision_memory_status_event_id": "dmw",
-    "decision_memory_crop_id": "dmx"
+    "decision_memory_crop_id": "dmx",
+    "executor_host_id": "exh",
+    "executor_host_use_event_id": "exhu",
+    "executor_host_slot_event_id": "exhs",
+    "stage_layout_revision_id": "slr",
+    "stage_layout_switch_event_id": "sls"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -264,7 +269,12 @@
     "DecisionMemoryCase": "decision_memory_case_id",
     "DecisionMemoryDecision": "decision_memory_decision_id",
     "DecisionMemoryStatusEvent": "decision_memory_status_event_id",
-    "DecisionMemoryCrop": "decision_memory_crop_id"
+    "DecisionMemoryCrop": "decision_memory_crop_id",
+    "ExecutorHost": "executor_host_id",
+    "ExecutorHostUseEvent": "executor_host_use_event_id",
+    "ExecutorHostSlotEvent": "executor_host_slot_event_id",
+    "StageLayoutRevision": "stage_layout_revision_id",
+    "StageLayoutSwitchEvent": "stage_layout_switch_event_id"
   },
   "distinct_identities": [
     {
@@ -568,6 +578,33 @@
       "evidence": [
         "CMP-SEAL-C4",
         "0042_comparison_stage_review"
+      ]
+    },
+    {
+      "name": "executor_host_identity",
+      "identifiers": [
+        "executor_host_id",
+        "executor_host_use_event_id",
+        "executor_host_slot_event_id"
+      ],
+      "rule": "ExecutorHost identifies one server for its whole life; ExecutorHostUseEvent one change of its Use switch; ExecutorHostSlotEvent one change of the slots of a provider on it. Each is allocated independently. A host name, an address, a provider, a model and a slot count are attributes and never identities. A call journal row names the host without a foreign key: a host is archived, never deleted, and a call outlives anything it names.",
+      "authority": "ADR-0028; plan 2026-11-09 section 3.2",
+      "evidence": [
+        "HOSTS-SEAL-1",
+        "0062_hosts_stage_models"
+      ]
+    },
+    {
+      "name": "stage_layout_identity",
+      "identifiers": [
+        "stage_layout_revision_id",
+        "stage_layout_switch_event_id"
+      ],
+      "rule": "StageLayoutRevision identifies one append-only revision of the layout of models over the analysis stages; StageLayoutSwitchEvent one change of the switch that puts the layout in force. Each is allocated independently. A kit name, a cell key, a model and a revision number are attributes and never identities. A run freezes the plan it was started with, never the layout's current revision.",
+      "authority": "ADR-0028; plan 2026-11-09 section 4.5",
+      "evidence": [
+        "HOSTS-SEAL-1",
+        "0062_hosts_stage_models"
       ]
     }
   ],

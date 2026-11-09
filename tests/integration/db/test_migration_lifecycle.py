@@ -149,6 +149,19 @@ EXPECTED_TABLES = {
     "decision_memory_evidence",
     "decision_memory_norm_ref",
     "decision_memory_status_event",
+    # `0061_decision_memory_m2`: the installation settings' journal of the decision memory.
+    "decision_memory_setting_event",
+    # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): a server with its two journals, its latest report and the cooldown of a model on it; the
+    # layout of models over the analysis stages with its revisions and switch; the cell-by-cell binding of a planned run.
+    "executor_host",
+    "executor_host_use_event",
+    "executor_host_slot_event",
+    "executor_host_report",
+    "executor_model_cooldown",
+    "stage_layout",
+    "stage_layout_revision",
+    "stage_layout_switch_event",
+    "audit_run_cell_binding",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
     "norm_current_snapshot",
     "norm_current_snapshot_event",
@@ -193,6 +206,8 @@ EXPECTED_VIEWS = {
     "executor_route_current",
     "version_classification_revision",
     "version_classification_current",
+    # `0061_decision_memory_m2`: a case's status from its latest event and its verdict from its latest decision.
+    "decision_memory_case_current",
 }
 
 #: The alpha runner instantiates none of these aggregates. Their absence is a deliverable, so

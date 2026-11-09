@@ -2295,6 +2295,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0061_decision_memory_m2",
+  "migration_head": "0062_hosts_stage_models",
   "contract_version": "1.44.0"
 }

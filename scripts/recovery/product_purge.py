@@ -105,11 +105,18 @@ KEEP_NORM_TABLES = EXEMPT_FROM_FINGERPRINT
 #: routing-mode journal are the stand's configuration of where model work goes, like the connections and the legacy
 #: routes they name: they reference connections and connection revisions, never a run, a document or a call. A Run and
 #: a comparison job reference a group revision and a rule revision (`0048`), PRODUCT to KEEP and never the other way.
+#: `HOSTS-SEAL-1` (`0062_hosts_stage_models`): a host, its «Использовать» and slot journals, its latest report and the cooldown of a
+#: model on it are the stand's configuration of where model work goes, like the connections, kept as `analysis_preset_revision` is; so are
+#: the stage layout, its revisions and its switch (which models serve which analysis stages). They reference tokens, connections and
+#: accounts, never a run, a document or a call. A call names its host by a bare identity and a planned run its layout in its frozen plan
+#: (PRODUCT to KEEP, never the other way); the cell binding of a planned run is PRODUCT (below).
 KEEP_EXECUTOR_TABLES = frozenset((
     "analysis_preset_revision", "executor_agent_install", "executor_connection",
     "executor_connection_revision", "executor_enrollment", "executor_group", "executor_group_member",
-    "executor_group_revision", "executor_probe", "executor_route_event", "executor_routing_mode_event",
-    "executor_routing_rule_revision", "executor_runner_token", "executor_secret",
+    "executor_group_revision", "executor_host", "executor_host_report", "executor_host_slot_event",
+    "executor_host_use_event", "executor_model_cooldown", "executor_probe", "executor_route_event",
+    "executor_routing_mode_event", "executor_routing_rule_revision", "executor_runner_token", "executor_secret",
+    "stage_layout", "stage_layout_revision", "stage_layout_switch_event",
 ))
 #: `0055_work_schedule` (`UI-PARITY-P0P`): «График работ»'s installation settings, the engineers' monthly plans, the
 #: work calendar and the absences are the organisation's planning, like accounts: they reference accounts, never a
@@ -190,7 +197,7 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 #: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
-    "audit_run", "comparison_ai_job", "comparison_ai_link", "comparison_ai_pair_answer", "comparison_ai_pair_question",
+    "audit_run", "audit_run_cell_binding", "comparison_ai_job", "comparison_ai_link", "comparison_ai_pair_answer", "comparison_ai_pair_question",
     "comparison_ai_sheet_item", "comparison_launch_entry", "comparison_launch_queue", "comparison_matrix",
     "comparison_matrix_edit", "comparison_model_call", "comparison_report", "comparison_report_artifact",
     "comparison_report_part", "comparison_sheet_description", "comparison_spec_comparison", "comparison_spec_extraction",
