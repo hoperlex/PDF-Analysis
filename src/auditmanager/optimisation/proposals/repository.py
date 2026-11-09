@@ -32,7 +32,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Final
 
-from sqlalchemy import text
+from sqlalchemy import TextClause, text
 from sqlalchemy.orm import Session
 
 from ..matching import canonical_amount
@@ -51,39 +51,89 @@ __all__ = [
 
 _PROPOSAL_CHUNK: Final[int] = 2000
 
-_COUNTS = (
-    "(SELECT jsonb_object_agg(k.verdict, k.n) FROM ("
-    "  SELECT COALESCE(NULLIF(cur.verdict, 'revoke'), 'pending') AS verdict, count(*) AS n "
-    "  FROM optimisation_proposal q "
-    "  LEFT JOIN LATERAL (SELECT d.verdict FROM optimisation_proposal_decision d "
-    "    WHERE d.optimisation_proposal_id = q.optimisation_proposal_id "
-    "    ORDER BY d.seq DESC LIMIT 1) cur ON TRUE "
-    "  WHERE q.optimisation_pass_id = s.optimisation_pass_id "
-    "  GROUP BY 1) k) AS decision_counts"
-)
+#: The columns of a pass in the order :func:`_pass` reads them. ``chosen`` carries the stored ones and the version's ordinal,
+#: ``tally`` the decision counts.
 _PASS_COLUMNS = (
+    "c.optimisation_pass_id, c.project_uid, c.document_uid, c.version_uid, c.run_id, "
+    "c.text_layer_sha256, c.price_list_id, c.vendor_list_id, c.vendor_list_source, "
+    "c.extraction_algorithm, c.match_algorithm, c.generator_version, "
+    "c.specification_row_count, c.matched_row_count, c.proposed_row_count, c.proposal_count, "
+    "c.started_by_user_uid, c.started_at, t.decision_counts, c.version_ordinal"
+)
+#: The version's display ordinal ("V2", `UI-B-14`) comes with every pass: the pass is read for the version it was started over.
+_CHOSEN_COLUMNS = (
     "s.optimisation_pass_id, s.project_uid, s.document_uid, s.version_uid, s.run_id, "
     "s.text_layer_sha256, s.price_list_id, s.vendor_list_id, s.vendor_list_source, "
     "s.extraction_algorithm, s.match_algorithm, s.generator_version, "
     "s.specification_row_count, s.matched_row_count, s.proposed_row_count, s.proposal_count, "
-    f"s.started_by_user_uid, s.started_at, {_COUNTS}, v.version_ordinal"
+    "s.started_by_user_uid, s.started_at, v.version_ordinal"
 )
-#: The version's display ordinal ("V2", `UI-B-14`) comes with every pass: the pass is read for the version it was started over.
-_PASS_FROM = "FROM optimisation_pass s JOIN document_version v ON v.version_uid = s.version_uid "
-_SELECT_PASS = text(
-    f"SELECT {_PASS_COLUMNS} {_PASS_FROM} WHERE s.optimisation_pass_id = :id"
-)
-_FIND_PASS = text(
-    f"SELECT {_PASS_COLUMNS} {_PASS_FROM} "
-    "WHERE s.version_uid = :version AND s.run_id = :run AND s.price_list_id = :price_list "
+#: **How the decision counts are taken (`D-463`, `D-574`).** The decision in force of a proposal is its latest one by ``seq``, and
+#: the pass's counts are the proposals whose decision in force is each verdict, plus the ones with none (no decision, or a
+#: withdrawn one) under ``pending``. The first form looked the latest decision up with one ``LATERAL`` index probe for every
+#: proposal of every pass it returned: 200 passes of ~530 proposals cost 0.7 s (measured on a stand, `DEBT_REGISTER.md` `D-574`).
+#: It is now one pass over the decisions of the proposals of the chosen passes -- ``DISTINCT ON (proposal) ... ORDER BY
+#: proposal, seq DESC``, joined once to the proposals to learn their pass -- and the pending ones are the pass's
+#: ``proposal_count`` minus the decided ones: ``proposal_count`` is the database's own count of the pass's proposals
+#: (``am_require_optimisation_proposals`` refuses a pass at commit unless exactly that many proposals name it, and both tables
+#: are immutable), the same figure ``DocumentAuditReadModel.audits`` counts the undecided through. A verdict nobody holds is no
+#: key, as before; a pass without proposals has none (``NULL``). The answers are equal to the per-proposal form's, pass by pass
+#: (``tests/integration/optimisation/proposals/test_decision_counts_one_pass.py`` runs the old statement as the reference).
+_TALLY = f"""
+    latest AS (
+        SELECT DISTINCT ON (d.optimisation_proposal_id) q.optimisation_pass_id, d.verdict
+        FROM optimisation_proposal_decision d
+        JOIN optimisation_proposal q ON q.optimisation_proposal_id = d.optimisation_proposal_id
+        WHERE q.optimisation_pass_id IN (SELECT optimisation_pass_id FROM chosen)
+        ORDER BY d.optimisation_proposal_id, d.seq DESC
+    ),
+    decided AS (
+        SELECT optimisation_pass_id, verdict, count(*) AS n
+        FROM latest
+        WHERE verdict <> '{VERDICT_REVOKE}'
+        GROUP BY optimisation_pass_id, verdict
+    ),
+    tally AS (
+        SELECT k.optimisation_pass_id, jsonb_object_agg(k.verdict, k.n) AS decision_counts
+        FROM (
+            SELECT optimisation_pass_id, verdict, n FROM decided
+            UNION ALL
+            SELECT c.optimisation_pass_id, '{DECISION_PENDING}',
+                   CAST(c.proposal_count - coalesce(sum(x.n), 0) AS bigint)
+            FROM chosen c
+            LEFT JOIN decided x ON x.optimisation_pass_id = c.optimisation_pass_id
+            GROUP BY c.optimisation_pass_id, c.proposal_count
+        ) k
+        WHERE k.n > 0
+        GROUP BY k.optimisation_pass_id
+    )"""
+
+
+def _pass_statement(where: str, *, order_limit: str = "", order: str = "") -> TextClause:
+    """A pass (or passes) chosen by ``where``, with their counts, in the columns :func:`_pass` reads.
+
+    ``chosen`` is cut first (``order_limit`` is the pages' ``ORDER BY ... LIMIT``) so the one pass over the decisions
+    reads only the proposals of the passes the caller gets; ``order`` repeats the order on the joined result.
+    """
+    return text(
+        f"WITH chosen AS (SELECT {_CHOSEN_COLUMNS} "
+        "FROM optimisation_pass s JOIN document_version v ON v.version_uid = s.version_uid "
+        f"WHERE {where} {order_limit}),{_TALLY} "
+        f"SELECT {_PASS_COLUMNS} FROM chosen c LEFT JOIN tally t ON t.optimisation_pass_id = c.optimisation_pass_id {order}"
+    )
+
+
+_SELECT_PASS = _pass_statement("s.optimisation_pass_id = :id")
+_FIND_PASS = _pass_statement(
+    "s.version_uid = :version AND s.run_id = :run AND s.price_list_id = :price_list "
     "AND s.vendor_list_id = :vendor_list AND s.extraction_algorithm = :extraction "
     "AND s.match_algorithm = :match AND s.generator_version = :generator"
 )
-_LIST_PASSES = text(
-    f"SELECT {_PASS_COLUMNS} {_PASS_FROM} "
-    "WHERE s.project_uid = :project "
-    "AND (CAST(:document AS text) IS NULL OR s.document_uid = CAST(:document AS text)) "
-    "ORDER BY s.started_at DESC, s.optimisation_pass_id DESC LIMIT :limit"
+_LIST_PASSES = _pass_statement(
+    "s.project_uid = :project "
+    "AND (CAST(:document AS text) IS NULL OR s.document_uid = CAST(:document AS text))",
+    order_limit="ORDER BY s.started_at DESC, s.optimisation_pass_id DESC LIMIT :limit",
+    order="ORDER BY c.started_at DESC, c.optimisation_pass_id DESC",
 )
 _LOCK_VERSION = text(
     "SELECT pg_advisory_xact_lock(hashtextextended("
