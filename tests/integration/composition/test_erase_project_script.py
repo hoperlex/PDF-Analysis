@@ -30,6 +30,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.support.wrapper_rig import guard_names, guard_names_in, runbook_guards_text
+
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "infra/deploy/erase-project.sh"
 MODULE_DIR = ROOT / "scripts/recovery"
@@ -255,6 +257,11 @@ CASES: tuple[tuple[str, tuple[str, ...], str, bool], ...] = (
      "--actor must be the login", True),
     ("actor-required", (*COMMON, "--resume", ERASE, "--actor", "two words", "--owner-permission-ref", REF),
      "--actor must be the login", True),
+    # `D-514`: a login that starts with `-` is a swallowed option, refused as `memory-setting.sh` and `memory-forget.sh` refuse it.
+    ("actor-required", (*COMMON, "--resume", ERASE, "--actor", "-x", "--owner-permission-ref", REF),
+     "--actor must be the login", True),
+    ("actor-required", (*PLAN, "--apply", "--actor", "--reason", "--reason", "test_data", "--owner-permission-ref", REF,
+                        "--plan-sha256", SHA), "--actor must be the login", True),
     ("reason-closed-list", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "because they asked",
                             "--owner-permission-ref", REF, "--plan-sha256", SHA), "--reason must be one of", True),
     ("reason-closed-list", (*PLAN, "--apply", "--actor", ACTOR, "--owner-permission-ref", REF, "--plan-sha256", SHA),
@@ -299,6 +306,18 @@ def test_deleting_the_guard_removes_the_refusal(guard: str, args: tuple[str, ...
         f"the {guard} guard was deleted and the refusal happened anyway: it was never testing that guard")
     if reaches:
         assert broken.log.exists(), f"with {guard} gone the script should have gone on to the stack: {completed.stderr}"
+
+
+def test_the_leading_dash_rule_of_the_actor_is_its_own_clause_and_can_fail(rig: Rig) -> None:
+    """`D-514`: the block-deletion mutant above removes the whole `actor-required` guard; this removes only the clause that refuses a login
+    starting with `-`, and shows `-x` then goes on to the stack while a login with a space is still refused."""
+    args = (*COMMON, "--resume", ERASE, "--actor", "-x", "--owner-permission-ref", REF)
+    assert rig.run(*args).returncode == REFUSED
+    broken = rig.edited(' || [[ "$ACTOR" == -* ]]', "")
+    completed = broken.run(*args)
+    assert "--actor must be the login" not in completed.stderr and broken.log.exists(), completed.stderr
+    spaced = (*COMMON, "--resume", ERASE, "--actor", "two words", "--owner-permission-ref", REF)
+    assert "--actor must be the login" in broken.run(*spaced).stderr
 
 
 def test_a_missing_environment_file_is_refused_and_the_guard_can_fail(rig: Rig, tmp_path: Path) -> None:
@@ -845,6 +864,16 @@ def test_the_copy_key_file_list_does_not_gain_this_script() -> None:
 def test_the_script_is_executable_and_in_the_deploy_directory() -> None:
     assert SCRIPT.exists() and os.access(SCRIPT, os.X_OK)
     assert SCRIPT.parent == ROOT / "infra/deploy"
+
+
+def test_the_runbook_names_every_guard_of_the_script_and_the_check_can_fail() -> None:
+    """`D-513`: runbook section 17 lists the script's guards by name. It once listed 23 of 25 (the two `D-470` guards were added to the
+    script and not to the list); the list is now held to the script's markers, so a guard added or renamed without the runbook is red."""
+    markers = guard_names(SCRIPT)
+    text = runbook_guards_text(17)
+    assert guard_names_in(text) == markers, (sorted(markers - guard_names_in(text)), sorted(guard_names_in(text) - markers))
+    assert guard_names_in(text.replace("`memory-loss-reason`", "")) != markers, "the comparison cannot see a name that is missing"
+    assert guard_names_in(text + " `a-guard-nobody-wrote`") != markers, "the comparison cannot see a name that is not in the script"
 
 
 def test_every_guard_in_the_script_has_a_case_here() -> None:

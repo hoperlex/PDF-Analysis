@@ -13,6 +13,11 @@
 # module's refusals are its own -- above all the one that matters here: a change of `data_class` is refused while the memory has not captured every
 # decision of the ledger (`D-496`, no override) -- and this file shows them and adds none of its own after a connection.
 #
+# WHAT THIS SCRIPT READS (`D-517`): the module's `show --json`, ONE line of JSON, and nothing else of its output. The "nothing to do" short-circuit
+# and the read-back decide from the members of that line, and the screen the operator sees (`in force now`, the record at the end) is printed
+# from the same line, so what is shown and what is checked are one read. A line without every member of SHOW_MEMBERS is a failure, never a
+# guess. `memory_setting.SHOW_JSON_KEYS` and SHOW_MEMBERS below are held to each other by tests/integration/composition/test_memory_setting_script.py.
+#
 # WHAT A `set` DOES, IN ORDER (three container runs, each one the module):
 #
 #   1. `show`: the settings in force now, printed -- the operator sees the value they are about to replace and the count of decisions the sweep
@@ -45,6 +50,9 @@ MODULE_DIR="${ALPHA_MEMORY_MODULE_DIR:-$HERE/../../scripts/recovery}"
 # The files the module needs and nothing else: `memory_setting` imports `project_erase` (which imports `product_purge`, `blob_reference_audit`
 # and `schema_coverage`); tests/integration/composition/test_memory_setting_script.py holds this list to the module's own imports.
 MODULES=(memory_setting project_erase product_purge schema_coverage blob_reference_audit)
+# The members of the line `memory_setting show --json` prints (`memory_setting.SHOW_JSON_KEYS`): a value, a revision and a default for each of the
+# two settings, then the count of decisions the sweep has not captured.
+SHOW_MEMBERS=(data_class data_class_revision data_class_default training_use training_use_revision training_use_default uncaptured_decisions)
 
 DATABASE=""
 ACTOR=""
@@ -83,6 +91,9 @@ usage: memory-setting.sh --database <name> show
   --owner-permission-ref <t>   one line, at most 200 characters: where the OWNER's permission is recorded. Required for training_use on
                                (it releases client-derived content off the host); optional for the others. Recorded, never verified.
   --env-file <path>            default: infra/deploy/env/alpha.env
+
+  MEMORY_SETTING_LOCK_TIMEOUT  environment, optional: how long the change waits for the ledger lock, for example 30s (default 15s).
+                               A positive number of ms, s or min; it is passed to the one-off container.
 
 A change of data_class is refused by the module while the sweep has not captured every decision of the ledger. There is no override:
 let the worker finish (show prints the count), then run it again.
@@ -193,6 +204,17 @@ if [ "$COMMAND" = set ] && [ "$NAME" = training_use ] && [ "$VALUE" = on ] && [ 
 fi
 # <<< guard: training-needs-permission
 
+# >>> guard: lock-timeout-shape
+# `D-515`: how long the module waits for the ledger lock is the operator's to set (`MEMORY_SETTING_LOCK_TIMEOUT`, default `15s` in the module).
+# It is handed to the one-off container as it is, so it must be a plain positive duration: a typo is a sentence here and not a database
+# error after the connection, and `0` (wait for ever) is not a timeout.
+if [ "${MEMORY_SETTING_LOCK_TIMEOUT+set}" = set ] && [[ ! "$MEMORY_SETTING_LOCK_TIMEOUT" =~ ^[1-9][0-9]{0,5}(ms|s|min)$ ]]; then
+    refuse "MEMORY_SETTING_LOCK_TIMEOUT must be a positive number of ms, s or min (for example 30s)." \
+           "  given: ${MEMORY_SETTING_LOCK_TIMEOUT:-<empty>}" \
+           "Unset it for the module's own 15s. Nothing was read and nothing was touched."
+fi
+# <<< guard: lock-timeout-shape
+
 # >>> guard: env-file-present
 if [ ! -r "$ENV_FILE" ]; then
     refuse "the deployment environment $ENV_FILE is missing or unreadable." \
@@ -268,6 +290,11 @@ MODULE_DIR="$(cd "$MODULE_DIR" && pwd)"
 
 compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
 
+# `D-515`: the lock timeout the operator set, and only that one, goes into the container (the shape was checked above). None set: nothing is
+# passed and the module's own default applies.
+LOCK_TIMEOUT_ENV=()
+[ "${MEMORY_SETTING_LOCK_TIMEOUT+set}" != set ] || LOCK_TIMEOUT_ENV=(-e "MEMORY_SETTING_LOCK_TIMEOUT=$MEMORY_SETTING_LOCK_TIMEOUT")
+
 # THE PYTHON HALF RUNS INSIDE THE `api` IMAGE, from five files mounted read-only. The container runs as the operator's uid, as the erase's does;
 # stdin is /dev/null so that `docker compose run` cannot swallow the answer the operator is about to type (it forwards stdin otherwise).
 ERR_FILE="$(mktemp)"
@@ -277,7 +304,7 @@ setting_python() {
         mounts+=(-v "$MODULE_DIR/$module.py:/purge/scripts/recovery/$module.py:ro")
     done
     DATABASE_URL="$MIGRATOR_URL" compose run --rm --no-deps -T --user "$(id -u):$(id -g)" \
-        -e PYTHONPATH=/app/src:/purge "${mounts[@]}" \
+        -e PYTHONPATH=/app/src:/purge "${LOCK_TIMEOUT_ENV[@]+"${LOCK_TIMEOUT_ENV[@]}"}" "${mounts[@]}" \
         --entrypoint python api -m scripts.recovery.memory_setting --database "$DATABASE" "$@" </dev/null
 }
 
@@ -312,10 +339,65 @@ after_step() {
     fail "the $what failed (status $STATUS)." "Nothing was changed. Is the stack up (postgres)?"
 }
 
-# The value the settings screen says is in force: `data_class: real (revision 1; default test)` -> `real`. A screen without the line is not a
-# screen this script understands, and guessing from it would be the untruth the read-back exists to prevent.
-setting_value() {
-    printf '%s\n' "$2" | sed -n "s/^$1: \([a-z]*\) (.*/\1/p" | tail -1
+# `D-517`: the settings in force are the members of ONE line of JSON, flat, printed by `memory_setting show --json`: strings of `[a-z_]` and
+# non-negative integers, `"name": value` with one space after the colon (`json.dumps`). `json_member <line> <name>` prints the value of a member
+# (without quotes), or nothing when there is no such member; it always succeeds, so that an absent member is a failure the caller names and not an
+# unexplained exit of the error trap.
+json_member() {
+    local line="$1" name="$2" ere value
+    ere="\"$name\": (\"[a-z_]+\"|[0-9]+)[,}]"
+    if [[ "$line" =~ $ere ]]; then
+        value="${BASH_REMATCH[1]}"
+        printf '%s\n' "${value//\"/}"
+    fi
+}
+
+# The value of a setting that the line says is in force: `{"data_class": "real", ...}` -> `real`.
+setting_value() { json_member "$2" "$1"; }
+
+# A line is understood when it is ONE line and has every member of SHOW_MEMBERS in its shape. Anything else (the old text screen, an error, a
+# line of a newer module) is not a line this script can decide from, and guessing from it would be the untruth the read-back exists to prevent.
+settings_understood() {
+    local line="$1" member value
+    [[ "$line" != *$'\n'* ]] || return 1
+    for member in "${SHOW_MEMBERS[@]}"; do
+        value="$(json_member "$line" "$member")"
+        case "$member" in
+            *_revision|uncaptured_decisions) [[ "$value" =~ ^[0-9]+$ ]] || return 1 ;;
+            *) [[ "$value" =~ ^[a-z_]+$ ]] || return 1 ;;
+        esac
+    done
+}
+
+# The screen, printed from the line that was read (the same words as the module's own `show` prints for an operator who runs the module by hand).
+settings_screen() {
+    local line="$1" name revision origin
+    for name in data_class training_use; do
+        revision="$(json_member "$line" "${name}_revision")"
+        if [ "$revision" = 0 ]; then origin=default; else origin="revision $revision"; fi
+        printf '%s: %s (%s; default %s)\n' "$name" "$(json_member "$line" "$name")" "$origin" "$(json_member "$line" "${name}_default")"
+    done
+    printf 'uncaptured-decisions: %s (ledger accept/reject events with no memory decision; a data_class change is refused until this is 0)\n' \
+        "$(json_member "$line" uncaptured_decisions)"
+}
+
+# One look at the settings in force: the module's `show --json`, checked, left in LOOK. `$1` names the step; `$2` is `writing` for the look that
+# follows a write, which cannot promise that nothing was changed.
+look() {
+    local what="$1" writing="${2:-no}"
+    run_tool show --json
+    after_step "$what" "$writing"
+    if ! settings_understood "$OUT"; then
+        if [ "$writing" = writing ]; then
+            fail "the $what did not print the settings in the form this script reads (one line of JSON)." \
+                 "  printed: $OUT" \
+                 "The change may have been made: the settings in force say whether it was. Look:" \
+                 "  $SELF --database $(printf '%q' "$DATABASE") show"
+        fi
+        fail "the $what did not print the settings in the form this script reads (one line of JSON)." \
+             "  printed: $OUT" "Nothing was changed."
+    fi
+    LOOK="$OUT"
 }
 
 echo "memory-setting.sh: instance   $CONFIGURED_INSTANCE"
@@ -323,23 +405,18 @@ echo "memory-setting.sh: database   $DATABASE"
 
 # --- show -------------------------------------------------------------------------------------------------------
 if [ "$COMMAND" = show ]; then
-    run_tool show
-    after_step "show"
-    printf '%s\n' "$OUT"
+    look "show"
+    settings_screen "$LOOK"
     exit 0
 fi
 
 # --- set: look first, ask, write, look again -------------------------------------------------------------------
-run_tool show
-after_step "show before the change"
-BEFORE="$OUT"
+look "show before the change"
+BEFORE="$LOOK"
 CURRENT="$(setting_value "$NAME" "$BEFORE")"
 echo
 echo "memory-setting.sh: in force now:"
-printf '%s\n' "$BEFORE"
-if [ -z "$CURRENT" ]; then
-    fail "the settings screen above does not say what $NAME is." "Nothing was changed."
-fi
+settings_screen "$BEFORE"
 if [ "$CURRENT" = "$VALUE" ]; then
     echo
     echo "memory-setting.sh: $NAME is already $VALUE; nothing to do. Nothing was changed."
@@ -382,19 +459,18 @@ run_tool "${SET_ARGS[@]}"
 after_step "change" writing
 printf '%s\n' "$OUT"
 
-run_tool show
-after_step "show after the change" writing
-AFTER="$OUT"
+look "show after the change" writing
+AFTER="$LOOK"
 # >>> guard: readback-verified
 # The module said it wrote the value. The settings in force are the proof, and they are what goes into the release record: a value that does not
 # read back as written is not a change the operator is allowed to record as made.
 if [ "$(setting_value "$NAME" "$AFTER")" != "$VALUE" ]; then
     fail "THE CHANGE WAS REPORTED DONE but the settings in force do not say $NAME is $VALUE." \
-         "  settings read back:" "$(printf '%s' "$AFTER" | sed 's/^/    /')" \
+         "  settings read back:" "$(settings_screen "$AFTER" | sed 's/^/    /')" \
          "Do not record the change as made. Look again:  $SELF --database $(printf '%q' "$DATABASE") show"
 fi
 # <<< guard: readback-verified
 echo
 echo "memory-setting.sh: done. $NAME is now $VALUE. Write the settings below and today's date in the release record:"
-printf '%s\n' "$AFTER"
+settings_screen "$AFTER"
 exit 0

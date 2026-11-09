@@ -17,6 +17,7 @@ production compose and its images; the runbook (sections 20 and 21) says so and 
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
@@ -25,6 +26,8 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
+import types
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +35,7 @@ import pytest
 from sqlalchemy import text
 
 from auditmanager.decisions.public import register_decision_recorded, registered_decision_recorded
+from scripts.recovery import memory_setting
 from tests.integration.recovery.purge_seed import digest_of
 from tests.integration.recovery.purge_stand import Stand, _line
 from tests.integration.recovery.test_memory_forget import (  # noqa: F401  (the fixtures are used by name)
@@ -43,7 +47,7 @@ from tests.integration.recovery.test_memory_forget import (  # noqa: F401  (the 
     stand,
     state_of,
 )
-from tests.integration.recovery.test_memory_setting import Ledger
+from tests.integration.recovery.test_memory_setting import Ledger, _decision_in_flight
 from tests.support.memory_seed import seed_case
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -126,11 +130,53 @@ def journal(stand_: Stand) -> list[tuple[Any, ...]]:
 # --- memory-setting.sh ------------------------------------------------------------------------
 
 
+def modules_own_screen(operator: Operator) -> list[str]:
+    """What `memory_setting show` (the text screen of the module itself, run in this process) prints for the stand's database."""
+    out = io.StringIO()
+    memory_setting.show(operator.stand.engine, out)
+    return out.getvalue().splitlines()
+
+
 def test_show_prints_what_the_module_prints_and_connects_as_the_owner(operator: Operator) -> None:
+    """`D-517`: the wrapper reads the module's `show --json` and prints the screen from it; the screen is word for word the module's own."""
     completed = operator.run(SETTING, "show")
     assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert completed.stdout.splitlines()[2:] == modules_own_screen(operator)
     assert "data_class: test (default; default test)" in completed.stdout and "uncaptured-decisions: 0" in completed.stdout
-    assert len(operator.calls) == 1 and journal(operator.stand) == []
+    assert len(operator.calls) == 1 and operator.calls[0].endswith(f"-m scripts.recovery.memory_setting --database {operator.stand.database} show --json")
+    assert journal(operator.stand) == []
+
+
+def test_the_screen_of_the_wrapper_is_the_modules_after_changes_too(operator: Operator) -> None:
+    """Revisions, a default that is not the value, the backlog: the two screens are the same for every state the journal can be in."""
+    for argv in (("set", "data_class", "real", "--actor", "admin"), ("set", "data_class", "test", "--actor", "admin"),
+                 ("set", "training_use", "on", "--actor", "admin", "--owner-permission-ref", REFERENCE)):
+        assert operator.run(SETTING, *argv, typed=argv[2] + "\n").returncode == 0
+    completed = operator.run(SETTING, "show")
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert completed.stdout.splitlines()[2:] == modules_own_screen(operator)
+    assert "data_class: test (revision 2; default test)" in completed.stdout and "training_use: on (revision 1; default off)" in completed.stdout
+
+
+def test_the_lock_timeout_the_operator_sets_reaches_the_module_through_the_wrapper_and_the_pass_through_can_fail(
+    operator: Operator, ledger: Ledger
+) -> None:
+    """`D-515`: a decision is in flight and holds the ledger. With `MEMORY_SETTING_LOCK_TIMEOUT=1s` the module gives up after one second and
+    says so with that number; a copy of the wrapper that does not pass the variable waits for the module's own 15s and says 15s."""
+    inflight = _decision_in_flight(types.SimpleNamespace(engine=operator.stand.engine), ledger)
+    try:
+        started = time.monotonic()
+        completed = operator.run(SETTING, "set", "data_class", "real", "--actor", "admin", typed="real\n", MEMORY_SETTING_LOCK_TIMEOUT="1s")
+        assert completed.returncode == REFUSED and "could not lock within 1s" in completed.stderr, (completed.stdout, completed.stderr)
+        assert time.monotonic() - started < 14 and journal(operator.stand) == []
+        source = (DEPLOY / SETTING).read_text(encoding="utf-8").replace('"${LOCK_TIMEOUT_ENV[@]+"${LOCK_TIMEOUT_ENV[@]}"}" ', "")
+        completed = operator.run_script(SETTING, source, "set", "data_class", "real", "--actor", "admin", typed="real\n",
+                                        MEMORY_SETTING_LOCK_TIMEOUT="1s")
+        assert completed.returncode == REFUSED and "could not lock within 15s" in completed.stderr, (completed.stdout, completed.stderr)
+    finally:
+        inflight.rollback()
+        inflight.close()
+        (operator.deploy / SETTING).write_text((DEPLOY / SETTING).read_text(encoding="utf-8"), encoding="utf-8")
 
 
 def test_a_set_looks_asks_writes_and_reads_it_back_against_the_real_journal(operator: Operator) -> None:
@@ -225,6 +271,8 @@ def test_the_dry_run_prints_the_plan_and_changes_nothing(operator: Operator, mem
     assert completed.returncode == 0, (completed.stdout, completed.stderr)
     assert state_of(operator.stand) == before and not operator.dumps.exists()
     assert _line(completed.stdout, "cases") == "3" and "dry run. NOTHING ABOVE WAS CHANGED" in completed.stdout
+    assert "  needed: 4 (3 cases, one lock each, and one that says a forget is running)" in completed.stdout, "`D-516` through the wrapper"
+    assert "server lock table: max_locks_per_transaction" in completed.stdout and "WARNING" not in completed.stdout
     assert len(operator.calls) == 1
 
 

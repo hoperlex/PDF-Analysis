@@ -256,9 +256,10 @@ fi
 
 # >>> guard: actor-required
 # The erase is journalled on an administrator's account. The module checks that the account exists and holds `admin`;
-# here the value must at least be one word, so that an empty string or a sentence is refused before a connection.
+# here the value must at least be one word that is not an option (`D-514`: the rule of `memory-setting.sh` and `memory-forget.sh`), so that an
+# empty string, a sentence or a swallowed option is refused before a connection.
 if [ "$MODE" != plan ]; then
-    if [ -z "$ACTOR" ] || [[ "$ACTOR" =~ [[:space:][:cntrl:]] ]] || [ "${#ACTOR}" -gt 254 ]; then
+    if [ -z "$ACTOR" ] || [[ "$ACTOR" =~ [[:space:][:cntrl:]] ]] || [ "${#ACTOR}" -gt 254 ] || [[ "$ACTOR" == -* ]]; then
         refuse "--actor must be the login of an administrator (one word)." \
                "  given: ${ACTOR:-<none>}" \
                "Nothing was read and nothing was touched."
