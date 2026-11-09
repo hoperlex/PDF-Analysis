@@ -81,7 +81,9 @@ def test_a_host_call_names_the_model_of_the_connection_it_is_made_on() -> None:
 def test_the_window_is_the_cells_timeout_cut_to_what_the_watchdog_leaves_less_the_margin() -> None:
     assert answer_window(CALL.timeout_seconds, None) == 900.0, "no context: the cell's own timeout"
     fresh = _context()
-    assert answer_window(CALL.timeout_seconds, fresh) == 900.0, "a fresh attempt leaves far more than 900 s"
+    assert answer_window(600, fresh) == 600.0, "a cell that asks for less than the watchdog leaves gets what it asked for"
+    window_fresh = answer_window(CALL.timeout_seconds, fresh)
+    assert window_fresh is not None and window_fresh <= fresh.watchdog_seconds - pull.DEADLINE_MARGIN_SECONDS, "and one that asks for more is cut"
     near_end = _context(used=fresh.watchdog_seconds - 200)
     window = answer_window(CALL.timeout_seconds, near_end)
     assert window is not None and window <= 200 - pull.DEADLINE_MARGIN_SECONDS + 1, "the watchdog's remainder less the margin bounds it"

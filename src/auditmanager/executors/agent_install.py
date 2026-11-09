@@ -286,11 +286,7 @@ class InstallLifetimeRepository(AgentInstallRepository):
         ), {"id": install_id, "from_state": from_state, "reason": reason}).rowcount
         if not ended:
             return False
-        session.execute(text(
-            "UPDATE executor_secret SET replaced_at = clock_timestamp() "
-            "WHERE connection_id IS NOT DISTINCT FROM :c AND host_id IS NOT DISTINCT FROM :h "
-            "AND purpose = 'agent_install_key' AND replaced_at IS NULL"
-        ), {"c": connection_id, "h": host_id})
+        self._replace_key(session, connection_id=connection_id, host_id=host_id)
         return True
 
 

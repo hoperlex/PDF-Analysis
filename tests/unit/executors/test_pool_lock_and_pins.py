@@ -81,7 +81,7 @@ def test_the_hint_counts_planned_runs_per_pool_once_each_and_never_counts_calls(
     assert "comparison_model_call" not in hint, "D-260: the hint counts runs, the claim counts calls too"
     assert "r.binding_state = 'bound' AND r.stage_plan IS NOT NULL" in hint
     assert "r.binding_state = 'pending' AND r.stage_plan IS NOT NULL AND CAST(:dispatch_groups AS boolean)" in hint
-    assert "r.binding_state <> 'pending' AND r.stage_plan IS NULL" in hint, "the connection test leaves planned runs to their own branch"
+    assert "r.stage_plan IS NULL AND r.binding_state <> 'pending' AND NOT EXISTS" in hint, "the connection test leaves planned runs to their own branch"
 
 
 def test_the_hint_offers_a_pending_planned_run_only_to_a_process_that_dispatches_it_and_only_while_nothing_holds_it_back() -> None:

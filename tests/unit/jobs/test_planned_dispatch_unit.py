@@ -10,6 +10,7 @@ paths on PostgreSQL (the lock, the trigger, the attempt budget) are ``tests/inte
 
 from __future__ import annotations
 
+import itertools
 from types import SimpleNamespace
 from typing import Any
 
@@ -129,7 +130,7 @@ def test_a_run_with_no_plan_reads_as_it_did() -> None:
 
 
 def test_every_pool_a_cell_might_be_bound_in_is_locked_before_the_decision_and_a_pool_a_revision_added_is_locked_too(monkeypatch: pytest.MonkeyPatch) -> None:
-    reads = iter([[POOL_A, POOL_C], [POOL_A, POOL_B, POOL_C]])
+    reads = itertools.chain([[POOL_A, POOL_C]], itertools.repeat([POOL_A, POOL_B, POOL_C]))
     order: list[str] = []
     monkeypatch.setattr(executors_public, "pools_of", lambda session, cells: next(reads))
     monkeypatch.setattr(executors_public, "bind_cells", lambda session, *, run_id, cells: order.append("decide") or BindOutcome((_bound(),), None))
@@ -162,10 +163,10 @@ def test_the_pool_locks_are_taken_before_the_control_row_the_run_and_the_job(mon
 
     class Stops(Session):
         def execute(self, statement: Any, params: Any = None) -> Any:
-            super().execute(statement, params)
+            answered = super().execute(statement, params)
             if statement is jobs._ENSURE_CONTROL:
                 raise RuntimeError("stop at the control row")
-            return _Result(self.after)
+            return answered
 
     session = Stops(("pending", None, PLAN))
     with pytest.raises(RuntimeError, match="control row"):

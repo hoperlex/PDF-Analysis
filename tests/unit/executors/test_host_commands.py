@@ -80,7 +80,7 @@ class FakeHosts:
     enabled: bool | None = True
     archived: bool = False
     report: Any = None
-    pool_units: int = 0
+    units: int = 0
     slot_events: list[tuple[str, int]] = field(default_factory=list)
     use_events: list[bool] = field(default_factory=list)
     marks: list[bool] = field(default_factory=list)
@@ -137,10 +137,7 @@ class FakeHosts:
         self.locks.append(pool)
 
     def pool_units(self, session, pool, *, exclude_run_id=""):
-        return self.pool_units_value(pool)
-
-    def pool_units_value(self, pool):
-        return self.pool_units
+        return self.units
 
     def revoke_tokens_of(self, session, host_id, *, actor_uid):
         self.revoked += 1
@@ -337,7 +334,7 @@ def _row(pool: str, pin: str, billing: str, archived: bool = False):
 
 
 def test_a_server_that_a_run_still_holds_is_not_archived() -> None:
-    hosts = FakeHosts(pool_units=1)
+    hosts = FakeHosts(units=1)
     hosts.connections = [_row(f"{HOST}:claude_code", OPUS, "not_metered")]
     with pytest.raises(DomainError) as refused:
         archive_host(None, host_id=HOST, roles=("admin",), idempotency_key="k" * 16, actor_uid=ADMIN,  # type: ignore[arg-type]
