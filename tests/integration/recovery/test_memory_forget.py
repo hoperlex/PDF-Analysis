@@ -617,12 +617,19 @@ def test_a_role_that_does_not_own_the_tables_cannot_forget(stand: Stand, memory:
 
 
 def test_the_typed_database_and_bucket_must_be_the_connected_ones(stand: Stand, memory: Memory) -> None:
-    code, out, err = invoke(tool, stand, *A_PROJECT, database="not_this_database")
-    assert refused(code, err, "typed names are not the connected ones") and "not_this_database" in err, (code, out, err)
-    code, out, err = invoke_bucket(tool, stand, "not-this-bucket", *A_PROJECT)
-    assert refused(code, err, "typed names are not the connected ones") and "not-this-bucket" in err, (code, out, err)
-    assert invoke(mutant("names-match"), stand, *A_PROJECT, database="not_this_database")[0] == 0
-    assert invoke_bucket(mutant("names-match"), stand, "not-this-bucket", *A_PROJECT)[0] == 0
+    other = f"{stand.bucket}-x"                                                # a real bucket on the same endpoint that is not the configured one
+    stand.client.create_bucket(Bucket=other)
+    try:
+        code, out, err = invoke(tool, stand, *A_PROJECT, database="not_this_database")
+        assert refused(code, err, "typed names are not the connected ones") and "not_this_database" in err, (code, out, err)
+        code, out, err = invoke_bucket(tool, stand, other, *A_PROJECT)
+        assert refused(code, err, "typed names are not the connected ones") and other in err, (code, out, err)
+        code, out, err = invoke(mutant("names-match"), stand, *A_PROJECT, database="not_this_database")
+        assert code == 0 and _line(out, "cases") == "3", (code, out, err)
+        code, out, err = invoke_bucket(mutant("names-match"), stand, other, *A_PROJECT)
+        assert code == 0 and f"bucket {other}" in out, (code, out, err)       # without the guard the objects phase would work on the OTHER bucket
+    finally:
+        _empty_and_delete(stand.client, other)
 
 
 def test_a_libpq_variable_that_could_redirect_the_connection_is_refused(stand: Stand, memory: Memory, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -684,7 +691,7 @@ def test_a_delete_that_reaches_outside_the_chosen_cases_rolls_the_forget_back(st
     argv = apply_args(stand, tmp_path)
     install_fault(stand, "zz_fault_outside", "decision_memory_crop", "AFTER", "DELETE",
                   "INSERT INTO public.decision_memory_evidence (case_id, revision, ordinal, page_number, quote, char_start, char_end) "
-                  f"VALUES ('{memory.b2}', 1, 5, 1, 'quote', 0, 5); RETURN NULL;")     # a row appears in a case that is not being forgotten
+                  f"VALUES ('{memory.b2}', 1, 5, 1, 'quote', 0, 5) ON CONFLICT DO NOTHING; RETURN NULL;")   # a row appears in a case that is not forgotten
     code, out, err = invoke(tool, stand, *argv)
     assert refused(code, err, "change data outside the chosen cases") and "decision_memory_evidence:outside" in err, (code, out, err)
     assert a_content(stand, memory) == 3 and count(stand, "decision_memory_evidence", "case_id = :c", c=memory.b2) == 1
@@ -695,13 +702,15 @@ def test_a_delete_that_reaches_outside_the_chosen_cases_rolls_the_forget_back(st
 
 def test_content_that_a_delete_did_not_remove_is_not_forgotten_by_the_tombstone(stand: Stand, memory: Memory, tmp_path: Path) -> None:
     argv = apply_args(stand, tmp_path)
-    install_fault(stand, "aa_fault_skip_norm_ref", "decision_memory_norm_ref", "BEFORE", "DELETE", "RETURN NULL;")
+    comments = "memory_decision_id IN (SELECT memory_decision_id FROM decision_memory_decision WHERE case_id = ANY(:c))"
+    install_fault(stand, "aa_fault_skip_comment", "decision_memory_decision_text", "BEFORE", "DELETE", "RETURN NULL;")   # a leaf: nothing refuses first
     code, out, err = invoke(tool, stand, *argv)
     assert refused(code, err, "content of the chosen cases remains"), (code, out, err)
     assert a_content(stand, memory) == 3 and forgets(stand) == 0
     code, out, err = invoke(mutant("content-emptied"), stand, *argv)
     assert "content of the chosen cases remains" not in err and forgets(stand) == 3, (code, out, err)
-    assert count(stand, "decision_memory_norm_ref", "case_id = ANY(:c)", c=memory.a_cases) == 3     # tombstoned, and the quotes are still there
+    assert a_content(stand, memory) == 0
+    assert count(stand, "decision_memory_decision_text", comments, c=memory.a_cases) == 4     # tombstoned, and the expert's words are still there
 
 
 def test_a_trigger_the_forget_left_switched_off_rolls_it_back(stand: Stand, memory: Memory, tmp_path: Path) -> None:
