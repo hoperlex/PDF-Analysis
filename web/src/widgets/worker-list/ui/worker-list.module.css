@@ -47,6 +47,14 @@
   font-size: var(--am-text-sm);
 }
 
+/* `D-431`: a held run's link is a 24 px target (it was 17); the surplus is margin, so the row keeps its height. */
+.runLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--am-target-min);
+  margin-block: calc((1lh - var(--am-target-min)) / 2);
+}
+
 .identity code {
   white-space: normal;
   overflow-wrap: anywhere;

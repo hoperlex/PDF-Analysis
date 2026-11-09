@@ -67,3 +67,59 @@ describe('the run page', () => {
     expect(markup).not.toContain('Запущен с этапа');
   });
 });
+
+/**
+ * `D-412` (lane J4): the details table read «0 ms» for a stage taken by reference -- its row has one instant for start and finish,
+ * the moment of the reuse -- where the rail already read «из прогона». The duration cell now says where the result came from.
+ */
+describe('the details table of a run started from a stage', () => {
+  const FROM = { started_from_run_id: SOURCE as never, start_stage_id: 'text_analysis' as const };
+  const REUSED_AT = '2026-11-09T04:46:41.000Z';
+  const stage = (stageId: 'source_preparation' | 'page_geometry_extraction' | 'document_context_build' | 'text_analysis', start: string, end: string) => ({
+    stage_id: stageId, status: 'succeeded' as const, stage_version: '1.0.0', started_at: start, finished_at: end,
+  });
+  const STAGES = [
+    stage('source_preparation', REUSED_AT, REUSED_AT),
+    stage('page_geometry_extraction', REUSED_AT, REUSED_AT),
+    stage('document_context_build', REUSED_AT, REUSED_AT),
+    stage('text_analysis', '2026-11-09T04:46:41.000Z', '2026-11-09T04:46:43.500Z'),
+  ];
+  const row = (markup: string, stageId: string): string => {
+    const found = new RegExp(`<tr data-stage-id="${stageId}"[^>]*>.*?</tr>`, 's').exec(markup);
+    if (found === null) throw new Error(`no row for ${stageId}`);
+    return found[0];
+  };
+
+  it('says «из прогона» for each stage taken by reference, and no duration of nothing', () => {
+    const markup = page({ ...FROM, stages: STAGES });
+    for (const taken of ['source_preparation', 'page_geometry_extraction', 'document_context_build']) {
+      const cells = row(markup, taken);
+      expect(cells).toContain('data-stage-reused=""');
+      expect(cells).toMatch(/<td[^>]*data-stage-elapsed="reused"[^>]*>\s*из прогона\s*<\/td>/);
+      expect(cells).not.toContain('0 ms');
+      expect(cells).not.toContain('data-stage-elapsed="0"');
+    }
+    expect(markup.match(/data-stage-elapsed="reused"/g)).toHaveLength(3);
+  });
+
+  it('keeps the measured duration of the stage this run computed', () => {
+    const cells = row(page({ ...FROM, stages: STAGES }), 'text_analysis');
+    expect(cells).toContain('data-stage-elapsed="2500"');
+    expect(cells).toContain('2.5 s');
+    expect(cells).not.toContain('data-stage-reused');
+    expect(cells).not.toContain('из прогона');
+  });
+
+  it('marks only the stages before the start stage when the run started from an earlier one', () => {
+    const markup = page({ ...FROM, start_stage_id: 'document_context_build', stages: STAGES });
+    expect(markup.match(/data-stage-elapsed="reused"/g)).toHaveLength(2);
+    expect(row(markup, 'document_context_build')).not.toContain('data-stage-reused');
+  });
+
+  it('is unchanged for a run that was not started from a stage', () => {
+    const markup = page({ stages: STAGES });
+    expect(markup).not.toContain('data-stage-reused');
+    expect(markup).not.toContain('data-stage-elapsed="reused"');
+    expect(row(markup, 'source_preparation')).toContain('data-stage-elapsed="0"');
+  });
+});

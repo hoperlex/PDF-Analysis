@@ -29,6 +29,18 @@
   font-weight: 400;
 }
 
+/*
+ * `D-431`: the links in a block's title are 24 px targets (they were 15 to 16). The surplus is taken out of the margin on both sides
+ * (`1lh` is the link's own line), so the title keeps the height of the line it had and the target reaches into the gap around it.
+ */
+a.more,
+.more a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--am-target-min);
+  margin-block: calc((1lh - var(--am-target-min)) / 2);
+}
+
 .rows {
   display: grid;
   gap: var(--am-gap-xs);
