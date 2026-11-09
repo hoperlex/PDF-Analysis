@@ -234,6 +234,10 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/manage-executor-connection/model/use-set-executor-route.ts': false,
   // `ANALYSIS-PRESETS-01`: saving, revising and archiving a preset changes no number the dashboard reads.
   'src/features/manage-analysis-preset/model/use-manage-analysis-preset.ts': false,
+  // `HOSTS-WEB-01`: a server's switch, its places, its connection and the stage layout change no number the dashboard reads;
+  // each invalidates the `execution` root, which the servers and the layout are filed under.
+  'src/features/manage-executor-host/model/use-manage-executor-host.ts': false,
+  'src/features/manage-stage-layout/model/use-manage-stage-layout.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */
