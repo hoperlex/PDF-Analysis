@@ -607,7 +607,7 @@ from sections 3, 4 and 7, this list is the fact:
   (`data_class` `test`/`real`, `training_use` `off`/`on`; an `on` carries `owner_permission_ref`, by a `CHECK`). Nothing journalled means `test`
   and `off`. The capture reads `data_class` at every decision (`MemoryCaptureAssembler`; `MEMORY_DATA_CLASS` is gone); a case keeps the class it
   was captured with. The application only reads; `scripts/recovery/memory_setting.py` (`show`, `set`) writes it as the owner, naming an admin
-  account. No consumer of `training_use` exists before the export (M5).
+  account. No consumer of `training_use` exists before the export (M5). **A change of `data_class` is refused while the ledger holds accept/reject events the memory has not captured** (`D-496`; the count is the worker's sweep predicate, taken under a `SHARE ROW EXCLUSIVE` lock on the ledger table so that a decision in flight is neither missed nor captured under the wrong class); the operator step is `DEPLOYMENT_RUNBOOK.md` section 20 (`D-490`).
 - **The read model.** The view `decision_memory_case_current` (status from the latest event, current verdict from the latest decision, the
   decision count) and `decision_memory.reads.MemoryReader` (list with filters and keyset paging, one case with content, decisions, crops and
   status history, counts, settings). A forgotten case answers its tombstone only.
