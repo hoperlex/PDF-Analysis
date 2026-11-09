@@ -59,11 +59,14 @@ describe('«База знаний»: the table has a floor for each column and t
     expect(declares('.filters :global(.am-kb__filter) { flex-direction: row; }', '.filters :global(.am-kb__filter)', 'flex-wrap', /^wrap$/)).toBe(false);
   });
 
-  it('gives every column a floor, 3.5 rem at least and 6 rem to the ones that hold words (three lines at the most for a stamp)', () => {
+  it('gives every column a floor, 3.5 rem at least and 5 rem to the ones that hold words, and leaves the long texts the rest of the row', () => {
     for (const column of COLUMNS) expect(minRem(TABLE, column), column).not.toBeNull();
     for (const column of ['.colType', '.colPlace', '.colVerdict', '.colText', '.colReason', '.colDate', '.colLink'] as const) {
-      expect(minRem(TABLE, column) ?? 0, column).toBeGreaterThanOrEqual(6);
+      expect(minRem(TABLE, column) ?? 0, column).toBeGreaterThanOrEqual(5);
     }
+    // The nine floors together stay under 55 rem (880 px): at 1280 px the frame is 969 px, and what is left is the long texts'.
+    const total = COLUMNS.reduce((sum, column) => sum + (minRem(TABLE, column) ?? 0), 0);
+    expect(total).toBeLessThanOrEqual(55);
   });
 
   it('reads every floor from a class the table\'s header cells carry', () => {
