@@ -53,7 +53,7 @@ def test_the_table_covers_every_pair() -> None:
 @pytest.mark.parametrize(("current", "kind"), sorted(EXPECTED))
 def test_a_transition_is_allowed_or_refused_exactly_as_the_table_says(current: str, kind: str) -> None:
     expected = EXPECTED[(current, kind)]
-    if isinstance(expected, str):
+    if not isinstance(expected, ErrorCode):
         assert next_status(current, kind) == expected
         return
     with pytest.raises(DomainError) as refused:

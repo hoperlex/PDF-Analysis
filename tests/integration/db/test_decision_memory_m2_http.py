@@ -139,7 +139,7 @@ def test_one_case_answers_what_it_keeps_and_a_forgotten_case_its_tombstone_only(
     assert event["forgotten_content_sha256"] == "a" * 64 and "owner" not in json.dumps(tomb)
 
     assert client.get(f"/api/v1{BASE}/cases/{UNKNOWN}").status_code == 404
-    assert client.get(f"/api/v1{BASE}/cases/not-a-case").status_code == 422
+    assert client.get(f"/api/v1{BASE}/cases/not-a-case").status_code == 404      # a malformed identity in a path is "not found", as everywhere
 
 
 def test_the_status_answers_the_counts_and_the_settings_in_force(served: Any) -> None:
@@ -190,7 +190,7 @@ def test_the_refusals_of_the_writes(served: Any) -> None:
     assert client.post(f"{url}/withdraw", json={"reason_code": "because I said so"}, headers=_key("key-http-bad-reason")).status_code == 422
     assert client.post(f"{url}/withdraw", json={}, headers=_key("key-http-no-reason")).status_code == 422
     assert client.post(f"{url}/withdraw", json={"reason_code": "other", "extra": 1}, headers=_key("key-http-extra")).status_code == 422
-    assert client.post(f"/api/v1{BASE}/cases/not-a-case/withdraw", json={"reason_code": "other"}, headers=_key("key-http-bad-id")).status_code == 422
+    assert client.post(f"/api/v1{BASE}/cases/not-a-case/withdraw", json={"reason_code": "other"}, headers=_key("key-http-bad-id")).status_code == 404
     unknown = client.post(f"/api/v1{BASE}/cases/{UNKNOWN}/restore", json={"reason_code": "other"}, headers=_key("key-http-unknown"))
     assert unknown.status_code == 404
     for verb in ("withdraw", "restore"):

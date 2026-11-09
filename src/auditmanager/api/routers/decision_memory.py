@@ -15,10 +15,10 @@ lives in ``auditmanager.decision_memory``. **Forget is not an operation**: it de
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Path, Query
-from pydantic import BeforeValidator, WithJsonSchema
+from pydantic import BeforeValidator, Field, WithJsonSchema
 
 from auditmanager.api.routers.declarations import CursorParam, LimitParam, envelope_responses, success
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
@@ -41,27 +41,27 @@ def _absent(value: Any) -> Any:
 
 CaseIdPath = Annotated[models.DecisionMemoryCaseId, Path()]
 SectionFilter = Annotated[
-    str | None, BeforeValidator(_absent),
+    Annotated[str, Field(min_length=1, max_length=64)] | None, BeforeValidator(_absent),
     WithJsonSchema({"type": "string", "minLength": 1, "maxLength": 64}),
     Query(json_schema_extra=optional_property),
 ]
 CategoryFilter = Annotated[
-    str | None, BeforeValidator(_absent),
+    Annotated[str, Field(min_length=1, max_length=64)] | None, BeforeValidator(_absent),
     WithJsonSchema({"type": "string", "minLength": 1, "maxLength": 64}),
     Query(json_schema_extra=optional_property),
 ]
 VerdictFilter = Annotated[
-    str | None, BeforeValidator(_absent),
+    Literal["accepted", "rejected"] | None, BeforeValidator(_absent),
     WithJsonSchema({"type": "string", "enum": ["accepted", "rejected"]}),
     Query(json_schema_extra=optional_property),
 ]
 StandingFilter = Annotated[
-    str | None, BeforeValidator(_absent),
+    Literal["active", "withdrawn", "forgotten"] | None, BeforeValidator(_absent),
     WithJsonSchema({"type": "string", "enum": ["active", "withdrawn", "forgotten"]}),
     Query(json_schema_extra=optional_property),
 ]
 DataClassFilter = Annotated[
-    str | None, BeforeValidator(_absent),
+    Literal["test", "real"] | None, BeforeValidator(_absent),
     WithJsonSchema({"type": "string", "enum": ["test", "real"]}),
     Query(json_schema_extra=optional_property),
 ]
