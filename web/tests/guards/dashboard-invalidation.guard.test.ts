@@ -234,6 +234,9 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/manage-executor-connection/model/use-set-executor-route.ts': false,
   // `ANALYSIS-PRESETS-01`: saving, revising and archiving a preset changes no number the dashboard reads.
   'src/features/manage-analysis-preset/model/use-manage-analysis-preset.ts': false,
+  // `D-495` (lane MEM-UI): withdrawing or restoring a decision-memory case changes the memory's own reads only; no
+  // dashboard number counts memory cases.
+  'src/features/manage-decision-memory/model/use-change-standing.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */
