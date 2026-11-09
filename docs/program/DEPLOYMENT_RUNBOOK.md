@@ -1959,7 +1959,9 @@ All commands run from the repository root on the host, as the operator who will 
 
    `--stop-worker` stops the `worker` service for the apply and starts it again afterwards, whatever the result. Use it when the
    tool refuses with `could not lock the tables`: the worker's heartbeat is the usual writer. If it still cannot lock, the script
-   prints the two commands that stop and start `api` and `web` around the run.
+   prints the two commands that stop and start `api` and `web` around the run. To wait longer than the module's `15s`, set
+   `PROJECT_ERASE_LOCK_TIMEOUT` in the environment of the command (`PROJECT_ERASE_LOCK_TIMEOUT=60s infra/deploy/erase-project.sh ...`); the
+   script hands it to the container and refuses a value that is not a positive number of `ms`, `s` or `min` before any connection (`D-580`).
 
 4. **Check the rest state.** The script prints three commands; run them. `ADR-0022` asks for the first two:
 
@@ -1995,7 +1997,7 @@ All commands run from the repository root on the host, as the operator who will 
 | `REFUSED: the plan the project has now is not the plan you approved` (3) | the project changed after the dry run | read the new plan; get the owner's permission for it; run again with its digest |
 | `REFUSED: what was retyped is not the project and the plan above` (3) | a wrong or missing answer | nothing changed; run again and type both |
 | tool: `work of this project is not terminal` (3) | a run, job, attempt or claimed executor task is in flight | let it finish or cancel it |
-| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-worker`; then the `api`/`web` commands the script prints |
+| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-worker`; then the `api`/`web` commands the script prints; to wait longer than `15s` set `PROJECT_ERASE_LOCK_TIMEOUT` (for example `60s`) |
 | tool: `Blob(s) only this project references are not 'available'` (3) | a failed or abandoned upload cannot enter the erase | not an operator step: report it (`PROD-07A` D5; the register keeps the open question) |
 | tool: `a row of the project references a row that belongs to another project` (3) | a re-audit of another project's run | not an operator step: report it; erasing would take another project's data |
 | `REFUSED: an earlier erase of this project did not finish` (3) | an erase committed and stopped | run the `--resume` command the script prints |
@@ -2015,7 +2017,7 @@ case). The names below are held to the script's markers by `test_the_runbook_nam
 list cannot lose a guard unnoticed, and no count is written here that could go stale (`D-513`). The option shapes (`known-options`,
 `one-mode`, `stop-worker-needs-a-write-mode`, `options-match-the-mode`, `memory-loss-reason`, `memory-loss-not-with-resume`,
 `names-required`, `project-identity-shape`, `erase-identity-shape`, `actor-required`, `reason-closed-list`, `owner-permission-ref`,
-`plan-digest-shape`), the instance (`env-file-present`, `instance-configured`, `migrator-url-configured`, `database-matches`,
+`plan-digest-shape`, `lock-timeout-shape`), the instance (`env-file-present`, `instance-configured`, `migrator-url-configured`, `database-matches`,
 `bucket-matches`, `compose-file-present`, `modules-present`, `dump-dir-writable`), and the sequence (`preflight-ran`, `plan-approved`,
 `retyped-confirmation`, `manifest-verified`). The tool behind it carries its own marked guards, each shown failing by
 `tests/integration/recovery/test_project_erase.py`.

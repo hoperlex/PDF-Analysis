@@ -122,6 +122,9 @@ usage: erase-project.sh --database <name> --bucket <name> --project prj_<ULID> [
                                "could not lock the tables": the worker's heartbeat is the usual writer.
   --env-file <path>            default: infra/deploy/env/alpha.env
 
+  PROJECT_ERASE_LOCK_TIMEOUT   environment, optional: how long the erase waits for the project's table locks, for example 60s (default 15s).
+                               A positive number of ms, s or min; it is passed to the one-off container.
+
 NO DUMP IS TAKEN, because a dump would keep the erased data. Every existing dump, mirror and copy still holds the project.
 USAGE
     exit 2
@@ -304,6 +307,18 @@ if [ "$MODE" = apply ] && [[ ! "$PLAN_SHA_GIVEN" =~ ^[0-9a-f]{64}$ ]]; then
 fi
 # <<< guard: plan-digest-shape
 
+# >>> guard: lock-timeout-shape
+# `D-580` (the rule of `D-515` in `memory-setting.sh` and `memory-forget.sh`): how long the module waits for the table locks is the operator's
+# to set (`PROJECT_ERASE_LOCK_TIMEOUT`, default `15s` in the module, which puts it into a `SET LOCAL` statement as text). It is handed to the
+# one-off container as it is, so it must be a plain positive duration: a typo is a sentence here and not a database error after the
+# connection, and `0` (wait for ever) is not a timeout.
+if [ "${PROJECT_ERASE_LOCK_TIMEOUT+set}" = set ] && [[ ! "$PROJECT_ERASE_LOCK_TIMEOUT" =~ ^[1-9][0-9]{0,5}(ms|s|min)$ ]]; then
+    refuse "PROJECT_ERASE_LOCK_TIMEOUT must be a positive number of ms, s or min (for example 60s)." \
+           "  given: ${PROJECT_ERASE_LOCK_TIMEOUT:-<empty>}" \
+           "Unset it for the module's own 15s. Nothing was read and nothing was touched."
+fi
+# <<< guard: lock-timeout-shape
+
 # >>> guard: env-file-present
 if [ ! -r "$ENV_FILE" ]; then
     refuse "the deployment environment $ENV_FILE is missing or unreadable." \
@@ -412,6 +427,11 @@ fi
 
 compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
 
+# `D-580`: the lock timeout the operator set, and only that one, goes into the container (the shape was checked above). None set: nothing is
+# passed and the module's own default applies.
+LOCK_TIMEOUT_ENV=()
+[ "${PROJECT_ERASE_LOCK_TIMEOUT+set}" != set ] || LOCK_TIMEOUT_ENV=(-e "PROJECT_ERASE_LOCK_TIMEOUT=$PROJECT_ERASE_LOCK_TIMEOUT")
+
 # THE PYTHON HALF RUNS INSIDE THE `api` IMAGE, from four files mounted read-only. The container runs as the operator's
 # uid so that what it writes under /dump is the operator's; stdin is /dev/null so that `docker compose run` cannot
 # swallow the answers the operator is about to type (it forwards stdin to the container otherwise).
@@ -422,7 +442,7 @@ erase_python() {
         mounts+=(-v "$MODULE_DIR/$module.py:/purge/scripts/recovery/$module.py:ro")
     done
     DATABASE_URL="$MIGRATOR_URL" compose run --rm --no-deps -T --user "$(id -u):$(id -g)" \
-        -e PYTHONPATH=/app/src:/purge "${mounts[@]}" "${DUMP_MOUNT[@]+"${DUMP_MOUNT[@]}"}" \
+        -e PYTHONPATH=/app/src:/purge "${LOCK_TIMEOUT_ENV[@]+"${LOCK_TIMEOUT_ENV[@]}"}" "${mounts[@]}" "${DUMP_MOUNT[@]+"${DUMP_MOUNT[@]}"}" \
         --entrypoint python api -m scripts.recovery.project_erase "$@" </dev/null
 }
 

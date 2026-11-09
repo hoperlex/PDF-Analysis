@@ -183,6 +183,19 @@ _ACTIVE_RUN_RULE = f""",
 #: decision, or a withdrawn one: ``pending``, as the pass's ``decision_counts`` say it). A version no pass was started over
 #: has no row. A fact beside the audit state, never part of it (`R-150u`): it changes none of the four words, and the
 #: counters' statement does not read it.
+#:
+#: **How the undecided ones are counted (`D-463`).** The decision in force of a proposal is its latest one by ``seq``. The first
+#: form of this statement looked it up for every proposal of every pass on the page with one ``LATERAL`` index probe each: a page
+#: of 200 documents whose passes held ~530 proposals (106,000 probes) cost 0.83 s of a 1.29 s statement, and the planner's
+#: over-estimate of that nested loop switched JIT on for another ~0.4 s (measured on a stand, `DEBT_REGISTER.md` `D-463`). It is now
+#: one pass over the decisions of those proposals -- ``DISTINCT ON (proposal) ... ORDER BY proposal, seq DESC`` -- joined once to the
+#: proposals of the latest passes: a proposal is decided exactly when it has a row there whose verdict is not ``revoke``, and the
+#: undecided ones are the pass's ``proposal_count`` minus those. ``proposal_count`` is the number of the pass's proposals by the
+#: database's own rule (``am_require_optimisation_proposals``: a pass is refused at commit unless exactly that many proposals name
+#: it, and both tables are immutable), which is also the figure this statement returns beside it. The answers are equal, proposal
+#: for proposal, to the per-proposal form (``tests/integration/dashboard/test_document_audit_optimisation_counts.py`` replays
+#: every history shape and runs the old statement as the reference). The same page's counts now cost 0.31 s of its 0.45 s; what remains is
+#: proportional to the proposals and decisions of those passes and only a stored per-pass tally removes it (`D-570`).
 _OPTIMISATION_RULE = """,
     latest_pass AS (
         SELECT DISTINCT ON (p.version_uid) p.version_uid, p.optimisation_pass_id, p.proposal_count
@@ -191,16 +204,17 @@ _OPTIMISATION_RULE = """,
         ORDER BY p.version_uid, p.started_at DESC, p.optimisation_pass_id DESC
     ),
     pass_undecided AS (
-        SELECT lp.version_uid, count(*) AS undecided
+        SELECT lp.version_uid,
+               lp.proposal_count - count(*) FILTER (WHERE cur.verdict <> 'revoke') AS undecided
         FROM latest_pass lp
-        JOIN optimisation_proposal q ON q.optimisation_pass_id = lp.optimisation_pass_id
-        LEFT JOIN LATERAL (
-            SELECT d.verdict FROM optimisation_proposal_decision d
-            WHERE d.optimisation_proposal_id = q.optimisation_proposal_id
-            ORDER BY d.seq DESC LIMIT 1
-        ) cur ON TRUE
-        WHERE cur.verdict IS NULL OR cur.verdict = 'revoke'
-        GROUP BY lp.version_uid
+        LEFT JOIN (
+            SELECT DISTINCT ON (d.optimisation_proposal_id) d.optimisation_proposal_id, q.optimisation_pass_id, d.verdict
+            FROM optimisation_proposal_decision d
+            JOIN optimisation_proposal q ON q.optimisation_proposal_id = d.optimisation_proposal_id
+            WHERE q.optimisation_pass_id IN (SELECT optimisation_pass_id FROM latest_pass)
+            ORDER BY d.optimisation_proposal_id, d.seq DESC
+        ) cur ON cur.optimisation_pass_id = lp.optimisation_pass_id
+        GROUP BY lp.version_uid, lp.proposal_count
     )"""
 
 #: One row per *kind* of current document, grouped in the database: the project and the confirmed section of the
