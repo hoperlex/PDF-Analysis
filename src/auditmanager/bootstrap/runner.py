@@ -31,6 +31,8 @@ def runner_token_view(record: Any) -> dict[str, Any]:
     """A token's metadata. Optional properties are absent when they have no value, never null."""
     fields = {
         "token_id": record.token_id, "connection_id": record.connection_id,
+        # `HOSTS-INT-WIRE-01`: exactly one of the two is set; the one without a value is absent, never null.
+        "host_id": record.host_id,
         "token_prefix": record.token_prefix, "created_at": record.created_at,
         "created_by": record.created_by, "expires_at": record.expires_at,
         "revoked_at": record.revoked_at, "revoked_by": record.revoked_by,
@@ -64,7 +66,8 @@ class RunnerAdapter(_SessionHolder):
             if principal is None:
                 return None
             return RunnerIdentity(
-                token_id=principal.token_id, connection_id=principal.connection_id)
+                token_id=principal.token_id, connection_id=principal.connection_id,
+                host_id=principal.host_id)
         return self._write(work)
 
     # -- the administrator's -----------------------------------------------------------------
@@ -106,7 +109,8 @@ class RunnerAdapter(_SessionHolder):
     def _principal(runner: RunnerIdentity) -> Any:
         from auditmanager.executors.public import RunnerPrincipal
 
-        return RunnerPrincipal(token_id=runner.token_id, connection_id=runner.connection_id)
+        return RunnerPrincipal(
+            token_id=runner.token_id, connection_id=runner.connection_id, host_id=runner.host_id)
 
     def claim_task(
         self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None,
@@ -123,7 +127,19 @@ class RunnerAdapter(_SessionHolder):
             "deadline_at": task.deadline_at, "model": task.model, "system": task.system,
             "user_text": task.user_text, "output_schema": dict(task.output_schema),
             **({"images": list(task.images)} if task.images else {}),
+            **self._host_members(task),
         })
+
+    @staticmethod
+    def _host_members(task: Any) -> dict[str, Any]:
+        """The seven members of a task claimed with a host token (RUNNER_API 10.4): all of them or none. A task that carries some but not
+        all is a defect of the stand, refused here rather than sent half made -- the agent would fail it as ``host_task_incomplete``."""
+        names = ("provider", "access", "model_id", "effort", "max_output_tokens", "timeout_seconds", "cell_key")
+        found = {name: getattr(task, name, None) for name in names}
+        present = {name: value for name, value in found.items() if value is not None}
+        if present and len(present) != len(names):
+            raise DomainError(ErrorCode.INTERNAL_ERROR, message="a host task has some of its members and not all")
+        return present
 
     def read_image(self, *, runner: RunnerIdentity, task_id: str, blob_id: str) -> bytes:
         """Serve only a current claim's bounded PNG, never a direct Blob lookup by URL."""
@@ -188,10 +204,19 @@ class RunnerAdapter(_SessionHolder):
         from auditmanager.executors.public import submit_answer
 
         def work(session: Session) -> models.ExecutorTaskAck:
+            # `HOSTS-INT-WIRE-01` (RUNNER_API 10.6): a host agent's answer also names the task's provider and access, the exact model string
+            # the provider reported and, when it gave a count, its usage. A connection token that sends any is refused by ``submit_answer``.
+            host_members: dict[str, Any] = {
+                "provider": None if body.provider is None else body.provider.value,
+                "access": None if body.access is None else body.access.value,
+                "reported_model": body.reported_model,
+                "usage": None if body.usage is None else {
+                    "input_tokens": body.usage.input_tokens, "output_tokens": body.usage.output_tokens},
+            }
             ack = submit_answer(
                 session, self._principal(runner), task_id, output_text=body.output_text,
                 model=body.model, input_tokens=body.input_tokens,
-                output_tokens=body.output_tokens, on_mismatch=ModelNotTheTasks,
+                output_tokens=body.output_tokens, on_mismatch=ModelNotTheTasks, **host_members,
             )
             return models.ExecutorTaskAck.model_validate(
                 {"task_id": ack.task_id, "state": ack.state})
