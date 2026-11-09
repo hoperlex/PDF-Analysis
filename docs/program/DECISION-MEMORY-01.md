@@ -621,7 +621,7 @@ from sections 3, 4 and 7, this list is the fact:
   `synthetic_drill_compare` (the restore drill probes the new guard).
 - **`D-470`.** `infra/deploy/purge-product-data.sh` and `infra/deploy/erase-project.sh` forward `--accept-memory-loss <reason>` (a closed list
   checked by the wrapper too) to every step that builds the plan; never to a finish or a resume.
-- **Contract slice 1.44.0 is not built.** The five operations of section 7.3 (`listDecisionMemoryCases`, `getDecisionMemoryCase`, `getDecisionMemoryStatus`, `withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase`) wait for the contract slot (lane C7 owned it while this lane worked, `1.42.0` -> `1.43.0`); what they need exists (`MemoryReader`, `withdraw_case`, `restore_case`, `DecisionMemoryAdapter`), `D-495`.
+- **Contract slice 1.44.0** (lane M2, after the integrator's go; `1.43.0` -> `1.44.0`, 275 -> 280 paths, 303 -> 308 operations, 730 -> 744 schemas, domain catalogs at candidate revision 61, no error code, no identity prefix): `listDecisionMemoryCases` and `getDecisionMemoryCase` (`expert`/`admin`; the viewer never reads the memory), `getDecisionMemoryStatus`, `withdrawDecisionMemoryCase` and `restoreDecisionMemoryCase` (`admin`; the last two keyed, `DecisionMemoryAdapter`). The reads render `MemoryReader`; a forgotten case answers its tombstone only; the filters enforce the enums the contract declares. `streamDecisionMemoryCrop` is not in this slice (the response carries a crop's `sha256` and `size_bytes`, not a way to fetch the bytes; M3). No page calls the operations (`D-495`).
 - **New debts** (`DEBT_REGISTER.md`): `D-490` .. `D-495`; closed: `D-390`, `D-393`, `D-470`; narrowed: `D-394`.
 
 ### Risks
