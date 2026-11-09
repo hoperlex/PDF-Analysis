@@ -99,6 +99,7 @@ from auditmanager.executors.enrollment_repository import (
     EnrollmentRepository,
     TokenHealth,
 )
+from auditmanager.executors.host_repository import HostRepository
 from auditmanager.executors.model import (
     CONFLICT_ENROLLMENT_REDEEMED,
     CONFLICT_ENROLLMENT_SHOWN_ONCE,
@@ -176,8 +177,10 @@ class EnrollmentPrincipal:
     itself: it is the key the instance tag is computed under. It lives for one request and is in no repr."""
 
     enrollment_id: str
-    connection_id: str
+    #: Exactly one of ``connection_id`` and ``host_id`` is set (`HOSTS-BACKEND-01`): a grant of a ``pull`` connection, or of a host.
+    connection_id: str | None
     exchange_key: bytes = field(repr=False)
+    host_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -405,7 +408,7 @@ def authenticate_enrollment(
         return None
     return EnrollmentPrincipal(
         enrollment_id=record.enrollment_id, connection_id=record.connection_id,
-        exchange_key=exchange_key(presented),
+        exchange_key=exchange_key(presented), host_id=record.host_id,
     )
 
 
@@ -413,8 +416,11 @@ def redeem_enrollment(
     session: Session, principal: EnrollmentPrincipal, *, runner_instance_id: str,
     executors: ExecutorRepository | None = None, repository: EnrollmentRepository | None = None,
     runner: RunnerRepository | None = None, journal: Journal = append_execution_event,
+    hosts: HostRepository | None = None,
 ) -> RedeemedToken:
-    """Exchange a proven grant for a runner token of its connection.
+    """Exchange a proven grant for a runner token of its connection -- or, for the grant of a host (`HOSTS-BACKEND-01`), for the **host
+    token**, which serves every system connection of that host. The host's row takes the place of the connection's in the lock order, and
+    redeeming the grant of a host revokes the host's other usable tokens (one agent process per host: a move or an upgrade replaces the old one).
 
     The connection and then the grant are locked, in that order (the order :func:`issue_executor_enrollment`
     takes), so two exchanges of one grant, and an exchange against a new grant, serialise. A grant revoked
@@ -431,19 +437,30 @@ def redeem_enrollment(
         executors or ExecutorRepository(), repository or EnrollmentRepository(),
         runner or RunnerRepository(),
     )
-    connection = store.get_connection(session, principal.connection_id, lock=True)
-    grant = grants.get_enrollment(session, principal.enrollment_id, lock=True)
-    if connection is None or grant is None or grant.connection_id != connection.connection_id:
-        raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+    if principal.host_id is not None:
+        owner = (hosts or HostRepository()).get_host(session, principal.host_id, lock=True)
+        grant = grants.get_enrollment(session, principal.enrollment_id, lock=True)
+        archived = owner is None or owner.archived_at is not None
+        if owner is None or grant is None or grant.host_id != owner.host_id:
+            raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+        archived_refusal = lambda: DomainError(  # noqa: E731
+            ErrorCode.CONFLICT, message="the host is archived", conflict_reason="host_archived", aggregate_type="ExecutorHost")
+    else:
+        connection = store.get_connection(session, principal.connection_id, lock=True)
+        grant = grants.get_enrollment(session, principal.enrollment_id, lock=True)
+        if connection is None or grant is None or grant.connection_id != connection.connection_id:
+            raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+        archived = connection.archived_at is not None
+        archived_refusal = lambda: _conflict("connection_archived", "the connection is archived")  # noqa: E731
     tag = instance_tag(principal.exchange_key, runner_instance_id)
     if grant.redeemed_at is not None:
-        if connection.archived_at is not None:
-            raise _conflict("connection_archived", "the connection is archived")
+        if archived:
+            raise archived_refusal()
         return _repeat(session, grant, tag, grants, tokens, journal)
     if not grant.usable:
         raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
-    if connection.archived_at is not None:
-        raise _conflict("connection_archived", "the connection is archived")
+    if archived:
+        raise archived_refusal()
     minted = _mint(session, grant, tag, grants, tokens)
     if minted is None:
         raise _conflict(CONFLICT_ENROLLMENT_REDEEMED, "the enrollment secret was already exchanged")
@@ -452,9 +469,30 @@ def redeem_enrollment(
     journal(
         session, event_type="executor.enrollment_redeemed", aggregate_type=_AGGREGATE_ENROLLMENT,
         aggregate_id=grant.enrollment_id,
-        payload={"connection_id": grant.connection_id, "token_id": minted.record.token_id},
+        payload={**_target(grant), "token_id": minted.record.token_id},
     )
+    if grant.host_id is not None:
+        _replace_host_tokens(session, grant, minted.record.token_id, hosts or HostRepository(), journal)
     return minted
+
+
+def _target(grant: EnrollmentRecord) -> dict[str, str]:
+    """The identity a grant is for, as a journal payload: a connection or a host."""
+    return {"host_id": grant.host_id} if grant.host_id is not None else {"connection_id": str(grant.connection_id)}
+
+
+def _replace_host_tokens(
+    session: Session, grant: EnrollmentRecord, keep_token_id: str, hosts: HostRepository, journal: Journal,
+) -> None:
+    """One agent process per host: the token just minted replaces every other usable token of the host."""
+    assert grant.host_id is not None
+    for token_id in hosts.usable_tokens(session, grant.host_id):
+        if token_id == keep_token_id:
+            continue
+        RunnerRepository().revoke_token(session, token_id, actor_uid=grant.created_by)
+        journal(
+            session, event_type="executor.runner_token_revoked", aggregate_type="ExecutorHost", aggregate_id=grant.host_id,
+            payload={"host_id": grant.host_id, "token_id": token_id, "reason": "host_moved"})
 
 
 def _mint(
@@ -467,8 +505,8 @@ def _mint(
         return None
     value, prefix = pair
     record = tokens.insert_token(
-        session, connection_id=grant.connection_id, token_prefix=prefix, token_hash=hash_token(value),
-        expires_in_days=DEFAULT_TOKEN_DAYS, actor_uid=grant.created_by,
+        session, connection_id=grant.connection_id, host_id=grant.host_id, token_prefix=prefix,
+        token_hash=hash_token(value), expires_in_days=DEFAULT_TOKEN_DAYS, actor_uid=grant.created_by,
     )
     return RedeemedToken(record=record, value=value)
 
@@ -498,16 +536,15 @@ def _repeat(
     if not grants.set_current_token(session, grant.enrollment_id, minted.record.token_id):
         raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
     journal(
-        session, event_type="executor.runner_token_revoked", aggregate_type=_AGGREGATE_CONNECTION,
-        aggregate_id=grant.connection_id,
-        payload={"connection_id": grant.connection_id, "token_id": current.token_id,
-                 "reason": "enrollment_repeat"},
+        session, event_type="executor.runner_token_revoked",
+        aggregate_type=_AGGREGATE_CONNECTION if grant.host_id is None else "ExecutorHost",
+        aggregate_id=str(grant.connection_id if grant.host_id is None else grant.host_id),
+        payload={**_target(grant), "token_id": current.token_id, "reason": "enrollment_repeat"},
     )
     journal(
         session, event_type="executor.enrollment_redeemed", aggregate_type=_AGGREGATE_ENROLLMENT,
         aggregate_id=grant.enrollment_id,
-        payload={"connection_id": grant.connection_id, "token_id": minted.record.token_id,
-                 "reason": "repeat"},
+        payload={**_target(grant), "token_id": minted.record.token_id, "reason": "repeat"},
     )
     return minted
 

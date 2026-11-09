@@ -39,7 +39,7 @@ UNFINISHED_STATES: Final[tuple[str, ...]] = ("requested", "scanning", "awaiting_
 STALE_SCAN_SECONDS: Final[int] = 120
 
 _COLUMNS: Final = (
-    "i.install_id, i.connection_id, i.state, i.access, i.ssh_host, i.ssh_port, i.ssh_user, "
+    "i.install_id, i.connection_id, i.host_id, i.state, i.access, i.ssh_host, i.ssh_port, i.ssh_user, "
     "i.key_secret_id, s.public_material AS public_key, i.observed_host_key, "
     "i.confirmed_host_key_fingerprint, i.host_key_confirmed_at, i.host_key_confirmed_by, "
     "i.package_version, i.package_sha256, i.failure_reason, i.key_removed_at, i.created_at, "
@@ -56,7 +56,9 @@ class InstallRecord:
     public half."""
 
     install_id: str
-    connection_id: str
+    #: Exactly one of ``connection_id`` and ``host_id`` is set (`HOSTS-SEAL-1`, ``ck_executor_agent_install_target``).
+    connection_id: str | None
+    host_id: str | None
     state: str
     access: str
     ssh_host: str
@@ -93,33 +95,48 @@ class AgentInstallRepository:
         ), {"c": connection_id}).first()
         return None if row is None else str(row[0])
 
+    def unfinished_install_of_host(self, session: Session, host_id: str) -> str | None:
+        """The identity of the host's session that has not ended, if there is one (one per host: ``ux_executor_agent_install_open_host``)."""
+        row = session.execute(text(
+            "SELECT install_id FROM executor_agent_install WHERE host_id = :h "
+            "AND state IN ('requested', 'scanning', 'awaiting_host_key', 'installing') LIMIT 1"
+        ), {"h": host_id}).first()
+        return None if row is None else str(row[0])
+
     def insert_key(
-        self, session: Session, *, secret_id: str, connection_id: str, kid: str,
+        self, session: Session, *, secret_id: str, connection_id: str | None = None, kid: str,
         destination: str, ciphertext: bytes, public_material: str | None, actor_uid: str,
+        host_id: str | None = None,
     ) -> None:
-        """Store the session's sealed key as the connection's current ``agent_install_key``, replacing the
-        previous one. The caller holds the connection's row lock, so there is exactly one current."""
+        """Store the session's sealed key as the owner's current ``agent_install_key``, replacing the
+        previous one. The owner is a connection or -- `HOSTS-BACKEND-01`, a host install, ``executor_secret.host_id`` -- a host;
+        the caller holds its row lock, so there is exactly one current."""
+        if (connection_id is None) == (host_id is None):
+            raise ValueError("a secret names exactly one of a connection and a host")
         session.execute(text(
             "UPDATE executor_secret SET replaced_at = clock_timestamp() "
-            "WHERE connection_id = :c AND purpose = 'agent_install_key' AND replaced_at IS NULL"
-        ), {"c": connection_id})
+            "WHERE connection_id IS NOT DISTINCT FROM :c AND host_id IS NOT DISTINCT FROM :h "
+            "AND purpose = 'agent_install_key' AND replaced_at IS NULL"
+        ), {"c": connection_id, "h": host_id})
         session.execute(text(
-            "INSERT INTO executor_secret (secret_id, connection_id, purpose, kid, destination, "
-            "ciphertext, last4, public_material, set_by) VALUES (:id, :c, 'agent_install_key', :kid, "
+            "INSERT INTO executor_secret (secret_id, connection_id, host_id, purpose, kid, destination, "
+            "ciphertext, last4, public_material, set_by) VALUES (:id, :c, :h, 'agent_install_key', :kid, "
             ":dest, :cipher, '', :public, :actor)"
-        ), {"id": secret_id, "c": connection_id, "kid": kid, "dest": destination,
+        ), {"id": secret_id, "c": connection_id, "h": host_id, "kid": kid, "dest": destination,
             "cipher": ciphertext, "public": public_material, "actor": actor_uid})
 
     def insert_install(
-        self, session: Session, *, install_id: ExecutorAgentInstallId | str, connection_id: str,
+        self, session: Session, *, install_id: ExecutorAgentInstallId | str, connection_id: str | None = None,
         access: str, ssh_host: str, ssh_port: int, ssh_user: str, key_secret_id: str,
-        package_version: str, package_sha256: str, actor_uid: str,
+        package_version: str, package_sha256: str, actor_uid: str, host_id: str | None = None,
     ) -> InstallRecord:
+        if (connection_id is None) == (host_id is None):
+            raise ValueError("an install session names exactly one of a connection and a host")
         session.execute(text(
-            "INSERT INTO executor_agent_install (install_id, connection_id, access, ssh_host, "
+            "INSERT INTO executor_agent_install (install_id, connection_id, host_id, access, ssh_host, "
             "ssh_port, ssh_user, key_secret_id, package_version, package_sha256, created_by) "
-            "VALUES (:id, :c, :access, :host, :port, :user, :secret, :version, :sha, :actor)"
-        ), {"id": str(install_id), "c": connection_id, "access": access, "host": ssh_host,
+            "VALUES (:id, :c, :h, :access, :host, :port, :user, :secret, :version, :sha, :actor)"
+        ), {"id": str(install_id), "c": connection_id, "h": host_id, "access": access, "host": ssh_host,
             "port": ssh_port, "user": ssh_user, "secret": key_secret_id,
             "version": package_version, "sha": package_sha256, "actor": actor_uid})
         found = self.get_install(session, str(install_id))
@@ -195,8 +212,8 @@ class AgentInstallRepository:
         ), {"id": install_id, "key": host_key}).rowcount)
 
     def finish_install(
-        self, session: Session, *, install_id: str, connection_id: str, from_state: str, state: str,
-        reason: str | None,
+        self, session: Session, *, install_id: str, connection_id: str | None = None, from_state: str, state: str,
+        reason: str | None, host_id: str | None = None,
     ) -> bool:
         """End the session -- ``succeeded`` (``reason`` is ``None``) or ``failed`` (a reason from
         ``ExecutorAgentInstallFailure``) -- drop its reference to the key and replace the connection's current
@@ -217,6 +234,7 @@ class AgentInstallRepository:
             return False
         session.execute(text(
             "UPDATE executor_secret SET replaced_at = clock_timestamp() "
-            "WHERE connection_id = :c AND purpose = 'agent_install_key' AND replaced_at IS NULL"
-        ), {"c": connection_id})
+            "WHERE connection_id IS NOT DISTINCT FROM :c AND host_id IS NOT DISTINCT FROM :h "
+            "AND purpose = 'agent_install_key' AND replaced_at IS NULL"
+        ), {"c": connection_id, "h": host_id})
         return True

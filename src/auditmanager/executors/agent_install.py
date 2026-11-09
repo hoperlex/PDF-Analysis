@@ -247,25 +247,26 @@ class InstallLifetimeRepository(AgentInstallRepository):
     :func:`create_agent_install` and :func:`get_agent_install` become ``AgentInstallRepository()``."""
 
     def overdue_installs(
-        self, session: Session, *, connection_id: str, install_id: str | None = None,
-        seconds: int = INSTALL_SESSION_SECONDS,
+        self, session: Session, *, connection_id: str | None = None, install_id: str | None = None,
+        seconds: int = INSTALL_SESSION_SECONDS, host_id: str | None = None,
     ) -> list[OverdueInstall]:
-        """The connection's unfinished sessions (or just ``install_id``, when named) created at least
-        ``seconds`` ago, **locked** so that the worker cannot move one between this read and the write that
+        """The connection's (or, `HOSTS-BACKEND-01`, the host's) unfinished sessions (or just ``install_id``, when named) created at
+        least ``seconds`` ago, **locked** so that the worker cannot move one between this read and the write that
         ends it. The clock is the database's."""
         rows = session.execute(text(
             "SELECT install_id, state, key_secret_id FROM executor_agent_install "
-            "WHERE connection_id = :c AND state = ANY(:states) "
+            "WHERE connection_id IS NOT DISTINCT FROM :c AND host_id IS NOT DISTINCT FROM :h AND state = ANY(:states) "
             "AND created_at <= clock_timestamp() - make_interval(secs => :seconds)"
             + ("" if install_id is None else " AND install_id = :id")
             + " ORDER BY created_at, install_id FOR UPDATE"
-        ), {"c": connection_id, "states": list(UNFINISHED_STATES), "seconds": seconds,
+        ), {"c": connection_id, "h": host_id, "states": list(UNFINISHED_STATES), "seconds": seconds,
             **({} if install_id is None else {"id": install_id})}).all()
         return [OverdueInstall(install_id=str(row[0]), state=str(row[1]),
                                key_secret_id=None if row[2] is None else str(row[2])) for row in rows]
 
     def fail_install(
-        self, session: Session, *, install_id: str, connection_id: str, from_state: str, reason: str
+        self, session: Session, *, install_id: str, connection_id: str | None = None, from_state: str, reason: str,
+        host_id: str | None = None,
     ) -> bool:
         """End the session as ``failed`` with ``reason``, drop its reference to the key and replace the
         connection's current ``agent_install_key``. ``False`` (nothing changed) when the session was no
@@ -286,14 +287,15 @@ class InstallLifetimeRepository(AgentInstallRepository):
             return False
         session.execute(text(
             "UPDATE executor_secret SET replaced_at = clock_timestamp() "
-            "WHERE connection_id = :c AND purpose = 'agent_install_key' AND replaced_at IS NULL"
-        ), {"c": connection_id})
+            "WHERE connection_id IS NOT DISTINCT FROM :c AND host_id IS NOT DISTINCT FROM :h "
+            "AND purpose = 'agent_install_key' AND replaced_at IS NULL"
+        ), {"c": connection_id, "h": host_id})
         return True
 
 
 def expire_overdue_installs(
-    session: Session, installs: InstallLifetimeRepository, *, connection_id: str,
-    install_id: str | None = None, journal: Journal = append_execution_event,
+    session: Session, installs: InstallLifetimeRepository, *, connection_id: str | None = None,
+    install_id: str | None = None, journal: Journal = append_execution_event, host_id: str | None = None,
 ) -> int:
     """Finish the connection's overdue sessions (or just ``install_id``) as ``failed`` and journal each.
 
@@ -304,11 +306,11 @@ def expire_overdue_installs(
     sessions it ended is returned."""
     ended = 0
     for overdue in installs.overdue_installs(
-        session, connection_id=connection_id, install_id=install_id, seconds=INSTALL_SESSION_SECONDS,
+        session, connection_id=connection_id, host_id=host_id, install_id=install_id, seconds=INSTALL_SESSION_SECONDS,
     ):
         reason = FAILURE_NO_WORKER if overdue.state == "requested" else FAILURE_TIMED_OUT
         if not installs.fail_install(
-            session, install_id=overdue.install_id, connection_id=connection_id,
+            session, install_id=overdue.install_id, connection_id=connection_id, host_id=host_id,
             from_state=overdue.state, reason=reason,
         ):
             continue
@@ -316,7 +318,8 @@ def expire_overdue_installs(
         journal(
             session, event_type="executor.agent_install_expired", aggregate_type=_AGGREGATE_INSTALL,
             aggregate_id=overdue.install_id,
-            payload={"connection_id": connection_id, "purpose": INSTALL_PURPOSE,
+            payload={**({"connection_id": connection_id} if connection_id is not None else {"host_id": host_id}),
+                     "purpose": INSTALL_PURPOSE,
                      "from_state": overdue.state, "to_state": "failed", "reason": reason,
                      **({} if overdue.key_secret_id is None else {"secret_id": overdue.key_secret_id})},
         )
