@@ -144,7 +144,7 @@ describe('the sets', () => {
       ['text', 'claude-sonnet-5-5', 'medium'], ['blocks', 'claude-opus-5-5', 'medium'], ['cross_check', 'claude-sonnet-5-5', 'medium'],
       ['norms', 'claude-sonnet-5-5', 'medium'], ['review', 'claude-sonnet-5-5', 'medium'], ['correction', 'claude-sonnet-5-5', 'medium'],
     ]);
-    expect(claude.map((c) => c.max_output_tokens)).toEqual([16000, 6000, 6000, 12000, 6000, 6000]);
+    expect(claude.map((c) => c.max_output_tokens)).toEqual([16000, 6000, 6000, 12000, 12000, 12000]);
     const codex = kitCells('codex_only', []);
     expect(codex.map((c) => c.model_id)).toEqual(['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol']);
     expect([...kitModelIds('claude_only')].sort()).toEqual([...CLAUDE_ONLY_MODELS].sort());

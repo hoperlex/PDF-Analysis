@@ -7,7 +7,7 @@
  * names is served by some server now. The ensemble of the blocks row (two legs and a judge) arrives in wave 2; until then the
  * blocks row of each set is its single leg, and the plan names the set so («Только Claude (блоки без судьи)»).
  *
- * The limits of a cell (answer tokens, timeout) are today's constants of the code (ADR-0028: 16000, 6000 and 12000 tokens);
+ * The limits of a cell (answer tokens, timeout) are today's constants of the code (`ROW_DEFAULT_MAX_OUTPUT_TOKENS` of `analysis/text/cell_settings.py`: 16000, 6000 and 12000 tokens);
  * a revision in force keeps its own limits for a cell the form changes, and these apply only to a cell the revision has not
  * got. The timeout has no constant in the code to copy for the new kinds of cell; the default is 1800 seconds
  * (`DEFAULT_TIMEOUT_SECONDS`, the same as the server's default of a cell, `HOSTS-LAYOUT-01`) and the server bounds it
@@ -31,8 +31,8 @@ export const DEFAULT_ANSWER_TOKENS: Readonly<Record<StageRowKey, number>> = {
   blocks: 6000,
   cross_check: 6000,
   norms: 12000,
-  review: 6000,
-  correction: 6000,
+  review: 12000,
+  correction: 12000,
 };
 
 interface KitCell { readonly model_id: string; readonly effort: ModelEffort }
