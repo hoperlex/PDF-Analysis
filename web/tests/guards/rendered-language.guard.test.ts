@@ -5638,11 +5638,15 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   },
   {
     label: 'Загрузка: стоимость повторного аудита…',
-    why: '`queue-page.tsx`, between the press of «Повторный аудит» and the answer of the cost estimate it asks for first (`use-reaudit-cost-approval.ts`): a `useMutation` in flight, which one static pass cannot start.',
+    why: '`reaudit-start.tsx` (step `reading`), between the press of «Повторный аудит» and the answer of the cost estimate it asks for first (`use-reaudit-cost-approval.ts`): the read is enabled only once `intent`, a `useState` of `queue-page.tsx`, holds a repeated Run, and one static pass presses nothing (`RUN-START-ONE-01b`).',
   },
   {
     label: 'Стоимость повторного аудита не оценена',
-    why: '`queue-page.tsx`, after the cost estimate of a re-audit was refused: the refusal sits in a settled `useMutation` that «Повторный аудит» started. A seeded query cache does not set a mutation observer\'s state.',
+    why: '`reaudit-start.tsx` (step `unreadable`), after the cost estimate of a re-audit could not be read: the query is disabled until «Повторный аудит» sets `intent` (a `useState`), so there is no error to seed into a cache in a static pass (`RUN-START-ONE-01b`).',
+  },
+  {
+    label: 'Загрузка: запрос на повторный прогон…',
+    why: '`reaudit-start.tsx` (step `send`), while an estimate that charges nothing has been agreed to by the click and the re-audit is on its way: `intent` is a `useState` set by «Повторный аудит» and the send is a `useMutation` started by an effect, which one static pass cannot reach (`RUN-START-ONE-01b`).',
   },
   {
     label: 'Загрузка: предложение перехода…',

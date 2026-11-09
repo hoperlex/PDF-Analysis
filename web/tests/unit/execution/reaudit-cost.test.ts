@@ -184,6 +184,22 @@ describe('an estimate that charges nothing is agreed to by the click', () => {
     expect(markup).toContain(`Открыть прогон ${NEW_RUN}`);
   });
 
+  it('is sent once while it is on its way, however often the page is drawn meanwhile', async () => {
+    vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => ({ data: free(body) }) as never);
+    let finish!: (value: never) => void;
+    vi.mocked(reauditRun).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { view } = await mount();
+    await view.press('Повторный аудит');
+    await until(view, () => vi.mocked(reauditRun).mock.calls.length > 0, 'the re-audit is sent');
+    // The send has not answered: the page is drawn again (the mutation is pending) and must not send a second time.
+    for (let draw = 0; draw < 4; draw += 1) await view.settle(() => undefined);
+    expect(view.markup()).toContain('Загрузка: запрос на повторный прогон');
+    expect(reauditRun).toHaveBeenCalledTimes(1);
+    await view.settle(() => finish({ data: { ...runStatus(), run_id: NEW_RUN, state: 'queued' } } as never));
+    expect(reauditRun).toHaveBeenCalledTimes(1);
+    expect(view.markup()).toContain('Команда выполнена.');
+  });
+
   it('a refusal of that send is said and is not followed by another send; a retry is the same call', async () => {
     vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => ({ data: free(body) }) as never);
     const { view } = await mount();
