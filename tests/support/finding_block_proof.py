@@ -281,7 +281,10 @@ def figures(analysis: Mapping[str, Any], *, label_of: Any = None) -> dict[str, A
         for kind in sorted({label_of(f["label"]) for f in findings}):
             subset = [f for f in on_linkable if label_of(f["label"]) == kind]
             subset_pairs = [p for p in pairs if label_of(p["label"]) == kind]
+            kind_texted = [p for p in subset_pairs if p["text"] is not None]
             kinds[kind] = {
+                "text_contains": share(sum(1 for p in kind_texted if p["text"] == "contains"), len(kind_texted)),
+                "text_most_words": share(sum(1 for p in kind_texted if p["text"] in ("contains", "most")), len(kind_texted)),
                 "findings": len(subset),
                 "with_a_block": sum(1 for f in subset if f["linked"]),
                 "coverage": share(sum(1 for f in subset if f["linked"]), len(subset)),

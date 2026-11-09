@@ -119,7 +119,7 @@ def block_text(pdf: bytes, layout_pages: list[list[tuple[float, float, float, fl
             width, height = float(page.width), float(page.height)
             row: list[str] = []
             for x0, y0, x1, y1 in boxes:
-                area = page.within_bbox((x0 * width, y0 * height, x1 * width, y1 * height))
+                area = page.within_bbox((x0 * width, y0 * height, x1 * width, y1 * height), strict=False)
                 row.append((area.extract_text(**TEXT_OPTIONS) or "").strip())
             texts.append(row)
     return texts
