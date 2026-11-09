@@ -70,7 +70,8 @@ def documents(pages: int, lines_per_page: int, *, version: str = VERSION, shift:
                 "bbox_unit": "pt", "bbox_origin": "top_left", "char_start": cursor, "char_end": cursor + 40,
             })
             cursor += 41
-    head = {"artifact_version": ARTIFACT_VERSION, "version_uid": version}
+    # `shift` also stands for "another document": it is in every document, so changing it changes each one's digest.
+    head = {"artifact_version": ARTIFACT_VERSION, "version_uid": version, "generation": shift}
     return {
         ROLE_BLOCK_INDEX: {**head, "artifact_role": ROLE_BLOCK_INDEX, "blocks": blocks},
         ROLE_PAGE_INVENTORY: {**head, "artifact_role": ROLE_PAGE_INVENTORY, "pages": [
