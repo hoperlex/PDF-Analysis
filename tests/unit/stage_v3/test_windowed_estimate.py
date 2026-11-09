@@ -32,8 +32,12 @@ class Repo:
         return {"revision_id": "revision-test"}
 
 
-def method(source, policy, monkeypatch, *, saved=None, changed=False, text_less=()):
-    """A V3Method over `source` whose saved page profiles are the snapshot's own (or changed, when asked)."""
+def method(source, policy, monkeypatch, *, saved=None, changed=False, text_less=(), rows_written=True):
+    """A V3Method over `source` whose saved page profiles are the snapshot's own (or changed, when asked).
+
+    `rows_written=False` is the state in which the consent estimate is asked: the profiles hold the text, step 2 of the
+    chain has not written a `stage_text_fragment` row yet, so the repository's snapshot has no fragments.
+    """
     profiles = {row["profile_id"]: row for row in source["all_profiles"]}
 
     class Reader:
@@ -45,12 +49,12 @@ def method(source, policy, monkeypatch, *, saved=None, changed=False, text_less=
     def fragments(profile, side):
         if profile.profile_id in text_less:
             return []
-        return [SimpleNamespace(normalised_text=row["normalised_text"], content_key=row["content_key"])
+        return [SimpleNamespace(normalised_text=row["normalised_text"], content_key=row["content_key"], box_anchor=row["box_anchor"])
                 for row in source["fragments"] if row["page_profile_id"] == profile.profile_id]
 
     monkeypatch.setattr(bridge, "extract_fragments", fragments)
     monkeypatch.setattr(bridge, "results", lambda _session, _run, bundle=None: dict(saved or {}))
-    return bridge.V3Method(Repo(source), profile_reader=Reader(), v3_policy=policy)
+    return bridge.V3Method(Repo(source if rows_written else dict(source, fragments=[])), profile_reader=Reader(), v3_policy=policy)
 
 
 def request(mode=AiMode.START, run=None):
@@ -106,6 +110,42 @@ def test_the_estimate_refuses_a_one_sided_revision_as_the_plan_does(monkeypatch,
         method(source, policy, monkeypatch).counts(None, request())                                          # ... the estimate must too, with its code
     with pytest.raises(StageAiValidationError, match=f"^{code}$"):
         method(snapshot_of([], [["t"]] * 2), policy, monkeypatch).counts(None, request())                    # either side may be the empty one
+
+
+@pytest.mark.parametrize("policy", [None, WINDOWED, GLOBAL], ids=["legacy", "windowed-v1", "windowed-global-v1"])
+def test_the_estimate_is_given_before_the_text_rows_exist(monkeypatch, policy):
+    """The consent estimate is asked before the chain's step 2 writes `stage_text_fragment` (a new pair, a new document
+    version): the pages have text in their profiles, so the estimate is given, and equals the one after step 2."""
+    before = method(SMALL, policy, monkeypatch, rows_written=False).counts(None, request())
+    after = method(SMALL, policy, monkeypatch).counts(None, request())
+    assert before == after and before.groups[0].calls == 1 and before.sheets == 2 and before.versions == 2
+
+
+@pytest.mark.parametrize("policy,code", [(WINDOWED, "v3_windowed_source_budget"), (GLOBAL, "v3_windowed_source_budget"),
+                                         (None, "v3_native_source_budget")], ids=["windowed-v1", "windowed-global-v1", "legacy"])
+def test_the_estimate_before_the_text_rows_exist_still_refuses_what_the_plan_refuses(monkeypatch, policy, code):
+    """D-532 holds on the facts of the profiles: the plan's own code, with no stored row to read."""
+    refused = [snapshot_of([["t"]] * 2, []), snapshot_of([], [["t"]] * 2), snapshot_of([["t"]] * 33, [["t"]] * 32),
+               snapshot_of([["t"] * 801], [["t"] * 800]), snapshot_of([["я" * 120_001]], [["я" * 120_000]])]
+    if policy is None:
+        refused.append(snapshot_of([["t"]] * 9, [["t"]] * 9))
+    for source in refused:
+        with pytest.raises(StageAiValidationError, match=f"^{code}$"):
+            method(source, policy, monkeypatch, rows_written=False).counts(None, request())
+
+
+def test_a_page_profile_without_stored_rows_is_read_from_its_profile_beside_stored_ones(monkeypatch):
+    """Rows that exist are the plan's facts; a profile with none is read from its own text, so neither refuses."""
+    source = snapshot_of([["t"]], [["t"]])
+    seen = []
+    real = w.source
+    monkeypatch.setattr(w, "source", lambda snapshot: seen.append(snapshot["fragments"]) or real(snapshot))
+    repo_rows = [row for row in source["fragments"] if row["page_profile_id"] == "cpr_left_1"]
+    built = method(source, WINDOWED, monkeypatch)
+    built._repo = Repo(dict(source, fragments=repo_rows))               # only the left page has a stored row
+    assert built.counts(None, request()).groups[0].calls == 1
+    assert [row["page_profile_id"] for row in seen[0]] == ["cpr_left_1", "cpr_right_1"]
+    assert seen[0][0] is repo_rows[0]                                  # the stored row itself, not a copy made from the profile
 
 
 def test_a_page_without_text_or_a_changed_saved_profile_is_refused_before_any_spend(monkeypatch):
