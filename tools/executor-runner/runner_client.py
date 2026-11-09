@@ -51,6 +51,14 @@ INSTANCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 #: `EXEC2-AGENT-01`: the contract's `agent_version`, and the shape of a runner token (56 characters).
 AGENT_VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")
 RUNNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{56}$")
+#: `HOSTS-AGENT-01` (RUNNER_API.md section 10): the host an enrollment is for, and what a host task names.
+HOST_ID_RE = re.compile(r"^exh_[0-9A-HJKMNP-TV-Z]{26}$")
+HOST_PROVIDERS = ("claude_code", "codex", "anthropic_api", "openai_api", "openrouter_api")
+HOST_ACCESSES = ("subscription", "api")
+HOST_TASK_KEYS = {"provider": str, "access": str, "model_id": str, "effort": str, "max_output_tokens": int,
+                  "timeout_seconds": int, "cell_key": str}
+MAX_HOST_TIMEOUT_SECONDS = 86400
+MAX_HOST_OUTPUT_TOKENS = 10_000_000
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 BLOCK_ID_RE = re.compile(r"^blk_[0-9a-f]{32}$")
 #: The opaque crop reference of a comparison crop (the contract's pattern). Echoed, never parsed.
@@ -234,6 +242,21 @@ def serves_images(task: dict, declared: int) -> bool:
     return len(task.get("images") or []) <= declared
 
 
+def valid_host_task(task: dict) -> bool:
+    """Whether the host members of a claimed task are all there and well typed (``HOSTS-AGENT-01``): ``provider``,
+    ``access``, ``model_id``, ``effort``, ``max_output_tokens``, ``timeout_seconds`` and ``cell_key``.  ``model``
+    is the same string as ``model_id``."""
+    for key, kind in HOST_TASK_KEYS.items():
+        value = task.get(key)
+        if type(value) is not kind or (kind is str and not value):
+            return False
+    return (task["provider"] in HOST_PROVIDERS and task["access"] in HOST_ACCESSES
+            and task["model_id"] == task["model"]
+            and 1 <= task["max_output_tokens"] <= MAX_HOST_OUTPUT_TOKENS
+            and 1 <= task["timeout_seconds"] <= MAX_HOST_TIMEOUT_SECONDS
+            and len(task["effort"]) <= 16 and len(task["cell_key"]) <= 200)
+
+
 class RunnerClient:
     def __init__(
         self,
@@ -402,8 +425,12 @@ class RunnerClient:
             "user_text": str,
             "output_schema": dict,
         }
+        if isinstance(document, dict) and "model" not in document and isinstance(document.get("model_id"), str):
+            document["model"] = document["model_id"]  # a host task names its model as model_id; `model` is the same string
         if not isinstance(document, dict) or any(not isinstance(document.get(key), kind) for key, kind in required.items()):
             raise RunnerUnavailable("the stand answered a claim with a malformed task document", status=200)
+        if any(key in document for key in HOST_TASK_KEYS) and not valid_host_task(document):
+            raise RunnerUnavailable("the stand answered a claim with a malformed host task", status=200)
         if not TASK_ID_RE.match(document["task_id"]):
             raise RunnerUnavailable("the stand answered a claim with a task_id of an unexpected shape", status=200)
         try:
@@ -461,13 +488,33 @@ class RunnerClient:
         model: str,
         input_tokens: Optional[int] = None,
         output_tokens: Optional[int] = None,
+        *,
+        provider: Optional[str] = None,
+        access: Optional[str] = None,
+        reported_model: Optional[str] = None,
     ) -> dict:
-        """submitExecutorTaskAnswer."""
+        """submitExecutorTaskAnswer.
+
+        A host agent (`HOSTS-AGENT-01`, RUNNER_API.md section 10) names the ``provider`` and ``access`` the task ran
+        on and the ``reported_model`` (the exact string the CLI or API reported; the stand checks it against the
+        catalogue's ``accepted_reported``), and sends the token counts as ``usage`` instead of as two members of the
+        body.  A single-model agent sends none of these and speaks the wire it always spoke."""
         body: dict[str, Any] = {"output_text": output_text, "model": model}
-        if input_tokens is not None:
-            body["input_tokens"] = input_tokens
-        if output_tokens is not None:
-            body["output_tokens"] = output_tokens
+        if provider is None:
+            if input_tokens is not None:
+                body["input_tokens"] = input_tokens
+            if output_tokens is not None:
+                body["output_tokens"] = output_tokens
+        else:
+            if (provider not in HOST_PROVIDERS or access not in HOST_ACCESSES or not isinstance(reported_model, str)
+                    or not 1 <= len(reported_model) <= 200):
+                raise RunnerRejected("an answer names a known provider, an access and a reported_model", status=422,
+                                     error_code="validation_failed")
+            body.update({"provider": provider, "access": access, "reported_model": reported_model})
+            usage = {name: value for name, value in (("input_tokens", input_tokens), ("output_tokens", output_tokens))
+                     if value is not None}
+            if usage:
+                body["usage"] = usage
         _, document = self._call(self._task_path(task_id, "answer"), body, self.timeout)
         return document if isinstance(document, dict) else {}
 
@@ -487,7 +534,8 @@ class RunnerClient:
         here. ``runner_instance_id`` (8 to 64 characters of ``A-Za-z0-9_-``) names the install: a repeat inside
         the stand's 15-minute window with the same name is idempotent, the stand revokes the token it minted
         before and returns a fresh one. Returns the stand's document, ``{"token": <56 characters, shown once>,
-        "runner_token": {...}}``; a document that is not one is ``RunnerUnavailable`` (the exchange can be
+        "runner_token": {...}}`` (``HOSTS-AGENT-01``: for a host enrollment also ``host_id`` and ``catalogue``, and
+        ``runner_token`` may be absent); a document that is not one is ``RunnerUnavailable`` (the exchange can be
         repeated, so nothing is lost). 401 is ``RunnerAuthError``: an unknown, expired or revoked secret.
         409 is ``RunnerConflict``: redeemed by another instance, redeemed too long ago, or the connection is
         archived."""
@@ -502,14 +550,24 @@ class RunnerClient:
             body["agent_version"] = agent_version
         _, document = self._call(ENROLL_PATH, body, self.timeout, bearer=secret)
         token = document.get("token") if isinstance(document, dict) else None
-        if not isinstance(token, str) or not RUNNER_TOKEN_RE.fullmatch(token) or not isinstance(document.get("runner_token"), dict):
+        if not isinstance(token, str) or not RUNNER_TOKEN_RE.fullmatch(token):
+            raise RunnerUnavailable("the stand answered an enrollment with a document that is not a runner token", status=201)
+        # a host enrollment (RUNNER_API.md section 10.1) names the host and carries the catalogue; the metadata of
+        # a token bound to a connection is `runner_token`, and a document for a host may leave it out
+        host_id = document.get("host_id")
+        if host_id is not None:
+            if not isinstance(host_id, str) or not HOST_ID_RE.fullmatch(host_id) or not isinstance(document.get("catalogue", []), list):
+                raise RunnerUnavailable("the stand answered an enrollment with a malformed host document", status=201)
+        elif not isinstance(document.get("runner_token"), dict):
             raise RunnerUnavailable("the stand answered an enrollment with a document that is not a runner token", status=201)
         return document
 
     def report_health(self, report: dict) -> dict:
         """reportRunnerHealth: tell the stand the agent's version, CLIs, concurrency, profile and features
         (``ReportRunnerHealthRequest``; the caller builds it and the stand refuses an incoherent one with 422).
-        Returns the acknowledgement ``{"recorded_at": ...}``."""
+        A host agent (`HOSTS-AGENT-01`, RUNNER_API.md section 10.3) adds ``providers`` and ``slots``.  Returns the
+        acknowledgement ``{"recorded_at": ...}``; to a host agent the stand also says ``catalogue`` and ``enabled``,
+        which this method returns untouched for the caller to read."""
         if not isinstance(report, dict):
             raise RunnerRejected("a health report is a JSON object", status=422, error_code="validation_failed")
         _, document = self._call(HEALTH_PATH, report, self.timeout)

@@ -6,7 +6,8 @@ through `runner_client.py`) implement exactly this document. `EXEC-PULL-01` impl
 server side and may only change this file together with the clients and their tests in
 `tests/unit/executor_runner/`.
 
-A **runner** is a Claude Code session (through the stdio MCP bridge) or an unattended agent.
+A **runner** is a Claude Code session (through the stdio MCP bridge) or an unattended agent (bound to one connection, or, in
+host mode, to a host: section 10).
 It calls the stand over HTTPS; the stand never calls it (`R-143c`). A runner sees task
 payloads (document text) and returns model answers. It never reaches PostgreSQL or S3.
 
@@ -448,5 +449,179 @@ one):
   which meets the same 401. A **404** (a stand without the operation) and a **422** are logged and the report is tried
   again only at the next interval.
 
-Cadence. The agent reports at start, again whenever what it detects changes (it detects every 120 s), and otherwise
-every 600 s. It reports from a thread of its own and never delays a claim.
+Cadence. The agent reports at start, again whenever what it detects changes (it detects every 60 s), and otherwise
+every 600 s. It reports from a thread of its own and never delays a claim. (A host agent, section 10, reports every 60 s.)
+
+## 10. `HOSTS-AGENT-01`: host mode (one process, one host token)
+
+Plan v3 (`executors-runs-rework-plan-2026-11-09`, section 5) and the owner's answers R-153d. A **host agent** is one process
+that holds one **host token** (bound to a host, `exh_<ULID>`, not to a connection) and serves every model its machine can
+reach: the `claude` and `codex` CLIs the service user is signed in to, and the API providers whose key is in the service's
+key file. No model is chosen at install. Sections 1 to 9 hold unchanged, except where this section says otherwise; an agent
+whose token is bound to a connection (a "single-model agent") speaks exactly the wire of sections 1 to 9 and nothing here
+(section 10.9). `HOSTS-SEAL-1` writes the same text into the stand's contract; where the two differ, that is a defect in one
+of them.
+
+### 10.1 Enrollment (`redeemExecutorEnrollment`)
+
+The request is the one of 9.1: the bearer is the one-time secret of a **host** enrollment and the body is
+`{"runner_instance_id", "agent_version"}`. No model is sent or asked for. The `201` document is
+
+```json
+{"token": "amr_…", "host_id": "exh_01J…", "catalogue": [ … ], "runner_token": {…}}
+```
+
+`token` is the runner token bound to the host (the same 56 characters as in 9.1). `host_id` matches
+`^exh_[0-9A-HJKMNP-TV-Z]{26}$`. `catalogue` is the array of 10.2. `runner_token` (the metadata of 9.1) is **optional** in a
+host document. The agent stores the token and nothing else of the answer, prints the host id and goes on; it takes its
+catalogue from the answers of 10.3, so a restart needs no stored copy. The repeat and `409` rules of 9.1 hold.
+
+### 10.2 The catalogue
+
+An array of objects, each `{"provider", "model_id", "efforts", "accepted_reported"}`:
+
+| Member | Values |
+| --- | --- |
+| `provider` | `claude_code`, `codex`, `anthropic_api`, `openai_api`, `openrouter_api` |
+| `model_id` | the id sent to the CLI or API, `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$` (`/` and `:` are for OpenRouter ids) |
+| `efforts` | non-empty array of lower-case words, the efforts a task may name for this model |
+| `accepted_reported` | array of strings the provider may report for this model besides `model_id` itself (a dated id, an alias); may be empty |
+
+The agent leaves out an entry that is not well formed (and logs which one, never its content): that model is simply not
+served. A model that is in the catalogue but whose provider is absent from the host is not reported at all.
+
+### 10.3 Health report (`reportRunnerHealth`)
+
+The body of 9.2 gains two members; every member of 9.2 is still sent and means what it meant:
+
+```json
+{"agent_version": "0.21.0", "clis": [ … ], "concurrency": 3, "execution_profile": "command", "features": [],
+ "runner_instance_id": "Qx7…",
+ "providers": [
+   {"provider": "claude_code", "access": "subscription", "cli_version": "2.1.310", "auth_state": "valid",
+    "models": [{"model_id": "claude-opus-5-5", "state": "verified", "checked_at": "2026-11-09T12:00:00Z"},
+               {"model_id": "claude-sonnet-5-5", "state": "failed", "checked_at": "2026-11-09T12:00:05Z",
+                "failure_code": "quota_exceeded"}]},
+   {"provider": "anthropic_api", "access": "api", "auth_state": "valid", "models": [ … ]}],
+ "slots": {"claude_code": 1, "anthropic_api": 2}}
+```
+
+* `providers[]`: one entry for each provider **detected** on the host (a CLI that is installed, an API whose key is in the
+  key file), in the order `claude_code`, `codex`, `anthropic_api`, `openai_api`, `openrouter_api`.
+  * `access`: `subscription` or `api`. For a CLI it is read from the CLI's own status command (`claude auth status`,
+    `codex login status`): a subscription login is `subscription`, a login with an API key is `api`. An API provider is
+    always `api`. A CLI that is not signed in is reported `subscription` with `auth_state: login_required`; one signed in by a
+    method the agent does not recognise is reported `api` with `auth_state: unknown` and **no verified model**.
+  * `cli_path` (optional): the CLI's absolute path. **Omitted by default** (ADR-0026 decision 8: a path stays on the host);
+    the operator can turn it on in `agent.toml`. `cli_version` (optional): the CLI's version, as in `clis`.
+  * `auth_state`: `valid`, `login_required` or `unknown`. For a CLI it is the status command's answer; for an API provider
+    it is `valid` once a model has been verified, `login_required` when the provider refused the key, else `unknown`.
+  * `models[]`: one entry for each catalogue model of that provider: `model_id`; `state` `verified` (a minimal call of this
+    model succeeded and the model that answered is the requested one or an accepted one), `not_verified` (not checked yet,
+    or the provider cannot be used now) or `failed` (the last call failed); `checked_at` (RFC 3339 UTC, when the state was
+    established); `failure_code` (only with `failed`, `^[a-z][a-z0-9_]{0,63}$`). The codes the agent uses are
+    `quota_exceeded`, `auth_failed`, `model_not_found` (the host's access) and `claude_*`, `codex_*`, `api_*`,
+    `reported_model_mismatch`, `timeout`, `probe_bad_answer` (anything else).
+  * No key, token, account, path (unless opted in) or text of a provider's answer is in the report.
+* `slots`: `{provider: integer ≥ 1}` for each provider in `providers`: the most calls of that provider the host runs at once.
+  The default is 1 for `access: subscription` and 2 for `access: api`, overridden in `agent.toml`.
+* `concurrency` is the sum of the slots, at most 16 (and at least 1). `execution_profile` is `command`. `features` is `[]`
+  unless the operator turned images on.
+
+**The answer** to an accepted report is `{"recorded_at": …, "catalogue": [ … ], "enabled": true}`: the current catalogue (10.2)
+and the host's «Использовать» switch. A stand that leaves `catalogue` out leaves the agent with the one it has (none, at
+start: nothing is checked and nothing is claimed); `enabled` is logged. **`enabled: false` does not stop claims**: the switch
+keeps the stand from binding new runs to the host, and the runs already bound finish their work.
+
+**Cadence and recount.** The agent runs *cheap detection* every 60 s (the CLIs' presence, version and login, and the key file;
+no model is called) and sends a report with every cycle: a heartbeat, which the stand reads as the host's pulse (older than
+120 s is no pulse). The report is built from a snapshot that is rebuilt **only when something in it changed** (detection, a
+check's result, the catalogue), so consecutive heartbeats carry the same body, and a change is sent at once instead of waiting
+for the next cycle. A *minimal model call* for each catalogue model of a provider is made when that provider is new or its
+login, key, CLI version or access changed (the models go back to `not_verified` until it passes), when the model is new in
+the catalogue, every **6 hours** for a verified model (configurable) and every **15 minutes** for a failed one. A check runs
+inside the provider's slot, so it never exceeds the slots; the effort used is the lowest the model has. A real call that
+fails for a reason about the host's access (`quota_exceeded`, `auth_failed`, `model_not_found`) puts that model to `failed`
+at once, so that the next report tells the stand.
+
+### 10.4 Claim (`claimExecutorTask`)
+
+Called with the host token, with the body of 2.1. The agent claims only while at least one model is `verified` and a slot is
+free behind one. The task gains these members, all present or none:
+
+| Member | Values |
+| --- | --- |
+| `provider`, `access` | as in 10.3 |
+| `model_id` | the catalogue's id; `model` (section 2.1) is the same string |
+| `effort` | one of that model's catalogue `efforts` |
+| `max_output_tokens` | integer, the ceiling of the answer |
+| `timeout_seconds` | integer, the time the call may take (the agent also stops at `deadline_at`) |
+| `cell_key` | opaque string naming the stage cell the task is for; logged, otherwise echoed nowhere |
+
+**The agent refuses any task whose model it does not currently report as verified for that provider and access**, and a
+task whose `effort` is not one of the model's: it calls `failExecutorTask` with `model_not_available: …` or
+`effort_not_allowed: …` before anything runs. A task with none of the members above is failed `host_task_incomplete`; one that
+carries images the host does not take (or that the provider's command cannot take: Claude Code) is failed
+`image_input_unsupported`.
+
+### 10.5 Extension (`extendExecutorTaskClaim`)
+
+Sent as in 2.2, but **only while the call has produced output** in the last 120 s (configurable): bytes on the CLI's stdout or
+stderr, or a streamed chunk or keep-alive of an API response. A hung CLI or API call therefore lets its claim lapse: the agent
+stops extending, stops the call, frees its slot, and submits nothing and fails nothing (the stand's lease rule takes the task
+back). A call that is only waiting for a free slot counts as silent for this purpose.
+
+### 10.6 Answer (`submitExecutorTaskAnswer`)
+
+```json
+{"output_text": "{…}", "model": "claude-opus-5-5", "provider": "claude_code", "access": "subscription",
+ "reported_model": "claude-opus-5-5-20261001", "usage": {"input_tokens": 1234, "output_tokens": 321}}
+```
+
+`model` is the task's `model_id`. `reported_model` is the **exact string the CLI or API reported** (for the Claude Code CLI the
+one key of `modelUsage`; for the APIs the model of the stream; for Codex, whose events name none, the model asked for, and a
+`model.rerouted` event fails the call); the agent itself refuses a reported model that is neither `model_id` nor in the
+catalogue's `accepted_reported`, and the stand checks the same (`R-133`). `provider` and `access` repeat the task's. `usage` is
+sent when the provider gave a count; `input_tokens` and `output_tokens` are **not** sent at the top level by a host agent.
+
+A call that cannot be answered is failed with a reason `<code>: <detail>` (section 2.4): `model_not_available`,
+`effort_not_allowed`, `host_task_incomplete`, `image_input_unsupported`, `quota_exceeded`, `auth_failed`, `model_not_found`
+(the host's access: the model also leaves service, 10.3), or a fixed word of the answerer (`claude_turn_failed`,
+`codex_timeout`, `api_unavailable`, `output_truncated`, `answer_not_json`, `reported_model_mismatch`, `timeout` …). No detail
+holds text of the document, of the provider's answer or a key.
+
+### 10.7 Slots
+
+Within a provider the agent never runs more concurrent calls (tasks and checks together) than that provider's `slots`; a task
+claimed for a provider whose slots are full waits for one (its claim is not extended while it waits, 10.5).
+
+### 10.8 The key file and the direct APIs
+
+`/etc/pdf-analysis-agent/keys.env` (path configurable): lines `NAME=value` with `NAME` one of `ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, `OPENROUTER_API_KEY` (an optional `export `, optional quotes; every other line is not read). It is read only
+when it is a regular file (not a link), **mode 0600 and owned by the user running the agent**; otherwise it is ignored and the
+journal says why (`mode_is_not_0600`, `not_owned_by_the_service_user`, `not_a_regular_file`, `unreadable`, `too_large`). A key
+gives the provider `anthropic_api`, `openai_api` or `openrouter_api`, `access: api`. It is read afresh for each call (a rotated
+key is used at once and its models are checked again), goes into one request header of one HTTPS request to the provider
+(Anthropic Messages, OpenAI Responses, OpenRouter chat completions, each streamed) and nowhere else: not in a report, a log,
+an answer or the environment of any child process. **A call through a key sends the document text to that provider** (a path
+out of the stand, `D-291`).
+
+### 10.9 Compatibility
+
+A token bound to a connection keeps the earlier wire: `reportRunnerHealth` without `providers` and `slots`, the claim without
+the host members, `submitExecutorTaskAnswer` with `model` and the top-level token counts. `agent.py` keeps that code path for
+`[executor] mode = "command"` and `"endpoint"`; the host path is `mode = "host"`. `install.sh --upgrade` converts an installed
+single-model agent to host mode with a new enrollment secret.
+
+### 10.10 What the stand's side must match (the points beyond the plain list)
+
+1. A host task carries `model` equal to `model_id` (the earlier tooling reads `model`); the agent also accepts a task that has
+   `model_id` only.
+2. A host enrollment document may omit `runner_token`; it must carry `host_id` and the token.
+3. The report keeps `clis`, `concurrency` (sum of slots), `execution_profile: command`, `features`; the agent does not send a
+   new `execution_profile` value.
+4. `access` of a CLI that is not signed in is `subscription`; of one signed in unrecognisably, `api` with `auth_state: unknown`.
+5. `failure_code` is free-form within `^[a-z][a-z0-9_]{0,63}$`; the stand may group the three access codes of 10.3.
+6. `cli_path` is not sent unless the operator opts in.
+7. `enabled: false` is not a reason for the agent to stop claiming; the stand stops handing out new runs.
