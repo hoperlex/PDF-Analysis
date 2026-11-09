@@ -291,14 +291,15 @@ class RunCostPreflight:
                        native_page_piece_policy):
         """The estimate of a run on the stage layout (consent v2, `HOSTS-LAYOUT-01`): priced **by model**.
 
-        Each row's calls and tokens belong to the model of its cell; a model is bought one way for the whole run (the access frozen in the
-        plan), so a subscription model costs 0 and an API model costs its pinned rates. The digest binds the plan, every model's rate
+        Each cell's calls and tokens belong to the model of that cell; a model is bought one way for the whole run (the access frozen in the
+        plan), so a subscription model costs 0 and an API model costs its pinned rates. The blocks row of an ensemble has one cell per leg and
+        one for the judge, and every one of them is asked once per block batch, so the row's calls are the base batches times its cells. The digest binds the plan, every model's rate
         digest and access and the source: a start that finds another plan, rate or access holds no consent. ``billing`` is ``unmetered``
         when every cell is on a subscription (pressing the button is the consent), ``metered`` when none is, else ``mixed``.
         """
         totals = {}
-        for row, (calls, row_input, row_output) in ledger.items():
-            entry = totals.setdefault(plan.cell(f"{row}:main").model_id, [0, 0, 0])
+        for key, (calls, row_input, row_output) in ledger.items():
+            entry = totals.setdefault(plan.cell(key).model_id, [0, 0, 0])
             entry[0] += calls
             entry[1] += row_input
             entry[2] += row_output
@@ -381,17 +382,20 @@ class RunCostPreflight:
         source["image_block_count"] = self._image_block_count(version)
         bundle = profile.prompt_bundle
         window = relaxed_window_characters(pin.model_id, apply_to_bundle(bundle, text_cell))
-        # Per row ledger of the plan: [calls, input tokens, output tokens]. Every addition below is made to the totals (the legacy
-        # route) and to the row it belongs to; a plan prices the rows by model and the totals are their sum.
-        ledger = {row: [0, 0, 0] for row in (plan.rows if planned else ())}
-        cell_tokens = {} if not planned else {cell.row: cell.max_output_tokens for cell in plan.cells}
+        # Per cell ledger of the plan: [calls, input tokens, output tokens]. Every addition below is made to the totals (the legacy route) and
+        # to the cells of the row it belongs to; a plan prices the cells by model and the totals are their sum. A row has one cell, except
+        # the blocks row of an ensemble: each of its legs and its judge is asked once per batch, so each carries the row's calls.
+        ledger = {cell.cell_key: [0, 0, 0] for cell in (plan.cells if planned else ())}
 
-        def led(row, calls, input_tokens_added, output_tokens_added):
+        def led(row, calls, input_tokens_added, floor=0):
+            """Add ``calls`` calls (and the input tokens of their requests) to every cell of ``row``, each answering at its own limit (at
+            least ``floor`` tokens: a repair of a reply is asked for the larger of the two)."""
             if planned:
-                entry = ledger[row]
-                entry[0] += calls
-                entry[1] += input_tokens_added
-                entry[2] += output_tokens_added
+                for cell in plan.cells_of_row(row):
+                    entry = ledger[cell.cell_key]
+                    entry[0] += calls
+                    entry[1] += input_tokens_added
+                    entry[2] += calls * max(floor, cell.max_output_tokens)
         if window <= 0:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_window_policy")
         # Ordered whole-page packing can require twice the aggregate quotient;
@@ -422,7 +426,7 @@ class RunCostPreflight:
         if planned:
             # The cell's answer limit wins over the relaxed limit's 64000: the layout is the explicit configuration of the call.
             output_tokens = windows * text_cell.max_output_tokens
-            led("text", windows, input_tokens, output_tokens)
+            led("text", windows, input_tokens)
         # A new plan is accepted explicitly. Previous accepted v1/v2 commands keep
         # their historical semantics and never acquire this larger call allowance.
         extended = None
@@ -464,8 +468,7 @@ class RunCostPreflight:
                     output_tokens += visual["max_windows"] * per_window_output
                     for phase, count in limits.items():
                         row = PHASE_ROWS[phase]
-                        led(row, visual["max_windows"] * count, visual["max_windows"] * count * 100_000,
-                            visual["max_windows"] * count * cell_tokens.get(row, 0))
+                        led(row, visual["max_windows"] * count, visual["max_windows"] * count * 100_000)
                     cross_window_mode = os.environ.get("AUDITMANAGER_EXTENDED_CROSS_WINDOW", "1").strip().lower()
                     if visual["text_page_limit"] > 16 and cross_window_mode not in {"0", "false", "off"}:
                         from auditmanager.analysis.public import extended_cross_window_policy
@@ -481,7 +484,7 @@ class RunCostPreflight:
                             for phase, count in global_limits.items())
                         for phase, count in global_limits.items():
                             row = PHASE_ROWS[phase]
-                            led(row, count, count * 100_000, count * cell_tokens.get(row, 0))
+                            led(row, count, count * 100_000)
                     if os.environ.get("AUDITMANAGER_NORM_PARAGRAPH_CONTEXT", "1").strip().lower() not in {"0", "false", "off"}:
                         from .norm_context import policy as norm_context_policy
                         norm_context = norm_context_policy()
@@ -491,7 +494,7 @@ class RunCostPreflight:
                         # Context augments input on existing calls only; citation/output
                         # schemas and logical request caps are unchanged.
                         input_tokens += norm_calls * norm_context["input_tokens_per_call"]
-                        led("norms", 0, norm_calls * norm_context["input_tokens_per_call"], 0)
+                        led("norms", 0, norm_calls * norm_context["input_tokens_per_call"])
                 elif coverage_mode in {"legacy", "0", "off", "false"}:
                     if planned:
                         # The legacy coverage has no per-phase accounting to price by model.
@@ -508,8 +511,7 @@ class RunCostPreflight:
                     extra_calls += parameters["max_calls"]
                     input_tokens += parameters["max_calls"] * 100_000
                     output_tokens += parameters["max_calls"] * parameters["output_tokens"]
-                    led("cross_check", parameters["max_calls"], parameters["max_calls"] * 100_000,
-                        parameters["max_calls"] * cell_tokens.get("cross_check", 0))
+                    led("cross_check", parameters["max_calls"], parameters["max_calls"] * 100_000)
                     if os.environ.get("AUDITMANAGER_PROJECT_PARAMETER_CONTEXT", "1").strip().lower() not in {"0", "false", "off"}:
                         from auditmanager.analysis.public import project_parameter_context_policy
                         parameter_context = project_parameter_context_policy(parameters)
@@ -517,7 +519,8 @@ class RunCostPreflight:
                         # At most two8-image requests in each16-source local window.
                         # Context adds input only; the parameter/visual call counts do not grow.
                         input_tokens += visual["max_windows"] * 2 * parameter_context["input_tokens_per_call"]
-                        led("cross_check", 0, visual["max_windows"] * 2 * parameter_context["input_tokens_per_call"], 0)
+                        # The context rides on the block requests: two per window for each cell of the blocks row (each leg and the judge).
+                        led("blocks", 0, visual["max_windows"] * 2 * parameter_context["input_tokens_per_call"])
                         if (extended.get("coverage_version") == "batched-v1"
                                 and os.environ.get("AUDITMANAGER_PROJECT_PARAMETER_REVIEW_CONTEXT", "1").strip().lower() not in {"0", "false", "off"}):
                             from auditmanager.analysis.public import project_parameter_review_context_policy
@@ -531,7 +534,7 @@ class RunCostPreflight:
                             for phase in review_context["scopes"]:
                                 phase_calls = visual["max_windows"] * extended["phase_call_limits"][phase] + extended.get(
                                     "global_cross_window_policy", {}).get("call_limits", {}).get(phase, 0)
-                                led(PHASE_ROWS[phase], 0, phase_calls * review_context["input_tokens_per_call"], 0)
+                                led(PHASE_ROWS[phase], 0, phase_calls * review_context["input_tokens_per_call"])
                 if extended.get("semantic_repair_attempts") == 1:
                     # Reserve one additional received-reply repair for every
                     # initial extended call; actual source-sized work is still
@@ -540,8 +543,8 @@ class RunCostPreflight:
                     output_tokens += extra_calls * 12_000
                     if planned:
                         # The repair of a reply runs on the cell of the phase it repairs: its calls are that row's.
-                        for row, (row_calls, _, _) in [(row, tuple(entry)) for row, entry in ledger.items() if row != "text"]:
-                            led(row, row_calls, row_calls * 100_000, row_calls * max(12_000, cell_tokens[row]))
+                        for row, row_calls in [(row, ledger[plan.cells_of_row(row)[0].cell_key][0]) for row in plan.rows if row != "text"]:
+                            led(row, row_calls, row_calls * 100_000, floor=12_000)
                     extra_calls *= 2
                 source["visual_scope"] = visual
             elif requested in {"v2", "extended-review-v2"}:
@@ -559,17 +562,16 @@ class RunCostPreflight:
                 extra_calls = image_calls + comprehensive_calls + norm_calls
                 input_tokens += image_calls * 40_000 + comprehensive_calls * 80_000 + norm_calls * 100_000
                 output_tokens += (image_calls + comprehensive_calls) * 6_000 + norm_calls * 12_000
-                led("blocks", image_calls, image_calls * 40_000, image_calls * cell_tokens.get("blocks", 0))
-                led("cross_check", comprehensive_calls, comprehensive_calls * 80_000,
-                    comprehensive_calls * cell_tokens.get("cross_check", 0))
-                led("norms", norm_calls, norm_calls * 100_000, norm_calls * cell_tokens.get("norms", 0))
+                led("blocks", image_calls, image_calls * 40_000)
+                led("cross_check", comprehensive_calls, comprehensive_calls * 80_000)
+                led("norms", norm_calls, norm_calls * 100_000)
             else:
                 raise _invalid("analysis_workflow", "unsupported_plan")
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,
             executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits,
             extended_review=extended, **({"native_page_piece_policy": page_pieces} if page_pieces is not None else {}))
         if planned:
-            if set(ledger) != set(rows_in_use(extended)):  # the rows the estimate priced are the rows the consent will hold
+            if {key.partition(":")[0] for key in ledger} != set(rows_in_use(extended)):  # the rows the estimate priced are the rows the consent will hold
                 raise _invalid("analysis_workflow", "stage_plan_rows_changed")
             return self._value_planned(version=version, chars=chars, source=source, plan=plan, ledger=ledger,
                 relaxed=relaxed_limits, windows=windows, window_characters=window, extended_review=extended,
