@@ -11,7 +11,8 @@ read) and answers from ``STUB_CONFIG``:
 * the call that runs the tool (``... --entrypoint python api -m <tool> <args>``) answers ``config[kind]``, where ``kind`` is chosen by the
   wrapper's ``flavour`` from the tool's arguments; the answer is a dict (``stdout``, ``stderr``, ``status``, optionally ``write_manifest``)
   or a LIST of them, consumed one per call and the last one repeated;
-* ``ps --status running --services`` answers ``config["running"]``; ``stop`` and ``up`` succeed.
+* ``ps --status running --services`` answers ``config["running"]``; ``up`` succeeds and so does ``stop``, unless ``config["stop_status"]`` is a
+  non-zero status (a ``compose stop`` that stopped some of the services and then failed, or was interrupted).
 """
 
 from __future__ import annotations
@@ -52,6 +53,9 @@ if rest[:1] == ["ps"]:
         sys.exit(config["ps_status"])
     sys.stdout.write("".join(name + "\n" for name in config.get("running", [])))
     sys.exit(0)
+if rest[:1] == ["stop"] and config.get("stop_status", 0):
+    sys.stderr.write("docker stub: compose stop failed (api stopped, worker did not)\n")
+    sys.exit(config["stop_status"])
 if rest[:1] in (["stop"], ["up"]):
     sys.exit(0)
 tool = os.environ["STUB_TOOL"]

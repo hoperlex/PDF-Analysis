@@ -21,6 +21,7 @@ from auditmanager.comparison.ai_jobs.model import AiConsentInput
 from auditmanager.comparison.spend.model import CallRoute
 from auditmanager.comparison.stage_ai.runtime import StageAiRuntime
 from auditmanager.comparison.stage_review.service import StageReviewService
+from auditmanager.comparison.stage_v3 import procedures as legacy
 from auditmanager.comparison.stage_v3.mode import ENGINE, experimental_progress
 from auditmanager.comparison.stage_v3.policy import bundle_for, fresh_policy, policy_for_run
 from auditmanager.comparison.work.model import Failed
@@ -62,7 +63,6 @@ def main(plan="legacy"):
             manifest = {pid: frozenset(f.content_key for f in fragments if f.profile_id == pid) for pid in (left, right)}
             raw = build_raw_differences([SheetLink(left, right)], fragments, {left: (100, 100), right: (100, 100)}, manifest)
             session.commit()
-        store.write(pair_id=pair, revision_id=revision, fragments=fragments, expected_keys=manifest, raw=raw, hints=())
 
         class Adapter:
             provider_mode = ProviderMode.RECORDED
@@ -77,6 +77,11 @@ def main(plan="legacy"):
         routes = SimpleNamespace(route_for=lambda _s, job: CallRoute(adapter, job.pinned_model,
             connection_revision_id=job.connection_revision_id, expected_model=None, check_identity=False, unmetered=True))
         runtime = StageAiRuntime(sessions, routes=routes, provider_mode="recorded", profile_reader=reader)
+        # The consent estimate is asked BEFORE step 2 of the chain writes the text rows (a new pair, a new document version):
+        # the profiles hold the text, so every plan gives its one-call estimate with no `stage_text_fragment` row yet (D-630).
+        early = runtime.estimate(revision_id=revision, user_uid=actor, engine=ENGINE)
+        assert early.totals.calls == 1, early.totals
+        store.write(pair_id=pair, revision_id=revision, fragments=fragments, expected_keys=manifest, raw=raw, hints=())
         with sessions() as session:
             run_id, command_id = _id("crn"), _command(session, "start_stage_chain_run")
             session.execute(text("UPDATE command_record SET outcome=CAST(:outcome AS jsonb) WHERE command_id=:id"),
@@ -87,7 +92,7 @@ def main(plan="legacy"):
                  "pins": json.dumps(pins), "actor": actor, "command": command_id})
             session.commit()
         estimate = runtime.estimate(revision_id=revision, user_uid=actor, engine=ENGINE)
-        assert estimate.totals.calls == 1
+        assert estimate.totals.calls == 1 and estimate.totals == early.totals, (early.totals, estimate.totals)
         with sessions() as session:
             job_id = runtime.prepare(session, run_id=run_id, user_uid=actor,
                                     consent=AiConsentInput(estimate.estimate_digest, True), engine=ENGINE)
@@ -141,7 +146,8 @@ def main(plan="legacy"):
             progress = experimental_progress(session, run_id)
             assert progress["status"] == "completed", progress
             assert progress["plan_version"] == (selected["plan_version"] if selected else "native-text-v3/1"), progress
-            assert progress["limits"] == (selected["limits"] if selected else progress["limits"]), progress
+            assert progress["limits"] == (selected["limits"] if selected else
+                {"pages": legacy.MAX_PAGES, "characters": legacy.MAX_CHARACTERS, "fragments": legacy.MAX_FRAGMENTS}), progress
             assert progress["completed_units"] == progress["planned_units"] and progress["pending_units"] == 0, progress
             assert ("Consolidator" in [p["name"] for p in progress["procedures"]]) == (plan == "windowed-global-v1"), progress
         cards, _, _ = review.page(run_id)

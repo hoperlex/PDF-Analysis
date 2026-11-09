@@ -279,6 +279,11 @@ if [ "$MODE" != plan ]; then
                "permission to forget these cases is recorded (R-146aj: never without it)." \
                "It is recorded as given and never verified. Nothing was read and nothing was touched."
     fi
+    if [[ "$ref" == -* ]]; then
+        refuse "--owner-permission-ref must not begin with '-': the module would read it as an option and refuse it late." \
+               "  given: $ref" \
+               "Say in words where the permission is recorded (for example: owner mail of 2026-11-09). Nothing was read and nothing was touched."
+    fi
     PERMISSION_REF="$ref"
 fi
 # <<< guard: owner-permission-ref
@@ -296,10 +301,23 @@ fi
 # `D-515`: how long the module waits for the memory's table locks is the operator's to set (`MEMORY_FORGET_LOCK_TIMEOUT`, default `15s` in the
 # module, which puts it into a `SET LOCAL` statement as text). It is handed to the one-off container as it is, so it must be a plain positive
 # duration: a typo is a sentence here and not a database error after the connection, and `0` (wait for ever) is not a timeout.
-if [ "${MEMORY_FORGET_LOCK_TIMEOUT+set}" = set ] && [[ ! "$MEMORY_FORGET_LOCK_TIMEOUT" =~ ^[1-9][0-9]{0,5}(ms|s|min)$ ]]; then
-    refuse "MEMORY_FORGET_LOCK_TIMEOUT must be a positive number of ms, s or min (for example 60s)." \
-           "  given: ${MEMORY_FORGET_LOCK_TIMEOUT:-<empty>}" \
-           "Unset it for the module's own 15s. Nothing was read and nothing was touched."
+# PostgreSQL takes at most 2147483647 ms (about 35791 min) for `lock_timeout`: a longer duration is a sentence here too, not an error 22023
+# after the connection (`F3` of the 2026-11-10 judge report).
+if [ "${MEMORY_FORGET_LOCK_TIMEOUT+set}" = set ]; then
+    lock_ms=0
+    if [[ "$MEMORY_FORGET_LOCK_TIMEOUT" =~ ^([1-9][0-9]{0,5})(ms|s|min)$ ]]; then
+        case "${BASH_REMATCH[2]}" in
+            ms) lock_ms=$(( ${BASH_REMATCH[1]} )) ;;
+            s) lock_ms=$(( ${BASH_REMATCH[1]} * 1000 )) ;;
+            min) lock_ms=$(( ${BASH_REMATCH[1]} * 60000 )) ;;
+        esac
+    fi
+    if [ "$lock_ms" -lt 1 ] || [ "$lock_ms" -gt 2147483647 ]; then
+        refuse "MEMORY_FORGET_LOCK_TIMEOUT must be a positive number of ms, s or min (for example 60s)." \
+               "It is at most 2147483647 ms (about 35791 min): the largest lock_timeout PostgreSQL takes." \
+               "  given: ${MEMORY_FORGET_LOCK_TIMEOUT:-<empty>}" \
+               "Unset it for the module's own 15s. Nothing was read and nothing was touched."
+    fi
 fi
 # <<< guard: lock-timeout-shape
 
@@ -495,8 +513,10 @@ stop_services_if_asked() {
     done
     if [ "${#to_stop[@]}" -gt 0 ]; then
         echo "memory-forget.sh: stopping ${to_stop[*]}"
-        compose stop "${to_stop[@]}"
+        # Listed BEFORE the stop: a `compose stop` that fails half way (api down, worker not) or is interrupted has stopped some of them, and
+        # the trap starts exactly those that were running. `up -d --no-deps` of a service that is still up changes nothing.
         STOPPED=("${to_stop[@]}")
+        compose stop "${to_stop[@]}"
     else
         echo "memory-forget.sh: neither api nor worker is running; nothing to stop"
     fi

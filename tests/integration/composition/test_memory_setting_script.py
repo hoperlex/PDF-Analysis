@@ -110,6 +110,10 @@ CASES: tuple[tuple[str, tuple[str, ...], str, bool], ...] = (
     ("permission-ref-shape", (*SET_CLASS, "--owner-permission-ref", "   "), "--owner-permission-ref must be one line", True),
     ("permission-ref-shape", (*SET_CLASS, "--owner-permission-ref", "x" * 201), "--owner-permission-ref must be one line", True),
     ("permission-ref-shape", (*SET_CLASS, "--owner-permission-ref", "line one\nline two"), "--owner-permission-ref must be one line", True),
+    # `F4`: argparse of the module reads a value that begins with "-" (and has no space) as an option, so the wrapper refuses it first
+    ("permission-ref-shape", (*SET_CLASS, "--owner-permission-ref", "-ticket42"), "--owner-permission-ref must not begin with '-'", True),
+    ("permission-ref-shape", (*SET_CLASS, "--owner-permission-ref", "  - see mail"), "--owner-permission-ref must not begin with '-'", True),
+    ("permission-ref-shape", (*SET_CLASS, "--owner-permission-ref", "-"), "--owner-permission-ref must not begin with '-'", True),
     ("training-needs-permission", (*DB, "set", "training_use", "on", "--actor", ACTOR), "--owner-permission-ref is required", True),
     ("database-matches", ("--database", "some_other_database", "show"), "not the configured alpha database", True),
 )
@@ -331,14 +335,24 @@ def test_the_screen_is_printed_from_the_members_that_were_read_and_each_member_i
         "uncaptured-decisions: 12345 (ledger accept/reject events with no memory decision; a data_class change is refused until this is 0)"]
 
 
+def declared_members(script_text: str) -> tuple[str, ...]:
+    """The `SHOW_MEMBERS=(...)` array of the wrapper's source."""
+    return tuple(re.search(r"^SHOW_MEMBERS=\(([^)]*)\)", script_text, re.MULTILINE).group(1).split())  # type: ignore[union-attr]
+
+
 def test_the_members_the_wrapper_reads_are_the_ones_the_module_prints_and_the_check_can_fail() -> None:
     """`D-517`: the module's `SHOW_JSON_KEYS` and the wrapper's `SHOW_MEMBERS` are one list, and this test's own `screen()` prints it too."""
     from scripts.recovery import memory_setting
 
     text = SCRIPT.read_text(encoding="utf-8")
-    declared = tuple(re.search(r"^SHOW_MEMBERS=\(([^)]*)\)", text, re.MULTILINE).group(1).split())  # type: ignore[union-attr]
+    declared = declared_members(text)
     assert declared == memory_setting.SHOW_JSON_KEYS == SHOW_MEMBERS == tuple(GOOD)
-    assert declared[:-1] != memory_setting.SHOW_JSON_KEYS, "the comparison cannot tell a list that lacks a member from the module's"
+    # The comparison can fail: the wrapper that lost its last member, or reads two in the other order, declares a list that is not the module's.
+    lost = text.replace(" uncaptured_decisions)", ")")
+    swapped = text.replace("(data_class data_class_revision ", "(data_class_revision data_class ")
+    for broken in (lost, swapped):
+        assert broken != text, "the mutation did not apply: the line of the script has changed"
+        assert declared_members(broken) != memory_setting.SHOW_JSON_KEYS, "the comparison cannot tell a changed list from the module's"
 
 
 # --- the tool's own refusals and failures ------------------------------------------------------
@@ -465,7 +479,8 @@ def test_the_pass_through_of_the_lock_timeout_can_fail(rig: Rig) -> None:
         "with the pass-through removed the value still reached the container: the test above would prove nothing")
 
 
-@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s"),
+@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s",
+                                   "35792min", "36000min", "999999min"),  # `F3`: PostgreSQL's lock_timeout ends at 2147483647 ms, 35791 min
                          ids=lambda v: repr(v))
 def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_connection_and_the_guard_can_fail(value: str, rig: Rig) -> None:
     completed = rig.run(*DB, "show", env={"MEMORY_SETTING_LOCK_TIMEOUT": value})
@@ -479,7 +494,7 @@ def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_co
         "with the guard gone the bad value goes into the container as it is: this is why the guard exists")
 
 
-@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999s"), ids=lambda v: repr(v))
+@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999ms", "999999s", "35791min"), ids=lambda v: repr(v))
 def test_a_lock_timeout_that_is_a_positive_duration_goes_through(value: str, rig: Rig) -> None:
     completed = rig.run(*SET_CLASS, env={"MEMORY_SETTING_LOCK_TIMEOUT": value}, typed=TYPED_REAL)
     assert completed.returncode == 0, (completed.stdout, completed.stderr)
