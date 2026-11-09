@@ -37,8 +37,8 @@ import {
 } from '@/widgets/executor-connections';
 import type { ExecutorConnectionsProps } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
-import { WorkersPage } from '@/_pages/workers';
-import type { WorkersPageProps } from '@/_pages/workers';
+import { WorkersAdvancedPage } from '@/_pages/workers';
+import type { WorkersAdvancedPageProps } from '@/_pages/workers';
 
 import { newClient, renderScreen } from '../screens/harness';
 import {
@@ -420,38 +420,40 @@ describe('«Скопировать диагностику» copies the probe out
   });
 });
 
-describe('the page', () => {
-  function page(props: WorkersPageProps, roles: Role[] = ['admin']): string {
+describe('the advanced page', () => {
+  function page(props: WorkersAdvancedPageProps, roles: Role[] = ['admin']): string {
     const client = newClient();
     seedExecutors(client);
     client.setQueryData(queryKeys.account.me(), { roles });
-    return renderScreen(client, createElement(WorkersPage as ComponentType<WorkersPageProps>, props));
+    return renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, props));
   }
 
-  it('opens on «Обзор» unless the address names a tab, with the tabs in their order', () => {
+  it('lists the sections in their order, every one closed unless the address names it', () => {
     const markup = page({});
-    expect(markup).toContain('data-workers-panel="overview"');
-    expect(markup).not.toContain('data-workers-panel="processes"');
-    expect(page({ initialTab: 'processes' })).toContain('data-workers-panel="processes"');
-    const order = ['overview', 'connections', 'processes', 'routes'].map((tab) => markup.indexOf(`data-workers-tab="${tab}"`));
+    const order = ['connections', 'groups', 'rules', 'routes', 'processes', 'presets', 'layout']
+      .map((section) => markup.indexOf(`data-advanced-section="${section}"`));
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    for (const label of ['Обзор', 'Подключения', 'Процессы', 'Назначения']) expect(markup).toContain(`>${label}<`);
+    for (const label of ['Подключения', 'Группы', 'Правила', 'Назначения', 'Процессы', 'Пресеты анализа']) expect(markup).toContain(`>${label}<`);
+    expect(markup).not.toMatch(/<details[^>]*open=""/);
+    // A closed section mounts nothing, so it reads nothing.
+    expect(markup).not.toContain('data-executor-connections');
+    expect(markup).not.toContain('data-executor-routes');
   });
 
-  it('opens the tab the address names, and draws nothing of the others', () => {
-    const connectionsTab = page({ initialTab: 'connections' });
-    expect(connectionsTab).toContain('data-workers-panel="connections"');
-    expect(connectionsTab).toContain('data-executor-connections');
-    expect(connectionsTab).not.toContain('data-worker-group');
+  it('opens the section the address names, and draws nothing of the others', () => {
+    const connections = page({ initialTab: 'connections' });
+    expect(connections).toMatch(/<details[^>]*open=""[^>]*data-advanced-section="connections"|<details[^>]*data-advanced-section="connections"[^>]*open=""/);
+    expect(connections).toContain('data-executor-connections');
+    expect(connections).not.toContain('data-worker-group');
     expect(page({ initialTab: 'routes' })).toContain('data-executor-routes');
     expect(page({ initialTab: 'processes' })).not.toContain('data-executor-connections');
   });
 
-  it('marks exactly the open tab as selected', () => {
-    const markup = page({ initialTab: 'routes' });
-    expect(markup.match(/aria-selected="true"/g)?.length).toBe(1);
-    expect(markup).toMatch(/aria-selected="true"[^>]*data-workers-tab="routes"|data-workers-tab="routes"[^>]*aria-selected="true"/);
+  it('opens «Подключения» when the address names a connection for the key form', () => {
+    const markup = page({ secretConnectionId: 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', secretForm: createElement('p', { 'data-test-key-form': '' }, 'форма') });
+    expect(markup).toContain('data-executor-connections');
+    expect(markup).toContain('data-test-key-form');
   });
 });
 

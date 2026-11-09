@@ -1,85 +1,39 @@
 /**
- * `EXEC2-WEB-GROUPS-01` — the tabs of «Исполнители» after «Группы» and «Правила», and what each of the
- * new ones draws on the page. Written under `R-149d` and not run in EXEC-2; none of it needs PostgreSQL.
+ * `EXEC2-WEB-GROUPS-01` — what «Группы» and «Правила» draw, and how «Назначения» behaves in each routing mode. Written under
+ * `R-149d` and not run in EXEC-2; none of it needs PostgreSQL. `HOSTS-WEB-01` moved the six tabs to the advanced page,
+ * `/workers/advanced`, where each is a section that mounts only when opened; the tab tests are in
+ * `tests/unit/workers/workers-tabs.test.ts`.
  *
- * The enumerator is `WORKERS_TABS`. «Назначения» stays the last tab: it is the legacy Primary/Standby
- * editor while the routing mode is `legacy` and the history of the routes once rules are in force
- * (ADR-0026 decision 17), so the page tests below also hold that it is an editor in the one mode and
- * history in the other.
+ * «Назначения» is the legacy Primary/Standby editor while the routing mode is `legacy` and the history of the routes once rules
+ * are in force (ADR-0026 decision 17), so the page tests below hold that it is an editor in the one mode and history in the other.
  */
 
 import { createElement } from 'react';
 import type { ComponentType } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { Role } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
-import {
-  DEFAULT_WORKERS_TAB, WORKERS_TABS, WORKERS_TAB_LABELS, WORKERS_TAB_PARAM, WorkersPage, isWorkersTab, tabAfterKey,
-} from '@/_pages/workers';
-import type { WorkersPageProps, WorkersTab } from '@/_pages/workers';
-import { WorkersTabs } from '@/_pages/workers/ui/workers-tabs';
+import { ADVANCED_SECTIONS, WorkersAdvancedPage } from '@/_pages/workers';
+import type { AdvancedSection, WorkersAdvancedPageProps } from '@/_pages/workers';
 
 import { newClient, renderScreen } from '../screens/harness';
 import { MAIN_GROUP, ROUTED_GROUP, ruleOf, seedGroups, seedRules } from './executor-groups-fixtures';
 
-describe('the tabs', () => {
-  it('are «Обзор», «Подключения», «Процессы», «Группы», «Правила», «Назначения», in that order', () => {
-    expect([...WORKERS_TABS]).toEqual(['overview', 'connections', 'processes', 'groups', 'rules', 'routes']);
-    expect(WORKERS_TABS.map((tab) => WORKERS_TAB_LABELS[tab])).toEqual([
-      'Обзор', 'Подключения', 'Процессы', 'Группы', 'Правила', 'Назначения',
-    ]);
-    expect(DEFAULT_WORKERS_TAB).toBe('overview');
-    expect(WORKERS_TAB_PARAM).toBe('tab');
-  });
-
-  it('are recognised by exact name only, and the new two are recognised', () => {
-    for (const tab of WORKERS_TABS) expect(isWorkersTab(tab)).toBe(true);
-    for (const other of ['', 'Groups', 'group', 'rule', 'Rules', null, undefined, 3]) {
-      expect(isWorkersTab(other)).toBe(false);
-    }
-  });
-
-  it('move with the arrow keys through the two new tabs, wrapping at the ends', () => {
-    expect(tabAfterKey('processes', 'ArrowRight')).toBe('groups');
-    expect(tabAfterKey('groups', 'ArrowRight')).toBe('rules');
-    expect(tabAfterKey('rules', 'ArrowRight')).toBe('routes');
-    expect(tabAfterKey('routes', 'ArrowRight')).toBe('overview');
-    expect(tabAfterKey('overview', 'ArrowLeft')).toBe('routes');
-    expect(tabAfterKey('connections', 'ArrowLeft')).toBe('overview');
-    expect(tabAfterKey('groups', 'ArrowLeft')).toBe('processes');
-    expect(tabAfterKey('routes', 'Home')).toBe('overview');
-    expect(tabAfterKey('connections', 'End')).toBe('routes');
-    expect(tabAfterKey('groups', 'Enter')).toBeNull();
-  });
-
-  it('render as a tablist of six, one selected, one in the tab order, one labelled panel', () => {
-    const markup = renderToStaticMarkup(
-      createElement(WorkersTabs, { active: 'rules', onSelect: () => {}, children: 'содержимое' }),
-    );
-    expect(markup.match(/role="tab"/g)).toHaveLength(6);
-    expect(markup.match(/aria-selected="true"/g)).toHaveLength(1);
-    expect(markup.match(/tabindex="-1"/g)).toHaveLength(5);
-    expect(markup).toContain('data-workers-panel="rules"');
-    for (const label of ['Обзор', 'Группы', 'Правила', 'Назначения']) expect(markup).toContain(`>${label}<`);
-  });
-});
-
-describe('the page', () => {
-  function page(props: WorkersPageProps, roles: Role[] = ['admin'], mode: 'legacy' | 'rules' | null = null): string {
+describe('the advanced page', () => {
+  function page(props: WorkersAdvancedPageProps, roles: Role[] = ['admin'], mode: 'legacy' | 'rules' | null = null): string {
     const client = newClient();
     seedGroups(client);
     client.setQueryData(queryKeys.account.me(), { roles });
     if (mode !== null) seedRules(client, mode, mode === 'rules' ? [ruleOf('text_analysis', ROUTED_GROUP, 1)] : []);
-    return renderScreen(client, createElement(WorkersPage as ComponentType<WorkersPageProps>, props));
+    return renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, props));
   }
 
-  const tab = (name: WorkersTab): WorkersPageProps => ({ initialTab: name });
+  const tab = (name: AdvancedSection): WorkersAdvancedPageProps => ({ initialTab: name });
 
   it('draws «Группы» and nothing of the other tabs', () => {
     const markup = page(tab('groups'));
-    expect(markup).toContain('data-workers-panel="groups"');
+    expect(markup).toContain('data-advanced-section="groups"');
     expect(markup).toContain('data-executor-groups');
     expect(markup).not.toContain('data-executor-rules');
     expect(markup).not.toContain('data-executor-routes');
@@ -88,7 +42,7 @@ describe('the page', () => {
 
   it('draws «Правила» with the legacy routes inside it while the mode is the legacy one', () => {
     const markup = page(tab('rules'), ['admin'], 'legacy');
-    expect(markup).toContain('data-workers-panel="rules"');
+    expect(markup).toContain('data-advanced-section="rules"');
     expect(markup).toContain('data-executor-rules');
     expect(markup).toContain('data-rules-legacy-routes');
     // The routes there are history: their summaries, never their editors.
@@ -115,11 +69,11 @@ describe('the page', () => {
     expect(markup).not.toContain('data-executor-routes-history');
   });
 
-  it('marks exactly the open tab as selected', () => {
-    for (const name of WORKERS_TABS) {
+  it('opens exactly the section the address named, and mounts nothing of the closed ones', () => {
+    for (const name of ADVANCED_SECTIONS) {
       const markup = page(tab(name), ['admin'], 'legacy');
-      expect(markup.match(/aria-selected="true"/g)).toHaveLength(1);
-      expect(markup).toMatch(new RegExp(`aria-selected="true"[^>]*data-workers-tab="${name}"|data-workers-tab="${name}"[^>]*aria-selected="true"`));
+      expect(markup.match(/<details[^>]*open=""/g), name).toHaveLength(1);
+      expect(markup).toMatch(new RegExp(`<details[^>]*open=""[^>]*data-advanced-section="${name}"|<details[^>]*data-advanced-section="${name}"[^>]*open=""`));
     }
   });
 

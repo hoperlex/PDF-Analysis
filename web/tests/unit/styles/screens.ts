@@ -52,7 +52,15 @@ import { ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
 import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
-import { WorkersPage } from '@/_pages/workers';
+import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
+import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
+import { ExecutorStageModels, StageLayoutAdvanced } from '@/widgets/executor-stage-models';
+import { CommandTabView, ConnectWindow, DeleteHostView, InstallSessionView, SshFormView } from '@/features/manage-executor-host';
+import { LayoutEditorView } from '@/features/manage-stage-layout';
+import {
+  CATALOGUE as HOSTS_CATALOGUE, ISSUED as HOSTS_ISSUED, LAYOUT as HOSTS_LAYOUT, LAYOUT_EMPTY as HOSTS_LAYOUT_EMPTY, LAYOUT_OFF as HOSTS_LAYOUT_OFF,
+  SERVER_ONLINE as HOSTS_ONLINE, install as hostsInstall, seedDetails as seedHostDetails, seedHosts, seedLayout,
+} from '../workers/hosts-fixtures';
 import { SectionFilterBar, SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
@@ -1345,29 +1353,6 @@ export function screens(): Screen[] {
     queue: OVERVIEW_QUEUE,
     processesHref: '?tab=processes',
   })));
-  {
-    const client = newClient();
-    client.setQueryData(queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT), {
-      items: [
-        {
-          worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true,
-          slots: 4, version: '0.5.0', started_at: '2026-10-09T10:00:00Z',
-          heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [RUN_ID, RUN_ID],
-        },
-        {
-          worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', state: 'offline', intake_enabled: true,
-          slots: 1, version: '0.4.0', started_at: '2026-10-08T09:00:00Z',
-          heartbeat_at: '2026-10-08T12:00:00Z', current_run_ids: [],
-        },
-      ],
-      page: { next_cursor: null },
-    });
-    client.setQueryData(queryKeys.execution.queue(undefined, {}), {
-      items: [], page: { next_cursor: null }, paused: false, overview: OVERVIEW_QUEUE,
-    });
-    client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
-    add('WorkersPage overview tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'overview' }>, { initialTab: 'overview' })));
-  }
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {
@@ -1392,6 +1377,63 @@ export function screens(): Screen[] {
   })));
 
   /*
+   * `HOSTS-WEB-01`: «Серверы» and «Модели по этапам» as the two tabs of the screen (the tabs and the page rules of
+   * `workers-page.module.css`), the row of a server in each of its looks (on line, grey, with nothing usable, busy, with
+   * «Подробнее» and the confirmation of «Удалить» open), the window «Подключить сервер» on both its tabs and in each state of
+   * the install, the table of the layout and the form that edits it, and the advanced page with its layout section open.
+   */
+  {
+    const client = newClient();
+    seedHosts(client);
+    seedLayout(client, HOSTS_LAYOUT);
+    client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+    add('WorkersPage servers tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'servers' | 'models' }>, { initialTab: 'servers' })));
+    add('WorkersPage models tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'servers' | 'models' }>, { initialTab: 'models' })));
+    add('ExecutorStageModels editing', renderScreen(client, createElement(ExecutorStageModels, { roles: ['admin'], initiallyEditing: true })));
+    add('StageLayoutAdvanced', renderScreen(client, createElement(StageLayoutAdvanced, { roles: ['admin'] })));
+    add('WorkersAdvancedPage layout section', renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<{ initialTab: 'layout' }>, { initialTab: 'layout' })));
+    seedHostDetails(client);
+    add('HostRow with details', renderScreen(client, createElement(HostRow, { host: HOSTS_ONLINE, admin: true, initialPanel: 'details' })));
+    add('LayoutEditorView', renderScreen(client, createElement(LayoutEditorView, {
+      draft: { kit: HOSTS_LAYOUT.current!.kit, cells: HOSTS_LAYOUT.current!.cells }, catalogue: HOSTS_CATALOGUE,
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6-astra'], currentKit: 'custom', pending: false,
+      problem: 'Набор моделей пуст: выберите модели по этапам.', failure: null, onKit: noop, onModel: noop, onEffort: noop, onLimit: noop, onSave: noop, onCancel: noop,
+    })));
+  }
+  {
+    const client = newClient();
+    seedHosts(client);
+    seedLayout(client, HOSTS_LAYOUT_OFF);
+    client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
+    add('WorkersPage servers tab, expert', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'servers' }>, { initialTab: 'servers' })));
+    add('WorkersPage models tab, expert, layout off', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'models' }>, { initialTab: 'models' })));
+  }
+  {
+    const client = newClient();
+    seedHosts(client, { items: [], online: 0, slots_free: 0, slots_total: 0, total: 0 });
+    seedLayout(client, HOSTS_LAYOUT_EMPTY);
+    add('ExecutorHosts empty', renderScreen(client, createElement(ExecutorHosts, { roles: ['admin'] })));
+    add('ExecutorStageModels none saved', renderScreen(client, createElement(ExecutorStageModels, { roles: ['admin'] })));
+  }
+  add('DeleteHostView', renderScreen(newClient(), createElement(DeleteHostView, { name: 'резерв', pending: false, failure: null, onConfirm: noop, onCancel: noop })));
+  add('ConnectWindow command tab', renderScreen(newClient(), createElement(ConnectWindow, { onClose: noop, staticOpen: true, initialTab: 'command' })));
+  add('ConnectWindow ssh tab', renderScreen(newClient(), createElement(ConnectWindow, { onClose: noop, staticOpen: true, initialTab: 'ssh' })));
+  add('CommandTabView issued', renderScreen(newClient(), createElement(CommandTabView, {
+    name: 'новый', pending: false, issued: HOSTS_ISSUED, replaced: true, failure: null, problem: null, onName: noop, onGet: noop,
+    status: createElement('p', null, 'найдено: Opus 5.5'),
+  })));
+  add('SshFormView problem', renderScreen(newClient(), createElement(SshFormView, { pending: false, problem: 'Укажите узел и пользователя SSH.', failure: null, onSubmit: noop })));
+  for (const state of ['requested', 'awaiting_host_key', 'installing', 'succeeded', 'failed'] as const) {
+    add(`InstallSessionView ${state}`, renderScreen(newClient(), createElement(InstallSessionView, {
+      install: hostsInstall({
+        state, ...(state === 'failed' ? { failure_reason: 'host_unreachable' as const } : {}),
+        ...(state === 'succeeded' ? { authorized_keys_line: undefined, key_removed_at: '2026-11-09T11:05:00Z' } : {}),
+      }),
+      confirming: false, confirmFailure: null, onConfirm: noop, onRetry: noop, children: createElement('p', null, 'найдено: Opus 5.5'),
+    })));
+  }
+
+  /*
    * `EXEC-HTTP-01`: «Подключения» and «Назначения». The cards carry the badges of every probe
    * outcome, the notes of a key that must be entered again and of the recent changes, and the
    * revision form and the key form; the routes carry the blocked list and the standby.
@@ -1407,8 +1449,9 @@ export function screens(): Screen[] {
     const client = newClient();
     seedExecutors(client, EXECUTOR_CASES);
     client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
-    add('WorkersPage connections tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'connections' })));
-    add('WorkersPage routes tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'routes' })));
+    add('WorkersAdvancedPage connections section', renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'connections' })));
+    add('WorkersAdvancedPage routes section', renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'routes' })));
+    add('WorkersAdvancedPage closed', renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<{ initialTab?: 'connections' }>, {})));
     add('Executor key form', withRouter(createElement(SetExecutorSecretForm, {
       connectionId: EXECUTOR_READY.connection.connection_id, outcome: 'saved',
     })));

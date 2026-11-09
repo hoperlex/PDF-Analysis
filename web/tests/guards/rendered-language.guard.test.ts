@@ -149,8 +149,21 @@ import type { StartArV3GroupViewProps } from '@/features/start-ar-v3-group';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList, WorkersOverviewSections } from '@/widgets/worker-list';
-import { WorkersPage } from '@/_pages/workers';
-import type { WorkersPageProps } from '@/_pages/workers';
+import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
+import type { WorkersAdvancedPageProps, WorkersPageProps } from '@/_pages/workers';
+import { ExecutorConnections } from '@/widgets/executor-connections';
+import { ExecutorGroups } from '@/widgets/executor-groups';
+import { ExecutorRoutes } from '@/widgets/executor-routes';
+import { ExecutorRules } from '@/widgets/executor-rules';
+import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
+import { ExecutorStageModels } from '@/widgets/executor-stage-models';
+import {
+  CommandTabView, ConnectWindow, DeleteHostView, InstallSessionView, SshFormView,
+} from '@/features/manage-executor-host';
+import {
+  ISSUED, SERVER_ONLINE, install as hostInstall, seedDetails as seedHostDetails, seedHosts, seedLayout,
+  LAYOUT as STAGE_LAYOUT, LAYOUT_EMPTY as STAGE_LAYOUT_EMPTY, LAYOUT_OFF as STAGE_LAYOUT_OFF,
+} from '../unit/workers/hosts-fixtures';
 import {
   CommandFailure, CreateConnectionForm, HostKeyControl, IssuedTokenView, ReviseConnectionForm,
   SettingsFields, SshKeyControl,
@@ -3121,7 +3134,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     ),
   },
   /*
-   * `EXEC-HTTP-01`. «Исполнители» on its other two tabs, as an administrator and as an expert,
+   * `EXEC-HTTP-01`, moved by `HOSTS-WEB-01`. The former tabs of «Исполнители» are sections of the advanced page, rendered here
+   * as an administrator (the page opened on the section) and as an expert (the widget itself: the page is not an expert's),
    * with the key form opened for a connection; every outcome of the key post (the form is a
    * server component, so its eight sentences are rendered here on their own); a refused
    * command; and the forms and controls a tab reaches only after a press or a choice, rendered
@@ -3129,11 +3143,11 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
    */
   {
     name: 'workers-connections',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'connections' }),
   },
   {
     name: 'workers-connections-key',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, {
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, {
       initialTab: 'connections',
       secretConnectionId: EXECUTOR_READY.connection.connection_id,
       secretForm: createElement(SetExecutorSecretForm, { connectionId: EXECUTOR_READY.connection.connection_id, outcome: 'saved' }),
@@ -3141,22 +3155,22 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   },
   {
     name: 'workers-connections-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }),
+    make: () => createElement(ExecutorConnections, { roles: ['expert'] }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     name: 'workers-routes',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
   },
   {
     name: 'workers-routes-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(ExecutorRoutes, { roles: ['expert'] }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // A route with no standby configured: the editor shows the unticked choice only.
     name: 'workers-routes-no-standby',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, [{
       work_kind: 'text_analysis', primary_connection_id: EXECUTOR_READY.connection.connection_id,
       set_at: '2026-10-21T10:00:00Z', set_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
@@ -3167,7 +3181,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     // «Анализ текста», and (`CMP-SEAL-C4`) the AI review of «Сравнение стадий», so that every member of `ExecutorWorkKind`
     // stands on a screen.
     name: 'workers-routes-comparison-kinds',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, (
       ['text_analysis', 'comparison_pair_check', 'comparison_sheet_changes', 'comparison_spec', 'comparison_report',
         'comparison_stage_review'] as const
@@ -3179,7 +3193,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     // No route at all: a run would be refused, and the screen says so.
     name: 'workers-routes-unassigned',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, []),
   },
   /*
@@ -3190,17 +3204,17 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
    */
   {
     name: 'workers-groups',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'groups' }),
   },
   {
     name: 'workers-groups-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    make: () => createElement(ExecutorGroups, { roles: ['expert'] }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // The groups are read and their capacities are not: the pending branch of each group's occupancy.
     name: 'workers-groups-capacity-pending',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'groups' }),
     seedClient: (client) => {
       for (const group of [MAIN_GROUP, ROUTED_GROUP]) {
         client.removeQueries({ queryKey: executorGroupCapacityKey(group.group_id) });
@@ -3209,21 +3223,134 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   },
   {
     name: 'workers-rules',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'rules' }),
   },
   {
     name: 'workers-rules-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    make: () => createElement(ExecutorRules, { roles: ['expert'], legacyRoutes: createElement(ExecutorRoutes, { roles: ['expert'], history: true }) }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // Under rules: a rule for two kinds of work (the second on an earlier revision of its group), the others unruled.
     name: 'workers-rules-in-force',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'rules' }),
     seedClient: (client) => client.setQueryData(KEYS.executorRoutingRules, ruleList('rules', [
       ruleOf('text_analysis', ROUTED_GROUP, 1),
       ruleOf('comparison_pair_check', { ...MAIN_GROUP, current_revision: { ...MAIN_GROUP.current_revision, group_revision_id: 'exgr_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z' } }, 2),
     ])),
+  },
+  /*
+   * `HOSTS-WEB-01` (ADR-0028). «Исполнители» in two tabs, as the roles meet them: «Серверы» (the administrator with the
+   * switch, the menu and the button; an expert with none; a viewer with the refusal; the empty list), what a row opens
+   * («Подробнее» with the reasons a model is unavailable, «Удалить»), «Модели по этапам» (the table for both roles, the layout
+   * switched off, none saved, the form), the window «Подключить сервер» on both its tabs and in each state of the install, and
+   * the advanced page for an administrator, for an expert (refused), and its sections for the presets and the layout.
+   * Every string seeded is Cyrillic or an identifier, as everywhere here.
+   */
+  {
+    name: 'workers-servers',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    seedClient: (client) => seedHosts(client),
+  },
+  {
+    name: 'workers-servers-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    seedClient: (client) => { seedHosts(client); client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }); },
+  },
+  {
+    name: 'workers-servers-viewer',
+    make: () => createElement(ExecutorHosts, { roles: ['viewer'] }),
+  },
+  {
+    name: 'workers-servers-empty',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    seedClient: (client) => seedHosts(client, { items: [], online: 0, slots_free: 0, slots_total: 0, total: 0 }),
+  },
+  {
+    name: 'workers-servers-details',
+    make: () => createElement(HostRow, { host: SERVER_ONLINE, admin: true, initialPanel: 'details' }),
+    seedClient: (client) => seedHostDetails(client),
+  },
+  {
+    name: 'workers-servers-delete',
+    make: () => createElement(DeleteHostView, { name: 'резерв', pending: false, failure: null, onConfirm: () => undefined, onCancel: () => undefined }),
+  },
+  {
+    name: 'workers-models',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); },
+  },
+  {
+    name: 'workers-models-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }); },
+  },
+  {
+    name: 'workers-models-off',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT_OFF); },
+  },
+  {
+    name: 'workers-models-none-saved',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT_EMPTY); },
+  },
+  {
+    name: 'workers-models-editing',
+    make: () => createElement(ExecutorStageModels, { roles: ['admin'], initiallyEditing: true }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); },
+  },
+  {
+    name: 'workers-models-viewer',
+    make: () => createElement(ExecutorStageModels, { roles: ['viewer'] }),
+  },
+  {
+    name: 'workers-connect-command',
+    make: () => createElement(ConnectWindow, { onClose: () => undefined, staticOpen: true, initialTab: 'command' }),
+  },
+  {
+    name: 'workers-connect-command-issued',
+    make: () => createElement(CommandTabView, {
+      name: 'новый', pending: false, issued: ISSUED, replaced: true, failure: null, problem: null, onName: () => undefined, onGet: () => undefined,
+      status: createElement('p', null, 'ждём сервер…'),
+    }),
+  },
+  {
+    name: 'workers-connect-ssh',
+    make: () => createElement(ConnectWindow, { onClose: () => undefined, staticOpen: true, initialTab: 'ssh' }),
+  },
+  {
+    name: 'workers-connect-ssh-problem',
+    make: () => createElement(SshFormView, { pending: false, problem: 'Укажите узел и пользователя SSH.', failure: null, onSubmit: () => undefined }),
+  },
+  ...(['requested', 'awaiting_host_key', 'installing', 'succeeded', 'failed'] as const).map((state) => ({
+    name: `workers-install-${state}`,
+    make: () => createElement(InstallSessionView, {
+      install: hostInstall({
+        state, ...(state === 'failed' ? { failure_reason: 'host_unreachable' as const } : {}),
+        ...(state === 'succeeded' ? { authorized_keys_line: undefined, key_removed_at: '2026-11-09T11:05:00Z' } : {}),
+      }),
+      confirming: false, confirmFailure: null, onConfirm: () => undefined, onRetry: () => undefined,
+      children: createElement('p', null, 'найдено: Opus 5.5'),
+    }),
+  })),
+  {
+    name: 'workers-advanced-presets',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'presets' }),
+  },
+  {
+    name: 'workers-advanced-layout',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'layout' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); },
+  },
+  {
+    name: 'workers-advanced-closed',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, {}),
+  },
+  {
+    name: 'workers-advanced-expert',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, {}),
+    seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // The three-way start choice's group select, over every answer the group list can be in.
