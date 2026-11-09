@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "ca4e3dd68f57c7ae1bccdafe15a04149e1f69ce65975dcfbc6e50b50c1c2dd44",
-    "content_commit": "9f7e76eb",
-    "content_commit_subject": "feat(contract): 1.41.0 — the portal blocks that hold a finding's evidence (UI-PARITY-C6)",
-    "dispatch_named_commit": "9f7e76eb0c5ee65fc43f6fbbb45c23f9577a57d5",
-    "commit_note": "Resealed by UI-PARITY-C6: contract 1.41.0 (listRunFindingBlocks: the portal blocks that hold each finding's evidence).",
+    "sha256": "8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a",
+    "content_commit": "42f0a029",
+    "content_commit_subject": "feat(contract): 1.42.0 — a run started from a stage of an earlier run (UI-PARITY-S2, UI-A-60, R-151i)",
+    "dispatch_named_commit": "42f0a0296638ca9d31dae050a1a8ed4bac465e26",
+    "commit_note": "Resealed by UI-PARITY-S2: contract 1.42.0 (startRunFromStage; started_from_run_id and start_stage_id on RunStatus; the cost estimate of a start from a stage).",
     "openapi_version": "3.1.0",
-    "info_version": "1.41.0",
-    "paths": 274,
-    "operations": 302,
-    "component_schemas": 729,
+    "info_version": "1.42.0",
+    "paths": 275,
+    "operations": 303,
+    "component_schemas": 730,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "ca4e3dd68f57c7ae1bccdafe15a04149e1f69ce65975dcfbc6e50b50c1c2dd44",
+    "snapshot_sha256": "8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "d0bf64d4bb8f7526af79e3a9e4e099c4793aae60da7bd76e67e893e0a10a70d8",
-      "index.ts": "16b2fa04e4e55878e80f3b1d1a9e7161b8ba6e082ee73fec1a2f160a89a27480",
-      "operations.gen.ts": "29f38b880521c06422b2e00fa264f8781b382406c8cab0371e3444c380082a53",
-      "types.gen.ts": "1147d25d53a7cf31c785be00b411b88c58663078cd085d38078db6bb8af35518"
+      "client.gen.ts": "3213c6818254412def5f1c54124ded32519e2bb19118d7e22b0fdace9e584fa0",
+      "index.ts": "dfd888b2bb08723a88b8ab0791b10d929ed11166ee348883ba5fd4f56710cd67",
+      "operations.gen.ts": "8d2e769850f674a5684341a0ca091949d6f525a679dd91cf0eb2ba4d0a3ff1da",
+      "types.gen.ts": "35975efb9f3a4d6a6c4a9bc28dcf6094c64401da6ad0771700f33fa7525c362b"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

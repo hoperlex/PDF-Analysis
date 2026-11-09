@@ -133,6 +133,7 @@ from auditmanager.jobs.public import (
 )
 from auditmanager.runs.crop_budget import MAX_CROP_BYTES, CropByteBudget
 from auditmanager.runs.provider import ProviderBinding, ProviderResolver
+from auditmanager.runs.stage_reuse import plan_stage_reuse, visual_only_pages_allowed
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -842,7 +843,7 @@ def _section_relaxed_limits(session: Session, run: RunRow) -> bool:
     if run.command_id is None:
         return False  # Legacy in-process Runs predate command custody.
     command = CommandRepository().get(session, CommandId.parse(run.command_id))
-    if command.command_type not in {"start_audit_run", "reaudit_run"} or command.state != "succeeded":
+    if command.command_type not in {"start_audit_run", "reaudit_run", "start_run_from_stage"} or command.state != "succeeded":
         raise DomainError(ErrorCode.INTERNAL_ERROR, message="section Run has no accepted command")
     outcome = command.outcome
     if (outcome is None or outcome.get("run_id") != run.run_id
@@ -955,7 +956,7 @@ def _execute_run_body(
         except ValueError:
             raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis",
                 reason="native_page_pieces_changed_requires_consent") from None
-    v3_workflow = isinstance(extended_policy,dict) and extended_policy.get("plan_version")=="extended-review-v3"
+    v3_workflow = visual_only_pages_allowed(extended_policy)
     image_only_v3 = False
     v3_pretext_invoked = False
     v3_pretext_ambiguous = False
@@ -1168,7 +1169,26 @@ def _execute_run_body(
         ("document_context_build", (ROLE_BLOCK_INDEX, ROLE_TEXT_LAYER)),
     )
     halted = False
+    # `R-151i` (`UI-A-60`). A run started from a stage takes the source run's outputs of the stages before it, by reference:
+    # the same immutable artifacts, no copy and no change to the source. The rule is asked again here, in this Attempt,
+    # with this run's own consent (the source's rows and blobs may have changed since the start was accepted); a refusal
+    # is the run's failure terminal and nothing is recomputed in its place. A second Attempt after a lost lease reaches the
+    # same rows by the same upsert. The row says which run the stage was taken from (``reused_from_run_id``).
+    reused_stage_ids: frozenset[str] = frozenset()
+    if run.start_stage_id is not None and run.started_from_run_id is not None:
+        plan = plan_stage_reuse(
+            session, source_run_id=run.started_from_run_id, start_stage_id=run.start_stage_id,
+            visual_only_pages=v3_workflow, runs=run_repo,
+        )
+        for reused in plan.reused:
+            taken = reused.as_stage_result(source_run_id=plan.source_run_id, at=clock())
+            _persist(session, run_repo, run_id, taken)
+            outputs.absorb(taken)
+        reused_stage_ids = frozenset(plan.reused_stage_ids)
+        session.commit()
     for stage_id, roles in deterministic:
+        if stage_id in reused_stage_ids:
+            continue
         run_repo.stage_started(session, run_id=run_id, stage_id=stage_id)
         session.commit()
         # Fresh statistics runs count crop bytes without the historical 2 GiB refusal.

@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 274,
+    "path_count": 275,
     "operations": [
       [
         "DELETE",
@@ -1295,6 +1295,11 @@
       ],
       [
         "POST",
+        "/runs/{run_id}/start-from-stage",
+        "startRunFromStage"
+      ],
+      [
+        "POST",
         "/stage-assemblies/{stage_assembly_id}/members",
         "reviseStageAssembly"
       ],
@@ -2197,6 +2202,7 @@
       "StartComparisonAiJobRequest",
       "StartComparisonAiSheetChangesRequest",
       "StartComparisonSeriesRequest",
+      "StartRunFromStageRequest",
       "StartRunRequest",
       "StartStageChainBatchRequest",
       "StartStageChainRunRequest",
@@ -2250,6 +2256,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0059_decision_memory",
-  "contract_version": "1.41.0"
+  "migration_head": "0060_run_from_stage",
+  "contract_version": "1.42.0"
 }

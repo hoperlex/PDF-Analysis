@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.41.0 (OpenAPI 3.1.0)
- *   sha256 ca4e3dd68f57c7ae1bccdafe15a04149e1f69ce65975dcfbc6e50b50c1c2dd44
+ *   AuditManager PC-01 API 1.42.0 (OpenAPI 3.1.0)
+ *   sha256 8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -309,6 +309,7 @@ import type {
   StartComparisonAiJobRequest,
   StartComparisonAiSheetChangesRequest,
   StartComparisonSeriesRequest,
+  StartRunFromStageRequest,
   StartRunRequest,
   StartStageChainBatchRequest,
   StartStageChainRunRequest,
@@ -612,6 +613,7 @@ export const OPERATION_IDS = [
   'startComparisonSpecification',
   'startOptimisationPass',
   'startRun',
+  'startRunFromStage',
   'startStageChainBatch',
   'startStageChainRun',
   'streamComparisonPairTile',
@@ -7642,6 +7644,36 @@ export type StartRunInput = {
 export type StartRunResult = RunStatus;
 
 // ------------------------------------------------------------------------------------
+// startRunFromStage - POST /runs/{run_id}/start-from-stage
+// ------------------------------------------------------------------------------------
+
+/**
+ * Start Run From Stage
+ *
+ * `R-151i` (`UI-A-60`): a NEW run of the earlier run's document version that reuses the earlier run's completed outputs of every PC-01 stage before `stage_id` and computes `stage_id` and the stages after it. The earlier run is immutable history and is not changed; the new run is linked to it by `started_from_run_id` and `start_stage_id` on its `RunStatus` (not by `reaudit_of_run_id`) and records today's configuration, exactly as a re-audit does (R-82). `stage_id` is one of `page_geometry_extraction`, `document_context_build` or `text_analysis`: the first stage reuses nothing (`422 validation_failed`, `field` `stage_id`, `constraint` `nothing_to_reuse`; use `reauditRun`) and any other stage is not startable (`constraint` `stage_not_startable`). The earlier run must have ended (`409 state_transition_not_allowed`) and be a run of the standard analysis (a member of an AR v3 group is `409 conflict`, `conflict_reason` `ar_v3_member_not_repeatable`). A stage output that cannot be taken is `422 analysis_input_invalid` with `details.stage_id` (the first stage that cannot) and `details.reason`: `source_stage_not_completed`, `source_stage_version_changed`, `source_stage_output_incomplete`, `source_artifact_unavailable`, `source_artifact_changed` or `source_stage_inputs_changed`. Nothing is recomputed in place of a refused output and nothing is written. Served starts require fresh confirmed cost consent from estimateRunCost with `start_from_run_id` and `start_stage_id`: the price is for the stages the new run computes, and the digest is bound to this earlier run and stage. While a run from this earlier run and stage has not ended, a second is `409 conflict`. Accepted keys replay their recorded outcome.
+ */
+export type StartRunFromStageInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/start-from-stage`. */
+  path: {
+    run_id: RunId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: StartRunFromStageRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startRunFromStage` (`application/json`, HTTP 202). */
+export type StartRunFromStageResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
 // startStageChainBatch - POST /projects/{project_uid}/stage-chain-batches
 // ------------------------------------------------------------------------------------
 
@@ -12262,6 +12294,20 @@ export const OPERATIONS = {
     successStatuses: [202],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['runs'],
+  },
+  startRunFromStage: {
+    operationId: 'startRunFromStage',
+    method: 'POST',
+    path: '/runs/{run_id}/start-from-stage',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [202],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   startStageChainBatch: {
     operationId: 'startStageChainBatch',

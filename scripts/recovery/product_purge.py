@@ -227,6 +227,9 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
     "set_worker_intake",
+    # Contract 1.42.0 (`UI-A-60`, `R-151i`): the receipt of a run started from a stage of an earlier run is about a project's
+    # runs, a product command like `reaudit_run`.
+    "start_run_from_stage",
     # Contract 1.35.0 (`UI-B-15`): the receipt of a proposals workbook loaded back is about a pass's proposals, a product
     # command like `decide_optimisation_proposal`. Lane C1 sealed it without classifying it; the classification test
     # (`test_every_event_type_and_command_type_the_source_writes_is_classified`) found it on the 1.36.0 stand.

@@ -903,7 +903,7 @@ class SeamRunAdapter:
     def estimate_run_cost(
         self, *, version_uid: str, executor_connection_id: str | None = None,
         reaudit_of_run_id: str | None = None, preset_id: str | None = None, relaxed_limits: bool = False,
-        executor_group_id: str | None = None,
+        executor_group_id: str | None = None, start_from_run_id: str | None = None, start_stage_id: str | None = None,
     ) -> Any:
         """`D-74`. The port declares it; this stand-in prices nothing, and says which dependency is missing."""
         raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="run_cost_estimator")

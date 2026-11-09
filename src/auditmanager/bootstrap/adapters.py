@@ -414,6 +414,40 @@ class ExecutionAdapter(_SessionHolder):
             self._runs.submit_existing(new_id)
         return view
 
+    def start_run_from_stage(self, *, run_id: str, stage_id: str, user_uid: str, idempotency_key: str,
+                             cost_consent: dict[str, Any] | None = None) -> RunStatusView:
+        """`R-151i` (`UI-A-60`): a new run of the source's version that reuses the source's stage outputs before ``stage_id``.
+
+        The configuration is today's, as for ``reaudit_run`` (the same run adapter holds it); the new run is queued in the
+        same transaction and handed to the carrier afterwards, exactly as a re-audit is."""
+        from auditmanager.runs.commands import start_run_from_stage
+
+        profile, bundle, mode = self._runs.current_configuration()
+        budget = self._runs.input_budget_characters
+        routes = self._runs.section_profiles
+        explicit: dict[str, Any] = (
+            {"analysis_profile_id": profile, "prompt_bundle_id": bundle}
+            if routes is None
+            else {"section_profiles": routes}
+        )
+
+        def write(session: Session) -> tuple[str, bool, RunStatusView]:
+            result = start_run_from_stage(
+                session, source_run_id=run_id, start_stage_id=stage_id,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                provider_mode=mode, input_budget_characters=budget,
+                connection_route=self._runs.route_freezer,
+                cost_preflight=self._runs.cost_preflight if self._runs.require_cost_consent or cost_consent is not None else None,
+                cost_consent=cost_consent, cost_actor_uid=user_uid,
+                group_admitter=getattr(self._runs, "group_admitter", None),
+                started_by_user_uid=user_uid,  # `R-151v`
+                **explicit)
+            return result.run_id, result.replayed, _run_status_view(session, result.run_id)
+        new_id, replayed, view = self._write(write)
+        if not replayed:
+            self._runs.submit_existing(new_id)
+        return view
+
     def set_job_priority(
         self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
     ) -> models.ExecutionQueueItem:
@@ -1291,10 +1325,25 @@ class RunAdapter(_SessionHolder):
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
                           reaudit_of_run_id: str | None = None,
                           preset_id: str | None = None, relaxed_limits: bool = False,
-                          executor_group_id: str | None = None) -> models.RunCostEstimate:
+                          executor_group_id: str | None = None,
+                          start_from_run_id: str | None = None,
+                          start_stage_id: str | None = None) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
         def estimate(session):
+            if start_from_run_id is not None or start_stage_id is not None:
+                # `R-151i`: the price of the stages a run started from a stage of an earlier run computes. Both fields or
+                # neither, and nothing that chooses a route: the new run follows today's, as a re-audit does.
+                if start_from_run_id is None or start_stage_id is None:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="start_stage_id", constraint="start_from_pair")
+                if (reaudit_of_run_id is not None or executor_connection_id is not None or preset_id is not None
+                        or relaxed_limits or executor_group_id is not None):
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="start_from_run_id", constraint="server_selected_route")
+                value = self._cost_preflight.estimate_from_stage(
+                    session, run_id=start_from_run_id, start_stage_id=start_stage_id)
+                if value.as_dict()["version_uid"] != version_uid:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="version_uid", constraint="reaudit_source_version")
+                return value
             if reaudit_of_run_id is not None:
                 if (executor_connection_id is not None or preset_id is not None or relaxed_limits
                         or executor_group_id is not None):
@@ -1857,6 +1906,9 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         started_by_user_uid=started_by,
         started_by_label=started_by_label,
         reaudit_of_run_id=run.reaudit_of_run_id,
+        # `R-151i`: both or neither (the database holds the pair). ``getattr`` as for the starter above: a stand-in older
+        # suites hand this reader has neither.
+        started_from_run_id=getattr(run, "started_from_run_id", None), start_stage_id=getattr(run, "start_stage_id", None),
         # `W55A-PIN-01` (R-113). The snapshot the run pinned at creation, from the row;
         # `run_status_body` renders it only when one was pinned.
         norms_snapshot_id=run.norms_snapshot_id,

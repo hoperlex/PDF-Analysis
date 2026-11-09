@@ -293,6 +293,8 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     "scope_id",
     "sequence_no",
     "stage_id",
+    # `0060_run_from_stage`: the first stage a run computes, a registry name like ``stage_id``.
+    "start_stage_id",
     "user_uid",
     # `0030_executor_connections`: ``pin_id`` names a model of the provider lock
     # (``claude-opus-5``), not an entity this product mints.
@@ -356,6 +358,8 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "group_id": "arg",
         "allocated_by_run_id": "run",
         "reaudit_of_run_id": "run",
+        # `0060_run_from_stage` (`R-151i`): the run whose stage outputs a run reuses.
+        "started_from_run_id": "run",
         "command_id": "cmd",
         "analysis_profile_id": "ap",
         "prompt_bundle_id": "pb",

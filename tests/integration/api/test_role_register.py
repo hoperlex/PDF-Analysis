@@ -73,6 +73,7 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "listExecutionJournal": ("GET", "/execution/journal"),
     "cancelRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
     "reauditRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
+    "startRunFromStage": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/start-from-stage"),
     "setJobPriority": ("PUT", "/execution/queue/job_01M2545JSD15ETSNNV904X991T/priority"),
     "setExecutionPaused": ("PUT", "/execution/dispatch"),
     "getExecutionDispatch": ("GET", "/execution/dispatch"),
@@ -740,6 +741,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "correctVersionClassification": _EXPERT,
     "cancelRun": frozenset({"expert", "admin"}),
     "reauditRun": frozenset({"expert", "admin"}),
+    "startRunFromStage": frozenset({"expert", "admin"}),
     "appendDecision": _EXPERT,
     # `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict; admin alone does not.
     "carryOverDecision": _EXPERT,

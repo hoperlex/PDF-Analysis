@@ -140,6 +140,8 @@ REQUIRED_OPERATIONS = {
     "listVersionSheetLabels",
     # `UI-PARITY-C6`. The portal blocks that hold each finding of a run.
     "listRunFindingBlocks",
+    # `UI-PARITY-S2`, `R-151i`. A new run that reuses an earlier run's stage outputs before the chosen stage.
+    "startRunFromStage",
     # `UI-PARITY-P0P`, `R-152a`…`R-152h`. «График работ»: the month, the reserve, the administrator's writes.
     "getWorkSchedule",
     "getWorkScheduleReserve",
@@ -440,6 +442,7 @@ WRITE_OPERATIONS = {
     "approveRegistration",
     "cancelRun",
     "reauditRun",
+    "startRunFromStage",
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",
