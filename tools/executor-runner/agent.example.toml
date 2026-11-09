@@ -1,5 +1,7 @@
 # Configuration of agent.py (the unattended pull agent). Copy to /etc/pdf-analysis-agent/agent.toml.
-# `install.sh` writes this file for you (one CLI, its pinned model, `concurrency = 1`) and keeps your edits on a rerun.
+# `install.sh` writes this file for you and keeps your edits on a rerun. This example is the SINGLE-MODEL agent (one
+# CLI, its pinned model, `concurrency = 1`; what `install.sh --model ID` writes). The HOST agent (what `install.sh` writes
+# with no model; one process serving every model the host can reach) is `[executor] mode = "host"`: see the end of this file.
 #
 # Secrets never go in this file. The runner token comes from the environment variable named in
 # token_env (the systemd unit loads it from an EnvironmentFile with mode 0600); an endpoint key,
@@ -56,3 +58,32 @@ accept_images = false
 # max_tokens = 0                        # 0 = leave to the server
 # accept_images = false                # set true only if the local model accepts image_url data URLs
 # max_images = 1                       # images per task the model sees, 1 to 8; above 1 needs accept_images
+
+# ---------------------------------------------------------------------------------------------------------------------
+# HOST MODE (HOSTS-AGENT-01, RUNNER_API.md section 10). Use INSTEAD of [model], [command] and [endpoint]:
+#
+#   [runner]
+#   origin = "https://stand.example.org"
+#   token_env = "PDF_ANALYSIS_RUNNER_TOKEN"   # the token of the HOST (install.sh enrolls it); no [model] is declared
+#
+#   [executor]
+#   mode = "host"
+#
+#   [host]
+#   key_file = "/etc/pdf-analysis-agent/keys.env"   # ANTHROPIC_API_KEY=, OPENAI_API_KEY=, OPENROUTER_API_KEY= (one per line);
+#                                                    # read only when it is mode 0600 and owned by the service user
+#   # detect_seconds = 60              # cheap detection (CLI present, version, login, key file; no model is called)
+#   # report_seconds = 60              # the heartbeat; the snapshot in it is rebuilt only when something changed
+#   # probe_interval_seconds = 21600   # a minimal call per catalogue model: when a login/key/version changed, and this often
+#   # failed_retry_seconds = 900       # ... and this often for a model whose last call failed
+#   # activity_window_seconds = 120    # a claim is extended only while the call produced output in this many seconds
+#   # report_cli_path = false          # true: send the CLI's absolute path in the report (ADR-0026 decision 8 says it stays local)
+#   # accept_images = false            # true: serve tasks with images (Codex and the API providers; not Claude Code)
+#
+#   [slots]                           # concurrent calls per provider; default 1 on a subscription login, 2 on an API
+#   # claude_code = 1                 # providers: claude_code, codex, anthropic_api, openai_api, openrouter_api
+#
+#   [api]                             # only for a proxy or a test: https://, or http:// for a loopback host
+#   # anthropic_base_url = "https://api.anthropic.com"
+#   # openai_base_url = "https://api.openai.com"
+#   # openrouter_base_url = "https://openrouter.ai/api"

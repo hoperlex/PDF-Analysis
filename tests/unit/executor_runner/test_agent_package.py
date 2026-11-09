@@ -117,8 +117,8 @@ def test_the_content_is_the_sources_and_the_version_the_argument(tmp_path):
 
 def test_tests_the_workspace_the_bridge_and_the_builder_are_not_in_the_package():
     assert set(package.PACKAGE_FILES) == {
-        "install.sh", "agent.py", "runner_client.py", "detect.py", "codex_answer.py", "claude_answer.py",
-        "pdf-analysis-agent.service", "agent.example.toml", "README.md"}
+        "install.sh", "agent.py", "runner_client.py", "detect.py", "host_mode.py", "api_answer.py", "codex_answer.py",
+        "claude_answer.py", "pdf-analysis-agent.service", "agent.example.toml", "README.md"}
     for left_out in ("mcp_bridge.py", "package.py", "workspace", "ssh-forced-command.sh", "RUNNER_API.md",
                      "agent.claude-ssh.example.toml", "agent.codex-ssh.example.toml"):
         assert left_out not in package.PACKAGE_FILES
@@ -132,7 +132,8 @@ def test_everything_the_installer_copies_is_in_the_package_and_nothing_it_needs_
     assert set(listed) <= set(package.PACKAGE_FILES)
     needed = set(listed) | {"install.sh", "pdf-analysis-agent.service", "agent.example.toml", "VERSION"}
     assert needed <= set(package.PACKAGE_FILES) | {"VERSION"}
-    assert {"detect.py", "runner_client.py"} <= set(listed), "the modules agent.py imports travel with it"
+    assert {"detect.py", "runner_client.py", "host_mode.py", "api_answer.py"} <= set(listed), \
+        "the modules agent.py imports travel with it (host mode imports the answerers too)"
 
 
 @pytest.mark.parametrize("bad", ["", "1", "1.2", "1.2.3.4", "v1.2.3", "1.2.3-rc1", "00001.2.3", "1.2.x", " 1.2.3", "1.2.3\n", "../1.2.3"])

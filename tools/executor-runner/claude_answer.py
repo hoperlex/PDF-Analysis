@@ -22,6 +22,13 @@ deadline (``AR-V3-LIVENESS-01``): in ``--ssh-envelope`` mode the command writes 
 stderr every ``HEARTBEAT_SECONDS``, ends the call after ``STALL_SECONDS`` without a new stream byte
 and, at the very latest, after ``SSH_HARD_CAP_SECONDS``.  Nothing limits the model's effort,
 thinking or turns.
+
+``HOSTS-AGENT-01`` (host mode, ``RUNNER_API.md`` section 10): :func:`run_host` is the entry point of the host agent.
+It serves **any model the stand's catalogue names** (the agent checks the id against the catalogue before it
+calls; ``ALLOWED_MODELS`` stays the list of the single-model command line above), passes ``--effort`` and returns
+the model the CLI itself reported (``modelUsage``), which must be the requested id or one of the catalogue's
+``accepted_reported`` strings.  This file stays standalone (standard library only): the SSH profile installs it
+alone.
 """
 
 from __future__ import annotations
@@ -30,6 +37,7 @@ import base64
 import binascii
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -79,6 +87,43 @@ PLAIN_SYSTEM_PROMPT = _PROMPT_HEAD + "Answer in plain text."
 
 class TaskError(Exception):
     pass
+
+
+class AccessError(TaskError):
+    """The CLI refused for a reason that is about this host's access, not about the task: ``kind`` is
+    ``quota_exceeded``, ``auth_failed`` or ``model_not_found``.  The host agent takes the model out of service on
+    one of these (RUNNER_API.md section 10.6)."""
+
+    def __init__(self, code: str, kind: str) -> None:
+        super().__init__(code)
+        self.kind = kind
+
+
+class Interrupted(Exception):
+    """The host agent asked the call to stop (lost claim, stalled, shutdown); the CLI has been killed."""
+
+
+_AUTH_FAILURE = re.compile(
+    r"invalid[ _-]?(x-)?api[ _-]?key|authentication|unauthori[sz]ed|\b40[13]\b|not logged in|/login|login required"
+    r"|oauth token.{0,20}(expired|revoked)|credentials", re.IGNORECASE)
+_MODEL_FAILURE = re.compile(
+    r"(model|selected model).{0,80}(not found|does not exist|not exist|not available|unavailable|invalid|unknown"
+    r"|may not exist|do not have access|no access)|(unknown|invalid|no such|unsupported) model", re.IGNORECASE)
+_QUOTA_FAILURE = re.compile(
+    r"usage limit|rate[ _-]?limit|quota|credit balance|insufficient[ _-]?(funds|credit)|too many requests|\b429\b"
+    r"|limit reached|hit your limit|out of (credits|usage)", re.IGNORECASE)
+
+
+def classify_failure_text(text: object) -> str | None:
+    """``auth_failed``, ``model_not_found``, ``quota_exceeded`` or ``None`` for the text of a failed turn.  The text
+    is judged and dropped: nothing of it is printed, logged or returned."""
+    if not isinstance(text, str):
+        return None
+    for kind, pattern in (("auth_failed", _AUTH_FAILURE), ("model_not_found", _MODEL_FAILURE),
+                          ("quota_exceeded", _QUOTA_FAILURE)):
+        if pattern.search(text[:2000]):
+            return kind
+    return None
 
 
 def read_task(payload: bytes, *, ssh: bool = False, model: str = DEFAULT_MODEL) -> dict:
@@ -231,25 +276,43 @@ def _effort(task: dict) -> str | None:
     return effort
 
 
-def _environment() -> dict[str, str]:
-    # The CLI needs its own stored subscription login, never an API key or the runner token
+#: Names that never reach a child CLI, whatever the allowlist says (``HOSTS-AGENT-01``): the API keys the host
+#: agent reads from its key file, the keys and tokens a CLI would take instead of its stored login, and the runner
+#: token.  A second guard behind the allowlist, so a name added to the list by mistake still cannot carry a secret.
+NEVER_PASS = frozenset({
+    "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
+    "CODEX_API_KEY", "PDF_ANALYSIS_RUNNER_TOKEN", "AUDITMANAGER_ENROLLMENT_SECRET",
+})
+_SECRET_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_PASSWORD")
+
+
+def _environment(max_output_tokens: int | None = None) -> dict[str, str]:
+    # The CLI needs its own stored login (subscription or API key), never a key or the runner token
     # inherited from the agent.  The three switches keep project, user and memory files out of
     # the prompt: the answer must depend on the task alone.
     allowed = (
         "HOME", "PATH", "LANG", "LC_ALL", "CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME",
         "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR",
     )
-    environment = {name: os.environ[name] for name in allowed if name in os.environ}
+    environment = {
+        name: os.environ[name] for name in allowed
+        if name in os.environ and name not in NEVER_PASS and not name.endswith(_SECRET_SUFFIXES)
+    }
     environment.update({
         "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     })
+    if max_output_tokens is not None:  # host mode: the task's output ceiling, in Claude Code's own variable
+        environment["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(max_output_tokens)
     return environment
 
 
-def _report(raw: bytes, model: str) -> dict:
-    """Accept exactly one successful, tool-free result served by the pinned model."""
+def _report(raw: bytes, model: str, accepted: frozenset[str] | None = None) -> dict:
+    """Accept exactly one successful, tool-free result served by the pinned model.
+
+    ``accepted`` (host mode) is the set of strings the CLI may report for the requested model: the result must
+    name exactly one model and it must be in the set.  Without it the single-model rule applies: exactly ``model``."""
     try:
         report = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
@@ -258,11 +321,17 @@ def _report(raw: bytes, model: str) -> dict:
         raise TaskError("unknown_claude_output")
     if (report.get("is_error") is not False or report.get("subtype") != "success"
             or report.get("terminal_reason", "completed") != "completed"):
+        kind = classify_failure_text(report.get("result")) if report.get("is_error") is True else None
+        if kind is not None:
+            raise AccessError("claude_" + kind, kind)
         raise TaskError("claude_turn_failed")
     if report.get("permission_denials"):
         raise TaskError("claude_tool_denied")
     usage = report.get("modelUsage")
-    if not isinstance(usage, dict) or set(usage) != {model}:
+    if accepted is None:
+        if not isinstance(usage, dict) or set(usage) != {model}:
+            raise TaskError("claude_model_mismatch")
+    elif not isinstance(usage, dict) or len(usage) != 1 or next(iter(usage)) not in accepted:
         raise TaskError("claude_model_mismatch")
     return report
 
@@ -363,7 +432,7 @@ def _heartbeat(elapsed: float, events: int, output_tokens: int) -> None:
     sys.stderr.flush()
 
 
-def _drain(process: subprocess.Popen, stream: _Stream, clock: dict, failure: list) -> None:
+def _drain(process: subprocess.Popen, stream: _Stream, clock: dict, failure: list, activity: object = None) -> None:
     """Reader thread: drain the CLI's stdout (a pipe) into ``stream``; every byte is a sign of life."""
     descriptor = process.stdout.fileno()
     try:
@@ -372,6 +441,8 @@ def _drain(process: subprocess.Popen, stream: _Stream, clock: dict, failure: lis
             if not chunk:
                 return
             clock["last"] = time.monotonic()
+            if activity is not None:
+                activity.touch()  # the host agent extends the claim only while output flows
             clock["bytes"] += len(chunk)
             if clock["bytes"] > MAX_STREAM_BYTES:
                 raise TaskError("claude_output_too_large")
@@ -395,7 +466,8 @@ def _feed_prompt(process: subprocess.Popen, prompt: bytes) -> None:
 
 
 def _run(task: dict, *, claude: str | None, timeout: float, model: str,
-         stall: float | None = None, heartbeat: bool = False) -> dict:
+         stall: float | None = None, heartbeat: bool = False, accepted: frozenset[str] | None = None,
+         activity: object = None, should_stop: object = None, max_output_tokens: int | None = None) -> dict:
     """Run the CLI on one task and return its accepted ``result`` report.
 
     ``timeout`` is the wall-clock ceiling of the call.  With ``stall`` the call also ends after that
@@ -436,20 +508,26 @@ def _run(task: dict, *, claude: str | None, timeout: float, model: str,
             command += ["--effort", effort]
         process = subprocess.Popen(
             command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            cwd=area, env=_environment(), start_new_session=True,
+            cwd=area, env=_environment(max_output_tokens), start_new_session=True,
         )
         stream = _Stream()
         started = time.monotonic()
         clock = {"last": started, "bytes": 0}
         failure: list = []
         writer = threading.Thread(target=_feed_prompt, args=(process, prompt), daemon=True)
-        reader = threading.Thread(target=_drain, args=(process, stream, clock, failure), daemon=True)
+        reader = threading.Thread(target=_drain, args=(process, stream, clock, failure, activity), daemon=True)
         try:
+            if activity is not None:
+                activity.touch()
             writer.start()
             reader.start()
             next_beat = started
             while True:
                 now = time.monotonic()
+                if should_stop is not None:
+                    reason = should_stop()
+                    if reason:
+                        raise Interrupted(reason)
                 if heartbeat and now >= next_beat:
                     _heartbeat(now - started, stream.lines, stream.output_tokens)
                     next_beat = now + HEARTBEAT_SECONDS
@@ -477,11 +555,57 @@ def _run(task: dict, *, claude: str | None, timeout: float, model: str,
         if failure:
             raise failure[0]
         if process.returncode != 0:
+            stream.finish()
+            kind = _failed_turn_kind(stream.result)
+            if kind is not None:
+                raise AccessError("claude_" + kind, kind)
             raise TaskError("claude_failed")
         stream.finish()
         if stream.result is None:
             raise TaskError("claude_no_result")
-        return _report(stream.result, model)
+        return _report(stream.result, model, accepted)
+
+
+def _failed_turn_kind(raw: bytes | None) -> str | None:
+    """The access kind of the ``result`` line of a CLI that exited non-zero, if it names one."""
+    if raw is None:
+        return None
+    try:
+        report = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(report, dict) or report.get("is_error") is not True:
+        return None
+    return classify_failure_text(report.get("result"))
+
+
+def run_host(task: dict, *, model: str, effort: str | None, timeout: float, claude: str | None = None,
+             accepted: tuple[str, ...] = (), activity: object = None, should_stop: object = None,
+             max_output_tokens: int | None = None) -> dict:
+    """One call for the host agent (``RUNNER_API.md`` section 10).
+
+    ``task`` holds ``system``, ``user_text`` and ``output_schema``; ``model`` is the catalogue's id (checked by the
+    caller against the catalogue), ``effort`` one of its efforts.  Returns ``output_text`` (the structured answer),
+    ``reported_model`` (what the CLI itself named in ``modelUsage``, exactly) and the token counts.  Raises
+    :class:`TaskError` (an :class:`AccessError` when the host's access is what failed) or :class:`Interrupted`."""
+    call = {"model": model, "system": task["system"], "user_text": task["user_text"],
+            "output_schema": task.get("output_schema")}
+    if effort is not None:
+        call["effort"] = effort
+    read_task(json.dumps(call, ensure_ascii=False).encode("utf-8"), model=model)
+    allowed = frozenset(accepted) | {model}
+    report = _run(call, claude=claude, timeout=timeout, model=model, accepted=allowed,
+                  activity=activity, should_stop=should_stop, max_output_tokens=max_output_tokens)
+    reported = next(iter(report["modelUsage"]))
+    text = _structured_answer(report)
+    usage = report["modelUsage"][reported]
+    if not isinstance(usage, dict):
+        raise TaskError("claude_usage_invalid")
+    tokens_in = sum(usage.get(name, 0) for name in ("inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"))
+    tokens_out = usage.get("outputTokens")
+    if (type(tokens_in) is not int or tokens_in < 0 or type(tokens_out) is not int or tokens_out < 0):
+        raise TaskError("claude_usage_invalid")
+    return {"output_text": text, "reported_model": reported, "input_tokens": tokens_in, "output_tokens": tokens_out}
 
 
 def answer(task: dict, *, claude: str | None = None, model: str = DEFAULT_MODEL) -> str:

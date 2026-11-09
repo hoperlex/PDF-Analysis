@@ -4,7 +4,7 @@
 #   sudo useradd --system --user-group --create-home --home-dir /var/lib/pdf-analysis-agent --shell /usr/sbin/nologin pdf-agent
 #   sudo chmod 0700 /var/lib/pdf-analysis-agent
 #   sudo install -d -o root -g root -m 0755 /opt/pdf-analysis-agent /etc/pdf-analysis-agent
-#   sudo install -m 0644 agent.py runner_client.py detect.py codex_answer.py claude_answer.py VERSION /opt/pdf-analysis-agent/
+#   sudo install -m 0644 agent.py runner_client.py detect.py host_mode.py api_answer.py codex_answer.py claude_answer.py VERSION /opt/pdf-analysis-agent/
 #   sudo install -m 0644 agent.toml /etc/pdf-analysis-agent/agent.toml
 #   sudo install -m 0600 -o root -g root /dev/null /etc/pdf-analysis-agent/agent.env
 #   echo 'PDF_ANALYSIS_RUNNER_TOKEN=<token from the stand>' | sudo tee -a /etc/pdf-analysis-agent/agent.env >/dev/null
@@ -14,9 +14,13 @@
 # read it and the token never appears on a command line. The service user's home, /var/lib/pdf-analysis-agent
 # (0700), is where the CLI logins of THAT user live (`codex login`, `claude auth login` run as it); the unit gives
 # the service write access to nothing else.
+# Host mode (`[executor] mode = "host"` in agent.toml, what install.sh writes when no model is given): the optional API
+# keys for direct calls live in /etc/pdf-analysis-agent/keys.env, mode 0600, owned by the SERVICE USER (not root), which
+# the agent itself reads; it is NOT an EnvironmentFile of this unit, so a key is never in the service's environment and
+# so never in the environment of a CLI the agent starts. /etc is readable under ProtectSystem=strict.
 
 [Unit]
-Description=PDF Analysis pull agent (executor channel)
+Description=PDF Analysis pull agent (executor channel; a host agent in host mode)
 After=network-online.target
 Wants=network-online.target
 
