@@ -18,7 +18,13 @@ import { ApiError } from '@/shared/api';
 
 /** `409 conflict` of a start whose digest is no longer the one the server computes. */
 export const ESTIMATE_STALE_REASON = 'run_cost_estimate_stale';
-/** `422 analysis_input_invalid`: the model, rate or revision the estimate was bound to has changed. */
+/**
+ * The model, rate or revision (or, on the stage layout, the access) the estimate was bound to has changed. Both starts answer
+ * `422 analysis_input_invalid` with this `reason` (the wiring lane proved it for a changed access on the stage layout's start as
+ * well; the contract's prose that said `409` is being corrected). The `409 conflict` form with this `conflict_reason` is still
+ * accepted, since it costs nothing and an older server's answer must not be read as a failure. All of them are the same answer for
+ * the person: read again (the same pair as `features/start-run`'s `estimateChanged`).
+ */
 export const BINDING_CHANGED_REASON = 'cost_estimate_binding_changed';
 
 export type ReauditStep = 'reading' | 'unreadable' | 'send' | 'ask' | 'failed';
@@ -49,6 +55,7 @@ export function reauditStep({ pending, error, ready, unmetered, lookAgain, faile
 /** Whether `error` is the server saying that what the person agreed to is not what it would run. */
 export function reauditEstimateChanged(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false;
-  return (error.errorCode === 'conflict' && error.details.conflict_reason === ESTIMATE_STALE_REASON)
+  return (error.errorCode === 'conflict'
+      && (error.details.conflict_reason === ESTIMATE_STALE_REASON || error.details.conflict_reason === BINDING_CHANGED_REASON))
     || (error.errorCode === 'analysis_input_invalid' && error.details.reason === BINDING_CHANGED_REASON);
 }

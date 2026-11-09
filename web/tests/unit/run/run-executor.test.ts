@@ -113,10 +113,12 @@ describe('the run table row', () => {
 });
 
 describe('the run page', () => {
-  it('names the executor in «Этапы анализа раздела», among the run’s facts', () => {
-    const markup = runDialog(runStatus({ executor: EXECUTOR }));
-    expect(markup).toContain('<dt>Исполнитель</dt>');
-    expect(markup).toMatch(/<dd data-run-executor="true">«Основной шлюз», модель «модель-основная»<\/dd>/);
+  it('names the executor and its model once in «Этапы анализа раздела», in the plan rows, with no line of its own above them', () => {
+    const markup = runDialog(runStatus({ executor: EXECUTOR }), { selected: 'text' });
+    expect(markup).not.toContain('<dt>Исполнитель</dt>');
+    expect(markup).not.toContain('data-run-executor="true"');
+    expect(markup).toContain('<strong title="модель-основная">модель-основная</strong>');
+    expect(markup).toMatch(/data-plan-row="server"[\s\S]*?Основной шлюз/);
     expect(markup).not.toContain('data-run-executor-waiting');
   });
 
@@ -138,7 +140,10 @@ describe('the run page', () => {
     expect(markup).toMatch(/<span data-run-executor-waiting="true">Ждёт исполнителя «Основной шлюз»\.<\/span>/);
     expect(markup).toContain('data-run-live="waiting"');
     expect(markup).not.toContain('data-run-live-server');
-    expect(runDialog(runStatus({ state: 'queued', terminal_at: null, executor: EXECUTOR }))).toContain('<dt>Исполнитель</dt>');
+    // The window has no executor line of its own (the plan rows say the model and the server); a queued run's server is not chosen yet.
+    const dialog = runDialog(runStatus({ state: 'queued', terminal_at: null, executor: EXECUTOR }), { selected: 'text' });
+    expect(dialog).not.toContain('<dt>Исполнитель</dt>');
+    expect(dialog).toMatch(/data-plan-row="server"[\s\S]*?Основной шлюз/);
   });
 
   it('shows the read-only role the model and the stages, and no server', () => {

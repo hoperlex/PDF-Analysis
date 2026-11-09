@@ -7,8 +7,9 @@
  *
  * **What the form offers.** A set only when every model it names can be served now; a model only when some server can serve
  * it (and the model already in the cell, so the draft never drops what is in force); an effort only from the catalogue's
- * list for the model. A row that is an ensemble scheme (several cells) is read-only here: the plan chooses it whole, with the
- * set. The server checks every pair again, and a refusal is said in words.
+ * list for the model. The blocks row is not a model and an effort: it is **one scheme of a closed list of three** (an Opus leg and
+ * a Sonnet judge, two Codex legs and a judge, or one Astra), chosen in one select, and its legs and judge are never edited one by
+ * one (`HOSTS-ENSEMBLE-01`). The server checks every pair and the scheme again, and a refusal is said in words.
  *
  * One idempotency key per intent, kept for an explicit repeat after an unknown outcome and released when the command settles.
  */
@@ -21,8 +22,9 @@ import type { ExecutionFailure } from '@/entities/execution';
 import { modelLabel } from '@/entities/executor-host';
 import {
   ADVANCED_SUMMARY,
+  BLOCKS_SCHEME_LABEL,
+  BLOCKS_SCHEME_UNLISTED,
   CANCEL_LABEL,
-  ENSEMBLE_NOTE,
   KIT_LEGEND,
   NO_AVAILABLE_MODELS,
   ROW_EFFORT_LABEL,
@@ -34,11 +36,12 @@ import {
   STAGE_ROW_LABELS,
   TIMEOUT_LABEL,
   TOKENS_LABEL,
-  cellText,
+  blockSchemeOf,
   effortsOf,
   layoutFailure,
   rowCells,
 } from '@/entities/stage-layout';
+import type { BlockScheme, BlockSchemeId } from '@/entities/stage-layout';
 import { useCommandKey } from '@/features/manage-executor-connection';
 import { HostFailure } from '@/features/manage-executor-host';
 import { Table } from '@/shared/ui';
@@ -50,7 +53,9 @@ import {
   draftRequest,
   initialDraft,
   modelOptions,
+  offeredBlockSchemes,
   offeredKits,
+  setBlockScheme,
   setCellEffort,
   setCellLimit,
   setCellModel,
@@ -69,25 +74,44 @@ export interface LayoutEditorViewProps {
   readonly failure: ExecutionFailure | null;
   readonly onKit: (kit: StageModelKit) => void;
   readonly onModel: (cellKey: string, modelId: string) => void;
+  /**
+   * The blocks row is chosen as one scheme of the closed list. Optional only for a view drawn to be read (the language and
+   * contrast instruments render the view with the handlers they need); `LayoutEditor` always passes it.
+   */
+  readonly onScheme?: ((scheme: BlockSchemeId) => void) | undefined;
   readonly onEffort: (cellKey: string, effort: ModelEffort) => void;
   readonly onLimit: (cellKey: string, field: 'max_output_tokens' | 'timeout_seconds', value: number) => void;
   readonly onSave: () => void;
   readonly onCancel: () => void;
 }
 
-function RowEditor({ row, cells, ...props }: {
+/** The blocks row: one select with the schemes the row may be, never a model and an effort per cell. */
+function SchemeEditor({ cells, schemes, onScheme }: {
+  readonly cells: readonly StageLayoutCell[];
+  readonly schemes: readonly BlockScheme[];
+  readonly onScheme: ((scheme: BlockSchemeId) => void) | undefined;
+}) {
+  const chosen = blockSchemeOf(cells);
+  return (
+    <select
+      aria-label={`${BLOCKS_SCHEME_LABEL}: ${STAGE_ROW_LABELS.blocks}`}
+      value={chosen === null ? '' : chosen.id}
+      data-layout-scheme="blocks"
+      onChange={(event) => onScheme?.(event.currentTarget.value as BlockSchemeId)}
+    >
+      {chosen === null ? <option value="" disabled>{BLOCKS_SCHEME_UNLISTED}</option> : null}
+      {schemes.map((scheme) => <option key={scheme.id} value={scheme.id} data-layout-scheme-id={scheme.id}>{scheme.label}</option>)}
+    </select>
+  );
+}
+
+function RowEditor({ row, cells, schemes, ...props }: {
   readonly row: (typeof STAGE_ROW_KEY_VALUES)[number];
   readonly cells: readonly StageLayoutCell[];
-} & Pick<LayoutEditorViewProps, 'catalogue' | 'availableModelIds' | 'onModel' | 'onEffort'>) {
+  readonly schemes: readonly BlockScheme[];
+} & Pick<LayoutEditorViewProps, 'catalogue' | 'availableModelIds' | 'onModel' | 'onEffort' | 'onScheme'>) {
   if (cells.length === 0) return <span className="am-note">нет данных</span>;
-  if (cells.length > 1) {
-    return (
-      <span data-layout-ensemble={row}>
-        {cells.map((cell) => `${STAGE_ROLE_LABELS[cell.role]}: ${cellText(cell)}`).join('; ')}
-        <span className="am-form__hint"> {ENSEMBLE_NOTE}</span>
-      </span>
-    );
-  }
+  if (row === 'blocks') return <SchemeEditor cells={cells} schemes={schemes} onScheme={props.onScheme} />;
   const cell = cells[0] as StageLayoutCell;
   const options = modelOptions(cell, props.catalogue, props.availableModelIds);
   const efforts = MODEL_EFFORT_VALUES.filter((effort) => effortsOf(props.catalogue, cell.model_id).includes(effort));
@@ -120,6 +144,7 @@ export function LayoutEditorView(props: LayoutEditorViewProps) {
   const kits = offeredKits(catalogue, availableModelIds, currentKit);
   const noChoice = availableModelIds.length === 0;
   const rows = STAGE_ROW_KEY_VALUES.map((row) => ({ row, cells: rowCells(draft.cells, row) }));
+  const schemes = offeredBlockSchemes(draft, catalogue, availableModelIds);
   return (
     <form
       className="am-form"
@@ -152,7 +177,16 @@ export function LayoutEditorView(props: LayoutEditorViewProps) {
             key: 'model',
             header: `${ROW_MODEL_LABEL} · ${ROW_EFFORT_LABEL.toLowerCase()}`,
             cell: (entry) => (
-              <RowEditor row={entry.row} cells={entry.cells} catalogue={catalogue} availableModelIds={availableModelIds} onModel={props.onModel} onEffort={props.onEffort} />
+              <RowEditor
+                row={entry.row}
+                cells={entry.cells}
+                schemes={schemes}
+                catalogue={catalogue}
+                availableModelIds={availableModelIds}
+                onModel={props.onModel}
+                onEffort={props.onEffort}
+                onScheme={props.onScheme}
+              />
             ),
           },
         ]}
@@ -249,6 +283,7 @@ export function LayoutEditor({ layout, catalogue, availableModelIds, onClose }: 
       failure={failure}
       onKit={(kit) => setDraft((was) => (was === null ? was : chooseKit(was, kit)))}
       onModel={(key, id) => setDraft((was) => (was === null ? was : setCellModel(was, key, id, catalogue)))}
+      onScheme={(scheme) => setDraft((was) => (was === null ? was : setBlockScheme(was, scheme)))}
       onEffort={(key, effort) => setDraft((was) => (was === null ? was : setCellEffort(was, key, effort)))}
       onLimit={(key, field, value) => setDraft((was) => (was === null ? was : setCellLimit(was, key, field, value)))}
       onSave={() => void save(draft)}

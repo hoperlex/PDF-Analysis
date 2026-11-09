@@ -4,10 +4,12 @@
  *
  * **These are choices offered to an administrator, not a rule.** A set only fills the form; the server accepts a revision
  * only if every cell is a pair of the model catalogue (`listModelCatalogue`), and a set is offered only when every model it
- * names is served by some server now. The ensemble of the blocks row (two legs and a judge) arrives in wave 2; until then the
- * blocks row of each set is its single leg, and the plan names the set so («Только Claude (блоки без судьи)»).
+ * names is served by some server now. The blocks row of a set is one of the three schemes of the closed list
+ * (`./block-schemes.ts`, `HOSTS-ENSEMBLE-01`): «Только Claude» is an Opus leg and a Sonnet judge, «Только Codex» is two legs and a
+ * judge, so a set has more than six cells, and the legs and the judge count as models of the set.
  *
- * The limits of a cell (answer tokens, timeout) are today's constants of the code (ADR-0028: 16000, 6000 and 12000 tokens);
+ * The limits of a cell (answer tokens, timeout) are today's constants of the code (`ROW_DEFAULT_MAX_OUTPUT_TOKENS` of
+ * `analysis/text/cell_settings.py`: 16000, 6000 and 12000 tokens, the legs and the judge of the blocks row taking the row's 6000);
  * a revision in force keeps its own limits for a cell the form changes, and these apply only to a cell the revision has not
  * got. The timeout has no constant in the code to copy for the new kinds of cell; the default is 1800 seconds
  * (`DEFAULT_TIMEOUT_SECONDS`, the same as the server's default of a cell, `HOSTS-LAYOUT-01`) and the server bounds it
@@ -17,11 +19,15 @@
 import type {
   ModelCatalogue,
   ModelEffort,
+  StageCellRole,
   StageLayoutCell,
   StageModelKit,
   StageRowKey,
 } from '@/shared/api';
 import { STAGE_ROW_KEY_VALUES } from '@/shared/api';
+
+import { blockSchemeById } from './block-schemes';
+import type { BlockScheme } from './block-schemes';
 
 export const DEFAULT_TIMEOUT_SECONDS = 1800;
 
@@ -31,35 +37,43 @@ export const DEFAULT_ANSWER_TOKENS: Readonly<Record<StageRowKey, number>> = {
   blocks: 6000,
   cross_check: 6000,
   norms: 12000,
-  review: 6000,
-  correction: 6000,
+  review: 12000,
+  correction: 12000,
 };
 
-interface KitCell { readonly model_id: string; readonly effort: ModelEffort }
+interface KitCell { readonly role: StageCellRole; readonly model_id: string; readonly effort: ModelEffort }
 
-const CLAUDE_ONLY: Readonly<Record<StageRowKey, KitCell>> = {
-  text: { model_id: 'claude-sonnet-5-5', effort: 'medium' },
-  blocks: { model_id: 'claude-opus-5-5', effort: 'medium' },
-  cross_check: { model_id: 'claude-sonnet-5-5', effort: 'medium' },
-  norms: { model_id: 'claude-sonnet-5-5', effort: 'medium' },
-  review: { model_id: 'claude-sonnet-5-5', effort: 'medium' },
-  correction: { model_id: 'claude-sonnet-5-5', effort: 'medium' },
+/** One cell of a row that has a single answer. */
+const main = (model_id: string, effort: ModelEffort = 'medium'): readonly KitCell[] => [{ role: 'main', model_id, effort }];
+
+/** The cells of a scheme, as a set's row. */
+const scheme = (candidate: BlockScheme): readonly KitCell[] => candidate.cells.map((cell) => ({ ...cell }));
+
+type KitTable = Readonly<Record<StageRowKey, readonly KitCell[]>>;
+
+const CLAUDE_ONLY: KitTable = {
+  text: main('claude-sonnet-5-5'),
+  blocks: scheme(blockSchemeById('claude_opus_judge_sonnet')),
+  cross_check: main('claude-sonnet-5-5'),
+  norms: main('claude-sonnet-5-5'),
+  review: main('claude-sonnet-5-5'),
+  correction: main('claude-sonnet-5-5'),
 };
 
-const CODEX_ONLY: Readonly<Record<StageRowKey, KitCell>> = {
-  text: { model_id: 'gpt-6.1-sol', effort: 'medium' },
-  blocks: { model_id: 'gpt-6-astra', effort: 'medium' },
-  cross_check: { model_id: 'gpt-6-sol', effort: 'medium' },
-  norms: { model_id: 'gpt-6-astra', effort: 'medium' },
-  review: { model_id: 'gpt-6-sol', effort: 'medium' },
-  correction: { model_id: 'gpt-6.1-sol', effort: 'medium' },
+const CODEX_ONLY: KitTable = {
+  text: main('gpt-6.1-sol'),
+  blocks: scheme(blockSchemeById('codex_astra_sol_judge')),
+  cross_check: main('gpt-6-sol'),
+  norms: main('gpt-6-astra'),
+  review: main('gpt-6-sol'),
+  correction: main('gpt-6.1-sol'),
 };
 
 /** The two named sets; «Свой набор» has no table, it is any edit. */
 export const NAMED_KITS = ['claude_only', 'codex_only'] as const satisfies readonly StageModelKit[];
 export type NamedKit = (typeof NAMED_KITS)[number];
 
-const KIT_TABLES: Readonly<Record<NamedKit, Readonly<Record<StageRowKey, KitCell>>>> = {
+const KIT_TABLES: Readonly<Record<NamedKit, KitTable>> = {
   claude_only: CLAUDE_ONLY,
   codex_only: CODEX_ONLY,
 };
@@ -72,26 +86,48 @@ export function cellKeyOf(row: StageRowKey, role: StageLayoutCell['role'] = 'mai
   return `${row}:${role}`;
 }
 
-/** The models a set names. */
+/** Every cell of a set, row by row, in the order of the roles inside a row. */
+function kitTable(kit: NamedKit): readonly { readonly row: StageRowKey; readonly cell: KitCell }[] {
+  return STAGE_ROW_KEY_VALUES.flatMap((row) => KIT_TABLES[kit][row].map((cell) => ({ row, cell })));
+}
+
+/** The models a set names, the legs and the judge of the blocks row among them. */
 export function kitModelIds(kit: NamedKit): readonly string[] {
-  return [...new Set(STAGE_ROW_KEY_VALUES.map((row) => KIT_TABLES[kit][row].model_id))];
+  return [...new Set(kitTable(kit).map(({ cell }) => cell.model_id))];
 }
 
 /**
- * The cells of a set. A cell the revision in force already has keeps its limits; the rest take today's constants.
+ * The cells of a set. A cell the revision in force already has keeps its limits; the rest take today's constants, the legs and the
+ * judge of the blocks row the row's.
  */
 export function kitCells(kit: NamedKit, current: readonly StageLayoutCell[]): StageLayoutCell[] {
-  return STAGE_ROW_KEY_VALUES.map((row) => {
-    const key = cellKeyOf(row);
-    const had = current.find((cell) => cell.cell_key === key);
-    const choice = KIT_TABLES[kit][row];
+  return kitTable(kit).map(({ row, cell }) => {
+    const key = cellKeyOf(row, cell.role);
+    const had = current.find((candidate) => candidate.cell_key === key);
     return {
       cell_key: key,
       row,
-      role: 'main',
-      model_id: choice.model_id,
-      effort: choice.effort,
+      role: cell.role,
+      model_id: cell.model_id,
+      effort: cell.effort,
       max_output_tokens: had?.max_output_tokens ?? DEFAULT_ANSWER_TOKENS[row],
+      timeout_seconds: had?.timeout_seconds ?? DEFAULT_TIMEOUT_SECONDS,
+    };
+  });
+}
+
+/** The cells of the blocks row for a scheme, with the limits of each cell the revision or the draft already has. */
+export function blockSchemeCells(candidate: BlockScheme, current: readonly StageLayoutCell[]): StageLayoutCell[] {
+  return candidate.cells.map((cell) => {
+    const key = cellKeyOf('blocks', cell.role);
+    const had = current.find((other) => other.cell_key === key);
+    return {
+      cell_key: key,
+      row: 'blocks',
+      role: cell.role,
+      model_id: cell.model_id,
+      effort: cell.effort,
+      max_output_tokens: had?.max_output_tokens ?? DEFAULT_ANSWER_TOKENS.blocks,
       timeout_seconds: had?.timeout_seconds ?? DEFAULT_TIMEOUT_SECONDS,
     };
   });
@@ -111,14 +147,30 @@ export function pairIsInCatalogue(catalogue: ModelCatalogue | undefined, modelId
   return effortsOf(catalogue, modelId).includes(effort);
 }
 
+/** Whether every cell is a pair of the catalogue and its model is served by some server now. */
+function cellsAreOffered(
+  cells: readonly { readonly model_id: string; readonly effort: ModelEffort }[],
+  catalogue: ModelCatalogue | undefined,
+  availableModelIds: readonly string[],
+): boolean {
+  const available = new Set(availableModelIds);
+  return cells.every((cell) => available.has(cell.model_id) && pairIsInCatalogue(catalogue, cell.model_id, cell.effort));
+}
+
 /**
- * Whether a set can be offered: every cell of it is a pair of the catalogue, and every model it names is served by some
- * server now. A set that cannot be used is not drawn (plan §6: an unavailable thing is not listed).
+ * Whether a set can be offered: every cell of it (the legs and the judge of the blocks row too) is a pair of the catalogue, and
+ * every model it names is served by some server now. A set that cannot be used is not drawn (plan §6: an unavailable thing is not
+ * listed).
  */
 export function kitIsOffered(kit: NamedKit, catalogue: ModelCatalogue | undefined, availableModelIds: readonly string[]): boolean {
-  const available = new Set(availableModelIds);
-  return STAGE_ROW_KEY_VALUES.every((row) => {
-    const choice = KIT_TABLES[kit][row];
-    return available.has(choice.model_id) && pairIsInCatalogue(catalogue, choice.model_id, choice.effort);
-  });
+  return cellsAreOffered(kitTable(kit).map(({ cell }) => cell), catalogue, availableModelIds);
+}
+
+/** Whether a scheme of the blocks row can be offered, on the same terms as a set. */
+export function blockSchemeIsOffered(
+  candidate: BlockScheme,
+  catalogue: ModelCatalogue | undefined,
+  availableModelIds: readonly string[],
+): boolean {
+  return cellsAreOffered(candidate.cells, catalogue, availableModelIds);
 }

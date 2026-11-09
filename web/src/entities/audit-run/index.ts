@@ -126,7 +126,12 @@ export type { ArV3PackView } from './api/use-ar-v3-pack-status';
 export { arV3PackStatusQueryOptions, useArV3PackStatus, useArV3StartAllowed } from './api/use-ar-v3-pack-status';
 
 export type { RunStatusPolling } from './api/use-run-status';
-export { useRunStatus } from './api/use-run-status';
+export { recordRunReading, useRunStatus } from './api/use-run-status';
+
+export type { RunStagesView } from './api/use-run-stages';
+export { runStagesKey, runStagesQueryOptions, useRunStages } from './api/use-run-stages';
+export type { ChipModelLine } from './model/run-stages';
+export { chipModelLine, modelsCount, planModelIds, stageOfChip } from './model/run-stages';
 
 export type { RunTableProps } from './ui/run-table';
 export { RunTable, STARTED_BY_UNKNOWN } from './ui/run-table';

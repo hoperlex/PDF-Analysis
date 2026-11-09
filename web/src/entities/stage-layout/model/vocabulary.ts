@@ -62,7 +62,10 @@ export const ROW_EFFORT_LABEL = 'Усилие';
 export const ADVANCED_SUMMARY = 'Дополнительно';
 export const TOKENS_LABEL = 'Ответ, токенов';
 export const TIMEOUT_LABEL = 'Таймаут, с';
-export const ENSEMBLE_NOTE = 'Схема из нескольких моделей выбирается целиком, вместе с набором.';
+/** The blocks row is one of three schemes, chosen whole (`HOSTS-ENSEMBLE-01`); its legs and judge are never edited one by one. */
+export const BLOCKS_SCHEME_LABEL = 'Схема';
+export const BLOCKS_SCHEME_UNLISTED = 'не из списка';
+export const BLOCKS_SCHEME_PROBLEM = 'Для блоков выберите одну из схем: другого сочетания моделей сервер не примет.';
 export const NO_AVAILABLE_MODELS =
   'Выбирать пока не из чего: ни одна модель каталога не доступна на серверах. Подключите сервер на вкладке «Серверы».';
 

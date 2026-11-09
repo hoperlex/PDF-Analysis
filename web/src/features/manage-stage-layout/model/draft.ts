@@ -17,8 +17,14 @@ import type {
   StageModelKit,
   StageModelLayout,
 } from '@/shared/api';
+import { STAGE_ROW_KEY_VALUES } from '@/shared/api';
 import {
+  BLOCKS_SCHEME_PROBLEM,
+  BLOCK_SCHEMES,
   NAMED_KITS,
+  blockSchemeCells,
+  blockSchemeIsOffered,
+  blockSchemeOf,
   effortsOf,
   isNamedKit,
   kitCells,
@@ -26,7 +32,7 @@ import {
   pairIsInCatalogue,
   rowCells,
 } from '@/entities/stage-layout';
-import type { NamedKit } from '@/entities/stage-layout';
+import type { BlockScheme, BlockSchemeId, NamedKit } from '@/entities/stage-layout';
 
 export interface LayoutDraft {
   readonly kit: StageModelKit;
@@ -84,6 +90,30 @@ export function setCellLimit(draft: LayoutDraft, cellKey: string, field: 'max_ou
   return replaceCell(draft, cellKey, (cell) => ({ ...cell, [field]: value }));
 }
 
+/**
+ * The blocks row is chosen as one scheme of the closed list (`HOSTS-ENSEMBLE-01`), never cell by cell: the cells of the other
+ * rows stay as they are, the cells of the row become the scheme's, and each cell keeps the limits it had.
+ */
+export function setBlockScheme(draft: LayoutDraft, schemeId: BlockSchemeId): LayoutDraft {
+  const chosen = BLOCK_SCHEMES.find((candidate) => candidate.id === schemeId);
+  if (chosen === undefined) return draft;
+  const cells = STAGE_ROW_KEY_VALUES.flatMap((row) => (row === 'blocks' ? blockSchemeCells(chosen, draft.cells) : rowCells(draft.cells, row)));
+  return { kit: 'custom', cells };
+}
+
+/**
+ * The schemes the blocks row offers: those every model of which some server can serve and the catalogue names with that effort,
+ * and the scheme the row already is (so a draft never silently drops what is in force).
+ */
+export function offeredBlockSchemes(
+  draft: LayoutDraft,
+  catalogue: ModelCatalogue | undefined,
+  availableModelIds: readonly string[],
+): readonly BlockScheme[] {
+  const own = blockSchemeOf(draft.cells);
+  return BLOCK_SCHEMES.filter((candidate) => candidate === own || blockSchemeIsOffered(candidate, catalogue, availableModelIds));
+}
+
 /** The models a cell offers: what some server can serve and the catalogue names, and the model the cell has. */
 export function modelOptions(
   cell: StageLayoutCell,
@@ -112,6 +142,8 @@ export function draftProblem(draft: LayoutDraft, catalogue: ModelCatalogue | und
       return `Таймаут — целое число секунд от ${TIMEOUT.min} до ${TIMEOUT.max}.`;
     }
   }
+  // The blocks row is one of the three schemes; a revision of any other pairing is refused by the server (`block_scheme_not_listed`).
+  if (draft.cells.some((cell) => cell.row === 'blocks') && blockSchemeOf(draft.cells) === null) return BLOCKS_SCHEME_PROBLEM;
   return null;
 }
 

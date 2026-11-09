@@ -21,7 +21,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import type { RunStatus } from '@/shared/api';
+import type { RunStages, RunStatus } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
 import { PROVIDER_MODE_LABELS, RunStateBadge, runStageLabel } from '@/shared/ui';
 import { chipProgress, isRunAnimating, runFinishEstimate } from '@/entities/audit-run';
@@ -38,6 +38,8 @@ export interface RunHeaderProps {
   readonly chips: readonly RunChip[];
   readonly executor: RunExecutorLine | null;
   readonly model: { readonly short: string; readonly pin: string } | null;
+  /** The stages read for the run (`useRunStages`), for the model each chip names; absent until read. */
+  readonly stages?: RunStages | undefined;
   /** Whether the reader may see the server (`maySeeServer`). */
   readonly showServer: boolean;
   readonly liveProgress: LiveProgress | null;
@@ -77,7 +79,7 @@ function segmentOf(chip: RunChip): string {
 }
 
 export function RunHeader({
-  status, chips, executor, model, showServer, liveProgress, recorded, polling, from, waiting, waitDetail, actions, onOpenChip,
+  status, chips, executor, model, stages, showServer, liveProgress, recorded, polling, from, waiting, waitDetail, actions, onOpenChip,
 }: RunHeaderProps) {
   const now = useRunClock(status);
   const animating = isRunAnimating(status);
@@ -146,7 +148,7 @@ export function RunHeader({
         />
       )}
 
-      <RunRail chips={chips} model={model} onOpen={onOpenChip} />
+      <RunRail chips={chips} model={model} stages={stages} onOpen={onOpenChip} />
 
       {/* `R-151i`: a run started from a stage says so under its head, with the way back to the run it took the first stages from. */}
       {from === null ? null : (
