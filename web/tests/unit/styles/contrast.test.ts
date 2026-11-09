@@ -581,15 +581,15 @@ describe('the census is taken over rendered screens, not over a list', () => {
     // measured — they are the dark palette — but through `palette()`, which reads the
     // block, not through the cascade, which cannot match the selector.
     //
-    // THREE MORE are declined since the design wave, all of them `:has()` or `:not()`: the
-    // sign-in glow (`.screen:has(input:focus) .orbitGlow`, `opacity`), the stage verdict label
-    // (`.verdict label:has(textarea)`, `display`) and the disclosure panel's entrance
-    // (`.am-disclosure__panel:not([hidden])`, `animation`). The assertion that makes the
-    // decline cost nothing is the one below: none of them declares a colour-bearing property,
-    // so there is no pair for the matcher to have missed -- and a fourth that did would fail it.
+    // TWO MORE are declined since the design wave, both `:has()` or `:not()`: the stage verdict
+    // label (`.verdict label:has(textarea)`, `display`) and the disclosure panel's entrance
+    // (`.am-disclosure__panel:not([hidden])`, `animation`). (A third, the sign-in glow
+    // `.screen:has(input:focus) .orbitGlow`, left with the sign-in scene on 2026-11-09.) The
+    // assertion that makes the decline cost nothing is the one below: none of them declares a
+    // colour-bearing property, so there is no pair for the matcher to have missed -- and one
+    // more that did would fail it.
     const DECLINED_WITHOUT_COLOUR = [
       '.am-disclosure__panel:not([hidden])',
-      '._screen_daa705:has(input:focus) ._orbitGlow_daa705',
       '._verdict_be624b label:has(textarea)',
     ];
     expect(unsupported()).toEqual(
@@ -957,8 +957,10 @@ describe('the register is held to the census in both directions, and in both pal
  * after the link-button hover repair: 67 borders (the translucent `color-mix` borders and the
  * 2.995 near-miss), 4 graphics, 1 text. 62 on 2026-11-07 (lane D5): the denser frame dropped the sidebar's tree guide, the
  * update notice's accent border, and two translucent card borders, which left five pairs in both palettes.
+ * 52 on 2026-11-09 (sign-in hotfix): the sign-in scene left, and with it the orbit's rings and node
+ * circles -- the accent at 14/22/30 % and the line at 45/52 % over the showcase card, in both palettes.
  */
-const PENDING_PAIR_ROWS = 62;
+const PENDING_PAIR_ROWS = 52;
 /** Likewise for the colour rules no screen reaches. */
 const PENDING_UNREACHED_ROWS = 53; // 61 at the base; lane D5 removed one row, lane D1 three, lane P2 three (the home page at `/` joined the census loaded), lane N1 one (the catalogue's `.filters` lost its box: the form is a line, the layout carries no colour)
 

@@ -62,11 +62,21 @@ function latinIn(markup: string): string[] {
 describe('the screen offers a credentials form and nothing that holds a credential', () => {
   const markup = render(createElement(SignInPage, {}));
 
-  it('shows the selected orbit concept without turning its stages into live results', () => {
-    expect(markup).toContain('Точность начинается');
-    expect(markup).toContain('Проверка как система связей');
-    expect(markup).toContain('Иллюстрация');
-    expect(markup).toContain('aria-hidden="true"');
+  it('is the credentials card alone: no hero copy, no illustrated scene (owner, 2026-11-09)', () => {
+    for (const removed of [
+      'Анализ проектной документации',
+      'Точность начинается',
+      'Один вход',
+      'Демонстрация сценария',
+      'Проверка как система связей',
+      'Иллюстрация',
+    ]) {
+      expect(markup, `«${removed}» is back on the sign-in screen`).not.toContain(removed);
+    }
+    // The card's title is the page's one heading, and the section is named by it.
+    expect(markup.match(/<h[1-6][\s>]/g)).toEqual(['<h1 ']);
+    expect(markup).toMatch(/<h1[^>]*id="sign-in-title"[^>]*>Продолжить работу<\/h1>/);
+    expect(markup).toMatch(/<section[^>]*aria-labelledby="sign-in-title"/);
   });
 
   it('posts to the exchange, with both fields and a submit', () => {

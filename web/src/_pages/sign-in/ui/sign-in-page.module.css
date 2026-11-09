@@ -1,17 +1,31 @@
+/*
+ * `/login` (owner, 2026-11-09): the credentials card alone, centred in the guest frame's working
+ * area on a flat background, in both themes through the `--am-showcase-*` tokens. The hero copy
+ * and the illustrated scene that stood beside it are gone, and so is the glow behind the scene.
+ */
 .screen {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(380px, 1.05fr);
-  align-items: center;
-  gap: var(--am-gap-xl);
-  width: min(100%, 1200px);
+  place-items: center;
+  box-sizing: border-box;
+  width: 100%;
   min-height: calc(100dvh - 160px);
   margin: 0 auto;
   padding: var(--am-gap) 0;
   color: var(--am-showcase-ink);
-  background: radial-gradient(circle at 72% 54%, color-mix(in srgb, var(--am-showcase-accent) 10%, transparent), transparent 38%);
 }
-.copy { min-width: 0; }
-.eyebrow, .cardEyebrow, .sceneEyebrow {
+.card {
+  box-sizing: border-box;
+  width: min(100%, 420px);
+  padding: var(--am-gap);
+  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 35%, transparent);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-showcase-card);
+  box-shadow: var(--am-shadow-3);
+}
+.header { display: flex; align-items: center; gap: var(--am-gap-md); }
+.signInMark { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; border-radius: var(--am-radius-sm); color: var(--am-showcase-accent-strong); background: var(--am-showcase-accent-soft); }
+.signInMark svg { width: 20px; height: 20px; }
+.cardEyebrow {
   margin: 0;
   color: var(--am-showcase-accent-strong);
   font-size: var(--am-text-xs);
@@ -20,75 +34,15 @@
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
-.eyebrow { margin-bottom: var(--am-gap-sm); }
-.title { margin: 0; font-size: var(--am-text-2xl); font-weight: 720; line-height: 1.15; letter-spacing: -0.03em; }
-.lead { max-width: 49ch; margin: var(--am-gap-sm) 0 var(--am-gap); color: var(--am-showcase-muted); font-size: var(--am-text-md); line-height: 1.55; }
-.card, .scene {
-  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 35%, transparent);
-  border-radius: var(--am-radius-lg);
-  background: var(--am-showcase-card);
-  box-shadow: var(--am-shadow-3);
-}
-.card { box-sizing: border-box; width: min(100%, 420px); padding: var(--am-gap); }
-.header { display: flex; align-items: center; gap: var(--am-gap-md); }
-.signInMark { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; border-radius: var(--am-radius-sm); color: var(--am-showcase-accent-strong); background: var(--am-showcase-accent-soft); }
-.signInMark svg { width: 20px; height: 20px; }
-
-.cardTitle { margin: 0; font-size: var(--am-text-lg); font-weight: 700; letter-spacing: -0.02em; }
-.reason { margin: var(--am-gap-sm) 0 0; padding: var(--am-gap-sm) var(--am-gap-md); border-left: 3px solid var(--am-showcase-accent); border-radius: var(--am-radius-sm); background: var(--am-showcase-accent-soft); color: var(--am-showcase-ink); font-size: var(--am-text-sm); font-weight: 600; line-height: 1.5; }
-.formLead { margin: var(--am-gap-sm) 0 var(--am-gap-md); color: var(--am-showcase-muted); font-size: var(--am-text-sm); line-height: 1.5; }
+.cardTitle { margin: 0; font-size: var(--am-text-lg); font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
+.reason { margin: var(--am-gap-sm) 0 0; padding: var(--am-gap-sm) var(--am-gap-md); border-left: 3px solid var(--am-showcase-accent); border-radius: var(--am-radius-sm); background: var(--am-showcase-accent-soft); color: var(--am-showcase-ink); font-size: var(--am-text-sm); font-weight: 600; line-height: 1.5; text-wrap: pretty; }
+.formLead { margin: var(--am-gap-sm) 0 var(--am-gap-md); color: var(--am-showcase-muted); font-size: var(--am-text-sm); line-height: 1.5; text-wrap: pretty; }
 .register { display: flex; flex-wrap: wrap; gap: var(--am-gap-xs) var(--am-gap-md); margin: var(--am-gap-md) 0 0; color: var(--am-showcase-muted); font-size: var(--am-text-sm); }
 .register a { color: var(--am-showcase-accent-strong); font-weight: 700; }
 .register a:focus-visible { outline: 2px solid var(--am-showcase-accent); outline-offset: 3px; border-radius: 2px; }
 .accessNote { margin: var(--am-gap-md) 0 0; padding-top: var(--am-gap-sm); border-top: 1px solid color-mix(in srgb, var(--am-showcase-line) 36%, transparent); color: var(--am-showcase-soft); font-size: var(--am-text-xs); }
-.scene { position: relative; display: flex; flex-direction: column; min-width: 0; height: clamp(500px, 40vw, 560px); padding: var(--am-gap-lg); overflow: hidden; }
-.sceneHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.sceneEyebrow { color: var(--am-showcase-soft); }
-.sceneBadge { padding: var(--am-gap-xs) var(--am-gap-md); border-radius: var(--am-radius-pill); background: var(--am-showcase-accent-soft); color: var(--am-showcase-accent-strong); font-size: var(--am-text-xs); font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
-.sceneTitle { margin: var(--am-gap-md) 0 0; font-size: var(--am-text-xl); font-weight: 700; letter-spacing: -0.02em; }
-.orbit { position: relative; flex: 1; min-height: 0; isolation: isolate; }
-.orbitGlow { position: absolute; top: 50%; left: 50%; width: min(96%, 400px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--am-showcase-accent) 16%, transparent), transparent 67%); transform: translate(-50%, -50%); }
-.ring, .orbitArc, .orbitArcSecondary { position: absolute; top: 50%; left: 50%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); }
-.ringOuter { width: min(76%, 350px); border: 1px solid color-mix(in srgb, var(--am-showcase-accent) 30%, transparent); }
-.ringDashed { width: min(61%, 282px); border: 1px dashed color-mix(in srgb, var(--am-showcase-line) 52%, transparent); }
-.ringMiddle { width: min(47%, 215px); border: 1px solid color-mix(in srgb, var(--am-showcase-accent) 22%, transparent); }
-.ringInner { width: min(33%, 155px); border: 1px solid color-mix(in srgb, var(--am-showcase-accent) 14%, transparent); }
-.orbitArc { width: min(76%, 350px); border: 4px solid transparent; border-top-color: var(--am-showcase-accent); border-left-color: var(--am-showcase-accent); transform: translate(-50%, -50%) rotate(-22deg); }
-.orbitArcSecondary { width: min(61%, 282px); border: 3px solid transparent; border-bottom-color: var(--am-showcase-accent); transform: translate(-50%, -50%) rotate(28deg); opacity: 0.76; }
-.orbitCore { position: absolute; top: 50%; left: 50%; display: grid; place-items: center; width: 88px; height: 88px; border: 2px solid var(--am-showcase-accent); border-radius: 50%; background: var(--am-showcase-card); box-shadow: 0 9px 24px color-mix(in srgb, var(--am-showcase-ink) 15%, transparent); color: var(--am-showcase-accent-strong); transform: translate(-50%, -50%); }
-.orbitCore svg { width: 47px; height: 47px; }
-.orbitNode { position: absolute; display: grid; justify-items: center; gap: var(--am-gap-xs); width: 80px; color: var(--am-showcase-muted); font-size: var(--am-text-xs); }
-.orbitNode b { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid color-mix(in srgb, var(--am-showcase-line) 45%, transparent); border-radius: 50%; background: var(--am-showcase-card); color: var(--am-showcase-accent-strong); box-shadow: var(--am-shadow-2); font-size: var(--am-text-xs); }
-.orbitNode small { font-size: var(--am-text-xs); }
-.nodeDocument { top: calc(50% - min(38%, 175px) - 37px); left: 50%; transform: translateX(-50%); }
-.nodeAnalysis { top: calc(50% + min(31%, 140px) - 19px); left: calc(50% + min(31%, 140px) - 40px); }
-.nodeExpert { top: calc(50% + min(31%, 140px) - 19px); left: calc(50% - min(31%, 140px) - 40px); }
-.nodeAnalysis b { background: var(--am-showcase-accent-soft); }
-.sceneFoot { display: flex; align-items: center; gap: var(--am-gap-sm); margin: 0; padding: var(--am-gap-md) var(--am-gap); border: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent); border-radius: var(--am-radius); background: var(--am-showcase-card-alt); color: var(--am-showcase-muted); font-size: var(--am-text-xs); }
-.sceneFoot span { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--am-showcase-accent); }
-.screen:has(input:focus) .orbitGlow { opacity: 0.28; }
-@media (prefers-reduced-motion: no-preference) {
-  .orbitArc { animation: orbitTurn 24s linear infinite; }
-  .orbitArcSecondary { animation: orbitTurnReverse 30s linear infinite; }
-  .orbitGlow { animation: orbitBreathe 8s ease-in-out infinite; }
-  @keyframes orbitTurn { to { transform: translate(-50%, -50%) rotate(338deg); } }
-  @keyframes orbitTurnReverse { to { transform: translate(-50%, -50%) rotate(-332deg); } }
-  @keyframes orbitBreathe { 50% { opacity: 0.55; } }
-}
-@media (max-width: 1250px) {
-  .screen { grid-template-columns: minmax(0, 1fr) minmax(330px, 0.95fr); gap: var(--am-gap-lg); }
-  .scene { height: 500px; padding: var(--am-gap); }
-}
-/* Narrow: the form alone, as the original's sign-in is; the illustration below the form only cost a screen of scrolling. */
-@media (max-width: 1120px) {
-  .screen { grid-template-columns: 1fr; max-width: 440px; min-height: 0; }
-  .copy { display: grid; justify-items: start; }
-  .lead { max-width: 62ch; }
-  .card { width: 100%; }
-  .scene { display: none; }
-}
+/* Phone: the card starts at the top, so the fields and «Войти» stay above the on-screen keyboard. */
 @media (max-width: 640px) {
-  .screen { padding: var(--am-gap-sm) 0 var(--am-gap); }
-  .title { font-size: var(--am-text-xl); }
-  .card { padding: var(--am-gap); border-radius: var(--am-radius); }
+  .screen { place-items: start center; min-height: 0; padding: var(--am-gap-sm) 0 var(--am-gap); }
+  .card { border-radius: var(--am-radius); }
 }
