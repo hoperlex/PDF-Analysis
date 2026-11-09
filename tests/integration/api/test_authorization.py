@@ -1265,6 +1265,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "optimisation_proposals.py",
         "registrations.py",
         "releases.py",
+        # `HOSTS-SEAL-2` (1.46.0): the stages of a run are a read for every role, and the answer leaves out the server and the access of a cell
+        # for the viewer; the route hands the caller (``user_uid``) to the port, whose implementation re-reads the role set in its own
+        # transaction -- as the schedule's and the specification's reads do. Whether anyone may ask is the role register's.
+        "run_stages.py",
         # `EXEC-PULL-01`: issuing and revoking a runner token records WHO did it (the actor of its
         # journal event and of its row); that only an administrator may is the role register's and
         # the command's own re-read of the role set. The runner's own five operations read the

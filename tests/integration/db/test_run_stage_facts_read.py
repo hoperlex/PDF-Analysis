@@ -92,13 +92,19 @@ def _call(connection: Connection, run_id: str, *, phase: str | None, stage_key: 
     return call_id
 
 
-def _effect(connection: Connection, run_id: str, *, call_id: str | None = None, stage_key: str | None, access: str | None,
-            complete: bool, request: str = "e") -> str:
+def _job(connection: Connection, run_id: str) -> tuple[str, str]:
+    """The run's one job (``uq_job_run_id``) and its one attempt, which every effect of the run names."""
     job_id, attempt_id = str(JobId.new()), str(AttemptId.new())
-    call_id = call_id or str(ModelCallId.new())
     connection.execute(text("INSERT INTO job (job_id, run_id) VALUES (:job, :run)"), {"job": job_id, "run": run_id})
     connection.execute(text("INSERT INTO attempt (attempt_id, job_id, execution_token) VALUES (:attempt, :job, 'test-token')"),
                        {"attempt": attempt_id, "job": job_id})
+    return job_id, attempt_id
+
+
+def _effect(connection: Connection, run_id: str, authority: tuple[str, str], *, call_id: str | None = None, stage_key: str | None,
+            access: str | None, complete: bool, request: str = "e") -> str:
+    job_id, attempt_id = authority
+    call_id = call_id or str(ModelCallId.new())
     connection.execute(text(
         "INSERT INTO provider_call_effect (model_call_id, run_id, job_id, attempt_id, stage_id, provider, model_identity, provider_mode, "
         "parameters, request_sha256, stage_key, access) VALUES (:id, :run, :job, :attempt, 'text_analysis', 'anthropic', "
@@ -124,11 +130,12 @@ def test_a_planned_run_reads_its_stage_results_and_a_journal_of_new_and_old_rows
         _stage(connection, run_id, "source_preparation")
         # a new row: effect and model_call, both carrying the key and the access (0062)
         done = _call(connection, run_id, phase=None, stage_key="text", access="subscription", request="1")
-        _effect(connection, run_id, call_id=done, stage_key="text", access="subscription", complete=True, request="1")
+        authority = _job(connection, run_id)
+        _effect(connection, run_id, authority, call_id=done, stage_key="text", access="subscription", complete=True, request="1")
         # an old row: no effect, no key, an unmetered cost basis, the chip derived from its extended phase
         _call(connection, run_id, phase="v3:w001:blocks:b001", basis="unmetered", request="2")
         # a call in flight: an effect only, with its key
-        _effect(connection, run_id, stage_key="norms", access="subscription", complete=False, request="3")
+        _effect(connection, run_id, authority, stage_key="norms", access="subscription", complete=False, request="3")
 
     answer = read_run_stage_facts(sessions, None, run_id=run_id, include_server=True)
 
