@@ -2496,6 +2496,13 @@ that the apply will be refused: it is the moment to split the selection or to ra
 permission for the plan still being asked for. These lines are not part of the plan and not part of its digest. With the production compose's
 defaults the warning starts above 5119 cases and the measured refusal at about 13000.
 
+**What raising the setting costs, measured** (`D-516`; the production `postgres` image, every other setting at its default, `show
+shared_memory_size`, 2026-11-10, `.local/evidence/lane-ops-polish/shmem-measure.txt`): 143 MB at `max_locks_per_transaction = 64`, 146 MB at 128,
+152 MB at 256 and 164 MB at 512, so 256 (a documented table of 25600 slots, four times today's) costs about 9 MB of shared memory. The compose
+file is left as it is: nothing needs the room yet, and the value is set with `command: ["postgres", "-c", "max_locks_per_transaction=256"]` on the
+`postgres` service, a deploy-config change that restarts `postgres` on the next deploy and is the owner's. Do it before a forget the dry run
+warns about, not after a refusal.
+
 ### What the script's guards are
 
 Every guard of the script is a block between `# >>> guard: <name>` and `# <<< guard: <name>` markers, each shown failing by
