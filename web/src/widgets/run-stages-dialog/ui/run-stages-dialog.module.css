@@ -1,0 +1,270 @@
+/*
+ * «Этапы анализа раздела» (`RUN-SCREEN-01a`). Every colour, radius, gap and shadow is a global `--am-*` token; no token is declared here.
+ * The chips on the left take their mark from `data-chip-state`, the same word the rail uses.
+ */
+
+.dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  width: min(1040px, calc(100vw - 2 * var(--am-gap)));
+  max-width: none;
+  max-height: 90vh;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  overflow: hidden;
+}
+
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border-bottom: 1px solid var(--am-line);
+  background: var(--am-paper);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--am-text-lg);
+}
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (min-width: 760px) {
+  .body {
+    grid-template-columns: minmax(180px, 0.28fr) minmax(0, 1fr);
+  }
+}
+
+/* ---- the list of chips ----------------------------------------------------------------------- */
+
+.list {
+  min-width: 0;
+  padding: var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+  background: var(--am-paper);
+}
+
+@media (min-width: 760px) {
+  .list {
+    border-right: 1px solid var(--am-line-soft);
+    border-bottom: 0;
+  }
+}
+
+.list ul {
+  display: flex;
+  flex-direction: row;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+
+@media (min-width: 760px) {
+  .list ul {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--am-gap-2xs);
+  width: 100%;
+  min-width: 120px;
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-left-width: 4px;
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover {
+  border-color: var(--am-accent);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.item[aria-current='true'] {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+}
+
+.item[data-chip-state='done'] {
+  border-left-color: var(--am-ok);
+}
+
+.item[data-chip-state='running'] {
+  border-left-color: var(--am-accent);
+}
+
+.item[data-chip-state='waiting'],
+.item[data-chip-state='partial'] {
+  border-left-color: var(--am-degraded);
+}
+
+.item[data-chip-state='failed'] {
+  border-left-color: var(--am-failed);
+}
+
+.itemName {
+  font-weight: 700;
+}
+
+.itemState {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.item[aria-current='true'] .itemState {
+  color: var(--am-ink);
+}
+
+/* ---- the chosen chip ------------------------------------------------------------------------- */
+
+.detail {
+  min-width: 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+}
+
+.chipTitle {
+  margin: 0 0 var(--am-gap-xs);
+  font-size: var(--am-text-md);
+}
+
+.summary,
+.note {
+  margin: 0 0 var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.3fr) minmax(0, 1fr);
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
+  padding: 0;
+}
+
+.facts dt,
+.facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.facts dt {
+  color: var(--am-ink-muted);
+}
+
+.plan {
+  width: 100%;
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.plan caption {
+  padding-bottom: var(--am-gap-xs);
+  font-weight: 700;
+  text-align: left;
+}
+
+.plan th[scope='row'] {
+  width: 34%;
+  font-weight: 400;
+  text-align: left;
+}
+
+.group {
+  background: var(--am-surface-sunken);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  letter-spacing: var(--am-tracking-caps);
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.procedures {
+  margin: var(--am-gap-sm) 0;
+  padding-left: var(--am-gap-lg);
+}
+
+.procedures p {
+  margin: var(--am-gap-2xs) 0 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.how {
+  margin: var(--am-gap-sm) 0;
+}
+
+.how summary {
+  cursor: pointer;
+  color: var(--am-ink-muted);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  margin: var(--am-gap-sm) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--am-gap-2xs);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.steps li[data-step-result] {
+  border-color: var(--am-ok);
+  background: var(--am-ok-light);
+}
+
+.arrow {
+  align-self: center;
+  color: var(--am-ink-muted);
+}
+
+.start {
+  margin-top: var(--am-gap-sm);
+}
