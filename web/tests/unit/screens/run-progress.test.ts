@@ -66,9 +66,15 @@ describe('the harness reaches this widget at all', () => {
     // The stage table is not on the page; it is in «Этапы анализа раздела», which a chip opens.
     expect(markup).not.toContain('data-stage-id=');
     expect(markup).not.toContain('Подробности этапов');
-    const dialog = runDialog(status, { selected: 'text' });
-    expect(dialog).toContain('data-stage-id="text_analysis"');
-    expect(dialog).toContain('Подробности этапов');
+    // The table of code stages is in the window only for a chip that has two or more; «Текст» has one, and its state and times are
+    // in «Факт» already (`RUN-STAGES-WEB-01`). The preparation has three.
+    const single = runDialog(status, { selected: 'text' });
+    expect(single).not.toContain('data-stage-id=');
+    expect(single).not.toContain('Подробности этапов');
+    expect(single).toContain('data-fact-row="state"');
+    const several = runDialog(status, { selected: 'preparation' });
+    expect(several).toContain('data-stage-id="source_preparation"');
+    expect(several).toContain('Подробности этапов');
   });
 
   it('shows an in-flight v3 Run with no fabricated PC-01 stages', () => {
@@ -347,6 +353,9 @@ describe('unknown label-table keys fail the whole run reading closed', () => {
   });
 });
 
+/** The count of published findings, said by the banner of a published run; no other outcome says one. */
+const FINDING_COUNT_CLAIM = /Прогон <span data-run-state="published">[^<]*<\/span>: (?:\d+ находк|<em>число находок)/u;
+
 /** `published` is the success terminal; `partial` and `failed` borrow nothing from it. */
 describe('the three terminals are three different claims', () => {
   it('keeps a published v3 preliminary review separate from canonical findings', () => {
@@ -358,7 +367,7 @@ describe('the three terminals are three different claims', () => {
     expect(markup).toContain('data-review-only="ar-v3-beta"');
     expect(markup).toContain('Каждая тема и цитата требует проверки эксперта');
     expect(markup).toContain('укажите идентификатор группы из ответа запуска');
-    expect(markup).not.toContain('Опубликованных находок');
+    expect(markup).not.toMatch(FINDING_COUNT_CLAIM);
     expect(markup).not.toContain('Разобрать находки');
   });
 
@@ -366,19 +375,28 @@ describe('the three terminals are three different claims', () => {
     const markup = screen({ state: 'partial', analysis_profile_id: AR_V3_BETA_PROFILE_ID, stages: [] });
     expect(markup).toContain('Полный проверенный результат не подтверждён');
     expect(markup).not.toContain('Разобрать находки');
-    expect(markup).not.toContain('Опубликованных находок');
+    expect(markup).not.toMatch(FINDING_COUNT_CLAIM);
   });
 
-  it('published states its finding count', () => {
-    expect(screen({ state: 'published', published_finding_count: 7 })).toContain(
-      'Опубликованных находок',
-    );
-    expect(screen({ state: 'published', published_finding_count: 7 })).toContain('7');
+  it('published states its finding count in one short sentence, with the Russian plural of the count', () => {
+    const sentence = (count: number) => screen({ state: 'published', published_finding_count: count })
+      .match(/data-run-outcome="published"[\s\S]*?<\/p>/)?.[0].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    expect(sentence(25)).toBe('Прогон опубликован: 25 находок.');
+    expect(sentence(7)).toBe('Прогон опубликован: 7 находок.');
+    // 1, 2 to 4, 5 and 11 to 14 take three different forms, and zero is a count, not an absence.
+    expect([1, 2, 4, 5, 11, 12, 21, 0].map(sentence)).toEqual([
+      'Прогон опубликован: 1 находка.', 'Прогон опубликован: 2 находки.', 'Прогон опубликован: 4 находки.',
+      'Прогон опубликован: 5 находок.', 'Прогон опубликован: 11 находок.', 'Прогон опубликован: 12 находок.',
+      'Прогон опубликован: 21 находка.', 'Прогон опубликован: 0 находок.',
+    ]);
+    // The old sentence and its technical word are gone.
+    expect(screen({ state: 'published', published_finding_count: 7 })).not.toContain('терминального');
   });
 
   it('published with an unreported count says so rather than showing zero', () => {
     const markup = screen({ state: 'published', published_finding_count: null as never });
-    expect(markup).toContain('не сообщено');
+    expect(markup).toContain('Прогон <span data-run-state="published">опубликован</span>: <em>число находок не сообщено</em>.');
+    expect(markup).not.toContain('0 находок');
     expect(markup).not.toContain('Published findings: 0');
   });
 
@@ -395,7 +413,7 @@ describe('the three terminals are three different claims', () => {
   it('partial with an empty set says the reading carries none, and does not pretend to be published', () => {
     const markup = screen({ state: 'partial', degradation_set: [] });
     expect(markup).toContain('data-run-outcome="partial"');
-    expect(markup).toContain('не содержит списка деградаций');
+    expect(markup).toContain('Список невыполненных этапов сервер не передал.');
     expect(markup).not.toContain('data-run-outcome="published"');
   });
 
@@ -405,7 +423,7 @@ describe('the three terminals are three different claims', () => {
     // Translated by `W33-SECT`; the claim is the same one and the machine value is
     // still `data-run-outcome`, which is what an instrument reads.
     expect(markup).toContain('Ничего не опубликовано.');
-    expect(markup).not.toContain('Опубликованных находок');
+    expect(markup).not.toMatch(FINDING_COUNT_CLAIM);
   });
 
   it('an open run implies no result', () => {
@@ -513,7 +531,7 @@ describe('findings and diagnostic observations are two counts, never one (M-6)',
       published_finding_count: 3,
       diagnostic_observation_count: 11,
     });
-    expect(markup).toContain('Опубликованных находок');
+    expect(markup).toContain('3 находки.');
     expect(markup).toContain('data-diagnostic-observation-count="11"');
     expect(markup).toContain('3');
     expect(markup).toContain('Диагностические наблюдения');
@@ -547,7 +565,7 @@ describe('findings and diagnostic observations are two counts, never one (M-6)',
       diagnostic_observation_count: 2,
     });
     expect(markup).toContain('data-diagnostic-observation-count="2"');
-    expect(markup).not.toContain('Опубликованных находок');
+    expect(markup).not.toMatch(FINDING_COUNT_CLAIM);
   });
 });
 

@@ -66,6 +66,7 @@ import { SHOW_REVIEW_INDICATION } from '@/shared/config';
 import { formatInstant, routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import { RunWorkerLine, runHoldsLease, runWorker, useWorkerLookup } from '@/entities/execution';
+import { pluralRu } from '@/entities/document-version';
 import { GroupWaitDetail } from '@/entities/executor-group';
 import { groupByCategory, runFindingsQueryOptions, SEVERITY_LABELS } from '@/entities/finding';
 import { tallySeverity } from '@/widgets/finding-list';
@@ -144,6 +145,9 @@ function RunHolder({ runId }: { readonly runId: string }) {
 }
 
 const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное значение.';
+
+/** «1 находка», «2 находки», «5 находок»: the forms `pluralRu` picks from. */
+const FINDING_FORMS: readonly [string, string, string] = ['находка', 'находки', 'находок'];
 
 /**
  * The second sentence of a published AR v3 beta Run (`R-146as`, `R-146ba`).
@@ -227,9 +231,10 @@ function Outcome({ status }: { readonly status: RunStatus }) {
       return (
         <div className={styles.outcome} data-run-outcome="published">
           <p>
-            Прогон достиг успешного терминального состояния{' '}
-            <span data-run-state="published">{STATE_LABELS.published}</span>. Опубликованных находок:{' '}
-            {outcome.findingCount === null ? <em>не сообщено</em> : outcome.findingCount}
+            Прогон <span data-run-state="published">{STATE_LABELS.published}</span>:{' '}
+            {outcome.findingCount === null
+              ? <em>число находок не сообщено</em>
+              : `${outcome.findingCount} ${pluralRu(outcome.findingCount, FINDING_FORMS)}`}.
           </p>
         </div>
       );
@@ -243,17 +248,15 @@ function Outcome({ status }: { readonly status: RunStatus }) {
       return (
         <div className={styles.outcome} data-run-outcome="partial">
           <p>
-            Прогон завершился как <span data-run-state="partial">{STATE_LABELS.partial}</span>. Он опубликовал результат с
-            зафиксированной деградацией: часть этапов не выполнена, и это не{' '}
-            <span data-run-state="published">{STATE_LABELS.published}</span>.
+            Прогон завершён <span data-run-state="partial">{STATE_LABELS.partial}</span>: часть этапов не выполнена.
           </p>
           {outcome.degradation.length === 0 ? (
             <p>
-              <em>Показание не содержит списка деградаций.</em>
+              <em>Список невыполненных этапов сервер не передал.</em>
             </p>
           ) : (
             <>
-              <p>Отсутствующие или деградировавшие этапы:</p>
+              <p>Не выполнены или выполнены не полностью:</p>
               <ul>
                 {/*
                  * The stage's name, not its id. `D-62`: the machine value stays in
@@ -282,10 +285,10 @@ function Outcome({ status }: { readonly status: RunStatus }) {
       return (
         <div className={styles.outcome} data-run-outcome="failed">
           <p>
-            Прогон завершился как <span data-run-state="failed">{STATE_LABELS.failed}</span>. Ничего не опубликовано.
+            Прогон завершился: <span data-run-state="failed">{STATE_LABELS.failed}</span>. Ничего не опубликовано.
           </p>
           <p>
-            Терминальная причина:{' '}
+            Причина:{' '}
             {outcome.terminalReason === null ? (
               <em>не сообщено</em>
             ) : (
@@ -304,7 +307,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
     case 'cancelled':
       return (
         <p className={styles.outcome} data-run-outcome="cancelled">
-          Прогон завершился как <span data-run-state="cancelled">{STATE_LABELS.cancelled}</span>. Ничего не опубликовано.
+          Прогон <span data-run-state="cancelled">{STATE_LABELS.cancelled}</span>. Ничего не опубликовано.
         </p>
       );
   }
@@ -551,8 +554,8 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
                 title="Разбирать нечего."
                 detail={
                   <p>
-                    Находки появляются только когда терминальное состояние публикует результат —{' '}
-                    <span data-run-state="published">{STATE_LABELS.published}</span> или{' '}
+                    Находки появляются, только когда прогон{' '}
+                    <span data-run-state="published">{STATE_LABELS.published}</span> или завершён{' '}
                     <span data-run-state="partial">{STATE_LABELS.partial}</span>. Этот прогон —{' '}
                     <span data-run-state={status.state}>{STATE_LABELS[status.state]}</span>.
                   </p>
