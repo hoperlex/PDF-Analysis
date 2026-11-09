@@ -323,13 +323,14 @@ export const queryKeys = {
     journal: (runId?: RunId, cursor?: string) =>
       ['execution', 'journal', { runId, cursor }] as const,
     /**
-     * The side menu's counters over the queue (`D-350`, `D-331`): `listExecutionQueue` read with `limit: 1`, because the
-     * figure is the page's `overview` and not its rows. `all` is the whole history (the jobs still open, whenever they were
-     * accepted), `last-day` the jobs accepted in the last 24 hours (the failures that make the red badge). A key of its own:
-     * the queue screen's pages (above) hold 25 rows with their ETA, which a counter read on every screen does not need.
-     * Under `execution`, so every command that changes the queue (`execution.all()`) refreshes it.
+     * The side menu's counters over the queue (`D-350`, `D-395`): `listExecutionQueue` read with `limit: 1`, because the
+     * figures are the page's `overview` (the jobs still open, whenever they were accepted) and its `live_failure_count`
+     * (the failures that make the red badge), not its rows. One key since contract 1.43.0: the window of `D-331` needed a
+     * second read, the server's count does not. A key of its own: the queue screen's pages (above) hold 25 rows with their
+     * ETA, which a counter read on every screen does not need. Under `execution`, so every command that changes the queue
+     * (`execution.all()`) refreshes it.
      */
-    queueCount: (period: 'all' | 'last-day') => ['execution', 'queue-count', period] as const,
+    queueCount: () => ['execution', 'queue-count'] as const,
     /**
      * `getExecutionDispatch` (`UI-PARITY-P0E`, `R-151f`): the installation's pause state, read by the top
      * strip on every screen. Under `execution`, so pausing or resuming (which invalidates `execution.all`)

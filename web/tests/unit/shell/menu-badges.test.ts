@@ -16,8 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppFrameSession } from '@/_app';
 import { FrameNavigation, FrameNavigationView } from '@/_app/frame-navigation';
 import {
-  KNOWLEDGE_BASE_BADGE_LABEL, KNOWLEDGE_BASE_PROJECT_BADGE_LABEL, QUEUE_BADGE_LABEL, QUEUE_ERROR_STATES, QUEUE_ERROR_WINDOW_HOURS,
-  QUEUE_ERRORS_BADGE_LABEL, QUEUE_OPEN_STATES, badgeSourceAt, badgeSourcesOf, badgeText, itemLabelWithBadges, menuBadgesOf, queueBadges,
+  KNOWLEDGE_BASE_BADGE_LABEL, KNOWLEDGE_BASE_PROJECT_BADGE_LABEL, QUEUE_BADGE_LABEL, QUEUE_ERRORS_BADGE_LABEL, QUEUE_OPEN_STATES, badgeSourceAt, badgeSourcesOf, badgeText, itemLabelWithBadges, menuBadgesOf, queueBadges,
   uncheckedBadges,
 } from '@/_app/menu-badges';
 import type { MenuBadges } from '@/_app/menu-badges';
@@ -59,11 +58,16 @@ const overview = (counts: Partial<Record<ExecutionQueueStateCount['state'], numb
     count: counts[state] ?? 0,
   }));
 
-const queuePage = (counts: Partial<Record<ExecutionQueueStateCount['state'], number>> | null): ExecutionQueuePage => ({
+/** A one-row queue page as the menu reads it: the overview, and (`D-395`) the server's count of the failures nobody has answered. */
+const queuePage = (
+  counts: Partial<Record<ExecutionQueueStateCount['state'], number>> | null,
+  liveFailures?: number,
+): ExecutionQueuePage => ({
   items: [],
   page: { next_cursor: null },
   paused: false,
   ...(counts === null ? {} : { overview: overview(counts) }),
+  ...(liveFailures === undefined ? {} : { live_failure_count: liveFailures }),
 });
 
 const knowledgePage = (total: number): KnowledgeBaseEntryPage => ({ items: [], page: { next_cursor: null }, total });
@@ -118,17 +122,16 @@ describe('the queue badge: the jobs that are waiting or being run', () => {
   });
 });
 
-describe('D-331: the queue\'s red mark counts the jobs accepted in the last 24 hours that ended in an error', () => {
-  const RED_LABEL = `Заданий с ошибкой за последние 24 часа`;
+describe('D-395: the queue\'s red mark is the server\'s count of the failures nobody has answered', () => {
+  const RED_LABEL = 'Заданий с ошибкой, которые ещё не повторяли';
 
-  it('names the window and the states in words, and a constant says how many hours', () => {
-    expect(QUEUE_ERROR_WINDOW_HOURS).toBe(24);
+  it('names what it counts in words, with no window in them', () => {
     expect(QUEUE_ERRORS_BADGE_LABEL).toBe(RED_LABEL);
-    expect(QUEUE_ERROR_STATES).toEqual(['failed', 'dead_letter']);
+    expect(QUEUE_ERRORS_BADGE_LABEL).not.toMatch(/час|сутк|24/);
   });
 
-  it('is the failed and the dead-lettered jobs of the recent overview, in the alert tone, after the open count', () => {
-    const badges = queueBadges(overview({ queued: 3 }), overview({ queued: 1, succeeded: 40, failed: 2, dead_letter: 1, cancelled: 5 }));
+  it('is `live_failure_count`, in the alert tone, after the open count', () => {
+    const badges = queueBadges(overview({ queued: 3 }), 3);
     expect(badges.map((badge) => [badge.tone, badge.count, badge.label])).toEqual([
       ['count', 3, `${QUEUE_BADGE_LABEL}: 3`],
       ['alert', 3, `${RED_LABEL}: 3`],
@@ -137,23 +140,24 @@ describe('D-331: the queue\'s red mark counts the jobs accepted in the last 24 h
     expect(badges[1]?.title).toContain('«Очередь»');
   });
 
-  it('counts only the recent overview: the whole history\'s failures are not the red mark', () => {
-    // 40 failed since the beginning, none in the last day: no red mark, and the open count stays.
-    const badges = queueBadges(overview({ queued: 3, failed: 40 }), overview({ succeeded: 2 }));
-    expect(badges.map((badge) => badge.tone)).toEqual(['count']);
+  it('does not add up the overview\'s failed states: 40 failed since the beginning are no red mark unless the server says they are live', () => {
+    // The overview counts every failed job ever; the red mark is the server\'s figure and no sum of states.
+    expect(queueBadges(overview({ queued: 3, failed: 40, dead_letter: 5 }), 0).map((badge) => badge.tone)).toEqual(['count']);
+    expect(queueBadges(overview({ queued: 3, failed: 40, dead_letter: 5 })).map((badge) => badge.tone)).toEqual(['count']);
+    expect(queueBadges(overview({ failed: 40 }), 2).map((badge) => [badge.tone, badge.count])).toEqual([['alert', 2]]);
   });
 
   it('is its own badge: the open count may be unknown or zero while the red mark stands, and the other way round', () => {
-    expect(queueBadges(undefined, overview({ failed: 2 })).map((badge) => [badge.tone, badge.count])).toEqual([['alert', 2]]);
-    expect(queueBadges(overview({}), overview({ dead_letter: 1 })).map((badge) => [badge.tone, badge.count])).toEqual([['alert', 1]]);
+    expect(queueBadges(undefined, 2).map((badge) => [badge.tone, badge.count])).toEqual([['alert', 2]]);
+    expect(queueBadges(overview({}), 1).map((badge) => [badge.tone, badge.count])).toEqual([['alert', 1]]);
     expect(queueBadges(overview({ running: 1 }), undefined).map((badge) => badge.tone)).toEqual(['count']);
   });
 
-  it('is no badge for a zero, for a recent overview that is unknown, or for jobs that are merely waiting to be retried', () => {
-    expect(queueBadges(overview({}), overview({ failed: 0 }))).toEqual([]);
+  it('is no badge for a zero or for a figure the page did not carry, or for jobs that are merely waiting to be retried', () => {
+    expect(queueBadges(overview({}), 0)).toEqual([]);
     expect(queueBadges(overview({}), undefined)).toEqual([]);
     // `retry_wait` is a failed attempt that will run again: it is open work, not an error mark.
-    expect(queueBadges(undefined, overview({ retry_wait: 4, queued: 2 }))).toEqual([]);
+    expect(queueBadges(overview({ retry_wait: 4, queued: 2 }))).toEqual([{ tone: 'count', count: 6, label: `${QUEUE_BADGE_LABEL}: 6` }]);
   });
 });
 
@@ -190,10 +194,10 @@ const BADGES: MenuBadges = menuBadgesOf({
   pendingRegistrations: 5,
 });
 
-/** The same, with two jobs of the last day in an error: «Очередь» then carries a count and a red mark. */
+/** The same, with two failures nobody has answered: «Очередь» then carries a count and a red mark. */
 const BADGES_WITH_ERRORS: MenuBadges = menuBadgesOf({
   queueOverview: overview({ queued: 2, running: 1, failed: 30 }),
-  queueRecentOverview: overview({ failed: 2 }),
+  queueLiveFailures: 2,
   knowledgeBaseTotal: 140,
   pendingRegistrations: 5,
 });
@@ -256,20 +260,20 @@ describe('the badges in the menu, in all three of its states', () => {
     expect(pillsIn(linkAt(rail, KNOWLEDGE_BASE)?.inside ?? '')).toEqual(['count:99+']);
   });
 
-  it('D-331: carry the red mark beside the open count on «Очередь», in all three states, named in the link\'s name', () => {
+  it('D-395: carry the red mark beside the open count on «Очередь», in all three states, named in the link\'s name', () => {
     const markup = draw(BADGES_WITH_ERRORS);
     for (const name of ['row', 'rail', 'stacked'] as const) {
       const queue = linkAt(state(markup, name), QUEUE);
       expect(queue?.attributes, name).toContain(
-        `aria-label="Очередь. Задач в очереди и в работе: 3. Заданий с ошибкой за последние 24 часа: 2"`,
+        `aria-label="Очередь. Задач в очереди и в работе: 3. Заданий с ошибкой, которые ещё не повторяли: 2"`,
       );
       expect(pillsIn(queue?.inside ?? ''), name).toEqual(['count:3', 'alert:2']);
-      expect(queue?.inside, name).toContain('title="Заданий с ошибкой за последние 24 часа: 2.');
+      expect(queue?.inside, name).toContain('title="Заданий с ошибкой, которые ещё не повторяли: 2.');
     }
     // The other items keep their one count and no red mark.
     expect(pillsIn(linkAt(state(markup, 'row'), KNOWLEDGE_BASE)?.inside ?? '')).toEqual(['count:99+']);
     expect(pillsIn(linkAt(state(markup, 'row'), REGISTRATIONS)?.inside ?? '')).toEqual(['count:5']);
-    // Without the recent overview the red mark is gone and the count is as it was.
+    // Without the server's live failure count the red mark is gone and the count is as it was.
     expect(pillsIn(linkAt(state(draw(BADGES), 'row'), QUEUE)?.inside ?? '')).toEqual(['count:3']);
   });
 
@@ -317,8 +321,7 @@ describe('the badges in the menu, in all three of its states', () => {
 
 const KB_KEY = queryKeys.findings.knowledgeBase({ limit: 1 });
 const PENDING_KEY = queryKeys.registrations.list({ status: 'pending', limit: 1 });
-const QUEUE_KEY = queryKeys.execution.queueCount('all');
-const RECENT_QUEUE_KEY = queryKeys.execution.queueCount('last-day');
+const QUEUE_KEY = queryKeys.execution.queueCount();
 
 function frame(client: QueryClient, subject: AppFrameSession | null): string {
   navigationState.pathname = '/dashboard';
@@ -328,9 +331,8 @@ function frame(client: QueryClient, subject: AppFrameSession | null): string {
 
 function seeded(): QueryClient {
   const client = newClient();
-  client.setQueryData(QUEUE_KEY, queuePage({ queued: 2, running: 1, failed: 30 }));
-  // Nothing failed in the last day, whatever the whole history holds.
-  client.setQueryData(RECENT_QUEUE_KEY, queuePage({ succeeded: 4 }));
+  // 30 failed jobs in the whole history, and the server says none of them is still the last word (`D-395`).
+  client.setQueryData(QUEUE_KEY, queuePage({ queued: 2, running: 1, failed: 30 }, 0));
   client.setQueryData(KB_KEY, knowledgePage(140));
   client.setQueryData(PENDING_KEY, registrationPage(5));
   return client;
@@ -352,7 +354,7 @@ describe('the frame reads the counters from the cache entries of the screens the
     expect(pillsIn(linkAt(row, QUEUE)?.inside ?? '')).toEqual(['count:3']);
     expect(pillsIn(linkAt(row, KNOWLEDGE_BASE)?.inside ?? '')).toEqual(['count:99+']);
     expect(pillsIn(linkAt(row, REGISTRATIONS)?.inside ?? '')).toEqual(['count:5']);
-    // The 30 failed jobs of the whole history make no red mark: only the jobs of the last day do (`D-331`), and none failed in it.
+    // The 30 failed jobs of the whole history make no red mark: only the server's live failures do (`D-395`), and it counts none.
     expect(markup).not.toContain('data-menu-badge="alert"');
     expect(pillsIn(linkAt(state(markup, 'rail'), QUEUE)?.inside ?? '')).toEqual(['count:3']);
     expect(pillsIn(linkAt(state(markup, 'stacked'), REGISTRATIONS)?.inside ?? '')).toEqual(['count:5']);
@@ -376,8 +378,8 @@ describe('the frame reads the counters from the cache entries of the screens the
     expect(markup).not.toContain('Задач в очереди');
     expect(markup).not.toContain('Заявок на регистрацию');
     const unasked = (client: QueryClient) => readsOf(client).filter((read) => !read.enabled).map((read) => read.key);
-    // The queue is read twice (the whole history, the last day), and neither is asked for a viewer.
-    expect(unasked(viewer)).toEqual(['execution/queue-count', 'execution/queue-count', 'registrations/list']);
+    // The queue is read once, and not asked for a viewer.
+    expect(unasked(viewer)).toEqual(['execution/queue-count', 'registrations/list']);
 
     const expert = seeded();
     frame(expert, EXPERT);
@@ -397,27 +399,25 @@ describe('the frame reads the counters from the cache entries of the screens the
     }
   });
 
-  it('files the four reads under their keys, once each: the two queue counters, the base\'s «Все» chip entry, the tile\'s entry', () => {
+  it('files the three reads under their keys, once each: the queue counter, the base\'s «Все» chip entry, the tile\'s entry', () => {
     const client = newClient();
     frame(client, ADMIN_ONLY);
     const reads = client.getQueryCache().getAll().map((query) => query.queryHash).sort();
     expect(reads).toEqual(
-      [QUEUE_KEY, RECENT_QUEUE_KEY, KB_KEY, PENDING_KEY].map((key) => client.defaultQueryOptions({ queryKey: [...key] }).queryHash).sort(),
+      [QUEUE_KEY, KB_KEY, PENDING_KEY].map((key) => client.defaultQueryOptions({ queryKey: [...key] }).queryHash).sort(),
     );
   });
 
   it('D-350: the queue counters are not the queue screen\'s page, so the menu cannot fill that key with a one-row page', () => {
     expect(JSON.stringify(QUEUE_KEY)).not.toBe(JSON.stringify(queryKeys.execution.queue()));
-    expect(JSON.stringify(RECENT_QUEUE_KEY)).not.toBe(JSON.stringify(QUEUE_KEY));
-    // Both stay under `execution`, which every command on the queue invalidates.
+    // It stays under `execution`, which every command on the queue invalidates.
     expect(QUEUE_KEY.slice(0, 1)).toEqual(queryKeys.execution.all());
-    expect(RECENT_QUEUE_KEY.slice(0, 1)).toEqual(queryKeys.execution.all());
     const client = newClient();
     frame(client, ADMIN_ONLY);
     expect(client.getQueryCache().find({ queryKey: [...queryKeys.execution.queue()] })).toBeUndefined();
   });
 
-  it('D-350, D-331: asks the queue for one row twice, the second time from 24 hours back, and the instant is not in the key', async () => {
+  it('D-350, D-395: asks the queue for one row once, with no period and no state: the live failures are the server\'s count', async () => {
     const client = newClient();
     frame(client, ADMIN_ONLY);
     const asked: URL[] = [];
@@ -425,52 +425,42 @@ describe('the frame reads the counters from the cache entries of the screens the
     vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', '/bff/v1');
     vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
       asked.push(new URL(String(input), 'http://web.test'));
-      return new Response(JSON.stringify(queuePage({ failed: 1 })), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify(queuePage({ failed: 1 }, 1)), { status: 200, headers: { 'content-type': 'application/json' } });
     });
-    const before = Date.now();
     try {
-      for (const key of [QUEUE_KEY, RECENT_QUEUE_KEY]) {
-        const query = client.getQueryCache().find({ queryKey: [...key] });
-        await (query?.options.queryFn as (() => Promise<unknown>) | undefined)?.();
-      }
+      const query = client.getQueryCache().find({ queryKey: [...QUEUE_KEY] });
+      await (query?.options.queryFn as (() => Promise<unknown>) | undefined)?.();
     } finally {
       vi.unstubAllGlobals();
       vi.unstubAllEnvs();
     }
-    const after = Date.now();
-    expect(asked).toHaveLength(2);
-    const [all, recent] = asked as [URL, URL];
-    for (const url of [all, recent]) {
-      expect(url.pathname).toMatch(/\/execution\/queue$/);
-      expect(url.searchParams.get('limit')).toBe('1');
-      expect(url.searchParams.has('cursor')).toBe(false);
-      expect(url.searchParams.has('state')).toBe(false);
+    expect(asked).toHaveLength(1);
+    const [url] = asked as [URL];
+    expect(url.pathname).toMatch(/\/execution\/queue$/);
+    expect(url.searchParams.get('limit')).toBe('1');
+    for (const absent of ['cursor', 'state', 'state_group', 'created_from', 'created_to']) {
+      expect(url.searchParams.has(absent), absent).toBe(false);
     }
-    expect(all.searchParams.has('created_from')).toBe(false);
-    const from = Date.parse(recent.searchParams.get('created_from') ?? '');
-    expect(Number.isNaN(from)).toBe(false);
-    expect(from).toBeGreaterThanOrEqual(before - QUEUE_ERROR_WINDOW_HOURS * 3_600_000);
-    expect(from).toBeLessThanOrEqual(after - QUEUE_ERROR_WINDOW_HOURS * 3_600_000);
-    // The instant is not part of the key, so the cache holds one entry however long the page stays open.
-    expect(JSON.stringify(RECENT_QUEUE_KEY)).not.toMatch(/\d{4}-\d\d-\d\d/);
-    expect(recent.searchParams.get('created_to')).toBeNull();
   });
 
-  it('D-331: draws the red mark from the last day\'s overview alone, beside the count, and drops it when that read failed', () => {
+  it('D-395: draws the red mark from the page\'s live failure count, beside the count, and drops it when that read failed', () => {
     const client = seeded();
-    client.setQueryData(RECENT_QUEUE_KEY, queuePage({ failed: 2, dead_letter: 1, succeeded: 9 }));
+    client.setQueryData(QUEUE_KEY, queuePage({ queued: 3, failed: 30, dead_letter: 1 }, 3));
     const markup = frame(client, ADMIN_ONLY);
     for (const name of ['row', 'rail', 'stacked'] as const) {
       expect(pillsIn(linkAt(state(markup, name), QUEUE)?.inside ?? ''), name).toEqual(['count:3', 'alert:3']);
     }
-    client.getQueryCache().find({ queryKey: [...RECENT_QUEUE_KEY] })?.setState({ status: 'error', error: new Error('нет связи'), errorUpdatedAt: Date.now() + 1, fetchStatus: 'idle' });
+    client.getQueryCache().find({ queryKey: [...QUEUE_KEY] })?.setState({ status: 'error', error: new Error('нет связи'), errorUpdatedAt: Date.now() + 1, fetchStatus: 'idle' });
     const row = state(frame(client, ADMIN_ONLY), 'row');
-    expect(pillsIn(linkAt(row, QUEUE)?.inside ?? '')).toEqual(['count:3']);
-    // And the other way: the whole-history read failing leaves the red mark.
-    const other = seeded();
-    other.setQueryData(RECENT_QUEUE_KEY, queuePage({ failed: 2 }));
-    other.getQueryCache().find({ queryKey: [...QUEUE_KEY] })?.setState({ status: 'error', error: new Error('нет связи'), errorUpdatedAt: Date.now() + 1, fetchStatus: 'idle' });
-    expect(pillsIn(linkAt(state(frame(other, ADMIN_ONLY), 'row'), QUEUE)?.inside ?? '')).toEqual(['alert:2']);
+    // One read carries both figures, so a failed read takes both and not the other items\' badges.
+    expect(pillsIn(linkAt(row, QUEUE)?.inside ?? '')).toEqual([]);
+    expect(pillsIn(linkAt(row, REGISTRATIONS)?.inside ?? '')).toEqual(['count:5']);
+  });
+
+  it('D-395: a page without the figure (a server that predates it) draws the count and no red mark, never a zero', () => {
+    const client = seeded();
+    client.setQueryData(QUEUE_KEY, queuePage({ queued: 3, failed: 30 }));
+    expect(pillsIn(linkAt(state(frame(client, ADMIN_ONLY), 'row'), QUEUE)?.inside ?? '')).toEqual(['count:3']);
   });
 
   it('D-362: the base\'s counter says it counts both journals, the figure the screen shows under «Все», not the one it opens on', () => {
@@ -509,7 +499,7 @@ describe('the frame reads the counters from the cache entries of the screens the
     expect(frame(none, ADMIN_ONLY)).not.toContain('data-menu-badge');
 
     const kept = seeded();
-    for (const key of [QUEUE_KEY, RECENT_QUEUE_KEY, KB_KEY, PENDING_KEY]) {
+    for (const key of [QUEUE_KEY, KB_KEY, PENDING_KEY]) {
       kept.getQueryCache().find({ queryKey: [...key] })?.setState({ status: 'error', error: new Error('нет связи'), errorUpdatedAt: Date.now() + 1, fetchStatus: 'idle' });
     }
     const markup = frame(kept, ADMIN_ONLY);

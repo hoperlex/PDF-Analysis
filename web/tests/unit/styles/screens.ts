@@ -207,7 +207,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.42.0',
+    contract_version: '1.43.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -744,8 +744,8 @@ export function screens(): Screen[] {
           sections: sectionNavigationOf(waitingRows, PROJECT_UID, sectionPage),
           badges: menuBadgesOf({
             queueOverview: [{ state: 'queued', count: 2 }, { state: 'running', count: 1 }],
-            // `D-331`: the red mark beside the count on «Очередь».
-            queueRecentOverview: [{ state: 'failed', count: 2 }],
+            // `D-395`: the red mark beside the count on «Очередь».
+            queueLiveFailures: 2,
             knowledgeBaseTotal: 140,
             pendingRegistrations: 5,
           }),
