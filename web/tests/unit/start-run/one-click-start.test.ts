@@ -172,6 +172,8 @@ describe('an estimate that can charge opens exactly one dialog', () => {
     expect(markup).toContain('Предварительная оценка: $1.2.');
     expect(markup).toContain('Модель: fixture-model.');
     expect(markup).toContain('Рекомендуемый лимит: $1.5.');
+    // `RUN-START-ONE-01b`: the optional subject line belongs to the queue's repeated Run; the start control draws none.
+    expect(markup).not.toContain('data-start-run-subject');
     expect(view.count('Отмена')).toBe(1);
     // «Запустить» of the control is held while the dialog is open, and the dialog has its own.
     expect(await click(view)).toBe(false);

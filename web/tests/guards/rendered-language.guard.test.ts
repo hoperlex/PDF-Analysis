@@ -2209,6 +2209,8 @@ function startRunCostDialogShapes(): ReactElement {
     view('ceiling-too-low', { ceiling: '1.1' }),
     view('sending', { busy: true }),
     view('changed', { changed: true }),
+    // `RUN-START-ONE-01b`: the queue's repeated Run names the run in the dialog's subject line.
+    view('repeated-run', { subject: 'Повторный аудит прогона run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F.' }),
     view('without-ceiling', { relaxed: true, ceiling: '0', estimate: { ...estimate, relaxed_limits: true } }),
     view('recorded', { estimate: { ...estimate, provider_mode: 'recorded' } }),
     view('free', {
@@ -5359,13 +5361,6 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
     // the control -- is the same discipline as `UNREACHABLE_IN_ONE_PASS`. It excuses a control from being SEEN here; the
     // journey itself (`tests/e2e/pc01/journey`) is the instrument that presses it.
     const PRESSED_BEFORE_IT_EXISTS: readonly { readonly text: string; readonly why: string }[] = [
-      {
-        text: 'Подтвердить',
-        why:
-          'The confirmation panel of «Очередь» (`queue-page.tsx`, `data-execution-intent`) is drawn when `intent` is set by ' +
-          'pressing a row action: «Отменить прогон», «Повторный аудит» or the priority form. `intent` is a `useState` and one ' +
-          'static pass presses nothing. «Исполнители» and «Нормы» confirm the same way, behind their own press.',
-      },
       {
         text: 'Возобновить выдачу',
         why:
