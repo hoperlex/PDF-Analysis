@@ -12,7 +12,8 @@ quantity, the saving, the saving's percent) are the exact decimal text of the st
 «Экономия, %» (`D-346`, contract 1.43.0) follows «Экономия». The workbook's columns are not a position the file is read by --
 the way back finds «ID предложения», «Решение эксперта» and «Комментарий» by their headers -- so it sits beside the amount it
 qualifies, and the two edited columns move one place to the right. It is the share of the current unit price the proposed one
-saves, and stands where the amount is empty for want of a numeric quantity.
+saves, and stands where the amount is empty for want of a numeric quantity. «Перенесено из версии» (`D-335`) is the last column, after the two an
+expert edits, and moves none of them.
 
 **What a row does.** A row whose «Решение эксперта» names a verdict different from the proposal's decision in force appends
 one ordinary decision event, authored by the importer, through ``decide_optimisation_proposal`` -- exactly as the screen's
@@ -78,6 +79,9 @@ PROPOSALS_SHEET: Final[str] = "Предложения"
 ID_COLUMN: Final[str] = "ID предложения"
 DECISION_COLUMN: Final[str] = "Решение эксперта"
 COMMENT_COLUMN: Final[str] = "Комментарий"
+#: `D-335` (contract 1.43.0): the last column, read-only for the way back: «V2» for a decision in force that an expert carried
+#: over from the earlier version's pass, empty otherwise. It sits after the two columns an expert edits and moves none of them.
+CARRIED_COLUMN: Final[str] = "Перенесено из версии"
 #: The sheet's columns; the identity first, then what a reader needs to decide, then the two columns that come back.
 PROPOSAL_COLUMNS: Final[tuple[str, ...]] = (
     ID_COLUMN,
@@ -96,8 +100,9 @@ PROPOSAL_COLUMNS: Final[tuple[str, ...]] = (
     "Экономия, %",
     DECISION_COLUMN,
     COMMENT_COLUMN,
+    CARRIED_COLUMN,
 )
-_WIDTHS: Final[tuple[int, ...]] = (32, 7, 10, 54, 40, 40, 28, 10, 14, 14, 14, 9, 16, 12, 22, 48)
+_WIDTHS: Final[tuple[int, ...]] = (32, 7, 10, 54, 40, 40, 28, 10, 14, 14, 14, 9, 16, 12, 22, 48, 20)
 
 #: The decision states as the workbook says them: the words of the screen's chips, which a spreadsheet user edits.
 DECISION_LABELS: Final[Mapping[str, str]] = {
@@ -189,6 +194,7 @@ def _values(item: OptimisationProposalRecord) -> tuple[str | int, ...]:
         _decimal(item.saving_percent),
         DECISION_LABELS[item.current_verdict],
         "" if decision is None or decision.comment is None else decision.comment,
+        "" if decision is None or decision.carried_from is None else f"V{decision.carried_from.version_ordinal}",
     )
 
 

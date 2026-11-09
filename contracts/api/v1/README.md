@@ -23,11 +23,15 @@ them reads the same answers as before.
   version's pass and absent for one made directly -- as `ProposalDecision` and `AcceptedOptimisationProposal` already carry it.
 - **`D-346` -- the percent beside the saving.** `AcceptedOptimisationProposal` gains the optional `saving_percent`, the very figure
   `OptimisationProposal.saving_percent` states (computed by the same function over the two stored unit prices; present where `saving` is
-  `null`, absent only at a zero current price). The proposals **CSV** (`exportOptimisationProposalsCsv`) gains `saving_percent` as its
-  **last** column: the file is read by position by whoever scripts against it, so a column in the middle would shift every one after
-  it. The proposals **workbook** (`exportOptimisationProposalsXlsx`) gains «Экономия, %» after «Экономия»: its way back
+  `null`, absent only at a zero current price). The proposals **CSV** (`exportOptimisationProposalsCsv`) gains `saving_percent` among its
+  **last** columns (only the carried mark below follows it): the file is read by position by whoever scripts against it, so a column in
+  the middle would shift every one after it. The proposals **workbook** (`exportOptimisationProposalsXlsx`) gains «Экономия, %» after «Экономия»: its way back
   (`importOptimisationProposalDecisions`) finds «ID предложения», «Решение эксперта» and «Комментарий» by their headers, so the two
   edited columns move one place right and nothing reads them by position. An empty cell is an absent percent, never `0`.
+  **`D-335` -- the carried mark in the same exports.** The CSV's last column is `decision_carried_from_version` (the display ordinal of the
+  earlier version the decision **in force** was carried over from; empty for a decision made directly and for a proposal with none in
+  force, a withdrawn one included); the workbook's last column is «Перенесено из версии» («V2» or empty), after the two an expert edits, so
+  none of them moves.
 - **`D-370` -- a group of states.** `listExecutionQueue` takes the optional `state_group`: `active` (`queued`, `leased`, `running`,
   `retry_wait`), `completed` (`succeeded`, `cancelled`) or `errors` (`failed`, `dead_letter`) -- the original's three sub-tabs. It lists
   every job in any state of the group, one paged list with the page's `overview` and cursor as for any other filter; the cursor is bound

@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.43.0 (OpenAPI 3.1.0)
- *   sha256 3b39fe53c76676d56aa1d43dade300a6e0a6117d077f2a123989ed59bfc2d0ff
+ *   sha256 8cb5ce4bbf64e8429108d7e66cc8d30b1da03bb6f1cd6698106d700b8f50e75e
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -2306,7 +2306,7 @@ export type ExcludeComparisonUploadSetResult = ComparisonProposalSet;
 /**
  * Export Optimisation Proposals Csv
  *
- * Every proposal of the pass as a CSV file, one row each in ordinal order: the pass, the specification row's provenance, both positions, both exact unit prices, the saving (an empty cell when it is absent, never `0`) and the current decision, and, as the last column, `saving_percent` (`D-346`, contract 1.43.0: the share of the current unit price the proposed one saves, empty only at a zero current price). UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; every cell that a spreadsheet would read as a formula is prefixed with an apostrophe. Computed on request from the stored rows; separate from the findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
+ * Every proposal of the pass as a CSV file, one row each in ordinal order: the pass, the specification row's provenance, both positions, both exact unit prices, the saving (an empty cell when it is absent, never `0`) and the current decision, and, as the last two columns, `saving_percent` (`D-346`, contract 1.43.0: the share of the current unit price the proposed one saves, empty only at a zero current price) and `decision_carried_from_version` (`D-335`: the display ordinal of the earlier version the decision in force was carried over from, empty for one made directly). UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; every cell that a spreadsheet would read as a formula is prefixed with an apostrophe. Computed on request from the stored rows; separate from the findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ExportOptimisationProposalsCsvInput = {
   /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/export.csv`. */
@@ -2329,7 +2329,7 @@ export type ExportOptimisationProposalsCsvResult = Blob;
 /**
  * Export Optimisation Proposals Xlsx
  *
- * `UI-B-15` (contract 1.35.0): every proposal of the pass as a workbook with one sheet, «Предложения», one row each in ordinal order. The first column, «ID предложения», is the proposal's own identity -- the key by which `importOptimisationProposalDecisions` reads the file back, never the display number «№»; then the specification row, both positions, the exact prices and the saving (an empty cell when it is absent, never `0`), «Экономия, %» (`D-346`, contract 1.43.0: the share of the current unit price the proposed one saves, empty only at a zero current price), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено` or `на доработку`) and «Комментарий», filled with the decision in force. Every cell is text, so one that begins with `=` is shown and not evaluated. Computed on request from the stored rows. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
+ * `UI-B-15` (contract 1.35.0): every proposal of the pass as a workbook with one sheet, «Предложения», one row each in ordinal order. The first column, «ID предложения», is the proposal's own identity -- the key by which `importOptimisationProposalDecisions` reads the file back, never the display number «№»; then the specification row, both positions, the exact prices and the saving (an empty cell when it is absent, never `0`), «Экономия, %» (`D-346`, contract 1.43.0: the share of the current unit price the proposed one saves, empty only at a zero current price), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено` or `на доработку`) and «Комментарий», filled with the decision in force. The last column, «Перенесено из версии» (`D-335`), reads «V2» for a decision in force that was carried over from the earlier version's pass and is empty otherwise; it moves none of the columns above. Every cell is text, so one that begins with `=` is shown and not evaluated. Computed on request from the stored rows. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ExportOptimisationProposalsXlsxInput = {
   /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/export.xlsx`. */
