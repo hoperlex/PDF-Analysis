@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Final, Mapping
+from typing import Any, Final, Mapping
 
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock, provider_lock
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -98,6 +98,16 @@ class ProviderConfig:
     #: on, ``None`` for a run whose executor was frozen at start. Set, :attr:`approved_connection_revision_id` is the
     #: member dispatch bound, and ``None`` there means the run is still pending, so no call may be made.
     approved_group_revision_id: str | None = None
+    #: `HOSTS-LAYOUT-01` (ADR-0028 decision 8, consent v2). For a run frozen with a stage plan, the models its consent approved:
+    #: model id -> ``{"rate_sha256", "access"}``. Set, :func:`~auditmanager.analysis.text.cost.require_approved_model` checks that the
+    #: model of a call is a member, at the rate and with the access approved, instead of comparing one ``approved_model_id``.
+    #: ``None`` is every run whose consent names one model.
+    approved_models: Mapping[str, Mapping[str, str]] | None = None
+    #: The digest of the stage plan the consent was given for (a planned run only).
+    approved_stage_plan_digest: str | None = None
+    #: The cell this configuration serves (model, effort, answer limit, timeout, access); ``None`` outside a planned run. The text
+    #: analysis reads its effort and answer limit from here, and ``model_id`` is then the cell's model.
+    cell_settings: Any = None
 
 
 def _read_ceiling(environ: Mapping[str, str]) -> tuple[float, bool]:

@@ -45,6 +45,8 @@ from auditmanager.analysis.text.anchors import (
 )
 from auditmanager.analysis.text.artifact import Observation, build_text_observations
 from auditmanager.analysis.text.binding import CallBinding
+from auditmanager.analysis.text.catalogue import accepted_reported
+from auditmanager.analysis.text.cell_settings import apply_to_bundle
 from auditmanager.analysis.text.config import ProviderConfig, ProviderMode, load_provider_config
 from auditmanager.analysis.text.cost import CostMeter, require_approved_model, request_cost_upper_usd
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock, provider_lock
@@ -309,7 +311,10 @@ def _identity_refusal(
       its stored message names ``model_not_selected`` (the code's safe detail keys are only
       ``run_id`` and ``stage_id``, so the word goes into the message);
     * the reply names no model;
-    * the reply names another model (exact comparison: no prefix, no alias, no case folding).
+    * the reply names another model (exact comparison: no prefix, no alias, no case folding). `HOSTS-LAYOUT-01`: "the same" is
+      :func:`~auditmanager.analysis.text.catalogue.accepted_reported` -- the expected string itself, or one of the exact strings the
+      model catalogue lists for it (``claude-opus-5-5[1m]`` for ``claude-opus-5-5``); a gateway name the catalogue does not list is
+      held to plain equality, as it always was.
 
     The answer arrived and may have been paid for, so the refusal is ``outcome_unknown``, never
     retry-safe, and carries the usage evidence of what the reply reported. The message names no
@@ -324,7 +329,7 @@ def _identity_refusal(
             "no model was selected (model_not_selected); the stage fails closed and "
             "the answer is not published"
         )
-    elif not isinstance(reported, str) or reported != expected:
+    elif not accepted_reported(expected, reported):
         message = (
             "the reply names a model other than the one asked for, or none; the answer "
             "is not published"
@@ -398,7 +403,8 @@ def run_text_analysis(
         validate_recognised(text_layer, recognised_pages)
         request = build_request(
             model_id=resolved_config.model_id,
-            bundle=profile.prompt_bundle,
+            # `HOSTS-LAYOUT-01`: the cell's answer limit and effort for a planned run; the profile's own otherwise.
+            bundle=apply_to_bundle(profile.prompt_bundle, resolved_config.cell_settings),
             text_layer=text_layer,
             idempotency_scope=str(run_id),
             recognised=recognised_pages,

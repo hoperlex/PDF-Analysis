@@ -39,6 +39,7 @@ from auditmanager.analysis.text.adapter import PROVIDER, ModelAdapter, ModelResp
 from auditmanager.analysis.text.anchors import REASON_ABSENT, BlockIndex, ResolvedAnchor, UnresolvedAnchor
 from auditmanager.analysis.text.artifact import Observation, build_text_observations
 from auditmanager.analysis.text.binding import CallBinding
+from auditmanager.analysis.text.cell_settings import apply_to_bundle
 from auditmanager.analysis.text.chunk_preflight import ChunkPreflightError, TextChunk
 from auditmanager.analysis.text.config import ProviderConfig, ProviderMode, load_provider_config
 from auditmanager.analysis.text.cost import BUDGET_SCOPE_RUN, CostMeter, require_approved_model, request_cost_upper_usd
@@ -386,7 +387,8 @@ def run_text_analysis_windows(
         where = _where(window, count)
         request = build_window_request(
             model_id=resolved_config.model_id,
-            bundle=profile.prompt_bundle,
+            # `HOSTS-LAYOUT-01`: the cell's answer limit and effort for a planned run; the profile's own otherwise.
+            bundle=apply_to_bundle(profile.prompt_bundle, resolved_config.cell_settings),
             plan=plan,
             window=window,
             idempotency_scope=str(run_id),

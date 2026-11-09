@@ -38,6 +38,26 @@ class RunCostPolicy:
     #: The group revision the accepted consent names, ``None`` for a Run whose executor was frozen at start. Set, a
     #: ``None`` ``connection_revision_id`` means *pending* (no member has taken the Run yet), not ``environment``.
     executor_group_revision_id: str | None = None
+    #: `HOSTS-LAYOUT-01` (consent v2). For a Run frozen with a stage plan: the models its consent approved (model id -> ``rate_sha256`` and
+    #: ``access``) and the digest of the plan it was given for. ``None`` for a Run whose consent names one model.
+    models: dict | None = None
+    stage_plan_digest: str | None = None
+
+
+def _binding_changed() -> DomainError:
+    return DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
+
+
+def _consent_models(value, plan) -> dict:
+    """The model map of a consent v2, checked against the plan of the Run it governs: exactly the plan's models, each with a rate digest
+    and the access the plan froze. Anything else is a consent that does not bind this Run's work."""
+    if (not isinstance(value, dict) or set(value) != set(plan.models)
+            or any(not isinstance(entry, dict) or set(entry) != {"rate_sha256", "access"}
+                   or not isinstance(entry["rate_sha256"], str) or len(entry["rate_sha256"]) != 64
+                   or any(ch not in "0123456789abcdef" for ch in entry["rate_sha256"])
+                   or entry["access"] != plan.access_of(model) for model, entry in value.items())):
+        raise _binding_changed()
+    return {model: dict(entry) for model, entry in value.items()}
 
 
 def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
@@ -52,7 +72,11 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
             raise DomainError(ErrorCode.INTERNAL_ERROR, message="run cost authority is not accepted")
         outcome = command.outcome or {}
     consent = outcome.get("cost_consent")
+    stage_plan = getattr(run, "stage_plan", None)
     if consent is None:
+        if stage_plan is not None:
+            # A Run frozen with a stage plan is never started without the consent that binds its models (`HOSTS-LAYOUT-01`).
+            raise _binding_changed()
         return RunCostPolicy(False, float(default_ceiling_usd), not bool(outcome.get("relaxed_limits", False)))
     try:
         digest, billing = consent["estimate_digest"], consent["billing"]
@@ -135,7 +159,8 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
             else:
                 raise ValueError()
         if (not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)
-                or billing not in {"metered", "unmetered"} or type(ceiling) is not int or ceiling < 0
+                or billing not in {"metered", "unmetered", "mixed"} or type(ceiling) is not int or ceiling < 0
+                or billing == "mixed" and consent.get("stage_plan_digest") is None
                 or type(uncapped_stats) is not bool
                 or uncapped_stats and (not outcome.get("relaxed_limits", False) or ceiling != 0)
                 or billing == "metered" and ceiling == 0 and not uncapped_stats
@@ -146,7 +171,20 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
     except (KeyError, TypeError, ValueError):
         raise DomainError(ErrorCode.INTERNAL_ERROR, message="accepted run cost authority is invalid") from None
     # Unmetered still has a positive operational configuration; no monetary halt applies.
-    if group_revision is not None or getattr(run, "binding_state", "frozen_at_start") != "frozen_at_start":
+    plan_digest, models = consent.get("stage_plan_digest"), None
+    if (stage_plan is not None) != (plan_digest is not None):
+        # A plan with a consent that names none, or a consent v2 on a Run with no plan: the consent does not bind this work.
+        raise _binding_changed()
+    if stage_plan is not None:
+        from .stage_layout import parse_plan
+
+        plan = parse_plan(stage_plan)
+        if (plan.digest != plan_digest or group_revision is not None or revision is not None
+                or model != plan.cell("text:main").model_id):
+            raise _binding_changed()
+        models = _consent_models(consent.get("models"), plan)
+        revision = None
+    elif group_revision is not None or getattr(run, "binding_state", "frozen_at_start") != "frozen_at_start":
         # Admitted on a group: the consent names the group revision and the Run froze the same one. The connection
         # revision is the one dispatch wrote -- ``None`` until then -- and is never compared with the consent, which
         # holds none (the DB only lets it go NULL -> a member of that group revision, once).
@@ -157,8 +195,8 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
     elif revision != getattr(run, "connection_revision_id", None):
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
     return RunCostPolicy(True, ceiling / 1_000_000 if ceiling else float(default_ceiling_usd),
-                         billing == "metered" and not uncapped_stats, window, maximum,
-                         digest, model, rates, revision, extended, page_pieces, group_revision)
+                         billing in {"metered", "mixed"} and not uncapped_stats, window, maximum,
+                         digest, model, rates, revision, extended, page_pieces, group_revision, models, plan_digest)
 
 
 def group_consent_holds(session, *, run_id: str, group_revision_id: str, pin_id: str, billing: str,
