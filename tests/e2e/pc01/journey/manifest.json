@@ -295,6 +295,7 @@
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
         {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "the run-start form offers the executors a run may start on, drawn for a session that may act as an expert"},
+        {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "the start control reads the detail of each executor connection to name the route a run would take (useExecutorConnectionDetails), only once a connection exists"},
         {"method": "GET", "path": "/analysis/presets", "operationId": "listAnalysisPresets", "$why_optional": "the run-start form offers the saved presets beside the executors, drawn for a session that may act as an expert"},
         {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
         {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
@@ -523,6 +524,7 @@
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
         {"method": "GET", "path": "/versions/{version_uid}/portal-blocks", "operationId": "listVersionPortalBlocks", "$why_optional": "the evidence viewer's block index, read only for a version whose run read portal blocks"},
+        {"method": "GET", "path": "/runs/{run_id}/finding-blocks", "operationId": "listRunFindingBlocks", "$why_optional": "UI-PARITY-C6 (contract 1.41.0): «Блоки замечания» and the table's block count (UI-A-74) read which blocks hold each finding, once the run's findings are read; no finding needs to be open"},
         {"method": "GET", "path": "/versions/{version_uid}/blocks", "operationId": "getVersionBlocks", "$why_optional": "the evidence viewer's text-line index, read only for a version a run has read"},
         {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
@@ -624,6 +626,7 @@
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
         {"method": "GET", "path": "/runs/{run_id}", "operationId": "getRunStatus", "$why_optional": "only once the version has a run"},
         {"method": "GET", "path": "/runs/{run_id}/findings", "operationId": "listRunFindings", "$why_optional": "only for a run that published a result"},
+        {"method": "GET", "path": "/runs/{run_id}/finding-blocks", "operationId": "listRunFindingBlocks", "$why_optional": "UI-PARITY-C6 (contract 1.41.0): the per-block counts and «Без сущностей» read which blocks hold the findings of a run, only for a run that published a result, once its findings are read"},
         {"method": "GET", "path": "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop", "operationId": "streamVersionPortalBlockCrop", "$why_optional": "only for an IMAGE block with a crop, loaded lazily by the browser as it is scrolled to"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
@@ -802,6 +805,7 @@
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "only after the reader chooses a project"},
         {"method": "GET", "path": "/versions/{version_uid}/portal-blocks", "operationId": "listVersionPortalBlocks", "$why_optional": "only after the reader chooses a version; «Блоки портала» is the tab it opens on"},
+        {"method": "GET", "path": "/runs/{run_id}/finding-blocks", "operationId": "listRunFindingBlocks", "$why_optional": "UI-PARITY-C6 (contract 1.41.0): the page strip, the per-block counts and «Без сущностей» read which blocks hold the findings of the run the reader chose, only once a version with a published run is chosen"},
         {"method": "GET", "path": "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop", "operationId": "streamVersionPortalBlockCrop", "$why_optional": "only for an IMAGE block with a crop, loaded lazily by the browser as it is scrolled to"},
         {"method": "GET", "path": "/versions/{version_uid}/blocks", "operationId": "getVersionBlocks", "$why_optional": "only after the reader opens «Строки текста»"},
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
@@ -1126,6 +1130,7 @@
       ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "the presets widget reads the detail of each executor connection to name the route a preset takes (useExecutorConnectionDetails), only once a connection exists"},
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
@@ -1232,8 +1237,23 @@
       "$comment": [
         "«Сравнение стадий» (CMP-STAGE-PAIR-01) reads projects, account roles and module state on a cold route.",
         "A single visible project opens its confirmed pair catalog and nonbinding suggestions. A reader with several",
-        "projects chooses one before those operations are sent. Confirming a pair is an explicit expert action."
+        "projects chooses one before those operations are sent. Confirming a pair is an explicit expert action.",
+        "`query` (D-380, lane J2): the screen reads the header's project from `?project=` (`useAddressProject`), so the walk names",
+        "the journey's own project there and reads the same workspace whether the stand holds one project or several.",
+        "`read_state` (D-380): `--state confirmed_pair` makes the walk wait until the catalog shows a confirmed pair and its table,",
+        "the state in which the pairs table widened the page to 839 px; a stand with no pair (no `cmp-stage-assembly`) is a finding,",
+        "not a pass of a state that was never read."
       ],
+      "query": {"project": "{project_uid}"},
+      "read_state": {
+        "confirmed_pair": {
+          "bound_ms": 20000,
+          "present": [
+            {"selector": "[data-pair-counters]", "text_matches": "Сопоставлено: [1-9]"},
+            {"selector": "section[aria-labelledby=\"stage-pair-heading\"] table"}
+          ]
+        }
+      },
       "expects_api": [
         {"method": "GET", "path": "/projects", "operationId": "listProjects"},
         {"method": "GET", "path": "/me", "operationId": "getMe"}
@@ -1245,6 +1265,9 @@
         {"method": "GET", "path": "/projects/{project_uid}/stage-pair-suggestions", "operationId": "listStagePairSuggestions", "$why_optional": "read after a project is selected, automatically for exactly one project"},
         {"method": "GET", "path": "/projects/{project_uid}/stage-uploads", "operationId": "listStageUploads", "$why_optional": "only once a project is chosen: the page opens on the first project the list offers"},
         {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "only once a project is chosen: the pair catalogue reads the project's documents to offer the members of an assembly (assemblies.ts readDocuments), automatically for exactly one project"},
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "D-380: with `?project=` in the address the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
+        {"method": "GET", "path": "/stage-pairs/{stage_pair_id}/chain-runs", "operationId": "listStageChainRuns", "$why_optional": "D-380, state confirmed_pair: a single confirmed pair opens its «Управление парой» panel by itself and the run controls read the pair's runs"},
+        {"method": "GET", "path": "/stage-pairs/{stage_pair_id}/sheet-map", "operationId": "getStageSheetMap", "refusal": true, "expect_status": 404, "$why_optional": "D-380, state confirmed_pair: the assembly editor asks for the pair's sheet map before any map exists, and the contract answers 404 not_found; any other answer is a finding"},
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},

@@ -2035,6 +2035,212 @@ def test_the_instrument_still_asserts_a_width_on_every_route() -> None:
     )
 
 
+# --------------------------------------------------------------------------------------
+# `D-380` (lane J2): the read walk's width, its paused state and its named states.
+#
+# The journey declares ONE width and walks ONE state, so three layout faults of 0.17.1 passed it. `--width`, `--paused`
+# and `--state` let a run look at the others; these checks hold what those options read out of the manifest (a route's
+# `query` and `read_state`) to the tree, so a renamed marker or a query naming nothing is red here, not at a stand.
+# --------------------------------------------------------------------------------------
+
+_TEMPLATE_NAME = re.compile(r"\{([a-z_]+)\}")
+_REGEX_META = re.compile(r"[\\\[\](){}.*+?^$|]")
+
+
+def route_query_findings(routes: Sequence[dict]) -> list[str]:
+    """A route's ``query`` may name only identifiers an EARLIER route captured, or a sample the route declares itself."""
+    findings: list[str] = []
+    captured: set[str] = set()
+    for route in routes:
+        known = captured | set((route.get("sample_identifiers") or {}))
+        query = route.get("query")
+        if query is not None and (not isinstance(query, dict) or not query):
+            findings.append(f"route '{route['name']}': `query` must be a non-empty object of templates")
+            query = {}
+        for key, template in (query or {}).items():
+            if not isinstance(template, str) or not template:
+                findings.append(f"route '{route['name']}': query '{key}' is not a template string")
+                continue
+            for name in _TEMPLATE_NAME.findall(template):
+                if name not in known:
+                    findings.append(
+                        f"route '{route['name']}': query '{key}' names {{{name}}}, which no earlier route captures"
+                    )
+        follow = route.get("follow")
+        if follow:
+            captured.add(follow["capture"])
+    return findings
+
+
+def read_state_findings(routes: Sequence[dict], source: str) -> list[str]:
+    """Every named read state is bounded, non-empty, and made of handles and words ``web/src`` still draws."""
+    findings: list[str] = []
+    for route in routes:
+        for name, state in (route.get("read_state") or {}).items():
+            label = f"route '{route['name']}' state '{name}'"
+            bound = state.get("bound_ms")
+            if not isinstance(bound, int) or isinstance(bound, bool) or bound <= 0:
+                findings.append(f"{label}: bound_ms is {bound!r}; a wait without a positive bound is a hang")
+            conditions = state.get("present")
+            if not isinstance(conditions, list) or not conditions:
+                findings.append(f"{label}: `present` must list at least one condition, or every screen is in the state")
+                continue
+            for condition in conditions:
+                selector = condition.get("selector")
+                if not isinstance(selector, str) or not selector:
+                    findings.append(f"{label}: a condition has no selector")
+                    continue
+                for attribute in _DATA_ATTRIBUTE.findall(selector):
+                    if attribute not in source:
+                        findings.append(f"{label}: {attribute} is no longer drawn by web/src ({selector})")
+                for ident in _ID_SELECTOR.findall(selector):
+                    if f'id="{ident}"' not in source:
+                        findings.append(f"{label}: id {ident} is no longer drawn by web/src ({selector})")
+                for attribute, value in re.findall(r'\[(aria-labelledby)=\\?"([^"\\]+)\\?"\]', selector):
+                    if value not in source:
+                        findings.append(f"{label}: {attribute}={value} is no longer drawn by web/src ({selector})")
+                pattern = condition.get("text_matches")
+                if pattern is not None:
+                    try:
+                        re.compile(pattern)
+                    except re.error as error:
+                        findings.append(f"{label}: text_matches {pattern!r} is not a regular expression ({error})")
+                        continue
+                    literal = _REGEX_META.split(pattern)[0].strip()
+                    if literal and literal not in source:
+                        findings.append(f"{label}: the words {literal!r} are no longer drawn by web/src")
+    return findings
+
+
+def route_refusal_findings(routes: Sequence[dict], openapi: dict) -> list[str]:
+    """A read route's declared refusal names a status the contract publishes for that operation, and an error status."""
+    findings: list[str] = []
+    for route in routes:
+        for entry in route.get("optional_api") or []:
+            if entry.get("refusal") is not True:
+                if "expect_status" in entry:
+                    findings.append(f"route '{route['name']}': {entry['operationId']} has expect_status without refusal: true")
+                continue
+            status = entry.get("expect_status")
+            if not isinstance(status, int) or isinstance(status, bool) or status < 400:
+                findings.append(f"route '{route['name']}': {entry['operationId']} declares a refusal with expect_status {status!r}")
+                continue
+            if status not in responses_published_for(openapi, entry["method"], entry["path"]):
+                findings.append(
+                    f"route '{route['name']}': {entry['operationId']} declares the refusal {status}, which the contract does not publish for it"
+                )
+    return findings
+
+
+def test_a_read_routes_declared_refusals_are_statuses_the_contract_publishes(manifest: dict, openapi: dict) -> None:
+    assert route_refusal_findings(manifest["routes"], openapi) == []
+    stage = next(route for route in manifest["routes"] if route["name"] == "stage-compare")
+    declared = [e for e in stage["optional_api"] if e.get("refusal") is True]
+    assert [(e["operationId"], e["expect_status"]) for e in declared] == [("getStageSheetMap", 404)], (
+        "D-380: the confirmed-pair state asks for a sheet map before one exists; that 404 is the state, nothing else is declared"
+    )
+
+
+def test_control_a_declared_refusal_the_contract_does_not_publish_is_detected() -> None:
+    contract = {"paths": {"/x/{id}": {"get": {"responses": {"200": {}, "404": {}}}}}}
+    ok = {"name": "r", "optional_api": [{"method": "GET", "path": "/x/{id}", "operationId": "getX", "refusal": True, "expect_status": 404}]}
+    assert route_refusal_findings([ok], contract) == []
+    wrong = {"name": "r", "optional_api": [{"method": "GET", "path": "/x/{id}", "operationId": "getX", "refusal": True, "expect_status": 409}]}
+    assert any("does not publish" in f for f in route_refusal_findings([wrong], contract))
+    success = {"name": "r", "optional_api": [{"method": "GET", "path": "/x/{id}", "operationId": "getX", "refusal": True, "expect_status": 200}]}
+    assert any("expect_status 200" in f for f in route_refusal_findings([success], contract))
+    stray = {"name": "r", "optional_api": [{"method": "GET", "path": "/x/{id}", "operationId": "getX", "expect_status": 404}]}
+    assert any("without refusal" in f for f in route_refusal_findings([stray], contract))
+
+
+def test_a_routes_query_names_only_what_an_earlier_route_captured(manifest: dict) -> None:
+    assert route_query_findings(manifest["routes"]) == []
+    stage = next(route for route in manifest["routes"] if route["name"] == "stage-compare")
+    assert stage.get("query") == {"project": "{project_uid}"}, (
+        "D-380: with two or more projects on the stand /stage-comparison draws a chooser and nothing else, so the walk "
+        "must name the journey's project in the address"
+    )
+
+
+def test_every_read_state_is_bounded_and_made_of_handles_the_application_draws(manifest: dict) -> None:
+    source = application_source(_require(WEB_SRC))
+    assert read_state_findings(manifest["routes"], source) == []
+    stage = next(route for route in manifest["routes"] if route["name"] == "stage-compare")
+    assert "confirmed_pair" in stage.get("read_state", {}), (
+        "D-380: the confirmed pair is the state in which the pairs table widened the page; `--state confirmed_pair` "
+        "reads it"
+    )
+
+
+def test_control_a_query_naming_nothing_is_detected() -> None:
+    routes = [
+        {"name": "a", "path": "/a", "query": {"project": "{project_uid}"}},
+        {"name": "b", "path": "/b", "follow": {"capture": "project_uid"}},
+        {"name": "c", "path": "/c", "query": {"project": "{project_uid}"}},
+        {"name": "d", "path": "/d", "query": {"x": "{version_uid}"}, "sample_identifiers": {"version_uid": "ver_X"}},
+        {"name": "e", "path": "/e", "query": {}},
+    ]
+    found = route_query_findings(routes)
+    assert any("route 'a'" in f and "{project_uid}" in f for f in found), "used before anything captured it"
+    assert not any("route 'c'" in f for f in found), "captured by an earlier route"
+    assert not any("route 'd'" in f for f in found), "its own sample"
+    assert any("route 'e'" in f for f in found), "an empty query is a mistake, not a feature"
+
+
+def test_control_a_read_state_that_lost_its_handle_is_detected() -> None:
+    state = {
+        "bound_ms": 20000,
+        "present": [
+            {"selector": "[data-pair-counters]", "text_matches": "Сопоставлено: [1-9]"},
+            {"selector": 'section[aria-labelledby="stage-pair-heading"] table'},
+        ],
+    }
+    route = {"name": "r", "read_state": {"s": state}}
+    drawn = 'data-pair-counters Сопоставлено: stage-pair-heading'
+    assert read_state_findings([route], drawn) == []
+    assert any("data-pair-counters" in f for f in read_state_findings([route], "Сопоставлено: stage-pair-heading"))
+    assert any("Сопоставлено" in f for f in read_state_findings([route], "data-pair-counters stage-pair-heading"))
+    assert any("stage-pair-heading" in f for f in read_state_findings([route], "data-pair-counters Сопоставлено:"))
+    unbounded = {"name": "r", "read_state": {"s": {**state, "bound_ms": 0}}}
+    assert any("bound_ms" in f for f in read_state_findings([unbounded], drawn))
+    empty = {"name": "r", "read_state": {"s": {"bound_ms": 1, "present": []}}}
+    assert any("every screen is in the state" in f for f in read_state_findings([empty], drawn))
+    broken = {"name": "r", "read_state": {"s": {"bound_ms": 1, "present": [{"selector": "x", "text_matches": "("}]}}}
+    assert any("not a regular expression" in f for f in read_state_findings([broken], drawn))
+
+
+def test_the_read_walk_is_wired_to_its_options() -> None:
+    """The flags are parsed, the pause is entered before the walk and put back in a ``finally``, and the verdicts are called."""
+    journey = _require(JOURNEY_SCRIPT).read_text(encoding="utf-8")
+    for needle in (
+        "'--width'", "'--paused'", "'--state'", "readViewport(", "widthFindings(route.name, record.width, READ_VIEWPORT)",
+        "routeQuery(", "queryString(", "stateExpression(", "stateFindings(", "pausedFindings(", "pauseDispatch(", "restoreDispatch(",
+        "pickFollowed(", "Object.assign(HINTS, write.captured)", "declaredRefusals(", "isDeclaredRefusal(",
+    ):
+        assert needle in journey, f"journey.mjs no longer contains {needle}: an option is parsed and does nothing"
+    entered = journey.index("await pauseDispatch(")
+    walked = journey.index("for (const route of PHASE === 'write' ? [] : manifest.routes)")
+    finally_at = journey.index("} finally {", walked)
+    assert entered < walked < finally_at < journey.index("await restoreDispatch("), (
+        "the pause must be entered before the walk and put back in the `finally` that follows it, "
+        "so a walk that throws does not leave a stand paused"
+    )
+    dispatch = _require(JOURNEY_DIR / "dispatch.mjs").read_text(encoding="utf-8")
+    assert "setExecutionPaused" in dispatch or "/execution/dispatch" in dispatch
+    assert "idempotency-key" in dispatch, "setExecutionPaused requires an idempotency key"
+
+
+def test_the_options_unit_tests_run_with_the_gate() -> None:
+    """``node --test`` over the pure rules of the new options and of the kept exchanges."""
+    node = shutil.which("node")
+    assert node is not None, "node is required: the journey is a node program"
+    ran = subprocess.run(
+        [node, "--test", str(JOURNEY_DIR / "walk-options.test.mjs"), str(JOURNEY_DIR / "dispatch.test.mjs")],
+        cwd=REPOSITORY_ROOT, capture_output=True, text=True, timeout=120,
+    )
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+
+
 def test_the_instrument_still_reads_back_the_jar_every_route_started_with() -> None:
     """`D-16`: exercise the real Page snapshot against an independent browser reply.
 
