@@ -77,7 +77,7 @@ describe('what sends the person back to a fresh estimate', () => {
   it('is a stale digest or a changed binding, and nothing else', () => {
     expect(reauditEstimateChanged(refusal(409, 'conflict', { conflict_reason: ESTIMATE_STALE_REASON }))).toBe(true);
     expect(reauditEstimateChanged(refusal(422, 'analysis_input_invalid', { reason: BINDING_CHANGED_REASON }))).toBe(true);
-    // The stage layout's start words the changed binding as a 409 with `conflict_reason` (contract 1.45.0).
+    // The stage layout's start answers the 422 above like the Run path; the 409 form of the same fact is accepted as well.
     expect(reauditEstimateChanged(refusal(409, 'conflict', { conflict_reason: BINDING_CHANGED_REASON }))).toBe(true);
     // The right words under the wrong code, another conflict, another reason, a transport failure, a plain value.
     expect(reauditEstimateChanged(refusal(422, 'analysis_input_invalid', { conflict_reason: ESTIMATE_STALE_REASON }))).toBe(false);

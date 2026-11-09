@@ -19,9 +19,11 @@ import { ApiError } from '@/shared/api';
 /** `409 conflict` of a start whose digest is no longer the one the server computes. */
 export const ESTIMATE_STALE_REASON = 'run_cost_estimate_stale';
 /**
- * The model, rate or revision (or, on the stage layout, the access) the estimate was bound to has changed. The Run path answers
- * `422 analysis_input_invalid` with this `reason`; the stage layout's start answers `409 conflict` with this `conflict_reason`.
- * Both are the same answer for the person: read again (the same pair as `features/start-run`'s `estimateChanged`).
+ * The model, rate or revision (or, on the stage layout, the access) the estimate was bound to has changed. Both starts answer
+ * `422 analysis_input_invalid` with this `reason` (the wiring lane proved it for a changed access on the stage layout's start as
+ * well; the contract's prose that said `409` is being corrected). The `409 conflict` form with this `conflict_reason` is still
+ * accepted, since it costs nothing and an older server's answer must not be read as a failure. All of them are the same answer for
+ * the person: read again (the same pair as `features/start-run`'s `estimateChanged`).
  */
 export const BINDING_CHANGED_REASON = 'cost_estimate_binding_changed';
 
