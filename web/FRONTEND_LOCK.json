@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "9bad911d85cd3b0908c40666e424ca7e568daaeb1643b507aac21a455ad093dc",
-    "content_commit": "b64a73a5",
-    "content_commit_subject": "wip(contract): 1.46.0 -- getRunStages (GET /runs/{run_id}/stages), RunStages models, port, route, role register, stage facts read, adapter; pins moved from 1.45.0 (HOSTS-SEAL-2, RUN-STAGES-01)",
-    "dispatch_named_commit": "b64a73a52ce5d4c9774def00da814527b442fe69",
-    "commit_note": "Resealed by HOSTS-SEAL-2: contract 1.46.0 (getRunStages, the stages of a run, plan and fact).",
+    "sha256": "934dea8b63eecbae98762733cef0ab4a3029d14796115776df44771d526b775d",
+    "content_commit": "56972d7b",
+    "content_commit_subject": "feat(contract): 1.47.0 -- the comparison cells of the stage layout: StageComparisonCell, ComparisonLayoutKind, comparison_cells on the layout revision and its request, cell on ComparisonAiRoute (HOSTS-SEAL-3, HOSTS-CMP-01)",
+    "dispatch_named_commit": "56972d7be1c810b8b394f05870802569c381dd3b",
+    "commit_note": "Resealed by HOSTS-SEAL-3: contract 1.47.0 (the comparison cells of the stage layout: StageComparisonCell, ComparisonLayoutKind, comparison_cells, ComparisonAiRoute.cell).",
     "openapi_version": "3.1.0",
-    "info_version": "1.46.0",
+    "info_version": "1.47.0",
     "paths": 296,
     "operations": 324,
-    "component_schemas": 794,
+    "component_schemas": 796,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "9bad911d85cd3b0908c40666e424ca7e568daaeb1643b507aac21a455ad093dc",
+    "snapshot_sha256": "934dea8b63eecbae98762733cef0ab4a3029d14796115776df44771d526b775d",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "db0ceb96064a11bd373ae80aac5cf26f1e4d9c061b3d264b285be90f5cf0da6d",
-      "index.ts": "d5764d52f5d2c2d683eb964a461d03612df5aaf0afa6768dbd4e41bdfd782233",
-      "operations.gen.ts": "aeb77e7927a285675cb6fc8831de6d66cdb2ae3128403c113b2962574ef73c53",
-      "types.gen.ts": "826affda934ec88296319907871ce9ddc2059e4733dbb432fa465e3daaf76bb8"
+      "client.gen.ts": "e1fd003eac6bbcf5ddf75264fff2c93a4dfc1ed578b1b648f7370254623eb920",
+      "index.ts": "d9e52e04b517dc3ae255439d8755b69ac81eca1d8d8c27f8510c4c86b99f1be1",
+      "operations.gen.ts": "e72f89712effff38cdeb9b93d554d6ca716dcfe442f0e91b374c56a200e702cb",
+      "types.gen.ts": "2faaff187bc8f53ddc3e0725e37e466e2fd353f5b9d19af2ad5a3bcf9436f849"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
