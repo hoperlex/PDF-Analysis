@@ -450,11 +450,13 @@ def _an_uncaptured_decision(s: Stand) -> None:
     """One accept or reject has no decision-memory row any more: its memory decision is removed with its guard switched off."""
     with s.engine.connect() as connection:
         decision = connection.execute(text("SELECT memory_decision_id FROM decision_memory_decision ORDER BY 1 LIMIT 1")).scalar_one()
-    for table in ("decision_memory_decision_text", "decision_memory_decision"):
+    # `0061_decision_memory_m2`: the comment's table carries the forget guard now (`trg_<table>_forget_guard`), the decision's the plain one.
+    for table, trigger in (("decision_memory_decision_text", "trg_decision_memory_decision_text_forget_guard"),
+                           ("decision_memory_decision", "trg_decision_memory_decision_immutable")):
         with s.engine.begin() as connection:
-            connection.execute(text(f'ALTER TABLE public."{table}" DISABLE TRIGGER trg_{table}_immutable'))
+            connection.execute(text(f'ALTER TABLE public."{table}" DISABLE TRIGGER {trigger}'))
             connection.execute(text(f'DELETE FROM public."{table}" WHERE memory_decision_id = :d'), {"d": decision})
-            connection.execute(text(f'ALTER TABLE public."{table}" ENABLE TRIGGER trg_{table}_immutable'))
+            connection.execute(text(f'ALTER TABLE public."{table}" ENABLE TRIGGER {trigger}'))
 
 
 def act_plan(m: types.ModuleType, h: Harness) -> tuple[int, str, str]:
