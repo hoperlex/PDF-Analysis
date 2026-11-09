@@ -177,3 +177,21 @@ def test_the_catalogue_is_the_only_source_of_the_pairs_and_of_the_reported_names
     assert accepted_reported("claude-opus-5-5", "claude-opus-5-5[1m]")
     for bad in ("claude-opus-5-5-20261001", "Claude-Opus-5-5", " claude-opus-5-5", "claude-opus-5", None, 5):
         assert not accepted_reported("claude-opus-5-5", bad)
+
+
+def test_a_plan_cell_carries_exactly_the_keys_the_readers_take_and_the_stage_key_is_the_row():
+    """`getRunStages` and the cell-binding trigger read the frozen plan: each cell is exactly these six keys, and a call's `stage_key` is
+    the layout row (`text`, `blocks`, `cross_check`, `norms`, `review`, `correction`)."""
+    from auditmanager.analysis.text.binding import CallBinding
+    from auditmanager.runs.stage_facts import _plan_cells
+
+    document = _plan("subscription").to_json()
+    assert {tuple(sorted(cell)) for cell in document["cells"]} == {
+        ("access", "cell_key", "effort", "max_output_tokens", "model_id", "timeout_seconds")}
+    seen = _plan_cells(document)       # the reader of `getRunStages` accepts it and reads every field
+    assert sorted(cell["cell_key"] for views in seen.values() for cell in views) == sorted(f"{row}:main" for row in layout.STAGE_ROWS)
+    for views in seen.values():
+        for view in views:
+            assert {"model_id", "effort", "max_output_tokens", "timeout_seconds", "access"} <= set(view)
+    for row in layout.STAGE_ROWS:
+        assert CallBinding(expected_model="m", check_identity=True, cell_key=f"{row}:main", access="api").stage_key == row
