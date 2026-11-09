@@ -168,6 +168,7 @@ def test_an_unclaimed_task_is_no_sign_of_life(clock: Clock) -> None:
     with store_task_never_claimed:
         _adapter(clock, store, context=context, host_call=replace(CALL, timeout_seconds=30)).complete(REQUEST)
     assert context.signs == [] and context.live is False
+    assert clock.now - 1000 <= 34, "it waited the cell's 30 s, not the revision's 3600 s"
 
 
 def test_a_connections_own_call_takes_no_sign_of_life_from_its_claim(clock: Clock) -> None:

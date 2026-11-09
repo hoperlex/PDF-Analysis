@@ -89,7 +89,7 @@ def test_a_cell_prefers_a_pool_its_run_already_holds_over_a_free_unit_elsewhere(
     groups = _groups(opus=[held], sonnet=[_member("exc_SONA", HOST_A), _member("exc_SONB", HOST_B)])
     facts = {HOST_A: _facts(HOST_A, slots=1, in_use=0), HOST_B: _facts(HOST_B, slots=1, in_use=0)}
     del other
-    for run in ("run_1", "run_2", "run_3", "run_4", "run_5", "run_6"):
+    for run in (f"run_{n}" for n in range(1, 41)):
         outcome = _decide(run, _cells(("text:main", OPUS), ("norms:main", SONNET)), groups, facts)
         assert outcome.bound is not None
         assert {cell.host_id for cell in outcome.bound} == {HOST_A}, "the second cell follows the first into the pool the run holds"
