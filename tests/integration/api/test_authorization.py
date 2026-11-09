@@ -1247,6 +1247,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `UI-PARITY-P0I`: a finding's execution status records WHO set it; whether they may is the role register's
         # (expert).
         "findings.py",
+        # `HOSTS-SEAL-1` (1.45.0): the writes on a server (its switch, slots, archive, host-targeted enrollment and install) record WHO did it
+        # (the actor of the journal event and of the row); that only an administrator may is the role register's and the command's own
+        # re-read of the role set. The reads take no subject.
+        "hosts.py",
         "me.py",
         "norms.py",
         # `W60-PRICE-LIST-01`: a price list and a vendor-list revision record WHO uploaded or
@@ -1283,6 +1287,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # role re-read happens in its transaction; whether they may is the role register's
         # (any one role), decided before the handler runs.
         "specification_prices.py",
+        # `HOSTS-SEAL-1` (1.45.0): saving a revision of the stage layout and switching it record WHO did it; that only an administrator may is
+        # the role register's. The layout, the catalogue and the readiness of a start take no subject.
+        "stage_models.py",
         "users.py",
     ], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "
