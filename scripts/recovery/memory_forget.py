@@ -812,13 +812,12 @@ def selector_of(args: argparse.Namespace) -> Selector:
 def check_arguments(args: argparse.Namespace) -> None:
     """The refusals that need no database: what an operator must say before anything is touched."""
     mode = "resume" if args.resume is not None else "apply" if args.apply else "plan"
-    if mode == "resume":
-        # >>> guard: resume-id-shape
-        if not _ERASE_ID.fullmatch(args.resume):
-            raise ForgetRefused("--resume must be a forget identity (era_ and 26 characters).")
-        # <<< guard: resume-id-shape
-    else:
+    if mode != "resume":
         selector_of(args)
+    # >>> guard: resume-id-shape
+    elif not _ERASE_ID.fullmatch(args.resume):
+        raise ForgetRefused("--resume must be a forget identity (era_ and 26 characters).")
+    # <<< guard: resume-id-shape
     if mode == "plan":
         return
     # >>> guard: owner-permission-ref
