@@ -29,6 +29,7 @@ from auditmanager.jobs.public import append_execution_event
 from auditmanager.runs.public import (
     KIT_CUSTOM, LayoutRevisionRow, ModelAvailabilityPort, PROVIDER_SOURCE_DATABASE, SqlStageLayoutStore, StageLayoutStore,
     StagePlanFreezer, SwitchEventRow, cells_to_wire, no_layout_revision, provider_source_not_database, require_valid_layout,
+    start_readiness,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
@@ -195,5 +196,14 @@ class StagePlanService:
 
     # -- the one button --------------------------------------------------------------------------------------------------------
 
-    def get_start_readiness(self, *, body: Any) -> Any:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=DEPENDENCY)
+    def get_start_readiness(self, *, body: Any) -> dict[str, Any]:
+        """``getRunStartReadiness``: the route, the access of each cell, the cells no server serves, the digest to confirm and the total.
+        Reads the layout and the availability and prices the plan; writes nothing and calls no model."""
+        if self._cost_preflight is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        request = {name: getattr(body, name, None) for name in (
+            "reaudit_of_run_id", "executor_connection_id", "preset_id", "executor_group_id", "start_from_run_id", "start_stage_id")}
+        with self._sessions() as session:
+            return start_readiness(
+                self._cost_preflight, session, self.freezer(session), version_uid=str(body.version_uid),
+                relaxed_limits=bool(getattr(body, "relaxed_limits", None)), **request)

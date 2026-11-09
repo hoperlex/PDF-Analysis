@@ -46,6 +46,7 @@ from auditmanager.analysis.text.anchors import (
 from auditmanager.analysis.text.artifact import Observation, build_text_observations
 from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.catalogue import accepted_reported
+from auditmanager.analysis.text.cell_settings import apply_to_bundle
 from auditmanager.analysis.text.config import ProviderConfig, ProviderMode, load_provider_config
 from auditmanager.analysis.text.cost import CostMeter, require_approved_model, request_cost_upper_usd
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock, provider_lock
@@ -402,7 +403,8 @@ def run_text_analysis(
         validate_recognised(text_layer, recognised_pages)
         request = build_request(
             model_id=resolved_config.model_id,
-            bundle=profile.prompt_bundle,
+            # `HOSTS-LAYOUT-01`: the cell's answer limit and effort for a planned run; the profile's own otherwise.
+            bundle=apply_to_bundle(profile.prompt_bundle, resolved_config.cell_settings),
             text_layer=text_layer,
             idempotency_scope=str(run_id),
             recognised=recognised_pages,

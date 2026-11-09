@@ -26,7 +26,7 @@ from auditmanager.runs.stage_layout_store import LayoutRevisionRow, StageLayoutS
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
-    "AVAILABILITY_DEPENDENCY", "call_journal_columns", "cell_binding", "model_of", "settings_of", "ModelAvailability", "ModelAvailabilityPort", "NOT_ON_ANY_SERVER", "PROVIDER_SOURCE_DATABASE",
+    "AVAILABILITY_DEPENDENCY", "call_journal_columns", "cell_binding", "estimate_for_request", "start_readiness", "model_of", "settings_of", "ModelAvailability", "ModelAvailabilityPort", "NOT_ON_ANY_SERVER", "PROVIDER_SOURCE_DATABASE",
     "StagePlanDraft", "StagePlanFreezer", "StagePlanSource", "provider_source_not_database", "no_layout_revision",
 ]
 
@@ -195,3 +195,83 @@ def call_journal_columns(call: Any) -> dict[str, Any]:
     if call is None or getattr(call, "cell_key", None) is None:
         return {}
     return {"stage_key": call.stage_key, "host_id": call.host_id, "access": call.access}
+
+
+# --- the estimate of a request and the readiness of a start -----------------------------------------------------------------------
+
+
+def _invalid(field: str, constraint: str) -> DomainError:
+    return DomainError(ErrorCode.VALIDATION_FAILED, field=field, constraint=constraint)
+
+
+def estimate_for_request(
+    preflight: Any, session: Session, *, version_uid: str, stage_plan: Any, reaudit_of_run_id: str | None = None,
+    start_from_run_id: str | None = None, start_stage_id: str | None = None, executor_connection_id: str | None = None,
+    preset_id: str | None = None, executor_group_id: str | None = None, relaxed_limits: bool = False,
+) -> Any:
+    """The estimate a request body asks for -- a fresh start, a re-audit or a start from a stage -- as ``estimateRunCost`` answers it, with
+    ``stage_plan`` the layout's draft (priced by model) or ``None`` (the legacy route). The same refusals as the estimate operation: a
+    stage and its run go together, and a repeat names no executor, preset, group or relaxed limit."""
+    planned = {"stage_plan": stage_plan}  # ``None`` is an answer: the layout is off, and the estimate does not ask again
+    if start_from_run_id is not None or start_stage_id is not None:
+        if start_from_run_id is None or start_stage_id is None:
+            raise _invalid("start_stage_id", "start_from_pair")
+        if (reaudit_of_run_id is not None or executor_connection_id is not None or preset_id is not None or relaxed_limits
+                or executor_group_id is not None):
+            raise _invalid("start_from_run_id", "server_selected_route")
+        value = preflight.estimate_from_stage(session, run_id=start_from_run_id, start_stage_id=start_stage_id, **planned)
+    elif reaudit_of_run_id is not None:
+        if executor_connection_id is not None or preset_id is not None or relaxed_limits or executor_group_id is not None:
+            raise _invalid("reaudit_of_run_id", "server_selected_route")
+        value = preflight.estimate_reaudit(session, run_id=reaudit_of_run_id, **planned)
+    else:
+        return preflight.estimate_run(
+            session, version_uid=version_uid, executor_connection_id=executor_connection_id, preset_id=preset_id,
+            relaxed_limits=relaxed_limits, **({"executor_group_id": executor_group_id} if executor_group_id is not None else {}),
+            **planned)
+    if value.as_dict()["version_uid"] != version_uid:
+        raise _invalid("version_uid", "reaudit_source_version")
+    return value
+
+
+def start_readiness(preflight: Any, session: Session, draft: "StagePlanDraft | None", **request: Any) -> dict[str, Any]:
+    """What the one button « Запустить » would do for this request, writing nothing and calling no model (``getRunStartReadiness``).
+
+    With the layout off (``draft`` is ``None``) the route is ``legacy`` and the answer is the estimate as it always was. With it on, the
+    answer lists every cell of the rows the run would call with the access it would run with; a cell no server serves makes ``ready``
+    false and carries the reasons, and then nothing is priced. Otherwise the estimate by model is made and its digest is the one to
+    confirm: if the access of a model changes before the start, the start's own estimate has another digest and is refused
+    (``cost_estimate_binding_changed``).
+    """
+    if draft is None:
+        value = estimate_for_request(preflight, session, stage_plan=None, **request).as_dict()
+        return {"route": "legacy", "ready": True, "cells": [], "estimate_digest": value["estimate_digest"],
+                "estimated_cost_micros": value["estimated_cost_micros"],
+                "recommended_ceiling_micros": value["recommended_ceiling_micros"]}
+    from auditmanager.runs.commands import refuse_selectors_under_layout
+
+    refuse_selectors_under_layout(executor_connection_id=request.get("executor_connection_id"), preset_id=request.get("preset_id"),
+                                  executor_group_id=request.get("executor_group_id"))
+    rows = preflight.stage_rows_in_use()
+
+    def cells_of(plan: Any) -> list[dict[str, Any]]:
+        result = []
+        for cell in draft.cells_of(rows):
+            availability = draft.availability_of(cell.model_id)
+            access = availability.access if plan is None else plan.access_of(cell.model_id)
+            view = {"cell_key": cell.cell_key, "row": cell.row, "role": cell.role, "model_id": cell.model_id,
+                    "effort": cell.effort, "available": access is not None,
+                    "reasons": [] if access is not None else list(availability.reasons or (NOT_ON_ANY_SERVER,))}
+            if access is not None:
+                view["access"] = access
+            result.append(view)
+        return result
+
+    if draft.unavailable(rows):
+        return {"route": "stage_plan", "ready": False, "kit": draft.kit, "cells": cells_of(None)}
+    value = estimate_for_request(preflight, session, stage_plan=draft, **request)
+    plan, public = value.stage_plan, value.as_dict()
+    return {"route": "stage_plan", "ready": True, "kit": plan.kit, "access": plan.access,
+            "estimate_digest": public["estimate_digest"], "stage_plan_digest": plan.digest,
+            "estimated_cost_micros": public["estimated_cost_micros"],
+            "recommended_ceiling_micros": public["recommended_ceiling_micros"], "cells": cells_of(plan)}

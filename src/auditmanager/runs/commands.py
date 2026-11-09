@@ -649,9 +649,11 @@ def _journal_stage_plan(session: Session, run_id: str, plan: FrozenStagePlan | N
     )
 
 
-def _planned_estimate_kwargs(planned: StagePlanDraft | None) -> dict[str, Any]:
-    """The estimate is told of the layout only when there is one, so a preflight that predates it is called exactly as before."""
-    return {} if planned is None else {"stage_plan": planned}
+def _planned_estimate_kwargs(planned: StagePlanDraft | None, stage_plans: StagePlanSource | None) -> dict[str, Any]:
+    """The estimate is told of the layout when the command asked about it: the draft while it is on, ``None`` while it is off (so the
+    estimate does not ask again and cannot disagree with the command). With no seam at all a preflight that predates the layout is
+    called exactly as before."""
+    return {} if stage_plans is None else {"stage_plan": planned}
 
 
 def _plan_of(estimate: Any, planned: StagePlanDraft | None) -> FrozenStagePlan | None:
@@ -843,7 +845,7 @@ def start_audit_run(
             executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits,
             version_record=version_record, parse_native_text=False,
             **({"executor_group_id": executor_group_id} if executor_group_id is not None else {}),
-            **_planned_estimate_kwargs(planned))
+            **_planned_estimate_kwargs(planned, stage_plans))
         approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
         frozen, chosen_preset = estimate.frozen_route, estimate.chosen_preset
         admitted = getattr(estimate, "admitted_group", None)
@@ -1234,7 +1236,7 @@ def reaudit_run(
             raise _chosen_executor_unserved()
         if cost_preflight is not None:
             estimate = cost_preflight.estimate_reaudit(session, run_id=source_run_id, version_record=source_version,
-                parse_native_text=False, **_planned_estimate_kwargs(planned))
+                parse_native_text=False, **_planned_estimate_kwargs(planned, stage_plans))
             approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
             frozen = estimate.frozen_route
             admitted = getattr(estimate, "admitted_group", None)
@@ -1418,7 +1420,7 @@ def start_run_from_stage(
         if cost_preflight is not None:
             estimate = cost_preflight.estimate_from_stage(
                 session, run_id=source_run_id, start_stage_id=start_stage_id, version_record=source_version,
-                parse_native_text=False, **_planned_estimate_kwargs(planned))
+                parse_native_text=False, **_planned_estimate_kwargs(planned, stage_plans))
             approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
             frozen = estimate.frozen_route
             admitted = getattr(estimate, "admitted_group", None)

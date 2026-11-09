@@ -151,11 +151,11 @@ def test_with_the_layout_off_the_start_is_exactly_what_it_was() -> None:
     _start(ledger, runs, session, stage_plans=Layout(on=False), preflight=preflight, freezer=freezer)
     (row,) = runs.created
     assert "stage_plan" not in row and "binding_state" not in row and session.events == []
-    assert "stage_plan" not in preflight.calls[0][1], "a preflight that predates the layout is called as before"
+    assert preflight.calls[0][1]["stage_plan"] is None, "the command asked: the estimate is told the layout is off and does not ask again"
     assert ledger.fingerprints == [BASE_FINGERPRINT]
-    plain, plain_runs = Ledger(), Runs()
-    _start(plain, plain_runs, Session(), stage_plans=None, preflight=Preflight())
-    assert "stage_plan" not in plain_runs.created[0]
+    plain, plain_runs, plain_preflight = Ledger(), Runs(), Preflight()
+    _start(plain, plain_runs, Session(), stage_plans=None, preflight=plain_preflight)
+    assert "stage_plan" not in plain_runs.created[0] and "stage_plan" not in plain_preflight.calls[0][1], "no seam: called as before"
 
 
 @pytest.mark.parametrize(("named", "field"), [
@@ -244,7 +244,7 @@ def test_a_repeat_and_a_start_from_a_stage_are_unchanged_with_the_layout_off(com
     command(ledger, runs, session, stage_plans=Layout(on=False), preflight=preflight, freezer=freezer, admitter=Admitter())
     (row,) = runs.created
     assert "stage_plan" not in row and "binding_state" not in row
-    assert "stage_plan" not in preflight.calls[0][1]
+    assert preflight.calls[0][1]["stage_plan"] is None
 
 
 @pytest.mark.parametrize("command", [_repeat, _from_stage])

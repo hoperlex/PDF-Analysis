@@ -1,4 +1,5 @@
-"""`HOSTS-SEAL-1`: the stubs the wave-1 lanes replace refuse, every one, with a typed ``503 dependency_unavailable``.
+"""`HOSTS-SEAL-1`: the stubs the wave-1 lanes replace refuse, every one, with a typed ``503 dependency_unavailable``. (`HOSTS-LAYOUT-01` has filled the
+stage-layout service and the providers of a planned run: their cases are now `test_stage_plan_service.py` and `test_stage_plan_binding.py`.)
 
 No database, no network: nothing is read, written or sent to a model. A stub that answered with an empty body would be a silent fallback
 (AGENTS section 4); a stub that raised ``NotImplementedError`` would be an untyped 500. Each module names the dependency it stands for.
@@ -13,7 +14,7 @@ import pytest
 
 from auditmanager.api.routers.hosts_ports import ExecutorHostPort, StageModelPort
 from auditmanager.api.schemas import models
-from auditmanager.bootstrap import hosts_dispatch, stage_plan_providers
+from auditmanager.bootstrap import hosts_dispatch
 from auditmanager.bootstrap.hosts_adapter import ExecutorHostAdapter
 from auditmanager.bootstrap.stage_plan_adapter import StageModelAdapter
 from auditmanager.runs import stage_facts
@@ -64,10 +65,25 @@ def test_every_server_call_of_the_shipped_adapter_refuses_naming_executor_hosts(
     assert _refusal(lambda: getattr(adapter, method)(**kwargs)).detail_fields["dependency"] == "executor_hosts"
 
 
+class _Reached(Exception):
+    """Raised by the stand-in service: the adapter got as far as the service."""
+
+
+class _Service:
+    """`HOSTS-LAYOUT-01` filled ``StagePlanService``: the adapter is its seam and decides nothing, so each call must arrive at it."""
+
+    def __getattr__(self, name: str) -> Any:
+        def reached(**kwargs: Any) -> Any:
+            raise _Reached(name)
+
+        return reached
+
+
 @pytest.mark.parametrize(("method", "kwargs"), STAGE_CALLS, ids=[name for name, _ in STAGE_CALLS])
-def test_every_layout_call_of_the_shipped_adapter_refuses_naming_stage_models(method: str, kwargs: dict[str, Any]) -> None:
-    adapter = StageModelAdapter(None)  # type: ignore[arg-type]
-    assert _refusal(lambda: getattr(adapter, method)(**kwargs)).detail_fields["dependency"] == "stage_models"
+def test_every_layout_call_of_the_adapter_is_the_services(method: str, kwargs: dict[str, Any]) -> None:
+    adapter = StageModelAdapter(None, service=_Service())  # type: ignore[arg-type]
+    with pytest.raises(_Reached):
+        getattr(adapter, method)(**kwargs)
 
 
 def test_the_two_adapters_carry_the_whole_of_their_ports() -> None:
@@ -85,7 +101,6 @@ def test_the_two_adapters_carry_the_whole_of_their_ports() -> None:
 @pytest.mark.parametrize(("call", "dependency"), [
     (lambda: hosts_dispatch.bind_planned_run(None, run_id="run_x"), "executor_host_dispatch"),  # type: ignore[arg-type]
     (lambda: hosts_dispatch.claim_for_host_token(None, token_id="ern_x", runner_instance_id=None, wait_seconds=0), "executor_host_dispatch"),  # type: ignore[arg-type]
-    (lambda: stage_plan_providers.StagePlanProviders().binding_for(None, run_id="run_x", cell_key="text:main"), "stage_plan_providers"),  # type: ignore[arg-type]
     (lambda: stage_facts.read_run_stage_facts(None, run_id="run_x"), "run_stage_facts"),  # type: ignore[arg-type]
 ])
 def test_the_seams_of_dispatch_providers_and_stage_facts_refuse_the_same_way(call: Any, dependency: str) -> None:

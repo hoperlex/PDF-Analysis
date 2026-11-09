@@ -90,7 +90,7 @@ from auditmanager.analysis.public import (
     run_stage,
     run_source_preparation_with_progress,
 )
-from auditmanager.analysis.public import publish_artifact
+from auditmanager.analysis.public import apply_to_bundle, publish_artifact
 from auditmanager.analysis.public import (
     AR_V3_BETA_BUNDLE_ID,
     AR_V3_BETA_PROFILE_ID,
@@ -598,7 +598,8 @@ def _run_text_analysis_stage(
         ceiling_usd=provider_config.run_cost_ceiling_usd,
         recognised_characters=recognised_total_characters(recognised_pages),
         # `SECTION-JUDGE-FIXES-01`: the call carries this profile's own prompt and schema, not the АР v1 pair.
-        bundle=profile.prompt_bundle,
+        # `HOSTS-LAYOUT-01`: with the cell's answer limit when the run has a stage plan, so a window is sized for the cell's own limit.
+        bundle=apply_to_bundle(profile.prompt_bundle, provider_config.cell_settings),
         relaxed_limits=relaxed_limits,
         approved_window_characters=provider_config.approved_window_characters,
         native_page_pieces=provider_config.approved_native_page_pieces is not None,
@@ -812,9 +813,17 @@ def _bind_provider(
     providers: ProviderResolver | None, adapter: ModelAdapter, config: ProviderConfig,
 ) -> ProviderBinding:
     """The adapter, configuration and call binding this Attempt's model stage runs with."""
+    planned = getattr(run, "stage_plan", None) is not None
     if providers is None:
+        if planned:
+            # `HOSTS-LAYOUT-01`: a run frozen with a stage plan is called cell by cell through the database source; the process's own adapter
+            # serving it would be a silent fallback to a model nobody planned.
+            raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="stage_plan_run_without_cells")
         return ProviderBinding(adapter=adapter, config=config, call=None)
     binding = providers(session, run, context)
+    if planned and getattr(binding, "cells", None) is None:
+        # ... and a source that answers a planned run with one binding (the environment source) is refused for the same reason.
+        raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="stage_plan_run_without_cells")
     mode = getattr(getattr(binding.adapter, "provider_mode", None), "value", None)
     if mode is not None and str(mode) != str(run.provider_mode):
         raise DomainError(
@@ -977,6 +986,9 @@ def _execute_run_body(
             approved_connection_revision_id=cost_policy.connection_revision_id,
             approved_group_revision_id=cost_policy.executor_group_revision_id,
             approved_native_page_pieces=cost_policy.native_page_piece_policy,
+            # `HOSTS-LAYOUT-01`: consent v2 -- the models the consent approved and the plan it was given for.
+            approved_models=cost_policy.models,
+            approved_stage_plan_digest=cost_policy.stage_plan_digest,
         )
     if (v3_profile or v3_bundle) and (
         not v3_exact

@@ -213,6 +213,19 @@ def test_the_executor_hands_the_consent_to_a_planned_binding_and_keeps_its_cells
     assert cell_binding(bound, "norms:main").config.approved_models == config.approved_models
 
 
+def test_a_planned_run_is_never_served_by_one_binding_or_by_the_processs_own_adapter() -> None:
+    runs = Runs()
+    one_binding = lambda session, run, context: ProviderBinding(adapter=Adapter("x"), config=base_config(), call=CallBinding(
+        expected_model="claude-sonnet-5-5", check_identity=True))
+    for providers_arg in (None, one_binding):
+        error = refused(_bind_provider, None, runs.run(), None, providers_arg, Adapter("x"), base_config())
+        assert error.code is ErrorCode.ANALYSIS_INPUT_INVALID and error.detail_fields["reason"] == "stage_plan_run_without_cells"
+    # a run with no plan is bound exactly as before, with or without a resolver
+    plain = SimpleNamespace(run_id=RUN, stage_plan=None, provider_mode="live")
+    assert _bind_provider(None, plain, None, None, Adapter("x"), base_config()).cells is None
+    assert _bind_provider(None, plain, None, one_binding, Adapter("x"), base_config()).call.expected_model == "claude-sonnet-5-5"
+
+
 # --- the three exact comparisons of the reported model ---------------------------------------------------------------------
 
 

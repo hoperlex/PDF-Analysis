@@ -189,6 +189,9 @@ from auditmanager.analysis.text.cell_settings import (  # HOSTS-LAYOUT-01
     DEFAULT_EFFORT,
     DEFAULT_TIMEOUT_SECONDS,
     ROW_DEFAULT_MAX_OUTPUT_TOKENS,
+    apply_to_bundle,
+    effort_of,
+    limit_of,
 )
 from auditmanager.analysis.text.recorded import RecordedAdapter
 from auditmanager.analysis.text.wire_schema import to_wire_schema, with_wire_schema  # AR-V3-WIRE-SCHEMA-01
@@ -265,6 +268,9 @@ __all__ = [
     "ModelCatalogue",
     "ROW_DEFAULT_MAX_OUTPUT_TOKENS",
     "accepted_reported",
+    "apply_to_bundle",
+    "effort_of",
+    "limit_of",
     "load_model_catalogue",
     "model_catalogue",
     "request_cost_upper_usd",
