@@ -2565,7 +2565,6 @@ class BlockAdapter(_SessionHolder):
         portal = self._portal_document(portal_ref, ROLE_PORTAL_BLOCKS, version_uid)
         index = self._portal_document(index_ref, ROLE_BLOCK_INDEX, version_uid)
         inventory = self._portal_document(inventory_ref, ROLE_PAGE_INVENTORY, version_uid)
-        pages = linkable_pages(portal["pages"], {int(page["page_number"]): page for page in inventory["pages"]})
         collected: dict[int, list[Any]] = {}
         for block in index["blocks"]:
             box = block["bbox"]
@@ -2573,6 +2572,11 @@ class BlockAdapter(_SessionHolder):
                 int(block["page_number"]), int(block["char_start"]), int(block["char_end"]),
                 float(box["x0"]), float(box["y0"]), float(box["x1"]), float(box["y1"]),
             ))
+        # The lines are handed to the page guard: a line outside its page proves a text layer whose coordinates are not the
+        # page's (a MediaBox whose origin is not 0), and the page is then named in ``unlinked_pages`` (`D-353`).
+        pages = linkable_pages(
+            portal["pages"], {int(page["page_number"]): page for page in inventory["pages"]}, lines=collected,
+        )
         built = BlockAdapter._RunGeometry(
             pages=MappingProxyType(pages),
             lines=MappingProxyType({page: tuple(page_lines) for page, page_lines in collected.items()}),
