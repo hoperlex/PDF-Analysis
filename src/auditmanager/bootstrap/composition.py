@@ -32,6 +32,7 @@ from auditmanager.bootstrap.providers import (
 from auditmanager.bootstrap.runner import RunnerAdapter
 from auditmanager.bootstrap.hosts_adapter import ExecutorHostAdapter
 from auditmanager.bootstrap.stage_plan_adapter import StageModelAdapter
+from auditmanager.bootstrap.run_stage_adapter import RunStageAdapter
 from auditmanager.comparison.public import (
     COMPARISON_MODULES_ENV,
     HANDLER_FACTORIES as COMPARISON_HANDLER_FACTORIES,
@@ -821,6 +822,9 @@ def build_application(
         # `HOSTS-BACKEND-01` and `HOSTS-LAYOUT-01` fill the services, each operation answers a typed 503.
         executor_hosts=ExecutorHostAdapter(sessions),
         stage_models=StageModelAdapter(sessions),
+        # `HOSTS-SEAL-2`, `RUN-STAGES-01`. The facts of a run's stages for the stage window, over the same sessions
+        # and the same object store the extended review reads.
+        run_stages=RunStageAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,
