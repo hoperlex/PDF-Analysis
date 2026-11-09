@@ -1,0 +1,217 @@
+/*
+ * «Память решений» in «База знаний» (`D-495`): the list, the case, the administrator's status line. Dense, tokens only; the
+ * colours are the global ones the badges and the verdict words already read.
+ */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.statusLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.statusKey {
+  font-size: var(--am-text-xs);
+  font-weight: 750;
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+}
+
+.statusLine strong {
+  color: var(--am-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--am-ink-muted);
+}
+
+.inline {
+  margin-left: var(--am-gap-xs);
+}
+
+.inlineEnd {
+  margin-right: var(--am-gap-xs);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The list: the knowledge base's own table form, a frame that scrolls sideways rather than squeezing its columns. */
+.tableFrame {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--am-text-sm);
+}
+
+.table th {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-strong);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  letter-spacing: var(--am-tracking-caps);
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-grid-line);
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.table tbody tr:hover {
+  background: var(--am-surface);
+}
+
+.table tbody tr[data-memory-verdict='accepted'] > :first-child {
+  box-shadow: inset 3px 0 0 var(--am-ok);
+}
+
+.table tbody tr[data-memory-verdict='rejected'] > :first-child {
+  box-shadow: inset 3px 0 0 var(--am-failed);
+}
+
+.table tbody tr[data-memory-status='withdrawn'],
+.table tbody tr[data-memory-status='forgotten'] {
+  color: var(--am-ink-muted);
+}
+
+/* The case. */
+.case {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+.caseHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+}
+
+.caseTitle {
+  margin: 0;
+  font-size: var(--am-text-lg);
+  line-height: var(--am-leading-tight);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-2xs) var(--am-gap);
+  margin: 0;
+  font-size: var(--am-text-sm);
+}
+
+.facts > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.facts dt {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: var(--am-gap) var(--am-gap-lg);
+  align-items: start;
+}
+
+.column {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+.section {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  padding-bottom: var(--am-gap-2xs);
+  border-bottom: 1px solid var(--am-line-soft);
+  font-size: var(--am-text-xs);
+  font-weight: 650;
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+}
+
+.sectionCount {
+  color: var(--am-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.items {
+  display: grid;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.itemMeta {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.text {
+  margin: 0;
+  font-size: var(--am-text-base);
+  line-height: var(--am-leading-base);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.quote {
+  margin: var(--am-gap-2xs) 0 0;
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
+  border-left: 3px solid var(--am-line-strong);
+  font-size: var(--am-text-sm);
+  line-height: var(--am-leading-base);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

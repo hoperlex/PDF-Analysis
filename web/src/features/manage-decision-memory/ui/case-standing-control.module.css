@@ -1,0 +1,14 @@
+/* «Отозвать» / «Вернуть» on one memory case (`D-495`): the reason and the button in one row. Token reads only. */
+
+.control {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+}

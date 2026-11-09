@@ -13,15 +13,21 @@
 
 import type { FindingCategory, Verdict } from '@/shared/api';
 
-/** «Тип»: the decisions on findings, on optimisation proposals, or both as one journal (`D-317`). */
-export type KbKind = 'all' | 'findings' | 'proposals';
+import { MEMORY_PARAMS } from './memory-address';
+
+/**
+ * «Тип»: the decisions on findings, on optimisation proposals, or both as one journal (`D-317`); and `memory`, «Память решений»
+ * (`D-495`): the copy of what an expert saw and decided, which the expert and the administrator are offered and the viewer is not
+ * (the tab's own filters and open case are in `model/memory-address.ts`).
+ */
+export type KbKind = 'all' | 'findings' | 'proposals' | 'memory';
 /** `UI-B-34`: the original's table (the default) or the rows as events. */
 export type KbView = 'table' | 'events';
 /** `Все` is the absence of the parameter, never a value sent to the server. */
 export type CategoryChoice = FindingCategory | 'all';
 export type VerdictChoice = Verdict | 'all';
 
-export const KB_KINDS: readonly KbKind[] = ['all', 'findings', 'proposals'];
+export const KB_KINDS: readonly KbKind[] = ['all', 'findings', 'proposals', 'memory'];
 export const KB_VIEWS: readonly KbView[] = ['table', 'events'];
 
 export const CATEGORY_CHOICES: readonly CategoryChoice[] = [
@@ -87,5 +93,7 @@ export function writeKbAddress(params: Params, next: KbAddress): URLSearchParams
   put(KB_VIEW_PARAM, next.view, DEFAULT_KB_ADDRESS.view);
   put(KB_CATEGORY_PARAM, next.category, DEFAULT_KB_ADDRESS.category);
   put(KB_VERDICT_PARAM, next.verdict, DEFAULT_KB_ADDRESS.verdict);
+  // The memory tab's filters and open case belong to the tab: leaving it takes them off the address.
+  if (next.kind !== 'memory') for (const name of MEMORY_PARAMS) written.delete(name);
   return written;
 }
