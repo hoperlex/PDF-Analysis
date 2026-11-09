@@ -132,16 +132,17 @@ describe('item 3: «Настройки анализа» — boxes that scroll si
     return renderScreen(client, createElement(AnalysisSettingsPage, {}));
   };
 
-  it('makes each of the four sections a named region with a tab stop', () => {
+  it('makes each of the three sections a named region with a tab stop, and no longer draws the presets (HOSTS-WEB-01b)', () => {
     const markup = page();
-    for (const label of ['Состояние анализа АР v3', 'Пакет анализа АР v3', 'Разбор анализа АР v3', 'Пресеты запуска']) {
+    for (const label of ['Состояние анализа АР v3', 'Пакет анализа АР v3', 'Разбор анализа АР v3']) {
       expect(markup, label).toMatch(new RegExp(`<section class="[^"]*panel[^"]*" role="region" aria-label="${label}" tabindex="0"`));
     }
+    expect(markup).not.toContain('Пресеты запуска');
   });
 
   it('keeps the profile table in the one region it already had, and does not scroll its frame a second time', () => {
     const markup = page();
-    expect(markup.match(/role="region"[^>]*tabindex="0"/g)).toHaveLength(5);
+    expect(markup.match(/role="region"[^>]*tabindex="0"/g)).toHaveLength(4);
     expect(markup).toMatch(/<div class="[^"]*panel[^"]*flush[^"]*"><section[^>]*aria-labelledby="analysis-profiles-heading"/);
     expect(markup).not.toMatch(/<div class="[^"]*flush[^"]*"[^>]*tabindex/);
   });

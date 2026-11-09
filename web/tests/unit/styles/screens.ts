@@ -3287,10 +3287,8 @@ export function screens(): Screen[] {
       preview: CUT_OVER_PREVIEW, connections: CONNECTION_CASES.map((one) => one.connection),
     })));
 
+    // `HOSTS-WEB-01b`: the presets left this page, so neither the account, the executors nor the presets are seeded for it.
     const settings = newClient();
-    settings.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
-    seedExecutors(settings, EXECUTOR_CASES);
-    settings.setQueryData(ANALYSIS_PRESETS_KEY, { items: [] });
     settings.setQueryData(queryKeys.analysis.profiles(), {
       items: PROJECT_STRUCTURE_ORDER.map((code, index): AnalysisProfileListItem => {
         const digit = (index % 10).toString();

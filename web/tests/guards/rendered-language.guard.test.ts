@@ -2330,7 +2330,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'start-run-control',
     make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
   },
-  // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» of «Настройки анализа» and the preset select of
+  // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» (on `/workers/advanced` since `HOSTS-WEB-01b`) and the preset select of
   // the start control, in the states a default cache does not select.
   {
     name: 'analysis-presets-for-an-administrator',

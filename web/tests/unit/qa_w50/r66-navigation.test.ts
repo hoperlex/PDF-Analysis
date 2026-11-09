@@ -293,18 +293,15 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     expect(markup).not.toContain('data-route="/analysis-settings"');
     // Exactly these reads, each under its own key: the registry, the AR v3 beta group review
     // (`AR-V3-BETA-GROUP-REVIEW-SCREEN-01`) and the installed-pack status
-    // (`AR-V3-BETA-PACK-STATUS-WEB-01`); and, since `ANALYSIS-PRESETS-01`, the section «Пресеты
-    // запуска»: the account (the controls are an administrator's), the presets and the connection
-    // list their executors are read from (no connection is listed here, so no detail is read).
+    // (`AR-V3-BETA-PACK-STATUS-WEB-01`). The section «Пресеты запуска» (`ANALYSIS-PRESETS-01`) moved to
+    // `/workers/advanced` (`HOSTS-WEB-01b`), so the account, the presets and the connection list are no
+    // longer read here: a read that came back with the section reddens this list.
     // With no `group_id` in the address the review has no
     // group to ask about: its query is registered under the empty address and DISABLED, so the
     // screen asks the server nothing about any group; the pack status is always read, because
     // it names no group. An extra read, or a lost one, reddens this list.
     expect(readsOf(client)).toEqual([
-      { key: ['account', 'me'], enabled: true },
-      { key: ['analysis-presets'], enabled: true },
       { key: ['analysis', 'profiles'], enabled: true },
-      { key: ['execution', 'connections'], enabled: true },
       { key: ['runs', 'ar-v3-group-review', ''], enabled: false },
       { key: ['runs', 'ar-v3-pack-status'], enabled: true },
     ]);
@@ -315,10 +312,7 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     const client = newClient();
     renderScreen(client, routed);
     expect(readsOf(client)).toEqual([
-      { key: ['account', 'me'], enabled: true },
-      { key: ['analysis-presets'], enabled: true },
       { key: ['analysis', 'profiles'], enabled: true },
-      { key: ['execution', 'connections'], enabled: true },
       { key: ['runs', 'ar-v3-group-review', GROUP_ID], enabled: true },
       { key: ['runs', 'ar-v3-pack-status'], enabled: true },
     ]);

@@ -9,14 +9,12 @@
  * read-only: profiles are not edited, uploaded or reviewed here, and the contract has no
  * operation that would. A draft profile says in words that it still needs an expert's review.
  *
- * `ANALYSIS-PRESETS-01`: «Пресеты запуска» sits above the table — the named, saved choices of the
- * executor a run starts on. Any role reads them; only an administrator sees the controls.
+ * `HOSTS-WEB-01b`: «Пресеты запуска» (`ANALYSIS-PRESETS-01`) moved to the administrator's page `/workers/advanced`, so
+ * the section is no longer drawn here and the presets are in one place only.
  */
 
-import { useMe } from '@/entities/account';
 import { useAnalysisProfiles } from '@/entities/analysis-profile';
 import { failureMessage } from '@/shared/api/failure-message';
-import { AnalysisPresets } from '@/widgets/analysis-presets';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { ArV3BetaStatus } from '@/widgets/ar-v3-beta-status';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
@@ -26,12 +24,11 @@ import styles from './analysis-settings-page.module.css';
 
 export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: string | null }) {
   const profiles = useAnalysisProfiles();
-  const me = useMe();
   const failure = profiles.error === null ? null : failureMessage(profiles.error);
   return (
     <PageShell
       title="Настройки анализа"
-      subtitle="Профиль анализа каждого раздела, с которым сервер выполняет прогон, и пресеты запуска. Профили здесь только показываются, изменить их нельзя."
+      subtitle="Профиль анализа каждого раздела, с которым сервер выполняет прогон. Профили здесь только показываются, изменить их нельзя."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void profiles.refetch()}>Обновить</button>}
     >
       <div className={styles.stack}>
@@ -43,9 +40,6 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
         </section>
         <section className={styles.panel} role="region" aria-label="Разбор анализа АР v3" tabIndex={0}>
           <ArV3BetaReview groupId={groupId} />
-        </section>
-        <section className={styles.panel} role="region" aria-label="Пресеты запуска" tabIndex={0}>
-          <AnalysisPresets roles={me.data?.roles ?? []} />
         </section>
       </div>
       {profiles.isPending ? <LoadingState what="профилей анализа" /> : null}
