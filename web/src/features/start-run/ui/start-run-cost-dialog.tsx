@@ -6,9 +6,11 @@
  *
  * It says what `CostApproval` says, in the same words but for two: the money is written «$1.2», as the batch
  * panel writes it, and the recorded mode is «Тестовый режим» (a Latin word does not reach a reader, `R-18`). It
- * takes its figures through the same helpers (`microsAsUsd`, `ceilingMicros`). The 1.44.0 estimate holds one model and one total, so it shows the
- * model and the total; a per-model list belongs to the estimate that carries lines (plan v3 wave 2). The counts (pages, characters, windows,
- * calls, tokens) are grouped by threes with a narrow no-break space, as the application groups every large integer (`groupDigits`).
+ * takes its figures through the same helpers (`microsAsUsd`, `ceilingMicros`). An estimate of one model shows the model and the total.
+ * An estimate that carries `models` (consent v2, `READINESS-WEB-01`: the start takes the stage layout and several models answer) shows one
+ * line per model, «Opus 5.5 · по подписке · $0», and then the total, «Итого: $1.2»: the person agrees to the figure of each model and to
+ * the sum, and sees which of them is paid by subscription. The counts (pages, characters, windows, calls, tokens) are grouped by threes
+ * with a narrow no-break space, as the application groups every large integer (`groupDigits`).
  *
  * `StartRunCostDialogView` is the markup; `StartRunCostDialog` opens it as a native modal `<dialog>`
  * (the browser keeps the focus inside, Esc is «Отмена», the page behind is inert), as the other windows
@@ -20,6 +22,7 @@ import { useEffect, useId, useRef } from 'react';
 import type { ReactNode, Ref } from 'react';
 
 import { groupDigits, shortModelName } from '@/entities/audit-run';
+import { ACCESS_LABELS, modelLabel } from '@/entities/executor-host';
 import type { RunCostEstimate } from '@/shared/api';
 import { ceilingMicros, microsAsUsd } from '@/shared/ui';
 
@@ -57,6 +60,8 @@ export function StartRunCostDialogView({
 }: StartRunCostDialogViewProps) {
   const titleId = useId();
   const sufficient = relaxed || ceilingMicros(ceiling, ceilingFloor(estimate)) !== null;
+  // Consent v2: an estimate that names its models is read line by line; one that names none is read as it always was.
+  const lines = estimate.models ?? [];
   return (
     <dialog
       ref={dialogRef}
@@ -70,16 +75,30 @@ export function StartRunCostDialogView({
       {changed ? (
         <p role="status" data-start-run-changed="">Оценка изменилась с прошлого раза. Проверьте новую оценку и запустите снова.</p>
       ) : null}
-      <p>
-        {chargesMoney(estimate)
-          ? `Предварительная оценка: $${microsAsUsd(estimate.estimated_cost_micros)}.`
-          : 'Подключение без тарификации в приложении. Денежная оценка не отражает внешний счёт провайдера.'}
-      </p>
+      {lines.length > 0 ? (
+        <>
+          <p>Предварительная оценка по моделям:</p>
+          <ul className={styles.dialogModels} data-estimate-models="">
+            {lines.map((line) => (
+              <li key={`${line.model_id}:${line.access}`} data-estimate-model={line.model_id} data-model-access={line.access}>
+                {`${modelLabel(line.model_id)} · ${ACCESS_LABELS[line.access]} · $${microsAsUsd(line.estimated_cost_micros)}`}
+              </li>
+            ))}
+          </ul>
+          <p data-estimate-total="">{`Итого: $${microsAsUsd(estimate.estimated_cost_micros)}.`}</p>
+        </>
+      ) : (
+        <p>
+          {chargesMoney(estimate)
+            ? `Предварительная оценка: $${microsAsUsd(estimate.estimated_cost_micros)}.`
+            : 'Подключение без тарификации в приложении. Денежная оценка не отражает внешний счёт провайдера.'}
+        </p>
+      )}
       {estimate.provider_mode === 'recorded' ? (
         <p className="am-note">Тестовый режим: сохранённые ответы. Оценка не является фактическим расходом.</p>
       ) : null}
       <p>
-        Модель: {shortModelName(estimate.model_id) ?? estimate.model_id}. Страниц: {groupDigits(estimate.page_count)}; символов: {groupDigits(estimate.text_characters)}; окон: {groupDigits(estimate.windows)};{' '}
+        {lines.length > 0 ? '' : `Модель: ${shortModelName(estimate.model_id) ?? estimate.model_id}. `}Страниц: {groupDigits(estimate.page_count)}; символов: {groupDigits(estimate.text_characters)}; окон: {groupDigits(estimate.windows)};{' '}
         {relaxed ? 'начальная оценка вызовов' : 'вызовов'}: {groupDigits(estimate.calls)}.
       </p>
       <p>Оценка входных токенов: {groupDigits(estimate.input_tokens)}.</p>

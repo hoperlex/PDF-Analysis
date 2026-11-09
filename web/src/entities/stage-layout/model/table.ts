@@ -37,8 +37,11 @@ export function cellText(cell: Pick<StageLayoutCell, 'model_id' | 'effort'>): st
   return `${modelLabel(cell.model_id)} · ${STAGE_EFFORT_LABELS[cell.effort]}`;
 }
 
-/** The cells of one row of a revision, in the order of the roles. */
-export function rowCells(cells: readonly StageLayoutCell[], row: StageRowKey): readonly StageLayoutCell[] {
+/**
+ * The cells of one row of a revision (or of the plan a start would freeze, `RunStartReadinessCell`), in the order of the roles.
+ * Any cell that names its row and its role will do, so the layout and the readiness read it the same way.
+ */
+export function rowCells<Cell extends Pick<StageLayoutCell, 'row' | 'role'>>(cells: readonly Cell[], row: StageRowKey): readonly Cell[] {
   return cells
     .filter((cell) => cell.row === row)
     .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role));

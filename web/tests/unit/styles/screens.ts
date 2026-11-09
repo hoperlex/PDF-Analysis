@@ -84,7 +84,7 @@ import type { EvidenceState } from '@/widgets/comparison-viewer';
 import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList, FindingRowActions } from '@/widgets/finding-list';
-import { BatchStartPanelView, StartRunCostDialogView } from '@/features/start-run';
+import { BatchStartPanelView, StartRunCostDialogView, runStartReadinessKey } from '@/features/start-run';
 import { DocumentLifecycleView, DocumentTagsView } from '@/features/manage-document';
 import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
@@ -100,10 +100,14 @@ import { assignmentUid, monthFixture, reserveFixture, EXPERT_A, EXPERT_B } from 
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
+import {
+  CLAUDE_CELLS, ENSEMBLE_CELLS, READINESS_MIXED, blockedReadiness, modelLines, readiness,
+} from '../start-run/readiness-fixtures';
 import { ProjectList } from '@/widgets/project-list';
-import { RunList } from '@/widgets/run-list';
+import { RunList, StartRunWithReadiness } from '@/widgets/run-list';
 import { RunEta, RunProgress } from '@/widgets/run-progress';
-import { RunStagesDialog } from '@/widgets/run-stages-dialog';
+import { PlanStagesDialog, RunStagesDialog } from '@/widgets/run-stages-dialog';
+import { readinessPlan } from '@/entities/stage-layout';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { DocumentContext, SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
@@ -128,7 +132,7 @@ import type {
 } from '@/shared/api';
 import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
 import type { Account, AnalysisPreset, AnalysisProfileListItem } from '@/shared/api';
-import type { RegistrationRequest } from '@/shared/api';
+import type { RegistrationRequest, RunStartReadiness } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
@@ -2012,6 +2016,34 @@ export function screens(): Screen[] {
     add('StartRunCostDialog, without a money ceiling', dialog({
       relaxed: true, ceiling: '0', estimate: costEstimate({ version_uid: VERSION_UID, relaxed_limits: true }),
     }));
+    // `READINESS-WEB-01`, consent v2: one line per model with how it is paid, then the total.
+    add('StartRunCostDialog, one line per model and the total', dialog({
+      estimate: { ...costEstimate({ version_uid: VERSION_UID }), billing: 'mixed', models: modelLines() },
+    }));
+  }
+  // `READINESS-WEB-01`: the line under «Запустить» (the set, a part by API, a model no server has) and the stage window in plan mode.
+  {
+    const start = (roles: readonly string[], answer: RunStartReadiness) => {
+      const client = newClient();
+      client.setQueryData(queryKeys.account.me(), { roles });
+      client.setQueryData(runStartReadinessKey(VERSION_UID), answer);
+      return renderScreen(client, createElement(StartRunWithReadiness, { projectUid: PROJECT_UID, versionUid: VERSION_UID }));
+    };
+    add('StartRunWithReadiness, the set and its access', start(['expert'], readiness()));
+    add('StartRunWithReadiness, a part by API', start(['expert'], READINESS_MIXED));
+    add('StartRunWithReadiness, a model no server has, for an expert', start(['expert'], blockedReadiness()));
+    add('StartRunWithReadiness, a model no server has, for an administrator', start(['admin', 'expert'], blockedReadiness()));
+    add('PlanStagesDialog, the plan of the second version, with «Изменить»', render(createElement(PlanStagesDialog, {
+      rows: readinessPlan(CLAUDE_CELLS), kit: 'Только Claude', onClose: noop, editHref: '/workers?tab=models', staticOpen: true,
+    })));
+    add('PlanStagesDialog, a scheme of several models and a cell no server has', render(createElement('div', null,
+      createElement(PlanStagesDialog, {
+        rows: readinessPlan(ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks')), kit: 'Только Claude', onClose: noop, staticOpen: true,
+      }),
+      createElement(PlanStagesDialog, {
+        rows: readinessPlan(blockedReadiness().cells.filter((cell) => cell.row === 'blocks')), kit: null, onClose: noop, staticOpen: true,
+      }),
+    )));
   }
   add(
     'FindingList failed',

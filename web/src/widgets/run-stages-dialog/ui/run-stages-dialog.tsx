@@ -19,7 +19,7 @@
  * shown the model and the stages, and no executor line.
  */
 
-import { useEffect, useId, useRef } from 'react';
+import { useId } from 'react';
 
 import type { RunStatus, StageId } from '@/shared/api';
 import { STAGE_ID_VALUES } from '@/shared/api';
@@ -39,6 +39,7 @@ import { procedureReasonSentence } from '@/widgets/extended-review';
 import { StartRunFromStageControl } from '@/features/start-run-from-stage';
 
 import { CHIP_ALGORITHMS } from '../model/chip-algorithms';
+import { useModalDialog } from '../model/use-modal-dialog';
 
 import styles from './run-stages-dialog.module.css';
 
@@ -151,25 +152,9 @@ function Procedures({ procedures }: { readonly procedures: readonly ProcedureRea
 }
 
 export function RunStagesDialog({ status, chips, selected, onSelect, onClose, reusedStageIds, showServer, staticOpen = false }: RunStagesDialogProps) {
-  const dialog = useRef<HTMLDialogElement | null>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
+  const dialog = useModalDialog(staticOpen, onClose);
   const titleId = useId();
   const chipTitleId = useId();
-
-  useEffect(() => {
-    const element = dialog.current;
-    if (element === null || staticOpen || typeof element.showModal !== 'function') return;
-    if (!element.open) element.showModal();
-    const closed = () => {
-      closeRef.current();
-    };
-    element.addEventListener('close', closed);
-    return () => {
-      element.removeEventListener('close', closed);
-      if (element.open) element.close();
-    };
-  }, [staticOpen]);
 
   const chip = chips.find((candidate) => candidate.definition.id === selected) ?? chips[0] ?? null;
   const executor = showServer ? runExecutorLine(status) : null;

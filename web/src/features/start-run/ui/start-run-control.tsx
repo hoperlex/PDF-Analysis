@@ -15,9 +15,13 @@
  * for exactly the accounts the control is drawn for (`R-150e`: those that may take an expert's action),
  * which are the accounts that saw the tick-box.
  *
- * **The readiness line.** Today it says «Маршрут: автоматически». Wave 2 passes the real line
- * («Набор: … · по подписке · Модели по этапам ▸», from `getRunStartReadiness`) as `readinessNote`; this
- * control invents none of it.
+ * **The readiness line.** It says «Маршрут: автоматически» until the widget that mounts the control passes the real line
+ * («Набор: … · по подписке · Модели по этапам ▸», from `getRunStartReadiness`, `./readiness-line.tsx`) as `readinessNote`;
+ * this control invents none of it.
+ *
+ * **Blocked.** The same widget passes `blockedReason` when the plan names a model no server has («Нет Opus 5.5 — Анализ блоков
+ * · обратитесь к администратору»). The button is then inactive and the reason is said beside it; «▾» is not drawn, since its one
+ * item is another way to start the same run, and a thing that cannot be done is not offered (`R-153f`).
  *
  * There is no provider-mode selector and, on failure, no offer to start the run "in recorded mode
  * instead" — the mode this deployment is configured for is shown on the run and never chosen here. A
@@ -54,13 +58,19 @@ export interface StartRunControlProps {
   /** Called with the 202 reading, so the screen can move to run progress. */
   readonly onStarted?: ((run: RunStatus) => void) | undefined;
   /**
-   * Wave 2 slot: the one line under the button, once `getRunStartReadiness` fills it
+   * The one line under the button, once `getRunStartReadiness` fills it
    * («Набор: … · по подписке · Модели по этапам ▸»). Absent: «Маршрут: автоматически».
    */
   readonly readinessNote?: ReactNode | undefined;
+  /**
+   * Why the start is not possible now (`READINESS-WEB-01`): a model of the plan that no server has. Present, the button is
+   * inactive and this is said under the line; absent or `null`, the start is offered as before.
+   */
+  readonly blockedReason?: ReactNode | undefined;
 }
 
-function StartRunControlInner({ projectUid, versionUid, onStarted, readinessNote }: StartRunControlProps) {
+function StartRunControlInner({ projectUid, versionUid, onStarted, readinessNote, blockedReason }: StartRunControlProps) {
+  const blocked = blockedReason !== undefined && blockedReason !== null && blockedReason !== false;
   const flow = useRunCostApproval(versionUid, onStarted);
   const estimateFailure = flow.estimateError === null ? null : executionFailure(flow.estimateError, false);
   const failure: RunFailure | null = flow.startError === null ? null : classifyRunFailure(flow.startError);
@@ -72,20 +82,23 @@ function StartRunControlInner({ projectUid, versionUid, onStarted, readinessNote
           type="button"
           className="am-button"
           data-start-run-button=""
-          disabled={flow.busy || flow.dialog !== null || flow.comparisonOnly}
+          disabled={flow.busy || flow.dialog !== null || flow.comparisonOnly || blocked}
           onClick={() => flow.start(false)}
         >
           Запустить
         </button>
-        <span className={styles.more} title={`${UNCAPPED_START_LABEL}. ${UNCAPPED_MEANING}`} data-start-run-more="">
-          <Menu
-            label="Другие способы запуска"
-            trigger={<span aria-hidden="true">▾</span>}
-            items={[{ kind: 'action', label: UNCAPPED_START_LABEL, onChoose: () => flow.start(true) }]}
-          />
-        </span>
+        {blocked ? null : (
+          <span className={styles.more} title={`${UNCAPPED_START_LABEL}. ${UNCAPPED_MEANING}`} data-start-run-more="">
+            <Menu
+              label="Другие способы запуска"
+              trigger={<span aria-hidden="true">▾</span>}
+              items={[{ kind: 'action', label: UNCAPPED_START_LABEL, onChoose: () => flow.start(true) }]}
+            />
+          </span>
+        )}
       </div>
       <p className="am-note" data-start-readiness="">{readinessNote ?? DEFAULT_READINESS_NOTE}</p>
+      {blocked ? <p className={`am-note ${styles.blocked}`} role="status" data-start-blocked="">{blockedReason}</p> : null}
 
       {flow.estimating ? <LoadingState what="оценка стоимости" /> : null}
       {estimateFailure === null ? null : (

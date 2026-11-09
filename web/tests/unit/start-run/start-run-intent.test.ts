@@ -191,6 +191,9 @@ describe('the control takes its key and its request from the same intent, and na
   });
 
   it('answers a changed estimate with an estimate, and never with a different executor or route', () => {
-    expect(hook).toContain('if (estimateChanged(error)) estimate(relaxed, true);');
+    expect(hook).toContain('if (estimateChanged(error)) {');
+    expect(hook).toContain('estimate(relaxed, true);');
+    // `READINESS-WEB-01`: the line under the button is read again at the same moment, since the access it states may be what changed.
+    expect(hook).toContain('invalidateQueries({ queryKey: runStartReadinessKey(versionUid) })');
   });
 });
