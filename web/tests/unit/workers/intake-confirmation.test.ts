@@ -32,7 +32,7 @@ vi.mock('react', async (importOriginal) => {
   };
 });
 
-const { WorkersPage, noIntakeIntent } = await import('@/_pages/workers/ui/workers-page');
+const { ProcessesSection, noIntakeIntent } = await import('@/_pages/workers/ui/processes-section');
 const { WorkerList } = await import('@/widgets/worker-list');
 const { WORKER_PAGE_LIMIT } = await import('@/entities/execution');
 
@@ -133,13 +133,13 @@ describe('the intake switch asks first', () => {
     expect(requests).toEqual([]);
   });
 
-  it('the page answers the switch with a confirmation, not a write', async () => {
-    const tree = treeOf(() => WorkersPage({ initialTab: 'processes' }));
+  it('the section answers the switch with a confirmation, not a write', async () => {
+    const tree = treeOf(() => ProcessesSection({ roles: ['admin'] }));
     expect(button(tree, 'Подтвердить')).toBeUndefined();
     const list = elements(tree).find((element) => element.type === WorkerList) as
       | ReactElement<{ onIntake: (worker: ExecutionWorker, enabled: boolean) => void }>
       | undefined;
-    expect(list, 'the page renders the worker list').toBeDefined();
+    expect(list, 'the section renders the worker list').toBeDefined();
     list?.props.onIntake(WORKER, false);
     await settle();
     expect(requests.filter((request) => request.line.startsWith('PUT'))).toEqual([]);
@@ -147,7 +147,7 @@ describe('the intake switch asks first', () => {
 
   it('the confirmation sends one setWorkerIntake with the intent key, and a repeat reuses it', async () => {
     seed.set(noIntakeIntent, { worker: WORKER, enabled: false, key: 'ik-seeded-intent' });
-    const tree = treeOf(() => WorkersPage({ initialTab: 'processes' }));
+    const tree = treeOf(() => ProcessesSection({ roles: ['admin'] }));
     expect(textOf(tree)).toContain(`Запретить исполнителю ${WORKER.worker_id} брать новые прогоны?`);
     const confirm = button(tree, 'Подтвердить');
     expect(confirm?.props.onClick, 'the confirmation is a button with a handler').toBeTypeOf('function');
@@ -164,7 +164,7 @@ describe('the intake switch asks first', () => {
 
   it('«Отмена» closes the confirmation without a write', async () => {
     seed.set(noIntakeIntent, { worker: WORKER, enabled: true, key: 'ik-cancelled' });
-    const tree = treeOf(() => WorkersPage({ initialTab: 'processes' }));
+    const tree = treeOf(() => ProcessesSection({ roles: ['admin'] }));
     expect(textOf(tree)).toContain(`Разрешить исполнителю ${WORKER.worker_id} брать новые прогоны?`);
     button(tree, 'Отмена')?.props.onClick?.();
     await settle();

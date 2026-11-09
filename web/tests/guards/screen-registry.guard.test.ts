@@ -173,8 +173,9 @@ describe('the registry is the route tree: every page has a row and every row a p
     // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31. `R-151l` added «Раздел»: 31 -> 32. `R-151m` added
     // the version's «Блоки» tab: 32 -> 33. `UI-PARITY-P0P` added «График работ»: 33 -> 34.
     // `UI-A-94` (contract 1.36.0) added «Журнал входов»: 34 -> 35.
-    expect(routeAddresses().length).toBe(35);
-    expect(REGISTRY.length).toBe(35);
+    // `HOSTS-WEB-01` added «Расширенные исполнители» (`/workers/advanced`): 35 -> 36.
+    expect(routeAddresses().length).toBe(36);
+    expect(REGISTRY.length).toBe(36);
   });
 
   it('has no page without a row and no row without a page', () => {
@@ -239,12 +240,13 @@ describe('every row has the shape §3.1 gives it', () => {
     expect(cycleFindings(REGISTRY)).toEqual([]);
   });
 
-  it('R-60: exactly the four administrator screens require admin (the access journal is the fourth, 1.36.0); R-150w: four operator screens require expert or admin', () => {
+  it('R-60: exactly the five administrator screens require admin (the access journal is the fourth, 1.36.0; the advanced page of the executors is the fifth, `HOSTS-WEB-01`); R-150w: four operator screens require expert or admin', () => {
     expect(REGISTRY.filter((row) => Array.isArray(row.roles)).map((row) => [row.address, row.roles])).toEqual([
       ['/dispatcher', ['expert', 'admin']],
       ['/schedule', ['expert', 'admin']],
       ['/logs', ['expert', 'admin']],
       ['/workers', ['expert', 'admin']],
+      ['/workers/advanced', ['admin']],
       ['/queue', ['expert', 'admin']],
       ['/admin/users', ['admin']],
       ['/admin/users/[user_uid]', ['admin']],

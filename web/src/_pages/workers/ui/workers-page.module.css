@@ -1,20 +1,10 @@
 /*
- * The tabs of «Исполнители» (`EXEC-HTTP-01`, five since `EXEC2-WEB-GROUPS-01`, six with «Обзор», UI-B-63). Token reads only, no token declared here, no
+ * The tabs of «Исполнители» (`EXEC-HTTP-01`; two since `HOSTS-WEB-01`: «Серверы» and «Модели по этапам»). Token reads only, no token declared here, no
  * `:not()` (the contrast census cannot read it); every rule is reached by a screen in
  * `tests/unit/styles/screens.ts`, the open tab by its `aria-selected` value — the attribute the
  * tab really emits. The same rules as the tabs of «Блоки», collocated because a page does not
  * import another page's stylesheet.
  */
-
-/* The detail the subtitle leaves out: one muted line, opened on request. */
-.about {
-  margin: 0 0 var(--am-gap-xs);
-}
-
-.about summary {
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-}
 
 .tabs {
   margin-top: var(--am-gap-xs);
@@ -82,4 +72,37 @@
 .panel:focus-visible {
   outline: 2px solid var(--am-accent);
   outline-offset: 2px;
+}
+
+/* The advanced page (`HOSTS-WEB-01`): one disclosure per former tab, closed until opened. */
+.sections {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin-top: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.section {
+  padding: var(--am-gap-xs) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  min-width: 0;
+}
+
+.sectionSummary {
+  cursor: pointer;
+  color: var(--am-ink);
+  font-size: var(--am-text-md);
+  font-weight: 600;
+}
+
+.sectionSummary:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.sectionBody {
+  margin-top: var(--am-gap-sm);
+  min-width: 0;
 }

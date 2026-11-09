@@ -370,7 +370,10 @@ from sqlalchemy import Engine, text
 #: and switch guards, the cell binding's member and immutable guards, to 273; the frozen guards of five existing tables are re-created with the new columns
 #: in their lists, which moves the digest and not the count), functions +4 (``am_check_gapless_number``, ``am_check_executor_task_claimer``,
 #: ``am_check_stage_layout_switch`` and ``am_check_audit_run_cell_binding``, to 84; ``am_guard_audit_run_frozen`` is replaced under its name). Views, extensions,
-#: sequences, policies and the state topology are byte-identical to the ``0061`` seal.
+#: sequences, policies and the state topology are byte-identical to the ``0061`` seal. Amended the same day (`G-1`, found by `HOSTS-BACKEND-01`; ``0062``
+#: was unpublished): the sealed key of a host's SSH install is an ``executor_secret`` of the host, so ``executor_secret`` gains ``host_id`` (columns +1, to 1772) with its
+#: foreign key and format check and the exactly-one-of check ``ck_executor_secret_target`` (constraints +3, to 2156), the partial unique index
+#: ``ux_executor_secret_current_host`` (indexes +1, to 507) and a frozen guard that names the column (a new triggers digest, the count unchanged at 273).
 #: Resealed 2026-11-09 for ``0061_decision_memory_m2`` (`DECISION-MEMORY-01` phase M2), chained after ``0060``, measured on a throwaway PostgreSQL (the
 #: project image, stand ``am-lane-m2-pg``, lane M2) upgraded ONCE to ``0061`` by this test's own observed output: relations +2 (the table
 #: ``decision_memory_setting_event`` and the view ``decision_memory_case_current``, to 158), columns +24 (the settings table's 6, the status event's
@@ -411,11 +414,11 @@ from sqlalchemy import Engine, text
 #: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
 #: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1771, "4018a64fd8985e6af40c37efd479a4a6c969ebb38da324e75198487adca98b1d"),
+    "columns": (1772, "b4b711f933b981c2bec62c4500b19bd73773bc6f59f5aba507f56da6e24205b9"),
     "relations": (167, "ef1026a801186590cb7afd9dd28d9536f98793a6e573cc21249cfae50b6db2f2"),
-    "constraints": (2153, "070f158e5938b22f4707c2793f34c54e336badf65366665c9753cfa057e08d1b"),
-    "indexes": (506, "2484fc9a1f0c3cf1244d96559c1b2c2be661100d0e1961c485fe94dd1a83753d"),
-    "triggers": (273, "a0f61fb2c49d865fab6a44da0399df73bca5107d873764f4356c636d9e6d102b"),
+    "constraints": (2156, "26ed0190df417b6a86f7ba3b6e94aee873a8f535554fd8cb0099d9eba005c2e3"),
+    "indexes": (507, "5dfa2ed9cfbd0adadc6c670ef8dbf1f84af08977501415c69502272a561b6a5e"),
+    "triggers": (273, "7cff7a6099027a986fd0df2a12896d5ef33d62030b21e95f7df7faea1eefdaf1"),
     "functions": (84, "14338b5dc4ffcb6620a587a4fe67c558e28614758c0334090260874196f3ca3d"),
     "views": (6, "0bd9b7927321000af88e44410f7f431c918230428ac258d472d294d62d08043e"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

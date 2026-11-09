@@ -365,6 +365,16 @@ export const SCREEN_REGISTRY = [
     projectScope: 'global',
   },
   {
+    // `HOSTS-WEB-01` (plan 2026-11-09 §7.5): the former tabs of «Исполнители», folded, behind a quiet link on it. Not in the menu.
+    address: '/workers/advanced',
+    label: 'Расширенные исполнители',
+    group: 'hidden',
+    access: 'session',
+    roles: ['admin'],
+    inMenu: false,
+    projectScope: 'global',
+  },
+  {
     address: '/analysis-settings',
     label: 'Настройки анализа',
     group: 'system',

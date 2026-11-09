@@ -149,8 +149,29 @@ import type { StartArV3GroupViewProps } from '@/features/start-ar-v3-group';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList, WorkersOverviewSections } from '@/widgets/worker-list';
-import { WorkersPage } from '@/_pages/workers';
-import type { WorkersPageProps } from '@/_pages/workers';
+import { modelLabel } from '@/entities/executor-host';
+import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
+import type { WorkersAdvancedPageProps, WorkersPageProps } from '@/_pages/workers';
+import { ExecutorConnections } from '@/widgets/executor-connections';
+import { ExecutorGroups } from '@/widgets/executor-groups';
+import { ExecutorRoutes } from '@/widgets/executor-routes';
+import { ExecutorRules } from '@/widgets/executor-rules';
+import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
+import { ExecutorStageModels } from '@/widgets/executor-stage-models';
+import { ProcessesSection } from '@/_pages/workers/ui/processes-section';
+import { executorHostDetailsKey, executorHostsKey } from '@/entities/executor-host';
+import { stageLayoutKey } from '@/entities/stage-layout';
+import { LayoutEditorView } from '@/features/manage-stage-layout';
+import { HostDetailsView } from '@/features/manage-executor-host';
+import { StageModelsTable } from '@/widgets/executor-stage-models';
+import {
+  CommandTabView, ConnectWindow, DeleteHostView, InstallSessionView, SshFormView,
+} from '@/features/manage-executor-host';
+import {
+  CATALOGUE as STAGE_CATALOGUE, HOST_DETAILS_OFF, LAYOUT_ENSEMBLE as STAGE_LAYOUT_ENSEMBLE,
+  ISSUED, SERVER_ONLINE, install as hostInstall, seedDetails as seedHostDetails, seedHosts, seedLayout,
+  LAYOUT as STAGE_LAYOUT, LAYOUT_EMPTY as STAGE_LAYOUT_EMPTY, LAYOUT_OFF as STAGE_LAYOUT_OFF,
+} from '../unit/workers/hosts-fixtures';
 import {
   CommandFailure, CreateConnectionForm, HostKeyControl, IssuedTokenView, ReviseConnectionForm,
   SettingsFields, SshKeyControl,
@@ -432,6 +453,7 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   { word: 'SSH', why: 'The protocol name in «Команда по SSH», «Через SSH-туннель», «Узел SSH» and «Ключ SSH». A standard name (RFC 4251) that Russian technical writing does not translate; no contract here defines the word.' },
   { word: 'Claude Code', why: 'The product name of the command-line tool a remote machine runs, in «Claude Code без интерфейса» and «Сеанс Claude Code». A product name, not translated; listed before `Claude` so the pair is consumed whole.' },
   { word: 'Claude', why: 'The model family name in «Формат сообщений Claude». A product name, not translated for the reason AuditManager is not; no contract here defines it.' },
+  { word: 'Codex', why: 'The name of the second command-line client and of the set «Только Codex» (`HOSTS-WEB-01`, plan 2026-11-09 §4.3). A product name, not translated for the reason Claude is not; the contract publishes the provider as `codex`, in lower case, which is translated and so is not permitted as visible text.' },
   { word: 'authorized_keys', why: 'The file OpenSSH reads on the remote machine, named where the generated public key is shown so the person knows where to add it. The spelling is fixed by OpenSSH; no contract here defines it, and it is not a filename the extension pattern matches.' },
   { word: 'MD', why: 'The abbreviation of Markdown in «Сводка изменений (MD)», «Скачать MD», «Исходный MD» and «MD листа», the names of the original\'s buttons (`CMP-VC-UI-02`). A format name that Russian technical writing does not translate; no contract here defines the word, and a bare `MD` is not a filename the extension pattern matches.' },
   // ------------------------------------------------------------------------------------
@@ -464,7 +486,30 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
  * an identifier catalog, an RFC, a checksum algorithm -- so that "what shape is an
  * identifier" is not a question this guard answers by taste.
  */
+
+/**
+ * `HOSTS-WEB-01`. The model names the screens print, read out of the model catalogue, `contracts/analysis/v1/model-catalogue.json`:
+ * each pin as the catalogue spells it (`gpt-6-sol`) and as the screens name it, without the provider prefix (`Opus 5.5`, from
+ * `modelLabel`). **Derived, not listed**: a model the catalogue gains is allowed the day it is added, and a screen that prints a
+ * name the catalogue does not have is still an offence. A name is a product's, not a sentence, and no schema enumerates it.
+ */
+function catalogueModelNames(): readonly string[] {
+  const catalogue = readJson<{ readonly entries: readonly { readonly model_id: string }[] }>(
+    join(REPO_ROOT, 'contracts', 'analysis', 'v1', 'model-catalogue.json'),
+  );
+  const ids = [...new Set(catalogue.entries.map((entry) => entry.model_id))];
+  return [...ids, ...ids.map(modelLabel)].sort((a, b) => b.length - a.length);
+}
+
 const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp }[] = [
+  {
+    name: 'the model names of the catalogue',
+    // Whole names only: `gpt-6-sol` inside `gpt-6-solar` is not the catalogue's name.
+    pattern: new RegExp(
+      `(?<![A-Za-z0-9.-])(?:${catalogueModelNames().map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![A-Za-z0-9-])`,
+      'g',
+    ),
+  },
   {
     name: 'prefixed ULID identifiers',
     // `contracts/domain/v1/identifiers.json` fixes the form: a lowercase prefix, an
@@ -3121,7 +3166,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     ),
   },
   /*
-   * `EXEC-HTTP-01`. «Исполнители» on its other two tabs, as an administrator and as an expert,
+   * `EXEC-HTTP-01`, moved by `HOSTS-WEB-01`. The former tabs of «Исполнители» are sections of the advanced page, rendered here
+   * as an administrator (the page opened on the section) and as an expert (the widget itself: the page is not an expert's),
    * with the key form opened for a connection; every outcome of the key post (the form is a
    * server component, so its eight sentences are rendered here on their own); a refused
    * command; and the forms and controls a tab reaches only after a press or a choice, rendered
@@ -3129,11 +3175,11 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
    */
   {
     name: 'workers-connections',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'connections' }),
   },
   {
     name: 'workers-connections-key',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, {
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, {
       initialTab: 'connections',
       secretConnectionId: EXECUTOR_READY.connection.connection_id,
       secretForm: createElement(SetExecutorSecretForm, { connectionId: EXECUTOR_READY.connection.connection_id, outcome: 'saved' }),
@@ -3141,22 +3187,22 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   },
   {
     name: 'workers-connections-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }),
+    make: () => createElement(ExecutorConnections, { roles: ['expert'] }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     name: 'workers-routes',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
   },
   {
     name: 'workers-routes-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(ExecutorRoutes, { roles: ['expert'] }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // A route with no standby configured: the editor shows the unticked choice only.
     name: 'workers-routes-no-standby',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, [{
       work_kind: 'text_analysis', primary_connection_id: EXECUTOR_READY.connection.connection_id,
       set_at: '2026-10-21T10:00:00Z', set_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
@@ -3167,7 +3213,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     // «Анализ текста», and (`CMP-SEAL-C4`) the AI review of «Сравнение стадий», so that every member of `ExecutorWorkKind`
     // stands on a screen.
     name: 'workers-routes-comparison-kinds',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, (
       ['text_analysis', 'comparison_pair_check', 'comparison_sheet_changes', 'comparison_spec', 'comparison_report',
         'comparison_stage_review'] as const
@@ -3179,7 +3225,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     // No route at all: a run would be refused, and the screen says so.
     name: 'workers-routes-unassigned',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, []),
   },
   /*
@@ -3190,17 +3236,17 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
    */
   {
     name: 'workers-groups',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'groups' }),
   },
   {
     name: 'workers-groups-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    make: () => createElement(ExecutorGroups, { roles: ['expert'] }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // The groups are read and their capacities are not: the pending branch of each group's occupancy.
     name: 'workers-groups-capacity-pending',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'groups' }),
     seedClient: (client) => {
       for (const group of [MAIN_GROUP, ROUTED_GROUP]) {
         client.removeQueries({ queryKey: executorGroupCapacityKey(group.group_id) });
@@ -3209,21 +3255,188 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   },
   {
     name: 'workers-rules',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'rules' }),
   },
   {
     name: 'workers-rules-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    make: () => createElement(ExecutorRules, { roles: ['expert'], legacyRoutes: createElement(ExecutorRoutes, { roles: ['expert'], history: true }) }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // Under rules: a rule for two kinds of work (the second on an earlier revision of its group), the others unruled.
     name: 'workers-rules-in-force',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'rules' }),
     seedClient: (client) => client.setQueryData(KEYS.executorRoutingRules, ruleList('rules', [
       ruleOf('text_analysis', ROUTED_GROUP, 1),
       ruleOf('comparison_pair_check', { ...MAIN_GROUP, current_revision: { ...MAIN_GROUP.current_revision, group_revision_id: 'exgr_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z' } }, 2),
     ])),
+  },
+  /*
+   * `HOSTS-WEB-01` (ADR-0028). «Исполнители» in two tabs, as the roles meet them: «Серверы» (the administrator with the
+   * switch, the menu and the button; an expert with none; a viewer with the refusal; the empty list), what a row opens
+   * («Подробнее» with the reasons a model is unavailable, «Удалить»), «Модели по этапам» (the table for both roles, the layout
+   * switched off, none saved, the form), the window «Подключить сервер» on both its tabs and in each state of the install, and
+   * the advanced page for an administrator, for an expert (refused), and its sections for the presets and the layout.
+   * Every string seeded is Cyrillic or an identifier, as everywhere here.
+   */
+  {
+    name: 'workers-servers',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    seedClient: (client) => seedHosts(client),
+  },
+  {
+    name: 'workers-servers-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    seedClient: (client) => { seedHosts(client); client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }); },
+  },
+  {
+    name: 'workers-servers-viewer',
+    make: () => createElement(ExecutorHosts, { roles: ['viewer'] }),
+  },
+  {
+    name: 'workers-servers-empty',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    seedClient: (client) => seedHosts(client, { items: [], online: 0, slots_free: 0, slots_total: 0, total: 0 }),
+  },
+  {
+    name: 'workers-servers-details',
+    make: () => createElement(HostRow, { host: SERVER_ONLINE, admin: true, initialPanel: 'details' }),
+    seedClient: (client) => seedHostDetails(client),
+  },
+  {
+    name: 'workers-servers-delete',
+    make: () => createElement(DeleteHostView, { name: 'резерв', pending: false, failure: null, onConfirm: () => undefined, onCancel: () => undefined }),
+  },
+  {
+    name: 'workers-models',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); },
+  },
+  {
+    name: 'workers-models-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }); },
+  },
+  {
+    name: 'workers-models-off',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT_OFF); },
+  },
+  {
+    name: 'workers-models-none-saved',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT_EMPTY); },
+  },
+  {
+    name: 'workers-models-editing',
+    make: () => createElement(ExecutorStageModels, { roles: ['admin'], initiallyEditing: true }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); },
+  },
+  {
+    name: 'workers-models-viewer',
+    make: () => createElement(ExecutorStageModels, { roles: ['viewer'] }),
+  },
+  {
+    name: 'workers-connect-command',
+    make: () => createElement(ConnectWindow, { onClose: () => undefined, staticOpen: true, initialTab: 'command' }),
+  },
+  {
+    name: 'workers-connect-command-issued',
+    make: () => createElement(CommandTabView, {
+      name: 'новый', pending: false, issued: ISSUED, replaced: true, failure: null, problem: null, onName: () => undefined, onGet: () => undefined,
+      status: createElement('p', null, 'ждём сервер…'),
+    }),
+  },
+  {
+    name: 'workers-connect-ssh',
+    make: () => createElement(ConnectWindow, { onClose: () => undefined, staticOpen: true, initialTab: 'ssh' }),
+  },
+  {
+    name: 'workers-connect-ssh-problem',
+    make: () => createElement(SshFormView, { pending: false, problem: 'Укажите узел и пользователя SSH.', failure: null, onSubmit: () => undefined }),
+  },
+  ...(['requested', 'awaiting_host_key', 'installing', 'succeeded', 'failed'] as const).map((state) => ({
+    name: `workers-install-${state}`,
+    make: () => createElement(InstallSessionView, {
+      install: hostInstall({
+        state, ...(state === 'failed' ? { failure_reason: 'ssh_refused' as const } : {}),
+        ...(state === 'succeeded' ? { key_removed_at: '2026-11-09T11:05:00Z' } : {}),
+      }),
+      confirming: false, confirmFailure: null, onConfirm: () => undefined, onRetry: () => undefined,
+      children: createElement('p', null, 'найдено: Opus 5.5'),
+    }),
+  })),
+  {
+    // Every role of a cell, and the three efforts, in one table: the blocks row as an ensemble scheme.
+    name: 'workers-models-ensemble',
+    make: () => createElement(StageModelsTable, { layout: STAGE_LAYOUT_ENSEMBLE, admin: false }),
+  },
+  {
+    // The form with every model served: the three segments, and an effort select with all three efforts.
+    name: 'workers-models-editing-all',
+    make: () => createElement(LayoutEditorView, {
+      draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
+      onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
+    }),
+  },
+  {
+    // A server that is off and out of contact: the two reasons that name it, in the details.
+    name: 'workers-servers-details-off',
+    make: () => createElement(HostDetailsView, { details: HOST_DETAILS_OFF, rechecking: false, onRecheck: () => undefined }),
+  },
+  {
+    // The branches a cold or refused read reaches: the details of a server, «Модели по этапам», the editor's inputs, the list.
+    name: 'workers-servers-details-cold',
+    make: () => createElement(HostRow, { host: SERVER_ONLINE, admin: true, initialPanel: 'details' }),
+  },
+  {
+    name: 'workers-servers-details-failed',
+    make: () => createElement(HostRow, { host: SERVER_ONLINE, admin: true, initialPanel: 'details' }),
+    seedClient: (client) => seedError(client, executorHostDetailsKey(SERVER_ONLINE.host_id), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'workers-models-cold',
+    make: () => createElement(ExecutorStageModels, { roles: ['admin'] }),
+  },
+  {
+    name: 'workers-models-failed',
+    make: () => createElement(ExecutorStageModels, { roles: ['expert'] }),
+    seedClient: (client) => seedError(client, stageLayoutKey(), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'workers-models-editing-cold',
+    make: () => createElement(ExecutorStageModels, { roles: ['admin'], initiallyEditing: true }),
+    seedClient: (client) => client.setQueryData(stageLayoutKey(), STAGE_LAYOUT),
+  },
+  {
+    name: 'workers-servers-failed',
+    make: () => createElement(ExecutorHosts, { roles: ['admin'] }),
+    seedClient: (client) => seedError(client, executorHostsKey(), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'workers-processes-cold',
+    make: () => createElement(ProcessesSection, { roles: ['admin'] }),
+    seedClient: (client) => client.removeQueries({ queryKey: KEYS.workers }),
+  },
+  {
+    name: 'workers-advanced-presets',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'presets' }),
+  },
+  {
+    name: 'workers-advanced-layout',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'layout' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); },
+  },
+  {
+    name: 'workers-advanced-closed',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, {}),
+  },
+  {
+    name: 'workers-advanced-expert',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, {}),
+    seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // The three-way start choice's group select, over every answer the group list can be in.
@@ -4322,19 +4535,6 @@ const TRANSLATED_SCHEMAS = [
   'ExecutorIdentityBasis',
   'ExecutorRateCheck',
   'ExecutorWorkKind',
-  // `HOSTS-SEAL-1` (ADR-0028): «Исполнители» and «Модели по этапам» say the state of a server, a model and a provider's login, the
-  // access, the effort and the row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. `review`,
-  // `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid` and `online` are plain English words and must not be permitted bare.
-  'StageRowKey',
-  'StageCellRole',
-  'StageModelKit',
-  'ModelEffort',
-  'ExecutorModelAccess',
-  'ProviderAuthState',
-  'ModelProbeState',
-  'ExecutorHostState',
-  'ModelUnavailableReason',
-  'RunStartRoute',
   // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
   // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
   // `queued`, `running`, `stale`, `failed`, `done`), which must not be permitted bare. `ComparisonLayer` and `ComparisonChannelState`
@@ -4396,7 +4596,7 @@ const TRANSLATED_SCHEMAS = [
 function translatedVocabulary(): ReadonlySet<string> {
   const openapi = readJson<OpenApi>(CONTRACT_PATH);
   const values = new Set<string>();
-  for (const name of TRANSLATED_SCHEMAS) {
+  for (const name of [...TRANSLATED_SCHEMAS, ...RESERVED_TRANSLATED_SCHEMAS]) {
     const schema = openapi.components.schemas[name];
     if (schema === undefined) {
       throw new Error(
@@ -4408,6 +4608,29 @@ function translatedVocabulary(): ReadonlySet<string> {
   }
   return values;
 }
+
+/**
+ * `HOSTS-SEAL-1` (ADR-0028, contract 1.45.0): enumerations of the servers and the stage layout that no screen renders yet.
+ *
+ * «Исполнители» and «Модели по этапам» will say the state of a server, a model and a provider's login, the access, the effort and the
+ * row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. Several of those values are plain English
+ * words (`review`, `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid`, `online`). They leave the permitted vocabulary NOW, so the
+ * guard keeps reddening `review` as it did before the contract carried it as a bare value (`StageRowKey`), but they are not yet
+ * `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries, and none does. `HOSTS-WEB-01` moves each
+ * schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empties this list.
+ */
+const RESERVED_TRANSLATED_SCHEMAS = [
+  'StageRowKey',
+  'StageCellRole',
+  'StageModelKit',
+  'ModelEffort',
+  'ExecutorModelAccess',
+  'ProviderAuthState',
+  'ModelProbeState',
+  'ExecutorHostState',
+  'ModelUnavailableReason',
+  'RunStartRoute',
+] as const;
 
 const TRANSLATED = translatedVocabulary();
 
@@ -4463,7 +4686,8 @@ describe('the guard reads a contract rather than a list of words', () => {
     // 25 since `D-292`: four format and sheet names of the comparison exports (`XLSX`, `JSON`, `HTML`, `RawJSON`), each
     // with its reason. It was 21.
     // 26 since `UI-B-52`: `Alt`, the legend engraved on a keyboard key, said in the queue's hint for moving a waiting job.
-    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(26);
+    // 27 since `HOSTS-WEB-01`: `Codex`, the product name of the second command-line client (the model names are derived, not listed).
+    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(27);
     for (const { word, why } of NOT_DERIVABLE) {
       expect(why.length, `${word} has no reason`).toBeGreaterThan(60);
     }
@@ -5143,7 +5367,78 @@ const SCHEMA_MARKERS: readonly {
     why:
       '`widgets/version-series/ui/queue-strips.tsx`, the state of one step in the list of «Очередь запуска»: ждёт, идёт, ждёт подтверждения, готово, пропуск, ошибка.',
   },
+  // `HOSTS-WEB-01` (ADR-0028): «Исполнители» in two tabs. The contract value is in a `data-` attribute and the screen says it in Russian.
+  {
+    schema: 'StageRowKey',
+    attribute: 'data-stage-row',
+    why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx`, one cell of the table of six rows: Анализ текста, Анализ блоков, Комплексная сверка, Нормы, Критик, Уточнение.',
+  },
+  {
+    schema: 'StageCellRole',
+    attribute: 'data-stage-role',
+    why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx`, the part a cell plays in an ensemble row: the single answer, the two legs, the judge (named in front of the model).',
+  },
+  {
+    schema: 'StageModelKit',
+    attribute: 'data-layout-kit',
+    why: '`features/manage-stage-layout/ui/layout-editor.tsx`, the segments of the form «Изменить»: Только Claude, Только Codex, Свой набор.',
+  },
+  {
+    schema: 'ModelEffort',
+    attribute: 'data-model-effort',
+    why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx` and the effort select of `features/manage-stage-layout/ui/layout-editor.tsx`: низкое, среднее, высокое.',
+  },
+  {
+    schema: 'ExecutorModelAccess',
+    attribute: 'data-host-access',
+    why: '`features/manage-executor-host/ui/host-details.tsx`, a client found on a server in «Подробнее»: по подписке, по ключу API.',
+  },
+  {
+    schema: 'ProviderAuthState',
+    attribute: 'data-host-auth',
+    why: '`features/manage-executor-host/ui/host-details.tsx`, the login of a client on a server in «Подробнее»: вход выполнен, нужно войти на сервере, вход не определён.',
+  },
+  {
+    schema: 'ExecutorHostState',
+    attribute: 'data-host-state',
+    why: '`widgets/executor-hosts/ui/executor-hosts.tsx`, the dot of a server row: на связи, все места заняты, нет связи.',
+  },
+  {
+    schema: 'ModelUnavailableReason',
+    attribute: 'data-host-reason',
+    why: '`features/manage-executor-host/ui/host-details.tsx` (the reasons of «Подробнее») and the mark «⚠ нет на серверах» of `widgets/executor-stage-models`: said only where an action is blocked or a run waits.',
+  },
 ];
+
+/**
+ * Translated schemas that no screen of this wave can show yet, each with the reason and the wave that will. **A ratchet in both
+ * directions**: a schema here has no marker above (it would be decided twice), and the day a marker is added the line is deleted;
+ * a schema that is neither marked nor named here is red, as it always was. `HOSTS-SEAL-1` translated both at the contract and the
+ * words are waiting for their screens, so the raw value is not permitted in the meantime.
+ */
+const NOT_YET_ON_A_SCREEN: readonly { readonly schema: (typeof TRANSLATED_SCHEMAS)[number]; readonly why: string }[] = [
+  {
+    schema: 'ModelProbeState',
+    why:
+      'What the agent knows of one model (`verified`, `not_verified`, `failed`) travels in the agent\'s report to the stand (`RunnerCatalogueEntry`, the host-mode runner protocol); ' +
+      'no operation the web calls returns it. The web shows the stand\'s own reasons (`ModelUnavailableReason`), so a probe state is a screen of nobody until the contract returns it.',
+  },
+  {
+    schema: 'RunStartRoute',
+    why:
+      'Which route a run was started by (`stage_plan` or `legacy`) is a field of the readiness read of the run start; the start button and the run screen are wave 2 ' +
+      '(`RUN-START-ONE-01`, `RUN-SCREEN-01`), which are forbidden hotspots of `HOSTS-WEB-01`.',
+  },
+];
+
+/** The translated schemas nobody decided anything about: neither marked nor named as waiting. Pure, so a test can drive it. */
+export function undecidedSchemas(
+  translated: readonly string[],
+  marked: readonly string[],
+  waiting: readonly string[],
+): readonly string[] {
+  return translated.filter((name) => !marked.includes(name) && !waiting.includes(name));
+}
 
 /** `data-x="y"` pairs, read out of the raw markup of every screen in every state. */
 function markerValuesOnScreens(): Map<string, Set<string>> {
@@ -5167,11 +5462,23 @@ describe('the matrix covers the contract, and says which member it does not', ()
     // A schema added to `TRANSLATED_SCHEMAS` with no marker would be excused by silence,
     // which is the class of defect this section exists to close. Both directions.
     const marked = SCHEMA_MARKERS.map((entry) => entry.schema);
-    expect([...TRANSLATED_SCHEMAS].filter((name) => !marked.includes(name))).toEqual([]);
+    const waiting = NOT_YET_ON_A_SCREEN.map((entry) => entry.schema);
+    expect(undecidedSchemas(TRANSLATED_SCHEMAS, marked, waiting)).toEqual([]);
     expect(marked.filter((name) => !([...TRANSLATED_SCHEMAS] as string[]).includes(name))).toEqual([]);
+    // The ratchet: a schema that has a marker is no longer waiting, and a waiting one is still translated.
+    expect(waiting.filter((name) => marked.includes(name))).toEqual([]);
+    expect(waiting.filter((name) => !([...TRANSLATED_SCHEMAS] as string[]).includes(name))).toEqual([]);
+    for (const { schema, why } of NOT_YET_ON_A_SCREEN) {
+      expect(why.length, `${schema} is waiting with no reason`).toBeGreaterThan(80);
+    }
     for (const { schema, why } of SCHEMA_MARKERS) {
       expect(why.length, `${schema} names no module that renders it`).toBeGreaterThan(40);
     }
+  });
+
+  it('can fail: a translated schema that is neither marked nor named as waiting is found', () => {
+    expect(undecidedSchemas(['A', 'B', 'C'], ['A'], ['B'])).toEqual(['C']);
+    expect(undecidedSchemas(['A'], ['A'], [])).toEqual([]);
   });
 
   it('renders every attribute it claims to read, so a renamed one is red and not merely empty', () => {

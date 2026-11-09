@@ -20,9 +20,11 @@ What this revision adds
 ``executor_model_cooldown``
     The passive check of plan section 5.5: after a real refusal (access, quota, no such model) the (host, provider, model) is taken out
     of availability until ``until``. One row per triple, replaced by the next refusal.
-``host_id`` on ``executor_runner_token``, ``executor_enrollment`` and ``executor_agent_install``
-    ``connection_id`` becomes nullable on all three, and ``ck_*_target`` says *exactly one of* ``connection_id`` and ``host_id``. Every
-    row written before this revision names a connection. A host token claims the tasks of the system connections of its host: the
+``host_id`` on ``executor_runner_token``, ``executor_enrollment``, ``executor_agent_install`` and ``executor_secret``
+    ``connection_id`` becomes nullable on all four, and ``ck_*_target`` says *exactly one of* ``connection_id`` and ``host_id``. Every
+    row written before this revision names a connection. The sealed key of a host's SSH install is an ``executor_secret`` of purpose
+    ``agent_install_key`` with ``host_id`` and no connection (``ux_executor_secret_current_host``: one current secret per host and
+    purpose); the purposes themselves are unchanged and a host secret may name any of them. A host token claims the tasks of the system connections of its host: the
     composite key of ``executor_task`` to the token (``fk_executor_task_token``) cannot express that and is replaced by a plain key plus
     ``trg_executor_task_claimer``, which accepts the connection's own token or a token of the connection's host. The enrollment key
     ``(runner_token_id, host_id)`` and a second unique index per host mirror the connection forms.
@@ -112,6 +114,10 @@ _FROZEN_INSTALL_0046 = (
     "'install_id', 'connection_id', 'access', 'ssh_host', 'ssh_port', 'ssh_user', 'created_at', 'created_by'"
 )
 _FROZEN_INSTALL_0062 = _FROZEN_INSTALL_0046 + ", 'host_id'"
+_FROZEN_SECRET_0030 = (
+    "'secret_id', 'connection_id', 'purpose', 'kid', 'destination', 'ciphertext', 'last4', 'public_material', 'set_at', 'set_by'"
+)
+_FROZEN_SECRET_0062 = _FROZEN_SECRET_0030 + ", 'host_id'"
 _FROZEN_GROUP_0047 = "'group_id', 'display_name', 'created_at', 'created_by'"
 _FROZEN_GROUP_0062 = _FROZEN_GROUP_0047 + ", 'system_managed'"
 
@@ -475,6 +481,23 @@ def upgrade() -> None:
     )
     _guard("executor_agent_install", "trg_executor_agent_install_frozen_guard", "am_guard_frozen_columns", _FROZEN_INSTALL_0062)
 
+    # The sealed key of a host's SSH install (`executor_agent_install.key_secret_id`) is a secret of the host, not of a connection.
+    op.execute("ALTER TABLE executor_secret ALTER COLUMN connection_id DROP NOT NULL")
+    op.execute("ALTER TABLE executor_secret ADD COLUMN host_id text NULL REFERENCES executor_host (host_id)")
+    op.execute(
+        f"ALTER TABLE executor_secret ADD CONSTRAINT ck_executor_secret_host_id_format "
+        f"CHECK (host_id IS NULL OR host_id ~ '^exh_{ULID}$')"
+    )
+    op.execute(
+        "ALTER TABLE executor_secret ADD CONSTRAINT ck_executor_secret_target "
+        "CHECK ((connection_id IS NULL) <> (host_id IS NULL))"
+    )
+    op.execute(
+        "CREATE UNIQUE INDEX ux_executor_secret_current_host ON executor_secret (host_id, purpose) "
+        "WHERE host_id IS NOT NULL AND replaced_at IS NULL"
+    )
+    _guard("executor_secret", "trg_executor_secret_frozen_guard", "am_guard_frozen_columns", _FROZEN_SECRET_0062)
+
     # The task's key to its claiming token named (token, connection); a host token has no connection. A plain key and the trigger.
     op.execute("ALTER TABLE executor_task DROP CONSTRAINT fk_executor_task_token")
     op.execute(
@@ -782,7 +805,8 @@ def downgrade() -> None:
         ("host-bound credentials",
          "SELECT EXISTS (SELECT 1 FROM executor_runner_token WHERE host_id IS NOT NULL) "
          "OR EXISTS (SELECT 1 FROM executor_enrollment WHERE host_id IS NOT NULL) "
-         "OR EXISTS (SELECT 1 FROM executor_agent_install WHERE host_id IS NOT NULL)"),
+         "OR EXISTS (SELECT 1 FROM executor_agent_install WHERE host_id IS NOT NULL) "
+         "OR EXISTS (SELECT 1 FROM executor_secret WHERE host_id IS NOT NULL)"),
         ("model_call / provider_call_effect stage_key, host_id or access",
          "SELECT EXISTS (SELECT 1 FROM model_call WHERE stage_key IS NOT NULL OR host_id IS NOT NULL OR access IS NOT NULL) "
          "OR EXISTS (SELECT 1 FROM provider_call_effect "
@@ -845,6 +869,13 @@ def downgrade() -> None:
         "ALTER TABLE executor_task ADD CONSTRAINT fk_executor_task_token "
         "FOREIGN KEY (claimed_by_token_id, connection_id) REFERENCES executor_runner_token (token_id, connection_id)"
     )
+
+    _guard("executor_secret", "trg_executor_secret_frozen_guard", "am_guard_frozen_columns", _FROZEN_SECRET_0030)
+    op.execute("DROP INDEX ux_executor_secret_current_host")
+    op.execute("ALTER TABLE executor_secret DROP CONSTRAINT ck_executor_secret_target")
+    op.execute("ALTER TABLE executor_secret DROP CONSTRAINT ck_executor_secret_host_id_format")
+    op.execute("ALTER TABLE executor_secret DROP COLUMN host_id")
+    op.execute("ALTER TABLE executor_secret ALTER COLUMN connection_id SET NOT NULL")
 
     _guard("executor_agent_install", "trg_executor_agent_install_frozen_guard", "am_guard_frozen_columns", _FROZEN_INSTALL_0046)
     op.execute("DROP INDEX ix_executor_agent_install_host")

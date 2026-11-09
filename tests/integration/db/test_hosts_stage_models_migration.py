@@ -39,6 +39,7 @@ from auditmanager.shared.identity import (
     ExecutorHostSlotEventId,
     ExecutorHostUseEventId,
     ExecutorRunnerTokenId,
+    ExecutorSecretId,
     ProjectUid,
     PromptBundleId,
     RunId,
@@ -106,12 +107,34 @@ def _token(connection: Any, *, host_id: str | None = None, connection_id: str | 
     return token_id
 
 
+def _secret_before(connection: Any, connection_id: str) -> str:
+    """A secret as ``0061`` could write it (no ``host_id`` column yet)."""
+    secret_id = str(ExecutorSecretId.new())
+    connection.execute(text(
+        "INSERT INTO executor_secret (secret_id, connection_id, purpose, kid, destination, ciphertext, last4, set_by) "
+        "VALUES (:id, :c, 'ssh_private_key', 'k1', 'adm1.hlab.kz', :cipher, 'abcd', :actor)"
+    ), {"id": secret_id, "c": connection_id, "cipher": b"sealed", "actor": ACTOR})
+    return secret_id
+
+
 def _legacy_connection(connection: Any) -> str:
     connection_id = str(ExecutorConnectionId.new())
     connection.execute(text(
         "INSERT INTO executor_connection (connection_id, kind, display_name, created_by) "
         "VALUES (:id, 'pull', 'legacy', :actor)"), {"id": connection_id, "actor": ACTOR})
     return connection_id
+
+
+def _secret(connection: Any, *, host_id: str | None = None, connection_id: str | None = None, purpose: str = "agent_install_key",
+            replaced: bool = False) -> str:
+    """One sealed secret; the install key of a host is one with ``host_id`` and no connection."""
+    secret_id = str(ExecutorSecretId.new())
+    connection.execute(text(
+        "INSERT INTO executor_secret (secret_id, connection_id, host_id, purpose, kid, destination, ciphertext, last4, set_by, replaced_at) "
+        "VALUES (:id, :c, :h, :purpose, 'k1', 'adm1.hlab.kz', :cipher, 'abcd', :actor, "
+        "CASE WHEN :replaced THEN clock_timestamp() ELSE NULL END)"
+    ), {"id": secret_id, "c": connection_id, "h": host_id, "purpose": purpose, "cipher": b"sealed", "actor": ACTOR, "replaced": replaced})
+    return secret_id
 
 
 def _system_connection(connection: Any, host_id: str, *, provider: str = "claude_code", model: str = MODEL) -> tuple[str, str]:
@@ -228,12 +251,13 @@ def test_the_step_changes_no_stored_row_and_a_legacy_credential_still_names_its_
     engine, url = at_previous
     with engine.begin() as connection:
         legacy = _legacy_connection(connection)
+        legacy_secret = _secret_before(connection, legacy)
         token = str(ExecutorRunnerTokenId.new())
         connection.execute(text(
             "INSERT INTO executor_runner_token (token_id, connection_id, token_prefix, token_hash, created_by, expires_at) "
             "VALUES (:id, :c, :prefix, :hash, :actor, clock_timestamp() + interval '1 day')"
         ), {"id": token, "c": legacy, "prefix": "amr_abcdefgh", "hash": b"h" * 32, "actor": ACTOR})
-    tables = ("executor_connection", "executor_runner_token", "audit_run", "command_record")
+    tables = ("executor_connection", "executor_runner_token", "executor_secret", "audit_run", "command_record")
     before = {table: _count(engine, table) for table in tables}
     _upgrade(foundation_command, url, THIS)
     assert _version(engine) == THIS
@@ -245,6 +269,10 @@ def test_the_step_changes_no_stored_row_and_a_legacy_credential_still_names_its_
         pool = connection.execute(text(
             "SELECT system_managed, host_id, capacity_pool FROM executor_connection WHERE connection_id = :c"), {"c": legacy}).one()
         assert pool == (False, None, None)
+        # a secret written before the step still names its connection and no host
+        assert connection.execute(text(
+            "SELECT connection_id, host_id, purpose FROM executor_secret WHERE secret_id = :s"), {"s": legacy_secret}).one() == (
+            legacy, None, "ssh_private_key")
     for table in ("executor_host", "audit_run_cell_binding", "stage_layout_revision", "executor_host_report"):
         assert _count(engine, table) == 0
     assert _count(engine, "stage_layout") == 1  # the one layout, key `default`
@@ -448,6 +476,44 @@ def test_a_task_is_claimed_by_a_token_of_its_connection_or_of_its_host_and_by_no
         pytest.skip(f"the probe fixture is not accepted by this schema: {error.orig}")
     _refused(engine, lambda c: task(c, stranger))  # a token of another host
     _refused(engine, lambda c: task(c, legacy_token))  # a token of another connection
+
+
+def test_the_sealed_key_of_a_host_install_is_a_secret_of_the_host_and_a_secret_names_exactly_one_of_a_connection_and_a_host(
+    world: dict[str, Any]
+) -> None:
+    engine, host = world["engine"], world["host"]
+    with engine.begin() as connection:
+        legacy = _legacy_connection(connection)
+        host_secret = _secret(connection, host_id=host)
+        _secret(connection, connection_id=legacy, purpose="ssh_private_key")  # the connection form is what it was
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT connection_id, host_id FROM executor_secret WHERE secret_id = :s"),
+                                  {"s": host_secret}).one() == (None, host)
+    _refused(engine, lambda c: _secret(c, host_id=host, connection_id=legacy, purpose="api_key"), "23514")  # both
+    _refused(engine, lambda c: _secret(c), "23514")  # neither
+    _refused(engine, lambda c: _secret(c, host_id="exh_nonsense"), "23514")  # a malformed host identity
+    _refused(engine, lambda c: _secret(c, host_id=str(ExecutorHostId.new())), "23503")  # a host that does not exist
+    _refused(engine, lambda c: _secret(c, host_id=host), "23505")  # one current secret per host and purpose
+    with engine.begin() as connection:
+        _secret(connection, host_id=host, purpose="api_key")  # another purpose, the same host
+        connection.execute(text("UPDATE executor_secret SET replaced_at = clock_timestamp() WHERE secret_id = :s"), {"s": host_secret})
+        _secret(connection, host_id=host)  # replaced: the next one is current
+    _refused(engine, lambda c: c.execute(text("UPDATE executor_secret SET host_id = NULL WHERE secret_id = :s"), {"s": host_secret}), "AM003")
+    _refused(engine, lambda c: c.execute(text("UPDATE executor_secret SET connection_id = :c WHERE secret_id = :s"),
+                                        {"c": legacy, "s": host_secret}), "AM003")
+
+
+def test_the_install_of_a_host_holds_its_sealed_key_in_a_secret_of_the_host(world: dict[str, Any]) -> None:
+    engine, host = world["engine"], world["host"]
+    with engine.begin() as connection:
+        secret = _secret(connection, host_id=host)
+        connection.execute(text(
+            "INSERT INTO executor_agent_install (install_id, connection_id, host_id, access, ssh_host, ssh_port, ssh_user, created_by, "
+            "key_secret_id) VALUES (:id, NULL, :h, 'generated_key', 'adm1.hlab.kz', 22, 'root', :a, :s)"),
+            {"id": "exai_" + str(ExecutorEnrollmentId.new())[-26:], "h": host, "a": ACTOR, "s": secret})
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT key_secret_id, key_removed_at FROM executor_agent_install WHERE host_id = :h"),
+                                  {"h": host}).one() == (secret, None)
 
 
 # -- system connections ---------------------------------------------------------------------------
@@ -693,4 +759,15 @@ def test_the_downgrade_is_refused_while_any_of_it_exists_and_changes_nothing(
     refused = foundation_command(_alembic("downgrade", PREVIOUS), url)
     assert refused.returncode != 0, refused.describe()
     assert "refusing to downgrade 0062_hosts_stage_models" in refused.stderr, refused.stderr
+    assert _version(engine) == THIS
+
+
+def test_the_downgrade_refusal_names_a_secret_of_a_host(at_this: tuple[Engine, str], foundation_command: Any) -> None:
+    """The host row alone refuses too; what is proved is that the secret is counted as a retained class of its own."""
+    engine, url = at_this
+    with engine.begin() as connection:
+        _secret(connection, host_id=_host(connection))
+    refused = foundation_command(_alembic("downgrade", PREVIOUS), url)
+    assert refused.returncode != 0, refused.describe()
+    assert "host-bound credentials" in refused.stderr and "executor_host" in refused.stderr, refused.stderr
     assert _version(engine) == THIS

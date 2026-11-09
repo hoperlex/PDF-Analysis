@@ -1,14 +1,12 @@
 'use client';
 
 /**
- * The tabs of «Исполнители» (`EXEC-HTTP-01`, `EXEC2-WEB-GROUPS-01`, `UI-PARITY` UI-B-63): «Обзор», «Подключения»,
- * «Процессы», «Группы», «Правила», «Назначения».
+ * The tabs of «Исполнители» (`HOSTS-WEB-01`): «Серверы» and «Модели по этапам».
  *
- * The WAI-ARIA tabs pattern with automatic activation, as the tabs of «Блоки» are: a `tablist`
- * of `tab` buttons, each naming the `tabpanel` it controls and saying whether it is the open
- * one; only the open tab is in the tab order, and the arrow keys, Home and End move the
- * selection and the focus. One panel is drawn, for the open tab, with the open tab's content as
- * its children: nothing of a closed tab is mounted, so a closed tab reads nothing from the API.
+ * The WAI-ARIA tabs pattern with automatic activation, as the tabs of «Блоки» are: a `tablist` of `tab` buttons, each naming
+ * the `tabpanel` it controls and saying whether it is the open one; only the open tab is in the tab order, and the arrow keys,
+ * Home and End move the selection and the focus. One panel is drawn, for the open tab, with the open tab's content as its
+ * children: nothing of a closed tab is mounted, so a closed tab reads nothing from the API.
  */
 
 import { useId, useRef } from 'react';
