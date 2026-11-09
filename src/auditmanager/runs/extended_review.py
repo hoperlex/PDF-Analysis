@@ -7,7 +7,7 @@ import math
 from copy import deepcopy
 from typing import Any
 
-from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelResponse, ProviderMode,
+from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelResponse, ProviderMode, accepted_reported,
     build_extended_request, extended_canonical, extended_digest, finalize_extended_items,
     parse_extended_reply, plan_extended_inputs, EXTENDED_REVIEW_ROLE, EXTENDED_REPLY_ROLE,
     pinned_models, request_cost_upper_usd, require_approved_model, extended_block_payload)
@@ -16,6 +16,8 @@ from auditmanager.executors.public import CropImage, attach_images
 from auditmanager.jobs.public import extended_unit
 from auditmanager.norms.public import SEARCH_WINDOW, search_norms
 from auditmanager.runs.repository import RunRepository
+from auditmanager.runs.stage_plan import call_journal_columns, cell_binding
+from auditmanager.runs.stage_layout import row_of_phase
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId
 from auditmanager.storage.public import parse_blob_id
@@ -62,9 +64,17 @@ def _saved_response(store, row: dict, request: ModelRequest, binding) -> ModelRe
 def _call(session, *, run_id, authority, jobs, journal, binding, request, phase, source_sha256,
           meter, store, publish, checkpoint, global_unknown_fence=False):
     checkpoint("extended_before_call")
+    if getattr(binding, "cells", None) is not None:
+        # `HOSTS-LAYOUT-01` (`R-133`): a planned run's calls go through the binding of their cell (``runs.stage_plan.cell_binding``). The
+        # run-level binding is the text cell's, and a block or a norm call made on it would run on the wrong model: refused, not skipped.
+        raise _refuse("extended_call_without_cell")
+    planned = binding.call is not None and getattr(binding.call, "cell_key", None) is not None
+    # The key of a saved reply. A planned call is identified by (source, phase, request, model) alone: neither the host nor the connection
+    # revision is in it, so a retry served by another host after a move finds the reply already paid for. Every other call keeps the key
+    # it has always had, so the replies of runs started before the layout are still found.
     key = extended_digest({"format": FORMAT, "source": source_sha256, "phase": phase,
         "request": request.request_sha256, "model": request.model_id,
-        "connection": None if binding.call is None else binding.call.connection_revision_id})
+        **({} if planned else {"connection": None if binding.call is None else binding.call.connection_revision_id})})
     saved = extended_unit(session, run_id=run_id, unit_key=key, source_sha256=source_sha256, phase=phase)
     session.commit()  # no read/authority lock survives external Blob I/O
     if saved is not None:
@@ -92,7 +102,8 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
         model_identity=request.model_id, provider_mode=binding.adapter.provider_mode.value,
         parameters=params, request_sha256=request.request_sha256,
         connection_revision_id=None if binding.call is None else binding.call.connection_revision_id,
-        identity_basis=None if binding.call is None else binding.call.identity_basis)
+        identity_basis=None if binding.call is None else binding.call.identity_basis,
+        **call_journal_columns(binding.call))
     if global_unknown_fence:
         bind_current=getattr(journal,"bind_current_call",None)
         if callable(bind_current):bind_current(call_id)
@@ -139,7 +150,7 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
     if budget_error is not None:
         raise budget_error
     if (binding.call is not None and binding.call.check_identity
-            and response.model != binding.call.expected_model):
+            and not accepted_reported(binding.call.expected_model, response.model)):
         raise _refuse("extended_model_identity_mismatch")
     return response, False
 

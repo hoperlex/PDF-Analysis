@@ -65,6 +65,11 @@ class ProviderBinding:
     adapter: Any
     config: Any
     call: Any = None
+    #: `HOSTS-LAYOUT-01` (ADR-0028 decision 6). Set only for a run frozen with a stage plan: ``cells(cell_key)`` answers the
+    #: :class:`ProviderBinding` of that cell -- the adapter of the member the cell was bound to, the cell's model and settings, and the
+    #: ``CallBinding`` that holds the reply to the cell's model. The binding itself is then the plan's **text** cell, so the text stage
+    #: runs on it unchanged; every other phase asks ``runs.stage_plan.cell_binding`` for its row's cell. ``None`` for every other run.
+    cells: Any = None
 
 
 class RouteFreezer(Protocol):

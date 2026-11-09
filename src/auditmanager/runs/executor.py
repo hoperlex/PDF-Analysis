@@ -133,6 +133,7 @@ from auditmanager.jobs.public import (
 )
 from auditmanager.runs.crop_budget import MAX_CROP_BYTES, CropByteBudget
 from auditmanager.runs.provider import ProviderBinding, ProviderResolver
+from auditmanager.runs.stage_plan import call_journal_columns
 from auditmanager.runs.stage_reuse import plan_stage_reuse, visual_only_pages_allowed
 from auditmanager.runs.repository import (
     INITIAL_STATE,
@@ -312,6 +313,7 @@ class _DurableCallJournal(ModelCallJournal):
             request_sha256=request.request_sha256,
             connection_revision_id=None if call is None else call.connection_revision_id,
             identity_basis=None if call is None else call.identity_basis,
+            **call_journal_columns(call),
         )
         if self._context is not None:
             self._context.bind_call(str(model_call_id))
@@ -834,6 +836,10 @@ def _bind_provider(
             approved_connection_revision_id=config.approved_connection_revision_id,
             approved_group_revision_id=config.approved_group_revision_id,
             approved_native_page_pieces=config.approved_native_page_pieces,
+            # `HOSTS-LAYOUT-01`: the models and the plan digest the consent v2 approved; each cell's binding carries them from here
+            # (``runs.stage_plan.cell_binding``).
+            approved_models=config.approved_models,
+            approved_stage_plan_digest=config.approved_stage_plan_digest,
         ))
     return binding
 
@@ -1059,12 +1065,15 @@ def _execute_run_body(
         # approved cost authority pins the same one for the call-time guard. Everything before this line (the budget,
         # the ceiling, the profile) was decided from the group revision's pin, which every member serves.
         run = run_repo.get(session, run_id)
-        if run.binding_state != "bound" or run.connection_revision_id is None:
+        planned = run.stage_plan is not None
+        # A planned run (`HOSTS-LAYOUT-01`) has no connection of its own: dispatch bound **every cell** of its plan, in the claim's
+        # transaction, and the cells are read through ``audit_run_cell_binding`` when the provider is bound below.
+        if run.binding_state != "bound" or (run.connection_revision_id is None and not planned):
             raise DomainError(
                 ErrorCode.STATE_TRANSITION_NOT_ALLOWED, machine="binding_state",
                 current_state=run.binding_state, requested_state="bound",
             )
-        if config.approved_cost_ceiling:
+        if config.approved_cost_ceiling and not planned:
             config = replace(config, approved_connection_revision_id=run.connection_revision_id)
     if run.state in {INITIAL_STATE, "queued"}:
         run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")

@@ -32,7 +32,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "BLOCK_SCHEMES", "BLOCKS_ENSEMBLE_LANDED", "BlockScheme", "CELL_ROLES", "FrozenStagePlan", "KITS", "KIT_CLAUDE_ONLY",
-    "KIT_CODEX_ONLY", "KIT_CUSTOM", "KIT_LABELS", "MODELLESS_PHASES", "PHASE_LABELS", "PHASE_ROWS", "PLAN_FORMAT", "PRESET_CELLS",
+    "KIT_CODEX_ONLY", "KIT_CUSTOM", "KIT_LABELS", "MODELLESS_PHASES", "PHASE_ALIASES", "PHASE_LABELS", "PHASE_ROWS", "PLAN_FORMAT", "PRESET_CELLS",
     "ROW_LABELS", "ROW_PHASES", "STAGE_ROWS", "cell_key", "cells_to_wire", "kit_of", "parse_plan", "preset_cells", "require_valid_layout",
     "row_of_phase", "rows_in_use", "validate_cells",
 ]
@@ -80,10 +80,19 @@ if set(PHASE_ROWS) & set(MODELLESS_PHASES) or set(PHASE_ROWS) | set(MODELLESS_PH
     raise AssertionError("every phase has one label and a phase is either with a model or without")
 
 
+#: The names the call identities of the extended review use for the phases above (``blocks:3``, ``comprehensive``, ``critic``,
+#: ``corrector``): the same phase, spelled as the workflow spells its calls.
+PHASE_ALIASES: Final[Mapping[str, str]] = {
+    "blocks": "block_analysis", "comprehensive": "comprehensive_analysis", "critic": "finding_review",
+    "corrector": "finding_correction",
+}
+
+
 def row_of_phase(phase: str) -> str | None:
-    """The row a phase belongs to. ``blocks:3`` style identities are read by their procedure name before the colon; a phase without a
-    model, like ``merge``, has none."""
-    return PHASE_ROWS.get(phase.partition(":")[0])
+    """The row a phase belongs to. An identity like ``blocks:3`` or ``norm_verification:b002`` is read by the name before the colon (and the
+    workflow's own aliases are resolved); a phase without a model, like ``merge``, has none."""
+    name = phase.partition(":")[0]
+    return PHASE_ROWS.get(PHASE_ALIASES.get(name, name))
 
 
 def cell_key(row: str, role: str = "main") -> str:

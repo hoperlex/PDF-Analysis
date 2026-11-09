@@ -16,7 +16,7 @@ Three things live here, none of which touches a model:
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Callable, Final, Iterable, Mapping, Protocol, Sequence
+from typing import Any, Callable, Final, Iterable, Mapping, Protocol, Sequence
 
 from sqlalchemy.orm import Session
 
@@ -26,7 +26,7 @@ from auditmanager.runs.stage_layout_store import LayoutRevisionRow, StageLayoutS
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
-    "AVAILABILITY_DEPENDENCY", "ModelAvailability", "ModelAvailabilityPort", "NOT_ON_ANY_SERVER", "PROVIDER_SOURCE_DATABASE",
+    "AVAILABILITY_DEPENDENCY", "call_journal_columns", "cell_binding", "model_of", "settings_of", "ModelAvailability", "ModelAvailabilityPort", "NOT_ON_ANY_SERVER", "PROVIDER_SOURCE_DATABASE",
     "StagePlanDraft", "StagePlanFreezer", "StagePlanSource", "provider_source_not_database", "no_layout_revision",
 ]
 
@@ -143,3 +143,55 @@ class StagePlanFreezer:
         return StagePlanDraft(
             revision.layout_revision_id, revision.kit, revision.cells, dict(self._availability.availability(session, models)),
         )
+
+
+# --- the binding of a call ------------------------------------------------------------------------------------------------------
+
+#: The approvals of the run's consent, which a cell's binding carries from the run-level configuration: the ceiling, the window and
+#: call limits, the models the consent v2 approved and the digest of the plan. A cell's own configuration names the cell's model.
+_RUN_APPROVALS: Final[tuple[str, ...]] = (
+    "run_cost_ceiling_usd", "approved_window_characters", "approved_max_windows", "approved_cost_ceiling", "approved_model_id",
+    "approved_rate_sha256", "approved_native_page_pieces", "approved_models", "approved_stage_plan_digest",
+)
+
+
+def _refuse_cell(reason: str) -> DomainError:
+    return DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason=reason)
+
+
+def cell_binding(binding: Any, cell_key: str) -> Any:
+    """The binding a call of the cell ``cell_key`` runs with (ADR-0028 decision 6, ``binding_for(cell)``).
+
+    A run that is not frozen with a stage plan has no cells: its one binding serves every call, exactly as before. For a planned run the
+    cell's own binding is resolved -- the adapter of the member the cell was bound to, the cell's model and settings, one ``CallBinding``
+    that holds the reply to the cell's model -- and carries the run's consent approvals. **A cell that comes back without a call binding,
+    or with one that is not the cell's, is refused** (`R-133`): a call is never made unbound, and never on another cell's model.
+    """
+    cells = getattr(binding, "cells", None)
+    if cells is None:
+        return binding
+    resolved = cells(cell_key)
+    call = getattr(resolved, "call", None)
+    if (call is None or getattr(call, "cell_key", None) != cell_key or not call.check_identity or not call.expected_model
+            or getattr(resolved.config, "cell_settings", None) is None):
+        raise _refuse_cell("cell_call_binding_missing")
+    approvals = {name: getattr(binding.config, name) for name in _RUN_APPROVALS}
+    return replace(resolved, config=replace(resolved.config, **approvals), cells=None)
+
+
+def model_of(binding: Any) -> str:
+    """The model id a request of this binding is built for."""
+    return binding.config.model_id
+
+
+def settings_of(binding: Any) -> Any:
+    """The cell settings of this binding (``None`` outside a planned run: the builders then keep their constants)."""
+    return getattr(binding.config, "cell_settings", None)
+
+
+def call_journal_columns(call: Any) -> dict[str, Any]:
+    """The keywords ``prepare_provider_call`` takes for a planned call: the layout row (``stage_key``), the serving host and the access.
+    Empty for every other call, which is then written exactly as before (``NULL`` in all three columns)."""
+    if call is None or getattr(call, "cell_key", None) is None:
+        return {}
+    return {"stage_key": call.stage_key, "host_id": call.host_id, "access": call.access}

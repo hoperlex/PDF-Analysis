@@ -89,6 +89,12 @@ _INSERT_RUN = text(
 
 _SELECT_RUN = text(f"SELECT {_RUN_COLUMNS} FROM audit_run WHERE run_id = :run_id")
 
+#: `HOSTS-LAYOUT-01` (migration 0062): the member each cell of a planned run was bound to at dispatch. Written once, in the transaction that
+#: moved the run to ``bound``; the database refuses an update or a delete.
+_SELECT_CELL_BINDINGS = text(
+    "SELECT cell_key, group_revision_id, connection_revision_id FROM audit_run_cell_binding WHERE run_id = :run_id"
+)
+
 #: `EXEC-PAR-START-01`. A run whose executor was **named** by the caller (or by the repeat of
 #: such a run) carries exactly one of these events, written in the transaction that created it.
 #: The run row holds only the frozen revision, which a routed run has as well, so the event is
@@ -330,6 +336,15 @@ class RunRow:
 
 
 @dataclass(frozen=True, slots=True)
+class CellBindingRow:
+    """One ``audit_run_cell_binding`` row: the system group revision and the member's connection revision a cell was bound to."""
+
+    cell_key: str
+    group_revision_id: str
+    connection_revision_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class RunCost:
     """What one run spent at the provider, and how well that figure is known.
 
@@ -546,6 +561,11 @@ class RunRepository:
         if row is None:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
         return _run_row(row)
+
+    def cell_bindings(self, session: Session, run_id: str) -> dict[str, CellBindingRow]:
+        """``cell_key -> binding`` of a planned run (empty while it is ``pending``). A planned run is called only through these rows."""
+        rows = session.execute(_SELECT_CELL_BINDINGS, {"run_id": run_id}).mappings().all()
+        return {row["cell_key"]: CellBindingRow(row["cell_key"], row["group_revision_id"], row["connection_revision_id"]) for row in rows}
 
     def find(self, session: Session, run_id: str) -> RunRow | None:
         row = session.execute(_SELECT_RUN, {"run_id": run_id}).first()
@@ -804,6 +824,7 @@ class RunRepository:
 
 
 __all__ = [
+    "CellBindingRow",
     "EXECUTOR_CHOSEN_EVENT",
     "INITIAL_STATE",
     "PC01_STAGES",
