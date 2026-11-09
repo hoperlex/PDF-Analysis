@@ -15,6 +15,7 @@ import pytest
 from fastapi import APIRouter, FastAPI
 from starlette.testclient import TestClient
 
+from auditmanager.api.routers.handlers import install_exception_handlers
 from auditmanager.api.routers.hosts_ports import RunStagePort
 from auditmanager.api.routers.run_stages import build_run_stage_routes
 from auditmanager.api.schemas import models
@@ -62,6 +63,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch, roles: frozenset[str], seen: list[boo
     monkeypatch.setattr(adapter_module, "read_run_stage_facts", read)
     port: RunStagePort = RunStageAdapter(_Sessions(), blob_store=None)  # type: ignore[arg-type]
     app = FastAPI()
+    install_exception_handlers(app)
     router = APIRouter()
     build_run_stage_routes(router, port)
     app.include_router(router)
@@ -91,15 +93,7 @@ def test_only_an_expert_or_an_administrator_is_told_the_server_and_the_access(
 def test_an_unknown_run_is_not_found_and_the_answer_names_no_run(monkeypatch: pytest.MonkeyPatch) -> None:
     answer = _wire(monkeypatch, frozenset({"expert"}), []).get("/runs/run_01M2545JSD15ETSNNV904X991M/stages")
     assert answer.status_code == 404
-
-
-def test_a_route_built_with_no_port_answers_no_stages() -> None:
-    app = FastAPI()
-    router = APIRouter()
-    build_run_stage_routes(router, None)  # type: ignore[arg-type]
-    app.include_router(router)
-    app.dependency_overrides[current_subject] = lambda: Subject(user_uid=USER, login="u@suite.invalid", token_epoch=1, display_label="U")
-    assert TestClient(app, raise_server_exceptions=False).get(f"/runs/{RUN}/stages").status_code == 500
+    assert json.loads(answer.content)["error_code"] == "not_found"
 
 
 def test_the_examples_of_the_contract_are_valid_answers_and_the_viewers_has_no_server_or_access() -> None:

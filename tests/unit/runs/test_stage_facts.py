@@ -139,7 +139,7 @@ def test_the_chips_are_the_dictionary_of_the_contract_in_the_order_the_rail_draw
 
 
 def test_every_contract_stage_belongs_to_exactly_one_chip() -> None:
-    registry = json.loads(Path(__file__).resolve().parents[3] / "contracts/analysis/v1/stage-registry.json".read_text(encoding="utf-8"))
+    registry = json.loads((Path(__file__).resolve().parents[3] / "contracts/analysis/v1/stage-registry.json").read_text(encoding="utf-8"))
     stage_ids = {stage["stage_id"] for stage in registry["stages"]}
     covered = [stage_id for chip in CHIPS for stage_id in chip.stage_ids]
     assert len(covered) == len(set(covered))
