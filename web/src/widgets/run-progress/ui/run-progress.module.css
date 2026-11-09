@@ -45,6 +45,17 @@
   margin: 0;
 }
 
+/* A run reproduced from recordings must not look live (`WEB-INT-1`); a live run draws no chip at all. */
+.recorded {
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface-sunken);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  line-height: var(--am-leading-tight);
+}
+
 .counter {
   color: var(--am-ink);
   font-size: var(--am-text-sm);

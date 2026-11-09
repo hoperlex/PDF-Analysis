@@ -25,7 +25,9 @@
  *   reconciled it.
  *
  *   **A recorded run still says so.** The provider mode no longer sits on the head's badge (plan §9.1); it is a row of «Подробнее»
- *   with its sentence, and a missing or unrecognised mode has its own label there, neither of which can be mistaken for `live`.
+ *   with its sentence, and a missing or unrecognised mode has its own label there, neither of which can be mistaken for `live`. A recorded
+ *   run also carries the small chip «из записи» in the head, beside its state (`WEB-INT-1`, the owner's rule that a recorded run must
+ *   not look live); a live run draws nothing there.
  *
  *   **Motion stops when the run stops.** A terminal or reconciled reading shows no live line, because there is no activity. The
  *   head keeps `data-run-activity` (`polling` or `stopped`) for the browser journey, which reads it, and says a sentence only for the
@@ -631,6 +633,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
         model={model}
         showServer={showServer}
         liveProgress={liveProgress}
+        recorded={mode === 'recorded'}
         polling={polling}
         from={from}
         waiting={status.state === 'queued' ? (executor === null ? runQueueReasonLabel(status) : runWaitingSentence(executor)) : null}

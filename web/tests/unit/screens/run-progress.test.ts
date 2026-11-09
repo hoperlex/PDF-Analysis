@@ -232,7 +232,8 @@ describe('the provider mode is among the run\'s facts, once, and is never guesse
     expect(markup).toContain(`<strong data-provider-mode="${mode}">${PROVIDER_MODE_LABELS[mode]}`);
     expect(markup.split(`data-provider-mode="${mode}"`).length - 1).toBe(1);
     expect(markup).not.toContain(`<strong>${mode}</strong>`);
-    // The head carries the state and nothing about how the provider was reached.
+    // The head's badge carries the state and nothing about how the provider was reached; a recorded run has its own small chip beside
+    // it (`WEB-INT-1`, tests/unit/screens/run-screen.test.ts), which is not the badge's qualifier and says no «режим провайдера:».
     expect(markup).not.toContain('am-badge__qualifier');
     expect(markup).not.toContain('режим провайдера:');
     expect(markup.indexOf('data-run-more=""')).toBeLessThan(markup.indexOf(`data-provider-mode="${mode}"`));

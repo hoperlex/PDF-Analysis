@@ -7,9 +7,12 @@
  * per chip, the server's estimated finish «≈ до ЧЧ:ММ», what to do next, the live line of an open run, the rail of chips and the caption of
  * a run started from a stage.
  *
- * The provider mode is not here and neither is the sentence about polling; `data-run-activity` stays on the status line as the
+ * The provider mode is not a badge here and neither is the sentence about polling; `data-run-activity` stays on the status line as the
  * browser journey reads it, and a sentence is printed only for the stopped-but-open reading (the poll has stopped while the run is
- * not over, so what is on screen is the last reading received).
+ * not over, so what is on screen is the last reading received). One thing of the provider mode is kept: a run reproduced from recordings
+ * carries a small chip «из записи» beside its state, so that it cannot be mistaken for a live one (`recorded`, from `runProviderMode`).
+ * A live run draws nothing, and neither does a reading with no mode or an unrecognised one -- those say so in «Подробнее», where the
+ * mode has its own row.
  *
  * The count is over the chips present in this run (`chipProgress`); it is a display count and not an ordinal of the contract's graph
  * (`stage-vocabulary.guard.test.ts` holds that the nine stages are not a line). A run that is over says how many chips completed.
@@ -20,7 +23,7 @@ import type { ReactNode } from 'react';
 
 import type { RunStatus } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
-import { RunStateBadge, runStageLabel } from '@/shared/ui';
+import { PROVIDER_MODE_LABELS, RunStateBadge, runStageLabel } from '@/shared/ui';
 import { chipProgress, isRunAnimating, runFinishEstimate } from '@/entities/audit-run';
 import type { LiveProgress, RunChip, RunChipDefinition, RunExecutorLine, RunFinishEstimate } from '@/entities/audit-run';
 
@@ -38,6 +41,8 @@ export interface RunHeaderProps {
   /** Whether the reader may see the server (`maySeeServer`). */
   readonly showServer: boolean;
   readonly liveProgress: LiveProgress | null;
+  /** Whether the run's provider mode is `recorded`: the chip «из записи» is drawn only then. */
+  readonly recorded: boolean;
   /** Whether the poll is running (`useRunStatus`). */
   readonly polling: boolean;
   readonly from: StartedFrom | null;
@@ -72,7 +77,7 @@ function segmentOf(chip: RunChip): string {
 }
 
 export function RunHeader({
-  status, chips, executor, model, showServer, liveProgress, polling, from, waiting, waitDetail, actions, onOpenChip,
+  status, chips, executor, model, showServer, liveProgress, recorded, polling, from, waiting, waitDetail, actions, onOpenChip,
 }: RunHeaderProps) {
   const now = useRunClock(status);
   const animating = isRunAnimating(status);
@@ -93,6 +98,7 @@ export function RunHeader({
       <div className={styles.headTop}>
         <p className={styles.status} data-run-activity={animating && polling ? 'polling' : 'stopped'}>
           <RunStateBadge state={status.state} />
+          {recorded ? <span className={styles.recorded} data-run-recorded="">{PROVIDER_MODE_LABELS.recorded}</span> : null}
           {counter === null ? null : <span className={styles.counter} data-run-stage-count={`${progress.liveIndex ?? progress.completed}/${progress.total}`}>{counter}</span>}
           {progress.total === 0 ? null : (
             <span

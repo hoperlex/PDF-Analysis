@@ -73,10 +73,57 @@ describe('the head', () => {
     }
   });
 
+  /*
+   * `WEB-INT-1`, the owner's rule that a recorded run must not look live. The head no longer carries the provider mode as a badge, but a run
+   * reproduced from recordings carries the small chip «из записи» beside its state, read from the same `runProviderMode` the old badge was
+   * (`badgeProviderMode`): only the value `recorded` draws it. A live run draws nothing, and neither does a reading with no mode or with
+   * a value outside the vocabulary (those are said in «Подробнее», where the mode has its own row).
+   */
+  describe('the chip «из записи»', () => {
+    const chipOf = (markup: string): string | null => /<span class="[^"]*" data-run-recorded="">([^<]*)<\/span>/.exec(markup)?.[1] ?? null;
+    const head = (markup: string): string => /data-run-head="">([\s\S]*?)<\/section>/.exec(markup)?.[1] ?? '';
+
+    it('is drawn beside the state of a recorded run, in every state of the run', () => {
+      for (const state of ['published', 'partial', 'failed', 'cancelled'] as const) {
+        const markup = screen({ state, provider_mode: 'recorded' });
+        expect(chipOf(head(markup)), state).toBe('из записи');
+        // beside the state, before the counter: the state badge, then the chip
+        expect(head(markup).indexOf(`data-run-state="${state}"`)).toBeLessThan(head(markup).indexOf('data-run-recorded'));
+      }
+      const open = screen({ state: 'running', terminal_at: null, provider_mode: 'recorded' });
+      expect(chipOf(head(open))).toBe('из записи');
+    });
+
+    it('is drawn once, and the mode row of «Подробнее» and its sentence stay', () => {
+      const markup = screen({ provider_mode: 'recorded' });
+      expect(markup.match(/data-run-recorded/g)).toHaveLength(1);
+      expect(markup).toContain('<strong data-provider-mode="recorded">из записи</strong>');
+      expect(markup).toContain('Этот прогон не является свидетельством живого вызова провайдера.');
+    });
+
+    it('is not drawn for a live run, for a reading with no mode, or for an unrecognised one', () => {
+      expect(screen({ provider_mode: 'live' })).not.toContain('data-run-recorded');
+      expect(screen({ provider_mode: undefined as never })).not.toContain('data-run-recorded');
+      expect(screen({ provider_mode: 'turbo' as never })).not.toContain('data-run-recorded');
+      // and the live run does not say «из записи» anywhere in its head
+      expect(head(screen({ provider_mode: 'live' }))).not.toContain('из записи');
+    });
+
+    it('follows the head\'s own flag: RunHeader draws it for `recorded` and only then', () => {
+      const status = runStatus({ provider_mode: 'recorded' });
+      const header = (recorded: boolean) => renderToStaticMarkup(createElement(RunHeader, {
+        status, chips: runChips({ status, procedures: [] }), executor: null, model: null, showServer: true, liveProgress: null, recorded, polling: false,
+        from: null, waiting: null, waitDetail: null, actions: null, onOpenChip: () => undefined,
+      }));
+      expect(header(true)).toContain('data-run-recorded=""');
+      expect(header(false)).not.toContain('data-run-recorded');
+    });
+  });
+
   it('says the reading is the last one only when the poll has stopped while the run is still open', () => {
     const status = runStatus({ state: 'running', terminal_at: null });
     const header = (polling: boolean) => renderToStaticMarkup(createElement(RunHeader, {
-      status, chips: runChips({ status, procedures: [] }), executor: null, model: null, showServer: true, liveProgress: null, polling,
+      status, chips: runChips({ status, procedures: [] }), executor: null, model: null, showServer: true, liveProgress: null, recorded: false, polling,
       from: null, waiting: null, waitDetail: null, actions: null, onOpenChip: () => undefined,
     }));
     expect(header(false)).toContain('data-run-poll-stopped');
