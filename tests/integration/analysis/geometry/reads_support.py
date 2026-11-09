@@ -64,13 +64,21 @@ def publish(session: Session, store: Any, payload: bytes, *, role: str, media_ty
     return published
 
 
-def seed_bundle_version(session: Session, store: Any, *, markdown: bytes | None = None) -> str:
-    """A version published from ``ar_baseline.zip``: the PDF, the block list, the markdown."""
-    bundle = members("ar_baseline.zip")
+def seed_bundle_version(
+    session: Session, store: Any, *, markdown: bytes | None = None, block_list: bytes | None = None,
+    bundle: Any | None = None, page_count: int = 8, text_character_count: int = 3800,
+) -> str:
+    """A version published from ``ar_baseline.zip``: the PDF, the block list, the markdown.
+
+    ``block_list`` replaces the bundle's block list (a page whose raster the PDF does not match); ``bundle`` replaces the
+    whole bundle (anything with ``pdf``, ``block_list`` and ``markdown`` bytes, such as ``recognised_support.BundleMembers``),
+    with its page and text-layer character counts.
+    """
+    bundle = bundle or members("ar_baseline.zip")
     entries = []
     for manifest_role, blob_role, media_type, payload in (
         (MANIFEST_ROLE_SOURCE_DOCUMENT, "source_document", "application/pdf", bundle.pdf),
-        (MANIFEST_ROLE_STRUCTURED_COMPANION, "source_structured_companion", "application/json", bundle.block_list),
+        (MANIFEST_ROLE_STRUCTURED_COMPANION, "source_structured_companion", "application/json", block_list or bundle.block_list),
         (MANIFEST_ROLE_MARKDOWN, "source_markdown", "text/markdown", markdown or bundle.markdown),
     ):
         published = publish(session, store, payload, role=blob_role, media_type=media_type)
@@ -86,9 +94,9 @@ def seed_bundle_version(session: Session, store: Any, *, markdown: bytes | None 
     return str(
         documents.publish_version(
             session, document_uid=document_uid, media_type="application/pdf",
-            byte_size=len(bundle.pdf), sha256=sha256_of(bundle.pdf), page_count=8,
+            byte_size=len(bundle.pdf), sha256=sha256_of(bundle.pdf), page_count=page_count,
             source_filename="ar_baseline.pdf", entries=tuple(entries),
-            text_character_count=3800, textless_pages=(), recognised_character_count=0,
+            text_character_count=text_character_count, textless_pages=(), recognised_character_count=0,
         )
     )
 
