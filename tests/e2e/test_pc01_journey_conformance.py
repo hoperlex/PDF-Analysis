@@ -4147,6 +4147,161 @@ def test_control_a_step_or_a_route_that_disappears_is_detected(manifest: dict) -
     assert any("'sign-out' is gone or renamed" in f for f in pinned_journey_findings(swapped))
 
 
+#: The tabs of «Исполнители» that `/workers` now redirects to `/workers/advanced` (`HOSTS-WEB-01`).
+MOVED_WORKERS_TABS = ("connections", "groups", "rules", "routes", "processes")
+ADVANCED_WORKERS_ADDRESS = "/workers/advanced"
+ADVANCED_WORKERS_MODULE = "web/src/app/workers/advanced/page.tsx"
+
+
+def registry_roles_of(registry_source: str, address: str) -> list[str] | None:
+    """The roles of one row of the screen registry, read from its source, or ``None`` when the row is absent."""
+    row = re.search(rf"address:\s*'{re.escape(address)}',(?P<body>.*?)\n\s*\}}", registry_source, re.DOTALL)
+    if row is None:
+        return None
+    roles = re.search(r"roles:\s*\[(?P<list>[^\]]*)\]", row["body"])
+    if roles is None:
+        return None
+    return re.findall(r"'([a-z]+)'", roles["list"])
+
+
+def workers_advanced_findings(manifest: dict, registry_source: str) -> list[str]:
+    """`HOSTS-WEB-01b`: the administrator's advanced page is walked, and nothing still stands on the tabs that moved to it.
+
+    The page is the administrator's alone (the registry row names `admin` and nothing else), so the journey must
+    (1) walk the route, whose cold read is the account and nothing more (a closed section mounts nothing);
+    (2) refuse an account that holds no administrator role, by sending it to /403, and say so with an address; and
+    (3) press nothing on the old address, which is only a redirect to the page.
+    """
+    findings: list[str] = []
+    routes = {route["name"]: route for route in manifest["routes"]}
+    advanced = next((r for r in manifest["routes"] if r["path"] == ADVANCED_WORKERS_ADDRESS), None)
+    if advanced is None:
+        findings.append(f"the read walk does not walk {ADVANCED_WORKERS_ADDRESS}")
+    else:
+        if advanced["page_module"] != ADVANCED_WORKERS_MODULE:
+            findings.append(f"the route {ADVANCED_WORKERS_ADDRESS} names the page module {advanced['page_module']}, not {ADVANCED_WORKERS_MODULE}")
+        required = sorted(call["operationId"] for call in advanced.get("expects_api") or ())
+        if required != ["getMe"]:
+            findings.append(f"the cold {ADVANCED_WORKERS_ADDRESS} must read the account and nothing else (a closed section mounts nothing); it requires {required}")
+    roles = registry_roles_of(registry_source, ADVANCED_WORKERS_ADDRESS)
+    if roles != ["admin"]:
+        findings.append(f"the screen registry row of {ADVANCED_WORKERS_ADDRESS} lists {roles}, not the administrator alone")
+
+    workers = routes.get("workers")
+    if workers is not None and any(call["operationId"] == "listWorkers" for call in workers.get("expects_api") or ()):
+        findings.append("the cold /workers still requires listWorkers, which «Серверы» no longer reads")
+    settings = routes.get("analysis-settings")
+    if settings is not None:
+        left = sorted(
+            call["operationId"] for call in settings.get("expects_api") or ()
+            if call["operationId"] in ("listAnalysisPresets", "listExecutorConnections")
+        )
+        if left:
+            findings.append(f"the cold /analysis-settings still requires {left}, which left the page with the section «Пресеты запуска»")
+
+    steps = write_steps(manifest)
+    here = [step for step in steps if step["at"].split("?")[0] == ADVANCED_WORKERS_ADDRESS]
+    if not any(step.get("as", "admin") == "admin" for step in here):
+        findings.append(f"no write step acts as the administrator on {ADVANCED_WORKERS_ADDRESS}")
+    refusals = [step for step in here if step.get("as", "admin") != "admin"]
+    if not refusals:
+        findings.append(f"no write step walks an account that is not an administrator to {ADVANCED_WORKERS_ADDRESS}")
+    for step in refusals:
+        if not str(step.get("expects_location", "")).startswith("/403"):
+            findings.append(f"the step '{step['name']}' sends a non-administrator to {ADVANCED_WORKERS_ADDRESS} and does not declare that it ends at /403")
+        if step.get("page_module") != ADVANCED_WORKERS_MODULE:
+            findings.append(f"the step '{step['name']}' names the page module {step.get('page_module')}, not {ADVANCED_WORKERS_MODULE}")
+    for step in steps:
+        query = step["at"].partition("?")[2]
+        tab = next((part.partition("=")[2] for part in query.split("&") if part.startswith("tab=")), None)
+        if step["at"].split("?")[0] == "/workers" and tab in MOVED_WORKERS_TABS:
+            findings.append(f"the step '{step['name']}' stands at {step['at']}, which only redirects to {ADVANCED_WORKERS_ADDRESS}")
+    return findings
+
+
+def test_the_advanced_page_of_the_executors_is_walked_as_an_administrators_screen(manifest: dict) -> None:
+    _require(WEB_SRC)
+    registry = (WEB_SRC / "shared" / "config" / "screen-registry.ts").read_text(encoding="utf-8")
+    findings = workers_advanced_findings(manifest, registry)
+    assert not findings, "the journey and `/workers/advanced` disagree:\n  " + "\n  ".join(findings)
+
+
+def test_control_the_advanced_page_findings_can_fail(manifest: dict) -> None:
+    """Each finding is produced by exactly the change it names, on a copy of the real manifest and a synthetic registry."""
+    registry = (
+        "  {\n    address: '/workers/advanced',\n    label: 'Расширенные исполнители',\n    group: 'hidden',\n"
+        "    access: 'session',\n    roles: ['admin'],\n    inMenu: false,\n  },\n"
+    )
+    assert workers_advanced_findings(manifest, registry) == []
+    assert registry_roles_of(registry, "/workers/advanced") == ["admin"]
+    assert registry_roles_of(registry, "/nowhere") is None
+
+    def mutated(change) -> list[str]:
+        copy_ = json.loads(json.dumps(manifest))
+        change(copy_)
+        return workers_advanced_findings(copy_, registry)
+
+    def drop_route(m: dict) -> None:
+        m["routes"] = [r for r in m["routes"] if r["path"] != ADVANCED_WORKERS_ADDRESS]
+
+    assert any("does not walk" in f for f in mutated(drop_route))
+
+    def read_more(m: dict) -> None:
+        advanced = next(r for r in m["routes"] if r["path"] == ADVANCED_WORKERS_ADDRESS)
+        advanced["expects_api"].append({"method": "GET", "path": "/execution/workers", "operationId": "listWorkers"})
+
+    assert any("account and nothing else" in f for f in mutated(read_more))
+
+    def wrong_module(m: dict) -> None:
+        next(r for r in m["routes"] if r["path"] == ADVANCED_WORKERS_ADDRESS)["page_module"] = "web/src/app/workers/page.tsx"
+
+    assert any("names the page module" in f for f in mutated(wrong_module))
+
+    experts = registry.replace("['admin']", "['expert', 'admin']")
+    assert any("not the administrator alone" in f for f in workers_advanced_findings(manifest, experts))
+    assert any("not the administrator alone" in f for f in workers_advanced_findings(manifest, ""))
+
+    def stale_workers_read(m: dict) -> None:
+        next(r for r in m["routes"] if r["name"] == "workers")["expects_api"].append(
+            {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers"}
+        )
+
+    assert any("still requires listWorkers" in f for f in mutated(stale_workers_read))
+
+    def stale_presets_read(m: dict) -> None:
+        next(r for r in m["routes"] if r["name"] == "analysis-settings")["expects_api"].append(
+            {"method": "GET", "path": "/analysis/presets", "operationId": "listAnalysisPresets"}
+        )
+
+    assert any("left the page" in f for f in mutated(stale_presets_read))
+
+    def no_refusal(m: dict) -> None:
+        m["write"]["steps"] = [s for s in m["write"]["steps"] if s["name"] != "worker-intake-is-an-administrators-act"]
+
+    assert any("not an administrator" in f for f in mutated(no_refusal))
+
+    def refusal_without_address(m: dict) -> None:
+        del _step_of(m, "worker-intake-is-an-administrators-act")["expects_location"]
+
+    assert any("does not declare that it ends at /403" in f for f in mutated(refusal_without_address))
+
+    def refusal_ends_elsewhere(m: dict) -> None:
+        _step_of(m, "worker-intake-is-an-administrators-act")["expects_location"] = "/workers"
+
+    assert any("does not declare that it ends at /403" in f for f in mutated(refusal_ends_elsewhere))
+
+    def admin_step_left_on_the_old_address(m: dict) -> None:
+        _step_of(m, "worker-stops-taking-new-work")["at"] = "/workers?tab=processes"
+
+    assert any("only redirects to" in f for f in mutated(admin_step_left_on_the_old_address))
+
+    def no_admin_step(m: dict) -> None:
+        for name in ("workers-list-the-worker", "worker-stops-taking-new-work", "worker-takes-new-work-again"):
+            m["write"]["steps"] = [s for s in m["write"]["steps"] if s["name"] != name]
+
+    assert any("as the administrator" in f for f in mutated(no_admin_step))
+
+
 def seed_paragraph_count_findings(source: str) -> list[str]:
     """The seeded documents state how many paragraphs they hold: `getNormDocument` serves the column."""
     findings = []
