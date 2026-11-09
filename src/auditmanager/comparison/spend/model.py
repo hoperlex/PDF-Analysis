@@ -133,6 +133,10 @@ class Consent:
     **before** it has a connection. Its consent names the group revision (``executor_group_revision_id``) and, while
     the job is ``pending``, no connection revision; once the job is bound it names both. A consent names a connection
     revision or a group revision, and always a pinned model.
+
+    `HOSTS-CMP-01` (ADR-0028 decision 19): a job the stage layout admitted also consented to its ``cell`` -- the effort, the answer limit and the
+    timeout of its kind of work, frozen with the estimate (the digest binds it). The wrapper applies it to every call of the job
+    (:mod:`auditmanager.comparison.spend.cell`); a consent with no cell leaves a call as its method built it.
     """
 
     estimate_digest: str
@@ -141,6 +145,7 @@ class Consent:
     connection_revision_id: str | None
     pinned_model: str
     executor_group_revision_id: str | None = None
+    cell: Any | None = None
 
     def __post_init__(self) -> None:
         if len(self.estimate_digest) != 64 or any(c not in "0123456789abcdef" for c in self.estimate_digest):

@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
@@ -40,7 +40,7 @@ from auditmanager.comparison.spend.model import (
 if TYPE_CHECKING:  # the types only: this module never imports another context at run time
     from sqlalchemy.orm import Session
 
-    from auditmanager.analysis.public import ModelPin
+    from auditmanager.analysis.public import CellSettings, ModelPin
 
 __all__ = [
     "AiCounts",
@@ -94,6 +94,8 @@ __all__ = [
     "WAIT_NEEDS_RECONSENT",
     "WAIT_REASONS",
     "WAIT_RUNNER_OFFLINE",
+    "cell_document",
+    "cell_of_document",
     "digest_of",
     "work_kind_of",
 ]
@@ -157,6 +159,25 @@ def work_kind_of(method: str) -> str:
     if method not in METHODS:
         raise ValueError(f"{method!r} is not a method of the version comparison AI")
     return f"comparison_{method}"
+
+
+def cell_document(cell: "CellSettings") -> dict[str, Any]:
+    """The contract's ``StageComparisonCell`` of a frozen cell: the kind of work (the key's row), the model, the effort, the answer limit and the
+    timeout. What the estimate stores and its digest binds (`HOSTS-CMP-01`)."""
+    return {
+        "work_kind": cell.row, "model_id": cell.model_id, "effort": cell.effort,
+        "max_output_tokens": cell.max_output_tokens, "timeout_seconds": cell.timeout_seconds,
+    }
+
+
+def cell_of_document(document: Mapping[str, Any]) -> "CellSettings":
+    """The cell a job froze, read back from the estimate it stored (the inverse of :func:`cell_document`)."""
+    from auditmanager.analysis.public import CellSettings
+
+    return CellSettings(
+        cell_key=f"{document['work_kind']}:main", model_id=str(document["model_id"]), effort=str(document["effort"]),
+        max_output_tokens=int(document["max_output_tokens"]), timeout_seconds=int(document["timeout_seconds"]),
+    )
 
 
 class AiMode(str, Enum):
@@ -323,6 +344,12 @@ class AiCounts:
             if value is not None:
                 _natural(value, what)
 
+    def capped(self, output_tokens: int) -> "AiCounts":
+        """The same counts with the answer each call may give held to ``output_tokens`` at most (``min``, never raised): what the estimate of a
+        job with a frozen cell counts (`HOSTS-CMP-01`). A subclass keeps its own members."""
+        return replace(
+            self, groups=tuple(replace(group, output_tokens=min(group.output_tokens, output_tokens)) for group in self.groups))
+
     def totals(self) -> AiTotals:
         return AiTotals(
             calls=sum(g.calls for g in self.groups),
@@ -344,6 +371,10 @@ class AiRoute:
     dispatched call chooses a member -- and carries instead ``executor_group_id``, ``executor_group_revision_id`` and, when a
     rule routed it, ``routing_rule_revision_id``; ``pinned_model``, ``gateway_model`` and ``billing`` are the group revision's
     and ``pin`` carries its rate snapshot. Exactly one of the two shapes is valid.
+
+    `HOSTS-CMP-01` (ADR-0028 decision 19): a route chosen by the stage layout also carries the ``cell`` of its work kind -- the effort, the answer limit
+    and the timeout the owner chose. It is part of the document the digest binds, so the consent names what will run, and a job freezes it with its
+    estimate. It is valid only on a group route, and only for the route's own kind of work.
     """
 
     work_kind: str
@@ -357,8 +388,11 @@ class AiRoute:
     executor_group_id: str | None = None
     executor_group_revision_id: str | None = None
     routing_rule_revision_id: str | None = None
+    cell: "CellSettings | None" = None
 
     def __post_init__(self) -> None:
+        if self.cell is not None and (self.executor_group_revision_id is None or self.cell.row != self.work_kind):
+            raise ValueError("a cell belongs to the group route of its own kind of work")
         if self.executor_group_revision_id is not None:
             if self.connection_id is not None or self.revision_id is not None:
                 raise ValueError("a route admitted by a group names no connection until its first call binds it")
@@ -390,6 +424,8 @@ class AiRoute:
             }
             if self.routing_rule_revision_id is not None:
                 document["routing_rule_revision_id"] = self.routing_rule_revision_id
+            if self.cell is not None:
+                document["cell"] = cell_document(self.cell)
             return document
         return {
             "connection_id": self.connection_id, "revision_id": self.revision_id,
@@ -569,6 +605,14 @@ class AiJobRecord:
             restart=self.restart, stage_chain_run_id=self.stage_chain_run_id,
             stage_link_revision_id=self.stage_link_revision_id,
         )
+
+    @property
+    def cell(self) -> "CellSettings | None":
+        """The cell this job froze with its estimate (`HOSTS-CMP-01`), or ``None`` for a job admitted by the legacy route or by a rule. A renewed
+        consent stores an estimate on the same route, so the cell is the job's for good."""
+        route = self.estimate.get("route")
+        document = route.get("cell") if isinstance(route, Mapping) else None
+        return None if document is None else cell_of_document(document)
 
     @property
     def live(self) -> bool:
