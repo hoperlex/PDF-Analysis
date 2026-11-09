@@ -284,10 +284,10 @@ describe('«Память решений»', () => {
       expect(markup).toContain('Отметка пола +0,300');
       expect(markup).toContain('СП 54.13330.2022');
       expect(markup).toContain('п. 5.2');
-      // A crop is a description: its page, box, size and the head of its digest -- and no image is drawn or asked for.
+      // A crop is a description: its page, box, size and digest -- and no image is drawn or asked for.
       expect(markup).toContain('data-memory-crop="dmx_01M2545JSD15ETSNNV904X995D"');
       expect(markup).toContain('640×480 пикс.');
-      expect(markup).toContain('aaaaaaaaaaaa…');
+      expect(markup).toContain('a'.repeat(64));
       expect(markup).toContain('Фрагмент плана первого этажа');
       expect(markup).toContain('Изображения кадров пока не открываются');
       expect(markup).not.toContain('<img');
@@ -326,7 +326,7 @@ describe('«Память решений»', () => {
       const markup = view.markup();
       expect(markup).toContain('data-memory-standing-note="forgotten"');
       expect(markup).toContain('Содержимое дела забыто');
-      expect(markup).toContain('bbbbbbbbbbbbbbbb…');
+      expect(markup).toContain('b'.repeat(64));
       expect(markup).not.toContain('data-memory-finding-text');
       expect(markup).not.toContain('data-memory-standing-control');
       expect(view.count('Отозвать')).toBe(0);

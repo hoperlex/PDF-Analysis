@@ -11,4 +11,4 @@ export type { DecisionMemoryCaseViewProps } from './ui/decision-memory-case';
 export { DecisionMemoryCaseView } from './ui/decision-memory-case';
 export type { DecisionMemoryStatusLineProps } from './ui/decision-memory-status-line';
 export { DecisionMemoryStatusLine } from './ui/decision-memory-status-line';
-export { formatBox, shortDigest, sizeLabel } from './model/format';
+export { boxFrameWords, formatBox, sizeLabel } from './model/format';

@@ -47,7 +47,7 @@ export function wholeCase(over: Partial<DecisionMemoryCase> = {}, summaryOver: P
       required_value: '+0,150',
       stated_value: '+0,300',
       stage_id: 'document_context_build',
-      analysis_profile_id: 'ar_text_v1' as never,
+      analysis_profile_id: 'ap_01M2545JSD15ETSNNV904X991F',
       provider_mode: 'recorded',
     },
     decisions: [
@@ -69,9 +69,9 @@ export function wholeCase(over: Partial<DecisionMemoryCase> = {}, summaryOver: P
         char_start: 10,
         char_end: 30,
         block_ref: 'b_000012',
-        bbox: [0.12, 0.3456789, 0.5, 0.4],
-        bbox_unit: 'normalised',
-        bbox_origin: 'top-left',
+        bbox: [72, 120.4567, 300, 140],
+        bbox_unit: 'pt',
+        bbox_origin: 'top_left',
       },
     ],
     norm_refs: [

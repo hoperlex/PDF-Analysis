@@ -10,7 +10,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DecisionMemoryCaseView, DecisionMemoryFilters, DecisionMemoryList, DecisionMemoryStatusLine, formatBox, shortDigest, sizeLabel } from '@/widgets/decision-memory';
+import { DecisionMemoryCaseView, DecisionMemoryFilters, DecisionMemoryList, DecisionMemoryStatusLine, boxFrameWords, formatBox, sizeLabel } from '@/widgets/decision-memory';
 import { NO_MEMORY_FILTERS } from '@/entities/decision-memory';
 
 import { COUNTS, CASE_A, CASE_B, summary, wholeCase } from './memory-fixtures';
@@ -81,11 +81,11 @@ describe('the case', () => {
     // Evidence: one-based number, page, characters, block, the box with its unit and origin; three decimals at most.
     expect(markup).toContain('№1 · стр. 3 · символы 10–30');
     expect(markup).toContain('блок <code>b_000012</code>');
-    expect(markup).toContain('рамка [0.12; 0.346; 0.5; 0.4] (normalised, top-left)');
+    expect(markup).toContain('рамка [72; 120.457; 300; 140] (пт, от левого верхнего угла)');
     expect(markup).toContain('подтверждена');
     // Crops.
-    expect(markup).toContain('Кадр 1 · стр. 3 · рамка [0.1; 0.2; 0.6; 0.7] · 640×480 пикс. · 20 КБ · к подтверждению №1');
-    expect(markup).toContain(`title="${'a'.repeat(64)}"`);
+    expect(markup).toContain('Кадр 1 · стр. 3 · рамка [0.1; 0.2; 0.6; 0.7] (доли страницы) · 640×480 пикс. · 20 КБ · к подтверждению №1');
+    expect(markup).toContain('a'.repeat(64));
     expect(markup).not.toContain('<img');
     expect(markup).not.toContain('<a ');
     expect(markup).toContain('Изображения кадров пока не открываются');
@@ -120,7 +120,7 @@ describe('the case', () => {
     });
     expect(markup).toContain('data-memory-standing-note="forgotten"');
     expect(markup).toContain('Содержимое дела забыто');
-    expect(markup).toContain('cccccccccccccccc…');
+    expect(markup).toContain('c'.repeat(64));
     expect(markup).not.toContain('Находка и рекомендация');
     expect(markup).not.toContain('data-memory-finding-text');
     expect(markup).not.toContain('data-memory-decision=');
@@ -165,12 +165,13 @@ describe('the filters', () => {
 });
 
 describe('the plain-text forms', () => {
+  it('words the unit and the origin of a box, and leaves a value it does not know as sent', () => {
+    expect(boxFrameWords('pt', 'top_left')).toBe('пт, от левого верхнего угла');
+    expect(boxFrameWords(null, null)).toBe('');
+    expect(boxFrameWords('mm', 'centre')).toBe('mm, centre');
+  });
   it('keeps three decimals at most and drops trailing zeros', () => {
     expect(formatBox([0.1, 0.123456, 0.5, 1])).toBe('[0.1; 0.123; 0.5; 1]');
-  });
-  it('shortens a digest and keeps a short one whole', () => {
-    expect(shortDigest('abcdef0123456789', 8)).toBe('abcdef01…');
-    expect(shortDigest('abc')).toBe('abc');
   });
   it('rounds a size up to one kilobyte at the least', () => {
     expect(sizeLabel(1)).toBe('1 КБ');

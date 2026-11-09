@@ -206,6 +206,13 @@
   white-space: pre-wrap;
 }
 
+/* A full SHA-256 digest: sixty-four characters that break anywhere rather than widen the column. */
+.digest {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font-size: var(--am-text-xs);
+}
+
 .quote {
   margin: var(--am-gap-2xs) 0 0;
   padding: var(--am-gap-2xs) var(--am-gap-sm);

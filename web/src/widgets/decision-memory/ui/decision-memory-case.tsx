@@ -32,7 +32,7 @@ import {
 import { SeverityBadge, normCitationStateLabel } from '@/entities/finding';
 import { CaseStandingControl } from '@/features/manage-decision-memory';
 
-import { formatBox, shortDigest, sizeLabel } from '../model/format';
+import { boxFrameWords, formatBox, sizeLabel } from '../model/format';
 import { MemoryStatusBadge } from './status-badge';
 import { MemorySectionCell, memoryCategoryLabel } from './decision-memory-list';
 import styles from './decision-memory.module.css';
@@ -64,7 +64,7 @@ function stageLabel(stageId: string): string {
 
 function EvidenceItem({ item }: { readonly item: DecisionMemoryEvidence }) {
   const box = item.bbox === null ? null : formatBox(item.bbox);
-  const frame = [item.bbox_unit, item.bbox_origin].filter((part): part is string => part !== null).join(', ');
+  const frame = boxFrameWords(item.bbox_unit, item.bbox_origin);
   return (
     <li data-memory-evidence={item.ordinal}>
       <p className={styles.itemMeta}>
@@ -93,11 +93,11 @@ function CropItem({ item }: { readonly item: DecisionMemoryCrop }) {
   return (
     <li data-memory-crop={item.crop_id}>
       <p className={styles.itemMeta}>
-        Кадр {item.crop_ordinal} · стр. {item.page_number} · рамка {formatBox(item.bbox)} · {item.width_px}×{item.height_px} пикс. ·{' '}
+        Кадр {item.crop_ordinal} · стр. {item.page_number} · рамка {formatBox(item.bbox)} (доли страницы) · {item.width_px}×{item.height_px} пикс. ·{' '}
         {sizeLabel(item.size_bytes)}
         {item.evidence_ordinal === null ? null : ` · к подтверждению №${item.evidence_ordinal + 1}`}
         {' · отпечаток '}
-        <code title={item.sha256}>{shortDigest(item.sha256)}</code>
+        <code className={styles.digest}>{item.sha256}</code>
       </p>
       {item.portal_description === null ? null : <p className={styles.text}>{item.portal_description}</p>}
     </li>
@@ -184,7 +184,7 @@ export function DecisionMemoryCaseView({ data, isLoading, error, manage, onBack 
                       <strong>{MEMORY_STATUS_EVENT_LABELS[event.kind]}</strong> · {MEMORY_REASON_LABELS[event.reason_code].toLowerCase()} ·{' '}
                       <time dateTime={event.created_at}>{formatInstant(event.created_at)}</time>
                       {event.forgotten_content_sha256 === null ? null : (
-                        <> · отпечаток забытого <code title={event.forgotten_content_sha256}>{shortDigest(event.forgotten_content_sha256, 16)}</code></>
+                        <> · отпечаток забытого <code className={styles.digest}>{event.forgotten_content_sha256}</code></>
                       )}
                     </p>
                   </li>
