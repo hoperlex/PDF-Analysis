@@ -379,6 +379,8 @@ def _build_items(
     if lock:
         repo.lock_connections(session, primaries)
     connections = {connection_id: store.get_connection(session, connection_id) for connection_id in primaries}
+    # `HOSTS-BACKEND-01`: the stand's own system connections are never a cut-over candidate (no route can name one; this is the guard).
+    connections = {key: (None if value is not None and value.system_managed else value) for key, value in connections.items()}
     revisions = store.current_revisions(session, primaries)
     taken = set(repo.active_group_names(session))
     items: list[PreviewItem] = []

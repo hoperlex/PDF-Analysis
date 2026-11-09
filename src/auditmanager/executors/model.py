@@ -128,6 +128,7 @@ __all__ = [
     "normalise_origin",
     "refuse_plain_http",
     "refuse_purpose",
+    "refuse_system_object",
     "validate_settings",
 ]
 
@@ -544,6 +545,15 @@ def refuse_purpose(kind: str, purpose: str) -> None:
     """``purpose_not_for_kind`` unless the kind holds a secret of that purpose."""
     if purpose not in PURPOSES_BY_KIND[kind]:
         raise _refuse("purpose", "purpose_not_for_kind")
+
+
+def refuse_system_object(aggregate_type: str = "ExecutorConnection") -> DomainError:
+    """``conflict`` / ``system_managed``: the stand keeps this connection or group for a host (`HOSTS-BACKEND-01`, ADR-0028 decisions 2 and 3); it
+    is never revised, archived, keyed, probed, routed, enrolled or named by a rule by hand. Nothing about it is echoed."""
+    return DomainError(
+        ErrorCode.CONFLICT, message="this object is kept by the stand for a server and cannot be changed by hand",
+        conflict_reason="system_managed", aggregate_type=aggregate_type,
+    )
 
 
 @dataclass(frozen=True, slots=True)

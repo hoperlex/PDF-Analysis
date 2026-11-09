@@ -58,6 +58,7 @@ from auditmanager.executors.groups import (
     refuse_settings,
     refuse_work_kind,
 )
+from auditmanager.executors.model import refuse_system_object
 from auditmanager.executors.queries import Occupancy, occupancies
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.usability import is_probed_ok, is_served
@@ -314,6 +315,8 @@ def _refuse_members(
     for member in members:
         connection = (
             store.get_connection(session, member.connection_id) if member.connection_id in existing else None)
+        if connection is not None and connection.system_managed:
+            raise refuse_system_object()
         current = currents.get(member.connection_id)
         refuse_member(
             settings, member, connection=connection,
@@ -415,6 +418,8 @@ def revise_group(
     record = repo.get_group(session, group_id, lock=True)
     if record is None:
         raise group_not_found()
+    if record.system_managed:
+        raise refuse_system_object("ExecutorGroup")
     if record.archived_at is not None:
         raise group_archived()
     _refuse_members(session, store, repo, settings, members)
@@ -451,6 +456,8 @@ def archive_group(
     record = repo.get_group(session, group_id, lock=True)
     if record is None:
         raise group_not_found()
+    if record.system_managed:
+        raise refuse_system_object("ExecutorGroup")
     if record.archived_at is None:
         if any(rule.group_id == group_id for rule in repo.current_rules(session)):
             raise group_routed()
@@ -492,6 +499,8 @@ def set_routing_rule(
     record = repo.get_group(session, revision.group_id, lock=True)
     if record is None:
         raise group_not_found()
+    if record.system_managed:
+        raise refuse_system_object("ExecutorGroup")
     if record.archived_at is not None:
         raise group_archived()
     rule = append_rule(

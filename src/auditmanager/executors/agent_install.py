@@ -80,6 +80,7 @@ from auditmanager.executors.model import (
     CONSTRAINT_PRIVATE_KEY_NOT_ACCEPTED,
     CONSTRAINT_PRIVATE_KEY_REQUIRED,
     host_key_fingerprint,
+    refuse_system_object,
 )
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.sealing import PublicRing
@@ -370,6 +371,8 @@ def create_agent_install(
     connection = store.get_connection(session, connection_id, lock=True)
     if connection is None:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type=_AGGREGATE_CONNECTION)
+    if connection.system_managed:
+        raise refuse_system_object()
     if connection.archived_at is not None:
         raise _conflict("connection_archived", "the connection is archived")
     if connection.kind != "pull":

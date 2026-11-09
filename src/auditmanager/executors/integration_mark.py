@@ -23,7 +23,7 @@ from typing import Final
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.executors.model import CONSTRAINT_KIND_NOT_PULL
+from auditmanager.executors.model import CONSTRAINT_KIND_NOT_PULL, refuse_system_object
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.ingest.public import (
     CommandReplay,
@@ -125,6 +125,9 @@ def set_integration_authorisation(
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type=_AGGREGATE)
     if isinstance(claimed, CommandReplay):
         return marks.marks_of(session, [connection_id]).get(connection_id)
+    if connection.system_managed:
+        # The mark of a system connection is set by «Использовать» of its host, never by hand (`HOSTS-BACKEND-01`).
+        raise refuse_system_object()
     if connection.archived_at is not None:
         raise DomainError(ErrorCode.CONFLICT, message="the connection is archived",
                           conflict_reason="connection_archived")

@@ -85,6 +85,7 @@ from typing import Any, Final
 from sqlalchemy.orm import Session
 
 from auditmanager.executors.answers import read_answer
+from auditmanager.executors.model import refuse_system_object
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.runner_repository import (
     DEFAULT_CLAIM_IMAGES,
@@ -330,6 +331,8 @@ def issue_runner_token(
     connection = store.get_connection(session, connection_id, lock=True)
     if connection is None:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type=_AGGREGATE)
+    if connection.system_managed:
+        raise refuse_system_object()
     if connection.archived_at is not None:
         raise _conflict("connection_archived", "the connection is archived")
     if connection.kind != "pull":

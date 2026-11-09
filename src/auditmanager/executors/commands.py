@@ -43,6 +43,7 @@ from auditmanager.executors.model import (
     SecretRecord,
     destination_for,
     refuse_purpose,
+    refuse_system_object,
     validate_settings,
 )
 from auditmanager.executors.repository import ExecutorRepository
@@ -122,6 +123,10 @@ def _locked(
 
 
 def _live(connection: ConnectionRecord) -> ConnectionRecord:
+    """The connection a command may act on: not archived and **not a system connection** (`HOSTS-BACKEND-01`): the stand keeps those for the
+    servers, and revising, archiving, keying, probing or routing one by hand is refused -- ``conflict`` / ``system_managed``."""
+    if connection.system_managed:
+        raise refuse_system_object()
     if connection.archived_at is not None:
         raise _conflict("connection_archived")
     return connection

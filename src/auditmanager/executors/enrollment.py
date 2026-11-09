@@ -108,6 +108,7 @@ from auditmanager.executors.model import (
     RUNNER_CLI_NAMES,
     RUNNER_EXECUTION_PROFILES,
     RUNNER_FEATURES,
+    refuse_system_object,
 )
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.runner import DEFAULT_TOKEN_DAYS, hash_token
@@ -325,6 +326,8 @@ def issue_executor_enrollment(
     connection = store.get_connection(session, connection_id, lock=True)
     if connection is None:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type=_AGGREGATE_CONNECTION)
+    if connection.system_managed:
+        raise refuse_system_object()
     if connection.archived_at is not None:
         raise _conflict("connection_archived", "the connection is archived")
     if connection.kind != "pull":
