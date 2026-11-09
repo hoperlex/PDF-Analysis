@@ -318,6 +318,11 @@
   text-align: center;
 }
 
+/* `R-153g`: a section with no document is in the list too, its 0 in the muted ink of a note, not the ink of a count. */
+.sectionCountEmpty {
+  color: var(--am-ink-muted);
+}
+
 /*
  * `UI-A-05`, `UI-A-06`, `UI-A-91`: the counters beside a menu item -- the section's red number of documents no expert has
  * checked, the jobs of «Очередь», the entries of «База знаний», the pending «Заявки на регистрацию». A count is the accent

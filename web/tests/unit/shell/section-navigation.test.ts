@@ -1,6 +1,7 @@
 /**
  * `UI-A-04`: «Разделы» in the side menu — the current project's sections, each with its mark and a count badge,
- * leading to the section page (`R-151l`).
+ * leading to the section page (`R-151l`). `R-153g` (owner, 2026-11-09): all fifteen are listed, the ones holding no
+ * document too, in structure order; an empty one shows a muted 0, no red badge, and still links to its page.
  *
  * The model is pure and read as data (`sectionNavigationOf`); the markup is read off a static pass of the frame's
  * navigation, in all three of its states; and the wiring (a project in the address, the dashboard's summary of that
@@ -15,7 +16,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { FrameNavigation, FrameNavigationView } from '@/_app/frame-navigation';
 import { buildNavigation, offersSectionNavigation } from '@/_app/navigation';
 import {
-  SECTIONS_EMPTY_NOTE,
   SECTIONS_FAILED_NOTE,
   SECTIONS_GROUP_LABEL,
   SECTIONS_LOADING_NOTE,
@@ -72,26 +72,30 @@ function summaryOf(sectionRows: SectionDocumentCount[]): DashboardSummary {
   };
 }
 
-// `AR` and `KJ` with documents, and `PS` with one: the structure order (`S-5`) is AR, PS, KJ.
+// `AR` and `KJ` with documents, and `PS` with one: the structure order (`S-5`) is AR, PS, KJ among the fifteen.
 const COUNTS: Partial<Record<ProjectSection, number>> = { KJ: 2, AR: 4, PS: 1 };
+/** The project structure's order (`S-5`), typed from the poll answer and not read from the model. */
+const STRUCTURE = ['AR', 'AI', 'PS', 'POS', 'TX', 'KJ', 'KM', 'OV', 'VK', 'PT', 'EOM', 'SS', 'ITP', 'GP', 'PB'] as const;
 const sectionPage = (code: string, project = PROJECT): string => routes.projectSection(project, code);
 
 describe('sectionNavigationOf — the sections of the current project', () => {
-  it('lists only the sections that hold documents, in the order of the project structure', () => {
+  it('R-153g: lists every section of the project, the empty ones too, in the order of the project structure', () => {
     const result = sectionNavigationOf(rows(COUNTS), PROJECT, null);
     expect(result.status).toBe('ready');
     if (result.status !== 'ready') return;
-    expect(result.entries.map((entry) => [entry.code, entry.abbr, entry.count])).toEqual([
+    expect(result.entries.map((entry) => entry.code)).toEqual(STRUCTURE);
+    expect(result.entries.map((entry) => entry.count)).toEqual(STRUCTURE.map((code) => COUNTS[code] ?? 0));
+    expect(result.entries.slice(0, 3).map((entry) => [entry.code, entry.abbr, entry.count])).toEqual([
       ['AR', 'АР', 4],
+      ['AI', 'АИ', 0],
       ['PS', 'ПЗ', 1],
-      ['KJ', 'КЖ', 2],
     ]);
   });
 
-  it('leads each entry to the section page of that project, through the route helper', () => {
+  it('leads each entry, the empty ones too, to the section page of that project, through the route helper', () => {
     const result = sectionNavigationOf(rows(COUNTS), PROJECT, null);
     if (result.status !== 'ready') throw new Error('not ready');
-    expect(result.entries.map((entry) => entry.href)).toEqual([sectionPage('AR'), sectionPage('PS'), sectionPage('KJ')]);
+    expect(result.entries.map((entry) => entry.href)).toEqual(STRUCTURE.map((code) => sectionPage(code)));
   });
 
   it('marks the entry whose page is shown current, and no other: not another project\'s page, not the project page', () => {
@@ -106,14 +110,18 @@ describe('sectionNavigationOf — the sections of the current project', () => {
     expect(current(null)).toEqual([]);
   });
 
-  it('is an empty list, not a failure, for a project none of whose documents is confirmed for a section', () => {
-    expect(sectionNavigationOf(rows({}), PROJECT, null)).toEqual({ status: 'ready', entries: [] });
+  it('R-153g: a project none of whose documents is confirmed for a section still lists all fifteen, each at 0', () => {
+    const result = sectionNavigationOf(rows({}), PROJECT, null);
+    if (result.status !== 'ready') throw new Error('not ready');
+    expect(result.entries.map((entry) => [entry.code, entry.count])).toEqual(STRUCTURE.map((code) => [code, 0]));
+    expect(sectionsSummary(result.entries)).toEqual({ documents: 0, awaitingDecision: 0 });
   });
 
   it('never lists the «Без раздела» bucket as a section, whatever it counts', () => {
     const result = sectionNavigationOf(rows({ AR: 1 }, 40), PROJECT, null);
     if (result.status !== 'ready') throw new Error('not ready');
-    expect(result.entries.map((entry) => entry.code)).toEqual(['AR']);
+    expect(result.entries.map((entry) => entry.code)).toEqual(STRUCTURE);
+    expect(result.entries.reduce((sum, entry) => sum + entry.count, 0)).toBe(1);
   });
 
   it('is a failure, not a shorter list, when the breakdown is not whole: a section missing, repeated or unknown', () => {
@@ -159,23 +167,27 @@ describe('UI-A-05: the documents of a section that no expert has checked', () =>
 
   it('is the row\'s audit_counts.awaiting_decision, and null where the row carries no counts: unknown is not zero', () => {
     const entries = entriesOf(rowsAwaiting(COUNTS, { AR: 3, PS: 0, KJ: 9 }, ['KJ']));
-    expect(entries.map((entry) => [entry.code, entry.awaitingDecision])).toEqual([['AR', 3], ['PS', 0], ['KJ', null]]);
+    expect(entries.filter((entry) => entry.code === 'AR' || entry.code === 'PS' || entry.code === 'KJ').map((entry) => [entry.code, entry.awaitingDecision])).toEqual([['AR', 3], ['PS', 0], ['KJ', null]]);
+    // An empty section carries the row's own figure: 0 where the row has counts, and no red badge either way.
+    expect(entries.find((entry) => entry.code === 'AI')).toMatchObject({ count: 0, awaitingDecision: 0 });
   });
 
   it('is the awaiting_decision figure and not the wider no_expert_decision, which counts the documents never run', () => {
     // 4 documents in AR: 1 waits for a decision, 3 were never run (`no_expert_decision` = 4).
     const row = { section: 'AR' as ProjectSection, document_count: 4, ...sectionAudit(4, { not_run: 3, awaiting_decision: 1, no_expert_decision: 4 }) };
-    const [entry] = entriesOf([...rows({}).filter((other) => other.section !== 'AR'), row]);
+    const entry = entriesOf([...rows({}).filter((other) => other.section !== 'AR'), row]).find((one) => one.code === 'AR');
     expect(entry?.awaitingDecision).toBe(1);
   });
 
   it('adds what the red number counts to the entry\'s name, only when there is one', () => {
     const labels = entriesOf(rowsAwaiting(COUNTS, { AR: 3 }, ['KJ'])).map(sectionEntryLabel);
-    expect(labels).toEqual([
+    expect(labels.filter((label) => /^(АР|ПЗ|КЖ) /.test(label))).toEqual([
       'АР Архитектурные решения, документов: 4, не проверено экспертом: 3',
       'ПЗ Пояснительная записка, документов: 1',
       'КЖ Конструкции железобетонные, документов: 2',
     ]);
+    // An empty section is named with its 0, and has no red clause.
+    expect(labels).toContain('АИ Архитектурные решения (интерьер), документов: 0');
   });
 });
 
@@ -239,8 +251,8 @@ describe('the «Разделы» group in the menu', () => {
   it('draws one link per section: the mark, a badge with the count, the name as tooltip and the full name as its name', () => {
     const markup = draw(READY);
     const items = [...markup.matchAll(/<li class="am-disclosure__item" data-section-nav-item="([A-Z]+)">(.*?)<\/li>/g)];
-    // Once in the bar and once in the stacked menu.
-    expect(items.map((m) => m[1])).toEqual(['AR', 'PS', 'KJ', 'AR', 'PS', 'KJ']);
+    // Once in the bar and once in the stacked menu: all fifteen sections each time (`R-153g`).
+    expect(items.map((m) => m[1])).toEqual([...STRUCTURE, ...STRUCTURE]);
     const first = items[0]?.[2] ?? '';
     expect(first).toContain(`href="${sectionPage('AR')}"`);
     expect(first).toContain('aria-label="АР Архитектурные решения, документов: 4"');
@@ -279,13 +291,75 @@ describe('the «Разделы» group in the menu', () => {
     }
   });
 
-  it('says why there is no list, in words: still reading, could not be read whole, or no section holds a document', () => {
+  it('says why there is no list, in words: still reading, or could not be read whole', () => {
     const note = (sections: SectionNavigation): string | null =>
       /<p class="[^"]*" data-section-nav-status="([a-z]+)">([^<]*)<\/p>/.exec(draw(sections))?.slice(1).join('|') ?? null;
     expect(note({ status: 'loading' })).toBe(`loading|${SECTIONS_LOADING_NOTE}`);
     expect(note({ status: 'failed' })).toBe(`failed|${SECTIONS_FAILED_NOTE}`);
-    expect(note({ status: 'ready', entries: [] })).toBe(`empty|${SECTIONS_EMPTY_NOTE}`);
     expect(draw({ status: 'failed' })).not.toContain('data-section-nav-item');
+    // `R-153g`: a project without a single document has no note either — its sections are listed, each at 0.
+    const none = draw(sectionNavigationOf(rows({}), PROJECT, null));
+    expect(none).not.toContain('data-section-nav-status');
+    expect([...none.matchAll(/data-section-nav-item="([A-Z]+)"/g)]).toHaveLength(STRUCTURE.length * 2);
+  });
+
+  describe('R-153g: a section with no document', () => {
+    const itemsOf = (markup: string): Map<string, string[]> => {
+      const found = new Map<string, string[]>();
+      for (const match of markup.matchAll(/<li class="am-disclosure__item" data-section-nav-item="([A-Z]+)">(.*?)<\/li>/g)) {
+        found.set(match[1] as string, [...(found.get(match[1] as string) ?? []), match[2] as string]);
+      }
+      return found;
+    };
+    /** The number in the item's count badge and whether it carries the muted modifier. */
+    const countOf = (item: string): { readonly text: string; readonly muted: boolean } | null => {
+      const match = /<span class="([^"]*)"[^>]*>(\d+)<\/span><\/span><\/a>/.exec(item);
+      return match === null ? null : { text: match[2] as string, muted: /sectionCountEmpty/.test(match[1] as string) };
+    };
+
+    it('is listed with a muted 0, no red badge, and a link to its section page', () => {
+      const found = itemsOf(draw(sectionNavigationOf(rowsAwaiting(COUNTS, { AR: 3 }), PROJECT, null)));
+      expect(found.get('OV')).toHaveLength(2); // the bar and the stacked menu
+      for (const item of found.get('OV') ?? []) {
+        expect(item).toContain(`href="${sectionPage('OV')}"`);
+        expect(item).toContain('aria-label="ОВ Отопление, вентиляция и кондиционирование, документов: 0"');
+        expect(countOf(item)).toEqual({ text: '0', muted: true });
+        expect(item).not.toContain('data-menu-badge');
+      }
+      // A section that holds documents keeps the ordinary count, and the red badge where one waits.
+      for (const item of found.get('AR') ?? []) {
+        expect(countOf(item)).toEqual({ text: '4', muted: false });
+        expect(item).toContain('data-menu-badge="alert"');
+      }
+    });
+
+    it('can fail: the muted modifier is on the empty counts and on no other', () => {
+      const found = itemsOf(draw(READY));
+      const muted = [...found.entries()].filter(([, items]) => items.every((item) => countOf(item)?.muted === true)).map(([code]) => code);
+      expect(muted).toEqual(STRUCTURE.filter((code) => COUNTS[code] === undefined));
+      expect(muted).not.toContain('AR');
+    });
+
+    it('is the current entry when its page is shown, in the bar, the rail and the stacked menu', () => {
+      const markup = draw(sectionNavigationOf(rows(COUNTS), PROJECT, sectionPage('OV')), sectionPage('OV'));
+      expect(currentSectionLinks(markup)).toEqual([sectionPage('OV'), sectionPage('OV'), sectionPage('OV')]);
+    });
+
+    it('draws a muted 0 on the group\'s button for a project with no document at all, and no red figure', () => {
+      const markup = draw(sectionNavigationOf(rows({}), PROJECT, null));
+      for (const inside of sectionButtonInsides(markup)) {
+        expect(/data-section-nav-total="0"[^>]*>0</.test(inside), inside).toBe(true);
+        expect(inside).toContain('sectionCountEmpty');
+        expect(inside).not.toContain('data-menu-badge');
+      }
+      for (const attributes of sectionButtons(markup)) expect(attributes).toContain('aria-label="Разделы. Документов в разделах: 0"');
+    });
+
+    it('is a link in the compact rail too, named with its 0', () => {
+      const rail = /<div class="[^"]*" data-nav-state="rail">(.*?)<div class="[^"]*" data-nav-state="stacked">/s.exec(draw(READY))?.[1] ?? '';
+      expect(rail).toContain(`aria-label="ОВ Отопление, вентиляция и кондиционирование, документов: 0"`);
+      expect(rail).toContain(`href="${sectionPage('OV')}"`);
+    });
   });
 
   it('the compact rail holds a labelled group of mark links, only when there is a list', () => {
@@ -293,14 +367,16 @@ describe('the «Разделы» group in the menu', () => {
     const group = /<div class="[^"]*" role="group" aria-label="Разделы"[^>]*>(.*?)<\/div>/s.exec(rail(draw(READY_ON_KJ, sectionPage('KJ'))));
     expect(group, 'no rail group').not.toBeNull();
     const links = [...(group?.[1] ?? '').matchAll(/<a\b([^>]*)>(.*?)<\/a>/g)];
-    expect(links.map((m) => /aria-label="([^"]*)"/.exec(m[1] as string)?.[1])).toEqual([
+    const named = links.map((m) => /aria-label="([^"]*)"/.exec(m[1] as string)?.[1]);
+    expect(named).toHaveLength(STRUCTURE.length);
+    expect(named.filter((name) => /^(АР|ПЗ|КЖ) /.test(name ?? ''))).toEqual([
       'АР Архитектурные решения, документов: 4',
       'ПЗ Пояснительная записка, документов: 1',
       'КЖ Конструкции железобетонные, документов: 2',
     ]);
-    expect(links.map((m) => /aria-current="page"/.test(m[1] as string))).toEqual([false, false, true]);
-    expect(links.map((m) => textOf(m[2] as string).trim())).toEqual(['АР', 'ПЗ', 'КЖ']);
-    for (const sections of [undefined, { status: 'loading' } as const, { status: 'failed' } as const, { status: 'ready', entries: [] } as const]) {
+    expect(links.map((m) => /aria-current="page"/.test(m[1] as string))).toEqual(STRUCTURE.map((code) => code === 'KJ'));
+    expect(links.map((m) => textOf(m[2] as string).trim()).slice(0, 3)).toEqual(['АР', 'АИ', 'ПЗ']);
+    for (const sections of [undefined, { status: 'loading' } as const, { status: 'failed' } as const]) {
       expect(rail(draw(sections)), JSON.stringify(sections)).not.toContain(`aria-label="${SECTIONS_GROUP_LABEL}"`);
     }
   });
@@ -343,13 +419,17 @@ describe('the «Разделы» group in the menu', () => {
     it('rides the corner of the glyph in the compact rail, and the link\'s name says what it counts', () => {
       const rail = /<div class="[^"]*" data-nav-state="rail">(.*?)<div class="[^"]*" data-nav-state="stacked">/s.exec(draw(WAITING))?.[1] ?? '';
       const links = [...rail.matchAll(/<a\b([^>]*)>(.*?)<\/a>/g)].filter((m) => (m[1] as string).includes('/sections/'));
-      expect(links.map((m) => /aria-label="([^"]*)"/.exec(m[1] as string)?.[1])).toEqual([
+      expect(links).toHaveLength(STRUCTURE.length);
+      // The three that hold documents, in structure order; the twelve empty ones carry no badge.
+      const withDocuments = links.filter((m) => /aria-label="(АР|ПЗ|КЖ) /.test(m[1] as string));
+      expect(withDocuments.map((m) => /aria-label="([^"]*)"/.exec(m[1] as string)?.[1])).toEqual([
         'АР Архитектурные решения, документов: 4, не проверено экспертом: 3',
         'ПЗ Пояснительная записка, документов: 1',
         'КЖ Конструкции железобетонные, документов: 2, не проверено экспертом: 120',
       ]);
-      expect(links.map((m) => (m[2] as string).includes('data-menu-badge="alert"'))).toEqual([true, false, true]);
-      expect(links.map((m) => /aria-hidden="true"><span[^>]*data-menu-badge="alert">([^<]*)</.exec(m[2] as string)?.[1] ?? null)).toEqual(['3', null, '99+']);
+      expect(withDocuments.map((m) => (m[2] as string).includes('data-menu-badge="alert"'))).toEqual([true, false, true]);
+      expect(withDocuments.map((m) => /aria-hidden="true"><span[^>]*data-menu-badge="alert">([^<]*)</.exec(m[2] as string)?.[1] ?? null)).toEqual(['3', null, '99+']);
+      expect(links.filter((m) => (m[2] as string).includes('data-menu-badge'))).toHaveLength(2);
     });
   });
 
@@ -396,8 +476,8 @@ describe('the «Разделы» group in the menu', () => {
       for (const attributes of sectionButtons(markup)) expect(attributes).toContain('aria-label="Разделы. Документов в разделах: 7"');
     });
 
-    it('draws nothing while the list is loading, failed or empty: a figure not read is no badge', () => {
-      for (const sections of [{ status: 'loading' } as const, { status: 'failed' } as const, { status: 'ready', entries: [] } as const, undefined]) {
+    it('draws nothing while the list is loading or failed: a figure not read is no badge', () => {
+      for (const sections of [{ status: 'loading' } as const, { status: 'failed' } as const, undefined]) {
         const markup = draw(sections);
         expect(sectionButtonInsides(markup).every((inside) => inside === ''), JSON.stringify(sections)).toBe(true);
         for (const attributes of sectionButtons(markup)) expect(attributes, JSON.stringify(sections)).not.toContain('aria-label');
@@ -454,7 +534,7 @@ describe('the frame reads the current project\'s sections only where it is offer
     navigationState.pathname = sectionPage('KJ');
     navigationState.search = '';
     const markup = frame(seeded(), true);
-    expect([...markup.matchAll(/data-section-nav-item="([A-Z]+)"/g)].map((m) => m[1])).toEqual(['AR', 'PS', 'KJ', 'AR', 'PS', 'KJ']);
+    expect([...markup.matchAll(/data-section-nav-item="([A-Z]+)"/g)].map((m) => m[1])).toEqual([...STRUCTURE, ...STRUCTURE]);
     expect(currentSectionLinks(markup)).toEqual([sectionPage('KJ'), sectionPage('KJ'), sectionPage('KJ')]);
   });
 
