@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import type { ModelCatalogue, Role, StageModelLayout } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import {
-  NAMED_KITS, cellText, effortsOf, kitCells, kitIsOffered, kitModelIds, layoutFailure, layoutRefusalSentence, layoutTable, pairIsInCatalogue,
+  DEFAULT_TIMEOUT_SECONDS, NAMED_KITS, cellText, effortsOf, kitCells, kitIsOffered, kitModelIds, layoutFailure, layoutRefusalSentence, layoutTable, pairIsInCatalogue,
   rowOfStageKey,
 } from '@/entities/stage-layout';
 import {
@@ -148,6 +148,16 @@ describe('the sets', () => {
     const codex = kitCells('codex_only', []);
     expect(codex.map((c) => c.model_id)).toEqual(['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol']);
     expect([...kitModelIds('claude_only')].sort()).toEqual([...CLAUDE_ONLY_MODELS].sort());
+  });
+
+  it('give a cell the revision does not have the timeout the server defaults to: 1800 seconds, not 600', () => {
+    expect(DEFAULT_TIMEOUT_SECONDS).toBe(1800);
+    for (const kit of NAMED_KITS) {
+      expect(kitCells(kit, []).map((c) => c.timeout_seconds)).toEqual([1800, 1800, 1800, 1800, 1800, 1800]);
+    }
+    // A cell the revision has keeps its own timeout, so the default reaches only a cell with none.
+    const onlyText = LAYOUT_CELLS.filter((c) => c.row === 'text').map((c) => ({ ...c, timeout_seconds: 99 }));
+    expect(kitCells('claude_only', onlyText).map((c) => c.timeout_seconds)).toEqual([99, 1800, 1800, 1800, 1800, 1800]);
   });
 
   it('keep the limits of a cell the revision in force already has', () => {
