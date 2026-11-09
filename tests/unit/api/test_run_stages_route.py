@@ -18,7 +18,7 @@ from starlette.testclient import TestClient
 from auditmanager.api.routers.hosts_ports import RunStagePort
 from auditmanager.api.routers.run_stages import build_run_stage_routes
 from auditmanager.api.schemas import models
-from auditmanager.api.security import Subject, current_subject
+from auditmanager.api.security import OPERATION_ROLES, Subject, current_subject
 from auditmanager.bootstrap import run_stage_adapter as adapter_module
 from auditmanager.bootstrap.run_stage_adapter import RunStageAdapter
 from auditmanager.runs import stage_facts as sf
@@ -117,3 +117,9 @@ def test_the_examples_of_the_contract_are_valid_answers_and_the_viewers_has_no_s
 def test_the_port_is_one_method_and_the_adapter_has_it() -> None:
     assert {n for n in dir(RunStagePort) if not n.startswith("_")} == {"get_run_stages"}
     assert callable(RunStageAdapter.get_run_stages)
+
+
+def test_every_role_that_reads_a_run_reads_its_stages_and_the_viewer_is_among_them() -> None:
+    """The register lets the viewer ask; what the viewer is not told is the implementation's (above). The two together are `R-150w`:
+    a register that closed the read to the viewer would hide the model and the stages, which the owner ruled the viewer may see."""
+    assert OPERATION_ROLES["getRunStages"] == OPERATION_ROLES["getRunStatus"] == frozenset({"expert", "admin", "viewer"})
