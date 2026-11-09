@@ -622,7 +622,7 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
 
         <section className={styles.panel} aria-label="Подробности этапов">
           <h2>Подробности этапов</h2>
-          <StageTable rows={stageRows(status)} />
+          <StageTable rows={stageRows(status)} {...(from === null ? {} : { reused: from.reusedStageIds })} />
         </section>
       </div>
 
