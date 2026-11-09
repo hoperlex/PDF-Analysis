@@ -55,7 +55,7 @@ def test_an_administrator_revises_and_the_revision_is_the_current_one(events):
     view = service.revise_layout(body=request(), user_uid=ADMIN, idempotency_key="k1")
     assert view["current"]["revision_no"] == 1 and view["current"]["kit"] == "claude_only"
     assert view["current"]["created_by"] == ADMIN and view["enabled"] is False
-    assert [cell["cell_key"] for cell in view["current"]["cells"]] == [f"{row}:main" for row in layout.STAGE_ROWS]
+    assert [cell["cell_key"] for cell in view["current"]["cells"]] == [c.cell_key for c in layout.preset_cells("claude_only")]
     assert events[0]["event_type"] == "stage_layout.revised" and events[0]["payload"]["actor_uid"] == ADMIN
     # the wire shape holds
     models.StageModelLayout.model_validate(view)
@@ -152,7 +152,7 @@ def test_the_layout_names_the_cells_no_server_serves(events):
     service, store = make(availability=MemoryAvailability({
         "claude-sonnet-5-5": SUBSCRIPTION, "claude-opus-5-5": NOWHERE}))
     service.revise_layout(body=request(), user_uid=ADMIN, idempotency_key="k")
-    assert service.get_layout()["unavailable_cell_keys"] == ["blocks:main"]
+    assert service.get_layout()["unavailable_cell_keys"] == ["blocks:leg1"]
 
 
 def test_the_catalogue_read_offers_only_what_the_layout_may_name():
@@ -203,7 +203,7 @@ def test_the_access_is_a_subscription_when_one_serves_the_model_else_an_api_key_
     gone = StagePlanFreezer(store=store, availability=MemoryAvailability({"claude-sonnet-5-5": SUBSCRIPTION}),
                             provider_source="database")(session)
     error = refusal(gone.freeze, layout.STAGE_ROWS)
-    assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE and "blocks:main" in str(error)
+    assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE and "blocks:leg1" in str(error)
     # ... but a run that never calls the blocks row is not refused for it
     assert gone.freeze(("text", "cross_check")).rows == ("text", "cross_check")
 
