@@ -22,6 +22,16 @@ Scenarios (each prints one JSON block and writes ``<out>/<name>.json`` plus ``<o
   XY-cut at paragraph or at cell level (``tests/support/xy_cut_blocks.py``): the answer key's quotations that are unique on their
   page, and the same sweep.
 
+**The second witness (`D-450`).** Each result also carries the relation as ``link_evidence`` computes it with the recognised text of the
+portal's text blocks (``figures_with_the_witness``), over the same stored documents, with three sensitivity runs: the shortest
+quotation the witness is asked about set to 1 (``..._min1``), and the recognised text damaged the way a reading damages it (a word
+in ten, in three, written with a look-alike Latin letter or a letter short; ``..._noise10`` and ``..._noise30``). The shipped adapter
+does not hand the text to the rule (that wiring is in ``bootstrap/adapters.py``, `D-590`), so this reproduction calls the rule
+itself, and **fails the scenario** unless the same call without the text gives exactly the adapter's answer for every finding.
+The blocks' text of the ``pz_*`` and ``stress_*`` scenarios is what the PDF's own characters inside the block read as (an exact
+reading); the quotations of the sweeps are unique on their page, so with an exact reading a wrong link needs overlapping
+blocks and the noise runs show what a damaged reading costs in coverage, not what it costs in wrong links (`D-590`).
+
 **What is authored.** The model's reply is never live: it is an authored recording (``recording_document``, token counts invented
 and small, keyed by the request checksum the real chain computes), so a finding here is "a quotation somebody chose", not a
 model's. The portal's blocks of the ``pz_*`` scenarios are an algorithm's, not a portal's. What is real is the chain from the
@@ -48,7 +58,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "tools" / "fixtures"))  # portal_bundle
 
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-from auditmanager.analysis.geometry.finding_blocks import COVERAGE  # noqa: E402
+from auditmanager.analysis.geometry.finding_blocks import COVERAGE, WITNESS_MIN_CHARACTERS  # noqa: E402
 from auditmanager.analysis.stages.extraction import NORMALIZATION_DESCRIPTION  # noqa: E402
 from auditmanager.analysis.text import ProviderConfig, ProviderMode, RecordedAdapter  # noqa: E402
 from auditmanager.analysis.text.adapter import build_request  # noqa: E402
@@ -62,7 +72,18 @@ from auditmanager.shared.identity import IdempotencyKey  # noqa: E402
 from auditmanager.storage import S3BlobStore, S3StorageSettings  # noqa: E402
 from tests.integration.analysis.geometry import reads_support as support  # noqa: E402
 from tests.integration.analysis.recognised.recognised_support import BundleMembers, members  # noqa: E402
-from tests.support.finding_block_proof import BlockFact, EvidenceFact, PdfOracle, analyse, figures  # noqa: E402
+from tests.support.finding_block_proof import (  # noqa: E402
+    NOISE_RATES,
+    BlockFact,
+    EvidenceFact,
+    MemoOracle,
+    PdfOracle,
+    analyse,
+    degrade,
+    figures,
+    require_same_links,
+    rule_links,
+)
 from tests.support import stress_layout_pdf  # noqa: E402
 from tests.support.xy_cut_blocks import CELLS, PARAGRAPHS, Layout, block_text, page_blocks  # noqa: E402
 
@@ -314,6 +335,29 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             before_items.append((uid, sorted(held, key=order.__getitem__), labels[uid]))
         before = analyse(items=before_items, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=oracle)
 
+        # The rule with the second witness, over the same stored documents. First the guard: the call without the text must be
+        # the adapter's answer, finding by finding, or this reproduction is not the shipped rule and nothing below means anything.
+        unlinked = set(links.unlinked_pages)
+        plain = {uid: rule_links(facts, lines, sizes, blocks, unlinked, None) for uid, facts in usable}
+        require_same_links(plain, linked)
+        texts = {b.portal_block_id: b.text for b in blocks if b.text}
+        memo = MemoOracle(oracle)
+
+        def witnessed(texts_given: dict[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS) -> dict[str, Any]:
+            result = [(uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters), labels[uid]) for uid, facts in usable]
+            return analyse(items=result, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=memo)
+
+        with_witness = witnessed(texts)
+        sensitivity = {"min1": witnessed(texts, 1)}
+        for rate in NOISE_RATES:
+            damaged = {key: degrade(key, text, rate) for key, text in texts.items()}
+            sensitivity[f"noise{round(rate * 100)}"] = witnessed(damaged)
+        before_pairs = {(p["finding_uid"], p["portal_block_id"]) for p in now["pairs"]}
+        added = Counter(p["geometry"] for p in with_witness["pairs"] if (p["finding_uid"], p["portal_block_id"]) not in before_pairs)
+        lost = sorted(before_pairs - {(p["finding_uid"], p["portal_block_id"]) for p in with_witness["pairs"]})
+        if lost:
+            raise AssertionError(f"the second witness removed {len(lost)} links the geometry made, e.g. {lost[:3]}")
+
         def kind(label: str) -> str:
             return label.split()[1] if label.startswith("AUTHORED") else "recorded"
 
@@ -324,7 +368,11 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             "evidence_items": sum(len(v) for v in evidence.values()),
             "skipped_units": dict(scenario.skipped), "status": links.status, "unlinked_pages": links.unlinked_pages,
             "figures": figures(now, label_of=kind), "figures_before_the_fix": figures(before, label_of=kind),
-            "analysis": now, "analysis_before_the_fix": before,
+            "figures_with_the_witness": figures(with_witness, label_of=kind),
+            "witness_pairs_added_by_geometry_verdict": dict(added),
+            "figures_with_the_witness_sensitivity": {name: figures(report) for name, report in sensitivity.items()},
+            "reproduction_matches_the_adapter": True,
+            "analysis": now, "analysis_before_the_fix": before, "analysis_with_the_witness": with_witness,
         }
     finally:
         oracle.close()
@@ -339,7 +387,10 @@ def render(results: list[dict[str, Any]]) -> str:
     lines += ["| scenario | findings | with a block | coverage | links | wrong | marginal | missed | precision by glyphs | precision by text (contains / most words) |",
               "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |"]
     for r in results:
-        for label, f in (("fixed rule", r["figures"]), ("rule before", r["figures_before_the_fix"])):
+        rows = [("fixed rule", r["figures"]), ("rule before", r["figures_before_the_fix"]),
+                ("fixed rule + witness", r["figures_with_the_witness"])]
+        rows += [(f"witness {name}", f) for name, f in r["figures_with_the_witness_sensitivity"].items()]
+        for label, f in rows:
             lines.append(
                 f"| {r['name']} ({label}) | {f['findings']} | {f['findings_with_a_block']} | {f['coverage']} | {f['links']} | "
                 f"{f['wrong']} | {f['links_by_geometry'].get('marginal', 0)} | {f['missed_links']} | "
@@ -351,9 +402,12 @@ def render(results: list[dict[str, Any]]) -> str:
         lines.append(f"pages {r['pages']}, portal blocks {r['portal_blocks']}, text-layer lines {r['text_layer_lines']}, "
                      f"authored {r['authored_findings']}, published {r['published_findings']}, evidence items {r['evidence_items']}, "
                      f"unlinked pages {r['unlinked_pages']}, skipped units {r['skipped_units']}")
-        for title, key in (("fixed rule", "figures"), ("rule before the fix", "figures_before_the_fix")):
+        lines.append(f"links the witness added, by the glyph verdict: {r['witness_pairs_added_by_geometry_verdict']}")
+        for title, key in (("fixed rule", "figures"), ("rule before the fix", "figures_before_the_fix"),
+                           ("fixed rule + second witness", "figures_with_the_witness")):
             lines += ["", f"### {title}", "", "```json", json.dumps(r[key], ensure_ascii=False, indent=1), "```"]
-        for title, key in (("WRONG links, fixed rule", "analysis"), ("WRONG links, rule before the fix", "analysis_before_the_fix")):
+        for title, key in (("WRONG links, fixed rule", "analysis"), ("WRONG links, rule before the fix", "analysis_before_the_fix"),
+                           ("WRONG links, fixed rule + second witness", "analysis_with_the_witness")):
             wrong = [p for p in r[key]["pairs"] if p["geometry"] == "WRONG"]
             lines += ["", f"### {title}: {len(wrong)}", ""]
             for p in wrong[:25]:
@@ -456,7 +510,12 @@ def main() -> int:
                 continue
             results.append(result)
             (args.out / f"{scenario.name}.json").write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
-            print(json.dumps({"name": result["name"], "fixed": result["figures"], "before": result["figures_before_the_fix"]}, ensure_ascii=False))
+            print(json.dumps({
+                "name": result["name"], "fixed": result["figures"], "before": result["figures_before_the_fix"],
+                "witness": result["figures_with_the_witness"], "added": result["witness_pairs_added_by_geometry_verdict"],
+                "sensitivity": {k: {n: v[n] for n in ("findings_with_a_block", "coverage", "links", "wrong", "missed_links")}
+                                for k, v in result["figures_with_the_witness_sensitivity"].items()},
+            }, ensure_ascii=False))
     finally:
         session.close()
         transaction.rollback()

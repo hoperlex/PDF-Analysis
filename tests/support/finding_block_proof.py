@@ -16,6 +16,7 @@ version cannot hide in the oracle's.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import re
 import unicodedata
@@ -26,7 +27,13 @@ from typing import Any
 
 import pdfplumber
 
-from auditmanager.analysis.geometry.finding_blocks import COVERAGE
+from auditmanager.analysis.geometry.finding_blocks import (
+    COVERAGE,
+    WITNESS_MIN_CHARACTERS,
+    EvidenceSpan,
+    PortalBox,
+    link_evidence,
+)
 from auditmanager.analysis.stages.extraction import TEXT_OPTIONS
 
 Box = tuple[float, float, float, float]
@@ -147,6 +154,69 @@ def holders(boxes: Sequence[Box], blocks: Mapping[str, Box]) -> tuple[set[str], 
         if any(share >= COVERAGE for share in shares):
             holding.add(identifier)
     return holding, touching
+
+
+# -- the rule with the second witness (D-450) ------------------------------------------------
+
+#: Cyrillic letters a reading writes with their Latin look-alikes.
+HOMOGLYPHS = str.maketrans("аеорсхАЕОРСХ", "aeopcxAEOPCX")
+NOISE_RATES = (0.1, 0.3)
+
+
+def degrade(block_id: str, text: str, rate: float) -> str:
+    """The recognised text as a damaging reading gives it: a deterministic ``rate`` of its words with a look-alike Latin letter
+    (or, with none to swap, a letter short; a one-letter word becomes a bar). Nothing is added to the text: damage makes a word
+    stop matching the quotation's."""
+    pieces = []
+    for number, piece in enumerate(re.split(r"(\s+)", text)):
+        if piece.strip():
+            draw = int(hashlib.sha256(f"{block_id}:{number}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+            if draw < rate:
+                swapped = piece.translate(HOMOGLYPHS)
+                piece = swapped if swapped != piece else (piece[:-1] or "|")
+        pieces.append(piece)
+    return "".join(pieces)
+
+
+class MemoOracle:
+    """``PdfOracle`` that answers a placement it has given before from memory: the same quotations are held against several rules."""
+
+    def __init__(self, oracle: PdfOracle) -> None:
+        self._oracle = oracle
+        self._memo: dict[tuple[int, int, str], Any] = {}
+
+    def quote_boxes(self, page_number: int, char_start: int, quote: str) -> Any:
+        key = (page_number, char_start, quote)
+        if key not in self._memo:
+            self._memo[key] = self._oracle.quote_boxes(page_number, char_start, quote)
+        return self._memo[key]
+
+
+def rule_links(
+    evidence: Sequence[EvidenceFact], lines: Sequence[Any], sizes: Mapping[int, tuple[float, float]], blocks: Sequence[BlockFact],
+    unlinked: set[int], texts: Mapping[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS,
+) -> list[str]:
+    """``finding_blocks.link_evidence`` over the stored documents: the shipped rule, called as the adapter calls it, with the
+    recognised text (the second witness) when ``texts`` is given. ``unlinked`` are the adapter's ``unlinked_pages``."""
+    by_page: dict[int, list[Any]] = {}
+    for line in lines:
+        by_page.setdefault(line.page_number, []).append(line)
+    boxes = [PortalBox(b.portal_block_id, b.page_number, *b.bbox_norm) for b in blocks]
+    spans = [EvidenceSpan(f.page_number, f.char_start, f.char_end, f.quote) for f in evidence if f.page_number not in unlinked]
+    pages = {n: size for n, size in sizes.items() if n not in unlinked}
+    return list(link_evidence(
+        spans, lines=by_page, pages=pages, blocks=boxes, block_texts=texts, witness_min_characters=min_characters,
+    ))
+
+
+def require_same_links(reproduced: Mapping[str, Sequence[str]], shipped: Mapping[str, Sequence[str]]) -> None:
+    """The guard of the reproduction: the rule called without the text must give the shipped adapter's answer for every finding
+    (and for no other), or what is measured with the text is not the shipped rule's second witness."""
+    differing = sorted(uid for uid in set(reproduced) | set(shipped) if list(reproduced.get(uid, ())) != list(shipped.get(uid, ())))
+    if differing:
+        raise AssertionError(
+            f"the reproduction of the adapter's rule differs for {len(differing)} of {len(shipped)} findings, e.g. {differing[:3]}"
+        )
 
 
 # -- one run's links against the witnesses ---------------------------------------------------
