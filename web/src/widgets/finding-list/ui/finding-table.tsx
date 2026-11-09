@@ -58,10 +58,18 @@ export interface FindingTableProps {
   readonly unlinkedPages?: ReadonlySet<number> | undefined;
 }
 
-/** The pages of the finding's own evidence on which no block link can be derived, in page order. */
+/**
+ * The pages of the finding's evidence on which no block link can be derived, in page order. The evidence is the canonical
+ * observation's and every merged observation's (`D-473`): a page only a merged observation cites is as unplaceable as one the
+ * canonical cites, and the count is as much a floor for it.
+ */
 function unlinkedPagesOf(finding: Finding, unlinkedPages: ReadonlySet<number> | undefined): readonly number[] {
   if (unlinkedPages === undefined || unlinkedPages.size === 0) return [];
-  return declaredPages(finding.observation).filter((page) => unlinkedPages.has(page));
+  const cited = new Set<number>();
+  for (const observation of [finding.observation, ...(finding.merged_observations ?? [])]) {
+    for (const page of declaredPages(observation)) cited.add(page);
+  }
+  return [...cited].filter((page) => unlinkedPages.has(page)).sort((left, right) => left - right);
 }
 
 const COLUMNS = ['№', 'Важность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'] as const;

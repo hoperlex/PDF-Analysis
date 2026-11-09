@@ -15,7 +15,7 @@ import { groupByCategory } from '@/entities/finding';
 import { declaredPages } from '@/entities/finding-observation';
 import { FindingList, findingNumbers, findingsAsShown, inVerdictOrder } from '@/widgets/finding-list';
 
-import { findingDetail, observation } from './fixtures';
+import { evidence, findingDetail, observation } from './fixtures';
 
 const uid = (n: number): string => `fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q${String(n).padStart(2, '0')}`;
 
@@ -118,6 +118,32 @@ describe('the blocks of a finding in the table', () => {
     expect(markup).toContain('2+ бл.');
     expect(markup).toContain(`Блоков замечания: не менее 2. Цитата на стр. ${page}`);
     expect((markup.match(/data-finding-block-partial=/g) ?? []).length).toBe(1);
+  });
+
+  it('looks at the merged observations’ pages too, and names every unlinked page in order (D-473)', () => {
+    const canonical = observation({ finding_text: 'Замечание 3', evidence: [evidence({ page_number: 4 })] });
+    const merged = observation({ finding_text: 'То же', evidence: [evidence({ page_number: 9 }), evidence({ page_number: 4 })] });
+    const other = observation({ finding_text: 'И ещё', evidence: [evidence({ page_number: 2 })] });
+    const withMerged = findingDetail({
+      finding_uid: uid(3), current_verdict: 'accepted', observation: canonical, merged_observations: [canonical, merged, other],
+    });
+    const render = (finding: Finding, unlinked: readonly number[]) =>
+      renderToStaticMarkup(createElement(FindingList, {
+        groups: groupByCategory([finding]), selectedFindingUid: null, onSelect: () => {}, view: 'table',
+        blockCountOf: () => 2, unlinkedPages: new Set(unlinked),
+      }));
+    // A page only a merged observation cites leaves the count partial, which the canonical's pages alone did not say.
+    const onlyMerged = render(withMerged, [9]);
+    expect(onlyMerged).toContain('data-finding-block-partial=""');
+    expect(onlyMerged).toContain('2+ бл.');
+    expect(onlyMerged).toContain('Цитата на стр. 9:');
+    // Every unlinked page of any of the observations is named once, in page order.
+    expect(render(withMerged, [9, 2, 4])).toContain('Цитата на стр. 2, 4, 9:');
+    // The canonical's page still counts, and a finding with no merged observations is read as before.
+    expect(render(withMerged, [4])).toContain('Цитата на стр. 4:');
+    const plain = findingDetail({ finding_uid: uid(3), current_verdict: 'accepted', observation: canonical });
+    expect(render(plain, [9])).not.toContain('data-finding-block-partial');
+    expect(render(withMerged, [999])).not.toContain('data-finding-block-partial');
   });
 
   it('keeps the exact count when no page the finding cites is unlinked', () => {

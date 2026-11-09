@@ -40,6 +40,12 @@ export interface DocumentCardGridProps {
    */
   readonly reviewAddress?: ((runId: string) => string) | undefined;
   /**
+   * `D-461`: where the document's «Оптимизация» tab opens. With it, the pill «Оптимизация N» of a card is a link to that tab
+   * (the screen builds the address; the pill's counts are those of the latest pass, so the address names no pass). Without it the
+   * pill stays a figure.
+   */
+  readonly optimisationAddress?: ((version: DocumentVersion) => string) | undefined;
+  /**
    * `UI-A-53`: a card that opens the grid, as the original's Σ card «Оптимизация раздела» does. It is the section's
    * own control and not a document, so it is drawn in the grid's first cell and counted in no figure.
    */
@@ -58,27 +64,32 @@ const FINDINGS_WORD: readonly [string, string, string] = ['замечание', 
  * optimisation pass, and while an expert still has some to decide, the marker «3 не решено». Nothing for a document no pass was
  * started over, or whose pass produced no proposal.
  */
-function OptimisationPillMark({ audit }: { readonly audit: DocumentVersion['audit'] }) {
+function OptimisationPillMark({ audit, href }: { readonly audit: DocumentVersion['audit']; readonly href?: string | undefined }) {
   const pill = optimisationPill(audit);
   if (pill === null) return null;
-  return (
-    <span
-      className={styles.optimisation}
-      data-card-optimisation={pill.count}
-      data-card-optimisation-undecided={pill.undecided}
-      title={pill.title}
-    >
+  const content = (
+    <>
       {pill.text}
       {pill.mark === null ? null : <span className={styles.optimisationMark}>{pill.mark}</span>}
-    </span>
+    </>
   );
+  const marks = {
+    className: styles.optimisation,
+    'data-card-optimisation': pill.count,
+    'data-card-optimisation-undecided': pill.undecided,
+    title: pill.title,
+  };
+  // `D-461`: a link to the document's «Оптимизация» tab where the screen gave an address, a figure otherwise.
+  return href === undefined ? <span {...marks}>{content}</span> : <Link href={href} {...marks}>{content}</Link>;
 }
 
 export function documentCardTitle(version: DocumentVersion): string {
   return version.display_title ?? version.source_filename ?? version.version_uid;
 }
 
-export function DocumentCardGrid({ documents, addresses, select, reviewAddress, leading, classification = 'both' }: DocumentCardGridProps) {
+export function DocumentCardGrid({
+  documents, addresses, select, reviewAddress, optimisationAddress, leading, classification = 'both',
+}: DocumentCardGridProps) {
   return (
     <ul className={styles.grid} data-document-cards={documents.length}>
       {leading === undefined || leading === null ? null : <li className={styles.leading} data-grid-leading="">{leading}</li>}
@@ -124,7 +135,7 @@ export function DocumentCardGrid({ documents, addresses, select, reviewAddress, 
                   {version.audit.finding_count} {pluralRu(version.audit.finding_count, FINDINGS_WORD)}
                 </span>
               )}
-              <OptimisationPillMark audit={version.audit} />
+              <OptimisationPillMark audit={version.audit} href={optimisationAddress?.(version)} />
             </div>
             {/* `R-151e`: the document's free tags. */}
             {(version.tags ?? []).length === 0 ? null : (
