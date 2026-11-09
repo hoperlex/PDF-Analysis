@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import type { ModelCatalogue, Role, StageModelLayout } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import {
-  NAMED_KITS, cellText, effortsOf, kitCells, kitIsOffered, kitModelIds, layoutFailure, layoutRefusalSentence, layoutTable, pairIsInCatalogue,
+  DEFAULT_TIMEOUT_SECONDS, NAMED_KITS, cellText, effortsOf, kitCells, kitIsOffered, kitModelIds, layoutFailure, layoutRefusalSentence, layoutTable, pairIsInCatalogue,
   rowOfStageKey,
 } from '@/entities/stage-layout';
 import {
@@ -150,6 +150,16 @@ describe('the sets', () => {
     expect([...kitModelIds('claude_only')].sort()).toEqual([...CLAUDE_ONLY_MODELS].sort());
   });
 
+  it('give a cell the revision does not have the timeout the server defaults to: 1800 seconds, not 600', () => {
+    expect(DEFAULT_TIMEOUT_SECONDS).toBe(1800);
+    for (const kit of NAMED_KITS) {
+      expect(kitCells(kit, []).map((c) => c.timeout_seconds)).toEqual([1800, 1800, 1800, 1800, 1800, 1800]);
+    }
+    // A cell the revision has keeps its own timeout, so the default reaches only a cell with none.
+    const onlyText = LAYOUT_CELLS.filter((c) => c.row === 'text').map((c) => ({ ...c, timeout_seconds: 99 }));
+    expect(kitCells('claude_only', onlyText).map((c) => c.timeout_seconds)).toEqual([99, 1800, 1800, 1800, 1800, 1800]);
+  });
+
   it('keep the limits of a cell the revision in force already has', () => {
     const current = LAYOUT_CELLS.map((c) => ({ ...c, max_output_tokens: 1234, timeout_seconds: 99 }));
     expect(kitCells('codex_only', current).every((c) => c.max_output_tokens === 1234 && c.timeout_seconds === 99)).toBe(true);
@@ -276,7 +286,7 @@ describe('the form «Изменить»', () => {
   });
 
   it('shows a refusal of the server in words and never an identifier', () => {
-    const refusal = new ApiError(422, { contract_version: '1.45.0', error_code: 'validation_failed', message: 'x', correlation_id: 'cid-layout-1', retryable: false, details: { field: 'cells', constraint: 'catalogue' } }, null);
+    const refusal = new ApiError(422, { contract_version: '1.46.0', error_code: 'validation_failed', message: 'x', correlation_id: 'cid-layout-1', retryable: false, details: { field: 'cells', constraint: 'catalogue' } }, null);
     expect(layoutRefusalSentence(refusal)).toContain('парой из каталога');
     expect(layoutFailure(refusal, true).kind).toBe('refusal');
     const markup = view({ failure: layoutFailure(refusal, true) });
@@ -320,7 +330,7 @@ describe('the switch «Модели по этапам: включены» and th
   });
 
   it('says the two refusals of the server in words', () => {
-    const conflict = (reason: string) => new ApiError(409, { contract_version: '1.45.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-l-2', retryable: false, details: { conflict_reason: reason } }, null);
+    const conflict = (reason: string) => new ApiError(409, { contract_version: '1.46.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-l-2', retryable: false, details: { conflict_reason: reason } }, null);
     expect(layoutFailure(conflict('no_layout_revision'), true).detail).toContain('набор моделей ещё не сохранён');
     expect(layoutFailure(conflict('provider_source_not_database'), true).detail).toContain('не из базы данных');
     expect(layoutFailure(conflict('something_new'), true).detail).not.toContain('something_new');

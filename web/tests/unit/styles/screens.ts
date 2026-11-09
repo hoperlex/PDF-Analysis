@@ -49,7 +49,7 @@ import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
-import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widgets/worker-list';
+import { WorkerList } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
@@ -227,7 +227,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.45.0',
+    contract_version: '1.46.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1139,28 +1139,6 @@ export function screens(): Screen[] {
     busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
     onPriority: noop, onNext: null, onPrevious: null,
   })));
-  // `UI-B-64`: the blocks under the tiles of «Обзор» -- the servers, the nearest queued jobs, a silent server and a job that ended badly.
-  {
-    const at = '2026-10-09T10:05:00Z';
-    const job = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
-      job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${id}`, run_id: RUN_ID, state, priority: 0, created_at: at, available_at: at, ...QUEUE_WORK, ...extra,
-    });
-    add('WorkersOverviewSections with attention', withRouter(createElement(WorkersOverviewSections, {
-      workers: [
-        { worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true, slots: 4, version: '0.5.0',
-          started_at: at, heartbeat_at: at, current_run_ids: [RUN_ID] },
-        { worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: true, slots: 2, version: '0.5.0',
-          started_at: at, heartbeat_at: at, current_run_ids: [] },
-      ],
-      workersPartial: true,
-      jobs: [job('1', 'queued', { queue_position: 1 }), job('2', 'failed', { error_code: 'analysis_failed' })],
-      jobsPartial: true,
-      processesHref: '?tab=processes',
-    } as unknown as Parameters<typeof WorkersOverviewSections>[0])));
-    add('WorkersOverviewSections with nothing to attend to', withRouter(createElement(WorkersOverviewSections, {
-      workers: [], workersPartial: false, jobs: [],
-    })));
-  }
   // The «Обновлено» line of the queue and the journal: current, and out of date (a note on the surface tint).
   add('UpdateTime fresh', withRouter(createElement(UpdateTime, {
     dataUpdatedAt: Date.parse('2026-10-09T10:05:00Z'), failed: false, now: Date.parse('2026-10-09T10:05:04Z'),
@@ -1443,18 +1421,6 @@ export function screens(): Screen[] {
     shape.seedClient?.(client);
     add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
   }
-  // M-17 (`R-151t`), UI-B-63: the overview tiles of «Обзор», with servers not online and a partial registry, the
-  // queue's line, and the links from the tiles to «Процессы» and «Очередь» (the rules `.link` and `.queueLine`).
-  const OVERVIEW_QUEUE = [
-    { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 },
-    { state: 'retry_wait', count: 0 }, { state: 'succeeded', count: 12 }, { state: 'failed', count: 2 },
-    { state: 'cancelled', count: 0 }, { state: 'dead_letter', count: 0 },
-  ] as const;
-  add('WorkersOverview with the queue', render(createElement(WorkersOverviewView, {
-    workers: { online: 1, total: 3, onlineSlots: 4, freeSlots: 2, partial: true },
-    queue: OVERVIEW_QUEUE,
-    processesHref: '?tab=processes',
-  })));
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {
@@ -3403,10 +3369,8 @@ export function screens(): Screen[] {
       preview: CUT_OVER_PREVIEW, connections: CONNECTION_CASES.map((one) => one.connection),
     })));
 
+    // `HOSTS-WEB-01b`: the presets left this page, so neither the account, the executors nor the presets are seeded for it.
     const settings = newClient();
-    settings.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
-    seedExecutors(settings, EXECUTOR_CASES);
-    settings.setQueryData(ANALYSIS_PRESETS_KEY, { items: [] });
     settings.setQueryData(queryKeys.analysis.profiles(), {
       items: PROJECT_STRUCTURE_ORDER.map((code, index): AnalysisProfileListItem => {
         const digit = (index % 10).toString();

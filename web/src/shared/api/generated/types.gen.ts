@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.45.0 (OpenAPI 3.1.0)
- *   sha256 415f8eb3950460753d5e309ed336900358898292e50ab55e4614f57153c89f70
+ *   AuditManager PC-01 API 1.46.0 (OpenAPI 3.1.0)
+ *   sha256 9bad911d85cd3b0908c40666e424ca7e568daaeb1643b507aac21a455ad093dc
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.45.0';
+export const CONTRACT_VERSION = '1.46.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '415f8eb3950460753d5e309ed336900358898292e50ab55e4614f57153c89f70';
+export const CONTRACT_DIGEST = '9bad911d85cd3b0908c40666e424ca7e568daaeb1643b507aac21a455ad093dc';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -586,6 +586,13 @@ export const SCHEMA_NAMES = [
   'RunNormReferences',
   'RunPreset',
   'RunQueueReason',
+  'RunStage',
+  'RunStageCell',
+  'RunStageChip',
+  'RunStageFacts',
+  'RunStagePlanSource',
+  'RunStageState',
+  'RunStages',
   'RunStartReadiness',
   'RunStartReadinessCell',
   'RunStartRoute',
@@ -4354,7 +4361,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.45.0";
+  contract_version: "1.46.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -7054,6 +7061,128 @@ export const RUN_QUEUE_REASON_VALUES = [
 
 /** RunQueueReason - the closed value set above. */
 export type RunQueueReason = (typeof RUN_QUEUE_REASON_VALUES)[number];
+
+/** One chip of the run: the code stage and procedure ids it covers, its plan (empty for a chip that calls no model) and its facts. */
+export type RunStage = {
+  chip: RunStageChip;
+  facts: RunStageFacts;
+  plan: Array<RunStageCell>;
+  stage_ids: Array<string>;
+};
+
+/**
+ * One line of a chip's plan: the part it plays (`main`, `leg1`, `leg2`, `judge`), the model, the effort, the answer limit and the
+ * timeout the run froze, and -- for an expert and an administrator -- the access and the server the cell is bound to. Of a run
+ * without a stage plan the line has `role` `main`, the model of the run's binding and nothing else it does not know.
+ * `access` and `server` are omitted for the viewer («Наблюдатель», `R-150w`); `server` is also absent while the cell is not bound.
+ */
+export type RunStageCell = {
+  access?: ExecutorModelAccess;
+  cell_key?: StageCellKey;
+  effort?: ModelEffort;
+  max_output_tokens?: number;
+  model_id?: string;
+  role: StageCellRole;
+  server?: string;
+  timeout_seconds?: number;
+};
+
+/**
+ * A chip of a run: a reader's name for the phase or phases of code that do one kind of work. The eight chips in the order the
+ * rail draws them -- `preparation` (the three PC-01 preparation stages), `text` (analysis of the text), `blocks` (analysis of the
+ * blocks), `cross_check` (the complex cross-check and the parameter passport), `merge` (the deterministic merge), `norms` (the
+ * norms), `review` (the critic) and `correction` (the refinement) -- and `ar_v3`, the one stage of the separate AR v3 profile.
+ * A chip order is a display order, not the order of the stage graph.
+ */
+export const RUN_STAGE_CHIP_VALUES = [
+  'preparation',
+  'text',
+  'blocks',
+  'cross_check',
+  'merge',
+  'norms',
+  'review',
+  'correction',
+  'ar_v3',
+] as const;
+
+/** RunStageChip - the closed value set above. */
+export type RunStageChip = (typeof RUN_STAGE_CHIP_VALUES)[number];
+
+/**
+ * What happened on a chip. `started_at` and `finished_at` are the earliest and the latest call of a chip that calls a model, or
+ * the times of its stage results (`finished_at` only once the chip has finished, and never from a stage taken from an earlier
+ * run). `calls_succeeded` and `calls_failed` count the calls the journal ended, `calls_retried` the calls that repeated an earlier
+ * call of the same request (a reply replayed from custody is not a call). `input_tokens`, `output_tokens` and `cost_micros` are
+ * the totals of the journal; `subscription_input_tokens` and `subscription_output_tokens` are the part of the tokens served by a
+ * subscription (not metered, never in `cost_micros`). `planned` and `completed` are the batches of the extended review's
+ * `phase_coverage` and are absent where the review keeps none. `last_error_code` is the code of the stage result that failed or,
+ * else, of the latest failed call; `reason` the extended review's reason a procedure did not complete.
+ */
+export type RunStageFacts = {
+  calls_failed: number;
+  calls_retried: number;
+  calls_succeeded: number;
+  completed?: number;
+  cost_micros: number;
+  finished_at?: string;
+  input_tokens: number;
+  last_error_code?: string;
+  output_tokens: number;
+  planned?: number;
+  reason?: string;
+  reused_from_run_id?: RunId;
+  started_at?: string;
+  state: RunStageState;
+  subscription_input_tokens: number;
+  subscription_output_tokens: number;
+};
+
+/**
+ * Where the plan of the chips comes from. `stage_plan`: the plan the run froze at its start, one cell per row and role.
+ * `run_binding`: the run froze none (it started on the route as before), so each chip that calls a model has one line, «модель
+ * прогона», from the run's binding -- or from the journal when it has none.
+ */
+export const RUN_STAGE_PLAN_SOURCE_VALUES = [
+  'stage_plan',
+  'run_binding',
+] as const;
+
+/** RunStagePlanSource - the closed value set above. */
+export type RunStagePlanSource = (typeof RUN_STAGE_PLAN_SOURCE_VALUES)[number];
+
+/**
+ * How a chip stands. `pending`: not started. `running`: the work is under way (a stage or procedure running, or a call in flight).
+ * `done`: completed. `partial`: completed with a typed shortfall. `failed`: refused. `skipped`: not run by decision. `unavailable`:
+ * could not run (for example, the corpus is missing).
+ */
+export const RUN_STAGE_STATE_VALUES = [
+  'pending',
+  'running',
+  'done',
+  'partial',
+  'failed',
+  'skipped',
+  'unavailable',
+] as const;
+
+/** RunStageState - the closed value set above. */
+export type RunStageState = (typeof RUN_STAGE_STATE_VALUES)[number];
+
+/**
+ * The stages of a run, plan and fact (`HOSTS-SEAL-2`, ADR-0028): each chip the run has, in the order the rail draws them, with
+ * what it was planned to run on and what the journal and the stage results say happened. A chip that no stage result, procedure,
+ * plan cell or call mentions is not listed. `state` is the run's own, so a reader knows whether a chip that is `running` is still
+ * being worked on. `plan_source` says whether the plans are the run's frozen `stage_plan` or the one line of its binding. The
+ * examples are: a run in progress on the stage layout; a finished run's norms chip as the viewer reads it (no `access`, no
+ * `server`); and a run that started on the route as before.
+ */
+export type RunStages = {
+  items: Array<RunStage>;
+  plan_source: RunStagePlanSource;
+  run_id: RunId;
+  state: RunState;
+};
 
 /**
  * What the one button «Запустить» says (ADR-0028): the route, the kit, every cell with its access, whether the start is

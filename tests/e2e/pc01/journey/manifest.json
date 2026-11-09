@@ -877,49 +877,89 @@
       "path": "/workers",
       "page_module": "web/src/app/workers/page.tsx",
       "$comment": [
-        "Исполнители (W54-WORKERS-WEB) reads the worker registry and the signed-in account's",
-        "roles on a cold route. The intake switch requires explicit administrator intent and",
-        "a confirmation, and is not emitted by this read journey.",
+        "Исполнители (W54-WORKERS-WEB; two tabs since HOSTS-WEB-01, ADR-0028): «Серверы» and «Модели по этапам».",
+        "The cold route opens «Серверы». It reads the signed-in account's roles and, once they are known",
+        "(the viewer reads nothing, R-150w), the list of servers (`listExecutorHosts`, polled every 10 s while",
+        "the tab is visible). It no longer reads the worker registry or the queue: «Обзор» became the summary line",
+        "of «Серверы», and «Процессы» moved to the administrator's `/workers/advanced` (route `workers-advanced`).",
         "",
-        "EXEC-HTTP-01 gave the screen three tabs: «Подключения», «Процессы», «Назначения». Since the",
-        "second UX pass (2026-11-07) the cold route opens «Обзор», as the original's dispatcher does:",
-        "it reads the worker registry's first page (as «Процессы» did) and the queue's first page for its",
-        "tiles and blocks (`listExecutionQueue`, the entry the side menu's counter already holds, so the",
-        "queue read is declared required and costs no request the menu did not make). «Процессы» is one",
-        "click or `?tab=processes` away and the steps that press its switches stand there. A closed tab mounts",
-        "nothing. The other tabs are opened by a click or by",
-        "`?tab=`, which this walk does not carry, and read `listExecutorConnections`,",
-        "`getExecutorConnection` (one per listed connection) and `listExecutorRoutes`; they are",
-        "declared `optional_api` so the claim names every read the screen can make without",
-        "asserting a tab the walk never opens.",
+        "«Модели по этапам» is one click or `?tab=models` away and reads the layout, the model catalogue and the",
+        "list of servers; «Подробнее» of a server reads its details; «Подключить сервер» reads only after the administrator",
+        "starts a connection (the install session, `getExecutorHostAgentInstall`), and the administrator's writes",
+        "(`createExecutorHostAgentInstall`, `issueExecutorHostEnrollment`, `setExecutorHostEnabled`,",
+        "`setExecutorHostSlots`, `archiveExecutorHost`, `reviseStageModelLayout`) require explicit intent and are not",
+        "emitted by this read journey. A closed tab mounts nothing, so the reads of the tab the walk never opens are",
+        "declared `optional_api`: the claim names every read the screen can make without asserting a tab it never opens.",
         "",
-        "The administrator's writes -- `createExecutorConnection`, `reviseExecutorConnection`,",
-        "`archiveExecutorConnection`, `requestExecutorProbe`, `generateExecutorSshKey` and",
-        "`setExecutorRoute` -- and, since EXEC-CANDIDATE-2, `issueRunnerToken` and `revokeRunnerToken`",
-        "of a `pull` connection -- require explicit intent and are not emitted by this read journey,",
-        "like the intake switch. A `pull` connection's card adds no read of its own: the runner",
-        "tokens and the open-task count ride in `getExecutorConnection`. A runner's four calls",
-        "(`claimExecutorTask` and the rest) are never made by the browser. The API key is not an API call of the browser at all: the key form",
-        "is a server-rendered native `<form method=\"post\">` that posts to the web tier's own",
-        "reserved door `POST /bff/v1/executor-secret/<connection_id>` (answer: 303 to",
-        "`/workers?tab=connections&connection=<id>&secret=<outcome>`), which forwards to",
-        "`setExecutorSecret` server-side. The door is the web tier's own, like `/bff/v1/session`,",
-        "carries the key in no header, body or address of its answer, and is not pressed by any",
-        "step here, because a step would need a live stack and a real key; it is held by",
-        "`web/tests/unit/workers/executor-secret-door.test.ts` and named here so the journey's",
-        "written claim knows the door exists. See web/src/app/bff/v1/[...path]/route.ts."
+        "The old tabs (`?tab=connections`, `groups`, `rules`, `routes`, `processes`) and the key-form address",
+        "(`?connection=`, where the BFF's `executor-secret` door sends the person back with `?secret=<outcome>`) are",
+        "redirected to `/workers/advanced` by this route; the steps that pressed them stand there now. The door is the web",
+        "tier's own, like `/bff/v1/session`, carries the key in no header, body or address of its answer and is not",
+        "pressed by any step here; it is held by `web/tests/unit/workers/executor-secret-door.test.ts`. See",
+        "web/src/app/bff/v1/[...path]/route.ts."
       ],
       "expects_api": [
-        {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers"},
-        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue"},
-        {"method": "GET", "path": "/me", "operationId": "getMe"}
+        {"method": "GET", "path": "/me", "operationId": "getMe"},
+        {
+          "method": "GET",
+          "path": "/executor-hosts",
+          "operationId": "listExecutorHosts",
+          "$why": "«Серверы» is the tab the cold route opens, and the journey's account holds both roles, so the list is read once the roles are known"
+        }
       ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
-        {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01); the cold route opens «Обзор» and a closed tab mounts nothing"},
-        {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "read once per listed connection on the «Подключения» and «Назначения» tabs, and polled every 3 s while a probe is open (EXEC-HTTP-01)"},
-        {"method": "GET", "path": "/executor-routes", "operationId": "listExecutorRoutes", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01)"},
+        {"method": "GET", "path": "/executor-hosts/{host_id}/details", "operationId": "getExecutorHostDetails", "$why_optional": "read only while an administrator has «Подробнее» of a server open; the cold route opens none"},
+        {"method": "GET", "path": "/executor-hosts/{host_id}/agent-installs/{install_id}", "operationId": "getExecutorHostAgentInstall", "$why_optional": "read only after an administrator starts a connection in «Подключить сервер» (the SSH install session); the cold route starts none"},
+        {"method": "GET", "path": "/model-layout", "operationId": "getStageModelLayout", "$why_optional": "read only on the «Модели по этапам» tab, which a closed tab mounts nothing of; the cold route opens «Серверы»"},
+        {"method": "GET", "path": "/model-catalogue", "operationId": "listModelCatalogue", "$why_optional": "read only on the «Модели по этапам» tab, for an administrator's editor; the cold route opens «Серверы»"},
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+      ],
+      "follow": null
+    },
+    {
+      "name": "workers-advanced",
+      "path": "/workers/advanced",
+      "page_module": "web/src/app/workers/advanced/page.tsx",
+      "$comment": [
+        "Расширенные исполнители (HOSTS-WEB-01, plan 2026-11-09 section 7.5), ADMINISTRATOR ONLY: the screen registry's row",
+        "lists `admin` alone, so an expert is sent to /403 (the write step `worker-intake-is-an-administrators-act`",
+        "walks that refusal as `expert_only`; this read walk runs as the journey's own account, which holds both roles).",
+        "The page keeps what «Исполнители» had before it became two tabs, one folded section each: «Подключения»,",
+        "«Группы», «Правила», «Назначения», «Процессы», «Пресеты анализа» (moved from «Настройки анализа») and",
+        "«Модели по этапам» with its switch and journal.",
+        "",
+        "A closed section mounts nothing, so the cold route reads the account's roles and nothing else, and that is the",
+        "claim: `expects_api` is the account alone. Opening a section is what reads, so the reads of every section are",
+        "declared `optional_api` and not asserted: the walk never opens one. The write steps that stand here open «Процессы»",
+        "through `?tab=processes` (`workers-list-the-worker`, `worker-stops-taking-new-work`, `worker-takes-new-work-again`).",
+        "The writes of the sections -- connections, groups, rules, routes, presets, the layout and the intake switch --",
+        "require explicit intent and are not emitted by this read journey."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/me",
+          "operationId": "getMe",
+          "$why": "the page draws its sections only for an administrator, which it reads from the account's roles, mounted with the page"
+        }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "read only once «Подключения», «Назначения» or «Пресеты анализа» is open; the cold route opens none"},
+        {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "read once per listed connection in «Подключения», «Назначения» and «Пресеты анализа», and polled every 3 s while a probe is open, only once a section is open"},
+        {"method": "GET", "path": "/executor-routes", "operationId": "listExecutorRoutes", "$why_optional": "read only once «Подключения», «Правила» or «Назначения» is open"},
+        {"method": "GET", "path": "/executor-groups", "operationId": "listExecutorGroups", "$why_optional": "read only once «Группы» or «Правила» is open"},
+        {"method": "GET", "path": "/executor-groups/{group_id}/capacity", "operationId": "getExecutorGroupCapacity", "$why_optional": "read once per listed group in «Группы», only once the section is open"},
+        {"method": "GET", "path": "/executor-routing-rules", "operationId": "listExecutorRoutingRules", "$why_optional": "read only once «Правила» is open"},
+        {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers", "$why_optional": "read only once «Процессы» is open (`?tab=processes`); the cold route opens none"},
+        {"method": "GET", "path": "/analysis/presets", "operationId": "listAnalysisPresets", "$why_optional": "read only once «Пресеты анализа» is open"},
+        {"method": "GET", "path": "/model-layout", "operationId": "getStageModelLayout", "$why_optional": "read only once «Модели по этапам» is open"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
         {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
@@ -1100,7 +1140,13 @@
       "$comment": [
         "Настройки анализа (R-66; W59-ANALYSIS-SETTINGS-01 graduated it from the honest stub)",
         "reads the analysis-profile registry once on a cold route: the fifteen sections and",
-        "the profile each runs with. Read-only: the screen emits no write."
+        "the profile each runs with. Read-only: the screen emits no write.",
+        "",
+        "HOSTS-WEB-01b: the section «Пресеты запуска» moved to the administrator's `/workers/advanced`",
+        "(route `workers-advanced`), so this page no longer reads the presets, the executor connections or",
+        "the account: those three required reads were removed with the section, and a page that still made",
+        "one would be red as an undeclared call. The account is read by the shell for a session the",
+        "«Очередь» screen is open to, which is why `/me` is declared below as optional."
       ],
       "expects_api": [
         {"method": "GET", "path": "/analysis/profiles", "operationId": "listAnalysisProfiles"},
@@ -1109,30 +1155,12 @@
           "path": "/ar-v3-beta/pack",
           "operationId": "getArV3BetaPackStatus",
           "$why": "the AR v3 pack panel is part of the page, read on mount"
-        },
-        {
-          "method": "GET",
-          "path": "/analysis/presets",
-          "operationId": "listAnalysisPresets",
-          "$why": "«Пресеты запуска» is part of the page, read on mount"
-        },
-        {
-          "method": "GET",
-          "path": "/executor-connections",
-          "operationId": "listExecutorConnections",
-          "$why": "«Пресеты запуска» judges each preset against the executors, read on mount"
-        },
-        {
-          "method": "GET",
-          "path": "/me",
-          "operationId": "getMe",
-          "$why": "the page decides which controls it draws from the account's roles (`useMayActAsExpert`), mounted with the page"
         }
       ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
-        {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "the presets widget reads the detail of each executor connection to name the route a preset takes (useExecutorConnectionDetails), only once a connection exists"},
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
         {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
@@ -8797,11 +8825,11 @@
       },
       {
         "name": "workers-list-the-worker",
-        "at": "/workers?tab=processes",
-        "page_module": "web/src/app/workers/page.tsx",
+        "at": "/workers/advanced?tab=processes",
+        "page_module": "web/src/app/workers/advanced/page.tsx",
         "control_module": "web/src/widgets/worker-list/ui/worker-list.tsx",
         "$comment": [
-          "Исполнители, «Процессы» (`?tab=processes`: the screen opens on «Обзор» since the second UX pass). The lane runs one worker beside the API (EXECUTION_ROLE=worker); it is registered, active and takes new work."
+          "Расширенные исполнители, «Процессы» (`?tab=processes` opens that section). Since HOSTS-WEB-01 «Процессы» is a section of `/workers/advanced`, for an administrator; the old address `/workers?tab=processes` is only a redirect to it, so the step stands on the page itself. The lane runs one worker beside the API (EXECUTION_ROLE=worker); it is registered, active and takes new work."
         ],
         "captures": [
           {
@@ -8834,26 +8862,36 @@
       {
         "name": "worker-intake-is-an-administrators-act",
         "as": "expert_only",
-        "at": "/workers?tab=processes",
-        "page_module": "web/src/app/workers/page.tsx",
+        "at": "/workers/advanced?tab=processes",
+        "page_module": "web/src/app/workers/advanced/page.tsx",
         "control_module": "web/src/widgets/worker-list/ui/worker-list.tsx",
         "$comment": [
-          "An expert reads the workers and is offered no switch."
+          "The worker registry and its intake switch are the administrator's: since HOSTS-WEB-01 «Процессы» is a section of `/workers/advanced`, whose registry row lists `admin` alone. An expert, who read the list and was offered no switch on the old tab, is now sent to /403 before the page mounts, so the list is never drawn to them and never read.",
+          "Three things fail this step if the page ever opens for an expert: the browser ends anywhere but /403, it sends `GET /execution/workers`, or a worker row or an intake button is drawn."
         ],
-        "expects_api": [
+        "expects_location": "/403",
+        "expects_not_called": [
           {
             "method": "GET",
             "path": "/execution/workers",
-            "operationId": "listWorkers",
-            "expect_status": 200
+            "why": "the section «Процессы» never mounts for an account that cannot open the advanced page"
+          },
+          {
+            "method": "PUT",
+            "path": "/execution/workers/{worker_id}/intake",
+            "why": "an expert changes no worker's intake"
           }
         ],
         "expects_present": [
           {
-            "selector": "ol[data-worker-group=\"active\"] > li"
+            "selector": "h1",
+            "text_contains": "Доступ закрыт"
           }
         ],
         "expects_absent": [
+          {
+            "selector": "ol[data-worker-group=\"active\"] > li"
+          },
           {
             "selector": "li button",
             "text": "Не брать новые"
@@ -8868,9 +8906,9 @@
       },
       {
         "name": "worker-stops-taking-new-work",
-        "at": "/workers?tab=processes",
-        "page_module": "web/src/app/workers/page.tsx",
-        "control_module": "web/src/_pages/workers/ui/workers-page.tsx",
+        "at": "/workers/advanced?tab=processes",
+        "page_module": "web/src/app/workers/advanced/page.tsx",
+        "control_module": "web/src/_pages/workers/ui/processes-section.tsx",
         "$comment": [
           "The administrator stops the worker taking new jobs (confirmation first); its row says intake is off."
         ],
@@ -8908,9 +8946,9 @@
       },
       {
         "name": "worker-takes-new-work-again",
-        "at": "/workers?tab=processes",
-        "page_module": "web/src/app/workers/page.tsx",
-        "control_module": "web/src/_pages/workers/ui/workers-page.tsx",
+        "at": "/workers/advanced?tab=processes",
+        "page_module": "web/src/app/workers/advanced/page.tsx",
+        "control_module": "web/src/_pages/workers/ui/processes-section.tsx",
         "$comment": [
           "And allows it again, so the lane's runs are taken."
         ],

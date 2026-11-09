@@ -41,7 +41,7 @@ def planned_parameters(policy, *, reason=None, terminal=False):
         "expert_decisions_written": False, "normative_verification": "not_performed"}
 
 
-def run_project_parameters(*, run, model_id, outputs, store, state, accepted, durable_call, checkpoint, aggregate, save):
+def run_project_parameters(*, run, model_id, outputs, store, state, accepted, durable_call, checkpoint, aggregate, save, settings=None):
     section = state["section"]
     body = state["project_parameters"]
     source_sha = state["source_sha256"]
@@ -107,7 +107,7 @@ def run_project_parameters(*, run, model_id, outputs, store, state, accepted, du
             checkpoint("project_parameters_batch")
             receipt = body["batches"][batch["index"]]
             request = build_project_parameters_request(model_id=model_id, run_id=run.run_id,
-                section=section, batch=batch, accepted=accepted, source_sha256=source_sha)
+                section=section, batch=batch, accepted=accepted, source_sha256=source_sha, settings=settings)
             receipt.update(status="running", request_sha256=request.request_sha256); persist()
             response, replayed = durable_call(request, batch["index"])
             receipt.update(response_received=True, response_sha256=response.response_sha256, replayed=replayed)

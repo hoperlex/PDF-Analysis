@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 295,
+    "path_count": 296,
     "operations": [
       [
         "DELETE",
@@ -602,6 +602,11 @@
         "GET",
         "/runs/{run_id}/norm-verification",
         "getRunNormVerification"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/stages",
+        "getRunStages"
       ],
       [
         "GET",
@@ -2185,6 +2190,13 @@
       "RunNormReferences",
       "RunPreset",
       "RunQueueReason",
+      "RunStage",
+      "RunStageCell",
+      "RunStageChip",
+      "RunStageFacts",
+      "RunStagePlanSource",
+      "RunStageState",
+      "RunStages",
       "RunStartReadiness",
       "RunStartReadinessCell",
       "RunStartRoute",
@@ -2414,5 +2426,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0062_hosts_stage_models",
-  "contract_version": "1.45.0"
+  "contract_version": "1.46.0"
 }

@@ -1,10 +1,10 @@
 /**
- * `ANALYSIS-PRESETS-01` (`R-146av`): the presets of how a run starts, in «Настройки анализа», at run
- * start and on the run.
+ * `ANALYSIS-PRESETS-01` (`R-146av`): the presets of how a run starts, on `/workers/advanced` (they sat in
+ * «Настройки анализа» until `HOSTS-WEB-01b`), at run start and on the run.
  *
  * What is proved here, in the order a person meets it:
  *
- * - the settings section: the list for any role, the controls for an administrator only, an archive
+ * - the section (the widget, mounted by the advanced page): the list for any role, the controls for an administrator only, an archive
  *   apart, a preset whose executor cannot serve said so, and the failure/empty states;
  * - the commands, live: a save sends exactly `{name, executor_connection_id}` under one key, a repeat
  *   after a failure reuses the key, an edit is another key; a revision names its preset in the path;
@@ -90,7 +90,7 @@ const BLOCKED = ALL_CASES.find((one) => {
 function apiError(status: number, errorCode: string, details: Record<string, unknown> = {}): ApiError {
   const envelope = {
     error_code: errorCode, message: 'x', retryable: false, correlation_id: 'cid-0123456789abcdef', details,
-    contract_version: '1.45.0',
+    contract_version: '1.46.0',
   } as unknown as ErrorEnvelope;
   return new ApiError(status, envelope, null);
 }

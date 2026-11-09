@@ -148,7 +148,7 @@ import {
 import type { StartArV3GroupViewProps } from '@/features/start-ar-v3-group';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
-import { WorkerList, WorkersOverviewSections } from '@/widgets/worker-list';
+import { WorkerList } from '@/widgets/worker-list';
 import { modelLabel } from '@/entities/executor-host';
 import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
 import type { WorkersAdvancedPageProps, WorkersPageProps } from '@/_pages/workers';
@@ -1140,7 +1140,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.45.0',
+    contract_version: '1.46.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1152,7 +1152,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.45.0',
+    contract_version: '1.46.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2019,7 +2019,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.45.0',
+    contract_version: '1.46.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2212,7 +2212,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.45.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.46.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2334,8 +2334,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'start-run-control',
     make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
   },
-  // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» of «Настройки анализа», in the states a default cache does not
-  // select (the preset select of the start control was removed by `RUN-START-ONE-01a`).
+  // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» (on `/workers/advanced` since `HOSTS-WEB-01b`), in the states a default cache
+  // does not select (the preset select of the start control was removed by `RUN-START-ONE-01a`).
   {
     name: 'analysis-presets-for-an-administrator',
     make: () => createElement(AnalysisPresets, { roles: ['admin'] }),
@@ -2824,23 +2824,6 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       roles: ['admin'], asOf: Date.parse('2026-10-09T10:15:00Z'),
       busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
       onPriority: () => {}, onNext: null, onPrevious: null,
-    }),
-  },
-  {
-    // `UI-B-64`: the blocks under the tiles of «Обзор», with a silent server and a job that ended badly.
-    name: 'workers-overview-sections-attention',
-    make: () => createElement(WorkersOverviewSections, {
-      workers: [{
-        worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: true, slots: 2, version: '0.5.0',
-        started_at: '2026-10-09T10:00:00Z', heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [],
-      }],
-      workersPartial: true,
-      jobs: [{
-        job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', run_id: RUN_ID, state: 'failed', priority: 0,
-        created_at: '2026-10-09T10:00:00Z', available_at: '2026-10-09T10:00:00Z', error_code: 'analysis_failed', ...QUEUE_WORK,
-      }],
-      jobsPartial: true,
-      processesHref: '?tab=processes',
     }),
   },
   /*
@@ -4500,6 +4483,20 @@ const TRANSLATED_SCHEMAS = [
   'ExecutorIdentityBasis',
   'ExecutorRateCheck',
   'ExecutorWorkKind',
+  // `HOSTS-SEAL-1` (ADR-0028): «Исполнители» and «Модели по этапам» say the state of a server, a model and a provider's login, the
+  // access, the effort and the row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. `review`,
+  // `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid` and `online` are plain English words and must not be permitted bare.
+  // `HOSTS-WEB-01` renders them (the markers are in `SCHEMA_MARKERS` below; `ModelProbeState` and `RunStartRoute` wait in `NOT_YET_ON_A_SCREEN`).
+  'StageRowKey',
+  'StageCellRole',
+  'StageModelKit',
+  'ModelEffort',
+  'ExecutorModelAccess',
+  'ProviderAuthState',
+  'ModelProbeState',
+  'ExecutorHostState',
+  'ModelUnavailableReason',
+  'RunStartRoute',
   // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
   // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
   // `queued`, `running`, `stale`, `failed`, `done`), which must not be permitted bare. `ComparisonLayer` and `ComparisonChannelState`
@@ -4575,26 +4572,18 @@ function translatedVocabulary(): ReadonlySet<string> {
 }
 
 /**
- * `HOSTS-SEAL-1` (ADR-0028, contract 1.45.0): enumerations of the servers and the stage layout that no screen renders yet.
+ * Enumerations that no screen renders yet (`HOSTS-SEAL-1` reserved ten, `HOSTS-WEB-01` rendered them and moved them into `TRANSLATED_SCHEMAS`).
  *
- * «Исполнители» and «Модели по этапам» will say the state of a server, a model and a provider's login, the access, the effort and the
- * row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. Several of those values are plain English
- * words (`review`, `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid`, `online`). They leave the permitted vocabulary NOW, so the
- * guard keeps reddening `review` as it did before the contract carried it as a bare value (`StageRowKey`), but they are not yet
- * `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries, and none does. `HOSTS-WEB-01` moves each
- * schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empties this list.
+ * They leave the permitted vocabulary NOW, so the guard keeps reddening a plain English word of the contract (`review`, `text`, `done`) as it did
+ * before the contract carried it, but they are not yet `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries,
+ * and none does. `RUN-SCREEN-01` moves each schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empties this list.
  */
 const RESERVED_TRANSLATED_SCHEMAS = [
-  'StageRowKey',
-  'StageCellRole',
-  'StageModelKit',
-  'ModelEffort',
-  'ExecutorModelAccess',
-  'ProviderAuthState',
-  'ModelProbeState',
-  'ExecutorHostState',
-  'ModelUnavailableReason',
-  'RunStartRoute',
+  // `HOSTS-SEAL-2` (contract 1.46.0): the window «Этапы анализа раздела» will say a chip, its state and where its plan comes from in Russian, with the
+  // contract value in a `data-` attribute (`RUN-SCREEN-01`). `text`, `blocks`, `merge`, `norms`, `review`, `done` and `preparation` are plain English words.
+  'RunStageChip',
+  'RunStageState',
+  'RunStagePlanSource',
 ] as const;
 
 const TRANSLATED = translatedVocabulary();
@@ -4723,7 +4712,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.45.0',
+            contract_version: '1.46.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4745,7 +4734,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.45.0',
+            contract_version: '1.46.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

@@ -350,6 +350,9 @@ describe('lane N1: the table reads at a glance', () => {
     const markup = renderScreen(client, createElement(AnalysisSettingsPage));
     expect(markup).toContain('Профили здесь только показываются, изменить их нельзя.');
     expect(markup).not.toContain('Пресеты запуска — сохранённый выбор исполнителя для прогона.');
+    // `HOSTS-WEB-01b`: the presets live on `/workers/advanced`, so neither the section nor the subtitle names them here.
+    expect(markup).not.toContain('Пресеты запуска');
+    expect(markup).not.toContain('пресеты запуска');
   });
 });
 
@@ -386,7 +389,7 @@ describe('the page', () => {
   it('renders a refusal in Russian with its correlation id, and no table', () => {
     const client = newClient();
     seedError(client, queryKeys.analysis.profiles(), new ApiError(403, {
-      contract_version: '1.45.0', error_code: 'permission_denied',
+      contract_version: '1.46.0', error_code: 'permission_denied',
       message: 'permission denied', correlation_id: 'cid-analysis-settings-1', retryable: false,
     }, null));
     const markup = renderScreen(client, createElement(AnalysisSettingsPage));

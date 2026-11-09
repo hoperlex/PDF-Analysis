@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import unicodedata
 
-from .core import ModelRequest, canonical, digest
+from .core import ModelRequest, canonical, digest, effort_of, limit_of
 from .original_review.normalize import normalize_finding
 from .original_review.rule_filter import apply_rule_filter
 from .original_review.scorer import score_finding
@@ -301,7 +301,7 @@ def _normative_view(observations, *, full_context=False):
 
 
 def _request(*, model_id, run_id, section, observations, sources, window_id, context,
-             phase, schema, instruction, critiques=None, full_context=False):
+             phase, schema, instruction, critiques=None, full_context=False, settings=None):
     from .section_rules import section_instructions
     selected = _input_items(observations)
     indexed, texts = _source_index(sources, context)
@@ -350,9 +350,11 @@ def _request(*, model_id, run_id, section, observations, sources, window_id, con
         properties["source_evidence"]["items"]["properties"]["source_id"]["enum"] = allowed_ids
         if "proposed_source_ids" in properties:
             properties["proposed_source_ids"]["items"]["enum"] = allowed_ids
-    body = {"model": model_id, "max_tokens": REVIEW_OUTPUT_TOKENS if phase == "finding_review" else CORRECTION_OUTPUT_TOKENS,
+    # `HOSTS-LAYOUT-01`: the cell's answer limit and effort when the run has a stage plan; the constants otherwise.
+    body = {"model": model_id,
+        "max_tokens": limit_of(settings, REVIEW_OUTPUT_TOKENS if phase == "finding_review" else CORRECTION_OUTPUT_TOKENS),
         "system": system, "messages": [{"role": "user", "content": canonical(payload)}],
-        "thinking": {"type": "adaptive"}, "output_config": {"effort": "high",
+        "thinking": {"type": "adaptive"}, "output_config": {"effort": effort_of(settings),
             "format": {"type": "json_schema", "schema": schema}}}
     if len(canonical(body).encode("utf-8")) > MAX_REQUEST_BYTES:
         raise ValueError("review_request_window_too_large")
@@ -361,12 +363,12 @@ def _request(*, model_id, run_id, section, observations, sources, window_id, con
 
 
 def build_critic_request(*, model_id, run_id, section, observations, sources, window_id, context=None,
-                         full_context=False):
+                         full_context=False, settings=None):
     if not _input_items(observations):
         return None
     return _request(model_id=model_id, run_id=run_id, section=section, observations=observations,
         sources=sources, window_id=window_id, context=context, phase="finding_review", schema=critic_schema(),
-        full_context=full_context,
+        full_context=full_context, settings=settings,
         instruction=("Верни объект reviews: ровно одна запись для КАЖДОГО input_id, без добавлений и пропусков. "
             "source_ids повторяют полный исходный набор. llm_decision — только совет модели. Для reject нужны "
             "confidence>=0.75, enough_source, evidence_checked=true и конкретные source_evidence с ДОСЛОВНЫМИ "
@@ -523,14 +525,14 @@ def _targets(observations, critiques):
 
 
 def build_corrector_request(*, model_id, run_id, section, observations, critiques, sources, window_id, context=None,
-                            full_context=False):
+                            full_context=False, settings=None):
     targets = _targets(observations, critiques)
     if not targets:
         return None
     selected = [row for row in critiques if row["input_id"] in targets]
     return _request(model_id=model_id, run_id=run_id, section=section, observations=targets,
         sources=sources, window_id=window_id, context=context, phase="finding_correction",
-        schema=corrector_schema(), critiques=selected, full_context=full_context,
+        schema=corrector_schema(), critiques=selected, full_context=full_context, settings=settings,
         instruction=("Верни объект corrections: ровно одна запись для каждого переданного input_id, без новых наблюдений. "
             "Следуй консервативному corrector исходного проекта: НИЧЕГО НЕ УДАЛЯТЬ, исходные данные сохранить. "
             "source_ids повторяют исходный набор. action=retain или needs_context сохраняют proposed_title/description "

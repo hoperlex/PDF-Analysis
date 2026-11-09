@@ -42,7 +42,7 @@ function envelope(
   details?: ErrorEnvelope['details'],
 ): ErrorEnvelope {
   return {
-    contract_version: '1.45.0',
+    contract_version: '1.46.0',
     correlation_id: 'cid-7f1c',
     error_code: code,
     message,

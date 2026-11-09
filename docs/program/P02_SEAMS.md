@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-323 operations, sealed. `A5` generates the typed client from this document; `B6`
+324 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1493,6 +1493,7 @@ could.
 | `setStageModelLayoutEnabled` | `PUT /model-layout/enabled` |
 | `listModelCatalogue` | `GET /model-catalogue` |
 | `getRunStartReadiness` | `POST /runs/start-readiness` |
+| `getRunStages` | `GET /runs/{run_id}/stages` |
 | `downloadAgentPackage` | `GET /runner/agent-package/{version}` |
 | `estimateStageChainRun` | `GET /stage-link-revisions/{stage_link_revision_id}/chain-estimate` |
 | `resumeStageChainRun` | `POST /stage-chain-runs/{stage_chain_run_id}/resume` |

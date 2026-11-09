@@ -4,7 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 
-from .core import ModelRequest, canonical, digest
+from .core import ModelRequest, canonical, digest, effort_of, limit_of
 from .coverage import validate_cross_window_policy
 from .cross_window import FULL_BIN_SOURCES, FULL_COVERAGE_MODE, FULL_VERSION
 from .review import _document, _validate
@@ -81,7 +81,7 @@ def _sources(batch):
     return indexed
 
 
-def build_global_cross_window_request(*, model_id, run_id, section, batch, source_sha256, policy):
+def build_global_cross_window_request(*, model_id, run_id, section, batch, source_sha256, policy, settings=None):
     from .section_rules import section_instructions
     if not validate_cross_window_policy(policy): raise ValueError("global_cross_window_policy_required")
     indexed = _sources(batch)
@@ -117,9 +117,10 @@ def build_global_cross_window_request(*, model_id, run_id, section, batch, sourc
         "source_id бери только из переданных пакетов и не подменяй номером страницы или ID другого этапа. "
         "norm_queries — только поисковые запросы, не подтверждение нормы. Ответ по закрытой схеме, по-русски.\n\n" +
         section_instructions(section, "comprehensive_analysis"))
-    body = {"model": model_id, "max_tokens": 6000, "system": instruction,
+    # `HOSTS-LAYOUT-01`: the cell's answer limit and effort when the run has a stage plan; the constants otherwise.
+    body = {"model": model_id, "max_tokens": limit_of(settings, 6000), "system": instruction,
         "messages": [{"role": "user", "content": canonical(payload)}], "thinking": {"type": "adaptive"},
-        "output_config": {"effort": "high", "format": {"type": "json_schema", "schema": response_schema(source_ids=indexed)}}}
+        "output_config": {"effort": effort_of(settings), "format": {"type": "json_schema", "schema": response_schema(source_ids=indexed)}}}
     if len(canonical(body).encode("utf-8")) > 900_000: raise ValueError("global_cross_window_request_budget")
     return ModelRequest(model_id, body,
         idempotency_scope=f"{run_id}:v3:global-cross-window:{batch['batch_key']}:{digest(body)}")

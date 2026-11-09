@@ -1,4 +1,5 @@
-"""The ports of the host and stage-layout operations of contract 1.45.0 (`HOSTS-SEAL-1`, ADR-0028).
+"""The ports of the host and stage-layout operations of contract 1.45.0 (`HOSTS-SEAL-1`, ADR-0028) and of the stages of a run
+(contract 1.46.0, `HOSTS-SEAL-2`).
 
 They live beside ``ports.py`` and not in it: ``ports.py`` is the integrator's hotspot for the wave, and a Protocol needs no place in a shared
 file to be a seam. The wave-1 lanes implement them -- ``HOSTS-BACKEND-01`` the servers, ``HOSTS-LAYOUT-01`` the layout, the catalogue and
@@ -16,7 +17,7 @@ from typing import Protocol
 
 from auditmanager.api.schemas import models
 
-__all__ = ["ExecutorHostPort", "StageModelPort"]
+__all__ = ["ExecutorHostPort", "RunStagePort", "StageModelPort"]
 
 
 class ExecutorHostPort(Protocol):
@@ -72,3 +73,11 @@ class StageModelPort(Protocol):
     def list_catalogue(self) -> models.ModelCatalogue: ...
 
     def get_start_readiness(self, *, body: models.RunCostEstimateRequest) -> models.RunStartReadiness: ...
+
+
+class RunStagePort(Protocol):
+    """The stages of a run, plan and fact (`HOSTS-SEAL-2`, `RUN-STAGES-01`): one read for every role that may read a run. The caller's
+    identity goes with the call because the answer depends on the role -- the server and the access of a cell are omitted for the
+    viewer (`R-150w`) -- and a route decides nothing about roles; the implementation reads them. An unknown run is `404 not_found`."""
+
+    def get_run_stages(self, *, run_id: str, user_uid: str) -> models.RunStages: ...

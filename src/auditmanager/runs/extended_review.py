@@ -7,7 +7,7 @@ import math
 from copy import deepcopy
 from typing import Any
 
-from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelResponse, ProviderMode,
+from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelResponse, ProviderMode, accepted_reported,
     build_extended_request, extended_canonical, extended_digest, finalize_extended_items,
     parse_extended_reply, plan_extended_inputs, EXTENDED_REVIEW_ROLE, EXTENDED_REPLY_ROLE,
     pinned_models, request_cost_upper_usd, require_approved_model, extended_block_payload)
@@ -16,6 +16,8 @@ from auditmanager.executors.public import CropImage, attach_images
 from auditmanager.jobs.public import extended_unit
 from auditmanager.norms.public import SEARCH_WINDOW, search_norms
 from auditmanager.runs.repository import RunRepository
+from auditmanager.runs.stage_plan import call_journal_columns, cell_binding, settings_of
+from auditmanager.runs.stage_layout import row_of_phase
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId
 from auditmanager.storage.public import parse_blob_id
@@ -26,6 +28,32 @@ FORMAT = "extended-review-v1"
 
 def _refuse(reason: str):
     return DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason=reason)
+
+
+def _cell(binding, row):
+    """`binding_for(cell)` (ADR-0028 decision 6): the binding of the ``row`` cell -- the adapter of the member it was bound to, the cell's
+    model and settings, the call binding that holds the reply to the cell's model. A run that is not frozen with a stage plan has one
+    binding for every call, and this returns it."""
+    return cell_binding(binding, f"{row}:main")
+
+
+def _kw(binding, row):
+    """The keywords every request builder of the ``row`` cell takes: its model and its settings (``None`` outside a planned run, so the
+    builder keeps the constants it always had)."""
+    cell = _cell(binding, row)
+    return {"model_id": cell.config.model_id, "settings": settings_of(cell)}
+
+
+def _phase_binding(binding, identity):
+    """The binding a call of ``identity`` runs with: the run's own for a run without a stage plan, else the cell of the row the phase
+    belongs to. A semantic repair (``:repair:1``) is the phase it repairs, so it runs on that phase's cell. A phase that has no row has no
+    model, and a planned run does not call one."""
+    if getattr(binding, "cells", None) is None:
+        return binding
+    row = row_of_phase(identity)
+    if row is None:
+        raise _refuse("extended_phase_has_no_cell")
+    return _cell(binding, row)
 
 
 def _response_payload(response: ModelResponse) -> dict:
@@ -62,9 +90,17 @@ def _saved_response(store, row: dict, request: ModelRequest, binding) -> ModelRe
 def _call(session, *, run_id, authority, jobs, journal, binding, request, phase, source_sha256,
           meter, store, publish, checkpoint, global_unknown_fence=False):
     checkpoint("extended_before_call")
+    if getattr(binding, "cells", None) is not None:
+        # `HOSTS-LAYOUT-01` (`R-133`): a planned run's calls go through the binding of their cell (``runs.stage_plan.cell_binding``). The
+        # run-level binding is the text cell's, and a block or a norm call made on it would run on the wrong model: refused, not skipped.
+        raise _refuse("extended_call_without_cell")
+    planned = binding.call is not None and getattr(binding.call, "cell_key", None) is not None
+    # The key of a saved reply. A planned call is identified by (source, phase, request, model) alone: neither the host nor the connection
+    # revision is in it, so a retry served by another host after a move finds the reply already paid for. Every other call keeps the key
+    # it has always had, so the replies of runs started before the layout are still found.
     key = extended_digest({"format": FORMAT, "source": source_sha256, "phase": phase,
         "request": request.request_sha256, "model": request.model_id,
-        "connection": None if binding.call is None else binding.call.connection_revision_id})
+        **({} if planned else {"connection": None if binding.call is None else binding.call.connection_revision_id})})
     saved = extended_unit(session, run_id=run_id, unit_key=key, source_sha256=source_sha256, phase=phase)
     session.commit()  # no read/authority lock survives external Blob I/O
     if saved is not None:
@@ -92,7 +128,8 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
         model_identity=request.model_id, provider_mode=binding.adapter.provider_mode.value,
         parameters=params, request_sha256=request.request_sha256,
         connection_revision_id=None if binding.call is None else binding.call.connection_revision_id,
-        identity_basis=None if binding.call is None else binding.call.identity_basis)
+        identity_basis=None if binding.call is None else binding.call.identity_basis,
+        **call_journal_columns(binding.call))
     if global_unknown_fence:
         bind_current=getattr(journal,"bind_current_call",None)
         if callable(bind_current):bind_current(call_id)
@@ -139,7 +176,7 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
     if budget_error is not None:
         raise budget_error
     if (binding.call is not None and binding.call.check_identity
-            and response.model != binding.call.expected_model):
+            and not accepted_reported(binding.call.expected_model, response.model)):
         raise _refuse("extended_model_identity_mismatch")
     return response, False
 
@@ -320,10 +357,10 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
                 sections=state["context_sections"], coverage=state["coverage"])
             if context_cut and "page_context_truncated" not in state["warnings"]:
                 state["warnings"].append("page_context_truncated")
-            request = attach_images(build_extended_request(model_id=binding.config.model_id, run_id=run.run_id,
+            request = attach_images(build_extended_request(**_kw(binding, "blocks"), run_id=run.run_id,
                 phase="blocks", section=section, payload=payload), crops)
             response, reused = _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
-                binding=binding, request=request, phase=f"blocks:{start//8}", source_sha256=state["source_sha256"],
+                binding=_cell(binding, "blocks"), request=request, phase=f"blocks:{start//8}", source_sha256=state["source_sha256"],
                 meter=meter, store=store, publish=publish, checkpoint=checkpoint)
             if response.truncated:
                 raise _refuse("extended_response_truncated")
@@ -348,7 +385,8 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
         indexed = {"xmi_"+extended_digest({"ordinal": i, "observation": item})[:24]: item for i, item in enumerate(items)}
         if any(len(item["description"]) > 800 for item in items):
             state["warnings"].append("merge_context_truncated")
-        request = build_extended_request(model_id=binding.config.model_id, run_id=run.run_id, phase="merge",
+        # The v1 plan's semantic merge is the « Свод » of the original; the layout values it by analogy with the cross-check row.
+        request = build_extended_request(**_kw(binding, "cross_check"), run_id=run.run_id, phase="merge",
             section=section, payload={"observations": [{
                 "title": item["title"], "description": item["description"][:800], "source_ids": item["source_ids"],
                 "norm_candidate_ids": [c["paragraph_id"] for c in item["norm_candidates"]],
@@ -357,7 +395,7 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
                 "sources": [{k:v for k,v in s.items() if k != "context"}
                 for s in state["sources"]], "source_sha256": state["source_sha256"]})
         response, reused = _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
-            binding=binding, request=request, phase="merge", source_sha256=state["source_sha256"],
+            binding=_cell(binding, "cross_check"), request=request, phase="merge", source_sha256=state["source_sha256"],
             meter=meter, store=store, publish=publish, checkpoint=checkpoint)
         if response.truncated:
             raise _refuse("extended_response_truncated")
@@ -523,7 +561,7 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
             "blocks_remaining":0,"skipped":[]}}
 
 
-def _full_comprehensive_review(*, run, model_id, section, state, pages, block_items, call):
+def _full_comprehensive_review(*, run, model_id, section, state, pages, block_items, call, settings=None):
     """Cover every page character and source in repeatable provider-sized batches."""
     from auditmanager.analysis.public import build_comprehensive_request
     units = []
@@ -565,7 +603,7 @@ def _full_comprehensive_review(*, run, model_id, section, state, pages, block_it
             return
         sources = [{k: v for k, v in source.items() if k != "context"}
             for source in state["sources"] if source["source_id"] in batch_allowed]
-        request = build_comprehensive_request(model_id=model_id, run_id=run.run_id, section=section,
+        request = build_comprehensive_request(model_id=model_id, run_id=run.run_id, section=section, settings=settings,
             payload={"native_context": batch_contexts, "visual_observations": batch_visual,
                 "text_observations": batch_text, "sources": sources,
                 "source_sha256": state["source_sha256"], "coverage": state["coverage"]})
@@ -588,7 +626,7 @@ def _full_comprehensive_review(*, run, model_id, section, state, pages, block_it
     return observations
 
 
-def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint):
+def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings=None):
     """Search and review every candidate-bearing observation in bounded model calls."""
     from auditmanager.analysis.public import build_norm_review_request, parse_norm_review
     items = state["observations"]
@@ -620,7 +658,7 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
             for i, item in enumerate(batch, start=batch_number * 40)}
         norm_context = {candidate["paragraph_id"]: candidate
             for item in batch for candidate in item["norm_candidates"]}
-        request = build_norm_review_request(model_id=model_id, run_id=run.run_id, section=section,
+        request = build_norm_review_request(model_id=model_id, run_id=run.run_id, section=section, settings=settings,
             payload={"observations": [{"title": item["title"], "description": item["description"],
                 "source_ids": item["source_ids"], "input_id": key,
                 "norm_candidate_ids": [candidate["paragraph_id"] for candidate in item["norm_candidates"]]}
@@ -823,7 +861,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             save("running")
         try:
             response, replayed = _call(session,run_id=run.run_id,authority=authority,jobs=jobs,journal=journal,
-                binding=binding,request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
+                binding=_phase_binding(binding, identity),request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
                 source_sha256=state["source_sha256"],meter=meter,store=store,publish=publish,checkpoint=checkpoint,
                 global_unknown_fence=v3)
         except DomainError as error:
@@ -961,7 +999,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 if v3:
                     from auditmanager.analysis.public import build_extended_request_v3
                     builder=build_extended_request_v3;extra={"window_id":window_context["window_id"]}
-                request=attach_images(builder(model_id=binding.config.model_id,run_id=run.run_id,
+                request=attach_images(builder(**_kw(binding,"blocks"),run_id=run.run_id,
                     phase="blocks",section=section,payload=payload,**extra),crops)
                 response=call(request,"blocks:"+str(start//8))
                 parsed, refused = _received_reply(state=state, request=request, response=response,
@@ -995,7 +1033,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         contexts=[]
         if full_document:
             phase("comprehensive_analysis","running")
-            comprehensive = _full_comprehensive_review(run=run, model_id=binding.config.model_id,
+            comprehensive = _full_comprehensive_review(run=run, **_kw(binding,"cross_check"),
                 section=section, state=state, pages=pages, block_items=block_items, call=call)
             if "page_context_truncated" in state["warnings"]:
                 state["warnings"] = [warning for warning in state["warnings"] if warning != "page_context_truncated"]
@@ -1039,7 +1077,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 if v3:
                     from auditmanager.analysis.public import build_comprehensive_request_v3
                     builder=build_comprehensive_request_v3;extra={"window_id":window_context["window_id"]}
-                request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+                request=builder(**_kw(binding,"cross_check"),run_id=run.run_id,section=section,
                     **extra,payload={"native_context":contexts,"visual_observations":block_items,
                         "text_observations":([{k:item[k] for k in ("title","description","source_ids","norm_queries")}
                             for item in state["text_items"]] if v3 else state["text_items"]),
@@ -1068,7 +1106,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             _norm_batched_v3(session=session,run=run,binding=binding,state=state,snapshot_id=snapshot_id,
                 phase=phase,call=call,checkpoint=checkpoint,window_context=window_context)
         elif full_document:
-            _full_norm_verification(session=session, run=run, model_id=binding.config.model_id,
+            _full_norm_verification(session=session, run=run, **_kw(binding,"norms"),
                 section=section, state=state, snapshot_id=snapshot_id, call=call,
                 phase=phase, checkpoint=checkpoint)
         else:
@@ -1103,7 +1141,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 if v3:
                     from auditmanager.analysis.public import build_norm_review_request_v3
                     builder=build_norm_review_request_v3;extra={"window_id":window_context["window_id"]}
-                request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+                request=builder(**_kw(binding,"norms"),run_id=run.run_id,section=section,
                     **extra,payload={"observations":[{"title":item["title"],"description":item["description"],
                         "source_ids":item["source_ids"],"input_id":key,
                         "norm_candidate_ids":[c["paragraph_id"] for c in item.get("norm_candidates",[])]} for key,item in indexed.items()],
@@ -1169,7 +1207,7 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
             "source_sha256":state["source_sha256"],"ocr_status":"not_performed",
             "native_context":[row for row in contexts if row["source_id"] in references]}
         phase("finding_review","running")
-        request=build_critic_request(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+        request=build_critic_request(**_kw(binding,"review"),run_id=run.run_id,section=section,
             observations=indexed,sources=sources,window_id=window_id,context=context)
         critic_payload=json.loads(request.body["messages"][0]["content"])
         critic_cut=any(critic_payload.get(key,{}).get("truncated",False)
@@ -1182,7 +1220,7 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
             indexed[review["input_id"]].update(critic=review,review_status="reviewed")
         phase("finding_review","partial" if len(selected)<len(state["observations"]) or critic_cut else "completed",
             "context_window_truncated" if critic_cut else None)
-        request=build_corrector_request(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+        request=build_corrector_request(**_kw(binding,"correction"),run_id=run.run_id,section=section,
             observations=indexed,critiques=reviews,sources=sources,window_id=window_id,context=context)
         if request is None:
             phase("finding_correction","completed","no_corrections_requested")
@@ -1304,10 +1342,10 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                     or not _source_sized(accepted_parameters) and index >= accepted_parameters["max_calls"]):
                 raise _refuse("project_parameters_approved_call_limit")
             return _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
-                binding=binding, request=request, phase=f"v3:project-parameters:b{index:03d}",
+                binding=_cell(binding, "cross_check"), request=request, phase=f"v3:project-parameters:b{index:03d}",
                 source_sha256=state["source_sha256"], meter=meter, store=store, publish=publish,
                 checkpoint=checkpoint, global_unknown_fence=True)
-        run_project_parameters(run=run, model_id=binding.config.model_id, outputs=outputs, store=store,
+        run_project_parameters(run=run, **_kw(binding, "cross_check"), outputs=outputs, store=store,
             state=state, accepted=accepted_parameters, durable_call=parameter_call,
             checkpoint=checkpoint, aggregate=aggregate, save=save)
     def aggregate():
@@ -1736,7 +1774,7 @@ def _comprehensive_batched_v3(*, run, binding, state, contexts, block_items, pha
             'sources': [{key: value for key, value in source.items() if key != 'context'} for source in selected],
             'source_sha256': state['source_sha256'], 'coverage': state['coverage'],
             'batch_index': batch['index'], 'batch_sha256': batch['batch_sha256']}
-        request = build_comprehensive_request_batched_v3(model_id=binding.config.model_id,
+        request = build_comprehensive_request_batched_v3(**_kw(binding, "cross_check"),
             run_id=run.run_id, section=state['section'], payload=payload,
             window_id=window_context['window_id'] + f':comp:b{batch["index"]:03d}',
             relaxed_limits=_bounds_lifted(window_context['policy']))
@@ -1812,7 +1850,7 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
         indexed = {row['input_id']: row['item'] for row in batch['items']}
         registry = {candidate['paragraph_id']: candidate for item in indexed.values()
             for candidate in item['norm_candidates']}
-        request = build_norm_review_request_batched_v3(model_id=binding.config.model_id,
+        request = build_norm_review_request_batched_v3(**_kw(binding, "norms"),
             run_id=run.run_id, section=state['section'], window_id=window_context['window_id'] +
                 f':norm:b{batch["index"]:03d}', relaxed_limits=_bounds_lifted(window_context['policy']), payload={'coverage_version': 'batched-v1',
                     'observations': [{'input_id': key, 'title': item['title'], 'description': item['description'],
@@ -1901,7 +1939,7 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         context = {'coverage': state['coverage'], 'window_id': window_id,
             'source_sha256': state['source_sha256'], 'ocr_status': 'not_performed',
             'native_context': [row for row in contexts if row['source_id'] in references]}
-        request = build_critic_request(model_id=binding.config.model_id, run_id=run.run_id,
+        request = build_critic_request(**_kw(binding, "review"), run_id=run.run_id,
             section=state['section'], observations=indexed, sources=sources,
             window_id=window_id + f':critic:b{batch["index"]:03d}', context=context,
             full_context=_source_sized(window_context['policy']))
@@ -1958,7 +1996,7 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         context = {'coverage': state['coverage'], 'window_id': window_id,
             'source_sha256': state['source_sha256'], 'ocr_status': 'not_performed',
             'native_context': [row for row in contexts if row['source_id'] in references]}
-        request = build_corrector_request(model_id=binding.config.model_id, run_id=run.run_id,
+        request = build_corrector_request(**_kw(binding, "correction"), run_id=run.run_id,
             section=state['section'], observations=indexed, critiques=critiques, sources=sources,
             window_id=window_id + f':corrector:b{batch["index"]:03d}', context=context,
             full_context=_source_sized(window_context['policy']))
@@ -2124,7 +2162,7 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
         receipt.update(status="running", request_sha256=request.request_sha256)
         persist()
         response, replayed = _call(session, run_id=run.run_id, authority=authority, jobs=jobs,
-            journal=journal, binding=binding, request=request,
+            journal=journal, binding=_phase_binding(binding, identity), request=request,
             phase="v3:global-cross-window:" + identity, source_sha256=source_sha,
             meter=meter, store=store, publish=publish, checkpoint=checkpoint, global_unknown_fence=True)
         receipt.update(response_received=True, replayed=replayed, response_sha256=response.response_sha256)
@@ -2199,7 +2237,7 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
               None if plan["batches"] else "no_cross_window_candidates")
         for batch in plan["batches"]:
             checkpoint("global_cross_window_batch")
-            request = build_global_cross_window_request(model_id=binding.config.model_id, run_id=run.run_id,
+            request = build_global_cross_window_request(**_kw(binding, "cross_check"), run_id=run.run_id,
                 section=state["section"], batch=batch, source_sha256=source_sha, policy=accepted)
             response = call(request, f'comprehensive_analysis:b{batch["index"]:03d}')
             parsed, refused = _received_reply(state=global_state, request=request, response=response,

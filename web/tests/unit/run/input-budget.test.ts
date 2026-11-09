@@ -47,7 +47,7 @@ const NNBSP = '\u202F';
 
 function refusal(details?: Record<string, string | number | boolean | null>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.45.0',
+    contract_version: '1.46.0',
     error_code: 'analysis_input_budget_exceeded',
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-budget',
@@ -137,7 +137,7 @@ describe('the re-audit classifier prints the same figures', () => {
     const other = new ApiError(
       409,
       {
-        contract_version: '1.45.0', error_code: 'state_transition_not_allowed', message: 'm',
+        contract_version: '1.46.0', error_code: 'state_transition_not_allowed', message: 'm',
         correlation_id: 'c', retryable: false, details: FIGURES as never,
       },
       'c',
