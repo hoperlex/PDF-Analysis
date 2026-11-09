@@ -36,7 +36,7 @@ def test_the_connection_lock_is_keyed_on_the_pool_when_the_connection_has_one_an
 def test_the_three_pool_locks_are_one_statement_and_share_the_prefix_of_the_connection_lock() -> None:
     jobs_pool, spend_pool = _sql(jobs._LOCK_POOL), _sql(spend._LOCK_POOL)  # type: ignore[attr-defined]
     repository_pool = hosts._LOCK_POOL  # type: ignore[attr-defined]
-    assert jobs_pool == spend_pool == repository_pool.replace("\n", " ") or jobs_pool == spend_pool
+    assert jobs_pool == spend_pool
     assert re.sub(r"\s+", " ", jobs_pool) == re.sub(r"\s+", " ", repository_pool)
     assert f"'{PREFIX}' || :pool" in jobs_pool
     assert f"'{PREFIX}' ||" in _sql(jobs._LOCK_CONNECTION)  # type: ignore[attr-defined]
@@ -61,7 +61,7 @@ def test_the_units_of_a_pool_count_runs_once_by_cell_or_revision_and_active_call
     sql = hosts.POOL_UNITS
     for statement in (sql, _sql(spend._POOL_HAS_FREE_UNIT)):  # type: ignore[attr-defined]
         assert "JOIN audit_run_cell_binding b ON b.run_id = a.run_id" in statement
-        assert " UNION SELECT " in statement.replace("UNION ", " UNION SELECT ", 1) or "UNION" in statement
+        assert "UNION" in statement
         assert "UNION ALL" not in statement, "a run bound twice in a pool is one unit"
         assert "j.state IN ('leased', 'running', 'retry_wait')" in statement
         assert "active_call.state IN ('prepared', 'sent')" in statement
