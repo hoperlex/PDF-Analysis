@@ -1,7 +1,7 @@
 /**
  * `RUN-SCREEN-01a` (plan `executors-runs-rework-plan` §9): the run screen as a head over two tabs, with its blocks where the plan put them.
  *
- * Rendered over a seeded cache, as `run-progress.test.ts` does; what must be pressed is in `run-screen-live.test.ts`. Measured here: what
+ * Rendered over a seeded cache, as `run-progress.test.ts` does; what must be pressed is in `tests/unit/run/run-screen-live.test.ts`. Measured here: what
  * the head says and no longer says, the tabs and their keyboard, the two tiles, the place of every block the page had, the dialog's
  * content and who is offered the start from a stage in it.
  */

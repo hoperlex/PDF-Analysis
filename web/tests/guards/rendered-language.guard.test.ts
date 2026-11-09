@@ -5403,7 +5403,7 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
           'the rail opens (`RunProgress` keeps the open chip in a `useState`); one static pass presses nothing and leaves the dialog closed. ' +
           'The button there reads «Запустить с этого этапа». The journey (`tests/e2e/pc01/journey/manifest.json`) still names the old words ' +
           'and presses the button on the run page: its owner adds the step that opens the dialog on a chip and renames the text, and this entry ' +
-          'is then replaced by the new words or deleted. tests/unit/screens/run-screen.test.ts and run-screen-live.test.ts render the dialog and press it.',
+          'is then replaced by the new words or deleted. tests/unit/screens/run-screen.test.ts and tests/unit/run/run-screen-live.test.ts render the dialog and press it.',
       },
       {
         text: 'Подтвердить',
@@ -5561,7 +5561,7 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   },
   {
     label: 'Загрузка: события прогона…',
-    why: 'RUN-SCREEN-01a: the run\'s events are the tab «Журнал» of the run screen (`RunTabs`, `useState`); RunEvents is mounted only once that tab is pressed, and one static pass leaves the screen on «Обзор». tests/unit/screens/run-screen.test.ts renders RunEvents cold and reads the loading branch, and run-screen-live.test.ts presses the tab.',
+    why: 'RUN-SCREEN-01a: the run\'s events are the tab «Журнал» of the run screen (`RunTabs`, `useState`); RunEvents is mounted only once that tab is pressed, and one static pass leaves the screen on «Обзор». tests/unit/screens/run-screen.test.ts renders RunEvents cold and reads the loading branch, and tests/unit/run/run-screen-live.test.ts presses the tab.',
   },
   {
     label: 'События прогона не открылись',

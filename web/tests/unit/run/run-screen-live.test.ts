@@ -24,7 +24,7 @@ import { PROJECT_UID, VERSION_UID, runStatus } from '../review/fixtures';
 import { APPROVE_COST, COST_CONSENT, costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
-import { newClient } from './harness';
+import { newClient } from '../screens/harness';
 
 const RUN_ID = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const NEW_RUN = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8N';
