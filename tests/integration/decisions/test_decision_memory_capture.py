@@ -36,13 +36,17 @@ class _Geometry:
         self.crops: tuple[dict[str, Any], ...] = ()
         self.box_reads = 0
         self.crop_reads = 0
+        self.asked_runs: list[str] = []      # the run each read was for: a block reference is an anchor inside ONE run's artifact
+        self.boxes_of_run: dict[str, dict[str, Any]] | None = None   # per run, when a test gives the runs different numbering
 
-    def evidence_boxes_in(self, session: Session, version_uid: str) -> dict[str, Any]:
+    def evidence_boxes_in(self, session: Session, run_id: str) -> dict[str, Any]:
         self.box_reads += 1
-        return self.boxes
+        self.asked_runs.append(run_id)
+        return self.boxes if self.boxes_of_run is None else self.boxes_of_run.get(run_id, {})
 
-    def portal_crops_in(self, session: Session, version_uid: str) -> tuple[dict[str, Any], ...]:
+    def portal_crops_in(self, session: Session, run_id: str) -> tuple[dict[str, Any], ...]:
         self.crop_reads += 1
+        self.asked_runs.append(run_id)
         return self.crops
 
 
@@ -101,6 +105,7 @@ def test_a_decision_leaves_a_case_with_what_the_expert_saw_and_said(session: Ses
     assert decision["author_user_uid"] is None and decision["decided_at"] == event.recorded_at
     assert session.execute(text("SELECT comment FROM decision_memory_decision_text")).scalar_one() == "подтверждено по странице"
     assert memory.geometry.crop_reads == 1 and memory.geometry.box_reads == 0   # no evidence names a block, so no index was read
+    assert memory.geometry.asked_runs == [published.run_id]                      # J3 F3: the finding's own run, not the version's newest
 
 
 def test_a_crop_and_a_box_the_artifacts_name_are_referenced_not_copied(session: Session, published: Any, memory: SimpleNamespace) -> None:
@@ -121,6 +126,33 @@ def test_a_crop_and_a_box_the_artifacts_name_are_referenced_not_copied(session: 
     assert crop["selection_rule"] == "page_images/1" and crop["portal_description"] == "Схема этажа"
     assert (crop["bbox_x0"], crop["bbox_y1"]) == (0.1, 0.5)
     assert _count(session, "blob", "blob_id = :b", b=blob) == 1          # the Blob is the same row: a binding, not a copy
+
+
+def test_a_box_comes_from_the_block_index_of_the_findings_own_run_never_a_newer_runs(
+    session: Session, published: Any, memory: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """J3 F3: ``b_NNNNNN`` is an anchor inside the artifact of the run that minted it. The version has a newer run whose index
+    numbers its lines differently: the same ``b_000001`` is another line there. The case must carry the finding's own run's box."""
+    import dataclasses
+
+    import auditmanager.findings as findings_module
+
+    real = findings_module.published_finding_evidence
+    monkeypatch.setattr(findings_module, "published_finding_evidence", lambda s, run_id: tuple(
+        dataclasses.replace(item, block_id="b_000001") for item in real(s, run_id)))
+
+    newer_run = "run_01ARZ3NDEKTSV4RRFFQ69G5FAW"                      # a newer run of the same version, with its own numbering
+    indexes = {
+        published.run_id: {"b_000001": ((10.0, 20.0, 110.0, 32.0), "pt", "top_left")},
+        newer_run: {"b_000001": ((300.0, 400.0, 480.0, 412.0), "pt", "top_left")},
+    }
+    memory.geometry.boxes_of_run = indexes
+    _decide(session, published)
+    boxes = session.execute(text("SELECT block_ref, bbox_x0, bbox_y0, bbox_x1, bbox_y1, bbox_unit, bbox_origin FROM decision_memory_evidence "
+                                 "ORDER BY ordinal")).all()
+    assert [(row.block_ref, row.bbox_x0, row.bbox_y0, row.bbox_x1, row.bbox_y1, row.bbox_unit, row.bbox_origin) for row in boxes] == [
+        ("b_000001", 10.0, 20.0, 110.0, 32.0, "pt", "top_left")] * 2
+    assert memory.geometry.asked_runs == [published.run_id, published.run_id]   # the index, then the crops: both of the finding's run
 
 
 def test_a_second_decision_on_the_same_observation_adds_a_decision_to_the_same_case(
