@@ -555,6 +555,11 @@ class ConnectionRecord:
     created_by: str
     archived_at: datetime | None = None
     archived_by: str | None = None
+    #: `HOSTS-BACKEND-01` (ADR-0028 decision 2): a connection the stand keeps for one found (host, provider, access, model); the user
+    #: never sees, revises or archives it. ``host_id`` and ``capacity_pool`` are set exactly then (``ck_executor_connection_pool``).
+    system_managed: bool = False
+    host_id: str | None = None
+    capacity_pool: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

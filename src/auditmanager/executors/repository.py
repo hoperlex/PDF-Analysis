@@ -40,7 +40,8 @@ from auditmanager.shared.identity import (
 __all__ = ["ExecutorRepository"]
 
 _CONNECTION_COLUMNS: Final = (
-    "connection_id, kind, display_name, created_at, created_by, archived_at, archived_by"
+    "connection_id, kind, display_name, created_at, created_by, archived_at, archived_by, "
+    "system_managed, host_id, capacity_pool"
 )
 _REVISION_COLUMNS: Final = (
     "revision_id, connection_id, revision_no, created_at, created_by, pin_id, gateway_model, "
@@ -155,7 +156,7 @@ _RUNNER_ONLINE = text(
 def _connection(row: Mapping[str, Any]) -> ConnectionRecord:
     return ConnectionRecord(**{name: row[name] for name in (
         "connection_id", "kind", "display_name", "created_at", "created_by", "archived_at",
-        "archived_by")})
+        "archived_by", "system_managed", "host_id", "capacity_pool")})
 
 
 def _revision(row: Mapping[str, Any]) -> RevisionRecord:
@@ -212,8 +213,9 @@ class ExecutorRepository:
         return None if row is None else _connection(row)
 
     def list_connections(self, session: Session, *, limit: int = 500) -> list[ConnectionRecord]:
+        """The connections a user made, active first. The system connections of the hosts are not listed (`HOSTS-BACKEND-01`)."""
         rows = session.execute(text(
-            f"SELECT {_CONNECTION_COLUMNS} FROM executor_connection "
+            f"SELECT {_CONNECTION_COLUMNS} FROM executor_connection WHERE NOT system_managed "
             "ORDER BY archived_at IS NOT NULL, created_at DESC, connection_id DESC LIMIT :limit"
         ), {"limit": limit}).mappings().all()
         return [_connection(row) for row in rows]
