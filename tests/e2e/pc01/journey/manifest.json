@@ -706,7 +706,13 @@
         "was right -- R-23 makes the screen required and the journey must walk every screen the",
         "application offers.",
         "`follow: null` because this screen captures no identity the next step needs: it is a",
-        "projection over the whole decision journal and hangs off no parent."
+        "projection over the whole decision journal and hangs off no parent.",
+        "",
+        "`D-495`: «Память решений» is the fourth «Тип» (`?kind=memory`), for a session holding `expert` or",
+        "`admin`. A cold walk opens the default «Замечания», so the memory's reads are OPTIONAL: they are made only",
+        "once the tab is chosen (the case read once a case is opened, the status read only by `admin`). The two",
+        "keyed writes of the tab (`withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase`) are the administrator's",
+        "and are not walked here."
       ],
       "expects_api": [
         {
@@ -718,10 +724,13 @@
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
-        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to; the page itself reads the same account (one cache entry) to offer «Память решений» (D-495) to `expert` and `admin` only"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
-        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"},
+        {"method": "GET", "path": "/decision-memory/cases", "operationId": "listDecisionMemoryCases", "$why_optional": "D-495: the «Память решений» tab (`?kind=memory`) reads one page of cases, only once the tab is chosen by a session holding `expert` or `admin`; the viewer is not offered the tab"},
+        {"method": "GET", "path": "/decision-memory/cases/{case_id}", "operationId": "getDecisionMemoryCase", "$why_optional": "D-495: the «Память решений» tab reads one case, only once a case is opened (`?mcase=`) by a session holding `expert` or `admin`"},
+        {"method": "GET", "path": "/decision-memory/status", "operationId": "getDecisionMemoryStatus", "$why_optional": "D-495: the «Память решений» tab draws the memory's counts and settings in one line, only once the tab is chosen by a session holding `admin`"}
       ],
       "follow": null
     },

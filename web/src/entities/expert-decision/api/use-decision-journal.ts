@@ -40,7 +40,7 @@ export interface DecisionJournalQuery {
   readonly cursor?: string | undefined;
 }
 
-export function useDecisionJournal({ category, verdict, project_uid, cursor }: DecisionJournalQuery = {}) {
+export function useDecisionJournal({ category, verdict, project_uid, cursor }: DecisionJournalQuery = {}, enabled = true) {
   const filters = {
     ...(project_uid === undefined ? {} : { project_uid }),
     ...(category === undefined ? {} : { category }),
@@ -54,6 +54,7 @@ export function useDecisionJournal({ category, verdict, project_uid, cursor }: D
       const response = await listDecisions({ query: filters });
       return response.data;
     },
+    enabled,
   });
 }
 
