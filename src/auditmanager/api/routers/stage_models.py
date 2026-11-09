@@ -1,4 +1,4 @@
-"""The models of the analysis stages (`HOSTS-SEAL-1`, ADR-0028, contract 1.45.0): five operations.
+"""The models of the analysis stages (`HOSTS-SEAL-1`, ADR-0028, contract 1.45.0): five routes.
 
 ====================================  =====================================================================================
 ``getStageModelLayout``               ``expert`` or ``admin``; the layout in force, its history and the switch (read only for an expert)
@@ -38,7 +38,7 @@ def _body(view: BaseModel) -> bytes:
 
 def build_stage_model_routes(router: APIRouter, stage_models: StageModelPort) -> None:
     @router.get(
-        "/stage-model-layout", operation_id="getStageModelLayout", tags=_TAGS,
+        "/model-layout", operation_id="getStageModelLayout", tags=_TAGS,
         response_model=models.StageModelLayout,
         responses={**success(200, "The layout in force, its history and the switch."), **envelope_responses(401, 403, 500, 503)},
         description=(
@@ -52,7 +52,7 @@ def build_stage_model_routes(router: APIRouter, stage_models: StageModelPort) ->
         return json_response(200, _body(stage_models.get_layout()))
 
     @router.post(
-        "/stage-model-layout/revisions", operation_id="reviseStageModelLayout", tags=_TAGS, status_code=201,
+        "/model-layout/revisions", operation_id="reviseStageModelLayout", tags=_TAGS, status_code=201,
         response_model=models.StageModelLayout,
         responses={**success(201, "The layout with the new revision as its current one, or the recorded outcome of an identical earlier "
                                   "request."),
@@ -71,7 +71,7 @@ def build_stage_model_routes(router: APIRouter, stage_models: StageModelPort) ->
         return json_response(201, _body(view))
 
     @router.put(
-        "/stage-model-layout/enabled", operation_id="setStageModelLayoutEnabled", tags=_TAGS,
+        "/model-layout/enabled", operation_id="setStageModelLayoutEnabled", tags=_TAGS,
         response_model=models.StageModelLayout,
         responses={**success(200, "The layout with the switch as it now stands."),
                    **envelope_responses(401, 403, 409, 422, 500, 503, descriptions={409: STATE_CONFLICT_DESCRIPTION})},

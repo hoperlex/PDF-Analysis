@@ -601,7 +601,7 @@ class TestN1ComponentReferenceResolution:
         # `UI-PARITY-S2` adds one: `startRunFromStage` addresses a run.
         # `DECISION-MEMORY-M2` adds three: `getDecisionMemoryCase`, `withdrawDecisionMemoryCase` and `restoreDecisionMemoryCase` address a
         # case by identity. (`listDecisionMemoryCases` and `getDecisionMemoryStatus` name no parent and declare no `404`.)
-        assert len(report) == 227, report
+        assert len(report) == 235, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

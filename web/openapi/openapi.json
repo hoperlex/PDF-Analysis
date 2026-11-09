@@ -25608,7 +25608,7 @@
         }
       }
     },
-    "/stage-model-layout": {
+    "/model-layout": {
       "get": {
         "operationId": "getStageModelLayout",
         "tags": [
@@ -25657,7 +25657,7 @@
         }
       }
     },
-    "/stage-model-layout/revisions": {
+    "/model-layout/revisions": {
       "post": {
         "operationId": "reviseStageModelLayout",
         "tags": [
@@ -25725,7 +25725,7 @@
         }
       }
     },
-    "/stage-model-layout/enabled": {
+    "/model-layout/enabled": {
       "put": {
         "operationId": "setStageModelLayoutEnabled",
         "tags": [

@@ -29,7 +29,7 @@ adapters answer `503 dependency_unavailable`.
   `issueExecutorEnrollment`, `createExecutorAgentInstall`, `getExecutorAgentInstall` and `confirmExecutorAgentInstallHostKey`, which are
   **unchanged** and stay the forms for a `pull` connection until the comparison routes move to the hosts. `RunnerTokenMetadata`,
   `ExecutorEnrollmentMetadata` and `ExecutorAgentInstall` name exactly one of `connection_id` and `host_id`.
-- **The stage layout.** `getStageModelLayout` (`GET /stage-model-layout`, `role:admin|expert`), `reviseStageModelLayout`
+- **The stage layout.** `getStageModelLayout` (`GET /model-layout`, `role:admin|expert`), `reviseStageModelLayout`
   (`POST .../revisions`, an immutable revision with its author) and `setStageModelLayoutEnabled` (`PUT .../enabled`, the switch and its journal) --
   the writes `role:admin`, keyed; `listModelCatalogue` (`GET /model-catalogue`, `role:admin|expert`), the content of
   `contracts/analysis/v1/model-catalogue.json`; `getRunStartReadiness` (`POST /runs/start-readiness`, a read with the body of `estimateRunCost`,

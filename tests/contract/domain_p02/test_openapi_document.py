@@ -376,6 +376,23 @@ REQUIRED_OPERATIONS = {
     "setExecutorRoutingRule",
     "previewExecutorRouting",
     "setExecutorRoutingMode",
+    # `HOSTS-SEAL-1` (contract 1.45.0). The servers (list, read, details, switch, slots, archive, host-targeted enrollment and install) and the models
+    # of the analysis stages (the layout, its revision and switch, the catalogue, the readiness of a start).
+    "listExecutorHosts",
+    "getExecutorHost",
+    "getExecutorHostDetails",
+    "setExecutorHostEnabled",
+    "setExecutorHostSlots",
+    "archiveExecutorHost",
+    "issueExecutorHostEnrollment",
+    "createExecutorHostAgentInstall",
+    "getExecutorHostAgentInstall",
+    "confirmExecutorHostAgentInstallHostKey",
+    "getStageModelLayout",
+    "reviseStageModelLayout",
+    "setStageModelLayoutEnabled",
+    "listModelCatalogue",
+    "getRunStartReadiness",
     # `CMP-SEAL-C3`: stage intake, pairs, sheet map, raw text and chain runs.
     "listStagePairs", "confirmStagePair", "getStagePair", "listStagePairSuggestions",
     "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",
@@ -565,6 +582,16 @@ WRITE_OPERATIONS = {
     "archiveExecutorGroup",
     "setExecutorRoutingRule",
     "setExecutorRoutingMode",
+    # `HOSTS-SEAL-1`. The eight administrator writes of the servers and the stage layout are keyed; the reads are not, and neither is
+    # `getRunStartReadiness` (a POST that writes nothing, like the cost estimates).
+    "setExecutorHostEnabled",
+    "setExecutorHostSlots",
+    "archiveExecutorHost",
+    "issueExecutorHostEnrollment",
+    "createExecutorHostAgentInstall",
+    "confirmExecutorHostAgentInstallHostKey",
+    "reviseStageModelLayout",
+    "setStageModelLayoutEnabled",
     # `CMP-SEAL-C3`: every new stage command is keyed and expert-only.
     "createStageUpload", "uploadStageUploadPart", "completeStageUploadFile",
     "confirmStageUploadCandidate", "rejectStageUploadCandidate", "pauseStageUpload",
@@ -977,6 +1004,7 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 #: rather than a drift nobody notices. Moves on a reseal that adds or removes every
 #: parameter, header and body an operation takes.
 INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
+    # `HOSTS-SEAL-1` (1.45.0) adds ``listExecutorHosts``, ``getStageModelLayout`` and ``listModelCatalogue``: the installation's servers, layout and catalogue take no input.
     # `DECISION-MEMORY-M2` (1.44.0) adds ``getDecisionMemoryStatus``: the counts and the settings take no input.
     # `W59-ANALYSIS-SETTINGS-01` adds ``listAnalysisProfiles``: the registry takes no input.
     # `EXEC-SEAL-01` adds the two executor lists: a connection list and a route list take no input.
@@ -994,7 +1022,8 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
      "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
      "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue",
      "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting",
-     "getExecutionDispatch", "getDecisionMemoryStatus"}
+     "getExecutionDispatch", "getDecisionMemoryStatus",
+     "listExecutorHosts", "getStageModelLayout", "listModelCatalogue"}
 )
 
 

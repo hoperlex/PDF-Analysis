@@ -1,4 +1,4 @@
-"""The servers of the executor surface (`HOSTS-SEAL-1`, ADR-0028, contract 1.45.0): ten operations.
+"""The servers of the executor surface (`HOSTS-SEAL-1`, ADR-0028, contract 1.45.0): ten routes.
 
 ====================================================  =====================================================================
 ``listExecutorHosts``                                 ``expert`` or ``admin``; the servers and the summary line

@@ -325,6 +325,11 @@
       ],
       [
         "GET",
+        "/model-layout",
+        "getStageModelLayout"
+      ],
+      [
+        "GET",
         "/norm-documents",
         "listNormDocuments"
       ],
@@ -702,11 +707,6 @@
         "GET",
         "/stage-link-revisions/{stage_link_revision_id}/text-hints",
         "listStageTextHints"
-      ],
-      [
-        "GET",
-        "/stage-model-layout",
-        "getStageModelLayout"
       ],
       [
         "GET",
@@ -1150,6 +1150,11 @@
       ],
       [
         "POST",
+        "/model-layout/revisions",
+        "reviseStageModelLayout"
+      ],
+      [
+        "POST",
         "/optimisation-passes/{optimisation_pass_id}/decision-carryovers",
         "carryOverProposalDecisions"
       ],
@@ -1430,11 +1435,6 @@
       ],
       [
         "POST",
-        "/stage-model-layout/revisions",
-        "reviseStageModelLayout"
-      ],
-      [
-        "POST",
         "/stage-pairs/{stage_pair_id}/chain-runs",
         "startStageChainRun"
       ],
@@ -1555,6 +1555,11 @@
       ],
       [
         "PUT",
+        "/model-layout/enabled",
+        "setStageModelLayoutEnabled"
+      ],
+      [
+        "PUT",
         "/norms/snapshots/current",
         "setCurrentNormSnapshot"
       ],
@@ -1582,11 +1587,6 @@
         "PUT",
         "/projects/{project_uid}/vendor-lists/{section_code}",
         "setProjectVendorList"
-      ],
-      [
-        "PUT",
-        "/stage-model-layout/enabled",
-        "setStageModelLayoutEnabled"
       ],
       [
         "PUT",

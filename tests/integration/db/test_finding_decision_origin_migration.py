@@ -27,7 +27,7 @@ from sqlalchemy.exc import DBAPIError
 
 from auditmanager.shared.db.engine import create_database_engine
 
-HEAD = "0061_decision_memory_m2"  # the head the fixture migrates to; 0058 is the migration under test, three steps below it
+HEAD = "0062_hosts_stage_models"  # the head the fixture migrates to; 0058 is the migration under test, four steps below it
 PREVIOUS = "0057_decision_carryover"
 TABLE = "expert_decision_event"
 FORMAT = "ck_expert_decision_event_carried_from_format"
