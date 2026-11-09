@@ -29,6 +29,7 @@ from auditmanager.api.routers import build_router
 from auditmanager.api.schemas import models
 from auditmanager.bootstrap.adapters import CredentialAdapter
 from auditmanager.bootstrap.hosts_adapter import ExecutorHostAdapter
+from auditmanager.bootstrap.hosts_dispatch import HostModelAvailability
 from auditmanager.bootstrap.stage_plan_adapter import StageModelAdapter
 from auditmanager.bootstrap.stage_plan_service import StagePlanService
 from w13_api_driver import Surface
@@ -79,8 +80,11 @@ def surface(session_factory: sessionmaker[Session]) -> Surface:
             projects=None, documents=None, runs=None, findings=None, decisions=None, exports=None,  # type: ignore[arg-type]
             credentials=CredentialAdapter(session_factory, users=UserRepository(), accounts=AccountRepository(), signer=SIGNER),
             executor_hosts=ExecutorHostAdapter(session_factory, public_origin="https://stand.example"),
-            stage_models=StageModelAdapter(
-                session_factory, service=StagePlanService(session_factory=session_factory, provider_source="environment")),
+            # the availability is the servers' (as the composition root wires it): a layout in force -- another test of the same database may
+            # have left one -- is read against them; without a port the read of a layout in force would refuse typed
+            # (``stage_model_availability``), which is right for a service wired without one and not what this surface is about
+            stage_models=StageModelAdapter(session_factory, service=StagePlanService(
+                session_factory=session_factory, provider_source="environment", availability=HostModelAvailability())),
         )
     )
 
