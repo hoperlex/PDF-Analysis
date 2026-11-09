@@ -683,21 +683,25 @@ def fill_the_lock_table(stand: Stand, leave: int) -> Callable[[], None]:
     The lock table is server-wide, so this is what a forget of a great many cases runs into, made small: ``D-497`` item 6. The
     locks belong to a session of their own and outlive its transactions; the returned function lets them go."""
     holder = stand.engine.connect().execution_options(isolation_level="AUTOCOMMIT")
-    try:
-        holder.execute(text("SELECT count(pg_advisory_lock(g)) FROM generate_series(1, 400000) g"))
-    except Exception as error:  # noqa: BLE001
-        assert getattr(getattr(error, "orig", None), "sqlstate", "") == "53200", error
-    else:
-        holder.close()
-        pytest.fail("the lock table did not fill: this server's lock table is larger than the test can fill")
-    held = int(holder.execute(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()")).scalar_one())
-    assert held > leave, held
-    holder.execute(text("SELECT count(pg_advisory_unlock(g)) FROM generate_series(:first, :last) g"), {"first": held - leave + 1, "last": held})
 
     def release() -> None:
         holder.execute(text("SELECT pg_advisory_unlock_all()"))
         holder.close()
 
+    try:
+        try:
+            holder.execute(text("SELECT count(pg_advisory_lock(g)) FROM generate_series(1, 400000) g"))
+        except Exception as error:  # noqa: BLE001
+            assert getattr(getattr(error, "orig", None), "sqlstate", "") == "53200", error
+        else:
+            pytest.fail("the lock table did not fill: this server's lock table is larger than the test can fill")
+        held = int(holder.execute(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()")).scalar_one())
+        assert held > leave, held
+        holder.execute(text("SELECT count(pg_advisory_unlock(g)) FROM generate_series(CAST(:first AS bigint), CAST(:last AS bigint)) g"),
+                       {"first": held - leave + 1, "last": held})
+    except BaseException:
+        release()          # a table left full would fail every test after this one for a reason that is not theirs
+        raise
     return release
 
 

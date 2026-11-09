@@ -468,8 +468,10 @@ def lock_table_message(engine: Engine, *, wanted: int, taken: int) -> str:
     """The refusal for a selection too large for the server's lock table (`D-497` item 6): numbers, and the two ways out.
 
     Every case needs one advisory lock until the single transaction commits, and the lock table is shared by every session of the server:
-    ``max_locks_per_transaction`` x (``max_connections`` + ``max_prepared_transactions``) slots in all (default ``64`` x ``100``). The
-    transaction was rolled back, so it is read on a connection of its own.
+    ``max_locks_per_transaction`` x (``max_connections`` + ``max_prepared_transactions``) sizes it (default ``64`` x ``100`` = 6400);
+    PostgreSQL rounds the shared memory up, and on the default settings about twice that many locks fit (13056 measured, 2026-11-09,
+    ``.local/evidence/lane-mem-ops-d511/measure-locks-result.json``). The transaction was rolled back, so it is read on a connection of
+    its own.
     """
     capacity = "unknown"
     try:
@@ -481,8 +483,8 @@ def lock_table_message(engine: Engine, *, wanted: int, taken: int) -> str:
         pass
     batch = max(1, taken // 2)
     return (f"{wanted} cases need one advisory lock each inside the single transaction of a forget, and the server's lock table ran out "
-            f"after {taken} (max_locks_per_transaction x (max_connections + max_prepared_transactions) = {capacity} slots for every session "
-            f"together). Nothing was changed. Forget fewer at a time -- one project (--origin-project) or at most {batch} cases "
+            f"after {taken}; the table is shared by every session and sized by max_locks_per_transaction x (max_connections + "
+            f"max_prepared_transactions) = {capacity}. Nothing was changed. Forget fewer at a time -- one project (--origin-project) or at most {batch} cases "
             "(--case, repeated) per run -- with api and worker stopped, which frees the slots they hold; or raise "
             "max_locks_per_transaction in the server's configuration and restart it.")
 
