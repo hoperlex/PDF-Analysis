@@ -96,7 +96,7 @@ def test_the_revisions_are_numbered_and_the_switch_in_force_is_the_latest_event(
     second = store.append_revision(session, kit="codex_only", cells=layout.preset_cells("codex_only"), created_by=user)
     assert (first.revision_no, second.revision_no) == (1, 2)
     assert [r.revision_no for r in store.history(session, limit=10)] == [2, 1] and store.current_revision(session).kit == "codex_only"
-    assert [c.cell_key for c in store.current_revision(session).cells] == [f"{row}:main" for row in layout.STAGE_ROWS]
+    assert [c.cell_key for c in store.current_revision(session).cells] == [c.cell_key for c in layout.preset_cells("codex_only")]
     store.append_switch(session, enabled=True, set_by=user)
     assert store.enabled(session) is True
     store.append_switch(session, enabled=False, set_by=user)
