@@ -93,7 +93,7 @@ Checks run per branch before the merge:
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
 - Product `VERSION` is `0.20.0`; this file describes development, not a release.
-- The development API contract is `1.43.0`: **275 paths / 303 operations / 730 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0061_decision_memory_m2`** (`db/migrations/versions/`).
+- The development API contract is `1.44.0`: **280 paths / 308 operations / 744 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0061_decision_memory_m2`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 
 Run `infra/deploy/verify-deployed.sh` for the current deployment; this document is no substitute for that probe.

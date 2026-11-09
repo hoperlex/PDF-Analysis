@@ -132,6 +132,12 @@ REQUIRED_OPERATIONS = {
     "importOptimisationProposalDecisions",
     # `UI-PARITY-OPT-CARRYOVER`, `UI-B-14`. The decisions of an earlier version's pass, carried into this one by content.
     "carryOverProposalDecisions",
+    # `DECISION-MEMORY-M2` (1.44.0). The expert decision memory: cases, one case, the status, withdraw and restore.
+    "listDecisionMemoryCases",
+    "getDecisionMemoryCase",
+    "getDecisionMemoryStatus",
+    "withdrawDecisionMemoryCase",
+    "restoreDecisionMemoryCase",
     # `UI-PARITY-P0L`, `R-151d`. Decisions loaded back from the run's own workbook.
     "importRunDecisions",
     # `UI-PARITY-P0N`. One project as the listing gives it.
@@ -463,6 +469,9 @@ WRITE_OPERATIONS = {
     "importOptimisationProposalDecisions",
     # `UI-B-14` (1.37.0): the carried decisions are appended under one key, each under a key derived from it.
     "carryOverProposalDecisions",
+    # `DECISION-MEMORY-M2` (1.44.0): a change of a case's standing is an append-only status event, keyed.
+    "withdrawDecisionMemoryCase",
+    "restoreDecisionMemoryCase",
     "importRunDecisions",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",

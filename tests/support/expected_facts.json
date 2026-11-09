@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 275,
+    "path_count": 280,
     "operations": [
       [
         "DELETE",
@@ -177,6 +177,21 @@
         "GET",
         "/dashboard",
         "getDashboardSummary"
+      ],
+      [
+        "GET",
+        "/decision-memory/cases",
+        "listDecisionMemoryCases"
+      ],
+      [
+        "GET",
+        "/decision-memory/cases/{case_id}",
+        "getDecisionMemoryCase"
+      ],
+      [
+        "GET",
+        "/decision-memory/status",
+        "getDecisionMemoryStatus"
       ],
       [
         "GET",
@@ -990,6 +1005,16 @@
       ],
       [
         "POST",
+        "/decision-memory/cases/{case_id}/restore",
+        "restoreDecisionMemoryCase"
+      ],
+      [
+        "POST",
+        "/decision-memory/cases/{case_id}/withdraw",
+        "withdrawDecisionMemoryCase"
+      ],
+      [
+        "POST",
         "/executor-connections",
         "createExecutorConnection"
       ],
@@ -1796,6 +1821,20 @@
       "DecisionImportRefusal",
       "DecisionImportReport",
       "DecisionImportRow",
+      "DecisionMemoryCase",
+      "DecisionMemoryCaseId",
+      "DecisionMemoryCasePage",
+      "DecisionMemoryCaseSummary",
+      "DecisionMemoryContent",
+      "DecisionMemoryCountRow",
+      "DecisionMemoryCrop",
+      "DecisionMemoryDecision",
+      "DecisionMemoryEvidence",
+      "DecisionMemoryNormRef",
+      "DecisionMemoryStatus",
+      "DecisionMemoryStatusChange",
+      "DecisionMemoryStatusChangeRequest",
+      "DecisionMemoryStatusEvent",
       "DecisionRecord",
       "DecisionRecordPage",
       "DiffHunk",
@@ -2257,5 +2296,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0061_decision_memory_m2",
-  "contract_version": "1.43.0"
+  "contract_version": "1.44.0"
 }

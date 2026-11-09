@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.43.0 (OpenAPI 3.1.0)
- *   sha256 8cb5ce4bbf64e8429108d7e66cc8d30b1da03bb6f1cd6698106d700b8f50e75e
+ *   AuditManager PC-01 API 1.44.0 (OpenAPI 3.1.0)
+ *   sha256 f0cd51c65c6a0f27e50cb9b41a440af77f2eded90c801719ac212026c3766877
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.43.0';
+export const CONTRACT_VERSION = '1.44.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '8cb5ce4bbf64e8429108d7e66cc8d30b1da03bb6f1cd6698106d700b8f50e75e';
+export const CONTRACT_DIGEST = 'f0cd51c65c6a0f27e50cb9b41a440af77f2eded90c801719ac212026c3766877';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -297,6 +297,20 @@ export const SCHEMA_NAMES = [
   'DecisionImportRefusal',
   'DecisionImportReport',
   'DecisionImportRow',
+  'DecisionMemoryCase',
+  'DecisionMemoryCaseId',
+  'DecisionMemoryCasePage',
+  'DecisionMemoryCaseSummary',
+  'DecisionMemoryContent',
+  'DecisionMemoryCountRow',
+  'DecisionMemoryCrop',
+  'DecisionMemoryDecision',
+  'DecisionMemoryEvidence',
+  'DecisionMemoryNormRef',
+  'DecisionMemoryStatus',
+  'DecisionMemoryStatusChange',
+  'DecisionMemoryStatusChangeRequest',
+  'DecisionMemoryStatusEvent',
   'DecisionRecord',
   'DecisionRecordPage',
   'DiffHunk',
@@ -3920,6 +3934,149 @@ export type DecisionImportRow = {
   row: number;
 };
 
+/** A case with everything it keeps. ``content`` is ``null`` and the lists are empty for a forgotten case (its tombstone only). */
+export type DecisionMemoryCase = {
+  content: DecisionMemoryContent | null;
+  crops: Array<DecisionMemoryCrop>;
+  decisions: Array<DecisionMemoryDecision>;
+  evidence: Array<DecisionMemoryEvidence>;
+  norm_refs: Array<DecisionMemoryNormRef>;
+  status_events: Array<DecisionMemoryStatusEvent>;
+  summary: DecisionMemoryCaseSummary;
+};
+
+export type DecisionMemoryCaseId = string;
+
+/** The contract pattern for `DecisionMemoryCaseId`. Anchored; use with `new RegExp()`. */
+export const DECISION_MEMORY_CASE_ID_PATTERN = "^dmc_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type DecisionMemoryCasePage = {
+  items: Array<DecisionMemoryCaseSummary>;
+  page: PageInfo;
+};
+
+/** One case as the list gives it: where it stands (``status``), the verdict of its latest decision and how many decisions it holds. */
+export type DecisionMemoryCaseSummary = {
+  captured_at: string;
+  case_id: DecisionMemoryCaseId;
+  category: string;
+  crop_state: "referenced" | "none_available";
+  current_decided_at: string | null;
+  current_origin_kind: "direct" | "carried" | "imported" | null;
+  current_severity: Severity | null;
+  current_verdict: "accepted" | "rejected" | null;
+  data_class: "test" | "real";
+  decision_count: number;
+  origin_project_uid: ProjectUid;
+  section_code: string | null;
+  status: "active" | "withdrawn" | "forgotten";
+  status_changed_at: string | null;
+  status_reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other" | null;
+};
+
+/** What the model proposed, as it stood when the decision was taken (immutable, a primary record from capture). */
+export type DecisionMemoryContent = {
+  analysis_profile_id: AnalysisProfileId;
+  finding_text: string;
+  proposed_severity: Severity | null;
+  provider_mode: "live" | "recorded";
+  recommendation_text: string;
+  required_value: string | null;
+  stage_id: string;
+  stated_value: string | null;
+};
+
+export type DecisionMemoryCountRow = {
+  cases: number;
+  data_class: "test" | "real";
+  status: "active" | "withdrawn" | "forgotten";
+};
+
+/** A crop image the case references (a binding to an existing Blob, never a copy); ``bbox`` is the normalised box on the page. */
+export type DecisionMemoryCrop = {
+  bbox: Array<number>;
+  crop_id: string;
+  crop_ordinal: number;
+  evidence_ordinal: number | null;
+  height_px: number;
+  media_type: "image/png";
+  page_number: number;
+  portal_description: string | null;
+  selection_rule: string;
+  sha256: string;
+  size_bytes: number;
+  width_px: number;
+};
+
+/** One captured decision. ``comment`` is the expert's own words, ``null`` for a carried decision and for a forgotten case. */
+export type DecisionMemoryDecision = {
+  comment: string | null;
+  decided_at: string;
+  event_type: "accept" | "reject";
+  memory_decision_id: string;
+  origin_kind: "direct" | "carried" | "imported";
+  severity: Severity | null;
+  verdict: "accepted" | "rejected";
+};
+
+/** A quoted span the expert looked at. ``bbox`` is ``[x0, y0, x1, y1]`` in ``bbox_unit`` from ``bbox_origin`` when the block was known. */
+export type DecisionMemoryEvidence = {
+  bbox: Array<number> | null;
+  bbox_origin: string | null;
+  bbox_unit: string | null;
+  block_ref: string | null;
+  char_end: number;
+  char_start: number;
+  ordinal: number;
+  page_number: number;
+  quote: string;
+};
+
+/** A certified normative reference the finding rested on (ids that stay resolvable, and the quoted norm text). */
+export type DecisionMemoryNormRef = {
+  citation_state: "verified" | "rebound";
+  clause_number: string | null;
+  designation: string;
+  norm_document_id: NormDocumentId;
+  norm_paragraph_id: NormParagraphId;
+  ordinal: number;
+  page_label: number;
+  quote: string;
+};
+
+/** What the memory holds and the installation settings in force (nothing journalled means ``test`` and ``off``). */
+export type DecisionMemoryStatus = {
+  by_status_and_class: Array<DecisionMemoryCountRow>;
+  cases: number;
+  data_class: "test" | "real";
+  decisions: number;
+  training_use: "off" | "on";
+};
+
+/** What a withdraw or a restore did: the status event written (or, for a replay, the first call's) and the standing after it. */
+export type DecisionMemoryStatusChange = {
+  case_id: DecisionMemoryCaseId;
+  changed_at: string;
+  kind: "withdraw" | "restore";
+  reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other";
+  status: "active" | "withdrawn";
+  status_event_id: string;
+};
+
+/** Why a case is withdrawn or restored: a closed reason (free text would put personal data into an append-only record). */
+export type DecisionMemoryStatusChangeRequest = {
+  reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other";
+};
+
+/** One change of standing, newest last. A ``forget`` carries the digest of the content that was forgotten, never the content. */
+export type DecisionMemoryStatusEvent = {
+  created_at: string;
+  forgotten_content_sha256: string | null;
+  kind: "withdraw" | "restore" | "forget";
+  reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other";
+  status_event_id: string;
+};
+
 /** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
@@ -4134,7 +4291,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.43.0";
+  contract_version: "1.44.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;

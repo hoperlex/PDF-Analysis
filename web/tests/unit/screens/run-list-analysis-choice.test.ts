@@ -49,7 +49,7 @@ const NOT_ALLOWED: ReadonlyArray<readonly [string, (client: Client) => void]> = 
   [
     'a failed read',
     (client) => seedError(client, PACK, new ApiError(503, {
-      contract_version: '1.43.0', error_code: 'dependency_unavailable', message: 'm',
+      contract_version: '1.44.0', error_code: 'dependency_unavailable', message: 'm',
       correlation_id: 'c', retryable: true,
     }, 'c')),
   ],

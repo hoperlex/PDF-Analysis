@@ -22,7 +22,7 @@
     "dispatch_named_commit": "551d29e2b5dbdada915c6127fe27cae850dd1c60",
     "commit_note": "Resealed by UI-PARITY-C7: contract 1.43.0 (ProposalDecisionRecord.carried_from; AcceptedOptimisationProposal.saving_percent; the percent and the carried mark in the proposals exports; listExecutionQueue state_group; ExecutionQueuePage.live_failure_count; DocumentAudit optimisation counts).",
     "openapi_version": "3.1.0",
-    "info_version": "1.43.0",
+    "info_version": "1.44.0",
     "paths": 275,
     "operations": 303,
     "component_schemas": 730,

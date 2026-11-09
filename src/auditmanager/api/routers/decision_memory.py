@@ -125,7 +125,7 @@ def build_decision_memory_routes(router: APIRouter, memory: DecisionMemoryPort) 
     @router.get(
         "/decision-memory/status", operation_id="getDecisionMemoryStatus", tags=_TAGS, status_code=200,
         response_model=models.DecisionMemoryStatus,
-        responses={**success(200, "The counts and the settings in force."), **envelope_responses(401, 403, 422, 500, 503)},
+        responses={**success(200, "The counts and the settings in force."), **envelope_responses(401, 403, 500, 503)},
         description=(
             "`DECISION-MEMORY-01` phase M2: how many cases and decisions the memory holds, by standing and data class, and the "
             "installation settings in force -- `data_class`, what a case captured now is (`test` until an operator journals `real`), and "
