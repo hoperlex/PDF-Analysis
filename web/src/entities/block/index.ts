@@ -6,7 +6,7 @@
 
 export { PORTAL_BLOCK_PAGE_LIMIT, portalBlocksQueryOptions, usePortalBlocks } from './api/use-portal-blocks';
 export { sheetOfPage, useSheetLabels } from './api/use-sheet-labels';
-export { useRunFindingBlocks } from './api/use-run-finding-blocks';
+export { runFindingBlocksQueryOptions, useRunFindingBlocks } from './api/use-run-finding-blocks';
 export { blocksOfFinding, findingBlockIndex } from './model/finding-blocks';
 export type { FindingBlockIndex } from './model/finding-blocks';
 export { hasMeaningfulContent } from './model/content';

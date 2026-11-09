@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Finding, FindingCategory, Verdict } from '@/shared/api';
 import { groupByCategory } from '@/entities/finding';
+import { declaredPages } from '@/entities/finding-observation';
 import { FindingList, findingNumbers, findingsAsShown, inVerdictOrder } from '@/widgets/finding-list';
 
 import { findingDetail, observation } from './fixtures';
@@ -103,6 +104,28 @@ describe('the blocks of a finding in the table', () => {
     expect(markup).toContain('data-finding-block-count="1"');
     expect((markup.match(/data-finding-block-count=/g) ?? []).length).toBe(2);
     expect(markup).toContain('title="Блоков замечания: 2"');
+    expect(markup).toContain('2 бл.');
+  });
+
+  it('calls the count partial when the finding also cites a page the server could not place evidence on (J3 F7)', () => {
+    const cited = RUN.find((finding) => finding.finding_uid === uid(3));
+    const page = declaredPages((cited as Finding).observation)[0] as number;
+    const markup = renderToStaticMarkup(createElement(FindingList, {
+      groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, view: 'table',
+      blockCountOf: (findingUid) => (findingUid === uid(3) ? 2 : undefined), unlinkedPages: new Set([page]),
+    }));
+    expect(markup).toContain('data-finding-block-partial=""');
+    expect(markup).toContain('2+ бл.');
+    expect(markup).toContain(`Блоков замечания: не менее 2. Цитата на стр. ${page}`);
+    expect((markup.match(/data-finding-block-partial=/g) ?? []).length).toBe(1);
+  });
+
+  it('keeps the exact count when no page the finding cites is unlinked', () => {
+    const markup = renderToStaticMarkup(createElement(FindingList, {
+      groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, view: 'table',
+      blockCountOf: (findingUid) => (findingUid === uid(3) ? 2 : undefined), unlinkedPages: new Set([999]),
+    }));
+    expect(markup).not.toContain('data-finding-block-partial');
     expect(markup).toContain('2 бл.');
   });
 

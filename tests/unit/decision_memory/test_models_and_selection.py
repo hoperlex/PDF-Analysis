@@ -102,6 +102,17 @@ class TestTheValuesRefuseWhatTheTablesRefuse:
         with pytest.raises(DomainError):
             DecisionFact("dec_01M5F21PBT7E8WRN3M61BDQFDD", "comment", None, "x", None, "direct", NOW)
 
+    def test_a_carried_decision_stores_no_comment_text_because_its_ledger_comment_is_the_systems(self) -> None:
+        """J3 F8: the text table is the expert's own words; the carry-over's sentence names identities and is not theirs."""
+        sentence = "Решение перенесено из версии 1 (по сравнению) после подтверждения экспертом."
+        with pytest.raises(DomainError) as refused:
+            DecisionFact("dec_01M5F21PBT7E8WRN3M61BDQFDD", "accept", None, sentence, None, "carried", NOW)
+        assert refused.value.code is ErrorCode.VALIDATION_FAILED
+        assert DecisionFact("dec_01M5F21PBT7E8WRN3M61BDQFDD", "accept", None, None, None, "carried", NOW).comment is None
+        # the other origins keep the comment: a direct or an imported decision's text is the expert's
+        for kind in ("direct", "imported"):
+            assert DecisionFact("dec_01M5F21PBT7E8WRN3M61BDQFDD", "accept", None, "ок", None, kind, NOW).comment == "ок"
+
     def test_an_unknown_origin_kind_is_refused(self) -> None:
         with pytest.raises(DomainError):
             DecisionFact("dec_01M5F21PBT7E8WRN3M61BDQFDD", "accept", None, None, None, "invented", NOW)

@@ -2171,8 +2171,15 @@ class BlockAdapter(_SessionHolder):
     """
 
     def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        import threading
+        from collections import OrderedDict
+
         super().__init__(session_factory)
         self._blob_store = blob_store
+        # `listRunFindingBlocks`'s derived inputs, by the digests of the three documents they come from (see `_run_geometry`).
+        self._geometry_cache: "OrderedDict[tuple[Any, ...], tuple[BlockAdapter._RunGeometry, int]]" = OrderedDict()
+        self._geometry_cache_bytes = 0
+        self._geometry_cache_lock = threading.Lock()
 
     def get_block_index(self, *, version_uid: str) -> VersionBlockIndexView:
         return self._read(lambda session: self.block_index_in(session, version_uid))
@@ -2292,11 +2299,6 @@ class BlockAdapter(_SessionHolder):
 
     def portal_source_in(self, session: Session, version_uid: str) -> "BlockAdapter._PortalSource | None":
         """:meth:`_portal_source` over a session the caller owns."""
-        from auditmanager.analysis.public import (
-            ROLE_PAGE_CROPS,
-            ROLE_PORTAL_BLOCKS,
-            ROLE_RECOGNISED_TEXT,
-        )
         from auditmanager.documents.repository import DocumentRepository
         from auditmanager.runs import RunRepository
         from auditmanager.shared.identity import VersionUid
@@ -2304,57 +2306,100 @@ class BlockAdapter(_SessionHolder):
         DocumentRepository().get_version(session, VersionUid.parse(version_uid))
         repository = RunRepository()
         for run in repository.list_for_version(session, version_uid):
-            stages = {
-                stage.stage_id: stage
-                for stage in repository.stage_results(session, str(run.run_id))
-            }
-            geometry = stages.get("page_geometry_extraction")
-            if geometry is None or geometry.status != "succeeded":
-                continue
-            portal_blocks = self._artifact_reference(geometry.artifacts, ROLE_PORTAL_BLOCKS)
-            if portal_blocks is None:
-                continue
-            preparation = stages.get("source_preparation")
-            return BlockAdapter._PortalSource(
-                run_id=str(run.run_id),
-                portal_blocks=portal_blocks,
-                page_crops=self._artifact_reference(geometry.artifacts, ROLE_PAGE_CROPS),
-                recognised_text=(
-                    None
-                    if preparation is None
-                    else self._artifact_reference(preparation.artifacts, ROLE_RECOGNISED_TEXT)
-                ),
-            )
+            source = self._portal_source_of(repository, session, str(run.run_id))
+            if source is not None:
+                return source
         return None
 
-    def evidence_boxes_in(
-        self, session: Session, version_uid: str
-    ) -> dict[str, tuple[tuple[float, float, float, float], str, str]]:
-        """The boxes of the version's text blocks by block reference (``b_NNNNNN``): ``(x0, y0, x1, y1), unit, origin``.
+    @staticmethod
+    def _portal_source_of(repository: Any, session: Session, run_id: str) -> "BlockAdapter._PortalSource | None":
+        """What the one run published as portal geometry, or ``None`` when its ``page_geometry_extraction`` did not succeed or
+        published no ``geometry.portal_blocks`` (a run over a version without a bundle succeeds without it)."""
+        from auditmanager.analysis.public import (
+            ROLE_PAGE_CROPS,
+            ROLE_PORTAL_BLOCKS,
+            ROLE_RECOGNISED_TEXT,
+        )
 
-        Empty when no run of the version produced a block index. For the decision memory (`ADR-0027`), over the caller's session.
+        stages = {stage.stage_id: stage for stage in repository.stage_results(session, run_id)}
+        geometry = stages.get("page_geometry_extraction")
+        if geometry is None or geometry.status != "succeeded":
+            return None
+        portal_blocks = BlockAdapter._artifact_reference(geometry.artifacts, ROLE_PORTAL_BLOCKS)
+        if portal_blocks is None:
+            return None
+        preparation = stages.get("source_preparation")
+        return BlockAdapter._PortalSource(
+            run_id=run_id,
+            portal_blocks=portal_blocks,
+            page_crops=BlockAdapter._artifact_reference(geometry.artifacts, ROLE_PAGE_CROPS),
+            recognised_text=(
+                None
+                if preparation is None
+                else BlockAdapter._artifact_reference(preparation.artifacts, ROLE_RECOGNISED_TEXT)
+            ),
+        )
+
+    def evidence_boxes_in(
+        self, session: Session, run_id: str
+    ) -> dict[str, tuple[tuple[float, float, float, float], str, str]]:
+        """The boxes of the text blocks of **the run's own** block index by block reference (``b_NNNNNN``): ``(x0, y0, x1, y1), unit, origin``.
+
+        A block reference is an anchor inside the artifact of the run that minted it (``page_geometry_extraction``'s ``_build_blocks``:
+        «never a foreign key»); two runs of one version may number their lines differently (other text extraction options), so the
+        evidence of a finding is looked up in the index of the run that published the finding, never in the version's newest run's.
+        Empty when that run produced no block index (its geometry stage did not succeed or published none): an absent box is NULL in
+        the memory, not another run's box. The document is read with the digest the run's ``stage_result`` recorded, as
+        :meth:`list_run_finding_blocks` reads it. For the decision memory (`ADR-0027`), over the caller's session.
         """
-        index = self.block_index_in(session, version_uid)
+        from auditmanager.analysis.public import ROLE_BLOCK_INDEX
+        from auditmanager.runs import RunRepository
+
+        repository = RunRepository()
+        run = self._run_in(repository, session, run_id)
+        geometry = next(
+            (stage for stage in repository.stage_results(session, run_id) if stage.stage_id == "page_geometry_extraction"), None,
+        )
+        reference = (
+            None if geometry is None or geometry.status != "succeeded"
+            else self._artifact_reference(geometry.artifacts, ROLE_BLOCK_INDEX)
+        )
+        if reference is None:
+            return {}
+        index = self._portal_document(reference, ROLE_BLOCK_INDEX, run.version_uid)
         return {
-            block.block_id: (
-                (block.bbox["x0"], block.bbox["y0"], block.bbox["x1"], block.bbox["y1"]),
-                block.bbox_unit,
-                block.bbox_origin,
+            block["block_id"]: (
+                (block["bbox"]["x0"], block["bbox"]["y0"], block["bbox"]["x1"], block["bbox"]["y1"]),
+                block["bbox_unit"],
+                block["bbox_origin"],
             )
-            for block in index.blocks
+            for block in index["blocks"]
         }
 
-    def portal_crops_in(self, session: Session, version_uid: str) -> tuple[Mapping[str, Any], ...]:
-        """The crop records of the version's portal geometry (``geometry.page_crops``), each with the portal's description of its
-        IMAGE block under ``portal_description`` when it has one; empty when no run produced portal geometry or crops.
+    @staticmethod
+    def _run_in(repository: Any, session: Session, run_id: str) -> Any:
+        run = repository.find(session, run_id)
+        if run is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
+        return run
 
-        Every artifact is read with the digest its ``stage_result`` recorded, as :meth:`list_portal_blocks` reads it: a blob that is
-        missing or differs is ``storage_integrity_error``, never a shorter answer. An absent reference is an absent crop manifest (a
-        run before the crop policy), which is an explicit empty answer and not an error. For the decision memory (`ADR-0027`).
+    def portal_crops_in(self, session: Session, run_id: str) -> tuple[Mapping[str, Any], ...]:
+        """The crop records of **the run's own** portal geometry (``geometry.page_crops``), each with the portal's description of its
+        IMAGE block under ``portal_description`` when it has one; empty when that run produced no portal geometry or crops.
+
+        The run is the finding's run (as :meth:`evidence_boxes_in`): a run that published no portal geometry yields no crops, and the
+        crops of a later run of the version are not borrowed. Every artifact is read with the digest its ``stage_result`` recorded,
+        as :meth:`list_portal_blocks` reads it: a blob that is missing or differs is ``storage_integrity_error``, never a shorter
+        answer. An absent reference is an absent crop manifest (a run before the crop policy), which is an explicit empty answer and
+        not an error. For the decision memory (`ADR-0027`).
         """
         from auditmanager.analysis.public import KIND_PORTAL_DESCRIPTION, ROLE_PAGE_CROPS, ROLE_RECOGNISED_TEXT
+        from auditmanager.runs import RunRepository
 
-        source = self.portal_source_in(session, version_uid)
+        repository = RunRepository()
+        run = self._run_in(repository, session, run_id)
+        version_uid = run.version_uid
+        source = self._portal_source_of(repository, session, run_id)
         if source is None or source.page_crops is None:
             return ()
         manifest = self._portal_document(source.page_crops, ROLE_PAGE_CROPS, version_uid)
@@ -2406,12 +2451,8 @@ class BlockAdapter(_SessionHolder):
         from auditmanager.analysis.public import (
             ROLE_BLOCK_INDEX,
             ROLE_PAGE_INVENTORY,
-            ROLE_PORTAL_BLOCKS,
             EvidenceSpan,
-            PortalBox,
-            TextLine,
             link_evidence,
-            linkable_pages,
         )
         from auditmanager.findings import (
             group_published_findings, published_finding_evidence, published_findings,
@@ -2447,25 +2488,8 @@ class BlockAdapter(_SessionHolder):
         if index_ref is None or inventory_ref is None or source is None:
             return absent()
 
-        portal = self._portal_document(source.portal_blocks, ROLE_PORTAL_BLOCKS, run.version_uid)
-        index = self._portal_document(index_ref, ROLE_BLOCK_INDEX, run.version_uid)
-        inventory = self._portal_document(inventory_ref, ROLE_PAGE_INVENTORY, run.version_uid)
-        pages = linkable_pages(portal["pages"], {int(page["page_number"]): page for page in inventory["pages"]})
-        lines: dict[int, list[Any]] = {}
-        for block in index["blocks"]:
-            box = block["bbox"]
-            lines.setdefault(int(block["page_number"]), []).append(TextLine(
-                int(block["page_number"]), int(block["char_start"]), int(block["char_end"]),
-                float(box["x0"]), float(box["y0"]), float(box["x1"]), float(box["y1"]),
-            ))
-        boxes = [
-            PortalBox(
-                block["portal_block_id"], int(block["page_number"]),
-                float(block["bbox_norm"][0]), float(block["bbox_norm"][1]),
-                float(block["bbox_norm"][2]), float(block["bbox_norm"][3]),
-            )
-            for block in portal["blocks"]
-        ]
+        geometry_of_run = self._run_geometry(index_ref, inventory_ref, source.portal_blocks, run.version_uid)
+        pages, lines, boxes = geometry_of_run.pages, geometry_of_run.lines, geometry_of_run.boxes
         items = []
         for group in sorted(groups, key=lambda group: group.canonical.finding_uid):
             canonical = group.canonical.finding_observation_id
@@ -2479,9 +2503,101 @@ class BlockAdapter(_SessionHolder):
             ))
         return models.RunFindingBlockLinks(
             run_id=run_id, version_uid=run.version_uid, status="produced",
-            unlinked_pages=sorted(int(page["page_number"]) for page in portal["pages"] if int(page["page_number"]) not in pages),
+            unlinked_pages=list(geometry_of_run.unlinked_pages),
             items=items,
         )
+
+    class _RunGeometry:
+        """What :meth:`list_run_finding_blocks` derives from the run's block index and page inventory and the version's portal
+        blocks, and nothing else: immutable, so a cached copy can be shared by concurrent reads."""
+
+        __slots__ = ("pages", "lines", "boxes", "unlinked_pages")
+
+        def __init__(
+            self, *, pages: Mapping[int, tuple[float, float]], lines: Mapping[int, tuple[Any, ...]],
+            boxes: tuple[Any, ...], unlinked_pages: tuple[int, ...],
+        ) -> None:
+            self.pages, self.lines, self.boxes, self.unlinked_pages = pages, lines, boxes, unlinked_pages
+
+    #: How many runs' derived geometry one adapter keeps, and the most the three documents of all of them may declare together.
+    #: A document larger than the budget is read and derived as before, and not kept.
+    _GEOMETRY_CACHE_ENTRIES = 8
+    _GEOMETRY_CACHE_BYTES = 48 * 1024 * 1024
+
+    def _run_geometry(
+        self, index_ref: Mapping[str, Any], inventory_ref: Mapping[str, Any], portal_ref: Mapping[str, Any], version_uid: str,
+    ) -> "BlockAdapter._RunGeometry":
+        """The derived inputs of one run's relation, from a per-process cache when the same three documents were derived before.
+
+        The key is the version and the SHA-256 and size each ``stage_result`` recorded for the three artifacts, so a hit is the
+        very content a miss verified and parsed (the blob store is content-addressed, ``_verified_bytes`` holds every read to that
+        declaration): **a miss is the whole truth** and a hit changes no answer. The cache is lost with the process and is never
+        read by anything but this method. What a hit does not do is read the object store again, so an object that disappears
+        or is damaged afterwards is noticed by the next miss (another document, an eviction, a restart), not by a hit; the
+        findings and their evidence, which decide the answer, are read from the database on every call.
+        """
+        from types import MappingProxyType
+
+        from auditmanager.analysis.public import (
+            ROLE_BLOCK_INDEX,
+            ROLE_PAGE_INVENTORY,
+            ROLE_PORTAL_BLOCKS,
+            PortalBox,
+            TextLine,
+            linkable_pages,
+        )
+
+        declared = [
+            (role, reference.get("sha256"), reference.get("size_bytes"))
+            for role, reference in (
+                (ROLE_BLOCK_INDEX, index_ref), (ROLE_PAGE_INVENTORY, inventory_ref), (ROLE_PORTAL_BLOCKS, portal_ref),
+            )
+        ]
+        weight = sum(int(size) for _, sha, size in declared if sha is not None and size is not None)
+        key = (version_uid, *declared) if all(sha is not None and size is not None for _, sha, size in declared) else None
+        if key is not None:
+            with self._geometry_cache_lock:
+                hit = self._geometry_cache.get(key)
+                if hit is not None:
+                    self._geometry_cache.move_to_end(key)
+                    return hit[0]
+
+        portal = self._portal_document(portal_ref, ROLE_PORTAL_BLOCKS, version_uid)
+        index = self._portal_document(index_ref, ROLE_BLOCK_INDEX, version_uid)
+        inventory = self._portal_document(inventory_ref, ROLE_PAGE_INVENTORY, version_uid)
+        pages = linkable_pages(portal["pages"], {int(page["page_number"]): page for page in inventory["pages"]})
+        collected: dict[int, list[Any]] = {}
+        for block in index["blocks"]:
+            box = block["bbox"]
+            collected.setdefault(int(block["page_number"]), []).append(TextLine(
+                int(block["page_number"]), int(block["char_start"]), int(block["char_end"]),
+                float(box["x0"]), float(box["y0"]), float(box["x1"]), float(box["y1"]),
+            ))
+        built = BlockAdapter._RunGeometry(
+            pages=MappingProxyType(pages),
+            lines=MappingProxyType({page: tuple(page_lines) for page, page_lines in collected.items()}),
+            boxes=tuple(
+                PortalBox(
+                    block["portal_block_id"], int(block["page_number"]),
+                    float(block["bbox_norm"][0]), float(block["bbox_norm"][1]),
+                    float(block["bbox_norm"][2]), float(block["bbox_norm"][3]),
+                )
+                for block in portal["blocks"]
+            ),
+            unlinked_pages=tuple(sorted(int(page["page_number"]) for page in portal["pages"] if int(page["page_number"]) not in pages)),
+        )
+        if key is not None and weight <= self._GEOMETRY_CACHE_BYTES:
+            with self._geometry_cache_lock:
+                if key not in self._geometry_cache:
+                    self._geometry_cache[key] = (built, weight)
+                    self._geometry_cache_bytes += weight
+                while self._geometry_cache and (
+                    len(self._geometry_cache) > self._GEOMETRY_CACHE_ENTRIES
+                    or self._geometry_cache_bytes > self._GEOMETRY_CACHE_BYTES
+                ):
+                    _, (_, evicted) = self._geometry_cache.popitem(last=False)
+                    self._geometry_cache_bytes -= evicted
+        return built
 
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         from auditmanager.analysis.public import (
@@ -2957,8 +3073,9 @@ class MemoryCaptureAssembler:
     It lives in the composition root because it reads five contexts (findings, documents, analysis geometry, decisions, the memory)
     through their public modules, and none of them may import another.
 
-    ``geometry`` is anything with ``evidence_boxes_in(session, version_uid)`` and ``portal_crops_in(session, version_uid)`` --
-    :class:`BlockAdapter` in production. The artifacts they read are only read for an observation that has no case yet; a later
+    ``geometry`` is anything with ``evidence_boxes_in(session, run_id)`` and ``portal_crops_in(session, run_id)`` --
+    :class:`BlockAdapter` in production. Both read **the run of the decided finding** (``b_NNNNNN`` is an anchor inside one run's
+    artifact, never a key across runs). The artifacts they read are only read for an observation that has no case yet; a later
     decision on a known observation reads nothing outside the database.
 
     A failure propagates (the decision fails loudly): nothing here falls back to a case without its crops or its citations.
@@ -3051,7 +3168,7 @@ class MemoryCaptureAssembler:
         known = self._repository.case_content_digest(session, row.finding_observation_id) is not None
         boxes: Mapping[str, Any] = {}
         if not known and any(item.block_id for item in stored):
-            boxes = self._geometry.evidence_boxes_in(session, head.version_uid)
+            boxes = self._geometry.evidence_boxes_in(session, head.run_id)
 
         def _item(item: Any) -> Any:
             box = boxes.get(item.block_id) if item.block_id else None
@@ -3064,7 +3181,7 @@ class MemoryCaptureAssembler:
             )
 
         evidence = tuple(_item(item) for item in stored)
-        crops = () if known else select_page_image_crops(evidence, self._geometry.portal_crops_in(session, head.version_uid))
+        crops = () if known else select_page_image_crops(evidence, self._geometry.portal_crops_in(session, head.run_id))
 
         content = CaseContent(
             category=row.category, finding_text=row.finding_text, recommendation_text=row.recommendation_text,
@@ -3091,8 +3208,11 @@ class MemoryCaptureAssembler:
             crops=crops,
             decision=DecisionFact(
                 source_decision_id=event.decision_id, event_type=event.event_type, severity=event.severity,
-                comment=event.comment, author_user_uid=event.author_user_uid, origin_kind=origin_kind,
-                decided_at=event.recorded_at,
+                # The memory keeps the expert's own words. A carried event's comment is the system sentence of
+                # `decisions.carryover.carryover_comment` (identities of the source decision, finding and versions): not theirs,
+                # and `origin_kind = carried` already says it came from an earlier version.
+                comment=None if origin_kind == "carried" else event.comment,
+                author_user_uid=event.author_user_uid, origin_kind=origin_kind, decided_at=event.recorded_at,
             ),
         )
 

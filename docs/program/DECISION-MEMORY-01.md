@@ -558,6 +558,16 @@ What exists, as built; where it differs from sections 3 and 7, this list is the 
 - **Crop selection rule v1** is `page_images/1`: the portal image-block crops of the pages the evidence names, at most 4, no geometric
   test against the evidence block (`D-392`). The rule name is stored on every crop.
 - **Guards G1** are in `product_purge.py` and `project_erase.py`; **G2** (pending crops) arrives with M3.
+- **Judge J3 fixes (lane FX, 2026-11-09):** (1) the evidence boxes and the crops of a case are read from the **decided finding's own run**
+  (`BlockAdapter.evidence_boxes_in(session, run_id)` and `portal_crops_in(session, run_id)`): a block reference `b_NNNNNN` is an anchor
+  inside one run's artifact, so the version's newest run's index must not resolve it; a run without a block index gives no box and a run
+  without portal geometry gives no crops (`D-471`). (2) A **carried** decision stores no comment text: its ledger comment is the system's
+  sentence (`carryover_comment`), not the expert's words, and `DecisionFact` refuses a comment on a carried decision; `origin_kind =
+  carried` says where it came from (the sweep still stores an imported decision as `direct`, `D-391`). (3) Guard **G1** has an explicit
+  way out for a capture that can never succeed: `--accept-memory-loss <reason>` on `product_purge.py` and `project_erase.py` (a closed list
+  of reasons) records the count and a digest of the uncaptured decision identities in the plan, its digest and, for the erase, in
+  `erasure.requested` and `plan.json`; without it the guard still refuses (`D-470`: the shell wrappers do not forward it yet).
+  (4) `access/references.py` names `decision_memory_decision.author_user_uid` (no foreign key) in its header, with a schema-reading test.
 - **Debts of this phase** (`DEBT_REGISTER.md`): `D-390` every case is `data_class = test` until M2 makes it a setting; `D-391` the
   import's `imported`; `D-392` the crop rule and `model_identity`; `D-393` the status event's actor key and command types; `D-394`
   the forget guard and the crop state guard; `D-397` the object-store reads inside a first decision and the sweep's scan.

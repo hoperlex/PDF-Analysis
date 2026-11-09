@@ -51,6 +51,17 @@ export interface FindingTableProps {
    * then draws nothing, never a «0».
    */
   readonly blockCountOf?: ((findingUid: string) => number | undefined) | undefined;
+  /**
+   * Pages on which the server could not place evidence (the run's block links, `unlinked_pages`). A finding that cites one
+   * has a count that is not all of its blocks, and the count says so (J3 F7). Absent, no count is called partial.
+   */
+  readonly unlinkedPages?: ReadonlySet<number> | undefined;
+}
+
+/** The pages of the finding's own evidence on which no block link can be derived, in page order. */
+function unlinkedPagesOf(finding: Finding, unlinkedPages: ReadonlySet<number> | undefined): readonly number[] {
+  if (unlinkedPages === undefined || unlinkedPages.size === 0) return [];
+  return declaredPages(finding.observation).filter((page) => unlinkedPages.has(page));
 }
 
 const COLUMNS = ['№', 'Важность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'] as const;
@@ -93,6 +104,30 @@ function NormCell({ finding }: { readonly finding: Finding }) {
   );
 }
 
+/**
+ * The count of the blocks that hold the finding's evidence. When the finding also cites a page the server could not place
+ * evidence on, the count is a floor, not the number: it reads «N+ бл.» and its title says which pages are left out.
+ */
+function BlockCount({ blocks, unlinked }: { readonly blocks: number; readonly unlinked: readonly number[] }) {
+  if (unlinked.length === 0) {
+    return (
+      <span className={styles.blocks} title={`Блоков замечания: ${blocks}`} data-finding-block-count={blocks}>
+        {blocks} бл.
+      </span>
+    );
+  }
+  return (
+    <span
+      className={styles.blocks}
+      title={`Блоков замечания: не менее ${blocks}. Цитата на стр. ${unlinked.join(', ')}: для этой страницы привязка к блокам не определена, её блоки не посчитаны.`}
+      data-finding-block-count={blocks}
+      data-finding-block-partial=""
+    >
+      {blocks}+ бл.
+    </span>
+  );
+}
+
 export function FindingTable({
   findings,
   numberOf,
@@ -102,6 +137,7 @@ export function FindingTable({
   renderExpansion,
   sheetOf,
   blockCountOf,
+  unlinkedPages,
 }: FindingTableProps) {
   return (
     <div className={styles.scroll} data-finding-table="">
@@ -157,9 +193,7 @@ export function FindingTable({
                       </span>
                     ) : null}
                     {blocks === undefined || blocks === 0 ? null : (
-                      <span className={styles.blocks} title={`Блоков замечания: ${blocks}`} data-finding-block-count={blocks}>
-                        {blocks} бл.
-                      </span>
+                      <BlockCount blocks={blocks} unlinked={unlinkedPagesOf(finding, unlinkedPages)} />
                     )}
                   </td>
                   <td className={styles.severity}>

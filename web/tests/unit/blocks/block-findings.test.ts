@@ -376,12 +376,29 @@ describe('the list «Без сущностей»', () => {
   });
 
   it('draws the two lists the original draws, with their counts and what each means', () => {
-    expect(visibleText(section('withoutFindings'))).toContain('Замечаний не выявлено (2)');
-    expect(visibleText(section('withoutFindings'))).toContain('Ни одно замечание прогона не лежит в этих блоках');
+    expect(visibleText(section('withoutFindings'))).toContain('Замечания к блоку не привязаны (2)');
+    expect(visibleText(section('withoutFindings'))).toContain('Ни одно замечание прогона не привязано к этим блокам по положению цитаты на странице');
     expect(visibleText(section('withoutContent'))).toContain('Без значимого содержимого (2)');
     expect(visibleText(section('withoutContent'))).toContain('нечего читать');
     // The first list comes first.
     expect(markup.indexOf('data-portal-empty="withoutFindings"')).toBeLessThan(markup.indexOf('data-portal-empty="withoutContent"'));
+  });
+
+  it('never states an absence the geometric link cannot support (J3 F7): no «не выявлено», no «нет замечаний», and a title that names the link', () => {
+    const first = section('withoutFindings');
+    expect(visibleText(first)).not.toContain('не выявлено');
+    expect(visibleText(first)).not.toContain('а замечаний по ним нет');
+    expect(visibleText(first)).toContain('Это не значит, что замечаний по ним нет');
+    expect(first).toMatch(/<h3\b[^>]*title="Привязка замечаний к блокам считается по положению цитаты на странице/);
+  });
+
+  it('lists no block of a page the server could not place evidence on, under either heading (J3 F7)', () => {
+    // Nine blocks: 1, 2 and 4 hold findings, 6 and 7 lie on the unlinked page 3, and the four others are listed.
+    expect(BLOCKS).toHaveLength(9);
+    expect(count(markup, 'data-portal-block-type')).toBe(BLOCKS.length - 3 - 2);
+    // The control: were page 3 not unlinked, its two blocks would be listed too (so the count above is the guard's, not the fixture's).
+    const placeable = list({ pageFindings: reading({ unlinked_pages: [] }), initialPage: 'empty' });
+    expect(count(placeable, 'data-portal-block-type')).toBe(BLOCKS.length - 3);
   });
 
   it('puts the right blocks in each: free text blocks in the first, the stamp and the empty text block in the second', () => {
@@ -426,10 +443,11 @@ describe('the block view’s findings panel', () => {
     expect(shown).not.toContain('Замечание указывает страницу PDF');
   });
 
-  it('says a block no finding holds has none', () => {
+  it('says a block no finding was linked to has none linked, not that it has no findings', () => {
     const shown = panel(open(2)); // the stamp of page 1
     expect(shown).toContain('data-page-findings-panel="0"');
-    expect(visibleText(shown)).toContain('Ни одно замечание прогона не лежит в этом блоке.');
+    expect(visibleText(shown)).toContain('Ни одно замечание прогона не привязано к этому блоку по положению цитаты.');
+    expect(visibleText(shown)).not.toContain('не лежит');
     expect(shown).not.toContain('data-finding-uid');
   });
 

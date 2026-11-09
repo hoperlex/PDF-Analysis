@@ -6,7 +6,8 @@
  * (`unlinkedPages`) is in neither list: it is unknown, not free of findings. The rest of the blocks that no finding holds
  * are split as the original splits them, by what the block itself holds (`hasMeaningfulContent`): the original says the
  * model read the first kind and the algorithm took the second out, a record this product does not keep, so the
- * headings here say what is known -- no finding of the run sits in the block; the block has nothing to read.
+ * headings here say what is known -- no finding of the run was linked to the block (the link is geometric and has known
+ * misses, `D-353`, so it is never worded as an absence of findings); the block has nothing to read.
  */
 
 import type { PortalBlock } from '@/shared/api';
@@ -15,7 +16,7 @@ import { hasMeaningfulContent } from '@/entities/block';
 import type { PageFindingsReading } from './page-findings';
 
 export interface NoEntityBlocks {
-  /** «Замечаний не выявлено»: blocks with something to read that no finding of the run sits in. */
+  /** «Замечания к блоку не привязаны»: blocks with something to read that no finding of the run was linked to (J3 F7: not «no findings»). */
   readonly withoutFindings: readonly PortalBlock[];
   /** «Без значимого содержимого»: blocks with nothing to read (a stamp, an area the portal recognised nothing in). */
   readonly withoutContent: readonly PortalBlock[];

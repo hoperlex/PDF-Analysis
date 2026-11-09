@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts.recovery import product_purge as purge
 from scripts.recovery import project_erase as tool
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -154,8 +155,32 @@ def test_every_fact_of_the_plan_moves_the_digest(change: dict[str, object]) -> N
 
 def test_the_plan_names_nobody_and_gives_no_reason() -> None:
     names = set(tool.plan_document.__code__.co_varnames[:tool.plan_document.__code__.co_argcount])
-    assert names == {"head", "project_uid", "table_facts", "receipt_fact", "exclusive", "shared", "objects"}
+    # `memory_loss` (J3 F6) is not the erase's reason or its actor: it is the decisions the operator accepted to lose from the memory,
+    # a fact about the data the plan approves, and it is in the document only when there is one.
+    assert names == {"head", "project_uid", "table_facts", "receipt_fact", "exclusive", "shared", "objects", "memory_loss"}
     assert set(_document()) == {"blobs", "objects", "project_uid", "receipts", "schema_head", "tables", "version"}
+
+
+def test_an_accepted_memory_loss_is_in_the_plan_only_when_there_is_one_and_moves_the_digest() -> None:
+    plain = tool.plan_digest(_document())
+    assert tool.plan_digest(_document(memory_loss=None)) == plain        # no loss: the digest is what it always was
+    loss = purge.MemoryLoss("test_data", 2, "a" * 64)
+    document = _document(memory_loss=loss)
+    assert document["memory_loss"] == {"reason_code": "test_data", "events": 2, "events_sha256": "a" * 64}
+    assert tool.plan_digest(document) != plain
+    for other in (purge.MemoryLoss("owner_decided", 2, "a" * 64), purge.MemoryLoss("test_data", 3, "a" * 64),
+                  purge.MemoryLoss("test_data", 2, "b" * 64)):
+        assert tool.plan_digest(_document(memory_loss=other)) != tool.plan_digest(document)
+
+
+def test_the_accepted_loss_is_a_closed_reason_and_only_when_something_is_uncaptured() -> None:
+    assert purge.accepted_memory_loss([], "test_data") is None            # nothing uncaptured: the flag changes nothing
+    assert purge.accepted_memory_loss(["dec_B", "dec_A"], None) is None   # no flag: the caller refuses
+    loss = purge.accepted_memory_loss(["dec_B", "dec_A"], "owner_decided")
+    assert loss == purge.accepted_memory_loss(["dec_A", "dec_B"], "owner_decided") and loss is not None
+    assert (loss.events, loss.reason) == (2, "owner_decided")
+    with pytest.raises(purge.PurgeRefused):
+        purge.accepted_memory_loss(["dec_A"], "because I said so")        # free text would reach the durable record
 
 
 def test_object_sizes_are_not_part_of_the_plan() -> None:

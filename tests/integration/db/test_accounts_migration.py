@@ -317,6 +317,32 @@ def test_the_reference_register_equals_the_schema_foreign_keys_to_app_user(
     )
 
 
+def test_every_memory_column_that_names_an_account_without_a_foreign_key_is_named_in_this_header(
+    migrated_engine: Engine,
+) -> None:
+    """`DECISION-MEMORY-01` section 3.3 (P13), judge J3 F8: the decision memory's account columns carry no foreign key, so the
+    register above cannot list them; the header of ``access/references.py`` must. The set is read from the live schema, not
+    retyped: a new ``decision_memory_*`` column named ``*user_uid`` without a foreign key that the header does not name is red."""
+    from auditmanager.access import references
+
+    with migrated_engine.connect() as connection:
+        named = {(table, column) for table, column in connection.execute(text(
+            "SELECT table_name, column_name FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name LIKE 'decision\\_memory\\_%' AND column_name LIKE '%user\\_uid'"))}
+        keyed = {(table, column) for table, column in connection.execute(text(
+            "SELECT src.relname, a.attname FROM pg_constraint c JOIN pg_class src ON src.oid = c.conrelid "
+            "JOIN pg_class dst ON dst.oid = c.confrelid "
+            "JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey) "
+            "WHERE c.contype = 'f' AND dst.relname = 'app_user'"))}
+    without_key = sorted(named - keyed)
+    assert ("decision_memory_decision", "author_user_uid") in without_key, "the premise changed: the author column has a key now"
+    header = " ".join((references.__doc__ or "").split())
+    missing = [f"{table}.{column}" for table, column in without_key if f"{table}.{column}" not in header.replace("`", "")]
+    assert missing == [], f"a memory column names an account with no foreign key and the header does not say so: {missing}"
+    # and none of them has slipped into the register, which is for foreign keys only
+    assert not {(entry.table, entry.column) for entry in ACCOUNT_REFERENCES} & set(without_key)
+
+
 # =======================================================================================
 # The login, the names, the archive pair.
 # =======================================================================================

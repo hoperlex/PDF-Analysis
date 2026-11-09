@@ -36,13 +36,17 @@ class _Geometry:
         self.crops: tuple[dict[str, Any], ...] = ()
         self.box_reads = 0
         self.crop_reads = 0
+        self.asked_runs: list[str] = []      # the run each read was for: a block reference is an anchor inside ONE run's artifact
+        self.boxes_of_run: dict[str, dict[str, Any]] | None = None   # per run, when a test gives the runs different numbering
 
-    def evidence_boxes_in(self, session: Session, version_uid: str) -> dict[str, Any]:
+    def evidence_boxes_in(self, session: Session, run_id: str) -> dict[str, Any]:
         self.box_reads += 1
-        return self.boxes
+        self.asked_runs.append(run_id)
+        return self.boxes if self.boxes_of_run is None else self.boxes_of_run.get(run_id, {})
 
-    def portal_crops_in(self, session: Session, version_uid: str) -> tuple[dict[str, Any], ...]:
+    def portal_crops_in(self, session: Session, run_id: str) -> tuple[dict[str, Any], ...]:
         self.crop_reads += 1
+        self.asked_runs.append(run_id)
         return self.crops
 
 
@@ -101,6 +105,7 @@ def test_a_decision_leaves_a_case_with_what_the_expert_saw_and_said(session: Ses
     assert decision["author_user_uid"] is None and decision["decided_at"] == event.recorded_at
     assert session.execute(text("SELECT comment FROM decision_memory_decision_text")).scalar_one() == "подтверждено по странице"
     assert memory.geometry.crop_reads == 1 and memory.geometry.box_reads == 0   # no evidence names a block, so no index was read
+    assert memory.geometry.asked_runs == [published.run_id]                      # J3 F3: the finding's own run, not the version's newest
 
 
 def test_a_crop_and_a_box_the_artifacts_name_are_referenced_not_copied(session: Session, published: Any, memory: SimpleNamespace) -> None:
@@ -121,6 +126,33 @@ def test_a_crop_and_a_box_the_artifacts_name_are_referenced_not_copied(session: 
     assert crop["selection_rule"] == "page_images/1" and crop["portal_description"] == "Схема этажа"
     assert (crop["bbox_x0"], crop["bbox_y1"]) == (0.1, 0.5)
     assert _count(session, "blob", "blob_id = :b", b=blob) == 1          # the Blob is the same row: a binding, not a copy
+
+
+def test_a_box_comes_from_the_block_index_of_the_findings_own_run_never_a_newer_runs(
+    session: Session, published: Any, memory: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """J3 F3: ``b_NNNNNN`` is an anchor inside the artifact of the run that minted it. The version has a newer run whose index
+    numbers its lines differently: the same ``b_000001`` is another line there. The case must carry the finding's own run's box."""
+    import dataclasses
+
+    import auditmanager.findings as findings_module
+
+    real = findings_module.published_finding_evidence
+    monkeypatch.setattr(findings_module, "published_finding_evidence", lambda s, run_id: tuple(
+        dataclasses.replace(item, block_id="b_000001") for item in real(s, run_id)))
+
+    newer_run = "run_01ARZ3NDEKTSV4RRFFQ69G5FAW"                      # a newer run of the same version, with its own numbering
+    indexes = {
+        published.run_id: {"b_000001": ((10.0, 20.0, 110.0, 32.0), "pt", "top_left")},
+        newer_run: {"b_000001": ((300.0, 400.0, 480.0, 412.0), "pt", "top_left")},
+    }
+    memory.geometry.boxes_of_run = indexes
+    _decide(session, published)
+    boxes = session.execute(text("SELECT block_ref, bbox_x0, bbox_y0, bbox_x1, bbox_y1, bbox_unit, bbox_origin FROM decision_memory_evidence "
+                                 "ORDER BY ordinal")).all()
+    assert [(row.block_ref, row.bbox_x0, row.bbox_y0, row.bbox_x1, row.bbox_y1, row.bbox_unit, row.bbox_origin) for row in boxes] == [
+        ("b_000001", 10.0, 20.0, 110.0, 32.0, "pt", "top_left")] * 2
+    assert memory.geometry.asked_runs == [published.run_id, published.run_id]   # the index, then the crops: both of the finding's run
 
 
 def test_a_second_decision_on_the_same_observation_adds_a_decision_to_the_same_case(
@@ -167,6 +199,34 @@ def test_a_carried_and_an_imported_decision_keep_their_origin(session: Session, 
     with pytest.raises(DomainError) as refused:
         _decide(session, published, "reject", origin_kind="carried")           # carried without the decision it carries over
     assert refused.value.code is ErrorCode.VALIDATION_FAILED
+
+
+def test_a_carried_decisions_system_sentence_is_not_stored_as_the_experts_words(
+    session: Session, published: Any, memory: SimpleNamespace
+) -> None:
+    """J3 F8: the carry-over's ledger comment is `carryover_comment(...)` -- identities of the source decision, finding and versions.
+    The memory's text table is the expert's own words, so a carried decision stores none and says `carried` in its origin; the
+    sweep (a process that decided without the port) does the same."""
+    from auditmanager.decisions.carryover import CarryoverProvenance, carryover_comment
+    from auditmanager.shared.identity import VersionUid
+
+    source = _decide(session, published, "accept", comment="подтверждаю")
+    sentence = carryover_comment(CarryoverProvenance(
+        source_finding_uid=published.finding_uid, source_decision_id=source.decision_id, source_version_uid=VersionUid.new().value,
+        source_version_ordinal=1, target_version_uid=published.version_uid, mode="version"))
+    carried = record_decision(
+        session, finding_uid=published.second_finding_uid, finding_observation_id=published.second_finding_observation_id,
+        event_type="accept", comment=sentence, author_label="Петрова А.", author_user_uid=None,
+        carried_from_decision_id=source.decision_id)
+    rows = dict(session.execute(text(
+        "SELECT d.source_decision_id, t.comment FROM decision_memory_decision d JOIN decision_memory_decision_text t "
+        "ON t.memory_decision_id = d.memory_decision_id")).all())
+    assert rows[source.decision_id] == "подтверждаю"                      # the expert's own words are kept
+    assert rows[carried.decision_id] is None                              # the system's sentence is not
+    origin = session.execute(text("SELECT origin_kind FROM decision_memory_decision WHERE source_decision_id = :d"),
+                             {"d": carried.decision_id}).scalar_one()
+    assert origin == "carried"
+    assert sentence not in "".join(str(value) for value in rows.values() if value is not None)
 
 
 def test_a_capture_that_fails_fails_the_decision_and_leaves_no_event(session: Session, published: Any, memory: SimpleNamespace) -> None:

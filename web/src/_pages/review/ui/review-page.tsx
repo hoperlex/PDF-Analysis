@@ -467,6 +467,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             onViewChange={setView}
             toolbar="outside"
             blockCountOf={blockLinks === null ? undefined : (findingUid) => blocksOfFinding(blockLinks, findingUid).length}
+            unlinkedPages={blockLinks === null ? undefined : blockLinks.unlinkedPages}
             selectedFindingUid={selectedUid}
             onSelect={(findingUid) => {
               // A second press on the open row of the table closes it, as the original's strip does.

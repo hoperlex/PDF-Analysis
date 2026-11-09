@@ -154,6 +154,11 @@ class DecisionFact:
             raise _invalid(f"{self.event_type!r} is not a captured decision event")
         if self.origin_kind not in ORIGIN_KINDS:
             raise _invalid(f"{self.origin_kind!r} is not a decision origin")
+        if self.origin_kind == "carried" and self.comment is not None:
+            # `decision_memory_decision_text` is the expert's own words. A carried event's ledger comment is the system's rendering of
+            # its provenance (`decisions.carryover.carryover_comment`: identities of the source finding, decision and versions), not
+            # anything the expert wrote, so it is not stored as theirs; `origin_kind = carried` says where the decision came from.
+            raise _invalid("a carried decision stores no comment text: its ledger comment is the system's, not the expert's")
 
     @property
     def verdict(self) -> str:
