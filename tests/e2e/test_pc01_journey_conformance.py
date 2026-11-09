@@ -2235,7 +2235,13 @@ def test_the_options_unit_tests_run_with_the_gate() -> None:
     node = shutil.which("node")
     assert node is not None, "node is required: the journey is a node program"
     ran = subprocess.run(
-        [node, "--test", str(JOURNEY_DIR / "walk-options.test.mjs"), str(JOURNEY_DIR / "dispatch.test.mjs")],
+        [
+            node,
+            "--test",
+            str(JOURNEY_DIR / "walk-options.test.mjs"),
+            str(JOURNEY_DIR / "dispatch.test.mjs"),
+            str(JOURNEY_DIR / "width.test.mjs"),
+        ],
         cwd=REPOSITORY_ROOT, capture_output=True, text=True, timeout=120,
     )
     assert ran.returncode == 0, ran.stdout + ran.stderr

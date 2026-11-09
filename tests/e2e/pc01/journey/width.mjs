@@ -120,3 +120,93 @@ export function widthFindings(where, measurement, declared) {
       'D-93: AppFrame is global, so this is every screen in the product and not this one.',
   ];
 }
+
+/**
+ * `D-565`: a collapsed column is a width fault that `scrollWidth <= innerWidth` cannot see.
+ *
+ * ## The row
+ *
+ * `D-560` (a section table whose name column was 12 px wide at 1280) and `D-561` (37 px at 390) passed the assertion
+ * above in every walk since the section table got its five numbers. A grid track that is squeezed does not push the
+ * page sideways: the text wraps one word to a line inside the narrow box and the page grows TALLER, so the document's
+ * width is untouched while a reader sees a column of syllables. Lane WALK-V4 found both by reading the boxes, not
+ * the page.
+ *
+ * ## The reading, stated once
+ *
+ * A visible leaf box (its children, if any, are inline) that holds at least `COLLAPSED_MIN_TEXT` characters of text,
+ * is narrower than `COLLAPSED_MAX_WIDTH` px and taller than `COLLAPSED_MIN_HEIGHT` px. Ten characters in a box under
+ * 90 px wide wrap in two lines at most unless the box is squeezed (a 16 px line is about 8 px per character, so ten
+ * characters need 80 px on one line), and a box over 70 px tall holds four lines or more at the dense line height.
+ * A word that is simply long (`Администратор` in a narrow chip) is one line and therefore short, so it does not read.
+ * Vertical writing is skipped: a rotated label is narrow and tall by design.
+ *
+ * The page of WALK-V4 gave 16 hits on «Главная» at 390 px and 15 at 1440 px before the fix and none after; one true
+ * hit was left (`D-563`, the author cell of the runs' table).
+ */
+export const COLLAPSED_MIN_TEXT = 10;
+export const COLLAPSED_MAX_WIDTH = 90;
+export const COLLAPSED_MIN_HEIGHT = 70;
+
+export const COLLAPSED_READING = `(() => {
+  const MIN_TEXT = ${COLLAPSED_MIN_TEXT}, MAX_WIDTH = ${COLLAPSED_MAX_WIDTH}, MIN_HEIGHT = ${COLLAPSED_MIN_HEIGHT};
+  const hits = [];
+  let count = 0;
+  for (const el of Array.from(document.querySelectorAll('body *'))) {
+    const tag = el.tagName.toLowerCase();
+    if (el.closest('svg') && tag !== 'svg') continue;
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) continue;
+    if (!(r.width < MAX_WIDTH && r.height > MIN_HEIGHT)) continue;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) <= 0) continue;
+    if (typeof cs.writingMode === 'string' && cs.writingMode.startsWith('vertical')) continue;
+    const text = (el.innerText ?? el.textContent ?? '').trim().replace(/\\s+/g, ' ');
+    if (text.length < MIN_TEXT) continue;
+    const leaf = Array.from(el.children).every((c) => { const d = getComputedStyle(c).display; return d === 'inline' || d === 'none'; });
+    if (!leaf) continue;
+    count += 1;
+    if (hits.length >= 8) continue;
+    const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3;
+    hits.push({
+      tag,
+      className: typeof el.className === 'string' ? el.className.trim().slice(0, 120) : null,
+      id: el.id || null,
+      width: Math.round(r.width),
+      height: Math.round(r.height),
+      lines: Math.round(r.height / lineHeight),
+      text: text.slice(0, 50),
+    });
+  }
+  return { count, hits };
+})()`;
+
+/** Take the collapsed-column reading. Like `measureWidth`, it reflows nothing. */
+export async function measureCollapsed(page) {
+  return await page.evaluate(COLLAPSED_READING);
+}
+
+/**
+ * The verdict, as zero or one finding. `reading` is what `measureCollapsed` returned; `declared` is the viewport the run
+ * was held to, so the finding names the width the squeeze was measured at.
+ */
+export function collapsedFindings(where, reading, declared) {
+  if (reading === null || reading === undefined) {
+    return [`${where}: the collapsed-column reading could not be taken from the page at all`];
+  }
+  if (!(reading.count > 0)) return [];
+  const kind = declared.requested === true ? 'requested' : 'declared';
+  const named = reading.hits
+    .map(
+      (h) =>
+        `<${h.tag}${h.id ? `#${h.id}` : ''}${h.className ? `.${h.className.split(/\s+/).join('.')}` : ''}> ` +
+        `${h.width} x ${h.height} px (${h.lines} lines) "${h.text}"`,
+    )
+    .join('; ');
+  return [
+    `${where}: a column collapsed at the ${kind} width ${declared.width} px. ` +
+      `${reading.count} visible text box(es) of ${COLLAPSED_MIN_TEXT} or more characters are under ${COLLAPSED_MAX_WIDTH} px wide ` +
+      `and over ${COLLAPSED_MIN_HEIGHT} px tall; first: ${named}. ` +
+      'D-565: a squeezed grid track makes the page taller instead of wider, so scrollWidth cannot see it.',
+  ];
+}
