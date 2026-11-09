@@ -66,8 +66,13 @@ class MemoryStore:
     def switch_journal(self, session: Any, *, limit: int) -> Sequence[SwitchEventRow]:
         return list(reversed(self.events))[:limit]
 
-    def append_revision(self, session: Any, *, kit: str, cells: Sequence[CellSettings], created_by: str) -> LayoutRevisionRow:
-        row = LayoutRevisionRow(StageLayoutRevisionId.new().value, len(self.revisions) + 1, kit, tuple(cells), NOW, created_by)
+    def append_revision(
+        self, session: Any, *, kit: str, cells: Sequence[CellSettings], created_by: str,
+        comparison_cells: Sequence[CellSettings] | None = None,
+    ) -> LayoutRevisionRow:
+        row = LayoutRevisionRow(
+            StageLayoutRevisionId.new().value, len(self.revisions) + 1, kit, tuple(cells), NOW, created_by,
+            tuple(comparison_cells) if comparison_cells else None)
         self.revisions.append(row)
         return row
 

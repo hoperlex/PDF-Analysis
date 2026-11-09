@@ -160,8 +160,9 @@ def fail_run_consent_lapsed(session: Session, *, run_id: str, from_state: str) -
 
 
 from .cost_policy import RunCostPolicy, group_consent_holds, read_run_cost_policy
-from .stage_layout import (  # HOSTS-LAYOUT-01
+from .stage_layout import (  # HOSTS-LAYOUT-01; the comparison cells are HOSTS-CMP-01
     BLOCK_SCHEMES,
+    COMPARISON_KINDS,
     FrozenStagePlan,
     KIT_CUSTOM,
     KIT_LABELS,
@@ -172,9 +173,11 @@ from .stage_layout import (  # HOSTS-LAYOUT-01
     ROW_LABELS,
     STAGE_ROWS,
     cells_to_wire,
+    comparison_cells_to_wire,
     kit_of,
     parse_plan,
     preset_cells,
+    require_valid_comparison_cells,
     require_valid_layout,
     row_of_phase,
     rows_in_use,
@@ -247,6 +250,7 @@ __all__ = [
     "run_to_terminal",
     "start_serving_carrier",
     "BLOCK_SCHEMES",
+    "COMPARISON_KINDS",
     "FrozenStagePlan",
     "KITS",
     "KIT_CUSTOM",
@@ -266,11 +270,13 @@ __all__ = [
     "StagePlanFreezer",
     "SwitchEventRow",
     "cells_to_wire",
+    "comparison_cells_to_wire",
     "kit_of",
     "no_layout_revision",
     "parse_plan",
     "preset_cells",
     "provider_source_not_database",
+    "require_valid_comparison_cells",
     "require_valid_layout",
     "row_of_phase",
     "rows_in_use",

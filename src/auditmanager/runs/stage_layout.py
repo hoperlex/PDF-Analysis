@@ -12,7 +12,10 @@ This module is pure: no database, no clock, no environment. It is the single def
 * the **validation** of a layout against the catalogue (``contracts/analysis/v1/model-catalogue.json``): only a pair the file offers,
   never a Haiku, an effort above ``high`` or ``low`` for Opus;
 * the **plan** (:class:`FrozenStagePlan`): the cells of a layout revision with the access chosen for each model when a run starts, its
-  JSON form (what ``audit_run.stage_plan`` stores) and its digest.
+  JSON form (what ``audit_run.stage_plan`` stores) and its digest;
+* the **comparison cells** (`HOSTS-CMP-01`, ADR-0028 decision 19): one cell ``<kind>:main`` for each of the four kinds of the version
+  comparison that call a model (:data:`COMPARISON_KINDS`), with the same four settings as a row. They are part of a layout revision and
+  of no run: a run's plan holds the six rows only (:func:`rows_in_use`), and a comparison job freezes its cell when it starts.
 
 Nothing here decides a model from a model's output (``AGENTS.md`` section 4): a model, an effort and a limit come from the stored
 layout, the access from the availability the stand reads at the start.
@@ -31,10 +34,13 @@ from auditmanager.analysis.public import (
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
-    "BLOCK_SCHEMES", "BLOCKS_ENSEMBLE_LANDED", "BlockScheme", "CELL_ROLES", "ENSEMBLE_ROLES", "ENSEMBLE_ROW", "FrozenStagePlan", "ROLE_ORDER", "KITS", "KIT_CLAUDE_ONLY",
+    "BLOCK_SCHEMES", "BLOCKS_ENSEMBLE_LANDED", "BlockScheme", "CELL_ROLES", "COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS",
+    "COMPARISON_DEFAULT_TIMEOUT_SECONDS", "COMPARISON_KINDS", "COMPARISON_LABELS", "COMPARISON_PRESET_CELLS", "ENSEMBLE_ROLES",
+    "ENSEMBLE_ROW", "FrozenStagePlan", "ROLE_ORDER", "KITS", "KIT_CLAUDE_ONLY",
     "KIT_CODEX_ONLY", "KIT_CUSTOM", "KIT_LABELS", "MODELLESS_PHASES", "PHASE_ALIASES", "PHASE_LABELS", "PHASE_ROWS", "PLAN_FORMAT", "PRESET_CELLS",
     "ROW_LABELS", "ROW_PHASES", "STAGE_ROWS", "cell_key", "cells_to_wire", "kit_of", "parse_plan", "preset_cells", "require_valid_layout",
-    "role_of_phase", "row_of_phase", "rows_in_use", "validate_cells",
+    "comparison_cell_key", "comparison_cells_in_force", "comparison_cells_to_wire", "comparison_preset_cells", "require_valid_comparison_cells",
+    "role_of_phase", "row_of_phase", "rows_in_use", "validate_cells", "validate_comparison_cells",
 ]
 
 #: The six rows, in the order the owner sees them. ``git grep -n "STAGE_ROWS" -- src`` is the totality query of this set.
@@ -279,6 +285,121 @@ def cells_to_wire(cells: Iterable[CellSettings]) -> list[dict[str, Any]]:
     """The JSON of a layout cell (``StageLayoutCell``): what the revision stores and the API returns."""
     return [
         {"cell_key": cell.cell_key, "row": cell.row, "role": cell.role, "model_id": cell.model_id, "effort": cell.effort,
+         "max_output_tokens": cell.max_output_tokens, "timeout_seconds": cell.timeout_seconds}
+        for cell in cells
+    ]
+
+
+# --- the comparison cells -----------------------------------------------------------------------------------------------------
+# `HOSTS-CMP-01` (ADR-0028 decision 19). The four kinds of work of the version comparison that call a model are served by the same
+# system groups as the analysis. A kind has one cell ``<kind>:main`` (model, effort, answer limit, timeout), kept in the layout revision
+# beside the six rows and never in a run's plan. ``comparison_stage_review`` is not here: it is an enum value with no handler (`CMP-SEAL-C4`).
+
+#: The kinds of comparison work a cell is chosen for, in the order the owner sees them. ``git grep -n "COMPARISON_KINDS" -- src`` is the
+#: totality query of this set; the work kinds are ``executors.model.WORK_KINDS``.
+COMPARISON_KINDS: Final[tuple[str, ...]] = (
+    "comparison_pair_check", "comparison_sheet_changes", "comparison_spec", "comparison_report",
+)
+COMPARISON_LABELS: Final[Mapping[str, str]] = {
+    "comparison_pair_check": "Проверка пар листов", "comparison_sheet_changes": "Описание изменений листов",
+    "comparison_spec": "Сравнение спецификаций", "comparison_report": "Отчёт по сравнению версий",
+}
+#: The answer limit, in tokens, that each kind's calls carried as a code constant before the layout: ``ai_pairs`` 1200, ``ai_sheets`` 8192,
+#: ``specification`` 32000, and 8000 for ``report`` (the largest of its roles; the client's is 4000). A cell's limit is a ceiling over the
+#: module's own (``min``), so a default equal to the constant changes nothing a call sends.
+COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS: Final[Mapping[str, int]] = {
+    "comparison_pair_check": 1_200, "comparison_sheet_changes": 8_192, "comparison_spec": 32_000, "comparison_report": 8_000,
+}
+#: The call window of each kind, as the original sets it (``version_comparison_ai``: ``sheet_match`` 900 s, ``VC_SC`` 1800 s, the whole
+#: specification 900 s, ``VC_MR`` 2400 s).
+COMPARISON_DEFAULT_TIMEOUT_SECONDS: Final[Mapping[str, int]] = {
+    "comparison_pair_check": 900, "comparison_sheet_changes": 1_800, "comparison_spec": 900, "comparison_report": 2_400,
+}
+#: Model · effort of every kind of each set (the original's models mapped onto the catalogue: its ``gpt-6-luna`` is not a pin, and pinning a
+#: model is the owner's, so it is ``gpt-6-astra``; `D-667`). The Claude set serves all four on Sonnet.
+COMPARISON_PRESET_CELLS: Final[Mapping[str, Mapping[str, tuple[str, str]]]] = {
+    KIT_CLAUDE_ONLY: {kind: (_SONNET, "high") for kind in COMPARISON_KINDS},
+    KIT_CODEX_ONLY: {
+        "comparison_pair_check": (_ASTRA, "high"), "comparison_sheet_changes": (_SOL61, "high"),
+        "comparison_spec": (_ASTRA, "high"), "comparison_report": (_SOL61, "high"),
+    },
+}
+if any(set(table) != set(COMPARISON_KINDS) for table in COMPARISON_PRESET_CELLS.values()) or any(
+        set(table) != set(COMPARISON_KINDS) for table in (
+            COMPARISON_LABELS, COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS, COMPARISON_DEFAULT_TIMEOUT_SECONDS)):  # pragma: no cover
+    raise AssertionError("every comparison kind has a label, a limit, a timeout and a cell in each set")
+
+
+def comparison_cell_key(kind: str) -> str:
+    return cell_key(kind)
+
+
+def comparison_preset_cells(kit: str) -> tuple[CellSettings, ...]:
+    """The comparison cells of a set with the original's answer limits and call windows, in the order of :data:`COMPARISON_KINDS`."""
+    table = COMPARISON_PRESET_CELLS.get(kit)
+    if table is None:
+        raise ValueError("only the two sets have a table of comparison cells")
+    return tuple(
+        CellSettings(cell_key=comparison_cell_key(kind), model_id=table[kind][0], effort=table[kind][1],
+                     max_output_tokens=COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS[kind],
+                     timeout_seconds=COMPARISON_DEFAULT_TIMEOUT_SECONDS[kind])
+        for kind in COMPARISON_KINDS
+    )
+
+
+def comparison_cells_in_force(kit: str, stored: Sequence[CellSettings] | None) -> tuple[CellSettings, ...] | None:
+    """The comparison cells a revision of ``kit`` that stored ``stored`` serves with. A revision with no stored list (made before the cells
+    existed, or saved without them) follows the table of its set; « Свой набор » has no table, so its comparison kinds have **no cell** and
+    a comparison is then refused rather than served by a model nobody chose (``None``)."""
+    if stored:
+        return tuple(sorted(stored, key=lambda cell: COMPARISON_KINDS.index(cell.row) if cell.row in COMPARISON_KINDS else len(COMPARISON_KINDS)))
+    return comparison_preset_cells(kit) if kit in PRESET_CELLS else None
+
+
+def validate_comparison_cells(
+    cells: Sequence[CellSettings], *, catalogue: ModelCatalogue | None = None,
+) -> tuple[CellSettings, ...]:
+    """Check the comparison cells of a layout and return them in the order of :data:`COMPARISON_KINDS`, or raise ``validation_failed``
+    (field ``comparison_cells``): a cell is ``<kind>:main`` of a known kind and appears once; every kind has its cell; every (model, effort)
+    pair is one the catalogue offers; a limit and a timeout are integers inside the wire's bounds."""
+    catalogue = catalogue or model_catalogue()
+    by_key: dict[str, CellSettings] = {}
+    for cell in cells:
+        kind, separator, role = cell.cell_key.partition(":")
+        if not separator or kind not in COMPARISON_KINDS:
+            raise _invalid("unknown_cell", "comparison_cells")
+        if role != "main":
+            raise _invalid("role_not_offered", "comparison_cells")
+        if cell.cell_key in by_key:
+            raise _invalid("cell_repeated", "comparison_cells")
+        by_key[cell.cell_key] = cell
+    if any(comparison_cell_key(kind) not in by_key for kind in COMPARISON_KINDS):
+        raise _invalid("cell_missing", "comparison_cells")
+    ordered = tuple(by_key[comparison_cell_key(kind)] for kind in COMPARISON_KINDS)
+    for cell in ordered:
+        catalogue.require_pair(cell.model_id, cell.effort, field="comparison_cells")
+        if (type(cell.max_output_tokens) is not int or not 1 <= cell.max_output_tokens <= 65_536
+                or type(cell.timeout_seconds) is not int or not 1 <= cell.timeout_seconds <= 7_200):
+            raise _invalid("limit_out_of_range", "comparison_cells")
+    return ordered
+
+
+def require_valid_comparison_cells(
+    kit: str, cells: Sequence[CellSettings], *, catalogue: ModelCatalogue | None = None,
+) -> tuple[CellSettings, ...]:
+    """:func:`validate_comparison_cells` plus the rule that a named set is that set: the models and efforts of the comparison cells of
+    « Только Codex » are its table's (a limit or a timeout may differ, as for the rows). ``kit`` itself is judged by
+    :func:`require_valid_layout`."""
+    ordered = validate_comparison_cells(cells, catalogue=catalogue)
+    if kit in PRESET_CELLS and _model_effort(ordered) != _model_effort(comparison_preset_cells(kit)):
+        raise _invalid("kit_does_not_match_cells", "kit")
+    return ordered
+
+
+def comparison_cells_to_wire(cells: Iterable[CellSettings]) -> list[dict[str, Any]]:
+    """The JSON of a comparison cell (``StageComparisonCell``): what the API returns. The kind is the cell key's row."""
+    return [
+        {"work_kind": cell.row, "model_id": cell.model_id, "effort": cell.effort,
          "max_output_tokens": cell.max_output_tokens, "timeout_seconds": cell.timeout_seconds}
         for cell in cells
     ]
