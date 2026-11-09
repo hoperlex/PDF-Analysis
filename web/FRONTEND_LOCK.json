@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6",
-    "content_commit": "5fa35716",
-    "content_commit_subject": "feat(web): the generated client over contract 1.44.0 (getDecisionMemoryStatus declares no 422)",
-    "dispatch_named_commit": "5fa35716fae3be49632d2a2609fc53c2c6e729f4",
-    "commit_note": "Resealed by DECISION-MEMORY-M2: contract 1.44.0 (five operations of the expert decision memory).",
+    "sha256": "415f8eb3950460753d5e309ed336900358898292e50ab55e4614f57153c89f70",
+    "content_commit": "8bdbe563",
+    "content_commit_subject": "feat(contract): 1.45.0 pin sweep — surface counts, head, domain catalogs, seam register, keyed and input-less lists, port guard (HOSTS-SEAL-1)",
+    "dispatch_named_commit": "8bdbe56310ecb73fc6aaf6647c2ac829563b4929",
+    "commit_note": "Resealed by HOSTS-SEAL-1: contract 1.45.0 (fifteen operations of the servers and the models of the analysis stages).",
     "openapi_version": "3.1.0",
-    "info_version": "1.44.0",
-    "paths": 280,
-    "operations": 308,
-    "component_schemas": 744,
+    "info_version": "1.45.0",
+    "paths": 295,
+    "operations": 323,
+    "component_schemas": 787,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6",
+    "snapshot_sha256": "415f8eb3950460753d5e309ed336900358898292e50ab55e4614f57153c89f70",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "c57c42638a8abcc2e219c9279e06e786259700d0311856345099a0a42b0bbf72",
-      "index.ts": "d15a9aca77ad9de29d76d2405018b0ee24d4827a9e6f26799933096fd8c5002d",
-      "operations.gen.ts": "1549b0579e5b50d0add6403c45420a8025bcd81eb0ec5e78cb822ad5d07001a6",
-      "types.gen.ts": "15e2ebd386eef8931e4928ba20a5113e86289d0e5a410674e58a3bac7f42b4de"
+      "client.gen.ts": "e45d258057f2c8689b7d9ef095bfe38fdfe8cb3d7d67107ca5f20c194f469da6",
+      "index.ts": "43a1788db6134eacae467e271a8a4a33290c236cf0ceee51cfc9c4de8caf156c",
+      "operations.gen.ts": "cc2c67415be865e543f50eef0d09d8e0bb2010ed48c5958ed1b0d62450ceb441",
+      "types.gen.ts": "cc5ba3dca2483a2a2a261063abb0d2295cca6ac509e7a703e112d9615a323c77"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
