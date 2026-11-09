@@ -181,7 +181,7 @@ describe('the picker, drawn', () => {
     const client = newClient();
     client.setQueryData(PROJECTS_KEY, projectPage([PROJECT]));
     seedError(client, DOCUMENTS_KEY, new ApiError(503, {
-      contract_version: '1.43.0', error_code: 'dependency_unavailable', message: 'Безопасная фраза.',
+      contract_version: '1.44.0', error_code: 'dependency_unavailable', message: 'Безопасная фраза.',
       correlation_id: 'cid-picker-1', retryable: true,
     }, 'cid-picker-1'));
     const failed = picker(client, { selection: { projectUid: PROJECT_UID, documentUid: null, versionUid: null } });

@@ -11,7 +11,33 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.43.0` (`UI-PARITY-C7`)
+## Current contract `1.44.0` (`DECISION-MEMORY-M2`)
+
+Slice for `DECISION-MEMORY-01` phase M2 (`ADR-0027`): the expert decision memory, the copy of what an expert saw and said when a decision was
+taken, which outlives its project and document. **Five operations, fourteen schemas, no new error code and no new identity prefix** (migration
+`0061_decision_memory_m2`).
+
+- `listDecisionMemoryCases` -- `GET /decision-memory/cases` (`role:admin|expert`): newest capture first (`cursor`, `limit`), filtered by
+  `section_code`, `category`, `verdict` (the latest decision's), `status` (`active`, `withdrawn`, `forgotten`), `data_class` and
+  `origin_project_uid`. `DecisionMemoryCasePage`.
+- `getDecisionMemoryCase` -- `GET /decision-memory/cases/{case_id}` (`role:admin|expert`): the case with its content, decisions (the expert's
+  own comments), evidence, normative references, crop references and the history of its standing. **A forgotten case answers its tombstone
+  only** (`content` is `null`, the lists are empty). `DecisionMemoryCase`.
+- `getDecisionMemoryStatus` -- `GET /decision-memory/status` (`role:admin`): counts by standing and data class and the installation settings in
+  force (`data_class`, `training_use`; nothing journalled means `test` and `off`). `DecisionMemoryStatus`.
+- `withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase` -- `POST /decision-memory/cases/{case_id}/withdraw` and `/restore` (`role:admin`,
+  `Idempotency-Key` required, body `DecisionMemoryStatusChangeRequest`: a closed `reason_code`): an append-only status event; a case already in
+  that state is `409 state_transition_not_allowed`, a forgotten case `409 conflict` with `conflict_reason: memory_case_forgotten`, an unknown one
+  `404`. `DecisionMemoryStatusChange`.
+- **Not operations.** *Forget* (it deletes content and objects) and the settings stay operator tools (`scripts/recovery/memory_forget.py`,
+  `memory_setting.py`); `streamDecisionMemoryCrop`, the similar-cases hint and the training export belong to later phases. The viewer role does
+  not read the memory (it holds the experts' own words and quotes of client documents). The memory is not a decision authority: while the
+  source finding exists the ledger decides.
+- **Not changed.** Every existing operation, schema and error code. No page calls the new operations yet.
+
+The API has 280 paths, 308 operations and 744 schemas; migration head `0061`. The domain catalogs are at candidate revision 61.
+
+## Contract `1.43.0` (`UI-PARITY-C7`, historical)
 
 Slice that closes five open debts end to end (`D-335`, `D-346`, `D-361`, `D-370`, `D-395`). **No operation, no schema, no migration (head stays
 `0060`), no error code.** Optional members and one optional query parameter only; every one is additive, so a client that does not know

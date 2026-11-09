@@ -3076,11 +3076,6 @@ class _AppendedDecision:
         return self._verdict
 
 
-#: `ADR-0027`: every case of the first phase is ``test`` -- the closed beta runs on test data, and ``test`` is the safe direction because
-#: an export defaults to ``real`` only. Phase M2 makes it an installation setting; that must land before real client data does (`D-390`).
-MEMORY_DATA_CLASS = "test"
-
-
 class MemoryCaptureAssembler:
     """The decision memory's capture (`ADR-0027`, `DECISION-MEMORY-01` section 7): build one snapshot and hand it to the memory.
 
@@ -3088,6 +3083,10 @@ class MemoryCaptureAssembler:
     event is inserted, in the caller's transaction; the sweep calls :meth:`capture` for events recorded before there was a memory.
     It lives in the composition root because it reads five contexts (findings, documents, analysis geometry, decisions, the memory)
     through their public modules, and none of them may import another.
+
+    ``data_class`` (``test`` or ``real``) is read **at every capture** from the installation setting
+    (:class:`~auditmanager.decision_memory.public.MemoryReader.settings`, `D-390`); nothing journalled means ``test``, the safe direction
+    because an export defaults to ``real`` only. A caller that passes ``data_class`` pins it (the tests do); the composition root does not.
 
     ``geometry`` is anything with ``evidence_boxes_in(session, run_id)`` and ``portal_crops_in(session, run_id)`` --
     :class:`BlockAdapter` in production. Both read **the run of the decided finding** (``b_NNNNNN`` is an anchor inside one run's
@@ -3097,14 +3096,15 @@ class MemoryCaptureAssembler:
     A failure propagates (the decision fails loudly): nothing here falls back to a case without its crops or its citations.
     """
 
-    def __init__(self, *, geometry: Any, data_class: str = MEMORY_DATA_CLASS) -> None:
-        from auditmanager.decision_memory.public import DATA_CLASSES, MemoryRepository
+    def __init__(self, *, geometry: Any, data_class: str | None = None) -> None:
+        from auditmanager.decision_memory.public import DATA_CLASSES, MemoryReader, MemoryRepository
 
-        if data_class not in DATA_CLASSES:
+        if data_class is not None and data_class not in DATA_CLASSES:
             raise ValueError(f"{data_class!r} is not a decision-memory data class")
         self._geometry = geometry
-        self._data_class = data_class
+        self._pinned_data_class = data_class
         self._repository = MemoryRepository()
+        self._reader = MemoryReader()
 
     def __call__(self, session: Session, event: Any, origin_kind: str) -> None:
         self.capture(session, event, origin_kind)
@@ -3220,7 +3220,7 @@ class MemoryCaptureAssembler:
             ),
             content=content,
             section_code=None if classification is None else classification.section_code,
-            data_class=self._data_class,
+            data_class=self._pinned_data_class or self._reader.settings(session).data_class,
             crops=crops,
             decision=DecisionFact(
                 source_decision_id=event.decision_id, event_type=event.event_type, severity=event.severity,
@@ -3333,6 +3333,182 @@ class MemoryCaptureSweep:
         if captured:
             logging.getLogger(__name__).info("decision memory: captured %d earlier decision(s)", captured)
         return MemorySweepReport(captured, failed)
+
+
+#: The command types of the keyed status operations. The product purge keeps both (`KEEP_COMMAND_TYPES`): a status event, a KEEP row,
+#: references the receipt.
+COMMAND_TYPE_WITHDRAW_MEMORY_CASE = "withdraw_decision_memory_case"
+COMMAND_TYPE_RESTORE_MEMORY_CASE = "restore_decision_memory_case"
+
+
+class DecisionMemoryAdapter(_SessionHolder):
+    """The expert decision memory behind ``DecisionMemoryPort`` (`DECISION-MEMORY-01` section 7.3, contract 1.44.0).
+
+    Withdraw and restore are keyed commands: the composition root claims the command (the memory imports neither ``ingest`` nor
+    ``decisions``), the status event is written with the receipt's ``command_id``, and a replay answers the event the first call wrote.
+    Who may call is the API layer's decision (``admin`` for the writes and the status, ``expert`` or ``admin`` for the reads); the memory
+    only records the actor. The reads render the memory's own values into the contract's models and nothing else.
+    """
+
+    def withdraw_case(self, *, case_id: str, reason_code: str, user_uid: str, idempotency_key: str) -> models.DecisionMemoryStatusChange:
+        return self._keyed(COMMAND_TYPE_WITHDRAW_MEMORY_CASE, "withdraw", case_id, reason_code, user_uid, idempotency_key)
+
+    def restore_case(self, *, case_id: str, reason_code: str, user_uid: str, idempotency_key: str) -> models.DecisionMemoryStatusChange:
+        return self._keyed(COMMAND_TYPE_RESTORE_MEMORY_CASE, "restore", case_id, reason_code, user_uid, idempotency_key)
+
+    def _keyed(
+        self, command_type: str, operation: str, case_id: str, reason_code: str, user_uid: str, idempotency_key: str
+    ) -> models.DecisionMemoryStatusChange:
+        from auditmanager.decision_memory.public import StatusChange, restore_case, status_after_events, withdraw_case
+        from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
+        from auditmanager.shared.identity import IdempotencyKey
+
+        change = {"withdraw": withdraw_case, "restore": restore_case}[operation]
+
+        def work(session: Session) -> StatusChange:
+            commands = CommandRepository()
+            claimed = commands.begin(
+                session, command_type=command_type, idempotency_key=IdempotencyKey(idempotency_key),
+                fingerprint=payload_fingerprint({
+                    "command": f"{command_type}.v1", "case_id": case_id, "reason_code": reason_code,
+                    "actor_user_uid": user_uid,
+                }),
+            )
+            if isinstance(claimed, CommandReplay):
+                event_id = claimed.outcome.get("status_event_id")
+                found = None if not isinstance(event_id, str) else session.execute(
+                    sql_text(
+                        "SELECT case_id, status_event_id, kind, reason_code, created_at FROM decision_memory_status_event "
+                        "WHERE status_event_id = :id"
+                    ), {"id": event_id},
+                ).mappings().one_or_none()
+                if found is None:
+                    raise DomainError(ErrorCode.IDEMPOTENCY_KEY_STALE, command_type=command_type)
+                return StatusChange(
+                    case_id=found["case_id"], status_event_id=found["status_event_id"], kind=found["kind"],
+                    status=status_after_events(found["kind"]), reason_code=found["reason_code"], changed_at=found["created_at"],
+                )
+            result = change(
+                session, case_id=case_id, actor_user_uid=user_uid, reason_code=reason_code, command_id=str(claimed.command_id),
+            )
+            commands.succeed(session, command_id=claimed.command_id, outcome={"status_event_id": result.status_event_id})
+            return result
+
+        result = self._write(work)
+        return models.DecisionMemoryStatusChange(
+            case_id=result.case_id, status_event_id=result.status_event_id, kind=result.kind, status=result.status,
+            reason_code=result.reason_code, changed_at=result.changed_at,
+        )
+
+    def list_cases(
+        self, *, section_code: str | None, category: str | None, verdict: str | None, status: str | None,
+        data_class: str | None, origin_project_uid: str | None, cursor: str | None, limit: int,
+    ) -> models.DecisionMemoryCasePage:
+        from auditmanager.decision_memory.public import MemoryReader
+
+        after = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            try:
+                after = (datetime.fromisoformat(parts[0]), parts[1]) if len(parts) == 2 else None
+            except ValueError:
+                after = None
+            if after is None or after[0].tzinfo is None:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+
+        page = self._read(lambda session: MemoryReader().list_cases(
+            session, section=section_code, category=category, verdict=verdict, status=status, data_class=data_class,
+            origin_project_uid=origin_project_uid, after=after, limit=limit,
+        ))
+        next_cursor = None if page.next_after is None else encode_cursor([page.next_after[0].isoformat(), page.next_after[1]])
+        return models.DecisionMemoryCasePage(
+            items=[_memory_summary(item) for item in page.items], page=models.PageInfo(next_cursor=next_cursor),
+        )
+
+    def get_case(self, *, case_id: str) -> models.DecisionMemoryCase | None:
+        from auditmanager.decision_memory.public import MemoryReader
+
+        detail = self._read(lambda session: MemoryReader().get_case(session, case_id))
+        if detail is None:
+            return None
+        content = detail.content
+        return models.DecisionMemoryCase(
+            summary=_memory_summary(detail.summary),
+            content=None if content is None else models.DecisionMemoryContent(
+                finding_text=content["finding_text"], recommendation_text=content["recommendation_text"],
+                proposed_severity=content["proposed_severity"], required_value=content["required_value"],
+                stated_value=content["stated_value"], stage_id=content["stage_id"],
+                analysis_profile_id=content["analysis_profile_id"], provider_mode=content["provider_mode"],
+            ),
+            decisions=[
+                models.DecisionMemoryDecision(
+                    memory_decision_id=d["memory_decision_id"], event_type=d["event_type"], verdict=d["verdict"],
+                    severity=d["severity"], origin_kind=d["origin_kind"], decided_at=d["decided_at"], comment=d["comment"],
+                )
+                for d in detail.decisions
+            ],
+            evidence=[
+                models.DecisionMemoryEvidence(
+                    ordinal=e["ordinal"], page_number=e["page_number"], quote=e["quote"], char_start=e["char_start"],
+                    char_end=e["char_end"], block_ref=e["block_ref"],
+                    bbox=None if e["bbox_x0"] is None else [e["bbox_x0"], e["bbox_y0"], e["bbox_x1"], e["bbox_y1"]],
+                    bbox_unit=e["bbox_unit"], bbox_origin=e["bbox_origin"],
+                )
+                for e in detail.evidence
+            ],
+            norm_refs=[
+                models.DecisionMemoryNormRef(
+                    ordinal=n["ordinal"], norm_document_id=n["norm_document_id"], norm_paragraph_id=n["norm_paragraph_id"],
+                    designation=n["designation"], clause_number=n["clause_number"], page_label=n["page_label"],
+                    quote=n["quote"], citation_state=n["citation_state"],
+                )
+                for n in detail.norm_refs
+            ],
+            crops=[
+                models.DecisionMemoryCrop(
+                    crop_id=c["crop_id"], crop_ordinal=c["crop_ordinal"], evidence_ordinal=c["evidence_ordinal"],
+                    selection_rule=c["selection_rule"], page_number=c["page_number"],
+                    bbox=[c["bbox_x0"], c["bbox_y0"], c["bbox_x1"], c["bbox_y1"]], media_type=c["media_type"], sha256=c["sha256"],
+                    size_bytes=c["size_bytes"], width_px=c["width_px"], height_px=c["height_px"],
+                    portal_description=c["portal_description"],
+                )
+                for c in detail.crops
+            ],
+            status_events=[
+                models.DecisionMemoryStatusEvent(
+                    status_event_id=e["status_event_id"], kind=e["kind"], reason_code=e["reason_code"], created_at=e["created_at"],
+                    forgotten_content_sha256=e["forgotten_content_sha256"],
+                )
+                for e in detail.status_events
+            ],
+        )
+
+    def status(self) -> models.DecisionMemoryStatus:
+        from auditmanager.decision_memory.public import MemoryReader
+
+        def work(session: Session) -> tuple[Any, Any]:
+            reader = MemoryReader()
+            return reader.settings(session), reader.counts(session)
+
+        settings, counts = self._read(work)
+        return models.DecisionMemoryStatus(
+            data_class=settings.data_class, training_use=settings.training_use, cases=counts.cases, decisions=counts.decisions,
+            by_status_and_class=[
+                models.DecisionMemoryCountRow(status=status, data_class=klass, cases=cases)
+                for status, klass, cases in counts.by_status_and_class
+            ],
+        )
+
+
+def _memory_summary(item: Any) -> models.DecisionMemoryCaseSummary:
+    return models.DecisionMemoryCaseSummary(
+        case_id=item.case_id, category=item.category, section_code=item.section_code, data_class=item.data_class,
+        crop_state=item.crop_state, origin_project_uid=item.origin_project_uid, captured_at=item.captured_at, status=item.status,
+        status_reason_code=item.status_reason_code, status_changed_at=item.status_changed_at,
+        current_verdict=item.current_verdict, current_severity=item.current_severity,
+        current_origin_kind=item.current_origin_kind, current_decided_at=item.current_decided_at,
+        decision_count=item.decision_count,
+    )
 
 
 class CsvExportAdapter(_SessionHolder):

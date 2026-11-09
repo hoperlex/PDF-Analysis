@@ -599,7 +599,9 @@ class TestN1ComponentReferenceResolution:
         # `UI-PARITY-OPT-CARRYOVER` adds one: `carryOverProposalDecisions` addresses the target pass by identity.
         # `UI-PARITY-C6` adds one: `listRunFindingBlocks` addresses a run.
         # `UI-PARITY-S2` adds one: `startRunFromStage` addresses a run.
-        assert len(report) == 224, report
+        # `DECISION-MEMORY-M2` adds three: `getDecisionMemoryCase`, `withdrawDecisionMemoryCase` and `restoreDecisionMemoryCase` address a
+        # case by identity. (`listDecisionMemoryCases` and `getDecisionMemoryStatus` name no parent and declare no `404`.)
+        assert len(report) == 227, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

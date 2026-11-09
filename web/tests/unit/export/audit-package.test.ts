@@ -53,7 +53,7 @@ function deps(extended: ExtendedRunReview | Error, overrides: Partial<AuditPacka
 
 function refusal(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.43.0', error_code: code, message: 'English the client never prints.',
+    contract_version: '1.44.0', error_code: code, message: 'English the client never prints.',
     correlation_id: 'cid-pkg-1', retryable: false, details: {},
   };
   return new ApiError(status, envelope, 'cid-pkg-1');

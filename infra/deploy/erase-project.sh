@@ -73,6 +73,8 @@ PERMISSION_REF=""
 PLAN_SHA_GIVEN=""
 STOP_WORKER=no
 HAVE_PROJECT=no
+ACCEPT_MEMORY_LOSS=""
+MEMORY_LOSS_GIVEN=no
 
 SELF="$0"
 
@@ -95,7 +97,7 @@ usage() {
 usage: erase-project.sh --database <name> --bucket <name> --project prj_<ULID> [--dry-run]
        erase-project.sh --database <name> --bucket <name> --project prj_<ULID> --apply
                         --actor <admin login> --reason <code> --owner-permission-ref "<text>"
-                        --plan-sha256 <digest> [--stop-worker]
+                        --plan-sha256 <digest> [--stop-worker] [--accept-memory-loss <why>]
        erase-project.sh --database <name> --bucket <name> --resume era_<ULID>
                         --actor <admin login> --owner-permission-ref "<text>" [--stop-worker]
 
@@ -111,6 +113,11 @@ usage: erase-project.sh --database <name> --bucket <name> --project prj_<ULID> [
                                recorded. An operator never erases a project without it (R-146aj). It is recorded as
                                given and never verified.
   --plan-sha256 <digest>       the plan-sha256 the dry run printed.
+  --accept-memory-loss <why>   dry run and --apply: do not refuse for the project's expert decisions the decision memory has not
+                               captured (a capture that can never succeed). <why> is one of: artifact_missing_or_damaged,
+                               citation_partition_inconsistent, test_data, owner_decided. The loss is written into the plan, its
+                               digest and the erasure.requested event; the dry run and the apply must both carry it. Default: refuse
+                               (guard G1). Not with --resume.
   --stop-worker                stop the worker for the apply or the resume and start it again afterwards. For a refusal
                                "could not lock the tables": the worker's heartbeat is the usual writer.
   --env-file <path>            default: infra/deploy/env/alpha.env
@@ -132,7 +139,7 @@ trap 'on_error $LINENO' ERR
 # ignored would run an erase the operator believed was reasoned, and a trailing `--project` would swallow the next word.
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --database|--bucket|--project|--resume|--actor|--reason|--owner-permission-ref|--plan-sha256|--env-file)
+        --database|--bucket|--project|--resume|--actor|--reason|--owner-permission-ref|--plan-sha256|--accept-memory-loss|--env-file)
             [ "$#" -ge 2 ] || refuse "$1 needs a value." "Nothing was read and nothing was touched. Run --help." ;;
     esac
     case "$1" in
@@ -144,6 +151,7 @@ while [ "$#" -gt 0 ]; do
         --reason) REASON="$2"; shift 2 ;;
         --owner-permission-ref) PERMISSION_REF="$2"; shift 2 ;;
         --plan-sha256) PLAN_SHA_GIVEN="$2"; shift 2 ;;
+        --accept-memory-loss) ACCEPT_MEMORY_LOSS="$2"; MEMORY_LOSS_GIVEN=yes; shift 2 ;;
         --env-file) ENV_FILE="$2"; shift 2 ;;
         --dry-run) DRY_RUN=yes; shift ;;
         --apply) APPLY=yes; shift ;;
@@ -192,6 +200,27 @@ if [ "$MODE" = resume ] && { [ -n "$REASON" ] || [ -n "$PLAN_SHA_GIVEN" ]; }; th
            "Nothing was read and nothing was touched."
 fi
 # <<< guard: options-match-the-mode
+
+# >>> guard: memory-loss-reason
+# The way out of guard G1 names one reason from the tool's CLOSED list: the reason is written into `erasure.requested`, an append-only
+# record, and free text would put personal data there. The tool refuses an unknown one too; the wrapper refuses first, and an option that
+# lost its value (it would swallow the next word, or be empty and read as "not given") is an unknown reason too.
+if [ "$MEMORY_LOSS_GIVEN" = yes ]; then
+    case "$ACCEPT_MEMORY_LOSS" in
+        artifact_missing_or_damaged|citation_partition_inconsistent|test_data|owner_decided) ;;
+        *) refuse "--accept-memory-loss must be one of: artifact_missing_or_damaged, citation_partition_inconsistent, test_data, owner_decided." \
+                  "  given: ${ACCEPT_MEMORY_LOSS:-<nothing>}" "Nothing was read and nothing was touched." ;;
+    esac
+fi
+# <<< guard: memory-loss-reason
+
+# >>> guard: memory-loss-not-with-resume
+# A `--resume` finishes an erase that was already approved, with the loss (if any) it recorded in `erasure.requested`.
+if [ "$MODE" = resume ] && [ "$MEMORY_LOSS_GIVEN" = yes ]; then
+    refuse "--accept-memory-loss does not go with --resume." \
+           "The loss, if any, was accepted in the plan the erase was approved on. Nothing was read and nothing was touched."
+fi
+# <<< guard: memory-loss-not-with-resume
 
 # >>> guard: names-required
 if [ -z "$DATABASE" ] || [ -z "$BUCKET" ]; then
@@ -560,7 +589,9 @@ if [ "$MODE" = resume ]; then
 fi
 
 # --- the plan: read-only, inside the api image ------------------------------------------------------------------
-run_tool --database "$DATABASE" --bucket "$BUCKET" --project "$PROJECT"
+LOSS_FLAGS=()
+[ "$MEMORY_LOSS_GIVEN" = yes ] && LOSS_FLAGS+=(--accept-memory-loss "$ACCEPT_MEMORY_LOSS")
+run_tool --database "$DATABASE" --bucket "$BUCKET" --project "$PROJECT" "${LOSS_FLAGS[@]+"${LOSS_FLAGS[@]}"}"
 printf '%s\n' "$OUT"
 OUT_SHOWN=yes
 PLAN_SHA="$(parse plan-sha256 "$OUT")"
@@ -588,6 +619,9 @@ if [ "$MODE" = plan ]; then
     echo "erase-project.sh: permission in writing (R-146aj), then run the same command with"
     echo "erase-project.sh:   --apply --actor <admin login> --reason <code> --owner-permission-ref \"<where it is recorded>\" \\"
     echo "erase-project.sh:   --plan-sha256 $PLAN_SHA"
+    if [ "$MEMORY_LOSS_GIVEN" = yes ]; then
+        echo "erase-project.sh:   --accept-memory-loss $ACCEPT_MEMORY_LOSS   (the plan above carries this accepted loss; the apply must too)"
+    fi
     echo "erase-project.sh: NO DUMP WILL BE TAKEN (it would keep the erased data); take care of the copies yourself first."
     exit 0
 fi
@@ -628,7 +662,8 @@ fi
 stop_worker_if_asked
 echo "erase-project.sh: erasing (one transaction, then the objects, then the final record)"
 run_tool --database "$DATABASE" --bucket "$BUCKET" --project "$PROJECT" --apply --plan-sha256 "$PLAN_SHA_GIVEN" \
-    --actor "$ACTOR" --reason "$REASON" --owner-permission-ref "$PERMISSION_REF" --dump-dir /dump
+    --actor "$ACTOR" --reason "$REASON" --owner-permission-ref "$PERMISSION_REF" --dump-dir /dump \
+    "${LOSS_FLAGS[@]+"${LOSS_FLAGS[@]}"}"
 after_step "erase"
 printf '%s\n' "$(host_paths "$OUT")"
 if [ -n "$(parse manifest-sha256 "$OUT")" ]; then

@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.43.0 (OpenAPI 3.1.0)
- *   sha256 8cb5ce4bbf64e8429108d7e66cc8d30b1da03bb6f1cd6698106d700b8f50e75e
+ *   AuditManager PC-01 API 1.44.0 (OpenAPI 3.1.0)
+ *   sha256 cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -118,6 +118,12 @@ import type {
   DecideOptimisationProposalRequest,
   DecisionEventPage,
   DecisionImportReport,
+  DecisionMemoryCase,
+  DecisionMemoryCaseId,
+  DecisionMemoryCasePage,
+  DecisionMemoryStatus,
+  DecisionMemoryStatusChange,
+  DecisionMemoryStatusChangeRequest,
   DecisionRecordPage,
   DocumentTagList,
   DocumentUid,
@@ -433,6 +439,8 @@ export const OPERATION_IDS = [
   'getComparisonUpload',
   'getComparisonUploadProposal',
   'getDashboardSummary',
+  'getDecisionMemoryCase',
+  'getDecisionMemoryStatus',
   'getDocumentVersion',
   'getEffectiveVendorLists',
   'getExecutionDispatch',
@@ -494,6 +502,7 @@ export const OPERATION_IDS = [
   'listComparisonUploads',
   'listComparisonVersionOrders',
   'listDecisionHistory',
+  'listDecisionMemoryCases',
   'listDecisions',
   'listDocumentTags',
   'listDocuments',
@@ -567,6 +576,7 @@ export const OPERATION_IDS = [
   'reportRunnerHealth',
   'requestExecutorProbe',
   'resetUserPassword',
+  'restoreDecisionMemoryCase',
   'restoreUser',
   'resumeComparisonAiPairCheck',
   'resumeComparisonAiSheetChanges',
@@ -644,6 +654,7 @@ export const OPERATION_IDS = [
   'uploadDocumentVersion',
   'uploadPriceList',
   'uploadStageUploadPart',
+  'withdrawDecisionMemoryCase',
   'withdrawSheetPairing',
 ] as const;
 
@@ -2995,6 +3006,48 @@ export type GetDashboardSummaryInput = {
 export type GetDashboardSummaryResult = DashboardSummary;
 
 // ------------------------------------------------------------------------------------
+// getDecisionMemoryCase - GET /decision-memory/cases/{case_id}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Decision Memory Case
+ *
+ * `DECISION-MEMORY-01` phase M2: one case -- its summary, the model's finding and recommendation as they stood, the evidence quotes with their page geometry, the certified normative references, the crop images it references (a binding to an existing Blob), every captured decision with the expert's own comment, and the history of its standing. **A forgotten case answers its tombstone only**: `content` is `null`, the lists are empty and no decision carries a comment; the `forget` event carries the digest of what was forgotten. An unknown case is `404`. `role:admin|expert`.
+ */
+export type GetDecisionMemoryCaseInput = {
+  /** Path parameters, substituted into `/decision-memory/cases/{case_id}`. */
+  path: {
+    case_id: DecisionMemoryCaseId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getDecisionMemoryCase` (`application/json`, HTTP 200). */
+export type GetDecisionMemoryCaseResult = DecisionMemoryCase;
+
+// ------------------------------------------------------------------------------------
+// getDecisionMemoryStatus - GET /decision-memory/status
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Decision Memory Status
+ *
+ * `DECISION-MEMORY-01` phase M2: how many cases and decisions the memory holds, by standing and data class, and the installation settings in force -- `data_class`, what a case captured now is (`test` until an operator journals `real`), and `training_use`, whether the training export may run (`off` until the owner's permission is recorded). The settings are changed by an operator tool, not by this surface. `role:admin`.
+ */
+export type GetDecisionMemoryStatusInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getDecisionMemoryStatus` (`application/json`, HTTP 200). */
+export type GetDecisionMemoryStatusResult = DecisionMemoryStatus;
+
+// ------------------------------------------------------------------------------------
 // getDocumentVersion - GET /versions/{version_uid}
 // ------------------------------------------------------------------------------------
 
@@ -4495,6 +4548,38 @@ export type ListDecisionHistoryInput = {
 
 /** Success body of `listDecisionHistory` (`application/json`, HTTP 200). */
 export type ListDecisionHistoryResult = DecisionEventPage;
+
+// ------------------------------------------------------------------------------------
+// listDecisionMemoryCases - GET /decision-memory/cases
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Decision Memory Cases
+ *
+ * `DECISION-MEMORY-01` phase M2 (contract 1.44.0): the cases of the expert decision memory -- the copy of what an expert saw and said when a decision was taken, kept after the project and the document are gone. Newest capture first (`cursor`, `limit`). Filters, all optional: `section_code` (as of capture), `category`, `verdict` (the latest decision's), `status` (`active`, `withdrawn`, `forgotten`), `data_class` (`test` or `real`, fixed at capture) and `origin_project_uid` (an identity that may resolve nowhere any more). A case is **history, not a verdict in force**: while the source finding exists the ledger decides. `role:admin|expert`.
+ */
+export type ListDecisionMemoryCasesInput = {
+  /** Query string parameters. */
+  query?: {
+    category?: string;
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    data_class?: "test" | "real";
+    /** Page size. */
+    limit?: number;
+    origin_project_uid?: ProjectUid;
+    section_code?: string;
+    status?: "active" | "withdrawn" | "forgotten";
+    verdict?: "accepted" | "rejected";
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listDecisionMemoryCases` (`application/json`, HTTP 200). */
+export type ListDecisionMemoryCasesResult = DecisionMemoryCasePage;
 
 // ------------------------------------------------------------------------------------
 // listDecisions - GET /decisions
@@ -6373,6 +6458,36 @@ export type ResetUserPasswordInput = {
 
 /** Success body of `resetUserPassword` (`application/json`, HTTP 200). */
 export type ResetUserPasswordResult = Account;
+
+// ------------------------------------------------------------------------------------
+// restoreDecisionMemoryCase - POST /decision-memory/cases/{case_id}/restore
+// ------------------------------------------------------------------------------------
+
+/**
+ * Restore Decision Memory Case
+ *
+ * `DECISION-MEMORY-01` phase M2: undo a withdraw. Append-only: a `restore` status event with a closed `reason_code` and the caller's account. A case that is not withdrawn is `409 state_transition_not_allowed`; a forgotten case accepts no status event (`409 conflict`, `conflict_reason: memory_case_forgotten`); an unknown case is `404`. An exact repeat of the `Idempotency-Key` answers the first call's event and writes nothing. `role:admin`.
+ */
+export type RestoreDecisionMemoryCaseInput = {
+  /** Path parameters, substituted into `/decision-memory/cases/{case_id}/restore`. */
+  path: {
+    case_id: DecisionMemoryCaseId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: DecisionMemoryStatusChangeRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `restoreDecisionMemoryCase` (`application/json`, HTTP 200). */
+export type RestoreDecisionMemoryCaseResult = DecisionMemoryStatusChange;
 
 // ------------------------------------------------------------------------------------
 // restoreUser - POST /users/{user_uid}/restore
@@ -8462,6 +8577,36 @@ export type UploadStageUploadPartInput = {
 export type UploadStageUploadPartResult = StageUploadPartReceipt;
 
 // ------------------------------------------------------------------------------------
+// withdrawDecisionMemoryCase - POST /decision-memory/cases/{case_id}/withdraw
+// ------------------------------------------------------------------------------------
+
+/**
+ * Withdraw Decision Memory Case
+ *
+ * `DECISION-MEMORY-01` phase M2: take a case out of hints, prompts and exports. Append-only: a `withdraw` status event with a closed `reason_code` (no free text) and the caller's account; the case itself is never edited. A case that is already withdrawn is `409 state_transition_not_allowed`; a forgotten case accepts no status event (`409 conflict`, `conflict_reason: memory_case_forgotten`); an unknown case is `404`. An exact repeat of the `Idempotency-Key` answers the first call's event and writes nothing. `role:admin`.
+ */
+export type WithdrawDecisionMemoryCaseInput = {
+  /** Path parameters, substituted into `/decision-memory/cases/{case_id}/withdraw`. */
+  path: {
+    case_id: DecisionMemoryCaseId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: DecisionMemoryStatusChangeRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `withdrawDecisionMemoryCase` (`application/json`, HTTP 200). */
+export type WithdrawDecisionMemoryCaseResult = DecisionMemoryStatusChange;
+
+// ------------------------------------------------------------------------------------
 // withdrawSheetPairing - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals
 // ------------------------------------------------------------------------------------
 
@@ -9777,6 +9922,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['dashboard'],
   },
+  getDecisionMemoryCase: {
+    operationId: 'getDecisionMemoryCase',
+    method: 'GET',
+    path: '/decision-memory/cases/{case_id}',
+    pathParams: ['case_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['decision-memory'],
+  },
+  getDecisionMemoryStatus: {
+    operationId: 'getDecisionMemoryStatus',
+    method: 'GET',
+    path: '/decision-memory/status',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['decision-memory'],
+  },
   getDocumentVersion: {
     operationId: 'getDocumentVersion',
     method: 'GET',
@@ -10630,6 +10803,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['decisions'],
+  },
+  listDecisionMemoryCases: {
+    operationId: 'listDecisionMemoryCases',
+    method: 'GET',
+    path: '/decision-memory/cases',
+    pathParams: [],
+    queryParams: ['category', 'cursor', 'data_class', 'limit', 'origin_project_uid', 'section_code', 'status', 'verdict'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['decision-memory'],
   },
   listDecisions: {
     operationId: 'listDecisions',
@@ -11652,6 +11839,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['users'],
+  },
+  restoreDecisionMemoryCase: {
+    operationId: 'restoreDecisionMemoryCase',
+    method: 'POST',
+    path: '/decision-memory/cases/{case_id}/restore',
+    pathParams: ['case_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['decision-memory'],
   },
   restoreUser: {
     operationId: 'restoreUser',
@@ -12730,6 +12931,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
+  },
+  withdrawDecisionMemoryCase: {
+    operationId: 'withdrawDecisionMemoryCase',
+    method: 'POST',
+    path: '/decision-memory/cases/{case_id}/withdraw',
+    pathParams: ['case_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['decision-memory'],
   },
   withdrawSheetPairing: {
     operationId: 'withdrawSheetPairing',

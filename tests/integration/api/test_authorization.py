@@ -556,6 +556,11 @@ GUARDED = (
     ("exportOptimisationProposalsXlsx", "GET", "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/export.xlsx"),
     ("importOptimisationProposalDecisions", "POST", "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/decision-imports"),
     ("carryOverProposalDecisions", "POST", "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/decision-carryovers"),
+    ("listDecisionMemoryCases", "GET", "/decision-memory/cases"),
+    ("getDecisionMemoryCase", "GET", "/decision-memory/cases/dmc_01M2545JSD15ETSNNV904X991N"),
+    ("getDecisionMemoryStatus", "GET", "/decision-memory/status"),
+    ("withdrawDecisionMemoryCase", "POST", "/decision-memory/cases/dmc_01M2545JSD15ETSNNV904X991N/withdraw"),
+    ("restoreDecisionMemoryCase", "POST", "/decision-memory/cases/dmc_01M2545JSD15ETSNNV904X991N/restore"),
     ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
     ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
     ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),
@@ -1196,6 +1201,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # page reads take no subject.
         "comparison_uploads.py",
         "comparison_version_orders.py",
+        # `DECISION-MEMORY-M2` (1.44.0): a withdraw and a restore record WHO changed a case's standing (the actor of the status event
+        # and of the command receipt); that only an administrator may is the role register's. The reads take no subject.
+        "decision_memory.py",
         "decisions.py",
         # `W61-DISPATCHER-01`: an assignment records WHO created or moved it; what they may
         # do is the role register's and the dispatch context's own re-read of the role set.

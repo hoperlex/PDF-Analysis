@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-303 operations, sealed. `A5` generates the typed client from this document; `B6`
+308 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1220,6 +1220,11 @@ could.
 | `listVersionSheetLabels` | `GET /versions/{version_uid}/sheet-labels` |
 | `listRunFindingBlocks` | `GET /runs/{run_id}/finding-blocks` |
 | `startRunFromStage` | `POST /runs/{run_id}/start-from-stage` |
+| `listDecisionMemoryCases` | `GET /decision-memory/cases` |
+| `getDecisionMemoryCase` | `GET /decision-memory/cases/{case_id}` |
+| `getDecisionMemoryStatus` | `GET /decision-memory/status` |
+| `withdrawDecisionMemoryCase` | `POST /decision-memory/cases/{case_id}/withdraw` |
+| `restoreDecisionMemoryCase` | `POST /decision-memory/cases/{case_id}/restore` |
 | `getWorkSchedule` | `GET /work-schedule` |
 | `getWorkScheduleReserve` | `GET /work-schedule/reserve` |
 | `setWorkScheduleSettings` | `PUT /work-schedule/settings` |
@@ -1510,7 +1515,7 @@ Rules that hold across the whole surface:
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `startRunFromStage`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
-  `importRunDecisions`, `importOptimisationProposalDecisions`, `carryOverProposalDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
+  `importRunDecisions`, `importOptimisationProposalDecisions`, `carryOverProposalDecisions`, `withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
   `scheduleAssignments`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,

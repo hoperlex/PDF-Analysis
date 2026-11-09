@@ -384,8 +384,8 @@ def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
     # ``executor_routing_mode_event``); 0043-0045 and 0048 add none: 110 + 12 + 2 + 5 = 129. 0053-0055 add seven (document
     # tags, the execution status of a finding, and the five «График работ» journals); 0049-0052 and 0056-0058 add none:
     # 129 + 7 = 136 (measured 2026-11-08; lane C4 saw this pin red at 136 on its stand); `0059_decision_memory` adds the eight
-    # tables of the decision memory: 136 + 8 = 144, which is `len(coverage.TABLES)`.
-    assert refused == sorted(coverage.TABLES) and len(refused) == 144
+    # tables of the decision memory: 136 + 8 = 144; `0061_decision_memory_m2` adds the settings' journal: 145, which is `len(coverage.TABLES)`.
+    assert refused == sorted(coverage.TABLES) and len(refused) == 145
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------

@@ -358,6 +358,14 @@ from sqlalchemy import Engine, text
 #: primary keys, four unique constraints, nine foreign keys and 78 checks, to 2052), indexes +17 (eight primary keys, four unique
 #: constraints and five lookups, to 482) and triggers +8 (``am_immutable_row`` on each, to 254). Functions, views, extensions,
 #: sequences, policies and the state topology are byte-identical to the ``0058`` seal.
+#: Resealed 2026-11-09 for ``0061_decision_memory_m2`` (`DECISION-MEMORY-01` phase M2), chained after ``0060``, measured on a throwaway PostgreSQL (the
+#: project image, stand ``am-lane-m2-pg``, lane M2) upgraded ONCE to ``0061`` by this test's own observed output: relations +2 (the table
+#: ``decision_memory_setting_event`` and the view ``decision_memory_case_current``, to 158), columns +24 (the settings table's 6, the status event's
+#: ``forgotten_content_sha256`` and the view's 17, to 1705), constraints +12 (the status event's actor foreign key and two checks; the settings
+#: table's primary key, foreign key and seven checks, to 2069), indexes +1 (the settings table's primary key, to 484), triggers +2 (the status
+#: event's transition guard and the settings journal's ``am_immutable_row``, to 256) with a new digest because the five content tables' triggers are
+#: renamed ``trg_<table>_forget_guard`` and run ``am_guard_decision_memory_forget``, functions +2 (that and ``am_guard_decision_memory_status``, to
+#: 80) and views +1 (to 6). Extensions, sequences, policies and the state topology are byte-identical to the ``0060`` seal.
 #: Resealed 2026-11-09 for ``0060_run_from_stage`` (`UI-PARITY-S2`, `UI-A-60`, `R-151i`), chained after ``0059``, measured on a
 #: throwaway PostgreSQL (the project image, stand ``am-lane-s2-pg``) upgraded ONCE to ``0060`` (a down/up cycle leaves a gap in the
 #: ordinal positions of ``audit_run`` and so another columns digest; this seal is the fresh one): ``audit_run.started_from_run_id`` and
@@ -390,13 +398,13 @@ from sqlalchemy import Engine, text
 #: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
 #: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1681, "f3ed9758ca91f8a65124f7d8f5ed6dc1470f06b124dde4e53d8152f6f6b21dd2"),
-    "relations": (156, "09ca737e44525a8f3d9f0d518e5586cb26a6ae833acbd07ab94fe5de8fa54cf3"),
-    "constraints": (2057, "0fc73dcff520cd401e18a38789e685eddb810a9032dc0e0bf06435c187b48444"),
-    "indexes": (483, "a2e75cc96f84164bf1e6ff5e11a4d272eadc7ed74288fa2605ccb0c0e868ad28"),
-    "triggers": (254, "96705b4d82bd1e8c15016ff6d8f6b72735b7491b7b5d5c954b04095c99454c3b"),
-    "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),
-    "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
+    "columns": (1705, "33af512040de1c41b0d22f1eb65b8cbe3efaf69e67b4febbcea52be7b20e6b33"),
+    "relations": (158, "fd2f9607741365705d81318ccd7d6246c68eb17b6331374256a5991a02262422"),
+    "constraints": (2069, "78372c9cccf6fb147387581b729c59208c6f93f26737bbba2038cacaf5580f98"),
+    "indexes": (484, "08e2ebbca32f7db0b61aa8fa3b9b1ce309ea6fd8b5907cb7c141bd9e7ee85dc8"),
+    "triggers": (256, "7f44a204313e2d54b4ea43c3729e39b2219e670c094617c86525003885aff13d"),
+    "functions": (80, "7ccacf5c8c98d724a613c1f4ee9d3fcf6330b6cf908b204d7ca58b35c42c0fe5"),
+    "views": (6, "0bd9b7927321000af88e44410f7f431c918230428ac258d472d294d62d08043e"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
     "policies": (0, "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"),

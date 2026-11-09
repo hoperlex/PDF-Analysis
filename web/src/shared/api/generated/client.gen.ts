@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.43.0 (OpenAPI 3.1.0)
- *   sha256 8cb5ce4bbf64e8429108d7e66cc8d30b1da03bb6f1cd6698106d700b8f50e75e
+ *   AuditManager PC-01 API 1.44.0 (OpenAPI 3.1.0)
+ *   sha256 cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -200,6 +200,10 @@ import type {
   GetComparisonUploadProposalResult,
   GetDashboardSummaryInput,
   GetDashboardSummaryResult,
+  GetDecisionMemoryCaseInput,
+  GetDecisionMemoryCaseResult,
+  GetDecisionMemoryStatusInput,
+  GetDecisionMemoryStatusResult,
   GetDocumentVersionInput,
   GetDocumentVersionResult,
   GetEffectiveVendorListsInput,
@@ -322,6 +326,8 @@ import type {
   ListComparisonVersionOrdersResult,
   ListDecisionHistoryInput,
   ListDecisionHistoryResult,
+  ListDecisionMemoryCasesInput,
+  ListDecisionMemoryCasesResult,
   ListDecisionsInput,
   ListDecisionsResult,
   ListDocumentTagsInput,
@@ -468,6 +474,8 @@ import type {
   RequestExecutorProbeResult,
   ResetUserPasswordInput,
   ResetUserPasswordResult,
+  RestoreDecisionMemoryCaseInput,
+  RestoreDecisionMemoryCaseResult,
   RestoreUserInput,
   RestoreUserResult,
   ResumeComparisonAiPairCheckInput,
@@ -622,6 +630,8 @@ import type {
   UploadPriceListResult,
   UploadStageUploadPartInput,
   UploadStageUploadPartResult,
+  WithdrawDecisionMemoryCaseInput,
+  WithdrawDecisionMemoryCaseResult,
   WithdrawSheetPairingInput,
   WithdrawSheetPairingResult,
 } from './operations.gen';
@@ -1720,6 +1730,30 @@ export function getDashboardSummary(
 }
 
 /**
+ * Get Decision Memory Case
+ *
+ * `GET /decision-memory/cases/{case_id}`.
+ */
+export function getDecisionMemoryCase(
+  input: GetDecisionMemoryCaseInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetDecisionMemoryCaseResult>> {
+  return request<GetDecisionMemoryCaseResult>(OPERATIONS.getDecisionMemoryCase, input, options);
+}
+
+/**
+ * Get Decision Memory Status
+ *
+ * `GET /decision-memory/status`.
+ */
+export function getDecisionMemoryStatus(
+  input: GetDecisionMemoryStatusInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetDecisionMemoryStatusResult>> {
+  return request<GetDecisionMemoryStatusResult>(OPERATIONS.getDecisionMemoryStatus, input, options);
+}
+
+/**
  * Read one published document version.
  *
  * `GET /versions/{version_uid}`.
@@ -2449,6 +2483,18 @@ export function listDecisionHistory(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListDecisionHistoryResult>> {
   return request<ListDecisionHistoryResult>(OPERATIONS.listDecisionHistory, input, options);
+}
+
+/**
+ * List Decision Memory Cases
+ *
+ * `GET /decision-memory/cases`.
+ */
+export function listDecisionMemoryCases(
+  input: ListDecisionMemoryCasesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListDecisionMemoryCasesResult>> {
+  return request<ListDecisionMemoryCasesResult>(OPERATIONS.listDecisionMemoryCases, input, options);
 }
 
 /**
@@ -3325,6 +3371,18 @@ export function resetUserPassword(
   options?: RequestOptions,
 ): Promise<ApiResponse<ResetUserPasswordResult>> {
   return request<ResetUserPasswordResult>(OPERATIONS.resetUserPassword, input, options);
+}
+
+/**
+ * Restore Decision Memory Case
+ *
+ * `POST /decision-memory/cases/{case_id}/restore` - a write; carries a required Idempotency-Key.
+ */
+export function restoreDecisionMemoryCase(
+  input: RestoreDecisionMemoryCaseInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RestoreDecisionMemoryCaseResult>> {
+  return request<RestoreDecisionMemoryCaseResult>(OPERATIONS.restoreDecisionMemoryCase, input, options);
 }
 
 /**
@@ -4252,6 +4310,18 @@ export function uploadStageUploadPart(
 }
 
 /**
+ * Withdraw Decision Memory Case
+ *
+ * `POST /decision-memory/cases/{case_id}/withdraw` - a write; carries a required Idempotency-Key.
+ */
+export function withdrawDecisionMemoryCase(
+  input: WithdrawDecisionMemoryCaseInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<WithdrawDecisionMemoryCaseResult>> {
+  return request<WithdrawDecisionMemoryCaseResult>(OPERATIONS.withdrawDecisionMemoryCase, input, options);
+}
+
+/**
  * Withdraw Sheet Pairing
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals` - a write; carries a required Idempotency-Key.
@@ -4359,6 +4429,8 @@ export const apiClient = {
   getComparisonUpload,
   getComparisonUploadProposal,
   getDashboardSummary,
+  getDecisionMemoryCase,
+  getDecisionMemoryStatus,
   getDocumentVersion,
   getEffectiveVendorLists,
   getExecutionDispatch,
@@ -4420,6 +4492,7 @@ export const apiClient = {
   listComparisonUploads,
   listComparisonVersionOrders,
   listDecisionHistory,
+  listDecisionMemoryCases,
   listDecisions,
   listDocumentTags,
   listDocuments,
@@ -4493,6 +4566,7 @@ export const apiClient = {
   reportRunnerHealth,
   requestExecutorProbe,
   resetUserPassword,
+  restoreDecisionMemoryCase,
   restoreUser,
   resumeComparisonAiPairCheck,
   resumeComparisonAiSheetChanges,
@@ -4570,5 +4644,6 @@ export const apiClient = {
   uploadDocumentVersion,
   uploadPriceList,
   uploadStageUploadPart,
+  withdrawDecisionMemoryCase,
   withdrawSheetPairing,
 } as const;

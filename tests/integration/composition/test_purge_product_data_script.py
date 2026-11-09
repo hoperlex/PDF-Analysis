@@ -178,6 +178,10 @@ CASES: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("known-options", (*COMMON, "--dry-run", "--dryrun"), "unrecognised option: --dryrun"),
     ("destructive-flag", COMMON, "no --yes-purge-product-data and no --dry-run"),
     ("one-mode", (*COMMON, "--dry-run", "--yes-purge-product-data"), "were more than one"),
+    # `D-470`: the way out of guard G1 is a closed reason, forwarded to every step that builds the plan, never to a finish.
+    ("memory-loss-reason", (*COMMON, "--dry-run", "--accept-memory-loss", "because I said so"), "--accept-memory-loss must be one of"),
+    ("memory-loss-not-with-finish", (*COMMON, "--finish-objects", "/nowhere", "--accept-memory-loss", "test_data"),
+     "does not go with --finish-objects"),
     ("names-required", ("--dry-run",), "--database and --bucket are both required"),
     ("database-matches", ("--database", "some_other_database", "--bucket", BUCKET, "--dry-run"),
      "not the configured alpha database"),
@@ -199,6 +203,33 @@ def test_deleting_the_guard_removes_the_refusal(guard: str, args: tuple[str, ...
     completed = rig.mutant(guard).run(*args)
     assert says not in completed.stderr, (
         f"the {guard} guard was deleted and the refusal happened anyway: it was never testing that guard")
+
+
+def test_the_accepted_memory_loss_reaches_every_step_that_builds_the_plan_and_the_delete_step_is_left_alone(rig: Rig) -> None:
+    """`D-470`: plan, snapshot and apply carry `--accept-memory-loss <reason>` (the plan digest covers the accepted loss, so all three
+    must agree); the object deletion, which only deletes a listed set, does not. Without the option no step mentions it."""
+    assert rig.run(*COMMON, "--yes-purge-product-data", "--accept-memory-loss", "owner_decided").returncode == 0
+    tool = [call for call in rig.calls if "scripts.recovery.product_purge" in call]
+    by_step = {call.split("product_purge ")[1].split()[0]: call for call in tool}
+    assert set(by_step) == {"plan", "snapshot-objects", "apply", "delete-objects"}
+    for step in ("plan", "snapshot-objects", "apply"):
+        assert "--accept-memory-loss owner_decided" in by_step[step], by_step[step]
+    assert "--accept-memory-loss" not in by_step["delete-objects"]
+
+    plain = Rig(rig.tmp / "plain")
+    assert plain.run(*COMMON, "--yes-purge-product-data").returncode == 0
+    assert not any("--accept-memory-loss" in call for call in plain.calls)
+
+
+def test_the_memory_loss_forwarding_can_fail(rig: Rig) -> None:
+    source = SCRIPT.read_text(encoding="utf-8")
+    line = '[ -n "$ACCEPT_MEMORY_LOSS" ] && FLAGS+=(--accept-memory-loss "$ACCEPT_MEMORY_LOSS")'
+    assert source.count(line) == 1
+    copy = rig.tmp / "no-forwarding.sh"
+    copy.write_text(source.replace(line, ":"), encoding="utf-8")
+    broken = Rig(rig.tmp / "broken", script=copy)
+    assert broken.run(*COMMON, "--yes-purge-product-data", "--accept-memory-loss", "owner_decided").returncode == 0
+    assert not any("--accept-memory-loss" in call for call in broken.calls), "the option still reached the tool"
 
 
 def test_a_missing_environment_file_is_refused_and_the_guard_can_fail(rig: Rig, tmp_path: Path) -> None:
@@ -488,6 +519,6 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     me = Path(__file__).read_text(encoding="utf-8")
     missing = sorted(name for name in markers if f'"{name}"' not in me)
     assert not missing, f"guards with no case: {missing}"
-    assert len(markers) == 16
+    assert len(markers) == 18
     for name in markers:
         assert len(re.findall(rf"^# <<< guard: {re.escape(name)}$", SCRIPT.read_text(encoding="utf-8"), re.MULTILINE)) == 1

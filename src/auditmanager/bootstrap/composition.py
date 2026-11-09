@@ -57,6 +57,7 @@ from auditmanager.bootstrap.adapters import (
     CsvExportAdapter,
     DashboardAdapter,
     DecisionAdapter,
+    DecisionMemoryAdapter,
     DocumentAdapter,
     ExecutionAdapter,
     ExecutorAdapter,
@@ -783,6 +784,8 @@ def build_application(
         dispatch=DispatchAdapter(sessions),
         # `UI-PARITY-P0P`. «График работ» over the same session factory.
         schedule=ScheduleAdapter(sessions),
+        # `DECISION-MEMORY-01` phase M2 (contract 1.44.0): the expert decision memory.
+        decision_memory=DecisionMemoryAdapter(sessions),
         # `W60-PRICE-LIST-01`. Project price lists (the uploaded file kept as a Blob in the
         # same store) and vendor lists, over the same sessions.
         optimisation=OptimisationAdapter(sessions, blob_store=store),

@@ -129,10 +129,11 @@ IMMUTABLE_TABLES = {
     # `0055_work_schedule` (`UI-PARITY-P0P`): the five journals of «График работ» are `am_immutable_row` (this set lacked them).
     "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_assignment_schedule_event",
     "work_calendar_event",
-    # `0059_decision_memory` (`ADR-0027`): the case of a decision and everything it keeps are written once; a later decision on the
-    # same observation is a new `decision_memory_decision` row, and a withdrawal is a status event.
-    "decision_memory_case", "decision_memory_decision", "decision_memory_decision_text", "decision_memory_status_event",
-    "decision_memory_content", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_crop",
+    # `0059_decision_memory` (`ADR-0027`): the case of a decision is written once; a later decision on the same observation is a new
+    # `decision_memory_decision` row, and a withdrawal is a status event. `0061_decision_memory_m2` adds the settings' journal. The five
+    # content tables (content, the expert's comment, evidence, normative references, crops) left this list: since `0061` their guard is
+    # `am_guard_decision_memory_forget` (UPDATE refused, DELETE only beside a same-transaction forget event), see FORGET_GUARDED_TABLES.
+    "decision_memory_case", "decision_memory_decision", "decision_memory_status_event", "decision_memory_setting_event",
 }
 
 
@@ -234,6 +235,24 @@ def test_exactly_the_declared_tables_are_append_only(migrated_engine: Engine) ->
         table for table in tables if "am_append_only" in _trigger_functions(migrated_engine, table)
     }
     assert with_append_only == APPEND_ONLY_TABLES
+
+
+#: `0061_decision_memory_m2` (`D-394`): the content side of the decision memory, deletable only by a forget of its case.
+FORGET_GUARDED_TABLES = {
+    "decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref",
+    "decision_memory_crop",
+}
+
+
+def test_exactly_the_content_tables_of_the_memory_carry_the_forget_guard_and_no_other_guard(migrated_engine: Engine) -> None:
+    with migrated_engine.connect() as connection:
+        tables = {row[0] for row in connection.execute(text(
+            "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = 'public' AND c.relkind = 'r'"))}
+    guarded = {t for t in tables if "am_guard_decision_memory_forget" in _trigger_functions(migrated_engine, t)}
+    assert guarded == FORGET_GUARDED_TABLES
+    assert not guarded & IMMUTABLE_TABLES                      # and they no longer carry the plain immutability guard
+    assert not any("am_immutable_row" in _trigger_functions(migrated_engine, t) for t in guarded)
 
 
 def test_exactly_the_declared_tables_are_immutable(migrated_engine: Engine) -> None:
