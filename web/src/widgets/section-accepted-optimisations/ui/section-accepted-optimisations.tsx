@@ -9,7 +9,8 @@
  * a withdrawal is. The section and the project are filters, not parents: a section nothing was accepted in is an empty
  * page, said as such. Each row names its project and document set and leads to the document's «Оптимизация» tab, on the
  * pass the proposal belongs to (`UI-B-02`). Every price and the saving are the API's exact text; a saving the API
- * leaves out is said to be not computed, never shown as zero.
+ * leaves out is said to be not computed, never shown as zero. Under the amount stands the server's percent of the price
+ * (`saving_percent`, `D-346`), «−25 % к цене в прайс-листе», the very figure the proposal card states.
  *
  * **Filters.** The section and the project are the page's, chosen in the row of the tabs (`UI-B-24`) and shared with the
  * specification tab; this widget reads them as props and starts from its first page whenever either changes.
@@ -25,7 +26,9 @@ import type { TableColumn } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState, Table } from '@/shared/ui';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
 import { CarriedMark } from '@/entities/expert-decision';
-import { formatAmount, formatDecimal, useAcceptedOptimisationProposals } from '@/entities/optimisation-proposal';
+import {
+  describeSavingPercent, formatAmount, formatDecimal, useAcceptedOptimisationProposals,
+} from '@/entities/optimisation-proposal';
 
 import styles from './section-accepted-optimisations.module.css';
 
@@ -83,7 +86,23 @@ const COLUMNS: readonly TableColumn<AcceptedOptimisationProposal>[] = [
     ),
   },
   { key: 'quantity', header: 'Количество', cell: acceptedQuantity },
-  { key: 'saving', header: 'Экономия', cell: acceptedSaving },
+  {
+    key: 'saving',
+    header: 'Экономия',
+    cell: (row) => {
+      // `D-346` (contract 1.43.0): the server's percent of the price, as the proposal card states it ("−25 % к цене в прайс-листе"),
+      // under the amount and where the amount is «не рассчитана». Never computed here; nothing is drawn for a row that carries none.
+      const percent = describeSavingPercent(row);
+      return (
+        <>
+          {acceptedSaving(row)}
+          {percent === null ? null : (
+            <span className={styles.place} data-saving-percent={row.saving_percent}>{percent}</span>
+          )}
+        </>
+      );
+    },
+  },
   {
     key: 'decision',
     header: 'Решение',
