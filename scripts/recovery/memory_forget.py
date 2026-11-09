@@ -89,6 +89,12 @@ STATUS_LOCK_PREFIX = "decision_memory_status:"
 LOCK_TIMEOUT = os.environ.get("MEMORY_FORGET_LOCK_TIMEOUT", "15s")
 PLAN_FILE_VERSION = 1
 PERMISSION_REF_MAX = erase.PERMISSION_REF_MAX
+#: ``out of shared memory``: what PostgreSQL answers when the server-wide lock table has no slot left for one more lock.
+SQLSTATE_OUT_OF_SHARED_MEMORY = "53200"
+#: The three settings that size the server's lock table (``max_locks_per_transaction`` x (``max_connections`` + ``max_prepared_transactions``)).
+LOCK_TABLE_SETTINGS = ("max_locks_per_transaction", "max_connections", "max_prepared_transactions")
+#: The dry run warns when a selection needs more than this share of the lock table's documented size (4/5; integer arithmetic, `D-516`).
+LOCK_WARN_NUMERATOR, LOCK_WARN_DENOMINATOR = 4, 5
 
 #: The content side, in the order the rows are deleted (the foreign keys point at ``decision_memory_content``), with the predicate that
 #: selects a case's rows; ``:cases`` is the case-id list.
@@ -400,7 +406,7 @@ def build_plan(connection: Connection, client: Any | None, *, database: str, buc
     )
 
 
-def render_plan(plan: Plan, *, dry_run: bool) -> str:
+def render_plan(plan: Plan, *, dry_run: bool, lock_room: Sequence[str] = ()) -> str:
     out = [f"memory-forget: database {plan.database} (migration head {plan.head}), bucket {plan.bucket}",
            f"selector: {erase.canonical_json(plan.selector.event_document())}", ""]
     out.append(f"-- cases to forget: {len(plan.cases)} (already forgotten and skipped: {plan.already_forgotten}) --")
@@ -420,6 +426,9 @@ def render_plan(plan: Plan, *, dry_run: bool) -> str:
     out.append(f"  objects to delete, by exact key: {len(plan.objects)} keys, {len(present)} present in the bucket, "
                f"{sum(o.size or 0 for o in present)} bytes")
     out.append("")
+    if lock_room:
+        out.extend(lock_room)
+        out.append("")
     if dry_run:
         out.append("--dry-run: NOTHING ABOVE WAS CHANGED.")
     out.append(f"cases: {len(plan.cases)}")
@@ -460,6 +469,74 @@ def resolve_actor(connection: Connection, login: str | None) -> str:
 
 
 # --- phase 2: the transaction -----------------------------------------------------------------
+
+
+def lock_table_settings(connection: Connection) -> tuple[int, int, int]:
+    """``max_locks_per_transaction``, ``max_connections`` and ``max_prepared_transactions`` of the server this connection is to."""
+    per, connections, prepared = (int(connection.execute(text(f"SELECT current_setting('{name}')")).scalar_one())
+                                  for name in LOCK_TABLE_SETTINGS)
+    return per, connections, prepared
+
+
+def lock_room_lines(cases: int, *, per: int, connections: int, prepared: int) -> list[str]:
+    """What the dry run says about the lock table (`D-516`): the advisory locks the selection needs, the table's documented size, and a
+    warning above 80 % of it.
+
+    The apply takes one advisory lock per case and one more that says a forget is running, and holds them all until it commits. The table
+    is shared by every session and sized by ``max_locks_per_transaction`` x (``max_connections`` + ``max_prepared_transactions``); PostgreSQL
+    rounds it up, and on the default settings about twice that many fitted (13056 measured against the documented 6400), so the documented
+    size is the cautious figure and above 80 % of it is the point at which an operator is told. The table's other users (the application's own
+    sessions, and the relation locks of this very transaction) are not counted: the warning is a reason to read runbook section 21, not a
+    promise either way. It is a statement in the plan's text and not a part of the plan: it is not in the plan's digest.
+    """
+    needed = cases + 1
+    slots = per * (connections + prepared)
+    lines = ["-- advisory locks (the apply holds them until it commits) --",
+             f"  needed: {needed} ({cases} cases, one lock each, and one that says a forget is running)",
+             f"  server lock table: max_locks_per_transaction {per} x (max_connections {connections} + max_prepared_transactions {prepared}) "
+             f"= {slots} slots, shared by every session"]
+    if needed * LOCK_WARN_DENOMINATOR > slots * LOCK_WARN_NUMERATOR:
+        lines.append(f"  WARNING: this selection needs {-(-needed * 100 // slots)} % of that size (the warning starts above "
+                     f"{LOCK_WARN_NUMERATOR * 100 // LOCK_WARN_DENOMINATOR} %). PostgreSQL rounds the table up and about twice the size fitted on "
+                     "the default settings (measured), so it may still go through; when it does not, the apply is refused and changes nothing. "
+                     "Forget fewer at a time (--origin-project, or --case in batches) with api and worker stopped, or raise "
+                     "max_locks_per_transaction first (runbook section 21, 'Large selections').")
+    return lines
+
+
+def lock_room_for_dry_run(connection: Connection, cases: int) -> list[str]:
+    """``lock_room_lines`` for the connection's server. A server that will not say its settings is said so, not left out."""
+    try:
+        per, connections, prepared = lock_table_settings(connection)
+    except Exception as error:  # noqa: BLE001 - the numbers are help; the plan stands without them, and says that it does
+        return ["-- advisory locks (the apply holds them until it commits) --",
+                f"  needed: {cases + 1} ({cases} cases, one lock each, and one that says a forget is running)",
+                f"  server lock table: its size could not be read ({type(error).__name__}); an apply that outgrows it is refused and changes nothing"]
+    return lock_room_lines(cases, per=per, connections=connections, prepared=prepared)
+
+
+def lock_table_message(engine: Engine, *, wanted: int, taken: int) -> str:
+    """The refusal for a selection too large for the server's lock table (`D-497` item 6): numbers, and the two ways out.
+
+    Every case needs one advisory lock until the single transaction commits, and the lock table is shared by every session of the server:
+    ``max_locks_per_transaction`` x (``max_connections`` + ``max_prepared_transactions``) sizes it (default ``64`` x ``100`` = 6400);
+    PostgreSQL rounds the shared memory up, and on the default settings about twice that many locks fit (13056 measured, 2026-11-09,
+    ``.local/evidence/lane-mem-ops-d511/measure-locks-result.json``). The transaction was rolled back, so it is read on a connection of
+    its own.
+    """
+    capacity = "unknown"
+    try:
+        with engine.connect() as connection:
+            per, connections, prepared = lock_table_settings(connection)
+        capacity = f"{per} x ({connections} + {prepared}) = {per * (connections + prepared)}"
+    except Exception:  # noqa: BLE001 - the numbers are help; the refusal stands without them
+        pass
+    batch = max(1, taken // 2)
+    return (f"{wanted} cases need one advisory lock each inside the single transaction of a forget, and the server's lock table ran out "
+            f"after {taken}; the table is shared by every session and sized by max_locks_per_transaction x (max_connections + "
+            f"max_prepared_transactions) = {capacity}. Nothing was changed. Forget fewer at a time -- one project (--origin-project) or at most {batch} cases "
+            "(--case, repeated) per run -- with api and worker stopped, which frees the slots they hold; or raise "
+            "max_locks_per_transaction in the server's configuration and restart it.")
 
 
 def _verification(connection: Connection, cases: Sequence[str]) -> dict[str, tuple[int, str]]:
@@ -539,14 +616,26 @@ def phase_commit(engine: Engine, *, database: str, bucket: str, selector: Select
             events_before = int(connection.execute(text("SELECT count(*) FROM public.decision_memory_status_event")).scalar_one())
             triggers_before = purge._trigger_state(connection)
 
-            for case_id, content_sha256 in plan.cases:
-                # one writer per case, the key of the transition guard and of the product's withdraw and restore
-                connection.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": STATUS_LOCK_PREFIX + case_id})
-                connection.execute(text(
-                    "INSERT INTO public.decision_memory_status_event (status_event_id, case_id, kind, reason_code, actor_user_uid, "
-                    "owner_permission_ref, forgotten_content_sha256) VALUES (:id, :case, 'forget', :reason, :actor, :ref, :digest)"
-                ), {"id": DecisionMemoryStatusEventId.new().value, "case": case_id, "reason": reason, "actor": actor_uid,
-                    "ref": permission_ref, "digest": content_sha256})
+            taken = 0
+            try:
+                for case_id, content_sha256 in plan.cases:
+                    # one writer per case, the key of the transition guard and of the product's withdraw and restore. The guard takes the
+                    # same lock again on the INSERT below, so this one cannot be dropped to save a slot: a forget holds one advisory lock
+                    # per case until it commits (`D-497` item 6).
+                    connection.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                                       {"key": STATUS_LOCK_PREFIX + case_id})
+                    taken += 1
+                    connection.execute(text(
+                        "INSERT INTO public.decision_memory_status_event (status_event_id, case_id, kind, reason_code, actor_user_uid, "
+                        "owner_permission_ref, forgotten_content_sha256) VALUES (:id, :case, 'forget', :reason, :actor, :ref, :digest)"
+                    ), {"id": DecisionMemoryStatusEventId.new().value, "case": case_id, "reason": reason, "actor": actor_uid,
+                        "ref": permission_ref, "digest": content_sha256})
+            except Exception as error:
+                # >>> guard: lock-table-room
+                if getattr(getattr(error, "orig", None), "sqlstate", "") == SQLSTATE_OUT_OF_SHARED_MEMORY:
+                    raise ForgetRefused(lock_table_message(engine, wanted=len(plan.cases), taken=taken)) from error
+                # <<< guard: lock-table-room
+                raise
             moved = connection.execute(text(
                 "UPDATE public.blob SET state = 'erasure_pending' WHERE blob_id = ANY(CAST(:ids AS text[])) AND state = 'available'"
             ), {"ids": list(blob_ids)}).rowcount
@@ -892,7 +981,8 @@ def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
                 with engine.connect() as connection:
                     connection.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
                     plan = build_plan(connection, client, database=args.database, bucket=args.bucket, selector=selector)
-                print(render_plan(plan, dry_run=True), file=out)
+                    lock_room = lock_room_for_dry_run(connection, len(plan.cases)) if plan.cases else []
+                print(render_plan(plan, dry_run=True, lock_room=lock_room), file=out)
                 if not plan.cases:
                     print("memory-forget: no case of that selection is left to forget; nothing to do.", file=out)
                 return EXIT_OK

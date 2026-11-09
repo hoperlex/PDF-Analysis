@@ -1903,7 +1903,7 @@ project.
 ### Before you start
 
 1. **The owner's permission, in writing, first (`R-146aj`).** An operator never erases a project without it. Nothing can verify it:
-   the script requires `--owner-permission-ref "<one line saying where it is recorded>"` (at most 200 characters, for example
+   the script requires `--owner-permission-ref "<one line saying where it is recorded>"` (at most 200 characters, not beginning with `-`, for example
    `owner mail of 2026-11-02, filed under the release record`) and writes that line into both journal events. The product has no
    legal-hold concept and the erase does not check one; whether the project is subject to a hold is the operator's question to the
    owner.
@@ -1959,7 +1959,9 @@ All commands run from the repository root on the host, as the operator who will 
 
    `--stop-worker` stops the `worker` service for the apply and starts it again afterwards, whatever the result. Use it when the
    tool refuses with `could not lock the tables`: the worker's heartbeat is the usual writer. If it still cannot lock, the script
-   prints the two commands that stop and start `api` and `web` around the run.
+   prints the two commands that stop and start `api` and `web` around the run. To wait longer than the module's `15s`, set
+   `PROJECT_ERASE_LOCK_TIMEOUT` in the environment of the command (`PROJECT_ERASE_LOCK_TIMEOUT=60s infra/deploy/erase-project.sh ...`); the
+   script hands it to the container and refuses a value that is not a positive number of `ms`, `s` or `min`, or longer than 2147483647 ms (about 35791 min), before any connection (`D-580`, `D-632`).
 
 4. **Check the rest state.** The script prints three commands; run them. `ADR-0022` asks for the first two:
 
@@ -1995,7 +1997,7 @@ All commands run from the repository root on the host, as the operator who will 
 | `REFUSED: the plan the project has now is not the plan you approved` (3) | the project changed after the dry run | read the new plan; get the owner's permission for it; run again with its digest |
 | `REFUSED: what was retyped is not the project and the plan above` (3) | a wrong or missing answer | nothing changed; run again and type both |
 | tool: `work of this project is not terminal` (3) | a run, job, attempt or claimed executor task is in flight | let it finish or cancel it |
-| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-worker`; then the `api`/`web` commands the script prints |
+| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-worker`; then the `api`/`web` commands the script prints; to wait longer than `15s` set `PROJECT_ERASE_LOCK_TIMEOUT` (for example `60s`) |
 | tool: `Blob(s) only this project references are not 'available'` (3) | a failed or abandoned upload cannot enter the erase | not an operator step: report it (`PROD-07A` D5; the register keeps the open question) |
 | tool: `a row of the project references a row that belongs to another project` (3) | a re-audit of another project's run | not an operator step: report it; erasing would take another project's data |
 | `REFUSED: an earlier erase of this project did not finish` (3) | an erase committed and stopped | run the `--resume` command the script prints |
@@ -2009,13 +2011,16 @@ directory and checks them against the journal; it needs no plan digest and asks 
 
 ### What the script's guards are
 
-Twenty-three marked guards, each shown failing by `tests/integration/composition/test_erase_project_script.py`: the option
-shapes (`known-options`, `one-mode`, `stop-worker-needs-a-write-mode`, `options-match-the-mode`, `names-required`,
-`project-identity-shape`, `erase-identity-shape`,
-`actor-required`, `reason-closed-list`, `owner-permission-ref`, `plan-digest-shape`), the instance (`env-file-present`,
-`instance-configured`, `migrator-url-configured`, `database-matches`, `bucket-matches`, `compose-file-present`,
-`modules-present`, `dump-dir-writable`), and the sequence (`preflight-ran`, `plan-approved`, `retyped-confirmation`,
-`manifest-verified`). The tool behind it has 44 more.
+Every guard of the script is a block between `# >>> guard: <name>` and `# <<< guard: <name>` markers, and each is shown failing by
+`tests/integration/composition/test_erase_project_script.py` (`test_every_guard_in_the_script_has_a_case_here` fails on a marker with no
+case). The names below are held to the script's markers by `test_the_runbook_names_every_guard_of_the_script` in the same file, so this
+list cannot lose a guard unnoticed, and no count is written here that could go stale (`D-513`). The option shapes (`known-options`,
+`one-mode`, `stop-worker-needs-a-write-mode`, `options-match-the-mode`, `memory-loss-reason`, `memory-loss-not-with-resume`,
+`names-required`, `project-identity-shape`, `erase-identity-shape`, `actor-required`, `reason-closed-list`, `owner-permission-ref`,
+`plan-digest-shape`, `lock-timeout-shape`), the instance (`env-file-present`, `instance-configured`, `migrator-url-configured`, `database-matches`,
+`bucket-matches`, `compose-file-present`, `modules-present`, `dump-dir-writable`), and the sequence (`preflight-ran`, `plan-approved`,
+`retyped-confirmation`, `manifest-verified`). The tool behind it carries its own marked guards, each shown failing by
+`tests/integration/recovery/test_project_erase.py`.
 
 ### Why this script is not in the copy key's file list (section 13)
 
@@ -2032,6 +2037,8 @@ files (`test_the_copy_key_file_list_does_not_gain_this_script` pins it).
 * No dump, no mirror, no reach into manual copies (above). No secure wipe. No legal-hold check.
 * A bucket with versioning enabled is refused, not handled. A project whose Blobs include a non-`available` one is refused.
 * `--resume` finishes an erase that this tool started; it is not a way to erase a second project.
+* It leaves the decision memory alone: the memory outlives the project (`ADR-0027`), and the content of its cases is removed only by
+  `infra/deploy/memory-forget.sh` (section 21), on its own plan and the owner's permission.
 
 ## 18. The offline copy of the key ring (`ERASE-WRAP-01` for `PROD-08`; `ADR-0022` section 6, `AD-08`; `R-146n` item 7)
 
@@ -2251,3 +2258,280 @@ leave with a revert of the compose file.
 * Nothing here was run against Docker. The mechanism is checked by `tests/integration/composition/test_compose_log_and_memory_limits.py`
   (the file read by indentation, `docker compose`'s variable rules reimplemented and tested against their documentation);
   the first `docker compose config` on a real host is step 5.
+
+---
+
+## 20. The decision memory: the `data_class` switch before the first real client document (`D-490`, `D-496`; `DECISION-MEMORY-01` section 8, phase M2)
+
+**What it is for.** Every decision an expert takes leaves a case in the decision memory (`ADR-0027`). A case is stored with a
+`data_class`, `test` or `real`, and **the column is immutable**: a case captured as `test` stays `test` for good. The class a case gets is
+the installation setting in force **when the case is captured**, and the setting starts as `test` (the safe direction: the training export
+reads `real` only). So the stand holds test data until an operator says otherwise, and **a real client document decided before that is
+remembered as test data and silently left out of every export.** The remedy for a case captured under the wrong class is a withdraw,
+not a reclassification. Nothing else in the deploy asks for this step, so this is where it is written down.
+
+**When.** Once, **before the first real client document is uploaded** (`R-4`; section 7 says who decides that), and **after the worker's
+sweep has captured everything the ledger already holds**. The tool enforces the second half: it refuses the change while the memory has not
+captured every accept or reject decision of the ledger (a decision taken before the memory existed, or one whose capture failed and is
+retried), because the sweep would capture those under the **new** class. Switching later, back and forth, follows the same rule.
+
+**How.** The door is `infra/deploy/memory-setting.sh` (`D-511`), in the shape of `erase-project.sh` (section 17). It runs the module
+`scripts/recovery/memory_setting.py` in a one-off `api` container, connected as the **owner** (`MIGRATOR_DATABASE_URL`, section 16: the script
+hands it to the container as `DATABASE_URL` through the environment of the `docker compose` process and passes no `PG*` variable), with the five
+files the module imports mounted read-only (`memory_setting`, `project_erase`, `product_purge`, `schema_coverage`, `blob_reference_audit`: the
+`api` image does not carry `scripts/recovery`; a test holds the list to the module's own imports). It refuses before any connection what can be
+refused without one (an option it does not know, a setting or value outside the closed lists, an actor that is not one word, `training_use on`
+without `--owner-permission-ref`, a `MEMORY_SETTING_LOCK_TIMEOUT` that is not a duration, a typed database that is not the configured one, a
+missing environment file or owner url) and names an
+administrator's login in `--actor` (the journal records the account's `usr_` identity, never the login). It reads the module's `show --json` (one line, `memory_setting.SHOW_JSON_KEYS`) and nothing else of its
+output, decides the "nothing to do" and the read-back from it and prints the screen below from the same line (`D-517`). It stops no service: the
+worker must be **running**, because its sweep is what empties the backlog the tool counts. All commands run from the repository root, as the operator who keeps
+the release record:
+
+1. **Look.**
+
+   ```
+   infra/deploy/memory-setting.sh --database <POSTGRES_DB> show
+   ```
+
+   Expected, on a stand that has never been switched (after the `instance` and `database` lines):
+
+   ```
+   data_class: test (default; default test)
+   training_use: off (default; default off)
+   uncaptured-decisions: 0 (ledger accept/reject events with no memory decision; a data_class change is refused until this is 0)
+   ```
+
+   A number above `0` means the sweep has more to do. The sweep runs in the **worker** (section 12; about 50 events every 30 s), so check
+   that the worker is up and `show` again in a minute. A number that does not go down is a capture that fails: the worker's log names the
+   decision (`decision memory: could not capture dec_...`); fix that first, the tool has no way around it.
+2. **Switch.**
+
+   ```
+   infra/deploy/memory-setting.sh --database <POSTGRES_DB> set data_class real --actor <admin login>
+   ```
+
+   The script does three things in order. It runs `show` and prints the settings in force (`in force now:`), so the value being replaced and
+   the count of uncaptured decisions are on the screen before anything is asked; a setting that already has the typed value ends here with
+   `nothing to do`. It prints `THIS CHANGES data_class FROM test TO real for every case captured from now on.` and asks
+   `retype the new value of data_class to go on:`: **type `real` yourself**; a value that was pasted into the command line is a value nobody
+   looked at, and an end of input is not an answer. Then the module writes it: `memory-setting: data_class: test -> real (revision 1).` and the
+   line saying cases already captured keep their class. Exit `0`.
+3. **Look again, and record it.** The script reads the settings back and **checks** that the value it reads is the one that was typed (a
+   value that does not read back is exit `4`, `THE CHANGE WAS REPORTED DONE`, and is not to be recorded as made); then it prints
+   `done. data_class is now real. Write the settings below and today's date in the release record:` and the screen, which must read
+   `data_class: real (revision 1; default test)`. Write that output and the date in the release record. A deploy needs nothing else: the
+   setting is data, not configuration, and survives a restart and a restore.
+
+**What it says when it stops (exit `3`, nothing changed; `4` is a failure, see below).** The tool's own words are printed first, then the
+script's line `the change was refused (reason above)`. `N accept/reject decision(s) of the ledger are not captured by the decision
+memory yet ... There is no override.`: step 1 above. `could not lock within 15s`: a decision was being written (the tool holds the ledger
+still for the count and the write, so a decision cannot slip between them); run it again in a moment, or wait longer by
+setting `MEMORY_SETTING_LOCK_TIMEOUT` in the environment of the command (`MEMORY_SETTING_LOCK_TIMEOUT=60s infra/deploy/memory-setting.sh ...`;
+default `15s`; the script hands the variable to the one-off container, and refuses before any connection a value that is not a positive number of
+`ms`, `s` or `min`, or is longer than PostgreSQL's `lock_timeout` takes (2147483647 ms, about 35791 min), `D-515`, `D-632`). `the database is at migration X, the tool was written for Y`: the tool is older than the schema; use the tool of the
+tree that is deployed. `what was retyped is not the new value`: nothing was written; run it again and type the value. Exit `4`
+(`the change failed`) means the connection or the container failed; the write is one transaction, so the settings in force say whether it was
+made: run `show`.
+
+**What it does not do.** It does not reclassify a case that was already captured (withdraw it, `DECISION-MEMORY-01` section 4.5, and let the
+expert decide again). It does not switch `training_use` on its own account: that is a different setting with its own rule (it needs
+`--owner-permission-ref`, and it releases client-derived content off the host, `ADR-0022` section 4). It is **not** run by a deploy, a
+restore or `reset.sh`, so a stand rebuilt from a dump keeps whatever the dump held, and a stand rebuilt empty starts at `test` again:
+repeat step 1 to 3 after it, before real data. It is not one of the copy key's files (section 13): a settings change is an interactive act of
+an administrator.
+
+**What has and has not been run (`D-511`).** The script's guards, order and exit codes are shown by `tests/integration/composition/
+test_memory_setting_script.py` (every marked guard shown failing, with a stub in place of `docker`), and the script is run against a
+real PostgreSQL, the real ledger and the real sweep, with the module executed in a sandbox that holds only the five mounted files, by
+`tests/integration/recovery/test_memory_ops_wrappers.py`. What neither has run is the real `docker compose run` with the production `api` image
+(the flags, `/app/src` in the image, the operator's uid reading the mounts): that is first exercised by the rehearsal on a restored copy
+(`PROD-17`), which must precede the first real use, exactly as for section 17.
+
+
+## 21. The decision memory: forgetting cases (`D-511`; `DECISION-MEMORY-01` section 4.5; `R-146aj`)
+
+**What it is for.** The memory outlives the project and the document a case came from (`ADR-0027`): erasing a project (section 17) does not
+touch it. When the owner says that what the memory holds about some cases must go (a client's request, a capture that took what it should not
+have, test data that was captured as real), the one way is `infra/deploy/memory-forget.sh` (`D-511`), the operator's door to
+`scripts/recovery/memory_forget.py`, in the shape of `erase-project.sh`. For the chosen cases it removes the content: the finding and
+recommendation text, the evidence quotes, the norm references, the crop images (their rows and their objects, unless a document's artifact
+or another case still references them) and the expert's comment. **What stays** is the case, its decisions (verdict, severity, author, time:
+no words of the expert) and one `forget` tombstone per case with who, when, why, the owner's permission reference and the digest of the
+content that was forgotten (proof of what is gone, without holding it), plus two journal events and two files (below).
+
+**It is not the project erase and not a withdraw.** Section 17 removes a project's documents and findings and leaves the memory alone. A
+*withdraw* (a screen of the product) takes a case out of the exports and keeps its content; a forget removes the content and cannot be
+undone. A forget takes no dump and no mirror, because a dump would keep the very content it was asked to remove: the last step of the
+procedure is the operator's, and so are the copies it did not reach.
+
+### Before you start
+
+1. **The owner's permission, in writing, first (`R-146aj`).** Nothing can verify it: the script requires
+   `--owner-permission-ref "<one line saying where it is recorded>"` (at most 200 characters, not beginning with `-`, for example
+   `owner mail of 2026-11-09, filed under the release record`) and writes that line into the tombstones and both journal events.
+2. **An administrator's login** for `--actor` (the journal records the account's `usr_` identity, never the login).
+3. **The stack is up** (`postgres` and `s3`). **`api` and `worker` should not be running during the apply** (`D-497` item 2): the tool takes
+   its locks in another order than a capture does, so a capture, a withdraw or a restore that arrives while it runs can make it deadlock or
+   roll back. It fails safe (nothing is changed, and you run it again), but a forget of many cases is long enough for that to happen.
+   `--stop-services` stops the ones of the two that are running and starts exactly those again afterwards, whatever the result (also when
+   `docker compose stop` itself fails or is interrupted half way: the list is made before the stop, `D-631`). The worker's
+   sweep and the product's captures pause for the run.
+4. **Decide about the copies now**, not after: the forget reaches none of them (step 6).
+5. `infra/deploy/env/alpha.env` has `MIGRATOR_DATABASE_URL` (section 16); the script hands the tool the owner's url (the application role holds
+   no `DELETE` on the memory's tables and the tool refuses it).
+
+### The procedure (every step has the output to expect)
+
+All commands run from the repository root, as the operator who will keep the record. Choose **one** selector: `--origin-project prj_<26
+characters>` (every case that came from that project), `--case dmc_<26 characters>` (once or more) or `--all`. A name or a description is
+refused: identities only.
+
+1. **The dry run** (what you get with no mode option; it changes nothing):
+
+   ```
+   infra/deploy/memory-forget.sh --database <POSTGRES_DB> --bucket <S3_BUCKET> --origin-project prj_<26 characters>
+   ```
+
+   Expected: three lines (`instance`, `database`, `bucket`), then the plan: the cases (and how many were forgotten already and are
+   skipped), the rows to delete by table, the crop Blobs only these cases reference (they go) and those another case, a document or the norm
+   corpus also references (they stay), the object keys, then `cases: <n>`, `plan-sha256: <64 hex>`, and the script's closing text
+   `dry run. NOTHING ABOVE WAS CHANGED` with the options an apply needs. Between the plan's tables and that line is the lock-table statement
+   (below, "Large selections"): the advisory locks the selection needs, the server's lock table size, and a `WARNING` above 80 % of it. Exit 0.
+   A selection with nothing left to forget says `nothing to do`
+   (exit 0). A case that is not in this memory is a refusal (exit 3).
+2. **Show the plan to the owner**, get the permission for **that** plan, and record its `plan-sha256` with the permission. A plan is the memory
+   as it is now: a case captured after the dry run changes the digest.
+3. **Apply.**
+
+   ```
+   infra/deploy/memory-forget.sh --database <POSTGRES_DB> --bucket <S3_BUCKET> --origin-project prj_<26 characters> --apply \
+       --actor <admin login> --reason <capture_defect|wrong_decision|client_request|test_data|other> \
+       --owner-permission-ref "<where the permission is recorded>" --plan-sha256 <the digest from step 1> --stop-services
+   ```
+
+   `--reason` is one of the five words (the tombstone's vocabulary): free text is refused, because it would be written into an append-only
+   table. Expected: the plan is printed again; the script compares its digest with the one you passed (a different digest is a refusal: read
+   the new plan and start from step 2); then
+
+   ```
+   memory-forget.sh: THIS FORGETS THE CONTENT OF THE <n> CASE(S) ABOVE. It cannot be undone, and NO DUMP is taken first.
+   memory-forget.sh: retype the number of cases to go on:
+   memory-forget.sh: retype the plan digest to go on:
+   ```
+
+   **Type both yourself.** A value that was pasted into the command line is a value nobody looked at; an end of input is not an answer.
+   Then `stopping api worker` (with `--stop-services`; without it the script says that `api` and `worker` are NOT being stopped and what
+   that risks), `forgetting (one transaction, then the objects, then the final record)`, `forget-id: era_<26 characters>` (keep it),
+   `objects-deleted: <n>`, `objects-missing: <n>`, the tool's summary (`manifest-sha256`, `manifest`, `plan-sha256`, `rows-deleted`), the
+   list of what a forget does not reach, `starting api worker again`, and the script's `done. The forget is era_...`. Exit 0.
+4. **Check the rest state.** The script prints three commands; run them. The first two print `0`, the third `1`:
+
+   ```
+   $DC exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select count(*) from blob where state = 'erasure_pending'"
+   $DC exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select count(*) from decision_memory_content c where exists (select 1 from decision_memory_status_event e where e.case_id = c.case_id and e.kind = 'forget')"
+   $DC exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select count(*) from audit_event where event_type = 'memory.forget_completed' and aggregate_id = 'era_...'"
+   ```
+
+   (`DC` is `docker compose --env-file <alpha.env> --file <compose.server.yml>`, spelled out in the script's output.)
+5. **Keep the record.** `infra/deploy/dumps/forgets/<era_id>/plan.json` and `manifest.json` (mode 0600 in a directory 0700, owned by you;
+   the container ran as your uid for that reason). The database holds only their digests. **The manifest is the only proof that a known crop
+   was forgotten**: it lists every forgotten Blob (`blob_id`, SHA-256, size, media type). The script has already hashed it and compared the
+   digest with the one in both journal events (`manifest-sha256 ... (verified against the file)`); if it could not, it ends non-zero with
+   `THE FORGET COMPLETED but the manifest on disk is not the one the database holds` and you **discard nothing**. Put both files with the
+   release record, off this host.
+6. **The copies the forget did not reach.** Remove or age them by hand, and write in the release record that you did:
+   `infra/deploy/dumps/` (every dump and `*-purge-*` directory), the copy directory of the copy key (section 13), the copy fetched to the
+   development host for an `R-93` restore test, the VPS provider's snapshots, and any copy outside the host. Also outside this host's control:
+   training exports already produced and anything trained on them, prompts already sent to a model provider, the local copies of a remote
+   executor, the disk blocks of a deleted object (there is no secure wipe) and container logs.
+
+### When it stops
+
+| What you read (exit) | What it means | What to do |
+|---|---|---|
+| `REFUSED: --owner-permission-ref is required` (3) | `R-146aj`: no statement of where the permission is recorded | get the permission; run again |
+| `REFUSED: name exactly one of --case ...` (3) | which cases is the whole question; none and "all" are not the same | choose one selector |
+| `REFUSED: ... never a name` / `never a description` (3) | an identity is required | take it from the memory's case list or the project's page |
+| `REFUSED: [migrator_url_unset]` (3) | `alpha.env` has no owner url | section 16 |
+| `REFUSED: the plan the memory has now is not the plan you approved` (3) | the memory changed after the dry run | read the new plan; get the owner's permission for it; run again with its digest |
+| `REFUSED: what was retyped is not the number of cases and the plan above` (3) | a wrong or missing answer | nothing changed; run again and type both |
+| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-services`; then look for another writer (a second operator session, a restore); to wait longer than `15s` set `MEMORY_FORGET_LOCK_TIMEOUT` (for example `60s`; the script hands it to the container and refuses a value that is not a positive number of `ms`, `s` or `min`, or longer than 2147483647 ms, about 35791 min) |
+| tool: `another forget holds the lock` (3) | a second forget is running | wait for it to finish |
+| tool: `the lock table ran out` (3) | the selection is too large for one transaction | see "Large selections" below |
+| tool: `Blob row(s) are in erasure_pending` (3) | an earlier erase or forget committed and did not finish | find its id in the event that began it (`erasure.requested` for a project erase, `memory.forget_requested` for a forget) and finish that one with `--resume` (a forget: this script; an erase: `erase-project.sh`) |
+| tool: `Blob(s) only these cases reference are not 'available'` (3) | a failed or abandoned upload cannot enter the forget | not an operator step: report it |
+| `FAILED: THE DATABASE PART OF THE FORGET IS COMMITTED (era_...)` (**4**) | the database part is done; the objects or the final record are not | run the command printed under `Finish it`; it is safe to repeat; the plan and manifest are already on disk |
+| `FAILED: THE FORGET COMPLETED but the manifest on disk is not the one the database holds` (4) | the file does not hash to the journalled digest | discard nothing; the digest is in both events; report |
+
+A refusal after the commit is still exit **4**, never 3: 3 promises that nothing was changed. The finishing command is
+`infra/deploy/memory-forget.sh --database ... --bucket ... --resume era_... --actor <login> --owner-permission-ref "..." [--stop-services]`
+(set `ALPHA_DUMP_ROOT` as before, if you set it). It reads `plan.json` and `manifest.json` from the dump directory and checks them against
+the journal; it needs no plan digest and asks nothing.
+
+### Large selections (`D-497` item 6)
+
+A forget holds **one advisory lock per case until it commits** (the database's own status guard takes it on each tombstone, so it cannot be
+left out), and the server's lock table is shared by every session: `max_locks_per_transaction x (max_connections +
+max_prepared_transactions)` slots in all, `64 x (100 + 0) = 6400` on the production compose (the settings are PostgreSQL's defaults).
+Measured on a PostgreSQL with those defaults (`.local/evidence/lane-mem-ops-d511/measure-locks.sh`, 2026-11-09, tree `3f4f0702b`, nothing else
+running): the table filled at **13056** advisory locks, about twice the 6400 the formula gives (PostgreSQL rounds the shared memory up).
+`memory_forget --all` over **12000** cases went through; over **14000** it stopped after **13011** locks and changed nothing. So on the
+production compose a forget of up to about **13000** cases is one run, with `api` and `worker` stopped; the formula is what to read when the
+server's settings are not the defaults. Past the limit the tool refuses, in words and with the numbers (`the lock table ran out after N`),
+and there are two ways out: split the selection (one project at a time with `--origin-project`, or `--case` in batches well below the number
+the message names), or raise `max_locks_per_transaction` in the server's configuration and restart it (`compose.server.yml` sets no `command:`
+for `postgres` today, so that is a change to the compose file, the owner's). A forget of thousands of cases holds a large part of the shared
+table until it commits, and a statement of any other session that needs a lock while the table is full fails with `out of shared memory`:
+this is one more reason `api` and `worker` are stopped for the run.
+
+**The dry run says how near the selection is** (`D-516`): after the table of Blobs it prints
+
+```
+-- advisory locks (the apply holds them until it commits) --
+  needed: <cases + 1> (<cases> cases, one lock each, and one that says a forget is running)
+  server lock table: max_locks_per_transaction 64 x (max_connections 100 + max_prepared_transactions 0) = 6400 slots, shared by every session
+```
+
+read from the server's own settings, and, when the need is above **80 %** of that documented size, a `WARNING` line with the percentage. The
+documented size is the cautious figure (PostgreSQL rounds the table up; about twice fitted on the defaults), so a warning is not a prediction
+that the apply will be refused: it is the moment to split the selection or to raise the setting *before* the apply, with the owner's
+permission for the plan still being asked for. These lines are not part of the plan and not part of its digest. With the production compose's
+defaults the warning starts above 5119 cases and the measured refusal at about 13000.
+
+**What raising the setting costs, measured** (`D-516`; the production `postgres` image, every other setting at its default, `show
+shared_memory_size`, 2026-11-10, `.local/evidence/lane-ops-polish/shmem-measure.txt`): 143 MB at `max_locks_per_transaction = 64`, 146 MB at 128,
+152 MB at 256 and 164 MB at 512, so 256 (a documented table of 25600 slots, four times today's) costs about 9 MB of shared memory. The compose
+file is left as it is: nothing needs the room yet, and the value is set with `command: ["postgres", "-c", "max_locks_per_transaction=256"]` on the
+`postgres` service, a deploy-config change that restarts `postgres` on the next deploy and is the owner's. Do it before a forget the dry run
+warns about, not after a refusal.
+
+### What the script's guards are
+
+Every guard of the script is a block between `# >>> guard: <name>` and `# <<< guard: <name>` markers, each shown failing by
+`tests/integration/composition/test_memory_forget_script.py`; the names below are held to the script's markers by
+`test_the_runbook_names_every_guard_of_the_script` in the same file, and no count is written here (`D-513`). The option shapes
+(`known-options`, `one-mode`, `stop-services-needs-a-write-mode`, `options-match-the-mode`, `names-required`, `one-selector`,
+`selector-identity-shape`, `forget-identity-shape`, `actor-required`, `reason-closed-list`, `owner-permission-ref`, `plan-digest-shape`,
+`lock-timeout-shape`), the instance (`env-file-present`, `instance-configured`, `migrator-url-configured`, `database-matches`, `bucket-matches`,
+`compose-file-present`, `modules-present`, `dump-dir-writable`), and the sequence (`preflight-ran`, `plan-approved`,
+`retyped-confirmation`, `manifest-verified`). The tool behind it carries its own marked guards, shown failing by
+`tests/integration/recovery/test_memory_forget.py`.
+The five mounted files (`memory_forget`, `project_erase`, `product_purge`, `schema_coverage`, `blob_reference_audit`) are held to the
+module's own imports by a test, and the closure is shown to be the whole of it by running the module in a sandbox that holds only them
+(`tests/integration/recovery/test_memory_ops_wrappers.py`).
+
+### Why this script is not in the copy key's file list (section 13)
+
+The forget is interactive, by an administrator, with the owner's permission recorded and two answers typed by a person; an unattended key
+must not be able to reach it. The list stays five files (`test_the_copy_key_file_list_does_not_gain_this_script` pins it).
+
+### What this does not do
+
+* **It has not run against a live stack.** The wrapper's tests run with a stub in place of `docker` and, for the meeting with the module,
+  with a shim that runs it in a sandbox against a real PostgreSQL and bucket; the real `docker compose run` with the production `api` image
+  (the flags, `/app/src` in the image, the operator's uid reading the mounts and writing the dump directory) is first exercised by the
+  rehearsal on a restored copy (`PROD-17`), which must precede the first real forget.
+* No dump, no mirror, no reach into the copies (step 6). No secure wipe. No legal-hold check. A bucket with versioning enabled is refused.
+* It does not recall a training export. It does not change `data_class` or any setting (section 20).
+* `--resume` finishes a forget that this tool started; it is not a way to forget a second selection.

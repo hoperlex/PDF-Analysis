@@ -238,6 +238,9 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // each invalidates the `execution` root, which the servers and the layout are filed under.
   'src/features/manage-executor-host/model/use-manage-executor-host.ts': false,
   'src/features/manage-stage-layout/model/use-manage-stage-layout.ts': false,
+  // `D-495` (lane MEM-UI): withdrawing or restoring a decision-memory case changes the memory's own reads only; no
+  // dashboard number counts memory cases.
+  'src/features/manage-decision-memory/model/use-change-standing.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

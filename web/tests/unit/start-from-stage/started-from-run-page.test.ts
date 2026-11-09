@@ -114,7 +114,7 @@ describe('the stage table of a run started from a stage, in «Этапы ана�
   it('keeps the measured duration of the stage this run computed', () => {
     const cells = row(dialog({ ...FROM, stages: STAGES }, 'text'), 'text_analysis');
     expect(cells).toContain('data-stage-elapsed="2500"');
-    expect(cells).toContain('2.5 s');
+    expect(cells).toContain('2,5 с');
     expect(cells).not.toContain('data-stage-reused');
     expect(cells).not.toContain('из прогона');
   });

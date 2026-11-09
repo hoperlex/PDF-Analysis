@@ -2474,6 +2474,9 @@ class BlockAdapter(_SessionHolder):
         (``prepared.page_inventory``, the page sizes), and the **version's** portal blocks (the document
         ``listVersionPortalBlocks`` serves). The rule and its known misses are
         ``analysis.geometry.finding_blocks``'s; nothing is stored and no evidence is changed.
+
+        A finding's blocks are those that hold the evidence of **any** of its published observations (the canonical one and
+        every one it merged, `D-520`), each block once, the canonical observation's blocks first.
         """
         from auditmanager.analysis.public import (
             ROLE_BLOCK_INDEX,
@@ -2517,16 +2520,29 @@ class BlockAdapter(_SessionHolder):
 
         geometry_of_run = self._run_geometry(index_ref, inventory_ref, source.portal_blocks, run.version_uid)
         pages, lines, boxes = geometry_of_run.pages, geometry_of_run.lines, geometry_of_run.boxes
+        spans_of: dict[str, list[EvidenceSpan]] = {}
+        for item in evidence:
+            spans_of.setdefault(item.finding_observation_id, []).append(
+                EvidenceSpan(item.page_number, item.char_start, item.char_end),
+            )
         items = []
         for group in sorted(groups, key=lambda group: group.canonical.finding_uid):
-            canonical = group.canonical.finding_observation_id
-            spans = [
-                EvidenceSpan(item.page_number, item.char_start, item.char_end)
-                for item in evidence if item.finding_observation_id == canonical
+            # `D-520`: a finding is one finding and its observations are its evidence, so the evidence of every observation
+            # the finding merged counts, not only the canonical one's. The canonical observation's blocks come first (the
+            # portal's order among them), then each merged observation's in the order of its id, so the answer does not
+            # depend on the order the rows came in; a block that holds the evidence of several observations is listed once.
+            observations = [
+                group.canonical.finding_observation_id,
+                *sorted(row.finding_observation_id for row in group.merged),
             ]
+            linked: dict[str, None] = {}
+            for observation in observations:
+                spans = spans_of.get(observation)
+                if spans:
+                    linked.update(dict.fromkeys(link_evidence(spans, lines=lines, pages=pages, blocks=boxes)))
             items.append(models.FindingBlockLink(
                 finding_uid=group.canonical.finding_uid,
-                portal_block_ids=list(link_evidence(spans, lines=lines, pages=pages, blocks=boxes)),
+                portal_block_ids=list(linked),
             ))
         return models.RunFindingBlockLinks(
             run_id=run_id, version_uid=run.version_uid, status="produced",

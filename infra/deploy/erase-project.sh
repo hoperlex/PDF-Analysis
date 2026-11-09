@@ -122,6 +122,9 @@ usage: erase-project.sh --database <name> --bucket <name> --project prj_<ULID> [
                                "could not lock the tables": the worker's heartbeat is the usual writer.
   --env-file <path>            default: infra/deploy/env/alpha.env
 
+  PROJECT_ERASE_LOCK_TIMEOUT   environment, optional: how long the erase waits for the project's table locks, for example 60s (default 15s).
+                               A positive number of ms, s or min; it is passed to the one-off container.
+
 NO DUMP IS TAKEN, because a dump would keep the erased data. Every existing dump, mirror and copy still holds the project.
 USAGE
     exit 2
@@ -256,9 +259,10 @@ fi
 
 # >>> guard: actor-required
 # The erase is journalled on an administrator's account. The module checks that the account exists and holds `admin`;
-# here the value must at least be one word, so that an empty string or a sentence is refused before a connection.
+# here the value must at least be one word that is not an option (`D-514`: the rule of `memory-setting.sh` and `memory-forget.sh`), so that an
+# empty string, a sentence or a swallowed option is refused before a connection.
 if [ "$MODE" != plan ]; then
-    if [ -z "$ACTOR" ] || [[ "$ACTOR" =~ [[:space:][:cntrl:]] ]] || [ "${#ACTOR}" -gt 254 ]; then
+    if [ -z "$ACTOR" ] || [[ "$ACTOR" =~ [[:space:][:cntrl:]] ]] || [ "${#ACTOR}" -gt 254 ] || [[ "$ACTOR" == -* ]]; then
         refuse "--actor must be the login of an administrator (one word)." \
                "  given: ${ACTOR:-<none>}" \
                "Nothing was read and nothing was touched."
@@ -290,6 +294,11 @@ if [ "$MODE" != plan ]; then
                "permission to erase this project is recorded (R-146aj: never without it)." \
                "It is recorded as given and never verified. Nothing was read and nothing was touched."
     fi
+    if [[ "$ref" == -* ]]; then
+        refuse "--owner-permission-ref must not begin with '-': the module would read it as an option and refuse it late." \
+               "  given: $ref" \
+               "Say in words where the permission is recorded (for example: owner mail of 2026-11-09). Nothing was read and nothing was touched."
+    fi
     PERMISSION_REF="$ref"
 fi
 # <<< guard: owner-permission-ref
@@ -302,6 +311,31 @@ if [ "$MODE" = apply ] && [[ ! "$PLAN_SHA_GIVEN" =~ ^[0-9a-f]{64}$ ]]; then
            "Run the dry run first (no mode option). Nothing was read and nothing was touched."
 fi
 # <<< guard: plan-digest-shape
+
+# >>> guard: lock-timeout-shape
+# `D-580` (the rule of `D-515` in `memory-setting.sh` and `memory-forget.sh`): how long the module waits for the table locks is the operator's
+# to set (`PROJECT_ERASE_LOCK_TIMEOUT`, default `15s` in the module, which puts it into a `SET LOCAL` statement as text). It is handed to the
+# one-off container as it is, so it must be a plain positive duration: a typo is a sentence here and not a database error after the
+# connection, and `0` (wait for ever) is not a timeout.
+# PostgreSQL takes at most 2147483647 ms (about 35791 min) for `lock_timeout`: a longer duration is a sentence here too, not an error 22023
+# after the connection (`F3` of the 2026-11-10 judge report).
+if [ "${PROJECT_ERASE_LOCK_TIMEOUT+set}" = set ]; then
+    lock_ms=0
+    if [[ "$PROJECT_ERASE_LOCK_TIMEOUT" =~ ^([1-9][0-9]{0,5})(ms|s|min)$ ]]; then
+        case "${BASH_REMATCH[2]}" in
+            ms) lock_ms=$(( ${BASH_REMATCH[1]} )) ;;
+            s) lock_ms=$(( ${BASH_REMATCH[1]} * 1000 )) ;;
+            min) lock_ms=$(( ${BASH_REMATCH[1]} * 60000 )) ;;
+        esac
+    fi
+    if [ "$lock_ms" -lt 1 ] || [ "$lock_ms" -gt 2147483647 ]; then
+        refuse "PROJECT_ERASE_LOCK_TIMEOUT must be a positive number of ms, s or min (for example 60s)." \
+               "It is at most 2147483647 ms (about 35791 min): the largest lock_timeout PostgreSQL takes." \
+               "  given: ${PROJECT_ERASE_LOCK_TIMEOUT:-<empty>}" \
+               "Unset it for the module's own 15s. Nothing was read and nothing was touched."
+    fi
+fi
+# <<< guard: lock-timeout-shape
 
 # >>> guard: env-file-present
 if [ ! -r "$ENV_FILE" ]; then
@@ -411,6 +445,11 @@ fi
 
 compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
 
+# `D-580`: the lock timeout the operator set, and only that one, goes into the container (the shape was checked above). None set: nothing is
+# passed and the module's own default applies.
+LOCK_TIMEOUT_ENV=()
+[ "${PROJECT_ERASE_LOCK_TIMEOUT+set}" != set ] || LOCK_TIMEOUT_ENV=(-e "PROJECT_ERASE_LOCK_TIMEOUT=$PROJECT_ERASE_LOCK_TIMEOUT")
+
 # THE PYTHON HALF RUNS INSIDE THE `api` IMAGE, from four files mounted read-only. The container runs as the operator's
 # uid so that what it writes under /dump is the operator's; stdin is /dev/null so that `docker compose run` cannot
 # swallow the answers the operator is about to type (it forwards stdin to the container otherwise).
@@ -421,7 +460,7 @@ erase_python() {
         mounts+=(-v "$MODULE_DIR/$module.py:/purge/scripts/recovery/$module.py:ro")
     done
     DATABASE_URL="$MIGRATOR_URL" compose run --rm --no-deps -T --user "$(id -u):$(id -g)" \
-        -e PYTHONPATH=/app/src:/purge "${mounts[@]}" "${DUMP_MOUNT[@]+"${DUMP_MOUNT[@]}"}" \
+        -e PYTHONPATH=/app/src:/purge "${LOCK_TIMEOUT_ENV[@]+"${LOCK_TIMEOUT_ENV[@]}"}" "${mounts[@]}" "${DUMP_MOUNT[@]+"${DUMP_MOUNT[@]}"}" \
         --entrypoint python api -m scripts.recovery.project_erase "$@" </dev/null
 }
 
@@ -529,8 +568,10 @@ after_step() {
 stop_worker_if_asked() {
     if [ "$STOP_WORKER" = yes ] && [ "$WORKER_DECLARED" = yes ]; then
         echo "erase-project.sh: stopping the worker service"
-        compose stop worker
+        # Marked BEFORE the stop: a `compose stop` that fails or is interrupted may have stopped it, and the trap starts it again
+        # (`up -d --no-deps` of a service that is still up changes nothing).
         WORKER_STOPPED=yes
+        compose stop worker
     fi
 }
 
