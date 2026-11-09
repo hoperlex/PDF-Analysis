@@ -15,7 +15,7 @@ import Link from 'next/link';
 
 import type { DocumentVersion } from '@/shared/api';
 
-import { activeRunHref, pluralRu } from '../model/audit-state';
+import { activeRunHref, optimisationPill, pluralRu } from '../model/audit-state';
 import { isComparisonOnly } from '../model/upload-kind';
 import { AuditChip } from './audit-chip';
 import { ClassificationBadges } from './classification-badges';
@@ -52,6 +52,27 @@ export interface DocumentCardGridProps {
 }
 
 const FINDINGS_WORD: readonly [string, string, string] = ['замечание', 'замечания', 'замечаний'];
+
+/**
+ * `D-361`, `UI-A-46` (second half): the original's second pill «Оптимизация N [метка]» -- the proposals of the document's latest
+ * optimisation pass, and while an expert still has some to decide, the marker «3 не решено». Nothing for a document no pass was
+ * started over, or whose pass produced no proposal.
+ */
+function OptimisationPillMark({ audit }: { readonly audit: DocumentVersion['audit'] }) {
+  const pill = optimisationPill(audit);
+  if (pill === null) return null;
+  return (
+    <span
+      className={styles.optimisation}
+      data-card-optimisation={pill.count}
+      data-card-optimisation-undecided={pill.undecided}
+      title={pill.title}
+    >
+      {pill.text}
+      {pill.mark === null ? null : <span className={styles.optimisationMark}>{pill.mark}</span>}
+    </span>
+  );
+}
 
 export function documentCardTitle(version: DocumentVersion): string {
   return version.display_title ?? version.source_filename ?? version.version_uid;
@@ -103,6 +124,7 @@ export function DocumentCardGrid({ documents, addresses, select, reviewAddress, 
                   {version.audit.finding_count} {pluralRu(version.audit.finding_count, FINDINGS_WORD)}
                 </span>
               )}
+              <OptimisationPillMark audit={version.audit} />
             </div>
             {/* `R-151e`: the document's free tags. */}
             {(version.tags ?? []).length === 0 ? null : (
