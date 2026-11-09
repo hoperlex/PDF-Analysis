@@ -109,11 +109,11 @@ ol.records {
  * and the frame, not the cells, takes the difference.
  */
 .colType { min-width: 6.5rem; }
-.colPlace { min-width: 7.5rem; }
+.colPlace { min-width: 7rem; }
 .colSection { min-width: 3.5rem; }
 .colSeverity { min-width: 4.5rem; }
 .colVerdict { min-width: 6.5rem; }
-.colText { min-width: 8rem; }
+.colText { min-width: 7.5rem; }
 .colReason { min-width: 6.5rem; }
 .colDate { min-width: 6.5rem; }
 .colLink { min-width: 6rem; }

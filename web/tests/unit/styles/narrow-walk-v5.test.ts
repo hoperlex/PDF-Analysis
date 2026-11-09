@@ -97,16 +97,25 @@ describe('«Сравнение версий»: the «Версии» cell is the 
 
 describe('«Настройки анализа» and the stage names of «Сравнение»: the first columns keep the width of their words (lane WALK-V5)', () => {
   const PROFILE = source('widgets', 'analysis-profile-table', 'ui', 'analysis-profile-table.module.css');
+  const TABLET = 'min-width: 601px) and (max-width: 1100px';
   const STAGES = source('widgets', 'stage-comparison', 'ui', 'stage-comparison.module.css');
 
   it('can fail: the old stylesheets, no floor, read as wrong', () => {
     expect(minRem('.section span { font-weight: normal; }', '.section')).toBeNull();
     expect(minRem('.stageName { font-weight: 500; }', '.stageName')).toBeNull();
+    expect(declares('.table code { white-space: normal; }', '.digest code', 'white-space', /^nowrap$/)).toBe(false);
+    expect(declaresIn('.state :global(.am-badge) { white-space: nowrap; }', TABLET, '.state :global(.am-badge)', 'white-space', /^normal$/)).toBe(false);
+  });
+
+  it('lets the state badge break between a phone and 1100 px, and keeps it on one line elsewhere', () => {
+    expect(declaresIn(PROFILE, TABLET, '.state :global(.am-badge)', 'white-space', /^normal$/)).toBe(true);
+    expect(declares(withoutMedia(PROFILE), '.state :global(.am-badge)', 'white-space', /^nowrap$/)).toBe(true);
   });
 
   it('gives the section 8 rem and the version a line of its own, and the stage name 8 rem as a box', () => {
     expect(minRem(PROFILE, '.section')).toBe(8);
     expect(declares(PROFILE, '.version', 'white-space', /^nowrap$/)).toBe(true);
+    expect(declares(PROFILE, '.digest code', 'white-space', /^nowrap$/)).toBe(true);
     expect(minRem(STAGES, '.stageName')).toBe(8);
     expect(declares(STAGES, '.stageName', 'display', /^inline-block$/)).toBe(true);
   });
