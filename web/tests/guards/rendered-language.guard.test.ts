@@ -5386,6 +5386,12 @@ const SCHEMA_MARKERS: readonly {
     why:
       '`widgets/version-series/ui/queue-strips.tsx`, the state of one step in the list of «Очередь запуска»: ждёт, идёт, ждёт подтверждения, готово, пропуск, ошибка.',
   },
+  // `READINESS-WEB-01`: the line under «Запустить» says the route in Russian («Набор: …», «Маршрут: прежний»); the contract value is in `data-readiness-route`.
+  {
+    schema: 'RunStartRoute',
+    attribute: 'data-readiness-route',
+    why: '`widgets/run-list/ui/start-run-with-readiness.tsx` through `features/start-run/ui/readiness-line.tsx`: the line under «Запустить», «Набор: Только Claude · по подписке · …» on the layout\'s route and «Маршрут: прежний» on the old one.',
+  },
   // `HOSTS-WEB-01` (ADR-0028): «Исполнители» in two tabs. The contract value is in a `data-` attribute and the screen says it in Russian.
   {
     schema: 'StageRowKey',
@@ -5441,12 +5447,6 @@ const NOT_YET_ON_A_SCREEN: readonly { readonly schema: (typeof TRANSLATED_SCHEMA
     why:
       'What the agent knows of one model (`verified`, `not_verified`, `failed`) travels in the agent\'s report to the stand (`RunnerCatalogueEntry`, the host-mode runner protocol); ' +
       'no operation the web calls returns it. The web shows the stand\'s own reasons (`ModelUnavailableReason`), so a probe state is a screen of nobody until the contract returns it.',
-  },
-  {
-    schema: 'RunStartRoute',
-    why:
-      'Which route a run was started by (`stage_plan` or `legacy`) is a field of the readiness read of the run start; the start button and the run screen are wave 2 ' +
-      '(`RUN-START-ONE-01`, `RUN-SCREEN-01`), which are forbidden hotspots of `HOSTS-WEB-01`.',
   },
 ];
 

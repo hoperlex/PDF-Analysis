@@ -74,9 +74,12 @@ export function readinessNoteOf(reading: RunStartReadinessReading, onOpenStages:
       );
     case 'ready': {
       const line = readinessLine(reading.readiness);
-      if (line.kind === 'legacy') return <span data-readiness-state="legacy">{LEGACY_ROUTE_NOTE}</span>;
+      // The route's contract value is the marker (`RunStartRoute`); the screen says it in Russian.
+      if (line.kind === 'legacy') {
+        return <span data-readiness-state="legacy" data-readiness-route={reading.readiness.route}>{LEGACY_ROUTE_NOTE}</span>;
+      }
       return (
-        <span data-readiness-state="plan">
+        <span data-readiness-state="plan" data-readiness-route={reading.readiness.route}>
           <ReadinessLinePlan kit={line.kit} access={line.access} onOpenStages={onOpenStages} />
         </span>
       );

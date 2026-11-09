@@ -312,7 +312,7 @@ describe('«Модели по этапам ▸» opens the stage window in plan 
 
 describe('the plan window, drawn open', () => {
   const draw = (cells: Parameters<typeof readinessPlan>[0], extra: { kit?: string | null; editHref?: string } = {}) => renderToStaticMarkup(
-    createElement(PlanStagesDialog, { rows: readinessPlan(cells), kit: extra.kit ?? 'Только Claude', onClose: () => undefined, staticOpen: true, ...(extra.editHref === undefined ? {} : { editHref: extra.editHref }) }),
+    createElement(PlanStagesDialog, { rows: readinessPlan(cells), kit: extra.kit === undefined ? 'Только Claude' : extra.kit, onClose: () => undefined, staticOpen: true, ...(extra.editHref === undefined ? {} : { editHref: extra.editHref }) }),
   );
 
   it('lists the eight stages and what each does without a model', () => {
