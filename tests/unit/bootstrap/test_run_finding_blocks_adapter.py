@@ -26,6 +26,7 @@ from auditmanager.analysis.public import (
     ROLE_PAGE_INVENTORY,
     ROLE_PORTAL_BLOCKS,
     ROLE_RECOGNISED_TEXT,
+    ROLE_TEXT_LAYER,
 )
 from auditmanager.bootstrap.adapters import BlockAdapter
 from auditmanager.runs import RunRepository
@@ -69,10 +70,11 @@ def stage(status: str, role: str) -> SimpleNamespace:
     return SimpleNamespace(status=status, artifacts=({"role": role, "blob_id": "stub"},))
 
 
-def stages(*, geometry: str = "succeeded", preparation: str = "succeeded") -> dict[str, Any]:
+def stages(*, geometry: str = "succeeded", preparation: str = "succeeded", text_layer: bool = True) -> dict[str, Any]:
+    prepared = ({"role": ROLE_PAGE_INVENTORY, "blob_id": "stub"}, *(({"role": ROLE_TEXT_LAYER, "blob_id": "stub"},) if text_layer else ()))
     return {
         "page_geometry_extraction": stage(geometry, ROLE_BLOCK_INDEX),
-        "source_preparation": stage(preparation, ROLE_PAGE_INVENTORY),
+        "source_preparation": SimpleNamespace(status=preparation, artifacts=prepared),
     }
 
 
@@ -111,6 +113,8 @@ class Adapter(BlockAdapter):
 
     def _portal_document(self, reference: Any, role: str, version_uid: str) -> dict[str, Any]:
         assert version_uid == VERSION
+        if reference is None:           # as the real reader: a reference the run did not record fails closed
+            raise self._portal_integrity(role)
         return self._documents[role]
 
 
@@ -282,27 +286,30 @@ def test_an_unknown_run_is_not_found_never_an_empty_answer(run: dict[str, Any]) 
     assert refused.value.code == ErrorCode.NOT_FOUND
 
 
-# --- D-590: the second witness (the recognised text of the portal's text blocks) -------------------------------------------
+# --- D-590: the second witness (the recognised text of the portal's text blocks and the text layer's pages) ---------------------
 #
 # One page, one line that stands across two portal blocks that are cells of one row (LEFT is the left half of the line, RIGHT the
 # right half, neither holds the whole line), and one more block (ABOVE) that holds a line of its own. The quotation is in the line's
-# right half. What each case sets is the recognised text and the quotation; the geometry alone links nothing to the crossed line.
+# right half. What each case sets is the recognised text, the text layer's page and the quotation; the geometry alone links nothing
+# to the crossed line. The rule's own conditions are ``test_finding_blocks.py``'s; what is asserted here is what the adapter hands it.
 
 LEFT, RIGHT, ABOVE, PICTURE = "blk_" + "e" * 32, "blk_" + "f" * 32, "blk_" + "d" * 32, "blk_" + "9" * 32
 QUOTE = "Степень огнестойкости здания — II."
 LEFT_TEXT = "Пункт 1.3 Класс здания по назначению, этажность и площадь указаны в разделе 2."
 RIGHT_TEXT = "1.3. Степень огнестойкости здания — II. Класс конструктивной пожарной опасности — С0."
+PAGE_TEXT = LEFT_TEXT + "\n" + RIGHT_TEXT       # the text layer's page: the quotation occurs in it once
 ROW = (30, 60)          # the line's span of characters: chars 30..60 of the page, the evidence is the span 33..60
 
 
 def row_documents(
     *, texts: dict[str, str] | None = None, flags: dict[str, list[str]] | None = None, kinds: dict[str, str] | None = None,
-    picture: bool = False, entries: list[dict[str, Any]] | None = None,
+    picture: bool = False, entries: list[dict[str, Any]] | None = None, page_text: str | None = PAGE_TEXT,
 ) -> dict[str, Any]:
-    """The three documents of the row and, when ``texts`` is given, the recognised text: an entry per text block of ``texts``.
+    """The three documents of the row, the text layer and, when ``texts`` or ``entries`` is given, the recognised text.
 
     ``flags`` (by block) are the quality flags of an entry, ``kinds`` replaces an entry's kind, ``picture`` adds an image block over
-    the line's middle, ``entries`` replaces the entries altogether."""
+    the line's middle (a block the line passes through that nothing reads), ``entries`` replaces the entries altogether and
+    ``page_text`` is the text layer's text of the page."""
     def block(identifier: str, box: list[float], block_type: str = "text") -> dict[str, Any]:
         return {"portal_block_id": identifier, "page_number": 1, "block_type": block_type, "bbox_norm": box}
 
@@ -321,6 +328,7 @@ def row_documents(
         ROLE_PORTAL_BLOCKS: {"pages": PORTAL["pages"], "blocks": blocks},
         ROLE_BLOCK_INDEX: {"blocks": [above, line]},
         ROLE_PAGE_INVENTORY: INVENTORY,
+        ROLE_TEXT_LAYER: {"pages": [{"page_number": 1, "text": page_text or ""}, {"page_number": 2, "text": ""}]},
     }
     if texts is not None or entries is not None:
         documents[ROLE_RECOGNISED_TEXT] = {"entries": entries if entries is not None else [
@@ -338,16 +346,33 @@ def row_links(documents: dict[str, Any], run: dict[str, Any], quote: str = QUOTE
     return next(item.portal_block_ids for item in links.items if item.finding_uid == FIRST)
 
 
+BOTH = {LEFT: LEFT_TEXT, RIGHT: RIGHT_TEXT}
+
+
 def test_a_line_across_two_blocks_is_linked_to_the_one_whose_recognised_text_holds_the_quotation(run: dict[str, Any]) -> None:
-    documents = row_documents(texts={LEFT: LEFT_TEXT, RIGHT: RIGHT_TEXT})
-    assert row_links(documents, run) == [RIGHT]
+    assert row_links(row_documents(texts=BOTH), run) == [RIGHT]
 
 
 def test_without_recognised_text_the_answer_is_the_geometrys_and_the_same_line_links_to_no_block(run: dict[str, Any]) -> None:
     # The version has no recognised-text document: no witness, the answer of before `D-590`, whatever the quotation is.
     assert row_links(row_documents(), run) == []
     # The same documents with the text give the link, so the difference between the two answers is the text and nothing else.
-    assert row_links(row_documents(texts={LEFT: LEFT_TEXT, RIGHT: RIGHT_TEXT}), run) == [RIGHT]
+    assert row_links(row_documents(texts=BOTH), run) == [RIGHT]
+
+
+def test_the_witness_can_be_rolled_back_by_one_constant_and_then_neither_document_is_read(run: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(BlockAdapter, "_SECOND_WITNESS", False)
+    documents, asked = row_documents(texts=BOTH), []
+    run["groups"], run["evidence"] = (finding(FIRST, "obs_canonical"),), (evidence("obs_canonical", 1, ROW[0] + 3, ROW[1], QUOTE),)
+
+    class Recording(Adapter):
+        def _portal_document(self, reference: Any, role: str, version_uid: str) -> dict[str, Any]:
+            asked.append(role)
+            return super()._portal_document(reference, role, version_uid)
+
+    links = Recording(documents=documents).list_run_finding_blocks(run_id=RUN)
+    assert links.items[0].portal_block_ids == []
+    assert ROLE_RECOGNISED_TEXT not in asked and ROLE_TEXT_LAYER not in asked and len(asked) == 3
 
 
 def test_a_recognised_text_that_holds_no_quotation_adds_no_link_and_takes_none_away(run: dict[str, Any]) -> None:
@@ -356,50 +381,76 @@ def test_a_recognised_text_that_holds_no_quotation_adds_no_link_and_takes_none_a
     run["evidence"] = (evidence("obs_canonical", 1, 3, 9, "Раздел разработан"), evidence("obs_canonical", 1, ROW[0] + 3, ROW[1], QUOTE))
     plain = Adapter(documents=row_documents()).list_run_finding_blocks(run_id=RUN)
     assert plain.items[0].portal_block_ids == [ABOVE]
-    witnessed = Adapter(documents=row_documents(texts={LEFT: LEFT_TEXT, RIGHT: "Другой текст, в нём этой строки нет."})).list_run_finding_blocks(run_id=RUN)
+    other = {LEFT: LEFT_TEXT, RIGHT: "Другой текст, в нём этой строки нет."}
+    witnessed = Adapter(documents=row_documents(texts=other)).list_run_finding_blocks(run_id=RUN)
     assert witnessed.model_dump(mode="json") == plain.model_dump(mode="json")
-    both = Adapter(documents=row_documents(texts={LEFT: LEFT_TEXT, RIGHT: RIGHT_TEXT})).list_run_finding_blocks(run_id=RUN)
+    both = Adapter(documents=row_documents(texts=BOTH)).list_run_finding_blocks(run_id=RUN)
     assert both.items[0].portal_block_ids == [ABOVE, RIGHT]          # the portal's order: the geometry's block and the witness's
 
 
-def test_a_flagged_reading_of_the_other_crossed_block_makes_the_witness_abstain(run: dict[str, Any]) -> None:
+def test_a_flagged_reading_of_a_touching_block_makes_the_witness_abstain(run: dict[str, Any]) -> None:
     # The quotation may stand in exactly the block whose reading failed: a match in the other block is then not trusted.
-    documents = row_documents(texts={LEFT: LEFT_TEXT, RIGHT: RIGHT_TEXT}, flags={LEFT: ["homoglyph"]})
-    assert row_links(documents, run) == []
-    assert row_links(row_documents(texts={LEFT: LEFT_TEXT, RIGHT: RIGHT_TEXT}, flags={RIGHT: ["homoglyph"]}), run) == []
+    assert row_links(row_documents(texts=BOTH, flags={LEFT: ["homoglyph"]}), run) == []
+    assert row_links(row_documents(texts=BOTH, flags={RIGHT: ["homoglyph"]}), run) == []
 
 
-def test_an_unread_text_block_makes_the_witness_abstain_whether_its_body_is_empty_or_it_has_no_entry(run: dict[str, Any]) -> None:
+def test_an_unread_block_makes_the_witness_abstain_whether_its_body_is_empty_or_it_has_no_entry(run: dict[str, Any]) -> None:
     assert row_links(row_documents(texts={LEFT: "", RIGHT: RIGHT_TEXT}), run) == []
     assert row_links(row_documents(texts={RIGHT: RIGHT_TEXT}), run) == []
 
 
-def test_a_picture_description_is_never_a_reading_and_an_image_block_is_not_doubtful(run: dict[str, Any]) -> None:
-    description = {"portal_block_id": PICTURE, "page_number": 1, "kind": KIND_PORTAL_DESCRIPTION, "text": QUOTE}
+def test_a_picture_the_line_passes_through_is_a_block_nothing_reads_and_the_witness_abstains(run: dict[str, Any]) -> None:
+    # `JUDGE-N2` H1 / M3: the plan of this row left image blocks out of the doubtful ones, so a drawing's label was linked to the
+    # notes block that repeated it. An image has no reading; it can neither hold the quotation nor rule it out.
+    description = {"portal_block_id": PICTURE, "page_number": 1, "kind": KIND_PORTAL_DESCRIPTION, "text": "План этажа"}
     reading = [
         {"portal_block_id": identifier, "page_number": 1, "kind": KIND_RECOGNISED_TEXT, "quote_source": "recognised",
          "text": text, "flags": []}
-        for identifier, text in ((LEFT, LEFT_TEXT), (RIGHT, RIGHT_TEXT))
+        for identifier, text in BOTH.items()
     ]
-    # The picture's description repeats the quotation, and the picture lies across the line: it neither matches (two blocks
-    # would then hold the quotation and the witness would abstain) nor makes the witness abstain (it is not read).
-    assert row_links(row_documents(picture=True, entries=[*reading, description]), run) == [RIGHT]
-    # And a description alone is no reading: with the quotation in the picture's description only, the picture (which the line
-    # crosses) is not linked, and neither is a text block.
-    other = {**reading[1], "text": "Другой текст, в нём этой строки нет."}
-    assert row_links(row_documents(picture=True, entries=[reading[0], other, description]), run) == []
+    assert row_links(row_documents(picture=True, entries=[*reading, description]), run) == []
+    assert row_links(row_documents(entries=[*reading]), run) == [RIGHT], "and without the picture the link is made"
 
 
-def test_two_crossed_blocks_that_both_hold_the_quotation_give_no_link(run: dict[str, Any]) -> None:
+def test_a_picture_description_is_never_a_reading_even_when_it_is_the_only_place_the_quotation_is_found(run: dict[str, Any]) -> None:
+    description = {"portal_block_id": PICTURE, "page_number": 1, "kind": KIND_PORTAL_DESCRIPTION, "text": QUOTE}
+    other = {"portal_block_id": RIGHT, "page_number": 1, "kind": KIND_RECOGNISED_TEXT, "quote_source": "recognised",
+             "text": "Другой текст, в нём этой строки нет.", "flags": []}
+    left = {"portal_block_id": LEFT, "page_number": 1, "kind": KIND_RECOGNISED_TEXT, "quote_source": "recognised",
+            "text": LEFT_TEXT, "flags": []}
+    assert row_links(row_documents(picture=True, entries=[left, other, description]), run) == []
+
+
+def test_two_touching_blocks_that_both_hold_the_quotation_give_no_link(run: dict[str, Any]) -> None:
     assert row_links(row_documents(texts={LEFT: RIGHT_TEXT, RIGHT: RIGHT_TEXT}), run) == []
 
 
+def test_a_quotation_the_text_layer_repeats_on_the_page_is_not_asked_of_the_witness(run: dict[str, Any]) -> None:
+    # `JUDGE-N2` H1: the evidence is the FIRST occurrence on the page; a block that holds a later copy would be a match for the
+    # text and not for the place. The reading says the quotation is where RIGHT is; the layer says it is also elsewhere.
+    twice = row_documents(texts=BOTH, page_text=PAGE_TEXT + "\n" + QUOTE)
+    assert row_links(twice, run) == []
+    assert row_links(row_documents(texts=BOTH, page_text="Другой текст страницы"), run) == [], "the layer does not hold it at all"
+    assert row_links(row_documents(texts=BOTH), run) == [RIGHT]
+
+
 def test_a_quotation_that_is_too_short_is_not_asked_of_the_witness(run: dict[str, Any]) -> None:
-    assert row_links(row_documents(texts={LEFT: LEFT_TEXT, RIGHT: RIGHT_TEXT + " 3 м3"}), run, quote="м3") == []
+    texts = {LEFT: LEFT_TEXT, RIGHT: RIGHT_TEXT + " 3 м3"}
+    assert row_links(row_documents(texts=texts, page_text=PAGE_TEXT + " 3 м3"), run, quote="м3") == []
 
 
 def test_the_quotation_of_a_merged_observation_is_handed_to_the_witness_too(run: dict[str, Any]) -> None:
-    assert row_links(row_documents(texts={LEFT: LEFT_TEXT, RIGHT: RIGHT_TEXT}), run, merged=True) == [RIGHT]
+    assert row_links(row_documents(texts=BOTH), run, merged=True) == [RIGHT]
+
+
+def test_recognised_text_without_the_runs_text_layer_is_an_integrity_error_never_a_witness_without_it(run: dict[str, Any]) -> None:
+    run["stages"] = stages(text_layer=False)
+    run["groups"], run["evidence"] = (finding(FIRST, "obs_canonical"),), (evidence("obs_canonical", 1, ROW[0] + 3, ROW[1], QUOTE),)
+    with pytest.raises(DomainError) as refused:
+        Adapter(documents=row_documents(texts=BOTH)).list_run_finding_blocks(run_id=RUN)
+    assert refused.value.code == ErrorCode.STORAGE_INTEGRITY_ERROR
+    # A version with no recognised text does not read the text layer, so its absence is not asked about.
+    assert row_links(row_documents(), run) == []
 
 
 @pytest.mark.parametrize(

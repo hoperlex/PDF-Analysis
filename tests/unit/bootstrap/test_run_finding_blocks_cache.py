@@ -32,6 +32,7 @@ from auditmanager.analysis.public import (
     ROLE_PAGE_INVENTORY,
     ROLE_PORTAL_BLOCKS,
     ROLE_RECOGNISED_TEXT,
+    ROLE_TEXT_LAYER,
 )
 from auditmanager.bootstrap.adapters import BlockAdapter
 from auditmanager.runs import RunRepository
@@ -123,8 +124,8 @@ def stub_run(
     stages = {
         "page_geometry_extraction": SimpleNamespace(stage_id="page_geometry_extraction", status="succeeded",
                                                     artifacts=(adapter.references[ROLE_BLOCK_INDEX],)),
-        "source_preparation": SimpleNamespace(stage_id="source_preparation", status="succeeded",
-                                              artifacts=(adapter.references[ROLE_PAGE_INVENTORY],)),
+        "source_preparation": SimpleNamespace(stage_id="source_preparation", status="succeeded", artifacts=(
+            adapter.references[ROLE_PAGE_INVENTORY], *([adapter.references[ROLE_TEXT_LAYER]] if ROLE_TEXT_LAYER in adapter.references else []))),
     }
     monkeypatch.setattr(RunRepository, "find", lambda self, session, run_id: SimpleNamespace(version_uid=version))
     monkeypatch.setattr(RunRepository, "stage_results", lambda self, session, run_id: tuple(stages.values()))
@@ -233,18 +234,20 @@ def test_a_reference_without_a_recorded_digest_is_never_kept(run: Any) -> None:
     assert len(adapter._geometry_cache) == 0
 
 
-# --- D-590: the recognised text is the fourth document of the key ------------------------------------------------------------
+# --- D-590: the recognised text and the text layer are the fourth and fifth documents of the key ---------------------------------
 #
 # One page, one line across two portal blocks (the left and the right cell of a row): the geometry alone links the evidence to
-# neither, and the recognised text names the right one. So the answer is a function of the recognised text, and a cache that
-# did not key on it would serve the answer of the text it first read.
+# neither, the recognised text names the right one, and the text layer says the quotation is unique on the page. So the answer is a
+# function of both documents, and a cache that did not key on them would serve the answer of the texts it first read.
 
 LEFT_CELL, RIGHT_CELL = "blk_" + "e" * 32, "blk_" + "f" * 32
 QUOTE = "Степень огнестойкости здания — II."
 ROW_EVIDENCE = (SimpleNamespace(finding_observation_id="obs_1", page_number=1, char_start=3, char_end=40, quote=QUOTE),)
+HOLDS, ELSEWHERE = f"1.3. {QUOTE} Класс конструктивной пожарной опасности — С0.", "Другой пункт, в нём этой строки нет."
+LEFT_TEXT = "Пункт 1.3"
 
 
-def row_documents(left: str, right: str, *, version: str = VERSION) -> dict[str, dict[str, Any]]:
+def row_documents(left: str, right: str, *, page_text: str | None = None, version: str = VERSION) -> dict[str, dict[str, Any]]:
     head = {"artifact_version": ARTIFACT_VERSION, "version_uid": version}
     line = {"block_id": "b_000001", "page_number": 1, "bbox": {"x0": 100.0, "y0": 250.0, "x1": 500.0, "y1": 262.0},
             "char_start": 0, "char_end": 40, "block_ordinal": 0, "bbox_unit": "pt", "bbox_origin": "top_left"}
@@ -264,10 +267,13 @@ def row_documents(left: str, right: str, *, version: str = VERSION) -> dict[str,
              "text": text, "flags": []}
             for identifier, text in ((LEFT_CELL, left), (RIGHT_CELL, right))
         ]},
+        ROLE_TEXT_LAYER: {**head, "artifact_role": ROLE_TEXT_LAYER,
+                          "pages": [{"page_number": 1, "char_start": 0, "char_end": 100, "text": page_text or f"{left}\n{right}"}]},
     }
 
 
 def build_row(left: str, right: str, *, store: CountingStore | None = None, with_text: bool = True) -> tuple[Adapter, dict[str, dict[str, Any]]]:
+    """The documents of the row in a store; without ``with_text`` the version has no recognised text (the run still has a text layer)."""
     store = store or CountingStore()
     adapter = Adapter(store)
     for role, document in row_documents(left, right).items():
@@ -276,70 +282,92 @@ def build_row(left: str, right: str, *, store: CountingStore | None = None, with
     return adapter, adapter.references
 
 
+def replace(adapter: Adapter, role: str, document: dict[str, Any]) -> None:
+    adapter.references[role] = {"role": role, **adapter.store.put(json.dumps(document).encode("utf-8"))}
+
+
 def blocks_of_the_row(adapter: Adapter) -> list[str]:
     return adapter.list_run_finding_blocks(run_id=RUN).items[0].portal_block_ids
 
 
-HOLDS, ELSEWHERE = f"1.3. {QUOTE} Класс конструктивной пожарной опасности — С0.", "Другой пункт, в нём этой строки нет."
-
-
 def test_a_changed_recognised_text_is_another_key_and_the_cache_does_not_serve_the_answer_of_the_old_one(run: Any) -> None:
-    adapter, references = build_row("Пункт 1.3", HOLDS)
+    adapter, references = build_row(LEFT_TEXT, HOLDS)
     run(adapter, evidence=ROW_EVIDENCE)
     assert blocks_of_the_row(adapter) == [RIGHT_CELL]
-    assert adapter.store.reads == 4                         # the index, the inventory, the portal blocks, the recognised text
-    assert blocks_of_the_row(adapter) == [RIGHT_CELL] and adapter.store.reads == 4          # a hit asks the store for nothing
+    assert adapter.store.reads == 5                         # the index, the inventory, the portal blocks, the recognised text, the text layer
+    assert blocks_of_the_row(adapter) == [RIGHT_CELL] and adapter.store.reads == 5          # a hit asks the store for nothing
     before = references[ROLE_RECOGNISED_TEXT]["sha256"]
 
-    document = row_documents("Пункт 1.3", ELSEWHERE)[ROLE_RECOGNISED_TEXT]
-    references[ROLE_RECOGNISED_TEXT] = {"role": ROLE_RECOGNISED_TEXT, **adapter.store.put(json.dumps(document).encode("utf-8"))}
+    replace(adapter, ROLE_RECOGNISED_TEXT, row_documents(LEFT_TEXT, ELSEWHERE, page_text=f"{LEFT_TEXT}\n{HOLDS}")[ROLE_RECOGNISED_TEXT])
     run(adapter, evidence=ROW_EVIDENCE)
     assert references[ROLE_RECOGNISED_TEXT]["sha256"] != before
     assert blocks_of_the_row(adapter) == []                 # the new text does not hold the quotation: a miss, and the link is gone
-    assert adapter.store.reads == 8                         # all four were read again, and the two entries of the cache are kept
+    assert adapter.store.reads == 10                        # all five were read again, and the two entries of the cache are kept
     assert len(adapter._geometry_cache) == 2
 
 
+def test_a_changed_text_layer_is_another_key_and_the_page_that_repeats_the_quotation_loses_the_link(run: Any) -> None:
+    adapter, references = build_row(LEFT_TEXT, HOLDS)
+    run(adapter, evidence=ROW_EVIDENCE)
+    assert blocks_of_the_row(adapter) == [RIGHT_CELL]
+    before = references[ROLE_TEXT_LAYER]["sha256"]
+    replace(adapter, ROLE_TEXT_LAYER, row_documents(LEFT_TEXT, HOLDS, page_text=f"{LEFT_TEXT}\n{HOLDS}\n{QUOTE}")[ROLE_TEXT_LAYER])
+    run(adapter, evidence=ROW_EVIDENCE)
+    assert references[ROLE_TEXT_LAYER]["sha256"] != before
+    assert blocks_of_the_row(adapter) == []                 # the layer now holds the quotation twice: the evidence is the first, not this
+    assert adapter.store.reads == 10 and len(adapter._geometry_cache) == 2
+
+
 def test_a_version_without_recognised_text_reads_three_documents_and_keeps_its_own_key(run: Any) -> None:
-    adapter, _ = build_row("Пункт 1.3", HOLDS, with_text=False)
+    adapter, _ = build_row(LEFT_TEXT, HOLDS, with_text=False)
     run(adapter, evidence=ROW_EVIDENCE)
     assert blocks_of_the_row(adapter) == [] and adapter.store.reads == 3       # no witness: the geometry alone links nothing here
-    assert blocks_of_the_row(adapter) == [] and adapter.store.reads == 3
+    assert blocks_of_the_row(adapter) == [] and adapter.store.reads == 3       # and the text layer, which the run has, is not read
     (key,) = adapter._geometry_cache
     assert [entry[0] for entry in key[1:]] == [ROLE_BLOCK_INDEX, ROLE_PAGE_INVENTORY, ROLE_PORTAL_BLOCKS]
     # The same three documents with a recognised text are another entry, not the first one served with the text missing.
-    with_text, _ = build_row("Пункт 1.3", HOLDS, store=adapter.store)
+    with_text, _ = build_row(LEFT_TEXT, HOLDS, store=adapter.store)
     with_text._geometry_cache = adapter._geometry_cache
     run(with_text, evidence=ROW_EVIDENCE)
-    assert blocks_of_the_row(with_text) == [RIGHT_CELL] and adapter.store.reads == 3 + 4
+    assert blocks_of_the_row(with_text) == [RIGHT_CELL] and adapter.store.reads == 3 + 5
     assert len(adapter._geometry_cache) == 2
 
 
 def test_the_answer_with_the_witness_does_not_depend_on_the_cache(run: Any) -> None:
-    caching, _ = build_row("Пункт 1.3", HOLDS)
+    caching, _ = build_row(LEFT_TEXT, HOLDS)
     run(caching, evidence=ROW_EVIDENCE)
     assert blocks_of_the_row(caching) == [RIGHT_CELL]       # the answer is one the witness gave
-    never_keeping, _ = build_row("Пункт 1.3", HOLDS)
+    never_keeping, _ = build_row(LEFT_TEXT, HOLDS)
     never_keeping._GEOMETRY_CACHE_BYTES = 0
     run(never_keeping, evidence=ROW_EVIDENCE)
     for _ in range(3):
         assert never_keeping.list_run_finding_blocks(run_id=RUN) == caching.list_run_finding_blocks(run_id=RUN)
-    assert never_keeping.store.reads == 12 and caching.store.reads == 4          # three more reads each
+    assert never_keeping.store.reads == 15 and caching.store.reads == 5          # three more reads each
 
 
-def test_the_recognised_text_counts_in_the_weight_the_cache_is_bounded_by(run: Any) -> None:
-    adapter, references = build_row("Пункт 1.3", HOLDS)
+def test_the_witness_switched_off_reads_neither_the_text_nor_the_layer_and_has_the_three_part_key(run: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(BlockAdapter, "_SECOND_WITNESS", False)
+    adapter, _ = build_row(LEFT_TEXT, HOLDS)
+    run(adapter, evidence=ROW_EVIDENCE)
+    assert blocks_of_the_row(adapter) == [] and adapter.store.reads == 3
+    (key,) = adapter._geometry_cache
+    assert len(key) == 4
+
+
+def test_the_recognised_text_and_the_layer_count_in_the_weight_the_cache_is_bounded_by(run: Any) -> None:
+    adapter, references = build_row(LEFT_TEXT, HOLDS)
     run(adapter, evidence=ROW_EVIDENCE)
     blocks_of_the_row(adapter)
     (_, weight), = adapter._geometry_cache.values()
-    assert weight == sum(references[role]["size_bytes"] for role in references)
+    assert weight == sum(references[role]["size_bytes"] for role in references) and len(references) == 5
     assert adapter._geometry_cache_bytes == weight
 
 
-def test_a_recognised_text_that_cannot_be_verified_is_the_integrity_error_a_geometry_document_is(run: Any) -> None:
-    adapter, references = build_row("Пункт 1.3", HOLDS)
+@pytest.mark.parametrize("role", [ROLE_RECOGNISED_TEXT, ROLE_TEXT_LAYER])
+def test_a_document_of_the_witness_that_cannot_be_verified_is_the_integrity_error_a_geometry_document_is(run: Any, role: str) -> None:
+    adapter, references = build_row(LEFT_TEXT, HOLDS)
     run(adapter, evidence=ROW_EVIDENCE)
-    adapter.store.blobs.pop(references[ROLE_RECOGNISED_TEXT]["blob_id"])
+    adapter.store.blobs.pop(references[role]["blob_id"])
     with pytest.raises(DomainError) as refused:
         adapter.list_run_finding_blocks(run_id=RUN)
     assert refused.value.code == ErrorCode.STORAGE_INTEGRITY_ERROR

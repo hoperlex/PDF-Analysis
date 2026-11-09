@@ -22,8 +22,11 @@ Scenarios (each prints one JSON block and writes ``<out>/<name>.json`` plus ``<o
   XY-cut at paragraph or at cell level (``tests/support/xy_cut_blocks.py``): the answer key's quotations that are unique on their
   page, and the same sweep.
 
-**The second witness (`D-450`).** Each result also carries the relation as ``link_evidence`` computes it with the recognised text of the
-portal's text blocks (``figures_with_the_witness``), over the same stored documents, with three sensitivity runs: the shortest
+**The second witness (`D-450`, `D-590`).** Each result also carries the relation as ``link_evidence`` computes it with the recognised text of the
+portal's text blocks and the text layer's page texts (``figures_with_the_witness``; the witness is asked only when the quotation is unique on
+its page and every block that touches the line has a reading, `JUDGE-N2` H1), over the same stored documents, with these sensitivity runs:
+the widest unboxed stretch of a line tolerated (``gap_none``, ``gap_8``, ``gap_2`` characters instead of the shipped four), the page-uniqueness
+condition patched out (``no_unique_gate``, an ablation: what it keeps out), the shortest
 quotation the witness is asked about set to 1 (``..._min1``), and the recognised text damaged the way a reading damages it (a word
 in ten, in three, written with a look-alike Latin letter or a letter short; ``..._noise10`` and ``..._noise30``, each also without
 the witness's abstention on a block whose reading carries a quality flag, ``..._without_the_doubtful_guard``; and the damage no flag
@@ -68,7 +71,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "tools" / "fixtures"))  # portal_bundle
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from auditmanager.analysis.geometry import finding_blocks as rule_module  # noqa: E402
-from auditmanager.analysis.geometry.finding_blocks import COVERAGE, WITNESS_MIN_CHARACTERS  # noqa: E402
+from auditmanager.analysis.geometry.finding_blocks import COVERAGE, WITNESS_MAX_GAP_CHARACTERS, WITNESS_MIN_CHARACTERS, Readings  # noqa: E402
 from auditmanager.analysis.stages.extraction import NORMALIZATION_DESCRIPTION  # noqa: E402
 from auditmanager.analysis.text import ProviderConfig, ProviderMode, RecordedAdapter  # noqa: E402
 from auditmanager.analysis.text.adapter import build_request  # noqa: E402
@@ -336,6 +339,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             for b in index.blocks
         ]
         sizes = {p.page_number: (p.width_pt, p.height_pt) for p in oracle.layer}
+        layer = {p.page_number: p.text for p in oracle.layer}          # the text layer's page texts: what the witness asks about uniqueness
         usable = [f for f in evidence.items()]
         unlinked = set(links.unlinked_pages)
         # The whole-width rule alone (`D-353`): the rule called without the text, which is the adapter's answer before `D-590`.
@@ -357,8 +361,9 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             return label.split()[1] if label.startswith("AUTHORED") else "recorded"
 
         texts = {b.portal_block_id: b.text for b in blocks if b.text}
+        shared = Readings(texts, doubtful_blocks(blocks, texts), layer)
         with_text = {
-            uid: rule_links(facts, lines, sizes, blocks, unlinked, texts, WITNESS_MIN_CHARACTERS, doubtful_blocks(blocks, texts))
+            uid: rule_links(facts, lines, sizes, blocks, unlinked, texts, WITNESS_MIN_CHARACTERS, readings=shared)
             for uid, facts in usable
         }
         require_same_links(with_text, linked)
@@ -370,20 +375,33 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
 
         def witnessed(
             texts_given: dict[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS, *, guarded: bool = True,
-            veto: bool = True,
+            veto: bool = True, unique: bool = True, max_gap: float | None = WITNESS_MAX_GAP_CHARACTERS,
         ) -> dict[str, Any]:
-            """The relation with the witness; ``guarded=False`` drops the doubtful-reading abstention and ``veto=False`` the near-copy
-            one (patched out of the rule for this call: an ablation, to see what each is worth, never the shipped rule)."""
+            """The relation with the witness; ``guarded=False`` drops the doubtful-reading abstention, ``veto=False`` the near-copy
+            one and ``unique=False`` the page-uniqueness condition (each patched out of the rule for this call: an ablation, to see
+            what each is worth, never the shipped rule); ``max_gap`` is the widest unboxed stretch of a line tolerated (``None``: any)."""
             doubtful = doubtful_blocks(blocks, texts_given) if guarded and texts_given else set()
-            with contextlib.nullcontext() if veto else mock.patch.object(rule_module, "_near_copy", lambda *_a, **_k: False):
+            variant = Readings(texts_given, doubtful, layer)          # folded once for the variant, not once per finding
+            with contextlib.ExitStack() as patched:
+                if not veto:
+                    patched.enter_context(mock.patch.object(rule_module, "_near_copy", lambda *_a, **_k: False))
+                if not unique:
+                    patched.enter_context(mock.patch.object(rule_module.Readings, "occurrences", lambda *_a, **_k: 1))
                 result = [
-                    (uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters, doubtful), labels[uid])
+                    (uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters, readings=variant,
+                                     max_gap_characters=max_gap), labels[uid])
                     for uid, facts in usable
                 ]
             return analyse(items=result, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=memo)
 
         with_witness = witnessed(texts)
         sensitivity = {"min1": witnessed(texts, 1)}
+        # How much each condition of the rule costs in coverage (and, on the sets where an error is possible, what it keeps out):
+        # the widest unboxed stretch of a line tolerated, and the page-uniqueness condition dropped.
+        sensitivity["gap_none"] = witnessed(texts, max_gap=None)
+        sensitivity["gap_8"] = witnessed(texts, max_gap=8.0)
+        sensitivity["gap_2"] = witnessed(texts, max_gap=2.0)
+        sensitivity["no_unique_gate"] = witnessed(texts, unique=False)
         for rate in NOISE_RATES:
             damaged = {key: degrade(key, text, rate) for key, text in texts.items()}
             name = f"noise{round(rate * 100)}"
@@ -395,6 +413,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             # The naive witness (neither abstention), on the damaged readings: what the two are worth.
             sensitivity[f"naive_noise{round(rate * 100)}"] = witnessed(damaged, guarded=False, veto=False)
             sensitivity[f"naive_dropped{round(rate * 100)}"] = witnessed(unseen, guarded=False, veto=False)
+            sensitivity[f"no_unique_gate_dropped{round(rate * 100)}"] = witnessed(unseen, unique=False)
         sensitivity["naive_exact"] = witnessed(texts, guarded=False, veto=False)
         before_pairs = {(p["finding_uid"], p["portal_block_id"]) for p in now["pairs"]}
         added = Counter(p["geometry"] for p in with_witness["pairs"] if (p["finding_uid"], p["portal_block_id"]) not in before_pairs)
