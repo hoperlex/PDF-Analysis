@@ -688,20 +688,25 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | account | profile, password change, sign-out, version history | a surname is required; mismatch and wrong current password; the old pass is refused after a change |
 | «Пользователи» | archive, restore, reset password | a repeat that differs |
 
-### «Запустить с этапа» (`UI-A-60`, lane J4, `D-412`)
+### «Запустить с этапа» (`UI-A-60`, lane J4, `D-412`; the way in moved by `RUN-SCREEN-01a`, `WEB-INT-1`)
 
 Three steps after `worker-takes-new-work-again` (the worker takes work, dispatch is open) walk `docs/program/RUN-FROM-STAGE-01.md` on the
 recorded provider: `run-from-stage-refused-for-a-run-that-never-ran`, `run-from-stage-takes-the-earlier-stages-of-the-first-run` and
 `run-from-stage-leaves-the-first-run-as-it-was` (`FROM_STAGE_STEPS` in `test_pc01_journey_conformance.py` pins their names, cases and what each
-asserts). The action step reads the source's published finding count off its own page, chooses the stage in the dialog, waits for the plan the
-server answers (the three stages taken, «Анализ текста» computed), gives the cost consent through the new `approve_run_cost` scope
-`run_from_stage` (the dialog has no estimate button: the estimate is read when the stage is chosen, so the driver observes it and holds the
-request to `{version_uid, start_from_run_id, start_stage_id}` and the start to `{stage_id, cost_consent}` on `POST /runs/{source}/start-from-stage`),
-waits for the NEW run's page, and holds it to: the line «Запущен с этапа 4 … из прогона <source>» with its link, `data-pipeline-reused` on exactly
-the three stages in the rail, «из прогона» in the details table's duration cell of those three (not «0 ms»), `published` within the bound and the
-same number of findings as the source. The refusal drives the dialog on the run the queue steps cancelled: it ended, so the page offers the start,
-but it never began a stage, so the server refuses the price (`source_stage_not_completed` on `source_preparation`); the first stage cannot be
-tried because the dialog does not offer it.
+asserts). The start is no longer a button of the run page: a chip of the rail opens «Этапы анализа раздела» and the control sits in that modal under the
+words «Запустить с этого этапа». Both action steps therefore press `[data-run-chip="text"]` and then `[data-run-start-from-stage="offer"]`; the chip «Текст»
+covers one startable stage, so there is no stage select (`[data-start-from-stage-only="text_analysis"]`) and the estimate is read as the dialog opens.
+The action step reads the source's published finding count off its own page, waits for the plan the server answers (the three stages taken,
+«Анализ текста» computed), gives the cost consent through the `approve_run_cost` scope `run_from_stage` (the driver first holds the stage the dialog
+shows, inside the open modal, to the stage it approves -- `assertFromStageDialogShows` -- then observes the estimate and holds the request to
+`{version_uid, start_from_run_id, start_stage_id}` and the start to `{stage_id, cost_consent}` on `POST /runs/{source}/start-from-stage`),
+waits for the NEW run's page, opens the dialog on its chip «Подготовка» (the three reused stages are that one chip) and holds the page to: the line
+«Запущен с этапа 4 … из прогона <source>» with its link, `data-chip-reused` on the chip «Подготовка» and «из прогона» in place of its duration in the
+rail, «из прогона» in the duration cell of its three rows in the dialog's table (not «0 ms»), `published` within the bound and the same number of
+findings as the source. The refusal drives the dialog on the run the queue steps cancelled: it ended, so its chip offers the start, but it never began
+a stage, so the server refuses the price (`source_stage_not_completed` on `source_preparation`); the first stage cannot be tried because no chip's
+dialog offers it. The third step reads the first run cold and holds it to no mark of a start from a stage in the rail or in the dialog opened on
+«Подготовка». Browser execution of these steps after the move to the chips is **UNVERIFIED** (WEB-INT-1 ran no browser).
 
 Measured 2026-11-09, lane J4, the 0.19.1 tree plus the lane, one `local-stand.sh` stand (no `LANE_C4`), `--phase write --steps <every step not
 named `cmp-*`>` (87 of 134 checked, 33 pending, 14 `cmp-*` left out, 0 findings, about 3 minutes): the three steps are green, the new run published

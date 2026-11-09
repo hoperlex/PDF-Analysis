@@ -5362,13 +5362,13 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
     // journey itself (`tests/e2e/pc01/journey`) is the instrument that presses it.
     const PRESSED_BEFORE_IT_EXISTS: readonly { readonly text: string; readonly why: string }[] = [
       {
-        text: 'Запустить с этапа',
+        text: 'Запустить с этого этапа',
         why:
           '`RUN-SCREEN-01a`: «Запустить с этапа» moved from the run page into «Этапы анализа раздела» (`run-stages-dialog`), which a chip of ' +
           'the rail opens (`RunProgress` keeps the open chip in a `useState`); one static pass presses nothing and leaves the dialog closed. ' +
-          'The button there reads «Запустить с этого этапа». The journey (`tests/e2e/pc01/journey/manifest.json`) still names the old words ' +
-          'and presses the button on the run page: its owner adds the step that opens the dialog on a chip and renames the text, and this entry ' +
-          'is then replaced by the new words or deleted. tests/unit/screens/run-screen.test.ts and tests/unit/run/run-screen-live.test.ts render the dialog and press it.',
+          'The button there reads «Запустить с этого этапа», and the journey (`tests/e2e/pc01/journey/manifest.json`, the three `run-from-stage` steps; ' +
+          '`WEB-INT-1`) presses the chip `[data-run-chip="text"]` first and then this button. tests/unit/screens/run-screen.test.ts and ' +
+          'tests/unit/run/run-screen-live.test.ts render the dialog and press it.',
       },
       {
         text: 'Возобновить выдачу',
