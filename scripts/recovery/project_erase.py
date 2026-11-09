@@ -239,6 +239,8 @@ class Plan:
     journal_events: int
     sha256: str
     closure: Closure
+    #: Decisions the operator accepted to lose from the memory (`--accept-memory-loss`); ``None`` when none.
+    memory_loss: purge.MemoryLoss | None = None
 
     @property
     def rows_to_delete(self) -> int:
@@ -383,9 +385,13 @@ def manifest_bytes(erase_id: str, project_uid: str, blobs: Sequence[BlobFact]) -
 
 def plan_document(head: str, project_uid: str, table_facts: Mapping[str, tuple[int, str]],
                   receipt_fact: tuple[int, str], exclusive: Sequence[BlobFact], shared: Sequence[str],
-                  objects: Sequence[PlanObject]) -> dict[str, Any]:
-    """The canonical form the plan digest is taken over: nothing about who, why or when."""
-    return {
+                  objects: Sequence[PlanObject], memory_loss: purge.MemoryLoss | None = None) -> dict[str, Any]:
+    """The canonical form the plan digest is taken over: nothing about who, why or when.
+
+    An accepted decision-memory loss (``--accept-memory-loss``) is part of what the plan approves, so it is in the document, and only
+    when there is one: the digest of a plan without it is what it always was.
+    """
+    document = {
         "blobs": {
             "exclusive": [[b.blob_id, b.sha256, b.size_bytes, b.media_type]
                           for b in sorted(exclusive, key=lambda blob: blob.blob_id)],
@@ -398,6 +404,9 @@ def plan_document(head: str, project_uid: str, table_facts: Mapping[str, tuple[i
         "tables": {table: list(fact) for table, fact in sorted(table_facts.items())},
         "version": PLAN_FILE_VERSION,
     }
+    if memory_loss is not None:
+        document["memory_loss"] = memory_loss.as_document()
+    return document
 
 
 def plan_digest(document: Mapping[str, Any]) -> str:
@@ -845,7 +854,7 @@ def _state_counts(connection: Connection, closure: Closure, scope: Mapping[str, 
 
 
 def build_plan(connection: Connection, client: Any | None, *, database: str, bucket: str,
-               project_uid: str) -> Plan:
+               project_uid: str, accept_memory_loss: str | None = None) -> Plan:
     """Everything that can be decided without writing. Raises :class:`EraseRefused`.
 
     ``client=None`` skips the bucket (sizes stay unknown): the transaction re-derives the plan
@@ -883,18 +892,20 @@ def build_plan(connection: Connection, client: Any | None, *, database: str, buc
         )
     # <<< guard: scope-is-pure
 
-    # >>> guard: memory-captured
     # G1 (`DECISION-MEMORY-01` section 4.4, `ADR-0027`): the decision memory is the only copy of the context of a decision once its
     # project is erased, so no accept or reject of this project may be missing from it. The memory itself is not in the closure
-    # (it has no foreign key into the project) and is never touched by this tool.
-    uncaptured = int(connection.execute(text(
-        f"SELECT count(*) {purge.UNCAPTURED_DECISION_EVENTS_SQL} AND e.decision_id = ANY({_KEYS})"
-    ), {"keys": list(scope["expert_decision_event"])}).scalar_one())
-    if uncaptured:
+    # (it has no foreign key into the project) and is never touched by this tool. The operator's way out is
+    # `--accept-memory-loss` (`purge.accepted_memory_loss`): the loss is then part of the plan, not a refusal.
+    uncaptured = list(connection.execute(text(
+        f"SELECT e.decision_id {purge.UNCAPTURED_DECISION_EVENTS_SQL} AND e.decision_id = ANY({_KEYS}) ORDER BY 1"
+    ), {"keys": list(scope["expert_decision_event"])}).scalars())
+    memory_loss = purge.accepted_memory_loss(uncaptured, accept_memory_loss)
+    # >>> guard: memory-captured
+    if uncaptured and memory_loss is None:
         raise EraseRefused(
-            f"{uncaptured} expert decision event(s) (accept or reject) of this project have no decision-memory case, so "
+            f"{len(uncaptured)} expert decision event(s) (accept or reject) of this project have no decision-memory case, so "
             "erasing the project would lose the context of those decisions. The worker's sweep captures them within a minute or "
-            "so; run the erase again once the count is zero. Nothing was touched."
+            f"so; run the erase again once the count is zero. {purge.MEMORY_LOSS_HINT} Nothing was touched."
         )
     # <<< guard: memory-captured
 
@@ -955,12 +966,12 @@ def build_plan(connection: Connection, client: Any | None, *, database: str, buc
     journal = connection.execute(text(
         "SELECT count(*) FROM public.audit_event WHERE aggregate_id = ANY(CAST(:ids AS text[]))"
     ), {"ids": identities}).scalar_one()
-    document = plan_document(head, project_uid, table_facts, receipt_fact, exclusive, shared, objects)
+    document = plan_document(head, project_uid, table_facts, receipt_fact, exclusive, shared, objects, memory_loss)
     return Plan(
         database=database, bucket=bucket, head=head, project_uid=project_uid, scope=scope,
         table_facts=table_facts, receipts=receipts, receipt_fact=receipt_fact, exclusive=tuple(exclusive),
         shared=tuple(shared), objects=objects, journal_events=int(journal), sha256=plan_digest(document),
-        closure=closure,
+        closure=closure, memory_loss=memory_loss,
     )
 
 
@@ -987,8 +998,14 @@ def render_plan(plan: Plan, *, dry_run: bool) -> str:
     out.append(f"  run-journal events of the project (identities only): {plan.journal_events}")
     out.append("  accounts, release notes, executor configuration, the norm corpus, every other project")
     out.append("")
+    if plan.memory_loss is not None:
+        out.append("-- decision memory: LOSS ACCEPTED (--accept-memory-loss) --")
+        out.append(f"  {plan.memory_loss.events} expert decision event(s) of the project have no memory case and are erased with "
+                   f"their source; reason: {plan.memory_loss.reason}; events-sha256: {plan.memory_loss.events_sha256}")
+        out.append("")
     if dry_run:
         out.append("--dry-run: NOTHING ABOVE WAS CHANGED.")
+    out.append(f"memory-loss-accepted: {'no' if plan.memory_loss is None else plan.memory_loss.events}")
     out.append(f"blobs-exclusive: {len(plan.exclusive)}")
     out.append(f"blobs-shared: {len(plan.shared)}")
     out.append(f"rows-to-delete: {plan.rows_to_delete}")
@@ -1100,7 +1117,7 @@ def delete_scope(connection: Connection, closure: Closure, scope: Mapping[str, S
 def write_erase_files(directory: Path, erase_id: str, plan: Plan, manifest: bytes) -> None:
     """The plan and the manifest, on disk before the commit that makes them the only record."""
     document = plan_document(plan.head, plan.project_uid, plan.table_facts, plan.receipt_fact,
-                             plan.exclusive, plan.shared, plan.objects)
+                             plan.exclusive, plan.shared, plan.objects, plan.memory_loss)
     directory.mkdir(parents=True, exist_ok=False)
     os.chmod(directory, 0o700)
     envelope = {"erase_id": erase_id, "plan": document, "plan_sha256": plan.sha256}
@@ -1111,7 +1128,8 @@ def write_erase_files(directory: Path, erase_id: str, plan: Plan, manifest: byte
 
 
 def phase_commit(engine: Engine, *, database: str, bucket: str, project_uid: str, expected_plan: str,
-                 actor_uid: str, reason: str, permission_ref: str, dump_dir: Path) -> Committed:
+                 actor_uid: str, reason: str, permission_ref: str, dump_dir: Path,
+                 accept_memory_loss: str | None = None) -> Committed:
     """Phase 2. ONE transaction. Any exception, including a verification mismatch, rolls all of it back."""
     erase_id = str(ErasureRequestId.new())
     directory = dump_dir / erase_id
@@ -1142,7 +1160,8 @@ def phase_commit(engine: Engine, *, database: str, bucket: str, project_uid: str
                 raise
 
             # The plan again, under the locks: nothing can change from here to COMMIT.
-            plan = build_plan(connection, None, database=database, bucket=bucket, project_uid=project_uid)
+            plan = build_plan(connection, None, database=database, bucket=bucket, project_uid=project_uid,
+                              accept_memory_loss=accept_memory_loss)
 
             # >>> guard: plan-unchanged
             if plan.sha256 != expected_plan:
@@ -1163,6 +1182,10 @@ def phase_commit(engine: Engine, *, database: str, bucket: str, project_uid: str
                 "manifest_sha256": manifest_sha256, "rows_deleted": plan.rows_to_delete,
                 "blobs_exclusive": len(plan.exclusive), "blobs_shared": len(plan.shared),
             }
+            if plan.memory_loss is not None:
+                # The durable record of what the operator accepted: a reason from a closed list, a count and a digest of the
+                # decision identities. Never content (`DECISION-MEMORY-01` section 4.4).
+                requested["memory_loss"] = plan.memory_loss.as_document()
             append_event(connection, EVENT_REQUESTED, erase_id, requested)
 
             before = _verification(connection, closure_checked, plan.scope, plan.receipts, blob_ids)
@@ -1357,10 +1380,11 @@ def phase_finish(engine: Engine, committed: Committed, *, summary: Mapping[str, 
 
 def apply_erase(engine: Engine, client: Any, *, database: str, bucket: str, project_uid: str,
                 expected_plan: str, actor_uid: str, reason: str, permission_ref: str, dump_dir: Path,
-                out: Any) -> Committed:
+                out: Any, accept_memory_loss: str | None = None) -> Committed:
     committed = phase_commit(
         engine, database=database, bucket=bucket, project_uid=project_uid, expected_plan=expected_plan,
-        actor_uid=actor_uid, reason=reason, permission_ref=permission_ref, dump_dir=dump_dir)
+        actor_uid=actor_uid, reason=reason, permission_ref=permission_ref, dump_dir=dump_dir,
+        accept_memory_loss=accept_memory_loss)
     print(f"erase-id: {committed.erase_id}", file=out, flush=True)
     finish(engine, client, committed, bucket=bucket, actor_uid=actor_uid, permission_ref=permission_ref, out=out)
     return committed
@@ -1471,10 +1495,12 @@ def _typed_names(engine: Engine, s3: S3StorageSettings, database: str, bucket: s
     # <<< guard: names-match
 
 
-def _read_only_plan(engine: Engine, client: Any, database: str, bucket: str, project_uid: str) -> Plan:
+def _read_only_plan(engine: Engine, client: Any, database: str, bucket: str, project_uid: str,
+                    accept_memory_loss: str | None = None) -> Plan:
     with engine.connect() as connection:
         connection.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
-        return build_plan(connection, client, database=database, bucket=bucket, project_uid=project_uid)
+        return build_plan(connection, client, database=database, bucket=bucket, project_uid=project_uid,
+                          accept_memory_loss=accept_memory_loss)
 
 
 def _already_erased(engine: Engine, project_uid: str) -> tuple[str, str | None] | None:
@@ -1560,6 +1586,10 @@ def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
     parser.add_argument("--owner-permission-ref",
                         help="where the owner's permission is recorded (free text, one line; recorded, not verified)")
     parser.add_argument("--dump-dir", type=Path, help="where <era_ID>/plan.json and manifest.json are written")
+    parser.add_argument("--accept-memory-loss", metavar="REASON", choices=purge.MEMORY_LOSS_REASONS,
+                        help="dry run, --apply: do not refuse for the project's expert decisions the memory has not captured (a "
+                             "capture that can never succeed); the loss is written into the plan, its digest and the "
+                             "erasure.requested event. One of: " + ", ".join(purge.MEMORY_LOSS_REASONS))
     args = parser.parse_args(argv)
     engine: Engine | None = None
     try:
@@ -1580,7 +1610,7 @@ def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
                 raise EraseRefused(f"{args.project} has no rows left and {erase_id} is not complete: resume it with "
                                    f"--resume {erase_id}. Nothing was touched.")
         if not args.apply and args.resume is None:
-            plan = _read_only_plan(engine, client, args.database, args.bucket, args.project)
+            plan = _read_only_plan(engine, client, args.database, args.bucket, args.project, args.accept_memory_loss)
             print(render_plan(plan, dry_run=True), file=out)
             return EXIT_OK
         with engine.connect() as connection:
@@ -1600,7 +1630,7 @@ def run(argv: Sequence[str] | None = None, *, out: Any = None) -> int:
         committed = apply_erase(
             engine, client, database=args.database, bucket=args.bucket, project_uid=args.project,
             expected_plan=args.plan_sha256, actor_uid=actor_uid, reason=args.reason,
-            permission_ref=permission_ref, dump_dir=args.dump_dir, out=out)
+            permission_ref=permission_ref, dump_dir=args.dump_dir, out=out, accept_memory_loss=args.accept_memory_loss)
         print(render_done(committed), file=out)
         return EXIT_OK
     except EraseRefused as error:

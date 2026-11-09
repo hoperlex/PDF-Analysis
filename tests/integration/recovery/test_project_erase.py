@@ -753,6 +753,53 @@ def test_an_erase_leaves_the_decision_memory_of_the_project_it_erased(stand: Sta
     assert count(stand, "decision_memory_decision", "case_id = ANY(:c)", c=cases) > 0
 
 
+def test_an_operator_may_accept_the_loss_of_a_memory_that_can_never_be_captured_and_the_loss_is_recorded(
+    stand: Stand, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """J3 F6: guard G1 refused the erase for ever when a capture could never succeed (a damaged artifact), so a client's erasure
+    request could not be honoured. The way out is explicit and closed, names a count and a digest of identities, and is written
+    into the durable `erasure.requested` event and the plan file; the default stays a refusal."""
+    harness = Harness(stand, tmp_path, monkeypatch, "Школа")
+    _prepare_an_uncaptured_decision(stand, harness)
+    uncaptured = scalars(stand, f"SELECT e.decision_id {purge.UNCAPTURED_DECISION_EVENTS_SQL}")
+    assert len(uncaptured) == 1
+    refused = harness.dry(tool)
+    assert refused[0] == tool.EXIT_REFUSED and "have no decision-memory case" in refused[2] and "--accept-memory-loss" in refused[2]
+
+    flags = ("--project", harness.target, "--accept-memory-loss")
+    plan = {reason: invoke(tool, stand, *flags, reason) for reason in ("artifact_missing_or_damaged", "owner_decided")}
+    assert all(result[0] == 0 for result in plan.values()), plan
+    assert "-- decision memory: LOSS ACCEPTED" in plan["owner_decided"][1] and "memory-loss-accepted: 1" in plan["owner_decided"][1]
+    sha = _line(plan["artifact_missing_or_damaged"][1], "plan-sha256")
+    assert sha != _line(plan["owner_decided"][1], "plan-sha256")       # the reason is what the plan approves
+
+    assert harness.apply(tool, sha)[0] == tool.EXIT_REFUSED            # no flag: the guard is back
+    stale = harness.apply(tool, sha, accept_memory_loss="owner_decided")
+    assert stale[0] == tool.EXIT_REFUSED and "changed since the plan" in stale[2]
+    assert not harness.gone()
+
+    code, out, err = harness.apply(tool, sha, accept_memory_loss="artifact_missing_or_damaged")
+    assert code == 0, (out, err)
+    assert harness.gone()
+    requested = next(payload for event_type, _, _, payload in events(stand) if event_type == "erasure.requested")
+    assert requested["memory_loss"] == {
+        "reason_code": "artifact_missing_or_damaged", "events": 1,
+        "events_sha256": hashlib.sha256(uncaptured[0].encode("utf-8")).hexdigest(),
+    }
+    erase_id = _line(out, "erase-id")
+    envelope = json.loads((harness.dump / erase_id / "plan.json").read_text(encoding="utf-8"))
+    assert envelope["plan"]["memory_loss"] == requested["memory_loss"] and envelope["plan_sha256"] == sha
+
+
+def test_the_flag_changes_nothing_in_an_erase_when_no_decision_of_the_project_is_uncaptured(stand: Stand) -> None:
+    target = project_like(stand, "Школа")
+    plain = invoke(tool, stand, "--project", target)
+    flagged = invoke(tool, stand, "--project", target, "--accept-memory-loss", "test_data")
+    assert plain[0] == flagged[0] == 0
+    assert _line(plain[1], "plan-sha256") == _line(flagged[1], "plan-sha256")
+    assert "memory-loss-accepted: no" in flagged[1]
+
+
 def test_a_second_apply_of_the_same_plan_finds_nothing_to_do_and_changes_nothing(stand: Stand, tmp_path: Path) -> None:
     target = project_like(stand, "Склад")
     sha = _line(invoke(tool, stand, "--project", target)[1], "plan-sha256")
