@@ -32,6 +32,7 @@ from auditmanager.executors.agent_package import AgentPackage
 from auditmanager.executors.runner import RunnerPrincipal, claim_task, extend_claim, fail_task, submit_answer
 from auditmanager.executors.runner_repository import RunnerRepository
 from auditmanager.jobs.repository import GroupDispatchWaiting, JobRepository
+from auditmanager.runs import RunRepository
 from auditmanager.shared.errors import DomainError
 from auditmanager.shared.identity import AnalysisProfileId, DocumentUid, ProjectUid, PromptBundleId, RunId, VersionUid
 
@@ -137,6 +138,7 @@ def _planned_run(sessions: sessionmaker[Session], plan: str) -> str:
             "frozen_input_digest, binding_state, stage_plan) VALUES (:run, :project, :version, :profile, :bundle, 'recorded', :digest, "
             "'pending', CAST(:plan AS jsonb))"),
             {**ids, "profile": str(AnalysisProfileId.new()), "bundle": str(PromptBundleId.new()), "digest": "b" * 64, "plan": plan})
+        RunRepository().advance(s, run_id=ids["run"], from_state="created", to_state="queued")
         JobRepository().enqueue(s, run_id=ids["run"])
         s.commit()
     return ids["run"]
