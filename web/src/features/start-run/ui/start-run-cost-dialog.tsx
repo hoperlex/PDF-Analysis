@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useId, useRef } from 'react';
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 import type { RunCostEstimate } from '@/shared/api';
 import { ceilingMicros, microsAsUsd } from '@/shared/ui';
@@ -39,6 +39,11 @@ export interface StartRunCostDialogViewProps {
   readonly onCeilingChange: (value: string) => void;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
+  /**
+   * What the start is about, when the dialog is not opened from the start control (`RUN-START-ONE-01b`: the queue names the
+   * run it repeats). One line under the title; absent, nothing is drawn and the start control looks as it did.
+   */
+  readonly subject?: ReactNode | undefined;
   /** The census and the unit suite: drawn open without `showModal`. */
   readonly staticOpen?: boolean | undefined;
   /** Wires the native `<dialog>`; a static render passes none. */
@@ -46,7 +51,7 @@ export interface StartRunCostDialogViewProps {
 }
 
 export function StartRunCostDialogView({
-  estimate, relaxed, ceiling, changed, busy, onCeilingChange, onConfirm, onCancel, staticOpen = false, dialogRef,
+  estimate, relaxed, ceiling, changed, busy, onCeilingChange, onConfirm, onCancel, subject, staticOpen = false, dialogRef,
 }: StartRunCostDialogViewProps) {
   const titleId = useId();
   const sufficient = relaxed || ceilingMicros(ceiling, ceilingFloor(estimate)) !== null;
@@ -59,6 +64,7 @@ export function StartRunCostDialogView({
       data-start-run-dialog=""
     >
       <h3 id={titleId} className={styles.dialogTitle}>Стоимость перед запуском</h3>
+      {subject === undefined || subject === null ? null : <p data-start-run-subject="">{subject}</p>}
       {changed ? (
         <p role="status" data-start-run-changed="">Оценка изменилась с прошлого раза. Проверьте новую оценку и запустите снова.</p>
       ) : null}

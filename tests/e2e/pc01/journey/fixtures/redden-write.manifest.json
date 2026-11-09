@@ -447,12 +447,20 @@
         "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
         "actions": [
           {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
