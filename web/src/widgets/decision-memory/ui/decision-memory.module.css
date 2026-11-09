@@ -8,6 +8,23 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-xs) var(--am-gap);
+  /*
+   * The bar is a flex item of the screen's filter row, and a flex item will not shrink below its automatic minimum: the widest
+   * option of the section select (a whole section title). Measured at 390 px it made the bar 390 wide inside a 348 wide card and the
+   * page scroll sideways. `min-width: 0` lets the bar and each filter shrink to the card; the selects then shrink inside their row.
+   */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.filters > :global(.am-kb__filter) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.filters select {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .statusLine {
