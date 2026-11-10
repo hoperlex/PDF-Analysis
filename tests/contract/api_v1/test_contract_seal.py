@@ -132,7 +132,7 @@ def test_a_domain_catalog_is_frozen_at_the_sealed_round(name: str) -> None:
     catalog = _json(DOMAIN / name)
     assert (catalog["contract_version"], catalog["supersedes"]) == (SEALED, PREVIOUS)
     assert (catalog["status"], catalog["frozen"]) == ("frozen", True)
-    assert catalog["candidate_revision"] == 67
+    assert catalog["candidate_revision"] == 68
 
 
 @pytest.mark.parametrize("name", SCHEMAS)
@@ -142,7 +142,7 @@ def test_a_domain_schema_refuses_a_catalog_that_is_not_frozen(name: str) -> None
     assert properties["supersedes"] == {"const": PREVIOUS}
     assert properties["status"] == {"const": "frozen"}
     assert properties["frozen"] == {"const": True}
-    assert properties["candidate_revision"]["const"] == 67
+    assert properties["candidate_revision"]["const"] == 68
 
 
 def test_the_envelope_schema_pins_the_sealed_version() -> None:
