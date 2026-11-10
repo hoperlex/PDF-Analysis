@@ -674,6 +674,7 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | exports | a run's CSV and Excel (the saved file is read) | admin-only is refused `permission_denied` |
 | «Очередь», «Исполнители» | pause, a waiting run, priority, cancel, re-audit, resume; worker intake off and on | an expert has no priority or pause; 500 is out of range |
 | the run page, «Запустить с этапа» | the first run is continued from «Анализ текста»: the estimate names the reused and the computed stages, the consent is given, the new run is started through the source run's door and ends `published` with the source's findings | a run that was cancelled while it waited has nothing to take: the price is refused `422 analysis_input_invalid` and nothing is started; the first run is read again and carries no mark of a start from a stage |
+| «Память решений» (the fourth «Тип» of «База знаний») | the tab is pressed and lists the case the first decision was captured as; the case is opened; «Отозвать» with a closed reason (pressed twice: one keyed `POST`); the list under «Отозвано»; «Вернуть» (pressed twice: one keyed `POST`) | a withdrawal without a reason is a held button; «Действует» holds nothing of the withdrawn case and says the selection is empty; an expert reads the case and is offered no withdrawal control and no status line (the viewer is not walked: `D-650`) |
 | account | profile, password change, sign-out, version history | a surname is required; mismatch and wrong current password; the old pass is refused after a change |
 | «Пользователи» | archive, restore, reset password | a repeat that differs |
 
@@ -700,6 +701,53 @@ the API (`D-421`), the read walk at 1280 px and at 390 px: 35 of 35 routes clean
 prefetch of the source run's link (`GET /projects/.../runs/<id>?_rsc=`) for the run's status, which made `queue-reaudit-the-cancelled-run` red on any
 built stand (it now takes the exchange whose body is that run); and `version-comparison` (the side menu's `/dashboard` with `?project=`) and `review`
 (the lazy crop of an image block) made calls the routes did not declare.
+
+### «Память решений» (`D-495`, lane MEM-JOURNEY, `D-503`)
+
+The fourth «Тип» of «База знаний» is the copy of what an expert saw and decided, kept after its project and document are gone (`ADR-0027`). Its
+accept is captured in the SAME transaction as the decision (`DECISION-MEMORY-01` 7.2), so the journey seeds nothing: the accept `record-decision`
+makes IS the case. Eight `memory-*` steps follow `record-decision` (and stand BEFORE `carry-over-decision`, which captures a second case, so the
+newest case of the project is the journey's first); `MEMORY_STEPS` in `test_pc01_journey_conformance.py` pins their names, order, cases and what
+each asserts:
+
+| step | case | what it does |
+|---|---|---|
+| `memory-tab-lists-the-captured-case` | action | presses the tab «Память решений» on `/knowledge-base?project=`; the list (`listDecisionMemoryCases`) and the administrator's status line (`getDecisionMemoryStatus`) are read and are REQUIRED here (optional on the route: a cold walk opens «Замечания»); captures `memory_case_id` from the row; the case carries the accept |
+| `memory-case-opens-from-the-list` | action | «Открыть» reads that one case (`getDecisionMemoryCase`): the finding as it stood, the evidence, the decision, the control that withdraws it |
+| `memory-withdraw-needs-a-reason` | refused | the button is held until a closed reason is chosen; no `POST …/withdraw` is sent |
+| `memory-case-withdraw` | action | chooses «Тестовые данные», presses «Отозвать» twice: ONE `POST` with `Idempotency-Key` and `{"reason_code":"test_data"}`, `status: withdrawn`, the note and the `withdraw` event in the history, «Вернуть» offered instead |
+| `memory-list-shows-the-withdrawn-case` | action | the filter «Состояние: Отозвано» (it writes `?mstatus=`) lists the case with its reason |
+| `memory-list-by-standing-excludes-the-withdrawn-case` | refused | «Действует» holds nothing and says the SELECTION is empty («Сбросить отбор»), not the memory |
+| `memory-case-restore` | action | «Вернуть» with «Другая причина», pressed twice: ONE keyed `POST`, `status: active`, both events in the history, the note gone; the memory is left as it was found |
+| `memory-case-for-an-expert-is-read-only` | refused | as `expert_only`: the tab, the list and the case are read; no withdrawal control, no status line, and `getDecisionMemoryStatus` is not asked |
+
+**The viewer is not walked.** The tab is hidden from a viewer (`useMemoryAccess`: hidden, not disabled; an address that names it shows «Замечания»), but the
+journey's roster holds `expert_only` and `admin_only` and no viewer account, and a viewer account is not invented here (`D-650`);
+`test_the_journey_has_no_viewer_account_which_is_why_the_viewer_is_not_walked` fails the day the roster holds one.
+
+**Two read states** put a width over the tab, which a cold walk of `/knowledge-base` (the default «Замечания») never draws. `--state memory_list` opens
+`?kind=memory`, `--state memory_case` opens `?kind=memory&mcase=<memory_case_id>`; a state declares its own `query`, its own `expects_api` (the tab does
+not read the journal the default tab reads) and a `bind` of a contract name to a captured one (`case_id` -> `memory_case_id`). The case id comes from the
+write half of the same run or from `--seed`; a stand that holds no case is a finding (the state is not reached), not a pass.
+
+```
+# on a stand that already holds the case (the steps above, or --seed <the write half's captured identities>)
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --routes knowledge-base --state memory_list --width 1280 --seed <seed> --out <dir>
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --routes knowledge-base --state memory_case --width 390 --height 844 --seed <seed> --out <dir>
+```
+
+Measured 2026-11-10, lane MEM-JOURNEY, tree `98042a706` (0.20.7 plus the lane), two fresh `local-stand.sh` stands (migration head
+`0061_decision_memory_m2`, no `LANE_C4`), each inside ONE locked command of the shared host (build, stand, walk, teardown, about 3 minutes of walking):
+`--phase write --steps create-project,upload-document,classify-version,start-run,record-decision,<the eight memory steps>` (13 of 142 steps, exit 3 =
+PARTIAL, 0 findings, 44 s), then the read walk over all 35 routes with `--state memory_list --width 1280` and with `--state memory_case --width 390
+--height 844` (35 of 35 routes, 0 findings, 0 console errors, 0 page errors, 0 failed calls, `scrollWidth == innerWidth`), and the knowledge-base route
+alone in the other width and state (`.local/evidence/lane-mem-journey/run2`; the database afterwards: 1 case, 1 decision, 6 status events = 3 withdrawals and
+3 restores for 3 presses of each). The FIRST stand (`run1`) was red in two steps, and the red was the application's: pressing «Отозвать» twice sent
+two `POST`s under one Idempotency-Key (the server answered both with the same event and wrote one, so nothing was lost). The control was held by
+`isPending` alone, which is a re-render late; it now presses through the single-flight gate the other keyed forms use
+(`features/manage-decision-memory/model/press-standing.ts`), and the second stand sent one request per pair of presses. The width reading answers
+`scrollWidth <= innerWidth`; a headless Chrome keeps 15 px of its 390 for a classic scrollbar, so the «Тип» row, which ends at x=390 with its fourth button,
+leaves a 15 px horizontal scroll range there (`D-651`).
 
 ### The journey's section, and the steps that stay on АР (`PROD-10B-JOURNEY-REBASE-01`)
 
