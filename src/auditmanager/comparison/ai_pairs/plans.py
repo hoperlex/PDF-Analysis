@@ -7,7 +7,8 @@ the handler runs them. Both build them here, so what was priced is what is asked
 The content key (ADR-0025 decision 15, the wave brief's rule 5) is a digest of the prompt version, the project, the pinned model,
 the process's provider mode (a recorded answer is never mistaken for a live one), the kind of the question, the digest of the
 exact prompt text and, for each picture in order, the content key of its page and the digest of its stored preview. Two questions with the same key are the same question: the second is never sent. A new prompt
-version, another model, another project or another page content is another key.
+version, another model, another project or another page content is another key. A job that froze a stage-layout cell adds the cell's model,
+effort and answer limit (`D-675`): two jobs with different cells never share a stored answer; a job with no cell has the key it always had.
 """
 
 from __future__ import annotations
@@ -16,8 +17,9 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
+from auditmanager.comparison.ai_jobs.model import cell_key_document
 from auditmanager.comparison.ai_pairs.decide import reverse_candidates
 from auditmanager.comparison.ai_pairs.model import (
     KIND_REVERSE,
@@ -28,6 +30,9 @@ from auditmanager.comparison.ai_pairs.model import (
 )
 from auditmanager.comparison.ai_pairs.prompt import build_prompt
 from auditmanager.comparison.ai_pairs.questions import askable
+
+if TYPE_CHECKING:
+    from auditmanager.analysis.public import CellSettings
 
 __all__ = ["CallPlan", "PlanContext", "content_key", "forward_plan", "reverse_plan"]
 
@@ -46,6 +51,8 @@ class PlanContext:
     page_counts: Mapping[str, int]
     facts: Mapping[tuple[str, int], PageFacts]
     document_title: str = ""
+    #: The cell the job froze under the stage layout (`HOSTS-CMP-01`); ``None`` for a job with no cell. Part of every key of a plan (`D-675`).
+    cell: "CellSettings | None" = None
 
     def label(self, version_uid: str) -> str:
         return f"№{self.order.index(version_uid) + 1}" if version_uid in self.order else version_uid[:12]
@@ -79,13 +86,16 @@ class CallPlan:
 
 def content_key(
     *, project_uid: str, model_identity: str, provider_mode: str, kind: str, prompt: str, pages: Sequence[PageFacts],
+    cell: "CellSettings | None" = None,
 ) -> str:
     """The key an answer is stored under (see the module docstring)."""
-    document = {
+    document: dict[str, object] = {
         "prompt_version": PROMPT_VERSION, "project_uid": project_uid, "model": model_identity, "mode": provider_mode, "kind": kind,
         "max_tokens": MAX_OUTPUT_TOKENS, "prompt": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
         "images": [[page.content_key, page.preview_sha256] for page in pages],
     }
+    if cell is not None:
+        document["cell"] = cell_key_document(cell)
     return hashlib.sha256(json.dumps(document, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
@@ -107,7 +117,7 @@ def forward_plan(question: Question, context: PlanContext) -> CallPlan:
         kind=question.kind, prompt=prompt, pages=pages, cands=tuple(page.page_number for page in candidates),
         key=content_key(
             project_uid=context.project_uid, model_identity=context.model_identity, provider_mode=context.provider_mode,
-            kind=question.kind, prompt=prompt, pages=pages,
+            kind=question.kind, prompt=prompt, pages=pages, cell=context.cell,
         ),
     )
 
@@ -137,6 +147,6 @@ def reverse_plan(question: Question, b_page: int, context: PlanContext) -> CallP
         kind=KIND_REVERSE, prompt=prompt, pages=pages, cands=tuple(page.page_number for page in candidates),
         key=content_key(
             project_uid=context.project_uid, model_identity=context.model_identity, provider_mode=context.provider_mode,
-            kind=KIND_REVERSE, prompt=prompt, pages=pages,
+            kind=KIND_REVERSE, prompt=prompt, pages=pages, cell=context.cell,
         ),
     )

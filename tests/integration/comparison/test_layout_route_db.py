@@ -21,7 +21,7 @@ What each shows:
    a model is the access the route is made with.
 
 Break-it-once (the lane's mutation script, in a scratch copy of ``src``): without the third branch of ``estimate.read_route`` tests 1, 2, 3 and 6 fail
-(the route is the legacy connection's or ``executor_route_missing``); without the host-aware reading of a system member (``dispatch.member_facts_of``)
+(the route is the legacy connection's or ``executor_route_missing``); without the host-aware reading of a system member (``executors.group_commands._facts``, `D-676`)
 test 2 fails (no member is eligible: the call waits ``runner_offline``).
 """
 

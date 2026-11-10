@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
@@ -39,6 +40,7 @@ from auditmanager.executors.groups import (
     AGGREGATE_RULE,
     GroupCapacity,
     GroupDetail,
+    GroupMemberRecord,
     GroupRecord,
     GroupRevisionRecord,
     GroupSettings,
@@ -58,7 +60,7 @@ from auditmanager.executors.groups import (
     refuse_settings,
     refuse_work_kind,
 )
-from auditmanager.executors.model import refuse_system_object
+from auditmanager.executors.model import ConnectionRecord, RevisionRecord, refuse_system_object
 from auditmanager.executors.queries import Occupancy, occupancies
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.usability import is_probed_ok, is_served
@@ -71,6 +73,9 @@ from auditmanager.ingest.public import (
 from auditmanager.jobs.public import append_execution_event
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
+
+if TYPE_CHECKING:
+    from auditmanager.executors.host_commands import HostFacts
 
 __all__ = [
     "advance_group_rotation",
@@ -221,32 +226,78 @@ def _facts(
 ) -> list[tuple[MemberFacts, Occupancy, str | None]]:
     """For each member of the revision: the facts (:class:`MemberFacts`), its occupancy and the connection's
     current revision id. Read from the rows now; nothing is stored. The probe of a member is read on the
-    connection's *current* revision (a member whose revision changed is reported first for that)."""
+    connection's *current* revision (a member whose revision changed is reported first for that).
+
+    A **system** member -- the system connection of a server (`HOSTS-BACKEND-01`, ADR-0028 decisions 3 and 16; `D-676`) -- has no probe and no
+    runner token of its own: the server reports, and the server's facts say whether it can take a call. Its facts are therefore the server's
+    (:func:`_host_member_facts`); a member that is not a system connection is read as it always was."""
     ids = [member.connection_id for member in revision.members]
     currents = store.current_revisions(session, ids)
     counts = occupancies(session, ids, store)
+    connections = {connection_id: store.get_connection(session, connection_id) for connection_id in ids}
+    hosts = _hosts_of_system_members(session, connections.values())
     found = []
     for member in revision.members:
-        connection = store.get_connection(session, member.connection_id)
+        connection = connections.get(member.connection_id)
         occupancy = counts.get(member.connection_id)
         if connection is None or occupancy is None:
             raise _inconsistent("a group member has no connection")
         current = currents.get(member.connection_id)
-        served = current is not None and is_served(connection, current)
-        probed = current is not None and is_probed_ok(session, store, connection, current)
-        online = connection.kind != "pull" or store.runner_online(session, member.connection_id)
-        found.append((
-            MemberFacts(
+        if connection.system_managed and connection.capacity_pool is not None:
+            facts = _host_member_facts(revision, member, connection, current, hosts)
+        else:
+            served = current is not None and is_served(connection, current)
+            probed = current is not None and is_probed_ok(session, store, connection, current)
+            online = connection.kind != "pull" or store.runner_online(session, member.connection_id)
+            facts = MemberFacts(
                 connection_id=member.connection_id, tie_break_order=member.tie_break_order,
                 revision_is_snapshot=(
                     current is not None and current.revision_id == member.connection_revision_id),
                 archived=connection.archived_at is not None, served=served, probed_ok=probed,
                 runner_online=online, capacity=occupancy.capacity, used=occupancy.used,
-            ),
-            occupancy,
-            None if current is None else current.revision_id,
-        ))
+            )
+        found.append((facts, occupancy, None if current is None else current.revision_id))
     return found
+
+
+def _hosts_of_system_members(session: Session, connections: Iterable[ConnectionRecord | None]) -> dict[str, HostFacts]:
+    """The servers (``HostFacts``, archived ones too) that the system connections among ``connections`` belong to, by host id; empty when
+    none is a system connection, and then nothing is read."""
+    from auditmanager.executors.host_commands import read_hosts
+    from auditmanager.executors.hosts import split_pool
+
+    host_ids = sorted({
+        split_pool(connection.capacity_pool)[0] for connection in connections
+        if connection is not None and connection.system_managed and connection.capacity_pool is not None
+    })
+    if not host_ids:
+        return {}
+    return {item.record.host_id: item for item in read_hosts(session, host_ids, include_archived=True)}
+
+
+def _host_member_facts(
+    revision: GroupRevisionRecord, member: GroupMemberRecord, connection: ConnectionRecord, current: RevisionRecord | None,
+    hosts: dict[str, HostFacts],
+) -> MemberFacts:
+    """The facts of a system member, read from its server. ``probed_ok`` and ``runner_online`` are the absence of any reason the model is
+    not available on the server now (``member_reasons``: the server is off, off line, signed out, has not verified the model or is cooling
+    down; a server that does not exist is ``host_offline``), and the capacity and use are the server's slots of the provider -- the pool the
+    Runs' cell binding counts and the spend mirror locks."""
+    from auditmanager.executors.host_commands import member_reasons
+    from auditmanager.executors.hosts import access_of_billing, split_pool
+
+    host_id, provider = split_pool(connection.capacity_pool)
+    host = hosts.get(host_id)
+    reasons, _full = (["host_offline"], False) if host is None else member_reasons(
+        host, provider=provider, access=access_of_billing(revision.billing), model_id=revision.pin_id)
+    slot = None if host is None else host.slot_of(provider)
+    return MemberFacts(
+        connection_id=member.connection_id, tie_break_order=member.tie_break_order,
+        revision_is_snapshot=current is not None and current.revision_id == member.connection_revision_id,
+        archived=connection.archived_at is not None or host is None or host.record.archived_at is not None,
+        served=True, probed_ok=not reasons, runner_online=not reasons,
+        capacity=0 if slot is None else slot.slots, used=0 if slot is None else slot.in_use,
+    )
 
 
 def member_facts(
@@ -254,7 +305,8 @@ def member_facts(
 ) -> list[MemberFacts]:
     """What is true of each member of ``revision`` right now, in the revision's member order. The dispatcher takes the
     members whose :func:`~auditmanager.executors.group_selection.member_issue` is ``None`` or ``at_capacity`` and
-    chooses among them with :func:`~auditmanager.executors.group_selection.choose`, under the locks of decision 14."""
+    chooses among them with :func:`~auditmanager.executors.group_selection.choose`, under the locks of decision 14. A member that is the
+    system connection of a server is read by its server's facts (`D-676`)."""
     return [facts for facts, _, _ in _facts(session, revision, repository or ExecutorRepository())]
 
 

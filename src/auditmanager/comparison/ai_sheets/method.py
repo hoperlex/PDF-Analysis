@@ -17,7 +17,7 @@ A job's modes (:class:`~auditmanager.comparison.ai_jobs.model.AiMode`):
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,10 @@ from auditmanager.comparison.ai_sheets.repository import AiSheetRepository, Pair
 from auditmanager.comparison.ai_sheets.views import eligible
 from auditmanager.shared.errors import DomainError, ErrorCode
 
-__all__ = ["SheetChangesMethod", "facts_of", "keys_for", "kind_of", "model_reader_of_route", "prompt_for"]
+if TYPE_CHECKING:
+    from auditmanager.analysis.public import CellSettings
+
+__all__ = ["SheetChangesMethod", "cell_reader_of_route", "facts_of", "keys_for", "kind_of", "model_reader_of_route", "prompt_for"]
 
 #: A single sheet: the instructions, the sheet's text (at most ``SINGLE_TEXT_LIMIT`` characters) and the title lines.
 _SINGLE_OVERHEAD_CHARS: Final[int] = 600
@@ -47,15 +50,15 @@ def prompt_for(kind: str) -> str:
     return prompt_version_of(sc.PROMPT_VERSION, sc.PROMPT_DIGEST)
 
 
-def keys_for(pairs: Sequence[PairFacts], model: str) -> dict[str, str]:
-    """``{pair id: content key}`` of the pairs that have a subject."""
+def keys_for(pairs: Sequence[PairFacts], model: str, cell: "CellSettings | None" = None) -> dict[str, str]:
+    """``{pair id: content key}`` of the pairs that have a subject. ``cell`` is the job's frozen cell, if it has one (`D-675`)."""
     out: dict[str, str] = {}
     for pair in pairs:
         subject = pair.subject_key
         if subject is None:
             continue
         out[pair.pair_id] = content_key(
-            project_uid=pair.project_uid, kind=kind_of(pair), subject_key=subject, prompt_version=prompt_for(kind_of(pair)), model=model,
+            project_uid=pair.project_uid, kind=kind_of(pair), subject_key=subject, prompt_version=prompt_for(kind_of(pair)), model=model, cell=cell,
         )
     return out
 
@@ -80,6 +83,15 @@ def model_reader_of_route(session: Session) -> str:
     return read_route(session, WORK_KIND, "live").pinned_model
 
 
+def cell_reader_of_route(session: Session) -> "CellSettings | None":
+    """The cell the route of the work kind carries now (`HOSTS-CMP-01`), or ``None`` when it has none: what the estimate keys the stored
+    descriptions on, as a job that starts from it will (`D-675`)."""
+    from auditmanager.comparison.ai_jobs.estimate import read_route
+    from auditmanager.comparison.ai_sheets.model import WORK_KIND
+
+    return read_route(session, WORK_KIND, "live").cell
+
+
 class SheetChangesMethod:
     """The :class:`~auditmanager.comparison.ai_jobs.model.AiMethod` of the sheet descriptions."""
 
@@ -88,10 +100,12 @@ class SheetChangesMethod:
     def __init__(
         self, material: SheetMaterial | Callable[[], SheetMaterial] | None = None, *, repository: AiSheetRepository | None = None,
         model_reader: Callable[[Session], str] = model_reader_of_route,
+        cell_reader: "Callable[[Session], CellSettings | None]" = cell_reader_of_route,
     ) -> None:
         self._material = material
         self._repo = repository or AiSheetRepository()
         self._model_reader = model_reader
+        self._cell_reader = cell_reader
 
     @property
     def prompt_version(self) -> str:
@@ -114,10 +128,12 @@ class SheetChangesMethod:
             pairs = [] if pair is None else [pair]
         return [p for p in pairs if eligible(p)]
 
-    def wanted(self, session: Session, scope: Any, mode: AiMode, model: str, *, restart: bool) -> tuple[list[PairFacts], dict[str, str], set[str]]:
+    def wanted(
+        self, session: Session, scope: Any, mode: AiMode, model: str, *, restart: bool, cell: "CellSettings | None" = None,
+    ) -> tuple[list[PairFacts], dict[str, str], set[str]]:
         """``(the pairs of the job's items, their content keys, the keys that are stored)``."""
         everything = self.eligible_pairs(session, scope)
-        keys = keys_for(everything, model)
+        keys = keys_for(everything, model, cell)
         stored = set(self._repo.stored_keys(session, scope.project_uid, list(keys.values())))
         lacking = [p for p in everything if keys[p.pair_id] not in stored]
         if mode is AiMode.START:
@@ -138,7 +154,7 @@ class SheetChangesMethod:
     def counts(self, session: Session, request: AiEstimateRequest) -> AiCounts:
         scope = request.scope
         model = self._model_reader(session)
-        chosen, keys, stored = self.wanted(session, scope, request.mode, model, restart=False)
+        chosen, keys, stored = self.wanted(session, scope, request.mode, model, restart=False, cell=self._cell_reader(session))
         everything = self.eligible_pairs(session, scope)
         groups: list[AiCallGroup] = []
         for pair in chosen:
@@ -191,7 +207,7 @@ class SheetChangesMethod:
     # -- the work items -------------------------------------------------------------------------------------------------
     def work_items(self, session: Session, job: AiJobRecord, mode: AiMode) -> list[AiWorkItemSpec]:
         scope = job.scope
-        chosen, _keys, _stored = self.wanted(session, scope, mode, job.pinned_model, restart=job.restart)
+        chosen, _keys, _stored = self.wanted(session, scope, mode, job.pinned_model, restart=job.restart, cell=job.cell)
         if mode is AiMode.FAILED:
             # «Повторить листы с ошибкой» describes the failed sheets and nothing else: a sheet that was waiting when the job was
             # cancelled stays cancelled, so no row of this job says it is still to come.

@@ -239,7 +239,7 @@ def _pool_slots_sql(pool: str) -> str:
 #: pool locks (the hint is advisory, as it is for a group). Planned Runs are offered only by a process that dispatches them (``dispatch_groups``).
 _NEXT_JOB = text(
     "WITH held AS ("
-    "SELECT rev.connection_id, active_job.run_id FROM job active_job "
+    "SELECT rev.connection_id AS capacity_key, active_job.run_id FROM job active_job "
     "JOIN audit_run active_run ON active_run.run_id = active_job.run_id "
     "JOIN executor_connection_revision rev ON rev.revision_id = active_run.connection_revision_id "
     f"WHERE active_job.state IN {_ACTIVE_JOB_STATES} "
@@ -258,7 +258,7 @@ _NEXT_JOB = text(
     "JOIN executor_connection_revision pool_rev ON pool_rev.revision_id = bound_cell.connection_revision_id "
     "JOIN executor_connection pool_connection ON pool_connection.connection_id = pool_rev.connection_id "
     "WHERE bound_cell.run_id = ANY (CAST(:submitted AS text[]))), "
-    "loaded AS (SELECT connection_id, count(*) AS units FROM held GROUP BY connection_id) "
+    "loaded AS (SELECT capacity_key, count(*) AS units FROM held GROUP BY capacity_key) "
     "SELECT j.run_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
     "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
     "AND j.available_at <= statement_timestamp() "
@@ -267,7 +267,7 @@ _NEXT_JOB = text(
     "AND ("
     # frozen_at_start and bound: the connection test, exactly as it was (a NULL revision is the environment source).
     "(r.stage_plan IS NULL AND r.binding_state <> 'pending' AND NOT EXISTS (SELECT 1 FROM executor_connection_revision mine "
-    "JOIN loaded ON loaded.connection_id = mine.connection_id "
+    "JOIN loaded ON loaded.capacity_key = mine.connection_id "
     "WHERE mine.revision_id = r.connection_revision_id "
     "AND loaded.units >= COALESCE((SELECT current_revision.max_active_runs "
     "FROM executor_connection_revision current_revision "
@@ -281,7 +281,7 @@ _NEXT_JOB = text(
     "AND r.wait_reason IS NULL "
     "AND EXISTS (SELECT 1 FROM executor_group_member group_member "
     "WHERE group_member.group_revision_id = r.executor_group_revision_id "
-    "AND COALESCE((SELECT loaded.units FROM loaded WHERE loaded.connection_id = group_member.connection_id), 0) "
+    "AND COALESCE((SELECT loaded.units FROM loaded WHERE loaded.capacity_key = group_member.connection_id), 0) "
     "< COALESCE((SELECT current_revision.max_active_runs FROM executor_connection_revision current_revision "
     "WHERE current_revision.connection_id = group_member.connection_id "
     "ORDER BY current_revision.revision_no DESC LIMIT 1), 1))) "
@@ -291,7 +291,7 @@ _NEXT_JOB = text(
     "SELECT 1 FROM audit_run_cell_binding bound_cell "
     "JOIN executor_connection_revision pool_rev ON pool_rev.revision_id = bound_cell.connection_revision_id "
     "JOIN executor_connection pool_connection ON pool_connection.connection_id = pool_rev.connection_id "
-    "JOIN loaded ON loaded.connection_id = pool_connection.capacity_pool "
+    "JOIN loaded ON loaded.capacity_key = pool_connection.capacity_pool "
     f"WHERE bound_cell.run_id = r.run_id AND loaded.units >= {_pool_slots_sql('pool_connection.capacity_pool')})) "
     # a pending planned Run: offered once; the claim binds every cell or stores why not.
     "OR (r.binding_state = 'pending' AND r.stage_plan IS NOT NULL AND CAST(:dispatch_groups AS boolean) "
