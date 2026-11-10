@@ -1,8 +1,9 @@
 """The model catalogue as the hosts see it (`HOSTS-BACKEND-01`, ADR-0028 decision 13).
 
 ``contracts/analysis/v1/model-catalogue.json`` describes the lock pins the stage layout may name: for each (provider, model) the accesses
-it can be served with, the efforts it may be asked for and the exact strings an answer may report as its model. This module reads that
-file and nothing else. It answers three questions for the host machinery:
+it can be served with, the efforts it may be asked for and the exact strings an answer may report as its model. The file has one reader,
+``analysis.public.model_catalogue`` / ``load_model_catalogue`` (`D-669`); this module takes that reading through ``analysis.public`` and
+keeps only the hosts' view of it. It answers three questions for the host machinery:
 
 * which (provider, model) pairs a host report may be turned into system connections for (an entry of the file that is also a lock pin);
 * what the stand hands an agent as its catalogue (``Catalogue.for_agent``: ``RunnerCatalogueEntry`` of the contract);
@@ -10,30 +11,25 @@ file and nothing else. It answers three questions for the host machinery:
   case folding (`R-133`).
 
 Rates and identity stay in ``docs/program/P02_LOCK.json``; a catalogue entry without a lock pin is not offered here (a model is a
-system connection only while it is a pin). The file is read once per process (``catalogue()``); ``load_catalogue`` takes a path so a test
-can point at a variant.
+system connection only while it is a pin). The catalogue is built once per process (``catalogue()``); ``load_catalogue`` takes a path so a
+test can point at a variant.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
 
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
-    "CATALOGUE_RELPATH",
     "Catalogue",
     "CatalogueEntry",
     "catalogue",
     "load_catalogue",
 ]
-
-CATALOGUE_RELPATH: Final[str] = "contracts/analysis/v1/model-catalogue.json"
-_REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[3]
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,32 +75,31 @@ class Catalogue:
         ]
 
 
-def _entry(raw: dict[str, Any]) -> CatalogueEntry:
+def _entry(raw: Any) -> CatalogueEntry:
+    """One entry of the analysis reading (``analysis.public.CatalogueEntry``) in the hosts' shape (``access`` is ``accesses`` here)."""
     return CatalogueEntry(
-        provider=str(raw["provider"]), model_id=str(raw["model_id"]),
-        accesses=tuple(str(item) for item in raw["access"]),
-        efforts=tuple(str(item) for item in raw["efforts"]),
-        accepted_reported=tuple(str(item) for item in raw["accepted_reported"]),
+        provider=raw.provider, model_id=raw.model_id, accesses=tuple(raw.access), efforts=tuple(raw.efforts),
+        accepted_reported=tuple(raw.accepted_reported),
     )
 
 
 def load_catalogue(path: Path | None = None, *, pinned: frozenset[str] | None = None) -> Catalogue:
-    """Read the catalogue. ``pinned`` is the set of model ids the provider lock holds; an entry whose model is not one is left out
-    (``None`` reads the lock). The file being unreadable is ``dependency_unavailable`` -- there is no built-in copy to fall back to."""
-    source = path or (_REPO_ROOT / CATALOGUE_RELPATH)
+    """Build the hosts' catalogue from the one reader of the file, ``analysis.public`` (`D-669`). ``pinned`` is the set of model ids the
+    provider lock holds; an entry whose model is not one is left out (``None`` reads the lock). ``path`` points at a variant of the file
+    (a test); ``None`` takes the repository's own, read once. The file being unreadable is ``dependency_unavailable`` -- there is no
+    built-in copy to fall back to."""
+    from auditmanager.analysis.public import load_model_catalogue, model_catalogue, pinned_models
+
     try:
-        document = json.loads(source.read_text(encoding="utf-8"))
-        entries = [_entry(item) for item in document["entries"]]
-    except (OSError, ValueError, KeyError, TypeError):
+        document = model_catalogue() if path is None else load_model_catalogue(path)
+    except DomainError:
         raise DomainError(
             ErrorCode.DEPENDENCY_UNAVAILABLE, message="the model catalogue cannot be read",
             dependency="model_catalogue",
         ) from None
     if pinned is None:
-        from auditmanager.analysis.public import pinned_models
-
         pinned = frozenset(pin.model_id for pin in pinned_models())
-    return Catalogue(entries=tuple(item for item in entries if item.model_id in pinned))
+    return Catalogue(entries=tuple(_entry(item) for item in document.entries if item.model_id in pinned))
 
 
 @lru_cache(maxsize=1)
