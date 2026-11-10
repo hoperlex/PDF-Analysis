@@ -418,8 +418,9 @@ def test_the_layout_the_real_service_revises_is_the_layout_the_route_reads_and_t
     server(db, "layout-7", report("codex", "api", ASTRA))
     service = StagePlanService(session_factory=db.sessions, availability=HostModelAvailability(), provider_source="database")
     wire = layout.comparison_cells_to_wire(cells(comparison_pair_check={"effort": "medium", "max_output_tokens": 900}))
+    # « Свой набор »: a named set must keep its table's models and efforts, and the medium effort of the pair check is the owner's own choice
     body = models.ReviseStageModelLayoutRequest.model_validate({
-        "kit": "codex_only", "cells": layout.cells_to_wire(layout.preset_cells("codex_only")), "comparison_cells": wire})
+        "kit": "custom", "cells": layout.cells_to_wire(layout.preset_cells("codex_only")), "comparison_cells": wire})
     service.revise_layout(body=body, user_uid=admin, idempotency_key=key())
     view = service.set_layout_enabled(enabled=True, user_uid=admin, idempotency_key=key())
 

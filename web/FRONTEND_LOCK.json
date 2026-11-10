@@ -16,10 +16,10 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "411b8c93a5297e924c9e5e5f679b565699bf58a9ec886aaf1b2ede99bffc5064",
-    "content_commit": "56bc9919",
-    "content_commit_subject": "fix(contract): the ErrorEnvelope's contract_version const is 1.47.0 (HOSTS-SEAL-3)",
-    "dispatch_named_commit": "56bc9919b60df692d70e01873b5f059f87d5cfae",
+    "sha256": "d6843502b6ccd307fcf8a7576e4975e1393a1355732827be29b56cc7587706b6",
+    "content_commit": "22767264",
+    "content_commit_subject": "fix(contract): the startRun prose says 422 analysis_input_invalid for cost_estimate_binding_changed; tests: the real service writes what the route reads (HOSTS-SEAL-3, HOSTS-CMP-01)",
+    "dispatch_named_commit": "22767264556859d9de6d4fe654525a9ea309453f",
     "commit_note": "Resealed by HOSTS-SEAL-3: contract 1.47.0 (the comparison cells of the stage layout: StageComparisonCell, ComparisonLayoutKind, comparison_cells, ComparisonAiRoute.cell).",
     "openapi_version": "3.1.0",
     "info_version": "1.47.0",
@@ -27,7 +27,7 @@
     "operations": 324,
     "component_schemas": 796,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "411b8c93a5297e924c9e5e5f679b565699bf58a9ec886aaf1b2ede99bffc5064",
+    "snapshot_sha256": "d6843502b6ccd307fcf8a7576e4975e1393a1355732827be29b56cc7587706b6",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "c8515805727393f6a06f141d77deb6f6ea320f44999038673c6931a234dd8c53",
-      "index.ts": "e4f0e63dfe069e634d2027297c162671f5dce29d2121755fd80300f937643fc8",
-      "operations.gen.ts": "19f9757d369d3921e3202a7d2e6502563feaeeba4073f99896e3723a5f6c9cfa",
-      "types.gen.ts": "a0366033077264409c3e0778608f2f5d27adce335dd2bdc5b609b1567c408b3a"
+      "client.gen.ts": "38c816ec088904276c024e1902a60c755cf8f6a10527eeb4ec442ccee9c0f029",
+      "index.ts": "1c4b8f88616b31c69b9446b96cbec7462d072e1789269b8f6fce874ebf3927b4",
+      "operations.gen.ts": "f6e47bc49ae80fc6c4403004d79dab3a0424a1a835c03b41f51ec26f5ac493ab",
+      "types.gen.ts": "57ee9583b04d8a88db5a42aa174983ba19e7fba185f976ee7e0990746d34ff1e"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
