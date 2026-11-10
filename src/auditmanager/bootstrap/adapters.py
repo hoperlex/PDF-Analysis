@@ -60,6 +60,7 @@ from auditmanager.api.schemas.documents import (
 )
 from auditmanager.api.schemas.findings import (
     EvidenceView,
+    FindingBlockEvidenceView,
     FindingDetailView,
     FindingView,
     ObservationView,
@@ -1911,13 +1912,49 @@ def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
             model_call_id=row.model_call_id,
         ),
         proposed_severity=getattr(row, "proposed_severity", None),
+        # `CRIT-SEAL-50`: only a block-anchored observation says so; `text_span` is the absent default, so a text body is unchanged.
+        grounding_kind=_grounding_kind_view(row),
     )
+
+
+#: `CRIT-SEAL-50`: the grounding kind of a block-anchored observation, as the contract's `FindingGroundingKind` names it.
+_GROUNDING_PORTAL_BLOCK = "portal_block"
+#: The category of a finding made of a drawing and another source (`findings.publication.CATEGORY_CROSS_SOURCE`).
+_CATEGORY_CROSS_SOURCE = "cross_source"
+
+
+def _grounding_kind_view(row: Any) -> str | None:
+    kind = getattr(row, "grounding_kind", None)
+    return _GROUNDING_PORTAL_BLOCK if kind == _GROUNDING_PORTAL_BLOCK else None
+
+
+def _origin_view(row: Any) -> str | None:
+    """`CRIT-SEAL-50`: the «Источник» of a finding -- ``cross_check`` for a finding of drawing and another source, ``drawing`` for any other
+    block-anchored one; ``None`` (absent, meaning ``text``) for a finding of text spans, so a text finding's body is unchanged.
+
+    Decided by the canonical observation's category and grounding, not by its stage: ``finding_merge`` is also the stage of a drawing group
+    merged across windows (`findings.publication`), which is still a drawing finding.
+    """
+    if getattr(row, "category", None) == _CATEGORY_CROSS_SOURCE:
+        return "cross_check"
+    return "drawing" if getattr(row, "grounding_kind", None) == _GROUNDING_PORTAL_BLOCK else None
 
 
 def _finding_view(
     row: Any, evidence: Sequence[Any], verdict: Any,
     merged_rows: Sequence[Any] = (),
+    block_evidence: Sequence[Any] = (),
 ) -> FindingView:
+    # The blocks of the canonical observation (`Finding.block_evidence` mirrors it, as the citations do). None -- no block -- is absent from
+    # the body, as for every finding before the field existed.
+    blocks = tuple(
+        FindingBlockEvidenceView(
+            ordinal=item.ordinal, page_number=item.page_number, portal_block_id=item.portal_block_id,
+            bbox_norm=item.bbox_norm, crop_sha256=item.crop_sha256, recognised_quote=item.recognised_quote,
+        )
+        for item in sorted(block_evidence, key=lambda item: item.ordinal)
+        if item.finding_observation_id == row.finding_observation_id
+    )
     return FindingView(
         finding_uid=row.finding_uid,
         project_uid=row.project_uid,
@@ -1933,6 +1970,8 @@ def _finding_view(
             tuple(_observation_view(member, evidence) for member in merged_rows)
             if merged_rows else None
         ),
+        block_evidence=blocks or None,
+        origin=_origin_view(row),
     )
 
 
@@ -2676,16 +2715,17 @@ class FindingAdapter(_SessionHolder):
         """
         from auditmanager.decisions import current_verdict
         from auditmanager.findings import (
-            group_published_findings, published_finding_evidence, published_findings,
+            group_published_findings, published_finding_block_evidence, published_finding_evidence, published_findings,
         )
 
         def work(session: Session) -> Sequence[FindingView]:
             rows = published_findings(session, run_id)
             evidence = published_finding_evidence(session, run_id)
+            blocks = published_finding_block_evidence(session, run_id)
             views = [
                 _finding_view(group.canonical, evidence,
                               current_verdict(session, group.canonical.finding_uid),
-                              group.merged)
+                              group.merged, blocks)
                 for group in group_published_findings(rows)
             ]
             if category is not None:
@@ -2699,8 +2739,8 @@ class FindingAdapter(_SessionHolder):
     def get_finding(self, *, finding_uid: str) -> FindingDetailView:
         from auditmanager.decisions import current_verdict, decision_history
         from auditmanager.findings import (
-            finding_by_uid, group_published_findings, published_finding_evidence,
-            published_findings,
+            finding_by_uid, group_published_findings, published_finding_block_evidence,
+            published_finding_evidence, published_findings,
         )
 
         def work(session: Session) -> FindingDetailView:
@@ -2718,12 +2758,13 @@ class FindingAdapter(_SessionHolder):
                     message="finding canonical observation changed during read",
                 )
             evidence = published_finding_evidence(session, row.run_id)
+            blocks = published_finding_block_evidence(session, row.run_id)
             verdict = current_verdict(session, finding_uid)
             history = decision_history(session, finding_uid)
             comments = [e.comment for e in history if e.comment]
             return FindingDetailView(
                 finding=_with_carried_origin(session, _with_execution_status(session, [_finding_view(
-                    row, evidence, verdict, matches[0].merged,
+                    row, evidence, verdict, matches[0].merged, blocks,
                 )]))[0],
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),

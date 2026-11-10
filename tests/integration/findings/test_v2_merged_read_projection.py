@@ -44,6 +44,13 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> FindingAdapter:
                 quote text, char_start integer, char_end integer, block_id text
             )
         """))
+        # `CRIT-CAPTURE-01` part B: the finding readers also read the blocks a finding stands on; this stand has none.
+        conn.execute(text("""
+            CREATE TABLE finding_block_evidence (
+                finding_observation_id text, ordinal integer, page_number integer, portal_block_id text,
+                bbox_x0 real, bbox_y0 real, bbox_x1 real, bbox_y1 real, crop_sha256 text, recognised_quote text
+            )
+        """))
         conn.execute(text("""
             INSERT INTO finding VALUES ('fnd_one', 'prj_one', 'ver_one', 'run_one',
                                         'dimensions', 'fobs_a')
