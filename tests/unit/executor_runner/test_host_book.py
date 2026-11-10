@@ -73,9 +73,38 @@ def test_a_well_formed_catalogue_is_parsed_with_its_efforts_and_accepted_reporte
     assert models[1].accepted == ("claude-sonnet-5-5",)
 
 
+def test_the_catalogue_the_stand_sends_is_served_whole():
+    """The stand's own catalogue, exactly as ``reportRunnerHealth`` hands it out, loses no entry on the agent.
+
+    Its ``accepted_reported`` names strings such as ``claude-opus-5-5[1m]``; the agent once held them to the ``--model`` rule, so
+    both Claude subscription models went unserved on every host (adm1, 2026-11-10) while the fixtures above stayed green.
+    """
+    from auditmanager.executors.catalogue import catalogue
+
+    sent = catalogue().for_agent()
+    models, problems = host_mode.parse_catalogue(sent)
+    assert problems == []
+    assert [(m.provider, m.model_id) for m in models] == [(e["provider"], e["model_id"]) for e in sent]
+    for model, entry in zip(models, sent):
+        assert set(model.accepted) == {entry["model_id"], *entry["accepted_reported"]}
+
+
+def test_a_reported_string_is_held_to_the_contract_not_to_the_model_id_rule():
+    entry = {"provider": "claude_code", "model_id": "claude-opus-5-5", "efforts": ["low"],
+             "accepted_reported": ["claude-opus-5-5[1m]", "Claude Opus 5.5"]}
+    models, problems = host_mode.parse_catalogue([entry])
+    assert problems == [] and models[0].accepted == ("claude-opus-5-5", "claude-opus-5-5[1m]", "Claude Opus 5.5")
+    # the id itself is what reaches --model: it keeps the strict rule
+    models, problems = host_mode.parse_catalogue([{**entry, "model_id": "claude-opus-5-5[1m]"}])
+    assert models == () and "bad model_id" in problems[0]
+
+
 @pytest.mark.parametrize("entry,needle", [
     ({"provider": "gemini", "model_id": "x", "efforts": ["low"]}, "unknown provider"),
     ({"provider": "codex", "model_id": "has space", "efforts": ["low"]}, "bad model_id"),
+    ({"provider": "codex", "model_id": "gpt-6", "efforts": ["low"], "accepted_reported": ["gpt\n6"]}, "bad accepted_reported"),
+    ({"provider": "codex", "model_id": "gpt-6", "efforts": ["low"], "accepted_reported": [""]}, "bad accepted_reported"),
+    ({"provider": "codex", "model_id": "gpt-6", "efforts": ["low"], "accepted_reported": ["g" * 201]}, "bad accepted_reported"),
     ({"provider": "codex", "model_id": "gpt-6", "efforts": []}, "bad efforts"),
     ({"provider": "codex", "model_id": "gpt-6", "efforts": ["LOW"]}, "bad efforts"),
     ({"provider": "codex", "model_id": "gpt-6", "efforts": ["low"], "accepted_reported": "gpt"}, "bad accepted_reported"),
