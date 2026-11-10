@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.51.0 (OpenAPI 3.1.0)
- *   sha256 5c2adbcfe1f1aef811448699bf24e800584da98827214e60fb585b748d8a4c0c
+ *   AuditManager PC-01 API 1.52.0 (OpenAPI 3.1.0)
+ *   sha256 dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.51.0';
+export const CONTRACT_VERSION = '1.52.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '5c2adbcfe1f1aef811448699bf24e800584da98827214e60fb585b748d8a4c0c';
+export const CONTRACT_DIGEST = 'dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -290,6 +290,7 @@ export const SCHEMA_NAMES = [
   'DecisionMemoryCaseId',
   'DecisionMemoryCasePage',
   'DecisionMemoryCaseSummary',
+  'DecisionMemoryComment',
   'DecisionMemoryContent',
   'DecisionMemoryCountRow',
   'DecisionMemoryCrop',
@@ -3922,6 +3923,8 @@ export type DecisionImportRow = {
 
 /** A case with everything it keeps. ``content`` is ``null`` and the lists are empty for a forgotten case (its tombstone only). */
 export type DecisionMemoryCase = {
+  /** The experts' comments on the case, oldest first (since 1.52.0). Absent when the server does not report them; present and empty when the case has none and for a forgotten case. */
+  comments?: Array<DecisionMemoryComment>;
   content: DecisionMemoryContent | null;
   crops: Array<DecisionMemoryCrop>;
   decisions: Array<DecisionMemoryDecision>;
@@ -3958,6 +3961,16 @@ export type DecisionMemoryCaseSummary = {
   status: "active" | "withdrawn" | "forgotten";
   status_changed_at: string | null;
   status_reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other" | null;
+};
+
+/**
+ * One comment an expert left on a case, as the memory keeps it (`CRIT-SEAL-52`, contract 1.52.0, ``D-682``). Like a decision it names no author:
+ * the memory holds what was decided and said, not who said it.
+ */
+export type DecisionMemoryComment = {
+  comment: string;
+  comment_id: string;
+  decided_at: string;
 };
 
 /** What the model proposed, as it stood when the decision was taken (immutable, a primary record from capture). */
@@ -4277,7 +4290,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.51.0";
+  contract_version: "1.52.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -5468,6 +5481,7 @@ export type FindingMatchProposal = {
 
 export type FindingObservation = {
   category: FindingCategory;
+  /** The text spans the observation quotes. At least one, unless grounding_kind is portal_block (since 1.52.0): a block-grounded observation has no text span, and its blocks are listed in block_evidence of the finding. */
   evidence: Array<Evidence>;
   finding_observation_id: FindingObservationId;
   finding_text: string;
