@@ -122,6 +122,7 @@ import { PdfPrecheckProgress } from './pdf-precheck-progress';
 import { RunHeader } from './run-header';
 import { RunNextTask } from './run-next-task';
 import { RunTabs } from './run-tabs';
+import { RunWaitCells } from './run-wait-cells';
 import { startedFrom } from '../model/started-from';
 import { maySeeServer } from '../model/server-access';
 import type { RunTab } from '../model/run-tabs';
@@ -655,12 +656,18 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
         from={from}
         waiting={status.state === 'queued' ? (executor === null ? runQueueReasonLabel(status) : runWaitingSentence(executor)) : null}
         waitDetail={
-          status.state === 'queued' && executor !== null && executor.phase === 'planned' ? (
-            <GroupWaitDetail
-              groupId={status.planned?.executor_group_id}
-              revisionId={status.planned?.executor_group_revision_id}
-              waitReason={executor.queueReason ?? null}
-            />
+          status.state === 'queued' ? (
+            <>
+              {/* `HOSTS-L1` (`D-660`): a run on the stage layout names the model it waits for, one line; the group's own detail follows. */}
+              <RunWaitCells run={status} />
+              {executor !== null && executor.phase === 'planned' ? (
+                <GroupWaitDetail
+                  groupId={status.planned?.executor_group_id}
+                  revisionId={status.planned?.executor_group_revision_id}
+                  waitReason={executor.queueReason ?? null}
+                />
+              ) : null}
+            </>
           ) : null
         }
         actions={

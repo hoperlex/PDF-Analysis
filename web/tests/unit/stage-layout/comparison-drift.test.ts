@@ -155,7 +155,7 @@ describe('the comparison of the web and the server can disagree, and this test s
   });
 
   it('is red when a kind of a set moves to another model', () => {
-    const altered = SOURCE.replace('"comparison_spec": (_ASTRA, "high")', '"comparison_spec": (_SOL, "high")');
+    const altered = SOURCE.replace('"comparison_spec": (_LUNA, "high")', '"comparison_spec": (_SOL, "high")');
     expect(altered).not.toBe(SOURCE);
     expect(plain(parseServerComparison(altered))).not.toEqual(same);
   });

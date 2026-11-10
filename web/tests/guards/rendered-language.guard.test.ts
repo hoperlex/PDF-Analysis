@@ -1148,7 +1148,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.47.0',
+    contract_version: '1.48.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1160,7 +1160,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.47.0',
+    contract_version: '1.48.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2027,7 +2027,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.47.0',
+    contract_version: '1.48.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2220,7 +2220,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.47.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.48.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -3418,7 +3418,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'workers-models-editing-comparison',
     make: () => createElement(LayoutEditorView, {
       draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells, comparison: STAGE_COMPARISON_CELLS }, catalogue: STAGE_CATALOGUE,
-      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'], currentKit: 'custom',
       pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
       onLimit: () => undefined, onComparisonModel: () => undefined, onComparisonEffort: () => undefined, onComparisonLimit: () => undefined,
       onSave: () => undefined, onCancel: () => undefined,
@@ -3429,7 +3429,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'workers-models-editing-comparison-none',
     make: () => createElement(LayoutEditorView, {
       draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
-      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'], currentKit: 'custom',
       pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
       onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
     }),
@@ -3439,7 +3439,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'workers-models-editing-all',
     make: () => createElement(LayoutEditorView, {
       draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
-      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'], currentKit: 'custom',
       pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
       onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
     }),
@@ -4330,6 +4330,29 @@ export const CACHE_STATES: readonly {
   { state: 'cancelled-run', run: { state: 'cancelled', published_finding_count: 0 } },
   { state: 'created-run', run: { state: 'created', terminal_at: null, published_finding_count: 0 } },
   { state: 'queued-run', run: { state: 'queued', terminal_at: null, published_finding_count: 0 } },
+  /*
+   * `HOSTS-L1` (`D-660`, contract 1.48.0): a run on the stage layout that waits names the model it waits for and the cause. A line names two
+   * models at most, so four states put all seven members of `RunWaitCause` on the screen, the last with «и ещё N».
+   */
+  ...(
+    [
+      ['queued-run-waits-none-served-and-host-disabled', 'model_unavailable', [['text:main', 'gpt-6-sol', 'not_on_any_server'], ['blocks:leg1', 'gpt-6-astra', 'host_disabled']]],
+      ['queued-run-waits-host-offline-and-login', 'model_unavailable', [['text:main', 'gpt-6.1-sol', 'host_offline'], ['review:main', 'claude-opus-5-5', 'login_required']]],
+      ['queued-run-waits-not-verified-and-cooling-down', 'model_unavailable', [['norms:main', 'gpt-6-astra', 'model_not_verified'], ['correction:main', 'claude-sonnet-5-5', 'model_cooling_down']]],
+      [
+        'queued-run-waits-at-capacity',
+        'executor_at_capacity',
+        [['text:main', 'gpt-6-sol', 'at_capacity'], ['blocks:judge', 'gpt-6.1-sol', 'at_capacity'], ['norms:main', 'gpt-6-astra', 'at_capacity']],
+      ],
+    ] as const
+  ).map(([state, reason, cells]) => ({
+    state,
+    run: {
+      state: 'queued' as const, terminal_at: null, published_finding_count: 0, binding_state: 'pending' as const, wait_reason: reason,
+      waiting_since: '2026-09-10T08:00:30.000Z',
+      wait_cells: cells.map(([cell_key, model_id, cause]) => ({ cell_key, model_id, access: 'subscription' as const, cause })),
+    } satisfies Partial<RunStatus>,
+  })),
   { state: 'validating-run', run: { state: 'validating', terminal_at: null, published_finding_count: 0 } },
   /*
    * The OTHER provider mode and the OTHER cost basis, added by `W41-BLIND`.
@@ -4591,6 +4614,9 @@ const TRANSLATED_SCHEMAS = [
   'ModelProbeState',
   'ExecutorHostState',
   'ModelUnavailableReason',
+  // `HOSTS-L1` (contract 1.48.0, `D-660`): the run page names the model a waiting run waits for and the cause in Russian («нет сервера с этой
+  // моделью», «все места сервера заняты»), with the contract value in `data-run-wait-cause`. `at_capacity` and `host_offline` are English words.
+  'RunWaitCause',
   'RunStartRoute',
   // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
   // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
@@ -4807,7 +4833,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.47.0',
+            contract_version: '1.48.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4829,7 +4855,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.47.0',
+            contract_version: '1.48.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -5462,6 +5488,11 @@ const SCHEMA_MARKERS: readonly {
     schema: 'ExecutorHostState',
     attribute: 'data-host-state',
     why: '`widgets/executor-hosts/ui/executor-hosts.tsx`, the dot of a server row: на связи, все места заняты, нет связи.',
+  },
+  {
+    schema: 'RunWaitCause',
+    attribute: 'data-run-wait-cause',
+    why: '`widgets/run-progress/ui/run-wait-cells.tsx`, the line under the sentence of a waiting run on the stage layout (`entities/audit-run` `WAIT_CAUSE_LABELS`): сервер выключен, сервер не на связи, на сервере нужно войти в клиент, нет сервера с этой моделью, все места сервера заняты.',
   },
   {
     schema: 'ModelUnavailableReason',

@@ -6,6 +6,8 @@ export type { RunLiveLineViewProps } from './ui/run-live-line';
 export { RunLiveLineView, RunWaitLine } from './ui/run-live-line';
 export { RunNextTask } from './ui/run-next-task';
 export { RunRail } from './ui/run-rail';
+export type { RunWaitCellsProps } from './ui/run-wait-cells';
+export { RunWaitCells } from './ui/run-wait-cells';
 export { RunEta, RunHeader } from './ui/run-header';
 export { RUN_TABS, RUN_TAB_LABELS, tabAfterKey } from './model/run-tabs';
 export type { RunTab } from './model/run-tabs';
