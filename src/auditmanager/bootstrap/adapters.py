@@ -3127,8 +3127,9 @@ _UNCAPTURED_EVENTS = sql_text(
 
 
 #: The ledger's ``comment`` events of observations that already have a case (`ADR-0029` decision 10). A comment of an observation with no
-#: case yet is not a candidate: the first ✓/✕ carries it over. Which of these the memory already keeps is the memory's answer
-#: (``MemoryRepository.captured_comment_sources``), asked below; the cursor is the sequence number, as for decisions.
+#: case yet is not a candidate: the first ✓/✕ carries it over. A comment the memory already keeps is not a candidate either (the anti-join,
+#: as for decisions: once everything is repaired, a pass lists nothing). ``MemoryRepository.captured_comment_sources`` is asked again
+#: below, on the rows read, to guard the gap between this read and the capture; the cursor is the sequence number, as for decisions.
 _COMMENT_EVENTS_OF_CASES = sql_text(
     """
     SELECT e.sequence_no, e.decision_id, e.finding_uid, e.finding_observation_id, e.event_type, e.verdict, e.severity,
@@ -3136,6 +3137,7 @@ _COMMENT_EVENTS_OF_CASES = sql_text(
       FROM expert_decision_event e
      WHERE e.event_type = 'comment' AND e.sequence_no > :after
        AND EXISTS (SELECT 1 FROM decision_memory_case k WHERE k.origin_observation_id = e.finding_observation_id)
+       AND NOT EXISTS (SELECT 1 FROM decision_memory_comment c WHERE c.source_decision_id = e.decision_id)
      ORDER BY e.sequence_no
      LIMIT :batch
     """

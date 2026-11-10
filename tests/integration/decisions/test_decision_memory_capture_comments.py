@@ -25,7 +25,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.bootstrap.adapters import MemoryCaptureAssembler, MemoryCaptureSweep
+from auditmanager.bootstrap.adapters import _COMMENT_EVENTS_OF_CASES, MemoryCaptureAssembler, MemoryCaptureSweep
 from auditmanager.decision_memory.public import MemoryReader
 from auditmanager.decisions import append_decision_under_key, record_decision
 from auditmanager.decisions import public as decisions_public
@@ -288,3 +288,26 @@ def test_the_sweep_repairs_the_comments_of_existing_cases_and_leaves_a_case_less
     again = sweep.run_once()
     assert (again.captured, again.comments_captured, again.comments_failed) == (0, 0, 0)   # the memory's answer is the state: nothing twice
     assert [source for source, _ in _comments(session)] == kept
+
+
+def test_once_the_sweep_has_repaired_everything_the_next_pass_lists_no_comment_candidates(
+    session: Session, published: Any, memory: SimpleNamespace
+) -> None:
+    """The steady state is empty (the anti-join, as for decisions): a comment the memory keeps is not read again."""
+    _event(session, published, "accept", "ок")                                         # the case exists, made through the port
+    register_decision_recorded(None)                                                   # the fixture restores the port afterwards
+    late = _event(session, published, "comment", "Заметка, которую порт не увидел.")
+    assert _count(session, "decision_memory_comment") == 0
+
+    def candidates() -> list[str]:
+        rows = session.execute(_COMMENT_EVENTS_OF_CASES, {"after": 0, "batch": 500}).mappings().all()
+        return [row["decision_id"] for row in rows]
+
+    assert late.decision_id in candidates()                                            # the query is not vacuous: it lists the gap
+    connection = session.get_bind()
+    factory = lambda: Session(bind=connection, join_transaction_mode="create_savepoint", expire_on_commit=False)  # noqa: E731
+    sweep = MemoryCaptureSweep(factory, MemoryCaptureAssembler(geometry=_Geometry()), batch=500)
+    assert sweep.run_once().comments_captured >= 1
+    assert [source for source, _ in _comments(session)] == [late.decision_id]
+    assert late.decision_id not in candidates()                                        # repaired: nothing of it is listed any more
+    assert sweep.run_once().comments_captured == 0
