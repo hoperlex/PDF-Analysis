@@ -48,6 +48,7 @@ SKIP_REASONS: Final[frozenset[str]] = frozenset({
     "encoder_image_missing",          # the host has no image to run
     "export_failed",                  # the file for the encoder could not be written
     "import_refused",                 # the encoder's answer was not one this stand accepts
+    "pass_failed",                    # the worker's pass failed on several looks in a row: the stand is given back rather than held by a broken pass
 })
 
 #: ``HH:MM`` as the contract writes it (``VectorWindow``).

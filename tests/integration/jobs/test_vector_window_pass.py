@@ -370,6 +370,69 @@ def test_an_answer_this_stand_will_not_take_is_skipped_and_nothing_of_it_is_stor
     assert not w.embeddings_of(sessions, [case]) and w.intents_of(sessions, [case])[case]["state"] == "pending"
 
 
+def test_a_pass_that_keeps_failing_gives_the_stand_back_after_three_looks_and_not_before(
+    engine: Engine, sessions: sessionmaker[Session], made: Any, exchange: Exchange, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    w.add_case(engine, finding=finding("broken-pass"))
+    running = support.queue_run(sessions, None)
+    support.claim(sessions, running)
+    try:
+        vector_pass = made()
+        open_the_night(vector_pass, exchange)
+        assert w.control(sessions)["state"] == "draining"
+
+        def broken(session: Session) -> int:
+            raise RuntimeError("the database said no")
+
+        monkeypatch.setattr(store, "running_work", broken)
+        for _ in range(2):
+            assert vector_pass.run(w.INSIDE).last.what == "failed"
+        assert w.control(sessions)["state"] == "draining", "two bad looks are a bad moment, not a fault"
+        vector_pass.run(w.INSIDE)
+        assert w.control(sessions) == {"paused": False, "state": "skipped", "reason": "pass_failed"}
+        assert (exchange.directory / "abort").exists()
+    finally:
+        monkeypatch.undo()
+        support.cancel(sessions, running)
+
+
+def test_a_look_that_succeeds_between_failures_resets_the_count(
+    engine: Engine, sessions: sessionmaker[Session], made: Any, exchange: Exchange, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    w.add_case(engine, finding=finding("flaky-pass"))
+    running = support.queue_run(sessions, None)
+    support.claim(sessions, running)
+    try:
+        vector_pass = made()
+        open_the_night(vector_pass, exchange)
+        real = store.running_work
+
+        def broken(session: Session) -> int:
+            raise RuntimeError("a bad moment")
+
+        for _ in range(5):
+            monkeypatch.setattr(store, "running_work", broken)
+            vector_pass.run(w.INSIDE)
+            vector_pass.run(w.INSIDE)
+            monkeypatch.setattr(store, "running_work", real)
+            vector_pass.run(w.INSIDE)   # one good look
+        assert w.control(sessions)["state"] == "draining", "ten failures in all, never three in a row"
+    finally:
+        monkeypatch.undo()
+        support.cancel(sessions, running)
+
+
+def test_an_unreadable_account_of_the_container_is_a_skip_not_a_stuck_window(
+    engine: Engine, sessions: sessionmaker[Session], made: Any, exchange: Exchange,
+) -> None:
+    w.add_case(engine, finding=finding("garbled-result"))
+    vector_pass = made()
+    open_the_night(vector_pass, exchange)
+    (exchange.directory / "result").write_text("exit_code=oops\n", encoding="utf-8")
+    vector_pass.run(w.INSIDE)
+    assert w.control(sessions) == {"paused": False, "state": "skipped", "reason": "encoder_failed"}
+
+
 def test_a_restarted_worker_picks_the_round_up_where_it_was(
     engine: Engine, sessions: sessionmaker[Session], made: Any, exchange: Exchange,
 ) -> None:

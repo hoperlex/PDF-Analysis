@@ -53,7 +53,7 @@ from auditmanager.precedents.vectors.window import (
     current_span,
 )
 
-__all__ = ["BACKFILL_ROUNDS", "MAX_LOOKS", "MIN_ROUND_SECONDS", "PassReport", "Step", "VectorWindowPass"]
+__all__ = ["BACKFILL_ROUNDS", "MAX_FAILED_LOOKS", "MAX_LOOKS", "MIN_ROUND_SECONDS", "PassReport", "Step", "VectorWindowPass"]
 
 _log = logging.getLogger(__name__)
 
@@ -61,6 +61,9 @@ _log = logging.getLogger(__name__)
 BACKFILL_ROUNDS: Final[int] = 4
 #: Looks that follow one another in one call: opened, drained, exported, and one more for the first wait.
 MAX_LOOKS: Final[int] = 4
+#: Consecutive looks that raise before the pass gives the stand back (a skip with ``pass_failed``): while the window is open the stand takes no run, so a pass
+#: that cannot do its work must not hold it. One failure is a bad moment (a lock, a timeout); three in a row (about a minute) is a fault.
+MAX_FAILED_LOOKS: Final[int] = 3
 #: A new round starts after an import only if at least this much of the window is left: an encoder that is cut off loses its round.
 MIN_ROUND_SECONDS: Final[int] = 1200
 #: The container's exit statuses the host reports (`infra/deploy/embed-window.sh`): 0 done; 124 stopped at the deadline (the ``timeout`` convention);
@@ -110,6 +113,7 @@ class VectorWindowPass:
         self._round_limit = round_limit
         self._next_at: float | None = None
         self._moment: datetime = self._clock()
+        self._failed_looks = 0
 
     def __call__(self) -> int:
         now = self._monotonic()
@@ -122,17 +126,48 @@ class VectorWindowPass:
 
     def run(self, now: datetime | None = None) -> PassReport:
         """Fill the queue, then look at the machine; while a step changed the state, look again (the drain, the export and the first wait of
-        the encoder are looks of one call, not of three intervals). At most :data:`MAX_LOOKS` looks follow one another."""
+        the encoder are looks of one call, not of three intervals). At most :data:`MAX_LOOKS` looks follow one another.
+
+        A look that raises is logged and tried again at the next call; :data:`MAX_FAILED_LOOKS` in a row give the stand back (:meth:`_give_back`)."""
         moment = now or self._clock()
-        self._fill_queue()
+        try:
+            self._fill_queue()
+        except Exception:  # noqa: BLE001 - the queue is the day's work; a window that is open must not wait for it
+            _log.exception("the queue of intents could not be filled; the window's own work goes on")
         changes = 0
-        step = self._look(moment)
-        while step.changed:
-            changes += 1
-            if changes >= MAX_LOOKS:
-                break
+        try:
             step = self._look(moment)
+            while step.changed:
+                changes += 1
+                if changes >= MAX_LOOKS:
+                    break
+                step = self._look(moment)
+        except Exception:  # noqa: BLE001 - see _give_back
+            self._failed_looks += 1
+            _log.exception("a look of the vector window failed (%d in a row)", self._failed_looks)
+            if self._failed_looks >= MAX_FAILED_LOOKS:
+                self._give_back(moment)
+            return PassReport(changes, Step("unknown", False, "failed"))
+        self._failed_looks = 0
         return PassReport(changes, step)
+
+    def _give_back(self, now: datetime) -> None:
+        """The pass cannot do its work: if the window is holding the stand, skip it (loudly, with ``pass_failed``) and tell the host to stop. Best effort:
+        if the database itself is what failed, nothing is running that this could free."""
+        self._moment = now
+        try:
+            with self._sessions() as session:
+                control = store.lock_control(session)
+                if control.window_state in (STATE_DRAINING, STATE_ENCODING):
+                    self._skip(session, "pass_failed", f"{self._failed_looks} looks in a row raised")
+                    try:
+                        self._exchange.request_abort()
+                    except OSError:
+                        _log.exception("the host could not be told to stop")
+                session.commit()
+            self._failed_looks = 0
+        except Exception:  # noqa: BLE001 - nothing more can be done from here
+            _log.exception("the stand could not be given back by the failing pass")
 
     def _fill_queue(self) -> None:
         """Queue the cases that have no intent, in transactions of their own, so it runs paused and outside the window (`R-153w`)."""
@@ -205,7 +240,11 @@ class VectorWindowPass:
     # -- encoding ------------------------------------------------------------------------------------------------
 
     def _encoding(self, session: Session, control: store.ControlRow, span: WindowSpan | None) -> tuple[Step, bool]:
-        result = self._exchange.result()
+        try:
+            result = self._exchange.result()
+        except ValueError as exc:   # the host writes it whole; a file that is not one is a fault, and the round is not waited for
+            self._exchange.clear()
+            return self._skip(session, "encoder_failed", f"the host's account of the container could not be read: {exc}"), False
         if result is None:
             if span is None:
                 self._exchange.request_abort()
