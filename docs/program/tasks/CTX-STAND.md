@@ -62,6 +62,7 @@ Dispatch the lane only when every task above is merged into the base it works fr
 ## Non-goals
 - no MCP, no CLI tools
 - no precedents content until the encoder moves: `until_move`
+- no reference block for plan v2: its critic is deterministic and reads none (`ADR-0029` decision 14)
 
 ## Deliverables
 - the descriptor `context_request: [{input_id, text_sha256, section}]` only on `review:main` tasks of runs with a `stage_plan`

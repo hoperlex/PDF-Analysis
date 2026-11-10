@@ -1,7 +1,7 @@
 # Task CRIT-CORE-01 — the precedents core: votes, independence, marks, veto, stop-words, hints and the budget
 
 ## Outcome
-A pure module in the new context `precedents` implements `ADR-0029` decisions 4 and 5: who votes, independence, similarity classes, the marks, `cancel_suggested` with the critic condition, the veto, stop-words by stems, the hints P1, P4 and P5, and the selection under a character budget. It calls no model and no database.
+A pure module in the new context `precedents` implements `ADR-0029` decisions 4 and 5: who votes, independence, similarity classes, the marks, `cancel_suggested` with the critic condition, the veto, stop-words by stems, the hints P1, P4 and P5, and the selection under a character budget. It takes «critic in plan» and «reviewed» as inputs. It calls no model and no database.
 
 Owner: the core lane.
 
@@ -60,8 +60,9 @@ Dispatch the lane only when every task above is merged into the base it works fr
 
 ## Deliverables
 - functions that take votes, comments and critic records as data and return marks, queue membership, hints and a budgeted selection
+- the inputs «critic in plan» and «reviewed» per finding: the core does not know which critic ran (AI in plan v3, deterministic in plan v2, `R-154f`); mapping a plan's critic output to them is `PREC-PASS`
 - the label table: `often_rejected`, `cancel_suggested` (a part of it), `likely_accepted`, `mixed`, `few`/`none`; unanimous refusals never give `mixed`
-- a finding the critic did not review gets only the neutral line «Прецедентов: N (критик не разбирал)» and never `cancel_suggested`
+- a finding no critic reviewed gets only the neutral line «Прецедентов: N (критик не разбирал)» and never `cancel_suggested`
 - `src/auditmanager/precedents/` and `tests/unit/precedents/` are new directories
 
 ## Required tests
@@ -71,7 +72,8 @@ Dispatch the lane only when every task above is merged into the base it works fr
 - fewer than 5 independent votes give no `cancel_suggested`
 - a vote cast under a shown refusal mark is not independent
 - `carried` does not vote and an imported decision does
-- a finding the critic did not review gets no `cancel_suggested`
+- a finding no critic reviewed gets no `cancel_suggested`, whichever plan it ran under
+- a finding that a critic reviewed without a veto can get `cancel_suggested`, with the same inputs for plan v2 and plan v3
 - a veto from any linked candidate hides `cancel_suggested`
 - a stop-word in another grammatical case still matches
 - the selection under 12 000 characters returns the line «не уместилось: N»

@@ -61,7 +61,7 @@ Dispatch the lane only when every task above is merged into the base it works fr
 
 ## Non-goals
 - no UI: `PREC-WEB`
-- under the plan v2 there is no critic, hence no «снять» queue (`R-154b`)
+- no change of the core's rules: mapping the deterministic critic of plan v2 (`R-154f`) and the AI critic's records of plan v3 into the inputs «critic in plan» and «reviewed» is this lane's job
 
 ## Deliverables
 - marks, queue and hints from the core over the memory read through `decision_memory.public`
@@ -72,12 +72,14 @@ Dispatch the lane only when every task above is merged into the base it works fr
 - command: .venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q -p no:cacheprovider <the test files named above>
 - expected: pass; each check below can fail, and a lane shows the test that proves it can
 - a withdrawn case leaves the marks at read time
-- a finding outside the critic window does not enter the queue
+- a finding outside the AI critic's window does not enter the queue
+- a finding no critic reviewed does not enter the queue, in plan v2 and in plan v3
+- a finding reviewed by the plan v2 deterministic critic without a veto can enter the queue
 - a switched-off section shows no refusal marks
 - the viewer role gets `permission_denied`
 
 ## Integration contract
-`PREC-WEB` reads the two operations; the pass runs from the maintenance loop, registered by the last part of `CRIT-CAPTURE-01`, which the integrator takes right after this lane.
+`PREC-WEB` reads the two operations; the pass runs from the maintenance loop, registered by the last part of `CRIT-CAPTURE-01`, which the integrator takes right after this lane. The v2 critic's output comes from the lane `V2-ORIGINAL-REVIEW-01` of the AR v3 removal wave (`R-154f`); until it lands, the pass treats a v2 finding as not reviewed, so v2 gets no «снять».
 
 ## Failure/idempotency/security cases
 - no vector gives «Недоступно», never a fallback search
