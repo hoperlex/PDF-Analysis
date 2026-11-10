@@ -278,7 +278,7 @@ def a_call(s: Scene, item: Any, adapter: Adapter, *, unmetered: bool) -> Any:
 def test_a_start_with_the_layout_on_is_admitted_by_the_system_group_and_freezes_the_cell(db: Db) -> None:
     server(db, "layout-1", report("codex", "api", ASTRA))
     cell = CellSettings(f"{KIND}:main", ASTRA, "medium")
-    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "medium"}))
+    layout_on(db, "codex_only", cells(comparison_pair_check={"model_id": ASTRA, "effort": "medium"}))
     s = scene(db)
     group_revision = group_revision_of_pair(db, ASTRA, "api")
 
@@ -313,7 +313,7 @@ def test_a_start_with_the_layout_on_is_admitted_by_the_system_group_and_freezes_
 
 def test_the_first_call_binds_a_servers_system_connection_and_sends_the_cells_effort_and_no_cap(db: Db) -> None:
     host = server(db, "layout-2", report("codex", "subscription", ASTRA))
-    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "medium"}))
+    layout_on(db, "codex_only", cells(comparison_pair_check={"model_id": ASTRA, "effort": "medium"}))
     s = scene(db)
     job_id = s.start().record.job_id
     adapter = Adapter(reply=ai.live_reply(cost=None, tokens=(1_000, 200), model=ASTRA))
@@ -341,7 +341,7 @@ def test_the_first_call_binds_a_servers_system_connection_and_sends_the_cells_ef
 
 def test_a_subscription_serves_the_kind_before_an_api_key_and_an_api_key_when_no_subscription_does(db: Db) -> None:
     server(db, "layout-3a", report("codex", "api", ASTRA))
-    layout_on(db, "codex_only", cells())
+    layout_on(db, "codex_only", cells(comparison_pair_check={"model_id": ASTRA}))
     s = scene(db)
     api_only = s.service.estimate(s.scope).route
     assert (api_only.billing, api_only.executor_group_revision_id) == ("metered", group_revision_of_pair(db, ASTRA, "api"))
@@ -390,10 +390,10 @@ def test_with_the_switch_off_the_job_is_what_it_always_was(db: Db) -> None:
 
 def test_a_job_keeps_its_own_cell_when_the_layout_is_revised_afterwards(db: Db) -> None:
     server(db, "layout-6", report("codex", "api", ASTRA))
-    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "medium"}))
+    layout_on(db, "codex_only", cells(comparison_pair_check={"model_id": ASTRA, "effort": "medium"}))
     s = scene(db)
     started = s.start().record
-    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "low"}), on=False)  # the layout moves on
+    layout_on(db, "codex_only", cells(comparison_pair_check={"model_id": ASTRA, "effort": "low"}), on=False)  # the layout moves on
     assert s.service.estimate(AiScope(method="pair_check", project_uid=s.world["project"], document_uid=s.world["document"],
                                       matrix_id=s.world["build"])).route.cell.effort == "low", "a new start reads the layout in force"
     with db.sessions() as session:

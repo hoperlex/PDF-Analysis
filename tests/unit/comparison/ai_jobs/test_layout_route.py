@@ -29,7 +29,7 @@ from auditmanager.runs import stage_layout as layout
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ExecutorConnectionId, ExecutorConnectionRevisionId, ExecutorGroupId, ExecutorGroupRevisionId, ProjectUid, DocumentUid
 
-ASTRA, SONNET = "gpt-6-astra", "claude-sonnet-5-5"
+ASTRA, SONNET, LUNA = "gpt-6-astra", "claude-sonnet-5-5", "gpt-6-luna"
 SUB_GROUP, API_GROUP = str(ExecutorGroupId.new()), str(ExecutorGroupId.new())
 SUB_REV, API_REV = str(ExecutorGroupRevisionId.new()), str(ExecutorGroupRevisionId.new())
 CONNECTION, CONNECTION_REV = str(ExecutorConnectionId.new()), str(ExecutorConnectionRevisionId.new())
@@ -66,7 +66,7 @@ class World:
     """The executors' reads: which (model, access) pairs have an available member, which are full, and the route the legacy and the rule would read."""
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, *, free: tuple[str, ...] = ("subscription", "api"), full: tuple[str, ...] = (),
-                 mode: str = "legacy", layout_state: Layout | None = None, source: str | None = "database") -> None:
+                 mode: str = "legacy", layout_state: Layout | None = None, source: str | None = "database", model: str = ASTRA) -> None:
         from auditmanager.executors import public as executors
         from auditmanager.runs import public as runs
 
@@ -74,11 +74,11 @@ class World:
         self.free, self.full, self.mode = free, full, mode
         self.evaluated: list[str] = []
         self.legacy_reads = self.rule_reads = 0
-        revisions = {SUB_REV: group_revision(SUB_REV, SUB_GROUP, model=ASTRA, billing="not_metered"),
-                     API_REV: group_revision(API_REV, API_GROUP, model=ASTRA, billing="metered")}
+        revisions = {SUB_REV: group_revision(SUB_REV, SUB_GROUP, model=model, billing="not_metered"),
+                     API_REV: group_revision(API_REV, API_GROUP, model=model, billing="metered")}
         self.revisions = revisions
         groups = {"subscription": (SUB_GROUP, SUB_REV), "api": (API_GROUP, API_REV)}
-        lock = {ASTRA: (2.0, 10.0), SONNET: (2.0, 10.0)}
+        lock = {ASTRA: (2.0, 10.0), SONNET: (2.0, 10.0), LUNA: (0.1, 0.5)}
 
         def evaluate_wait(session: Any, *, run_id: str, cells: Any, **kw: Any) -> Any:
             (cell,) = cells
@@ -205,8 +205,10 @@ def test_a_revision_with_no_cell_for_the_kind_is_refused_not_served_by_a_model_n
 
 
 def test_a_revision_that_follows_its_sets_table_gives_the_kind_the_sets_cell(monkeypatch):
-    world = World(monkeypatch, layout_state=Layout(cells=None, kit="codex_only"))
-    assert world.read().cell == layout.comparison_preset_cells("codex_only")[0]
+    table_cell = layout.comparison_preset_cells("codex_only")[0]
+    assert table_cell.model_id == LUNA, "the table of « Только Codex » gives the pair check gpt-6-luna since R-153m; the world serves that model"
+    world = World(monkeypatch, layout_state=Layout(cells=None, kit="codex_only"), model=table_cell.model_id)
+    assert world.read().cell == table_cell
 
 
 def test_the_route_of_a_job_that_is_being_re_estimated_wins_over_the_layout(monkeypatch):
