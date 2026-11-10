@@ -286,7 +286,7 @@ def test_each_api_answerer_sends_the_model_effort_and_no_cap_and_returns_the_rep
     ceiling = body.get("max_tokens") or body.get("max_output_tokens")
     # `R-153n`: OpenAI and OpenRouter get no output-token parameter; Anthropic requires one and gets the model's maximum
     assert ceiling == (api_answer.ANTHROPIC_MAX_OUTPUT_TOKENS if provider == "anthropic_api" else None)
-    assert api_answer.ANTHROPIC_MAX_OUTPUT_TOKENS == 64_000
+    assert api_answer.ANTHROPIC_MAX_OUTPUT_TOKENS == 128_000
     efforts = body.get("output_config", {}).get("effort") or body.get("reasoning", {}).get("effort")
     assert efforts == effort
     assert "findings" in json.dumps(body), "the output schema is part of what the model is told"
@@ -309,7 +309,7 @@ def test_a_probe_ceiling_is_sent_only_when_the_caller_names_one():
         capped = api_answer.build_request(provider, model="m", effort="low", max_output_tokens=4096, system="s", user_text="u", output_schema={})
         assert capped[key] == 4096
         uncapped = api_answer.build_request(provider, model="m", effort="low", system="s", user_text="u", output_schema={})
-        assert uncapped.get(key) == (64_000 if provider == "anthropic_api" else None)
+        assert uncapped.get(key) == (128_000 if provider == "anthropic_api" else None)
         assert key in uncapped if provider == "anthropic_api" else key not in uncapped
     for provider in ("openai_api", "openrouter_api"):
         body = api_answer.build_request(provider, model="m", effort="low", system="s", user_text="u", output_schema={})

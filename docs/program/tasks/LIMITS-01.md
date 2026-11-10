@@ -100,7 +100,7 @@ two readers of a stored cell), `runs/preflight.py` (two reads of the renamed est
 ## Deliverables
 - `CellSettings` is a model and an effort (and an access in a plan); `timeout_seconds` and `estimate_output_tokens` are derived from the row.
 - `HostCall` and `payload.host` without `max_output_tokens`; D-677's request-limit channel and the `min(cell, module)` capping removed.
-- The agent: no `CLAUDE_CODE_MAX_OUTPUT_TOKENS`; no output-token parameter for OpenAI and OpenRouter; 64000 for Anthropic; `ACTIVITY_WINDOW_SECONDS` 600.
+- The agent: no `CLAUDE_CODE_MAX_OUTPUT_TOKENS`; no output-token parameter for OpenAI and OpenRouter; 128000 for Anthropic (the catalogue's Claude models' output maximum); `ACTIVITY_WINDOW_SECONDS` 600.
 - Contract 1.49.0, the generated web client and the frontend lock.
 - The editor without «Дополнительно»; the stage dialog without «ответ до N токенов».
 - `R-153n`..`R-153p`, the `ADR-0028` addendum, VERSION 0.23.1 and its note.
@@ -126,6 +126,6 @@ two readers of a stored cell), `runs/preflight.py` (two reads of the renamed est
 No flag. Rollback is a forward revert of the branch; the stand and the agent are then reverted together (the older agent needs the older task).
 
 ## Handoff
-See the lane report. Debt-row candidates: the Anthropic maximum is 64000 by default, not a recorded per-model figure; `analysis/extended` still
+See the lane report. Debt-row candidates: the Anthropic maximum is 128000 for every catalogue Claude model, not a recorded per-model figure; `analysis/extended` still
 calls `limit_of(settings, default)`; `test_layout_route.py::test_a_revision_that_follows_its_sets_table_gives_the_kind_the_sets_cell` was red at
 the base (the fixture serves `gpt-6-astra`, the table gives `gpt-6-luna`).

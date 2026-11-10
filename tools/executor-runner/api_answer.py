@@ -14,8 +14,8 @@ seconds ends the call.  What each answerer sends:
 * the requested ``model`` exactly and the requested ``effort`` in the provider's own parameter
   (``output_config.effort`` for Anthropic, ``reasoning.effort`` for OpenAI and OpenRouter);
 * **no answer cap** (`LIMITS-01`, owner ruling `R-153n`): OpenAI Responses and OpenRouter get no output-token parameter (it is optional there).
-  Anthropic Messages refuses a request without ``max_tokens``, so it gets :data:`ANTHROPIC_MAX_OUTPUT_TOKENS`, the largest answer the
-  repository records for a Claude model. Only the availability probe passes a ceiling of its own (``host_mode.PROBE_MAX_OUTPUT_TOKENS``);
+  Anthropic Messages refuses a request without ``max_tokens``, so it gets :data:`ANTHROPIC_MAX_OUTPUT_TOKENS`, the output maximum of
+  every Claude model in the catalogue. Only the availability probe passes a ceiling of its own (``host_mode.PROBE_MAX_OUTPUT_TOKENS``);
 * the task's ``system`` text with the output schema appended as an instruction (OpenAI also gets the schema as a
   constrained ``json_schema`` format when the caller provides a strict copy) and the ``user_text`` as the user turn;
 * nothing else: no tools, no stored conversation (``store: false`` at OpenAI), no sampling parameters.
@@ -53,11 +53,11 @@ DEFAULT_BASE_URLS = {
     PROVIDER_OPENROUTER: "https://openrouter.ai/api",
 }
 ANTHROPIC_VERSION = "2023-06-01"
-#: ``max_tokens`` of an Anthropic Messages request that names no ceiling of its own: the largest Claude answer the repository records
-#: (``analysis/profiles/ar_v3/request_delivery.py``: 64000). The repository records no per-model maximum -- ``docs/program/P02_LOCK.json`` and
-#: the model catalogue hold the context and the rates only -- so this is that figure, not a provider fact; a model whose real maximum is lower
-#: would answer such a request with an invalid-request error (see the debt row candidate of `LIMITS-01`).
-ANTHROPIC_MAX_OUTPUT_TOKENS = 64_000
+#: ``max_tokens`` of an Anthropic Messages request that names no ceiling of its own: the output maximum of the Claude models the catalogue
+#: offers (Opus 5.5 and Sonnet 5.5, and Opus 5 / Sonnet 5 before them: 128000 each on a streamed request, which every call here is). The
+#: parameter is required, so the model's own maximum is the only value that caps nothing (`R-153n`). The catalogue records no per-model
+#: output maximum; a Claude model added to it with a lower one would answer such a request with an invalid-request error.
+ANTHROPIC_MAX_OUTPUT_TOKENS = 128_000
 _PATHS = {
     PROVIDER_ANTHROPIC: "/v1/messages",
     PROVIDER_OPENAI: "/v1/responses",

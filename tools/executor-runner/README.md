@@ -198,7 +198,7 @@ command takes `--effort`; Codex gets `-c model_reasoning_effort="<effort>"`; the
 ruling `R-153n`, restoring his instruction of 2026-11-06; the task carries no `max_output_tokens`): the Claude Code command is run
 without `CLAUDE_CODE_MAX_OUTPUT_TOKENS` and the variable is removed from its environment if the agent inherited it; the Codex command
 has no such limit; OpenAI Responses and OpenRouter get no output-token parameter; Anthropic Messages requires `max_tokens`, so it gets
-64000, the largest Claude answer the repository records (`api_answer.ANTHROPIC_MAX_OUTPUT_TOKENS`). The one exception is the availability
+128000, the output maximum of every Claude model in the catalogue (`api_answer.ANTHROPIC_MAX_OUTPUT_TOKENS`). The one exception is the availability
 probe (`PROBE_MAX_OUTPUT_TOKENS`, 4096), which is not an analysis answer and reaches an API provider only. A call is bound by its task's time. The service stays one process; `journalctl -u pdf-analysis-agent` shows the recount (`probe:`), the catalogue and
 the reason a key file was ignored. `sudo -u pdf-agent -H python3 /opt/pdf-analysis-agent/detect.py --host` shows what the agent
 would report, without calling a model.
