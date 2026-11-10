@@ -56,6 +56,15 @@ def _run(connection: Connection, *, plan: dict[str, Any] | None = None, revision
     return ids["run"]
 
 
+def _no_review(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests read the facts of a planned run inserted without the command and consent v2 a real start carries
+    (`HOSTS-LAYOUT-01`: a planned run never starts without them, and `read_run_cost_policy` refuses one that has none). The extended
+    review's own reader is tested on its own; here it stands absent, so the facts are read from the stage rows and the journal."""
+    import auditmanager.runs.extended_review as extended_review
+
+    monkeypatch.setattr(extended_review, "read_extended_review", lambda *args, **kwargs: None)
+
+
 def _connection_revision(connection: Connection) -> str:
     connection_id, revision_id = str(ExecutorConnectionId.new()), str(ExecutorConnectionRevisionId.new())
     connection.execute(text(
@@ -122,7 +131,10 @@ def sessions(migrated_engine: Engine) -> sessionmaker:
     return sessionmaker(bind=migrated_engine, expire_on_commit=False)
 
 
-def test_a_planned_run_reads_its_stage_results_and_a_journal_of_new_and_old_rows(migrated_engine: Engine, sessions: sessionmaker) -> None:
+def test_a_planned_run_reads_its_stage_results_and_a_journal_of_new_and_old_rows(
+    migrated_engine: Engine, sessions: sessionmaker, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _no_review(monkeypatch)
     with migrated_engine.begin() as connection:
         run_id = _run(connection, plan=PLAN)
         _stage(connection, run_id, "source_preparation")
@@ -153,7 +165,10 @@ def test_a_planned_run_reads_its_stage_results_and_a_journal_of_new_and_old_rows
     assert "finished_at" not in norms and "started_at" in norms
 
 
-def test_the_viewers_read_leaves_out_the_access_of_every_cell(migrated_engine: Engine, sessions: sessionmaker) -> None:
+def test_the_viewers_read_leaves_out_the_access_of_every_cell(
+    migrated_engine: Engine, sessions: sessionmaker, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _no_review(monkeypatch)
     with migrated_engine.begin() as connection:
         run_id = _run(connection, plan=PLAN)
     answer = read_run_stage_facts(sessions, None, run_id=run_id, include_server=False)
