@@ -76,6 +76,12 @@ volumes:
   # are wider.
   web-sessions:
     name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-web-sessions
+  # `EMBED-01` (ADR-0029 decision 8). The directory the worker and the host's timer meet in: the worker writes the batch for the night encoder
+  # here and reads the vectors back, `infra/deploy/embed-window.sh` (on the host, by this volume's mountpoint) runs the `embedder` service
+  # over it. It holds the TEXT of expert findings for the length of one round and is emptied by the worker after it. The `embedder` and the
+  # `worker` mount it and nothing else does.
+  embed-exchange:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-embed-exchange
 
 services:
   postgres:
@@ -393,6 +399,10 @@ services:
       # is offline before it ends `no_executor_online` (whole seconds, 1..604800; a blank value refuses to start,
       # so the default is written here).
       AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS: ${AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS:-1800}
+      # `EMBED-01` (ADR-0029 decision 8). Where the worker leaves the batch for the night encoder and finds its vectors (the volume below).
+      # A literal: the directory is the one the volume is mounted at. The worker's pass that uses it is wired by the composition root; until
+      # then nothing reads this name, and a worker without it does nothing about the window.
+      AUDITMANAGER_EMBED_DIR: /embed
     # The provider credential, the private key ring and the optional destination allowlist
     # (`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS`): a separate file the owner writes on the host,
     # never passed to --env-file, so it stays out of compose substitution and therefore out
@@ -402,6 +412,9 @@ services:
         required: false
     tmpfs:
       - /run/auditmanager:uid=10001,gid=10001,mode=0700,size=1m
+    # `EMBED-01`: the exchange with the night encoder (see the volume above). The only mount of this service.
+    volumes:
+      - embed-exchange:/embed
     # `SIGTERM` drains: no new claim, the run in flight finishes (at most 270 s, then the
     # process exits and its lease expires into the reclaim). Above that drain on purpose.
     stop_grace_period: 300s
@@ -526,3 +539,61 @@ services:
     # listener is refused once a name is set.
     ports:
       - "${ALPHA_BIND_ADDRESS:-127.0.0.1}:${ALPHA_HTTP_PORT:?ALPHA_HTTP_PORT is unset.}:8080"
+
+  # `EMBED-01` (ADR-0029 decision 8, plan-v5 section 5). The offline encoder of the precedents' vectors: `bge-m3-dense-v1` in the norms-worker image,
+  # run by the host's timer (`infra/deploy/embed-window.sh`) inside the night window and by nothing else.
+  #
+  #   * IN THE PROFILE `embedder`, so `up`, `build` and `ps` never start or build it. `deploy.sh` builds its image only when ALPHA_EMBEDDER=yes
+  #     (the image is 5.5 GB and a rebuild needs 9.5 GB of disk: `docs/program/W54-EMBED-BUILD-01.md`).
+  #   * NO NETWORK (`network_mode: none`), NO DATABASE (no `DATABASE_URL`, no `networks`, no `depends_on`, no `env_file`), NO SECRET. The image sets
+  #     the hub offline. The container reads one file and writes two; it cannot reach anything else, and it holds the text of findings only
+  #     for the minutes it runs.
+  #   * A HARD MEMORY LIMIT THAT HAS NO DEFAULT. `${ALPHA_MEM_LIMIT_EMBEDDER:?...}` makes compose refuse to render this file at all while the
+  #     value is unset or empty -- and compose renders the whole file for every command, so an alpha.env without it stops `up` as well: that is
+  #     the intent (the encoder's peak, 3 177,9 MiB at the bake-off's threads and batch, sits next to services that have no limit, and a limit
+  #     nobody chose is how the host's kernel chooses the victim). NO NUMBER IS INVENTED HERE; the owner sets it from the first night's
+  #     measurement. `memswap_limit` is the same value, so the container cannot swap past its limit, and `oom_score_adj: 1000` makes it the
+  #     kernel's first victim if the host still runs short: a killed encoder is a skipped window, a killed worker or database is an outage.
+  #   * TWO CPUs, TWO THREADS, BATCH EIGHT: `cpus`, the thread variables below and `embed_intents.py` (`THREADS`, `BATCH`).
+  #   * The entry is `embed_intents.py`, mounted read-only from the checkout: `embed-texts` of the norms package, plus the over-length texts set
+  #     aside (they become `poisoned`, never cut). The image is not changed for it.
+  embedder:
+    profiles: [embedder]
+    build:
+      context: ../..
+      dockerfile: infra/norms-worker/Dockerfile
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-embedder
+    network_mode: none
+    restart: "no"
+    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:?ALPHA_MEM_LIMIT_EMBEDDER is unset. It is the encoder's hard memory limit (for example 3500m); no number is invented. See infra/deploy/README.md, the night encoder.}
+    memswap_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:?ALPHA_MEM_LIMIT_EMBEDDER is unset.}
+    oom_score_adj: 1000
+    cpus: 2
+    pids_limit: 256
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=256m
+    environment:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      HOME: /tmp
+    volumes:
+      - embed-exchange:/embed
+      - ../norms-worker/embed_intents.py:/opt/norms-worker/embed_intents.py:ro
+    command:
+      - python
+      - /opt/norms-worker/embed_intents.py
+      - --in
+      - /embed/request.json
+      - --out
+      - /embed/response.json
+      - --over-limit-out
+      - /embed/over_limit.json
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

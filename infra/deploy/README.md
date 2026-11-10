@@ -836,6 +836,37 @@ rather than assumed:
 `tests/integration/composition/test_deployed_stack_probe.py` drives every one of its
 answers against stubs, including the ones where it is confused.
 
+## The night encoder — `EMBED-01` (ADR-0029 decision 8)
+
+The vectors of the precedents (`bge-m3-dense-v1`, 1024 dimensions) are made **offline, at night, by a container that has no database and no network**. The
+host is 4 GB and the encoder peaks at about 3,2 GiB, so while it runs the stand takes no new run; that is a temporary decision with a recorded end
+(ADR-0029, «Temporary decisions», 2). What is here, and nothing else, is that decision's deployment:
+
+* **the service `embedder`** in `compose.server.yml`, in the profile `embedder` (`up`, `build` and `ps` never touch it): `network_mode: none`, no
+  `DATABASE_URL`, no secret, a read-only root, two CPUs, two threads, a batch of eight, `oom_score_adj: 1000`, and a **hard memory limit with no
+  default**: `mem_limit` and `memswap_limit` are both `${ALPHA_MEM_LIMIT_EMBEDDER:?...}`. **Compose renders the whole file for every command**, so
+  while `ALPHA_MEM_LIMIT_EMBEDDER` is empty or unset in `alpha.env` *every* `docker compose` call of this stack -- `up` included -- refuses and names it.
+  Set it (for example `3500m`) before the deploy that brings this service in. No number is shipped: the first night is the measurement, and a limit
+  nobody chose is how the host's kernel chooses the victim.
+* **the volume `<instance>-embed-exchange`**, mounted at `/embed` by the `worker` and the `embedder` and by nothing else: the worker leaves the batch
+  (the text of expert findings, for the length of one round) and finds the vectors; the worker empties it after each round.
+* **the host's timer**, `infra/deploy/embed-window.sh` with `systemd/auditmanager-embed-window.{service,timer}`: it looks at the exchange every minute,
+  writes a heartbeat, and when the worker has left a batch runs the `embedder` over it, stops it at the window's deadline (or when the worker says
+  `abort`), and reports how it ended. Install it once, as root: `infra/deploy/embed-window.sh install` (it fills in the checkout and the environment
+  file, enables the timer). **To stop the night encoder: `systemctl disable --now auditmanager-embed-window.timer`** -- the worker opens no window for
+  a host whose timer is silent, so nothing stops a run for nothing; the intents wait. Pausing «Векторы» in the top strip does the same from the screen.
+* **`ALPHA_EMBEDDER=yes`** (default `no`) makes `deploy.sh` build the image after the other two and **after a check of the disk** (the image is 5,5 GB and
+  its rebuild took 9,5 GB, `docs/program/W54-EMBED-BUILD-01.md`; `ALPHA_EMBEDDER_BUILD_MIN_FREE_GB`, default 12; an image that is already there is not
+  rebuilt), and makes `verify-deployed.sh` check that the image, the timer and a heartbeat of the last ten minutes are in place. Both call
+  `embed-window.sh build-image` and `embed-window.sh verify`.
+* **the window itself** -- 01:00-06:00 at Yekaterinburg unless the setting `vector_window` says otherwise -- is the worker's, not the timer's. A window
+  that did not take place (the stand did not drain, the timer was silent, the container was killed at its limit or stopped at the deadline) is
+  **skipped loudly**: the state «skipped» with its reason in the pause menu, an ERROR line in the worker's log, and the next night repeats. A text over
+  512 tokens is not cut: its intent becomes `poisoned` and the administrator sees it.
+* **what to read on the first night**: `docker stats` is useless for a container that lives minutes; read the exit status in `result` of the exchange
+  (`137` is the memory limit) and the worker's log line `the vector window closed: ...` or `... was skipped (...)`. If the limit was too low, raise
+  `ALPHA_MEM_LIMIT_EMBEDDER` and deploy; if it was too high for the stand's other services, lower it and accept more nights.
+
 ## What is NOT here, and why
 
 * **A host name, a certificate and a DNS record.** Still nobody's to invent. `W14-PKG`

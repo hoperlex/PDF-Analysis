@@ -1120,6 +1120,24 @@ echo "  ${BUILT_IMAGES// /, } are built"
 echo
 # <<< guard: images-built
 
+# --- 1-embedder. the night encoder's image (`EMBED-01`, ADR-0029 decision 8) ----------------------------------------
+# `ALPHA_EMBEDDER` (yes or no, default `no`: the stack is what it was). `yes` builds the image of the service `embedder` -- the norms-worker
+# image, 5.5 GB, whose rebuild took 9.5 GB -- AFTER the images above and BEFORE anything is brought up, and only after `embed-window.sh` has
+# checked that the disk can hold it, so a full disk is one sentence and a stack still serving, never a build that dies halfway. The check and
+# the build are `embed-window.sh build-image`, so they are driven (with a docker shim) in `tests/unit/precedents/test_embed_window_script.py`.
+# The service is in a compose profile: `up` below never starts it. The host's timer runs it (`embed-window.sh install`, root).
+EMBEDDER="$(configured ALPHA_EMBEDDER)"
+case "${EMBEDDER:-no}" in
+    no) ;;
+    yes)
+        echo "-- the night encoder's image --"
+        "$HERE/embed-window.sh" build-image --env-file "$ENV_FILE" \
+            || refuse "the night encoder's image was not built." \
+                      "NOTHING WAS STARTED OR REPLACED. Set ALPHA_EMBEDDER=no in $ENV_FILE to deploy without it." ;;
+    *) refuse "ALPHA_EMBEDDER is '$EMBEDDER', which is neither yes nor no." \
+              "Nothing was built. It is read as data; a value this script does not recognise is refused, not read as the default." ;;
+esac
+
 # --- 1a. an identical rebuild keeps the identity it already had ----------------------
 # `D-36`, AND THE ONE PART OF CRITERION 1'S ROW `R-1` DOES NOT BLOCK. Fetch, switch and
 # roll back are claims about a server with a previous version on it and there is no such

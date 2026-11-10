@@ -640,4 +640,20 @@ esac
 echo "  no account accepts the published password; temporary passwords, if any, are warned about above."
 echo
 
+# --- 6. the night encoder (`EMBED-01`, ADR-0029 decision 8) ---------------------------------------------------------
+# Asked only when the environment says it is on (`ALPHA_EMBEDDER=yes`; default no). The image of the service `embedder` is not a running container
+# (it runs for the length of a round, started by the host's timer), so what can be asked of it is that it exists, that the timer is enabled and
+# active, and that the timer has been seen within ten minutes. `embed-window.sh verify` says which of the three is missing.
+EMBEDDER="$(configured ALPHA_EMBEDDER)"
+case "${EMBEDDER:-no}" in
+    no) ;;
+    yes)
+        echo "-- the night encoder --"
+        EMBED_OUTPUT="$("$HERE/embed-window.sh" verify --env-file "$ENV_FILE" 2>&1)" \
+            || fail "$DRIFT" "the night encoder is on (ALPHA_EMBEDDER=yes) and is not in place." "$EMBED_OUTPUT"
+        printf '  %s\n' "$EMBED_OUTPUT"
+        echo ;;
+    *) fail "$UNANSWERABLE" "ALPHA_EMBEDDER is '$EMBEDDER', which is neither yes nor no." ;;
+esac
+
 echo "verify-deployed.sh: the deployed stack IS this tree ($HEAD_SHA$DIRTY)."
