@@ -458,6 +458,58 @@ said "the browser made no API call at all" about a page that had asked for a dep
 `write.mjs`) copies the exchanges, console errors, page errors and location into the step's record before the exception leaves, and the
 finding for `could not be driven` now ends with the calls the browser had made (`GET /bff/v1/... -> 503`). The error is rethrown unchanged.
 
+### The walk's DOM readings: `--readings` (`D-619`, lane WALK-TOOLS, 2026-11-10)
+
+The two assertions above are PASS/FAIL. The width walk of lane WALK-V5 (2026-11-10: 37 screens at 360, 414, 768, 1024, 1280, 1366 and 1440 px, and at
+1680 and 1920 px for the four that change there) also took readings that a human has to judge, and they are what found the layouts the assertions are
+blind to. They were a 250-line probe in a git-ignored evidence directory; `readings.mjs` is that probe, over the journey's own modules, behind a flag:
+
+```
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 390 --height 844 --readings \
+  [--readings-baseline <journey.json of a run at 1280 with --readings>] --out <dir>
+```
+
+| reading | what it takes | what it makes of it |
+|---|---|---|
+| page height | `document.scrollHeight`, and its ratio to the same route in the baseline run | flag `height>3x` when the ratio is over `HEIGHT_RATIO_LIMIT` (3.0 itself is not); a **finding**, but only when `--readings-baseline` was given |
+| inner scrollers | every box with `overflow-x: auto/scroll` whose content is wider than the box, plus the boxes that clip or truncate their text, boxes left of the page and the elements that really widen it | flag `scroller` when the content passes the box by more than 16 px (a table under 768 px is a window by design and is not flagged); a **note** under the route's line, never a finding |
+| stacked menu | under 1024 px the «Меню» button is clicked and the width measured again (`width.mjs`'s `measureWidth`) | flag `menu-overflow` and a **finding** when the opened menu makes the page scroll sideways; the width assertion measures before any click |
+| tallest table row | the tallest body row of each table, cell by cell (box and the text's own height) | recorded only: a narrow cell in a tall row is often a symptom of its neighbour, and the cell's `textH` tells them apart |
+
+The readings are `record.readings` of each route in the envelope (`facts`, `ratio`, `baselineHeight`, `menu`, `afterMenu`, `flags`), taken **last** (opening the
+menu is the one thing they change), and the route's line gains `h=<px> x<ratio> flags=[...]`. `facts` has the shape of the old probe's `records.jsonl` (`scrollH`,
+`scrollers`, `clipped`, `truncated`, `left`, `realOffenders`, `tables`, `h1`), so a route at a width compares with the probe's record of the same route. Without
+`--readings` the envelope and the output are exactly what they were. `--readings-baseline` needs `--readings`, and an envelope that holds no readings stops
+the run (exit 2).
+
+**The matrix is a loop of runs, the 1280 first** (it is every other run's baseline; 360 and 414 use a 844 px high window as the probe did):
+
+```
+walk() { node tests/e2e/pc01/journey/journey.mjs --origin $ORIGIN --phase read --width $1 --height $2 --seed $SEED --readings $3 --out $OUT/$1; }
+walk 1280 900                                              # first: it is the baseline of the others
+for w in 360 414; do walk $w 844 "--readings-baseline $OUT/1280/journey.json"; done
+for w in 768 1024 1366 1440; do walk $w 900 "--readings-baseline $OUT/1280/journey.json"; done
+# 1680 and 1920, for the four screens that change there: add --routes root,version,project,dashboard
+```
+
+(`$SEED` is the `write.captured` object of the write half's `journey.json`, saved as its own JSON file; a run with `--seed` exits `3`, `PARTIAL`, when it is otherwise clean, and `$OUT/<width>/journey.json` is its envelope.) The probe walked its matrix in 4 minutes
+on two parallel browsers (WALK-V5, 2026-11-10); the journey's read walk is one cold browser per route, about 45 s a width (lane J2 above), so the seven widths are about
+five minutes in series. That figure for the journey was **not re-taken** through `--readings` on a stand by lane WALK-TOOLS (no stand was up in its window).
+
+**Shown able to fail, in a real browser.** `readings.test.mjs` (`node --test`, in the gate's list) holds the verdicts: each threshold on both sides of its edge, the
+flags, the findings, the baseline. The page-side expressions read boxes and styles, which a fake document cannot make honest, so `readings.page.test.mjs` drives a
+Chrome over `fixtures/readings-page.html`, served on a loopback port by the test, twice: with its `#fault` style (a scroller 900 px wide in a 372 px box, a
+menu 1500 px wide once opened, a table column squeezed to 24 px, a box that clips its text) and without it (`?clean=1`). It requires the first read red and the
+second clean, on the journey's own `takeReadings`. It needs a browser (`E2E_PC01_CHROME=<chrome> node --test tests/e2e/pc01/journey/readings.page.test.mjs`, no
+stand, no sign-in), and like `cdp.mjs` it does not skip without one, so it is NOT in the gate's list; `test_pc01_journey_conformance.py` checks only that the flag is
+wired, that the test imports the journey's module and that the fixture still carries its `#fault`.
+
+**`lab.mjs`: candidate CSS on the live page.** The knowledge-base filter floors of WALK-V5 were chosen by injecting candidate rules into the live page and reading the
+result. `lab.mjs --origin O --journey <journey.json> --route <name> --variants <file.json> [--widths ...] [--selector CSS] [--out file]` does that for any route: each
+variant (`null` is the page as it is, always include it) is injected into a cold browser per width, and the page height, `scrollWidth/innerWidth`, the collapsed-column count and
+the boxes of an optional selector are printed. The injection and the variants file are held by `readings.test.mjs` and `readings.page.test.mjs` (a rule injected into the
+clean fixture makes its row tall); the script's sign-in and route lookup need a stand and were not run by lane WALK-TOOLS.
+
 ## No dependency
 
 `cdp.mjs` speaks the Chrome DevTools Protocol over Node's built-in global `WebSocket`
