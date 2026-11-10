@@ -30,6 +30,17 @@ The rules, as the owner ruled them:
   words: a document whose first run is in flight is still ``not_run`` and a checked one with a re-run in flight is
   still ``checked``. The counters do not read it.
 
+* **One list is counted by the same statement** (`F8-COUNT-XLSX`, plan-v5 section 4 item 6). A run carries a publication marker,
+  ``audit_run.publication_mode``: ``text_only`` (the default, and every run older than the marker) or ``one_list``. A ``one_list`` run
+  publishes its extended-review candidates as findings of their own -- one ``finding`` per group, N observations of
+  ``grounding_kind = portal_block`` -- and they are rows of the very tables this statement reads, so a ``text_only`` run counts exactly as
+  before and a ``one_list`` run counts its candidates too, without a branch on the marker: a second rule for the same set would be a second
+  place to be wrong. What the words mean follows from that. For a ``text_only`` run ``clean`` is "the text path found nothing" and
+  ``awaiting_decision`` "a text finding awaits the expert"; for a ``one_list`` run ``clean`` is "neither the text nor the drawings found
+  anything" and ``awaiting_decision`` includes the candidates, which are about as many as the machine proposed. The release note says so.
+  ``tests/integration/dashboard/test_one_list_counters.py`` pins both modes; the marker is deliberately *not* a column of the read model, since
+  the wire cannot carry it and nothing here would read it.
+
 A finding is *undecided* when its current verdict, read from ``finding_current_verdict`` (the projection
 ``decisions.projection`` and the verdict panel already read), is ``pending`` -- no verdict was ever recorded --
 or ``needs_manual_review``, which the database cannot produce today but which an expert would still have to
