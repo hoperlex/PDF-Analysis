@@ -9,6 +9,10 @@
  * which opens the form (`features/manage-stage-layout`). The layout is read for an expert and an administrator only: the
  * viewer neither sees the tab nor reads the layout (`R-150w`).
  *
+ * **«Сравнение версий»** (`CMP-WEB-01`) is one folded line under the table, holding a line for each of the four kinds of the comparison of
+ * versions; it is the only thing the table gains. A revision with no model for the comparison (a «Свой набор» saved without them) has no
+ * line to fold: it says in one sentence that the comparison will not run, because that is a problem and the normal is not shown.
+ *
  * While the layout is switched off, the table says so in a line: runs follow the routes as before, and the administrator can
  * still prepare a revision, since the switch cannot be turned on without a saved one. The revisions and the journal live on
  * the advanced page.
@@ -20,6 +24,8 @@ import type { Role, StageModelLayout } from '@/shared/api';
 import { canExecute, executionFailure } from '@/entities/execution';
 import { availableModelIds, mayReadHosts, useExecutorHosts } from '@/entities/executor-host';
 import {
+  COMPARISON_GROUP_TITLE,
+  COMPARISON_NONE_NOTE,
   EDIT_LABEL,
   LAYOUT_OFF_NOTE,
   LAYOUT_ON_NOTE,
@@ -28,6 +34,7 @@ import {
   NO_LAYOUT,
   NO_LAYOUT_ADMIN,
   STAGE_ROW_LABELS,
+  comparisonTable,
   layoutTable,
   useModelCatalogue,
   useStageModelLayout,
@@ -43,6 +50,28 @@ export interface StageModelsTableProps {
   /** An administrator: drawn «Изменить». */
   readonly admin: boolean;
   readonly onEdit?: (() => void) | undefined;
+}
+
+/** «Сравнение версий ▸»: one folded line with a line for each kind; or the sentence that none will run. Nothing before a revision exists. */
+function ComparisonLines({ layout }: { readonly layout: StageModelLayout }) {
+  if (layout.current === undefined) return null;
+  const readings = comparisonTable(layout);
+  if (readings.length === 0) return <p className={styles.note} data-layout-comparison-none>{COMPARISON_NONE_NOTE}</p>;
+  return (
+    <details className={styles.fold} data-layout-comparison-group>
+      <summary>{COMPARISON_GROUP_TITLE}</summary>
+      <ul className={styles.cells}>
+        {readings.map((reading) => (
+          <li key={reading.kind} className={styles.cell} data-comparison-kind={reading.kind} data-model-effort={reading.effort}>
+            {`${reading.label}: ${reading.text}`}
+            {reading.unavailable ? (
+              <span className={styles.missing} title={NOT_ON_SERVERS_HINT} data-host-reason="not_on_any_server">{NOT_ON_SERVERS}</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 /** The note, the table and, for an administrator, «Изменить». The pure part of the screen. */
@@ -83,6 +112,7 @@ export function StageModelsTable({ layout, admin, onEdit }: StageModelsTableProp
           ]}
         />
       )}
+      <ComparisonLines layout={layout} />
       {admin && onEdit !== undefined ? (
         <p className={styles.actions}>
           <button className="am-button" type="button" data-layout-edit onClick={onEdit}>{EDIT_LABEL}</button>
