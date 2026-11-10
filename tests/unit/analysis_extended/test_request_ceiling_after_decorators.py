@@ -104,7 +104,8 @@ def _norm_run(monkeypatch, *, attached_size, policy, calls):
         return NS(output_text=json.dumps({"assessments": [{"input_id": row["input_id"], "norm_assessment": {
             "relation": "insufficient", "explanation": "Цитата не раскрывает условие",
             "citations": [{"paragraph_id": "p1", "quote": "Цитата"}]}} for row in json.loads(
-                request.body["messages"][0]["content"]).get("observations", [])]}), response_sha256="b" * 64)
+                request.body["messages"][0]["content"]).get("observations", [])]}), response_sha256="b" * 64,
+            truncated=False)  # the runtime reads `truncated` of every reply it receives, as `ModelResponse` carries it
     runtime._norm_batched_v3(session=None, run=NS(run_id="run"), binding=NS(config=NS(model_id="m")), state=state,
         snapshot_id=None, phase=lambda *_: None, call=call, checkpoint=lambda _: None, window_context=window)
 
