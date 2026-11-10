@@ -478,8 +478,9 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
     word: 'MiB',
     why:
       'A unit symbol. IEC 80000-13 fixes the spelling and it is not localised; the ' +
-      'upload envelope states a size in it. `MB`, `KiB`, `GiB` are matched by the unit ' +
-      'pattern for the same reason; this entry covers a bare one.',
+      'upload envelope states a size in it. `KiB`, `GiB` attached to a number are matched by the ' +
+      'IEC pattern for the same reason; this entry covers a bare one. The decimal `MB` and `KB` ' +
+      'are NOT covered (`D-666`): they have a Russian form, «МБ» and «КБ».',
   },
 ];
 
@@ -573,14 +574,30 @@ const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp
     pattern: /\b[vV][1-9][0-9]*\b/g,
   },
   {
-    name: 'units attached to a number',
-    // A unit is Latin because the unit is Latin. Bound to a preceding number so that a
-    // bare `MB` in a sentence is still an offence.
-    // `m` and `s` are here because the run screen renders a duration as "4 m 0 s". They
-    // are bound to a preceding number like every other unit, so a bare `s` is an offence.
-    pattern: /\b\d+(?:[.,]\d+)?\s*(?:[KMGT]i?B|ms|[smhd]|px|rem|%)\b/g,
+    // `D-666`. This entry used to mask EVERY unit after a number (`s`, `ms`, `m`, `h`, `d`, `px`, `rem`, `MB`, `KB`, ...), on the
+    // reading that "a unit is Latin because the unit is Latin". That excused the class it was meant to catch: a duration
+    // rendered «2.5 s» to a Russian reviewer and only a unit test that expected the Latin text noticed «2,5 с». The units that
+    // have a Russian form are now refused (see `LATIN_UNIT_AFTER_NUMBER`); what stays masked is the one family with no
+    // Russian form that this application prints, the IEC 80000-13 binary symbols (`25 MiB`, the upload envelope), which the
+    // `MiB` entry of `NOT_DERIVABLE` reasons and which `tests/e2e/pc01/journey/manifest.json` names by text.
+    name: 'IEC binary units attached to a number',
+    pattern: /(?<![A-Za-z0-9_.])\d+(?:[.,]\d+)?\s*[KMGT]iB(?![A-Za-z0-9_])/g,
   },
 ];
+
+/**
+ * `D-666`. A number followed by a Latin unit: `2.5 s`, `300 ms`, `3 min`, `1 h`, `12 MB`, `64 KB`, `320 px`.
+ *
+ * The Russian forms exist and the screens have formatters for them (`2,5 с`, `мс`, `мин`, `ч`, `МБ`), so a Latin unit here is
+ * chrome the application wrote, not a standard's symbol. It is looked for in the text left AFTER the machine shapes are taken out
+ * (a model name, an identifier, a digest, a filename, a timestamp, an IEC binary unit), so what those legitimately contain cannot
+ * trip it, and BEFORE the contract vocabulary and the residue list are applied, so no enum value or listed word can excuse a unit.
+ *
+ * Both sides are bounded: the digit must not continue a word, a version or a decimal (`v3 s`, `1.2.3 s` are not read from the
+ * middle), and the unit must be the whole token (`3 sections` is not `3 s`; it is reported as the word `sections` by the word pass).
+ * Only Latin letters are matched, so «2,5 с» (Cyrillic `с`) and «3 мин» are never touched.
+ */
+export const LATIN_UNIT_AFTER_NUMBER = /(?<![A-Za-z0-9_.,])\d+(?:[.,]\d+)?\s*(?:min|ms|px|rem|[KMGT]B|[smhd])(?![A-Za-z0-9_])/g;
 
 /** Entities `renderToStaticMarkup` writes, decoded so `&amp;` is not read as `amp`. */
 function decodeEntities(text: string): string {
@@ -641,6 +658,14 @@ export function unexplainedLatin(text: string, vocabulary: ReadonlySet<string>):
   let residue = text;
   for (const { pattern } of MACHINE_SHAPES) residue = residue.replace(pattern, ' ');
 
+  // `D-666`: a number and a Latin unit are reported whole (`2.5 s`), not as the bare letter they leave (`s`), and before the
+  // vocabulary is applied so that no contract value can excuse them.
+  const units: string[] = [];
+  residue = residue.replace(LATIN_UNIT_AFTER_NUMBER, (found: string) => {
+    units.push(found.replace(/\s+/g, ' '));
+    return ' ';
+  });
+
   // Longest first, so `needs_manual_review` is consumed before `review` could be.
   //
   // AND ON A WORD BOUNDARY, which `split`/`join` did not do. `accept` is a permitted
@@ -670,7 +695,7 @@ export function unexplainedLatin(text: string, vocabulary: ReadonlySet<string>):
   }
 
   const words = residue.match(/[A-Za-z][A-Za-z'’]*/g) ?? [];
-  return [...new Set(words)];
+  return [...new Set([...units, ...words])];
 }
 
 // ===================================================================== the screens
@@ -4903,6 +4928,57 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('needs', VOCABULARY)).toEqual(['needs']);
     expect(unexplainedLatin('analysis', VOCABULARY)).toEqual(['analysis']);
   });
+
+  it('D-666: refuses a number followed by a Latin unit, and names it with its number', () => {
+    // The form that was let through: `RUN-SCREEN-FIX-01` found «2.5 s» rendered, and only a unit test that expected the Latin text
+    // noticed the change to «2,5 с». The unit used to be masked along with every other machine shape.
+    const refused: readonly (readonly [string, readonly string[]])[] = [
+      ['Заняло 2.5 s', ['2.5 s']],
+      ['Заняло 2,5 s', ['2,5 s']],
+      ['Заняло 10s', ['10s']],
+      ['Ответ за 300 ms', ['300 ms']],
+      ['Ожидание 3 min', ['3 min']],
+      ['Осталось 1 h', ['1 h']],
+      ['Осталось 2 d', ['2 d']],
+      ['Размер 12 MB', ['12 MB']],
+      ['Размер 64 KB', ['64 KB']],
+      ['Ширина 320 px', ['320 px']],
+      ['Отступ 1.5 rem', ['1.5 rem']],
+      // The run screen's old duration, each half named on its own.
+      ['Заняло 4 m 0 s', ['4 m', '0 s']],
+      ['Заняло 4m 0s', ['4m', '0s']],
+    ];
+    for (const [text, expected] of refused) expect(unexplainedLatin(text, VOCABULARY), text).toEqual(expected);
+    // Not excused by an element around it, or by the attribute it is in: `<code>` is for identifiers, not for units.
+    expect(visibleText('<code>2.5 s</code>').flatMap((text) => unexplainedLatin(text, VOCABULARY))).toEqual(['2.5 s']);
+    expect(visibleText('<span title="1 h">Время</span>').flatMap((text) => unexplainedLatin(text, VOCABULARY))).toEqual(['1 h']);
+    // Not excused by a contract word either: the unit is looked for before the vocabulary is applied, so a vocabulary that
+    // happened to contain the letters would still not let «3 s» through.
+    const permissive = new Set([...VOCABULARY, 's', 'ms', 'min', 'h', 'd', 'MB', 'KB', 'px']);
+    for (const unit of ['s', 'ms', 'min', 'h', 'MB', 'KB', 'px']) {
+      expect(unexplainedLatin(`Заняло 3 ${unit}`, permissive), unit).toEqual([`3 ${unit}`]);
+    }
+  });
+
+  it('D-666: leaves the Russian units and the legitimate Latin around a number alone', () => {
+    // The Russian forms the screens print.
+    for (const text of ['Заняло 2,5 с', 'Ответ за 300 мс', 'Ожидание 3 мин', 'Осталось 1 ч', 'Размер 12 МБ', 'Размер 64 КБ', 'Заняло 4 м 0 с']) {
+      expect(unexplainedLatin(text, VOCABULARY), text).toEqual([]);
+    }
+    // A model is named as the catalogue spells it and as the screens name it, and a duration beside it is Russian.
+    for (const name of catalogueModelNames()) {
+      expect(unexplainedLatin(`Модель ${name}, 2,5 с`, VOCABULARY), name).toEqual([]);
+      expect(unexplainedLatin(`${name} 3 мин`, VOCABULARY), name).toEqual([]);
+    }
+    expect(visibleText('<p>Модель <code>gpt-6-sol</code>, 2,5 с</p>').flatMap((text) => unexplainedLatin(text, VOCABULARY))).toEqual([]);
+    // The IEC binary units are a symbol with no Russian form this application prints, and the upload envelope names one.
+    for (const text of ['Не более 25 MiB.', 'До 512 KiB', '1 GiB']) expect(unexplainedLatin(text, VOCABULARY), text).toEqual([]);
+    // The unit must be the whole token: `3 sections` is the word `sections`, not `3 s`, and a bare letter without a number is a word.
+    expect(unexplainedLatin('3 sections', VOCABULARY)).toEqual(['sections']);
+    expect(unexplainedLatin('Заняло s', VOCABULARY)).toEqual(['s']);
+    // A digit that continues a word or a version is not read from its middle.
+    expect(unexplainedLatin('АР v3 s', VOCABULARY)).toEqual(['s']);
+  });
 });
 
 describe('the guard renders the screens it claims to render', () => {
@@ -4945,6 +5021,23 @@ describe('the guard renders the screens it claims to render', () => {
     // quietly became a list of state blocks.
     const substantial = screens.filter((screen) => screen.markup.length > 2000);
     expect(substantial.length, 'no screen rendered a whole page').toBeGreaterThan(20);
+  });
+
+  /**
+   * `D-666`: a Latin unit is read off EVERY state the matrix renders, not only off the strings of the unit cases above.
+   *
+   * Each rendered state gets «2.5 s» in a text node and «1 h» in a `title`, the two places a reviewer reads text, and the extraction
+   * the R-18 case below uses must return both from it. The states are real (their markup is what the screens render), so a state
+   * whose markup swallowed what follows it, or whose text the extraction skipped, is named here. Judging the whole of every state a
+   * second time would repeat the R-18 case (it timed out at the default 120 s), so the judgement is made once, on the two strings.
+   */
+  it('D-666: reads «2.5 s» in a text node and «1 h» in a title off every rendered state, and refuses both', () => {
+    for (const { where, markup } of screens) {
+      const read = visibleText(`${markup}<p>Заняло 2.5 s</p><span title="1 h">Время</span>`);
+      expect(read, where).toContain('Заняло 2.5 s');
+      expect(read, where).toContain('1 h');
+    }
+    expect(['Заняло 2.5 s', '1 h'].flatMap((text) => unexplainedLatin(text, VOCABULARY))).toEqual(['2.5 s', '1 h']);
   });
 
   /**
