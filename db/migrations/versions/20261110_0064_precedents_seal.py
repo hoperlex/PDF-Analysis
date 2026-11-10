@@ -167,6 +167,11 @@ def _replace_check(table: str, name: str, expression: str) -> None:
     op.execute(f"ALTER TABLE {table} ADD CONSTRAINT {name} CHECK ({expression})")
 
 
+def _quoted(comment: str) -> str:
+    """A comment text as a SQL string literal's body: a quote is doubled."""
+    return comment.replace("'", "''")
+
+
 def _literals(values: Sequence[str]) -> str:
     return ", ".join("'" + value + "'" for value in values)
 
@@ -676,7 +681,7 @@ def upgrade() -> None:
         ),
     }
     for table, comment in comments.items():
-        op.execute(f"COMMENT ON TABLE {table} IS '{comment}';")
+        op.execute(f"COMMENT ON TABLE {table} IS '{_quoted(comment)}';")
     op.execute(
         "COMMENT ON COLUMN decision_memory_decision.precedent_label_at_decision IS "
         "'The Precedents label in force for the finding when the expert decided (none, few, often_rejected, cancel_suggested, "
