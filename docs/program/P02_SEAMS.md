@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-324 operations, sealed. `A5` generates the typed client from this document; `B6`
+318 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -860,7 +860,7 @@ registry's `listWorkers` and `setWorkerIntake` on 2026-10-12 (stubs answering
 operations on 2026-10-12 under `R-112` and `R-113` (stubs answering `dependency_unavailable`
 until `W55A-SEARCH-01`). `W55B-SEAL-01` added the two portal-block reads on 2026-10-13 under
 `R-116` and `R-119` (stubs answering `dependency_unavailable` until `W55B-GEOMETRY-01`).
-`W57A-SEAL-01B` added the refusing `getRunNormVerification`. `W59-SECTION-SEAL-01` added
+`W59-SECTION-SEAL-01` added
 `classifyDocumentVersion` and `getVersionSectionReview` on 2026-10-20: a version's
 expert-confirmed project stage and section, persisted by `0024_version_classification`, which
 `startRun` and `reauditRun` now route the analysis profile from. `CLASSIFICATION-CORRECTION-01`
@@ -1276,7 +1276,6 @@ could.
 | `setCurrentNormSnapshot` | `PUT /norms/snapshots/current` |
 | `listVersionPortalBlocks` | `GET /versions/{version_uid}/portal-blocks` |
 | `streamVersionPortalBlockCrop` | `GET /versions/{version_uid}/portal-blocks/{portal_block_id}/crop` |
-| `getRunNormVerification` | `GET /runs/{run_id}/norm-verification` |
 | `classifyDocumentVersion` | `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` |
 | `correctVersionClassification` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections` |
 | `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
