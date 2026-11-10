@@ -1,6 +1,7 @@
 /*
- * The queue's pause state in the frame's top strip (`R-151f`). Every colour, length and radius is a
- * token (`--am-*`); the badge is the shared `.am-badge`.
+ * The pause state in the frame's top strip (`R-151f`): the badges of what is paused, and the one «Пауза» button with its
+ * menu (`ADR-0029` decision 8). Every colour, length and radius is a token (`--am-*`); the badge is the shared
+ * `.am-badge`, the menu the shared `.am-menu`.
  */
 
 .status {
@@ -38,4 +39,42 @@
   min-height: 28px;
   padding: var(--am-gap-2xs) var(--am-gap-md);
   font-size: var(--am-text-sm);
+}
+
+/*
+ * The one button. It is the shared menu's trigger drawn as the strip's quiet button (28 px, a hairline border, the paper
+ * ground), with a caret that says it opens. The popup keeps the menu's own rules and opens under the button's right edge.
+ */
+.menu {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.menu :global(.am-menu__trigger) {
+  min-height: 28px;
+  padding: var(--am-gap-2xs) var(--am-gap-md);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+  font-weight: 500;
+}
+
+.menu :global(.am-menu__trigger:hover),
+.menu :global(.am-menu__trigger[aria-expanded='true']) {
+  border-color: var(--am-ink-soft);
+  background: var(--am-surface);
+  box-shadow: none;
+}
+
+.face {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--am-gap-xs);
+}
+
+.caret {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
 }
