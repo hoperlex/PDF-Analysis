@@ -77,13 +77,6 @@ GUARDED = (
     ),
     ("startRun", "POST", "/runs"),
     ("getRunStatus", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K"),
-    ("startArV3BetaGroup", "POST", "/ar-v3-beta/groups"),
-    ("getArV3BetaGroup", "GET", "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K"),
-    (
-        "getArV3BetaGroupReview", "GET",
-        "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K/review",
-    ),
-    ("getArV3BetaPackStatus", "GET", "/ar-v3-beta/pack"),
     ("listRunFindings", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     ("getFinding", "GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
     ("appendDecision", "POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
@@ -199,8 +192,6 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/portal-blocks/"
         "blk_0123456789abcdef0123456789abcdef/crop",
     ),
-    # `W57A-SEAL-01B`. The refusing normative report (any one role).
-    ("getRunNormVerification", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-verification"),
     # `W59-SECTION-SEAL-01`. A version's classification and its section review, addressed
     # through the version's document and project: behind the seam before any port is asked.
     (
@@ -536,7 +527,6 @@ GUARDED = (
     ("getExtendedRunReview", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/extended-review"),
     ("streamComparisonTechnicalReport", "GET", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/technical-report"),
     ("estimateRunCost", "POST", "/runs/cost-estimate"),
-    ("estimateArV3GroupCost", "POST", "/ar-v3-beta/groups/cost-estimate"),
     ("importComparisonZip", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-zip-uploads"),
     # `UI-PARITY-P0E`..`P0O` (contracts 1.20.0..1.30.0): the pause read, a document's archive, title and tags, the
     # project's tag catalogue, a finding's execution status, the proposal decision journal, the decision import, one
@@ -703,8 +693,7 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     be, and an operation that is in neither fails here.
     """
     # `W59-SECTION-SEAL-01`: counted from the two tables rather than restated, so the next
-    # reseal moves the tables and not a literal (``getRunNormVerification`` was missing from
-    # ``GUARDED`` since `W57A-SEAL-01B`; it is swept now).
+    # reseal moves the tables and not a literal.
     assert len(GUARDED) + len(RUNNER) + len(ENROLLMENT) + len(OPEN) == len(
         {operation for operation, _, _ in (*GUARDED, *RUNNER, *ENROLLMENT, *OPEN)}
     )
@@ -1178,10 +1167,6 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         if _imports_the_seam_accessor(path)
     )
     assert subject_readers == [
-        # `BETA-COST-PREFLIGHT-1030`: a group start carries the priced consent, and the consent records WHO gave it
-        # (``cost_actor_uid``); that only an expert may start is the role register's, and the consent is bound to a digest
-        # the start re-computes.
-        "ar_v3_groups.py",
         "auth.py",
         # `W59-DECISION-CARRYOVER-01`: the carried decision records WHO confirmed it, as
         # `appendDecision` does; whether they may is the role register's (expert) and the

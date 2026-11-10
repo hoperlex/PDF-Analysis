@@ -8,10 +8,6 @@ refused **and writes nothing** -- no ``audit_run``, no ``job``, no ``command_rec
 the keys used -- and a repeat (``reauditRun``) of a finished Run without a consent is refused the same
 way. A start with the consent taken from the estimate of the same version is accepted, which is what
 shows the refusals are about the consent and not about anything else the request lacks.
-
-Not covered here: ``startArV3BetaGroup`` without consent. A group start is refused earlier, by the
-missing sealed pack, in a plain composition; its consent gate is exercised in
-``tests/integration/runs/test_v3_recorded_group_over_http.py``, which installs a pack.
 """
 
 from __future__ import annotations

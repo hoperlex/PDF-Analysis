@@ -8,7 +8,6 @@ Every case is stated from the owner's rulings (`R-150n` ... `R-150u`) and not re
 * `R-150p` the counted object is the current version (the SQL's join, asserted in the integration suite);
 * `R-150r` a failed or cancelled run is not a result: the document is `not_run`;
 * `R-150s` `published` and `partial` are both results and `partial` is a flag, not a fifth state;
-* `R-150t` AR v3 groups use the per-run rule (a comment in the module, asserted below);
 * `R-150u` optimisation is not part of the state: the function takes no such input.
 
 The statement itself is judged on a real database in `tests/integration/dashboard/test_audit_state.py`.
@@ -117,11 +116,11 @@ def test_the_counted_object_is_the_current_version_only() -> None:
     assert "r.version_uid IN (SELECT version_uid FROM current_docs)" in sql
 
 
-def test_the_state_takes_no_optimisation_input_and_the_ar_v3_rule_is_cited() -> None:
-    """`R-150u` and `R-150t`: the signature is findings only, and the module says why AR v3 groups are per run."""
+def test_the_state_takes_no_optimisation_input_and_the_rule_is_cited() -> None:
+    """`R-150u`: the signature is findings only, and the module says why."""
     assert list(inspect.signature(audit_state).parameters) == ["result_state", "has_findings", "has_undecided"]
     source = Path(module.__file__).read_text(encoding="utf-8")
-    assert "R-150t" in source and "R-150u" in source
+    assert "R-150u" in source
 
 
 # --- the counters -----------------------------------------------------------------------------------

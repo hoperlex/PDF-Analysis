@@ -755,37 +755,3 @@ def test_each_situation_of_the_active_run_reads_as_ruled_and_leaves_the_audit_st
         assert getattr(counted, record.state) == 1 and counted.document_count == 1, name
     assert not wrong, "\n".join(wrong)
     assert {case[3][max(case[3])] for case in cases} == {None, "queued", "running", "validating"}, "not vacuous"
-
-
-def test_a_run_of_an_ar_v3_group_in_flight_is_not_an_active_run(session: Session) -> None:
-    """The sealed v3 pair is the one condition shared with the result run (``STANDARD_RUN_SQL``): a v3 member in flight
-    is a run of its version and listed with the others, but the document's card does not name it, as it never names a
-    v3 result."""
-    from auditmanager.analysis.public import AR_V3_BETA_BUNDLE_ID, AR_V3_BETA_PROFILE_ID
-
-    seed = Seeder(session)
-    project = seed.project("v3 в работе")
-    document = seed.document(project, "Документ")
-    version = seed.version(document, classified=("R", "AR"))
-    standard = _run(session, project, version, "queued", age=100)
-    v3 = str(RunId.new())
-    session.execute(
-        text(
-            "INSERT INTO audit_run (run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id, "
-            "provider_mode, frozen_input_digest, created_at) VALUES (:r, :p, :v, 'created', :ap, :pb, 'recorded', :s, "
-            "now() - make_interval(secs => 5))"
-        ),
-        {"r": v3, "p": project, "v": version, "ap": str(AR_V3_BETA_PROFILE_ID), "pb": str(AR_V3_BETA_BUNDLE_ID),
-         "s": _digest(f"v3-{v3}")},
-    )
-    for step in ("queued", "running"):
-        session.execute(text("UPDATE audit_run SET state = :s WHERE run_id = :r"), {"s": step, "r": v3})
-    session.commit()
-    record = model.audits(session, version_uids=[version])[version]
-    assert (record.active_run_id, record.active_run_state) == (standard, "queued"), (
-        "the newer v3 run is not the active run; the older standard one is"
-    )
-    session.execute(text("UPDATE audit_run SET state = 'cancelled', terminal_at = now() WHERE run_id = :r"), {"r": standard})
-    session.commit()
-    record = model.audits(session, version_uids=[version])[version]
-    assert (record.active_run_id, record.active_run_state) == (None, None), "a v3 run alone names nothing"
