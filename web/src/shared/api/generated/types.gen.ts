@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.46.0 (OpenAPI 3.1.0)
- *   sha256 9bad911d85cd3b0908c40666e424ca7e568daaeb1643b507aac21a455ad093dc
+ *   AuditManager PC-01 API 1.47.0 (OpenAPI 3.1.0)
+ *   sha256 d6843502b6ccd307fcf8a7576e4975e1393a1355732827be29b56cc7587706b6
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.46.0';
+export const CONTRACT_VERSION = '1.47.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '9bad911d85cd3b0908c40666e424ca7e568daaeb1643b507aac21a455ad093dc';
+export const CONTRACT_DIGEST = 'd6843502b6ccd307fcf8a7576e4975e1393a1355732827be29b56cc7587706b6';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -145,6 +145,7 @@ export const SCHEMA_NAMES = [
   'ComparisonLaunchQueueCounts',
   'ComparisonLaunchQueueState',
   'ComparisonLayer',
+  'ComparisonLayoutKind',
   'ComparisonMatrix',
   'ComparisonMatrixCandidate',
   'ComparisonMatrixCell',
@@ -705,6 +706,7 @@ export const SCHEMA_NAMES = [
   'StageChangeCategory',
   'StageChangeJournal',
   'StageClassificationCard',
+  'StageComparisonCell',
   'StageGraphicEvidence',
   'StageGraphicEvidenceId',
   'StageGraphicEvidencePage',
@@ -1940,9 +1942,13 @@ export type ComparisonAiQueueItem = {
  * process is in recorded mode, in which case every answer is a recorded test answer.
  *
  * `EXEC2-SEAL-2` (ADR-0026 decisions 12 and 13): for work admitted by a rule or a group, `executor_group_id`, `executor_group_revision_id` and (when a rule routed it) `routing_rule_revision_id` name what admission froze, `pinned_model` and `billing` follow the group revision, and `connection_id` and `revision_id` are absent until dispatch binds the work to a member. The estimate digest binds every field that is present.
+ *
+ * `HOSTS-CMP-01` (ADR-0028 decision 19): a route chosen by the stage layout also carries the `cell` of its kind of work -- the
+ * effort, the answer limit and the timeout the job froze. The estimate digest binds it, so the consent names what will run.
  */
 export type ComparisonAiRoute = {
   billing: ExecutorBilling;
+  cell?: StageComparisonCell;
   connection_id?: ExecutorConnectionId;
   executor_group_id?: ExecutorGroupId;
   executor_group_revision_id?: ExecutorGroupRevisionId;
@@ -2291,6 +2297,21 @@ export const COMPARISON_LAYER_VALUES = [
 
 /** ComparisonLayer - the closed value set above. */
 export type ComparisonLayer = (typeof COMPARISON_LAYER_VALUES)[number];
+
+/**
+ * A kind of comparison work that the stage layout chooses a model for (`HOSTS-CMP-01`): `comparison_pair_check` (the AI check of
+ * doubtful sheet pairs), `comparison_sheet_changes` (the AI description of a sheet's changes), `comparison_spec` (the comparison of whole
+ * specifications) and `comparison_report` (the report of a comparison). `comparison_stage_review` has no handler and is not offered.
+ */
+export const COMPARISON_LAYOUT_KIND_VALUES = [
+  'comparison_pair_check',
+  'comparison_sheet_changes',
+  'comparison_spec',
+  'comparison_report',
+] as const;
+
+/** ComparisonLayoutKind - the closed value set above. */
+export type ComparisonLayoutKind = (typeof COMPARISON_LAYOUT_KIND_VALUES)[number];
 
 /**
  * The effective matrix of a document set: the algorithm, then accepted AI links (labelled,
@@ -4361,7 +4382,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.46.0";
+  contract_version: "1.47.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -6893,10 +6914,12 @@ export type ReviseStageAssemblyRequest = {
 
 /**
  * A new revision: the kit and every cell. Only pairs of the catalogue are accepted; a row of the closed list of block schemes
- * is chosen as a whole.
+ * is chosen as a whole. `comparison_cells` (`HOSTS-CMP-01`, optional) are the four kinds of comparison work, each once; left out, a named
+ * kit follows its table and `custom` has none.
  */
 export type ReviseStageModelLayoutRequest = {
   cells: Array<StageLayoutCell>;
+  comparison_cells?: Array<StageComparisonCell>;
   kit: StageModelKit;
 };
 
@@ -8354,6 +8377,19 @@ export type StageClassificationCard = {
   title: string;
 };
 
+/**
+ * The settings of one kind of comparison work (`HOSTS-CMP-01`): model, effort, the output limit in tokens and the timeout in seconds.
+ * The model and the effort must be a pair of `listModelCatalogue`. The limit is a ceiling over the limit of the work itself: a call is made
+ * with the smaller of the two. The timeout is the window of one call to a server. A comparison job freezes its cell when it starts.
+ */
+export type StageComparisonCell = {
+  effort: ModelEffort;
+  max_output_tokens: number;
+  model_id: string;
+  timeout_seconds: number;
+  work_kind: ComparisonLayoutKind;
+};
+
 export type StageGraphicEvidence = {
   content_key: Sha256;
   graphic_id: StageGraphicEvidenceId;
@@ -8409,9 +8445,14 @@ export type StageLayoutCell = {
   timeout_seconds: number;
 };
 
-/** One immutable revision of the layout: the kit and every cell, with its author and time. */
+/**
+ * One immutable revision of the layout: the kit and every cell, with its author and time. `comparison_cells` are the cells of the four
+ * kinds of comparison work in force (`HOSTS-CMP-01`): what the revision stored, else the table of its kit. They are absent only for a
+ * `custom` revision that stored none: a comparison is then refused, never served by a model nobody chose.
+ */
 export type StageLayoutRevision = {
   cells: Array<StageLayoutCell>;
+  comparison_cells?: Array<StageComparisonCell>;
   created_at: string;
   created_by: UserUid;
   kit: StageModelKit;

@@ -5,7 +5,9 @@
 
 * the **layout** and its revisions -- a pair of the catalogue per cell, the closed list of block schemes, the sets « Только Claude » and
   « Только Codex » (``runs/stage_layout.py`` holds the tables, this module only applies them). Only an administrator revises it; the role
-  set is re-read in the command's own transaction. An expert reads it through the router; the viewer is closed by ``api/security.py``;
+  set is re-read in the command's own transaction. An expert reads it through the router; the viewer is closed by ``api/security.py``.
+  A revision also holds the **comparison cells** (`HOSTS-CMP-01`): the model, effort, limit and timeout of the four kinds of comparison
+  work that call a model. They are optional on a request -- a revision saved without them follows its set's table;
 * the **switch** and its journal: on, runs started from now on freeze a ``stage_plan``; off, they follow the legacy route. It needs a
   revision and ``AUDITMANAGER_PROVIDER_SOURCE=database``, is read only when a run starts (``runs/stage_plan.py``), and every change is an
   append-only event with its author;
@@ -28,8 +30,8 @@ from auditmanager.ingest.public import CommandReplay, CommandRepository, Command
 from auditmanager.jobs.public import append_execution_event
 from auditmanager.runs.public import (
     KIT_CUSTOM, LayoutRevisionRow, ModelAvailabilityPort, PROVIDER_SOURCE_DATABASE, SqlStageLayoutStore, StageLayoutStore,
-    StagePlanFreezer, SwitchEventRow, cells_to_wire, no_layout_revision, provider_source_not_database, require_valid_layout,
-    start_readiness,
+    StagePlanFreezer, SwitchEventRow, cells_to_wire, comparison_cells_to_wire, no_layout_revision, provider_source_not_database,
+    require_valid_comparison_cells, require_valid_layout, start_readiness,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
@@ -58,10 +60,14 @@ def _value(member: Any) -> Any:
 
 
 def _revision_view(row: LayoutRevisionRow) -> dict[str, Any]:
-    return {
+    view: dict[str, Any] = {
         "layout_revision_id": row.layout_revision_id, "revision_no": row.revision_no, "kit": row.kit,
         "cells": cells_to_wire(row.cells), "created_at": row.created_at, "created_by": row.created_by,
     }
+    comparison = row.comparison_cells_in_force
+    if comparison is not None:  # « Свой набор » that stored none has none: the key is absent, not an empty list
+        view["comparison_cells"] = comparison_cells_to_wire(comparison)
+    return view
 
 
 def _event_view(row: SwitchEventRow) -> dict[str, Any]:
@@ -83,6 +89,21 @@ def _cells_of(body: Any) -> tuple[CellSettings, ...]:
     return tuple(cells)
 
 
+def _comparison_cells_of(body: Any) -> tuple[CellSettings, ...] | None:
+    """The comparison cells of a request, or ``None`` when it carries none (the revision then follows its set's table). The cell's key is
+    the kind and ``main``: the wire names the kind, never a key."""
+    items = getattr(body, "comparison_cells", None)
+    if items is None:
+        return None
+    return tuple(
+        CellSettings(
+            cell_key=f"{_value(item.work_kind)}:main", model_id=str(item.model_id), effort=str(_value(item.effort)),
+            max_output_tokens=int(item.max_output_tokens), timeout_seconds=int(item.timeout_seconds),
+        )
+        for item in items
+    )
+
+
 class StagePlanService:
     def __init__(
         self, *, session_factory: sessionmaker[Session], store: StageLayoutStore | None = None,
@@ -98,6 +119,7 @@ class StagePlanService:
             else os.environ.get("AUDITMANAGER_PROVIDER_SOURCE", "environment").strip() or "environment"
         )
         self._cost_preflight = cost_preflight
+        self._availability = availability
         #: The seam the start commands call; the integrator hands this same object to ``start_audit_run``, ``reaudit_run`` and
         #: ``start_run_from_stage`` (``stage_plans=service.freezer``) and to ``RunCostPreflight``.
         self.freezer = StagePlanFreezer(store=self._store, availability=availability, provider_source=self._provider_source)
@@ -128,6 +150,12 @@ class StagePlanService:
             result["current"] = _revision_view(history[0])
             draft = self.freezer.draft_of(session, history[0])
             result["unavailable_cell_keys"] = [cell.cell_key for cell in draft.unavailable({cell.row for cell in draft.cells})]
+            comparison = history[0].comparison_cells_in_force
+            if comparison:
+                # The comparison cells are served by the same system groups: a model no server serves is « нет на серверах » there too.
+                served = self._availability.availability(session, tuple(dict.fromkeys(cell.model_id for cell in comparison)))
+                result["unavailable_cell_keys"] += [
+                    cell.cell_key for cell in comparison if cell.model_id not in served or served[cell.model_id].access is None]
         return result
 
     def list_catalogue(self) -> dict[str, Any]:
@@ -149,18 +177,25 @@ class StagePlanService:
         ``validation_failed`` (a cell outside the catalogue, a block scheme not on the list, a set named for cells that are not its)."""
         kit = str(_value(body.kit))
         cells = _cells_of(body)
+        comparison = _comparison_cells_of(body)
         with self._sessions() as session:
             _admin(_roles(session, user_uid))
             ordered = require_valid_layout(kit, cells, catalogue=self._catalogue)
+            ordered_comparison = (
+                None if comparison is None else require_valid_comparison_cells(kit, comparison, catalogue=self._catalogue))
+            # The list is part of the request only when it was sent: a request without it keeps the fingerprint it always had.
+            sent = {} if ordered_comparison is None else {"comparison_cells": comparison_cells_to_wire(ordered_comparison)}
             claimed = self._commands.begin(
                 session, command_type=COMMAND_TYPE_REVISE, idempotency_key=IdempotencyKey(idempotency_key),
-                fingerprint=payload_fingerprint({"actor_uid": user_uid, "kit": kit, "cells": cells_to_wire(ordered)}),
+                fingerprint=payload_fingerprint({"actor_uid": user_uid, "kit": kit, "cells": cells_to_wire(ordered), **sent}),
             )
             if isinstance(claimed, CommandReplay):
                 return self._layout(session)
             assert isinstance(claimed, CommandStarted)
             self._store.lock(session)
-            row = self._store.append_revision(session, kit=kit, cells=ordered, created_by=user_uid)
+            row = self._store.append_revision(
+                session, kit=kit, cells=ordered, created_by=user_uid,
+                **({} if ordered_comparison is None else {"comparison_cells": ordered_comparison}))
             append_execution_event(
                 session, event_type="stage_layout.revised", aggregate_type="StageLayoutRevision",
                 aggregate_id=row.layout_revision_id,

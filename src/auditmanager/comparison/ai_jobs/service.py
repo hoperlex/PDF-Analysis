@@ -691,14 +691,17 @@ class ComparisonAiJobService:
         actually spent before that consent**; otherwise a resumed job would overrun on its first call.
 
         `EXEC2-GROUP-CMP-01`: the consent of a job admitted by a group names the group revision it froze, and no connection revision while
-        the job is ``pending`` (its first call chooses the member and the consent is re-checked against it)."""
+        the job is ``pending`` (its first call chooses the member and the consent is re-checked against it).
+
+        `HOSTS-CMP-01`: a job the stage layout admitted consented to its **cell** with the estimate (the digest binds it); the consent carries it, and
+        the spend wrapper applies it to every call."""
         job = self._job(session, job_id)
         baseline = self._repo.spent_before(session, job_id, job.consented_at) if job.consent_no > 1 else 0
         ceiling = job.ceiling_micros / 1_000_000 if job.ceiling_micros > 0 else float(JOB_CEILING_USD)
         return Consent(
             estimate_digest=job.estimate_digest, estimate_usd=(baseline + job.estimate_micros) / 1_000_000,
             ceiling_usd=ceiling, connection_revision_id=job.connection_revision_id, pinned_model=job.pinned_model,
-            executor_group_revision_id=job.executor_group_revision_id,
+            executor_group_revision_id=job.executor_group_revision_id, cell=job.cell,
         )
 
     # -- reads --------------------------------------------------------------------------------------

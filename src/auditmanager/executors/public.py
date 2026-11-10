@@ -231,7 +231,7 @@ from auditmanager.executors.host_commands import (
     sync_system_objects,
 )
 from auditmanager.executors.host_repository import ActiveTask, HostRecord, HostRepository
-from auditmanager.executors.hosts import REASON_ORDER, access_of_billing, split_pool
+from auditmanager.executors.hosts import REASON_ORDER, access_of_billing, pair_group_name, split_pool  # pair_group_name: HOSTS-CMP-01, the comparison finds the system group of a pair
 from auditmanager.executors.pull import HostCall
 # EXEC2-CUTOVER-01 (ADR-0026 decision 17): the cut-over preview, the mode change and the guard on the legacy routes.
 from auditmanager.executors.routing_mode import (
@@ -462,6 +462,7 @@ __all__ = [
     # HOSTS-INT-WIRE-01: what the composition root's availability port and member binder read (the capacity pool and the reasons' order).
     "REASON_ORDER",
     "access_of_billing",
+    "pair_group_name",  # HOSTS-CMP-01
     "split_pool",
     # EXEC2-CUTOVER-01
     "MappingEntry",

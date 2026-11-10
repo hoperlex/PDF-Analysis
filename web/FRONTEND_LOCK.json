@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "9bad911d85cd3b0908c40666e424ca7e568daaeb1643b507aac21a455ad093dc",
-    "content_commit": "b64a73a5",
-    "content_commit_subject": "wip(contract): 1.46.0 -- getRunStages (GET /runs/{run_id}/stages), RunStages models, port, route, role register, stage facts read, adapter; pins moved from 1.45.0 (HOSTS-SEAL-2, RUN-STAGES-01)",
-    "dispatch_named_commit": "b64a73a52ce5d4c9774def00da814527b442fe69",
-    "commit_note": "Resealed by HOSTS-SEAL-2: contract 1.46.0 (getRunStages, the stages of a run, plan and fact).",
+    "sha256": "d6843502b6ccd307fcf8a7576e4975e1393a1355732827be29b56cc7587706b6",
+    "content_commit": "22767264",
+    "content_commit_subject": "fix(contract): the startRun prose says 422 analysis_input_invalid for cost_estimate_binding_changed; tests: the real service writes what the route reads (HOSTS-SEAL-3, HOSTS-CMP-01)",
+    "dispatch_named_commit": "22767264556859d9de6d4fe654525a9ea309453f",
+    "commit_note": "Resealed by HOSTS-SEAL-3: contract 1.47.0 (the comparison cells of the stage layout: StageComparisonCell, ComparisonLayoutKind, comparison_cells, ComparisonAiRoute.cell).",
     "openapi_version": "3.1.0",
-    "info_version": "1.46.0",
+    "info_version": "1.47.0",
     "paths": 296,
     "operations": 324,
-    "component_schemas": 794,
+    "component_schemas": 796,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "9bad911d85cd3b0908c40666e424ca7e568daaeb1643b507aac21a455ad093dc",
+    "snapshot_sha256": "d6843502b6ccd307fcf8a7576e4975e1393a1355732827be29b56cc7587706b6",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "db0ceb96064a11bd373ae80aac5cf26f1e4d9c061b3d264b285be90f5cf0da6d",
-      "index.ts": "d5764d52f5d2c2d683eb964a461d03612df5aaf0afa6768dbd4e41bdfd782233",
-      "operations.gen.ts": "aeb77e7927a285675cb6fc8831de6d66cdb2ae3128403c113b2962574ef73c53",
-      "types.gen.ts": "826affda934ec88296319907871ce9ddc2059e4733dbb432fa465e3daaf76bb8"
+      "client.gen.ts": "38c816ec088904276c024e1902a60c755cf8f6a10527eeb4ec442ccee9c0f029",
+      "index.ts": "1c4b8f88616b31c69b9446b96cbec7462d072e1789269b8f6fce874ebf3927b4",
+      "operations.gen.ts": "f6e47bc49ae80fc6c4403004d79dab3a0424a1a835c03b41f51ec26f5ac493ab",
+      "types.gen.ts": "57ee9583b04d8a88db5a42aa174983ba19e7fba185f976ee7e0990746d34ff1e"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

@@ -4,6 +4,10 @@ Three tables hold it and nothing else does: ``stage_layout`` (one row, key ``def
 numbered without a gap, ``slr_<ULID>``, the author) and ``stage_layout_switch_event`` (append-only, ``sls_<ULID>``, the author). The switch
 in force is the **latest event**; an empty journal means off. Nothing is updated and nothing is deleted: the database refuses both.
 
+A revision holds its cells in one ``cells`` array: the six rows of the analysis and, since `HOSTS-CMP-01`, the four comparison cells
+(``comparison_pair_check:main`` and the rest, the key's row being the kind of comparison work). :class:`LayoutRevisionRow` keeps them apart: ``cells`` is
+the analysis rows only, which is what every reader of a run's plan has always read, and ``comparison_cells`` the others.
+
 This module only reads and appends. Who may, what a revision must satisfy and what the switch needs are decided by
 :mod:`auditmanager.bootstrap.stage_plan_service`; what a revision means for a run is :mod:`auditmanager.runs.stage_layout`.
 """
@@ -18,7 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.analysis.public import CellSettings
-from auditmanager.runs.stage_layout import cells_to_wire
+from auditmanager.runs.stage_layout import COMPARISON_KINDS, cells_to_wire, comparison_cells_in_force
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import StageLayoutRevisionId, StageLayoutSwitchEventId
 
@@ -35,6 +39,17 @@ class LayoutRevisionRow:
     cells: tuple[CellSettings, ...]
     created_at: datetime
     created_by: str
+    #: The comparison cells this revision stored, in kind order; ``None`` when it stored none (made before they existed, or saved without).
+    comparison_cells: tuple[CellSettings, ...] | None = None
+
+    @property
+    def comparison_cells_in_force(self) -> tuple[CellSettings, ...] | None:
+        """The comparison cells this revision serves with: what it stored, else its set's table, else none (« Свой набор » stored none)."""
+        return comparison_cells_in_force(self.kit, self.comparison_cells)
+
+    def comparison_cell(self, work_kind: str) -> CellSettings | None:
+        """The cell of one kind of comparison work in force, or ``None`` when the revision has none for it."""
+        return next((cell for cell in self.comparison_cells_in_force or () if cell.row == work_kind), None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +75,7 @@ class StageLayoutStore(Protocol):
 
     def append_revision(
         self, session: Session, *, kit: str, cells: Sequence[CellSettings], created_by: str,
+        comparison_cells: Sequence[CellSettings] | None = None,
     ) -> LayoutRevisionRow: ...
 
     def append_switch(self, session: Session, *, enabled: bool, set_by: str) -> SwitchEventRow: ...
@@ -88,9 +104,11 @@ _LOCK_REVISIONS = text("SELECT pg_advisory_xact_lock(hashtextextended('stage_lay
 _LOCK_SWITCH = text("SELECT pg_advisory_xact_lock(hashtextextended('stage_layout_switch_event:' || :key, 0))")
 
 
-def _cells_of(document: Any) -> tuple[CellSettings, ...]:
+def _cells_of(document: Any) -> tuple[tuple[CellSettings, ...], tuple[CellSettings, ...] | None]:
+    """``(the rows' cells, the comparison cells or None)`` of a stored ``cells`` array: a cell is a comparison cell when the row of its key is
+    a kind of comparison work."""
     try:
-        return tuple(
+        found = tuple(
             CellSettings(
                 cell_key=str(item["cell_key"]), model_id=str(item["model_id"]), effort=str(item["effort"]),
                 max_output_tokens=int(item["max_output_tokens"]), timeout_seconds=int(item["timeout_seconds"]),
@@ -99,12 +117,16 @@ def _cells_of(document: Any) -> tuple[CellSettings, ...]:
         )
     except (KeyError, TypeError, ValueError):
         raise DomainError(ErrorCode.INTERNAL_ERROR, message="a stored stage layout revision is invalid") from None
+    rows = tuple(cell for cell in found if cell.row not in COMPARISON_KINDS)
+    comparison = tuple(cell for cell in found if cell.row in COMPARISON_KINDS)
+    return rows, comparison or None
 
 
 def _revision(row: Mapping[str, Any]) -> LayoutRevisionRow:
+    rows, comparison = _cells_of(row["cells"])
     return LayoutRevisionRow(
         layout_revision_id=row["layout_revision_id"], revision_no=int(row["revision_no"]), kit=row["kit"],
-        cells=_cells_of(row["cells"]), created_at=row["created_at"], created_by=row["created_by"],
+        cells=rows, created_at=row["created_at"], created_by=row["created_by"], comparison_cells=comparison,
     )
 
 
@@ -132,6 +154,7 @@ class SqlStageLayoutStore:
 
     def append_revision(
         self, session: Session, *, kit: str, cells: Sequence[CellSettings], created_by: str,
+        comparison_cells: Sequence[CellSettings] | None = None,
     ) -> LayoutRevisionRow:
         import json
 
@@ -140,9 +163,10 @@ class SqlStageLayoutStore:
         identity = StageLayoutRevisionId.new().value
         created_at = session.execute(_INSERT_REVISION, {
             "id": identity, "key": LAYOUT_KEY, "no": number, "kit": kit, "by": created_by,
-            "cells": json.dumps(cells_to_wire(cells), sort_keys=True),
+            "cells": json.dumps(cells_to_wire([*cells, *(comparison_cells or ())]), sort_keys=True),
         }).scalar_one()
-        return LayoutRevisionRow(identity, number, kit, tuple(cells), created_at, created_by)
+        return LayoutRevisionRow(
+            identity, number, kit, tuple(cells), created_at, created_by, tuple(comparison_cells) if comparison_cells else None)
 
     def append_switch(self, session: Session, *, enabled: bool, set_by: str) -> SwitchEventRow:
         session.execute(_LOCK_SWITCH, {"key": LAYOUT_KEY})

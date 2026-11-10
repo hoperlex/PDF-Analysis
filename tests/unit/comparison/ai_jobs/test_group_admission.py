@@ -89,8 +89,11 @@ class Executors:
     def __init__(self, monkeypatch: pytest.MonkeyPatch, *, mode: str = "rules", rule: str | None = RULE_NEW,
                  rule_revision: str = REVISION_NEW) -> None:
         from auditmanager.executors import public
+        from auditmanager.runs import public as runs
 
         self.mode, self.rule, self.rule_revision = mode, rule, rule_revision
+        #: The stage layout is off here (`HOSTS-CMP-01`): ``read_route`` asks the switch first and these scenarios are the routes of the two modes.
+        monkeypatch.setattr(runs, "SqlStageLayoutStore", lambda: SimpleNamespace(enabled=lambda session: False))
         self.revisions = {REVISION: revision(REVISION, group=GROUP, pin=OPUS), REVISION_NEW: revision(REVISION_NEW, group=GROUP_NEW, pin=SONNET)}
         #: The provider lock as these scenarios read it: the rates the revisions above snapshotted (a group is made at the lock's rates).
         #: A test moves a model's rates to show a snapshot that is no longer the lock's.

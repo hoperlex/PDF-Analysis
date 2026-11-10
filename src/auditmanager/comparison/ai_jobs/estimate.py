@@ -10,7 +10,9 @@ estimate without a model call:
    `EXEC2-GROUP-CMP-01` (ADR-0026 decisions 13 and 17): while the mode is ``rules``, the route is the group revision the
    work kind's **current rule** names -- its ``pin_id``, its rate snapshot and its billing -- with no connection (the job's
    first dispatched call chooses a member); a work kind with no rule is ``dependency_unavailable`` /
-   ``no_rule_for_work_kind``. A job that was admitted by a group is re-estimated (a resume, a retry) on **its own** group
+   ``no_rule_for_work_kind``. `HOSTS-CMP-01` (ADR-0028 decision 19): while the stage layout is on, it comes first -- the route is the current
+   revision of the system group that serves the **cell** of the work kind (:mod:`~auditmanager.comparison.ai_jobs.layout_route`), and carries
+   that cell; a kind whose model no server serves is ``executor_route_missing``, never read from the legacy route or a rule. A job that was admitted by a group is re-estimated (a resume, a retry) on **its own** group
    revision, never on the rule as it is now, and a job made before the cut-over is re-estimated through the legacy route;
 2. the **price** -- the pinned rates over the summed input and output tokens, in integer micro-USD rounded **up** (the
    spend wrapper prices a call the same way); a connection that is ``not_metered`` has ``estimate_micros`` 0, no ceiling and
@@ -148,16 +150,23 @@ def no_rule_for_work_kind() -> DomainError:
 
 
 def read_route(session: Session, work_kind: str, provider_mode: str) -> AiRoute:
-    """The route a start would use, by the routing mode in force.
+    """The route a start would use: the stage layout's when it is on, else by the routing mode in force.
 
+    The stage layout on (`HOSTS-CMP-01`): the system group that serves the cell of ``work_kind``
+    (:func:`~auditmanager.comparison.ai_jobs.layout_route.read_layout_route`). It does not answer while the switch is off, nor for a kind the
+    layout holds no cell of; the route is then what it always was.
     ``legacy`` (the default): the primary of ``work_kind``'s current route, at its current revision (:func:`read_legacy_route`).
     ``rules``: the group revision the work kind's current rule names (:func:`read_rule_route`). While a job is being re-estimated the
     route of **that job** answers (:data:`JOB_ROUTE_KEY`)."""
+    from auditmanager.comparison.ai_jobs.layout_route import read_layout_route
     from auditmanager.executors.public import routing_mode
 
     override = session.info.get(JOB_ROUTE_KEY)
     if override is not None and override.work_kind == work_kind:
         return override
+    layout = read_layout_route(session, work_kind, provider_mode)
+    if layout is not None:
+        return layout
     if routing_mode(session).mode == ROUTING_MODE_RULES:
         return read_rule_route(session, work_kind, provider_mode)
     return read_legacy_route(session, work_kind, provider_mode)
@@ -186,8 +195,10 @@ def read_legacy_route(session: Session, work_kind: str, provider_mode: str) -> A
 
 def route_of_group_revision(
     session: Session, group_revision_id: str, *, work_kind: str, provider_mode: str, rule_revision_id: str | None,
+    cell: Any = None,
 ) -> AiRoute:
-    """The route of one immutable group revision: its model, its billing and its rate snapshot, with no connection.
+    """The route of one immutable group revision: its model, its billing and its rate snapshot, with no connection. ``cell`` is the
+    stage layout's cell of the work kind (`HOSTS-CMP-01`) when the layout chose the group, or the one a job froze.
 
     It **reads** and refuses nothing about the rates: an estimate is computed at the snapshot the group revision holds. Whether that snapshot
     is still the provider lock's is asked by :func:`require_group_rates_hold`, and only where the operation declares ``422``."""
@@ -200,7 +211,7 @@ def route_of_group_revision(
         work_kind=work_kind, connection_id=None, revision_id=None, pinned_model=revision.pin_id,
         gateway_model=revision.gateway_model, billing=revision.billing, provider_mode=provider_mode,
         pin=group_pin(revision), executor_group_id=revision.group_id,
-        executor_group_revision_id=revision.group_revision_id, routing_rule_revision_id=rule_revision_id,
+        executor_group_revision_id=revision.group_revision_id, routing_rule_revision_id=rule_revision_id, cell=cell,
     )
 
 
@@ -220,12 +231,13 @@ def read_rule_route(session: Session, work_kind: str, provider_mode: str) -> AiR
 
 def read_job_route(session: Session, job: Any, provider_mode: str) -> AiRoute:
     """The route of a job that was admitted by a rule or a group: the group revision it froze, whatever the rule says now
-    (ADR-0026 decision 17: work already admitted finishes on its own group revision)."""
+    (ADR-0026 decision 17: work already admitted finishes on its own group revision). A job the stage layout admitted keeps its own **cell** the
+    same way (`HOSTS-CMP-01`): the layout is not read again."""
     if job.executor_group_revision_id is None:
         raise ValueError("only a job admitted by a group has a group route")
     return route_of_group_revision(
         session, job.executor_group_revision_id, work_kind=work_kind_of(job.method), provider_mode=provider_mode,
-        rule_revision_id=job.routing_rule_revision_id,
+        rule_revision_id=job.routing_rule_revision_id, cell=job.cell,
     )
 
 
@@ -237,6 +249,9 @@ def build_estimate(
     new job); ``day_committed_micros`` is what the installation has spent or reserved today. Neither is in the digest."""
     if route.work_kind != scope.work_kind:
         raise ValueError("the route is the route of another kind of work")
+    if route.cell is not None:
+        # The cell's answer limit is a ceiling over the module's own: the estimate counts what a call may answer at most (`HOSTS-CMP-01`).
+        counts = counts.capped(route.cell.max_output_tokens)
     totals = counts.totals()
     if route.metered:
         if route.pin is None:

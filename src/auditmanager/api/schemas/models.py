@@ -658,6 +658,8 @@ __all__ = [
     "SetStageModelLayoutEnabledRequest",
     "StageCellKey",
     "StageCellRole",
+    "ComparisonLayoutKind",
+    "StageComparisonCell",
     "StageLayoutCell",
     "StageLayoutRevision",
     "StageLayoutRevisionId",
@@ -1125,7 +1127,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.46.0"]
+    contract_version: Literal["1.47.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -7622,10 +7624,36 @@ class ComparisonAiCeiling(str, enum.Enum):
     DAY = "day"
 
 
+class ComparisonLayoutKind(str, enum.Enum):
+    """A kind of comparison work that the stage layout chooses a model for (`HOSTS-CMP-01`): `comparison_pair_check` (the AI check of
+    doubtful sheet pairs), `comparison_sheet_changes` (the AI description of a sheet's changes), `comparison_spec` (the comparison of whole
+    specifications) and `comparison_report` (the report of a comparison). `comparison_stage_review` has no handler and is not offered."""
+
+    COMPARISON_PAIR_CHECK = "comparison_pair_check"
+    COMPARISON_SHEET_CHANGES = "comparison_sheet_changes"
+    COMPARISON_SPEC = "comparison_spec"
+    COMPARISON_REPORT = "comparison_report"
+
+
+class StageComparisonCell(_Object):
+    """The settings of one kind of comparison work (`HOSTS-CMP-01`): model, effort, the output limit in tokens and the timeout in seconds.
+    The model and the effort must be a pair of `listModelCatalogue`. The limit is a ceiling over the limit of the work itself: a call is made
+    with the smaller of the two. The timeout is the window of one call to a server. A comparison job freezes its cell when it starts."""
+
+    work_kind: ComparisonLayoutKind
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    effort: ModelEffort
+    max_output_tokens: Annotated[int, Field(ge=1, le=65536)]
+    timeout_seconds: Annotated[int, Field(ge=1, le=7200)]
+
+
 class ComparisonAiRoute(_Object):
     """What serves the calls of an estimate or a job: the connection and its revision, the model the
     revision pins (a reply from another model is refused, ``R-133``), how it is billed and whether the
-    process is in recorded mode, in which case every answer is a recorded test answer."""
+    process is in recorded mode, in which case every answer is a recorded test answer.
+
+    `HOSTS-CMP-01` (ADR-0028 decision 19): a route chosen by the stage layout also carries the `cell` of its kind of work -- the
+    effort, the answer limit and the timeout the job froze. The estimate digest binds it, so the consent names what will run."""
 
     #: `EXEC2-SEAL-2` (ADR-0026 decisions 12 and 13). For work admitted by a rule or a group the connection and its
     #: revision are absent until dispatch binds the work, and the group, the rule revision and the planned model
@@ -7638,6 +7666,7 @@ class ComparisonAiRoute(_Object):
     executor_group_id: ExecutorGroupId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     executor_group_revision_id: ExecutorGroupRevisionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     routing_rule_revision_id: ExecutorRoutingRuleRevisionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    cell: StageComparisonCell = Field(**_NOT_GIVEN)  # type: ignore[assignment]
 
 
 class ComparisonAiEstimate(_Object):
@@ -9516,7 +9545,9 @@ class StageLayoutCell(_Object):
 
 
 class StageLayoutRevision(_Object):
-    """One immutable revision of the layout: the kit and every cell, with its author and time."""
+    """One immutable revision of the layout: the kit and every cell, with its author and time. `comparison_cells` are the cells of the four
+    kinds of comparison work in force (`HOSTS-CMP-01`): what the revision stored, else the table of its kit. They are absent only for a
+    `custom` revision that stored none: a comparison is then refused, never served by a model nobody chose."""
 
     layout_revision_id: StageLayoutRevisionId
     revision_no: Annotated[int, Field(ge=1)]
@@ -9524,6 +9555,7 @@ class StageLayoutRevision(_Object):
     cells: Annotated[list[StageLayoutCell], Field(min_length=1, max_length=32)]
     created_at: datetime
     created_by: UserUid
+    comparison_cells: Annotated[list[StageComparisonCell], Field(min_length=4, max_length=4)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
 
 
 class StageLayoutSwitchEvent(_Object):
@@ -9549,10 +9581,12 @@ class StageModelLayout(_Object):
 
 class ReviseStageModelLayoutRequest(_Object):
     """A new revision: the kit and every cell. Only pairs of the catalogue are accepted; a row of the closed list of block schemes
-    is chosen as a whole."""
+    is chosen as a whole. `comparison_cells` (`HOSTS-CMP-01`, optional) are the four kinds of comparison work, each once; left out, a named
+    kit follows its table and `custom` has none."""
 
     kit: StageModelKit
     cells: Annotated[list[StageLayoutCell], Field(min_length=1, max_length=32)]
+    comparison_cells: Annotated[list[StageComparisonCell], Field(min_length=4, max_length=4)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
 
 
 class SetStageModelLayoutEnabledRequest(_Object):

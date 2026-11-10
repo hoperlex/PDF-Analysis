@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING, Any, Final, NoReturn
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.comparison.spend.ceilings import check_after_call, check_before_call
+from auditmanager.comparison.spend.cell import apply_cell
 from auditmanager.comparison.spend.dispatch import (
     group_offline_wait_seconds, priced_as_consented, same_rates, select_member, write_binding,
 )
@@ -140,7 +141,13 @@ class ComparisonModelCaller:
         Raises a :class:`~.errors.SpendError`: ``CallRefused`` (nothing was sent), ``CallFailed`` (the
         journal says ``failed``), ``OutcomeUnknown`` (it says ``unknown``; the call is **not** repeated
         here) or ``CallLost`` (the attempt lost the item). Each has ``as_outcome()`` for the handler.
+
+        `HOSTS-CMP-01`: a job the stage layout admitted consented to its cell, and the request is sent with the cell's effort and with the answer limit
+        held to the cell's (:func:`~auditmanager.comparison.spend.cell.apply_cell`) -- before it is hashed, priced and journalled, so the journal
+        holds the request that goes out. A consent with no cell leaves the request as the method built it.
         """
+        if consent is not None and consent.cell is not None:
+            request, estimate = apply_cell(consent.cell, request, estimate)
         mode = _mode_of(route)
         recorded = mode == PROVIDER_RECORDED
         unmetered = recorded or route.unmetered
