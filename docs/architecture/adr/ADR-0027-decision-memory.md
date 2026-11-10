@@ -108,3 +108,13 @@ sharpens the decisions above; the owner may revise any of it.
 - **Consequence for accounts.** An account that withdrew, restored or forgot a case, or changed a setting, can no longer be purged
   (`R-61`, the `RESTRICT` key); the author of a decision still can (`Q7`).
 - **Still not decided and not built:** `Q2`, `Q4`, `Q5`, `Q9`, `Q10`, `Q11`; the export, the embeddings, the hint and the prompt use.
+
+## Addendum 2026-11-10 (`ADR-0029`: the precedents core reads the memory)
+
+Recorded by the lane `CRIT-ADR-29`; the decisions are the owner's polls of 2026-11-10 (`R-153q`…`R-153ar`, `docs/program/OWNER_RULINGS_2026-09-17.md` section 3.55) as built into `ADR-0029`. Nothing above is rewritten; the owner may revise any of it.
+
+- **Decision 6 stays in force and is refined.** The memory imports `auditmanager.shared` and `auditmanager.storage.public` only, and **does not import the precedents core**. The core (`src/auditmanager/precedents/`, a new context that imports only the `public` module of others) reads the memory through `decision_memory.public`. The wiring of the two is the composition root's, as the capture assembler's already is.
+- **Decision 2 is refined.** A table of **derived state** the precedents programme adds (`decision_memory_probe`, `decision_memory_precedent_run`, `decision_memory_precedent_advice`) is `PRODUCT`: it holds no case content and is purged with the product. The content, the experts' comments (`decision_memory_comment`), the block evidence, the embeddings and their intents stay `KEEP`. Capture and the forget protection cover the new content tables.
+- **Decision 3 is refined.** The finding's own verdict is still decided by the ledger and no behaviour reads it from the memory. A precedent mark reads the verdicts of **other** cases; it is advice for the expert and for the AI critic, never a decision, and no model writes a mark or a memory decision.
+- **Answer to Q8 (the table above) is revised.** `comment` events are now captured, into their own table, and carried over on a case's first ✓/✕ (`R-153ag`, `ADR-0029` decision 10). A comment never changes a vote. The rest of the Q8 answer stands.
+- **Q4 is closed by the owner** (`R-153z`, `ADR-0029`): any project's case may be shown to a model whole, with quotes; the risk is accepted and recorded there.

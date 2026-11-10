@@ -1,0 +1,96 @@
+# Task F8-PUBLISH — the group publisher and block memory: candidates become findings
+
+## Outcome
+A new publisher turns a group of N observations into one finding; candidates appear in «Разбор» with ✓/✕; the memory captures block evidence in the same release (`ADR-0029` decision 7).
+
+Owner: the publisher lane; `src/auditmanager/runs/extended_review.py` has one owner at a time: this lane first, then `CTX-STAND`, `CTX-CRITIC`, `M7-NORM-PNG`.
+
+## Depends on
+- F8-GATE
+
+Dispatch the lane only when every task above is merged into the base it works from.
+
+## Frozen inputs
+- domain contract: 1.49.0 at the base; 1.50.0 once the AR v3 removal wave merges (`R-154h`)
+- API contract: 1.49.0 at the base; 1.50.0 once the AR v3 removal wave merges (`R-154h`)
+- analysis/comparison/event contract: 1.49.0 at the base; 1.50.0 once the AR v3 removal wave merges (`R-154h`)
+- migration head: `0062_hosts_stage_models` at the base; `0063` once the AR v3 removal wave merges (`R-154h`)
+- the seals: the first seal of this programme is 1.51.0 / `0064` (`R-154h`: the AR v3 removal wave takes 1.50.0 / `0063` first); the second is 1.52.0 / `0065` (`R-154h`)
+- base commit: `47c90e1ec6adf160f788e69279819c0e9c048e8e`
+- ADR: `ADR-0029` decision 7; plan section 4 items 1, 2, 4, 5 and 8
+- `dm-capture/2` and block evidence in the memory ship with the publisher
+- plan: the «Прецеденты» plan (version 5, with the R-154 correction) is the integrator's working copy `.local/evidence/lane-common-prec/plan-v5.md` and is not in git; the decisions it carries are in `ADR-0029`
+- rules: the common rules of the programme (`.local/evidence/lane-common-prec-2026-11-10.md`, git-ignored): minimal checks only, tests under the host lock, no push, merge or tag
+- the plan read the code at `5342b7178`, which has the same code as the base; every `path:line` the lane relies on is checked in its own worktree before use
+
+## Enumerator ownership
+- enumerated_set_changed: no
+- enumerator_path: not_applicable
+- enumerator_owner: not_applicable
+- totality_query: not_applicable
+
+## Captured premise evidence
+- premise: none
+
+## Historical evidence
+- correction_mode: none
+- source_record: not_applicable
+- addendum_path: not_applicable
+
+## Publication authority
+- development_target: origin/dev
+- origin_main_authority: none
+
+## Allowed paths
+- `src/auditmanager/findings/publication.py`
+- `src/auditmanager/findings/queries.py`
+- `src/auditmanager/findings/public.py`
+- `src/auditmanager/runs/executor.py`
+- `src/auditmanager/runs/extended_review.py`
+- `src/auditmanager/decision_memory/**`
+- `tests/integration/findings/**`
+- `tests/integration/runs/**`
+- `tests/unit/decision_memory/**`
+
+## Forbidden hotspots
+- `contracts/**` and `db/migrations/**`, unless the lane owns them below
+- `src/auditmanager/bootstrap/composition.py` and `src/auditmanager/bootstrap/adapters.py`, unless the lane owns them below
+- `pyproject.toml`, `uv.lock`, `web/package-lock.json`, `web/src/app/globals.css`
+- `VERSION` and `release-notes/**`, unless the lane owns them below
+- the historical records `docs/program/tasks/**` (except the new task files of `CRIT-ADR-29`) and `docs/manual-tests/**`
+- any path outside `Allowed paths`; a path a lane needs and lacks is named in its report, not taken
+
+## Non-goals
+- no change to a `text_only` run
+- no counters and no Excel: `F8-COUNT-XLSX`
+
+## Deliverables
+- the publisher next to `publish_gate_result`: the canonical observation is the first member; one category per group, a mixed group is `cross_source`; `stage_id` `block_analysis` for blocks and `finding_merge` for cross-checks, cross-window and mixed groups
+- no duplicates: a group wholly of `primary_text_*` sources is not published twice; a mixed group with a primary source becomes its own finding with `related_finding_uid`
+- the recommendation is the corrector's refinement if there is one, otherwise «Требуется проверка эксперта по источнику»; the length CHECK stays
+- `extended_observation_ref` and `context_kinds` (`norm_text`, `norm_images`, `precedents`) stored per candidate
+- `dm-capture/2` in the memory: block evidence in `decision_memory_block_evidence`, the crop taken by block
+
+## Required tests
+- command: .venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q -p no:cacheprovider <the test files named above>
+- expected: pass; each check below can fail, and a lane shows the test that proves it can
+- a group of N reads without `STORAGE_INTEGRITY_ERROR`
+- a group wholly of `primary_text_*` is not published
+- a mixed group gets `cross_source`
+- a `text_only` run publishes as before
+- capture of a block finding writes its evidence (the capture wiring is `CRIT-CAPTURE-01`, in the same release)
+
+## Integration contract
+`F8-WEB` and `F8-COUNT-XLSX` read the new findings; the publisher works only for runs with the marker `one_list`. The capture of block evidence in the composition root is the part of `CRIT-CAPTURE-01` that ships in the same release as this lane; the integrator takes it right after this lane and does not publish the publisher without it.
+
+## Failure/idempotency/security cases
+- transfer between versions has few pairs for block findings: the limit is recorded, not hidden
+
+## Rollback / feature flag
+The switch «один список»: new runs only.
+
+## Handoff
+- changed files: `git diff --stat <base>..HEAD` and a proof that the forbidden hotspots are untouched
+- commands/results: each check with its exact command, the tree SHA and the counts; «not run» with the reason
+- known limits: stated, with `path:line` evidence for any departure from the plan
+- integration notes: what the integrator must do next
