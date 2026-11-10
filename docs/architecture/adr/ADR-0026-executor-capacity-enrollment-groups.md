@@ -71,7 +71,7 @@ It has no enrollment, no installer and no groups. The plan section 2 records the
 10. **Immutable group revision.**
     - It holds `pin_id`, `gateway_model`, `billing`, a rate snapshot, `strategy = least_loaded` and the members' **revision** snapshots.
     - Every member revision must match `pin_id` and `gateway_model` exactly, be of a served kind, and share `billing` and rates (option A of the design; mixed groups are refused).
-    - Tables are `executor_group`, `executor_group_revision` and `executor_group_member`; the name avoids the existing `ar_v3_run_group`.
+    - Tables are `executor_group`, `executor_group_revision` and `executor_group_member`; the names do not collide with the run-group tables that existed when this ADR was written (removed 2026-11-10, `R-154c`).
 11. **Rules.** One current rule per `work_kind`, append-only, targeting a group revision.
 12. **Explicit binding state.** Every Run and comparison job has a `binding_state`:
     - `frozen_at_start` for every existing row, an explicit connection and a preset, with unchanged behaviour;

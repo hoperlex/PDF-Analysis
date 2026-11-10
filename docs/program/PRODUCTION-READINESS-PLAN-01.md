@@ -1,6 +1,7 @@
 # PRODUCTION-READINESS-PLAN-01 — the road from `origin/dev` to the production release
 
 Written 2026-10-26 by lane `production-adr-pack-01` ([task](tasks/PRODUCTION-ADR-PACK-01.md), [report](PRODUCTION-ADR-PACK-01.md)); revised the same day after the judge's findings and the owner's second poll round (`R-146o`…`R-146v`).
+**Amended 2026-11-10 (`R-154a`, `R-154c`):** the six-scope АР beta (AR v3) was removed from the tree. Item `PROD-12` (the reviewed pack), the AR v3 clauses of `PROD-10`, `PROD-11` and `PROD-11a`, the `D-204` steps and the accepted risk `A-11` are withdrawn, and the beta does not need an АР pack. The other items stand.
 It plans; it builds nothing, claims no approval and changes no state of the stand. The owner's decisions are `R-146a`…`R-146v`
 (`OWNER_RULINGS_2026-09-17.md` section 3.46) and are quoted only through those rows. The architecture is in
 [`ADR-0021`](../architecture/adr/ADR-0021-production-topology-and-operations.md),
@@ -124,7 +125,7 @@ No complete `make gate` can run on the development host (`D-205`).
 - **Executor:** Sonnet lane (probe), then the owner.
 - **Check:** the probe test lists, per v3 group Run, its state and whether `saved_page_text` answers; `pytest -q` of that probe on a lane stack.
 
-### PROD-12 — Activation of АР v3 (`D-204`, `R-146g`): the critical path of the production release for АР, and of `B3`, `B5`, `B10` for the beta (`R-146q`)
+### PROD-12 — Withdrawn 2026-11-10 (`R-154a`): it activated the AR v3 reviewed pack (`D-204`, `R-146g`)
 - **Result:** a reviewed pack is installed (`v3_pack_cli verify` exits 0) and `startArV3BetaGroup` stops refusing. The sequence is `AR-V3-BETA-ACTIVATION-RUNBOOK-01.md`, steps 1 to 9, none of which code can supply.
 - **Steps and owners:** (1) the stand imports the repaired norms bundle and designates snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74` — owner window; (2) include/revise/exclude for each C01–C22 branch —
   qualified expert; (3) the missing official D1–D5 amendment pages, the C15 ГОСТ correction page and the D6 law text, hashed — owner; (4) BGE-M3 query vectors with reproducible provenance

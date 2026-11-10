@@ -37,9 +37,8 @@ A document is in exactly one of four states, plus a flag.
 | flag `partial` | The result run is `partial`. It marks the document in any of the four states; it is not a fifth state. | `R-150s` |
 
 Optimisation proposals are not part of any state; they are counted separately, and that count is not built in this slice
-(`R-150u`). AR v3 six-run groups use the general per-run rule above for now (each run of a group is a run of its version; the
-latest `published` or `partial` one is the result); the group rule is decided when AR v3 is switched on (`R-150t`, `Q-MD-9`,
-still a debt). The function `audit_state(result_state, has_findings, has_undecided)` is the only place the rule is written; a
+(`R-150u`). The six-run groups of the removed AR v3 beta (`R-154a`) had no group rule (`R-150t`, `Q-MD-9`); the question is moot
+(`D-303` is closed). The function `audit_state(result_state, has_findings, has_undecided)` is the only place the rule is written; a
 combination the database cannot produce (a state that is not a result, undecided findings without findings) is refused out loud.
 
 ## 3. The figures on the wire
@@ -113,4 +112,4 @@ not by documents or findings.
 The header selector and the columns (waves 1 and 2); the «отказ» chip that shows why a document with only failed runs is
 `not_run` (`R-150r`; the per-document state itself, with its `partial` flag, is `DocumentVersion.audit` of `listDocuments` since
 contract `1.34.0`, `UI-PARITY-DOC-AUDIT`); the separate count of optimisation proposals
-(`R-150u`); the AR v3 group rule (`R-150t`, `Q-MD-9`); the other open questions of `D-303` (`Q-MD-8`, `Q-MD-10` … `Q-MD-21`).
+(`R-150u`); the other questions of `D-303` (`Q-MD-8`, `Q-MD-10` … `Q-MD-21`), which `R-151t` settled. The AR v3 group rule (`R-150t`, `Q-MD-9`) is moot since 2026-11-10 (`R-154a`).
