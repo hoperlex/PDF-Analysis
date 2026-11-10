@@ -70,7 +70,7 @@ class Rig:
         self.docker = executable(self.shim_dir / "docker", SHIM)
         executable(self.bin / "systemctl", SYSTEMCTL)
         self.env_file = tmp / "alpha.env"
-        self.env_file.write_text("ALPHA_INSTANCE=am-test\n", encoding="utf-8")
+        self.env_file.write_text("ALPHA_INSTANCE=am-test\nALPHA_MEM_LIMIT_EMBEDDER=3500m\n", encoding="utf-8")
 
     def run(self, command: str, **extra: str) -> subprocess.CompletedProcess[str]:
         env = {
@@ -219,9 +219,9 @@ def test_a_disk_with_room_builds_the_service_under_its_profile(rig: Rig) -> None
 
 
 def test_the_threshold_is_the_environments_when_it_says_one(rig: Rig) -> None:
-    rig.env_file.write_text("ALPHA_INSTANCE=am-test\nALPHA_EMBEDDER_BUILD_MIN_FREE_GB=20\n", encoding="utf-8")
+    rig.env_file.write_text("ALPHA_INSTANCE=am-test\nALPHA_MEM_LIMIT_EMBEDDER=3500m\nALPHA_EMBEDDER_BUILD_MIN_FREE_GB=20\n", encoding="utf-8")
     assert rig.run("build-image", SHIM_IMAGE="absent", EMBED_FREE_GIB="15").returncode == 3
-    rig.env_file.write_text("ALPHA_INSTANCE=am-test\nALPHA_EMBEDDER_BUILD_MIN_FREE_GB=lots\n", encoding="utf-8")
+    rig.env_file.write_text("ALPHA_INSTANCE=am-test\nALPHA_MEM_LIMIT_EMBEDDER=3500m\nALPHA_EMBEDDER_BUILD_MIN_FREE_GB=lots\n", encoding="utf-8")
     refused = rig.run("build-image", SHIM_IMAGE="absent", EMBED_FREE_GIB="99")
     assert refused.returncode == 3 and "not a whole number" in refused.stderr
 
@@ -252,6 +252,54 @@ def test_verify_wants_the_image_the_timer_and_a_fresh_heartbeat(rig: Rig) -> Non
     assert stale.returncode == 3 and "1100 s old" in stale.stderr
     (rig.exchange / "heartbeat").unlink()
     assert "never written a heartbeat" in rig.run("verify", EMBED_NOW="1800000000").stderr
+
+
+# -- the memory limit is demanded, never defaulted -----------------------------------------------------------------------------
+
+
+def without_limit(rig: Rig, how: str = "absent") -> None:
+    rig.env_file.write_text("ALPHA_INSTANCE=am-test\n" + ("ALPHA_MEM_LIMIT_EMBEDDER=\n" if how == "empty" else ""), encoding="utf-8")
+
+
+@pytest.mark.parametrize("how", ["absent", "empty"])
+def test_the_build_refuses_without_the_limit_and_builds_nothing(rig: Rig, how: str) -> None:
+    without_limit(rig, how)
+    done = rig.run("build-image", SHIM_IMAGE="absent", EMBED_FREE_GIB="99")
+    assert done.returncode == 3 and "ALPHA_MEM_LIMIT_EMBEDDER is unset or empty" in done.stderr
+    assert builds(rig) == [], "compose would render 3g; nothing is built on it"
+
+
+@pytest.mark.parametrize("how", ["absent", "empty"])
+def test_the_run_refuses_without_the_limit_tells_the_worker_and_starts_no_container(rig: Rig, how: str) -> None:
+    without_limit(rig, how)
+    rig.request()
+    done = rig.run("tick", EMBED_NOW="1800000000")
+    assert done.returncode == 3 and "ALPHA_MEM_LIMIT_EMBEDDER is unset or empty" in done.stderr
+    assert not rig.ran_a_container(), "the encoder never starts on the compose default"
+    assert rig.result()["exit_code"] == "2", "the worker is told: a failed container is a loud skipped window"
+    assert "ALPHA_MEM_LIMIT_EMBEDDER" in (rig.exchange / "stderr.log").read_text(encoding="utf-8")
+    assert (rig.exchange / "heartbeat").exists(), "the timer is still seen alive: it is the value that is missing, not the timer"
+
+
+def test_a_tick_with_nothing_to_run_does_not_need_the_limit(rig: Rig) -> None:
+    without_limit(rig)
+    assert rig.run("tick", EMBED_NOW="1800000000").returncode == 0
+
+
+def test_install_and_verify_refuse_without_the_limit(rig: Rig) -> None:
+    without_limit(rig)
+    target = rig.tmp / "units"
+    refused = rig.run("install", EMBED_SYSTEMD_DIR=str(target))
+    assert refused.returncode == 3 and "ALPHA_MEM_LIMIT_EMBEDDER" in refused.stderr and not target.exists()
+    (rig.exchange / "heartbeat").write_text("epoch=1799999900\n", encoding="utf-8")
+    verified = rig.run("verify", EMBED_NOW="1800000000")
+    assert verified.returncode == 3 and "ALPHA_MEM_LIMIT_EMBEDDER" in verified.stderr
+
+
+def test_the_environment_of_the_call_counts_as_compose_reads_it(rig: Rig) -> None:
+    without_limit(rig)
+    done = rig.run("build-image", SHIM_IMAGE="absent", EMBED_FREE_GIB="99", ALPHA_MEM_LIMIT_EMBEDDER="3500m")
+    assert done.returncode == 0 and len(builds(rig)) == 1
 
 
 # -- the units ---------------------------------------------------------------------------------------------------------------

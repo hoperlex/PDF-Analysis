@@ -548,12 +548,14 @@ services:
   #   * NO NETWORK (`network_mode: none`), NO DATABASE (no `DATABASE_URL`, no `networks`, no `depends_on`, no `env_file`), NO SECRET. The image sets
   #     the hub offline. The container reads one file and writes two; it cannot reach anything else, and it holds the text of findings only
   #     for the minutes it runs.
-  #   * A HARD MEMORY LIMIT THAT HAS NO DEFAULT. `${ALPHA_MEM_LIMIT_EMBEDDER:?...}` makes compose refuse to render this file at all while the
-  #     value is unset or empty -- and compose renders the whole file for every command, so an alpha.env without it stops `up` as well: that is
-  #     the intent (the encoder's peak, 3 177,9 MiB at the bake-off's threads and batch, sits next to services that have no limit, and a limit
-  #     nobody chose is how the host's kernel chooses the victim). NO NUMBER IS INVENTED HERE; the owner sets it from the first night's
-  #     measurement. `memswap_limit` is the same value, so the container cannot swap past its limit, and `oom_score_adj: 1000` makes it the
-  #     kernel's first victim if the host still runs short: a killed encoder is a skipped window, a killed worker or database is an outage.
+  #   * A HARD MEMORY LIMIT, `mem_limit` and `memswap_limit` the same value (so the container cannot swap past it), and `oom_score_adj: 1000`
+  #     (the kernel's first victim if the host still runs short: a killed encoder is a skipped window, a killed worker or database is an
+  #     outage). THE `:-3g` DEFAULT EXISTS ONLY SO THAT COMPOSE RENDERS THIS FILE when `ALPHA_MEM_LIMIT_EMBEDDER` is unset -- Compose renders the
+  #     whole file for every command, so a `:?` here would stop `up` on every stand that has not set it, for a service that is off by default.
+  #     IT IS NOT THE LIMIT THE ENCODER RUNS UNDER: `embed-window.sh` (install, build-image, verify and the run itself) and `deploy.sh` refuse
+  #     while ALPHA_MEM_LIMIT_EMBEDDER is unset or empty, so every path that starts the encoder demands the owner's explicit value and the encoder
+  #     never starts on this default (the encoder's peak was 3 177,9 MiB at the bake-off's threads and batch, next to services that have no limit;
+  #     the first night is the measurement of the value chosen).
   #   * TWO CPUs, TWO THREADS, BATCH EIGHT: `cpus`, the thread variables below and `embed_intents.py` (`THREADS`, `BATCH`).
   #   * The entry is `embed_intents.py`, mounted read-only from the checkout: `embed-texts` of the norms package, plus the over-length texts set
   #     aside (they become `poisoned`, never cut). The image is not changed for it.
@@ -565,8 +567,8 @@ services:
     image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-embedder
     network_mode: none
     restart: "no"
-    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:?ALPHA_MEM_LIMIT_EMBEDDER is unset. It is the encoder's hard memory limit (for example 3500m); no number is invented. See infra/deploy/README.md, the night encoder.}
-    memswap_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:?ALPHA_MEM_LIMIT_EMBEDDER is unset.}
+    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}
+    memswap_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}
     oom_score_adj: 1000
     cpus: 2
     pids_limit: 256

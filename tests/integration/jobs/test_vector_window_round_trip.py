@@ -107,7 +107,7 @@ def test_a_night_goes_from_the_workers_batch_through_the_host_script_and_the_rea
         exchange_dir = tmp_path / "exchange"
         exchange_dir.mkdir()
         env_file = tmp_path / "alpha.env"
-        env_file.write_text("ALPHA_INSTANCE=am-roundtrip\n", encoding="utf-8")
+        env_file.write_text("ALPHA_INSTANCE=am-roundtrip\nALPHA_MEM_LIMIT_EMBEDDER=3500m\n", encoding="utf-8")
         short = w.add_case(engine, finding="Круговой рейс: короткая находка про высоту помещения")
         long = w.add_case(engine, finding="Круговой рейс: " + "очень длинная находка " * 40)
         now = int(w.INSIDE.timestamp())

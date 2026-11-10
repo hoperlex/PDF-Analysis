@@ -14,14 +14,18 @@
 #   * every tick writes `heartbeat` (`epoch=<n>`): the worker opens no window for a host whose timer is silent, so a timer that is off costs no
 #     night of stopped runs (rollback of this feature is `systemctl disable --now auditmanager-embed-window.timer`, and the intents wait);
 #   * a tick that finds `request.json` and no `result` runs the service `embedder` over it, with the HARD memory limit compose gives it
-#     (`mem_limit` from ALPHA_MEM_LIMIT_EMBEDDER, no default), and watches it: at the `deadline` the worker wrote, or when `abort` appears, the
+#     (`mem_limit` from ALPHA_MEM_LIMIT_EMBEDDER), and watches it: at the `deadline` the worker wrote, or when `abort` appears, the
 #     container is stopped (by its exact name: this script never kills by pattern);
+#   * THE LIMIT IS DEMANDED, NOT DEFAULTED. Compose renders `mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}` so that an unset variable does not stop
+#     every compose command of the stack; that 3g is not what the encoder may run under. `install`, `build-image`, `verify` and the run itself
+#     (`tick`, once there is a request) refuse while ALPHA_MEM_LIMIT_EMBEDDER is unset or empty -- in the environment of the call or in the
+#     environment file, as Compose reads it -- and the run reports it to the worker (status 2, a loud skip) instead of starting;
 #   * what the container says, on either stream, goes to `stderr.log` (its tail is kept); then it writes `result` (`exit_code=<n>`): 0 done, 124 stopped at the deadline, 130 stopped by `abort`, 137 killed (the kernel's memory limit
 #     gives SIGKILL), 127 the image is not there, anything else the container's own status. The worker reads it, imports or skips LOUDLY.
 #
 # It removes nothing of the round: the worker clears the files after it has read them. A second tick while one runs does nothing (a lock).
 #
-# Settings read as DATA from the environment file (never sourced): ALPHA_INSTANCE, and ALPHA_EMBEDDER_BUILD_MIN_FREE_GB (free GiB the image's build
+# Settings read as DATA from the environment file (never sourced): ALPHA_INSTANCE, ALPHA_MEM_LIMIT_EMBEDDER, and ALPHA_EMBEDDER_BUILD_MIN_FREE_GB (free GiB the image's build
 # needs on the docker root; default 12: the image is 5.5 GB and its rebuild took 9.5 GB, `docs/program/W54-EMBED-BUILD-01.md`). Overrides for a test:
 # EMBED_DIR (the exchange directory, instead of the volume's mountpoint), EMBED_DOCKER (the docker command), EMBED_NOW (epoch seconds),
 # EMBED_POLL_SECONDS (the watch interval, default 5), EMBED_FREE_GIB (the free space, instead of asking df).
@@ -59,6 +63,21 @@ configured() {
 }
 
 now() { printf '%s' "${EMBED_NOW:-$(date +%s)}"; }
+
+# The encoder's hard memory limit as Compose will read it (the environment of the call wins over the environment file), or nothing.
+mem_limit_value() {
+    local value="${ALPHA_MEM_LIMIT_EMBEDDER:-}"
+    [ -n "$value" ] || value="$(configured ALPHA_MEM_LIMIT_EMBEDDER)"
+    printf '%s' "$value"
+}
+
+LIMIT_MESSAGE="ALPHA_MEM_LIMIT_EMBEDDER is unset or empty."
+LIMIT_HINT="The encoder's hard memory limit has no default of its own (compose renders 3g only so that the file renders): set it in the environment file, for example 3500m, from the measurement you chose."
+
+# Every path that starts the encoder demands the explicit value (the compose default is not a limit anyone chose).
+require_limit() {
+    [ -n "$(mem_limit_value)" ] || refuse "$LIMIT_MESSAGE" "$LIMIT_HINT"
+}
 
 atomic_write() {  # atomic_write <file> <content>
     printf '%s\n' "$2" >"$1.part"
@@ -111,6 +130,12 @@ tick() {
         report "$dir" 124 "the window had ended before the encoder started"
         return 0
     fi
+    if [ -z "$(mem_limit_value)" ]; then
+        # No container is started on the compose default. The worker is told (a skipped window with a reason it logs), and the timer's journal fails.
+        report "$dir" 2 "$LIMIT_MESSAGE $LIMIT_HINT"
+        printf 'embed-window.sh: %s\n' "$LIMIT_MESSAGE" >&2
+        return 3
+    fi
     if ! "$DOCKER" image inspect "$inst-embedder" >/dev/null 2>&1; then
         report "$dir" 127 "there is no image $inst-embedder on this host; deploy.sh builds it when ALPHA_EMBEDDER=yes"
         return 0
@@ -145,6 +170,8 @@ report() {  # report <dir> <code> <message>
 
 install_units() {
     [ "$(id -u)" -eq 0 ] || [ -n "${EMBED_SYSTEMD_DIR:-}" ] || refuse "install writes to $SYSTEMD_DIR and enables a timer: run it as root."
+    instance >/dev/null
+    require_limit
     local repo env unit
     repo="$(cd "$HERE/../.." && pwd)"
     env="$(cd "$(dirname "$ENV_FILE")" && pwd)/$(basename "$ENV_FILE")"
@@ -188,6 +215,7 @@ free_gib() {
 build_image() {
     local inst image minimum free
     inst="$(instance)"
+    require_limit
     image="$inst-embedder"
     if "$DOCKER" image inspect "$image" >/dev/null 2>&1 && [ "${ALPHA_EMBEDDER_REBUILD:-no}" != yes ]; then
         echo "embed-window.sh: the image $image is present and is not rebuilt (ALPHA_EMBEDDER_REBUILD=yes rebuilds it)."
@@ -214,6 +242,7 @@ build_image() {
 verify() {
     local inst dir age beat
     inst="$(instance)"
+    require_limit
     "$DOCKER" image inspect "$inst-embedder" >/dev/null 2>&1 \
         || refuse "the encoder's image $inst-embedder is not on this host." "Run deploy.sh with ALPHA_EMBEDDER=yes."
     systemctl is-enabled "$UNIT_NAME.timer" >/dev/null 2>&1 \

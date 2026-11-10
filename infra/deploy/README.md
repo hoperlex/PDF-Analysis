@@ -843,11 +843,13 @@ host is 4 GB and the encoder peaks at about 3,2 GiB, so while it runs the stand 
 (ADR-0029, «Temporary decisions», 2). What is here, and nothing else, is that decision's deployment:
 
 * **the service `embedder`** in `compose.server.yml`, in the profile `embedder` (`up`, `build` and `ps` never touch it): `network_mode: none`, no
-  `DATABASE_URL`, no secret, a read-only root, two CPUs, two threads, a batch of eight, `oom_score_adj: 1000`, and a **hard memory limit with no
-  default**: `mem_limit` and `memswap_limit` are both `${ALPHA_MEM_LIMIT_EMBEDDER:?...}`. **Compose renders the whole file for every command**, so
-  while `ALPHA_MEM_LIMIT_EMBEDDER` is empty or unset in `alpha.env` *every* `docker compose` call of this stack -- `up` included -- refuses and names it.
-  Set it (for example `3500m`) before the deploy that brings this service in. No number is shipped: the first night is the measurement, and a limit
-  nobody chose is how the host's kernel chooses the victim.
+  `DATABASE_URL`, no secret, a read-only root, two CPUs, two threads, a batch of eight, `oom_score_adj: 1000`, and a **hard memory limit**: `mem_limit` and
+  `memswap_limit` are both `${ALPHA_MEM_LIMIT_EMBEDDER:-3g}`. **The `3g` exists only so that Compose renders the file when the variable is unset** (Compose
+  renders the whole file for every command, so a required variable would stop `up` on every stand for a service that is off by default). **It is not
+  the limit the encoder runs under:** `embed-window.sh` (`install`, `build-image`, `verify` and the run itself) and `deploy.sh` (with `ALPHA_EMBEDDER=yes`)
+  **refuse while `ALPHA_MEM_LIMIT_EMBEDDER` is unset or empty**, so the encoder never starts on the default and no number is chosen for you. Set it in
+  `alpha.env` (for example `3500m`) before `ALPHA_EMBEDDER=yes`; the first night is the measurement of the value you chose. A run the timer finds
+  while it is unset is reported to the worker as a failed container (a loud skipped window), not started.
 * **the volume `<instance>-embed-exchange`**, mounted at `/embed` by the `worker` and the `embedder` and by nothing else: the worker leaves the batch
   (the text of expert findings, for the length of one round) and finds the vectors; the worker empties it after each round.
 * **the host's timer**, `infra/deploy/embed-window.sh` with `systemd/auditmanager-embed-window.{service,timer}`: it looks at the exchange every minute,

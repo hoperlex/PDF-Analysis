@@ -28,13 +28,21 @@ def test_deploy_builds_the_encoder_image_after_the_serving_images_and_before_up(
     assert built < embedder < first_up
 
 
-def test_deploy_calls_it_only_for_yes_and_refuses_what_it_does_not_recognise() -> None:
+def test_deploy_reads_the_option_and_demands_the_limit_before_anything_is_built() -> None:
     start = position(DEPLOY_SH, 'EMBEDDER="$(configured ALPHA_EMBEDDER)"')
-    block = DEPLOY_SH[start:DEPLOY_SH.index("# --- 1a.", start)]
+    block = DEPLOY_SH[start:DEPLOY_SH.index("esac\n", start)]
     assert re.search(r"case \"\$\{EMBEDDER:-no\}\" in\n\s+no\) ;;\n\s+yes\)", block), "an unset value is no"
-    assert "neither yes nor no" in block and "refuse " in block
-    assert block.count("build-image") == 1
-    assert "NOTHING WAS STARTED OR REPLACED" in block, "a failed encoder build leaves what was serving still serving"
+    assert 'configured ALPHA_MEM_LIMIT_EMBEDDER' in block and "refuse " in block and "has no default of its own" in block
+    assert "neither yes nor no" in DEPLOY_SH[start:start + 2500]
+    assert start < position(DEPLOY_SH, "echo \"-- building the images --\""), "before the first build: a refusal after it is a build wasted"
+    assert start > position(DEPLOY_SH, "# <<< guard: identity-policy-known")
+
+
+def test_deploy_builds_the_encoder_image_only_for_yes_and_leaves_what_was_serving_alone_when_it_fails() -> None:
+    start = position(DEPLOY_SH, "# --- 1-embedder.")
+    block = DEPLOY_SH[start:DEPLOY_SH.index("# --- 1a.", start)]
+    assert re.search(r"case \"\$\{EMBEDDER:-no\}\" in\n\s+yes\)", block)
+    assert block.count("build-image") >= 1 and "NOTHING WAS STARTED OR REPLACED" in block
 
 
 def test_deploy_adds_no_guard_marker_of_its_own() -> None:

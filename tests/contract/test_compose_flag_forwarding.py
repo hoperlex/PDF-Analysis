@@ -221,13 +221,15 @@ def test_a_name_read_without_a_readable_default_is_refused() -> None:
 
 # -- `EMBED-01` (ADR-0029 decision 8): the night encoder's service ---------------------------------------------------------------
 #
-# The service `embedder` is the encoder of the precedents' vectors: offline, with a hard memory limit that has no default. What is held here is what the
-# decision says about its definition, on the file as written; each guard is shown refusing a copy of the file that broke it.
+# The service `embedder` is the encoder of the precedents' vectors: offline, with a hard memory limit. Its `${ALPHA_MEM_LIMIT_EMBEDDER:-3g}` default exists
+# only so that Compose renders the file on a stand that has not set the variable (Compose renders the whole file for every command); the encoder is never
+# started on it, which is `embed-window.sh`'s refusal, held in `tests/unit/precedents/test_embed_window_script.py`. What is held here is what the decision says
+# about the definition, on the file as written; each guard is shown refusing a copy of the file that broke it.
 
 EMBEDDER = "embedder"
 LIMIT_NAME = "ALPHA_MEM_LIMIT_EMBEDDER"
 SERVICE_LINE = re.compile(r"  ([a-z0-9-]+):[ ]*")
-REFUSING = re.compile(r"\$\{" + LIMIT_NAME + r":\?[^}]*\}")
+LIMIT_EXPRESSION = "${" + LIMIT_NAME + ":-3g}"
 
 
 def service_names(compose: str) -> list[str]:
@@ -292,8 +294,10 @@ def embedder_problems(compose: str) -> list[str]:
         out.append("a database, store or secret appears in its definition")
     for key in ("mem_limit", "memswap_limit"):
         value = keys.get(key, "")
-        if not REFUSING.search(value):
-            out.append(f"{key} is {value!r}: it must be ${{{LIMIT_NAME}:?...}}, with no default")
+        if value != LIMIT_EXPRESSION:
+            out.append(f"{key} is {value!r}: it must be exactly {LIMIT_EXPRESSION}, so that Compose renders the file with the variable unset")
+    if re.search(r"\$\{" + LIMIT_NAME + r":?\?", text):
+        out.append(f"{LIMIT_NAME} is required (`:?`): every compose command of a stack that has not set it would refuse, for a service that is off by default")
     if keys.get("oom_score_adj") != "1000":
         out.append(f"oom_score_adj is {keys.get('oom_score_adj')!r}, not 1000")
     if keys.get("cpus") != "2":
@@ -348,8 +352,11 @@ def test_the_worker_and_the_embedder_share_the_exchange_and_the_worker_has_no_ot
     ("    profiles: [embedder]\n", "", "profiles is None"),
     ("    network_mode: none\n", "", "network_mode is None"),
     ("    network_mode: none\n", "    network_mode: none\n    networks: [alpha]\n", "it declares networks"),
-    ("    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:?", "    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-0}\n    x_unused: ${ALPHA_MEM_LIMIT_EMBEDDER:?", "mem_limit is '${ALPHA_MEM_LIMIT_EMBEDDER:-0}'"),
-    ("    memswap_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:?ALPHA_MEM_LIMIT_EMBEDDER is unset.}\n", "    memswap_limit: 4g\n", "memswap_limit is '4g'"),
+    ("    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}\n", "    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-0}\n", "mem_limit is '${ALPHA_MEM_LIMIT_EMBEDDER:-0}'"),
+    ("    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}\n", "    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:?unset}\n", "is required (`:?`)"),
+    ("    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}\n", "    mem_limit: 3g\n", "mem_limit is '3g'"),
+    ("    memswap_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}\n", "    memswap_limit: 4g\n", "memswap_limit is '4g'"),
+    ("    memswap_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}\n", "    memswap_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-4g}\n", "memswap_limit is '${ALPHA_MEM_LIMIT_EMBEDDER:-4g}'"),
     ("    oom_score_adj: 1000\n", "    oom_score_adj: 500\n", "oom_score_adj is '500'"),
     ("    cpus: 2\n", "    cpus: 4\n", "cpus is '4'"),
     ("      OMP_NUM_THREADS: \"2\"\n", "      OMP_NUM_THREADS: \"8\"\n", "thread variables are not 2"),
@@ -372,22 +379,25 @@ def _docker_compose(args: list[str], env: dict[str, str]) -> subprocess.Complete
     return subprocess.run(["docker", "compose", "--file", str(COMPOSE), *args], env=env, capture_output=True, text=True, timeout=120, check=False)
 
 
-def test_compose_itself_refuses_to_render_the_file_without_the_limit_and_does_not_list_the_embedder_without_its_profile() -> None:
-    """The real thing, where there is a `docker compose` to ask (it needs no daemon): the refusal is Compose's, naming the variable."""
+def test_compose_itself_renders_the_file_without_the_limit_and_the_embedder_carries_a_memory_limit() -> None:
+    """The real thing, where there is a `docker compose` to ask (it needs no daemon): with the variable unset or empty the file still renders -- every
+    other compose command of a stack that has not set it keeps working -- the embedder is not listed without its profile, and with it carries a `mem_limit`
+    and the same `memswap_limit` (the default, 3g, only so that the file renders)."""
     if shutil.which("docker") is None or _docker_compose(["version"], dict(os.environ)).returncode != 0:
         pytest.skip("no `docker compose` on this machine; the text of the definition is held by the tests above")
-    required = {name for name in re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*):\?", COMPOSE.read_text(encoding="utf-8"))} - {LIMIT_NAME}
+    required = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*):\?", COMPOSE.read_text(encoding="utf-8")))
+    assert LIMIT_NAME not in required, "the limit is not a required variable"
     base = {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/root"), **{name: "x" for name in required}, "ALPHA_HTTP_PORT": "8080"}
-    refused = _docker_compose(["config", "--services"], base)
-    assert refused.returncode != 0 and LIMIT_NAME in refused.stderr, refused.stderr
-    empty = _docker_compose(["config", "--services"], {**base, LIMIT_NAME: ""})
-    assert empty.returncode != 0 and LIMIT_NAME in empty.stderr, "an empty value is as unset as an absent one"
-    given = {**base, LIMIT_NAME: "3500m"}
-    plain = _docker_compose(["config", "--services"], given)
-    assert plain.returncode == 0 and EMBEDDER not in plain.stdout.split(), plain.stderr
-    profiled = _docker_compose(["--profile", EMBEDDER, "config", "--services"], given)
-    assert profiled.returncode == 0 and EMBEDDER in profiled.stdout.split(), profiled.stderr
-    rendered = _docker_compose(["--profile", EMBEDDER, "config"], given).stdout
-    block = rendered.split("  embedder:\n", 1)[1].split("\n  postgres:", 1)[0]
-    assert 'mem_limit: "3670016000"' in block and 'memswap_limit: "3670016000"' in block and "oom_score_adj: 1000" in block
-    assert "network_mode: none" in block and "cpus: 2" in block
+    for env in (base, {**base, LIMIT_NAME: ""}):
+        plain = _docker_compose(["config", "--services"], env)
+        assert plain.returncode == 0, plain.stderr
+        assert EMBEDDER not in plain.stdout.split() and len(plain.stdout.split()) == 9, "`up` and `ps` see the nine services of before"
+        profiled = _docker_compose(["--profile", EMBEDDER, "config"], env)
+        assert profiled.returncode == 0, profiled.stderr
+        block = profiled.stdout.split("  embedder:\n", 1)[1].split("\n  postgres:", 1)[0]
+        assert 'mem_limit: "3221225472"' in block and 'memswap_limit: "3221225472"' in block, block
+        assert "oom_score_adj: 1000" in block and "network_mode: none" in block and "cpus: 2" in block
+    given = _docker_compose(["--profile", EMBEDDER, "config"], {**base, LIMIT_NAME: "3500m"})
+    assert given.returncode == 0, given.stderr
+    block = given.stdout.split("  embedder:\n", 1)[1].split("\n  postgres:", 1)[0]
+    assert 'mem_limit: "3670016000"' in block and 'memswap_limit: "3670016000"' in block, "an explicit value reaches both limits"

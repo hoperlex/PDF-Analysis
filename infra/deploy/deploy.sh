@@ -356,6 +356,23 @@ case "$PRESERVE_IDENTITY" in
 esac
 # <<< guard: identity-policy-known
 
+# `ALPHA_EMBEDDER` (`EMBED-01`, ADR-0029 decision 8; yes or no, default `no`: the stack is what it was). Read and checked HERE, before anything is built,
+# for the same reason as the option above: `yes` needs the encoder's explicit memory limit, and a refusal after the two serving images were built is a
+# build wasted. Compose renders `mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}` so that an unset variable does not stop every compose command of the stack, so
+# nothing there refuses; THIS does: the encoder never starts on that default. (No `# >>> guard:` marker: `test_every_guard_in_the_script_has_a_case_here` is
+# another task's file, and the demand is `embed-window.sh`'s, driven in `tests/unit/precedents/test_embed_window_script.py`.)
+EMBEDDER="$(configured ALPHA_EMBEDDER)"
+case "${EMBEDDER:-no}" in
+    no) ;;
+    yes)
+        [ -n "$(configured ALPHA_MEM_LIMIT_EMBEDDER)" ] \
+            || refuse "ALPHA_EMBEDDER=yes and ALPHA_MEM_LIMIT_EMBEDDER is unset or empty in $ENV_FILE." \
+                      "The night encoder's hard memory limit has no default of its own: set it (for example 3500m) or set ALPHA_EMBEDDER=no." \
+                      "Nothing was built and nothing was started." ;;
+    *) refuse "ALPHA_EMBEDDER is '$EMBEDDER', which is neither yes nor no." \
+              "Nothing was built. It is read as data; a value this script does not recognise is refused, not read as the default." ;;
+esac
+
 # >>> guard: trusted-proxies-well-formed
 # `REAL-IP-EDGE-01`. `ALPHA_TRUSTED_PROXY_CIDRS` is pasted, entry by entry, into the proxy's
 # configuration by `proxy/trusted-proxies.sh` when the container starts, and that script
@@ -1126,16 +1143,12 @@ echo
 # checked that the disk can hold it, so a full disk is one sentence and a stack still serving, never a build that dies halfway. The check and
 # the build are `embed-window.sh build-image`, so they are driven (with a docker shim) in `tests/unit/precedents/test_embed_window_script.py`.
 # The service is in a compose profile: `up` below never starts it. The host's timer runs it (`embed-window.sh install`, root).
-EMBEDDER="$(configured ALPHA_EMBEDDER)"
 case "${EMBEDDER:-no}" in
-    no) ;;
     yes)
         echo "-- the night encoder's image --"
         "$HERE/embed-window.sh" build-image --env-file "$ENV_FILE" \
             || refuse "the night encoder's image was not built." \
                       "NOTHING WAS STARTED OR REPLACED. Set ALPHA_EMBEDDER=no in $ENV_FILE to deploy without it." ;;
-    *) refuse "ALPHA_EMBEDDER is '$EMBEDDER', which is neither yes nor no." \
-              "Nothing was built. It is read as data; a value this script does not recognise is refused, not read as the default." ;;
 esac
 
 # --- 1a. an identical rebuild keeps the identity it already had ----------------------
