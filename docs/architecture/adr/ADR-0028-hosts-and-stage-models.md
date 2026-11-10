@@ -1,6 +1,6 @@
 # ADR-0028: Executor hosts, system-managed groups, and per-stage models frozen at dispatch
 
-- Status: accepted by the repository owner on 2026-11-09 (`R-153a`…`R-153f`; the plan was approved whole, `R-153c`). The product decisions are the owner's; the engineering choices below are the planner's inside them. They are revisable by a dated addendum.
+- Status: accepted by the repository owner on 2026-11-09 (`R-153a`…`R-153f`; the plan was approved whole, `R-153c`). The product decisions are the owner's; the engineering choices below are the planner's inside them. They are revisable by a dated addendum. **Amended 2026-11-10 (`LIMITS-01`, `R-153n`…`R-153p`):** decisions 5, 9 and 12 no longer carry an answer limit or a stored timeout per cell, and the agent's silence window is 600 s; see the addendum at the end.
 - Date: 2026-11-09
 - Owners: repository owner / HOSTS integrator (the planning session)
 - Amends: `ADR-0026` decisions 1, 2, 3, 5, 8, 9, 10, 12–15 and 17 for runs that carry a `stage_plan` (table below). Decision 16 is unchanged. Nothing in `ADR-0026` is removed: the connections, groups, rules and the cut-over keep serving everything that does not start from a `stage_plan` (the five `comparison_*` kinds until `HOSTS-CMP-01`, AR v3, the SSH connection «kzSonnet»).
@@ -24,7 +24,7 @@ The code on `origin/dev` `8f76b4ed6` (VERSION 0.20.0, contract 1.44.0, migration
 - a run has one binding per attempt (`src/auditmanager/runs/executor.py:1297`, `_bind_provider`); `binding.config.model_id` is read at more than 17 places (`runs/extended_review.py`, `analysis/text/stage.py:390`, `analysis/text/windowed.py:325`, `runs/preflight.py:206`);
 - `CallBinding` carries one `expected_model` (`bootstrap/composition.py:932`); consent and estimate assume one model (`analysis/text/cost.py`, `runs/cost_policy.py`, `runs/preflight.py`);
 - the pin set is closed (`analysis/text/lock.py:133`, `pinned_models`); `R-143g` forbade new pins;
-- effort and limits are code constants: effort `high` (`analysis/extended/workflow.py:95`, `analysis/text/prompt.py:304`) and answer limits of 16000 tokens (`analysis/text/prompt.py:230`), 6000 (`analysis/extended/workflow.py:93`, `core.py:258`, `cross_window_review.py:120`) and 12000 (`analysis/extended/workflow.py:143`);
+- effort and limits are code constants (the limits are gone since 2026-11-10, `R-153n`; see the addendum): effort `high` (`analysis/extended/workflow.py:95`, `analysis/text/prompt.py:304`) and answer limits of 16000 tokens (`analysis/text/prompt.py:230`), 6000 (`analysis/extended/workflow.py:93`, `core.py:258`, `cross_window_review.py:120`) and 12000 (`analysis/extended/workflow.py:143`);
 - waiting is allowed only for `binding_state = 'pending'` (`db/migrations/versions/20261102_0048_dispatch_time_binding.py:308`, `ck_audit_run_wait_pending`), and three lost attempts are a dead letter (`jobs/repository.py:1006`);
 - the extended review that runs by default is v3. Its merge is deterministic (`runs/extended_review.py:1061`, `analysis.public.deterministic_extended_merge`), so «Свод» has no model.
 
@@ -56,7 +56,7 @@ The code on `origin/dev` `8f76b4ed6` (VERSION 0.20.0, contract 1.44.0, migration
 ### Binding
 
 5. **Run binding source `stage_plan`; all cells bound at dispatch.**
-   - A run started under the stage layout freezes `audit_run.stage_plan`: for every cell its model, effort, answer limit, timeout and access. The run itself carries no group, connection or analysis preset.
+   - A run started under the stage layout freezes `audit_run.stage_plan`: for every cell its model, effort and access. The run itself carries no group, connection or analysis preset. *(Amended 2026-11-10, `R-153n`/`R-153o`: the plan held an answer limit and a timeout per cell before; it holds neither now. A plan frozen before that is still read, and its two numbers are not.)*
    - A **cell** is «row · role»: `main`, `leg1`, `leg2` or `judge` (decision 11).
    - At dispatch, in the claim transaction, **every cell the run will call under its consent is bound at once**, each to a member of the system group of its (model, access). The result is written once to `audit_run_cell_binding (run_id, cell_key, group_revision_id, connection_revision_id)`; a trigger refuses any second write.
    - If any cell has no free eligible member the run stays in the existing `pending` state with the new wait reason `model_unavailable`, naming the cells and the cause, for example «Ждём Opus 5.5 — на серверах нет входа · с 14:02 до 14:32». After 30 minutes it ends with `no_executor_online` (`R-149c`). Nothing was executed, so nothing is lost. **No state is introduced in the middle of a run.**
@@ -74,7 +74,7 @@ The code on `origin/dev` `8f76b4ed6` (VERSION 0.20.0, contract 1.44.0, migration
    - All cells by subscription: the estimate is 0 $ and pressing the button labelled «по подписке» is the consent (`{estimate_digest, ceiling_micros: 0, confirmed: true}`). At least one cell by API: one dialog with the estimate by model and the total. A batch is always one dialog (`R-151c`).
    - If access changed between the read and the start, the server refuses with the existing cost-preflight refusal, `reason: cost_estimate_binding_changed` (`ADR-0026` decision 18 addendum, still no new error code), and the UI re-reads readiness.
    - `ceiling_micros` is the human's choice; the process-wide `run_cost_ceiling_usd` is a separate notion.
-9. **Pull liveness.** The cell's timeout travels in the task and bounds the response window by the watchdog's remainder minus a margin. The agent extends its claim only while the CLI produced output in the last 120 s, so a hung CLI is caught. The attempt ceiling of 7200 s is unchanged.
+9. **Pull liveness.** The cell's timeout travels in the task and bounds the response window by the watchdog's remainder minus a margin. The agent extends its claim only while the CLI produced output in the last 600 s, so a hung CLI is caught. The attempt ceiling of 7200 s is unchanged. *(Amended 2026-11-10: the window was 120 s, `R-153p`; 600 s is deliberately equal to the server's stall window of `jobs/lease.py`. The timeout that travels in the task is the constant of the cell's row or comparison kind, `R-153o`, no longer a number stored in the cell.)*
 
 ### Stage layout
 
@@ -109,7 +109,7 @@ The code on `origin/dev` `8f76b4ed6` (VERSION 0.20.0, contract 1.44.0, migration
 
     - Before the ensemble, «Только Codex» runs blocks on one gpt-6-astra · medium (the original allows it); the Claude set is the single Opus 5.5 · medium. **Enabling the layout on production waits for the ensemble.**
     - «Свой набор» is any administrator edit. The default set is chosen by the administrator when the stand is switched; the initial value is «Только Claude», because the servers now serve Claude.
-    - The user sees «модель · усилие». «Дополнительно» (administrator): answer tokens and timeout, defaulting to today's constants. Parallelism is not shown; calls are sequential.
+    - The user sees «модель · усилие». *(Amended 2026-11-10, `R-153n`/`R-153o`: the «Дополнительно» block with the answer tokens and the timeout is removed; answer tokens do not exist and the timeout is a code constant.)* Parallelism is not shown; calls are sequential.
 13. **The catalogue file.**
     - `contracts/analysis/v1/model-catalogue.json`, with a `contract_version` and a schema beside it as its siblings have, describes **lock pins only**: provider, allowed efforts, access kinds and `accepted_reported`. Rates and identity stay in `docs/program/P02_LOCK.json`; a catalogue entry without a lock pin fails a test.
     - Efforts: Opus `medium`, `high`; Sonnet and Codex `low`, `medium`, `high`. Haiku, `xhigh`, `max` and Opus `low` are not offered (the original's owner forbids them).
@@ -166,6 +166,16 @@ The code on `origin/dev` `8f76b4ed6` (VERSION 0.20.0, contract 1.44.0, migration
 - The agent becomes a host agent: model-free install, discovery, API responders and a key file. The agent package and `PACKAGE_FILES` change.
 - The stand gains a layout store, host and cooldown tables and a write-once cell binding table; the migration, the contract and the hand-kept inventories move in one slot (`HOSTS-SEAL-1`).
 - Without database runs in the lanes, races in cell binding and the pool lock are first exercised on a throwaway database with the slot holder's consent (plan, checks).
+
+## Addendum 2026-11-10: no answer cap, timeouts as code constants, a 600 s silence window (`LIMITS-01`)
+
+The owner decided three things by direct poll on 2026-11-10 (`R-153n`, `R-153o`, `R-153p`, `docs/program/OWNER_RULINGS_2026-09-17.md` section 3.53). The first restores his instruction of 2026-11-06 (`docs/program/HOTFIX-RUN-PARTIAL-1106.md`: «remove response-size limits and UI mentions»), which this ADR had reverted by naming the limits «constants of the code» and putting them into «Дополнительно».
+
+- **No answer cap reaches any model (`R-153n`).** A layout cell carries a model and an effort, and nothing about the length of an answer: not in the layout write request, not in the layout and stage reads, not in the frozen plan, not in `payload.host`. The Claude Code command runs without `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, and the agent removes it from the child's environment if it inherited one; Codex has no cap; OpenAI Responses and OpenRouter get no output-token parameter; Anthropic Messages requires `max_tokens` and gets the model's maximum (the repository records none per model, so the agent uses 64000, the largest Claude value the code already carries). A `max_tokens` figure in a server request body is the number the cost estimate prices the call at, never a cap: `analysis/text/cell_settings.py` names it `ROW_ESTIMATE_OUTPUT_TOKENS`, and the comparison calls are priced at their module's own figure. The availability probe keeps its own 4096-token ceiling on an API call (it is not an analysis answer).
+- **Timeouts are code constants (`R-153o`).** The call window of a cell is the constant of its row, from the original (`PDF-proverka/backend/app/core/config.py`): text 1800 s, blocks 1800 s (a leg and the judge take the row's value), cross-check 3600 s (the original raised it after the merge was killed twice at 1801 s with its work lost), norms 600 s, critic 600 s, refinement 600 s; the four comparison kinds keep the original's 900, 1800, 900 and 2400 s. A number stored in an older layout revision or a frozen plan is not read. Each window is still cut to what the attempt watchdog leaves (`executors/pull.py` `answer_window`); the 7200 s hard cap of an attempt is unchanged.
+- **The agent's silence window is 600 s (`R-153p`).** It was 120 s. It equals the server's stall window (`ATTEMPT_STALL_SECONDS`) on purpose: Codex prints its events when an item completes, so a long silent reasoning must not be stopped by the agent while the stand would still wait.
+- **Compatibility.** Contract `1.49.0` removes `max_output_tokens` and `timeout_seconds` from the layout cell, the comparison cell and the stage cell, and `max_output_tokens` from `payload.host` (`timeout_seconds` stays, from the row constant). The database needs nothing (migration `0062` checks only the key and the model of a cell). The new agent reads an older stand's task and ignores its cap, so it can be installed first.
+- **Consequence of the 600 s windows for the short rows.** Norms, critic and refinement calls, which the original ran one per step, are here calls over a window of work; 600 s is the original's figure and is not a promise that a large window fits.
 
 ## Alternatives considered
 
