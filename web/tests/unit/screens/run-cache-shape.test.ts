@@ -115,7 +115,7 @@ describe('a terminal run is not polled again after the review screen ran (D-57.2
 
     expect(markup).toContain('data-run-activity="stopped"');
     expect(markup).not.toContain('data-run-activity="polling"');
-    expect(markup).toContain('показание окончательное');
+    expect(markup).not.toContain('data-run-poll-stopped');
     expect(markup).toContain(`data-run-id="${RUN_ID}"`);
   });
 

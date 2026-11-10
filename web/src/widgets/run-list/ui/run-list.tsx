@@ -39,9 +39,9 @@ import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import type { RunTableProps } from '@/entities/audit-run';
 import { RunTable, arV3GroupReviewAddress, looksLikeArV3GroupId, useArV3StartAllowed, useRunList } from '@/entities/audit-run';
-import { StartRunControl } from '@/features/start-run';
 
 import { AnalysisStart } from './analysis-start';
+import { StartRunWithReadiness } from './start-run-with-readiness';
 
 export interface RunListProps {
   readonly projectUid: ProjectUid;
@@ -96,7 +96,7 @@ function VersionRunList({
           {...(onRunStarted === undefined ? {} : { onRunStarted })}
         />
       ) : (
-        <StartRunControl
+        <StartRunWithReadiness
           projectUid={projectUid}
           versionUid={versionUid}
           {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}

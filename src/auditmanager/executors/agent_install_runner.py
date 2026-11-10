@@ -125,6 +125,8 @@ from auditmanager.executors.destinations import (
     DestinationUnresolvable,
 )
 from auditmanager.executors.enrollment import issue_executor_enrollment
+from auditmanager.executors.host_commands import issue_host_grant
+from auditmanager.executors.host_repository import HostRepository
 from auditmanager.executors.enrollment_repository import EnrollmentRepository
 from auditmanager.executors.model import CONFLICT_ENROLLMENT_SHOWN_ONCE, host_key_fingerprint
 from auditmanager.executors.public import SecretUnreadableError, open_secret
@@ -339,7 +341,7 @@ trap on_signal HUP INT TERM
 
 [[ $secret =~ ^ame_[0-9a-z]{8}_[A-Za-z0-9_-]{43}$ ]] || exit 81
 [[ $origin =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]] || exit 81
-[[ $model =~ ^[A-Za-z0-9._-]{1,64}$ ]] || exit 81
+[[ $model =~ ^[A-Za-z0-9._-]{1,64}$ ]] || exit 81  # "-" is no model: a host agent (`HOSTS-BACKEND-01`, ADR-0028 decision 1)
 [[ $sha =~ ^[0-9a-f]{64}$ ]] || exit 81
 [[ $size =~ ^[0-9]{1,8}$ ]] || exit 81
 [ "$size" -gt 0 ] && [ "$size" -le 33554432 ] || exit 81
@@ -358,9 +360,15 @@ printf "%s  agent.tar.gz\n" "$sha" | sha256sum -c - >/dev/null 2>&1 || exit 83
 tar -xzf agent.tar.gz </dev/null >/dev/null 2>&1 || exit 84
 [ -f install.sh ] || exit 84
 
-AUDITMANAGER_ENROLLMENT_SECRET=$secret AUDITMANAGER_STAND_ORIGIN=$origin AUDITMANAGER_AGENT_MODEL=$model \
-  sudo -n --preserve-env=AUDITMANAGER_ENROLLMENT_SECRET,AUDITMANAGER_STAND_ORIGIN,AUDITMANAGER_AGENT_MODEL \
-  bash install.sh --package agent.tar.gz --sha256 "$sha" </dev/null >/dev/null 2>&1
+if [ "$model" = "-" ]; then
+  AUDITMANAGER_ENROLLMENT_SECRET=$secret AUDITMANAGER_STAND_ORIGIN=$origin \
+    sudo -n --preserve-env=AUDITMANAGER_ENROLLMENT_SECRET,AUDITMANAGER_STAND_ORIGIN \
+    bash install.sh --package agent.tar.gz --sha256 "$sha" </dev/null >/dev/null 2>&1
+else
+  AUDITMANAGER_ENROLLMENT_SECRET=$secret AUDITMANAGER_STAND_ORIGIN=$origin AUDITMANAGER_AGENT_MODEL=$model \
+    sudo -n --preserve-env=AUDITMANAGER_ENROLLMENT_SECRET,AUDITMANAGER_STAND_ORIGIN,AUDITMANAGER_AGENT_MODEL \
+    bash install.sh --package agent.tar.gz --sha256 "$sha" </dev/null >/dev/null 2>&1
+fi
 rc=$?
 secret=""
 if [ "$rc" -eq 0 ]; then say "installed"; fi
@@ -828,7 +836,7 @@ class AgentInstallRunner:
                 self._journal(
                     session, event_type="executor.agent_install_host_key_observed",
                     aggregate_type=_AGGREGATE_INSTALL, aggregate_id=record.install_id,
-                    payload={"connection_id": record.connection_id, "state": "awaiting_host_key"},
+                    payload={**_owner(record), "state": "awaiting_host_key"},
                 )
             session.commit()
         _log.info("agent install %s: %s", record.install_id,
@@ -903,12 +911,18 @@ class AgentInstallRunner:
                 return FAILURE_ENROLLMENT_FAILED
             if _SCRIPT_ORIGIN.fullmatch(origin) is None:
                 return FAILURE_ENROLLMENT_FAILED
-            connection = self._executors.get_connection(session, record.connection_id)
-            revision = self._executors.current_revisions(session, [record.connection_id]).get(
-                record.connection_id)
-            if (connection is None or connection.archived_at is not None or connection.kind != "pull"
-                    or revision is None or _MODEL.fullmatch(revision.settings.gateway_model) is None):
-                return FAILURE_ENROLLMENT_FAILED
+            if record.host_id is not None:
+                # A host install asks for no model (`HOSTS-BACKEND-01`): only that the host is still there.
+                host = HostRepository().get_host(session, record.host_id)
+                if host is None or host.archived_at is not None:
+                    return FAILURE_ENROLLMENT_FAILED
+            else:
+                connection = self._executors.get_connection(session, record.connection_id)
+                revision = self._executors.current_revisions(session, [record.connection_id]).get(
+                    record.connection_id)
+                if (connection is None or connection.archived_at is not None or connection.kind != "pull"
+                        or revision is None or _MODEL.fullmatch(revision.settings.gateway_model) is None):
+                    return FAILURE_ENROLLMENT_FAILED
             address = self._address(record)
             if address is None:
                 return FAILURE_HOST_UNREACHABLE
@@ -961,19 +975,29 @@ class AgentInstallRunner:
             if record is None or record.state != "installing":
                 return _GONE
             try:
-                issued = self._issue_grant(
-                    session, connection_id=record.connection_id, roles=("admin",),
-                    idempotency_key=grant_key(record.install_id), actor_uid=record.created_by,
-                    configured_origin=ready.configured, executors=self._executors,
-                    repository=self._enrollments, commands=self._commands,
-                    package_source=lambda: ready.package, journal=self._journal,
-                )
-                current = self._executors.current_revisions(session, [record.connection_id]).get(
-                    record.connection_id)
-                if current is None or _MODEL.fullmatch(current.settings.gateway_model) is None:
-                    return FAILURE_ENROLLMENT_FAILED  # not committed: the grant is rolled back with it
+                if record.host_id is not None:
+                    issued = issue_host_grant(
+                        session, host_id=record.host_id, roles=("admin",),
+                        idempotency_key=grant_key(record.install_id), actor_uid=record.created_by,
+                        configured_origin=ready.configured, grants=self._enrollments, commands=self._commands,
+                        package_source=lambda: ready.package, journal=self._journal,
+                    )
+                    model = "-"  # no model: the bootstrap installs a host agent
+                else:
+                    issued = self._issue_grant(
+                        session, connection_id=record.connection_id, roles=("admin",),
+                        idempotency_key=grant_key(record.install_id), actor_uid=record.created_by,
+                        configured_origin=ready.configured, executors=self._executors,
+                        repository=self._enrollments, commands=self._commands,
+                        package_source=lambda: ready.package, journal=self._journal,
+                    )
+                    current = self._executors.current_revisions(session, [record.connection_id]).get(
+                        record.connection_id)
+                    if current is None or _MODEL.fullmatch(current.settings.gateway_model) is None:
+                        return FAILURE_ENROLLMENT_FAILED  # not committed: the grant is rolled back with it
+                    model = current.settings.gateway_model
                 payload = build_payload(
-                    secret=issued.secret, origin=ready.origin, model=current.settings.gateway_model,
+                    secret=issued.secret, origin=ready.origin, model=model,
                     sha256=ready.package.sha256, archive=ready.archive,
                     marker=install_marker(record.install_id) if record.access == "generated_key" else "-",
                 )
@@ -987,8 +1011,7 @@ class AgentInstallRunner:
             self._journal(
                 session, event_type="executor.agent_install_started", aggregate_type=_AGGREGATE_INSTALL,
                 aggregate_id=record.install_id,
-                payload={"connection_id": record.connection_id, "state": "installing",
-                         "actor_uid": record.created_by},
+                payload={**_owner(record), "state": "installing", "actor_uid": record.created_by},
             )
             session.commit()
             return _Prepared(
@@ -1054,6 +1077,7 @@ class AgentInstallRunner:
             ended = self._installs.finish_install(
                 session, install_id=record.install_id, connection_id=record.connection_id,
                 from_state=work.from_state, state=state, reason=reason,
+                **({} if record.host_id is None else {"host_id": record.host_id}),
             )
             if ended:
                 self._journal_end(session, record, state, reason, work.from_state, key_line)
@@ -1070,7 +1094,7 @@ class AgentInstallRunner:
     ) -> None:
         """The event of the end, and of the key's end: identities and controlled values only."""
         payload: dict[str, str | int | bool | None] = {
-            "connection_id": record.connection_id, "from_state": from_state, "to_state": state,
+            **_owner(record), "from_state": from_state, "to_state": state,
         }
         if record.key_secret_id is not None:
             payload["secret_id"] = record.key_secret_id
@@ -1087,9 +1111,14 @@ class AgentInstallRunner:
         self._journal(
             session, event_type="executor.agent_install_key_removed", aggregate_type=_AGGREGATE_INSTALL,
             aggregate_id=record.install_id,
-            payload={"connection_id": record.connection_id, "secret_id": record.key_secret_id,
+            payload={**_owner(record), "secret_id": record.key_secret_id,
                      "purpose": "agent_install_key", "reason": removal},
         )
+
+
+def _owner(record: InstallRecord) -> dict[str, str]:
+    """The identity an install session belongs to, as a journal payload: its connection, or -- `HOSTS-BACKEND-01` -- its host."""
+    return {"host_id": record.host_id} if record.host_id is not None else {"connection_id": str(record.connection_id)}
 
 
 def install_runner_for(

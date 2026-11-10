@@ -37,7 +37,22 @@ CHEAPER_MODEL_ID = "claude-sonnet-5"
 #: The owner's Codex subscription through the pull agent (`EXEC-CODEX-SSH-01`): a third pinned
 #: identity, not metered, whose rates are a reference only. It is a pin like the others.
 CODEX_MODEL_ID = "gpt-6-sol"
-PINNED_MODEL_IDS = {PRIMARY_MODEL_ID, CHEAPER_MODEL_ID, CODEX_MODEL_ID}
+#: `HOSTS-PIN-01`: four more pins, the models of the stage layout (plan 2026-11-09, section 4.2).
+#: Rates are the Standard API rates read from the vendors' pages on 2026-11-09.
+OPUS_5_5_MODEL_ID = "claude-opus-5-5"
+SONNET_5_5_MODEL_ID = "claude-sonnet-5-5"
+CODEX_6_1_SOL_MODEL_ID = "gpt-6.1-sol"
+CODEX_ASTRA_MODEL_ID = "gpt-6-astra"
+PINNED_MODEL_IDS = {
+    PRIMARY_MODEL_ID, CHEAPER_MODEL_ID, CODEX_MODEL_ID,
+    OPUS_5_5_MODEL_ID, SONNET_5_5_MODEL_ID, CODEX_6_1_SOL_MODEL_ID, CODEX_ASTRA_MODEL_ID,
+}
+NEW_PIN_RATES_USD_PER_MTOK = {
+    OPUS_5_5_MODEL_ID: (4.0, 20.0),
+    SONNET_5_5_MODEL_ID: (2.0, 10.0),
+    CODEX_6_1_SOL_MODEL_ID: (2.0, 10.0),
+    CODEX_ASTRA_MODEL_ID: (10.0, 50.0),
+}
 PRIMARY_INPUT_PER_MTOK_USD = 5.0
 PRIMARY_OUTPUT_PER_MTOK_USD = 25.0
 
@@ -51,9 +66,13 @@ def test_the_lock_document_still_says_what_this_file_pins() -> None:
     assert models["codex_subscription"]["model_id"] == CODEX_MODEL_ID
     assert models["primary"]["input_per_mtok_usd"] == PRIMARY_INPUT_PER_MTOK_USD
     assert models["primary"]["output_per_mtok_usd"] == PRIMARY_OUTPUT_PER_MTOK_USD
+    new = {entry["model_id"]: (entry["input_per_mtok_usd"], entry["output_per_mtok_usd"])
+           for tier, entry in models.items()
+           if isinstance(entry, dict) and entry["model_id"] in NEW_PIN_RATES_USD_PER_MTOK}
+    assert new == NEW_PIN_RATES_USD_PER_MTOK
 
 
-def test_the_loaded_lock_carries_exactly_the_three_pinned_identities() -> None:
+def test_the_loaded_lock_carries_exactly_the_seven_pinned_identities() -> None:
     lock = provider_lock()
     assert set(lock.models) == PINNED_MODEL_IDS
     assert lock.primary_model_id == PRIMARY_MODEL_ID

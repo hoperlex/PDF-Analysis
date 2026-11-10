@@ -15,7 +15,7 @@ What the wrapper (:class:`~auditmanager.comparison.spend.caller.ComparisonModelC
    never chosen for again: it needs only that member's free unit. This is also what makes a retry, a resume after ``overrun`` and a
    call after ``spend_unknown`` stay on the bound member (decision 16): a bound job has exactly one member to ask, and the database
    refuses to write another.
-3. **Choose** among the members that are eligible and have a free unit (``executors.public``: ``member_facts``, ``member_issue``,
+3. **Choose** among the members that are eligible and have a free unit (``executors.public``: ``member_facts`` -- read host-aware for a system group by :func:`member_facts_of` --, ``member_issue``,
    ``choose``). No eligible member with a free unit is a **wait**: the job's ``wait_reason`` says why (``executor_at_capacity``, or
    ``runner_offline`` when no member is eligible at all) and the item is asked again later (the refusal is ``connection_busy``, which
    every handler already answers with a retry that spends no attempt). A wait for capacity has no end; a wait with no eligible member
@@ -85,6 +85,7 @@ __all__ = [
     "group_wait_reason",
     "is_eligible",
     "lock_pin",
+    "member_facts_of",
     "member_issues",
     "pending_route",
     "priced_as_consented",
@@ -136,9 +137,54 @@ def is_eligible(facts: Any) -> bool:
 def member_issues(session: Session, revision: Any) -> list[str | None]:
     """The first issue of each member of ``revision`` now (``executors.group_selection.member_issue``; ``None`` is a member with no
     issue at all). Read-only: no lock is taken."""
-    from auditmanager.executors.public import member_facts, member_issue
+    from auditmanager.executors.public import member_issue
 
-    return [member_issue(facts) for facts in member_facts(session, revision)]
+    return [member_issue(facts) for facts in member_facts_of(session, revision)]
+
+
+def member_facts_of(session: Session, revision: Any) -> list[Any]:
+    """``executors.public.member_facts`` made to read a **system** member (`HOSTS-CMP-01`, ADR-0028 decisions 3 and 16).
+
+    The members of a system group are the system connections of the servers. They have no probe and no runner token of their own -- the server
+    reports, and the server's facts say whether it can take a call -- so the generic facts, which ask for a probe and a runner, find none and
+    would leave a group of servers with no eligible member for ever. For such a member the facts are the server's: ``probed_ok`` and
+    ``runner_online`` are the absence of any reason the model is not available on it now (``executors.public.member_reasons``: the server is off,
+    off line, signed out, has not verified the model or is cooling down), and its capacity and use are the server's slots of the provider -- the
+    pool the Runs' cell binding counts and the spend mirror locks. A member that is not a system connection is read as it always was."""
+    from auditmanager.executors.public import (
+        ExecutorRepository, MemberFacts, access_of_billing, current_revision, member_facts, member_reasons, read_hosts, split_pool,
+    )
+
+    found = list(member_facts(session, revision))
+    members = tuple(getattr(revision, "members", ()))
+    store = ExecutorRepository()
+    system = {}
+    for member in members:
+        connection = store.get_connection(session, member.connection_id)
+        if connection is not None and connection.system_managed and connection.capacity_pool is not None:
+            system[member.connection_id] = connection
+    if not system:
+        return found
+    hosts = {item.record.host_id: item for item in read_hosts(
+        session, sorted({split_pool(connection.capacity_pool)[0] for connection in system.values()}), include_archived=True)}
+    access = access_of_billing(revision.billing)
+    for index, member in enumerate(members):
+        connection = system.get(member.connection_id)
+        if connection is None:
+            continue
+        host_id, provider = split_pool(connection.capacity_pool)
+        host, current = hosts.get(host_id), current_revision(session, member.connection_id)
+        reasons, _full = (["host_offline"], False) if host is None else member_reasons(
+            host, provider=provider, access=access, model_id=revision.pin_id)
+        slot = None if host is None else host.slot_of(provider)
+        found[index] = MemberFacts(
+            connection_id=member.connection_id, tie_break_order=member.tie_break_order,
+            revision_is_snapshot=current is not None and current.revision_id == member.connection_revision_id,
+            archived=connection.archived_at is not None or host is None or host.record.archived_at is not None,
+            served=True, probed_ok=not reasons, runner_online=not reasons,
+            capacity=0 if slot is None else slot.slots, used=0 if slot is None else slot.in_use,
+        )
+    return found
 
 
 def group_wait_reason(issues: Sequence[str | None]) -> str | None:
@@ -374,7 +420,7 @@ def select_member(
     module). Writes nothing but the job's wait (committed on its way out through a refusal); the caller applies the ceilings and
     writes the binding. Raises ``CallRefused``: ``connection_busy`` (a wait), ``no_executor_online`` (the wait is over),
     ``consent_stale`` (the consent does not hold; the job pauses for a new one) or ``executor_route_missing``."""
-    from auditmanager.executors.public import choose, current_revision, group_revision_of, member_facts
+    from auditmanager.executors.public import choose, current_revision, group_revision_of
 
     jobs = dispatch.jobs
     rotation = repository.lock_group(session, dispatch.group_id)
@@ -399,7 +445,7 @@ def select_member(
             _open_member(session, dispatch, job.connection_revision_id), connection_id, job.connection_revision_id, binds=False,
         )
 
-    eligible = [facts for facts in member_facts(session, revision) if is_eligible(facts)]
+    eligible = [facts for facts in member_facts_of(session, revision) if is_eligible(facts)]
     chosen = choose(
         [facts.as_member() for facts in eligible], {facts.connection_id: facts.used for facts in eligible},
         {facts.connection_id: facts.capacity for facts in eligible}, rotation,

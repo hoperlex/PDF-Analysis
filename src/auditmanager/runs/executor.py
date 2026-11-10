@@ -90,7 +90,7 @@ from auditmanager.analysis.public import (
     run_stage,
     run_source_preparation_with_progress,
 )
-from auditmanager.analysis.public import publish_artifact
+from auditmanager.analysis.public import apply_to_bundle, publish_artifact
 from auditmanager.analysis.public import (
     AR_V3_BETA_BUNDLE_ID,
     AR_V3_BETA_PROFILE_ID,
@@ -133,6 +133,7 @@ from auditmanager.jobs.public import (
 )
 from auditmanager.runs.crop_budget import MAX_CROP_BYTES, CropByteBudget
 from auditmanager.runs.provider import ProviderBinding, ProviderResolver
+from auditmanager.runs.stage_plan import call_journal_columns
 from auditmanager.runs.stage_reuse import plan_stage_reuse, visual_only_pages_allowed
 from auditmanager.runs.repository import (
     INITIAL_STATE,
@@ -312,6 +313,7 @@ class _DurableCallJournal(ModelCallJournal):
             request_sha256=request.request_sha256,
             connection_revision_id=None if call is None else call.connection_revision_id,
             identity_basis=None if call is None else call.identity_basis,
+            **call_journal_columns(call),
         )
         if self._context is not None:
             self._context.bind_call(str(model_call_id))
@@ -596,7 +598,8 @@ def _run_text_analysis_stage(
         ceiling_usd=provider_config.run_cost_ceiling_usd,
         recognised_characters=recognised_total_characters(recognised_pages),
         # `SECTION-JUDGE-FIXES-01`: the call carries this profile's own prompt and schema, not the АР v1 pair.
-        bundle=profile.prompt_bundle,
+        # `HOSTS-LAYOUT-01`: with the cell's answer limit when the run has a stage plan, so a window is sized for the cell's own limit.
+        bundle=apply_to_bundle(profile.prompt_bundle, provider_config.cell_settings),
         relaxed_limits=relaxed_limits,
         approved_window_characters=provider_config.approved_window_characters,
         native_page_pieces=provider_config.approved_native_page_pieces is not None,
@@ -810,9 +813,17 @@ def _bind_provider(
     providers: ProviderResolver | None, adapter: ModelAdapter, config: ProviderConfig,
 ) -> ProviderBinding:
     """The adapter, configuration and call binding this Attempt's model stage runs with."""
+    planned = getattr(run, "stage_plan", None) is not None
     if providers is None:
+        if planned:
+            # `HOSTS-LAYOUT-01`: a run frozen with a stage plan is called cell by cell through the database source; the process's own adapter
+            # serving it would be a silent fallback to a model nobody planned.
+            raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="stage_plan_run_without_cells")
         return ProviderBinding(adapter=adapter, config=config, call=None)
     binding = providers(session, run, context)
+    if planned and getattr(binding, "cells", None) is None:
+        # ... and a source that answers a planned run with one binding (the environment source) is refused for the same reason.
+        raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="stage_plan_run_without_cells")
     mode = getattr(getattr(binding.adapter, "provider_mode", None), "value", None)
     if mode is not None and str(mode) != str(run.provider_mode):
         raise DomainError(
@@ -834,6 +845,10 @@ def _bind_provider(
             approved_connection_revision_id=config.approved_connection_revision_id,
             approved_group_revision_id=config.approved_group_revision_id,
             approved_native_page_pieces=config.approved_native_page_pieces,
+            # `HOSTS-LAYOUT-01`: the models and the plan digest the consent v2 approved; each cell's binding carries them from here
+            # (``runs.stage_plan.cell_binding``).
+            approved_models=config.approved_models,
+            approved_stage_plan_digest=config.approved_stage_plan_digest,
         ))
     return binding
 
@@ -971,6 +986,9 @@ def _execute_run_body(
             approved_connection_revision_id=cost_policy.connection_revision_id,
             approved_group_revision_id=cost_policy.executor_group_revision_id,
             approved_native_page_pieces=cost_policy.native_page_piece_policy,
+            # `HOSTS-LAYOUT-01`: consent v2 -- the models the consent approved and the plan it was given for.
+            approved_models=cost_policy.models,
+            approved_stage_plan_digest=cost_policy.stage_plan_digest,
         )
     if (v3_profile or v3_bundle) and (
         not v3_exact
@@ -1059,12 +1077,15 @@ def _execute_run_body(
         # approved cost authority pins the same one for the call-time guard. Everything before this line (the budget,
         # the ceiling, the profile) was decided from the group revision's pin, which every member serves.
         run = run_repo.get(session, run_id)
-        if run.binding_state != "bound" or run.connection_revision_id is None:
+        planned = getattr(run, "stage_plan", None) is not None
+        # A planned run (`HOSTS-LAYOUT-01`) has no connection of its own: dispatch bound **every cell** of its plan, in the claim's
+        # transaction, and the cells are read through ``audit_run_cell_binding`` when the provider is bound below.
+        if run.binding_state != "bound" or (run.connection_revision_id is None and not planned):
             raise DomainError(
                 ErrorCode.STATE_TRANSITION_NOT_ALLOWED, machine="binding_state",
                 current_state=run.binding_state, requested_state="bound",
             )
-        if config.approved_cost_ceiling:
+        if config.approved_cost_ceiling and not planned:
             config = replace(config, approved_connection_revision_id=run.connection_revision_id)
     if run.state in {INITIAL_STATE, "queued"}:
         run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")

@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0061_decision_memory_m2"
+HEAD = "0062_hosts_stage_models"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -91,6 +91,11 @@ TABLES = frozenset((
     "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_status_event",
     # `0061_decision_memory_m2` (`DECISION-MEMORY-01` phase M2): the installation settings' journal (`data_class`, `training_use`).
     "decision_memory_setting_event",
+    # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): a server with its two journals, its latest report and the cooldown of a model on it; the
+    # layout of models over the analysis stages with its revisions and switch; and the cell-by-cell binding of a planned run. Configuration
+    # but for the cell binding, which belongs to a run (`PRODUCT` in the purge).
+    "audit_run_cell_binding", "executor_host", "executor_host_report", "executor_host_slot_event", "executor_host_use_event",
+    "executor_model_cooldown", "stage_layout", "stage_layout_revision", "stage_layout_switch_event",
 ))
 
 #: Views at ``HEAD``. A view carries no rows; it is restored from the dump and checked by name.
@@ -408,6 +413,29 @@ TRIGGERS = (
     ("work_assignment_schedule_event", "trg_work_assignment_schedule_event_immutable", "am_immutable_row", 27),
     ("work_calendar_event", "trg_work_calendar_event_immutable", "am_immutable_row", 27),
     ("worker", "trg_worker_frozen_guard", "am_guard_frozen_columns", 19),
+    # `0062_hosts_stage_models` (`HOSTS-SEAL-1`). 19 = ROW | BEFORE | UPDATE; 11 = ROW | BEFORE | DELETE; 27 = ROW | BEFORE | DELETE | UPDATE;
+    # 7 = ROW | BEFORE | INSERT; 23 = ROW | BEFORE | INSERT | UPDATE. A host's identity and name are frozen, its archive write-once and a
+    # delete refused; the two journals are append-only and numbered without a gap (`am_check_gapless_number`); a cooldown's key is frozen.
+    ("executor_host", "trg_executor_host_frozen_guard", "am_guard_frozen_columns", 19),
+    ("executor_host", "trg_executor_host_no_delete", "am_immutable_row", 11),
+    ("executor_host", "trg_executor_host_write_once", "am_guard_write_once_columns", 19),
+    ("executor_host_slot_event", "trg_executor_host_slot_event_append_only", "am_append_only", 27),
+    ("executor_host_slot_event", "trg_executor_host_slot_event_number", "am_check_gapless_number", 7),
+    ("executor_host_use_event", "trg_executor_host_use_event_append_only", "am_append_only", 27),
+    ("executor_host_use_event", "trg_executor_host_use_event_number", "am_check_gapless_number", 7),
+    ("executor_model_cooldown", "trg_executor_model_cooldown_frozen_guard", "am_guard_frozen_columns", 19),
+    # A task is claimed by a token of its connection or of the host that owns it.
+    ("executor_task", "trg_executor_task_claimer", "am_check_executor_task_claimer", 23),
+    # The layout is one seeded row; its revisions and its switch are append-only and numbered; enabling needs a revision.
+    ("stage_layout", "trg_stage_layout_immutable", "am_immutable_row", 27),
+    ("stage_layout_revision", "trg_stage_layout_revision_append_only", "am_append_only", 27),
+    ("stage_layout_revision", "trg_stage_layout_revision_number", "am_check_gapless_number", 7),
+    ("stage_layout_switch_event", "trg_stage_layout_switch_enabled", "am_check_stage_layout_switch", 7),
+    ("stage_layout_switch_event", "trg_stage_layout_switch_event_append_only", "am_append_only", 27),
+    ("stage_layout_switch_event", "trg_stage_layout_switch_event_number", "am_check_gapless_number", 7),
+    # A cell is bound once, for a pending planned run, to a system member that pins the cell's model.
+    ("audit_run_cell_binding", "trg_audit_run_cell_binding_immutable", "am_immutable_row", 27),
+    ("audit_run_cell_binding", "trg_audit_run_cell_binding_member", "am_check_audit_run_cell_binding", 7),
 )
 
 #: The constraint triggers that are ``DEFERRABLE INITIALLY DEFERRED``: a parent row must
@@ -472,7 +500,15 @@ SEQUENCES = {
 #: two checks (the forgotten content's digest: its shape, and exactly on a forget), and the table ``decision_memory_setting_event``: a primary key, a
 #: foreign key (the actor) and seven checks (name, revision, value, the actor's identity shape, the permission reference, value-for-name, an ``on``
 #: names the owner's permission): c 1398, f 384, p 144, t 10, u 133 (measured on a throwaway database at ``0061``, 2026-11-09).
-CONSTRAINT_COUNTS = {"c": 1398, "f": 384, "p": 144, "t": 10, "u": 133}
+#: `0062_hosts_stage_models` (`HOSTS-SEAL-1`) adds nine tables and, net of the audit-run shape and wait-reason checks it replaces in place and the
+#: foreign key of a task to its claiming token that it replaces in place, 55 checks, 15 foreign keys (the host of each of the journals, the token, the
+#: grant, the install session, the connection and the report; the report's token; the cooldown's host; the layout's revisions and switch; the cell
+#: binding's run, group revision and connection revision), nine primary keys and five unique constraints (a journal's number per host and the
+#: layout's per-layout numbers, the token's key to its host): c 1453, f 399, p 153, t 10, u 138 (measured on a throwaway database at ``0062``,
+#: 2026-11-09).
+#: `G-1` (the sealed key of a host's SSH install is a secret of the host): `executor_secret.host_id` adds its foreign key, its format check and the
+#: exactly-one-of check: c 1455, f 400.
+CONSTRAINT_COUNTS = {"c": 1455, "f": 400, "p": 153, "t": 10, "u": 138}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -486,7 +522,10 @@ CONSTRAINT_COUNTS = {"c": 1398, "f": 384, "p": 144, "t": 10, "u": 133}
 #: index of the carried-from decision: 464, measured at ``0057`` on 2026-11-07; `0058` adds the same partial index on
 #: ``expert_decision_event``: 465; `0059` adds 17 (eight primary keys, four unique constraints and five lookups): 482; `0060` adds the partial index of the run a run was started from: 483;
 #: `0061` adds the settings table's primary key: 484 (measured on a throwaway database at ``0061``, 2026-11-09).
-INDEX_COUNT = 484
+#: `0062` adds 22 (nine primary keys, five unique constraints, and eight lookups and partial unique indexes): 506 (measured on a throwaway
+#: database at ``0062``, 2026-11-09).
+#: `G-1` adds the partial unique index of one current secret per host and purpose: 507.
+INDEX_COUNT = 507
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

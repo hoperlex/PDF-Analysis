@@ -61,18 +61,34 @@ _CONNECTION_OF_RUN = text(
     "JOIN executor_connection_revision rev ON rev.revision_id = r.connection_revision_id "
     "WHERE r.run_id = :run_id"
 )
-#: A transaction-scoped advisory lock keyed on the connection: the claim's guard, taken before
-#: the check and held to the claim's commit. A hash collision only serialises two connections
-#: that did not need it; the check below compares the real identity.
+#: A transaction-scoped advisory lock keyed on the **capacity key** of a connection: the claim's guard, taken before
+#: the check and held to the claim's commit. The capacity key is the connection's ``capacity_pool`` when it has one -- a system
+#: connection of a host: ``<host_id>:<provider>`` (`HOSTS-BACKEND-01`, ADR-0028 decision 4) -- and its own id otherwise, so every connection
+#: of one pool takes the one lock and a connection nobody pooled is locked as it always was. A hash collision only serialises two keys
+#: that did not need it; the check below compares the real identity. The comparison mirror
+#: (``comparison.spend.repository._LOCK_CONNECTION``) spells the statement the same, and :data:`_LOCK_POOL` takes the same key from a pool.
 _LOCK_CONNECTION = text(
-    "SELECT pg_advisory_xact_lock("
-    "hashtextextended('auditmanager.executor_connection|' || :connection_id, 0))"
+    "SELECT pg_advisory_xact_lock(hashtextextended('auditmanager.executor_connection|' || "
+    "COALESCE((SELECT capacity_pool FROM executor_connection WHERE connection_id = :connection_id), :connection_id), 0))"
+)
+#: The same lock taken from a pool (``<host_id>:<provider>``) when no connection is at hand: the claim of a planned run and the cell binding
+#: lock every pool a cell might be bound in, **in ascending pool key order** (ADR-0028 decision 15).
+_LOCK_POOL = text(
+    "SELECT pg_advisory_xact_lock(hashtextextended('auditmanager.executor_connection|' || :pool, 0))"
+)
+#: The one write that binds a planned Run: ``pending`` -> ``bound`` after every cell has its ``audit_run_cell_binding`` row (the database
+#: refuses the move otherwise, ``am_guard_audit_run_frozen``). The Run keeps no group, connection or preset of its own. The wait is over, so it is
+#: cleared with it.
+_BIND_PLANNED_RUN = text(
+    "UPDATE audit_run SET binding_state = 'bound', wait_reason = NULL, waiting_since = NULL, "
+    "updated_at = statement_timestamp() "
+    "WHERE run_id = :run_id AND binding_state = 'pending' AND stage_plan IS NOT NULL"
 )
 #: `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 to 16). What the claim needs to know of a Run's binding before it takes
 #: any lock: the state, and the group revision a ``pending`` Run was admitted on. An unlocked read -- the Run lock comes
 #: later, in the claim's order -- so it is read again under that lock (:data:`_RUN_BINDING`) and compared.
 _CLAIM_BINDING = text(
-    "SELECT binding_state, executor_group_revision_id FROM audit_run WHERE run_id = :run_id"
+    "SELECT binding_state, executor_group_revision_id, stage_plan FROM audit_run WHERE run_id = :run_id"
 )
 _RUN_BINDING = text(
     "SELECT binding_state, executor_group_revision_id, connection_revision_id FROM audit_run WHERE run_id = :run_id"
@@ -107,7 +123,17 @@ _WRITE_WAIT = text(
 _PENDING_RUNS = text(
     "SELECT r.run_id, r.executor_group_revision_id AS group_revision_id, r.created_at, r.wait_reason "
     "FROM audit_run r JOIN job j ON j.run_id = r.run_id "
-    "WHERE r.binding_state = 'pending' AND r.state = 'queued' AND j.state = 'queued' "
+    "WHERE r.binding_state = 'pending' AND r.state = 'queued' AND j.state = 'queued' AND r.stage_plan IS NULL "
+    "AND (CAST(:after_run_id AS text) IS NULL "
+    "OR (r.created_at, r.run_id) > (CAST(:after_created_at AS timestamptz), CAST(:after_run_id AS text))) "
+    "ORDER BY r.created_at, r.run_id LIMIT :batch_size"
+)
+#: The same page for the **planned** pending Runs (`HOSTS-BACKEND-01`): they have no group revision, and what they wait for is read from the cells
+#: of their frozen plan. The keyset is the same ``(created_at, run_id)``.
+_PENDING_PLANNED_RUNS = text(
+    "SELECT r.run_id, r.stage_plan, r.created_at, r.wait_reason "
+    "FROM audit_run r JOIN job j ON j.run_id = r.run_id "
+    "WHERE r.binding_state = 'pending' AND r.state = 'queued' AND j.state = 'queued' AND r.stage_plan IS NOT NULL "
     "AND (CAST(:after_run_id AS text) IS NULL "
     "OR (r.created_at, r.run_id) > (CAST(:after_created_at AS timestamptz), CAST(:after_run_id AS text))) "
     "ORDER BY r.created_at, r.run_id LIMIT :batch_size"
@@ -190,6 +216,27 @@ _CONNECTION_UNITS = text(
 #: few submitted Runs, never from the history of a connection's Runs: written as a correlated
 #: ``NOT EXISTS`` over ``audit_run`` the planner enumerated every Run ever frozen to the connection
 #: (5703 buffers against 10, 13.9 ms against 0.1 ms on 20 000 Runs), and that grows with the history.
+def _pool_slots_sql(pool: str) -> str:
+    """The SQL for the units a pool has (``<host_id>:<provider>``, given as a SQL expression): the latest slot event of the provider on
+    the host, else the default of the access the host's current report gives the provider (2 for ``api``, 1 otherwise). The copy
+    ``executors.host_repository.pool_slots_sql`` keeps for the executors' reads; a test holds the two equal."""
+    host, provider = f"split_part({pool}, ':', 1)", f"split_part({pool}, ':', 2)"
+    return (
+        f"COALESCE((SELECT slot_event.slots FROM executor_host_slot_event slot_event WHERE slot_event.host_id = {host} "
+        f"AND slot_event.provider = {provider} ORDER BY slot_event.event_no DESC LIMIT 1), "
+        "(SELECT CASE reported.provider_item ->> 'access' WHEN 'api' THEN 2 ELSE 1 END "
+        "FROM (SELECT jsonb_array_elements(host_report.providers) AS provider_item "
+        f"FROM executor_host_report host_report WHERE host_report.host_id = {host}) reported "
+        f"WHERE reported.provider_item ->> 'provider' = {provider} LIMIT 1), 1)"
+    )
+
+
+#: `HOSTS-BACKEND-01` (ADR-0028 decisions 4 and 5): the stage-plan source. ``held`` also names, **per capacity pool**, each Run whose Job is
+#: active (or that this process has submitted) and whose cells are bound in it -- a Run is one unit of a pool however many cells share it, which
+#: ``UNION`` gives by naming the pair (pool, run) once. The first column of ``held`` and ``loaded`` is the *capacity key*: a connection id for a
+#: Run frozen to a connection, a pool for a planned Run. A **bound planned Run** is offered unless one of its pools has all its slots held; a
+#: **pending planned Run** is offered once, while nothing holds it back (no stored wait reason), and the claim decides everything else under the
+#: pool locks (the hint is advisory, as it is for a group). Planned Runs are offered only by a process that dispatches them (``dispatch_groups``).
 _NEXT_JOB = text(
     "WITH held AS ("
     "SELECT rev.connection_id, active_job.run_id FROM job active_job "
@@ -199,7 +246,18 @@ _NEXT_JOB = text(
     "UNION "
     "SELECT rev.connection_id, submitted_run.run_id FROM audit_run submitted_run "
     "JOIN executor_connection_revision rev ON rev.revision_id = submitted_run.connection_revision_id "
-    "WHERE submitted_run.run_id = ANY (CAST(:submitted AS text[]))), "
+    "WHERE submitted_run.run_id = ANY (CAST(:submitted AS text[])) "
+    "UNION "
+    "SELECT pool_connection.capacity_pool, bound_cell.run_id FROM job pool_job "
+    "JOIN audit_run_cell_binding bound_cell ON bound_cell.run_id = pool_job.run_id "
+    "JOIN executor_connection_revision pool_rev ON pool_rev.revision_id = bound_cell.connection_revision_id "
+    "JOIN executor_connection pool_connection ON pool_connection.connection_id = pool_rev.connection_id "
+    f"WHERE pool_job.state IN {_ACTIVE_JOB_STATES} "
+    "UNION "
+    "SELECT pool_connection.capacity_pool, bound_cell.run_id FROM audit_run_cell_binding bound_cell "
+    "JOIN executor_connection_revision pool_rev ON pool_rev.revision_id = bound_cell.connection_revision_id "
+    "JOIN executor_connection pool_connection ON pool_connection.connection_id = pool_rev.connection_id "
+    "WHERE bound_cell.run_id = ANY (CAST(:submitted AS text[]))), "
     "loaded AS (SELECT connection_id, count(*) AS units FROM held GROUP BY connection_id) "
     "SELECT j.run_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
     "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
@@ -208,7 +266,7 @@ _NEXT_JOB = text(
     "AND j.run_id <> ALL (CAST(:submitted AS text[])) "
     "AND ("
     # frozen_at_start and bound: the connection test, exactly as it was (a NULL revision is the environment source).
-    "(r.binding_state <> 'pending' AND NOT EXISTS (SELECT 1 FROM executor_connection_revision mine "
+    "(r.stage_plan IS NULL AND r.binding_state <> 'pending' AND NOT EXISTS (SELECT 1 FROM executor_connection_revision mine "
     "JOIN loaded ON loaded.connection_id = mine.connection_id "
     "WHERE mine.revision_id = r.connection_revision_id "
     "AND loaded.units >= COALESCE((SELECT current_revision.max_active_runs "
@@ -226,7 +284,18 @@ _NEXT_JOB = text(
     "AND COALESCE((SELECT loaded.units FROM loaded WHERE loaded.connection_id = group_member.connection_id), 0) "
     "< COALESCE((SELECT current_revision.max_active_runs FROM executor_connection_revision current_revision "
     "WHERE current_revision.connection_id = group_member.connection_id "
-    "ORDER BY current_revision.revision_no DESC LIMIT 1), 1)))) "
+    "ORDER BY current_revision.revision_no DESC LIMIT 1), 1))) "
+    # a bound planned Run: offered unless one of the pools its cells are bound in has all its slots held (its own unit is not held while
+    # its Job is queued, so a retry competes for a free one, as a connection's Run does).
+    "OR (r.binding_state = 'bound' AND r.stage_plan IS NOT NULL AND NOT EXISTS ("
+    "SELECT 1 FROM audit_run_cell_binding bound_cell "
+    "JOIN executor_connection_revision pool_rev ON pool_rev.revision_id = bound_cell.connection_revision_id "
+    "JOIN executor_connection pool_connection ON pool_connection.connection_id = pool_rev.connection_id "
+    "JOIN loaded ON loaded.connection_id = pool_connection.capacity_pool "
+    f"WHERE bound_cell.run_id = r.run_id AND loaded.units >= {_pool_slots_sql('pool_connection.capacity_pool')})) "
+    # a pending planned Run: offered once; the claim binds every cell or stores why not.
+    "OR (r.binding_state = 'pending' AND r.stage_plan IS NOT NULL AND CAST(:dispatch_groups AS boolean) "
+    "AND r.wait_reason IS NULL)) "
     "ORDER BY j.priority DESC, j.created_at, j.job_id LIMIT 1 "
     "FOR UPDATE OF r SKIP LOCKED"
 )
@@ -339,11 +408,11 @@ _INSERT_PROVIDER_EFFECT = text(
     INSERT INTO provider_call_effect (
         model_call_id, run_id, job_id, attempt_id, stage_id, provider,
         model_identity, provider_mode, parameters, request_sha256,
-        connection_revision_id, identity_basis
+        connection_revision_id, identity_basis, stage_key, host_id, access
     ) VALUES (
         :model_call_id, :run_id, :job_id, :attempt_id, 'text_analysis', :provider,
         :model_identity, :provider_mode, CAST(:parameters AS jsonb), :request_sha256,
-        :connection_revision_id, :identity_basis
+        :connection_revision_id, :identity_basis, :stage_key, :host_id, :access
     )
     """
 )
@@ -386,7 +455,7 @@ _COMPLETE_PROVIDER = text(
 )
 _PROVIDER_FOR_COMPLETION = text(
     """
-    SELECT connection_revision_id, identity_basis FROM provider_call_effect
+    SELECT connection_revision_id, identity_basis, stage_key, host_id, access FROM provider_call_effect
      WHERE model_call_id = :model_call_id AND run_id = :run_id
        AND job_id = :job_id AND attempt_id = :attempt_id
        AND state = 'response_received'
@@ -471,12 +540,13 @@ _INSERT_MODEL_CALL = text(
         model_call_id, run_id, stage_id, provider, model_identity, provider_mode,
         parameters, request_sha256, response_sha256, input_tokens, output_tokens,
         latency_ms, cost_micros, cost_basis, status, error_code,
-        connection_revision_id, identity_basis
+        connection_revision_id, identity_basis, stage_key, host_id, access
     ) VALUES (
         :model_call_id, :run_id, 'text_analysis', :provider, :model_identity,
         :provider_mode, CAST(:parameters AS jsonb), :request_sha256, :response_sha256,
         :input_tokens, :output_tokens, :latency_ms, :cost_micros, :cost_basis,
-        :status, :error_code, :connection_revision_id, :identity_basis
+        :status, :error_code, :connection_revision_id, :identity_basis,
+        :stage_key, :host_id, :access
     )
     """
 )
@@ -643,6 +713,9 @@ class GroupWaits:
 WAIT_AT_CAPACITY = "executor_at_capacity"
 WAIT_RUNNER_OFFLINE = "runner_offline"
 WAIT_NEEDS_RECONSENT = "needs_reconsent"
+#: `HOSTS-BACKEND-01` (ADR-0028 decision 5): a planned Run waits because a cell of its plan has no available server. A run-only word: no comparison
+#: job carries it, so ``executors.model.WAIT_REASONS`` (the words both share) does not name it.
+WAIT_MODEL_UNAVAILABLE = "model_unavailable"
 #: The first reason ``member_issue`` gives for a member that passed every test but has no free unit (the words of
 #: ``ExecutorGroupMemberIssue``; ``executors.group_selection`` holds them).
 _ISSUE_AT_CAPACITY = "at_capacity"
@@ -1079,8 +1152,14 @@ class JobRepository:
         # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 14). Whether the Run's executor was frozen at start decides which
         # lock path is taken, so it is read first -- a plain read, no lock. A Run admitted on a group and not yet bound
         # (`pending`) takes the dispatch path below; every other Run takes the connection path it always took.
-        pending_revision = self._pending_group_revision(session, run_id=run_id)
-        if pending_revision is not None and not self._dispatch_groups:
+        #
+        # `HOSTS-BACKEND-01` (ADR-0028 decision 5). A Run that froze a ``stage_plan`` is bound **by cell**: it has no group revision and no
+        # connection of its own, so neither of the two branches below fits it. ``pending``, it takes the planned dispatch path (every pool its
+        # cells might be bound in is locked, in ascending order, and every cell is bound or none is); ``bound``, its retry holds the pools it
+        # was bound in. The read is unlocked and read again under the Run lock.
+        plan_state, pending_revision, stage_plan = self._claim_view(session, run_id=run_id)
+        planned_pending = stage_plan is not None and plan_state == "pending"
+        if (pending_revision is not None or planned_pending) and not self._dispatch_groups:
             # A process that does not serve the `database` provider source cannot bind a member (decision 12): the
             # `environment` source would run the Run on its own adapter, or fail it `executor_route_missing` after the claim
             # had bound it. Refused before any lock and any write, so the Run and its Job stay exactly as they are for a
@@ -1111,7 +1190,13 @@ class JobRepository:
         # The dispatch path takes the group row, then every member connection, ascending, and chooses a member under those
         # locks; the connection path takes the connection's lock. Both precede the control row.
         dispatch: _Dispatch | None = None
-        if pending_revision is None:
+        planned: tuple[Any, ...] | None = None
+        if stage_plan is not None:
+            if planned_pending:
+                planned = self._select_cells(session, run_id=run_id, stage_plan=stage_plan)
+            else:
+                self._hold_pool_limits(session, run_id=run_id)
+        elif pending_revision is None:
             self._hold_connection_limit(session, run_id=run_id)
         else:
             dispatch = self._select_member(
@@ -1134,6 +1219,8 @@ class JobRepository:
             # Read under the Run lock: a concurrent claim of this very Run that bound it first leaves it `bound`, and
             # this one must lose -- a Run is bound once.
             self._require_still_pending(session, run_id=run_id, group_revision_id=pending_revision)
+        elif planned is not None:
+            self._require_still_pending(session, run_id=run_id, group_revision_id=None)
         job = session.execute(_LOCK_JOB, {"run_id": run_id}).mappings().first()
         if job is None:
             # Direct execute_run callers can enqueue a queued Run without the
@@ -1154,6 +1241,9 @@ class JobRepository:
             # Every lock is held and every check has passed: write the binding (once), advance the group's rotation and
             # journal the dispatch. Model I/O starts only after the caller commits this transaction.
             self._bind(session, run_id=run_id, dispatch=dispatch)
+        elif planned is not None:
+            # The same for a planned Run: one row per cell, then ``pending`` -> ``bound``, before the Attempt exists.
+            self._bind_planned(session, run_id=run_id, bound=planned)
         attempt_id = str(AttemptId.new())
         lease_id = str(LeaseId.new())
         try:
@@ -1260,7 +1350,24 @@ class JobRepository:
         return str(row[1])
 
     @staticmethod
-    def _require_still_pending(session: Session, *, run_id: str, group_revision_id: str) -> None:
+    def _claim_view(session: Session, *, run_id: str) -> tuple[str | None, str | None, Mapping[str, Any] | None]:
+        """What the claim reads of the Run's binding before any lock, in one statement: ``(binding_state, the group revision a pending Run was
+        admitted on, the frozen stage plan)``. The group revision is ``None`` for any Run that is not a ``pending`` group Run (what
+        :meth:`_pending_group_revision` answers); the plan is ``None`` for every Run that froze none (`HOSTS-BACKEND-01`: a planned Run is bound by
+        cell and has no group). An unlocked read, read again under the Run lock."""
+        row = session.execute(_CLAIM_BINDING, {"run_id": run_id}).first()
+        if row is None:
+            return None, None, None
+        plan = row[2] if len(row) > 2 else None
+        plan = json.loads(plan) if isinstance(plan, str) else plan
+        if row[0] != "pending" or plan is not None:
+            return str(row[0]), None, plan
+        if row[1] is None:  # the database's shape check forbids it; a Run that says otherwise is not dispatched
+            raise DomainError(ErrorCode.INTERNAL_ERROR, message="a pending run has no group revision")
+        return str(row[0]), str(row[1]), None
+
+    @staticmethod
+    def _require_still_pending(session: Session, *, run_id: str, group_revision_id: str | None) -> None:
         row = session.execute(_RUN_BINDING, {"run_id": run_id}).first()
         if row is None or row[0] != "pending" or row[1] != group_revision_id or row[2] is not None:
             raise JobRepository._transition_error(
@@ -1348,6 +1455,73 @@ class JobRepository:
             },
         )
 
+    # --- dispatch of a planned Run (`HOSTS-BACKEND-01`, ADR-0028 decisions 4, 5 and 15) ---------------------------------------------
+
+    @staticmethod
+    def _select_cells(session: Session, *, run_id: str, stage_plan: Mapping[str, Any]) -> tuple[Any, ...]:
+        """Decide the binding of **every** cell of a pending planned Run under the pool locks, or say why not. Writes nothing.
+
+        **Lock order** (ADR-0028 decision 15): worker intake (the caller), the pools every cell *might* be bound in, in ascending pool key
+        -- the very lock a system connection's ``_LOCK_CONNECTION`` and a comparison call take -- then, back in :meth:`_claim`, the control row,
+        the Run and the Job. The pools are read without a lock, locked, read again, and what a group revised in between added is locked too (a
+        rare race, resolved by the database's deadlock detection and the next poll; never by an unlocked count).
+
+        Every cell is bound or none is. A cell with no available member, or whose pools are full, raises :class:`GroupDispatchWaiting` with the
+        run's wait reason (``model_unavailable`` or ``executor_at_capacity``), having written nothing: the Attempt does not exist yet, so waiting spends
+        none of the attempt budget."""
+        from auditmanager.executors.public import bind_cells, cell_requests, pools_of
+
+        cells = cell_requests(stage_plan)
+        locked: set[str] = set()
+        while True:
+            missing = [pool for pool in pools_of(session, cells) if pool not in locked]
+            if not missing:
+                break
+            for pool in missing:
+                session.execute(_LOCK_POOL, {"pool": pool})
+                locked.add(pool)
+        outcome = bind_cells(session, run_id=run_id, cells=cells)
+        if outcome.bound is None:
+            assert outcome.reason is not None
+            raise GroupDispatchWaiting(outcome.reason)
+        return tuple(outcome.bound)
+
+    def _bind_planned(self, session: Session, *, run_id: str, bound: Sequence[Any]) -> None:
+        """Write one row of ``audit_run_cell_binding`` per cell (once; the database refuses a second write and a row for a member that does not pin
+        the cell's model), then move the Run ``pending`` -> ``bound`` -- which the database allows only when every cell has its row. The caller holds
+        the pools, the Run and the Job. One ``executor.``-prefixed event per cell carries identities and controlled words only."""
+        from auditmanager.executors.public import write_bindings
+
+        write_bindings(session, run_id=run_id, bound=bound)
+        changed = session.execute(_BIND_PLANNED_RUN, {"run_id": run_id}).rowcount
+        if changed != 1:
+            raise self._transition_error("binding_state", "pending", "bound")
+        for item in bound:
+            append_execution_event(
+                session, event_type="executor.cell_bound", aggregate_type="AuditRun", aggregate_id=run_id, run_id=run_id,
+                payload={"cell_key": item.cell_key, "host_id": item.host_id, "connection_id": item.connection_id,
+                         "provider": item.provider, "access": item.access, "model_id": item.model_id,
+                         "from_state": "pending", "to_state": "bound", "reason": "stage_plan"})
+
+    @staticmethod
+    def _hold_pool_limits(session: Session, *, run_id: str) -> None:
+        """A bound planned Run's retry: no more units in use per pool than the pool has, decided under the pools' locks.
+
+        The Run keeps its cells' members (decision 16), so the pools are the ones it was bound in: locked in ascending order, then each is counted
+        without this Run (a queued Job holds no unit, as for a connection) and compared with its slots. A pool with no free unit refuses the claim
+        before anything is written (:class:`ExecutionNotClaimed`), exactly as a full connection does."""
+        from auditmanager.executors.public import bound_pools_of_run, pool_has_room
+
+        pools = bound_pools_of_run(session, run_id)
+        for pool in pools:
+            session.execute(_LOCK_POOL, {"pool": pool})
+        for pool in pools:
+            if not pool_has_room(session, pool, exclude_run_id=run_id):
+                raise DomainError(
+                    ErrorCode.CONFLICT, message="a pool of the run's servers has no free capacity unit",
+                    aggregate_type="ExecutorHost",
+                )
+
     # --- waiting is durable and visible (ADR-0026 decision 15) ----------------------------------------------------
 
     @staticmethod
@@ -1376,7 +1550,9 @@ class JobRepository:
         for *this* reason; another reason restarts that clock. Called by a carrier **after** a
         :class:`GroupDispatchWaiting` refusal, in a transaction of its own, and by the sweep. A Run that is no longer
         ``pending`` and ``queued`` is left alone."""
-        if reason is not None and reason not in (WAIT_AT_CAPACITY, WAIT_RUNNER_OFFLINE, WAIT_NEEDS_RECONSENT):
+        if reason is not None and reason not in (
+            WAIT_AT_CAPACITY, WAIT_RUNNER_OFFLINE, WAIT_NEEDS_RECONSENT, WAIT_MODEL_UNAVAILABLE,
+        ):
             raise ValueError("a wait reason is one of the words of RunQueueReason")
         return session.execute(_WRITE_WAIT, {"run_id": run_id, "reason": reason}).rowcount == 1
 
@@ -1454,7 +1630,53 @@ class JobRepository:
                 if self.record_group_wait(session, run_id=run_id, reason=reason):
                     updated += 1
             if len(page) < batch_size:
-                return GroupWaits(updated=updated, expired=expired, consent_lapsed=lapsed)
+                break
+        planned_updated, planned_expired = self._refresh_planned_waits(
+            session, limit=limit, batch_size=batch_size)
+        return GroupWaits(
+            updated=updated + planned_updated, expired=expired + planned_expired, consent_lapsed=lapsed)
+
+    def _refresh_planned_waits(self, session: Session, *, limit: float, batch_size: int) -> tuple[int, int]:
+        """The sweep of the **planned** pending Runs (`HOSTS-BACKEND-01`): keep each one's wait true and end the ones no server can serve.
+
+        For each Run, binding is evaluated **now** from the cells of its frozen plan, read-only and without a lock (:func:`~auditmanager.executors.
+        cell_binding.evaluate_wait`; the claim re-decides under the pool locks). The wait stored is that evaluation's reason: ``model_unavailable``
+        (some cell has no available server), ``executor_at_capacity`` (every cell has one, the pools are full) or **none** -- cleared, so the hint
+        offers the Run. A Run that has waited for ``model_unavailable`` longer than ``limit`` seconds **ends** ``no_executor_online`` (`R-149c`)
+        through the terminal path the group Runs use. Waiting for capacity never expires. What is decided is decided on the row locked
+        ``SKIP LOCKED``: its reason and the time it has waited are read again under the lock."""
+        from auditmanager.executors.public import cell_requests, evaluate_wait
+
+        updated = expired = 0
+        after_created_at: Any = None
+        after_run_id: str | None = None
+        while True:
+            page = session.execute(_PENDING_PLANNED_RUNS, {
+                "batch_size": batch_size, "after_created_at": after_created_at, "after_run_id": after_run_id,
+            }).mappings().all()
+            for row in page:
+                run_id = str(row["run_id"])
+                after_created_at, after_run_id = row["created_at"], run_id
+                plan = row["stage_plan"]
+                outcome = evaluate_wait(
+                    session, run_id=run_id, cells=cell_requests(json.loads(plan) if isinstance(plan, str) else plan))
+                reason = None if outcome.bound is not None else outcome.reason
+                if reason == row["wait_reason"] and reason != WAIT_MODEL_UNAVAILABLE:
+                    continue
+                locked = session.execute(
+                    _LOCK_PENDING_RUN, {"run_id": run_id, "offline_seconds": limit},
+                ).mappings().first()
+                if locked is None:
+                    continue
+                if (reason == WAIT_MODEL_UNAVAILABLE and locked["wait_reason"] == WAIT_MODEL_UNAVAILABLE
+                        and locked["wait_expired"]):
+                    self._end_without_executor(session, run_id=run_id)
+                    expired += 1
+                    continue
+                if self.record_group_wait(session, run_id=run_id, reason=reason):
+                    updated += 1
+            if len(page) < batch_size:
+                return updated, expired
 
     def _end_without_executor(self, session: Session, *, run_id: str) -> None:
         """End a ``pending`` Run that waited for a runner longer than allowed: ``no_executor_online``.
@@ -1603,12 +1825,40 @@ class JobRepository:
         request_sha256: str,
         connection_revision_id: str | None = None,
         identity_basis: str | None = None,
+        stage_key: str | None = None,
+        host_id: str | None = None,
+        access: str | None = None,
+        cell_key: str | None = None,
     ) -> ModelCallId:
         """Commit the intent of one provider call. With the provider source ``database`` the
         call names the connection revision that serves it and how its model identity is known
         (`EXEC-HTTP-01`); both or neither, as the schema requires. The ``model_call`` row written
-        when the call completes carries the same two values."""
+        when the call completes carries the same two values.
+
+        ``stage_key``, ``host_id`` and ``access`` (`HOSTS-SEAL-1`, migration ``0062``) are the row of
+        the stage layout the call belongs to, the host that serves it (a bare identity, no foreign key)
+        and ``subscription`` or ``api``. Each is ``None`` for every existing caller, which writes
+        ``NULL``; the ``model_call`` row carries the values the effect recorded.
+
+        ``cell_key`` (`HOSTS-BACKEND-01`) names the cell of a planned run the call is made for: the host and the access of the member the cell was
+        **bound to** are read from ``audit_run_cell_binding`` and written to the effect (and so to the call row), and so is the member's connection
+        revision with ``identity_basis`` ``declared`` when the caller named neither. A value the caller also passed must equal the binding's: a
+        call is journaled on the member that serves it, never on another. ``stage_key`` still arrives from the caller."""
         self.require_current(session, authority)
+        if cell_key is not None:
+            from auditmanager.executors.public import cell_binding_of
+
+            bound = cell_binding_of(session, authority.run_id, cell_key)
+            if bound is None:
+                raise DomainError(
+                    ErrorCode.INTERNAL_ERROR, message="the cell of this call is not bound to a member", aggregate_type="AuditRun")
+            if (host_id is not None and host_id != bound.host_id) or (access is not None and access != bound.access):
+                raise DomainError(
+                    ErrorCode.INTERNAL_ERROR, message="the call names another host or access than its cell was bound to",
+                    aggregate_type="AuditRun")
+            host_id, access = bound.host_id, bound.access
+            if connection_revision_id is None and identity_basis is None:
+                connection_revision_id, identity_basis = bound.connection_revision_id, "declared"
         model_call_id = ModelCallId.new()
         session.execute(
             _INSERT_PROVIDER_EFFECT,
@@ -1624,6 +1874,9 @@ class JobRepository:
                 "request_sha256": request_sha256,
                 "connection_revision_id": connection_revision_id,
                 "identity_basis": identity_basis,
+                "stage_key": stage_key,
+                "host_id": host_id,
+                "access": access,
             },
         )
         append_execution_event(
@@ -2048,6 +2301,9 @@ class JobRepository:
                 ),
                 "connection_revision_id": owned_effect["connection_revision_id"],
                 "identity_basis": owned_effect["identity_basis"],
+                "stage_key": owned_effect["stage_key"],
+                "host_id": owned_effect["host_id"],
+                "access": owned_effect["access"],
             },
         )
         changed = session.execute(

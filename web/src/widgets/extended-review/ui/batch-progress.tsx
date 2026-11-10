@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import styles from './extended-review.module.css';
+import { RUN_CHIP } from '@/entities/audit-run';
 import { extendedExecutionReason } from './execution-reason';
 
 type RecordValue = Record<string, unknown>;
@@ -10,7 +11,7 @@ function objects(value: unknown): RecordValue[] { return Array.isArray(value) ? 
 function text(value: unknown): string { return typeof value === 'string' ? value : ''; }
 function count(value: unknown): string { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? String(value) : '—'; }
 const STATUS: Readonly<Record<string, string>> = { queued: 'Запланировано', running: 'Выполняется', repairing: 'Исправляется ответ', completed: 'Завершено', partial: 'Частично', failed: 'Ошибка', unavailable: 'Недоступно', skipped: 'Пропущено' };
-const PHASE: Readonly<Record<string, string>> = { block_analysis: 'Анализ изображений', comprehensive_analysis: 'Комплексная сверка', finding_merge: 'Свод наблюдений', norm_verification: 'Сверка нормативных цитат', finding_review: 'Машинная критика', finding_correction: 'Предложения уточнения', report_generation: 'Подготовка отчёта' };
+const PHASE: Readonly<Record<string, string>> = { block_analysis: RUN_CHIP.blocks.full, comprehensive_analysis: 'Комплексная сверка', finding_merge: 'Свод наблюдений', norm_verification: 'Сверка нормативных цитат', finding_review: 'Машинная критика', finding_correction: 'Предложения уточнения', report_generation: 'Подготовка отчёта' };
 
 export function ReplyRepairSummary({ value }: { readonly value: unknown }) {
   const receipts = objects(value);

@@ -240,7 +240,12 @@ def reaudit_unmetered(run_id, key):
                 input_budget_characters=control.input_budget_characters,
                 connection_route=control.route_freezer, cost_preflight=control.cost_preflight,
                 cost_consent=consent, cost_actor_uid=None, started_by_user_uid=None,
-                group_admitter=control.group_admitter, **explicit)
+                group_admitter=control.group_admitter,
+                # `D-670` (`HOSTS-INT-WIRE-01`, ADR-0028 decision 14): the same layout reader the API's re-audit hands this command
+                # (``ExecutionAdapter.reaudit_run``): with the layout on the new run takes today's plan, and the estimate the consent was
+                # approved for is the plan's. Read straight off the run adapter, not through ``getattr(..., None)``: a control without
+                # the seam would take the legacy route in silence.
+                stage_plans=control.stage_plans, **explicit)
     # The Job was committed by the command. The API carrier makes no model call;
     # the existing worker claims it through the usual durable queue and cost fence.
     if not started.replayed:

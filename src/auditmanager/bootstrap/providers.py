@@ -18,6 +18,11 @@ between them is assembled here and nowhere else:
   The ``environment`` source has neither: it refuses a group start, and ``resolve`` refuses a ``pending`` run
   as it refuses a ``bound`` one (a connection it cannot serve).
 
+`HOSTS-INT-WIRE-01` (ADR-0028 decisions 5 and 6). A run frozen with a ``stage_plan`` has no connection of its own: dispatch bound each of its
+cells to a member of a system group, and the ``database`` source resolves the run **per cell** (``StagePlanProviders``: the adapter of the member
+and one ``CallBinding`` of the cell's model). The ``environment`` source refuses such a run with a typed error -- it has no member to serve a
+cell, and answering with its one adapter would call a model nobody planned.
+
 Nothing here falls back: a source that cannot serve a run says so with a typed error.
 """
 
@@ -32,14 +37,25 @@ from sqlalchemy.orm import Session, sessionmaker
 from auditmanager.analysis.public import (
     AR_V3_BETA_BUNDLE_ID,
     AR_V3_BETA_PROFILE_ID,
+    CellSettings,
     input_budget_characters,
 )
 from auditmanager.analysis.text import CallBinding, ModelRequest, ModelResponse, ProviderMode
-from auditmanager.executors.public import ExecutorRepository, SecretUnreadableError
+from auditmanager.bootstrap.stage_plan_providers import BoundMember, StagePlanProviders
+from auditmanager.executors.public import (
+    IDENTITY_BASIS_BY_KIND,
+    ExecutorRepository,
+    HostCall,
+    SecretUnreadableError,
+    access_of_billing,
+    build_pull_adapter,
+    split_pool,
+)
 from auditmanager.executors.resolver import admit_group, group_of_revision
 from auditmanager.executors.runtime import (
     DestinationPolicy,
     KindRuntime,
+    adapter_for,
     bind_connection,
     freeze_connection,
     route_missing,
@@ -101,6 +117,11 @@ def _awaits_dispatch(run: Any) -> bool:
     return getattr(run, "binding_state", None) == "pending"
 
 
+def _is_planned(run: Any) -> bool:
+    """A run frozen with a ``stage_plan`` (`HOSTS-LAYOUT-01`): its cells, not one connection, say which model serves each call."""
+    return getattr(run, "stage_plan", None) is not None
+
+
 def _is_ar_v3_beta_run(run: Any) -> bool:
     """The exact sealed pair the executor routes to the v3 review chain (`v3_exact`), nothing looser."""
     return (
@@ -144,6 +165,10 @@ class EnvironmentProviders(ProviderSource):
         self.admit_group = None
 
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:
+        if _is_planned(run):
+            # `HOSTS-INT-WIRE-01`: a run frozen with a stage plan is bound cell by cell to the servers; this source holds none. Its
+            # ``connection_revision_id`` is empty like an environment run's, so without this line the one adapter of the process would serve it.
+            raise route_missing()
         if _awaits_dispatch(run):
             # `EXEC2-GROUP-RUN-01`: a run admitted by a rule or a group has **no connection yet**, and no
             # connection is what an environment run has too. Serving it here would run group work on this
@@ -175,6 +200,8 @@ class DatabaseProviders(ProviderSource):
         self._runtime = runtime
         self.freeze = self._freeze
         self.admit_group = GroupAdmission(ceiling_usd=ceiling_usd)
+        #: `HOSTS-INT-WIRE-01`: a planned run is resolved per cell, through the member each cell was bound to at dispatch.
+        self._planned = StagePlanProviders(binder=self._bind_member, base_config=base_config)
 
     def _runtime_for(self, session: Session) -> KindRuntime:
         if self._runtime is not None:
@@ -209,7 +236,48 @@ class DatabaseProviders(ProviderSource):
             billing="unmetered" if revision.settings.billing == "not_metered" else "metered",
         )
 
+    def _bind_member(self, session: Session, *, connection_revision_id: str, cell: CellSettings, context: Any) -> BoundMember:
+        """The adapter of the member a cell was bound to (``binding_for(cell)``, ADR-0028 decision 6): the pull adapter of the member's
+        revision, built with **this cell's** provider, access, model, effort, answer limit, timeout and key, so the task the host agent claims
+        carries exactly what the frozen plan says. Nothing is chosen here: the member was written once at dispatch, and a revision that does
+        not serve the cell's model is refused, never substituted."""
+        store = ExecutorRepository()
+        revision = store.get_revision(session, connection_revision_id)
+        connection = None if revision is None else store.get_connection(session, revision.connection_id)
+        if revision is None or connection is None or connection.host_id is None or connection.capacity_pool is None:
+            raise route_missing()
+        if revision.settings.gateway_model != cell.model_id:
+            raise DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cell_member_serves_another_model")
+        # `D-673`: the label of the call row's ``provider`` and the basis of its model identity are facts of the member's kind and revision
+        # (the kind table's ``provider_label(revision)``, ``IDENTITY_BASIS_BY_KIND``), so they are read from there. This method used to call
+        # ``bind_connection`` for them, which built a whole pull adapter that was thrown away one line later by ``build_pull_adapter`` below.
+        # What ``bind_connection`` also checked is checked here: the kind is served, and it is a channel kind (a host's member is a ``pull``
+        # connection; a kind that keeps a sealed key has nothing to do on a host).
+        entry = adapter_for(connection.kind)
+        if entry is None or entry.channel is None:
+            raise route_missing()
+        if not entry.serves(revision):
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, message="this kind of connection is not served yet",
+                field="kind", constraint="kind_not_served")
+        provider_label, identity_basis = entry.provider_label(revision), IDENTITY_BASIS_BY_KIND[connection.kind]
+        runtime = self._runtime_for(session)
+        host_id, provider = split_pool(connection.capacity_pool)
+        access = access_of_billing(revision.settings.billing)
+        host_call = HostCall(
+            provider=provider, access=access, model_id=cell.model_id, effort=cell.effort,
+            max_output_tokens=cell.max_output_tokens, timeout_seconds=cell.timeout_seconds, cell_key=cell.cell_key)
+        adapter = build_pull_adapter(
+            session_factory=runtime.session_factory, revision=revision, context=context, engine=runtime.engine,
+            host_call=host_call)
+        return BoundMember(
+            adapter=adapter, provider_label=provider_label, identity_basis=identity_basis,
+            connection_revision_id=revision.revision_id, unmetered=access == "subscription", host_id=host_id)
+
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:
+        if _is_planned(run):
+            return self._planned.resolve(session, run, context)
         revision_id = getattr(run, "connection_revision_id", None)
         if revision_id is None:
             # A run frozen under the `environment` source, served after the switch: no fallback. And a run

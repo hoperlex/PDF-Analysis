@@ -11,7 +11,132 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.44.0` (`DECISION-MEMORY-M2`)
+## Current contract `1.47.0` (`HOSTS-SEAL-3`)
+
+Slice for `HOSTS-SEAL-3` with `HOSTS-CMP-01` (ADR-0028 decision 19; decisions of the HOSTS integrator, 2026-11-10): **the comparison of versions on the stage
+layout**. **No operation, two new schemas, three widened ones, no migration, no new error code, no state machine and no identity prefix**; migration head
+stays `0062`. The paths and operations are those of `1.46.0`.
+
+- **The cells.** The four kinds of comparison work that call a model -- `comparison_pair_check`, `comparison_sheet_changes`, `comparison_spec` and
+  `comparison_report` (the new enum `ComparisonLayoutKind`; `comparison_stage_review` has no handler and is not offered) -- each get one cell of the
+  layout, `StageComparisonCell`: `work_kind`, `model_id`, `effort`, `max_output_tokens` (1 to 65536) and `timeout_seconds` (1 to 7200). The model and the
+  effort are a pair of `listModelCatalogue`, as for a row. The analysis rows (`StageRowKey`, `StageLayoutCell`) are unchanged: no existing reader changes.
+- **The layout.** `ReviseStageModelLayoutRequest.comparison_cells` is **optional**: the four cells, each kind once. A named kit
+  (`claude_only`, `codex_only`) must have the models and efforts of its table (a limit or a timeout may be longer or shorter, as for the rows); `custom`
+  may name any pair of the catalogue. `StageLayoutRevision.comparison_cells` returns the cells **in force**: what the revision stored, else the table
+  of its kit -- so a revision made before this seal serves with the kit's defaults. It is absent only for a `custom` revision that stored none: its
+  comparison kinds have no cell, and a comparison is refused (`503 dependency_unavailable`, `executor_route_missing`), never served by a model nobody
+  chose. `StageModelLayout.unavailable_cell_keys` also names a comparison cell (`comparison_pair_check:main`) whose model no server serves.
+- **The tables** (the original's `version_comparison_ai` settings mapped onto the catalogue; the original's `gpt-6-luna` is not a pin, so it is
+  `gpt-6-astra`): « Только Codex » -- pair check `gpt-6-astra` high, 1200 tokens, 900 s; sheet changes `gpt-6.1-sol` high, 8192, 1800 s; specification
+  `gpt-6-astra` high, 32000, 900 s; report `gpt-6.1-sol` high, 8000, 2400 s. « Только Claude » -- `claude-sonnet-5-5` high for all four, with the same
+  limits and windows.
+- **The route.** `ComparisonAiRoute.cell` (optional) is the cell a comparison job froze. While the layout is switched on, an estimate or a start of one
+  of the four kinds is served by the system group of the cell's model (a subscription before an API key; the group revision, not a connection, is the
+  route), so it is a route of the group shape (`executor_group_id`, `executor_group_revision_id`, no `routing_rule_revision_id`) with the `cell`. **The
+  estimate digest binds the cell**: the consent names what will run. A kind whose model no server serves is refused at the estimate and at the start with
+  `503 dependency_unavailable`, `executor_route_missing`; it is not routed to a legacy connection or a rule. With the layout switched off the route is
+  what it was.
+- **The call.** The cell's effort replaces the module's, its limit is a ceiling over the module's own (`min(module limit, cell limit)`, also in the
+  estimate's `output_tokens`) and its timeout is the window of the call to the server. A job admitted by the legacy route or by a rule keeps today's
+  values.
+- **Prose corrected.** The description of `startRun` said that a start that finds another rate or another access since the estimate was read answers
+  `409` with `conflict_reason` `cost_estimate_binding_changed`. The code, its tests and ADR-0028 decision 8 answer `422 analysis_input_invalid` with
+  `details.reason` `cost_estimate_binding_changed`, before the key is claimed; the description now says so (prose only, no schema change).
+- **Not changed.** Every operation, every other schema, the stage plan a run freezes (it holds the six rows only) and every error code.
+
+The API has 296 paths, 324 operations and 796 schemas; migration head `0062`. The domain catalogs are at candidate revision 64.
+
+## Contract `1.46.0` (`HOSTS-SEAL-2`, historical)
+
+Slice for `HOSTS-SEAL-2` with `RUN-STAGES-01` (ADR-0028; plan section 9.4 of the owner-approved plan of 2026-11-09): **the stages of a run, plan and
+fact**. **One operation, seven schemas, no migration, no new error code, no state machine and no identity prefix**; migration head stays `0062`.
+
+- `getRunStages` -- `GET /runs/{run_id}/stages` (`runs`; `role:admin|expert|viewer`, a product read like `getRunStatus`): the data of the window
+  «Этапы анализа раздела». For each chip the run has, **in the order the rail draws them** (`preparation`, `text`, `blocks`, `cross_check`,
+  `merge`, `norms`, `review`, `correction` and, for the AR v3 profile, `ar_v3`; a chip that no stage result, procedure, plan cell or call mentions
+  is not listed) it answers `stage_ids` (the code stage and procedure ids the chip covers), `plan` and `facts`.
+- **`plan`** is the run's frozen `stage_plan` cells for the chip's row -- `role`, `model_id`, `effort`, `max_output_tokens`, `timeout_seconds`,
+  `access` and, once the cell is bound (`audit_run_cell_binding`), `server`, the display name of the host. A run that froze no `stage_plan`
+  (`plan_source` `run_binding`) has one line per chip that calls a model, `role` `main` and the model its binding pins (the server and access of its
+  binding too; with no binding, the model the journal names). A chip that calls no model (`preparation`, `merge`) has an empty plan.
+- **`facts`**: `state` (`pending`, `running`, `done`, `partial`, `failed`, `skipped`, `unavailable`); `started_at` and `finished_at` (the earliest and
+  the latest call of a chip that calls a model, else the times of its stage results; `finished_at` only once the chip has finished, and none from a
+  stage taken from an earlier run, which is named by `reused_from_run_id`); `calls_succeeded`, `calls_failed`, `calls_retried`; `input_tokens`,
+  `output_tokens`, the part of them served by a subscription (`subscription_input_tokens`, `subscription_output_tokens`) and `cost_micros`;
+  `last_error_code`; `reason` (the extended review's reason a procedure did not complete); and `planned` and `completed`, the batches of the
+  extended review's `phase_coverage`, absent where the review keeps none.
+- **Where the facts come from.** The PC-01 `stage_result` rows; the extended review artifact through its custody-checked reader (`procedures` for the
+  state, `phase_coverage` for the batches); the call journal (`model_call` and `provider_call_effect`), each call placed on a chip by its `stage_key`
+  (written since `0062`) or, for an older row, **derived at read time** from `parameters ->> 'extended_phase'`. A journal row whose key or phase is
+  unknown is `500 storage_integrity_error`, never a guess.
+- **The viewer** («Наблюдатель», `R-150w`) reads the stages but not the server nor the access: both are absent from every cell of its answer (not
+  null). An expert and an administrator see everything.
+- **Not changed.** Every other operation, schema and error code. No page calls the new operation yet (`RUN-SCREEN-01`).
+- **Details the stand answers on existing codes** (`HOSTS-INT-WIRE-01`, which wired `HOSTS-BACKEND-01` and `HOSTS-LAYOUT-01`; prose only: no schema,
+  no operation and no version change, and `error-codes.json` carries the same notes).
+  - `409 conflict`, `details.conflict_reason`: `system_managed` (a connection or group the stand keeps for a server is revised, archived, keyed,
+    probed, routed, enrolled or named by a rule by hand), `host_name_in_use` (a live server holds the name), `host_archived` (a write names an
+    archived server), `host_in_use` (`archiveExecutorHost` while a bound run still holds a unit of the server's pool) and `upgrade_blocked_by_use`
+    (a host enrollment or install under the name of a single-model `pull` connection that a route or a rule still uses, until `HOSTS-CMP-01`).
+  - `422 validation_failed`, `details.field` `slots` or `providers` (and `key_file` or `agent_version`) with a `constraint` that names what the
+    request got wrong: for `slots` `required`, `range` (1 to 16), `type` and `provider_not_reported`; for `providers` `required`, `length`, `type`,
+    `enum`, `access`, `auth_state`, `unique`, `accept_images`, `models`, `checked_at`, `failure_code` and `verified_without_login` (a provider that is
+    not logged in has no verified model); `host_token_only` (a connection token sends `providers`, `slots`, `key_file`, or a host answer's
+    `provider`/`reported_model`: it speaks the earlier wire); on a host token's answer `provider`, `access` and `reported_model` `required`, and
+    `provider` or `access` `not_the_task`. A value is never echoed.
+  - `503 dependency_unavailable`, `details.dependency` `model_catalogue`: `contracts/analysis/v1/model-catalogue.json` cannot be read; there is no
+    built-in copy to fall back to.
+  - The answer of `reportRunnerHealth` and `submitExecutorTaskAnswer` for a model that is not the task's is the runner's existing refusal; for a host
+    token the model that *answered* (`reported_model`) is held to the catalogue's `accepted_reported` for the task's model, exactly (`R-133`).
+  - **A start on the stage layout that finds another rate or another access since the estimate was read** is refused with the existing
+    cost-preflight refusal, `422 analysis_input_invalid` with `details.stage_id` `text_analysis` and `details.reason`
+    `cost_estimate_binding_changed`, before the key is claimed, and the client reads `getRunStartReadiness` again. (The description of `startRun` in
+    `openapi.json` said `409` with `conflict_reason`, which is not what the stand answers; `1.47.0` (`HOSTS-SEAL-3`) corrects that prose to
+    `422 analysis_input_invalid` with `details.reason` -- prose only, no schema change.)
+
+The API has 296 paths, 324 operations and 794 schemas; migration head `0062`. The domain catalogs are at candidate revision 63.
+
+## Contract `1.45.0` (`HOSTS-SEAL-1`, historical)
+
+Slice for `HOSTS-SEAL-1` (ADR-0028; the owner-approved plan of 2026-11-09): **servers** (hosts) and **the models of the analysis stages**.
+**Fifteen operations, forty-three schemas, one parameter, no new error code and no new state machine**; migration `0062_hosts_stage_models`; five
+identity prefixes (`exh`, `exhu`, `exhs`, `slr`, `sls`). Nothing behaves differently until the wave-1 lanes implement an operation: the shipped
+adapters answer `503 dependency_unavailable`.
+
+- **Servers** (`execution`). `listExecutorHosts` (`GET /executor-hosts`) and `getExecutorHost` (`GET /executor-hosts/{host_id}`) --
+  `role:admin|expert`, the viewer denied (`R-150w`); `getExecutorHostDetails` (`GET .../details`, `role:admin`): slots, the reasons a model is
+  unavailable (`host_disabled`, `host_offline`, `login_required`, `model_not_verified`, `model_cooling_down`) and the tasks running;
+  `setExecutorHostEnabled` (`PUT .../enabled`, the «Использовать» switch) and `setExecutorHostSlots` (`PUT .../slots`) -- `role:admin`, keyed,
+  each change an append-only event with its author; `archiveExecutorHost` (`POST .../archive`, one-way, not deletion).
+- **Connecting a server** (`role:admin`, keyed, no model). `issueExecutorHostEnrollment` (`POST /executor-hosts/enrollments`),
+  `createExecutorHostAgentInstall` (`POST /executor-hosts/agent-installs`), `getExecutorHostAgentInstall` and
+  `confirmExecutorHostAgentInstallHostKey` (under `/executor-hosts/{host_id}/agent-installs/{install_id}`) are the host-targeted forms of
+  `issueExecutorEnrollment`, `createExecutorAgentInstall`, `getExecutorAgentInstall` and `confirmExecutorAgentInstallHostKey`, which are
+  **unchanged** and stay the forms for a `pull` connection until the comparison routes move to the hosts. `RunnerTokenMetadata`,
+  `ExecutorEnrollmentMetadata` and `ExecutorAgentInstall` name exactly one of `connection_id` and `host_id`.
+- **The stage layout.** `getStageModelLayout` (`GET /model-layout`, `role:admin|expert`), `reviseStageModelLayout`
+  (`POST .../revisions`, an immutable revision with its author) and `setStageModelLayoutEnabled` (`PUT .../enabled`, the switch and its journal) --
+  the writes `role:admin`, keyed; `listModelCatalogue` (`GET /model-catalogue`, `role:admin|expert`), the content of
+  `contracts/analysis/v1/model-catalogue.json`; `getRunStartReadiness` (`POST /runs/start-readiness`, a read with the body of `estimateRunCost`,
+  `role:admin|expert`): the route, every cell of the plan a start would freeze with its access, whether the start is possible and the digest of
+  the estimate to confirm.
+- **The runner protocol, host mode** (a token bound to a connection keeps the earlier wire). `redeemExecutorEnrollment` answers `token`, `host_id`
+  and `catalogue` (and `runner_token` is optional); `reportRunnerHealth` carries `providers[]`, `slots` and `key_file` and is answered with
+  `catalogue` and `enabled`; a claimed task carries `provider`, `access`, `model_id`, `effort`, `max_output_tokens`, `timeout_seconds` and
+  `cell_key` (all seven or none) and `model` equals `model_id`; `extendExecutorTaskClaim` is sent only while the call has produced output in the
+  last 120 s; `submitExecutorTaskAnswer` carries `provider`, `access`, `reported_model` (the exact string, held against `accepted_reported`) and
+  `usage`. `RunnerExecutionProfile` gains no value and `clis` stays required. The text is `tools/executor-runner/RUNNER_API.md` section 10.
+- **Runs and the estimate.** `RunQueueReason` gains `model_unavailable`; `ExecutorGroupMemberIssue` gains `host_disabled`, `model_not_verified` and
+  `model_cooling_down`. `RunCostEstimate.billing` gains `mixed`, and the estimate carries `stage_plan_digest` and `models` (a line per model:
+  the digest of its rates, its access, calls, tokens and cost) -- the consent v2. `RunCostConsent` is unchanged and gains examples. With the layout
+  switched on the explicit executor selectors of `startRun` and `estimateRunCost` are `422 validation_failed`; `reauditRun` and `startRunFromStage`
+  take today's layout.
+- **Not changed.** Every other operation, schema and error code. No page calls the new operations yet.
+
+The API has 295 paths, 323 operations and 787 schemas; migration head `0062`. The domain catalogs are at candidate revision 62.
+
+## Contract `1.44.0` (`DECISION-MEMORY-M2`, historical)
 
 Slice for `DECISION-MEMORY-01` phase M2 (`ADR-0027`): the expert decision memory, the copy of what an expert saw and said when a decision was
 taken, which outlives its project and document. **Five operations, fourteen schemas, no new error code and no new identity prefix** (migration

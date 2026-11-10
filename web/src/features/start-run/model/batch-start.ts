@@ -52,6 +52,16 @@ export function estimateFits(estimate: RunCostEstimate, versionUid: VersionUid):
     && estimate.relaxed_limits === false;
 }
 
+/**
+ * Whether every estimate that is ready charges nothing (`billing: unmetered`), and there is at least one.
+ * Such a batch needs no separate agreement: its one button is the confirmation, and the list shows 0
+ * (`RUN-START-ONE-01a`, the single start's rule applied to the batch).
+ */
+export function batchIsFree(estimates: readonly BatchEstimate[]): boolean {
+  const ready = estimates.filter((item) => item.kind === 'ready');
+  return ready.length > 0 && ready.every((item) => item.estimate.billing === 'unmetered');
+}
+
 export interface BatchTotals {
   readonly ready: number;
   readonly pending: number;

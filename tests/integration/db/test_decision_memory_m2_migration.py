@@ -30,7 +30,7 @@ from auditmanager.shared.identity import DecisionMemoryStatusEventId
 from tests.support.memory_seed import ensure_blob
 from tests.support.memory_seed import seed_case as _seed_case
 
-HEAD = "0061_decision_memory_m2"
+HEAD = "0062_hosts_stage_models"  # the head the fixture migrates to; 0061 is the migration under test, one step below it
 PREVIOUS = "0060_run_from_stage"
 CONTENT_TABLES = (
     "decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref",

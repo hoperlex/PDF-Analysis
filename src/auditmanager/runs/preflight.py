@@ -11,15 +11,24 @@ import math
 import os
 import threading
 
-from auditmanager.analysis.public import count_native_text_characters, model_rate_sha256, pinned_models, relaxed_window_characters
+from auditmanager.analysis.public import (
+    apply_to_bundle, count_native_text_characters, model_rate_sha256, pinned_models, relaxed_window_characters,
+)
 from auditmanager.documents.public import DocumentRepository, UPLOAD_KIND_COMPARISON_PDF
 from auditmanager.norms.public import PromotionRefused, current_snapshot, qualification, select_verified_retrieval_set
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import VersionUid
 from auditmanager.storage.public import parse_blob_id
 
-from .commands import _freeze_for, _named_group_of, admit_group_for_start, analysis_source_entry, route_classified_version
+from .commands import (
+    _freeze_for, _named_group_of, admit_group_for_start, analysis_source_entry, refuse_selectors_under_layout, route_classified_version,
+)
 from .provider import AdmittedGroup
+from .stage_layout import PHASE_ROWS, STAGE_ROWS, FrozenStagePlan, rows_in_use
+
+#: "The layout was not asked about": ``estimate_run`` then reads the seam the preflight was built with. ``None`` is an answer (the layout
+#: is off, or the command already read it), and nothing is read again.
+_UNSET = object()
 
 
 FORMAT = "analysis-cost-preflight/1"
@@ -78,6 +87,9 @@ class RunCostEstimateValue:
     #: a preset or the route). The start admits the run on exactly this revision, so the estimate the person consented to
     #: and the group revision the run freezes cannot differ.
     admitted_group: AdmittedGroup | None = None
+    #: `HOSTS-LAYOUT-01` (ADR-0028 decision 8, consent v2). The plan this estimate priced -- the cells of the rows the run will call, with
+    #: the access chosen now -- or ``None`` for an estimate of the legacy route. The start freezes exactly this plan.
+    stage_plan: FrozenStagePlan | None = None
 
     def as_dict(self):
         return json.loads(self.public_json)
@@ -90,12 +102,17 @@ class RunCostEstimateValue:
         if (not isinstance(consent, dict) or set(consent) != {"estimate_digest", "ceiling_micros", "confirmed"}
                 or consent.get("confirmed") is not True):
             raise _invalid("cost_consent", "confirmation_required")
+        authority = json.loads(self.authority_json)
         if consent["estimate_digest"] != self.estimate_digest:
+            if authority.get("stage_plan_digest") is not None:
+                # `HOSTS-LAYOUT-01` (ADR-0028 decision 8): the digest of a stage-plan estimate binds the plan, each model's rates and the
+                # access it is bought with. Whatever moved since it was read -- an agent went off line and a subscription became an API
+                # key, a rate changed -- the consent no longer binds the work: the existing refusal, and the screen reads the start again.
+                raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
             raise DomainError(ErrorCode.CONFLICT, conflict_reason="run_cost_estimate_stale")
         cap = consent["ceiling_micros"]
         if type(cap) is not int or not 0 <= cap <= MAX_SAFE_MICROS:
             raise _invalid("ceiling_micros", "nonnegative_integer")
-        authority = json.loads(self.authority_json)
         uncapped_stats = (authority["scope"] == "run" and authority["relaxed_limits"] is True
                           and cap == 0)
         if not uncapped_stats and cap < self.as_dict()["estimated_cost_micros"]:
@@ -124,6 +141,12 @@ class RunCostEstimateValue:
             result["native_page_piece_policy"] = authority["native_page_piece_policy"]
         if "scope_costs_micros" in authority:
             result["scope_costs_micros"] = authority["scope_costs_micros"]
+        if authority.get("stage_plan_digest") is not None:
+            # Consent v2 (`HOSTS-LAYOUT-01`): the digest of the plan, and per model the rates and the access it was priced with.
+            # ``require_approved_model`` holds every call to membership of this map.
+            result["stage_plan_digest"] = authority["stage_plan_digest"]
+            result["models"] = {line["model_id"]: {"rate_sha256": line["rate_sha256"], "access": line["access"]}
+                                for line in authority["models"]}
         return result
 
 
@@ -132,7 +155,10 @@ class RunCostPreflight:
 
     def __init__(self, *, section_profiles, text_profiles, provider_config, provider_mode,
                  connection_route=None, preset_resolver=None, pack_registry=None, prices=None,
-                 blob_store=None, group_admitter=None):
+                 blob_store=None, group_admitter=None, stage_plans=None):
+        #: `HOSTS-LAYOUT-01`: the seam that reads the stage layout (``stage_plans(session)``: ``None`` while it is off, else the draft).
+        #: With it an estimate is by model while the layout is on, whoever asks; without it only an explicit ``stage_plan`` is.
+        self.stage_plans = stage_plans
         self.sections, self.profiles = section_profiles, text_profiles
         self.config, self.mode = provider_config, provider_mode
         self.route, self.presets, self.packs = connection_route, preset_resolver, pack_registry
@@ -261,23 +287,115 @@ class RunCostPreflight:
                 public[key] = pricing[key]
         return RunCostEstimateValue(_json(public), _json(authority), frozen, chosen, admitted)
 
+    def _value_planned(self, *, version, chars, source, plan, ledger, relaxed, windows, window_characters, extended_review,
+                       native_page_piece_policy):
+        """The estimate of a run on the stage layout (consent v2, `HOSTS-LAYOUT-01`): priced **by model**.
+
+        Each cell's calls and tokens belong to the model of that cell; a model is bought one way for the whole run (the access frozen in the
+        plan), so a subscription model costs 0 and an API model costs its pinned rates. The blocks row of an ensemble has one cell per leg and
+        one for the judge, and every one of them is asked once per block batch, so the row's calls are the base batches times its cells. The digest binds the plan, every model's rate
+        digest and access and the source: a start that finds another plan, rate or access holds no consent. ``billing`` is ``unmetered``
+        when every cell is on a subscription (pressing the button is the consent), ``metered`` when none is, else ``mixed``.
+        """
+        totals = {}
+        for key, (calls, row_input, row_output) in ledger.items():
+            entry = totals.setdefault(plan.cell(key).model_id, [0, 0, 0])
+            entry[0] += calls
+            entry[1] += row_input
+            entry[2] += row_output
+        lines = []
+        for model_id, (calls, row_input, row_output) in totals.items():
+            pin, access = self._pin(model_id), plan.access_of(model_id)
+            lines.append({"model_id": model_id, "access": access, "rate_sha256": model_rate_sha256(pin), "calls": calls,
+                          "input_tokens": row_input, "output_tokens": row_output,
+                          "estimated_cost_micros": 0 if access == "subscription" else estimated_micros(pin, row_input, row_output)})
+        cost = sum(line["estimated_cost_micros"] for line in lines)
+        billing = {"subscription": "unmetered", "api": "metered", "mixed": "mixed"}[plan.access]
+        text_pin = self._pin(plan.cell("text:main").model_id)
+        calls, input_tokens, output_tokens = (sum(entry[index] for entry in ledger.values()) for index in range(3))
+        pricing = {"model_id": text_pin.model_id, "rate_sha256": model_rate_sha256(text_pin), "billing": billing,
+                   "provider_mode": self.mode, "connection_revision_id": None, "preset_revision_id": None}
+        authority = dict(pricing, format=FORMAT, source_sha256=_digest(source), window_characters=window_characters,
+            max_windows=(max(12, version.page_count) if relaxed and native_page_piece_policy is None else max(12, windows)),
+            relaxed_limits=relaxed, scope="run", windows=windows, calls=calls, input_tokens=input_tokens,
+            output_tokens=output_tokens, stage_plan_digest=plan.digest, models=lines)
+        if extended_review is not None:
+            authority["extended_review"] = extended_review
+        if native_page_piece_policy is not None:
+            authority["native_page_piece_policy"] = native_page_piece_policy
+        digest = _digest(authority)
+        public = {"estimate_digest": digest, "scope": "run", "version_uid": str(version.version_uid), "provider_mode": self.mode,
+            "billing": billing, "model_id": text_pin.model_id, "text_characters": chars, "page_count": version.page_count,
+            "windows": windows, "calls": calls, "input_tokens": input_tokens, "output_tokens": output_tokens,
+            "estimated_cost_micros": cost, "recommended_ceiling_micros": max(1, (cost * 6 + 4) // 5) if cost else 0,
+            "currency": "USD", "relaxed_limits": relaxed, "stage_plan_digest": plan.digest, "models": lines}
+        return RunCostEstimateValue(_json(public), _json(authority), None, None, None, plan)
+
+    def _pin(self, model_id):
+        pin = next((row for row in self.prices() if row.model_id == model_id), None)
+        if pin is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="model_price_pin")
+        return pin
+
+    def stage_rows_in_use(self):
+        """The rows of the stage layout a run started now would call: the text analysis alone, or with the v2 or the v3 extended review
+        (`HOSTS-LAYOUT-01`; the same environment the estimate reads). The readiness read asks before it prices anything."""
+        if os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS", "1").strip().lower() in {"0", "false", "off"}:
+            return ("text",)
+        requested = os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3").strip().lower()
+        if requested in {"v3", "extended-review-v3"}:
+            return STAGE_ROWS
+        if requested in {"v2", "extended-review-v2"}:
+            return ("text", "blocks", "cross_check", "norms")
+        raise _invalid("analysis_workflow", "unsupported_plan")
+
     def estimate_run(self, session, *, version_uid, executor_connection_id=None, preset_id=None, relaxed_limits=False, version_record=None,
-                     allow_native_page_pieces=True, parse_native_text=True, executor_group_id=None):
+                     allow_native_page_pieces=True, parse_native_text=True, executor_group_id=None, stage_plan=_UNSET):
         if type(relaxed_limits) is not bool:
             raise _invalid("relaxed_limits", "boolean")
-        # `EXEC2-GROUP-RUN-01`: exclusivity and the environment refusal come first, before any row is read.
-        admitted = admit_group_for_start(session, self.group_admitter, executor_group_id=executor_group_id,
-            executor_connection_id=executor_connection_id, preset_id=preset_id)
+        # `HOSTS-LAYOUT-01`: with the stage layout on, the estimate is by model: the plan's cells decide the model, the effort, the answer
+        # limit and the access of every phase, and no executor, preset or group is named.
+        if stage_plan is _UNSET:
+            stage_plan = None if self.stage_plans is None else self.stage_plans(session)
+        planned = stage_plan is not None
+        if planned:
+            refuse_selectors_under_layout(executor_connection_id=executor_connection_id, preset_id=preset_id,
+                                          executor_group_id=executor_group_id)
+            admitted = None
+        else:
+            # `EXEC2-GROUP-RUN-01`: exclusivity and the environment refusal come first, before any row is read.
+            admitted = admit_group_for_start(session, self.group_admitter, executor_group_id=executor_group_id,
+                executor_connection_id=executor_connection_id, preset_id=preset_id)
         version, chars, source = self._source(session, version_uid, version_record, parse_native_text=parse_native_text)
         routed = route_classified_version(version, self.sections)
         resolve = self.profiles.resolve if hasattr(self.profiles, "resolve") else self.profiles
         profile = resolve(routed.analysis_profile_id, routed.prompt_bundle_id)
-        pin, pricing, frozen, chosen = (
-            self._route(session, executor_connection_id=executor_connection_id, preset_id=preset_id)
-            if admitted is None else self._route_group(admitted))
+        plan = text_cell = None
+        if planned:
+            plan = stage_plan.freeze(self.stage_rows_in_use())
+            text_cell = plan.cell("text:main")
+            pin, pricing, frozen, chosen = self._pin(text_cell.model_id), None, None, None
+        else:
+            pin, pricing, frozen, chosen = (
+                self._route(session, executor_connection_id=executor_connection_id, preset_id=preset_id)
+                if admitted is None else self._route_group(admitted))
         source["image_block_count"] = self._image_block_count(version)
         bundle = profile.prompt_bundle
-        window = relaxed_window_characters(pin.model_id, bundle)
+        window = relaxed_window_characters(pin.model_id, apply_to_bundle(bundle, text_cell))
+        # Per cell ledger of the plan: [calls, input tokens, output tokens]. Every addition below is made to the totals (the legacy route) and
+        # to the cells of the row it belongs to; a plan prices the cells by model and the totals are their sum. A row has one cell, except
+        # the blocks row of an ensemble: each of its legs and its judge is asked once per batch, so each carries the row's calls.
+        ledger = {cell.cell_key: [0, 0, 0] for cell in (plan.cells if planned else ())}
+
+        def led(row, calls, input_tokens_added, floor=0):
+            """Add ``calls`` calls (and the input tokens of their requests) to every cell of ``row``, each answering at its own limit (at
+            least ``floor`` tokens: a repair of a reply is asked for the larger of the two)."""
+            if planned:
+                for cell in plan.cells_of_row(row):
+                    entry = ledger[cell.cell_key]
+                    entry[0] += calls
+                    entry[1] += input_tokens_added
+                    entry[2] += calls * max(floor, cell.max_output_tokens)
         if window <= 0:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_window_policy")
         # Ordered whole-page packing can require twice the aggregate quotient;
@@ -305,6 +423,10 @@ class RunCostPreflight:
                 + windows * page_pieces["frame_characters"])
         input_tokens = math.ceil(Fraction(input_characters * 5, 7))
         output_tokens = windows * (64_000 if relaxed_limits else bundle.max_output_tokens)
+        if planned:
+            # The cell's answer limit wins over the relaxed limit's 64000: the layout is the explicit configuration of the call.
+            output_tokens = windows * text_cell.max_output_tokens
+            led("text", windows, input_tokens)
         # A new plan is accepted explicitly. Previous accepted v1/v2 commands keep
         # their historical semantics and never acquire this larger call allowance.
         extended = None
@@ -344,6 +466,9 @@ class RunCostPreflight:
                     # remains authoritative and every actual call is metered.
                     input_tokens += visual["max_windows"] * per_window_calls * 100_000
                     output_tokens += visual["max_windows"] * per_window_output
+                    for phase, count in limits.items():
+                        row = PHASE_ROWS[phase]
+                        led(row, visual["max_windows"] * count, visual["max_windows"] * count * 100_000)
                     cross_window_mode = os.environ.get("AUDITMANAGER_EXTENDED_CROSS_WINDOW", "1").strip().lower()
                     if visual["text_page_limit"] > 16 and cross_window_mode not in {"0", "false", "off"}:
                         from auditmanager.analysis.public import extended_cross_window_policy
@@ -357,6 +482,9 @@ class RunCostPreflight:
                         input_tokens += global_calls * 100_000
                         output_tokens += sum(count * (6_000 if phase == "comprehensive_analysis" else 12_000)
                             for phase, count in global_limits.items())
+                        for phase, count in global_limits.items():
+                            row = PHASE_ROWS[phase]
+                            led(row, count, count * 100_000)
                     if os.environ.get("AUDITMANAGER_NORM_PARAGRAPH_CONTEXT", "1").strip().lower() not in {"0", "false", "off"}:
                         from .norm_context import policy as norm_context_policy
                         norm_context = norm_context_policy()
@@ -366,7 +494,11 @@ class RunCostPreflight:
                         # Context augments input on existing calls only; citation/output
                         # schemas and logical request caps are unchanged.
                         input_tokens += norm_calls * norm_context["input_tokens_per_call"]
+                        led("norms", 0, norm_calls * norm_context["input_tokens_per_call"])
                 elif coverage_mode in {"legacy", "0", "off", "false"}:
+                    if planned:
+                        # The legacy coverage has no per-phase accounting to price by model.
+                        raise _invalid("analysis_coverage", "unsupported_for_stage_plan")
                     extra_calls = visual["max_windows"] * 6
                     input_tokens += visual["max_windows"] * 600_000
                     output_tokens += visual["max_windows"] * 72_000
@@ -379,6 +511,7 @@ class RunCostPreflight:
                     extra_calls += parameters["max_calls"]
                     input_tokens += parameters["max_calls"] * 100_000
                     output_tokens += parameters["max_calls"] * parameters["output_tokens"]
+                    led("cross_check", parameters["max_calls"], parameters["max_calls"] * 100_000)
                     if os.environ.get("AUDITMANAGER_PROJECT_PARAMETER_CONTEXT", "1").strip().lower() not in {"0", "false", "off"}:
                         from auditmanager.analysis.public import project_parameter_context_policy
                         parameter_context = project_parameter_context_policy(parameters)
@@ -386,6 +519,8 @@ class RunCostPreflight:
                         # At most two8-image requests in each16-source local window.
                         # Context adds input only; the parameter/visual call counts do not grow.
                         input_tokens += visual["max_windows"] * 2 * parameter_context["input_tokens_per_call"]
+                        # The context rides on the block requests: two per window for each cell of the blocks row (each leg and the judge).
+                        led("blocks", 0, visual["max_windows"] * 2 * parameter_context["input_tokens_per_call"])
                         if (extended.get("coverage_version") == "batched-v1"
                                 and os.environ.get("AUDITMANAGER_PROJECT_PARAMETER_REVIEW_CONTEXT", "1").strip().lower() not in {"0", "false", "off"}):
                             from auditmanager.analysis.public import project_parameter_review_context_policy
@@ -396,12 +531,20 @@ class RunCostPreflight:
                             review_calls += sum(extended.get("global_cross_window_policy", {}).get("call_limits", {}).get(phase, 0)
                                 for phase in review_context["scopes"])
                             input_tokens += review_calls * review_context["input_tokens_per_call"]
+                            for phase in review_context["scopes"]:
+                                phase_calls = visual["max_windows"] * extended["phase_call_limits"][phase] + extended.get(
+                                    "global_cross_window_policy", {}).get("call_limits", {}).get(phase, 0)
+                                led(PHASE_ROWS[phase], 0, phase_calls * review_context["input_tokens_per_call"])
                 if extended.get("semantic_repair_attempts") == 1:
                     # Reserve one additional received-reply repair for every
                     # initial extended call; actual source-sized work is still
                     # bounded by the accepted monetary ceiling and checkpoints.
                     input_tokens += extra_calls * 100_000
                     output_tokens += extra_calls * 12_000
+                    if planned:
+                        # The repair of a reply runs on the cell of the phase it repairs: its calls are that row's.
+                        for row, row_calls in [(row, ledger[plan.cells_of_row(row)[0].cell_key][0]) for row in plan.rows if row != "text"]:
+                            led(row, row_calls, row_calls * 100_000, floor=12_000)
                     extra_calls *= 2
                 source["visual_scope"] = visual
             elif requested in {"v2", "extended-review-v2"}:
@@ -419,17 +562,26 @@ class RunCostPreflight:
                 extra_calls = image_calls + comprehensive_calls + norm_calls
                 input_tokens += image_calls * 40_000 + comprehensive_calls * 80_000 + norm_calls * 100_000
                 output_tokens += (image_calls + comprehensive_calls) * 6_000 + norm_calls * 12_000
+                led("blocks", image_calls, image_calls * 40_000)
+                led("cross_check", comprehensive_calls, comprehensive_calls * 80_000)
+                led("norms", norm_calls, norm_calls * 100_000)
             else:
                 raise _invalid("analysis_workflow", "unsupported_plan")
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,
             executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits,
             extended_review=extended, **({"native_page_piece_policy": page_pieces} if page_pieces is not None else {}))
+        if planned:
+            if {key.partition(":")[0] for key in ledger} != set(rows_in_use(extended)):  # the rows the estimate priced are the rows the consent will hold
+                raise _invalid("analysis_workflow", "stage_plan_rows_changed")
+            return self._value_planned(version=version, chars=chars, source=source, plan=plan, ledger=ledger,
+                relaxed=relaxed_limits, windows=windows, window_characters=window, extended_review=extended,
+                native_page_piece_policy=page_pieces)
         return self._value(version=version, chars=chars, source=source, pricing=pricing, pin=pin,
             frozen=frozen, chosen=chosen, relaxed=relaxed_limits, scope="run", windows=windows, calls=windows+extra_calls,
             input_tokens=input_tokens, output_tokens=output_tokens, window_characters=window,
             extended_review=extended, native_page_piece_policy=page_pieces, admitted=admitted)
 
-    def estimate_reaudit(self, session, *, run_id, version_record=None, parse_native_text=True):
+    def estimate_reaudit(self, session, *, run_id, version_record=None, parse_native_text=True, stage_plan=_UNSET):
         from .repository import RunRepository
         runs = RunRepository()
         source_run = runs.get(session, run_id)
@@ -438,7 +590,11 @@ class RunCostPreflight:
         from .v3_start_switch import refuse_member_repeat
         if analysis_kind(source_run.analysis_profile_id, source_run.prompt_bundle_id) == ANALYSIS_AR_V3_BETA:
             raise refuse_member_repeat()
-        executor = runs.chosen_executor_connection(session, run_id)
+        if stage_plan is _UNSET:
+            stage_plan = None if self.stage_plans is None else self.stage_plans(session)
+        # `HOSTS-LAYOUT-01`: with the layout on, a repeat takes today's plan whatever the source ran on; its named connection or group is
+        # not carried over (the stand chooses the servers).
+        executor = None if stage_plan is not None else runs.chosen_executor_connection(session, run_id)
         from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
         # `EXEC2-GROUP-RUN-01`: a re-audit keeps the kind of selector the original start used. A named connection stays
         # that connection, a named group is admitted again on its current revision, and a start that named nothing
@@ -447,15 +603,16 @@ class RunCostPreflight:
             executor_connection_id=executor, version_record=version_record,
             allow_native_page_pieces=str(source_run.analysis_profile_id) != str(AR_V3_BETA_PROFILE_ID),
             parse_native_text=parse_native_text,
-            executor_group_id=_named_group_of(session, source_run, executor, self.group_admitter))
+            executor_group_id=None if stage_plan is not None else _named_group_of(session, source_run, executor, self.group_admitter),
+            stage_plan=stage_plan)
         authority = json.loads(value.authority_json)
         # A fresh approval is for this new re-audit, never the parent's paid work.
         authority["reaudit_of_run_id"] = run_id
         public = value.as_dict()
         public["estimate_digest"] = _digest(authority)
-        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group)
+        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group, value.stage_plan)
 
-    def estimate_from_stage(self, session, *, run_id, start_stage_id, version_record=None, parse_native_text=True):
+    def estimate_from_stage(self, session, *, run_id, start_stage_id, version_record=None, parse_native_text=True, stage_plan=_UNSET):
         """`R-151i`: the price of a run started from ``start_stage_id`` of ``run_id``, for the stages it computes.
 
         A run that reuses the stage outputs before the chosen stage prices only the stages from it on. Every model call of
@@ -468,7 +625,7 @@ class RunCostPreflight:
         from .stage_reuse import plan_stage_reuse, require_startable_stage, visual_only_pages_allowed
         require_startable_stage(start_stage_id)
         value = self.estimate_reaudit(session, run_id=run_id, version_record=version_record,
-            parse_native_text=parse_native_text)
+            parse_native_text=parse_native_text, stage_plan=stage_plan)
         authority = json.loads(value.authority_json)
         plan = plan_stage_reuse(session, source_run_id=run_id, start_stage_id=start_stage_id,
             visual_only_pages=visual_only_pages_allowed(authority.get("extended_review")))
@@ -480,7 +637,7 @@ class RunCostPreflight:
         public.update(start_from_run_id=run_id, start_stage_id=start_stage_id,
             reused_stage_ids=list(plan.reused_stage_ids), computed_stage_ids=list(plan.computed_stage_ids))
         public["estimate_digest"] = _digest(authority)
-        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group)
+        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group, value.stage_plan)
 
     def estimate_group(self, session, *, version_uid, relaxed_limits=False, version_record=None):
         from .v3_group import _validate_pack

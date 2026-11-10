@@ -109,6 +109,7 @@ describe('the seam operations', () => {
     // `approveRegistration` (`W49-SEAL-01`) creates an account, so it is keyed like every
     // other create on this surface.
     expect(writes).toEqual([
+      // `HOSTS-SEAL-1` (ADR-0028): the eight keyed writes of the servers and the stage layout sit in this list in sorted order (administrator commands).
       // `CMP-SEAL-C2`: the twenty-seven keyed writes of the version comparison AI, specifications, launch queue and reports
       // (ADR-0025 decision 19) sit in this list in sorted order, among the others.
       // `CMP-SEAL-C0`: the ten keyed comparison writes (ADR-0025 decision 19) sit in this list in order.
@@ -137,6 +138,7 @@ describe('the seam operations', () => {
       // administrator commands, keyed like the connection writes. So are `EXEC2-SEAL-1`'s enrollment,
       // integration mark and agent install (decisions 4, 6, 7 and 9, `R-149b`).
       'archiveExecutorGroup',
+      'archiveExecutorHost',
       'cancelComparisonAiPairCheck',
       'cancelComparisonAiSheetChanges',
       'cancelComparisonReport',
@@ -156,6 +158,7 @@ describe('the seam operations', () => {
       'completeStageUploadFile',
       'confirmComparisonUploadSet',
       'confirmExecutorAgentInstallHostKey',
+      'confirmExecutorHostAgentInstallHostKey',
       'confirmStagePair',
       'confirmStageUploadCandidate',
       'continueComparisonReport',
@@ -167,6 +170,7 @@ describe('the seam operations', () => {
       'createExecutorAgentInstall',
       'createExecutorConnection',
       'createExecutorGroup',
+      'createExecutorHostAgentInstall',
       'createProject',
       'createStageAssembly',
       'createStageReviewCard',
@@ -189,6 +193,7 @@ describe('the seam operations', () => {
       'importOptimisationProposalDecisions',
       'importRunDecisions',
       'issueExecutorEnrollment',
+      'issueExecutorHostEnrollment',
       // `EXEC-PULL-01`: issuing and revoking a runner token are administrator commands, keyed like
       // the other executor writes. The runner's own four operations (claim, extend, answer, fail)
       // are not keyed: the answer is idempotent on the task, and a claim repeats by design.
@@ -225,12 +230,15 @@ describe('the seam operations', () => {
       'reviseExecutorConnection',
       'reviseExecutorGroup',
       'reviseStageAssembly',
+      'reviseStageModelLayout',
       'revokeRunnerToken',
       'scheduleAssignments',
       'setDocumentArchived',
       'setDocumentTags',
       'setEngineerAbsences',
       'setExecutionPaused',
+      'setExecutorHostEnabled',
+      'setExecutorHostSlots',
       'setExecutorIntegrationAuthorisation',
       'setExecutorRoute',
       'setExecutorRoutingMode',
@@ -238,6 +246,7 @@ describe('the seam operations', () => {
       'setExecutorSecret',
       'setFindingExecutionStatus',
       'setJobPriority',
+      'setStageModelLayoutEnabled',
       'setStagePairCompleteness',
       'setWorkCalendarDays',
       'setWorkSchedulePlans',

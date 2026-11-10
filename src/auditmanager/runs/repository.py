@@ -66,7 +66,7 @@ _RUN_COLUMNS = (
     "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id, "
     "connection_revision_id, norm_retrieval_set_id, preset_revision_id, "
     "binding_state, executor_group_revision_id, routing_rule_revision_id, wait_reason, waiting_since, "
-    "started_by_user_uid, started_from_run_id, start_stage_id"
+    "started_by_user_uid, started_from_run_id, start_stage_id, stage_plan"
 )
 
 _INSERT_RUN = text(
@@ -76,18 +76,24 @@ _INSERT_RUN = text(
         norms_snapshot_id, provider_mode, frozen_input_digest, command_id,
         reaudit_of_run_id, connection_revision_id, norm_retrieval_set_id, preset_revision_id,
         binding_state, executor_group_revision_id, routing_rule_revision_id, started_by_user_uid,
-        started_from_run_id, start_stage_id
+        started_from_run_id, start_stage_id, stage_plan
     ) VALUES (
         :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
         :prompt_bundle_id, :norms_snapshot_id, :provider_mode, :frozen_input_digest, :command_id,
         :reaudit_of_run_id, :connection_revision_id, :norm_retrieval_set_id, :preset_revision_id,
         :binding_state, :executor_group_revision_id, :routing_rule_revision_id, :started_by_user_uid,
-        :started_from_run_id, :start_stage_id
+        :started_from_run_id, :start_stage_id, CAST(:stage_plan AS jsonb)
     )
     """
 )
 
 _SELECT_RUN = text(f"SELECT {_RUN_COLUMNS} FROM audit_run WHERE run_id = :run_id")
+
+#: `HOSTS-LAYOUT-01` (migration 0062): the member each cell of a planned run was bound to at dispatch. Written once, in the transaction that
+#: moved the run to ``bound``; the database refuses an update or a delete.
+_SELECT_CELL_BINDINGS = text(
+    "SELECT cell_key, group_revision_id, connection_revision_id FROM audit_run_cell_binding WHERE run_id = :run_id"
+)
 
 #: `EXEC-PAR-START-01`. A run whose executor was **named** by the caller (or by the repeat of
 #: such a run) carries exactly one of these events, written in the transaction that created it.
@@ -322,6 +328,20 @@ class RunRow:
     #: Frozen. Not ``reaudit_of_run_id``: a re-audit recomputes every stage.
     started_from_run_id: str | None = None
     start_stage_id: str | None = None
+    #: `HOSTS-LAYOUT-01` (migration 0062, ADR-0028 decision 5): the plan the run froze at its start -- ``stage-plan/1``, one cell per row
+    #: it calls with model, effort, limits and access (``runs.stage_layout.parse_plan`` reads it back) -- or ``None`` for a run on the
+    #: legacy route. Written once at INSERT and frozen. A run with a plan has no connection, group or preset of its own: it is
+    #: ``pending`` until dispatch binds each cell (``audit_run_cell_binding``).
+    stage_plan: Mapping[str, Any] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CellBindingRow:
+    """One ``audit_run_cell_binding`` row: the system group revision and the member's connection revision a cell was bound to."""
+
+    cell_key: str
+    group_revision_id: str
+    connection_revision_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -392,6 +412,7 @@ def _run_row(row: Any) -> RunRow:
         started_by_user_uid,
         started_from_run_id,
         start_stage_id,
+        stage_plan,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -422,6 +443,7 @@ def _run_row(row: Any) -> RunRow:
         started_by_user_uid=started_by_user_uid,
         started_from_run_id=started_from_run_id,
         start_stage_id=start_stage_id,
+        stage_plan=stage_plan,
     )
 
 
@@ -464,6 +486,7 @@ class RunRepository:
         started_by_user_uid: str | None = None,
         started_from_run_id: str | None = None,
         start_stage_id: str | None = None,
+        stage_plan: Mapping[str, Any] | None = None,
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
 
@@ -488,6 +511,10 @@ class RunRepository:
         group revision (and the rule revision when a rule routed it) and **no** connection revision, which the claim
         writes once at dispatch (``ck_audit_run_binding_shape`` refuses any other combination). Every other caller
         leaves the defaults: ``frozen_at_start``, no group, no rule.
+
+        `HOSTS-LAYOUT-01`: ``stage_plan`` (the document :class:`~auditmanager.runs.stage_layout.FrozenStagePlan` writes) is given with
+        ``binding_state = 'pending'`` and **no** connection revision, group or preset (``ck_audit_run_binding_shape``); dispatch binds
+        every cell, once, before the run goes to ``bound``.
         """
         if norm_retrieval_set_id is not None and norms_snapshot_id is None:
             raise ValueError("a retrieval set pin requires a snapshot pin")
@@ -516,6 +543,7 @@ class RunRepository:
                     "started_by_user_uid": started_by_user_uid,
                     "started_from_run_id": started_from_run_id,
                     "start_stage_id": start_stage_id,
+                    "stage_plan": None if stage_plan is None else json.dumps(dict(stage_plan), sort_keys=True),
                 },
             )
         except DBAPIError as exc:
@@ -533,6 +561,11 @@ class RunRepository:
         if row is None:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
         return _run_row(row)
+
+    def cell_bindings(self, session: Session, run_id: str) -> dict[str, CellBindingRow]:
+        """``cell_key -> binding`` of a planned run (empty while it is ``pending``). A planned run is called only through these rows."""
+        rows = session.execute(_SELECT_CELL_BINDINGS, {"run_id": run_id}).mappings().all()
+        return {row["cell_key"]: CellBindingRow(row["cell_key"], row["group_revision_id"], row["connection_revision_id"]) for row in rows}
 
     def find(self, session: Session, run_id: str) -> RunRow | None:
         row = session.execute(_SELECT_RUN, {"run_id": run_id}).first()
@@ -791,6 +824,7 @@ class RunRepository:
 
 
 __all__ = [
+    "CellBindingRow",
     "EXECUTOR_CHOSEN_EVENT",
     "INITIAL_STATE",
     "PC01_STAGES",

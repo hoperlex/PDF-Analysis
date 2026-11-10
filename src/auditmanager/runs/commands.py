@@ -153,6 +153,8 @@ from auditmanager.runs.provider import (
     RouteFreezer,
 )
 from auditmanager.runs.repository import EXECUTOR_CHOSEN_EVENT, RunRepository, RunRow
+from auditmanager.runs.stage_layout import FrozenStagePlan
+from auditmanager.runs.stage_plan import StagePlanDraft, StagePlanSource
 from auditmanager.runs.stage_reuse import plan_stage_reuse, require_startable_stage, visual_only_pages_allowed
 from auditmanager.sections.public import route_classified_version
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -610,6 +612,60 @@ def admit_group_for_start(
     return group_admitter(session, group_id=executor_group_id)
 
 
+def refuse_selectors_under_layout(
+    *, executor_connection_id: str | None, preset_id: str | None, executor_group_id: str | None,
+) -> None:
+    """`HOSTS-LAYOUT-01` (ADR-0028 decision 14): while the stage layout is on, the models of a run are the layout's and the servers are
+    the stand's. A start that names a connection, a preset or a group is ``validation_failed`` on that field
+    (``constraint: stage_layout_enabled``), before the key is claimed, so nothing is written; it is never read as absent."""
+    for field, value in (
+        ("executor_connection_id", executor_connection_id), ("preset_id", preset_id), ("executor_group_id", executor_group_id),
+    ):
+        if value is not None:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message="the stage layout chooses the models of a run; a start names no executor, preset or group",
+                field=field, constraint="stage_layout_enabled",
+            )
+
+
+def _planned_columns(plan: FrozenStagePlan | None) -> dict[str, Any]:
+    """What ``RunRepository.create`` is told of a run frozen with a stage plan: ``pending`` (every cell is bound at dispatch), the plan,
+    and -- by the omission of the group, connection and preset -- the fourth shape of ``ck_audit_run_binding_shape``."""
+    if plan is None:
+        return {}
+    return {"binding_state": "pending", "stage_plan": plan.to_json()}
+
+
+def _journal_stage_plan(session: Session, run_id: str, plan: FrozenStagePlan | None) -> None:
+    """A run frozen with a plan is an event of the run beside its row. Identities and classifiers only: the layout revision it froze and
+    the set; the models are in the row."""
+    if plan is None:
+        return
+    append_execution_event(
+        session, event_type="audit_run.stage_plan_frozen", aggregate_type="AuditRun",
+        aggregate_id=run_id, run_id=run_id,
+        payload={"revision_id": plan.layout_revision_id, "state": "pending", "reason": plan.kit},
+    )
+
+
+def _planned_estimate_kwargs(planned: StagePlanDraft | None, stage_plans: StagePlanSource | None) -> dict[str, Any]:
+    """The estimate is told of the layout when the command asked about it: the draft while it is on, ``None`` while it is off (so the
+    estimate does not ask again and cannot disagree with the command). With no seam at all a preflight that predates the layout is
+    called exactly as before."""
+    return {} if stage_plans is None else {"stage_plan": planned}
+
+
+def _plan_of(estimate: Any, planned: StagePlanDraft | None) -> FrozenStagePlan | None:
+    """The plan an estimate froze. A layout was on and the estimate returned none: refused (the consent would hold no plan)."""
+    if planned is None:
+        return None
+    plan = getattr(estimate, "stage_plan", None)
+    if not isinstance(plan, FrozenStagePlan):
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+    return plan
+
+
 def start_audit_run(
     session: Session,
     *,
@@ -637,8 +693,16 @@ def start_audit_run(
     executor_group_id: str | None = None,
     group_admitter: GroupAdmitter | None = None,
     started_by_user_uid: str | None = None,
+    stage_plans: StagePlanSource | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
+
+    ``stage_plans`` (`HOSTS-LAYOUT-01`, ADR-0028 decisions 5, 8 and 14) is the seam that reads the stage layout when a run **starts**. For a
+    new key it answers ``None`` while the layout is off -- the start is then exactly what it was -- or the draft of the layout in force.
+    With a draft the run is frozen with a ``stage_plan``: the cost preflight prices it by model and the consent v2 is held against it,
+    the run is written ``pending`` with the plan and no connection, group or preset, and every cell is bound at dispatch. A start that
+    also names a connection, a preset or a group is ``validation_failed`` (:func:`refuse_selectors_under_layout`), and a layout with no
+    cost preflight is ``dependency_unavailable``: a planned run is never started without the consent that binds its models.
 
     The caller owns the transaction. This function opens no engine, commits nothing and
     writes no rollback of its own. The norms snapshot the new run pins is read here, in
@@ -729,7 +793,7 @@ def start_audit_run(
         command_repo.find(session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key)
         if budget is not None or section_profiles is not None or connection_route is not None
         or executor_connection_id is not None or preset_id is not None or cost_preflight is not None or cost_consent is not None
-        or executor_group_id is not None or group_admitter is not None
+        or executor_group_id is not None or group_admitter is not None or stage_plans is not None
         else None
     )
     if section_profiles is not None:
@@ -766,14 +830,26 @@ def start_audit_run(
     chosen_preset: ChosenPreset | None = None
     admitted: AdmittedGroup | None = None
     approved_cost = None
+    planned: StagePlanDraft | None = None
+    stage_plan: FrozenStagePlan | None = None
+    if known is None and stage_plans is not None:
+        # `HOSTS-LAYOUT-01`: the switch is read here, in the run-creating transaction, and nowhere else.
+        planned = stage_plans(session)
+        if planned is not None:
+            refuse_selectors_under_layout(
+                executor_connection_id=executor_connection_id, preset_id=preset_id, executor_group_id=executor_group_id)
+            if cost_preflight is None:
+                raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
     if known is None and cost_preflight is not None:
         estimate = cost_preflight.estimate_run(session, version_uid=str(resolved_version),
             executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits,
             version_record=version_record, parse_native_text=False,
-            **({"executor_group_id": executor_group_id} if executor_group_id is not None else {}))
+            **({"executor_group_id": executor_group_id} if executor_group_id is not None else {}),
+            **_planned_estimate_kwargs(planned, stage_plans))
         approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
         frozen, chosen_preset = estimate.frozen_route, estimate.chosen_preset
         admitted = getattr(estimate, "admitted_group", None)
+        stage_plan = _plan_of(estimate, planned)
         budget = approved_cost["window_characters"]
     elif known is None and cost_consent is not None:
         raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
@@ -885,10 +961,12 @@ def start_audit_run(
         preset_revision_id=None if chosen_preset is None else chosen_preset.revision_id,
         started_by_user_uid=started_by_user_uid,  # `R-151v`
         **_admission_columns(admitted),
+        **_planned_columns(stage_plan),
     )
     _journal_standby(session, run_id, frozen)
     _journal_executor_choice(session, run_id, frozen)
     _journal_admission(session, run_id, admitted)
+    _journal_stage_plan(session, run_id, stage_plan)
     command_repo.succeed(session, claimed.command_id, {
         "run_id": run_id, **({"relaxed_limits": True} if relaxed_limits else {}),
         **({"cost_consent": approved_cost} if approved_cost is not None else {}),
@@ -1070,8 +1148,13 @@ def reaudit_run(
     cost_actor_uid: str | None = None,
     group_admitter: GroupAdmitter | None = None,
     started_by_user_uid: str | None = None,
+    stage_plans: StagePlanSource | None = None,
 ) -> StartedRun:
     """Create one new run of a terminal source's document version, on today's configuration.
+
+    `HOSTS-LAYOUT-01`: with ``stage_plans`` answering a draft (the stage layout is on) the new run takes **today's** plan, whatever the
+    source ran on: the executor, group or preset its start named are not carried over, and the consent is v2 over the layout's models.
+    With the layout off, or no seam, the re-audit is exactly what it was.
 
     ``connection_route`` (`EXEC-HTTP-01`) freezes the connection revision of the new run exactly
     as ``start_audit_run`` does, on today's route, for a new key only.
@@ -1133,24 +1216,31 @@ def reaudit_run(
     frozen: FrozenRoute | None = None
     admitted: AdmittedGroup | None = None
     approved_cost = None
+    planned: StagePlanDraft | None = None
+    stage_plan: FrozenStagePlan | None = None
     if (section_profiles is not None or budget is not None or connection_route is not None
             or cost_preflight is not None or cost_consent is not None
-            or group_admitter is not None) and ledger.find(
+            or group_admitter is not None or stage_plans is not None) and ledger.find(
         session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
     ) is None:
         if section_profiles is not None:
             routed = route_classified_version(source_version, section_profiles)
             analysis_profile_id = routed.analysis_profile_id
             prompt_bundle_id = routed.prompt_bundle_id
-        chosen_connection_id = repository.chosen_executor_connection(session, source_run_id)
+        planned = None if stage_plans is None else stage_plans(session)
+        if planned is not None and cost_preflight is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        # Under the layout the source's named connection is not carried over: the stand chooses the servers.
+        chosen_connection_id = None if planned is not None else repository.chosen_executor_connection(session, source_run_id)
         if chosen_connection_id is not None and connection_route is None:
             raise _chosen_executor_unserved()
         if cost_preflight is not None:
             estimate = cost_preflight.estimate_reaudit(session, run_id=source_run_id, version_record=source_version,
-                parse_native_text=False)
+                parse_native_text=False, **_planned_estimate_kwargs(planned, stage_plans))
             approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
             frozen = estimate.frozen_route
             admitted = getattr(estimate, "admitted_group", None)
+            stage_plan = _plan_of(estimate, planned)
             budget = approved_cost["window_characters"]
         elif cost_consent is not None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
@@ -1234,10 +1324,12 @@ def reaudit_run(
         connection_revision_id=None if frozen is None else frozen.revision_id,
         started_by_user_uid=started_by_user_uid,  # `R-151v`
         **_admission_columns(admitted),
+        **_planned_columns(stage_plan),
     )
     _journal_standby(session, new_id, frozen)
     _journal_executor_choice(session, new_id, frozen)
     _journal_admission(session, new_id, admitted)
+    _journal_stage_plan(session, new_id, stage_plan)
     repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
     (jobs or JobRepository()).enqueue(session, run_id=new_id)
     ledger.succeed(session, claimed.command_id, {"run_id": new_id,
@@ -1261,8 +1353,13 @@ def start_run_from_stage(
     cost_actor_uid: str | None = None,
     group_admitter: GroupAdmitter | None = None,
     started_by_user_uid: str | None = None,
+    stage_plans: StagePlanSource | None = None,
 ) -> StartedRun:
     """Create one new run of a terminal source's document version that reuses the source's stage outputs before ``start_stage_id``.
+
+    `HOSTS-LAYOUT-01`: with ``stage_plans`` answering a draft the new run takes **today's** plan, as a re-audit does. The stages it
+    reuses are the PC-01 stages before the chosen one -- the preparation stages, which run no model -- and ``text_analysis`` is always
+    computed, so a model's work is never reused under another plan.
 
     `R-151i` (`UI-A-60`, `D-301`; ``docs/program/RUN-FROM-STAGE-01.md``). The new run is a **new** aggregate: the source is
     never changed and is linked only by ``started_from_run_id`` and ``start_stage_id`` (migration 0060), not by
@@ -1301,6 +1398,8 @@ def start_run_from_stage(
     frozen: FrozenRoute | None = None
     admitted: AdmittedGroup | None = None
     approved_cost = None
+    planned: StagePlanDraft | None = None
+    stage_plan: FrozenStagePlan | None = None
     if ledger.find(session, command_type=COMMAND_TYPE_START_RUN_FROM_STAGE, idempotency_key=key) is None:
         # A run that has not ended has no finished stages to take; say so before the reuse rule is asked.
         if source.state not in _TERMINAL_RUN_STATES:
@@ -1312,16 +1411,20 @@ def start_run_from_stage(
             routed = route_classified_version(source_version, section_profiles)
             analysis_profile_id = routed.analysis_profile_id
             prompt_bundle_id = routed.prompt_bundle_id
-        chosen_connection_id = repository.chosen_executor_connection(session, source_run_id)
+        planned = None if stage_plans is None else stage_plans(session)
+        if planned is not None and cost_preflight is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        chosen_connection_id = None if planned is not None else repository.chosen_executor_connection(session, source_run_id)
         if chosen_connection_id is not None and connection_route is None:
             raise _chosen_executor_unserved()
         if cost_preflight is not None:
             estimate = cost_preflight.estimate_from_stage(
                 session, run_id=source_run_id, start_stage_id=start_stage_id, version_record=source_version,
-                parse_native_text=False)
+                parse_native_text=False, **_planned_estimate_kwargs(planned, stage_plans))
             approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
             frozen = estimate.frozen_route
             admitted = getattr(estimate, "admitted_group", None)
+            stage_plan = _plan_of(estimate, planned)
             budget = approved_cost["window_characters"]
         elif cost_consent is not None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
@@ -1409,10 +1512,12 @@ def start_run_from_stage(
         connection_revision_id=None if frozen is None else frozen.revision_id,
         started_by_user_uid=started_by_user_uid,  # `R-151v`
         **_admission_columns(admitted),
+        **_planned_columns(stage_plan),
     )
     _journal_standby(session, new_id, frozen)
     _journal_executor_choice(session, new_id, frozen)
     _journal_admission(session, new_id, admitted)
+    _journal_stage_plan(session, new_id, stage_plan)
     repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
     (jobs or JobRepository()).enqueue(session, run_id=new_id)
     ledger.succeed(session, claimed.command_id, {"run_id": new_id,
@@ -1438,6 +1543,7 @@ __all__ = [
     "admit_group_for_start",
     "refuse_comparison_only_version",
     "refuse_group_conflicts",
+    "refuse_selectors_under_layout",
     "start_audit_run",
     "start_run_from_stage",
     "start_run_fingerprint",

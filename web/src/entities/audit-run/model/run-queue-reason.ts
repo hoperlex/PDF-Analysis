@@ -21,6 +21,7 @@ export const QUEUE_REASON_LABELS: Readonly<Record<RunQueueReason, string>> = {
   executor_at_capacity: 'В очереди: исполнитель занят',
   runner_offline: 'В очереди: раннер не в сети',
   needs_reconsent: 'В очереди: нужно новое согласие на стоимость',
+  model_unavailable: 'В очереди: нужной модели сейчас нет на серверах',
 };
 
 /**

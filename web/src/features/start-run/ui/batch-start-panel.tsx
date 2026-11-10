@@ -17,7 +17,7 @@ import { routes } from '@/shared/lib';
 import { microsAsUsd } from '@/shared/ui';
 
 import type { BatchEntry, BatchEstimate, BatchOutcome } from '../model/batch-start';
-import { batchConsent, batchTotals } from '../model/batch-start';
+import { batchConsent, batchIsFree, batchTotals } from '../model/batch-start';
 import { useBatchStart } from '../model/use-batch-start';
 import styles from './start-run-control.module.css';
 
@@ -39,13 +39,17 @@ const usd = (micros: number): string => `$${microsAsUsd(micros)}`;
 function estimateLine(item: BatchEstimate | undefined): string {
   if (item === undefined || item.kind === 'pending') return 'оценивается…';
   if (item.kind === 'failed') return `оценки нет: ${item.text}`;
+  if (item.estimate.billing === 'unmetered') return `${usd(0)} · без тарификации`;
   return `≈ ${usd(item.estimate.estimated_cost_micros)}, не более ${usd(batchConsent(item.estimate).ceiling_micros)}`;
 }
 
 export function BatchStartPanelView({
   projectUid, entries, estimates, outcomes, estimating, starting, agreed, onAgree, onStart, onClose,
 }: BatchStartPanelViewProps) {
-  const totals = batchTotals(entries.map((entry) => estimates.get(entry.versionUid) ?? { kind: 'pending' }));
+  const readings = entries.map((entry): BatchEstimate => estimates.get(entry.versionUid) ?? { kind: 'pending' });
+  const totals = batchTotals(readings);
+  // Nothing in the batch can be charged: the button is the agreement, there is no tick-box.
+  const free = batchIsFree(readings);
   const settled = !estimating && totals.pending === 0;
   const startedAll = entries.every((entry) => {
     const ready = estimates.get(entry.versionUid)?.kind === 'ready';
@@ -74,11 +78,13 @@ export function BatchStartPanelView({
       </ol>
       {settled ? (
         <p className={styles.batchTotal} data-batch-total="">
-          Итого по {totals.ready} из {entries.length}: ≈ {usd(totals.costMicros)}, не более {usd(totals.ceilingMicros)}.
+          Итого по {totals.ready} из {entries.length}: {free
+            ? `${usd(0)} · без тарификации`
+            : `≈ ${usd(totals.costMicros)}, не более ${usd(totals.ceilingMicros)}`}.
           {totals.failed > 0 ? ` Без оценки не запускается: ${totals.failed}.` : null}
         </p>
       ) : null}
-      {settled && totals.ready > 0 && !startedAll ? (
+      {settled && totals.ready > 0 && !startedAll && !free ? (
         <label className={styles.batchAgree}>
           <input type="checkbox" checked={agreed} disabled={starting} onChange={(event) => onAgree(event.target.checked)} />{' '}
           Согласен на расходы не более {usd(totals.ceilingMicros)} по {totals.ready} прогонам
@@ -86,7 +92,7 @@ export function BatchStartPanelView({
       ) : null}
       <div className={styles.batchActions}>
         {settled && totals.ready > 0 && !startedAll ? (
-          <button type="button" className="am-button" disabled={!agreed || starting} onClick={onStart}>
+          <button type="button" className="am-button" disabled={(!agreed && !free) || starting} onClick={onStart}>
             {starting ? 'Запускается…' : `Запустить ${totals.ready}`}
           </button>
         ) : null}

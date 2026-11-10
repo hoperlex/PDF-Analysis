@@ -3,10 +3,12 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 
 import {
+  assertFromStageDialogShows,
   csvCells,
   csvShape,
   describeCalls,
   formulaLikeCells,
+  fromStageDialogExpression,
   keepingExchanges,
   namesNeededBy,
   nightWindowMayRun,
@@ -156,4 +158,32 @@ test('D-382: a step that succeeds is left alone, and a browser that is gone does
   );
   assert.deepEqual(dead.exchanges, []);
   assert.deepEqual(describeCalls(undefined, '/bff/v1'), []);
+});
+
+/** A page with the start-from-a-stage control in it: just enough DOM for the dialog's expression to run on. */
+function stageDialogPage({ modal, only = null, select = null }) {
+  const root = {
+    closest: (selector) => (selector === 'dialog[data-run-stages-dialog]' ? modal : null),
+    querySelector: (selector) => {
+      if (selector === '[data-start-from-stage-only]') return only === null ? null : { getAttribute: (name) => (name === 'data-start-from-stage-only' ? only : null) };
+      if (selector === 'select') return select === null ? null : { value: select };
+      return null;
+    },
+  };
+  return { querySelector: (selector) => (selector === '[data-run-start-from-stage="dialog"]' ? root : null) };
+}
+
+const readDialog = (document) => runInNewContext(fromStageDialogExpression('[data-run-start-from-stage="dialog"]'), { document });
+
+test('RUN-SCREEN-01a: the stage on the start-from-a-stage dialog is the stage the journey approves, and the dialog is the chip\'s modal', () => {
+  const open = { open: true };
+  // A chip with one startable stage fixes it; a chip with several draws a select.
+  assertFromStageDialogShows(readDialog(stageDialogPage({ modal: open, only: 'text_analysis' })), 'text_analysis');
+  assertFromStageDialogShows(readDialog(stageDialogPage({ modal: open, select: 'document_context_build' })), 'document_context_build');
+  // Each of the ways it can be wrong is refused: another stage, no stage chosen yet, a control outside the modal, a modal that is not open, no dialog.
+  assert.throws(() => assertFromStageDialogShows(readDialog(stageDialogPage({ modal: open, only: 'document_context_build' })), 'text_analysis'), /offers document_context_build \(chip\)/);
+  assert.throws(() => assertFromStageDialogShows(readDialog(stageDialogPage({ modal: open, select: '' })), 'text_analysis'), /offers no stage \(select\)/);
+  assert.throws(() => assertFromStageDialogShows(readDialog(stageDialogPage({ modal: null, only: 'text_analysis' })), 'text_analysis'), /not inside the open/);
+  assert.throws(() => assertFromStageDialogShows(readDialog(stageDialogPage({ modal: { open: false }, only: 'text_analysis' })), 'text_analysis'), /not inside the open/);
+  assert.throws(() => assertFromStageDialogShows(readDialog({ querySelector: () => null }), 'text_analysis'), /no dialog on the page/);
 });

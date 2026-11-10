@@ -49,10 +49,19 @@ import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
-import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widgets/worker-list';
+import { WorkerList } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
-import { WorkersPage } from '@/_pages/workers';
+import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
+import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
+import { ExecutorStageModels, StageLayoutAdvanced, StageModelsTable } from '@/widgets/executor-stage-models';
+import { CommandTabView, ConnectWindow, DeleteHostView, InstallSessionView, SshFormView } from '@/features/manage-executor-host';
+import { LayoutEditorView } from '@/features/manage-stage-layout';
+import {
+  CATALOGUE as HOSTS_CATALOGUE, COMPARISON_CELLS as HOSTS_COMPARISON_CELLS, ISSUED as HOSTS_ISSUED, LAYOUT as HOSTS_LAYOUT,
+  LAYOUT_COMPARISON as HOSTS_LAYOUT_COMPARISON, LAYOUT_EMPTY as HOSTS_LAYOUT_EMPTY, LAYOUT_OFF as HOSTS_LAYOUT_OFF,
+  SERVER_ONLINE as HOSTS_ONLINE, install as hostsInstall, seedDetails as seedHostDetails, seedHosts, seedLayout,
+} from '../workers/hosts-fixtures';
 import { SectionFilterBar, SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
@@ -76,7 +85,7 @@ import type { EvidenceState } from '@/widgets/comparison-viewer';
 import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList, FindingRowActions } from '@/widgets/finding-list';
-import { BatchStartPanelView } from '@/features/start-run';
+import { BatchStartPanelView, StartRunCostDialogView, runStartReadinessKey } from '@/features/start-run';
 import { DocumentLifecycleView, DocumentTagsView } from '@/features/manage-document';
 import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
@@ -92,9 +101,14 @@ import { assignmentUid, monthFixture, reserveFixture, EXPERT_A, EXPERT_B } from 
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
+import {
+  CLAUDE_CELLS, ENSEMBLE_CELLS, READINESS_MIXED, blockedReadiness, modelLines, readiness,
+} from '../start-run/readiness-fixtures';
 import { ProjectList } from '@/widgets/project-list';
-import { RunList } from '@/widgets/run-list';
-import { RunProgress } from '@/widgets/run-progress';
+import { RunList, StartRunWithReadiness } from '@/widgets/run-list';
+import { RunEta, RunProgress } from '@/widgets/run-progress';
+import { PlanStagesDialog, RunStagesDialog } from '@/widgets/run-stages-dialog';
+import { readinessPlan } from '@/entities/stage-layout';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { DocumentContext, SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
@@ -119,7 +133,7 @@ import type {
 } from '@/shared/api';
 import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
 import type { Account, AnalysisPreset, AnalysisProfileListItem } from '@/shared/api';
-import type { RegistrationRequest } from '@/shared/api';
+import type { RegistrationRequest, RunStartReadiness } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
@@ -130,14 +144,14 @@ import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { PauseStatusView } from '@/widgets/pause-status';
-import { UpdateTime, WORKER_PAGE_LIMIT } from '@/entities/execution';
+import { UpdateTime } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
   DOCUMENT_PAGE_LIMIT,
   VERSION_PAGE_LIMIT,
 } from '@/entities/document-version';
-import type { StageRow } from '@/entities/audit-run';
-import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, StageTable } from '@/entities/audit-run';
+import type { RunStagesView, StageRow } from '@/entities/audit-run';
+import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, StageTable, runChips, runStagesKey } from '@/entities/audit-run';
 
 import {
   DOCUMENT_UID,
@@ -219,7 +233,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.44.0',
+    contract_version: '1.47.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -874,6 +888,173 @@ export function screens(): Screen[] {
     runScreen('future_state' as RunState),
   );
 
+  /*
+   * `RUN-SCREEN-01a`: the run screen's new shapes. The tabs (the journal slot is given), the findings strip, the spend tile with a
+   * figure, an open run on a model chip with its window, model and server, and «Этапы анализа раздела» drawn open on a chip -- for a
+   * queued run (a chip that waits) and for a run whose chips stand in every state. Every colour-bearing rule of
+   * `run-progress.module.css` and `run-stages-dialog.module.css` is reached here or by the screens above.
+   */
+  {
+    const EXECUTOR = { connection_id: 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', display_name: 'adm1.hlab.kz', pin_id: 'claude-opus-5-5' };
+    const ok = (stage_id: 'source_preparation' | 'page_geometry_extraction' | 'document_context_build' | 'text_analysis') => ({
+      stage_id, status: 'succeeded' as const, error_code: null, started_at: '2026-09-10T08:00:00.000Z', finished_at: '2026-09-10T08:00:02.000Z',
+    });
+    const prepared = (['source_preparation', 'page_geometry_extraction', 'document_context_build', 'text_analysis'] as const).map(ok);
+    const seededRun = (overrides: Partial<RunStatus>, seed: (client: ReturnType<typeof newClient>) => void, props: Record<string, unknown> = {}) => {
+      const client = newClient();
+      const status = runStatus({ run_id: RUN_ID, ...overrides });
+      client.setQueryData(queryKeys.runs.detail(RUN_ID), status);
+      seed(client);
+      return renderWith(client, createElement(RunProgress, { projectUid: PROJECT_UID, runId: RUN_ID, ...props }));
+    };
+    const reading = (result: Record<string, unknown>) => (client: ReturnType<typeof newClient>) =>
+      client.setQueryData(['extended-run-review', RUN_ID], { run_id: RUN_ID, status: 'running', result });
+    const journal = createElement('p', null, 'События прогона');
+
+    add(
+      'RunProgress published, the tabs, the findings strip and a spend figure',
+      seededRun(
+        { state: 'published', stages: prepared, executor: EXECUTOR, cost_micros: 4_500_000, cost_basis: 'measured', model_call_count: 3 },
+        (client) => client.setQueryData(queryKeys.runs.findings(RUN_ID), { data: {
+          items: [
+            finding({ finding_uid: FINDING_UID, decided_severity: 'critical' }),
+            finding({ finding_uid: `${FINDING_UID.slice(0, -1)}C`, decided_severity: 'economic' }),
+            finding({ finding_uid: `${FINDING_UID.slice(0, -1)}D` }),
+          ],
+          page: { next_cursor: null },
+        } }),
+        { journal },
+      ),
+    );
+    add(
+      'RunProgress running on a model chip: the window, the model and the server',
+      seededRun(
+        { state: 'running', terminal_at: null, stages: prepared, executor: EXECUTOR, estimated_finish_at: '2026-09-10T09:30:00.000Z' },
+        reading({
+          workflow_version: 'extended-review-v3',
+          procedures: [
+            { id: 'block_analysis', title: 'Анализ блоков', status: 'running' },
+            { id: 'comprehensive_analysis', title: 'Комплексная сверка', status: 'queued' },
+            { id: 'finding_merge', title: 'Свод наблюдений', status: 'queued' },
+          ],
+          windows: [{ window_id: 'w1', index: 0, status: 'completed' }, { window_id: 'w2', index: 1, status: 'running' }],
+          window_progress: { total: 5 },
+        }),
+        { journal },
+      ),
+    );
+    // The estimate appears after mount (the clock is the browser's), which one server pass does not reach: the view is rendered by itself.
+    add('RunEta, the estimated finish of an open run, on time and late', render(createElement('div', null,
+      createElement(RunEta, { finish: { iso: '2026-09-10T09:30:00.000Z', clock: '09:30', late: false } }),
+      createElement(RunEta, { finish: { iso: '2026-09-10T08:30:00.000Z', clock: '08:30', late: true } }),
+    )));
+    add('RunProgress subscription run, a spend note without a figure', seededRun(
+      { state: 'published', stages: prepared, cost_basis: 'unmetered' as never, cost_micros: 0, model_call_count: 2 }, () => undefined,
+    ));
+
+    const dialog = (overrides: Partial<RunStatus>, selected: 'preparation' | 'text' | 'blocks' | 'merge', procedures: readonly {
+      id: string; title: string; status: 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'unavailable' | 'skipped'; reason?: string;
+    }[] = [], stages?: RunStagesView) => {
+      const status = runStatus({ run_id: RUN_ID, ...overrides });
+      const client = newClient();
+      client.setQueryData(queryKeys.runs.detail(RUN_ID), status);
+      client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
+      const chips = runChips({
+        status,
+        procedures: procedures.map((p) => ({ title: p.title, id: p.id, status: p.status, reason: p.reason ?? null, dependency: null, errorCode: null })),
+      });
+      return renderScreen(client, createElement(RunStagesDialog, {
+        status, chips, selected, onSelect: () => undefined, onClose: () => undefined, showServer: true, staticOpen: true, stages,
+      }));
+    };
+    // The preset line is the one `dl` of the window (`.facts dt`, `.facts dd`): a run started from a preset says which.
+    add('RunStagesDialog, a run started from a preset: the preset line', dialog(
+      { state: 'published', stages: prepared, executor: EXECUTOR, preset: { preset_id: 'pre_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', revision_no: 2, name: 'Быстрый черновик' } as never },
+      'text',
+    ));
+    add('RunStagesDialog, a queued run: the chip that waits', dialog({ state: 'queued', terminal_at: null, stages: [], executor: EXECUTOR, queue_reason: 'executor_at_capacity' }, 'preparation'));
+    add('RunStagesDialog, every state of a chip, the plan list and the start', dialog(
+      {
+        state: 'partial', degradation_set: ['text_analysis'], executor: EXECUTOR,
+        stages: [
+          ok('source_preparation'),
+          { stage_id: 'page_geometry_extraction', status: 'partial', error_code: 'analysis_input_budget_exceeded', started_at: '2026-09-10T08:00:02.000Z', finished_at: '2026-09-10T08:00:09.000Z' },
+          { stage_id: 'text_analysis', status: 'failed', error_code: 'analysis_failed', started_at: '2026-09-10T08:00:09.000Z', finished_at: '2026-09-10T08:00:10.000Z' },
+        ],
+      },
+      'merge',
+      [
+        { id: 'block_analysis', title: 'Анализ блоков', status: 'completed' },
+        { id: 'comprehensive_analysis', title: 'Комплексная сверка', status: 'running' },
+        { id: 'finding_merge', title: 'Свод наблюдений', status: 'failed', reason: 'dependency_failed' },
+        { id: 'norm_verification', title: 'Проверка нормативных ссылок', status: 'unavailable', reason: 'corpus_unavailable' },
+        { id: 'finding_review', title: 'Критик наблюдений', status: 'skipped' },
+        { id: 'finding_correction', title: 'Предложения по уточнению', status: 'queued' },
+      ],
+    ));
+
+    /*
+     * `RUN-STAGES-WEB-01`: the stages of a run (`getRunStages`). A run that froze its stage plan is drawn in the window on the blocks
+     * chip (an ensemble: a leg on a subscription with its server, a judge on a key with none yet; the facts with a subscription
+     * part and a price), on a failed chip with an error code and a reason, and on the rail with one line under each model chip.
+     * The words and the colours of the new rows are judged here like every other screen's.
+     */
+    const planned = (role: 'main' | 'leg1' | 'judge', model_id: string, extra: Record<string, unknown> = {}) => ({
+      role, model_id, effort: 'medium' as const, max_output_tokens: 6000, timeout_seconds: 900, ...extra,
+    });
+    const noFacts = {
+      calls_succeeded: 0, calls_failed: 0, calls_retried: 0, input_tokens: 0, output_tokens: 0, subscription_input_tokens: 0,
+      subscription_output_tokens: 0, cost_micros: 0,
+    };
+    const stagesAnswer: RunStagesView = {
+      phase: 'read',
+      stages: {
+        run_id: RUN_ID, state: 'running', plan_source: 'stage_plan',
+        items: [
+          { chip: 'preparation', stage_ids: ['source_preparation'], plan: [], facts: { ...noFacts, state: 'done', started_at: '2026-09-10T08:00:00Z', finished_at: '2026-09-10T08:01:09Z' } },
+          {
+            chip: 'text', stage_ids: ['text_analysis'], plan: [planned('main', 'claude-sonnet-5-5', { cell_key: 'text:main', access: 'subscription', server: 'adm1.hlab.kz' })],
+            facts: {
+              ...noFacts, state: 'failed', calls_succeeded: 5, calls_failed: 1, calls_retried: 1, input_tokens: 61240, output_tokens: 9310,
+              subscription_input_tokens: 61240, subscription_output_tokens: 9310, last_error_code: 'analysis_failed', reason: 'corpus_unavailable',
+              started_at: '2026-09-10T08:01:10Z', finished_at: '2026-09-10T08:06:40Z',
+            },
+          },
+          {
+            chip: 'blocks', stage_ids: ['block_analysis'],
+            plan: [
+              planned('leg1', 'claude-opus-5-5', { cell_key: 'blocks:leg1', access: 'subscription', server: 'adm1.hlab.kz' }),
+              planned('judge', 'claude-sonnet-5-5', { cell_key: 'blocks:judge', access: 'api', max_output_tokens: 12000 }),
+            ],
+            facts: {
+              ...noFacts, state: 'running', calls_succeeded: 12, input_tokens: 102400, output_tokens: 18800, subscription_input_tokens: 90000,
+              subscription_output_tokens: 15000, cost_micros: 412000, started_at: '2026-09-10T08:06:41Z', planned: 40, completed: 12,
+            },
+          },
+        ],
+      },
+    };
+    const planStatus: Partial<RunStatus> = {
+      state: 'running', terminal_at: null, executor: EXECUTOR,
+      stages: [ok('source_preparation'), { stage_id: 'text_analysis', status: 'failed', error_code: 'analysis_failed', started_at: '2026-09-10T08:01:10.000Z', finished_at: '2026-09-10T08:06:40.000Z' }],
+    };
+    const blocksProcedure = [{ id: 'block_analysis', title: 'Анализ блоков', status: 'running' as const }];
+    add('RunStagesDialog, a run with a stage plan: a blocks ensemble, its facts, a subscription part and a price', dialog(planStatus, 'blocks', blocksProcedure, stagesAnswer));
+    add('RunStagesDialog, a run with a stage plan: a failed chip with its error code and reason', dialog(planStatus, 'text', blocksProcedure, stagesAnswer));
+    add('RunStagesDialog, the stages could not be read: the run\'s model and the line that says so', dialog(planStatus, 'text', blocksProcedure, { phase: 'error' }));
+    add(
+      'RunProgress running with the stages read: one model line under each model chip',
+      seededRun(
+        { ...planStatus, state: 'running' },
+        (client) => {
+          reading({ workflow_version: 'extended-review-v3', procedures: blocksProcedure })(client);
+          if (stagesAnswer.phase === 'read') client.setQueryData(runStagesKey(RUN_ID), stagesAnswer.stages);
+        },
+        { journal },
+      ),
+    );
+  }
+
   // ------------------------------------------------------------------ the widgets
   add('ProjectList cold', withRouter(createElement(ProjectList, {})));
   add('DocumentList cold', withRouter(createElement(DocumentList, { projectUid: PROJECT_UID })));
@@ -1030,28 +1211,6 @@ export function screens(): Screen[] {
     busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
     onPriority: noop, onNext: null, onPrevious: null,
   })));
-  // `UI-B-64`: the blocks under the tiles of «Обзор» -- the servers, the nearest queued jobs, a silent server and a job that ended badly.
-  {
-    const at = '2026-10-09T10:05:00Z';
-    const job = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
-      job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${id}`, run_id: RUN_ID, state, priority: 0, created_at: at, available_at: at, ...QUEUE_WORK, ...extra,
-    });
-    add('WorkersOverviewSections with attention', withRouter(createElement(WorkersOverviewSections, {
-      workers: [
-        { worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true, slots: 4, version: '0.5.0',
-          started_at: at, heartbeat_at: at, current_run_ids: [RUN_ID] },
-        { worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: true, slots: 2, version: '0.5.0',
-          started_at: at, heartbeat_at: at, current_run_ids: [] },
-      ],
-      workersPartial: true,
-      jobs: [job('1', 'queued', { queue_position: 1 }), job('2', 'failed', { error_code: 'analysis_failed' })],
-      jobsPartial: true,
-      processesHref: '?tab=processes',
-    } as unknown as Parameters<typeof WorkersOverviewSections>[0])));
-    add('WorkersOverviewSections with nothing to attend to', withRouter(createElement(WorkersOverviewSections, {
-      workers: [], workersPartial: false, jobs: [],
-    })));
-  }
   // The «Обновлено» line of the queue and the journal: current, and out of date (a note on the surface tint).
   add('UpdateTime fresh', withRouter(createElement(UpdateTime, {
     dataUpdatedAt: Date.parse('2026-10-09T10:05:00Z'), failed: false, now: Date.parse('2026-10-09T10:05:04Z'),
@@ -1334,41 +1493,6 @@ export function screens(): Screen[] {
     shape.seedClient?.(client);
     add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
   }
-  // M-17 (`R-151t`), UI-B-63: the overview tiles of «Обзор», with servers not online and a partial registry, the
-  // queue's line, and the links from the tiles to «Процессы» and «Очередь» (the rules `.link` and `.queueLine`).
-  const OVERVIEW_QUEUE = [
-    { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 },
-    { state: 'retry_wait', count: 0 }, { state: 'succeeded', count: 12 }, { state: 'failed', count: 2 },
-    { state: 'cancelled', count: 0 }, { state: 'dead_letter', count: 0 },
-  ] as const;
-  add('WorkersOverview with the queue', render(createElement(WorkersOverviewView, {
-    workers: { online: 1, total: 3, onlineSlots: 4, freeSlots: 2, partial: true },
-    queue: OVERVIEW_QUEUE,
-    processesHref: '?tab=processes',
-  })));
-  {
-    const client = newClient();
-    client.setQueryData(queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT), {
-      items: [
-        {
-          worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true,
-          slots: 4, version: '0.5.0', started_at: '2026-10-09T10:00:00Z',
-          heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [RUN_ID, RUN_ID],
-        },
-        {
-          worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', state: 'offline', intake_enabled: true,
-          slots: 1, version: '0.4.0', started_at: '2026-10-08T09:00:00Z',
-          heartbeat_at: '2026-10-08T12:00:00Z', current_run_ids: [],
-        },
-      ],
-      page: { next_cursor: null },
-    });
-    client.setQueryData(queryKeys.execution.queue(undefined, {}), {
-      items: [], page: { next_cursor: null }, paused: false, overview: OVERVIEW_QUEUE,
-    });
-    client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
-    add('WorkersPage overview tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'overview' }>, { initialTab: 'overview' })));
-  }
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {
@@ -1393,6 +1517,81 @@ export function screens(): Screen[] {
   })));
 
   /*
+   * `HOSTS-WEB-01`: «Серверы» and «Модели по этапам» as the two tabs of the screen (the tabs and the page rules of
+   * `workers-page.module.css`), the row of a server in each of its looks (on line, grey, with nothing usable, busy, with
+   * «Подробнее» and the confirmation of «Удалить» open), the window «Подключить сервер» on both its tabs and in each state of
+   * the install, the table of the layout and the form that edits it, and the advanced page with its layout section open.
+   */
+  {
+    const client = newClient();
+    seedHosts(client);
+    seedLayout(client, HOSTS_LAYOUT);
+    client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+    add('WorkersPage servers tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'servers' | 'models' }>, { initialTab: 'servers' })));
+    add('WorkersPage models tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'servers' | 'models' }>, { initialTab: 'models' })));
+    add('ExecutorStageModels editing', renderScreen(client, createElement(ExecutorStageModels, { roles: ['admin'], initiallyEditing: true })));
+    add('StageLayoutAdvanced', renderScreen(client, createElement(StageLayoutAdvanced, { roles: ['admin'] })));
+    add('WorkersAdvancedPage layout section', renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<{ initialTab: 'layout' }>, { initialTab: 'layout' })));
+    seedHostDetails(client);
+    add('HostRow with details', renderScreen(client, createElement(HostRow, { host: HOSTS_ONLINE, admin: true, initialPanel: 'details' })));
+    add('LayoutEditorView', renderScreen(client, createElement(LayoutEditorView, {
+      draft: { kit: HOSTS_LAYOUT.current!.kit, cells: HOSTS_LAYOUT.current!.cells }, catalogue: HOSTS_CATALOGUE,
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6-astra'], currentKit: 'custom', pending: false,
+      problem: 'Набор моделей пуст: выберите модели по этапам.', failure: null, onKit: noop, onModel: noop, onEffort: noop, onLimit: noop, onSave: noop, onCancel: noop,
+    })));
+    /*
+     * `CMP-WEB-01`: the comparison of versions in «Модели по этапам». Under «Свой набор» the form draws the group «Сравнение версий» open:
+     * four rows with the kind, a model and an effort (and the limit of each in «Дополнительно»), and the same group with no model chosen,
+     * which carries the one-line note and the disabled effort. The table folds the four lines under the six rows (the mark «нет на
+     * серверах» on one of them), and says in a sentence that none will run when a «Свой набор» stored none.
+     */
+    const comparisonProps = {
+      catalogue: HOSTS_CATALOGUE, availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'],
+      currentKit: 'custom' as const, pending: false, problem: null, failure: null, onKit: noop, onModel: noop, onEffort: noop, onLimit: noop,
+      onComparisonModel: noop, onComparisonEffort: noop, onComparisonLimit: noop, onSave: noop, onCancel: noop,
+    };
+    add('LayoutEditorView comparison group', renderScreen(client, createElement(LayoutEditorView, {
+      ...comparisonProps, draft: { kit: 'custom', cells: HOSTS_LAYOUT.current!.cells, comparison: HOSTS_COMPARISON_CELLS },
+    })));
+    add('LayoutEditorView comparison group, no model chosen', renderScreen(client, createElement(LayoutEditorView, {
+      ...comparisonProps, draft: { kit: 'custom', cells: HOSTS_LAYOUT.current!.cells },
+    })));
+    add('StageModelsTable comparison lines', renderScreen(client, createElement(StageModelsTable, { layout: HOSTS_LAYOUT_COMPARISON, admin: true, onEdit: noop })));
+  }
+  {
+    const client = newClient();
+    seedHosts(client);
+    seedLayout(client, HOSTS_LAYOUT_OFF);
+    client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
+    add('WorkersPage servers tab, expert', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'servers' }>, { initialTab: 'servers' })));
+    add('WorkersPage models tab, expert, layout off', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'models' }>, { initialTab: 'models' })));
+  }
+  {
+    const client = newClient();
+    seedHosts(client, { items: [], online: 0, slots_free: 0, slots_total: 0, total: 0 });
+    seedLayout(client, HOSTS_LAYOUT_EMPTY);
+    add('ExecutorHosts empty', renderScreen(client, createElement(ExecutorHosts, { roles: ['admin'] })));
+    add('ExecutorStageModels none saved', renderScreen(client, createElement(ExecutorStageModels, { roles: ['admin'] })));
+  }
+  add('DeleteHostView', renderScreen(newClient(), createElement(DeleteHostView, { name: 'резерв', pending: false, failure: null, onConfirm: noop, onCancel: noop })));
+  add('ConnectWindow command tab', renderScreen(newClient(), createElement(ConnectWindow, { onClose: noop, staticOpen: true, initialTab: 'command' })));
+  add('ConnectWindow ssh tab', renderScreen(newClient(), createElement(ConnectWindow, { onClose: noop, staticOpen: true, initialTab: 'ssh' })));
+  add('CommandTabView issued', renderScreen(newClient(), createElement(CommandTabView, {
+    name: 'новый', pending: false, issued: HOSTS_ISSUED, replaced: true, failure: null, problem: null, onName: noop, onGet: noop,
+    status: createElement('p', null, 'найдено: Opus 5.5'),
+  })));
+  add('SshFormView problem', renderScreen(newClient(), createElement(SshFormView, { pending: false, problem: 'Укажите узел и пользователя SSH.', failure: null, onSubmit: noop })));
+  for (const state of ['requested', 'awaiting_host_key', 'installing', 'succeeded', 'failed'] as const) {
+    add(`InstallSessionView ${state}`, renderScreen(newClient(), createElement(InstallSessionView, {
+      install: hostsInstall({
+        state, ...(state === 'failed' ? { failure_reason: 'ssh_refused' as const } : {}),
+        ...(state === 'succeeded' ? { key_removed_at: '2026-11-09T11:05:00Z' } : {}),
+      }),
+      confirming: false, confirmFailure: null, onConfirm: noop, onRetry: noop, children: createElement('p', null, 'найдено: Opus 5.5'),
+    })));
+  }
+
+  /*
    * `EXEC-HTTP-01`: «Подключения» and «Назначения». The cards carry the badges of every probe
    * outcome, the notes of a key that must be entered again and of the recent changes, and the
    * revision form and the key form; the routes carry the blocked list and the standby.
@@ -1408,8 +1607,9 @@ export function screens(): Screen[] {
     const client = newClient();
     seedExecutors(client, EXECUTOR_CASES);
     client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
-    add('WorkersPage connections tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'connections' })));
-    add('WorkersPage routes tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'routes' })));
+    add('WorkersAdvancedPage connections section', renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'connections' })));
+    add('WorkersAdvancedPage routes section', renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'routes' })));
+    add('WorkersAdvancedPage closed', renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<{ initialTab?: 'connections' }>, {})));
     add('Executor key form', withRouter(createElement(SetExecutorSecretForm, {
       connectionId: EXECUTOR_READY.connection.connection_id, outcome: 'saved',
     })));
@@ -1888,6 +2088,48 @@ export function screens(): Screen[] {
         onClose: noop,
       })),
     );
+  }
+  // `RUN-START-ONE-01a`: the one dialog of a start that can charge money, drawn open: a billed estimate with its ceiling,
+  // one the server sent back, and a start without a money ceiling.
+  {
+    const dialog = (over: Partial<Parameters<typeof StartRunCostDialogView>[0]>) =>
+      render(createElement(StartRunCostDialogView, {
+        estimate: costEstimate({ version_uid: VERSION_UID }), relaxed: false, ceiling: '1.5', changed: false, busy: false,
+        staticOpen: true, onCeilingChange: noop, onConfirm: noop, onCancel: noop, ...over,
+      }));
+    add('StartRunCostDialog, a billed estimate with its ceiling', dialog({}));
+    add('StartRunCostDialog, ceiling too low, estimate changed', dialog({ ceiling: '1.1', changed: true }));
+    add('StartRunCostDialog, without a money ceiling', dialog({
+      relaxed: true, ceiling: '0', estimate: costEstimate({ version_uid: VERSION_UID, relaxed_limits: true }),
+    }));
+    // `READINESS-WEB-01`, consent v2: one line per model with how it is paid, then the total.
+    add('StartRunCostDialog, one line per model and the total', dialog({
+      estimate: { ...costEstimate({ version_uid: VERSION_UID }), billing: 'mixed', models: modelLines() },
+    }));
+  }
+  // `READINESS-WEB-01`: the line under «Запустить» (the set, a part by API, a model no server has) and the stage window in plan mode.
+  {
+    const start = (roles: readonly string[], answer: RunStartReadiness) => {
+      const client = newClient();
+      client.setQueryData(queryKeys.account.me(), { roles });
+      client.setQueryData(runStartReadinessKey(VERSION_UID), answer);
+      return renderScreen(client, createElement(StartRunWithReadiness, { projectUid: PROJECT_UID, versionUid: VERSION_UID }));
+    };
+    add('StartRunWithReadiness, the set and its access', start(['expert'], readiness()));
+    add('StartRunWithReadiness, a part by API', start(['expert'], READINESS_MIXED));
+    add('StartRunWithReadiness, a model no server has, for an expert', start(['expert'], blockedReadiness()));
+    add('StartRunWithReadiness, a model no server has, for an administrator', start(['admin', 'expert'], blockedReadiness()));
+    add('PlanStagesDialog, the plan of the second version, with «Изменить»', render(createElement(PlanStagesDialog, {
+      rows: readinessPlan(CLAUDE_CELLS), kit: 'Только Claude', onClose: noop, editHref: '/workers?tab=models', staticOpen: true,
+    })));
+    add('PlanStagesDialog, a scheme of several models and a cell no server has', render(createElement('div', null,
+      createElement(PlanStagesDialog, {
+        rows: readinessPlan(ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks')), kit: 'Только Claude', onClose: noop, staticOpen: true,
+      }),
+      createElement(PlanStagesDialog, {
+        rows: readinessPlan(blockedReadiness().cells.filter((cell) => cell.row === 'blocks')), kit: null, onClose: noop, staticOpen: true,
+      }),
+    )));
   }
   add(
     'FindingList failed',
@@ -3253,10 +3495,8 @@ export function screens(): Screen[] {
       preview: CUT_OVER_PREVIEW, connections: CONNECTION_CASES.map((one) => one.connection),
     })));
 
+    // `HOSTS-WEB-01b`: the presets left this page, so neither the account, the executors nor the presets are seeded for it.
     const settings = newClient();
-    settings.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
-    seedExecutors(settings, EXECUTOR_CASES);
-    settings.setQueryData(ANALYSIS_PRESETS_KEY, { items: [] });
     settings.setQueryData(queryKeys.analysis.profiles(), {
       items: PROJECT_STRUCTURE_ORDER.map((code, index): AnalysisProfileListItem => {
         const digit = (index % 10).toString();

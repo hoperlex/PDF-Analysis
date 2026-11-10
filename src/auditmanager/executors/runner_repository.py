@@ -39,7 +39,7 @@ TASK_DONE_CHANNEL: Final[str] = "auditmanager_executor_task_done"
 TASK_OPEN_CHANNEL: Final[str] = "auditmanager_executor_task_open"
 
 _TOKEN_COLUMNS: Final = (
-    "token_id, connection_id, token_prefix, created_at, created_by, expires_at, revoked_at, "
+    "token_id, connection_id, host_id, token_prefix, created_at, created_by, expires_at, revoked_at, "
     "revoked_by, last_seen_at, last_seen_address"
 )
 _TASK_COLUMNS: Final = (
@@ -115,7 +115,9 @@ class RunnerTokenRecord:
     """A token's metadata. The hash is not a field."""
 
     token_id: str
-    connection_id: str
+    #: Exactly one of ``connection_id`` and ``host_id`` is set (`HOSTS-SEAL-1`, ``ck_executor_runner_token_target``): a token of a
+    #: ``pull`` connection, or the host token of a server (`HOSTS-BACKEND-01`).
+    connection_id: str | None
     token_prefix: str
     created_at: datetime
     created_by: str
@@ -124,6 +126,7 @@ class RunnerTokenRecord:
     revoked_by: str | None
     last_seen_at: datetime | None
     last_seen_address: str | None
+    host_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,9 +135,10 @@ class StoredToken:
     database clock): not revoked, not expired, on a connection that is not archived."""
 
     token_id: str
-    connection_id: str
+    connection_id: str | None
     token_hash: bytes
     usable: bool
+    host_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,7 +187,7 @@ class ClaimedRow:
 
 def _token(row: Mapping[str, Any]) -> RunnerTokenRecord:
     return RunnerTokenRecord(**{name: row[name] for name in (
-        "token_id", "connection_id", "token_prefix", "created_at", "created_by", "expires_at",
+        "token_id", "connection_id", "host_id", "token_prefix", "created_at", "created_by", "expires_at",
         "revoked_at", "revoked_by", "last_seen_at", "last_seen_address")})
 
 
@@ -207,15 +211,18 @@ class RunnerRepository:
     # -- tokens ----------------------------------------------------------------------------
 
     def insert_token(
-        self, session: Session, *, connection_id: str, token_prefix: str, token_hash: bytes,
-        expires_in_days: int, actor_uid: str,
+        self, session: Session, *, connection_id: str | None = None, token_prefix: str, token_hash: bytes,
+        expires_in_days: int, actor_uid: str, host_id: str | None = None,
     ) -> RunnerTokenRecord:
+        """A token of exactly one of a connection and a host (the database's CHECK says the same)."""
+        if (connection_id is None) == (host_id is None):
+            raise ValueError("a runner token names exactly one of a connection and a host")
         row = session.execute(text(
-            "INSERT INTO executor_runner_token (token_id, connection_id, token_prefix, "
-            "token_hash, created_by, expires_at) VALUES (:id, :c, :prefix, :hash, :actor, "
+            "INSERT INTO executor_runner_token (token_id, connection_id, host_id, token_prefix, "
+            "token_hash, created_by, expires_at) VALUES (:id, :c, :h, :prefix, :hash, :actor, "
             "clock_timestamp() + make_interval(days => :days)) "
             f"RETURNING {_TOKEN_COLUMNS}"
-        ), {"id": str(ExecutorRunnerTokenId.new()), "c": connection_id, "prefix": token_prefix,
+        ), {"id": str(ExecutorRunnerTokenId.new()), "c": connection_id, "h": host_id, "prefix": token_prefix,
             "hash": token_hash, "actor": actor_uid, "days": expires_in_days}).mappings().one()
         return _token(row)
 
@@ -253,13 +260,14 @@ class RunnerRepository:
         row = session.execute(text(
             "SELECT t.token_id, t.connection_id, t.token_hash, "
             "(t.revoked_at IS NULL AND t.expires_at > clock_timestamp() "
-            "AND c.archived_at IS NULL) AS usable "
-            "FROM executor_runner_token t JOIN executor_connection c "
-            "ON c.connection_id = t.connection_id WHERE t.token_prefix = :prefix"
+            "AND COALESCE(c.archived_at, h.archived_at) IS NULL) AS usable, t.host_id "
+            "FROM executor_runner_token t LEFT JOIN executor_connection c "
+            "ON c.connection_id = t.connection_id LEFT JOIN executor_host h ON h.host_id = t.host_id "
+            "WHERE t.token_prefix = :prefix"
         ), {"prefix": token_prefix}).first()
         if row is None:
             return None
-        return StoredToken(row[0], row[1], bytes(row[2]), bool(row[3]))
+        return StoredToken(row[0], row[1], bytes(row[2]), bool(row[3]), row[4])
 
     def touch_token(
         self, session: Session, token_id: str, address: str | None, *, every_seconds: int = 5
@@ -291,8 +299,9 @@ class RunnerRepository:
         the token's, so locking it here, after the token's, would invert that order."""
         row = session.execute(text(
             "SELECT (t.revoked_at IS NULL AND t.expires_at > clock_timestamp() "
-            "AND c.archived_at IS NULL) AS usable "
-            "FROM executor_runner_token t JOIN executor_connection c ON c.connection_id = t.connection_id "
+            "AND COALESCE(c.archived_at, h.archived_at) IS NULL) AS usable "
+            "FROM executor_runner_token t LEFT JOIN executor_connection c ON c.connection_id = t.connection_id "
+            "LEFT JOIN executor_host h ON h.host_id = t.host_id "
             "WHERE t.token_id = :t FOR UPDATE OF t"
         ), {"t": token_id}).first()
         return row is not None and bool(row[0])
@@ -370,24 +379,33 @@ class RunnerRepository:
         gone is cancelled; a task past its deadline expires; a claim whose lease lapsed returns
         the task to ``open`` (and clears the instance that held it). Idempotent, and run before
         every claim."""
+        self._sweep(session, "connection_id = :c", {"c": connection_id})
+
+    def sweep_host(self, session: Session, host_id: str) -> None:
+        """The same for the tasks of every system connection of a host (`HOSTS-BACKEND-01`): what a host token's claim runs first."""
+        self._sweep(
+            session, "connection_id IN (SELECT k.connection_id FROM executor_connection k WHERE k.host_id = :c)",
+            {"c": host_id})
+
+    def _sweep(self, session: Session, scope: str, params: Mapping[str, Any]) -> None:
         session.execute(text(
             "UPDATE executor_task t SET state = 'cancelled', terminal_at = clock_timestamp() "
-            "WHERE t.connection_id = :c AND t.state IN ('open', 'claimed') "
+            f"WHERE t.{scope} AND t.state IN ('open', 'claimed') "
             f"AND ((t.attempt_id IS NOT NULL AND NOT {_ATTEMPT_LIVE}) "
             "OR (t.comparison_attempt_id IS NOT NULL "
             f"AND NOT {_comparison_attempt_live('t')}))"
-        ), {"c": connection_id})
+        ), dict(params))
         session.execute(text(
             "UPDATE executor_task SET state = 'expired', terminal_at = clock_timestamp() "
-            "WHERE connection_id = :c AND state IN ('open', 'claimed') "
+            f"WHERE {scope} AND state IN ('open', 'claimed') "
             "AND deadline_at <= clock_timestamp()"
-        ), {"c": connection_id})
+        ), dict(params))
         session.execute(text(
             "UPDATE executor_task SET state = 'open', claimed_by_token_id = NULL, "
             "claimed_by_instance_id = NULL, "
-            "claim_expires_at = NULL WHERE connection_id = :c AND state = 'claimed' "
+            f"claim_expires_at = NULL WHERE {scope} AND state = 'claimed' "
             "AND claim_expires_at <= clock_timestamp()"
-        ), {"c": connection_id})
+        ), dict(params))
 
     def held_claims(self, session: Session, token_id: str) -> int:
         return int(session.execute(text(
@@ -427,8 +445,9 @@ class RunnerRepository:
         return None if row is None else ClaimedRow(row[0], row[1], row[2], row[3], _payload(row[4]))
 
     def claim_next(
-        self, session: Session, *, connection_id: str, token_id: str, lease_seconds: int,
+        self, session: Session, *, connection_id: str | None = None, token_id: str, lease_seconds: int,
         max_images: int = DEFAULT_CLAIM_IMAGES, runner_instance_id: str | None = None,
+        host_id: str | None = None,
     ) -> ClaimedRow | None:
         """Claim the oldest open task of the connection whose Attempt is live **and whose images
         the claim can serve**: never a task with more images than ``max_images`` (ADR-0025
@@ -437,15 +456,25 @@ class RunnerRepository:
 
         `EXEC2-PULL-01`: the claimed task records ``runner_instance_id`` (``NULL`` for a claim that
         named none), which is what :meth:`redeliver` matches. The column is set only together with
-        the token (``ck_executor_task_instance_with_token``) and cleared by :meth:`sweep`."""
+        the token (``ck_executor_task_instance_with_token``) and cleared by :meth:`sweep`.
+
+        With ``host_id`` (`HOSTS-BACKEND-01`, a host token) the task is the oldest open one of **any system connection of the host**
+        that carries the host's task members (``payload.host``): a task without them is never handed to a host agent. Exactly one
+        of ``connection_id`` and ``host_id`` is named."""
+        if (connection_id is None) == (host_id is None):
+            raise ValueError("a claim names exactly one of a connection and a host")
         instance = _instance(runner_instance_id)
+        scope = (
+            "p.connection_id = :c" if host_id is None else
+            "p.connection_id IN (SELECT k.connection_id FROM executor_connection k WHERE k.host_id = :c "
+            "AND k.system_managed) AND p.payload -> 'host' IS NOT NULL")
         row = session.execute(text(
             "UPDATE executor_task t SET state = 'claimed', claimed_by_token_id = :token, "
             "claimed_by_instance_id = CAST(:instance AS text), "
             "claim_expires_at = LEAST(clock_timestamp() + make_interval(secs => :lease), "
             "t.deadline_at), first_claimed_at = COALESCE(t.first_claimed_at, clock_timestamp()), "
             "claim_count = t.claim_count + 1 "
-            "WHERE t.task_id = (SELECT p.task_id FROM executor_task p WHERE p.connection_id = :c "
+            f"WHERE t.task_id = (SELECT p.task_id FROM executor_task p WHERE {scope} "
             "AND p.state = 'open' AND p.deadline_at > clock_timestamp() "
             "AND (p.attempt_id IS NULL OR EXISTS (SELECT 1 FROM attempt a JOIN job j "
             "ON j.job_id = a.job_id AND j.current_attempt_id = a.attempt_id "
@@ -454,9 +483,15 @@ class RunnerRepository:
             f"AND {_image_count('p')} <= :max_images "
             "ORDER BY p.created_at, p.task_id FOR UPDATE OF p SKIP LOCKED LIMIT 1) "
             "RETURNING t.task_id, t.claim_expires_at, t.deadline_at, t.expected_model, t.payload"
-        ), {"c": connection_id, "token": token_id, "lease": lease_seconds,
+        ), {"c": connection_id if host_id is None else host_id, "token": token_id, "lease": lease_seconds,
             "max_images": _declared(max_images), "instance": instance}).first()
         return None if row is None else ClaimedRow(row[0], row[1], row[2], row[3], _payload(row[4]))
+
+    def connection_host(self, session: Session, connection_id: str) -> str | None:
+        """The host a system connection belongs to, or ``None`` (a connection of no host, or none)."""
+        row = session.execute(text(
+            "SELECT host_id FROM executor_connection WHERE connection_id = :c"), {"c": connection_id}).first()
+        return None if row is None or row[0] is None else str(row[0])
 
     def payload_of(self, session: Session, task_id: str) -> Mapping[str, Any] | None:
         row = session.execute(text(

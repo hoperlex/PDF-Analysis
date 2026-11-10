@@ -19,7 +19,7 @@ vi.mock('@/shared/api', async (importOriginal) => ({
 
 import type { RunCostEstimate, StartRunRequest, VersionUid } from '@/shared/api';
 import { ApiError, estimateRunCost, startRun } from '@/shared/api';
-import { BatchStartPanel, batchConsent, batchTotals, estimateFits, minimumCeiling } from '@/features/start-run';
+import { BatchStartPanel, batchConsent, batchIsFree, batchTotals, estimateFits, minimumCeiling } from '@/features/start-run';
 
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import type { LiveRender } from '../analysis-settings/live-render';
@@ -52,6 +52,18 @@ describe('the arithmetic of one agreement', () => {
     expect(totals).toEqual({ ready: 2, pending: 0, failed: 1, costMicros: 1_500_000, ceilingMicros: 1_900_000 });
   });
 
+  it('is free only when something is ready and every ready estimate is unmetered', () => {
+    const free = (id: VersionUid) => ({ kind: 'ready' as const, estimate: estimateFor(id, { billing: 'unmetered', estimated_cost_micros: 0, recommended_ceiling_micros: 0 }) });
+    const billed = (id: VersionUid) => ({ kind: 'ready' as const, estimate: estimateFor(id) });
+    expect(batchIsFree([free(A), free(B)])).toBe(true);
+    expect(batchIsFree([free(A), { kind: 'failed', text: 'нет' }, { kind: 'pending' }])).toBe(true);
+    expect(batchIsFree([free(A), billed(B)])).toBe(false);
+    expect(batchIsFree([billed(A)])).toBe(false);
+    expect(batchIsFree([])).toBe(false);
+    expect(batchIsFree([{ kind: 'failed', text: 'нет' }])).toBe(false);
+    expect(batchConsent(free(A).estimate)).toEqual({ estimate_digest: free(A).estimate.estimate_digest, ceiling_micros: 0, confirmed: true });
+  });
+
   it('agrees only to an estimate of this version, of one run, under the standard limits', () => {
     expect(estimateFits(estimateFor(A), A)).toBe(true);
     expect(estimateFits(estimateFor(A), B)).toBe(false);
@@ -68,7 +80,7 @@ describe('the batch panel, mounted', () => {
     vi.mocked(startRun).mockReset();
     vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => {
       if (body.version_uid === C) {
-        throw new ApiError(503, { contract_version: '1.44.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'cid-1', retryable: true }, 'cid-1');
+        throw new ApiError(503, { contract_version: '1.47.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'cid-1', retryable: true }, 'cid-1');
       }
       return { data: estimateFor(body.version_uid as VersionUid) } as never;
     });
@@ -109,5 +121,72 @@ describe('the batch panel, mounted', () => {
     expect(calls.map((call) => call.body.cost_consent?.estimate_digest)).toEqual([estimateFor(A).estimate_digest, estimateFor(B).estimate_digest]);
     expect(new Set(calls.map((call) => call.idempotencyKey)).size).toBe(2);
     expect(view.markup()).toContain('прогон запущен');
+  });
+
+  it('sends no executor, group or preset for any document, and draws no selector', async () => {
+    const view = await mount();
+    expect(view.markup()).not.toContain('<select');
+    expect(view.markup()).not.toContain('<option');
+    await view.check('Согласен на расходы не более $3 по 2 прогонам', true);
+    await view.press('Запустить 2');
+    await view.settle(async () => {});
+    const bodies = [...vi.mocked(estimateRunCost).mock.calls.map(([input]) => input.body), ...vi.mocked(startRun).mock.calls.map(([input]) => (input as { body: StartRunRequest }).body)];
+    expect(bodies.length).toBe(5);
+    for (const body of bodies) for (const key of Object.keys(body)) expect(['version_uid', 'cost_consent']).toContain(key);
+  });
+});
+
+describe('the batch panel when nothing in it can be charged', () => {
+  let live: LiveRender | null = null;
+  const free = (versionUid: VersionUid) =>
+    estimateFor(versionUid, { billing: 'unmetered', estimated_cost_micros: 0, recommended_ceiling_micros: 0 });
+
+  beforeEach(() => {
+    vi.mocked(estimateRunCost).mockReset();
+    vi.mocked(startRun).mockReset();
+    vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => ({
+      data: body.version_uid === B ? estimateFor(B) : free(body.version_uid as VersionUid),
+    }) as never);
+    vi.mocked(startRun).mockImplementation(async ({ body }) => ({ data: runStatus({ version_uid: body.version_uid }) }) as never);
+  });
+
+  afterEach(async () => {
+    await live?.unmount();
+    live = null;
+  });
+
+  async function mount(entries: readonly { versionUid: VersionUid; title: string }[]): Promise<LiveRender> {
+    live = await mountLive(createElement(QueryClientProvider, { client: newClient() },
+      createElement(BatchStartPanel, { projectUid: PROJECT, entries, onClose: () => {} })));
+    await live.settle(async () => {});
+    return live;
+  }
+
+  it('lists every document with 0, has no tick-box, and one confirm starts them all', async () => {
+    const view = await mount([{ versionUid: A, title: 'Документ А' }, { versionUid: C, title: 'Документ В' }]);
+    const markup = view.markup();
+    // One dialog, with each document's 0 and the total 0.
+    expect(markup.match(/data-batch-start=/g)).toHaveLength(1);
+    expect(markup.match(/\$0 · без тарификации/g)).toHaveLength(3);
+    expect(markup).toContain('Итого по 2 из 2: $0 · без тарификации.');
+    expect(markup).not.toContain('<input');
+    expect(markup).not.toContain('Согласен на расходы');
+    expect(vi.mocked(startRun)).not.toHaveBeenCalled();
+    expect(await view.press('Запустить 2')).toBe(true);
+    await view.settle(async () => {});
+    const calls = vi.mocked(startRun).mock.calls.map(([input]) => input as { body: StartRunRequest; idempotencyKey: string });
+    expect(calls.map((call) => call.body)).toEqual([A, C].map((id) => ({
+      version_uid: id, cost_consent: { estimate_digest: free(id).estimate_digest, ceiling_micros: 0, confirmed: true },
+    })));
+    expect(new Set(calls.map((call) => call.idempotencyKey)).size).toBe(2);
+    expect(view.markup()).toContain('прогон запущен');
+  });
+
+  it('keeps the agreement when even one document can be charged', async () => {
+    const view = await mount([{ versionUid: A, title: 'Документ А' }, { versionUid: B, title: 'Документ Б' }]);
+    expect(view.markup()).toContain('<input');
+    expect(view.markup()).toContain('Согласен на расходы не более $1.5 по 2 прогонам');
+    expect(await view.press('Запустить 2')).toBe(false);
+    expect(vi.mocked(startRun)).not.toHaveBeenCalled();
   });
 });

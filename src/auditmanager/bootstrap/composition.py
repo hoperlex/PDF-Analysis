@@ -30,6 +30,11 @@ from auditmanager.bootstrap.providers import (
     UnboundAdapter,
 )
 from auditmanager.bootstrap.runner import RunnerAdapter
+from auditmanager.bootstrap.hosts_adapter import ExecutorHostAdapter
+from auditmanager.bootstrap.hosts_dispatch import HostModelAvailability
+from auditmanager.bootstrap.stage_plan_adapter import StageModelAdapter
+from auditmanager.bootstrap.stage_plan_service import StagePlanService
+from auditmanager.bootstrap.run_stage_adapter import RunStageAdapter
 from auditmanager.comparison.public import (
     COMPARISON_MODULES_ENV,
     HANDLER_FACTORIES as COMPARISON_HANDLER_FACTORIES,
@@ -320,6 +325,21 @@ class _ComparisonRoutes:
         if pin is None or settings.pin_id != job.pinned_model or bound.revision.revision_id != job.connection_revision_id:
             raise route_missing()
         adapter = bound.adapter
+        # `HOSTS-CMP-01`: a job admitted on the stage layout froze its cell. When it is bound to a server's system member (a
+        # connection with a capacity pool), the host agent is told the cell's effort, limit, window and key (`payload.host`) and
+        # the cell's timeout is the task's window, as a planned run's call is (`bootstrap/providers.py`).
+        cell = getattr(job, "cell", None)
+        pool = getattr(getattr(bound, "connection", None), "capacity_pool", None)
+        if cell is not None and pool is not None:
+            from auditmanager.comparison.spend.cell import host_call_of
+            from auditmanager.executors.public import access_of_billing, build_pull_adapter, split_pool
+
+            _host_id, provider = split_pool(pool)
+            adapter = build_pull_adapter(
+                session_factory=self._runtime.session_factory, revision=bound.revision, context=context,
+                engine=getattr(self._runtime, "engine", None),
+                host_call=host_call_of(cell, provider=provider, access=access_of_billing(settings.billing)),
+            )
         if getattr(getattr(bound, "connection", None), "kind", None) == "pull":
             from auditmanager.comparison.profile.publish import ProfileBlobPublisher
 
@@ -605,6 +625,12 @@ def build_application(
             sessions, dispatch_groups=_dispatches_groups(resolved), group_offline_wait_seconds=offline_wait,
         )
 
+    # `HOSTS-INT-WIRE-01` (ADR-0028 decisions 5, 8, 12-14). The stage layout, built once: the one object the three start commands and the cost
+    # preflight read the layout through (``freezer``: ``None`` while the switch is off, which is the legacy route), and the service behind the
+    # layout, catalogue and readiness operations. The availability it asks is the servers' (``HostModelAvailability``); the provider source is
+    # the process's own, so a layout can neither be switched on nor a plan frozen unless it is ``database``.
+    stage_plans = StagePlanService(
+        session_factory=sessions, availability=HostModelAvailability(), provider_source=resolved.provider_source)
     ar_v3_installed_pack = _ar_v3_installed_pack(env)
     run_adapter = RunAdapter(
         sessions,
@@ -643,13 +669,22 @@ def build_application(
         ar_v3_installed_pack=ar_v3_installed_pack,
         # `AR-V3-OPT-IN`: permission to start, separate from the capability above, off unless the environment says `1`.
         ar_v3_start_allowed=_ar_v3_start_allowed(env, ar_v3_installed_pack),
+        # `HOSTS-INT-WIRE-01`: the same object reaches ``start_audit_run``, ``reaudit_run``, ``start_run_from_stage`` and ``RunCostPreflight``.
+        stage_plans=stage_plans.freezer,
     )
+    # The readiness read prices with the preflight the starts bind their consent to: one policy, handed over now that the adapter built it.
+    stage_plans.attach_cost_preflight(run_adapter.cost_preflight)
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)
 
     # `CMP-C1-FIX-A` item 5: one tile renderer for the API process, shared by the page tiles and the pair tiles, so that the
     # children it starts are bounded by its slots (``TILE_SLOTS``) and not by two renderers' worth.
     tile_renderer = TileRenderer()
+
+    # `HOSTS-INT-WIRE-01`. The servers: the sealing ring is the public one the connections use (the API holds no private key) and the install
+    # command is built from the configured public origin only, as for a connection's enrollment.
+    host_adapter = ExecutorHostAdapter(
+        sessions, ring=resolved.secrets_public_ring, public_origin=env.get(PUBLIC_ORIGIN_ENV) or None)
 
     block_adapter = BlockAdapter(sessions, blob_store=store)
     # `ADR-0027`: every decision this process records is copied into the decision memory in its own transaction. The port is
@@ -811,10 +846,19 @@ def build_application(
         enrollment=ExecutorEnrollmentAdapter(
             sessions, ring=resolved.secrets_public_ring,
             public_origin=env.get(PUBLIC_ORIGIN_ENV) or None,
+            # `HOSTS-INT-WIRE-01`: a host token's redeem and health report go through the host adapter.
+            hosts=host_adapter,
         ),
         # `EXEC2-GROUP-STORE-01`. Executor groups and the routing rule of a work kind: the four reads for any role
         # and the four writes, over the same sessions. The rates a group snapshots are the provider lock's.
         executor_groups=ExecutorGroupAdapter(sessions),
+        # `HOSTS-SEAL-1`, ADR-0028. Executor hosts and the stage model layout over the same sessions;
+        # `HOSTS-INT-WIRE-01` wires the services `HOSTS-BACKEND-01` and `HOSTS-LAYOUT-01` filled.
+        executor_hosts=host_adapter,
+        stage_models=StageModelAdapter(sessions, service=stage_plans),
+        # `HOSTS-SEAL-2`, `RUN-STAGES-01`. The facts of a run's stages for the stage window, over the same sessions
+        # and the same object store the extended review reads.
+        run_stages=RunStageAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,

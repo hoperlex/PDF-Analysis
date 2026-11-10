@@ -1,27 +1,68 @@
-.limitToggle {
+/* `RUN-START-ONE-01a`: the one button, with «▾» beside it. Tokens only. */
+.startRow {
   display: flex;
   align-items: center;
-  gap: var(--am-gap-sm);
-  cursor: pointer;
+  gap: var(--am-gap-xs);
 }
 
-/* The three ways to start (`EXEC2-WEB-GROUPS-01`): a radio group above the selects. Layout only. */
-.modes {
+.more {
+  display: inline-flex;
+}
+
+/* «▾» reads as the second half of the button; its popup opens under it, on its left edge. */
+.more :global(.am-menu__trigger) {
+  min-height: var(--am-target-min);
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink);
+}
+
+.more :global(.am-menu__popup) {
+  right: auto;
+  left: 0;
+}
+
+/* `READINESS-WEB-01`: why the start is not possible; the rule at the left says it is a stop, the words stay in the ink colour. */
+.blocked {
+  border-left-color: var(--am-failed);
+  color: var(--am-ink);
+}
+
+/* The dialog of a start that can charge money: a native modal, sized by its text. */
+.dialog {
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--am-gap-xl));
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  overflow-wrap: anywhere;
+}
+
+.dialogTitle {
+  margin: 0 0 var(--am-gap-sm);
+  font-size: var(--am-text-md);
+}
+
+.dialogModels {
+  margin: 0 0 var(--am-gap-sm);
+  padding-left: var(--am-gap-lg);
+}
+
+.dialogField {
   display: grid;
   gap: var(--am-gap-xs);
-  min-width: 0;
 }
 
-.modeLabel {
-  margin: 0;
-  font-weight: 600;
-}
-
-.mode {
+.dialogActions {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: var(--am-gap-sm);
-  cursor: pointer;
+  margin-top: var(--am-gap);
 }
 
 /* `R-151c`: one panel for starting several documents. Tokens only. */

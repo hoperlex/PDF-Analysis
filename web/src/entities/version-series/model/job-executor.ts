@@ -64,6 +64,7 @@ export const JOB_WAIT_LABELS: Readonly<Record<RunQueueReason, string>> = {
   executor_at_capacity: 'Ждёт исполнителя: все места заняты',
   runner_offline: 'Ждёт исполнителя: раннер не в сети',
   needs_reconsent: 'Нужно новое согласие на стоимость',
+  model_unavailable: 'Ждёт модель: на серверах её сейчас нет',
 };
 
 /** A job's connection is chosen at its first call to the model — not when work is sent, as a Run's is. */

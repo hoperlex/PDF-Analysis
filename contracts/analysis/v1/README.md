@@ -23,6 +23,7 @@ canonical metadata.
 | [job-package.schema.json](job-package.schema.json) | Work handed to an engine for exactly one Attempt |
 | [stage-result.schema.json](stage-result.schema.json) | Result of exactly one registry stage |
 | [result-package.schema.json](result-package.schema.json) | Result of exactly one Attempt |
+| [model-catalogue.json](model-catalogue.json) | `HOSTS-SEAL-1` (contract 1.45.0): the models the stage layout may name, the providers and accesses that can serve each, the reasoning efforts allowed and the exact strings an answer may report as its model; the pins of `docs/program/P02_LOCK.json` only |
 | [examples/](examples) | Valid examples plus three `*.invalid.json` negative fixtures |
 
 ## Stage registry

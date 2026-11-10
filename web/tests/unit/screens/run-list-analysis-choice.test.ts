@@ -49,7 +49,7 @@ const NOT_ALLOWED: ReadonlyArray<readonly [string, (client: Client) => void]> = 
   [
     'a failed read',
     (client) => seedError(client, PACK, new ApiError(503, {
-      contract_version: '1.44.0', error_code: 'dependency_unavailable', message: 'm',
+      contract_version: '1.47.0', error_code: 'dependency_unavailable', message: 'm',
       correlation_id: 'c', retryable: true,
     }, 'c')),
   ],
@@ -108,7 +108,7 @@ describe('the choice of an analysis is drawn on one answer of the server and on 
       expect(markup).toContain('АР v3: шесть проверок по нормам (бета)');
       // The standard form is the one below: today's form, once, and no v3 control or sentence beside it.
       expect(markup).toContain('data-start-run-control="true"');
-      expect(markup.match(/>Запустить прогон<\/button>/g)).toHaveLength(1);
+      expect(markup.match(/>Запустить<\/button>/g)).toHaveLength(1);
       expect(markup).not.toContain('data-ar-v3-group-start');
       expect(markup).not.toContain('Запустить шесть проверок АР v3');
       expect(markup).not.toContain('data-ar-v3-choice-note');
@@ -122,7 +122,7 @@ describe('the choice of an analysis is drawn on one answer of the server and on 
         expect(offersChoice(markup), name).toBe(false);
         expect(mentionsV3(markup), name).toBe(false);
         expect(markup).toContain('data-start-run-control="true"');
-        expect(markup.match(/>Запустить прогон<\/button>/g)).toHaveLength(1);
+        expect(markup.match(/>Запустить<\/button>/g)).toHaveLength(1);
       });
     }
   }

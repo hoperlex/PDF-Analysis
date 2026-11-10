@@ -120,8 +120,8 @@ import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { StageComparePage } from '@/_pages/stage-compare';
 import { VersionComparePage } from '@/_pages/version-compare';
 import { VersionDetailPage } from '@/_pages/version-detail';
-import { WorkersPage } from '@/_pages/workers';
-import type { WorkersPageProps } from '@/_pages/workers';
+import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
+import type { WorkersAdvancedPageProps, WorkersPageProps } from '@/_pages/workers';
 
 import { REPO_ROOT, repoRelative, walkFiles } from '../../guards/lib/repo';
 import { join } from 'node:path';
@@ -571,10 +571,17 @@ export const SEEDS: readonly Seed[] = [
   {
     address: '/workers',
     name: 'workers',
-    // The screen opens on «Обзор» since the second UX pass; this seed stays on «Процессы» (`?tab=processes`) so every instrument still reads
-    // the worker list from the derived screen. The overview has its own seeds (the census' `WorkersPage overview tab`, the language guard's
-    // `workers-overview-sections-attention`).
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'processes' }),
+    // `HOSTS-WEB-01`: the screen has two tabs and opens on «Серверы». The second tab, «Модели по этапам», has its own seeds
+    // (the census' `WorkersPage models tab`, the language guard's `workers-models`).
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    discipline: {},
+  },
+  {
+    address: '/workers/advanced',
+    name: 'workers-advanced',
+    // The former tabs, folded. This seed opens «Процессы» (`?tab=processes`) so every instrument still reads the worker list
+    // from the derived screen; the other sections have their own seeds in the census and the language guard.
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'processes' }),
     discipline: {},
   },
 ];

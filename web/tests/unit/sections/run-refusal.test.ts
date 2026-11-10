@@ -24,7 +24,12 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    useMutation: () => ({ mutate: () => {}, isPending: false, error: settled.error }),
+    // Only the start's mutation (the one with an `onSuccess`, `useStartRun`) answers with the refusal; the
+    // estimate's, which the one-button control also holds, stays unsettled.
+    useMutation: (options: { onSuccess?: unknown }) => ({
+      mutate: () => {}, reset: () => {}, isPending: false,
+      error: options.onSuccess === undefined ? null : settled.error,
+    }),
     useQueryClient: () => ({ setQueryData: () => {}, invalidateQueries: () => Promise.resolve() }),
   };
 });
@@ -47,8 +52,7 @@ const noProfile = () => apiError(422, 'section_profile_unavailable');
 
 function control(error: unknown): string {
   settled.error = error;
-  // `EXEC-PAR-WEB-01`: the control reads the connections for its «Исполнитель» select, so it needs a
-  // client; nothing is seeded, the list stays loading, and the select draws no button or link.
+  // The control reads the account for who may start (`R-150e`), so it needs a client; nothing is seeded.
   return renderToStaticMarkup(
     createElement(
       QueryClientProvider,
@@ -135,9 +139,9 @@ describe('the start-run control says which, and links to the panel that settles 
     );
     expect(markup).toContain('>Подтвердить стадию и раздел</a>');
     expect(markup).toContain('Прогон не запущен.');
-    // The control's own two buttons («Оценить стоимость», «Запустить прогон», since `6fe0bd50`) and no retry.
+    // The control's own buttons («Запустить» and the item of its «▾» menu, `RUN-START-ONE-01a`) and no retry.
     expect([...markup.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual([
-      'Оценить стоимость', 'Запустить прогон',
+      'Запустить', 'Без денежного потолка (сбор статистики)',
     ]);
     expect(markup).not.toContain('Повторить');
     expect(offersASubstitute(markup.replace(/<[^>]+>/g, ' '))).toBe(false);
@@ -149,9 +153,9 @@ describe('the start-run control says which, and links to the panel that settles 
     expect(markup).toContain('Для подтверждённого раздела нет профиля анализа.');
     expect(markup).toContain('data-classification-link=""');
     expect(markup).toContain('>Открыть стадию и раздел версии</a>');
-    // The control's own two buttons («Оценить стоимость», «Запустить прогон», since `6fe0bd50`) and no retry.
+    // The control's own buttons («Запустить» and the item of its «▾» menu, `RUN-START-ONE-01a`) and no retry.
     expect([...markup.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual([
-      'Оценить стоимость', 'Запустить прогон',
+      'Запустить', 'Без денежного потолка (сбор статистики)',
     ]);
     expect(offersASubstitute(markup.replace(/<[^>]+>/g, ' '))).toBe(false);
   });

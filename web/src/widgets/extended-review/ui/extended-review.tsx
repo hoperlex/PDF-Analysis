@@ -6,6 +6,7 @@ import type { ExtendedRunReview } from '@/shared/api';
 import { LoadingState } from '@/shared/ui';
 import { formatExtendedRunReport } from '@/entities/audit-run';
 import type { ExtendedReportFormat } from '@/entities/audit-run';
+import { extendedReviewKey } from './extended-review-reading';
 import { WindowProgress } from './window-progress';
 import { BatchProgress, ReplyRepairSummary } from './batch-progress';
 import { ObservationList } from './observation-list';
@@ -51,6 +52,13 @@ const reasonLabels: Record<string, string> = {
   norm_paragraph_context_changed_requires_consent: 'Реализация нормативного контекста изменилась после согласия. Для новых обращений нужен новый прогон со свежей оценкой.',
   norm_paragraph_context_incomplete: 'Часть исходного нормативного контекста не передана или поисковая цитата не совпала с непрерывным текстом абзаца. Ограничения сохранены в квитанциях; актуальность и применимость требуют сверки.',
 };
+/**
+ * The sentence for a procedure that did not complete: the plan list's own wording for the reasons it knows, the shared execution
+ * reason otherwise. Exported so the run screen's «Этапы анализа раздела» dialog, which now draws the plan list, prints the same sentence.
+ */
+export function procedureReasonSentence(reason: unknown, dependency?: unknown, status?: unknown, errorCode?: unknown): string {
+  return reasonLabels[text(reason)] ?? extendedExecutionReason(reason, dependency, status, errorCode);
+}
 const FINAL_STATES = new Set(['completed', 'partial', 'failed', 'unavailable', 'skipped']);
 export const MAX_TERMINAL_REVIEW_READS = 8;
 
@@ -135,13 +143,13 @@ function ReportDownloads({ reading }: { readonly reading: ExtendedRunReview }) {
   </section>;
 }
 
-export function ExtendedReview({ runId, active, projectUid }: { runId: string; active: boolean; projectUid?: string }) {
+export function ExtendedReview({ runId, active, projectUid, planElsewhere }: { runId: string; active: boolean; projectUid?: string; planElsewhere?: boolean }) {
   const activeRef = useRef(active);
   activeRef.current = active;
   const wasActive = useRef(active);
   const [terminalReads, setTerminalReads] = useState(0);
   const query = useQuery({
-    queryKey: ['extended-run-review', runId],
+    queryKey: extendedReviewKey(runId),
     queryFn: async () => {
       try { return (await getExtendedRunReview({ path: { run_id: runId } })).data; }
       finally { if (!activeRef.current) setTerminalReads((value) => value + 1); }
@@ -158,13 +166,17 @@ export function ExtendedReview({ runId, active, projectUid }: { runId: string; a
   if (query.data === undefined) return null;
   return <>
     {query.isError ? <p role="status">Не удалось обновить состояние. Ниже последняя полученная запись.</p> : null}
-    <ExtendedReviewView reading={query.data} {...(projectUid === undefined ? {} : { projectUid })} />
+    <ExtendedReviewView reading={query.data} {...(projectUid === undefined ? {} : { projectUid })} {...(planElsewhere === true ? { planElsewhere } : {})} />
     {!active && terminalReads >= MAX_TERMINAL_REVIEW_READS && !extendedReviewDefinitive(query.data) ? <p role="status">Финальная запись процедур пока не получена. Завершение расширенного анализа не подтверждено.</p> : null}
     <button type="button" className="am-button am-button--quiet" disabled={query.isFetching} onClick={() => { setTerminalReads(0); void query.refetch(); }}>Обновить полный анализ</button>
   </>;
 }
 
-export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedRunReview; projectUid?: string }) {
+/**
+ * `planElsewhere`: the list of planned procedures («План полного анализа») is drawn by the run screen's «Этапы анализа раздела» dialog
+ * (`RUN-SCREEN-01a`); the panel then points there instead of listing them a second time. Nothing else of the panel changes.
+ */
+export function ExtendedReviewView({ reading, projectUid, planElsewhere = false }: { reading: ExtendedRunReview; projectUid?: string; planElsewhere?: boolean }) {
   const result = object(reading.result);
   const procedures = objects(result?.procedures);
   const v2 = result?.workflow_version === 'extended-review-v2';
@@ -194,11 +206,11 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     <ReplyRepairSummary value={result?.reply_refusals} />
     {full ? <>
       <ParameterActivity value={result?.project_parameters} />
-      <p>Продолжение базовых этапов. Ход расширенных процедур показан ниже.</p>
-      {procedures.length === 0 ? <p>План расширенных процедур ещё не получен.</p> : <ol className={styles.procedures} aria-label="План полного анализа" data-extended-procedure-plan="">
+      <p>Продолжение базовых этапов. {planElsewhere ? 'Ход расширенных процедур — в окне «Этапы анализа раздела».' : 'Ход расширенных процедур показан ниже.'}</p>
+      {planElsewhere ? null : procedures.length === 0 ? <p>План расширенных процедур ещё не получен.</p> : <ol className={styles.procedures} aria-label="План полного анализа" data-extended-procedure-plan="">
         {procedures.map((procedure, index) => <li key={text(procedure.id) || index} data-extended-procedure={text(procedure.id)} data-procedure-status={text(procedure.status)}>
           <strong>{text(procedure.title) || 'Название процедуры не передано'}</strong> · {procedureLabels[text(procedure.status)] ?? 'Состояние не передано'}
-          {text(procedure.reason) && procedure.status !== 'completed' ? <p>{reasonLabels[text(procedure.reason)] ?? extendedExecutionReason(procedure.reason, procedure.dependency, procedure.status, procedure.error_code)}</p> : null}
+          {text(procedure.reason) && procedure.status !== 'completed' ? <p>{procedureReasonSentence(procedure.reason, procedure.dependency, procedure.status, procedure.error_code)}</p> : null}
         </li>)}
       </ol>}
     </> : procedures.length === 0 && result?.reason === undefined ? <p>Полная цепочка для этого прогона не подтверждена сервером. Историческим прогонам новые процедуры не приписываются.</p> : null}

@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-308 operations, sealed. `A5` generates the typed client from this document; `B6`
+324 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1478,6 +1478,22 @@ could.
 | `confirmExecutorAgentInstallHostKey` | `POST /executor-connections/{connection_id}/agent-installs/{install_id}/confirm-host-key` |
 | `redeemExecutorEnrollment` | `POST /runner/enroll` |
 | `reportRunnerHealth` | `POST /runner/health` |
+| `listExecutorHosts` | `GET /executor-hosts` |
+| `getExecutorHost` | `GET /executor-hosts/{host_id}` |
+| `getExecutorHostDetails` | `GET /executor-hosts/{host_id}/details` |
+| `setExecutorHostEnabled` | `PUT /executor-hosts/{host_id}/enabled` |
+| `setExecutorHostSlots` | `PUT /executor-hosts/{host_id}/slots` |
+| `archiveExecutorHost` | `POST /executor-hosts/{host_id}/archive` |
+| `issueExecutorHostEnrollment` | `POST /executor-hosts/enrollments` |
+| `createExecutorHostAgentInstall` | `POST /executor-hosts/agent-installs` |
+| `getExecutorHostAgentInstall` | `GET /executor-hosts/{host_id}/agent-installs/{install_id}` |
+| `confirmExecutorHostAgentInstallHostKey` | `POST /executor-hosts/{host_id}/agent-installs/{install_id}/confirm-host-key` |
+| `getStageModelLayout` | `GET /model-layout` |
+| `reviseStageModelLayout` | `POST /model-layout/revisions` |
+| `setStageModelLayoutEnabled` | `PUT /model-layout/enabled` |
+| `listModelCatalogue` | `GET /model-catalogue` |
+| `getRunStartReadiness` | `POST /runs/start-readiness` |
+| `getRunStages` | `GET /runs/{run_id}/stages` |
 | `downloadAgentPackage` | `GET /runner/agent-package/{version}` |
 | `estimateStageChainRun` | `GET /stage-link-revisions/{stage_link_revision_id}/chain-estimate` |
 | `resumeStageChainRun` | `POST /stage-chain-runs/{stage_chain_run_id}/resume` |
@@ -1522,6 +1538,8 @@ Rules that hold across the whole surface:
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,
   `setExecutorRoute`, `createAnalysisPreset`, `reviseAnalysisPreset`, `archiveAnalysisPreset`,
   `issueRunnerToken`, `revokeRunnerToken`,
+  `setExecutorHostEnabled`, `setExecutorHostSlots`, `archiveExecutorHost`, `issueExecutorHostEnrollment`, `createExecutorHostAgentInstall`,
+  `confirmExecutorHostAgentInstallHostKey`, `reviseStageModelLayout`, `setStageModelLayoutEnabled`,
   `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `appendComparisonVersionOrder`, `prepareComparisonMatrix`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `startComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries`, `finishComparisonSeries`, `startComparisonAiPairCheck`, `pauseComparisonAiPairCheck`, `resumeComparisonAiPairCheck`, `cancelComparisonAiPairCheck`, `startComparisonAiSheetChanges`, `pauseComparisonAiSheetChanges`, `resumeComparisonAiSheetChanges`, `cancelComparisonAiSheetChanges`, `finishComparisonAiSheetChanges`, `dequeueComparisonAiSheetChanges`, `retryComparisonAiSheetChanges`, `startComparisonSheetDescription`, `startComparisonSpecification`, `cancelComparisonSpecification`, `enqueueComparisonLaunch`, `pauseComparisonLaunchQueue`, `resumeComparisonLaunchQueue`, `clearComparisonLaunchQueue`, `removeComparisonLaunchEntry`, `createComparisonReport`, `uploadComparisonReportSource`, `startComparisonReport`, `cancelComparisonReport`, `continueComparisonReport`, `rebuildComparisonReportPdf`, `deleteComparisonReport` and `prepareComparisonClientReport`, `confirmStagePair`, `createStageAssembly`, `reviseStageAssembly`, `setStagePairCompleteness`, `createStageUpload`, `uploadStageUploadPart`, `completeStageUploadFile`, `confirmStageUploadCandidate`, `rejectStageUploadCandidate`, `pauseStageUpload`, `resumeStageUpload`, `cancelStageUpload`, `applyStageSheetMap`, `recomputeStageTextEvidence`, `startStageChainRun`, `cancelStageChainRun`, `resumeStageChainRun`, `startStageChainBatch`, `pauseStageChainBatch`, `resumeStageChainBatch`, `cancelStageChainBatch`, `undoStageLinkRepair`, `applyStageCardVerdicts`, `createStageReviewCard`, `importComparisonZip`, `issueExecutorEnrollment`, `setExecutorIntegrationAuthorisation`, `createExecutorAgentInstall`, `confirmExecutorAgentInstallHostKey`, `createExecutorGroup`, `reviseExecutorGroup`, `archiveExecutorGroup`, `setExecutorRoutingRule`, `setExecutorRoutingMode`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
@@ -1591,7 +1609,7 @@ Rules that hold across the whole surface:
     the exchange window is answered idempotently, so an agent that lost the response is not
     locked out; a repeat after the window is `conflict` with `conflict_reason:
     enrollment_redeemed`, and an unknown, expired or revoked secret is `authentication_required`;
-  * `estimateRunCost` and `estimateArV3GroupCost` (`BETA-COST-PREFLIGHT-1030`) are POSTs that
+  * `estimateRunCost`, `estimateArV3GroupCost` (`BETA-COST-PREFLIGHT-1030`) and `getRunStartReadiness` (`HOSTS-SEAL-1`) are POSTs that
     write nothing: a repeat computes the estimate again, and its digest differs only when the
     source, profile, preset, route, model or rates differ;
 * every response carries `X-Correlation-Id`;

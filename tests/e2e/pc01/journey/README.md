@@ -7,16 +7,25 @@ E2E_PC01_LOGIN=<login> E2E_PC01_PASSWORD=<password> \
 
 A sign-in, two phases, one instrument, one envelope, one exit code.
 
-`BETA-COST-JOURNEY-1030` keeps the existing ordinary starts compatible with required cost approval.
-Each declared start first presses its cost-estimate control, reads the actual successful source-bound response,
-checks that the prefilled finite USD cap equals the server's recommendation and covers its estimate, then presses
-the unchecked approval checkbox. The later start must carry identical version/executor-or-preset/raised-limit
-options, the exact estimate digest/cap and a real command key. Failed/missing/stale endpoints or changed payloads
-fail the step. Recorded mode is required unless `--allow-spend` explicitly permits live approval, including the
-first core Run. No provider mode is selected or replaced by the harness.
+`BETA-COST-JOURNEY-1030` keeps the existing starts compatible with required cost approval.
+`RUN-START-ONE-01b` moved the ordinary start (scope `run`) to the application's one-button start: the control is a single
+«Запустить» (`[data-start-run-button]`) with no estimate button and no tick-box, and the `approve_run_cost` action itself presses it.
+It then reads the actual successful source-bound `POST /runs/cost-estimate` response and agrees as the estimate asks:
 
-The closed `approve_run_cost` action supports `run` and `ar_v3_group`; the latter uses «Оценить стоимость шести
-проверок». The current manifest has six ordinary starts, including two historical pending AR v1 steps. Their
+- **metered**: the dialog `[data-start-run-dialog]` must be open with its finite USD ceiling prefilled and equal to the server's
+  recommendation and covering its estimate; the driver types that ceiling into the field and presses `[data-start-run-confirm]`
+  («Запустить» in the dialog). That press is the agreement.
+- **unmetered**: the click was the agreement. The estimate must be priced at 0, no dialog may be on the page, and the start fires by
+  itself with the estimate's own digest and recommended ceiling.
+
+Either way the start must then carry the identical version options, the exact estimate digest/cap and a real command key
+(`assertCostApprovedStart`); a manifest step has no click of its own after the action. Failed/missing/stale endpoints or changed payloads
+fail the step. Recorded mode is required unless `--allow-spend` explicitly permits live approval, including the first core Run;
+because an unmetered click starts the run at once, a live origin (known from an earlier run) is refused BEFORE the button is pressed.
+No provider mode is selected or replaced by the harness.
+
+The closed `approve_run_cost` action supports `run`, `run_from_stage` and `ar_v3_group`; the last keeps its estimate button and tick-box
+(«Оценить стоимость шести проверок»). The current manifest has six ordinary starts, including two historical pending AR v1 steps. Their
 pending status is preserved; this compatibility update does not invent an executed six-check AR v3 journey or
 activate those older steps. Browser execution of these new approval actions remains **UNVERIFIED**.
 
@@ -29,8 +38,10 @@ six-check default button is not a prerequisite for this walk. Its API, historica
 The existing queue re-audit step uses that same `run` cost scope with an explicit captured source Run. Selecting
 «Повторный аудит» automatically reads the selected Run and estimates its version with `reaudit_of_run_id`; the
 driver observes both responses, checks the source/version and the absence of client routing overrides, then
-presses the previously unchecked cost agreement. The subsequent «Подтвердить» must send fresh digest/cap consent
-to that same source's re-audit endpoint with a new command key. A parent's old approval is never substituted.
+agrees as the estimate asks: the page's dialog (ceiling typed, «Запустить») when it can charge, nothing when it does not, because
+the click on the row was the agreement. There is no «Подтвердить» and no tick-box in this flow any more. The re-audit sent must carry
+fresh digest/cap consent to that same source's re-audit endpoint with a new command key. A parent's old approval is never substituted.
+Browser execution of the one-button flow is **UNVERIFIED** (no live journey was run by `RUN-START-ONE-01b`).
 
 `CMP-JOURNEY-CODE-01` adds six concrete version-module steps over `fixtures/comparison/vs1`: upload five PDFs,
 confirm grouping/order, prepare the matrix, compare all four adjacent transitions, open real viewer tiles,
@@ -544,7 +555,7 @@ Re-measure both with the two commands above on a stand before quoting a figure.
 
 **And that is also why three of them stopped proving anything.** `W44-JOURNEY` found the
 two write fixtures pressing controls labelled `Create`, `Upload` and `Start run` — the
-application says `Создать`, `Загрузить` and `Запустить прогон` — so each died at its first
+application said `Создать`, `Загрузить` and `Запустить прогон` (now `Запустить`, `RUN-START-ONE-01a`) — so each died at its first
 click and reported findings about a control it could not press **instead of** the
 deliberate wrongs it declares. The real manifest did not rot, because `make gate` reads
 it; the fixtures are exempt from that guard by design, and the exemption is what let them
@@ -686,20 +697,25 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | account | profile, password change, sign-out, version history | a surname is required; mismatch and wrong current password; the old pass is refused after a change |
 | «Пользователи» | archive, restore, reset password | a repeat that differs |
 
-### «Запустить с этапа» (`UI-A-60`, lane J4, `D-412`)
+### «Запустить с этапа» (`UI-A-60`, lane J4, `D-412`; the way in moved by `RUN-SCREEN-01a`, `WEB-INT-1`)
 
 Three steps after `worker-takes-new-work-again` (the worker takes work, dispatch is open) walk `docs/program/RUN-FROM-STAGE-01.md` on the
 recorded provider: `run-from-stage-refused-for-a-run-that-never-ran`, `run-from-stage-takes-the-earlier-stages-of-the-first-run` and
 `run-from-stage-leaves-the-first-run-as-it-was` (`FROM_STAGE_STEPS` in `test_pc01_journey_conformance.py` pins their names, cases and what each
-asserts). The action step reads the source's published finding count off its own page, chooses the stage in the dialog, waits for the plan the
-server answers (the three stages taken, «Анализ текста» computed), gives the cost consent through the new `approve_run_cost` scope
-`run_from_stage` (the dialog has no estimate button: the estimate is read when the stage is chosen, so the driver observes it and holds the
-request to `{version_uid, start_from_run_id, start_stage_id}` and the start to `{stage_id, cost_consent}` on `POST /runs/{source}/start-from-stage`),
-waits for the NEW run's page, and holds it to: the line «Запущен с этапа 4 … из прогона <source>» with its link, `data-pipeline-reused` on exactly
-the three stages in the rail, «из прогона» in the details table's duration cell of those three (not «0 ms»), `published` within the bound and the
-same number of findings as the source. The refusal drives the dialog on the run the queue steps cancelled: it ended, so the page offers the start,
-but it never began a stage, so the server refuses the price (`source_stage_not_completed` on `source_preparation`); the first stage cannot be
-tried because the dialog does not offer it.
+asserts). The start is no longer a button of the run page: a chip of the rail opens «Этапы анализа раздела» and the control sits in that modal under the
+words «Запустить с этого этапа». Both action steps therefore press `[data-run-chip="text"]` and then `[data-run-start-from-stage="offer"]`; the chip «Текст»
+covers one startable stage, so there is no stage select (`[data-start-from-stage-only="text_analysis"]`) and the estimate is read as the dialog opens.
+The action step reads the source's published finding count off its own page, waits for the plan the server answers (the three stages taken,
+«Анализ текста» computed), gives the cost consent through the `approve_run_cost` scope `run_from_stage` (the driver first holds the stage the dialog
+shows, inside the open modal, to the stage it approves -- `assertFromStageDialogShows` -- then observes the estimate and holds the request to
+`{version_uid, start_from_run_id, start_stage_id}` and the start to `{stage_id, cost_consent}` on `POST /runs/{source}/start-from-stage`),
+waits for the NEW run's page, opens the dialog on its chip «Подготовка» (the three reused stages are that one chip) and holds the page to: the line
+«Запущен с этапа 4 … из прогона <source>» with its link, `data-chip-reused` on the chip «Подготовка» and «из прогона» in place of its duration in the
+rail, «из прогона» in the duration cell of its three rows in the dialog's table (not «0 ms»), `published` within the bound and the same number of
+findings as the source. The refusal drives the dialog on the run the queue steps cancelled: it ended, so its chip offers the start, but it never began
+a stage, so the server refuses the price (`source_stage_not_completed` on `source_preparation`); the first stage cannot be tried because no chip's
+dialog offers it. The third step reads the first run cold and holds it to no mark of a start from a stage in the rail or in the dialog opened on
+«Подготовка». Browser execution of these steps after the move to the chips is **UNVERIFIED** (WEB-INT-1 ran no browser).
 
 Measured 2026-11-09, lane J4, the 0.19.1 tree plus the lane, one `local-stand.sh` stand (no `LANE_C4`), `--phase write --steps <every step not
 named `cmp-*`>` (87 of 134 checked, 33 pending, 14 `cmp-*` left out, 0 findings, about 3 minutes): the three steps are green, the new run published

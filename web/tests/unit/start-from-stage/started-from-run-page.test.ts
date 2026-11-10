@@ -13,6 +13,7 @@ import { startedFrom } from '@/widgets/run-progress/model/started-from';
 
 import { PROJECT_UID, runStatus } from '../review/fixtures';
 import { newClient, renderWith } from '../screens/harness';
+import { runDialog } from '../run/run-dialog-fixture';
 
 const SOURCE = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z';
 
@@ -42,22 +43,26 @@ describe('the model of a run started from a stage', () => {
 describe('the run page', () => {
   const FROM = { started_from_run_id: SOURCE as never, start_stage_id: 'text_analysis' as const };
 
-  it('says the stage and links the earlier run, in the sentence and in the facts', () => {
+  it('says the stage and links the earlier run, in the caption under the head', () => {
     const markup = page(FROM);
     expect(markup).toContain('data-run-started-from-note="text_analysis"');
     expect(markup).toContain('Запущен с этапа 4 «Анализ текста» из прогона');
     expect(markup).toContain(`href="/projects/${PROJECT_UID}/runs/${SOURCE}"`);
-    expect(markup).toContain('<dt>Запущен с этапа</dt>');
     expect(markup).toContain(`data-run-started-from="${SOURCE}"`);
+    // The caption is the one place; the facts no longer repeat it (`RUN-SCREEN-01a`).
+    expect(markup).not.toContain('<dt>Запущен с этапа</dt>');
   });
 
-  it('marks exactly the stages taken from the earlier run in the rail', () => {
-    const markup = page({ ...FROM, start_stage_id: 'document_context_build' });
-    expect(markup.match(/data-pipeline-reused/g)).toHaveLength(2);
-    expect(markup).toMatch(/data-pipeline-stage="source_preparation"[^>]*data-pipeline-reused/);
-    expect(markup).toMatch(/data-pipeline-stage="page_geometry_extraction"[^>]*data-pipeline-reused/);
-    expect(markup).not.toMatch(/data-pipeline-stage="document_context_build"[^>]*data-pipeline-reused/);
-    expect(markup).not.toMatch(/data-pipeline-stage="text_analysis"[^>]*data-pipeline-reused/);
+  it('marks a chip as taken from the earlier run only when every stage of it was', () => {
+    // Started from «Анализ текста»: the three stages of «Подготовка» are the earlier run\'s, the text stage is computed.
+    const markup = page(FROM);
+    expect(markup.match(/data-chip-reused/g)).toHaveLength(1);
+    expect(markup).toMatch(/data-run-chip="preparation"[^>]*data-chip-reused/);
+    expect(markup).not.toMatch(/data-run-chip="text"[^>]*data-chip-reused/);
+    expect(markup).toMatch(/data-chip-took="из прогона"/);
+    // Started from the third stage: two of the three preparation stages are taken, so the chip is not.
+    const partly = page({ ...FROM, start_stage_id: 'document_context_build' });
+    expect(partly).not.toContain('data-chip-reused');
   });
 
   it('shows none of it for a run started from a version', () => {
@@ -72,7 +77,7 @@ describe('the run page', () => {
  * `D-412` (lane J4): the details table read «0 ms» for a stage taken by reference -- its row has one instant for start and finish,
  * the moment of the reuse -- where the rail already read «из прогона». The duration cell now says where the result came from.
  */
-describe('the details table of a run started from a stage', () => {
+describe('the stage table of a run started from a stage, in «Этапы анализа раздела»', () => {
   const FROM = { started_from_run_id: SOURCE as never, start_stage_id: 'text_analysis' as const };
   const REUSED_AT = '2026-11-09T04:46:41.000Z';
   const stage = (stageId: 'source_preparation' | 'page_geometry_extraction' | 'document_context_build' | 'text_analysis', start: string, end: string) => ({
@@ -84,6 +89,8 @@ describe('the details table of a run started from a stage', () => {
     stage('document_context_build', REUSED_AT, REUSED_AT),
     stage('text_analysis', '2026-11-09T04:46:41.000Z', '2026-11-09T04:46:43.500Z'),
   ];
+  const dialog = (over: Partial<RunStatus>, selected: 'preparation' | 'text') =>
+    runDialog(runStatus({ state: 'published', ...over }), { selected });
   const row = (markup: string, stageId: string): string => {
     const found = new RegExp(`<tr data-stage-id="${stageId}"[^>]*>.*?</tr>`, 's').exec(markup);
     if (found === null) throw new Error(`no row for ${stageId}`);
@@ -91,7 +98,7 @@ describe('the details table of a run started from a stage', () => {
   };
 
   it('says «из прогона» for each stage taken by reference, and no duration of nothing', () => {
-    const markup = page({ ...FROM, stages: STAGES });
+    const markup = dialog({ ...FROM, stages: STAGES }, 'preparation');
     for (const taken of ['source_preparation', 'page_geometry_extraction', 'document_context_build']) {
       const cells = row(markup, taken);
       expect(cells).toContain('data-stage-reused=""');
@@ -100,24 +107,28 @@ describe('the details table of a run started from a stage', () => {
       expect(cells).not.toContain('data-stage-elapsed="0"');
     }
     expect(markup.match(/data-stage-elapsed="reused"/g)).toHaveLength(3);
+    // The chip itself was taken whole, so it has no duration of its own to state.
+    expect(markup).toContain('<th scope="row">Длительность</th><td>из прогона</td>');
   });
 
   it('keeps the measured duration of the stage this run computed', () => {
-    const cells = row(page({ ...FROM, stages: STAGES }), 'text_analysis');
-    expect(cells).toContain('data-stage-elapsed="2500"');
-    expect(cells).toContain('2.5 s');
-    expect(cells).not.toContain('data-stage-reused');
-    expect(cells).not.toContain('из прогона');
+    // «Текст» has one code stage, so the window draws no table of stages for it (`RUN-STAGES-WEB-01`): the measured duration is the
+    // chip's own fact, and it is not «из прогона».
+    const markup = dialog({ ...FROM, stages: STAGES }, 'text');
+    expect(markup).not.toContain('data-stage-id=');
+    const duration = /data-fact-row="elapsed"[^>]*><th scope="row">Длительность<\/th><td>([^<]*)<\/td>/.exec(markup)?.[1];
+    expect(duration).toBe('2,5 с');
+    expect(markup).not.toContain('data-stage-reused');
   });
 
   it('marks only the stages before the start stage when the run started from an earlier one', () => {
-    const markup = page({ ...FROM, start_stage_id: 'document_context_build', stages: STAGES });
+    const markup = dialog({ ...FROM, start_stage_id: 'document_context_build', stages: STAGES }, 'preparation');
     expect(markup.match(/data-stage-elapsed="reused"/g)).toHaveLength(2);
     expect(row(markup, 'document_context_build')).not.toContain('data-stage-reused');
   });
 
   it('is unchanged for a run that was not started from a stage', () => {
-    const markup = page({ stages: STAGES });
+    const markup = dialog({ stages: STAGES }, 'preparation');
     expect(markup).not.toContain('data-stage-reused');
     expect(markup).not.toContain('data-stage-elapsed="reused"');
     expect(row(markup, 'source_preparation')).toContain('data-stage-elapsed="0"');

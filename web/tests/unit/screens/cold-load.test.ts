@@ -77,7 +77,7 @@ function runPage(items: RunStatus[]): RunStatusPage {
 
 function apiError(status: number, code: ErrorCode, retryable = false): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.44.0',
+    contract_version: '1.47.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-cold-1',
@@ -188,7 +188,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
     const client = newClient();
     client.setQueryData(DOCUMENTS_KEY, versionPage([version()]));
     const markup = withRouter(client, createElement(ProjectDetailPage, { projectUid: PROJECT_UID }));
-    expect(markup).not.toContain('Запустить прогон');
+    expect(markup).not.toContain('data-start-run-control');
   });
 });
 
@@ -211,7 +211,7 @@ describe('the version screen asks the server on a cold load (D-16)', () => {
     expect(client.getQueryCache().find({ queryKey: [...RUNS_KEY] })).toBeUndefined();
     expect(markup).toContain('Загрузка: эту версию…');
     expect(markup).not.toContain('Загрузка: прогоны этой версии…');
-    expect(markup).not.toContain('Запустить прогон');
+    expect(markup).not.toContain('data-start-run-control');
 
     const known = newClient();
     known.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
@@ -238,7 +238,8 @@ describe('the version screen asks the server on a cold load (D-16)', () => {
     const markup = screen(client);
 
     expect(markup).toContain('По этой версии прогонов не запускалось.');
-    expect(markup).toContain('Запустить прогон');
+    expect(markup).toContain('data-start-run-control');
+    expect(markup).toContain('>Запустить</button>');
   });
 
   it('lists the runs that exist, each addressable, without waiting for `running`', () => {

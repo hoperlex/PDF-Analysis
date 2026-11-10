@@ -148,18 +148,41 @@ import {
 import type { StartArV3GroupViewProps } from '@/features/start-ar-v3-group';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
-import { WorkerList, WorkersOverviewSections } from '@/widgets/worker-list';
-import { WorkersPage } from '@/_pages/workers';
-import type { WorkersPageProps } from '@/_pages/workers';
+import { WorkerList } from '@/widgets/worker-list';
+import { modelLabel } from '@/entities/executor-host';
+import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
+import type { WorkersAdvancedPageProps, WorkersPageProps } from '@/_pages/workers';
+import { ExecutorConnections } from '@/widgets/executor-connections';
+import { ExecutorGroups } from '@/widgets/executor-groups';
+import { ExecutorRoutes } from '@/widgets/executor-routes';
+import { ExecutorRules } from '@/widgets/executor-rules';
+import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
+import { ExecutorStageModels } from '@/widgets/executor-stage-models';
+import { ProcessesSection } from '@/_pages/workers/ui/processes-section';
+import { executorHostDetailsKey, executorHostsKey } from '@/entities/executor-host';
+import { readinessPlan, stageLayoutKey } from '@/entities/stage-layout';
+import { LayoutEditorView } from '@/features/manage-stage-layout';
+import { HostDetailsView } from '@/features/manage-executor-host';
+import { StageModelsTable } from '@/widgets/executor-stage-models';
+import {
+  CommandTabView, ConnectWindow, DeleteHostView, InstallSessionView, SshFormView,
+} from '@/features/manage-executor-host';
+import {
+  CATALOGUE as STAGE_CATALOGUE, HOST_DETAILS_OFF, LAYOUT_ENSEMBLE as STAGE_LAYOUT_ENSEMBLE,
+  ISSUED, SERVER_ONLINE, install as hostInstall, seedDetails as seedHostDetails, seedHosts, seedLayout,
+  LAYOUT as STAGE_LAYOUT, LAYOUT_EMPTY as STAGE_LAYOUT_EMPTY, LAYOUT_OFF as STAGE_LAYOUT_OFF,
+  COMPARISON_CELLS as STAGE_COMPARISON_CELLS, LAYOUT_COMPARISON as STAGE_LAYOUT_COMPARISON,
+} from '../unit/workers/hosts-fixtures';
 import {
   CommandFailure, CreateConnectionForm, HostKeyControl, IssuedTokenView, ReviseConnectionForm,
   SettingsFields, SshKeyControl,
 } from '@/features/manage-executor-connection';
 import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
-import { ExecutorSelectView, StartRunControl, StartRunFailureView } from '@/features/start-run';
+import { StartRunControl, StartRunCostDialogView, StartRunFailureView, runStartReadinessKey } from '@/features/start-run';
+import { StartRunWithReadiness } from '@/widgets/run-list';
+import { PlanStagesDialog } from '@/widgets/run-stages-dialog';
 import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
 import { AnalysisPresets } from '@/widgets/analysis-presets';
-import { executorChoices } from '@/entities/executor-connection';
 import { StageChanges, StageJournal } from '@/widgets/stage-changes';
 import { STAGE_REVIEW_KEYS } from '@/widgets/stage-changes/api/reads';
 import { StagePairCatalog } from '@/widgets/stage-pair-catalog';
@@ -177,11 +200,15 @@ import { PdfPrecheckProgress } from '@/widgets/run-progress/ui/pdf-precheck-prog
 import { executorGroupCapacityKey, executorGroupsKey, executorRoutingRulesKey } from '@/entities/executor-group';
 import { executionFailure } from '@/entities/execution';
 import { GroupCommandFailure } from '@/features/manage-executor-group';
-import { GroupSelectView } from '@/features/start-run';
 import { SshInstallSession, agentInstallQueryKey } from '@/features/connect-remote-agent';
 import {
   ARCHIVED_GROUP, MAIN_GROUP, ROUTED_GROUP, capacityOf, ruleList, ruleOf,
 } from '../unit/executor-groups/executor-groups-fixtures';
+import { costEstimate } from '../unit/analysis-settings/cost-estimate-fixtures';
+import {
+  CLAUDE_CELLS as READINESS_CLAUDE_CELLS, ENSEMBLE_CELLS as READINESS_ENSEMBLE_CELLS, READINESS_API, READINESS_LEGACY, READINESS_MIXED,
+  blockedReadiness, modelLines as readinessModelLines, readiness as readinessAnswer,
+} from '../unit/start-run/readiness-fixtures';
 import { connectionId as executorConnectionId } from '../unit/workers/executor-fixtures';
 import { install as agentInstall } from '../unit/workers/connect-remote-agent-fixtures';
 import {
@@ -433,6 +460,7 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   { word: 'SSH', why: 'The protocol name in «Команда по SSH», «Через SSH-туннель», «Узел SSH» and «Ключ SSH». A standard name (RFC 4251) that Russian technical writing does not translate; no contract here defines the word.' },
   { word: 'Claude Code', why: 'The product name of the command-line tool a remote machine runs, in «Claude Code без интерфейса» and «Сеанс Claude Code». A product name, not translated; listed before `Claude` so the pair is consumed whole.' },
   { word: 'Claude', why: 'The model family name in «Формат сообщений Claude». A product name, not translated for the reason AuditManager is not; no contract here defines it.' },
+  { word: 'Codex', why: 'The name of the second command-line client and of the set «Только Codex» (`HOSTS-WEB-01`, plan 2026-11-09 §4.3). A product name, not translated for the reason Claude is not; the contract publishes the provider as `codex`, in lower case, which is translated and so is not permitted as visible text.' },
   { word: 'authorized_keys', why: 'The file OpenSSH reads on the remote machine, named where the generated public key is shown so the person knows where to add it. The spelling is fixed by OpenSSH; no contract here defines it, and it is not a filename the extension pattern matches.' },
   { word: 'MD', why: 'The abbreviation of Markdown in «Сводка изменений (MD)», «Скачать MD», «Исходный MD» and «MD листа», the names of the original\'s buttons (`CMP-VC-UI-02`). A format name that Russian technical writing does not translate; no contract here defines the word, and a bare `MD` is not a filename the extension pattern matches.' },
   // ------------------------------------------------------------------------------------
@@ -465,7 +493,30 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
  * an identifier catalog, an RFC, a checksum algorithm -- so that "what shape is an
  * identifier" is not a question this guard answers by taste.
  */
+
+/**
+ * `HOSTS-WEB-01`. The model names the screens print, read out of the model catalogue, `contracts/analysis/v1/model-catalogue.json`:
+ * each pin as the catalogue spells it (`gpt-6-sol`) and as the screens name it, without the provider prefix (`Opus 5.5`, from
+ * `modelLabel`). **Derived, not listed**: a model the catalogue gains is allowed the day it is added, and a screen that prints a
+ * name the catalogue does not have is still an offence. A name is a product's, not a sentence, and no schema enumerates it.
+ */
+function catalogueModelNames(): readonly string[] {
+  const catalogue = readJson<{ readonly entries: readonly { readonly model_id: string }[] }>(
+    join(REPO_ROOT, 'contracts', 'analysis', 'v1', 'model-catalogue.json'),
+  );
+  const ids = [...new Set(catalogue.entries.map((entry) => entry.model_id))];
+  return [...ids, ...ids.map(modelLabel)].sort((a, b) => b.length - a.length);
+}
+
 const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp }[] = [
+  {
+    name: 'the model names of the catalogue',
+    // Whole names only: `gpt-6-sol` inside `gpt-6-solar` is not the catalogue's name.
+    pattern: new RegExp(
+      `(?<![A-Za-z0-9.-])(?:${catalogueModelNames().map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![A-Za-z0-9-])`,
+      'g',
+    ),
+  },
   {
     name: 'prefixed ULID identifiers',
     // `contracts/domain/v1/identifiers.json` fixes the form: a lowercase prefix, an
@@ -1097,7 +1148,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.44.0',
+    contract_version: '1.47.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1109,7 +1160,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.44.0',
+    contract_version: '1.47.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1976,7 +2027,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.44.0',
+    contract_version: '1.47.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2158,34 +2209,18 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
 ];
 
 /*
- * `EXEC-PAR-WEB-01`. The start control's «Исполнитель» and the refusals of a chosen executor.
+ * `EXEC-PAR-WEB-01`. The refusals of a start whose executor the stand will not use.
  *
- * The control itself is rendered in every cache state, so its loading, failed and read shapes
- * (every probe outcome, an archived connection, a connection with no settings) are all on a screen.
- * What a settled `useMutation` or a `useState` decides is not: a refusal of the executor that was
- * chosen, and a select whose value is a connection that cannot serve or has left the list. Those
- * are rendered through the views the control renders (`StartRunFailureView`, `ExecutorSelectView`).
+ * What a settled `useMutation` decides is not on a static render: a refusal of the executor the route
+ * chose. Those are rendered through the view the control renders (`StartRunFailureView`). The start control's
+ * own «Исполнитель» select was removed by `RUN-START-ONE-01a`, and with it the select shapes that stood here.
  */
 function startRunExecutorShapes(): ReactElement {
-  const details = new Map(EXECUTOR_CASES.map((one) => [one.connection.connection_id as string, one.detail]));
-  const connections = EXECUTOR_CASES.map((one) => one.connection);
-  const choices = executorChoices(connections, details);
-  const blocked = choices.find((choice) => choice.blocker === 'probe_failed');
-  const archived = choices.find((choice) => choice.archived);
-  if (blocked === undefined || archived === undefined) {
-    throw new Error('the executor fixtures hold no blocked and no archived connection to choose');
-  }
-  // A connection whose settings were not read: only the list, with no detail for it.
-  const unread = executorChoices([EXECUTOR_READY.connection], new Map());
-  const select = (key: string, reading: Parameters<typeof ExecutorSelectView>[0]['reading'], value: string | null) =>
-    createElement(ExecutorSelectView, { key, id: `select-${key}`, reading, value, disabled: false, onChange: () => undefined });
-  const ready = { phase: 'ready', choices } as const;
-
   const refusal = (
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.44.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.47.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2201,19 +2236,42 @@ function startRunExecutorShapes(): ReactElement {
   return createElement(
     'div',
     null,
-    select('ready-default', ready, null),
-    select('ready-blocked-chosen', ready, blocked.connectionId),
-    select('ready-archived-chosen', ready, archived.connectionId),
-    select('ready-chosen-left-the-list', ready, 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z'),
-    select('ready-unread', { phase: 'ready', choices: unread }, null),
-    select('ready-empty', { phase: 'ready', choices: [] }, null),
-    select('failed', {
-      phase: 'failed', detail: 'Сервер не ответил.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100',
-      onRetry: () => undefined,
-    }, null),
     ...failures.map((failure, index) => createElement(StartRunFailureView, {
       key: `failure-${index}`, failure, projectUid: PROJECT_UID, versionUid: VERSION_UID, onRetry: () => undefined,
     })),
+  );
+}
+
+/**
+ * `RUN-START-ONE-01a`: the one dialog of a start that can charge money, drawn open in each shape it takes: a billed
+ * estimate with its ceiling, one with a ceiling too low to cover it, one the server sent back (`changed`), a start
+ * without a money ceiling, and an estimate that charges nothing (shown after a changed answer).
+ */
+function startRunCostDialogShapes(): ReactElement {
+  // The model is the stand's own word for it; a Russian one keeps the case about the dialog's words, not a fixture's.
+  const estimate = { ...costEstimate({ version_uid: VERSION_UID }), model_id: 'модель-основная' };
+  const view = (key: string, over: Partial<Parameters<typeof StartRunCostDialogView>[0]>) =>
+    createElement(StartRunCostDialogView, {
+      key, estimate, relaxed: false, ceiling: '1.5', changed: false, busy: false, staticOpen: true,
+      onCeilingChange: () => undefined, onConfirm: () => undefined, onCancel: () => undefined, ...over,
+    });
+  return createElement(
+    'div',
+    null,
+    view('billed', {}),
+    view('ceiling-too-low', { ceiling: '1.1' }),
+    view('sending', { busy: true }),
+    view('changed', { changed: true }),
+    // `RUN-START-ONE-01b`: the queue's repeated Run names the run in the dialog's subject line.
+    view('repeated-run', { subject: 'Повторный аудит прогона run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F.' }),
+    view('without-ceiling', { relaxed: true, ceiling: '0', estimate: { ...estimate, relaxed_limits: true } }),
+    view('recorded', { estimate: { ...estimate, provider_mode: 'recorded' } }),
+    view('free', {
+      changed: true, ceiling: '0',
+      estimate: { ...estimate, billing: 'unmetered', estimated_cost_micros: 0, recommended_ceiling_micros: 0 },
+    }),
+    // `READINESS-WEB-01`, consent v2: one line per model, with how it is paid, and the total.
+    view('by-model', { estimate: { ...estimate, billing: 'mixed', models: readinessModelLines() } }),
   );
 }
 
@@ -2286,8 +2344,55 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'start-run-control',
     make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
   },
-  // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» of «Настройки анализа» and the preset select of
-  // the start control, in the states a default cache does not select.
+  // `READINESS-WEB-01`: the line under «Запустить» in each state a read leaves (the set and its access, a part by API, the old
+  // route, a model no server has for an expert and for an administrator, a typed 503, a refusal, nothing answered yet), and
+  // the stage window in plan mode.
+  ...([
+    ['subscription', ['expert'], readinessAnswer()],
+    ['part-by-api', ['expert'], READINESS_MIXED],
+    ['by-api', ['expert'], READINESS_API],
+    ['legacy', ['expert'], READINESS_LEGACY],
+    ['blocked-expert', ['expert'], blockedReadiness()],
+    ['blocked-admin', ['admin', 'expert'], blockedReadiness()],
+  ] as const).map(([name, roles, answer]) => ({
+    name: `start-run-readiness-${name}`,
+    make: () => createElement(StartRunWithReadiness, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    seedClient: (client: ReturnType<typeof newClient>) => {
+      client.setQueryData(queryKeys.account.me(), { roles: [...roles] });
+      client.setQueryData(runStartReadinessKey(VERSION_UID), answer);
+    },
+  })),
+  ...([['no-layout', 503, 'dependency_unavailable'], ['not-read', 500, 'internal_error']] as const).map(([name, status, code]) => ({
+    name: `start-run-readiness-${name}`,
+    make: () => createElement(StartRunWithReadiness, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    seedClient: (client: ReturnType<typeof newClient>) => {
+      client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
+      seedError(client, runStartReadinessKey(VERSION_UID), apiError(status, code));
+    },
+  })),
+  {
+    name: 'start-run-readiness-checking',
+    make: () => createElement(StartRunWithReadiness, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    seedClient: (client: ReturnType<typeof newClient>) => { client.setQueryData(queryKeys.account.me(), { roles: ['expert'] }); },
+  },
+  {
+    name: 'plan-stages-dialog-administrator',
+    make: () => createElement(PlanStagesDialog, {
+      rows: readinessPlan(READINESS_CLAUDE_CELLS), kit: 'Только Claude', onClose: () => undefined, editHref: '/workers?tab=models', staticOpen: true,
+    }),
+  },
+  {
+    name: 'plan-stages-dialog-scheme-and-gap',
+    make: () => createElement('div', null,
+      createElement(PlanStagesDialog, {
+        rows: readinessPlan(READINESS_ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks')), kit: 'Только Claude', onClose: () => undefined, staticOpen: true,
+      }),
+      createElement(PlanStagesDialog, {
+        rows: readinessPlan(blockedReadiness().cells.filter((cell) => cell.row === 'blocks')), kit: null, onClose: () => undefined, staticOpen: true,
+      })),
+  },
+  // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» (on `/workers/advanced` since `HOSTS-WEB-01b`), in the states a default cache
+  // does not select (the preset select of the start control was removed by `RUN-START-ONE-01a`).
   {
     name: 'analysis-presets-for-an-administrator',
     make: () => createElement(AnalysisPresets, { roles: ['admin'] }),
@@ -2318,24 +2423,12 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     seedClient: (client) => seedError(client, [...ANALYSIS_PRESETS_KEY], apiError(503, 'dependency_unavailable')),
   },
   {
-    name: 'start-run-control-with-presets',
-    make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
-    seedClient: seedPresets([
-      presetFixture(1),
-      presetFixture(2, { executor_connection_id: 'exc_01M2545JSD15ETSNNV904X9999' }),
-    ]),
-  },
-  {
-    name: 'start-run-control-presets-read-refused',
-    make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
-    seedClient: (client) => {
-      seedExecutors(client, EXECUTOR_CASES);
-      seedError(client, [...ANALYSIS_PRESETS_KEY], apiError(503, 'dependency_unavailable'));
-    },
-  },
-  {
     name: 'start-run-executor-shapes',
     make: startRunExecutorShapes,
+  },
+  {
+    name: 'start-run-cost-dialog',
+    make: startRunCostDialogShapes,
   },
   // `AR-V3-BETA-SCREEN-GATE-REPAIR-01`: these four branches are conditional on the
   // group ID and its separate read, so the default settings route cannot reach them.
@@ -2790,23 +2883,6 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       onPriority: () => {}, onNext: null, onPrevious: null,
     }),
   },
-  {
-    // `UI-B-64`: the blocks under the tiles of «Обзор», with a silent server and a job that ended badly.
-    name: 'workers-overview-sections-attention',
-    make: () => createElement(WorkersOverviewSections, {
-      workers: [{
-        worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: true, slots: 2, version: '0.5.0',
-        started_at: '2026-10-09T10:00:00Z', heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [],
-      }],
-      workersPartial: true,
-      jobs: [{
-        job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', run_id: RUN_ID, state: 'failed', priority: 0,
-        created_at: '2026-10-09T10:00:00Z', available_at: '2026-10-09T10:00:00Z', error_code: 'analysis_failed', ...QUEUE_WORK,
-      }],
-      jobsPartial: true,
-      processesHref: '?tab=processes',
-    }),
-  },
   /*
    * `UI-A-27` «Просмотр PDF»: the version page's drawer is mounted by a press, so it is rendered here on its own -- the bytes on their
    * way (the viewer's loading sentence) and the read refused (its typed error).
@@ -3122,7 +3198,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     ),
   },
   /*
-   * `EXEC-HTTP-01`. «Исполнители» on its other two tabs, as an administrator and as an expert,
+   * `EXEC-HTTP-01`, moved by `HOSTS-WEB-01`. The former tabs of «Исполнители» are sections of the advanced page, rendered here
+   * as an administrator (the page opened on the section) and as an expert (the widget itself: the page is not an expert's),
    * with the key form opened for a connection; every outcome of the key post (the form is a
    * server component, so its eight sentences are rendered here on their own); a refused
    * command; and the forms and controls a tab reaches only after a press or a choice, rendered
@@ -3130,11 +3207,11 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
    */
   {
     name: 'workers-connections',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'connections' }),
   },
   {
     name: 'workers-connections-key',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, {
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, {
       initialTab: 'connections',
       secretConnectionId: EXECUTOR_READY.connection.connection_id,
       secretForm: createElement(SetExecutorSecretForm, { connectionId: EXECUTOR_READY.connection.connection_id, outcome: 'saved' }),
@@ -3142,22 +3219,22 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   },
   {
     name: 'workers-connections-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }),
+    make: () => createElement(ExecutorConnections, { roles: ['expert'] }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     name: 'workers-routes',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
   },
   {
     name: 'workers-routes-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(ExecutorRoutes, { roles: ['expert'] }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // A route with no standby configured: the editor shows the unticked choice only.
     name: 'workers-routes-no-standby',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, [{
       work_kind: 'text_analysis', primary_connection_id: EXECUTOR_READY.connection.connection_id,
       set_at: '2026-10-21T10:00:00Z', set_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
@@ -3168,7 +3245,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     // «Анализ текста», and (`CMP-SEAL-C4`) the AI review of «Сравнение стадий», so that every member of `ExecutorWorkKind`
     // stands on a screen.
     name: 'workers-routes-comparison-kinds',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, (
       ['text_analysis', 'comparison_pair_check', 'comparison_sheet_changes', 'comparison_spec', 'comparison_report',
         'comparison_stage_review'] as const
@@ -3180,7 +3257,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     // No route at all: a run would be refused, and the screen says so.
     name: 'workers-routes-unassigned',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, []),
   },
   /*
@@ -3191,17 +3268,17 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
    */
   {
     name: 'workers-groups',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'groups' }),
   },
   {
     name: 'workers-groups-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    make: () => createElement(ExecutorGroups, { roles: ['expert'] }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // The groups are read and their capacities are not: the pending branch of each group's occupancy.
     name: 'workers-groups-capacity-pending',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'groups' }),
     seedClient: (client) => {
       for (const group of [MAIN_GROUP, ROUTED_GROUP]) {
         client.removeQueries({ queryKey: executorGroupCapacityKey(group.group_id) });
@@ -3210,48 +3287,219 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   },
   {
     name: 'workers-rules',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'rules' }),
   },
   {
     name: 'workers-rules-expert',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    make: () => createElement(ExecutorRules, { roles: ['expert'], legacyRoutes: createElement(ExecutorRoutes, { roles: ['expert'], history: true }) }),
     seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // Under rules: a rule for two kinds of work (the second on an earlier revision of its group), the others unruled.
     name: 'workers-rules-in-force',
-    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'rules' }),
     seedClient: (client) => client.setQueryData(KEYS.executorRoutingRules, ruleList('rules', [
       ruleOf('text_analysis', ROUTED_GROUP, 1),
       ruleOf('comparison_pair_check', { ...MAIN_GROUP, current_revision: { ...MAIN_GROUP.current_revision, group_revision_id: 'exgr_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z' } }, 2),
     ])),
   },
+  /*
+   * `HOSTS-WEB-01` (ADR-0028). «Исполнители» in two tabs, as the roles meet them: «Серверы» (the administrator with the
+   * switch, the menu and the button; an expert with none; a viewer with the refusal; the empty list), what a row opens
+   * («Подробнее» with the reasons a model is unavailable, «Удалить»), «Модели по этапам» (the table for both roles, the layout
+   * switched off, none saved, the form), the window «Подключить сервер» on both its tabs and in each state of the install, and
+   * the advanced page for an administrator, for an expert (refused), and its sections for the presets and the layout.
+   * Every string seeded is Cyrillic or an identifier, as everywhere here.
+   */
   {
-    // The three-way start choice's group select, over every answer the group list can be in.
-    name: 'start-run-group-select',
-    make: () => createElement(GroupSelectView, {
-      id: 'group-select', reading: { phase: 'ready', groups: [MAIN_GROUP, ROUTED_GROUP, ARCHIVED_GROUP] },
-      value: MAIN_GROUP.group_id, disabled: false, onChange: () => {},
+    name: 'workers-servers',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    seedClient: (client) => seedHosts(client),
+  },
+  {
+    name: 'workers-servers-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    seedClient: (client) => { seedHosts(client); client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }); },
+  },
+  {
+    name: 'workers-servers-viewer',
+    make: () => createElement(ExecutorHosts, { roles: ['viewer'] }),
+  },
+  {
+    name: 'workers-servers-empty',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }),
+    seedClient: (client) => seedHosts(client, { items: [], online: 0, slots_free: 0, slots_total: 0, total: 0 }),
+  },
+  {
+    name: 'workers-servers-details',
+    make: () => createElement(HostRow, { host: SERVER_ONLINE, admin: true, initialPanel: 'details' }),
+    seedClient: (client) => seedHostDetails(client),
+  },
+  {
+    name: 'workers-servers-delete',
+    make: () => createElement(DeleteHostView, { name: 'резерв', pending: false, failure: null, onConfirm: () => undefined, onCancel: () => undefined }),
+  },
+  {
+    name: 'workers-models',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); },
+  },
+  {
+    name: 'workers-models-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }); },
+  },
+  {
+    name: 'workers-models-off',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT_OFF); },
+  },
+  {
+    name: 'workers-models-none-saved',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'models' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT_EMPTY); },
+  },
+  {
+    name: 'workers-models-editing',
+    make: () => createElement(ExecutorStageModels, { roles: ['admin'], initiallyEditing: true }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); },
+  },
+  {
+    name: 'workers-models-viewer',
+    make: () => createElement(ExecutorStageModels, { roles: ['viewer'] }),
+  },
+  {
+    name: 'workers-connect-command',
+    make: () => createElement(ConnectWindow, { onClose: () => undefined, staticOpen: true, initialTab: 'command' }),
+  },
+  {
+    name: 'workers-connect-command-issued',
+    make: () => createElement(CommandTabView, {
+      name: 'новый', pending: false, issued: ISSUED, replaced: true, failure: null, problem: null, onName: () => undefined, onGet: () => undefined,
+      status: createElement('p', null, 'ждём сервер…'),
     }),
   },
   {
-    name: 'start-run-group-select-loading',
-    make: () => createElement(GroupSelectView, {
-      id: 'group-select', reading: { phase: 'loading' }, value: null, disabled: false, onChange: () => {},
+    name: 'workers-connect-ssh',
+    make: () => createElement(ConnectWindow, { onClose: () => undefined, staticOpen: true, initialTab: 'ssh' }),
+  },
+  {
+    name: 'workers-connect-ssh-problem',
+    make: () => createElement(SshFormView, { pending: false, problem: 'Укажите узел и пользователя SSH.', failure: null, onSubmit: () => undefined }),
+  },
+  ...(['requested', 'awaiting_host_key', 'installing', 'succeeded', 'failed'] as const).map((state) => ({
+    name: `workers-install-${state}`,
+    make: () => createElement(InstallSessionView, {
+      install: hostInstall({
+        state, ...(state === 'failed' ? { failure_reason: 'ssh_refused' as const } : {}),
+        ...(state === 'succeeded' ? { key_removed_at: '2026-11-09T11:05:00Z' } : {}),
+      }),
+      confirming: false, confirmFailure: null, onConfirm: () => undefined, onRetry: () => undefined,
+      children: createElement('p', null, 'найдено: Opus 5.5'),
+    }),
+  })),
+  {
+    // Every role of a cell, and the three efforts, in one table: the blocks row as an ensemble scheme.
+    name: 'workers-models-ensemble',
+    make: () => createElement(StageModelsTable, { layout: STAGE_LAYOUT_ENSEMBLE, admin: false }),
+  },
+  {
+    // `CMP-WEB-01`: the four folded lines of the comparison of versions under the six rows, one of them with the mark «нет на серверах».
+    name: 'workers-models-comparison',
+    make: () => createElement(StageModelsTable, { layout: STAGE_LAYOUT_COMPARISON, admin: false }),
+  },
+  {
+    // `CMP-WEB-01`: the sentence that says no comparison will run, for a «Свой набор» stored without the four cells.
+    name: 'workers-models-comparison-none',
+    make: () => createElement(StageModelsTable, { layout: STAGE_LAYOUT, admin: false }),
+  },
+  {
+    // `CMP-WEB-01`: the form under «Свой набор» with the group «Сравнение версий» (four rows) and the limits of each kind in «Дополнительно».
+    name: 'workers-models-editing-comparison',
+    make: () => createElement(LayoutEditorView, {
+      draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells, comparison: STAGE_COMPARISON_CELLS }, catalogue: STAGE_CATALOGUE,
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
+      onLimit: () => undefined, onComparisonModel: () => undefined, onComparisonEffort: () => undefined, onComparisonLimit: () => undefined,
+      onSave: () => undefined, onCancel: () => undefined,
     }),
   },
   {
-    name: 'start-run-group-select-failed',
-    make: () => createElement(GroupSelectView, {
-      id: 'group-select', reading: { phase: 'failed', detail: 'Список групп не получен.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100', onRetry: () => {} },
-      value: null, disabled: false, onChange: () => {},
+    // `CMP-WEB-01`: the group with no model chosen: the one-line note, «не выбрана» in each row, an effort that cannot be chosen yet.
+    name: 'workers-models-editing-comparison-none',
+    make: () => createElement(LayoutEditorView, {
+      draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
+      onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
     }),
   },
   {
-    name: 'start-run-group-select-gone',
-    make: () => createElement(GroupSelectView, {
-      id: 'group-select', reading: { phase: 'ready', groups: [] }, value: MAIN_GROUP.group_id, disabled: true, onChange: () => {},
+    // The form with every model served: the three segments, and an effort select with all three efforts.
+    name: 'workers-models-editing-all',
+    make: () => createElement(LayoutEditorView, {
+      draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
+      onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
     }),
+  },
+  {
+    // A server that is off and out of contact: the two reasons that name it, in the details.
+    name: 'workers-servers-details-off',
+    make: () => createElement(HostDetailsView, { details: HOST_DETAILS_OFF, rechecking: false, onRecheck: () => undefined }),
+  },
+  {
+    // The branches a cold or refused read reaches: the details of a server, «Модели по этапам», the editor's inputs, the list.
+    name: 'workers-servers-details-cold',
+    make: () => createElement(HostRow, { host: SERVER_ONLINE, admin: true, initialPanel: 'details' }),
+  },
+  {
+    name: 'workers-servers-details-failed',
+    make: () => createElement(HostRow, { host: SERVER_ONLINE, admin: true, initialPanel: 'details' }),
+    seedClient: (client) => seedError(client, executorHostDetailsKey(SERVER_ONLINE.host_id), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'workers-models-cold',
+    make: () => createElement(ExecutorStageModels, { roles: ['admin'] }),
+  },
+  {
+    name: 'workers-models-failed',
+    make: () => createElement(ExecutorStageModels, { roles: ['expert'] }),
+    seedClient: (client) => seedError(client, stageLayoutKey(), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'workers-models-editing-cold',
+    make: () => createElement(ExecutorStageModels, { roles: ['admin'], initiallyEditing: true }),
+    seedClient: (client) => client.setQueryData(stageLayoutKey(), STAGE_LAYOUT),
+  },
+  {
+    name: 'workers-servers-failed',
+    make: () => createElement(ExecutorHosts, { roles: ['admin'] }),
+    seedClient: (client) => seedError(client, executorHostsKey(), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'workers-processes-cold',
+    make: () => createElement(ProcessesSection, { roles: ['admin'] }),
+    seedClient: (client) => client.removeQueries({ queryKey: KEYS.workers }),
+  },
+  {
+    name: 'workers-advanced-presets',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'presets' }),
+  },
+  {
+    name: 'workers-advanced-layout',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'layout' }),
+    seedClient: (client) => { seedHosts(client); seedLayout(client, STAGE_LAYOUT); },
+  },
+  {
+    name: 'workers-advanced-closed',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, {}),
+  },
+  {
+    name: 'workers-advanced-expert',
+    make: () => createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, {}),
+    seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
   },
   {
     // The one sentence under every refused or unknown group, rule and mode command.
@@ -4326,6 +4574,24 @@ const TRANSLATED_SCHEMAS = [
   'ExecutorIdentityBasis',
   'ExecutorRateCheck',
   'ExecutorWorkKind',
+  // `HOSTS-SEAL-1` (ADR-0028): «Исполнители» and «Модели по этапам» say the state of a server, a model and a provider's login, the
+  // access, the effort and the row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. `review`,
+  // `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid` and `online` are plain English words and must not be permitted bare.
+  // `HOSTS-WEB-01` renders them (the markers are in `SCHEMA_MARKERS` below; `ModelProbeState` and `RunStartRoute` wait in `NOT_YET_ON_A_SCREEN`).
+  'StageRowKey',
+  'StageCellRole',
+  'StageModelKit',
+  'ModelEffort',
+  // `CMP-WEB-01` (contract 1.47.0): «Сравнение версий» in «Модели по этапам» says the four kinds of comparison work in Russian («Пары листов»,
+  // «Изменения листов», «Спецификация», «Отчёт»), with the contract value in `data-comparison-kind`. `comparison_spec` and the others are
+  // identifiers a person is not shown.
+  'ComparisonLayoutKind',
+  'ExecutorModelAccess',
+  'ProviderAuthState',
+  'ModelProbeState',
+  'ExecutorHostState',
+  'ModelUnavailableReason',
+  'RunStartRoute',
   // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
   // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
   // `queued`, `running`, `stale`, `failed`, `done`), which must not be permitted bare. `ComparisonLayer` and `ComparisonChannelState`
@@ -4387,7 +4653,7 @@ const TRANSLATED_SCHEMAS = [
 function translatedVocabulary(): ReadonlySet<string> {
   const openapi = readJson<OpenApi>(CONTRACT_PATH);
   const values = new Set<string>();
-  for (const name of TRANSLATED_SCHEMAS) {
+  for (const name of [...TRANSLATED_SCHEMAS, ...RESERVED_TRANSLATED_SCHEMAS]) {
     const schema = openapi.components.schemas[name];
     if (schema === undefined) {
       throw new Error(
@@ -4399,6 +4665,21 @@ function translatedVocabulary(): ReadonlySet<string> {
   }
   return values;
 }
+
+/**
+ * Enumerations that no screen renders yet (`HOSTS-SEAL-1` reserved ten, `HOSTS-WEB-01` rendered them and moved them into `TRANSLATED_SCHEMAS`).
+ *
+ * They leave the permitted vocabulary NOW, so the guard keeps reddening a plain English word of the contract (`review`, `text`, `done`) as it did
+ * before the contract carried it, but they are not yet `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries,
+ * and none does. `RUN-SCREEN-01` moves each schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empties this list.
+ */
+const RESERVED_TRANSLATED_SCHEMAS = [
+  // `HOSTS-SEAL-2` (contract 1.46.0): the window «Этапы анализа раздела» will say a chip, its state and where its plan comes from in Russian, with the
+  // contract value in a `data-` attribute (`RUN-SCREEN-01`). `text`, `blocks`, `merge`, `norms`, `review`, `done` and `preparation` are plain English words.
+  'RunStageChip',
+  'RunStageState',
+  'RunStagePlanSource',
+] as const;
 
 const TRANSLATED = translatedVocabulary();
 
@@ -4454,7 +4735,8 @@ describe('the guard reads a contract rather than a list of words', () => {
     // 25 since `D-292`: four format and sheet names of the comparison exports (`XLSX`, `JSON`, `HTML`, `RawJSON`), each
     // with its reason. It was 21.
     // 26 since `UI-B-52`: `Alt`, the legend engraved on a keyboard key, said in the queue's hint for moving a waiting job.
-    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(26);
+    // 27 since `HOSTS-WEB-01`: `Codex`, the product name of the second command-line client (the model names are derived, not listed).
+    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(27);
     for (const { word, why } of NOT_DERIVABLE) {
       expect(why.length, `${word} has no reason`).toBeGreaterThan(60);
     }
@@ -4525,7 +4807,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.44.0',
+            contract_version: '1.47.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4547,7 +4829,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.44.0',
+            contract_version: '1.47.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -5134,7 +5416,83 @@ const SCHEMA_MARKERS: readonly {
     why:
       '`widgets/version-series/ui/queue-strips.tsx`, the state of one step in the list of «Очередь запуска»: ждёт, идёт, ждёт подтверждения, готово, пропуск, ошибка.',
   },
+  // `READINESS-WEB-01`: the line under «Запустить» says the route in Russian («Набор: …», «Маршрут: прежний»); the contract value is in `data-readiness-route`.
+  {
+    schema: 'RunStartRoute',
+    attribute: 'data-readiness-route',
+    why: '`widgets/run-list/ui/start-run-with-readiness.tsx` through `features/start-run/ui/readiness-line.tsx`: the line under «Запустить», «Набор: Только Claude · по подписке · …» on the layout\'s route and «Маршрут: прежний» on the old one.',
+  },
+  // `HOSTS-WEB-01` (ADR-0028): «Исполнители» in two tabs. The contract value is in a `data-` attribute and the screen says it in Russian.
+  {
+    schema: 'StageRowKey',
+    attribute: 'data-stage-row',
+    why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx`, one cell of the table of six rows: Анализ текста, Анализ блоков, Комплексная сверка, Нормы, Критик, Уточнение.',
+  },
+  {
+    schema: 'StageCellRole',
+    attribute: 'data-stage-role',
+    why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx`, the part a cell plays in an ensemble row: the single answer, the two legs, the judge (named in front of the model).',
+  },
+  {
+    schema: 'StageModelKit',
+    attribute: 'data-layout-kit',
+    why: '`features/manage-stage-layout/ui/layout-editor.tsx`, the segments of the form «Изменить»: Только Claude, Только Codex, Свой набор.',
+  },
+  {
+    schema: 'ModelEffort',
+    attribute: 'data-model-effort',
+    why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx` and the effort select of `features/manage-stage-layout/ui/layout-editor.tsx`: низкое, среднее, высокое.',
+  },
+  {
+    schema: 'ComparisonLayoutKind',
+    attribute: 'data-comparison-kind',
+    why: '`features/manage-stage-layout/ui/layout-editor.tsx` (the four rows of «Сравнение версий» under «Свой набор») and `widgets/executor-stage-models/ui/executor-stage-models.tsx` (the four folded lines): Пары листов, Изменения листов, Спецификация, Отчёт.',
+  },
+  {
+    schema: 'ExecutorModelAccess',
+    attribute: 'data-host-access',
+    why: '`features/manage-executor-host/ui/host-details.tsx`, a client found on a server in «Подробнее»: по подписке, по ключу API.',
+  },
+  {
+    schema: 'ProviderAuthState',
+    attribute: 'data-host-auth',
+    why: '`features/manage-executor-host/ui/host-details.tsx`, the login of a client on a server in «Подробнее»: вход выполнен, нужно войти на сервере, вход не определён.',
+  },
+  {
+    schema: 'ExecutorHostState',
+    attribute: 'data-host-state',
+    why: '`widgets/executor-hosts/ui/executor-hosts.tsx`, the dot of a server row: на связи, все места заняты, нет связи.',
+  },
+  {
+    schema: 'ModelUnavailableReason',
+    attribute: 'data-host-reason',
+    why: '`features/manage-executor-host/ui/host-details.tsx` (the reasons of «Подробнее») and the mark «⚠ нет на серверах» of `widgets/executor-stage-models`: said only where an action is blocked or a run waits.',
+  },
 ];
+
+/**
+ * Translated schemas that no screen of this wave can show yet, each with the reason and the wave that will. **A ratchet in both
+ * directions**: a schema here has no marker above (it would be decided twice), and the day a marker is added the line is deleted;
+ * a schema that is neither marked nor named here is red, as it always was. `HOSTS-SEAL-1` translated both at the contract and the
+ * words are waiting for their screens, so the raw value is not permitted in the meantime.
+ */
+const NOT_YET_ON_A_SCREEN: readonly { readonly schema: (typeof TRANSLATED_SCHEMAS)[number]; readonly why: string }[] = [
+  {
+    schema: 'ModelProbeState',
+    why:
+      'What the agent knows of one model (`verified`, `not_verified`, `failed`) travels in the agent\'s report to the stand (`RunnerCatalogueEntry`, the host-mode runner protocol); ' +
+      'no operation the web calls returns it. The web shows the stand\'s own reasons (`ModelUnavailableReason`), so a probe state is a screen of nobody until the contract returns it.',
+  },
+];
+
+/** The translated schemas nobody decided anything about: neither marked nor named as waiting. Pure, so a test can drive it. */
+export function undecidedSchemas(
+  translated: readonly string[],
+  marked: readonly string[],
+  waiting: readonly string[],
+): readonly string[] {
+  return translated.filter((name) => !marked.includes(name) && !waiting.includes(name));
+}
 
 /** `data-x="y"` pairs, read out of the raw markup of every screen in every state. */
 function markerValuesOnScreens(): Map<string, Set<string>> {
@@ -5158,11 +5516,23 @@ describe('the matrix covers the contract, and says which member it does not', ()
     // A schema added to `TRANSLATED_SCHEMAS` with no marker would be excused by silence,
     // which is the class of defect this section exists to close. Both directions.
     const marked = SCHEMA_MARKERS.map((entry) => entry.schema);
-    expect([...TRANSLATED_SCHEMAS].filter((name) => !marked.includes(name))).toEqual([]);
+    const waiting = NOT_YET_ON_A_SCREEN.map((entry) => entry.schema);
+    expect(undecidedSchemas(TRANSLATED_SCHEMAS, marked, waiting)).toEqual([]);
     expect(marked.filter((name) => !([...TRANSLATED_SCHEMAS] as string[]).includes(name))).toEqual([]);
+    // The ratchet: a schema that has a marker is no longer waiting, and a waiting one is still translated.
+    expect(waiting.filter((name) => marked.includes(name))).toEqual([]);
+    expect(waiting.filter((name) => !([...TRANSLATED_SCHEMAS] as string[]).includes(name))).toEqual([]);
+    for (const { schema, why } of NOT_YET_ON_A_SCREEN) {
+      expect(why.length, `${schema} is waiting with no reason`).toBeGreaterThan(80);
+    }
     for (const { schema, why } of SCHEMA_MARKERS) {
       expect(why.length, `${schema} names no module that renders it`).toBeGreaterThan(40);
     }
+  });
+
+  it('can fail: a translated schema that is neither marked nor named as waiting is found', () => {
+    expect(undecidedSchemas(['A', 'B', 'C'], ['A'], ['B'])).toEqual(['C']);
+    expect(undecidedSchemas(['A'], ['A'], [])).toEqual([]);
   });
 
   it('renders every attribute it claims to read, so a renamed one is red and not merely empty', () => {
@@ -5401,11 +5771,13 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
     // journey itself (`tests/e2e/pc01/journey`) is the instrument that presses it.
     const PRESSED_BEFORE_IT_EXISTS: readonly { readonly text: string; readonly why: string }[] = [
       {
-        text: 'Подтвердить',
+        text: 'Запустить с этого этапа',
         why:
-          'The confirmation panel of «Очередь» (`queue-page.tsx`, `data-execution-intent`) is drawn when `intent` is set by ' +
-          'pressing a row action: «Отменить прогон», «Повторный аудит» or the priority form. `intent` is a `useState` and one ' +
-          'static pass presses nothing. «Исполнители» and «Нормы» confirm the same way, behind their own press.',
+          '`RUN-SCREEN-01a`: «Запустить с этапа» moved from the run page into «Этапы анализа раздела» (`run-stages-dialog`), which a chip of ' +
+          'the rail opens (`RunProgress` keeps the open chip in a `useState`); one static pass presses nothing and leaves the dialog closed. ' +
+          'The button there reads «Запустить с этого этапа», and the journey (`tests/e2e/pc01/journey/manifest.json`, the three `run-from-stage` steps; ' +
+          '`WEB-INT-1`) presses the chip `[data-run-chip="text"]` first and then this button. tests/unit/screens/run-screen.test.ts and ' +
+          'tests/unit/run/run-screen-live.test.ts render the dialog and press it.',
       },
       {
         text: 'Возобновить выдачу',
@@ -5555,6 +5927,10 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
     why: 'R-150e: the user form shows this only after its submit finds «Наблюдатель» ticked beside another role; one static render cannot tick boxes or submit. The rule itself is rolesCombinationAllowed, tested in tests/unit/entities/account.test.ts.',
   },
   {
+    label: 'Загрузка: события прогона…',
+    why: 'RUN-SCREEN-01a: the run\'s events are the tab «Журнал» of the run screen (`RunTabs`, `useState`); RunEvents is mounted only once that tab is pressed, and one static pass leaves the screen on «Обзор». tests/unit/screens/run-screen.test.ts renders RunEvents cold and reads the loading branch, and tests/unit/run/run-screen-live.test.ts presses the tab.',
+  },
+  {
     label: 'События прогона не открылись',
     why: 'UI-B-39: the run page shows this only after the run-filtered listExecutionJournal read fails; the run page is censused cold, where that read has not settled. The same ErrorState with this title is the only failure branch of RunEvents.',
   },
@@ -5680,15 +6056,19 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
    */
   {
     label: 'Загрузка: оценка стоимости…',
-    why: '`start-run-control.tsx`, while the cost estimate of the start is in flight: `useRunCostApproval` holds it in a `useMutation` that «Оценить стоимость» starts. One static pass cannot press the button or put a mutation into the pending state through a query cache.',
+    why: '`start-run-control.tsx`, while the cost estimate of the start is in flight: `useRunCostApproval` holds it in a `useMutation` that «Запустить» starts (`RUN-START-ONE-01a`). One static pass cannot press the button or put a mutation into the pending state through a query cache.',
   },
   {
     label: 'Загрузка: стоимость повторного аудита…',
-    why: '`queue-page.tsx`, between the press of «Повторный аудит» and the answer of the cost estimate it asks for first (`use-reaudit-cost-approval.ts`): a `useMutation` in flight, which one static pass cannot start.',
+    why: '`reaudit-start.tsx` (step `reading`), between the press of «Повторный аудит» and the answer of the cost estimate it asks for first (`use-reaudit-cost-approval.ts`): the read is enabled only once `intent`, a `useState` of `queue-page.tsx`, holds a repeated Run, and one static pass presses nothing (`RUN-START-ONE-01b`).',
   },
   {
     label: 'Стоимость повторного аудита не оценена',
-    why: '`queue-page.tsx`, after the cost estimate of a re-audit was refused: the refusal sits in a settled `useMutation` that «Повторный аудит» started. A seeded query cache does not set a mutation observer\'s state.',
+    why: '`reaudit-start.tsx` (step `unreadable`), after the cost estimate of a re-audit could not be read: the query is disabled until «Повторный аудит» sets `intent` (a `useState`), so there is no error to seed into a cache in a static pass (`RUN-START-ONE-01b`).',
+  },
+  {
+    label: 'Загрузка: запрос на повторный прогон…',
+    why: '`reaudit-start.tsx` (step `send`), while an estimate that charges nothing has been agreed to by the click and the re-audit is on its way: `intent` is a `useState` set by «Повторный аудит» and the send is a `useMutation` started by an effect, which one static pass cannot reach (`RUN-START-ONE-01b`).',
   },
   {
     label: 'Загрузка: предложение перехода…',

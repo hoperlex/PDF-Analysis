@@ -12,10 +12,10 @@
  * **Where there is one, the standard analysis is the default every time.** The choice starts at `standard` whenever this
  * component mounts and is held in state only: nothing is stored per person, project or browser, so a remount, a reload
  * or another visit opens on the standard analysis. One start sends exactly one analysis's operation: `startRun` through
- * `StartRunControl` for the standard analysis, `startArV3BetaGroup` through `StartArV3GroupControl` for v3. v3 is its own
+ * `StartRunControl` (with its readiness line, `./start-run-with-readiness.tsx`) for the standard analysis, `startArV3BetaGroup` through `StartArV3GroupControl` for v3. v3 is its own
  * operation; there is no flag on the default start, no fallback from either to the other and no substitute offered after a
- * refusal. Choosing v3 replaces the standard form, with its executor, preset and group selectors, by the v3 form: the
- * group start takes none, and showing them would promise a choice the server ignores. Changing the choice clears what
+ * refusal. Choosing v3 replaces the standard form, with its «Запустить» button and its «▾» menu, by the v3 form: the
+ * group start takes no "without a money ceiling" choice, and showing it would promise a choice the server ignores. Changing the choice clears what
  * the form that is left held (its estimate, its consent, its refusal).
  *
  * The caller of the v3 start holds its intent for as long as this component lives, as `useArV3GroupStartIntent` asks: a
@@ -29,9 +29,11 @@ import { useState } from 'react';
 import type { ArV3BetaGroup, ProjectUid, RunStatus, VersionUid } from '@/shared/api';
 import { useMayActAsExpert } from '@/entities/account';
 import { arV3GroupReviewAddress, looksLikeArV3GroupId, useArV3StartAllowed } from '@/entities/audit-run';
-import { AnalysisChoice, StartRunControl } from '@/features/start-run';
+import { AnalysisChoice } from '@/features/start-run';
 import type { AnalysisChoiceValue } from '@/features/start-run';
 import { StartArV3GroupControl, useArV3GroupStartIntent } from '@/features/start-ar-v3-group';
+
+import { StartRunWithReadiness } from './start-run-with-readiness';
 
 /** What the v3 form says about what it starts and what it leaves alone. */
 export const AR_V3_CHOICE_SENTENCE =
@@ -54,7 +56,7 @@ export function AnalysisStart({ projectUid, versionUid, onRunStarted }: Analysis
   const [analysis, setAnalysis] = useState<AnalysisChoiceValue>('standard');
 
   const standard = (
-    <StartRunControl
+    <StartRunWithReadiness
       projectUid={projectUid}
       versionUid={versionUid}
       {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}

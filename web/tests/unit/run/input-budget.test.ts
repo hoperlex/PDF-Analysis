@@ -21,7 +21,12 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    useMutation: () => ({ mutate: () => {}, isPending: false, error: settled.error }),
+    // Only the start's mutation (the one with an `onSuccess`, `useStartRun`) answers with the refusal; the
+    // estimate's, which the one-button control also holds, stays unsettled.
+    useMutation: (options: { onSuccess?: unknown }) => ({
+      mutate: () => {}, reset: () => {}, isPending: false,
+      error: options.onSuccess === undefined ? null : settled.error,
+    }),
     useQueryClient: () => ({ setQueryData: () => {}, invalidateQueries: () => Promise.resolve() }),
   };
 });
@@ -42,7 +47,7 @@ const NNBSP = '\u202F';
 
 function refusal(details?: Record<string, string | number | boolean | null>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.44.0',
+    contract_version: '1.47.0',
     error_code: 'analysis_input_budget_exceeded',
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-budget',
@@ -132,7 +137,7 @@ describe('the re-audit classifier prints the same figures', () => {
     const other = new ApiError(
       409,
       {
-        contract_version: '1.44.0', error_code: 'state_transition_not_allowed', message: 'm',
+        contract_version: '1.47.0', error_code: 'state_transition_not_allowed', message: 'm',
         correlation_id: 'c', retryable: false, details: FIGURES as never,
       },
       'c',
@@ -144,8 +149,7 @@ describe('the re-audit classifier prints the same figures', () => {
 describe('the start-run control shows the refusal with its figures and no retry', () => {
   function control(error: unknown): string {
     settled.error = error;
-    // `EXEC-PAR-WEB-01`: the control reads the connections for its «Исполнитель» select, so it needs
-    // a client; nothing is seeded, the list stays loading, and the select draws no button of its own.
+    // The control reads the account for who may start (`R-150e`), so it needs a client; nothing is seeded.
     return renderToStaticMarkup(createElement(
       QueryClientProvider,
       { client: new QueryClient() },
@@ -156,20 +160,19 @@ describe('the start-run control shows the refusal with its figures and no retry'
     ));
   }
 
-  it('renders the warning state with both figures, the correlation id and the two buttons of the control only', () => {
+  it('renders the warning state with both figures, the correlation id and the buttons of the control only', () => {
     const markup = control(refusal(FIGURES));
     expect(markup).toContain('am-state--warning');
     expect(markup).toContain('data-run-failure="input_budget_exceeded"');
     expect(markup).toContain(SENTENCE);
     expect(markup).toContain('cid-budget');
     expect(markup).toContain('Прогон не запущен.');
-    // The control's own two buttons and nothing else: since `6fe0bd50` a start is an estimate («Оценить
-    // стоимость») followed by the start itself, and a retry still cannot help a text that is too large.
+    // The control's own buttons and nothing else: «Запустить» and the item of its «▾» menu (`RUN-START-ONE-01a`;
+    // before it, «Оценить стоимость» and «Запустить прогон»), and a retry still cannot help a text that is too large.
     expect([...markup.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual([
-      'Оценить стоимость', 'Запустить прогон',
+      'Запустить', 'Без денежного потолка (сбор статистики)',
     ]);
-    expect(markup.match(/<button\b/g)).toHaveLength(2);
-    expect(markup).toContain('>Запустить прогон<');
+    expect(markup).toContain('>Запустить<');
     expect(markup).not.toContain('Повторить');
   });
 

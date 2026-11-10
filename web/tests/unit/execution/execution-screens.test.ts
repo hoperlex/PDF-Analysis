@@ -39,7 +39,7 @@ function queue(
 
 function envelope(code: 'permission_denied' | 'state_transition_not_allowed' | 'dependency_unavailable') {
   return {
-    contract_version: '1.44.0', error_code: code,
+    contract_version: '1.47.0', error_code: code,
     message: 'Безопасный отказ.', correlation_id: 'cid-execution-1', retryable: false,
   } as const;
 }

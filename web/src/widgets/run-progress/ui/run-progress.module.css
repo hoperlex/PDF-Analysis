@@ -1,25 +1,19 @@
 /*
- * The first collocated CSS module in this application.
+ * The run screen's collocated module (`W31-STYLE`, reworked by `RUN-SCREEN-01a`).
  *
- * `globals.css` has promised this architecture in its own header comment since the
- * bootstrap — "a slice styles itself with a colocated CSS module and consumes the tokens
- * below" — and `R-18` measured zero such modules against that promise. This is one,
- * against a slice where it costs nothing to be first: every class below was introduced by
- * `W31-STYLE` itself, so no test, no browser instrument and no other slice names them.
+ * `globals.css` promises this architecture in its own header comment -- "a slice styles itself with a colocated CSS module and
+ * consumes the tokens below". Every colour, radius, gap and shadow here is a global `--am-*` token and nothing is declared: the tokens
+ * are the seam a module consumes, and a module that redefined one would be the defect this architecture exists to prevent.
  *
- * What the promise costs everywhere else is measured rather than guessed, and is in
- * `docs/program/W31-STYLE.md`: eight `am-` class names are asserted by the frontend suite
- * and `.am-state` is read from the live DOM by `tests/e2e/pc01/journey/refusals.mjs`, so
- * migrating those is a change to two trees this wave does not own. The tokens stay global
- * — they are the seam a module consumes, and a module that redefined one would be the
- * defect this architecture exists to prevent.
+ * The screen is a head (state, stage count, bar, the live line, the rail of chips and what to do next) over two tabs. Every
+ * colour-bearing rule is reached by a screen of the contrast census (`tests/unit/styles/screens.ts`).
  */
 
 .progress {
   min-width: 0;
 }
 
-/* ---- the head: state, the stages and what to do next (the original's pipeline card) ------- */
+/* ---- the head: state, stages and what to do next (the original's pipeline card) ---------------- */
 
 .head {
   display: flex;
@@ -42,124 +36,76 @@
   gap: var(--am-gap-xs) var(--am-gap);
 }
 
-.headBody {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--am-gap);
+.status {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  min-width: 0;
+  margin: 0;
 }
 
-@media (min-width: 1100px) {
-  .headBody {
-    grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
-  }
+/* A run reproduced from recordings must not look live (`WEB-INT-1`); a live run draws no chip at all. */
+.recorded {
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface-sunken);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  line-height: var(--am-leading-tight);
+}
+
+.counter {
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.eta {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The bar is one segment per chip of this run, so it says what the count says and needs no width of its own. */
+.bar {
+  display: flex;
+  gap: var(--am-gap-2xs);
+  flex: 1 1 120px;
+  min-width: 96px;
+  max-width: 280px;
+  height: var(--am-gap-sm);
+}
+
+.segment {
+  flex: 1;
+  border-radius: var(--am-radius-pill);
+  background: var(--am-line);
+}
+
+.segment[data-segment='done'] {
+  background: var(--am-ok);
+}
+
+.segment[data-segment='live'] {
+  background: var(--am-accent);
+}
+
+.segment[data-segment='failed'] {
+  background: var(--am-failed);
 }
 
 .headActions {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--am-gap-sm);
-  min-width: 0;
-}
-
-.reviewCall {
-  display: flex;
-  flex-direction: column;
-  gap: var(--am-gap-xs);
-  margin: 0;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
-}
-
-/* Inside the head the rail is not a second card. */
-.head .pipeline {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-/* ---- the figures: one line under the head (the original's spend bar) -------------------- */
-
-.figures {
-  display: flex;
   flex-wrap: wrap;
-  gap: 0;
-  min-width: 0;
-  margin: 0 0 var(--am-gap-sm);
-  padding: 0;
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
-  background: var(--am-paper);
-}
-
-.figure {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-width: 0;
-  padding: var(--am-gap-xs) var(--am-gap);
-  border-right: 1px solid var(--am-line-soft);
-}
-
-.figure:last-child {
-  border-right: 0;
-}
-
-/* The global `dl` draws a row grid with lines under each term; a tile is not a row. */
-.figure dt,
-.figure dd {
-  grid-column: auto;
-  padding: 0;
-  border-bottom: 0;
-}
-
-.figure dt {
-  margin: 0;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
-}
-
-.figure dd {
-  margin: 0;
-  font-size: var(--am-text-md);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ---- the two panels: the run's facts and the stage table --------------------------------- */
-
-.columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
   gap: var(--am-gap-sm);
   min-width: 0;
-  margin: var(--am-gap-sm) 0 var(--am-gap);
 }
 
-@media (min-width: 1280px) {
-  .columns {
-    grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1.5fr);
-    align-items: start;
-  }
-}
-
-.panel {
-  min-width: 0;
-  padding: var(--am-gap-sm) var(--am-gap);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
-  background: var(--am-paper);
-}
-
-.panel > h2 {
-  margin: 0 0 var(--am-gap-sm);
-}
-
-/* `UI-B-70`: the waiting run's card «Следующая задача», a panel of its own over the columns. */
-.nextTask {
-  margin: var(--am-gap-sm) 0;
+.headActions:empty {
+  display: none;
 }
 
 .caption {
@@ -168,186 +114,104 @@
   font-size: var(--am-text-xs);
 }
 
-.facts {
-  display: grid;
-  grid-template-columns: minmax(96px, 0.4fr) minmax(0, 1fr);
-  gap: var(--am-gap-xs) var(--am-gap);
-  min-width: 0;
-  margin: 0 0 var(--am-gap-sm);
-  padding: 0;
-}
-
-.facts dt,
-.facts dd {
-  min-width: 0;
+.head .caption {
   margin: 0;
-  overflow-wrap: anywhere;
 }
 
-.facts dt {
-  color: var(--am-ink-muted);
-}
+/* ---- the rail: one button per chip of this run -------------------------------------------------- */
 
-/* ---- what qualifies each figure, at the foot ---------------------------------------------- */
-
-.notes {
-  margin-top: var(--am-gap);
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-}
-
-.progress > h2,
-.notes h2 {
-  margin-top: var(--am-gap);
-}
-
-.mode {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--am-gap-sm);
-  margin: 0 0 var(--am-gap-sm);
-}
-
-.pipeline {
+.rail {
   display: flex;
   align-items: stretch;
   gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   overflow-x: auto;
-  margin-bottom: var(--am-gap-lg);
-  padding: var(--am-gap-sm);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
-  background: var(--am-paper);
 }
 
-.pipelineItem {
+.railItem {
   display: flex;
-  align-items: center;
-  flex: 1 0 128px;
+  flex: 1 0 104px;
   min-width: 0;
 }
 
-.pipelineStage {
+.chip {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--am-gap-xs);
   flex: 1;
-  min-width: 104px;
-  min-height: 72px;
-  padding: var(--am-gap-sm);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--am-gap-2xs);
+  min-width: 0;
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);
-  text-align: center;
+  color: var(--am-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--am-accent);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .pipelineStage {
+  .chip {
     transition: border-color var(--am-motion-base) var(--am-ease), background var(--am-motion-base) var(--am-ease);
   }
 }
 
-.pipelineStage[data-pipeline-status='succeeded'] {
+.chip[data-chip-state='done'] {
   border-color: var(--am-ok);
   background: var(--am-ok-light);
 }
 
-.pipelineStage[data-pipeline-status='partial'] {
+.chip[data-chip-state='partial'] {
   border-color: var(--am-degraded);
   background: var(--am-degraded-light);
 }
 
-.pipelineStage[data-pipeline-status='failed'] {
+.chip[data-chip-state='failed'] {
   border-color: var(--am-failed);
   background: var(--am-failed-light);
 }
 
-.pipelineOrdinal {
-  color: var(--am-accent-strong);
-  font-size: var(--am-text-lg);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+.chip[data-chip-state='running'] {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
 }
 
-.pipelineName {
-  font-size: var(--am-text-xs);
+.chip[data-chip-state='waiting'] {
+  border-color: var(--am-degraded);
+  border-style: dashed;
+  background: var(--am-surface-sunken);
+}
+
+.chipName {
   font-weight: 700;
   line-height: var(--am-leading-tight);
 }
 
-.pipelineStatus {
+.chipState,
+.chipTook,
+.chipModel {
   color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
-}
-
-.pipelineArrow {
-  margin-inline: var(--am-gap-xs);
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-lg);
-}
-
-/* The reading the user came for. It was one paragraph among twelve. Set tight (`UI-PARITY-DENSE`): two lines, not a card. */
-.outcome {
-  padding: var(--am-gap-sm) var(--am-gap);
-  border: 1px solid var(--am-line);
-  border-left: 4px solid var(--am-inert);
-  border-radius: var(--am-radius);
-  background: var(--am-surface);
-  box-shadow: var(--am-shadow-1);
-}
-
-.outcome > *:last-child {
-  margin-bottom: 0;
-}
-
-.outcome p {
-  margin: 0 0 var(--am-gap-xs);
-}
-
-.outcome[data-run-outcome='published'] {
-  border-left-color: var(--am-ok);
-  background: var(--am-ok-light);
-}
-
-.outcome[data-run-outcome='partial'] {
-  border-left-color: var(--am-degraded);
-  background: var(--am-degraded-light);
-}
-
-.outcome[data-run-outcome='failed'] {
-  border-left-color: var(--am-failed);
-  background: var(--am-failed-light);
-}
-
-.outcome[data-run-outcome='in_flight'] {
-  border-left-color: var(--am-accent);
-  background: var(--am-accent-light);
-}
-
-.activity {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--am-gap-sm);
-  margin: 0;
-  padding: var(--am-gap-sm) 12px;
-  border-radius: var(--am-radius-sm);
-  background: var(--am-surface-sunken);
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-}
-
-/* The time a stage took, under its status on the rail (the original's status list states it). */
-.pipelineTook {
-  color: var(--am-ink-muted);
-  font-family: var(--am-font-mono);
   font-size: var(--am-text-xs);
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- the live line of an open run (`UI-A-65`) --------------------------------------------- */
+/* The time a chip took is body text like the state beside it; tabular figures (above) keep the digits aligned without a second face. */
+
+/* ---- the live line of an open run (`UI-A-65`) --------------------------------------------------- */
 
 .live {
   align-self: stretch;
@@ -394,6 +258,233 @@
   50% {
     opacity: 0.25;
   }
+}
+
+/* ---- the two tabs ------------------------------------------------------------------------------- */
+
+.tabs {
+  min-width: 0;
+}
+
+/* An underlined row, as the original's tabs and the other screens' own: no bordered panel round two buttons. */
+.tablist {
+  display: flex;
+  gap: var(--am-gap-xs);
+  margin-bottom: var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line);
+}
+
+.tab {
+  margin: 0 0 -1px;
+  padding: var(--am-gap-xs) var(--am-gap);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--am-ink-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--am-ink);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: -2px;
+}
+
+.tab[aria-selected='true'] {
+  border-bottom-color: var(--am-accent);
+  color: var(--am-ink);
+  font-weight: 700;
+}
+
+.panelBody {
+  min-width: 0;
+}
+
+/* ---- «Обзор»: two tiles, the outcome in a line, the rest folded -------------------------------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  margin: 0 0 var(--am-gap-sm);
+}
+
+@media (min-width: 900px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-paper);
+}
+
+.tile h2 {
+  margin: 0;
+  font-size: var(--am-text-md);
+}
+
+.tile p {
+  margin: 0;
+}
+
+.tileLink {
+  margin-top: auto;
+  font-size: var(--am-text-sm);
+}
+
+/* The severity strip's chips: a count under the expert's own word for the severity; nothing here is the model's. */
+.severities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.severity {
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-surface-sunken);
+  color: var(--am-ink);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.spend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.spendFigure {
+  font-size: var(--am-text-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.spendNote {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* The reading the user came for, set tight (`UI-PARITY-DENSE`): a line, not a card. */
+.outcome {
+  margin: 0 0 var(--am-gap-sm);
+  padding: var(--am-gap-xs) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-left: 4px solid var(--am-inert);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  box-shadow: var(--am-shadow-1);
+}
+
+.outcome > *:last-child {
+  margin-bottom: 0;
+}
+
+.outcome p {
+  margin: 0 0 var(--am-gap-xs);
+}
+
+.outcome[data-run-outcome='published'] {
+  border-left-color: var(--am-ok);
+  background: var(--am-ok-light);
+}
+
+.outcome[data-run-outcome='partial'] {
+  border-left-color: var(--am-degraded);
+  background: var(--am-degraded-light);
+}
+
+.outcome[data-run-outcome='failed'] {
+  border-left-color: var(--am-failed);
+  background: var(--am-failed-light);
+}
+
+.outcome[data-run-outcome='in_flight'] {
+  border-left-color: var(--am-accent);
+  background: var(--am-accent-light);
+}
+
+/* `UI-B-70`: the waiting run's card «Следующая задача». */
+.panel {
+  min-width: 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-paper);
+}
+
+.panel > h2 {
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.nextTask {
+  margin: var(--am-gap-sm) 0;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.4fr) minmax(0, 1fr);
+  gap: var(--am-gap-xs) var(--am-gap);
+  min-width: 0;
+  margin: 0 0 var(--am-gap-sm);
+  padding: 0;
+}
+
+.facts dt,
+.facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.facts dt {
+  color: var(--am-ink-muted);
+}
+
+/* ---- «Подробнее»: what the run is, and what qualifies each figure ------------------------------- */
+
+.more {
+  margin-top: var(--am-gap-sm);
+}
+
+.moreSummary {
+  cursor: pointer;
+  color: var(--am-ink-muted);
+}
+
+.moreBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  margin-top: var(--am-gap-sm);
+}
+
+.notes {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.notes h2 {
+  margin-top: var(--am-gap);
 }
 
 .notesSummary {

@@ -22,8 +22,9 @@ import {
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { CopyDiagnosticsView, WorkerList, copyToClipboard, workerDiagnosticText } from '@/widgets/worker-list';
 import { QueuePage } from '@/_pages/queue/ui/queue-page';
-import { WorkersPage, intakeIntentLabel } from '@/_pages/workers/ui/workers-page';
-import type { WorkersPageProps } from '@/_pages/workers';
+import { WorkersAdvancedPage } from '@/_pages/workers';
+import type { WorkersAdvancedPageProps } from '@/_pages/workers';
+import { ProcessesSection, intakeIntentLabel } from '@/_pages/workers/ui/processes-section';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
 import { QUEUE_WORK } from '../execution/queue-work';
@@ -64,7 +65,7 @@ function list(roles: Role[], items: readonly ExecutionWorker[] = REGISTRY, onPre
 
 function envelope(code: 'permission_denied' | 'dependency_unavailable') {
   return {
-    contract_version: '1.44.0', error_code: code,
+    contract_version: '1.47.0', error_code: code,
     message: 'Безопасный отказ.', correlation_id: 'cid-workers-1', retryable: false,
   } as const;
 }
@@ -245,7 +246,12 @@ describe('«Скопировать диагностику» on a worker’s row 
   });
 });
 
-describe('the «Исполнители» page', () => {
+/*
+ * `HOSTS-WEB-01`: «Процессы» is a section of the advanced page. The tests of its list render the section itself, so a role
+ * that the page does not admit (an expert) can still be shown what the list draws for it; the page's own admission is tested
+ * with the page.
+ */
+describe('«Процессы» on the advanced page', () => {
   function seeded(roles: Role[] | 'failed', workers: ExecutionWorkerPage | 'failed' = page(REGISTRY)) {
     const client = newClient();
     if (workers === 'failed') {
@@ -255,15 +261,32 @@ describe('the «Исполнители» page', () => {
     }
     if (roles === 'failed') seedError(client, queryKeys.account.me(), new TransportError('connection closed'));
     else client.setQueryData(queryKeys.account.me(), { roles });
-    return renderScreen(client, createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'processes' }));
+    return renderScreen(client, createElement(ProcessesSection, { roles: roles === 'failed' ? [] : roles }));
   }
 
-  it('is no longer the placeholder', () => {
-    const markup = seeded(['expert']);
-    expect(markup).not.toContain('data-route="/workers"');
+  function advancedPage(roles: Role[] | 'failed'): string {
+    const client = newClient();
+    client.setQueryData(queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT), page(REGISTRY));
+    if (roles === 'failed') seedError(client, queryKeys.account.me(), new TransportError('connection closed'));
+    else client.setQueryData(queryKeys.account.me(), { roles });
+    return renderScreen(client, createElement(WorkersAdvancedPage as ComponentType<WorkersAdvancedPageProps>, { initialTab: 'processes' }));
+  }
+
+  it('is no longer the placeholder, and is the administrator\'s page', () => {
+    const markup = advancedPage(['admin']);
+    expect(markup).not.toContain('data-route="/workers/advanced"');
     expect(markup).not.toContain('в альфе');
-    expect(markup).toContain('Исполнители');
+    expect(markup).toContain('Расширенные исполнители');
     expect(markup).toContain('>Обновить</button>');
+    expect(markup).toContain(ONLINE.worker_id);
+    expect(markup).toContain('Не брать новые');
+  });
+
+  it('draws no section for an expert: the page is the administrator\'s', () => {
+    const markup = advancedPage(['expert']);
+    expect(markup).not.toContain('data-workers-advanced');
+    expect(markup).not.toContain(ONLINE.worker_id);
+    expect(markup).toContain('Расширенные настройки недоступны');
   });
 
   it('gives an administrator the switch and an expert the list alone', () => {
@@ -273,12 +296,18 @@ describe('the «Исполнители» page', () => {
     expect(expert).not.toContain('Не брать новые');
   });
 
-  it('renders the rows without any switch when getMe fails, and says why', () => {
+  it('renders the rows without any switch while the roles are not read', () => {
     const markup = seeded('failed');
     expect(markup).toContain(ONLINE.worker_id);
-    expect(markup).toContain('data-workers-controls-withheld');
-    expect(markup).toContain('Исполнители показаны без команд: права не прочитаны.');
     expect(markup).not.toContain('Не брать новые');
+  });
+
+  it('draws nothing of the sections and says why when getMe fails', () => {
+    const markup = advancedPage('failed');
+    expect(markup).toContain('data-workers-account-failure');
+    expect(markup).toContain('Права доступа не прочитаны');
+    expect(markup).not.toContain('data-workers-advanced');
+    expect(markup).not.toContain(ONLINE.worker_id);
   });
 
   it('says the registry was not read instead of showing an empty list', () => {
@@ -311,19 +340,13 @@ describe('the «Исполнители» page', () => {
       status: 'error', error: new ApiError(503, envelope('dependency_unavailable'), null),
       fetchStatus: 'idle', errorUpdatedAt: Date.now(), fetchFailureCount: 1,
     });
-    const markup = renderScreen(client, createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'processes' }));
+    const markup = renderScreen(client, createElement(ProcessesSection, { roles: ['admin'] }));
     expect(markup).toContain('data-update-state="stale"');
     expect(markup).toContain('Данные могли устареть');
     expect(markup).toContain('Исполнители не обновились');
     expect(markup).toContain('data-workers-read-failure="refusal"');
     expect(markup).toContain(ONLINE.worker_id);
     expect(markup).not.toContain('Исполнители не прочитаны');
-  });
-
-  it('says the list refreshes itself, without claiming that of the other tabs', () => {
-    const markup = seeded(['expert']);
-    expect(markup).toContain('Обзор и список процессов обновляются автоматически, пока вкладка открыта');
-    expect(markup).toContain('остальные данные');
   });
 });
 

@@ -111,7 +111,7 @@ export function IssuedTokenView({
       </p>
       <CopyBox value={issued.token} />
       <p className="am-form__hint">
-        Действует до <Moment at={issued.runner_token.expires_at} />. Клиент получает токен через
+        {issued.runner_token === undefined ? null : <>Действует до <Moment at={issued.runner_token.expires_at} />. </>}Клиент получает токен через
         переменную окружения: не записывайте его в файл, в адрес и в сообщение. Как подключить клиента,
         описано в руководстве по установке клиента.
       </p>

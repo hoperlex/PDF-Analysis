@@ -177,6 +177,23 @@ from auditmanager.analysis.text.chunk_preflight import ChunkPreflightError
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.lock import ModelPin, pinned_models
 from auditmanager.analysis.text.cost import model_rate_sha256, require_approved_model, request_cost_upper_usd
+from auditmanager.analysis.text.catalogue import (  # HOSTS-LAYOUT-01
+    CatalogueEntry,
+    FORBIDDEN_EFFORTS,
+    ModelCatalogue,
+    accepted_reported,
+    load_model_catalogue,
+    model_catalogue,
+)
+from auditmanager.analysis.text.cell_settings import (  # HOSTS-LAYOUT-01
+    CellSettings,
+    DEFAULT_EFFORT,
+    DEFAULT_TIMEOUT_SECONDS,
+    ROW_DEFAULT_MAX_OUTPUT_TOKENS,
+    apply_to_bundle,
+    effort_of,
+    limit_of,
+)
 from auditmanager.analysis.text.recorded import RecordedAdapter
 from auditmanager.analysis.text.wire_schema import to_wire_schema, with_wire_schema  # AR-V3-WIRE-SCHEMA-01
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
@@ -245,6 +262,19 @@ __all__ = [
     "ModelResponse",
     "pinned_models",
     "model_rate_sha256",
+    "CatalogueEntry",
+    "CellSettings",
+    "DEFAULT_EFFORT",
+    "DEFAULT_TIMEOUT_SECONDS",
+    "FORBIDDEN_EFFORTS",
+    "ModelCatalogue",
+    "ROW_DEFAULT_MAX_OUTPUT_TOKENS",
+    "accepted_reported",
+    "apply_to_bundle",
+    "effort_of",
+    "limit_of",
+    "load_model_catalogue",
+    "model_catalogue",
     "request_cost_upper_usd",
     "require_approved_model",
     "PreparedCropItem",
@@ -469,6 +499,30 @@ def build_extended_request_v3(**kwargs):
 
 
 __all__.append("build_extended_request_v3")
+
+
+def build_block_judge_request(**kwargs):
+    """`HOSTS-ENSEMBLE-01`: the judge's request for one block batch of the blocks ensemble."""
+    from auditmanager.analysis.extended.block_ensemble import build_block_judge_request as build
+    return build(**kwargs)
+
+
+def parse_block_judge_reply(*args, **kwargs):
+    from auditmanager.analysis.extended.block_ensemble import parse_block_judge_reply as parse
+    return parse(*args, **kwargs)
+
+
+def reconcile_block_batch(**kwargs):
+    from auditmanager.analysis.extended.block_ensemble import reconcile_block_batch as reconcile
+    return reconcile(**kwargs)
+
+
+def block_leg_refs(legs):
+    from auditmanager.analysis.extended.block_ensemble import leg_refs
+    return leg_refs(legs)
+
+
+__all__.extend(["build_block_judge_request", "parse_block_judge_reply", "reconcile_block_batch", "block_leg_refs"])
 
 
 def empty_native_text_observations(**kwargs):

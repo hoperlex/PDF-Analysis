@@ -19,6 +19,7 @@ import { RunProgress } from '@/widgets/run-progress';
 
 import { PROJECT_UID, RUN_ID, VERSION_UID, render, runStatus } from '../review/fixtures';
 import { newClient, renderScreen, renderWith } from '../screens/harness';
+import { runDialog } from './run-dialog-fixture';
 
 const CONNECTION = 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const EXECUTOR = { connection_id: CONNECTION, display_name: 'Основной шлюз', pin_id: 'модель-основная' };
@@ -112,22 +113,49 @@ describe('the run table row', () => {
 });
 
 describe('the run page', () => {
-  it('names the executor among the run’s facts', () => {
-    const markup = page({ executor: EXECUTOR });
-    expect(markup).toContain('<dt>Исполнитель</dt>');
-    expect(markup).toMatch(/<dd data-run-executor="true">«Основной шлюз», модель «модель-основная»<\/dd>/);
+  it('names the executor and its model once in «Этапы анализа раздела», in the plan rows, with no line of its own above them', () => {
+    const markup = runDialog(runStatus({ executor: EXECUTOR }), { selected: 'text' });
+    expect(markup).not.toContain('<dt>Исполнитель</dt>');
+    expect(markup).not.toContain('data-run-executor="true"');
+    expect(markup).toContain('<strong title="модель-основная">модель-основная</strong>');
+    expect(markup).toMatch(/data-plan-row="server"[\s\S]*?Основной шлюз/);
     expect(markup).not.toContain('data-run-executor-waiting');
   });
 
-  it('says a run in the queue is waiting for it', () => {
+  it('names the executor and the model in the live line of an open run, and not in a closed one', () => {
+    const prepared = ['source_preparation', 'page_geometry_extraction', 'document_context_build'].map((stage_id) => ({
+      stage_id: stage_id as 'source_preparation', status: 'succeeded' as const, error_code: null,
+    }));
+    const open = page({ state: 'running', terminal_at: null, executor: EXECUTOR, stages: prepared });
+    expect(open).toContain('data-run-live-server');
+    expect(open).toContain('data-run-live-model');
+    expect(open).toContain('Основной шлюз');
+    // The first chip calls no model, so its line names neither a model nor a server.
+    expect(page({ state: 'running', terminal_at: null, executor: EXECUTOR })).not.toContain('data-run-live-server');
+    expect(page({ executor: EXECUTOR })).not.toContain('data-run-live-server');
+  });
+
+  it('says a run in the queue is waiting for it, in the line where the stage would be', () => {
     const markup = page({ state: 'queued', terminal_at: null, executor: EXECUTOR });
-    expect(markup).toMatch(/<p data-run-executor-waiting="true">Ждёт исполнителя «Основной шлюз»\.<\/p>/);
-    expect(markup).toContain('<dt>Исполнитель</dt>');
+    expect(markup).toMatch(/<span data-run-executor-waiting="true">Ждёт исполнителя «Основной шлюз»\.<\/span>/);
+    expect(markup).toContain('data-run-live="waiting"');
+    expect(markup).not.toContain('data-run-live-server');
+    // The window has no executor line of its own (the plan rows say the model and the server); a queued run's server is not chosen yet.
+    const dialog = runDialog(runStatus({ state: 'queued', terminal_at: null, executor: EXECUTOR }), { selected: 'text' });
+    expect(dialog).not.toContain('<dt>Исполнитель</dt>');
+    expect(dialog).toMatch(/data-plan-row="server"[\s\S]*?Основной шлюз/);
+  });
+
+  it('shows the read-only role the model and the stages, and no server', () => {
+    const markup = runDialog(runStatus({ executor: EXECUTOR }), { showServer: false });
+    expect(markup).not.toContain('<dt>Исполнитель</dt>');
+    expect(markup).not.toContain('Основной шлюз');
+    expect(markup).not.toContain('data-plan-row="server"');
   });
 
   it('draws no row, no waiting line and no placeholder for a run without an executor', () => {
     for (const over of [{}, { executor: null }, { state: 'queued' as const, terminal_at: null }]) {
-      const markup = page(over);
+      const markup = page(over) + runDialog(runStatus(over));
       expect(markup).not.toContain('<dt>Исполнитель</dt>');
       expect(markup).not.toContain('data-run-executor');
       expect(markup).not.toContain('Ждёт исполнителя');

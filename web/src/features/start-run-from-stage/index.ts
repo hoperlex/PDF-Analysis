@@ -1,3 +1,4 @@
+export type { StartRunFromStageControlProps } from './ui/start-run-from-stage-control';
 export { StartRunFromStageControl } from './ui/start-run-from-stage-control';
 export { useStartRunFromStage } from './model/use-start-run-from-stage';
 export { useStartFromStageCostApproval } from './model/use-start-from-stage-cost-approval';

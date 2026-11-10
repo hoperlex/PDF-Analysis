@@ -358,6 +358,22 @@ from sqlalchemy import Engine, text
 #: primary keys, four unique constraints, nine foreign keys and 78 checks, to 2052), indexes +17 (eight primary keys, four unique
 #: constraints and five lookups, to 482) and triggers +8 (``am_immutable_row`` on each, to 254). Functions, views, extensions,
 #: sequences, policies and the state topology are byte-identical to the ``0058`` seal.
+#: Resealed 2026-11-09 for ``0062_hosts_stage_models`` (`HOSTS-SEAL-1`, ADR-0028), chained after ``0061``, measured on a throwaway PostgreSQL (the project
+#: image, stand ``hosts-seal-pg``) upgraded ONCE to ``0062`` by this test's own observed output: relations +9 (``executor_host``, its use-event and slot-event
+#: journals, its report, ``executor_model_cooldown``, ``stage_layout`` with its revisions and switch events, and ``audit_run_cell_binding``, to 167), columns +66
+#: (the nine tables' 52 and 14 on existing tables: ``host_id`` on the runner token, the grant, the install session and the connection, ``system_managed`` and
+#: ``capacity_pool`` on the connection, ``system_managed`` on the group, ``audit_run.stage_plan`` and ``stage_key``, ``host_id`` and ``access`` on each of
+#: ``model_call`` and ``provider_call_effect``, to 1771), constraints +84 (nine primary keys, five unique constraints, 15 foreign keys and 55 checks, to 2153;
+#: ``ck_audit_run_binding_shape`` and ``ck_audit_run_wait_reason`` are redefined under their names, and ``fk_executor_task_token`` is replaced by a plain key to
+#: the token), indexes +22 (nine primary keys, five unique constraints and eight lookups and partial unique indexes, to 506) and triggers +17 (the host's
+#: frozen, write-once, no-delete, the two journals' append-only and number guards, the cooldown's key, the task claimer, the layout's immutable, revision
+#: and switch guards, the cell binding's member and immutable guards, to 273; the frozen guards of five existing tables are re-created with the new columns
+#: in their lists, which moves the digest and not the count), functions +4 (``am_check_gapless_number``, ``am_check_executor_task_claimer``,
+#: ``am_check_stage_layout_switch`` and ``am_check_audit_run_cell_binding``, to 84; ``am_guard_audit_run_frozen`` is replaced under its name). Views, extensions,
+#: sequences, policies and the state topology are byte-identical to the ``0061`` seal. Amended the same day (`G-1`, found by `HOSTS-BACKEND-01`; ``0062``
+#: was unpublished): the sealed key of a host's SSH install is an ``executor_secret`` of the host, so ``executor_secret`` gains ``host_id`` (columns +1, to 1772) with its
+#: foreign key and format check and the exactly-one-of check ``ck_executor_secret_target`` (constraints +3, to 2156), the partial unique index
+#: ``ux_executor_secret_current_host`` (indexes +1, to 507) and a frozen guard that names the column (a new triggers digest, the count unchanged at 273).
 #: Resealed 2026-11-09 for ``0061_decision_memory_m2`` (`DECISION-MEMORY-01` phase M2), chained after ``0060``, measured on a throwaway PostgreSQL (the
 #: project image, stand ``am-lane-m2-pg``, lane M2) upgraded ONCE to ``0061`` by this test's own observed output: relations +2 (the table
 #: ``decision_memory_setting_event`` and the view ``decision_memory_case_current``, to 158), columns +24 (the settings table's 6, the status event's
@@ -398,12 +414,12 @@ from sqlalchemy import Engine, text
 #: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
 #: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1705, "33af512040de1c41b0d22f1eb65b8cbe3efaf69e67b4febbcea52be7b20e6b33"),
-    "relations": (158, "fd2f9607741365705d81318ccd7d6246c68eb17b6331374256a5991a02262422"),
-    "constraints": (2069, "78372c9cccf6fb147387581b729c59208c6f93f26737bbba2038cacaf5580f98"),
-    "indexes": (484, "08e2ebbca32f7db0b61aa8fa3b9b1ce309ea6fd8b5907cb7c141bd9e7ee85dc8"),
-    "triggers": (256, "7f44a204313e2d54b4ea43c3729e39b2219e670c094617c86525003885aff13d"),
-    "functions": (80, "7ccacf5c8c98d724a613c1f4ee9d3fcf6330b6cf908b204d7ca58b35c42c0fe5"),
+    "columns": (1772, "b4b711f933b981c2bec62c4500b19bd73773bc6f59f5aba507f56da6e24205b9"),
+    "relations": (167, "ef1026a801186590cb7afd9dd28d9536f98793a6e573cc21249cfae50b6db2f2"),
+    "constraints": (2156, "26ed0190df417b6a86f7ba3b6e94aee873a8f535554fd8cb0099d9eba005c2e3"),
+    "indexes": (507, "5dfa2ed9cfbd0adadc6c670ef8dbf1f84af08977501415c69502272a561b6a5e"),
+    "triggers": (273, "7cff7a6099027a986fd0df2a12896d5ef33d62030b21e95f7df7faea1eefdaf1"),
+    "functions": (84, "14338b5dc4ffcb6620a587a4fe67c558e28614758c0334090260874196f3ca3d"),
     "views": (6, "0bd9b7927321000af88e44410f7f431c918230428ac258d472d294d62d08043e"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

@@ -17,6 +17,13 @@ whenever detection changes; and ``--enroll-only --env-file F`` (what ``install.s
 one-time secret in ``AUDITMANAGER_ENROLLMENT_SECRET`` for a runner token, stores the token in ``F`` and removes
 the secret from ``F``.
 
+``HOSTS-AGENT-01``: ``[executor] mode = "host"`` is the **host mode** (``RUNNER_API.md`` section 10): one process and one
+host token serve every model this host can reach (the ``claude`` and ``codex`` CLIs, and the API keys in the service's key
+file), with no model at install.  The stand's catalogue says which models matter; the agent checks each with a minimal call,
+reports what it verified with every heartbeat (60 s), and refuses a task whose model it does not currently report as
+verified.  ``HostAgent`` and ``HostHealthReporter`` below are that mode; the single-model agent (a token bound to one
+connection, ``mode = "command"`` or ``"endpoint"``) is unchanged.
+
 Rules kept here:
 
 * the token (and an endpoint key) come from environment variables named in the config, never
@@ -56,6 +63,7 @@ from pathlib import Path
 from typing import Any, Optional, Sequence
 
 import detect
+import host_mode
 from runner_client import (
     AGENT_VERSION_RE,
     Backoff,
@@ -79,9 +87,11 @@ EXIT_TEMPFAIL = 75  # sysexits EX_TEMPFAIL: enrolling failed for a reason a retr
 DEFAULT_TOKEN_ENV = "PDF_ANALYSIS_RUNNER_TOKEN"
 #: `EXEC2-AGENT-01`: the one-time enrollment secret, in the environment of `install.sh` and of `--enroll-only`.
 ENROLLMENT_SECRET_ENV = "AUDITMANAGER_ENROLLMENT_SECRET"
-#: The report is repeated this often, and sooner when detection changes; detection itself runs this often.
+#: The report is repeated this often, and sooner when detection changes; detection itself runs this often (cheap:
+#: CLI presence, version, login, key file; no model is called).  A host agent repeats its report every
+#: ``host_mode.REPORT_SECONDS`` (60 s): the stand reads the report as the host's pulse.
 HEALTH_REPORT_SECONDS = 600.0
-HEALTH_DETECT_SECONDS = 120.0
+HEALTH_DETECT_SECONDS = 60.0
 UNVERSIONED = "unversioned"
 DEADLINE_MARGIN_SECONDS = 5.0
 #: After the stand hands back a task this process is still working on (a token whose limit is one is
@@ -95,6 +105,9 @@ KNOWN_KEYS = {
     "runner": {"origin", "token_env", "wait_seconds", "ca_file", "allow_insecure_http", "concurrency", "drain_seconds", "extend_floor_seconds", "backoff_min_seconds", "backoff_max_seconds"},
     "model": {"declared"},
     "executor": {"mode"},
+    "host": host_mode.HOST_KEYS,
+    "slots": host_mode.SLOT_KEYS,
+    "api": host_mode.API_KEYS,
     "command": {"argv", "timeout_seconds", "cwd", "accept_images", "max_images"},
     "endpoint": {"url", "model", "api_key_env", "timeout_seconds", "response_format", "temperature", "max_tokens", "accept_images", "max_images"},
 }
@@ -139,9 +152,12 @@ class Config:
     max_tokens: int = 0
     endpoint_accept_images: bool = False
     endpoint_max_images: int = 1
+    host: Optional[host_mode.HostConfig] = None  # `HOSTS-AGENT-01`: set exactly when mode == "host"
 
     @property
     def accept_images(self) -> bool:
+        if self.mode == "host":
+            return bool(self.host and self.host.accept_images)
         return self.command_accept_images if self.mode == "command" else self.endpoint_accept_images
 
     @property
@@ -151,6 +167,8 @@ class Config:
         A task the agent cannot serve is still refused by :meth:`Agent._worker`."""
         if not self.accept_images:
             return 1
+        if self.mode == "host":
+            return self.host.max_images
         return self.command_max_images if self.mode == "command" else self.endpoint_max_images
 
 
@@ -211,6 +229,13 @@ def load_config(path: str) -> Config:
     cfg.max_tokens = int(endpoint.get("max_tokens", cfg.max_tokens))
     cfg.endpoint_accept_images = endpoint.get("accept_images", False)
     cfg.endpoint_max_images = endpoint.get("max_images", cfg.endpoint_max_images)
+    if cfg.mode == "host":
+        try:
+            cfg.host = host_mode.parse_host_config(document.get("host", {}), document.get("slots", {}), document.get("api", {}))
+        except ValueError as error:
+            raise ConfigError(str(error)) from None
+    elif any(name in document for name in ("host", "slots", "api")):
+        raise ConfigError('[host], [slots] and [api] belong to [executor] mode = "host"')
     validate_config(cfg)
     return cfg
 
@@ -230,10 +255,12 @@ def validate_config(cfg: Config) -> None:
         raise ConfigError("[runner] wait_seconds must be an integer in 0..25")
     if not isinstance(cfg.concurrency, int) or isinstance(cfg.concurrency, bool) or not 1 <= cfg.concurrency <= 8:
         raise ConfigError("[runner] concurrency must be an integer in 1..8")
+    if cfg.mode == "host":
+        return  # no model is declared: the catalogue says which models matter and the agent verifies each (section 10)
     if not cfg.declared_model:
         raise ConfigError("[model] declared is required: the exact pinned model id this agent answers as")
     if cfg.mode not in ("command", "endpoint"):
-        raise ConfigError('[executor] mode must be "command" or "endpoint"')
+        raise ConfigError('[executor] mode must be "command", "endpoint" or "host"')
     if cfg.mode == "command":
         if not math.isfinite(cfg.command_timeout) or cfg.command_timeout < 0:
             raise ConfigError("[command] timeout_seconds must be finite and non-negative (0 uses the task deadline)")
@@ -272,6 +299,7 @@ class Answer:
     output_text: str
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
+    reported_model: Optional[str] = None  # host mode: the exact string the CLI or API reported
 
 
 class Interrupted(Exception):
@@ -436,6 +464,7 @@ class Agent:
         # claim loop adds an id before the worker starts and the worker removes it when it ends.
         self._work_lock = threading.Lock()
         self._in_work: set[str] = set()
+        self.activity_window = host_mode.ACTIVITY_WINDOW_SECONDS
 
     def _enter_work(self, task_id: str) -> bool:
         """Register a task as in work. ``False`` when it already is: the stand handed this process a
@@ -469,14 +498,11 @@ class Agent:
     # -------------------------------------------------------------------- main loop
 
     def run(self, max_tasks: Optional[int]) -> int:
-        slots = threading.Semaphore(self.cfg.concurrency)
+        slots = self._claim_slots()
         backoff = Backoff(self.cfg.backoff_min_seconds, self.cfg.backoff_max_seconds)
         claimed = 0
-        self.log(
-            f"started: origin={self.client.origin} mode={self.cfg.mode} declared_model={self.cfg.declared_model} "
-            f"concurrency={self.cfg.concurrency} instance={self.instance_id} "
-            f"max_tasks={max_tasks if max_tasks else 'unlimited'}"
-        )
+        self.log(f"started: origin={self.client.origin} {self._start_note()} instance={self.instance_id} "
+                 f"max_tasks={max_tasks if max_tasks else 'unlimited'}")
         while not self.stop.is_set() and not self.auth_failed.is_set() and (not max_tasks or claimed < max_tasks):
             if not slots.acquire(timeout=0.5):  # claim only with a free local slot
                 continue
@@ -517,6 +543,13 @@ class Agent:
             self._workers.append(worker)
             worker.start()
         return self._finish()
+
+    def _claim_slots(self) -> Any:
+        """What the claim loop acquires before it claims and the worker releases: the local task slots."""
+        return threading.Semaphore(self.cfg.concurrency)
+
+    def _start_note(self) -> str:
+        return f"mode={self.cfg.mode} declared_model={self.cfg.declared_model} concurrency={self.cfg.concurrency}"
 
     def _finish(self) -> int:
         end = time.monotonic() + (0.0 if self.auth_failed.is_set() else self.cfg.drain_seconds)
@@ -643,10 +676,16 @@ class Agent:
             self._fail(task_id, "deadline_exceeded: the answer window closed")
         elif reason == "agent_shutdown":
             self._fail(task_id, "agent_shutdown: the agent was stopped before the answer was ready")
+        elif reason == "stalled":
+            self.log(f"{task_id}: no output from the call for {self.activity_window:.0f}s; it was stopped and the "
+                     "claim is left to lapse (nothing is submitted)")
         else:
             self.log(f"{task_id}: claim lost, abandoning (nothing is submitted)")
 
-    def _extend_loop(self, task: dict, done: threading.Event, state: dict) -> None:
+    def _extend_loop(self, task: dict, done: threading.Event, state: dict, activity: Any = None) -> None:
+        """Extend the claim while the task is worked on.  A host agent passes ``activity``: the claim is extended
+        only while the call has produced output in the last ``activity_window`` seconds, so a hung CLI or API call
+        lets its claim lapse (and is stopped); a single-model agent extends for as long as the task is in work."""
         task_id = task["task_id"]
         try:
             interval = self._interval(task["claim_expires_at"])
@@ -655,6 +694,9 @@ class Agent:
         while not done.wait(interval):
             if self.client.seconds_until(task["deadline_at"]) <= 0:
                 state["lost"] = "deadline"
+                return
+            if activity is not None and activity.idle() > self.activity_window:
+                state["lost"] = "stalled"
                 return
             try:
                 reply = self.client.extend(task_id)
@@ -694,7 +736,7 @@ class Agent:
                 self.log(f"{task_id}: answer delivery stopped (deadline)")
                 return
             try:
-                reply = self.client.answer(task_id, answer.output_text, self.cfg.declared_model, answer.input_tokens, answer.output_tokens)
+                reply = self._deliver(task, answer)
                 self.log(f"{task_id}: answer accepted (state={reply.get('state')})")
                 return
             except RunnerAuthError:
@@ -725,6 +767,11 @@ class Agent:
                 self.log(f"{task_id}: submit will retry in {pause:.1f}s ({error.message})")
                 self.abort.wait(pause)
 
+    def _deliver(self, task: dict, answer: Answer) -> dict:
+        """One submission of the answer (submitExecutorTaskAnswer)."""
+        return self.client.answer(task["task_id"], answer.output_text, self.cfg.declared_model,
+                                  answer.input_tokens, answer.output_tokens)
+
     def _fail(self, task_id: str, reason: str) -> None:
         try:
             self.client.fail(task_id, reason)
@@ -734,6 +781,141 @@ class Agent:
             self.stop.set()
         except RunnerError as error:
             self.log(f"{task_id}: could not report the failure ({error.message})")
+
+
+# --------------------------------------------------------------------------- host mode (HOSTS-AGENT-01)
+
+
+class _ClaimGate:
+    """Stands in for the semaphore of the single-model claim loop: the loop may claim only when the host mode says a
+    task could be served (some model verified and a free slot behind it).  ``release`` is a no-op: the number of
+    tasks in work, not a count held here, is what the gate reads."""
+
+    def __init__(self, agent: "HostAgent") -> None:
+        self._agent = agent
+
+    def acquire(self, timeout: float = 0.5) -> bool:
+        if self._agent.runtime.can_claim(len(self._agent.in_work())):
+            return True
+        self._agent.stop.wait(min(timeout, 0.5))
+        return False
+
+    def release(self) -> None:
+        return None
+
+
+class HostAgent(Agent):
+    """The claim loop of host mode (``RUNNER_API.md`` section 10).  It claims with the host token only while a
+    model is verified and a slot is free, refuses a task for a model it does not hold as verified
+    (``model_not_available``), runs the rest through the answerer of the task's provider inside that provider's
+    slot, extends the claim only while the call produces output, and submits the answer with the provider, the
+    access and the model the provider itself reported."""
+
+    def __init__(self, cfg: Config, client: RunnerClient, err: Any, instance_id: Optional[str] = None) -> None:
+        super().__init__(cfg, client, "", err, instance_id)
+        self.runtime = host_mode.HostRuntime(cfg.host, self.log, self.stop)
+        self.activity_window = cfg.host.activity_window_seconds
+
+    def _claim_slots(self) -> Any:
+        return _ClaimGate(self)
+
+    def _start_note(self) -> str:
+        return f"mode=host key_file={self.cfg.host.key_file} activity_window={self.activity_window:.0f}s"
+
+    def _deliver(self, task: dict, answer: Answer) -> dict:
+        return self.client.answer(task["task_id"], answer.output_text, task["model_id"], answer.input_tokens,
+                                  answer.output_tokens, provider=task["provider"], access=task["access"],
+                                  reported_model=answer.reported_model)
+
+    def _worker(self, task: dict, slots: Any) -> None:  # noqa: C901 - one task, start to end
+        task_id = task["task_id"]
+        done = threading.Event()
+        state = {"lost": ""}  # "", "claim_lost", "deadline", "stalled"
+        activity = host_mode.Activity()
+        extender = threading.Thread(target=self._extend_loop, args=(task, done, state, activity), daemon=True)
+        provider_slot: Optional[str] = None
+        try:
+            self.log(f"claimed {task_id} provider={task.get('provider')} access={task.get('access')} "
+                     f"model={task.get('model_id')} cell={task.get('cell_key')}")
+            try:
+                model, facts = self.runtime.check_task(task)
+            except host_mode.HostFailure as failure:
+                self.log(f"{task_id}: refused ({failure.code})")
+                self._fail(task_id, str(failure))
+                return
+            budget = self.client.seconds_until(task["deadline_at"]) - DEADLINE_MARGIN_SECONDS
+            if budget <= 0:
+                self._fail(task_id, "deadline_exceeded: too little time left to start")
+                return
+            if task.get("images") and not (self.cfg.accept_images and serves_images(task, self.cfg.declared_max_images)
+                                            and model.provider != detect.PROVIDER_CLAUDE_CODE):
+                self._fail(task_id, "image_input_unsupported")
+                return
+            extender.start()
+
+            def should_stop() -> str:
+                if state["lost"]:
+                    return state["lost"]
+                if self.abort.is_set():
+                    return "agent_shutdown"
+                return ""
+
+            try:
+                while not self.runtime.slots.try_acquire(model.provider):  # never more calls than the provider's slots
+                    reason = should_stop()
+                    if reason:
+                        raise host_mode.Stopped(reason)
+                    self.abort.wait(0.2)
+                provider_slot = model.provider
+                activity.touch()
+                started = time.monotonic()
+                with tempfile.TemporaryDirectory(prefix="pdfa-runner-images-") as directory:
+                    local_images = []
+                    for image, raw in self._fetch_images(task, budget, should_stop):
+                        path = Path(directory) / f"{image['blob_id']}.png"
+                        path.write_bytes(raw)
+                        path.chmod(0o600)
+                        local_images.append({**image, "path": str(path)})
+                    remaining = self.client.seconds_until(task["deadline_at"]) - DEADLINE_MARGIN_SECONDS
+                    reply = self.runtime.execute(task, model, facts, budget=remaining, activity=activity,
+                                                 should_stop=should_stop, local_images=tuple(local_images))
+            except host_mode.Stopped as stop:
+                self._interrupted(task_id, str(stop))
+                return
+            except Interrupted as stop:
+                self._interrupted(task_id, str(stop))
+                return
+            except RunnerAuthError:
+                self.auth_failed.set()
+                self.stop.set()
+                return
+            except (RunnerConflict, RunnerNotFound):
+                self._interrupted(task_id, "claim_lost")
+                return
+            except RunnerError as failure:
+                self.log(f"{task_id}: image delivery failed ({failure.error_code or failure.status or 'network'})")
+                self._fail(task_id, "image_delivery_failed")
+                return
+            except host_mode.HostFailure as failure:
+                self.log(f"{task_id}: the call failed ({failure.code})")
+                self._fail(task_id, str(failure))
+                return
+            finally:
+                if provider_slot is not None:
+                    self.runtime.slots.release(provider_slot)
+            if state["lost"]:
+                self._interrupted(task_id, state["lost"])
+                return
+            self.log(f"{task_id}: answer ready in {time.monotonic() - started:.1f}s ({len(reply['output_text'])} chars, "
+                     f"reported {reply['reported_model']})")
+            self._submit(task, Answer(reply["output_text"], reply.get("input_tokens"), reply.get("output_tokens"),
+                                      reply["reported_model"]), should_stop)
+        except Exception as error:  # noqa: BLE001 - one task must not take the agent down
+            self.log(f"{task_id}: internal error {type(error).__name__}")
+            self._fail(task_id, f"agent_error: {type(error).__name__}")
+        finally:
+            done.set()
+            self._leave_work(task_id)
 
 
 # ------------------------------------------------------------- health report and enrollment
@@ -765,10 +947,22 @@ def build_health_report(cfg: Config, instance_id: str, clis: list[dict], version
         "agent_version": version,
         "clis": clis,
         "concurrency": cfg.concurrency,
-        "execution_profile": cfg.mode,
+        "execution_profile": "command" if cfg.mode == "host" else cfg.mode,
         "features": ["images"] if cfg.accept_images else [],
         "runner_instance_id": instance_id,
     }
+
+
+def build_host_health_report(cfg: Config, instance_id: str, clis: list[dict], version: str, providers: list[dict],
+                             slots: dict) -> dict:
+    """The host agent's report (``RUNNER_API.md`` section 10.3): the report of any agent, with ``providers`` (what
+    detection found, with the state of each catalogue model) and ``slots`` (concurrent calls per provider).
+    ``concurrency`` is the sum of the slots, at most 16."""
+    report = build_health_report(cfg, instance_id, clis, version)
+    report["concurrency"] = max(1, min(host_mode.MAX_REPORTED_CONCURRENCY, sum(slots.values())))
+    report["providers"] = providers
+    report["slots"] = dict(slots)
+    return report
 
 
 def _describe(clis: list[dict]) -> str:
@@ -827,7 +1021,7 @@ class HealthReporter:
                     report = self.report()
                 except Exception as error:  # noqa: BLE001 - detection must not take the agent down
                     self.log(f"health: detection failed ({type(error).__name__}); trying again later")
-                    self.stop.wait(self.detect_seconds)
+                    self._pause(self.detect_seconds)
                     continue
                 if last is None or report != last or time.monotonic() - last_at >= self.report_seconds:
                     pending = report
@@ -842,14 +1036,20 @@ class HealthReporter:
                 if outcome == "accepted" and (last is None or pending["clis"] != last["clis"]):
                     self.log(f"health: reported {_describe(pending['clis'])}")
                 last, last_at, pending = pending, time.monotonic(), None
-            self.stop.wait(self.detect_seconds)
+            self._pause(self.detect_seconds)
+
+    def _pause(self, seconds: float) -> None:
+        self.stop.wait(seconds)
+
+    def _on_ack(self, acknowledgement: dict) -> None:
+        """The stand's answer to an accepted report (a host agent reads the catalogue and the switch from it)."""
 
     def _send(self, report: dict) -> tuple[str, float]:
         """``("accepted" | "deferred" | "token" | "retry", seconds)``. ``deferred``: the stand will not take
         this report now, so the next try is the next interval's. ``token``: the stand refused the token.
         ``retry``: try the same report again after ``seconds`` (0 means the backoff's pause)."""
         try:
-            self.client.report_health(report)
+            acknowledgement = self.client.report_health(report)
         except RunnerAuthError:
             self.log("health: the stand rejected the runner token; the claim loop will stop the agent")
             return "token", 0.0
@@ -867,7 +1067,39 @@ class HealthReporter:
             return "deferred", 0.0
         self.sent.append(report)
         del self.sent[:-16]
+        self._on_ack(acknowledgement)
         return "accepted", 0.0
+
+
+class HostHealthReporter(HealthReporter):
+    """The health reporter of host mode: the same loop (detect, report on change, repeat at the interval), with
+    ``runtime`` doing the detecting and holding the snapshot.  A heartbeat repeats the snapshot as it is; a new one
+    is built only when detection, a minimal call or the stand's catalogue changed something in it.  The stand's
+    answer carries the current catalogue and the host's «Использовать» switch, which the runtime takes.  A pause is
+    cut short when the runtime has something to say (a model verified or failed)."""
+
+    def __init__(self, cfg: Config, client: RunnerClient, instance_id: str, log: Any, stop: threading.Event,
+                 runtime: "host_mode.HostRuntime", *, version: Optional[str] = None) -> None:
+        super().__init__(cfg, client, instance_id, log, stop, version=version,
+                         report_seconds=cfg.host.report_seconds, detect_seconds=cfg.host.detect_seconds)
+        self.runtime = runtime
+
+    def report(self) -> dict:
+        self.runtime.refresh()
+        providers, slots = self.runtime.health_extras()
+        return build_host_health_report(self.cfg, self.instance_id, list(self.runtime.clis()), self.version, providers, slots)
+
+    def _on_ack(self, acknowledgement: dict) -> None:
+        self.runtime.accept_ack(acknowledgement)
+
+    def _pause(self, seconds: float) -> None:
+        end = time.monotonic() + seconds
+        while not self.stop.is_set() and not self.runtime.urgent.is_set():
+            left = end - time.monotonic()
+            if left <= 0:
+                return
+            self.stop.wait(min(0.5, left))
+        self.runtime.urgent.clear()
 
 
 class EnrollmentRefused(Exception):
@@ -941,8 +1173,11 @@ def store_runner_token(env_file: Path, token_env: str, token: str, drop: tuple[s
             pass
 
 
-def enroll_with_grant(cfg: Config, secret: str, env_file: Optional[str]) -> str:
+def enroll_with_grant(cfg: Config, secret: str, env_file: Optional[str], outcome: Optional[dict] = None) -> str:
     """Exchange the one-time secret for a runner token and store the token. Returns the token.
+
+    ``outcome``, when given, is filled with what the stand said besides the token that is safe to show: ``host_id``
+    (a host enrollment, ``RUNNER_API.md`` section 10.1) and ``catalogue_models`` (how many models its catalogue names).
 
     Nothing is sent unless the token can be stored: a spent secret with the token lost would leave the host
     needing a new enrollment. Raises ``ConfigError`` (cannot store, bad origin), ``EnrollmentRefused`` or
@@ -976,6 +1211,9 @@ def enroll_with_grant(cfg: Config, secret: str, env_file: Optional[str]) -> str:
     except RunnerError as error:
         raise EnrollmentRefused(f"the stand refused the enrollment (HTTP {error.status}): {error.message}") from None
     token = issued["token"]
+    if outcome is not None and isinstance(issued.get("host_id"), str):
+        outcome["host_id"] = issued["host_id"]
+        outcome["catalogue_models"] = len(host_mode.parse_catalogue(issued.get("catalogue", []))[0])
     try:
         store_runner_token(path, cfg.token_env, token, drop=(ENROLLMENT_SECRET_ENV,))
     except OSError as error:
@@ -1001,6 +1239,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # The one-time secret leaves this process's environment at once: the answer command and everything it
     # starts inherit the environment, and none of them has any use for it.
     grant = os.environ.pop(ENROLLMENT_SECRET_ENV, "")
+    enrolled: dict = {}
     try:
         cfg = load_config(args.config)
         if args.origin:
@@ -1010,7 +1249,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.enroll_only and not args.env_file:
             raise ConfigError("--enroll-only needs --env-file PATH")
         if grant:
-            token = enroll_with_grant(cfg, grant, args.env_file)
+            token = enroll_with_grant(cfg, grant, args.env_file, enrolled)
         else:
             token = os.environ.get(cfg.token_env, "")
     except EnrollmentRefused as error:
@@ -1023,7 +1262,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return EXIT_CONFIG
     if args.enroll_only:
-        print(f"enrolled: the runner token is stored in {args.env_file}; the enrollment secret is spent")
+        if "host_id" in enrolled:
+            print(f"enrolled: host {enrolled['host_id']}, the runner token is stored in {args.env_file}; "
+                  "the enrollment secret is spent")
+        else:
+            print(f"enrolled: the runner token is stored in {args.env_file}; the enrollment secret is spent")
         return EXIT_OK
     try:
         if not token:
@@ -1036,8 +1279,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.max_tasks < 0:
         print("error: --max-tasks must be 0 or more", file=sys.stderr)
         return EXIT_CONFIG
-    agent = Agent(cfg, client, api_key, sys.stderr)
-    HealthReporter(cfg, client, agent.instance_id, agent.log, agent.stop).start()
+    if cfg.mode == "host":
+        agent = HostAgent(cfg, client, sys.stderr)
+        HostHealthReporter(cfg, client, agent.instance_id, agent.log, agent.stop, agent.runtime).start()
+        agent.runtime.start_probes()
+    else:
+        agent = Agent(cfg, client, api_key, sys.stderr)
+        HealthReporter(cfg, client, agent.instance_id, agent.log, agent.stop).start()
 
     def on_signal(signum: int, _frame: Any) -> None:
         agent.log(f"signal {signum}: stopping after the tasks in flight")

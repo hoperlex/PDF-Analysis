@@ -431,7 +431,7 @@ export function runCost(status: {
   if (callCount === undefined || callCount === null) {
     return { kind: 'unreadable', why: 'она несёт стоимость без числа вызовов модели' };
   }
-  if (typeof micros !== 'number' || !Number.isInteger(micros) || micros < 0) {
+  if (typeof micros !== 'number' || !Number.isSafeInteger(micros) || micros < 0) {
     return { kind: 'unreadable', why: 'её стоимость не является неотрицательным целым' };
   }
   if (typeof callCount !== 'number' || !Number.isInteger(callCount) || callCount < 1) {
@@ -521,22 +521,27 @@ export function elapsedMs(
 }
 
 /**
- * Render an elapsed span at a resolution that still says something.
+ * Render an elapsed span at a resolution that still says something, in the application's words («2 мин 30 с», `RUN-SCREEN-FIX-01`).
  *
  * `formatInstant` prints to the second, so a stage that took 30 ms shows the same Started
  * and Finished stamp and the pair reads as "no information". This is the column that
  * makes the timings a fact rather than two identical strings: a sub-second stage reports
- * its milliseconds.
+ * its milliseconds («30 мс»).
+ *
+ * From a second to a minute the seconds are whole («20 с»); only under ten seconds does one decimal show, with a comma («9,5 с»), and a
+ * decimal that would be a zero is not written («3 с», not «3,0 с»). From a minute on it is minutes and whole seconds. Every figure is
+ * truncated, not rounded, as it always was: a span never reads longer than it took.
  */
 export function formatElapsed(ms: number | null): string {
   if (ms === null) return '—';
-  if (ms < 1000) return `${ms} ms`;
-  if (ms < 60_000) {
+  if (ms < 1000) return `${ms} мс`;
+  if (ms < 10_000) {
     const seconds = Math.floor(ms / 1000);
     const tenths = Math.floor((ms % 1000) / 100);
-    return `${seconds}.${tenths} s`;
+    return tenths === 0 ? `${seconds} с` : `${seconds},${tenths} с`;
   }
+  if (ms < 60_000) return `${Math.floor(ms / 1000)} с`;
   const minutes = Math.floor(ms / 60_000);
   const seconds = Math.floor((ms % 60_000) / 1000);
-  return `${minutes} m ${seconds} s`;
+  return `${minutes} мин ${seconds} с`;
 }

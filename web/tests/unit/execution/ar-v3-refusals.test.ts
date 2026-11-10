@@ -30,7 +30,7 @@ import { QueuePage } from '@/_pages/queue';
 
 import { newClient } from '../screens/harness';
 import { VERSION_UID, runStatus } from '../review/fixtures';
-import { APPROVE_COST, costEstimate } from '../analysis-settings/cost-estimate-fixtures';
+import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
 import { QUEUE_WORK } from './queue-work';
@@ -41,7 +41,7 @@ const RACE_TEXT = 'Параллельная запись проиграла';
 
 function refusal(code: ErrorCode, status: number, details?: Record<string, string | number | boolean | null>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.44.0', error_code: code, message: 'A caller-safe sentence.', correlation_id: 'cid-arv3',
+    contract_version: '1.47.0', error_code: code, message: 'A caller-safe sentence.', correlation_id: 'cid-arv3',
     retryable: false, ...(details === undefined ? {} : { details }),
   };
   return new ApiError(status, envelope, 'cid-arv3');
@@ -134,7 +134,9 @@ describe('«Повторный аудит» of an AR v3 group member in «Оче
     expect(markup).toContain('Стоимость повторного аудита не оценена');
     expect(markup).toContain(MEMBER_TEXT);
     expect(markup).not.toContain(RACE_TEXT);
-    expect(await view.press('Подтвердить')).toBe(false);
+    // Nothing to agree to: no dialog, no «Запустить», and nothing is sent (`RUN-START-ONE-01b`).
+    expect(markup).not.toContain('data-start-run-dialog');
+    expect(view.count('Запустить')).toBe(0);
     expect(reauditRun).not.toHaveBeenCalled();
   });
 
@@ -143,8 +145,8 @@ describe('«Повторный аудит» of an AR v3 group member in «Оче
     const view = await open();
     await view.press('Повторный аудит');
     await settleCost(view);
-    await view.check(APPROVE_COST, true);
-    await view.press('Подтвердить');
+    // The estimate can charge, so the one dialog asks; its «Запустить» is the agreement (`RUN-START-ONE-01b`).
+    await view.press('Запустить');
     const markup = view.markup();
     expect(reauditRun).toHaveBeenCalledTimes(1);
     expect(markup).toContain('Команда отклонена');

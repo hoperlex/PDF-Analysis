@@ -622,6 +622,58 @@ __all__ = [
     "ComparisonReportPage",
     "CreateComparisonReportRequest",
     "PrepareComparisonClientReportRequest",
+    "CreateExecutorHostAgentInstallRequest",
+    "ExecutorHost",
+    "ExecutorHostDetails",
+    "ExecutorHostId",
+    "ExecutorHostList",
+    "ExecutorHostModel",
+    "ExecutorHostModelStatus",
+    "ExecutorHostProviderDetail",
+    "ExecutorHostSlotUse",
+    "ExecutorHostSlots",
+    "ExecutorHostState",
+    "ExecutorHostTask",
+    "ExecutorModelAccess",
+    "ExecutorProvider",
+    "ExecutorTaskUsage",
+    "IssueExecutorHostEnrollmentRequest",
+    "ModelCatalogue",
+    "ModelCatalogueEntry",
+    "ModelEffort",
+    "ModelProbeState",
+    "ModelUnavailableReason",
+    "ProviderAuthState",
+    "ReviseStageModelLayoutRequest",
+    "RunCostModelLine",
+    "RunStartReadiness",
+    "RunnerKeyFileReport",
+    "RunStartReadinessCell",
+    "RunStartRoute",
+    "RunnerCatalogueEntry",
+    "RunnerProviderModelState",
+    "RunnerProviderReport",
+    "SetExecutorHostEnabledRequest",
+    "SetExecutorHostSlotsRequest",
+    "SetStageModelLayoutEnabledRequest",
+    "StageCellKey",
+    "StageCellRole",
+    "ComparisonLayoutKind",
+    "StageComparisonCell",
+    "StageLayoutCell",
+    "StageLayoutRevision",
+    "StageLayoutRevisionId",
+    "StageLayoutSwitchEvent",
+    "StageModelKit",
+    "StageModelLayout",
+    "StageRowKey",
+    "RunStage",
+    "RunStageCell",
+    "RunStageChip",
+    "RunStageFacts",
+    "RunStagePlanSource",
+    "RunStageState",
+    "RunStages",
 ]
 
 
@@ -782,6 +834,17 @@ ExecutorRoutingRuleRevisionId = TypeAliasType(
 )
 ExecutorRoutingModeEventId = TypeAliasType(
     "ExecutorRoutingModeEventId", Annotated[str, Field(pattern=rf"^exrm_{_ULID}$")]
+)
+#: `HOSTS-SEAL-1` (ADR-0028, migration ``0062``). An executor host -- a server with its one agent process and one host token -- and
+#: one revision of the stage layout (the models of the analysis stages), and the key of one cell of a plan (`row:role`).
+ExecutorHostId = TypeAliasType(
+    "ExecutorHostId", Annotated[str, Field(pattern=rf"^exh_{_ULID}$")]
+)
+StageLayoutRevisionId = TypeAliasType(
+    "StageLayoutRevisionId", Annotated[str, Field(pattern=rf"^slr_{_ULID}$")]
+)
+StageCellKey = TypeAliasType(
+    "StageCellKey", Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}:(main|leg1|leg2|judge)$")]
 )
 #: `W55A-SEAL-01`. The normative corpus's three public identities (`NORM-Q07`), declared in
 #: ``contracts/domain/v1/identifiers.json`` since `0012_norms_corpus`, cross the wire.
@@ -1064,7 +1127,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.44.0"]
+    contract_version: Literal["1.47.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1540,9 +1603,36 @@ class PortalBlockPage(_Object):
 
 
 class RunCostConsent(_Object):
+    """The expert confirms a fresh estimate (`HOSTS-SEAL-1`, consent v2). The body is the same whatever the route: the digest of
+    the estimate that was shown, the ceiling the person approves and `confirmed`. When every cell of a run on the stage layout
+    runs on a subscription the estimate is 0 and pressing the button that says so is the consent, with `ceiling_micros` 0. The
+    consent the stand stores is built from the estimate the digest names and adds to it the digest of the stage plan and, per
+    model, the digest of the rates and the access it was priced at; a start whose plan or access differs from them is refused."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"examples": [
+            {"estimate_digest": "0" * 64, "ceiling_micros": 0, "confirmed": True},
+            {"estimate_digest": "f" * 64, "ceiling_micros": 1500000, "confirmed": True},
+        ]},
+    )
+
     estimate_digest: Sha256
     ceiling_micros: Annotated[int, Field(ge=0, le=9007199254740991, strict=True)]
     confirmed: Annotated[bool, Field(strict=True)]
+
+
+class RunCostModelLine(_Object):
+    """One model of a run on the stage layout, priced (`HOSTS-SEAL-1`, consent v2): the digest of the rates it was priced at and
+    the access, so a start that finds another rate or another access refuses with `cost_estimate_binding_changed`."""
+
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    access: ExecutorModelAccess
+    rate_sha256: Sha256
+    calls: Annotated[int, Field(ge=0)]
+    input_tokens: Annotated[int, Field(ge=0)]
+    output_tokens: Annotated[int, Field(ge=0)]
+    estimated_cost_micros: Annotated[int, Field(ge=0)]
 
 
 class RunCostEstimateRequest(_Object):
@@ -1570,7 +1660,9 @@ class RunCostEstimate(_Object):
     scope: Literal["run", "ar_v3_group"]
     version_uid: VersionUid
     provider_mode: ProviderMode
-    billing: Literal["metered", "unmetered"]
+    #: `HOSTS-SEAL-1`: ``mixed`` is a run on the stage layout whose cells are paid in both ways; ``models`` then has a line per model.
+    billing: Literal["metered", "unmetered", "mixed"]
+    #: For a run on the stage layout, the model of its first cell; ``models`` lists every model it uses.
     model_id: Annotated[str, Field(min_length=1, max_length=200)]
     connection_revision_id: ExecutorRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     preset_revision_id: PresetRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1595,6 +1687,12 @@ class RunCostEstimate(_Object):
     start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     reused_stage_ids: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     computed_stage_ids: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `HOSTS-SEAL-1` (consent v2). Present for the estimate of a run on the stage layout: the digest of the frozen plan and one
+    #: line per model with the digest of its rates, the access it is priced at and its share of the estimate.
+    stage_plan_digest: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    models: Annotated[list[RunCostModelLine], Field(max_length=16)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class StartRunRequest(_Object):
@@ -1787,11 +1885,16 @@ class RunQueueReason(str, enum.Enum):
     is not running. `executor_at_capacity`: every unit of its executor connection (of every eligible member of
     its group) is in use. `runner_offline`: the connection is a `pull` connection and no runner of it is online
     (no eligible member has one). `needs_reconsent`: dispatch found the consent envelope no longer holds and
-    called nothing. The persisted `wait_reason` of pending work uses the same words."""
+    called nothing. `model_unavailable` (`HOSTS-SEAL-1`, ADR-0028 decision 15): a run started on the stage layout waits
+    because no available server can serve a model that one of its cells needs. The persisted `wait_reason` of pending
+    work uses the same words."""
 
     EXECUTOR_AT_CAPACITY = "executor_at_capacity"
     RUNNER_OFFLINE = "runner_offline"
     NEEDS_RECONSENT = "needs_reconsent"
+    #: `HOSTS-SEAL-1` (ADR-0028 decision 15): a run started on the stage layout waits because no available server can serve
+    #: a model one of its cells needs; the cells are named in the run's wait detail. Before the start, nothing has run.
+    MODEL_UNAVAILABLE = "model_unavailable"
 
 
 class RunStatus(_Object):
@@ -5246,7 +5349,9 @@ class ExecutorGroupMemberIssue(str, enum.Enum):
     `revision_changed`: the connection's current revision is not the snapshot the group revision holds.
     `connection_archived`: the connection is archived. `not_served`: this release does not serve the
     connection. `probe_not_ok`: the probe of the current key is not `ok`. `runner_offline`: a `pull`
-    connection has no runner online. `at_capacity`: every unit of the connection is in use."""
+    connection has no runner online. `at_capacity`: every unit of the connection is in use. `HOSTS-SEAL-1` (ADR-0028):
+    `host_disabled`: the member's host is switched off. `model_not_verified`: the agent of the host has not reported the
+    model as verified. `model_cooling_down`: the host took the model out of availability after a real refusal."""
 
     REVISION_CHANGED = "revision_changed"
     CONNECTION_ARCHIVED = "connection_archived"
@@ -5254,6 +5359,11 @@ class ExecutorGroupMemberIssue(str, enum.Enum):
     PROBE_NOT_OK = "probe_not_ok"
     RUNNER_OFFLINE = "runner_offline"
     AT_CAPACITY = "at_capacity"
+    #: `HOSTS-SEAL-1` (ADR-0028): the member's host is switched off («Использовать»), the model is not verified on the host (the
+    #: agent has not reported it as such), or the host took the model out of availability after a real refusal.
+    HOST_DISABLED = "host_disabled"
+    MODEL_NOT_VERIFIED = "model_not_verified"
+    MODEL_COOLING_DOWN = "model_cooling_down"
 
 
 class ExecutorRoutingPreviewStatus(str, enum.Enum):
@@ -5643,6 +5753,132 @@ class RunnerCliHealth(_Object):
     auth_state: RunnerCliAuthState
 
 
+# --- the host protocol (`HOSTS-SEAL-1`, ADR-0028, contract 1.45.0) ---------------------------------------
+#
+# One agent process serves one host: it reports which providers and models are usable on the machine, takes tasks of any of them
+# and answers with the exact model that produced the answer. The same words are encoded by `tools/executor-runner` and by the stand.
+
+
+class ExecutorProvider(str, enum.Enum):
+    """Where a model answer comes from. `claude_code` and `codex` are the command-line clients installed on the host (logged in
+    with an account, or with an API key); `anthropic_api`, `openai_api` and `openrouter_api` are direct calls with a key from the
+    service key file of the host."""
+
+    CLAUDE_CODE = "claude_code"
+    CODEX = "codex"
+    ANTHROPIC_API = "anthropic_api"
+    OPENAI_API = "openai_api"
+    OPENROUTER_API = "openrouter_api"
+
+
+class ExecutorModelAccess(str, enum.Enum):
+    """How a call is paid: `subscription` (an account, not metered) or `api` (an API key, billed per token)."""
+
+    SUBSCRIPTION = "subscription"
+    API = "api"
+
+
+class ModelEffort(str, enum.Enum):
+    """The reasoning effort a model is asked for. Only these three are ever offered: `xhigh` and `max` are not, and `low` is
+    not offered for Opus (`contracts/analysis/v1/model-catalogue.json`)."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class ProviderAuthState(str, enum.Enum):
+    """What the agent knows of a provider's login on the host: `valid`, `login_required` or `unknown`."""
+
+    VALID = "valid"
+    LOGIN_REQUIRED = "login_required"
+    UNKNOWN = "unknown"
+
+
+class ModelProbeState(str, enum.Enum):
+    """What the agent knows of one model: `verified` by a minimal call that answered with an accepted model string,
+    `not_verified` (not checked yet) or `failed` (the check ended in a refusal, with a code)."""
+
+    VERIFIED = "verified"
+    NOT_VERIFIED = "not_verified"
+    FAILED = "failed"
+
+
+class RunnerCatalogueEntry(_Object):
+    """One model the stand offers and one provider that may serve it, as handed to an agent: the efforts it may be asked for
+    and the exact strings an answer may report as its model (no prefix or date-suffix rule)."""
+
+    provider: ExecutorProvider
+    model_id: Annotated[str, Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$")]
+    efforts: Annotated[list[ModelEffort], Field(min_length=1, max_length=3)]
+    accepted_reported: Annotated[list[Annotated[str, Field(min_length=1, max_length=200)]], Field(min_length=1, max_length=4)]
+
+
+class RunnerProviderModelState(_Object):
+    """One model of a provider as the agent last checked it. `failure_code` is a lower-case code (`login_required`,
+    `quota_exceeded`, `model_not_found`, ...), never the provider's text."""
+
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    state: ModelProbeState
+    checked_at: datetime
+    failure_code: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class RunnerProviderReport(_Object):
+    """One provider found on the host: how it is paid for, where its client is and which version, whether it is logged in and
+    the state of each model of the catalogue on it. No secret, no key and no path to a credential.
+
+    `access` of a command-line client is read from the client's own status command: a subscription login is `subscription`, a
+    login with an API key is `api`; a client that is not signed in is reported `subscription` with `auth_state` `login_required`,
+    and one signed in by a method the agent does not recognise `api` with `auth_state` `unknown` and no verified model. A direct
+    API provider is always `api`: its `auth_state` is `valid` once a model has been verified, `login_required` when the provider
+    refused the key, else `unknown`. `cli_path` is left out unless the operator opted in. `accept_images` says whether the
+    provider can take a task that carries images on this host."""
+
+    provider: ExecutorProvider
+    access: ExecutorModelAccess
+    cli_path: Annotated[str, Field(min_length=1, max_length=512)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    cli_version: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    auth_state: ProviderAuthState
+    accept_images: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    models: Annotated[list[RunnerProviderModelState], Field(max_length=16)]
+
+
+class RunnerKeyFileReport(_Object):
+    """What the agent found of the service key file of the direct API providers (diagnostics for the server's details; no key and
+    no path): `ok` (read), `absent` (no file) or `ignored` (the file exists but was not read), with a lower-case `reason` code
+    when it was ignored (`mode_is_not_0600`, `not_owned_by_the_service_user`, `not_a_regular_file`, `unreadable`, `too_large`)."""
+
+    state: Literal["ok", "absent", "ignored"]
+    reason: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorHostSlots(_Object):
+    """How many calls of a provider the host may run at once (1 to 16). A provider that is absent has its default: 1 for a
+    subscription, 2 for an API key."""
+
+    claude_code: Annotated[int, Field(ge=1, le=16)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    codex: Annotated[int, Field(ge=1, le=16)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    anthropic_api: Annotated[int, Field(ge=1, le=16)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    openai_api: Annotated[int, Field(ge=1, le=16)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    openrouter_api: Annotated[int, Field(ge=1, le=16)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ExecutorTaskUsage(_Object):
+    """The token counts of the call that produced an answer, as the agent measured them."""
+
+    input_tokens: Annotated[int, Field(ge=0)]
+    output_tokens: Annotated[int, Field(ge=0)]
+
+
 class RunnerTokenMetadata(_Object):
     __doc__ = (
         "What the API ever says about a runner token after it was issued: that it exists, its\n"
@@ -5655,7 +5891,10 @@ class RunnerTokenMetadata(_Object):
     )
 
     token_id: ExecutorRunnerTokenId
-    connection_id: ExecutorConnectionId
+    #: Exactly one of ``connection_id`` and ``host_id`` is present (`HOSTS-SEAL-1`): a token of a ``pull`` connection, or the
+    #: host token of a server, which serves every system connection of that host.
+    connection_id: ExecutorConnectionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    host_id: ExecutorHostId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     token_prefix: Annotated[str, Field(pattern=r"^amr_[0-9a-z]{8}$")]
     created_at: datetime
     created_by: UserUid
@@ -5700,7 +5939,14 @@ class IssuedRunnerToken(_Object):
     token: Annotated[str, Field(min_length=56, max_length=56)] = Field(
         json_schema_extra={"readOnly": True}
     )
-    runner_token: RunnerTokenMetadata
+    #: Always present for a token of a ``pull`` connection; optional in a host document (`HOSTS-SEAL-1`).
+    runner_token: RunnerTokenMetadata = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `HOSTS-SEAL-1`: present when the exchange was made with the grant of a host. The token is then bound to this host, and
+    #: `catalogue` is the list of models the agent may be asked for, with their efforts and accepted reported strings.
+    host_id: ExecutorHostId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    catalogue: Annotated[list[RunnerCatalogueEntry], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ClaimExecutorTaskRequest(_Object):
@@ -5761,6 +6007,23 @@ class ClaimedExecutorTask(_Object):
     images: Annotated[list[RunnerImage], Field(max_length=8)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    #: `HOSTS-SEAL-1`: present on a task claimed with a host token -- all seven members (`provider`, `access`, `model_id`, `effort`,
+    #: `max_output_tokens`, `timeout_seconds`, `cell_key`) or none. The agent runs exactly this provider, access, model and
+    #: effort and refuses a model it does not report as verified (`failExecutorTask`, code `model_not_available`); `model` is
+    #: then equal to `model_id`.
+    provider: ExecutorProvider = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    access: ExecutorModelAccess = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    model_id: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    effort: ModelEffort = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    max_output_tokens: Annotated[int, Field(ge=1, le=65536)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    timeout_seconds: Annotated[int, Field(ge=1, le=7200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    cell_key: StageCellKey = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class ExtendedExecutorTaskClaim(_Object):
@@ -5781,6 +6044,15 @@ class SubmitExecutorTaskAnswerRequest(_Object):
     output_tokens: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    #: `HOSTS-SEAL-1`: the answer of a host agent carries `model` (the task's `model_id`), `provider` and `access` (the task's),
+    #: the **exact** model string the provider reported (held against `model_id` and the catalogue's `accepted_reported`, never
+    #: trimmed) and, when the provider gave a count, `usage`; it sends no top-level token counts.
+    provider: ExecutorProvider = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    access: ExecutorModelAccess = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reported_model: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    usage: ExecutorTaskUsage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class FailExecutorTaskRequest(_Object):
@@ -5855,7 +6127,10 @@ class ExecutorEnrollmentMetadata(_Object):
     its hash are never returned."""
 
     enrollment_id: ExecutorEnrollmentId
-    connection_id: ExecutorConnectionId
+    #: Exactly one of ``connection_id`` and ``host_id`` is present (`HOSTS-SEAL-1`): a grant for a ``pull`` connection, or for a
+    #: host, whose redemption yields a host token and takes no model.
+    connection_id: ExecutorConnectionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    host_id: ExecutorHostId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     secret_prefix: Annotated[str, Field(pattern=r"^ame_[0-9a-z]{8}$")]
     state: ExecutorEnrollmentState
     created_at: datetime
@@ -5908,12 +6183,25 @@ class ReportRunnerHealthRequest(_Object):
     runner_instance_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    #: `HOSTS-SEAL-1`: required of a host token, refused of a connection token. The providers found on the host with the
+    #: state of each model, and the slots the agent is configured with; the stand keeps the latest snapshot per host and
+    #: writes a new one only when it changes.
+    providers: Annotated[list[RunnerProviderReport], Field(max_length=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    slots: ExecutorHostSlots = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    key_file: RunnerKeyFileReport = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class RunnerHealthAck(_Object):
-    """The report was stored on the calling runner token."""
+    """The report was stored on the calling runner token. A host token also gets the catalogue it should check and whether the
+    host is switched on («Использовать»)."""
 
     recorded_at: datetime
+    catalogue: Annotated[list[RunnerCatalogueEntry], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    enabled: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class SetExecutorIntegrationAuthorisationRequest(_Object):
@@ -5952,7 +6240,9 @@ class ExecutorAgentInstall(_Object):
     host and its sealed secret destroyed."""
 
     install_id: ExecutorAgentInstallId
-    connection_id: ExecutorConnectionId
+    #: Exactly one of ``connection_id`` and ``host_id`` is present (`HOSTS-SEAL-1`).
+    connection_id: ExecutorConnectionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    host_id: ExecutorHostId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     state: ExecutorAgentInstallState
     access: ExecutorAgentInstallAccess
     ssh_host: Annotated[str, Field(min_length=1, max_length=253)]
@@ -7334,10 +7624,36 @@ class ComparisonAiCeiling(str, enum.Enum):
     DAY = "day"
 
 
+class ComparisonLayoutKind(str, enum.Enum):
+    """A kind of comparison work that the stage layout chooses a model for (`HOSTS-CMP-01`): `comparison_pair_check` (the AI check of
+    doubtful sheet pairs), `comparison_sheet_changes` (the AI description of a sheet's changes), `comparison_spec` (the comparison of whole
+    specifications) and `comparison_report` (the report of a comparison). `comparison_stage_review` has no handler and is not offered."""
+
+    COMPARISON_PAIR_CHECK = "comparison_pair_check"
+    COMPARISON_SHEET_CHANGES = "comparison_sheet_changes"
+    COMPARISON_SPEC = "comparison_spec"
+    COMPARISON_REPORT = "comparison_report"
+
+
+class StageComparisonCell(_Object):
+    """The settings of one kind of comparison work (`HOSTS-CMP-01`): model, effort, the output limit in tokens and the timeout in seconds.
+    The model and the effort must be a pair of `listModelCatalogue`. The limit is a ceiling over the limit of the work itself: a call is made
+    with the smaller of the two. The timeout is the window of one call to a server. A comparison job freezes its cell when it starts."""
+
+    work_kind: ComparisonLayoutKind
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    effort: ModelEffort
+    max_output_tokens: Annotated[int, Field(ge=1, le=65536)]
+    timeout_seconds: Annotated[int, Field(ge=1, le=7200)]
+
+
 class ComparisonAiRoute(_Object):
     """What serves the calls of an estimate or a job: the connection and its revision, the model the
     revision pins (a reply from another model is refused, ``R-133``), how it is billed and whether the
-    process is in recorded mode, in which case every answer is a recorded test answer."""
+    process is in recorded mode, in which case every answer is a recorded test answer.
+
+    `HOSTS-CMP-01` (ADR-0028 decision 19): a route chosen by the stage layout also carries the `cell` of its kind of work -- the
+    effort, the answer limit and the timeout the job froze. The estimate digest binds it, so the consent names what will run."""
 
     #: `EXEC2-SEAL-2` (ADR-0026 decisions 12 and 13). For work admitted by a rule or a group the connection and its
     #: revision are absent until dispatch binds the work, and the group, the rule revision and the planned model
@@ -7350,6 +7666,7 @@ class ComparisonAiRoute(_Object):
     executor_group_id: ExecutorGroupId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     executor_group_revision_id: ExecutorGroupRevisionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     routing_rule_revision_id: ExecutorRoutingRuleRevisionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    cell: StageComparisonCell = Field(**_NOT_GIVEN)  # type: ignore[assignment]
 
 
 class ComparisonAiEstimate(_Object):
@@ -9029,3 +9346,525 @@ class DecisionMemoryStatusChange(_Object):
     status: Literal["active", "withdrawn"]
     reason_code: _MemoryStatusReason
     changed_at: datetime
+
+
+# --- executor hosts, the stage layout and the model catalogue (`HOSTS-SEAL-1`, ADR-0028, contract 1.45.0) ----------------
+#
+# A *host* is a server: one agent process, one host token, every provider client and key on that machine. The user sees servers,
+# the models the servers can serve and the «Использовать» switch; connections, groups and capacity pools behind them are the stand's
+# own (system-managed) and are never listed. The layout says which model answers each analysis stage; a run freezes the plan it was
+# started with. This section is vocabulary and shapes only: no operation behaves before the wave-1 lanes implement it.
+
+
+class ExecutorHostState(str, enum.Enum):
+    """`online`: the agent reported within the last 120 seconds and a free slot exists. `busy`: online, every slot is in use.
+    `offline`: no report within the last 120 seconds (or never)."""
+
+    ONLINE = "online"
+    BUSY = "busy"
+    OFFLINE = "offline"
+
+
+class ModelUnavailableReason(str, enum.Enum):
+    """Why a model cannot be used on a host, or anywhere, right now. Lists of servers and models hide what is unavailable; the
+    reasons are shown only where an action is blocked or a run waits, and to the administrator in a server's details."""
+
+    HOST_DISABLED = "host_disabled"
+    HOST_OFFLINE = "host_offline"
+    LOGIN_REQUIRED = "login_required"
+    MODEL_NOT_VERIFIED = "model_not_verified"
+    MODEL_COOLING_DOWN = "model_cooling_down"
+    NOT_ON_ANY_SERVER = "not_on_any_server"
+
+
+class ExecutorHostModel(_Object):
+    """A model the host can serve now: `available` or, with every slot of its provider in use, `busy`."""
+
+    provider: ExecutorProvider
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    access: ExecutorModelAccess
+    state: Literal["available", "busy"]
+
+
+class ExecutorHost(_Object):
+    """A server (ADR-0028): its name, the «Использовать» switch, whether it is on line, the models it can serve now and its slots.
+    `models` holds only what can be used (an unavailable model is not listed); the reasons are in `ExecutorHostDetails`."""
+
+    host_id: ExecutorHostId
+    display_name: Annotated[str, Field(min_length=1, max_length=120)]
+    enabled: bool
+    state: ExecutorHostState
+    last_seen_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    agent_version: Annotated[str, Field(pattern=r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    models: Annotated[list[ExecutorHostModel], Field(max_length=64)]
+    slots_total: Annotated[int, Field(ge=0)]
+    slots_in_use: Annotated[int, Field(ge=0)]
+    created_at: datetime
+    created_by: UserUid
+    archived_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ExecutorHostList(_Object):
+    """The servers, newest first, with the summary line of the screen: servers on line of all, free slots of all."""
+
+    items: list[ExecutorHost]
+    online: Annotated[int, Field(ge=0)]
+    total: Annotated[int, Field(ge=0)]
+    slots_free: Annotated[int, Field(ge=0)]
+    slots_total: Annotated[int, Field(ge=0)]
+
+
+class ExecutorHostSlotUse(_Object):
+    """The slots of a provider on a host: how many may run at once and how many do."""
+
+    provider: ExecutorProvider
+    access: ExecutorModelAccess
+    slots: Annotated[int, Field(ge=1, le=16)]
+    in_use: Annotated[int, Field(ge=0)]
+
+
+class ExecutorHostModelStatus(_Object):
+    """One model of a provider on a host with the reasons it cannot be used, if it cannot (administrator's view)."""
+
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    state: Literal["available", "busy", "unavailable"]
+    reasons: Annotated[list[ModelUnavailableReason], Field(max_length=8)]
+    cooldown_until: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ExecutorHostProviderDetail(_Object):
+    """A provider found on the host: its access, its login, its client version and its models."""
+
+    provider: ExecutorProvider
+    access: ExecutorModelAccess
+    auth_state: ProviderAuthState
+    cli_version: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    models: Annotated[list[ExecutorHostModelStatus], Field(max_length=32)]
+
+
+class ExecutorHostTask(_Object):
+    """A call running on the host now: the run, the stage and since when."""
+
+    task_id: ExecutorTaskId
+    run_id: RunId
+    provider: ExecutorProvider
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    stage_key: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    since: datetime
+
+
+class ExecutorHostDetails(_Object):
+    """«Подробнее» of a server (administrator): its slots, each provider with the reasons its models cannot be used, and the
+    tasks running on it."""
+
+    host: ExecutorHost
+    slots: Annotated[list[ExecutorHostSlotUse], Field(max_length=8)]
+    providers: Annotated[list[ExecutorHostProviderDetail], Field(max_length=8)]
+    tasks: Annotated[list[ExecutorHostTask], Field(max_length=64)]
+
+
+class SetExecutorHostEnabledRequest(_Object):
+    """`true` switches the server on, `false` off. A server that is off takes no new run; runs already bound to it finish."""
+
+    enabled: Annotated[bool, Field(strict=True)]
+
+
+class SetExecutorHostSlotsRequest(_Object):
+    """The providers whose slots change; at least one. Each change is a journalled event with its author."""
+
+    slots: ExecutorHostSlots
+
+
+class IssueExecutorHostEnrollmentRequest(_Object):
+    """A new server and its one-time grant. The name is the administrator's; no model is asked for."""
+
+    display_name: Annotated[str, Field(min_length=1, max_length=120)]
+
+
+class CreateExecutorHostAgentInstallRequest(_Object):
+    """A new server and an install session of the agent over SSH (path A). As `CreateExecutorAgentInstallRequest`, with a name and
+    no model: `private_key` is required for `pasted_key` and refused for `generated_key`, sealed and never returned."""
+
+    display_name: Annotated[str, Field(min_length=1, max_length=120)]
+    access: ExecutorAgentInstallAccess
+    ssh_host: Annotated[str, Field(min_length=1, max_length=253)]
+    ssh_port: Annotated[int, Field(ge=1, le=65535)]
+    ssh_user: Annotated[str, Field(min_length=1, max_length=64)]
+    private_key: Annotated[str, Field(min_length=8, max_length=8192)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=_optional_write_only
+    )
+
+
+class StageRowKey(str, enum.Enum):
+    """A row of the stage layout: the analysis stage whose model is chosen. `text` (analysis of the text), `blocks` (analysis of
+    the blocks), `cross_check` (the complex cross-check and the parameter passport), `norms` (the norms), `review` (the critic)
+    and `correction` (the refinement)."""
+
+    TEXT = "text"
+    BLOCKS = "blocks"
+    CROSS_CHECK = "cross_check"
+    NORMS = "norms"
+    REVIEW = "review"
+    CORRECTION = "correction"
+
+
+class StageCellRole(str, enum.Enum):
+    """The part of a row a cell plays: `main` (the single answer), `leg1` and `leg2` (the two legs of an ensemble) and `judge`."""
+
+    MAIN = "main"
+    LEG1 = "leg1"
+    LEG2 = "leg2"
+    JUDGE = "judge"
+
+
+class StageModelKit(str, enum.Enum):
+    """The set the layout is based on: `claude_only`, `codex_only`, or `custom` (any edit of a set)."""
+
+    CLAUDE_ONLY = "claude_only"
+    CODEX_ONLY = "codex_only"
+    CUSTOM = "custom"
+
+
+class StageLayoutCell(_Object):
+    """The settings of one cell (a row and a role): model, effort, the output limit in tokens and the timeout in seconds. The
+    model and the effort must be a pair of `listModelCatalogue`."""
+
+    cell_key: StageCellKey
+    row: StageRowKey
+    role: StageCellRole
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    effort: ModelEffort
+    max_output_tokens: Annotated[int, Field(ge=1, le=65536)]
+    timeout_seconds: Annotated[int, Field(ge=1, le=7200)]
+
+
+class StageLayoutRevision(_Object):
+    """One immutable revision of the layout: the kit and every cell, with its author and time. `comparison_cells` are the cells of the four
+    kinds of comparison work in force (`HOSTS-CMP-01`): what the revision stored, else the table of its kit. They are absent only for a
+    `custom` revision that stored none: a comparison is then refused, never served by a model nobody chose."""
+
+    layout_revision_id: StageLayoutRevisionId
+    revision_no: Annotated[int, Field(ge=1)]
+    kit: StageModelKit
+    cells: Annotated[list[StageLayoutCell], Field(min_length=1, max_length=32)]
+    created_at: datetime
+    created_by: UserUid
+    comparison_cells: Annotated[list[StageComparisonCell], Field(min_length=4, max_length=4)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StageLayoutSwitchEvent(_Object):
+    """One change of the switch «Модели по этапам: включены», with its author."""
+
+    enabled: bool
+    set_at: datetime
+    set_by: UserUid
+
+
+class StageModelLayout(_Object):
+    """The layout of models over the analysis stages (ADR-0028). `enabled`: runs started now take the layout; off, they follow
+    the route as before. `current` is the revision in force (absent before the first), `history` the revisions newest first and
+    `switch_journal` the switch events newest first. `unavailable_cell_keys` are the cells of `current` whose model no server can
+    serve now (shown as «нет на серверах»)."""
+
+    enabled: bool
+    current: StageLayoutRevision = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    history: Annotated[list[StageLayoutRevision], Field(max_length=50)]
+    switch_journal: Annotated[list[StageLayoutSwitchEvent], Field(max_length=50)]
+    unavailable_cell_keys: Annotated[list[StageCellKey], Field(max_length=32)]
+
+
+class ReviseStageModelLayoutRequest(_Object):
+    """A new revision: the kit and every cell. Only pairs of the catalogue are accepted; a row of the closed list of block schemes
+    is chosen as a whole. `comparison_cells` (`HOSTS-CMP-01`, optional) are the four kinds of comparison work, each once; left out, a named
+    kit follows its table and `custom` has none."""
+
+    kit: StageModelKit
+    cells: Annotated[list[StageLayoutCell], Field(min_length=1, max_length=32)]
+    comparison_cells: Annotated[list[StageComparisonCell], Field(min_length=4, max_length=4)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class SetStageModelLayoutEnabledRequest(_Object):
+    """`true` puts the layout in force for runs started from now on (it needs a revision and the database provider source);
+    `false` takes it out. Runs already started keep the plan they froze."""
+
+    enabled: Annotated[bool, Field(strict=True)]
+
+
+class ModelCatalogueEntry(_Object):
+    """One model and one provider that may serve it: the accesses it can be served with, the efforts that may be asked for and the
+    exact strings an answer may report (`contracts/analysis/v1/model-catalogue.json`)."""
+
+    provider: ExecutorProvider
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    access: Annotated[list[ExecutorModelAccess], Field(min_length=1, max_length=2)]
+    efforts: Annotated[list[ModelEffort], Field(min_length=1, max_length=3)]
+    accepted_reported: Annotated[list[Annotated[str, Field(min_length=1, max_length=200)]], Field(min_length=1, max_length=4)]
+
+
+class ModelCatalogue(_Object):
+    """The models the layout may name. Only pins of the provider lock; Haiku, the efforts above `high` and `low` for Opus are
+    never offered."""
+
+    contract_version: Annotated[str, Field(pattern=r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$")]
+    items: Annotated[list[ModelCatalogueEntry], Field(max_length=64)]
+
+
+class RunStartRoute(str, enum.Enum):
+    """`stage_plan`: the run takes the layout. `legacy`: the layout is off and the run follows the automatic route as before."""
+
+    STAGE_PLAN = "stage_plan"
+    LEGACY = "legacy"
+
+
+class RunStartReadinessCell(_Object):
+    """One cell of the plan a start would freeze, with the access it would run with (absent when no server can serve it) and
+    why it cannot be served, if it cannot."""
+
+    cell_key: StageCellKey
+    row: StageRowKey
+    role: StageCellRole
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    effort: ModelEffort
+    access: ExecutorModelAccess = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    available: bool
+    reasons: Annotated[list[ModelUnavailableReason], Field(max_length=8)]
+
+
+class RunStartReadiness(_Object):
+    """What the one button «Запустить» says (ADR-0028): the route, the kit, every cell with its access, whether the start is
+    possible and, when it is, the digest of the estimate to confirm. `access` is the total: all cells on a subscription (the
+    estimate is 0 and the press of the button is the consent), all on an API key, or mixed (one dialog with the estimate by
+    model). An unavailable cell makes `ready` false and names itself in `cells`."""
+
+    route: RunStartRoute
+    ready: bool
+    kit: StageModelKit = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    access: Literal["subscription", "api", "mixed"] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    estimate_digest: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    stage_plan_digest: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    estimated_cost_micros: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    recommended_ceiling_micros: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    cells: Annotated[list[RunStartReadinessCell], Field(max_length=32)]
+
+
+# --- the stages of a run: plan and fact (`HOSTS-SEAL-2`, ADR-0028, contract 1.46.0) ----------------------------------------
+#
+# One read, ``getRunStages``, answers the window «Этапы анализа раздела»: for each chip the run has, what it was planned to run
+# on and what happened. It joins three places -- the PC-01 ``stage_result`` rows, the extended review's procedures and
+# ``phase_coverage``, and the call journal (``model_call`` and ``provider_call_effect``) -- and invents nothing: a figure the
+# journal does not hold is absent, not zero, and a chip no place mentions is not listed.
+
+
+class RunStageChip(str, enum.Enum):
+    """A chip of a run: a reader's name for the phase or phases of code that do one kind of work. The eight chips in the order the
+    rail draws them -- `preparation` (the three PC-01 preparation stages), `text` (analysis of the text), `blocks` (analysis of the
+    blocks), `cross_check` (the complex cross-check and the parameter passport), `merge` (the deterministic merge), `norms` (the
+    norms), `review` (the critic) and `correction` (the refinement) -- and `ar_v3`, the one stage of the separate AR v3 profile.
+    A chip order is a display order, not the order of the stage graph."""
+
+    PREPARATION = "preparation"
+    TEXT = "text"
+    BLOCKS = "blocks"
+    CROSS_CHECK = "cross_check"
+    MERGE = "merge"
+    NORMS = "norms"
+    REVIEW = "review"
+    CORRECTION = "correction"
+    AR_V3 = "ar_v3"
+
+
+class RunStageState(str, enum.Enum):
+    """How a chip stands. `pending`: not started. `running`: the work is under way (a stage or procedure running, or a call in flight).
+    `done`: completed. `partial`: completed with a typed shortfall. `failed`: refused. `skipped`: not run by decision. `unavailable`:
+    could not run (for example, the corpus is missing)."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    UNAVAILABLE = "unavailable"
+
+
+class RunStagePlanSource(str, enum.Enum):
+    """Where the plan of the chips comes from. `stage_plan`: the plan the run froze at its start, one cell per row and role.
+    `run_binding`: the run froze none (it started on the route as before), so each chip that calls a model has one line, «модель
+    прогона», from the run's binding -- or from the journal when it has none."""
+
+    STAGE_PLAN = "stage_plan"
+    RUN_BINDING = "run_binding"
+
+
+class RunStageCell(_Object):
+    """One line of a chip's plan: the part it plays (`main`, `leg1`, `leg2`, `judge`), the model, the effort, the answer limit and the
+    timeout the run froze, and -- for an expert and an administrator -- the access and the server the cell is bound to. Of a run
+    without a stage plan the line has `role` `main`, the model of the run's binding and nothing else it does not know.
+    `access` and `server` are omitted for the viewer («Наблюдатель», `R-150w`); `server` is also absent while the cell is not bound."""
+
+    cell_key: StageCellKey = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    role: StageCellRole
+    model_id: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    effort: ModelEffort = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    max_output_tokens: Annotated[int, Field(ge=1, le=65536)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    timeout_seconds: Annotated[int, Field(ge=1, le=7200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    access: ExecutorModelAccess = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    server: Annotated[str, Field(min_length=1, max_length=120)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class RunStageFacts(_Object):
+    """What happened on a chip. `started_at` and `finished_at` are the earliest and the latest call of a chip that calls a model, or
+    the times of its stage results (`finished_at` only once the chip has finished, and never from a stage taken from an earlier
+    run). `calls_succeeded` and `calls_failed` count the calls the journal ended, `calls_retried` the calls that repeated an earlier
+    call of the same request (a reply replayed from custody is not a call). `input_tokens`, `output_tokens` and `cost_micros` are
+    the totals of the journal; `subscription_input_tokens` and `subscription_output_tokens` are the part of the tokens served by a
+    subscription (not metered, never in `cost_micros`). `planned` and `completed` are the batches of the extended review's
+    `phase_coverage` and are absent where the review keeps none. `last_error_code` is the code of the stage result that failed or,
+    else, of the latest failed call; `reason` the extended review's reason a procedure did not complete."""
+
+    state: RunStageState
+    started_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    finished_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    calls_succeeded: Annotated[int, Field(ge=0)]
+    calls_failed: Annotated[int, Field(ge=0)]
+    calls_retried: Annotated[int, Field(ge=0)]
+    input_tokens: Annotated[int, Field(ge=0)]
+    output_tokens: Annotated[int, Field(ge=0)]
+    subscription_input_tokens: Annotated[int, Field(ge=0)]
+    subscription_output_tokens: Annotated[int, Field(ge=0)]
+    cost_micros: Annotated[int, Field(ge=0)]
+    last_error_code: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{2,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    reason: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    planned: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    completed: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reused_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class RunStage(_Object):
+    """One chip of the run: the code stage and procedure ids it covers, its plan (empty for a chip that calls no model) and its facts."""
+
+    chip: RunStageChip
+    stage_ids: Annotated[list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")]], Field(min_length=1, max_length=8)]
+    plan: Annotated[list[RunStageCell], Field(max_length=16)]
+    facts: RunStageFacts
+
+
+_RUN_STAGES_EXAMPLES: list[dict[str, Any]] = [
+    {
+        "run_id": "run_01M2545JSD15ETSNNV904X991K",
+        "state": "running",
+        "plan_source": "stage_plan",
+        "items": [
+            {
+                "chip": "preparation",
+                "stage_ids": ["source_preparation", "page_geometry_extraction", "document_context_build"],
+                "plan": [],
+                "facts": {
+                    "state": "done", "started_at": "2026-11-10T09:00:03Z", "finished_at": "2026-11-10T09:01:12Z",
+                    "calls_succeeded": 0, "calls_failed": 0, "calls_retried": 0, "input_tokens": 0, "output_tokens": 0,
+                    "subscription_input_tokens": 0, "subscription_output_tokens": 0, "cost_micros": 0,
+                },
+            },
+            {
+                "chip": "text",
+                "stage_ids": ["text_analysis"],
+                "plan": [{
+                    "cell_key": "text:main", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium",
+                    "max_output_tokens": 16000, "timeout_seconds": 1200, "access": "subscription", "server": "adm1.hlab.kz",
+                }],
+                "facts": {
+                    "state": "done", "started_at": "2026-11-10T09:01:13Z", "finished_at": "2026-11-10T09:06:40Z",
+                    "calls_succeeded": 5, "calls_failed": 1, "calls_retried": 1, "input_tokens": 61240, "output_tokens": 9310,
+                    "subscription_input_tokens": 61240, "subscription_output_tokens": 9310, "cost_micros": 0,
+                    "last_error_code": "dependency_unavailable",
+                },
+            },
+            {
+                "chip": "blocks",
+                "stage_ids": ["block_analysis"],
+                "plan": [{
+                    "cell_key": "blocks:main", "role": "main", "model_id": "claude-opus-5-5", "effort": "medium",
+                    "max_output_tokens": 6000, "timeout_seconds": 900, "access": "subscription", "server": "adm1.hlab.kz",
+                }],
+                "facts": {
+                    "state": "running", "started_at": "2026-11-10T09:06:41Z",
+                    "calls_succeeded": 12, "calls_failed": 0, "calls_retried": 0, "input_tokens": 102400, "output_tokens": 18800,
+                    "subscription_input_tokens": 102400, "subscription_output_tokens": 18800, "cost_micros": 0,
+                    "planned": 40, "completed": 12,
+                },
+            },
+        ],
+    },
+    {
+        "run_id": "run_01M2545JSD15ETSNNV904X991K",
+        "state": "published",
+        "plan_source": "stage_plan",
+        "items": [{
+            "chip": "norms",
+            "stage_ids": ["norm_verification"],
+            "plan": [{
+                "cell_key": "norms:main", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium",
+                "max_output_tokens": 6000, "timeout_seconds": 900,
+            }],
+            "facts": {
+                "state": "done", "started_at": "2026-11-10T09:30:00Z", "finished_at": "2026-11-10T09:41:10Z",
+                "calls_succeeded": 8, "calls_failed": 0, "calls_retried": 0, "input_tokens": 48000, "output_tokens": 7200,
+                "subscription_input_tokens": 0, "subscription_output_tokens": 0, "cost_micros": 412000,
+                "planned": 8, "completed": 8,
+            },
+        }],
+    },
+    {
+        "run_id": "run_01M2545JSD15ETSNNV904X991K",
+        "state": "published",
+        "plan_source": "run_binding",
+        "items": [{
+            "chip": "text",
+            "stage_ids": ["text_analysis"],
+            "plan": [{"role": "main", "model_id": "claude-sonnet-5", "access": "subscription", "server": "kzSonnet"}],
+            "facts": {
+                "state": "done", "started_at": "2026-11-09T11:00:00Z", "finished_at": "2026-11-09T11:03:30Z",
+                "calls_succeeded": 3, "calls_failed": 0, "calls_retried": 0, "input_tokens": 30100, "output_tokens": 4200,
+                "subscription_input_tokens": 30100, "subscription_output_tokens": 4200, "cost_micros": 0,
+            },
+        }],
+    },
+]
+
+
+class RunStages(_Object):
+    """The stages of a run, plan and fact (`HOSTS-SEAL-2`, ADR-0028): each chip the run has, in the order the rail draws them, with
+    what it was planned to run on and what the journal and the stage results say happened. A chip that no stage result, procedure,
+    plan cell or call mentions is not listed. `state` is the run's own, so a reader knows whether a chip that is `running` is still
+    being worked on. `plan_source` says whether the plans are the run's frozen `stage_plan` or the one line of its binding. The
+    examples are: a run in progress on the stage layout; a finished run's norms chip as the viewer reads it (no `access`, no
+    `server`); and a run that started on the route as before."""
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": _RUN_STAGES_EXAMPLES})
+
+    run_id: RunId
+    state: RunState
+    plan_source: RunStagePlanSource
+    items: Annotated[list[RunStage], Field(max_length=9)]

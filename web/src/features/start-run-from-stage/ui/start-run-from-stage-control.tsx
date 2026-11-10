@@ -31,7 +31,19 @@ type Choice = { readonly stageId: StageId; readonly key: string };
 
 const names = (ids: readonly StageId[]): string => ids.map((id) => `«${runStageLabel(id)}»`).join(', ');
 
-export function StartRunFromStageControl({ runId }: { readonly runId: string }) {
+export interface StartRunFromStageControlProps {
+  readonly runId: string;
+  /**
+   * `RUN-SCREEN-01a`: the dialog «Этапы анализа раздела» offers the start from the stage it shows, so it narrows the choice to
+   * that stage's startable ids. With one id left the stage is already chosen and no select is drawn; with several the select
+   * offers only them. Absent: every startable stage, as the control has always offered.
+   */
+  readonly stageIds?: readonly StageId[] | undefined;
+  /** The offer button's words; absent: «Запустить с этапа». */
+  readonly label?: string | undefined;
+}
+
+export function StartRunFromStageControl({ runId, stageIds, label }: StartRunFromStageControlProps) {
   const me = useMe();
   const run = useQuery(runStatusQueryOptions(runId as RunId));
   const router = useRouter();
@@ -42,8 +54,10 @@ export function StartRunFromStageControl({ runId }: { readonly runId: string }) 
   const start = useStartRunFromStage();
   const cost = useStartFromStageCostApproval(open ? runId : null, choice?.stageId ?? null, choice?.key ?? null);
 
-  const eligible = mayStartFromStage(me.data?.roles) && startableState(run.data?.state) && run.data?.analysis_kind !== 'ar_v3_beta';
+  const offered = stageIds === undefined ? STARTABLE_STAGE_IDS : STARTABLE_STAGE_IDS.filter((id) => stageIds.includes(id));
+  const eligible = offered.length > 0 && mayStartFromStage(me.data?.roles) && startableState(run.data?.state) && run.data?.analysis_kind !== 'ar_v3_beta';
   if (!eligible) return null;
+  const onlyStage = offered.length === 1 ? (offered[0] as StageId) : null;
 
   function close() {
     setOpen(false);
@@ -53,7 +67,7 @@ export function StartRunFromStageControl({ runId }: { readonly runId: string }) 
   }
 
   function choose(value: string) {
-    const stageId = STARTABLE_STAGE_IDS.find((id) => id === value);
+    const stageId = offered.find((id) => id === value);
     setFailure(null);
     setChoice(stageId === undefined ? null : { stageId, key: newIdempotencyKey() });
   }
@@ -78,8 +92,16 @@ export function StartRunFromStageControl({ runId }: { readonly runId: string }) 
 
   if (!open) {
     return (
-      <button type="button" className="am-button am-button--quiet" data-run-start-from-stage="offer" onClick={() => setOpen(true)}>
-        Запустить с этапа
+      <button
+        type="button"
+        className="am-button am-button--quiet"
+        data-run-start-from-stage="offer"
+        onClick={() => {
+          setOpen(true);
+          if (onlyStage !== null) setChoice({ stageId: onlyStage, key: newIdempotencyKey() });
+        }}
+      >
+        {label ?? 'Запустить с этапа'}
       </button>
     );
   }
@@ -92,13 +114,17 @@ export function StartRunFromStageControl({ runId }: { readonly runId: string }) 
         Будет создан новый прогон этой версии: результаты этапов до выбранного берутся из этого прогона, выбранный этап и
         следующие выполняются заново. Этот прогон не меняется.
       </p>
-      <div>
-        <label htmlFor={selectId}>Этап</label>{' '}
-        <select id={selectId} value={choice?.stageId ?? ''} disabled={start.isPending} onChange={(event) => choose(event.currentTarget.value)}>
-          <option value="">Выберите этап</option>
-          {STARTABLE_STAGE_IDS.map((id) => <option key={id} value={id}>{startStageOption(id)}</option>)}
-        </select>
-      </div>
+      {onlyStage !== null ? (
+        <p data-start-from-stage-only={onlyStage}>Этап: <strong>{startStageOption(onlyStage)}</strong></p>
+      ) : (
+        <div>
+          <label htmlFor={selectId}>Этап</label>{' '}
+          <select id={selectId} value={choice?.stageId ?? ''} disabled={start.isPending} onChange={(event) => choose(event.currentTarget.value)}>
+            <option value="">Выберите этап</option>
+            {offered.map((id) => <option key={id} value={id}>{startStageOption(id)}</option>)}
+          </select>
+        </div>
+      )}
       {choice === null ? null : cost.pending ? <p className="am-note" role="status">Загрузка: оценка стоимости запуска с этапа</p> : null}
       {estimateRefusal === null ? null : <p className="am-note" role="alert" data-start-from-stage-refusal>{estimateRefusal}</p>}
       {estimate === null ? null : (

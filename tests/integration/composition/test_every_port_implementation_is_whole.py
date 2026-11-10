@@ -35,6 +35,7 @@ from typing import Any
 
 import pytest
 
+from auditmanager.api.routers import hosts_ports as hosts_port_module
 from auditmanager.api.routers import ports as port_module
 from auditmanager.bootstrap.adapters import DecisionAdapter
 
@@ -156,6 +157,14 @@ PORT_FOR_ARGUMENT = {
     "schedule": "SchedulePort",
     # `DECISION-MEMORY-M2` (contract 1.44.0): the expert decision memory.
     "decision_memory": "DecisionMemoryPort",
+    # `HOSTS-SEAL-1` (contract 1.45.0): the servers and the models of the analysis stages. Their Protocols live in
+    # `api/routers/hosts_ports.py`, beside `ports.py` (a hotspot of the wave), and the shipped stubs are `bootstrap/hosts_adapter.py` and
+    # `bootstrap/stage_plan_adapter.py`.
+    "executor_hosts": "ExecutorHostPort",
+    "stage_models": "StageModelPort",
+    # `HOSTS-SEAL-2` (contract 1.46.0): the stages of a run. The Protocol is in `hosts_ports.py` too; the implementation is
+    # `bootstrap/run_stage_adapter.py::RunStageAdapter` over `runs/stage_facts.py`.
+    "run_stages": "RunStagePort",
     # `W60-PRICE-LIST-01`.
     "optimisation": "OptimisationPort",
     # `W60-OPT-MATCH-01`.
@@ -318,7 +327,7 @@ def _class_index() -> dict[str, list[tuple[str, ast.ClassDef]]]:
 
 
 def _declared(port_name: str) -> frozenset[str]:
-    port = getattr(port_module, port_name)
+    port = getattr(port_module, port_name, None) or getattr(hosts_port_module, port_name)
     return frozenset(
         name
         for name in dir(port)

@@ -46,6 +46,8 @@ PACKAGE_FILES = {
     "agent.py": 0o644,
     "runner_client.py": 0o644,
     "detect.py": 0o644,
+    "host_mode.py": 0o644,
+    "api_answer.py": 0o644,
     "codex_answer.py": 0o644,
     "claude_answer.py": 0o644,
     "pdf-analysis-agent.service": 0o644,

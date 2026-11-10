@@ -34,6 +34,16 @@ export {
   stageRows,
 } from './model/run-presentation';
 
+export type { RunChipDefinition, RunChipId } from './model/stage-dictionary';
+export {
+  AR_V3_CHIP_ID, AR_V3_RUN_CHIP, RUN_CHIP, RUN_CHIPS, RUN_CHIP_IDS, chipById, chipOfStage, phaseFullLabel,
+} from './model/stage-dictionary';
+export { shortModelName } from './model/model-short-name';
+export type { LiveProgress, ProcedureReading, ProcedureStatus } from './model/extended-readings';
+export { PROCEDURE_STATUS_VALUES, extendedLiveProgress, liveProgressText, procedureReadings } from './model/extended-readings';
+export type { ChipProgress, ChipState, RunChip, RunChipsInput } from './model/run-chips';
+export { CHIP_STATE_LABELS, chipProgress, runChips } from './model/run-chips';
+
 export type { RunFinishEstimate } from './model/run-estimate';
 export { formatClockTime, runFinishEstimate } from './model/run-estimate';
 
@@ -116,7 +126,12 @@ export type { ArV3PackView } from './api/use-ar-v3-pack-status';
 export { arV3PackStatusQueryOptions, useArV3PackStatus, useArV3StartAllowed } from './api/use-ar-v3-pack-status';
 
 export type { RunStatusPolling } from './api/use-run-status';
-export { useRunStatus } from './api/use-run-status';
+export { recordRunReading, useRunStatus } from './api/use-run-status';
+
+export type { RunStagesView } from './api/use-run-stages';
+export { runStagesKey, runStagesQueryOptions, useRunStages } from './api/use-run-stages';
+export type { ChipModelLine } from './model/run-stages';
+export { chipModelLine, modelsCount, planModelIds, stageOfChip } from './model/run-stages';
 
 export type { RunTableProps } from './ui/run-table';
 export { RunTable, STARTED_BY_UNKNOWN } from './ui/run-table';

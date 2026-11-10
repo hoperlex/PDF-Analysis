@@ -101,9 +101,11 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0059_decision_memory` (`ADR-0027`): the eight tables of the decision memory are kept (KEEP 41 -> 49); none of them has a
     # foreign key into a PRODUCT table, so the purge's TRUNCATE never needs them.
     # `0061_decision_memory_m2` adds the installation settings' journal, kept like the schedule's settings (KEEP 49 -> 50).
+    # `0062_hosts_stage_models` keeps eight tables of the host and the stage layout, like the executor connections (KEEP 50 -> 58), and
+    # a planned run's cell binding is a run's own row (PRODUCT 92 -> 93).
     assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 9
     assert not tool.KEEP_MEMORY_TABLES & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
-    assert len(tool.PRODUCT_TABLES) == 92 and len(tool.KEEP_TABLES) == 50 and len(tool.MIXED_TABLES) == 3
+    assert len(tool.PRODUCT_TABLES) == 93 and len(tool.KEEP_TABLES) == 58 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT

@@ -311,15 +311,18 @@ def test_a_stand_that_cannot_be_reached_is_exit_69_and_says_to_run_it_again(host
 # -------------------------------------------------------------------------------------------- config
 
 
-def test_a_fresh_install_without_a_model_is_refused_before_anything_changes(host):
+def test_a_fresh_install_without_a_model_is_a_host_agent_and_a_missing_model_is_no_longer_a_refusal(host):
+    """`HOSTS-AGENT-01`: the model is not asked at install. No model anywhere installs the host agent; the old
+    refusal (exit 64, `no default`) belongs to nothing any more. A model still installs the single-model agent
+    (the tests around this one)."""
     with A.Stand() as stand:
         done = host.run(stand, model=None)
-        also_empty = host.run(stand, env={"AUDITMANAGER_AGENT_MODEL": ""})
-        also_reconfigure = host.run(stand, "--reconfigure", model=None)
-    for refused in (done, also_empty, also_reconfigure):
-        assert refused.returncode == 64, refused.stderr
-        assert "AUDITMANAGER_AGENT_MODEL" in refused.stderr and "no default" in refused.stderr
-    assert not host.root.exists() and stand.requests == [] and host.commands("useradd") == []
+        assert done.returncode == 0, done.stdout + done.stderr
+        also_empty_env = host.run(stand, secret=None, env={"AUDITMANAGER_AGENT_MODEL": ""})
+    assert also_empty_env.returncode == 0, also_empty_env.stderr
+    cfg = agent.load_config(str(host.config))
+    assert cfg.mode == "host" and cfg.declared_model == "" and cfg.host.key_file == "/etc/pdf-analysis-agent/keys.env"
+    assert "no default" not in done.stderr and "AUDITMANAGER_AGENT_MODEL" not in done.stderr
 
 
 @pytest.mark.parametrize("model,cli,declared_tail", [

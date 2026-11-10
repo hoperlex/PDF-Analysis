@@ -439,6 +439,43 @@ class ExecutorRoutingModeEventId(OpaqueId, prefix="exrm", entity="ExecutorRoutin
     """
 
 
+class ExecutorHostId(OpaqueId, prefix="exh", entity="ExecutorHost"):
+    """Identity of one executor host -- a server with its one agent process and one host token (`HOSTS-SEAL-1`, migration ``0062``, ADR-0028).
+
+    Minted by ``auditmanager.executors``. The host name, its address and the providers found on it are attributes and never an identity;
+    a call journal row names the host by this identity without a foreign key, and a host is archived, never deleted.
+    """
+
+
+class ExecutorHostUseEventId(OpaqueId, prefix="exhu", entity="ExecutorHostUseEvent"):
+    """Identity of one change of a host's «Использовать» switch (`HOSTS-SEAL-1`, migration ``0062``).
+
+    Minted by ``auditmanager.executors``; the switch in force is the latest event of the host, never a flag.
+    """
+
+
+class ExecutorHostSlotEventId(OpaqueId, prefix="exhs", entity="ExecutorHostSlotEvent"):
+    """Identity of one change of the slots of a provider on a host (`HOSTS-SEAL-1`, migration ``0062``).
+
+    Minted by ``auditmanager.executors``; the slots in force are the latest event of the host and provider.
+    """
+
+
+class StageLayoutRevisionId(OpaqueId, prefix="slr", entity="StageLayoutRevision"):
+    """Identity of one immutable revision of the stage layout -- the models of the analysis stages (`HOSTS-SEAL-1`, migration ``0062``).
+
+    Minted by the stage-plan service. A run freezes the plan it was started with; this identity is what that plan records, never the
+    layout's current revision at the time of reading.
+    """
+
+
+class StageLayoutSwitchEventId(OpaqueId, prefix="sls", entity="StageLayoutSwitchEvent"):
+    """Identity of one change of the switch that puts the stage layout in force (`HOSTS-SEAL-1`, migration ``0062``).
+
+    Minted by the stage-plan service; the switch in force is the latest event, and an empty journal means off.
+    """
+
+
 class ComparisonUploadId(OpaqueId, prefix="cbt", entity="ComparisonUpload"):
     """Identity of one upload batch of plain PDFs for comparison (`CMP-SEAL-C0`, migration ``0038``, ADR-0025 decision 10)."""
 

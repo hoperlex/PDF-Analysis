@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from .core import (PLAN_VERSION_V2, MAX_ITEMS, ModelRequest, canonical, digest,
+from .core import (PLAN_VERSION_V2, MAX_ITEMS, ModelRequest, canonical, digest, effort_of, limit_of,
                    response_schema, parse_reply)
 
 WORKFLOW_V2 = PLAN_VERSION_V2
@@ -54,7 +54,7 @@ def _native_context(payload):
     return result, truncated
 
 
-def build_comprehensive_request(*, model_id, run_id, section, payload):
+def build_comprehensive_request(*, model_id, run_id, section, payload, settings=None):
     """Independent cross-source reasoning over actual visual results and native text."""
     if not isinstance(payload, dict):
         raise ValueError("comprehensive_payload_invalid")
@@ -90,9 +90,10 @@ def build_comprehensive_request(*, model_id, run_id, section, payload):
     encoded = canonical(body)
     if len(encoded) > 480_000:
         raise ValueError("comprehensive_payload_too_large")
-    return ModelRequest(model_id, {"model": model_id, "max_tokens": 6000, "system": instruction,
+    # `HOSTS-LAYOUT-01`: the cell's answer limit and effort when the run has a stage plan; the constants otherwise.
+    return ModelRequest(model_id, {"model": model_id, "max_tokens": limit_of(settings, 6000), "system": instruction,
         "messages": [{"role": "user", "content": encoded}], "thinking": {"type": "adaptive"},
-        "output_config": {"effort": "high", "format": {"type": "json_schema", "schema": response_schema()}}},
+        "output_config": {"effort": effort_of(settings), "format": {"type": "json_schema", "schema": response_schema()}}},
         idempotency_scope=f"{run_id}:comprehensive:{digest(body)}")
 
 
@@ -132,15 +133,15 @@ def deterministic_lossless_merge(items, *, full_document=False):
     return output
 
 
-def build_norm_review_request(*, model_id, run_id, section, payload):
+def build_norm_review_request(*, model_id, run_id, section, payload, settings=None):
     """Fourth bounded call: review actual corpus quotes for already merged observations."""
     from .core import build_request
     rows = payload.get("observations", [])
     if not isinstance(rows, list) or len(rows) > MAX_ITEMS:
         raise ValueError("norm_review_window_exceeded")
-    request = build_request(model_id=model_id, run_id=run_id, section=section, phase="merge", payload=payload)
+    request = build_request(model_id=model_id, run_id=run_id, section=section, phase="merge", payload=payload, settings=settings)
     body = deepcopy(request.body)
-    body["max_tokens"] = 12_000
+    body["max_tokens"] = limit_of(settings, 12_000)
     body["system"] = (f"Ты выполняешь отдельную предварительную нормативную сверку раздела {section}. "
         "Отдельная процедура norm_verification: НЕ объединяй и НЕ переписывай наблюдения. "
         "Для каждого входного input_id верни ровно одно наблюдение с единственным соответствующим input_ids. "
@@ -205,7 +206,7 @@ def review_bundle_digest(section):
         if path.is_file() and path.suffix in {".py", ".md", ".txt", ".json"}:
             assets[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
     for name in ("core.py", "workflow.py", "review.py", "native_pages.py", "coverage.py",
-                 "cross_window.py", "cross_window_review.py"):
+                 "cross_window.py", "cross_window_review.py", "block_ensemble.py"):
         assets[name] = hashlib.sha256((root / name).read_bytes()).hexdigest()
     return digest({"version": REVIEW_BUNDLE_VERSION, "workflow_version": WORKFLOW_V3,
                    "section": section, "section_rules": rules_digest(section), "assets": assets})
@@ -238,7 +239,7 @@ def _v3_request(request, *, run_id, section, phase, window_id=None, relaxed_limi
         idempotency_scope=f"{run_id}:v3:{window}:{phase}:{digest(body)}")
 
 
-def build_comprehensive_request_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False):
+def build_comprehensive_request_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False, settings=None):
     summarized = deepcopy(payload)
     truncated_items, truncated_sources = [], []
     for field in ("visual_observations", "text_observations"):
@@ -267,22 +268,22 @@ def build_comprehensive_request_v3(*, model_id, run_id, section, payload, window
         "full_input_sha256": digest(payload), "truncated_observations": truncated_items,
         "truncated_source_quotes": truncated_sources, "originals_retained_by_runtime": True}
     return _v3_request(build_comprehensive_request(model_id=model_id, run_id=run_id,
-        section=section, payload=summarized), run_id=run_id, section=section,
+        section=section, payload=summarized, settings=settings), run_id=run_id, section=section,
         phase="comprehensive_analysis", window_id=window_id, relaxed_limits=relaxed_limits)
 
 
-def build_norm_review_request_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False):
+def build_norm_review_request_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False, settings=None):
     return _v3_request(build_norm_review_request(model_id=model_id, run_id=run_id,
-        section=section, payload=payload), run_id=run_id, section=section,
+        section=section, payload=payload, settings=settings), run_id=run_id, section=section,
         phase="norm_verification", window_id=window_id, relaxed_limits=relaxed_limits)
 
 
-def build_comprehensive_request_batched_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False):
+def build_comprehensive_request_batched_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False, settings=None):
     """Fresh batched authority keeps complete observations and every supplied text piece."""
     if payload.get("coverage_version") != "batched-v1":
         raise ValueError("extended_batched_authority_required")
     return _v3_request(build_comprehensive_request(model_id=model_id, run_id=run_id,
-        section=section, payload=payload), run_id=run_id, section=section,
+        section=section, payload=payload, settings=settings), run_id=run_id, section=section,
         phase="comprehensive_analysis", window_id=window_id, relaxed_limits=relaxed_limits)
 
 
@@ -332,12 +333,12 @@ def _batched_norm_schema():
                 'norm_assessment': assessment}}}}}
 
 
-def build_norm_review_request_batched_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False):
+def build_norm_review_request_batched_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False, settings=None):
     """Fresh compact annotations avoid repeating the full original finding in every reply."""
     if payload.get('coverage_version') != 'batched-v1' or len(payload.get('observations', [])) > 20:
         raise ValueError('extended_batched_norm_authority_invalid')
     request = build_norm_review_request_v3(model_id=model_id, run_id=run_id, section=section,
-        payload=payload, window_id=window_id, relaxed_limits=relaxed_limits)
+        payload=payload, window_id=window_id, relaxed_limits=relaxed_limits, settings=settings)
     body = deepcopy(request.body)
     body['system'] += ('\nДля этой новой версии формат ответа заменён: объект assessments, ровно одна '
         'запись {input_id,norm_assessment} для каждого входа. Не возвращай title, description, source_ids '

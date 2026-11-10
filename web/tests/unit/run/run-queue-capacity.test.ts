@@ -26,6 +26,7 @@ import { RunProgress } from '@/widgets/run-progress';
 
 import { PROJECT_UID, RUN_ID, VERSION_UID, render, runStatus } from '../review/fixtures';
 import { newClient, renderScreen, renderWith } from '../screens/harness';
+import { runDialog } from './run-dialog-fixture';
 
 const CONNECTION = 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const EXECUTOR = { connection_id: CONNECTION, display_name: 'Основной шлюз', pin_id: 'модель-основная' };
@@ -195,23 +196,27 @@ describe('the run table row', () => {
 });
 
 describe('the run page', () => {
-  it('says the executor is busy beside the executor’s own row', () => {
-    const markup = page(queued({ queue_reason: 'executor_at_capacity' }));
-    expect(markup).toMatch(new RegExp(`<p data-run-executor-waiting="true">${BUSY}\\.</p>`));
-    expect(markup).toContain('<dt>Исполнитель</dt>');
-    expect(markup).toMatch(/<dd data-run-executor="true">«Основной шлюз», модель «модель-основная»<\/dd>/);
+  it('says the executor is busy in the waiting line, and the dialog names the executor once, as the server of the plan', () => {
+    const run = queued({ queue_reason: 'executor_at_capacity' });
+    const markup = page(run);
+    expect(markup).toMatch(new RegExp(`<span data-run-executor-waiting="true">${BUSY}\\.</span>`));
     expect(markup).not.toContain('Ждёт исполнителя');
+    const dialog = runDialog(run, { selected: 'text' });
+    expect(dialog).not.toContain('<dt>Исполнитель</dt>');
+    expect(dialog).not.toContain('data-run-executor');
+    expect(dialog).toContain('<strong title="модель-основная">модель-основная</strong>');
+    expect(dialog).toMatch(/data-plan-row="server"[\s\S]*?Основной шлюз/);
   });
 
   it('says the runner is not online', () => {
     const markup = page(queued({ queue_reason: 'runner_offline' }));
-    expect(markup).toMatch(new RegExp(`<p data-run-executor-waiting="true">${OFFLINE}\\.</p>`));
+    expect(markup).toMatch(new RegExp(`<span data-run-executor-waiting="true">${OFFLINE}\\.</span>`));
     expect(markup).not.toContain(BUSY);
   });
 
   it('keeps «Ждёт исполнителя» when the reading carries no reason', () => {
     const markup = page(queued());
-    expect(markup).toMatch(/<p data-run-executor-waiting="true">Ждёт исполнителя «Основной шлюз»\.<\/p>/);
+    expect(markup).toMatch(/<span data-run-executor-waiting="true">Ждёт исполнителя «Основной шлюз»\.<\/span>/);
     expect(markup).not.toContain('В очереди:');
   });
 

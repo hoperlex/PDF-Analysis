@@ -1,0 +1,260 @@
+{
+  "contract": "auditmanager.analysis.model-catalogue",
+  "contract_version": "1.47.0",
+  "status": "frozen",
+  "description": "HOSTS-SEAL-1 (plan 2026-11-09 sections 4.2 and 5, ADR-0028): the models the stage layout may name, and for each provider that can serve one the accesses it can serve it with, the reasoning efforts it may be asked for and the exact strings an answer may report as its model. It covers the pins of docs/program/P02_LOCK.json that the layout offers (claude-opus-5-5, claude-sonnet-5-5, gpt-6.1-sol, gpt-6-sol, gpt-6-astra) and nothing else: the older claude-opus-5 and claude-sonnet-5 stay pinned to read past runs and are never offered. Never offered: any Haiku, the efforts xhigh and max, and low for Opus (the original's owner forbids them). Matching is exact: an answer whose reported model is not in accepted_reported is refused, there is no prefix or date-suffix rule.",
+  "lock_file": "docs/program/P02_LOCK.json",
+  "efforts_vocabulary": [
+    "low",
+    "medium",
+    "high"
+  ],
+  "access_vocabulary": [
+    "subscription",
+    "api"
+  ],
+  "provider_vocabulary": [
+    "claude_code",
+    "codex",
+    "anthropic_api",
+    "openai_api",
+    "openrouter_api"
+  ],
+  "$comment": "claude_code and codex are the CLIs on a host; their access is subscription when the CLI is logged in with an account and api when it is logged in with an API key (billed per token). anthropic_api, openai_api and openrouter_api are the direct providers the host agent calls with a key from the service key file (owner answer to question 3 of the 2026-11-09 poll): access api only, and they may serve the same model ids. The accepted_reported strings of the three direct providers are provisional until HOSTS-AGENT-01 records what each one reports on a live call; a string that is not listed here is refused until the file names it.",
+  "entries": [
+    {
+      "provider": "claude_code",
+      "model_id": "claude-opus-5-5",
+      "access": [
+        "subscription",
+        "api"
+      ],
+      "efforts": [
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "claude-opus-5-5",
+        "claude-opus-5-5[1m]"
+      ]
+    },
+    {
+      "provider": "claude_code",
+      "model_id": "claude-sonnet-5-5",
+      "access": [
+        "subscription",
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "claude-sonnet-5-5",
+        "claude-sonnet-5-5[1m]"
+      ]
+    },
+    {
+      "provider": "codex",
+      "model_id": "gpt-6.1-sol",
+      "access": [
+        "subscription",
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "gpt-6.1-sol"
+      ]
+    },
+    {
+      "provider": "codex",
+      "model_id": "gpt-6-sol",
+      "access": [
+        "subscription",
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "gpt-6-sol"
+      ]
+    },
+    {
+      "provider": "codex",
+      "model_id": "gpt-6-astra",
+      "access": [
+        "subscription",
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "gpt-6-astra"
+      ]
+    },
+    {
+      "provider": "anthropic_api",
+      "model_id": "claude-opus-5-5",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "claude-opus-5-5"
+      ]
+    },
+    {
+      "provider": "anthropic_api",
+      "model_id": "claude-sonnet-5-5",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "provider": "openai_api",
+      "model_id": "gpt-6.1-sol",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "gpt-6.1-sol"
+      ]
+    },
+    {
+      "provider": "openai_api",
+      "model_id": "gpt-6-sol",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "gpt-6-sol"
+      ]
+    },
+    {
+      "provider": "openai_api",
+      "model_id": "gpt-6-astra",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "gpt-6-astra"
+      ]
+    },
+    {
+      "provider": "openrouter_api",
+      "model_id": "claude-opus-5-5",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "anthropic/claude-opus-5-5",
+        "claude-opus-5-5"
+      ]
+    },
+    {
+      "provider": "openrouter_api",
+      "model_id": "claude-sonnet-5-5",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "anthropic/claude-sonnet-5-5",
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "provider": "openrouter_api",
+      "model_id": "gpt-6.1-sol",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "openai/gpt-6.1-sol",
+        "gpt-6.1-sol"
+      ]
+    },
+    {
+      "provider": "openrouter_api",
+      "model_id": "gpt-6-sol",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "openai/gpt-6-sol",
+        "gpt-6-sol"
+      ]
+    },
+    {
+      "provider": "openrouter_api",
+      "model_id": "gpt-6-astra",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "openai/gpt-6-astra",
+        "gpt-6-astra"
+      ]
+    }
+  ]
+}

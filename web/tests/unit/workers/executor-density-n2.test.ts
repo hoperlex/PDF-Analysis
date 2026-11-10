@@ -91,20 +91,16 @@ describe('item 1: one opt-in two-column form in the global layer', () => {
   });
 });
 
-describe('item 2: «Исполнители» says its page in one sentence and keeps the rest one line away', () => {
-  const page = (): string => renderScreen(newClient(), createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }));
+describe('item 2: «Исполнители» says its page in one sentence', () => {
+  const page = (): string => renderScreen(newClient(), createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }));
 
-  it('puts one sentence under the title and the long text in a closed disclosure', () => {
+  // `HOSTS-WEB-01`: the long text of the six tabs went with them; two tabs say themselves.
+  it('puts one sentence under the title and no disclosure of explanations over the tabs', () => {
     const markup = page();
     const subtitle = /<p class="am-page__subtitle">([^<]*)<\/p>/.exec(markup)?.[1] ?? '';
-    expect(subtitle).toBe('Обзор и очередь, подключения к моделям, процессы, группы, правила и назначения.');
+    expect(subtitle).toBe('Серверы, на которых работают модели, и модель каждого этапа анализа.');
     expect(subtitle.split(/[.!?]/).filter((part) => part.trim() !== '')).toHaveLength(1);
-    const detail = /<details[^>]*data-workers-about[^>]*>[\s\S]*?<\/details>/.exec(markup)?.[0] ?? '';
-    expect(detail).not.toMatch(/^<details[^>]*\sopen/);
-    expect(detail).toContain('<summary>Что на экране и как обновляются данные</summary>');
-    expect(detail).toContain('Обзор и список процессов обновляются автоматически, пока вкладка открыта');
-    expect(detail).toContain('остальные данные — при возврате на вкладку, после команды и по запросу');
-    expect(markup.indexOf('data-workers-about')).toBeLessThan(markup.indexOf('role="tablist"'));
+    expect(markup).not.toContain('data-workers-about');
   });
 
   it('can fail: the subtitle that was there held four sentences-worth of clauses, and a long one is not accepted', () => {
@@ -136,16 +132,17 @@ describe('item 3: «Настройки анализа» — boxes that scroll si
     return renderScreen(client, createElement(AnalysisSettingsPage, {}));
   };
 
-  it('makes each of the four sections a named region with a tab stop', () => {
+  it('makes each of the three sections a named region with a tab stop, and no longer draws the presets (HOSTS-WEB-01b)', () => {
     const markup = page();
-    for (const label of ['Состояние анализа АР v3', 'Пакет анализа АР v3', 'Разбор анализа АР v3', 'Пресеты запуска']) {
+    for (const label of ['Состояние анализа АР v3', 'Пакет анализа АР v3', 'Разбор анализа АР v3']) {
       expect(markup, label).toMatch(new RegExp(`<section class="[^"]*panel[^"]*" role="region" aria-label="${label}" tabindex="0"`));
     }
+    expect(markup).not.toContain('Пресеты запуска');
   });
 
   it('keeps the profile table in the one region it already had, and does not scroll its frame a second time', () => {
     const markup = page();
-    expect(markup.match(/role="region"[^>]*tabindex="0"/g)).toHaveLength(5);
+    expect(markup.match(/role="region"[^>]*tabindex="0"/g)).toHaveLength(4);
     expect(markup).toMatch(/<div class="[^"]*panel[^"]*flush[^"]*"><section[^>]*aria-labelledby="analysis-profiles-heading"/);
     expect(markup).not.toMatch(/<div class="[^"]*flush[^"]*"[^>]*tabindex/);
   });

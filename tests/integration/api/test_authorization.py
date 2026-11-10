@@ -561,6 +561,24 @@ GUARDED = (
     ("getDecisionMemoryStatus", "GET", "/decision-memory/status"),
     ("withdrawDecisionMemoryCase", "POST", "/decision-memory/cases/dmc_01M2545JSD15ETSNNV904X991N/withdraw"),
     ("restoreDecisionMemoryCase", "POST", "/decision-memory/cases/dmc_01M2545JSD15ETSNNV904X991N/restore"),
+    # `HOSTS-SEAL-1` (contract 1.45.0): the servers and the models of the analysis stages; the viewer is denied every one.
+    ("listExecutorHosts", "GET", "/executor-hosts"),
+    ("getExecutorHost", "GET", "/executor-hosts/exh_01M2545JSD15ETSNNV904X991N"),
+    ("getExecutorHostDetails", "GET", "/executor-hosts/exh_01M2545JSD15ETSNNV904X991N/details"),
+    ("setExecutorHostEnabled", "PUT", "/executor-hosts/exh_01M2545JSD15ETSNNV904X991N/enabled"),
+    ("setExecutorHostSlots", "PUT", "/executor-hosts/exh_01M2545JSD15ETSNNV904X991N/slots"),
+    ("archiveExecutorHost", "POST", "/executor-hosts/exh_01M2545JSD15ETSNNV904X991N/archive"),
+    ("issueExecutorHostEnrollment", "POST", "/executor-hosts/enrollments"),
+    ("createExecutorHostAgentInstall", "POST", "/executor-hosts/agent-installs"),
+    ("getExecutorHostAgentInstall", "GET", "/executor-hosts/exh_01M2545JSD15ETSNNV904X991N/agent-installs/exai_01M2545JSD15ETSNNV904X991N"),
+    ("confirmExecutorHostAgentInstallHostKey", "POST", "/executor-hosts/exh_01M2545JSD15ETSNNV904X991N/agent-installs/exai_01M2545JSD15ETSNNV904X991N/confirm-host-key"),
+    ("getStageModelLayout", "GET", "/model-layout"),
+    ("reviseStageModelLayout", "POST", "/model-layout/revisions"),
+    ("setStageModelLayoutEnabled", "PUT", "/model-layout/enabled"),
+    ("listModelCatalogue", "GET", "/model-catalogue"),
+    ("getRunStartReadiness", "POST", "/runs/start-readiness"),
+    # `HOSTS-SEAL-2` (contract 1.46.0): the stages of a run; a product read, so the viewer is let in and only the server and the access leave the answer.
+    ("getRunStages", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/stages"),
     ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
     ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
     ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),
@@ -1231,6 +1249,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `UI-PARITY-P0I`: a finding's execution status records WHO set it; whether they may is the role register's
         # (expert).
         "findings.py",
+        # `HOSTS-SEAL-1` (1.45.0): the writes on a server (its switch, slots, archive, host-targeted enrollment and install) record WHO did it
+        # (the actor of the journal event and of the row); that only an administrator may is the role register's and the command's own
+        # re-read of the role set. The reads take no subject.
+        "hosts.py",
         "me.py",
         "norms.py",
         # `W60-PRICE-LIST-01`: a price list and a vendor-list revision record WHO uploaded or
@@ -1243,6 +1265,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "optimisation_proposals.py",
         "registrations.py",
         "releases.py",
+        # `HOSTS-SEAL-2` (1.46.0): the stages of a run are a read for every role, and the answer leaves out the server and the access of a cell
+        # for the viewer; the route hands the caller (``user_uid``) to the port, whose implementation re-reads the role set in its own
+        # transaction -- as the schedule's and the specification's reads do. Whether anyone may ask is the role register's.
+        "run_stages.py",
         # `EXEC-PULL-01`: issuing and revoking a runner token records WHO did it (the actor of its
         # journal event and of its row); that only an administrator may is the role register's and
         # the command's own re-read of the role set. The runner's own five operations read the
@@ -1267,6 +1293,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # role re-read happens in its transaction; whether they may is the role register's
         # (any one role), decided before the handler runs.
         "specification_prices.py",
+        # `HOSTS-SEAL-1` (1.45.0): saving a revision of the stage layout and switching it record WHO did it; that only an administrator may is
+        # the role register's. The layout, the catalogue and the readiness of a start take no subject.
+        "stage_models.py",
         "users.py",
     ], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "

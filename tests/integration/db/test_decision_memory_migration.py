@@ -32,7 +32,7 @@ from auditmanager.shared.identity import (
     DecisionMemoryStatusEventId,
 )
 
-HEAD = "0061_decision_memory_m2"  # the head the fixture migrates to; 0059 is the migration under test, two steps below it
+HEAD = "0062_hosts_stage_models"  # the head the fixture migrates to; 0059 is the migration under test, three steps below it
 #: `0061` (phase M2) adds the settings' journal to the family and replaces the content tables' guard; its own test is `test_decision_memory_m2_migration.py`.
 M2_TABLES = {"decision_memory_setting_event"}
 CONTENT_TABLES = {"decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_crop"}

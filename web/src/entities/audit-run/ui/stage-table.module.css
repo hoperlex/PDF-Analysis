@@ -53,6 +53,17 @@
   white-space: nowrap;
 }
 
+/*
+ * `D-615` (measured by lane WALK-V5 at 360, 414 and 1280 px): the cell that holds a stage's name and what it waits for keeps the width
+ * of its words. The table is `width: 100%` with auto layout and its other four columns do not wrap, so this was the one column that
+ * gave: down to its longest word, 72 px, four lines of «Извлечение геометрии страниц и блоков» and five of «после: …». With a floor
+ * the longest name sets in two lines at the narrowest the column gets, and where the pane is narrower than the columns the scroller
+ * above takes the difference. There is no ceiling: where the pane can give the table its full width, the table takes it.
+ */
+.stage {
+  min-width: 12rem;
+}
+
 .name {
   font-weight: 500;
 }

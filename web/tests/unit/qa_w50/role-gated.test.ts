@@ -134,12 +134,13 @@ describe('6 (fixture): admin screens are absent from the menu for an expert', ()
 });
 
 describe('6 (live): the administrator rows are role-gated in the real registry', () => {
-  it('the live role-gated set is the four operator screens (R-150w) and the four admin screens', () => {
+  it('the live role-gated set is the four operator screens (R-150w), the advanced page of the executors (administrators only) and the four admin screens', () => {
     const rows: readonly ScreenEntry[] = SCREEN_REGISTRY;
     const admin = ['/admin/users', '/admin/users/[user_uid]', '/admin/registrations', '/admin/auth-events'];
     // `R-150w`: the operator's screens ask for expert or admin, so «Наблюдатель» does not open them.
     // `UI-PARITY-P0P`: «График работ» is the same operators' screen.
-    const operator = ['/dispatcher', '/schedule', '/logs', '/workers', '/queue'];
+    // `HOSTS-WEB-01`: the advanced page of the executors is the administrator's alone, a row of its own beside «Исполнители».
+    const operator = ['/dispatcher', '/schedule', '/logs', '/workers', '/workers/advanced', '/queue'];
     // `R-80`: every other product row asks for any role (`any-role`), not for a listed one.
     expect(rows.filter((row) => Array.isArray(row.roles)).map((row) => row.address)).toEqual([...operator, ...admin]);
     expect(rows.filter((row) => row.group === 'admin').map((row) => row.address)).toEqual(admin);

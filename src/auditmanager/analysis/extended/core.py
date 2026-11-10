@@ -11,6 +11,7 @@ from typing import Any, Mapping
 
 from auditmanager.analysis.geometry.crop_cohort import prepare_image_crop_cohort
 from auditmanager.analysis.text.adapter import ModelRequest
+from auditmanager.analysis.text.cell_settings import effort_of, limit_of
 
 PLAN_VERSION = "extended-review-v1"
 PLAN_VERSION_V2 = "extended-review-v2"
@@ -234,7 +235,7 @@ def response_schema(*, merge: bool = False) -> dict:
     return schema
 
 
-def build_request(*, model_id: str, run_id: str, phase: str, section: str, payload: dict) -> ModelRequest:
+def build_request(*, model_id: str, run_id: str, phase: str, section: str, payload: dict, settings=None) -> ModelRequest:
     instruction = ("Исследуй приложенные изображения блоков чертежей вместе с текстом их страниц и соседей. "
         "Найди конкретные внутренние расхождения, технические неясности и позиции для экспертной сверки. "
         "Картинка является источником: не выдумывай native цитату или текстовые координаты. "
@@ -255,10 +256,11 @@ def build_request(*, model_id: str, run_id: str, phase: str, section: str, paylo
         "Используй только перечисленные source_id. " + norm_instruction +
         "Не утверждай актуальность или обязательность. Ответ по-русски, объект observations по схеме. "
         "Если источник не позволяет проверить вопрос, опиши неопределённость; не объявляй отсутствие детали по одному фрагменту.")
-    body = {"model": model_id, "max_tokens": 6000, "system": system,
+    # `HOSTS-LAYOUT-01`: the cell's answer limit and effort when the run has a stage plan; the constants otherwise.
+    body = {"model": model_id, "max_tokens": limit_of(settings, 6000), "system": system,
         "messages": [{"role": "user", "content": canonical(payload)}],
         "thinking": {"type": "adaptive"},
-        "output_config": {"effort": "high", "format": {"type": "json_schema", "schema": response_schema(merge=phase == "merge")}}}
+        "output_config": {"effort": effort_of(settings), "format": {"type": "json_schema", "schema": response_schema(merge=phase == "merge")}}}
     return ModelRequest(model_id, body, idempotency_scope=f"{run_id}:{phase}:{digest(payload)}")
 
 
@@ -510,14 +512,14 @@ def block_payload(*, section: str, batch: list[dict], sections: list[dict], cove
         "page_contexts": contexts, "context_sections": sections, "coverage": coverage}, truncated
 
 
-def build_request_v3(*, model_id, run_id, phase, section, payload, window_id):
+def build_request_v3(*, model_id, run_id, phase, section, payload, window_id, settings=None):
     """Fresh-consent visual request with the frozen section rubric; legacy requests stay byte-stable."""
     from .section_rules import section_instructions
     from .workflow import review_bundle_digest
     rubric = section_instructions(section, "block_analysis" if phase == "blocks" else phase)
     bound = {**payload,"workflow_version":PLAN_VERSION_V3,"window_id":window_id,
         "rules_sha256":review_bundle_digest(section)}
-    request=build_request(model_id=model_id,run_id=run_id,phase=phase,section=section,payload=bound)
+    request=build_request(model_id=model_id,run_id=run_id,phase=phase,section=section,payload=bound,settings=settings)
     body={**request.body,"system":request.body["system"]+"\n\n"+rubric}
     # These are generation constraints, not a replacement for the source-binding
     # validator. Parameter/context IDs in the same prompt are not visual evidence.

@@ -293,6 +293,8 @@ class World:
         self.events: list[dict[str, Any]] = []
         monkeypatch.setattr(public, "group_revision_of", lambda session, revision_id, groups=None: self.revision)
         monkeypatch.setattr(public, "member_facts", lambda session, revision, repository=None: self.facts)
+        # the host-aware reading of a system member (`HOSTS-CMP-01`) wraps ``member_facts`` with reads of the database: these scenarios are the choice among given facts
+        monkeypatch.setattr(dispatch, "member_facts_of", lambda session, revision: self.facts)
         monkeypatch.setattr(public, "current_revision", lambda session, connection_id, repository=None: self.currents.get(connection_id))
         monkeypatch.setattr(public, "advance_group_rotation", self._advance)
         monkeypatch.setattr(jobs_public, "append_execution_event", self._event)

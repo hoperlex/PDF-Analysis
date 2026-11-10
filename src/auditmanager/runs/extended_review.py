@@ -1,21 +1,25 @@
 """Bounded multimodal preliminary review under an ordinary Run's durable authority."""
 from __future__ import annotations
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import hashlib
 import json
 import math
+import time
 from copy import deepcopy
 from typing import Any
 
-from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelResponse, ProviderMode,
+from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelResponse, ProviderMode, accepted_reported,
     build_extended_request, extended_canonical, extended_digest, finalize_extended_items,
     parse_extended_reply, plan_extended_inputs, EXTENDED_REVIEW_ROLE, EXTENDED_REPLY_ROLE,
-    pinned_models, request_cost_upper_usd, require_approved_model, extended_block_payload)
+    pinned_models, request_cost_upper_usd, require_approved_model, extended_block_payload,
+    block_leg_refs, build_block_judge_request, parse_block_judge_reply, reconcile_block_batch)
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.executors.public import CropImage, attach_images
 from auditmanager.jobs.public import extended_unit
 from auditmanager.norms.public import SEARCH_WINDOW, search_norms
 from auditmanager.runs.repository import RunRepository
+from auditmanager.runs.stage_plan import call_journal_columns, cell_binding, settings_of
+from auditmanager.runs.stage_layout import ENSEMBLE_ROLES, parse_plan, role_of_phase, row_of_phase
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId
 from auditmanager.storage.public import parse_blob_id
@@ -26,6 +30,32 @@ FORMAT = "extended-review-v1"
 
 def _refuse(reason: str):
     return DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason=reason)
+
+
+def _cell(binding, row, role="main"):
+    """`binding_for(cell)` (ADR-0028 decision 6): the binding of the ``row`` cell -- the adapter of the member it was bound to, the cell's
+    model and settings, the call binding that holds the reply to the cell's model. A run that is not frozen with a stage plan has one
+    binding for every call, and this returns it. ``role`` is ``main`` except for a leg or the judge of the blocks ensemble."""
+    return cell_binding(binding, f"{row}:{role}")
+
+
+def _kw(binding, row, role="main"):
+    """The keywords every request builder of the ``row`` cell takes: its model and its settings (``None`` outside a planned run, so the
+    builder keeps the constants it always had)."""
+    cell = _cell(binding, row, role)
+    return {"model_id": cell.config.model_id, "settings": settings_of(cell)}
+
+
+def _phase_binding(binding, identity):
+    """The binding a call of ``identity`` runs with: the run's own for a run without a stage plan, else the cell of the row the phase
+    belongs to. A semantic repair (``:repair:1``) is the phase it repairs, so it runs on that phase's cell. A phase that has no row has no
+    model, and a planned run does not call one."""
+    if getattr(binding, "cells", None) is None:
+        return binding
+    row = row_of_phase(identity)
+    if row is None:
+        raise _refuse("extended_phase_has_no_cell")
+    return _cell(binding, row, role_of_phase(identity))
 
 
 def _response_payload(response: ModelResponse) -> dict:
@@ -62,9 +92,17 @@ def _saved_response(store, row: dict, request: ModelRequest, binding) -> ModelRe
 def _call(session, *, run_id, authority, jobs, journal, binding, request, phase, source_sha256,
           meter, store, publish, checkpoint, global_unknown_fence=False):
     checkpoint("extended_before_call")
+    if getattr(binding, "cells", None) is not None:
+        # `HOSTS-LAYOUT-01` (`R-133`): a planned run's calls go through the binding of their cell (``runs.stage_plan.cell_binding``). The
+        # run-level binding is the text cell's, and a block or a norm call made on it would run on the wrong model: refused, not skipped.
+        raise _refuse("extended_call_without_cell")
+    planned = binding.call is not None and getattr(binding.call, "cell_key", None) is not None
+    # The key of a saved reply. A planned call is identified by (source, phase, request, model) alone: neither the host nor the connection
+    # revision is in it, so a retry served by another host after a move finds the reply already paid for. Every other call keeps the key
+    # it has always had, so the replies of runs started before the layout are still found.
     key = extended_digest({"format": FORMAT, "source": source_sha256, "phase": phase,
         "request": request.request_sha256, "model": request.model_id,
-        "connection": None if binding.call is None else binding.call.connection_revision_id})
+        **({} if planned else {"connection": None if binding.call is None else binding.call.connection_revision_id})})
     saved = extended_unit(session, run_id=run_id, unit_key=key, source_sha256=source_sha256, phase=phase)
     session.commit()  # no read/authority lock survives external Blob I/O
     if saved is not None:
@@ -92,7 +130,8 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
         model_identity=request.model_id, provider_mode=binding.adapter.provider_mode.value,
         parameters=params, request_sha256=request.request_sha256,
         connection_revision_id=None if binding.call is None else binding.call.connection_revision_id,
-        identity_basis=None if binding.call is None else binding.call.identity_basis)
+        identity_basis=None if binding.call is None else binding.call.identity_basis,
+        **call_journal_columns(binding.call))
     if global_unknown_fence:
         bind_current=getattr(journal,"bind_current_call",None)
         if callable(bind_current):bind_current(call_id)
@@ -103,6 +142,8 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
     except Exception as error:
         dispatch = getattr(error, "dispatch_class", None)
         code = error if isinstance(error, DomainError) else _refuse("extended_provider_failed")
+        if dispatch is not None and getattr(code, "dispatch_class", None) is None:
+            code.dispatch_class = dispatch  # the retry policy of a leg reads what the transport proved, not the wrapper's code
         if binding.adapter.provider_mode is ProviderMode.RECORDED or dispatch in {"not_sent", "rate_limited", "proxy_unavailable", "definite_refusal"}:
             journal.not_processed(call_id, code, "not_sent" if dispatch is None else dispatch)
         else:
@@ -139,9 +180,159 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
     if budget_error is not None:
         raise budget_error
     if (binding.call is not None and binding.call.check_identity
-            and response.model != binding.call.expected_model):
+            and not accepted_reported(binding.call.expected_model, response.model)):
         raise _refuse("extended_model_identity_mismatch")
     return response, False
+
+
+# --- the blocks ensemble (`HOSTS-ENSEMBLE-01`, ADR-0028 decision 11) --------------------------------------------------------------
+#
+# A block batch of a run whose plan holds the legs and the judge of the blocks row is read by each leg alone (the ordinary block request,
+# on the leg's cell), then by the judge, which sees the batch again with the legs' observations. Calls are sequential. Each of them is its
+# own unit: its own identity (``blocks:N:leg1``, ``blocks:N:leg2``, ``blocks:N:judge``), its own idempotency key, its own journal row and
+# its own cell binding. A run without the legs and the judge in its plan (the legacy route, or a single model on the blocks row) calls one
+# model per batch, exactly as before.
+
+#: A leg that failed is asked again this many times, this many seconds apart (the original's ``STAGE01_LEG_RETRY_ATTEMPTS`` and
+#: ``STAGE01_LEG_RETRY_DELAY_S``). The stage is never aborted because one leg failed (``STAGE01_ABORT_ON_LEG_FAILURE_ENABLED`` is off).
+LEG_RETRY_ATTEMPTS = 5
+LEG_RETRY_DELAY_SECONDS = 30
+#: What a transport proved about a failed call: the only classes a leg is asked again on. ``outcome_unknown`` is never one of them: the
+#: provider may have processed the call, the v3 ambiguity fence (`has_ambiguous_provider_effect`) holds, and asking again would pay twice.
+LEG_RETRY_CLASSES = frozenset({"not_sent", "rate_limited", "proxy_unavailable", "definite_refusal"})
+#: The wait is taken in slices so that a cancelled run is noticed (the checkpoint re-reads the attempt and the run) within seconds.
+_RETRY_WAIT_SLICE_SECONDS = 5
+_sleep = time.sleep
+
+
+def _block_roles(run):
+    """The roles of the blocks cells of a run: ``("main",)`` for a run without a plan or with one model on the blocks row, else the
+    ensemble's ``("leg1", "judge")`` or ``("leg1", "leg2", "judge")`` from the plan the run froze at its start."""
+    document = getattr(run, "stage_plan", None)
+    if document is None:
+        return ("main",)
+    roles = parse_plan(document).roles_of_row("blocks")
+    if roles == ("main",):
+        return roles
+    if not roles or roles[-1] != "judge" or any(role not in ENSEMBLE_ROLES for role in roles) or len(set(roles)) != len(roles) \
+            or roles[0] != "leg1":
+        raise _refuse("block_ensemble_cells_invalid")
+    return roles
+
+
+def _wait_before_retry(checkpoint):
+    remaining = LEG_RETRY_DELAY_SECONDS
+    while remaining > 0:
+        checkpoint("extended_leg_retry_wait")
+        step = min(_RETRY_WAIT_SLICE_SECONDS, remaining)
+        _sleep(step)
+        remaining -= step
+
+
+def _leg_call(call, request, identity, *, checkpoint):
+    """One leg call, asked again after a failure the transport proved harmless: ``(response, retries)``.
+
+    Any other failure -- an ambiguous outcome, an exhausted budget, a refused identity, a limit of the approval -- propagates at once. After
+    the last allowed retry the failure propagates too, carrying ``leg_attempts``; the caller decides what a failed leg means."""
+    retries = 0
+    while True:
+        try:
+            return call(request, identity), retries
+        except DomainError as error:
+            if getattr(error, "dispatch_class", None) not in LEG_RETRY_CLASSES or retries >= LEG_RETRY_ATTEMPTS:
+                error.leg_attempts = retries
+                raise
+            retries += 1
+            _wait_before_retry(checkpoint)
+
+
+def _cell_receipt(state, index, role):
+    """The sub-receipt of one call of an ensemble batch inside the batch's receipt (``None`` when the run keeps no batch receipts)."""
+    row = next((row for row in state.get("batches", []) if row.get("procedure") == "block_analysis" and row.get("index") == index), None)
+    return None if row is None else row.setdefault("cells", {}).setdefault(role, {})
+
+
+def _ensemble_block_batch(*, run, binding, state, call, roles, section, index, batch, payload, crops, builder, extra, window_context,
+                          policy, checkpoint):
+    """One block batch of the ensemble: ``(observations, partial_reason)``.
+
+    * each leg asks the ordinary block request on its own cell, retried as :data:`LEG_RETRY_CLASSES` allow; a leg whose retries are spent
+      is **failed** and the batch is partial, a leg whose reply is refused after repair keeps the records it did get and the batch is
+      partial too. If every leg failed the batch fails: the last error propagates, as a failed block call does today;
+    * the judge then reads the batch with the observations of the legs that answered (and the names of those that did not). It is asked
+      once. If it fails on a harmless class, or its reply holds nothing valid, the batch is partial and the legs' observations stand
+      unreviewed; any other failure propagates;
+    * the observations are the legs' as they wrote them (annotated with how the judge related them) and the judge's gap observations.
+    """
+    allowed = {s["source_id"] for s in batch}
+    identity = f"blocks:{index}"
+    v3 = window_context is not None
+    cells = {role: _cell(binding, "blocks", role).config.model_id for role in roles}
+    legs = tuple(role for role in roles if role != "judge")
+    leg_items, failed, last_error, refused_any = {}, [], None, False
+    for role in legs:
+        request = attach_images(builder(**_kw(binding, "blocks", role), run_id=run.run_id, phase="blocks", section=section,
+                                        payload=payload, **extra), crops)
+        # A leg's request differs from its neighbour's by the model alone; the scope the transport may deduplicate on says the leg.
+        request = replace(request, idempotency_scope=f"{request.idempotency_scope}:{role}")
+        try:
+            response, retries = _leg_call(call, request, f"{identity}:{role}", checkpoint=checkpoint)
+        except DomainError as error:
+            if getattr(error, "dispatch_class", None) not in LEG_RETRY_CLASSES:
+                raise
+            failed.append(role)
+            last_error = error
+            cell = _cell_receipt(state, index, role)
+            if cell is not None:
+                cell.update(status="failed", attempts=1 + getattr(error, "leg_attempts", 0), error_code=error.code.value,
+                            dispatch_class=error.dispatch_class)
+            continue
+        parsed, refused = _received_reply(state=state, request=request, response=response,
+            parse=lambda text, **kwargs: parse_extended_reply(text, allowed_sources=allowed, **kwargs),
+            call=call, identity=f"{identity}:{role}", policy=policy)
+        leg_items[role] = parsed
+        refused_any |= refused
+        cell = _cell_receipt(state, index, role)
+        if cell is not None:
+            cell.update(status="partial" if refused else "completed", attempts=1 + retries, observations=len(parsed))
+    if not leg_items:
+        raise last_error
+    refs = block_leg_refs(leg_items)
+    judge_records, judge_failed = None, False
+    judge_request = attach_images(build_block_judge_request(
+        **_kw(binding, "blocks", "judge"), run_id=run.run_id, section=section, payload=payload, legs=leg_items, failed_legs=failed,
+        window_id=window_context["window_id"] if v3 else None,
+        relaxed_limits=v3 and _bounds_lifted(window_context["policy"])), crops)
+    judge_identity = f"{identity}:judge"
+    try:
+        judge_response = call(judge_request, judge_identity)
+    except DomainError as error:
+        if getattr(error, "dispatch_class", None) not in LEG_RETRY_CLASSES:
+            raise
+        judge_failed = True
+        cell = _cell_receipt(state, index, "judge")
+        if cell is not None:
+            cell.update(status="failed", attempts=1, error_code=error.code.value, dispatch_class=error.dispatch_class)
+    else:
+        records, refused = _received_reply(state=state, request=judge_request, response=judge_response,
+            parse=lambda text, **kwargs: parse_block_judge_reply(text, allowed_sources=allowed, refs=refs, **kwargs),
+            call=call, identity=judge_identity, policy=policy)
+        refused_any |= refused
+        judge_failed = refused and not records  # nothing of the reply was valid: the judge did not answer
+        judge_records = None if judge_failed else records
+        cell = _cell_receipt(state, index, "judge")
+        if cell is not None:
+            cell.update(status="failed" if judge_failed else "partial" if refused else "completed", attempts=1)
+    items, report = reconcile_block_batch(batch=identity, legs=leg_items, cells=cells, judge=judge_records, sources=batch)
+    report.update(failed_legs=failed, judge_failed=judge_failed)
+    holder = next((row for row in state.get("batches", []) if row.get("procedure") == "block_analysis" and row.get("index") == index), None)
+    if holder is not None:
+        holder["reconciliation"] = report
+    else:
+        state.setdefault("block_ensemble", {"format": report["format"], "cells": cells, "batches": []})["batches"].append(report)
+    reason = ("block_ensemble_leg_failed" if failed else "block_ensemble_judge_failed" if judge_failed
+              else "block_analysis_reply_refused" if refused_any else None)
+    return items, reason
 
 
 def _norms(session, observations: list[dict], snapshot_id: str | None,
@@ -320,10 +511,10 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
                 sections=state["context_sections"], coverage=state["coverage"])
             if context_cut and "page_context_truncated" not in state["warnings"]:
                 state["warnings"].append("page_context_truncated")
-            request = attach_images(build_extended_request(model_id=binding.config.model_id, run_id=run.run_id,
+            request = attach_images(build_extended_request(**_kw(binding, "blocks"), run_id=run.run_id,
                 phase="blocks", section=section, payload=payload), crops)
             response, reused = _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
-                binding=binding, request=request, phase=f"blocks:{start//8}", source_sha256=state["source_sha256"],
+                binding=_cell(binding, "blocks"), request=request, phase=f"blocks:{start//8}", source_sha256=state["source_sha256"],
                 meter=meter, store=store, publish=publish, checkpoint=checkpoint)
             if response.truncated:
                 raise _refuse("extended_response_truncated")
@@ -348,7 +539,8 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
         indexed = {"xmi_"+extended_digest({"ordinal": i, "observation": item})[:24]: item for i, item in enumerate(items)}
         if any(len(item["description"]) > 800 for item in items):
             state["warnings"].append("merge_context_truncated")
-        request = build_extended_request(model_id=binding.config.model_id, run_id=run.run_id, phase="merge",
+        # The v1 plan's semantic merge is the « Свод » of the original; the layout values it by analogy with the cross-check row.
+        request = build_extended_request(**_kw(binding, "cross_check"), run_id=run.run_id, phase="merge",
             section=section, payload={"observations": [{
                 "title": item["title"], "description": item["description"][:800], "source_ids": item["source_ids"],
                 "norm_candidate_ids": [c["paragraph_id"] for c in item["norm_candidates"]],
@@ -357,7 +549,7 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
                 "sources": [{k:v for k,v in s.items() if k != "context"}
                 for s in state["sources"]], "source_sha256": state["source_sha256"]})
         response, reused = _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
-            binding=binding, request=request, phase="merge", source_sha256=state["source_sha256"],
+            binding=_cell(binding, "cross_check"), request=request, phase="merge", source_sha256=state["source_sha256"],
             meter=meter, store=store, publish=publish, checkpoint=checkpoint)
         if response.truncated:
             raise _refuse("extended_response_truncated")
@@ -523,7 +715,7 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
             "blocks_remaining":0,"skipped":[]}}
 
 
-def _full_comprehensive_review(*, run, model_id, section, state, pages, block_items, call):
+def _full_comprehensive_review(*, run, model_id, section, state, pages, block_items, call, settings=None):
     """Cover every page character and source in repeatable provider-sized batches."""
     from auditmanager.analysis.public import build_comprehensive_request
     units = []
@@ -565,7 +757,7 @@ def _full_comprehensive_review(*, run, model_id, section, state, pages, block_it
             return
         sources = [{k: v for k, v in source.items() if k != "context"}
             for source in state["sources"] if source["source_id"] in batch_allowed]
-        request = build_comprehensive_request(model_id=model_id, run_id=run.run_id, section=section,
+        request = build_comprehensive_request(model_id=model_id, run_id=run.run_id, section=section, settings=settings,
             payload={"native_context": batch_contexts, "visual_observations": batch_visual,
                 "text_observations": batch_text, "sources": sources,
                 "source_sha256": state["source_sha256"], "coverage": state["coverage"]})
@@ -588,7 +780,7 @@ def _full_comprehensive_review(*, run, model_id, section, state, pages, block_it
     return observations
 
 
-def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint):
+def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings=None):
     """Search and review every candidate-bearing observation in bounded model calls."""
     from auditmanager.analysis.public import build_norm_review_request, parse_norm_review
     items = state["observations"]
@@ -620,7 +812,7 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
             for i, item in enumerate(batch, start=batch_number * 40)}
         norm_context = {candidate["paragraph_id"]: candidate
             for item in batch for candidate in item["norm_candidates"]}
-        request = build_norm_review_request(model_id=model_id, run_id=run.run_id, section=section,
+        request = build_norm_review_request(model_id=model_id, run_id=run.run_id, section=section, settings=settings,
             payload={"observations": [{"title": item["title"], "description": item["description"],
                 "source_ids": item["source_ids"], "input_id": key,
                 "norm_candidate_ids": [candidate["paragraph_id"] for candidate in item["norm_candidates"]]}
@@ -790,16 +982,23 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         if not hasattr(call, "prepared_requests"):
             call.prepared_requests = {}
         call.prepared_requests[identity] = request
+        cell_receipt=None
         if batched:
-            raw_kind, raw_index=base_identity.split(":",1)
+            raw_kind, raw_rest=base_identity.split(":",1)
+            # ``blocks:3:leg1``: a call of the blocks ensemble names its cell after the batch. The batch is the unit of coverage and of the
+            # approved call limit; each of its calls is a unit of its own (`HOSTS-ENSEMBLE-01`).
+            raw_index, _, role=raw_rest.partition(":")
+            if role and (raw_kind != "blocks" or role not in ENSEMBLE_ROLES):
+                raise _refuse("extended_phase_identity_invalid")
             kind={"blocks":"block_analysis"}.get(raw_kind,raw_kind)
             index=int(raw_index.removeprefix("b"))
+            batch_identity=f"{raw_kind}:{raw_index}"
             keys=used_batches.setdefault(kind,set())
-            if (base_identity not in keys and not window_context["policy"].get("unbounded_stats")
+            if (batch_identity not in keys and not window_context["policy"].get("unbounded_stats")
                     and not _source_sized(window_context["policy"])
                     and len(keys)>=window_context["policy"]["phase_call_limits"][kind]):
                 raise _refuse("approved_phase_call_limit")
-            keys.add(base_identity)
+            keys.add(batch_identity)
             key=f'{window_context["window_id"]}:{kind}:b{index:03d}'
             receipt=next((row for row in state.setdefault("batches",[]) if row["batch_key"]==key),None)
             if receipt is None:
@@ -815,19 +1014,24 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                     "processed_items":0,"total_items":0,"characters_processed":0,"characters_total":0})
                 coverage=state["phase_coverage"][kind]
                 coverage["planned"]+=1;coverage["remaining"]+=1;coverage["total_items"]+=len(source_rows)
+            if role and not repairing:
+                cell_receipt=receipt.setdefault("cells",{}).setdefault(role,{})
+                for stale in ("error_code","dispatch_class"):cell_receipt.pop(stale,None)
+                cell_receipt.update(cell=f"blocks:{role}",status="running",request_sha256=request.request_sha256)
             if repairing:
                 parent_receipt = receipt
-                receipt = {"attempt": 1, "status": "running"}
+                receipt = {"attempt": 1, "status": "running", **({"cell": f"blocks:{role}"} if role else {})}
                 parent_receipt.setdefault("repair_attempts", []).append(receipt)
+            receipt.pop("error_code",None)  # a retried call has not failed yet; an earlier failure of the same unit is not its state
             receipt.update(status="running",request_sha256=request.request_sha256)
             save("running")
         try:
             response, replayed = _call(session,run_id=run.run_id,authority=authority,jobs=jobs,journal=journal,
-                binding=binding,request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
+                binding=_phase_binding(binding, identity),request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
                 source_sha256=state["source_sha256"],meter=meter,store=store,publish=publish,checkpoint=checkpoint,
                 global_unknown_fence=v3)
         except DomainError as error:
-            for failed_receipt in (receipt, parameter_context_receipt, parameter_review_receipt):
+            for failed_receipt in (receipt, cell_receipt, parameter_context_receipt, parameter_review_receipt):
                 if failed_receipt is not None:
                     failed_receipt.update(error_code=error.code.value)
                     dependency=error.detail_fields.get("dependency")
@@ -840,6 +1044,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         if parameter_review_receipt is not None:
             parameter_review_receipt.update(response_received=True, replayed=replayed,
                 response_sha256=response.response_sha256)
+        if cell_receipt is not None:
+            cell_receipt.update(response_received=True,replayed=replayed,response_sha256=response.response_sha256)
         if receipt is not None:
             receipt.update(response_received=True,replayed=replayed,response_sha256=response.response_sha256)
             if repairing:
@@ -947,6 +1153,9 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         block_items = []
         if images:
             phase("block_analysis","running")
+            block_roles=_block_roles(run)
+            ensemble="judge" in block_roles
+            partial_reason=None
             for start in range(0,len(images),8):
                 batch=images[start:start+8];crops=[]
                 for source in batch:
@@ -961,26 +1170,38 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 if v3:
                     from auditmanager.analysis.public import build_extended_request_v3
                     builder=build_extended_request_v3;extra={"window_id":window_context["window_id"]}
-                request=attach_images(builder(model_id=binding.config.model_id,run_id=run.run_id,
-                    phase="blocks",section=section,payload=payload,**extra),crops)
-                response=call(request,"blocks:"+str(start//8))
-                parsed, refused = _received_reply(state=state, request=request, response=response,
-                    parse=lambda text, **kwargs: parse_extended_reply(text,
-                        allowed_sources={s["source_id"] for s in batch}, **kwargs),
-                    call=call, identity="blocks:"+str(start//8), policy=window_context["policy"] if v3 else {})
+                if ensemble:
+                    # Legs, then the judge; each call is a unit of its own (`HOSTS-ENSEMBLE-01`).
+                    parsed, batch_reason = _ensemble_block_batch(run=run, binding=binding, state=state, call=call,
+                        roles=block_roles, section=section, index=start//8, batch=batch, payload=payload, crops=crops,
+                        builder=builder, extra=extra, window_context=window_context,
+                        policy=window_context["policy"] if v3 else {}, checkpoint=checkpoint)
+                    refused = batch_reason is not None
+                else:
+                    request=attach_images(builder(**_kw(binding,"blocks"),run_id=run.run_id,
+                        phase="blocks",section=section,payload=payload,**extra),crops)
+                    response=call(request,"blocks:"+str(start//8))
+                    parsed, refused = _received_reply(state=state, request=request, response=response,
+                        parse=lambda text, **kwargs: parse_extended_reply(text,
+                            allowed_sources={s["source_id"] for s in batch}, **kwargs),
+                        call=call, identity="blocks:"+str(start//8), policy=window_context["policy"] if v3 else {})
+                    batch_reason="block_analysis_reply_refused" if refused else None
+                partial_reason=partial_reason or (batch_reason if ensemble else None)
                 block_items.extend(parsed)
                 if batched:
                     _coverage_complete(state,kind="block_analysis",index=start//8,
-                        partial=refused, reason="block_analysis_reply_refused" if refused else None)
+                        partial=refused, reason=batch_reason)
                 if not refused:
                     state["coverage"]["blocks_processed"]+=len(batch)
                 state["coverage"]["blocks_remaining"]=state["coverage"]["blocks_total"]-state["coverage"]["blocks_processed"]
                 state["observations"]=finalize_extended_items([*state["text_items"],*block_items],state["sources"])
                 save("running")
+            partial_rows=[row for row in state.get("batches", [])
+                if row["procedure"] == "block_analysis" and row.get("status") == "partial"]
             phase("block_analysis","partial" if state["coverage"]["blocks_remaining"] else "completed",
-                "block_analysis_reply_refused" if state["coverage"]["blocks_remaining"] and any(
-                    row.get("status") == "partial" for row in state.get("batches", [])
-                    if row["procedure"] == "block_analysis") else None)
+                (next((row["reason"] for row in partial_rows if row.get("reason")), None)
+                    or ("block_analysis_reply_refused" if partial_rows else partial_reason))
+                if state["coverage"]["blocks_remaining"] else None)
         else:
             legitimate_text_window=(v3 and not window_context.get("known_visual_refusals")
                 and not (native or {}).get("coverage",{}).get("skipped"))
@@ -995,7 +1216,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         contexts=[]
         if full_document:
             phase("comprehensive_analysis","running")
-            comprehensive = _full_comprehensive_review(run=run, model_id=binding.config.model_id,
+            comprehensive = _full_comprehensive_review(run=run, **_kw(binding,"cross_check"),
                 section=section, state=state, pages=pages, block_items=block_items, call=call)
             if "page_context_truncated" in state["warnings"]:
                 state["warnings"] = [warning for warning in state["warnings"] if warning != "page_context_truncated"]
@@ -1039,7 +1260,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 if v3:
                     from auditmanager.analysis.public import build_comprehensive_request_v3
                     builder=build_comprehensive_request_v3;extra={"window_id":window_context["window_id"]}
-                request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+                request=builder(**_kw(binding,"cross_check"),run_id=run.run_id,section=section,
                     **extra,payload={"native_context":contexts,"visual_observations":block_items,
                         "text_observations":([{k:item[k] for k in ("title","description","source_ids","norm_queries")}
                             for item in state["text_items"]] if v3 else state["text_items"]),
@@ -1068,7 +1289,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             _norm_batched_v3(session=session,run=run,binding=binding,state=state,snapshot_id=snapshot_id,
                 phase=phase,call=call,checkpoint=checkpoint,window_context=window_context)
         elif full_document:
-            _full_norm_verification(session=session, run=run, model_id=binding.config.model_id,
+            _full_norm_verification(session=session, run=run, **_kw(binding,"norms"),
                 section=section, state=state, snapshot_id=snapshot_id, call=call,
                 phase=phase, checkpoint=checkpoint)
         else:
@@ -1103,7 +1324,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 if v3:
                     from auditmanager.analysis.public import build_norm_review_request_v3
                     builder=build_norm_review_request_v3;extra={"window_id":window_context["window_id"]}
-                request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+                request=builder(**_kw(binding,"norms"),run_id=run.run_id,section=section,
                     **extra,payload={"observations":[{"title":item["title"],"description":item["description"],
                         "source_ids":item["source_ids"],"input_id":key,
                         "norm_candidate_ids":[c["paragraph_id"] for c in item.get("norm_candidates",[])]} for key,item in indexed.items()],
@@ -1169,7 +1390,7 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
             "source_sha256":state["source_sha256"],"ocr_status":"not_performed",
             "native_context":[row for row in contexts if row["source_id"] in references]}
         phase("finding_review","running")
-        request=build_critic_request(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+        request=build_critic_request(**_kw(binding,"review"),run_id=run.run_id,section=section,
             observations=indexed,sources=sources,window_id=window_id,context=context)
         critic_payload=json.loads(request.body["messages"][0]["content"])
         critic_cut=any(critic_payload.get(key,{}).get("truncated",False)
@@ -1182,7 +1403,7 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
             indexed[review["input_id"]].update(critic=review,review_status="reviewed")
         phase("finding_review","partial" if len(selected)<len(state["observations"]) or critic_cut else "completed",
             "context_window_truncated" if critic_cut else None)
-        request=build_corrector_request(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+        request=build_corrector_request(**_kw(binding,"correction"),run_id=run.run_id,section=section,
             observations=indexed,critiques=reviews,sources=sources,window_id=window_id,context=context)
         if request is None:
             phase("finding_correction","completed","no_corrections_requested")
@@ -1304,10 +1525,10 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                     or not _source_sized(accepted_parameters) and index >= accepted_parameters["max_calls"]):
                 raise _refuse("project_parameters_approved_call_limit")
             return _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
-                binding=binding, request=request, phase=f"v3:project-parameters:b{index:03d}",
+                binding=_cell(binding, "cross_check"), request=request, phase=f"v3:project-parameters:b{index:03d}",
                 source_sha256=state["source_sha256"], meter=meter, store=store, publish=publish,
                 checkpoint=checkpoint, global_unknown_fence=True)
-        run_project_parameters(run=run, model_id=binding.config.model_id, outputs=outputs, store=store,
+        run_project_parameters(run=run, **_kw(binding, "cross_check"), outputs=outputs, store=store,
             state=state, accepted=accepted_parameters, durable_call=parameter_call,
             checkpoint=checkpoint, aggregate=aggregate, save=save)
     def aggregate():
@@ -1736,7 +1957,7 @@ def _comprehensive_batched_v3(*, run, binding, state, contexts, block_items, pha
             'sources': [{key: value for key, value in source.items() if key != 'context'} for source in selected],
             'source_sha256': state['source_sha256'], 'coverage': state['coverage'],
             'batch_index': batch['index'], 'batch_sha256': batch['batch_sha256']}
-        request = build_comprehensive_request_batched_v3(model_id=binding.config.model_id,
+        request = build_comprehensive_request_batched_v3(**_kw(binding, "cross_check"),
             run_id=run.run_id, section=state['section'], payload=payload,
             window_id=window_context['window_id'] + f':comp:b{batch["index"]:03d}',
             relaxed_limits=_bounds_lifted(window_context['policy']))
@@ -1812,7 +2033,7 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
         indexed = {row['input_id']: row['item'] for row in batch['items']}
         registry = {candidate['paragraph_id']: candidate for item in indexed.values()
             for candidate in item['norm_candidates']}
-        request = build_norm_review_request_batched_v3(model_id=binding.config.model_id,
+        request = build_norm_review_request_batched_v3(**_kw(binding, "norms"),
             run_id=run.run_id, section=state['section'], window_id=window_context['window_id'] +
                 f':norm:b{batch["index"]:03d}', relaxed_limits=_bounds_lifted(window_context['policy']), payload={'coverage_version': 'batched-v1',
                     'observations': [{'input_id': key, 'title': item['title'], 'description': item['description'],
@@ -1901,7 +2122,7 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         context = {'coverage': state['coverage'], 'window_id': window_id,
             'source_sha256': state['source_sha256'], 'ocr_status': 'not_performed',
             'native_context': [row for row in contexts if row['source_id'] in references]}
-        request = build_critic_request(model_id=binding.config.model_id, run_id=run.run_id,
+        request = build_critic_request(**_kw(binding, "review"), run_id=run.run_id,
             section=state['section'], observations=indexed, sources=sources,
             window_id=window_id + f':critic:b{batch["index"]:03d}', context=context,
             full_context=_source_sized(window_context['policy']))
@@ -1965,7 +2186,7 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         context = {'coverage': state['coverage'], 'window_id': window_id,
             'source_sha256': state['source_sha256'], 'ocr_status': 'not_performed',
             'native_context': [row for row in contexts if row['source_id'] in references]}
-        request = build_corrector_request(model_id=binding.config.model_id, run_id=run.run_id,
+        request = build_corrector_request(**_kw(binding, "correction"), run_id=run.run_id,
             section=state['section'], observations=indexed, critiques=critiques, sources=sources,
             window_id=window_id + f':corrector:b{batch["index"]:03d}', context=context,
             full_context=_source_sized(window_context['policy']))
@@ -2131,7 +2352,7 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
         receipt.update(status="running", request_sha256=request.request_sha256)
         persist()
         response, replayed = _call(session, run_id=run.run_id, authority=authority, jobs=jobs,
-            journal=journal, binding=binding, request=request,
+            journal=journal, binding=_phase_binding(binding, identity), request=request,
             phase="v3:global-cross-window:" + identity, source_sha256=source_sha,
             meter=meter, store=store, publish=publish, checkpoint=checkpoint, global_unknown_fence=True)
         receipt.update(response_received=True, replayed=replayed, response_sha256=response.response_sha256)
@@ -2206,7 +2427,7 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
               None if plan["batches"] else "no_cross_window_candidates")
         for batch in plan["batches"]:
             checkpoint("global_cross_window_batch")
-            request = build_global_cross_window_request(model_id=binding.config.model_id, run_id=run.run_id,
+            request = build_global_cross_window_request(**_kw(binding, "cross_check"), run_id=run.run_id,
                 section=state["section"], batch=batch, source_sha256=source_sha, policy=accepted)
             response = call(request, f'comprehensive_analysis:b{batch["index"]:03d}')
             parsed, refused = _received_reply(state=global_state, request=request, response=response,

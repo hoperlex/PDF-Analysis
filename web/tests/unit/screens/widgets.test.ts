@@ -91,7 +91,7 @@ describe('the upload panel states the envelope before the file picker (U-09)', (
     // The version now has an address, and the Start-run control lives there.
     const markup = panel();
     expect(markup).not.toContain('No version published in this session');
-    expect(markup).not.toContain('Запустить прогон');
+    expect(markup).not.toContain('data-start-run-control');
   });
 
   it('says a published version is immutable rather than offering to replace one', () => {
@@ -132,7 +132,7 @@ function list(seed?: (client: ReturnType<typeof newClient>) => void): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.44.0',
+    contract_version: '1.47.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'corr-list-1',

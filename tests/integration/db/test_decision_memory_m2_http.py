@@ -1,7 +1,7 @@
 """`DECISION-MEMORY-M2` (contract 1.44.0): the five operations over HTTP, with the shipped router and the shipped adapter, on a clone of the
 migrated schema.
 
-The security seam is not rebuilt here (``test_role_register`` and ``test_authorization`` hold the roles of all 308 operations): the subject is
+The security seam is not rebuilt here (``test_role_register`` and ``test_authorization`` hold the roles of all 324 operations): the subject is
 supplied by overriding the dependency, and the question is what the operations DO. Shown: the list pages by cursor and filters by every
 parameter; one case answers its content, decisions, evidence, norm references, crops and history; the status answers the counts and the
 settings in force; a withdraw and a restore are keyed (an exact repeat answers the first event, another payload under the key is

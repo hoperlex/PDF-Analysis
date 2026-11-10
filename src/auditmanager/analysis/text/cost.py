@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import math
+from collections.abc import Mapping
 
 from auditmanager.analysis.text.lock import ModelPin
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -69,6 +70,17 @@ def require_approved_model(config, pin: ModelPin, call=None) -> None:
     approved is a run that has not been bound, and it is refused here like a changed binding -- before any call, so
     nothing is sent and nothing is spent."""
     if not getattr(config, "approved_cost_ceiling", False):
+        return
+    approved_models = getattr(config, "approved_models", None)
+    if approved_models is not None:
+        # Consent v2 (`HOSTS-LAYOUT-01`, ADR-0028 decision 8): a run frozen with a stage plan is approved for a **set** of models, each at the
+        # rates and with the access its estimate was priced at. The model of the call must be a member; its rate must be the one approved;
+        # and the call must be made with the approved access (a subscription call has no cost and an API call does, so a call that changes
+        # access has changed what the person agreed to). A call with no binding is not a member of anything.
+        entry = approved_models.get(pin.model_id) if isinstance(approved_models, Mapping) else None
+        if (entry is None or entry.get("rate_sha256") != model_rate_sha256(pin) or call is None
+                or getattr(call, "access", None) != entry.get("access")):
+            raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
         return
     expected_revision = getattr(config, "approved_connection_revision_id", None)
     awaiting_dispatch = (

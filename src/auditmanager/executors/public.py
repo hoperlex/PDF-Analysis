@@ -81,6 +81,7 @@ from auditmanager.executors.image_input import (
     image_load,
 )
 from auditmanager.executors.model import (
+    IDENTITY_BASIS_BY_KIND,
     ConnectionRecord,
     ConnectionSummary,
     ProbeRecord,
@@ -102,6 +103,7 @@ from auditmanager.executors.preset_commands import (
 )
 from auditmanager.executors.presets import ChosenPreset, PresetRecord, RunPresetRecord
 from auditmanager.executors.pull import (
+    DEADLINE_MARGIN_SECONDS,
     PullAdapter,
     TaskWaiter,
     answer_window,
@@ -185,6 +187,54 @@ from auditmanager.executors.group_selection import (
     choose,
     member_issue,
 )
+# HOSTS-BACKEND-01 (ADR-0028): the servers, the system objects kept for them, availability, and the binding of a planned run's cells.
+from auditmanager.executors.catalogue import Catalogue, CatalogueEntry, catalogue, load_catalogue
+from auditmanager.executors.cell_binding import (
+    AT_CAPACITY,
+    CAPACITY_WAIT_REASON,
+    WAIT_MODEL_UNAVAILABLE,
+    BindOutcome,
+    BoundCell,
+    CellRequest,
+    CellWait,
+    bind_cells,
+    bound_pools_of_run,
+    cell_binding_of,
+    cell_requests,
+    evaluate_wait,
+    pool_has_room,
+    pools_of,
+    write_bindings,
+)
+from auditmanager.executors.host_commands import (
+    HostDetails,
+    HostFacts,
+    HostHealthAck,
+    ModelAvailability,
+    SlotUse,
+    archive_host,
+    confirm_host_agent_install_host_key,
+    create_host_agent_install,
+    ensure_upgrade_allowed,
+    get_host_agent_install,
+    host_claim_limit,
+    host_details,
+    issue_host_enrollment,
+    issue_host_grant,
+    member_reasons,
+    model_availability,
+    read_hosts,
+    record_task_failure,
+    refuse_host_members_for_connection_token,
+    report_host_health,
+    report_host_runner_health,
+    set_host_enabled,
+    set_host_slots,
+    sync_system_objects,
+)
+from auditmanager.executors.host_repository import ActiveTask, HostRecord, HostRepository
+from auditmanager.executors.hosts import REASON_ORDER, access_of_billing, pair_group_name, split_pool  # pair_group_name: HOSTS-CMP-01, the comparison finds the system group of a pair
+from auditmanager.executors.pull import HostCall
 # EXEC2-CUTOVER-01 (ADR-0026 decision 17): the cut-over preview, the mode change and the guard on the legacy routes.
 from auditmanager.executors.routing_mode import (
     MappingEntry,
@@ -363,6 +413,61 @@ __all__ = [
     "revise_group",
     "routing_mode",
     "set_routing_rule",
+    # HOSTS-BACKEND-01
+    "AT_CAPACITY",
+    "CAPACITY_WAIT_REASON",
+    "WAIT_MODEL_UNAVAILABLE",
+    "BindOutcome",
+    "BoundCell",
+    "CellRequest",
+    "CellWait",
+    "bind_cells",
+    "bound_pools_of_run",
+    "cell_binding_of",
+    "cell_requests",
+    "evaluate_wait",
+    "pool_has_room",
+    "pools_of",
+    "write_bindings",
+    "Catalogue",
+    "CatalogueEntry",
+    "catalogue",
+    "load_catalogue",
+    "HostDetails",
+    "HostFacts",
+    "HostHealthAck",
+    "ModelAvailability",
+    "SlotUse",
+    "archive_host",
+    "confirm_host_agent_install_host_key",
+    "create_host_agent_install",
+    "ensure_upgrade_allowed",
+    "get_host_agent_install",
+    "host_claim_limit",
+    "host_details",
+    "issue_host_enrollment",
+    "issue_host_grant",
+    "member_reasons",
+    "model_availability",
+    "read_hosts",
+    "record_task_failure",
+    "refuse_host_members_for_connection_token",
+    "report_host_health",
+    "report_host_runner_health",
+    "set_host_enabled",
+    "set_host_slots",
+    "sync_system_objects",
+    "ActiveTask",
+    "HostRecord",
+    "HostRepository",
+    "HostCall",
+    # HOSTS-INT-WIRE-01: what the composition root's availability port and member binder read (the capacity pool and the reasons' order).
+    "REASON_ORDER",
+    "access_of_billing",
+    "pair_group_name",  # HOSTS-CMP-01
+    "split_pool",
+    "IDENTITY_BASIS_BY_KIND",  # HOSTS-DEBTS-01 (D-673): how a kind's model identity is known, read without building an adapter
+    "DEADLINE_MARGIN_SECONDS",  # HOSTS-DEBTS-01 (D-674): what a pull call leaves of the watchdog; the comparison grants a call's window plus it
     # EXEC2-CUTOVER-01
     "MappingEntry",
     "ModeChange",

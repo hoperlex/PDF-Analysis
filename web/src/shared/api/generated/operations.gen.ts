@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.44.0 (OpenAPI 3.1.0)
- *   sha256 cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6
+ *   AuditManager PC-01 API 1.47.0 (OpenAPI 3.1.0)
+ *   sha256 d6843502b6ccd307fcf8a7576e4975e1393a1355732827be29b56cc7587706b6
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -109,6 +109,7 @@ import type {
   CreateExecutorAgentInstallRequest,
   CreateExecutorConnectionRequest,
   CreateExecutorGroupRequest,
+  CreateExecutorHostAgentInstallRequest,
   CreateProjectRequest,
   CreateStageAssemblyRequest,
   CreateStageReviewCardRequest,
@@ -148,6 +149,10 @@ import type {
   ExecutorGroupDetail,
   ExecutorGroupId,
   ExecutorGroupList,
+  ExecutorHost,
+  ExecutorHostDetails,
+  ExecutorHostId,
+  ExecutorHostList,
   ExecutorProbe,
   ExecutorRevision,
   ExecutorRoute,
@@ -175,6 +180,7 @@ import type {
   IdempotencyKey,
   ImportProposalDecisionsRequest,
   ImportRunDecisionsRequest,
+  IssueExecutorHostEnrollmentRequest,
   IssueRunnerTokenRequest,
   IssueTokenRequest,
   IssueTokenResponse,
@@ -183,6 +189,7 @@ import type {
   JobId,
   KnowledgeBaseEntryPage,
   MarkReleaseNotesReadRequest,
+  ModelCatalogue,
   NormCatalogueEntryPage,
   NormCurrentSnapshot,
   NormDocument,
@@ -234,11 +241,14 @@ import type {
   ReviseExecutorConnectionRequest,
   ReviseExecutorGroupRequest,
   ReviseStageAssemblyRequest,
+  ReviseStageModelLayoutRequest,
   RunCostEstimate,
   RunCostEstimateRequest,
   RunFindingBlockLinks,
   RunId,
   RunNormReferences,
+  RunStages,
+  RunStartReadiness,
   RunStatus,
   RunStatusPage,
   RunnerHealthAck,
@@ -254,6 +264,8 @@ import type {
   SetDocumentTagsRequest,
   SetEngineerAbsencesRequest,
   SetExecutionPausedRequest,
+  SetExecutorHostEnabledRequest,
+  SetExecutorHostSlotsRequest,
   SetExecutorIntegrationAuthorisationRequest,
   SetExecutorRouteRequest,
   SetExecutorRoutingModeRequest,
@@ -263,6 +275,7 @@ import type {
   SetGlobalVendorListRequest,
   SetJobPriorityRequest,
   SetProjectVendorListRequest,
+  SetStageModelLayoutEnabledRequest,
   SetStagePairCompletenessRequest,
   SetWorkCalendarDaysRequest,
   SetWorkSchedulePlansRequest,
@@ -292,6 +305,7 @@ import type {
   StageLinkRevision,
   StageLinkRevisionId,
   StageLinkRevisionPage,
+  StageModelLayout,
   StagePair,
   StagePairId,
   StagePairPage,
@@ -358,6 +372,7 @@ export const OPERATION_IDS = [
   'archiveAnalysisPreset',
   'archiveExecutorConnection',
   'archiveExecutorGroup',
+  'archiveExecutorHost',
   'archiveUser',
   'cancelComparisonAiPairCheck',
   'cancelComparisonAiSheetChanges',
@@ -380,6 +395,7 @@ export const OPERATION_IDS = [
   'completeStageUploadFile',
   'confirmComparisonUploadSet',
   'confirmExecutorAgentInstallHostKey',
+  'confirmExecutorHostAgentInstallHostKey',
   'confirmStagePair',
   'confirmStageUploadCandidate',
   'continueComparisonReport',
@@ -391,6 +407,7 @@ export const OPERATION_IDS = [
   'createExecutorAgentInstall',
   'createExecutorConnection',
   'createExecutorGroup',
+  'createExecutorHostAgentInstall',
   'createProject',
   'createStageAssembly',
   'createStageReviewCard',
@@ -448,6 +465,9 @@ export const OPERATION_IDS = [
   'getExecutorConnection',
   'getExecutorGroup',
   'getExecutorGroupCapacity',
+  'getExecutorHost',
+  'getExecutorHostAgentInstall',
+  'getExecutorHostDetails',
   'getExecutorTaskImage',
   'getExtendedRunReview',
   'getFinding',
@@ -457,6 +477,8 @@ export const OPERATION_IDS = [
   'getProject',
   'getRunNormReferences',
   'getRunNormVerification',
+  'getRunStages',
+  'getRunStartReadiness',
   'getRunStatus',
   'getSectionSpecification',
   'getSpecificationPrices',
@@ -465,6 +487,7 @@ export const OPERATION_IDS = [
   'getStageChainRun',
   'getStageChangeCard',
   'getStageChangeJournal',
+  'getStageModelLayout',
   'getStagePair',
   'getStageProfileText',
   'getStageSheetMap',
@@ -482,6 +505,7 @@ export const OPERATION_IDS = [
   'importOptimisationProposalDecisions',
   'importRunDecisions',
   'issueExecutorEnrollment',
+  'issueExecutorHostEnrollment',
   'issueRunnerToken',
   'issueToken',
   'listAcceptedOptimisationProposals',
@@ -510,9 +534,11 @@ export const OPERATION_IDS = [
   'listExecutionQueue',
   'listExecutorConnections',
   'listExecutorGroups',
+  'listExecutorHosts',
   'listExecutorRoutes',
   'listExecutorRoutingRules',
   'listKnowledgeBaseEntries',
+  'listModelCatalogue',
   'listNormDocuments',
   'listNormParagraphs',
   'listNormSnapshotEvents',
@@ -592,6 +618,7 @@ export const OPERATION_IDS = [
   'reviseExecutorConnection',
   'reviseExecutorGroup',
   'reviseStageAssembly',
+  'reviseStageModelLayout',
   'revokeRunnerToken',
   'scheduleAssignments',
   'searchNorms',
@@ -600,6 +627,8 @@ export const OPERATION_IDS = [
   'setDocumentTags',
   'setEngineerAbsences',
   'setExecutionPaused',
+  'setExecutorHostEnabled',
+  'setExecutorHostSlots',
   'setExecutorIntegrationAuthorisation',
   'setExecutorRoute',
   'setExecutorRoutingMode',
@@ -609,6 +638,7 @@ export const OPERATION_IDS = [
   'setGlobalVendorList',
   'setJobPriority',
   'setProjectVendorList',
+  'setStageModelLayoutEnabled',
   'setStagePairCompleteness',
   'setWorkCalendarDays',
   'setWorkSchedulePlans',
@@ -948,6 +978,34 @@ export type ArchiveExecutorGroupInput = {
 
 /** Success body of `archiveExecutorGroup` (`application/json`, HTTP 200). */
 export type ArchiveExecutorGroupResult = ExecutorGroup;
+
+// ------------------------------------------------------------------------------------
+// archiveExecutorHost - POST /executor-hosts/{host_id}/archive
+// ------------------------------------------------------------------------------------
+
+/**
+ * Archive Executor Host
+ *
+ * `HOSTS-SEAL-1`: «Удалить» a server -- one-way, not deletion (a call names its host by identity for good). The host token is revoked, the system connections of the host are archived, and runs already bound to it finish as they can. Archiving an archived server answers it as it stands. `role:admin`, `Idempotency-Key` required.
+ */
+export type ArchiveExecutorHostInput = {
+  /** Path parameters, substituted into `/executor-hosts/{host_id}/archive`. */
+  path: {
+    host_id: ExecutorHostId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `archiveExecutorHost` (`application/json`, HTTP 200). */
+export type ArchiveExecutorHostResult = ExecutorHost;
 
 // ------------------------------------------------------------------------------------
 // archiveUser - POST /users/{user_uid}/archive
@@ -1333,7 +1391,11 @@ export type ChangePasswordResult = IssueTokenResponse;
 // claimExecutorTask - POST /runner/tasks/claim
 // ------------------------------------------------------------------------------------
 
-/** Claim Executor Task */
+/**
+ * Claim Executor Task
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): with a **host token** the task gains `provider`, `access`, `model_id`, `effort`, `max_output_tokens`, `timeout_seconds` and `cell_key` -- all seven or none -- and `model` equals `model_id`. The agent claims only while at least one model is verified and a slot is free behind one (no per-provider free capacity is sent: the stand's capacity pool decides). It refuses a task whose model it does not report as verified for that provider and access, or whose effort is not one of the model's, with `failExecutorTask` before anything runs (`model_not_available`, `effort_not_allowed`), a task with none of the host members with `host_task_incomplete`, and one with images the host cannot take with `image_input_unsupported`.
+ */
 export type ClaimExecutorTaskInput = {
   /** Request body, sent as `application/json`. */
   body: ClaimExecutorTaskRequest;
@@ -1554,6 +1616,37 @@ export type ConfirmExecutorAgentInstallHostKeyInput = {
 
 /** Success body of `confirmExecutorAgentInstallHostKey` (`application/json`, HTTP 200). */
 export type ConfirmExecutorAgentInstallHostKeyResult = ExecutorAgentInstall;
+
+// ------------------------------------------------------------------------------------
+// confirmExecutorHostAgentInstallHostKey - POST /executor-hosts/{host_id}/agent-installs/{install_id}/confirm-host-key
+// ------------------------------------------------------------------------------------
+
+/**
+ * Confirm Executor Host Agent Install Host Key
+ *
+ * `HOSTS-SEAL-1`: confirm the host key of the install session of a host, as `confirmExecutorAgentInstallHostKey`: the fingerprint must equal the one the worker observed; there is no trust on first use. `role:admin`, `Idempotency-Key` required.
+ */
+export type ConfirmExecutorHostAgentInstallHostKeyInput = {
+  /** Path parameters, substituted into `/executor-hosts/{host_id}/agent-installs/{install_id}/confirm-host-key`. */
+  path: {
+    host_id: ExecutorHostId;
+    install_id: ExecutorAgentInstallId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ConfirmExecutorAgentInstallHostKeyRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `confirmExecutorHostAgentInstallHostKey` (`application/json`, HTTP 200). */
+export type ConfirmExecutorHostAgentInstallHostKeyResult = ExecutorAgentInstall;
 
 // ------------------------------------------------------------------------------------
 // confirmStagePair - POST /projects/{project_uid}/stage-pairs
@@ -1779,6 +1872,8 @@ export type CreateComparisonUploadResult = ComparisonUpload;
  * Create Executor Agent Install
  *
  * Start the install of the universal agent over SSH (path A, `EXEC2-SEAL-1`, ADR-0026 decision 7) on a `pull` connection. The administrator supplies host, port and user and either a key the stand generates (`generated_key`: the response carries the public half and its `authorized_keys` line) or a pasted private key (`pasted_key`: sealed, never returned). Passwords are not accepted. The worker scans the host key and the install waits in `awaiting_host_key` for `confirmExecutorAgentInstallHostKey`; no command text comes from the caller. Refusals use existing codes: `403 permission_denied`; `404 not_found`; `409 conflict` with `conflict_reason` `connection_archived`, `no_revision` or `install_in_progress` (an install of this connection has not finished); `422 validation_failed` with field `kind` and constraint `kind_not_pull`, or field `private_key` and constraint `private_key_required` (`pasted_key` without a key) or `private_key_not_accepted` (a key sent with `generated_key`); `503 dependency_unavailable` with dependency `secrets_public_key_missing` or `agent_package`.
+ *
+ * `HOSTS-SEAL-1` (contract 1.45.0): this operation stays the form for a `pull` connection. A server is connected over SSH with `createExecutorHostAgentInstall`, which takes no connection and no model.
  */
 export type CreateExecutorAgentInstallInput = {
   /** Path parameters, substituted into `/executor-connections/{connection_id}/agent-installs`. */
@@ -1848,6 +1943,32 @@ export type CreateExecutorGroupInput = {
 
 /** Success body of `createExecutorGroup` (`application/json`, HTTP 201). */
 export type CreateExecutorGroupResult = ExecutorGroup;
+
+// ------------------------------------------------------------------------------------
+// createExecutorHostAgentInstall - POST /executor-hosts/agent-installs
+// ------------------------------------------------------------------------------------
+
+/**
+ * Create Executor Host Agent Install
+ *
+ * `HOSTS-SEAL-1`: connect a server over SSH (path A) -- create the host and an install session, with no model. As `createExecutorAgentInstall`: `private_key` is required for `pasted_key` and refused for `generated_key`, sealed to the stand's public key and never returned; the session carries `host_id`. `role:admin`, `Idempotency-Key` required.
+ */
+export type CreateExecutorHostAgentInstallInput = {
+  /** Request body, sent as `application/json`. */
+  body: CreateExecutorHostAgentInstallRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createExecutorHostAgentInstall` (`application/json`, HTTP 201). */
+export type CreateExecutorHostAgentInstallResult = ExecutorAgentInstall;
 
 // ------------------------------------------------------------------------------------
 // createProject - POST /projects
@@ -2244,6 +2365,8 @@ export type EstimateComparisonSpecificationResult = ComparisonAiEstimate;
  * Estimate selected section analysis before spend.
  *
  * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest. `EXEC2-SEAL-2`: `executor_group_id` (exclusive with `executor_connection_id` and `preset_id`, with the same refusals as `startRun`) estimates a run on the group's current revision; the estimate then carries `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` (when a rule routed it) and the planned `pin_id`, and no `connection_revision_id`. The estimate digest binds them. `AR-V3-OPT-IN`: with reaudit_of_run_id naming a member of an AR v3 group the answer is the repeat's refusal, `409 conflict` with `conflict_reason` `ar_v3_member_not_repeatable`, and no figure.
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): while the stage layout is switched on, the estimate is for the plan a start would freeze: `billing` is `unmetered` when every cell runs on a subscription, `metered` when every cell is on an API key and `mixed` otherwise; `models` has one line per model with the digest of its rates, its access, its calls, tokens and share of the cost, and `stage_plan_digest` is the digest of the plan. `estimate_digest` binds all of them (consent v2). The explicit executor selectors are `422 validation_failed` with constraint `stage_layout_enabled`. With the layout off the estimate is what it was.
  */
 export type EstimateRunCostInput = {
   /** Request body, sent as `application/json`. */
@@ -2414,7 +2537,11 @@ export type ExportRunXlsxResult = Blob;
 // extendExecutorTaskClaim - POST /runner/tasks/{task_id}/extend
 // ------------------------------------------------------------------------------------
 
-/** Extend Executor Task Claim */
+/**
+ * Extend Executor Task Claim
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): a host agent sends an extension **only while the call has produced output** (bytes on the client's stdout or stderr, or a streamed chunk or keep-alive of an API response) in the last 120 seconds, so a hung call lets its claim lapse and the lease rule takes the task back. The answer and the refusals are unchanged.
+ */
 export type ExtendExecutorTaskClaimInput = {
   /** Path parameters, substituted into `/runner/tasks/{task_id}/extend`. */
   path: {
@@ -2433,7 +2560,11 @@ export type ExtendExecutorTaskClaimResult = ExtendedExecutorTaskClaim;
 // failExecutorTask - POST /runner/tasks/{task_id}/fail
 // ------------------------------------------------------------------------------------
 
-/** Fail Executor Task */
+/**
+ * Fail Executor Task
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): a host agent's reason is `<code>` or `<code>: <detail>` with the code matching `^[a-z][a-z0-9_]{0,63}$`: `model_not_available`, `effort_not_allowed`, `host_task_incomplete`, `image_input_unsupported`, `quota_exceeded`, `auth_failed`, `model_not_found` (the last three also take the model out of availability on the host for 15 minutes), or a fixed word of the answerer. No detail holds text of the document, of the provider's answer or a key.
+ */
 export type FailExecutorTaskInput = {
   /** Path parameters, substituted into `/runner/tasks/{task_id}/fail`. */
   path: {
@@ -3198,6 +3329,76 @@ export type GetExecutorGroupCapacityInput = {
 export type GetExecutorGroupCapacityResult = ExecutorGroupCapacity;
 
 // ------------------------------------------------------------------------------------
+// getExecutorHost - GET /executor-hosts/{host_id}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Executor Host
+ *
+ * `HOSTS-SEAL-1`: one server, as `listExecutorHosts` lists it. `404 not_found` for an unknown host. `role:admin|expert`.
+ */
+export type GetExecutorHostInput = {
+  /** Path parameters, substituted into `/executor-hosts/{host_id}`. */
+  path: {
+    host_id: ExecutorHostId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutorHost` (`application/json`, HTTP 200). */
+export type GetExecutorHostResult = ExecutorHost;
+
+// ------------------------------------------------------------------------------------
+// getExecutorHostAgentInstall - GET /executor-hosts/{host_id}/agent-installs/{install_id}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Executor Host Agent Install
+ *
+ * `HOSTS-SEAL-1`: one install session of a host, as `getExecutorAgentInstall` reads one of a connection. `role:admin`.
+ */
+export type GetExecutorHostAgentInstallInput = {
+  /** Path parameters, substituted into `/executor-hosts/{host_id}/agent-installs/{install_id}`. */
+  path: {
+    host_id: ExecutorHostId;
+    install_id: ExecutorAgentInstallId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutorHostAgentInstall` (`application/json`, HTTP 200). */
+export type GetExecutorHostAgentInstallResult = ExecutorAgentInstall;
+
+// ------------------------------------------------------------------------------------
+// getExecutorHostDetails - GET /executor-hosts/{host_id}/details
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Executor Host Details
+ *
+ * `HOSTS-SEAL-1`: «Подробнее» of a server -- its slots and their use, each provider found on it with its login and, for every model, why it cannot be used (`host_disabled`, `host_offline`, `login_required`, `model_not_verified`, `model_cooling_down`), and the tasks running on it now (run, stage, since when). Derived at read time. `role:admin`.
+ */
+export type GetExecutorHostDetailsInput = {
+  /** Path parameters, substituted into `/executor-hosts/{host_id}/details`. */
+  path: {
+    host_id: ExecutorHostId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutorHostDetails` (`application/json`, HTTP 200). */
+export type GetExecutorHostDetailsResult = ExecutorHostDetails;
+
+// ------------------------------------------------------------------------------------
 // getExecutorTaskImage - GET /runner/tasks/{task_id}/images/{blob_id}
 // ------------------------------------------------------------------------------------
 
@@ -3386,6 +3587,50 @@ export type GetRunNormVerificationInput = {
 export type GetRunNormVerificationResult = NormVerificationReport;
 
 // ------------------------------------------------------------------------------------
+// getRunStages - GET /runs/{run_id}/stages
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Run Stages
+ *
+ * `HOSTS-SEAL-2` (ADR-0028, plan section 9.4): the data of the window «Этапы анализа раздела». For each chip of the run -- `preparation`, `text`, `blocks`, `cross_check`, `merge`, `norms`, `review`, `correction` and, for the AR v3 profile, `ar_v3`, in that order, only those the run has -- the code stage ids it covers, its **plan** (the cells the run froze in its `stage_plan`: role, model, effort, answer limit, timeout, access and the server the cell is bound to; for a run that froze none, one line from its binding) and its **facts**: the state; the first and last call (or the stage result's times); the calls succeeded, failed and retried; the input and output tokens, the part of them served by a subscription and the cost; the last error code; and the batches planned and completed where the extended review keeps them. The facts come from the stage results, the extended review artifact and the call journal; a call journalled before migration `0062` has no `stage_key` and is placed by its extended phase. `role:admin|expert|viewer`: the viewer reads the run's stages but never the server or the access (`R-150w`), which are absent from the answer. `404 not_found` for an unknown run.
+ */
+export type GetRunStagesInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/stages`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getRunStages` (`application/json`, HTTP 200). */
+export type GetRunStagesResult = RunStages;
+
+// ------------------------------------------------------------------------------------
+// getRunStartReadiness - POST /runs/start-readiness
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Run Start Readiness
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): what the one button «Запустить» would do for this version, writing nothing and calling no model. A read by POST like `estimateRunCost`, with the same body. With the layout off the route is `legacy` and the answer is the estimate as before. With it on: the plan a start would freeze, every cell with the access it would run with (a subscription when an agent with one is on line, else an API key) and the reasons it cannot be served, the total access (`subscription`, `api` or `mixed`), the digest and amount of the estimate and, when every cell is on a subscription, an estimate of 0 whose confirmation is the press of the button. `ready` is false while any cell has no server. The explicit executor selectors of the body are `422 validation_failed` while the layout is on. `role:admin|expert`.
+ */
+export type GetRunStartReadinessInput = {
+  /** Request body, sent as `application/json`. */
+  body: RunCostEstimateRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getRunStartReadiness` (`application/json`, HTTP 200). */
+export type GetRunStartReadinessResult = RunStartReadiness;
+
+// ------------------------------------------------------------------------------------
 // getRunStatus - GET /runs/{run_id}
 // ------------------------------------------------------------------------------------
 
@@ -3570,6 +3815,25 @@ export type GetStageChangeJournalInput = {
 
 /** Success body of `getStageChangeJournal` (`application/json`, HTTP 200). */
 export type GetStageChangeJournalResult = StageChangeJournal;
+
+// ------------------------------------------------------------------------------------
+// getStageModelLayout - GET /model-layout
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Stage Model Layout
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): the layout of models over the analysis stages -- for each row (text, blocks, cross-check, norms, critic, refinement) and role the model, the effort, the output limit and the timeout -- the revision in force, the revisions newest first, the switch and its journal, and the cells whose model no server can serve now. An expert reads it; only an administrator changes it. `role:admin|expert`; the viewer is denied.
+ */
+export type GetStageModelLayoutInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getStageModelLayout` (`application/json`, HTTP 200). */
+export type GetStageModelLayoutResult = StageModelLayout;
 
 // ------------------------------------------------------------------------------------
 // getStagePair - GET /stage-pairs/{stage_pair_id}
@@ -3963,6 +4227,8 @@ export type ImportRunDecisionsResult = DecisionImportReport;
  * Issue Executor Enrollment
  *
  * Issue the one-time enrollment grant of a universal agent for a `pull` connection (`EXEC2-SEAL-1`, ADR-0026 decisions 4, 6 and 9). The grant's secret, the package version and its sha256, and the copyable install command are **shown once**: only a one-way hash of the secret is stored and no operation returns it again. A grant is single-use, expires after 15 minutes and is bound to this connection; issuing a new one revokes the previous unredeemed grant. Issuing one for a connection that already has an online agent is how an agent moves to another host. Refusals use existing codes: `403 permission_denied` for a caller without `admin`; `404 not_found`; `409 conflict` with `conflict_reason` `connection_archived`, `no_revision`, or `enrollment_shown_once` (a repeat of the same Idempotency-Key: the secret was not stored and cannot be shown again); `422 validation_failed` with field `kind` and constraint `kind_not_pull`; `503 dependency_unavailable` with dependency `agent_package` (the image holds no package to install) or `public_origin` (the stand's configured public origin, `AUDITMANAGER_PUBLIC_ORIGIN`, is absent or not a plain `https://host[:port]`; the install command's origin comes from that setting alone and is never guessed from the request).
+ *
+ * `HOSTS-SEAL-1` (contract 1.45.0): this operation stays the form for a `pull` connection. A server is connected with `issueExecutorHostEnrollment`, which takes no connection and no model.
  */
 export type IssueExecutorEnrollmentInput = {
   /** Path parameters, substituted into `/executor-connections/{connection_id}/enrollments`. */
@@ -3982,6 +4248,32 @@ export type IssueExecutorEnrollmentInput = {
 
 /** Success body of `issueExecutorEnrollment` (`application/json`, HTTP 201). */
 export type IssueExecutorEnrollmentResult = IssuedExecutorEnrollment;
+
+// ------------------------------------------------------------------------------------
+// issueExecutorHostEnrollment - POST /executor-hosts/enrollments
+// ------------------------------------------------------------------------------------
+
+/**
+ * Issue Executor Host Enrollment
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): connect a server -- create the host and issue the one-time grant of its agent, with no model. Same document as `issueExecutorEnrollment`: the secret, the package version and digest and the copyable install command are **shown once**, only a one-way hash is stored; the grant is single-use, expires after 15 minutes and is bound to the new host (`enrollment.host_id`). Redeeming it (`redeemExecutorEnrollment`) yields a host token. `409 conflict` with `conflict_reason` `enrollment_shown_once` for a repeat of the same key (the secret was not stored). `422 validation_failed` for a name another live server has. `503 dependency_unavailable` with dependency `agent_package` or `public_origin`, as `issueExecutorEnrollment`. `role:admin`, `Idempotency-Key` required.
+ */
+export type IssueExecutorHostEnrollmentInput = {
+  /** Request body, sent as `application/json`. */
+  body: IssueExecutorHostEnrollmentRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `issueExecutorHostEnrollment` (`application/json`, HTTP 201). */
+export type IssueExecutorHostEnrollmentResult = IssuedExecutorEnrollment;
 
 // ------------------------------------------------------------------------------------
 // issueRunnerToken - POST /executor-connections/{connection_id}/runner-tokens
@@ -4776,6 +5068,25 @@ export type ListExecutorGroupsInput = {
 export type ListExecutorGroupsResult = ExecutorGroupList;
 
 // ------------------------------------------------------------------------------------
+// listExecutorHosts - GET /executor-hosts
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Executor Hosts
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): every server -- one agent process with its host token -- with the «Использовать» switch, whether it is on line (a report within the last 120 seconds), the models it can serve **now** and its slots, and the summary line of the screen. A server is a host, not a connection: the connections and groups the stand keeps for it are its own and are never listed. `role:admin|expert`; the viewer («Наблюдатель») is denied.
+ */
+export type ListExecutorHostsInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listExecutorHosts` (`application/json`, HTTP 200). */
+export type ListExecutorHostsResult = ExecutorHostList;
+
+// ------------------------------------------------------------------------------------
 // listExecutorRoutes - GET /executor-routes
 // ------------------------------------------------------------------------------------
 
@@ -4833,6 +5144,25 @@ export type ListKnowledgeBaseEntriesInput = {
 
 /** Success body of `listKnowledgeBaseEntries` (`application/json`, HTTP 200). */
 export type ListKnowledgeBaseEntriesResult = KnowledgeBaseEntryPage;
+
+// ------------------------------------------------------------------------------------
+// listModelCatalogue - GET /model-catalogue
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Model Catalogue
+ *
+ * `HOSTS-SEAL-1`: the catalogue of `contracts/analysis/v1/model-catalogue.json` -- the pins of the provider lock the layout offers, with the providers and accesses that can serve each, the efforts that may be asked for and the exact strings an answer may report as its model. A Haiku, an effort above `high` and `low` for Opus are never offered. `role:admin|expert`.
+ */
+export type ListModelCatalogueInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listModelCatalogue` (`application/json`, HTTP 200). */
+export type ListModelCatalogueResult = ModelCatalogue;
 
 // ------------------------------------------------------------------------------------
 // listNormDocuments - GET /norm-documents
@@ -6186,6 +6516,8 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
  * Reaudit Run
  *
  * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). `AR-V3-OPT-IN`: the source must be a run of the standard analysis. A member of an AR v3 group is refused with `409 conflict` and `conflict_reason` `ar_v3_member_not_repeatable` before the key is claimed, and nothing is written: the repeat would route by the section now and silently become the other analysis. AR v3 is repeated by a new startArV3BetaGroup. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection. New served re-audits require fresh confirmed cost consent from estimateRunCost with reaudit_of_run_id before any new spend; the parent approval is never reused. Accepted historical command keys replay their recorded outcome.
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): while the stage layout is switched on, a re-audit takes today's layout like a new start: a fresh plan, the consent v2 of `startRun` (the digest of the plan, per model the rate digest and access) and the same waiting for a model. With the layout off it is what it was.
  */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
@@ -6268,6 +6600,8 @@ export type RecomputeStageTextEvidenceResult = StageChainRun;
  * Redeem Executor Enrollment
  *
  * Exchange an enrollment secret, presented as the bearer credential, for a runner token (`EXEC2-SEAL-1`, ADR-0026 decision 4). The token is returned once, exactly as `issueRunnerToken` returns one. A repeat from the same `runner_instance_id` inside the exchange window is idempotent: an agent that lost the response is not locked out, and the stand never stores the value. A repeat after the window is `409 conflict` with `conflict_reason` `enrollment_redeemed`; `connection_archived` is refused the same way. An unknown, expired or revoked secret is `401 authentication_required`, and the answer does not say which. The secret reaches no other operation: the four task operations refuse it as they refuse any wrong token.
+ *
+ * `HOSTS-SEAL-1` (ADR-0028, contract 1.45.0): the grant may belong to a **host** (`issueExecutorHostEnrollment`). The exchange then takes no model and answers `token` (a runner token bound to the host, which serves every system connection of it), `host_id` and `catalogue` -- the models the agent may be asked for, each with its provider, `efforts` and `accepted_reported`; `runner_token` (the metadata) is optional in a host document and always present for the grant of a connection. The repeat and `409` rules are unchanged.
  */
 export type RedeemExecutorEnrollmentInput = {
   /** Request body, sent as `application/json`. */
@@ -6397,6 +6731,8 @@ export type RenameDocumentResult = DocumentVersion;
  * Report Runner Health
  *
  * An agent reports its version, its command-line clients with their sanitised authentication state, its concurrency, execution profile and declared features (`EXEC2-SEAL-1`, ADR-0026 decision 5). The report is stored on the calling runner token and returned in `RunnerTokenMetadata`. Only closed enumerations and bounded strings are accepted: no secret, no path to a credential and no document text is stored. A report that violates the schema is `422 validation_failed`.
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): a **host token** also sends `providers[]` (each provider found on the host: `access`, `auth_state`, the state of each catalogue model -- `verified`, `not_verified` or `failed` with a `failure_code` -- and `accept_images`), `slots` (an integer 1 to 16 per provider) and, optionally, `key_file` (`ok`, `absent` or `ignored`, with a reason code: diagnostics only). `providers` and `slots` are required of a host token and refused (`422 validation_failed`) for a connection token. `clis` stays required, `execution_profile` is `command` and `concurrency` is the sum of the slots (1 to 16). The stand keeps the latest snapshot per host and writes a new one only when its content changes; the pulse is the token's `last_seen_at` (a report older than 120 seconds is no pulse). The access of a command-line client is read from its own status: a subscription login is `subscription`, a login with a key `api`; a client not signed in is `subscription` with `auth_state` `login_required`; one signed in by an unrecognised method is `api` with `auth_state` `unknown` and no verified model. The answer carries `catalogue` and `enabled`; `enabled: false` is the «Использовать» switch off, which stops new runs being bound to the host and does **not** stop claims.
  */
 export type ReportRunnerHealthInput = {
   /** Request body, sent as `application/json`. */
@@ -6902,6 +7238,32 @@ export type ReviseStageAssemblyInput = {
 export type ReviseStageAssemblyResult = StageAssembly;
 
 // ------------------------------------------------------------------------------------
+// reviseStageModelLayout - POST /model-layout/revisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Revise Stage Model Layout
+ *
+ * `HOSTS-SEAL-1`: save a new immutable revision of the layout (author and time are kept). Every cell must be a pair of `listModelCatalogue` (model and effort); the blocks row is chosen from the closed list of schemes, never leg by leg; a cell key repeated or missing is `422 validation_failed`. A revision changes nothing for runs already started: they froze their plan. `role:admin`, `Idempotency-Key` required.
+ */
+export type ReviseStageModelLayoutInput = {
+  /** Request body, sent as `application/json`. */
+  body: ReviseStageModelLayoutRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `reviseStageModelLayout` (`application/json`, HTTP 201). */
+export type ReviseStageModelLayoutResult = StageModelLayout;
+
+// ------------------------------------------------------------------------------------
 // revokeRunnerToken - POST /executor-connections/{connection_id}/runner-tokens/{token_id}/revoke
 // ------------------------------------------------------------------------------------
 
@@ -7111,6 +7473,66 @@ export type SetExecutionPausedInput = {
 
 /** Success body of `setExecutionPaused` (`application/json`, HTTP 200). */
 export type SetExecutionPausedResult = ExecutionDispatchStatus;
+
+// ------------------------------------------------------------------------------------
+// setExecutorHostEnabled - PUT /executor-hosts/{host_id}/enabled
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Executor Host Enabled
+ *
+ * `HOSTS-SEAL-1`: the «Использовать» switch of a server (`R-149b`: the administrator who connected a server switched it on). Off, the server takes no new run; runs already bound to it finish. Each change is an append-only event with its author and time; setting the value already in force answers the server as it stands. `409 conflict` with `conflict_reason` `host_archived`. `role:admin`, `Idempotency-Key` required.
+ */
+export type SetExecutorHostEnabledInput = {
+  /** Path parameters, substituted into `/executor-hosts/{host_id}/enabled`. */
+  path: {
+    host_id: ExecutorHostId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetExecutorHostEnabledRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setExecutorHostEnabled` (`application/json`, HTTP 200). */
+export type SetExecutorHostEnabledResult = ExecutorHost;
+
+// ------------------------------------------------------------------------------------
+// setExecutorHostSlots - PUT /executor-hosts/{host_id}/slots
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Executor Host Slots
+ *
+ * `HOSTS-SEAL-1`: how many calls of a provider the server may run at once (1 to 16; default 1 for a subscription, 2 for an API key). A provider the host does not have is `422 validation_failed`. The stand keeps the slots on the host, not on a revision; each change is an append-only event with its author. `409 conflict` with `conflict_reason` `host_archived`. `role:admin`, `Idempotency-Key` required.
+ */
+export type SetExecutorHostSlotsInput = {
+  /** Path parameters, substituted into `/executor-hosts/{host_id}/slots`. */
+  path: {
+    host_id: ExecutorHostId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetExecutorHostSlotsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setExecutorHostSlots` (`application/json`, HTTP 200). */
+export type SetExecutorHostSlotsResult = ExecutorHost;
 
 // ------------------------------------------------------------------------------------
 // setExecutorIntegrationAuthorisation - POST /executor-connections/{connection_id}/integration-authorisation
@@ -7356,6 +7778,32 @@ export type SetProjectVendorListInput = {
 
 /** Success body of `setProjectVendorList` (`application/json`, HTTP 200). */
 export type SetProjectVendorListResult = SectionVendorList;
+
+// ------------------------------------------------------------------------------------
+// setStageModelLayoutEnabled - PUT /model-layout/enabled
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Stage Model Layout Enabled
+ *
+ * `HOSTS-SEAL-1`: the switch «Модели по этапам: включены». On, runs started from now on take the layout; off, they follow the route as before. It needs a revision (`409 conflict` with `conflict_reason` `no_layout_revision`) and the database provider source (`409 conflict` with `conflict_reason` `provider_source_not_database`). Read only at the start of a run, so switching off breaks no run in progress. Each change is an append-only event with its author. `role:admin`, `Idempotency-Key` required.
+ */
+export type SetStageModelLayoutEnabledInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetStageModelLayoutEnabledRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setStageModelLayoutEnabled` (`application/json`, HTTP 200). */
+export type SetStageModelLayoutEnabledResult = StageModelLayout;
 
 // ------------------------------------------------------------------------------------
 // setStagePairCompleteness - POST /stage-pairs/{stage_pair_id}/completeness
@@ -7742,6 +8190,8 @@ export type StartOptimisationPassResult = OptimisationPass;
  * `ANALYSIS-PRESETS-01`: the optional `preset_id` names a saved preset instead of a connection. Its current revision is read in the start's transaction and its executor connection is applied exactly as if `executor_connection_id` had named it, so every refusal of that field applies unchanged; the run records the preset revision and `RunStatus.preset` shows it. `422 validation_failed` with `details.field` `preset_id` refuses an unknown preset (`unknown_preset`) and a preset together with `executor_connection_id` (`conflicts_with_executor_connection_id`); `409 conflict` with `details.conflict_reason` `preset_archived` refuses an archived one. All three precede the key's claim, so nothing is written. The preset, not the connection it resolved to, is part of the payload the idempotency key is compared by: a retry after an administrator revised the preset replays the run that exists, and the same key with a hand-chosen connection is `idempotency_key_reuse`. `reauditRun` records no preset.
  *
  * `EXEC2-SEAL-2` (ADR-0026 decisions 12 to 17): the optional `executor_group_id` names an executor group instead of a connection or a preset. The group's current revision is read in the start's transaction and the run is admitted with `binding_state` `pending`: admission freezes the group revision, the planned model (`RunStatus.planned`) and the cost consent, and no connection; dispatch chooses a member and writes the connection revision once, in the worker's claim transaction (`RunStatus.binding`). It is exclusive with `executor_connection_id` and `preset_id` (`422 validation_failed` with `details.field` `executor_group_id` and constraint `conflicts_with_executor_connection_id` or `conflicts_with_preset_id`); an unknown group is `unknown_executor_group`; a run in the `environment` provider source refuses a group (`environment_source`); an archived group is `409 conflict` with `conflict_reason` `group_archived`. All precede the key's claim, so nothing is written. While the routing mode is `rules`, a start that names no connection, group or preset is admitted on the rule of the `text_analysis` work kind; a work kind with no rule is `503 dependency_unavailable` with `details.dependency` `no_rule_for_work_kind`. The group, not the connection it will choose, is part of the payload the idempotency key is compared by. While a run waits for an executor it reports `wait_reason` and `waiting_since`.
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): while the stage layout is switched on (`setStageModelLayoutEnabled`) the run is started on the **plan** the layout freezes for it, bound cell by cell at dispatch, and the explicit executor selectors (`executor_connection_id`, `preset_id`, `executor_group_id`) are `422 validation_failed` with constraint `stage_layout_enabled`. The consent is the same `{estimate_digest, ceiling_micros, confirmed}`: its estimate (`estimateRunCost`, or `getRunStartReadiness` which carries its digest) binds the digest of the plan and, per model, the digest of the rates and the access; if the access changed between the read and the start the answer is `422 analysis_input_invalid` with `details.reason` `cost_estimate_binding_changed` (before the key is claimed) and the client reads again. When every cell runs on a subscription the estimate is 0 and the press of the button is the consent. A cell no server can serve leaves the run `pending` with `wait_reason` `model_unavailable`, and after 30 minutes `no_executor_online`; nothing has run. With the layout off the run follows the route as before.
  */
 export type StartRunInput = {
   /** Request body, sent as `application/json`. */
@@ -7768,6 +8218,8 @@ export type StartRunResult = RunStatus;
  * Start Run From Stage
  *
  * `R-151i` (`UI-A-60`): a NEW run of the earlier run's document version that reuses the earlier run's completed outputs of every PC-01 stage before `stage_id` and computes `stage_id` and the stages after it. The earlier run is immutable history and is not changed; the new run is linked to it by `started_from_run_id` and `start_stage_id` on its `RunStatus` (not by `reaudit_of_run_id`) and records today's configuration, exactly as a re-audit does (R-82). `stage_id` is one of `page_geometry_extraction`, `document_context_build` or `text_analysis`: the first stage reuses nothing (`422 validation_failed`, `field` `stage_id`, `constraint` `nothing_to_reuse`; use `reauditRun`) and any other stage is not startable (`constraint` `stage_not_startable`). The earlier run must have ended (`409 state_transition_not_allowed`) and be a run of the standard analysis (a member of an AR v3 group is `409 conflict`, `conflict_reason` `ar_v3_member_not_repeatable`). A stage output that cannot be taken is `422 analysis_input_invalid` with `details.stage_id` (the first stage that cannot) and `details.reason`: `source_stage_not_completed`, `source_stage_version_changed`, `source_stage_output_incomplete`, `source_artifact_unavailable`, `source_artifact_changed` or `source_stage_inputs_changed`. Nothing is recomputed in place of a refused output and nothing is written. Served starts require fresh confirmed cost consent from estimateRunCost with `start_from_run_id` and `start_stage_id`: the price is for the stages the new run computes, and the digest is bound to this earlier run and stage. While a run from this earlier run and stage has not ended, a second is `409 conflict`. Accepted keys replay their recorded outcome.
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): while the stage layout is switched on, the new run takes **today's** plan and the consent v2 of `startRun`; only the PC-01 stages that use no model are reused from the earlier run. With the layout off it is what it was.
  */
 export type StartRunFromStageInput = {
   /** Path parameters, substituted into `/runs/{run_id}/start-from-stage`. */
@@ -8205,7 +8657,11 @@ export type StreamVersionPortalBlockCropResult = Blob;
 // submitExecutorTaskAnswer - POST /runner/tasks/{task_id}/answer
 // ------------------------------------------------------------------------------------
 
-/** Submit Executor Task Answer */
+/**
+ * Submit Executor Task Answer
+ *
+ * `HOSTS-SEAL-1` (ADR-0028): the answer of a **host agent** carries `model` (the task's `model_id`), `provider` and `access` (the task's), `reported_model` -- the **exact** string the client or API reported, held against `model_id` and the catalogue's `accepted_reported` and never trimmed (`R-133`) -- and `usage` when the provider gave a count; it sends no top-level `input_tokens` or `output_tokens`. A reported model that is neither is `409 conflict`. The answer is journalled with the stage of its cell, the host and the access.
+ */
 export type SubmitExecutorTaskAnswerInput = {
   /** Path parameters, substituted into `/runner/tasks/{task_id}/answer`. */
   path: {
@@ -8788,6 +9244,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  archiveExecutorHost: {
+    operationId: 'archiveExecutorHost',
+    method: 'POST',
+    path: '/executor-hosts/{host_id}/archive',
+    pathParams: ['host_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   archiveUser: {
     operationId: 'archiveUser',
     method: 'POST',
@@ -9096,6 +9566,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  confirmExecutorHostAgentInstallHostKey: {
+    operationId: 'confirmExecutorHostAgentInstallHostKey',
+    method: 'POST',
+    path: '/executor-hosts/{host_id}/agent-installs/{install_id}/confirm-host-key',
+    pathParams: ['host_id', 'install_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   confirmStagePair: {
     operationId: 'confirmStagePair',
     method: 'POST',
@@ -9240,6 +9724,20 @@ export const OPERATIONS = {
     operationId: 'createExecutorGroup',
     method: 'POST',
     path: '/executor-groups',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  createExecutorHostAgentInstall: {
+    operationId: 'createExecutorHostAgentInstall',
+    method: 'POST',
+    path: '/executor-hosts/agent-installs',
     pathParams: [],
     queryParams: [],
     headerParams: [],
@@ -10048,6 +10546,48 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['execution'],
   },
+  getExecutorHost: {
+    operationId: 'getExecutorHost',
+    method: 'GET',
+    path: '/executor-hosts/{host_id}',
+    pathParams: ['host_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['execution'],
+  },
+  getExecutorHostAgentInstall: {
+    operationId: 'getExecutorHostAgentInstall',
+    method: 'GET',
+    path: '/executor-hosts/{host_id}/agent-installs/{install_id}',
+    pathParams: ['host_id', 'install_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['execution'],
+  },
+  getExecutorHostDetails: {
+    operationId: 'getExecutorHostDetails',
+    method: 'GET',
+    path: '/executor-hosts/{host_id}/details',
+    pathParams: ['host_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['execution'],
+  },
   getExecutorTaskImage: {
     operationId: 'getExecutorTaskImage',
     method: 'GET',
@@ -10174,6 +10714,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['runs'],
   },
+  getRunStages: {
+    operationId: 'getRunStages',
+    method: 'GET',
+    path: '/runs/{run_id}/stages',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['runs'],
+  },
+  getRunStartReadiness: {
+    operationId: 'getRunStartReadiness',
+    method: 'POST',
+    path: '/runs/start-readiness',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   getRunStatus: {
     operationId: 'getRunStatus',
     method: 'GET',
@@ -10285,6 +10853,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
+  },
+  getStageModelLayout: {
+    operationId: 'getStageModelLayout',
+    method: 'GET',
+    path: '/model-layout',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
   },
   getStagePair: {
     operationId: 'getStagePair',
@@ -10522,6 +11104,20 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  issueExecutorHostEnrollment: {
+    operationId: 'issueExecutorHostEnrollment',
+    method: 'POST',
+    path: '/executor-hosts/enrollments',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
     tags: ['execution'],
   },
   issueRunnerToken: {
@@ -10916,6 +11512,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 500, 503],
     tags: ['execution'],
   },
+  listExecutorHosts: {
+    operationId: 'listExecutorHosts',
+    method: 'GET',
+    path: '/executor-hosts',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
   listExecutorRoutes: {
     operationId: 'listExecutorRoutes',
     method: 'GET',
@@ -10957,6 +11567,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['decisions'],
+  },
+  listModelCatalogue: {
+    operationId: 'listModelCatalogue',
+    method: 'GET',
+    path: '/model-catalogue',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
   },
   listNormDocuments: {
     operationId: 'listNormDocuments',
@@ -12064,6 +12688,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  reviseStageModelLayout: {
+    operationId: 'reviseStageModelLayout',
+    method: 'POST',
+    path: '/model-layout/revisions',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   revokeRunnerToken: {
     operationId: 'revokeRunnerToken',
     method: 'POST',
@@ -12174,6 +12812,34 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  setExecutorHostEnabled: {
+    operationId: 'setExecutorHostEnabled',
+    method: 'PUT',
+    path: '/executor-hosts/{host_id}/enabled',
+    pathParams: ['host_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  setExecutorHostSlots: {
+    operationId: 'setExecutorHostSlots',
+    method: 'PUT',
+    path: '/executor-hosts/{host_id}/slots',
+    pathParams: ['host_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
   setExecutorIntegrationAuthorisation: {
@@ -12301,6 +12967,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['optimisation'],
+  },
+  setStageModelLayoutEnabled: {
+    operationId: 'setStageModelLayoutEnabled',
+    method: 'PUT',
+    path: '/model-layout/enabled',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   setStagePairCompleteness: {
     operationId: 'setStagePairCompleteness',

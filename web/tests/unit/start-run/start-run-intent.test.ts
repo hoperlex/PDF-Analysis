@@ -33,7 +33,7 @@ import { join } from 'node:path';
 
 import { startRun } from '@/shared/api';
 import { resolveIntentKey } from '@/shared/lib';
-import { chosenExecutor, startRunBody, startRunIntent, useStartRun } from '@/features/start-run';
+import { startRunBody, startRunIntent, useStartRun } from '@/features/start-run';
 
 import { WEB_ROOT, readText } from '../../guards/lib/repo';
 
@@ -103,11 +103,6 @@ describe('the choice is sent, and only when a connection is chosen', () => {
     expect('executorConnectionId' in none).toBe(false);
     expect(startRunIntent(VERSION, SPARE).command(KEY).executorConnectionId).toBe(SPARE);
   });
-
-  it('reads the empty option as the default and any other value as the connection', () => {
-    expect(chosenExecutor('')).toBeNull();
-    expect(chosenExecutor(GATEWAY)).toBe(GATEWAY);
-  });
 });
 
 describe('the choice is part of the intent, so it changes the idempotency key', () => {
@@ -160,81 +155,45 @@ describe('the choice is part of the intent, so it changes the idempotency key', 
   });
 });
 
-describe('the control takes its key and its request from the same choice', () => {
-  const source = readText(join(WEB_ROOT, 'src', 'features', 'start-run', 'ui', 'start-run-control.tsx'));
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+describe('the control takes its key and its request from the same intent, and names no selector', () => {
+  // `RUN-START-ONE-01a`: the one-button sequence lives in the hook; the control only draws it.
+  const strip = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const hook = strip(readText(join(WEB_ROOT, 'src', 'features', 'start-run', 'model', 'use-run-cost-approval.ts')));
+  const control = strip(readText(join(WEB_ROOT, 'src', 'features', 'start-run', 'ui', 'start-run-control.tsx')));
 
-  it('derives one intent from the version, the one selector and the limit choice', () => {
-    // `EXEC2-WEB-GROUPS-01` (ADR-0026 decisions 12 to 14): the intent no longer takes the raw connection and
-    // preset state. It takes `selectors`, which `startSelectors` makes from the radio and the three choices,
-    // so at most ONE of group, preset and connection reaches the request, and the estimate's intent and the
-    // start's intent are built from the same selectors (the second adds the consent).
-    expect(code).toContain('const selectors = startSelectors(startChoice);');
-    expect(code).toContain(
-      'const startChoice: StartChoice = { mode, groupId: chosenGroup, connectionId: chosen, presetId: chosenPreset };',
-    );
-    expect(code.match(/startRunIntent\(/g)).toHaveLength(2);
-    expect(code).toContain(
-      'versionUid, selectors.executorConnectionId, selectors.presetId, relaxedLimits, undefined, selectors.executorGroupId,',
-    );
-    expect(code).toContain(
-      'versionUid, selectors.executorConnectionId, selectors.presetId, relaxedLimits, cost.draftConsent,\n    selectors.executorGroupId,',
-    );
-    // The raw state is never handed to the intent.
-    expect(code).not.toMatch(/startRunIntent\([^)]*\b(chosen|chosenPreset|chosenGroup)\b/);
+  it('derives the one intent from the version, the limit choice and the consent, with no selector', () => {
+    expect(hook.match(/startRunIntent\(/g)).toHaveLength(1);
+    expect(hook).toContain('startRunIntent(versionUid, null, null, relaxed, consent)');
+    expect(hook).not.toMatch(/startRunIntent\([^)]*\b(executor|group|preset)/i);
   });
 
-  it('mints the key for that intent and sends that intent’s command', () => {
-    expect(code).toContain('useIntentKey(intent.signature)');
-    expect(code).toContain('intent.command(idempotencyKey)');
+  it('mints the key for that intent with the same rule every write feature uses, and sends that intent’s command', () => {
+    expect(hook).toContain('held.current = resolveIntentKey(held.current, intent.signature, newIdempotencyKey);');
+    expect(hook).toContain('intent.command(held.current.idempotencyKey)');
   });
 
-  it('clears a refusal when the choice changes, because it was about the old choice', () => {
-    // Every way to change the choice -- the radio, the group select, the connection select, the preset
-    // select and the limit toggle -- resets the mutation and the estimate in the same handler.
-    expect(code).toMatch(/setChosen\(next\);\s*setMode\(next === null \? 'auto' : 'connection'\);\s*mutation\.reset\(\);\s*cost\.reset\(\);/);
-    expect(code).toMatch(/setChosenGroup\(next\);\s*mutation\.reset\(\);\s*cost\.reset\(\);/);
-    expect(code).toMatch(/setChosenPreset\(after\.presetId\);\s*mutation\.reset\(\);\s*cost\.reset\(\);/);
-    expect(code).toMatch(/setRelaxedLimits\(event\.currentTarget\.checked\);\s*mutation\.reset\(\);/);
-    expect(code).toContain('const locked = mutation.isPending || cost.pending');
-    expect(code).toContain('disabled={locked}');
-    expect(code).toContain('cost.consent === undefined');
+  it('builds the estimate request from the version and the limit choice alone', () => {
+    expect(hook).toContain('estimateRunCost({ body: estimateRequest(versionUid, relaxed) })');
+    const model = strip(readText(join(WEB_ROOT, 'src', 'features', 'start-run', 'model', 'one-click-start.ts')));
+    expect(model).toContain("{ version_uid: versionUid, ...(relaxed ? { relaxed_limits: true } : {}) }");
   });
 
-  it('never changes the choice itself: only the person’s change does, and a refusal changes nothing', () => {
-    // After a refusal the control keeps the choice and offers the retry; it must not move to the
-    // default or to another connection on its own, and it must not learn of a refusal except to show it.
-    //
-    // `ANALYSIS-PRESETS-01`: choosing a preset fills the executor, so the preset select's own change
-    // handler clears the hand-chosen connection (`setChosen(null)` straight after `setChosenPreset`).
-    // That is still the person's change; no other place may call it, and nothing reacts to an error.
-    //
-    // `EXEC2-WEB-GROUPS-01`: the radio is a third place a person changes the choice: `selectMode` drops what
-    // belongs to another mode (`chooseMode`) and so sets the connection, the preset and the group from it
-    // (`setChosen(after.connectionId)`). That too is the person's change, and it is the only addition.
-    expect(code.match(/setChosen\(/g)).toHaveLength(3);
-    expect(code).toContain('setChosen(next)');
-    expect(code).toContain('setChosen(after.connectionId)');
-    expect(code.match(/setChosen\(null\)/g)).toHaveLength(1);
-    expect(code).toMatch(/setChosenPreset\(next\);[\s\S]{0,200}?setChosen\(null\);/);
-    expect(code.match(/setChosenPreset\(/g)).toHaveLength(2);
-    expect(code.match(/setChosenGroup\(/g)).toHaveLength(2);
-    // No setter of the choice or the mode is reachable from the answer of a request.
-    const answered = code.match(/mutation\.mutate\([\s\S]*?\n {4}\}\);/)?.[0] ?? '';
-    expect(answered).toContain('onError');
-    expect(answered).not.toMatch(/set(Chosen|ChosenPreset|ChosenGroup|Mode|RelaxedLimits)\(/);
-    // A stale cost reading clears only its approval. The option setters remain exclusively
-    // in the change handlers counted above; no refusal may select another executor/preset.
-    expect(code).toContain("error.details?.conflict_reason === 'run_cost_estimate_stale'");
+  it('writes no intent signature or request body of its own, and holds no executor, group or preset', () => {
+    for (const code of [hook, control]) {
+      expect(code).not.toMatch(/useIntentKey\(\s*[`'"]/);
+      expect(code).not.toContain('executor_connection_id');
+      expect(code).not.toContain('executor_group_id');
+      expect(code).not.toContain('preset_id');
+      expect(code).not.toMatch(/executorConnectionId|executorGroupId|presetId/);
+    }
+    expect(control).not.toContain('version_uid');
+    expect(control).not.toMatch(/<select|type="radio"|type="checkbox"/);
   });
 
-  it('writes no intent signature or request body of its own', () => {
-    expect(code).not.toMatch(/useIntentKey\(\s*[`'"]/);
-    expect(code).not.toContain('version_uid');
-    expect(code).not.toContain('executor_connection_id');
-  });
-
-  it('holds the choice as an id or null, never as a mode', () => {
-    expect(code).toMatch(/useState<ExecutorConnectionId \| null>\(null\)/);
+  it('answers a changed estimate with an estimate, and never with a different executor or route', () => {
+    expect(hook).toContain('if (estimateChanged(error)) {');
+    expect(hook).toContain('estimate(relaxed, true);');
+    // `READINESS-WEB-01`: the line under the button is read again at the same moment, since the access it states may be what changed.
+    expect(hook).toContain('invalidateQueries({ queryKey: runStartReadinessKey(versionUid) })');
   });
 });

@@ -61,7 +61,7 @@ describe('the six-check start is drawn on no answer of the pack status, for a ve
     [
       'a failed read',
       (client) => seedError(client, PACK, new ApiError(503, {
-        contract_version: '1.44.0', error_code: 'dependency_unavailable', message: 'm',
+        contract_version: '1.47.0', error_code: 'dependency_unavailable', message: 'm',
         correlation_id: 'c', retryable: true,
       }, 'c')),
     ],
@@ -91,8 +91,8 @@ describe('the six-check start is drawn on no answer of the pack status, for a ve
         expect(markup).not.toContain('data-ar-start-note');
         // The ordinary start is the only start, drawn once, and untouched by any of it.
         expect(markup).toContain('data-start-run-control="true"');
-        expect(markup).toContain('>Запустить прогон</button>');
-        expect(markup.match(/>Запустить прогон<\/button>/g)).toHaveLength(1);
+        expect(markup).toContain('>Запустить</button>');
+        expect(markup.match(/>Запустить<\/button>/g)).toHaveLength(1);
       });
     }
   }
