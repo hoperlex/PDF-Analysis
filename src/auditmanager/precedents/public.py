@@ -64,7 +64,7 @@ from auditmanager.precedents.settings import (
 )
 # `PREC-SETTINGS-01`: the journal of the switches and settings behind `listPrecedentSettings` and `appendPrecedentSetting`. The composition root
 # wires `PrecedentSettingService` into `build_router(precedent_settings=...)`.
-from auditmanager.precedents.settings_service import (
+from auditmanager.precedents.setting_journal.service import (
     APPEND_PRECEDENT_SETTING_COMMAND_TYPE,
     PrecedentSettingService,
     checked_value,

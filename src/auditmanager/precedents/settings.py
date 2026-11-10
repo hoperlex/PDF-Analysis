@@ -3,7 +3,7 @@
 The journal is append-only: a setting's value in force is the row with the highest ``revision`` of that name, and **nothing journalled means
 the switch is off**. This module names the settings, holds the one guard on the switch the run's start reads (:data:`ONE_LIST_READY`) and reads
 the journal; it inserts nothing. The write, and the check of a value's shape that comes before it, is
-``settings_service.PrecedentSettingService``. A reader that finds a value it does not understand reads it as off, never as on.
+``setting_journal.service.PrecedentSettingService``. A reader that finds a value it does not understand reads it as off, never as on.
 
 The one switch the run's start reads is ``one_list``: its value is ``{"enabled": bool}`` (``ck_precedent_setting_event_switch`` keeps the
 flag a boolean). A run reads it once, when it is created, and freezes the answer as ``audit_run.publication_mode``; a later change of the
