@@ -531,11 +531,12 @@ def upgrade() -> None:
             created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
             CONSTRAINT pk_precedent_setting_event PRIMARY KEY (setting_name, revision),
             CONSTRAINT ck_precedent_setting_event_switch
-                CHECK (setting_name NOT IN ('one_list', 'critic_context') OR jsonb_typeof(value -> 'enabled') = 'boolean'),
+                CHECK (setting_name NOT IN ('one_list', 'critic_context')
+                       OR coalesce(jsonb_typeof(value -> 'enabled'), '') = 'boolean'),
             CONSTRAINT ck_precedent_setting_event_window
                 CHECK (setting_name <> 'vector_window'
-                       OR (jsonb_typeof(value -> 'start') = 'string' AND jsonb_typeof(value -> 'end') = 'string'
-                           AND jsonb_typeof(value -> 'tz') = 'string'))
+                       OR (coalesce(jsonb_typeof(value -> 'start'), '') = 'string' AND coalesce(jsonb_typeof(value -> 'end'), '') = 'string'
+                           AND coalesce(jsonb_typeof(value -> 'tz'), '') = 'string'))
         )
     """)
     op.execute(

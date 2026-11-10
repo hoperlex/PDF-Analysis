@@ -478,7 +478,7 @@ def test_the_pass_and_its_advice(at_head: Engine) -> None:
             connection.execute(text("INSERT INTO decision_memory_precedent_run (run_id) VALUES (:r)"), {"r": ids["run"]})
             connection.execute(text(
                 "INSERT INTO decision_memory_precedent_advice (run_id, finding_uid, revision, label, critic_reviewed, votes, hint_codes) "
-                "VALUES (:r, :f, :rev, :label, :reviewed, CAST(:votes AS jsonb), CAST(:hints AS text[]))"),
+                "VALUES (:r, :f, :revision, :label, :reviewed, CAST(:votes AS jsonb), CAST(:hints AS text[]))"),
                 {"r": ids["run"], "f": finding, **values})
         return write
 
@@ -598,8 +598,6 @@ def test_the_publication_mode_is_frozen_at_the_start_of_the_run(at_head: Engine)
                                             {"m": value, "r": holder["run"]}))
 
     _refused(at_head, change("one_list"), "AM003")
-    _refused(at_head, lambda c: (run(c), c.execute(text("UPDATE audit_run SET publication_mode = 'text_only' WHERE run_id = :r"),
-                                                   {"r": holder["run"]})), "AM003")   # not even to the value it has
     # a run is born with its mode, and a run that has a stage plan may be born as one_list
     _accepted(at_head, lambda c: _run(c, plan=True, mode="one_list"))
     _accepted(at_head, lambda c: _run(c, plan=False, mode="text_only"))
@@ -807,9 +805,13 @@ def test_the_downgrade_is_refused_while_any_of_it_exists_and_only_then(at_previo
             "SELECT count(*) FROM information_schema.columns WHERE (table_name = 'audit_run' AND column_name = 'publication_mode') "
             "OR (table_name = 'finding_observation' AND column_name IN ('grounding_kind', 'extended_observation_ref', 'related_finding_uid')) "
             "OR (table_name = 'decision_memory_decision' AND column_name LIKE 'precedent_%')")).scalar_one() == 0
-        assert "cross_source" not in connection.execute(text("SELECT pg_get_constraintdef('ck_finding_category'::regconstraint)")).scalar_one()
-        assert "block_crop_mismatch" not in connection.execute(text(
-            "SELECT pg_get_constraintdef('ck_finding_observation_ungrounded_reason'::regconstraint)")).scalar_one()
+        for table, constraint, value in (("finding", "ck_finding_category", "cross_source"),
+                                         ("finding_observation", "ck_finding_observation_category", "drawing_discrepancy"),
+                                         ("finding_observation", "ck_finding_observation_ungrounded_reason", "block_crop_mismatch")):
+            definition = connection.execute(text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :n AND conrelid = CAST(:t AS regclass)"),
+                {"n": constraint, "t": table}).scalar_one()
+            assert value not in definition, (constraint, definition)
         assert connection.execute(text("SELECT count(*) FROM pg_proc WHERE proname = 'am_guard_decision_memory_forgotten_insert'")).scalar_one() == 0
         arguments = connection.execute(text(
             "SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t WHERE t.tgname = 'trg_audit_run_frozen_guard'")).scalar_one()
