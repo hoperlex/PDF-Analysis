@@ -53,6 +53,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     subject === null
       ? null
       : {
+          userUid: subject.userUid,
           login: subject.login,
           displayLabel: subject.displayLabel,
           initials: subject.initials,

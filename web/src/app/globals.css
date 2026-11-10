@@ -181,56 +181,54 @@
   --am-inert-light: #eef0f3;
 
   /*
-   * ---- the avatar palette (`W50-SHELL-UI`, `R-57`) ------------------------------
+   * ---- the avatar palette (`W50-SHELL-UI`, `R-57`; `AVATAR-PALETTE-01`) -----------
    *
-   * Fourteen pairs: `--am-avatar-NN` is the circle and `--am-avatar-NN-ink` is the
+   * Twelve pairs: `--am-avatar-NN` is the circle and `--am-avatar-NN-ink` is the
    * initials on it. Which pair an account wears is `avatarColourIndex()` in
-   * `web/src/shared/ui/avatar-colour.ts`: a hash of the account's E-MAIL modulo fourteen,
-   * so correcting a name never recolours anybody.
+   * `web/src/shared/ui/avatar-colour.ts`: a hash of the account's `user_uid` modulo twelve,
+   * computed when the avatar is drawn and stored nowhere. The uid never changes, so neither
+   * a corrected name nor a changed e-mail recolours anybody.
    *
-   * DERIVED, NOT PICKED. Hue k (k = 0 … 13) is OKLCH hue 20° + k × 360°/14, at chroma 0.13
-   * here and 0.10 in the dark palette (lowered only where sRGB cannot hold it), and the
-   * OKLCH lightness of each is solved so that the WCAG relative luminance of the circle
-   * is 0.12 here and 0.36 in the dark palette. Equal luminance is the point: every circle
-   * then sits the same distance from the page and from its initials, so no account is
-   * harder to read than another. The ink is whichever of white and near-black reads
-   * better on that circle; at these two luminances that is white for every light pair and
-   * near-black for every dark one.
+   * DERIVED, NOT PICKED. The twelve hues are OKLCH 15, 40, 62, 138, 162, 188, 214, 242, 268,
+   * 294, 320 and 346 degrees (crimson, coral, orange, green, emerald, teal, azure, blue,
+   * indigo, violet, magenta, pink): about 25 degrees apart, with the muddy yellow-olive band
+   * from 75 to 130 degrees left out on purpose, because at this lightness it reads as brown.
+   * In the light palette every circle is OKLCH lightness 0.545 at chroma up to 0.14, held at
+   * the sRGB edge where the gamut is lower (teal and azure), with white initials. In the dark
+   * palette every circle is lightness 0.75 at chroma up to 0.13, with near-black initials.
+   * One lightness per palette is the point: every circle then sits the same distance from the
+   * page and from its initials, so no account is harder to read than another.
    *
    * WHAT IS ASSERTED, by `tests/unit/styles/avatar-palette.test.ts`, which reads these
-   * declarations rather than a list: exactly the indices 01 … 14, a circle and an ink in
+   * declarations rather than a list: exactly the indices 01 … 12, a circle and an ink in
    * each of the three palette blocks, the two dark blocks equal, the initials at 4.5:1 or
    * better on their circle and the circle at 3:1 or better against the page background
    * and the application bar, in both palettes. That file prints the measured table.
    */
-  --am-avatar-01: #a34145;
+  --am-avatar-01: #b24755;
   --am-avatar-01-ink: #ffffff;
-  --am-avatar-02: #9f4716;
+  --am-avatar-02: #b14e28;
   --am-avatar-02-ink: #ffffff;
-  --am-avatar-03: #885703;
+  --am-avatar-03: #a25d07;
   --am-avatar-03-ink: #ffffff;
-  --am-avatar-04: #716004;
+  --am-avatar-04: #428228;
   --am-avatar-04-ink: #ffffff;
-  --am-avatar-05: #536a03;
+  --am-avatar-05: #0a855b;
   --am-avatar-05-ink: #ffffff;
-  --am-avatar-06: #107030;
+  --am-avatar-06: #0a817a;
   --am-avatar-06-ink: #ffffff;
-  --am-avatar-07: #066f5b;
+  --am-avatar-07: #097e91;
   --am-avatar-07-ink: #ffffff;
-  --am-avatar-08: #026c71;
+  --am-avatar-08: #0977b3;
   --am-avatar-08-ink: #ffffff;
-  --am-avatar-09: #036a87;
+  --am-avatar-09: #4d6ac1;
   --am-avatar-09-ink: #ffffff;
-  --am-avatar-10: #1a64a8;
+  --am-avatar-10: #765cb9;
   --am-avatar-10-ink: #ffffff;
-  --am-avatar-11: #535aac;
+  --am-avatar-11: #9351a2;
   --am-avatar-11-ink: #ffffff;
-  --am-avatar-12: #744fa2;
+  --am-avatar-12: #a74981;
   --am-avatar-12-ink: #ffffff;
-  --am-avatar-13: #8c478a;
-  --am-avatar-13-ink: #ffffff;
-  --am-avatar-14: #9d416b;
-  --am-avatar-14-ink: #ffffff;
 
   /* ---- elevation --------------------------------------------------------------- */
   --am-shadow-0: none;
@@ -384,35 +382,31 @@
     --am-inert: #98a2b3;
     --am-inert-light: #182029;
 
-    /* ---- the avatar palette: same derivation, luminance 0.36, near-black ink --- */
-    --am-avatar-01: #dd8c8b;
+    /* ---- the avatar palette: the same twelve hues at lightness 0.75, near-black ink --- */
+    --am-avatar-01: #f58a93;
     --am-avatar-01-ink: #0d1219;
-    --am-avatar-02: #d9916f;
+    --am-avatar-02: #f3906d;
     --am-avatar-02-ink: #0d1219;
-    --am-avatar-03: #ca995a;
+    --am-avatar-03: #e89a50;
     --am-avatar-03-ink: #0d1219;
-    --am-avatar-04: #b3a154;
+    --am-avatar-04: #84c16e;
     --am-avatar-04-ink: #0d1219;
-    --am-avatar-05: #95aa63;
+    --am-avatar-05: #52c794;
     --am-avatar-05-ink: #0d1219;
-    --am-avatar-06: #71b07c;
+    --am-avatar-06: #16c7bd;
     --am-avatar-06-ink: #0d1219;
-    --am-avatar-07: #50b29a;
+    --am-avatar-07: #15c2e0;
     --am-avatar-07-ink: #0d1219;
-    --am-avatar-08: #41b2b7;
+    --am-avatar-08: #5ab7f9;
     --am-avatar-08-ink: #0d1219;
-    --am-avatar-09: #51accf;
+    --am-avatar-09: #8caafd;
     --am-avatar-09-ink: #0d1219;
-    --am-avatar-10: #72a6de;
+    --am-avatar-10: #b39df8;
     --am-avatar-10-ink: #0d1219;
-    --am-avatar-11: #939de2;
+    --am-avatar-11: #d292e1;
     --am-avatar-11-ink: #0d1219;
-    --am-avatar-12: #b195d9;
+    --am-avatar-12: #e88bbf;
     --am-avatar-12-ink: #0d1219;
-    --am-avatar-13: #c88fc5;
-    --am-avatar-13-ink: #0d1219;
-    --am-avatar-14: #d88caa;
-    --am-avatar-14-ink: #0d1219;
 
     /* ---- elevation ---------------------------------------------------------------- */
     --am-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -466,35 +460,31 @@
   --am-inert: #98a2b3;
   --am-inert-light: #182029;
 
-  /* ---- the avatar palette: same derivation, luminance 0.36, near-black ink --- */
-  --am-avatar-01: #dd8c8b;
+  /* ---- the avatar palette: the same twelve hues at lightness 0.75, near-black ink --- */
+  --am-avatar-01: #f58a93;
   --am-avatar-01-ink: #0d1219;
-  --am-avatar-02: #d9916f;
+  --am-avatar-02: #f3906d;
   --am-avatar-02-ink: #0d1219;
-  --am-avatar-03: #ca995a;
+  --am-avatar-03: #e89a50;
   --am-avatar-03-ink: #0d1219;
-  --am-avatar-04: #b3a154;
+  --am-avatar-04: #84c16e;
   --am-avatar-04-ink: #0d1219;
-  --am-avatar-05: #95aa63;
+  --am-avatar-05: #52c794;
   --am-avatar-05-ink: #0d1219;
-  --am-avatar-06: #71b07c;
+  --am-avatar-06: #16c7bd;
   --am-avatar-06-ink: #0d1219;
-  --am-avatar-07: #50b29a;
+  --am-avatar-07: #15c2e0;
   --am-avatar-07-ink: #0d1219;
-  --am-avatar-08: #41b2b7;
+  --am-avatar-08: #5ab7f9;
   --am-avatar-08-ink: #0d1219;
-  --am-avatar-09: #51accf;
+  --am-avatar-09: #8caafd;
   --am-avatar-09-ink: #0d1219;
-  --am-avatar-10: #72a6de;
+  --am-avatar-10: #b39df8;
   --am-avatar-10-ink: #0d1219;
-  --am-avatar-11: #939de2;
+  --am-avatar-11: #d292e1;
   --am-avatar-11-ink: #0d1219;
-  --am-avatar-12: #b195d9;
+  --am-avatar-12: #e88bbf;
   --am-avatar-12-ink: #0d1219;
-  --am-avatar-13: #c88fc5;
-  --am-avatar-13-ink: #0d1219;
-  --am-avatar-14: #d88caa;
-  --am-avatar-14-ink: #0d1219;
 
   /* ---- elevation ---------------------------------------------------------------- */
   --am-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -1466,16 +1456,6 @@ input[type='file']::file-selector-button:hover {
 .am-avatar--12 {
   background: var(--am-avatar-12);
   color: var(--am-avatar-12-ink);
-}
-
-.am-avatar--13 {
-  background: var(--am-avatar-13);
-  color: var(--am-avatar-13-ink);
-}
-
-.am-avatar--14 {
-  background: var(--am-avatar-14);
-  color: var(--am-avatar-14-ink);
 }
 
 

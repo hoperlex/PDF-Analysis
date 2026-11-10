@@ -49,6 +49,8 @@ import styles from './app-frame.module.css';
  * login before); there is no separate e-mail field.
  */
 export interface AppFrameSession {
+  /** The account's `user_uid`: the avatar's colour key (`AVATAR-PALETTE-01`). Never shown. */
+  readonly userUid: string;
   readonly login: string;
   readonly displayLabel: string;
   readonly initials: string;

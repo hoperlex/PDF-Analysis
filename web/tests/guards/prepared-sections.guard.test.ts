@@ -255,6 +255,7 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     // left the menu (it stayed a registered screen in `hidden`, and since `W60-OPT-PROPOSALS-01`
     // only points to the project's «Оптимизация» tab), and the stubs are linked from here on.
     const session = {
+      userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
       login: 'проверяющий@пример.испытание',
       displayLabel: 'Проверяющий П. П.',
       initials: 'ПП',
@@ -281,6 +282,7 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     forgetEverySession();
     jar.value = openSession(
       {
+        userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
         login: 'petrova@example.org',
         displayLabel: 'Петрова А. С.',
         initials: 'ПА',

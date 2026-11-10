@@ -495,7 +495,7 @@ function updateMyProfile(cookie: string, body: Record<string, unknown>): Promise
 }
 
 describe('W49: the session holds the subject getMe describes, never one this tier guessed', () => {
-  it('opens the row with getMe’s six fields, read with the minted credential', async () => {
+  it('opens the row with getMe’s seven fields, read with the minted credential', async () => {
     me = () =>
       accountAnswer({ roles: ['admin', 'expert'], is_default_credential: false, profile_complete: true });
     const cookie = cookieFrom(await signIn());
@@ -507,6 +507,8 @@ describe('W49: the session holds the subject getMe describes, never one this tie
 
     const subject = subjectOf(idFrom(cookie));
     expect(subject).toMatchObject({
+      // `AVATAR-PALETTE-01`: the account's user_uid from the API, the avatar's colour key.
+      userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
       // The account's login from the API, not the one typed into the form.
       login: ACCOUNT_LOGIN,
       displayLabel: ACCOUNT_LABEL,
@@ -525,6 +527,7 @@ describe('W49: the session holds the subject getMe describes, never one this tie
       'openedAt',
       'profileComplete',
       'roles',
+      'userUid',
     ]);
     expect(JSON.stringify(subject)).not.toContain(MINTED);
   });
@@ -713,6 +716,7 @@ describe('W49: a successful profile change rewrites the subject without a new si
 
     const after = subjectOf(idFrom(cookie));
     expect(after).toMatchObject({
+      userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
       login: ACCOUNT_LOGIN,
       displayLabel: ACCOUNT_LABEL,
       initials: 'ПА',

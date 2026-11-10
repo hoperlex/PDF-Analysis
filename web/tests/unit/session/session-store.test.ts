@@ -47,6 +47,7 @@ const HOUR = 3600;
 
 /** A subject as `getMe` would describe it. */
 const ACCOUNT: SessionAccount = {
+  userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
   login: 'reviewer@example.test',
   displayLabel: 'Проверяющая А. Б.',
   initials: 'ПА',
@@ -83,11 +84,12 @@ describe('a session is an opaque number here and a credential there', () => {
       'openedAt',
       'profileComplete',
       'roles',
+      'userUid',
     ]);
     expect(JSON.stringify(subject)).not.toContain(CREDENTIAL);
   });
 
-  it('copies the six subject fields and nothing else the caller’s object carried', () => {
+  it('copies the seven subject fields and nothing else the caller’s object carried', () => {
     const smuggled = { ...ACCOUNT, credential: 'smuggled-credential', token: 'smuggled-token' };
     const id = openSession(smuggled as SessionAccount, CREDENTIAL, HOUR);
     const subject = subjectOf(id);
@@ -131,6 +133,10 @@ describe('a session is an opaque number here and a credential there', () => {
       isDefaultCredential: true,
       profileComplete: false,
     });
+    // It cannot know the uid either, and must not borrow the login as the avatar's key: a marked
+    // stand-in that is not shaped like a uid the API issues.
+    expect(subjectOf(id)?.userUid).toBe(`legacy-form:${LOGIN}`);
+    expect(subjectOf(id)?.userUid).not.toMatch(/^usr_[0-9A-HJKMNP-TV-Z]{26}$/);
     expect(subjectOf(openSession(LOGIN, CREDENTIAL, HOUR, false))?.isDefaultCredential).toBe(false);
   });
 
@@ -242,8 +248,9 @@ describe('getMe’s answer becomes a subject only when every field is the contra
     archived_at: null,
   };
 
-  it('reads the six fields and derives the initials from the label', () => {
+  it('reads the seven fields and derives the initials from the label', () => {
     expect(accountFromMe(BODY)).toEqual({
+      userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
       login: 'reviewer@example.test',
       displayLabel: 'Проверяющая А. Б.',
       initials: 'ПА',
@@ -260,6 +267,11 @@ describe('getMe’s answer becomes a subject only when every field is the contra
       'account',
       { ...BODY, login: '' },
       { ...BODY, login: undefined },
+      // `AVATAR-PALETTE-01`: the avatar's key is required, never defaulted to the login.
+      { ...BODY, user_uid: '' },
+      { ...BODY, user_uid: undefined },
+      { ...BODY, user_uid: 7 },
+      { ...BODY, user_uid: null },
       { ...BODY, display_label: '   ' },
       { ...BODY, roles: ['expert', 'owner'] },
       { ...BODY, roles: ['expert', 'expert'] },

@@ -3,8 +3,8 @@
  *
  * `W49-PLAN.md` §3.5. After the exchange the BFF calls `getMe` with the credential it has just
  * been minted and keeps what comes back beside the credential in the register:
- * `{login, displayLabel, initials, roles, isDefaultCredential, profileComplete}`. The screens
- * of `W50` read it through `subjectOf` — never through `credentialOf`, which stays the
+ * `{userUid, login, displayLabel, initials, roles, isDefaultCredential, profileComplete}`.
+ * The screens of `W50` read it through `subjectOf` — never through `credentialOf`, which stays the
  * forwarder's alone — to decide what to show and where to send a browser. **None of it
  * decides what anybody is allowed to do.** The API reads the account's row on every
  * credentialed request (`auditmanager.api.security`), and refuses on its own evidence; a
@@ -26,6 +26,16 @@ import { ROLE_VALUES } from '@/shared/api/generated/types.gen';
 
 /** What the register records about the account behind a session. Deliberately no credential. */
 export interface SessionAccount {
+  /**
+   * The account's `user_uid`: the identifier the API issues once and never changes, exactly as
+   * `getMe` wrote it. Its only reader in this tier is the avatar's colour (`AVATAR-PALETTE-01`,
+   * `web/src/shared/ui/avatar-colour.ts`), which hashes it so that a changed e-mail or a
+   * corrected name never recolours the account. **Required, never defaulted:** a body without
+   * it is not a subject (see {@link accountFromMe}), and a stored row without it is not read
+   * (see `store.ts`). It is not an authority either: the API reads the account's row on every
+   * request.
+   */
+  readonly userUid: string;
   /** The sign-in identifier: the e-mail, or a legacy login until the profile is completed. */
   readonly login: string;
   /** The server's name for the account (`Фамилия И. О.`, else a display name, else the login). */
@@ -77,7 +87,8 @@ export function isRoleSet(value: unknown): value is readonly Role[] {
  *
  * Derived from the label and not from the e-mail on purpose: the avatar shows *who*, and the
  * label is the name this application shows everywhere else. The circle's colour is `W50`'s
- * and is hashed from the e-mail, so a corrected name does not recolour an account.
+ * and is hashed from the account's `user_uid` (`AVATAR-PALETTE-01`), so neither a corrected
+ * name nor a changed e-mail recolours an account.
  */
 export function initialsOf(displayLabel: string): string {
   const letters: string[] = [];
@@ -105,6 +116,7 @@ function capitalOf(letter: string): string {
 
 /** The fields of `Account` this tier reads. Everything is `unknown` until it is checked. */
 interface AccountBody {
+  readonly user_uid?: unknown;
   readonly login?: unknown;
   readonly display_label?: unknown;
   readonly roles?: unknown;
@@ -115,8 +127,8 @@ interface AccountBody {
 /**
  * The subject a `getMe` answer describes, or `null` when the answer is not one.
  *
- * `null` for a body that is not an object, a missing or empty `login` or `display_label`, a
- * role list that is not a set of contract roles, or a non-boolean `is_default_credential` or
+ * `null` for a body that is not an object, a missing or empty `user_uid`, `login` or
+ * `display_label`, a role list that is not a set of contract roles, or a non-boolean `is_default_credential` or
  * `profile_complete`. Never a partial subject with a default in the gap: the default for
  * `is_default_credential` would have to be `false`, which is the value that lets a reviewer
  * on the seeded password past the screen `R-50` sends them to.
@@ -124,6 +136,10 @@ interface AccountBody {
 export function accountFromMe(body: unknown): SessionAccount | null {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return null;
   const account = body as AccountBody;
+  // The contract requires `user_uid` on every `Account`. An answer without one is from a
+  // server this tier does not understand, and the avatar's colour is not worth inventing a
+  // key for (`AGENTS.md` §4: no silent fallback), least of all the login it exists to replace.
+  if (typeof account.user_uid !== 'string' || account.user_uid.length === 0) return null;
   if (typeof account.login !== 'string' || account.login.length === 0) return null;
   if (typeof account.display_label !== 'string' || account.display_label.trim().length === 0) {
     return null;
@@ -132,6 +148,7 @@ export function accountFromMe(body: unknown): SessionAccount | null {
   if (typeof account.is_default_credential !== 'boolean') return null;
   if (typeof account.profile_complete !== 'boolean') return null;
   return {
+    userUid: account.user_uid,
     login: account.login,
     displayLabel: account.display_label,
     initials: initialsOf(account.display_label),

@@ -15,10 +15,12 @@ import { initialsOf } from '@/entities/account';
 function subject(
   displayLabel: string,
   login: string,
+  userUid: string,
   roles: readonly string[],
   state: Partial<Pick<AppFrameSession, 'isDefaultCredential' | 'profileComplete'>> = {},
 ): AppFrameSession {
   return {
+    userUid,
     login,
     displayLabel,
     initials: initialsOf(displayLabel),
@@ -29,28 +31,28 @@ function subject(
 }
 
 /** An account holding `expert` only. */
-export const EXPERT = subject('Экспертова А. С.', 'эксперт@пример.испытание', ['expert']);
+export const EXPERT = subject('Экспертова А. С.', 'эксперт@пример.испытание', 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', ['expert']);
 
 /** An account holding both roles. */
-export const ADMIN_AND_EXPERT = subject('Проверкина А. С.', 'администратор@пример.испытание', ['admin', 'expert']);
+export const ADMIN_AND_EXPERT = subject('Проверкина А. С.', 'администратор@пример.испытание', 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', ['admin', 'expert']);
 
 /** An account holding `admin` only (`R-60`: it reads everything and changes no product data). */
-export const ADMIN_ONLY = subject('Управляева Б. В.', 'управление@пример.испытание', ['admin']);
+export const ADMIN_ONLY = subject('Управляева Б. В.', 'управление@пример.испытание', 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', ['admin']);
 
 /** An account with an empty role set. */
-export const NO_ROLES = subject('Безролева Г. Д.', 'безроли@пример.испытание', []);
+export const NO_ROLES = subject('Безролева Г. Д.', 'безроли@пример.испытание', 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', []);
 
 /** An account whose role set holds a value this build does not know. */
-export const UNKNOWN_ROLE = subject('Незнакомова Е. Ж.', 'незнакомая@пример.испытание', ['expert', 'auditor']);
+export const UNKNOWN_ROLE = subject('Незнакомова Е. Ж.', 'незнакомая@пример.испытание', 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', ['expert', 'auditor']);
 
 /** `R-50`: the seeded account, still on its default credential, before its profile is complete. */
-export const DEFAULT_CREDENTIAL = subject('админ', 'админ', ['admin', 'expert'], {
+export const DEFAULT_CREDENTIAL = subject('админ', 'админ', 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8G', ['admin', 'expert'], {
   isDefaultCredential: true,
   profileComplete: false,
 });
 
 /** `R-59`: a changed password, an incomplete profile (the legacy login before the e-mail). */
-export const INCOMPLETE_PROFILE = subject('админ', 'админ', ['admin', 'expert'], { profileComplete: false });
+export const INCOMPLETE_PROFILE = subject('админ', 'админ', 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8H', ['admin', 'expert'], { profileComplete: false });
 
 /** The longest name form: a sixty-letter last name, `Фамилия И. О.` — 66 characters. */
 export const LONGEST_LABEL = `${'Ж'.repeat(60)} И. О.`;
@@ -59,4 +61,4 @@ export const LONGEST_LABEL = `${'Ж'.repeat(60)} И. О.`;
 export const LONGEST_LOGIN = `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(48)}.example.test`;
 
 /** The width case: the longest name and the longest address at once. */
-export const LONGEST = subject(LONGEST_LABEL, LONGEST_LOGIN, ['admin', 'expert']);
+export const LONGEST = subject(LONGEST_LABEL, LONGEST_LOGIN, 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8J', ['admin', 'expert']);

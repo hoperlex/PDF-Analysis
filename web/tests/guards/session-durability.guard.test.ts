@@ -57,6 +57,7 @@ import {
   forgetEverySession,
   mintSessionId,
   openSession,
+  openSessionCount,
   refreshSubject,
   sessionCookie,
   sessionDurability,
@@ -350,6 +351,7 @@ describe('R-51: a deployment that names no store still loses them, and says so',
 
 describe('W49: the register is format version 2, and a version-1 file is replaced, not read', () => {
   const ACCOUNT: SessionAccount = {
+    userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
     login: 'reviewer@example.test',
     displayLabel: 'Проверяющая А. Б.',
     initials: 'ПА',
@@ -453,6 +455,9 @@ describe('W49: the register is format version 2, and a version-1 file is replace
       { displayLabel: '' },
       { initials: 7 },
       { login: '' },
+      { userUid: '' },
+      { userUid: 7 },
+      { userUid: undefined },
       { openedAt: 'now' },
     ].map((change) => ({ ...template, ...change, id: mintSessionId() }));
     writeFileSync(path, JSON.stringify({ version: 2, sessions: [template, ...broken] }), 'utf8');
@@ -460,6 +465,55 @@ describe('W49: the register is format version 2, and a version-1 file is replace
 
     expect(subjectOf(good)).toMatchObject(ACCOUNT);
     for (const row of broken) expect(subjectOf(row.id as string), JSON.stringify(row)).toBeNull();
+  });
+
+  it('does not read a version-2 row written before rows carried a user_uid: counted out loud, never coloured from the login', () => {
+    // `AVATAR-PALETTE-01`. The rows of a register written by the previous release have every
+    // field but the avatar's key. They are not read (their reviewers sign in again, once), the
+    // process says how many, and no row is given a key borrowed from its login.
+    const good = openSession(ACCOUNT, CREDENTIAL, HOUR);
+    const template = onDisk().sessions[0] as Record<string, unknown>;
+    const older = { ...template };
+    delete older.userUid;
+    const rows = [1, 2].map((n) => ({ ...older, id: mintSessionId(), credential: `${CREDENTIAL}-older-${n}` }));
+    // An expired row of the same shape is dropped as any expired row is: it is not counted.
+    const expired = { ...older, id: mintSessionId(), credential: `${CREDENTIAL}-expired`, expiresAt: Date.now() - 1000 };
+    writeFileSync(path, JSON.stringify({ version: 2, sessions: [template, ...rows, expired] }), 'utf8');
+    dropTheInMemoryRegister();
+
+    const notice = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(subjectOf(good)).toMatchObject(ACCOUNT);
+      for (const row of [...rows, expired]) {
+        expect(subjectOf(row.id), row.credential).toBeNull();
+        expect(credentialOf(row.id), row.credential).toBeNull();
+      }
+      expect(openSessionCount()).toBe(1);
+      const said = notice.mock.calls.map((call) => String(call[0]));
+      expect(said).toHaveLength(1);
+      expect(said[0]).toContain(path);
+      expect(said[0]).toContain('2 open session(s)');
+      expect(said[0]).toContain('user_uid');
+    } finally {
+      notice.mockRestore();
+    }
+
+    // The next write rewrites the file from memory: the older rows and their credentials leave it.
+    openSession(ACCOUNT, `${CREDENTIAL}-next`, HOUR);
+    expect(onDisk().sessions.map((row) => row.credential).sort()).toEqual([CREDENTIAL, `${CREDENTIAL}-next`].sort());
+    expect(readFileSync(path, 'utf8')).not.toContain('-older-');
+  });
+
+  it('says nothing about user_uid when every row has one', () => {
+    openSession(ACCOUNT, CREDENTIAL, HOUR);
+    dropTheInMemoryRegister();
+    const notice = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(subjectOf('0'.repeat(64))).toBeNull();
+      expect(notice).not.toHaveBeenCalled();
+    } finally {
+      notice.mockRestore();
+    }
   });
 
   it('reports a version it does not know and serves no session, as for any unreadable file', () => {

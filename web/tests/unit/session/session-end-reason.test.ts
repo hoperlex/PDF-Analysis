@@ -461,6 +461,7 @@ describe('the guard puts the reason after `next`, and only where the cookies say
   it('leaves a live session alone whatever the note says', async () => {
     const id = openSession(
       {
+        userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
         login: 'проверяющий',
         displayLabel: 'Проверяющая А. Б.',
         initials: 'ПА',

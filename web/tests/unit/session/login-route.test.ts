@@ -43,6 +43,7 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     forgetEverySession();
     jar.value = openSession(
       {
+        userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
         login: 'проверяющий',
         displayLabel: 'Проверяющая А. Б.',
         initials: 'ПА',

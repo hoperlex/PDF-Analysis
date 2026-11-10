@@ -44,7 +44,7 @@ export function AccountPage({ profileComplete, next }: AccountPageProps) {
     <PageShell title="Профиль" subtitle={profileComplete || account.profile_complete ? 'Данные вашей учётной записи.' : 'Завершите профиль, чтобы открыть остальные разделы.'} surface="canvas">
       <div className={styles.profile} data-account-profile-complete={account.profile_complete}>
         <header className={styles.identity}>
-          <Avatar initials={initialsOf(label)} colourKey={account.login} label={`Аватар: ${label}`} />
+          <Avatar initials={initialsOf(label)} colourKey={account.user_uid} label={`Аватар: ${label}`} />
           <h2 className={styles.name}>{label}</h2>
         </header>
         <dl className={styles.facts}>

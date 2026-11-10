@@ -40,6 +40,7 @@ vi.mock('next/navigation', async (importOriginal) => ({
 
 /** `R-150w`: a viewer reads the knowledge base and not the queue. */
 const VIEWER: AppFrameSession = {
+  userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
   login: 'наблюдатель@пример.испытание',
   displayLabel: 'Наблюдателева Д. Е.',
   initials: initialsOf('Наблюдателева Д. Е.'),

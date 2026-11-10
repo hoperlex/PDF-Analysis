@@ -165,6 +165,7 @@ describe('W50: every screen awaits requireScreen with its own address and props'
 // ================================================================= the driven half
 
 const COMPLETE: SessionAccount = {
+  userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
   login: 'petrova@example.org',
   displayLabel: 'Петрова А. С.',
   initials: 'ПА',

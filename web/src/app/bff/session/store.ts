@@ -62,7 +62,7 @@
  * ## What a row holds, since `W49-BFF-01`
  *
  * The credential, the two instants, and the **subject** `getMe` described when the session
- * was opened — `login`, `displayLabel`, `initials`, `roles`, `isDefaultCredential`,
+ * was opened — `userUid`, `login`, `displayLabel`, `initials`, `roles`, `isDefaultCredential`,
  * `profileComplete` (`./subject.ts`, `W49-PLAN.md` §3.5). The subject is rewritten after a
  * successful profile change or password change ({@link refreshSubject}), so a completed
  * profile is visible without signing in again.
@@ -72,6 +72,21 @@
  * profile state, and inventing either for a session that is already open would be deciding a
  * reviewer's rights in this tier. Replacing it signs every reviewer out once, which is the
  * rollback cost the task file states.
+ *
+ * ## A row written before `userUid` is not read (`AVATAR-PALETTE-01`)
+ *
+ * The avatar's colour is hashed from the account's `user_uid`, which rows did not carry until
+ * this change. A version-2 row without a non-empty `userUid` is **not read**: it is dropped at
+ * the first read like any row that fails its checks, the process says so out loud with the
+ * number of rows ({@link hydrate}), and the reviewer behind it signs in again, once. The
+ * alternatives were refused on purpose. Colouring such a session from its `login` would be a
+ * silent fallback to the key this change retires, and it would give the same account two
+ * colours across one sign-in. Inventing or guessing a uid here would be deciding an identity
+ * in this tier. Reading the identifier from the API while serving a request would turn a
+ * register read into a network call. The format version stays 2 for that reason as well:
+ * the rows this change writes are still valid rows for the code before it, which ignores the
+ * extra field, so a rollback signs nobody out, where a version bump would sign everybody out
+ * both ways.
  */
 
 import {
@@ -173,6 +188,7 @@ function heldSessionFrom(row: StoredRow, now: number): HeldSession | null {
   if (typeof row.credential !== 'string' || row.credential.length === 0) return null;
   if (typeof row.expiresAt !== 'number' || row.expiresAt <= now) return null;
   if (typeof row.openedAt !== 'number') return null;
+  if (typeof row.userUid !== 'string' || row.userUid.length === 0) return null;
   if (typeof row.login !== 'string' || row.login.length === 0) return null;
   if (typeof row.displayLabel !== 'string' || row.displayLabel.length === 0) return null;
   if (typeof row.initials !== 'string') return null;
@@ -183,6 +199,7 @@ function heldSessionFrom(row: StoredRow, now: number): HeldSession | null {
     credential: row.credential,
     openedAt: row.openedAt,
     expiresAt: row.expiresAt,
+    userUid: row.userUid,
     login: row.login,
     displayLabel: row.displayLabel,
     initials: row.initials,
@@ -190,6 +207,16 @@ function heldSessionFrom(row: StoredRow, now: number): HeldSession | null {
     isDefaultCredential: row.isDefaultCredential,
     profileComplete: row.profileComplete,
   };
+}
+
+/**
+ * True for a row that is a whole, live session in every respect except that it carries no
+ * `userUid` — the rows this change retires. Asked of the row with a stand-in uid so the two
+ * questions cannot drift apart: whatever {@link heldSessionFrom} checks, this checks too.
+ */
+function isRowFromBeforeUserUid(row: StoredRow, now: number): boolean {
+  if (typeof row.userUid === 'string' && row.userUid.length > 0) return false;
+  return heldSessionFrom({ ...row, userUid: 'stand-in' }, now) !== null;
 }
 
 function registry(): Registry {
@@ -271,6 +298,9 @@ function announce(path: string | null): void {
  * lost deployment. Every expired row is dropped on the way in, so a restart does not
  * resurrect a session that died while the process was down.
  *
+ * **A row without a `userUid` is counted, reported and not read** (`AVATAR-PALETTE-01`): see
+ * the header of this file.
+ *
  * **A version-1 file is replaced, not read** (`W49-PLAN.md` §3.5). Its rows carry no roles
  * and no profile state, so reading them would mean inventing both for a session that is
  * already open. The file is overwritten with an empty version-2 register on the spot — so
@@ -302,10 +332,19 @@ function hydrate(now: number): void {
     if (parsed.version !== REGISTER_FORMAT_VERSION || !Array.isArray(parsed.sessions)) {
       throw new Error(`unexpected register format: version ${String(parsed.version)}`);
     }
+    let withoutUserUid = 0;
     for (const row of parsed.sessions as readonly StoredRow[]) {
       if (typeof row.id !== 'string' || !SESSION_ID_PATTERN.test(row.id)) continue;
       const session = heldSessionFrom(row, now);
       if (session !== null) held.rows.set(row.id, session);
+      else if (isRowFromBeforeUserUid(row, now)) withoutUserUid += 1;
+    }
+    if (withoutUserUid > 0) {
+      console.warn(
+        `[session-register] ${path} holds ${String(withoutUserUid)} open session(s) written ` +
+          'before sessions carried the account user_uid (the avatar colour). They are not read: ' +
+          'each of those reviewers signs in again, once. The rows leave the file at the next write.',
+      );
     }
   } catch (error) {
     console.error(
@@ -491,7 +530,8 @@ export function openSession(
  * the account form, carrying the account returned by `getMe`.
  *
  * The fields this form cannot know are filled with the **restrictive** values, never the
- * permissive ones: no roles, an incomplete profile, and the login as the label. A screen
+ * permissive ones: no roles, an incomplete profile, and the login as the label. The `user_uid`
+ * is a marked stand-in (`legacy-form:<login>`), never a real-looking one. A screen
  * reading such a session shows the least it can and sends the reviewer to the profile, which
  * is the direction a default must point. Nothing is authorised by it either way: the API
  * reads the account's row on every request.
@@ -514,6 +554,11 @@ export function openSession(
   let now: number;
   if (typeof accountOrLogin === 'string') {
     account = {
+      // The login form cannot know the uid and must not borrow the login for it as the
+      // avatar's key. The stand-in is a string the API never issues (`UserUid` is
+      // `usr_` and 26 characters), so it cannot be mistaken for a real identifier; only
+      // tests open a session this way.
+      userUid: `legacy-form:${accountOrLogin}`,
       login: accountOrLogin,
       displayLabel: accountOrLogin,
       initials: initialsOf(accountOrLogin),
@@ -549,12 +594,13 @@ export function openSession(
 }
 
 /**
- * Exactly the six subject fields, copied: never a spread of whatever object the caller
+ * Exactly the seven subject fields, copied: never a spread of whatever object the caller
  * passed, so a property that is not part of the subject — a credential included — cannot
  * ride into the row, the file or a screen's props by accident.
  */
 function accountFields(account: SessionAccount): SessionAccount {
   return {
+    userUid: account.userUid,
     login: account.login,
     displayLabel: account.displayLabel,
     initials: account.initials,
