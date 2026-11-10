@@ -14,21 +14,25 @@ The viewer («Наблюдатель», `R-150w`) is denied the six user routes:
 runs, and a router decides nothing about roles. The runner route is reached with a runner token only (``RUNNER_OPERATIONS``).
 
 **Sealed, and asleep.** Nothing here reads or writes anything: every body refuses with ``503 dependency_unavailable`` (``details.dependency`` the
-stable class name of the lane that owns it) until that lane replaces it -- `CTX-STAND` the context, `PREC-PASS` the precedents, `EMBED-01` the
-vector control, `PREC-WEB` the settings. The contract's error catalogue is closed and has no ``501``; ``503`` is what every earlier seal's stubs
+stable class name of the lane that owns it) until that lane replaces it -- `CTX-STAND` the context, `PREC-PASS` the precedents, `PREC-WEB` the
+settings. **`EMBED-01` filled the vector control**: ``getVectorControl`` and ``setVectorPaused`` answer through ``VectorControlPort`` when the
+composition root hands ``build_router`` one, and keep the sleeping answer when it does not (`api/routers/precedents_ports.py`). The contract's error catalogue is closed and has no ``501``; ``503`` is what every earlier seal's stubs
 answer (``CMP-SEAL-C0`` onwards), and there is no fallback: a caller is told that the surface is not served, never given an empty answer.
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Final, NoReturn
+from collections.abc import Mapping
+from typing import Annotated, Any, Final, NoReturn
 
 from fastapi import APIRouter, Path
 
 from auditmanager.api.routers.declarations import STATE_CONFLICT_DESCRIPTION, envelope_responses, success
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
+from auditmanager.api.routers.precedents_ports import VectorControlPort
+from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
-from auditmanager.api.security import CurrentRunner
+from auditmanager.api.security import CurrentRunner, CurrentSubject
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -61,7 +65,12 @@ def _asleep(dependency: str) -> NoReturn:
     raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=dependency)
 
 
-def build_precedent_routes(router: APIRouter) -> None:
+def _vector_control_body(view: Mapping[str, Any]) -> bytes:
+    """The contract's ``VectorControl``: an optional member with no value is absent on the wire, never null."""
+    return encode_json(models.VectorControl.model_validate(dict(view)).model_dump(mode="json", exclude_unset=True))
+
+
+def build_precedent_routes(router: APIRouter, vector_control: VectorControlPort | None = None) -> None:
     @router.post(
         "/runner/tasks/{task_id}/context", operation_id="getExecutorTaskContext", tags=_TAGS,
         response_model=models.ExecutorTaskContext,
@@ -124,8 +133,10 @@ def build_precedent_routes(router: APIRouter) -> None:
             "are shown to an administrator only. `role:admin|expert`; the viewer is denied."
         ),
     )
-    def get_vector_control() -> models.VectorControl:
-        _asleep(DEPENDENCIES["vector_control"])
+    def get_vector_control(subject: CurrentSubject) -> WireResponse:
+        if vector_control is None:
+            _asleep(DEPENDENCIES["vector_control"])
+        return json_response(200, _vector_control_body(vector_control.get_vector_control(user_uid=subject.user_uid)))
 
     @router.put(
         "/vector-control/paused", operation_id="setVectorPaused", tags=_TAGS,
@@ -138,8 +149,13 @@ def build_precedent_routes(router: APIRouter) -> None:
             "control as it stands. `role:admin`, `Idempotency-Key` required."
         ),
     )
-    def set_vector_paused(body: models.SetVectorPausedRequest, idempotency_key: RequiredIdempotencyKey) -> models.VectorControl:
-        _asleep(DEPENDENCIES["vector_control"])
+    def set_vector_paused(
+        subject: CurrentSubject, body: models.SetVectorPausedRequest, idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        if vector_control is None:
+            _asleep(DEPENDENCIES["vector_control"])
+        view = vector_control.set_vector_paused(paused=body.paused, user_uid=subject.user_uid, idempotency_key=idempotency_key)
+        return json_response(200, _vector_control_body(view))
 
     @router.get(
         "/precedent-settings", operation_id="listPrecedentSettings", tags=_TAGS,
