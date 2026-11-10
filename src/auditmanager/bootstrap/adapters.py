@@ -1892,10 +1892,16 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     from auditmanager.execution.eta import run_estimated_finish
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
+    from auditmanager.runs.stage_facts import is_primary_text_placeholder
 
     repository = RunRepository()
     run = repository.get(session, run_id)
-    stages = repository.stage_results(session, run_id)
+    # `STAGE-PENDING-TEXT-01`: the text stage's placeholder row (written while the visual pass runs first) is not a result; it is not
+    # reported, so the stage reads as not started rather than «partial» with `analysis_input_invalid`.
+    stages = tuple(
+        stage for stage in repository.stage_results(session, run_id)
+        if not is_primary_text_placeholder(stage.stage_id, stage.metrics)
+    )
     # `R-151v`: who started the run, by the account's own display label; none before 0051.
     started_by = getattr(run, "started_by_user_uid", None)
     started_by_label = None

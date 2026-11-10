@@ -240,6 +240,33 @@ def test_the_state_of_the_stage_results_is_canonical_for_the_chips_they_cover() 
     assert item(closed, "preparation")["facts"]["state"] == "partial"  # one of three, and the run is over
 
 
+def _text_placeholder(*, pending: bool) -> StageRow:
+    """The row the executor writes for the text stage when the multi-stage workflow starts its visual pass (`runs/executor.py`)."""
+    return StageRow("text_analysis", "partial", error_code="analysis_input_invalid", started_at=at(3), primary_text_pending=pending)
+
+
+def test_the_text_stages_placeholder_reads_as_not_started_and_names_no_error() -> None:
+    """`STAGE-PENDING-TEXT-01`: while the visual pass runs first, the text chip is not «partial» with `analysis_input_invalid`."""
+    doc = planned(stage_rows=[*prep(), _text_placeholder(pending=True)], calls=[call("cross_check", n=0, subscription=True)])
+    text = item(doc, "text")["facts"]
+    assert text["state"] == "pending"
+    assert "last_error_code" not in text and "started_at" not in text and "finished_at" not in text
+    models.RunStages.model_validate(doc)
+    # the same row once the stage has written its own result (the metric is false) is read as it always was
+    written = item(planned(stage_rows=[*prep(), _text_placeholder(pending=False)], calls=[]), "text")["facts"]
+    assert (written["state"], written["last_error_code"], written["started_at"]) == ("partial", "analysis_input_invalid", at(3))
+
+
+def test_the_placeholder_is_known_by_the_metric_the_executor_writes() -> None:
+    source = (Path(__file__).resolve().parents[3] / "src/auditmanager/runs/executor.py").read_text(encoding="utf-8")
+    assert f'"{sf.PRIMARY_TEXT_PENDING_METRIC}":True' in source and 'reason="primary_text_pending"' in source
+    assert sf.is_primary_text_placeholder("text_analysis", {sf.PRIMARY_TEXT_PENDING_METRIC: True})
+    for stage_id, metrics in (("text_analysis", {sf.PRIMARY_TEXT_PENDING_METRIC: False}), ("text_analysis", {}),
+                              ("text_analysis", {sf.PRIMARY_TEXT_PENDING_METRIC: "true"}), ("text_analysis", None),
+                              ("block_analysis", {sf.PRIMARY_TEXT_PENDING_METRIC: True})):
+        assert not sf.is_primary_text_placeholder(stage_id, metrics), (stage_id, metrics)
+
+
 def test_the_procedures_say_the_state_and_the_reason_of_a_chip_the_stage_results_do_not_cover() -> None:
     procedures = [{"id": "norm_verification", "title": "Нормы", "status": "unavailable", "reason": "corpus_unavailable"},
                   {"id": "finding_review", "title": "Критик", "status": "failed", "error_code": "analysis_failed"}]
