@@ -44,6 +44,13 @@
   color: var(--am-ink-muted);
 }
 
+.project > a {
+  /* `D-564`: a 24 px target (it was 21 px); the surplus is padding with the same margin taken back, so the row keeps its height. */
+  min-height: var(--am-target-min);
+  padding-block: calc((var(--am-target-min) - 1lh) / 2);
+  margin-block: calc((1lh - var(--am-target-min)) / 2);
+}
+
 /* `UI-A-10`: the audit figures of a project take a line under its name and date, the width of the row; their colours are the badges'. */
 .projectFigures {
   flex: 1 0 100%;

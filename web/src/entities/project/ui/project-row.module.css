@@ -27,6 +27,10 @@
   font-size: var(--am-text-base);
   font-weight: 650;
   text-decoration: none;
+  /* `D-564`: a 24 px target (it was one line of text, 21 px); the surplus is padding with the same margin taken back, so the row keeps its height. */
+  min-height: var(--am-target-min);
+  padding-block: calc((var(--am-target-min) - 1lh) / 2);
+  margin-block: calc((1lh - var(--am-target-min)) / 2);
 }
 
 .name:hover {

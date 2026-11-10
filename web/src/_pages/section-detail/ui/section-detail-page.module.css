@@ -31,3 +31,14 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }
+
+/*
+ * `D-564`: «К разделам проекта» in the empty section's state is a 24 px target (it was 17 px, the content box of an inline link). An
+ * inline box takes padding without making the line taller only as an inline block; the margin takes the surplus back.
+ */
+.backLink {
+  display: inline-block;
+  min-height: var(--am-target-min);
+  padding-block: calc((var(--am-target-min) - 1lh) / 2);
+  margin-block: calc((1lh - var(--am-target-min)) / 2);
+}

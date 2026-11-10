@@ -132,7 +132,7 @@ function SectionDetail({
       <EmptyState
         title="В этом разделе пока нет документов."
         detail="Документ попадает в раздел, когда эксперт подтвердит раздел для его текущей версии на экране версии."
-        action={<Link href={routes.project(projectUid)}>К разделам проекта</Link>}
+        action={<Link className={styles.backLink} href={routes.project(projectUid)}>К разделам проекта</Link>}
       />
     );
   } else {
