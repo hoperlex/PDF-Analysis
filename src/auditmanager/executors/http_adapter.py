@@ -85,9 +85,15 @@ def effective_timeout(
     revision_timeout_seconds: int, context: Any | None, *, margin: int = DEADLINE_MARGIN_SECONDS
 ) -> float | None:
     """The seconds one call may take: the revision's, cut to the Attempt's remaining watchdog
-    minus ``margin``. ``None`` when less than one second is left, which the caller refuses."""
+    minus ``margin``. ``None`` when less than one second is left, which the caller refuses.
+
+    The call is starting: for a live Attempt that is a sign of life (`STALL-LOCAL-WORK-01`), so the
+    timeout is not shrunk by the worker's own work before the call."""
     timeout = float(revision_timeout_seconds)
     if context is not None:
+        starting = getattr(context, "call_started", None)
+        if callable(starting):
+            starting()
         timeout = min(timeout, float(context.remaining_seconds()) - margin)
     return None if timeout < 1.0 else timeout
 

@@ -351,7 +351,7 @@ into a program that prints names only, and its raw output is never shown or past
 3. **Nightly dump with an off-host mirror.** The recommended option of the poll; the owner chose
    manual copies (`R-146b`). Not built; `A-1`.
 4. **A managed PostgreSQL and managed object storage.** Not asked; would contradict `ADR-0020`'s single
-   failure domain and `R-146a`'s single host.
+   failure domain and `R-146a`'s single host. *(Asked on 2026-11-10: planned, not started; see the addendum at the end.)*
 5. **A new `dump-db.sh` beside the copy key's verb of the same name**, or a receipt that is a second file: rejected, the copy record is the receipt (section 5).
 
 ## Verification
@@ -371,3 +371,13 @@ afford to lose (`A-1`); a second host, a managed database or an off-host copy is
 recovery time or recovery point is promised to anyone; a second operator joins; the VPS size is
 measured and does not fit the 500-page envelope (`D-171`); a decision to add CI or scanning
 (`A-3`).
+
+## Addendum 2026-11-10 (a move to Yandex Cloud is planned, not started)
+
+Recorded by the lane `YC-MOVE-PLAN` after the owner's polls of 2026-11-10 (`R-153ab`, `R-153af`, `docs/program/OWNER_RULINGS_2026-09-17.md` section 3.55). Nothing above is rewritten.
+
+- **Alternative 4 is no longer «Not asked».** The owner answered: «запланировать полный перенос на Яндекс. Пока выбрать вариант ночное окно, пометить как временное решение на локальном хранилище» (`R-153ab`), and, asked whether to move the database to a Yandex cluster now, «Пока не трогаем» (`R-153af`). So a managed PostgreSQL and a managed object storage are decided **in principle and not started**.
+- **Nothing in this ADR's decisions changes today.** The topology is still one VPS with one `postgres` and one `s3` service, the manual copies and accepted risks `A-1` to `A-5` stand, and `R-146a` (one host) holds. The alternative stays rejected for the present topology.
+- **The revisit trigger is armed, not met.** «a managed database … is decided» is satisfied in principle by `R-153ab`; the ADR is replaced on the day the owner orders the move to start (step 0 of `docs/program/YC-MOVE-PLAN.md`), by an ADR that records the new topology, where the data may be held, and the new failure domains.
+- **What the plan adds:** the check that pgvector 0.8 or later is available at the provider (the search needs `hnsw.iterative_scan`), and that the exact `0.8.6` pin of migration `0013` is met or deliberately changed; the order of the steps; the list of what a move touches. It measures and orders nothing.
+- **The first consumer of the move** is the encoder: `ADR-0029` temporary decision 2 (the offline encoder in a night window on the 4 GB host) ends when the database, the storage and a separate encoder machine are in place.
