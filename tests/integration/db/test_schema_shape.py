@@ -367,6 +367,8 @@ PREFIX_BY_TABLE_COLUMN = {
     ("vector_control_event", "control_event_id"): "vce",
     ("executor_task_context_delivery", "delivery_id"): "etd",
     ("executor_task_context_delivery", "task_id"): "ext",
+    # the finding an observation is related to (a bare identity, no foreign key)
+    ("finding_observation", "related_finding_uid"): "fnd",
 }
 
 #: ``stage_ai_*.group_id`` is not an entity identity: it is the stage AI's own grouping label -- ``grp:`` plus the first 24 hex
