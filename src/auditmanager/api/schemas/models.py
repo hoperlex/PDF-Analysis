@@ -47,6 +47,7 @@ __all__ = [
     "DecisionMemoryCaseId",
     "DecisionMemoryCasePage",
     "DecisionMemoryCaseSummary",
+    "DecisionMemoryComment",
     "DecisionMemoryContent",
     "DecisionMemoryCountRow",
     "DecisionMemoryCrop",
@@ -2452,13 +2453,35 @@ class FindingBlockEvidence(_Object):
 
 
 class FindingObservation(_Object):
+    """An observation. Its ``evidence`` is the text it quotes: at least one item, **unless** its ``grounding_kind`` is ``portal_block`` (`CRIT-SEAL-52`,
+    contract 1.52.0, ``D-683``): such an observation stands on blocks of the portal, which the finding lists in ``block_evidence``, and has no text span, so
+    its ``evidence`` may be empty. The rule is a JSON Schema ``if``/``else`` on ``grounding_kind`` (``minItems: 1`` unless it is present and is
+    ``portal_block``), and ``Evidence`` is not touched."""
+
+    # ``else`` carries the rule for every observation that is not block-grounded, an absent ``grounding_kind`` (``text_span``, the only kind before
+    # 1.51.0) included: the ``if`` needs the member to be present, so an absent one falls to ``else``. ``else`` constrains ``evidence``, which is
+    # declared in ``properties``, and declares no member, so ``additionalProperties: false`` is unaffected (unlike an ``allOf``/``oneOf`` of
+    # restated objects, which a closed object cannot take).
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "if": {"properties": {"grounding_kind": {"const": "portal_block"}}, "required": ["grounding_kind"]},
+            "else": {"properties": {"evidence": {"minItems": 1}}},
+        },
+    )
+
     finding_observation_id: FindingObservationId
     run_id: RunId
     category: FindingCategory
     finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
     recommendation_text: Annotated[str, Field(min_length=1, max_length=4000)]
     proposed_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    evidence: Annotated[list[Evidence], Field(min_length=1)]
+    evidence: list[Evidence] = Field(
+        description=(
+            "The text spans the observation quotes. At least one, unless grounding_kind is portal_block (since 1.52.0): a block-grounded "
+            "observation has no text span, and its blocks are listed in block_evidence of the finding."
+        ),
+    )
     provenance: ObservationProvenance
     norm_citations: Annotated[list[NormCitation], Field(max_length=5)] = Field(
         default=None, json_schema_extra=optional_property
@@ -2471,6 +2494,14 @@ class FindingObservation(_Object):
     )  # type: ignore[assignment]
     #: `CRIT-SEAL-50` (contract 1.51.0): absent means `text_span`, the only kind before.
     grounding_kind: FindingGroundingKind = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+    @model_validator(mode="after")
+    def _evidence_unless_block_grounded(self) -> FindingObservation:
+        """The contract's ``if``/``else`` on ``grounding_kind``, where the served document is also what validates: no text evidence is allowed
+        only for a block-grounded observation (`CRIT-SEAL-52`, ``D-683``). The refusal is a transport-shape check, not a business rule."""
+        if not self.evidence and self.grounding_kind is not FindingGroundingKind.PORTAL_BLOCK:
+            raise ValueError("evidence needs at least one item unless grounding_kind is portal_block")
+        return self
 
 
 class Finding(_Object):
@@ -9212,6 +9243,15 @@ class DecisionMemoryCrop(_Object):
     portal_description: Annotated[str, Field(min_length=1, max_length=4000)] | None
 
 
+class DecisionMemoryComment(_Object):
+    """One comment an expert left on a case, as the memory keeps it (`CRIT-SEAL-52`, contract 1.52.0, ``D-682``). Like a decision it names no author:
+    the memory holds what was decided and said, not who said it."""
+
+    comment_id: Annotated[str, Field(pattern=rf"^dmk_{_ULID}$")]
+    decided_at: datetime
+    comment: Annotated[str, Field(min_length=1, max_length=4000)]
+
+
 class DecisionMemoryStatusEvent(_Object):
     """One change of standing, newest last. A ``forget`` carries the digest of the content that was forgotten, never the content."""
 
@@ -9232,6 +9272,15 @@ class DecisionMemoryCase(_Object):
     norm_refs: list[DecisionMemoryNormRef]
     crops: list[DecisionMemoryCrop]
     status_events: list[DecisionMemoryStatusEvent]
+    #: `CRIT-SEAL-52` (contract 1.52.0, ``D-682``): the experts' comments on the case, oldest first. Absent when the answer does not carry them (a server
+    #: that does not read them yet); present and empty when the case has none, and for a forgotten case.
+    comments: list[DecisionMemoryComment] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property,
+        description=(
+            "The experts' comments on the case, oldest first (since 1.52.0). Absent when the server does not report them; present and empty "
+            "when the case has none and for a forgotten case."
+        ),
+    )
 
 
 class DecisionMemoryCountRow(_Object):

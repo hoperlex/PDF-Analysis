@@ -29760,10 +29760,10 @@
           },
           "evidence": {
             "type": "array",
-            "minItems": 1,
             "items": {
               "$ref": "#/components/schemas/Evidence"
-            }
+            },
+            "description": "The text spans the observation quotes. At least one, unless grounding_kind is portal_block (since 1.52.0): a block-grounded observation has no text span, and its blocks are listed in block_evidence of the finding."
           },
           "provenance": {
             "$ref": "#/components/schemas/ObservationProvenance"
@@ -29790,6 +29790,23 @@
           },
           "grounding_kind": {
             "$ref": "#/components/schemas/FindingGroundingKind"
+          }
+        },
+        "if": {
+          "properties": {
+            "grounding_kind": {
+              "const": "portal_block"
+            }
+          },
+          "required": [
+            "grounding_kind"
+          ]
+        },
+        "else": {
+          "properties": {
+            "evidence": {
+              "minItems": 1
+            }
           }
         }
       },
@@ -49484,6 +49501,14 @@
             },
             "type": "array",
             "title": "Status Events"
+          },
+          "comments": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionMemoryComment"
+            },
+            "type": "array",
+            "title": "Comments",
+            "description": "The experts' comments on the case, oldest first (since 1.52.0). Absent when the server does not report them; present and empty when the case has none and for a forgotten case."
           }
         },
         "additionalProperties": false,
@@ -49692,6 +49717,35 @@
         ],
         "title": "DecisionMemoryCaseSummary",
         "description": "One case as the list gives it: where it stands (``status``), the verdict of its latest decision and how many decisions it holds."
+      },
+      "DecisionMemoryComment": {
+        "properties": {
+          "comment_id": {
+            "type": "string",
+            "pattern": "^dmk_[0-9A-HJKMNP-TV-Z]{26}$",
+            "title": "Comment Id"
+          },
+          "decided_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Decided At"
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Comment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "comment_id",
+          "decided_at",
+          "comment"
+        ],
+        "title": "DecisionMemoryComment",
+        "description": "One comment an expert left on a case, as the memory keeps it (`CRIT-SEAL-52`, contract 1.52.0, ``D-682``). Like a decision it names no author:\nthe memory holds what was decided and said, not who said it."
       },
       "DecisionMemoryContent": {
         "properties": {
