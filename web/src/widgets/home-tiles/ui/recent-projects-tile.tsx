@@ -51,7 +51,7 @@ function Body() {
     <ol className={styles.projects} data-recent-project-count={shown.length}>
       {shown.map((project) => (
         <li key={project.project_uid} className={styles.project}>
-          <Link className={styles.projectName} href={routes.project(project.project_uid)}>{project.name}</Link>
+          <Link href={routes.project(project.project_uid)}>{project.name}</Link>
           <span className={styles.created}>создан {formatInstant(project.created_at)}</span>
           {project.audit_counts === undefined ? null : (
             <span className={styles.projectFigures} data-recent-project-figures="">

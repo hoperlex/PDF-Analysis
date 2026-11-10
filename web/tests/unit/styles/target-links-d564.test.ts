@@ -87,7 +87,7 @@ describe('the reader can fail (lane TARGETS)', () => {
 describe('the links the walk named hold the floor and give the surplus back (lane TARGETS)', () => {
   const CASES: ReadonlyArray<{ readonly what: string; readonly css: readonly string[]; readonly selector: string }> = [
     { what: 'the project name in the project list', css: ['entities', 'project', 'ui', 'project-row.module.css'], selector: '.name' },
-    { what: 'the project name on «Главная»', css: ['widgets', 'home-tiles', 'ui', 'home-tiles.module.css'], selector: '.projectName' },
+    { what: 'the project name on «Главная»', css: ['widgets', 'home-tiles', 'ui', 'home-tiles.module.css'], selector: '.project > a' },
     { what: 'the version title of a version row', css: ['entities', 'document-version', 'ui', 'version-row.module.css'], selector: '.title' },
     { what: 'the second link of a version row', css: ['entities', 'document-version', 'ui', 'version-row.module.css'], selector: '.secondary' },
     { what: '«все версии» of a document card', css: ['entities', 'document-version', 'ui', 'document-cards.module.css'], selector: '.history' },
@@ -109,7 +109,8 @@ describe('the links the walk named hold the floor and give the surplus back (lan
 
 describe('the markup carries the classes the stylesheets read (lane TARGETS)', () => {
   it('puts each class on its link', () => {
-    expect(source('widgets', 'home-tiles', 'ui', 'recent-projects-tile.tsx')).toContain('<Link className={styles.projectName} href={routes.project(project.project_uid)}>');
+    // The tile's link carries no class (the rendered markup is pinned by `screens/home.test.ts`): `.project > a` reads its list item.
+    expect(source('widgets', 'home-tiles', 'ui', 'recent-projects-tile.tsx')).toContain('<Link href={routes.project(project.project_uid)}>{project.name}</Link>');
     expect(source('entities', 'document-version', 'ui', 'document-cards.tsx')).toContain('<Link className={styles.history} href={documentHref} title="История версий документа">');
     expect(source('_pages', 'section-detail', 'ui', 'section-detail-page.tsx')).toContain('<Link className={styles.backLink} href={routes.project(projectUid)}>К разделам проекта</Link>');
     expect(source('entities', 'project', 'ui', 'project-row.tsx')).toContain('<Link className={styles.name} href=');
