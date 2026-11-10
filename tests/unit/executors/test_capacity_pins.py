@@ -106,10 +106,20 @@ def test_the_claim_excludes_the_run_it_is_claiming_and_the_call_excludes_nobody(
 
 def test_the_hint_names_each_held_run_once_and_counts_them_per_connection() -> None:
     hint = _sql(jobs._NEXT_JOB)  # type: ignore[attr-defined]
-    assert "SELECT rev.connection_id, active_job.run_id FROM job active_job" in hint
+    assert "SELECT rev.connection_id AS capacity_key, active_job.run_id FROM job active_job" in hint
     assert "SELECT rev.connection_id, submitted_run.run_id FROM audit_run submitted_run" in hint
     assert " UNION SELECT" in hint and "UNION ALL" not in hint, "UNION (not UNION ALL) removes a run held twice"
-    assert "loaded AS (SELECT connection_id, count(*) AS units FROM held GROUP BY connection_id)" in hint
+    assert "loaded AS (SELECT capacity_key, count(*) AS units FROM held GROUP BY capacity_key)" in hint
+
+
+def test_the_first_column_of_the_hint_is_a_capacity_key_because_it_also_holds_pools() -> None:
+    """`D-664`: ``held`` and ``loaded`` count a connection's units under its id and a planned Run's under its capacity pool, so their first
+    column is not named ``connection_id`` -- and each of the three joins that read it says what it compares the key with."""
+    hint = _sql(jobs._NEXT_JOB)  # type: ignore[attr-defined]
+    assert "loaded.connection_id" not in hint and "SELECT connection_id, count(*)" not in hint
+    assert "JOIN loaded ON loaded.capacity_key = mine.connection_id" in hint, "a Run frozen to a connection"
+    assert "WHERE loaded.capacity_key = group_member.connection_id" in hint, "a member of a pending Run's group"
+    assert "JOIN loaded ON loaded.capacity_key = pool_connection.capacity_pool" in hint, "a planned Run's pool"
 
 
 def test_the_reads_group_the_active_rows_instead_of_correlating_a_count_per_connection() -> None:
