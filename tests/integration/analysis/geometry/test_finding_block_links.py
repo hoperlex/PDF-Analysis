@@ -14,13 +14,17 @@ chain, and the shipped adapter then answers ``listRunFindingBlocks`` from the th
 * ``not_produced`` for a run that never reached the geometry stage, and for a run of a version with no portal geometry;
 * ``404`` for an unknown run;
 * evidence on a page the portal's raster does not describe (``geometry_mismatch``) is named in ``unlinked_pages`` and links to
-  nothing -- never to a block of another page, never to the page's blocks that cannot be trusted.
+  nothing -- never to a block of another page, never to the page's blocks that cannot be trusted;
+* a line that crosses the edge between two blocks (a clause's number column and its text) links its evidence to the one block
+  whose recognised text holds the quotation, and to neither when the other block's reading is flagged or holds it too (the second
+  witness of `D-450`, wired by `D-590`: ``BlockAdapter`` reads ``prepared.recognised_text`` and hands it to the rule).
 
 The run harness of ``tests/integration/runs`` is loaded by path (``reads_support``).
 """
 
 from __future__ import annotations
 
+import copy
 import json
 
 import pytest
@@ -224,3 +228,122 @@ def test_evidence_on_a_page_the_portals_raster_does_not_describe_is_unlinked_nev
     baseline_ids = {i for item in baseline.items for i in item.portal_block_ids}
     kept_ids = {i for item in links.items for i in item.portal_block_ids}
     assert kept_ids == {i for i in baseline_ids if listed[i].page_number not in (2, 8)}
+
+
+# -- a line across two blocks: the second witness (D-450, D-590) ---------------------------
+
+
+PAGE_TWO_BLOCK = "blk_a754bb93ea5da1ec8413c2ff8e875380"     # the baseline's one TEXT block of page 2 (it covers the page's text)
+NUMBER_COLUMN = "blk_" + "c" * 32
+CLAUSE = "Степень огнестойкости здания — II."
+CLAUSE_NUMBERS = "1.\n1.1.\n1.2.\n1.3.\n1.4.\n1.5.\n1.6.\n1.7.\n1.8."
+#: A Latin P and a Cyrillic а in a Cyrillic word: the quality flags of the recognised text (``mixed_script``, ``homoglyph``) name it.
+FLAGGED_NUMBERS = "1.1. P\u0430здел\n1.2.\n1.3."
+#: The clause's own line, which holds the quotation: a reading of the number column that repeats it.
+CLAUSE_LINE = "1.3. " + CLAUSE
+
+
+def _page_two_as_a_number_column_and_its_text(number_column_text: str) -> tuple[bytes, bytes]:
+    """``(block list, markdown)`` of the baseline with page 2's one TEXT block cut in two: a number column and the clause text.
+
+    The clause the first baseline finding quotes (``1.3. Степень огнестойкости здания — II.``) is one extracted line that starts in
+    the number column and runs into the text: the cut stands in the space after ``1.3.``, so the line crosses the edge between the
+    two blocks and neither covers its whole width, which is a link the geometry cannot make. The block that keeps the baseline's id
+    is the text (the right of the cut) and holds the whole of the page's text as read; ``number_column_text`` is what the portal
+    read in the new left block.
+    """
+    bundle = members("ar_baseline.zip")
+    oracle = PdfOracle(bundle.pdf)
+    try:
+        page = oracle.layer[1]
+        at = page.text.find(CLAUSE)
+        assert at >= 0, "the baseline's page 2 holds the quotation"
+        boxes = oracle.quote_boxes(2, page.char_start + at, CLAUSE)
+    finally:
+        oracle.close()
+    assert boxes is not None and len(boxes) == 1, "the quotation is one line"
+    cut = round(boxes[0][0] - 0.0028, 4)      # half a space to the left of the quotation's first glyph, in the page's width
+    document = json.loads(bundle.block_list)
+    original = next(block for block in document["blocks"] if block["block_id"] == PAGE_TWO_BLOCK)
+    left, top, right, bottom = original["coords_norm"]
+    assert left < cut < boxes[0][0] < right
+    column = {**copy.deepcopy(original), "block_id": NUMBER_COLUMN, "coords_norm": [left, top, cut, bottom], "crop_url": None}
+    original["coords_norm"] = [cut, top, right, bottom]
+    document["blocks"].insert(document["blocks"].index(original), column)
+    markdown = bundle.markdown.decode("utf-8")
+    header = f"### BLOCK #2 [TEXT]: {PAGE_TWO_BLOCK}"
+    assert markdown.count(header) == 1
+    markdown = markdown.replace(header, f"### BLOCK #2 [TEXT]: {NUMBER_COLUMN}\n\n{number_column_text}\n\n{header}")
+    return json.dumps(document, ensure_ascii=False, indent=2).encode("utf-8"), markdown.encode("utf-8")
+
+
+def _by_pages(items, groups, evidence):
+    """The linked block ids of each finding by the pages its evidence is on (the finding uids differ from run to run)."""
+    return {
+        tuple(sorted({e.page_number for e in evidence[g.canonical.finding_observation_id]})): item.portal_block_ids
+        for item, g in zip(items, groups)
+    }
+
+
+def _run_on_the_split_page(session, blob_store, recorded_adapter, provider_config, new_key, number_column_text, name):
+    block_list, markdown = _page_two_as_a_number_column_and_its_text(number_column_text)
+    version_uid = seed_bundle_version(session, blob_store, block_list=block_list, markdown=markdown)
+    run_id = run_published(session, version_uid, new_key(name), blob_store, recorded_adapter, provider_config)
+    adapter = block_adapter(session, blob_store)
+    links = adapter.list_run_finding_blocks(run_id=run_id)
+    groups, evidence = _published(session, run_id)
+    assert links.status == "produced" and links.unlinked_pages == [] and len(groups) == 3
+    return adapter, version_uid, run_id, links, groups, evidence, _by_pages(links.items, groups, evidence)
+
+
+def test_a_line_across_a_number_column_and_its_text_is_linked_to_the_text_block_by_the_recognised_text(
+    session, produced, blob_store, recorded_adapter, provider_config, new_key
+) -> None:
+    """The finding that quotes page 2 and page 6 keeps its page-2 block though the line crosses the edge of two blocks.
+
+    The links agree with the PDF's own glyphs (no wrong, no missed link) and every text block linked holds its quotation. The
+    answer is the unsplit baseline's, block for block (the text block keeps the baseline block's id): the second witness recovered
+    exactly the link the cut would have lost."""
+    baseline = produced["adapter"].list_run_finding_blocks(run_id=produced["run_id"])
+    base_by_pages = _by_pages(baseline.items, *_published(session, produced["run_id"]))
+    adapter, version_uid, _, links, groups, evidence, by_pages = _run_on_the_split_page(
+        session, blob_store, recorded_adapter, provider_config, new_key, CLAUSE_NUMBERS, "finding-links-number-column",
+    )
+    assert PAGE_TWO_BLOCK in by_pages[(2, 6)] and NUMBER_COLUMN not in {i for ids in by_pages.values() for i in ids}
+    assert by_pages == base_by_pages
+
+    oracle = PdfOracle(members("ar_baseline.zip").pdf)
+    try:
+        report = analyse(
+            items=[(i.finding_uid, i.portal_block_ids, i.finding_uid) for i in links.items],
+            evidence=_facts(groups, evidence), blocks=_block_facts(adapter, version_uid),
+            unlinked_pages=links.unlinked_pages, oracle=oracle,
+        )
+    finally:
+        oracle.close()
+    assert [p for p in report["pairs"] if p["geometry"] in ("WRONG", "unplaced")] == []
+    assert report["misses"] == []
+    assert all(pair["text"] == "contains" for pair in report["pairs"] if pair["block_type"] == "text"), report["pairs"]
+
+
+@pytest.mark.parametrize(
+    ("number_column_text", "name"),
+    [
+        pytest.param(FLAGGED_NUMBERS, "finding-links-flagged-column", id="the-other-blocks-reading-is-flagged"),
+        pytest.param(CLAUSE_LINE, "finding-links-repeating-column", id="both-blocks-hold-the-quotation"),
+    ],
+)
+def test_a_line_across_two_blocks_is_linked_to_neither_when_the_other_blocks_reading_cannot_be_trusted_or_repeats_it(
+    session, produced, blob_store, recorded_adapter, provider_config, new_key, number_column_text, name
+) -> None:
+    """The same documents as the linking case but for the number column's reading: the link of page 2 is a missing link, never a
+    wrong one (the quotation may stand in the block whose reading failed, or in either of the two that hold it), and what the
+    geometry proves on the other pages is untouched."""
+    baseline = produced["adapter"].list_run_finding_blocks(run_id=produced["run_id"])
+    base_by_pages = _by_pages(baseline.items, *_published(session, produced["run_id"]))
+    *_, by_pages = _run_on_the_split_page(
+        session, blob_store, recorded_adapter, provider_config, new_key, number_column_text, name,
+    )
+    assert PAGE_TWO_BLOCK in base_by_pages[(2, 6)]
+    assert by_pages[(2, 6)] == [block for block in base_by_pages[(2, 6)] if block != PAGE_TWO_BLOCK] != []
+    assert by_pages[(3, 7)] == base_by_pages[(3, 7)] and by_pages[(8,)] == base_by_pages[(8,)]

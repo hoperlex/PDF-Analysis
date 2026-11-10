@@ -22,16 +22,20 @@ Scenarios (each prints one JSON block and writes ``<out>/<name>.json`` plus ``<o
   XY-cut at paragraph or at cell level (``tests/support/xy_cut_blocks.py``): the answer key's quotations that are unique on their
   page, and the same sweep.
 
-**The second witness (`D-450`).** Each result also carries the relation as ``link_evidence`` computes it with the recognised text of the
-portal's text blocks (``figures_with_the_witness``), over the same stored documents, with three sensitivity runs: the shortest
+**The second witness (`D-450`, `D-590`).** Each result also carries the relation as ``link_evidence`` computes it with the recognised text of the
+portal's text blocks and the text layer's page texts (``figures_with_the_witness``; the witness is asked only when the quotation is unique on
+its page and every block that touches the line has a reading, `JUDGE-N2` H1), over the same stored documents, with these sensitivity runs:
+the widest unboxed stretch of a line tolerated (``gap_none``, ``gap_8``, ``gap_2`` characters instead of the shipped four), the page-uniqueness
+condition patched out (``no_unique_gate``, an ablation: what it keeps out), the shortest
 quotation the witness is asked about set to 1 (``..._min1``), and the recognised text damaged the way a reading damages it (a word
 in ten, in three, written with a look-alike Latin letter or a letter short; ``..._noise10`` and ``..._noise30``, each also without
 the witness's abstention on a block whose reading carries a quality flag, ``..._without_the_doubtful_guard``; and the damage no flag
 names, a letter short, ``..._dropped10`` and ``..._dropped30``; and the **naive witness**, with neither the abstention on a doubtful reading
 nor the one on a near copy, on the exact and the damaged readings, ``..._naive_*``: an ablation that patches the rule's near-copy test
-out for the call, to show what the two abstentions are worth). The shipped adapter
-does not hand the text to the rule (that wiring is in ``bootstrap/adapters.py``, `D-590`), so this reproduction calls the rule
-itself, and **fails the scenario** unless the same call without the text gives exactly the adapter's answer for every finding.
+out for the call, to show what the two abstentions are worth). The shipped adapter hands the recognised text to the rule
+(``bootstrap/adapters.py``, `D-590`), so its answer is the relation **with** the witness; this reproduction calls the rule
+itself, **fails the scenario** unless the call with the blocks' text gives exactly the adapter's answer for every finding
+(``reproduction_matches_the_adapter``), and reads the whole-width rule's figures (``figures``) from the call without the text.
 The blocks' text of the ``pz_*`` and ``stress_*`` scenarios is what the PDF's own characters inside the block read as (an exact
 reading); the quotations of the sweeps are unique on their page, so with an exact reading a wrong link needs overlapping
 blocks and the noise runs of those sets show what a damaged reading costs in coverage, not in wrong links. ``repeat_sweep_cells``
@@ -67,7 +71,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "tools" / "fixtures"))  # portal_bundle
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from auditmanager.analysis.geometry import finding_blocks as rule_module  # noqa: E402
-from auditmanager.analysis.geometry.finding_blocks import COVERAGE, WITNESS_MIN_CHARACTERS  # noqa: E402
+from auditmanager.analysis.geometry.finding_blocks import COVERAGE, WITNESS_MAX_GAP_CHARACTERS, WITNESS_MIN_CHARACTERS, Readings  # noqa: E402
 from auditmanager.analysis.stages.extraction import NORMALIZATION_DESCRIPTION  # noqa: E402
 from auditmanager.analysis.text import ProviderConfig, ProviderMode, RecordedAdapter  # noqa: E402
 from auditmanager.analysis.text.adapter import build_request  # noqa: E402
@@ -325,9 +329,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             )
             for b in portal.blocks
         ]
-        linked = {i.finding_uid: list(i.portal_block_ids) for i in links.items}
-        items = [(uid, linked[uid], labels[uid]) for uid in evidence]
-        now = analyse(items=items, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=oracle)
+        linked = {i.finding_uid: list(i.portal_block_ids) for i in links.items}      # the shipped answer: with the second witness
 
         # The rule as it was, over the same stored documents.
         from auditmanager.analysis.geometry.finding_blocks import TextLine  # noqa: PLC0415
@@ -337,7 +339,15 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             for b in index.blocks
         ]
         sizes = {p.page_number: (p.width_pt, p.height_pt) for p in oracle.layer}
+        layer = {p.page_number: p.text for p in oracle.layer}          # the text layer's page texts: what the witness asks about uniqueness
         usable = [f for f in evidence.items()]
+        unlinked = set(links.unlinked_pages)
+        # The whole-width rule alone (`D-353`): the rule called without the text, which is the adapter's answer before `D-590`.
+        plain = {uid: rule_links(facts, lines, sizes, blocks, unlinked, None) for uid, facts in usable}
+        now = analyse(
+            items=[(uid, plain[uid], labels[uid]) for uid, _ in usable], evidence=evidence, blocks=blocks,
+            unlinked_pages=links.unlinked_pages, oracle=oracle,
+        )
         order = {b.portal_block_id: n for n, b in enumerate(blocks)}
         before_items = []
         for uid, facts in usable:
@@ -345,30 +355,53 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             before_items.append((uid, sorted(held, key=order.__getitem__), labels[uid]))
         before = analyse(items=before_items, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=oracle)
 
-        # The rule with the second witness, over the same stored documents. First the guard: the call without the text must be
+        # The rule with the second witness, over the same stored documents. First the guard: the call with the blocks' text must be
         # the adapter's answer, finding by finding, or this reproduction is not the shipped rule and nothing below means anything.
-        unlinked = set(links.unlinked_pages)
-        plain = {uid: rule_links(facts, lines, sizes, blocks, unlinked, None) for uid, facts in usable}
-        require_same_links(plain, linked)
+        def kind(label: str) -> str:
+            return label.split()[1] if label.startswith("AUTHORED") else "recorded"
+
         texts = {b.portal_block_id: b.text for b in blocks if b.text}
+        shared = Readings(texts, doubtful_blocks(blocks, texts), layer)
+        with_text = {
+            uid: rule_links(facts, lines, sizes, blocks, unlinked, texts, WITNESS_MIN_CHARACTERS, readings=shared)
+            for uid, facts in usable
+        }
+        require_same_links(with_text, linked)
+        adapter_figures = figures(analyse(
+            items=[(uid, linked[uid], labels[uid]) for uid, _ in usable], evidence=evidence, blocks=blocks,
+            unlinked_pages=links.unlinked_pages, oracle=oracle,
+        ), label_of=kind)
         memo = MemoOracle(oracle)
 
         def witnessed(
             texts_given: dict[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS, *, guarded: bool = True,
-            veto: bool = True,
+            veto: bool = True, unique: bool = True, max_gap: float | None = WITNESS_MAX_GAP_CHARACTERS,
         ) -> dict[str, Any]:
-            """The relation with the witness; ``guarded=False`` drops the doubtful-reading abstention and ``veto=False`` the near-copy
-            one (patched out of the rule for this call: an ablation, to see what each is worth, never the shipped rule)."""
+            """The relation with the witness; ``guarded=False`` drops the doubtful-reading abstention, ``veto=False`` the near-copy
+            one and ``unique=False`` the page-uniqueness condition (each patched out of the rule for this call: an ablation, to see
+            what each is worth, never the shipped rule); ``max_gap`` is the widest unboxed stretch of a line tolerated (``None``: any)."""
             doubtful = doubtful_blocks(blocks, texts_given) if guarded and texts_given else set()
-            with contextlib.nullcontext() if veto else mock.patch.object(rule_module, "_near_copy", lambda *_a, **_k: False):
+            variant = Readings(texts_given, doubtful, layer)          # folded once for the variant, not once per finding
+            with contextlib.ExitStack() as patched:
+                if not veto:
+                    patched.enter_context(mock.patch.object(rule_module, "_near_copy", lambda *_a, **_k: False))
+                if not unique:
+                    patched.enter_context(mock.patch.object(rule_module.Readings, "occurrences", lambda *_a, **_k: 1))
                 result = [
-                    (uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters, doubtful), labels[uid])
+                    (uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters, readings=variant,
+                                     max_gap_characters=max_gap), labels[uid])
                     for uid, facts in usable
                 ]
             return analyse(items=result, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=memo)
 
         with_witness = witnessed(texts)
         sensitivity = {"min1": witnessed(texts, 1)}
+        # How much each condition of the rule costs in coverage (and, on the sets where an error is possible, what it keeps out):
+        # the widest unboxed stretch of a line tolerated, and the page-uniqueness condition dropped.
+        sensitivity["gap_none"] = witnessed(texts, max_gap=None)
+        sensitivity["gap_8"] = witnessed(texts, max_gap=8.0)
+        sensitivity["gap_2"] = witnessed(texts, max_gap=2.0)
+        sensitivity["no_unique_gate"] = witnessed(texts, unique=False)
         for rate in NOISE_RATES:
             damaged = {key: degrade(key, text, rate) for key, text in texts.items()}
             name = f"noise{round(rate * 100)}"
@@ -380,15 +413,13 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             # The naive witness (neither abstention), on the damaged readings: what the two are worth.
             sensitivity[f"naive_noise{round(rate * 100)}"] = witnessed(damaged, guarded=False, veto=False)
             sensitivity[f"naive_dropped{round(rate * 100)}"] = witnessed(unseen, guarded=False, veto=False)
+            sensitivity[f"no_unique_gate_dropped{round(rate * 100)}"] = witnessed(unseen, unique=False)
         sensitivity["naive_exact"] = witnessed(texts, guarded=False, veto=False)
         before_pairs = {(p["finding_uid"], p["portal_block_id"]) for p in now["pairs"]}
         added = Counter(p["geometry"] for p in with_witness["pairs"] if (p["finding_uid"], p["portal_block_id"]) not in before_pairs)
         lost = sorted(before_pairs - {(p["finding_uid"], p["portal_block_id"]) for p in with_witness["pairs"]})
         if lost:
             raise AssertionError(f"the second witness removed {len(lost)} links the geometry made, e.g. {lost[:3]}")
-
-        def kind(label: str) -> str:
-            return label.split()[1] if label.startswith("AUTHORED") else "recorded"
 
         return {
             "name": scenario.name, "note": scenario.note, "run_id": run_id, "version_uid": version_uid,
@@ -398,6 +429,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             "skipped_units": dict(scenario.skipped), "status": links.status, "unlinked_pages": links.unlinked_pages,
             "figures": figures(now, label_of=kind), "figures_before_the_fix": figures(before, label_of=kind),
             "figures_with_the_witness": figures(with_witness, label_of=kind),
+            "figures_of_the_adapter": adapter_figures,
             "witness_pairs_added_by_geometry_verdict": dict(added),
             "figures_with_the_witness_sensitivity": {name: figures(report) for name, report in sensitivity.items()},
             "reproduction_matches_the_adapter": True,

@@ -142,6 +142,7 @@ from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_B
 from auditmanager.analysis.geometry.finding_blocks import (  # UI-PARITY-C6
     EvidenceSpan,
     PortalBox,
+    Readings,
     TextLine,
     link_evidence,
     linkable_pages,
@@ -194,6 +195,7 @@ __all__ = [
     "TextLine",
     "link_evidence",
     "linkable_pages",
+    "Readings",
     "BetaV3Profile",
     "BetaV3ProfileRefused",
     "SealedV3Request",
