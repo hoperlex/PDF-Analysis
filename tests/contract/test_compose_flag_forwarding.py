@@ -132,7 +132,7 @@ def test_the_intake_switch_reaches_api_and_worker_off_by_default() -> None:
 
 def test_the_code_defaults_are_read_as_the_code_writes_them() -> None:
     read = {name: default for source in _sources().values() for name, default in code_defaults(source).items()}
-    assert read["AUDITMANAGER_EXTENDED_ANALYSIS_PLAN"] == "v3"
+    assert read["AUDITMANAGER_EXTENDED_ANALYSIS_PLAN"] == "v2"  # `V3-OPTIN-01` (R-154b): v3 is opt-in
     assert read["AUDITMANAGER_EXTENDED_COVERAGE"] == "batched-v1"
     assert read["AUDITMANAGER_NATIVE_PAGE_PIECES"] == "1"
     assert read["AUDITMANAGER_STAGE_V3_PLAN"] == "windowed-global-v1"
@@ -172,6 +172,21 @@ def test_a_compose_default_that_differs_from_the_code_is_refused() -> None:
     assert changed != compose
     assert problems(changed, example, sources) == [
         "AUDITMANAGER_EXTENDED_COVERAGE in api is '${AUDITMANAGER_EXTENDED_COVERAGE:-legacy}', the code default is 'batched-v1'"]
+
+
+def test_the_plan_default_of_the_compose_file_and_the_example_is_held_to_the_codes_v2() -> None:
+    """`V3-OPTIN-01`: the guard can fail for the plan switch itself, in both files, in the direction that would silently opt a stand into v3."""
+    compose, example, sources = _whole()
+    assert "${AUDITMANAGER_EXTENDED_ANALYSIS_PLAN:-v2}" in compose and "\nAUDITMANAGER_EXTENDED_ANALYSIS_PLAN=v2\n" in example
+    in_compose = compose.replace("${AUDITMANAGER_EXTENDED_ANALYSIS_PLAN:-v2}", "${AUDITMANAGER_EXTENDED_ANALYSIS_PLAN:-v3}", 1)
+    assert problems(in_compose, example, sources) == [
+        "AUDITMANAGER_EXTENDED_ANALYSIS_PLAN in api is '${AUDITMANAGER_EXTENDED_ANALYSIS_PLAN:-v3}', the code default is 'v2'"]
+    in_example = example.replace("\nAUDITMANAGER_EXTENDED_ANALYSIS_PLAN=v2\n", "\nAUDITMANAGER_EXTENDED_ANALYSIS_PLAN=v3\n", 1)
+    assert problems(compose, in_example, sources) == [
+        "alpha.env.example gives AUDITMANAGER_EXTENDED_ANALYSIS_PLAN='v3', the code default is 'v2'"]
+    in_code = {path: source.replace('EXTENDED_PLAN_DEFAULT = "v2"', 'EXTENDED_PLAN_DEFAULT = "v3"', 1) for path, source in sources.items()}
+    assert in_code != sources
+    assert len(problems(compose, example, in_code)) == 2, "a code default moved to v3 is refused in the compose file and in the example"
 
 
 def test_a_name_the_example_does_not_list_is_refused() -> None:
