@@ -48,6 +48,17 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * `WALK-V5`: on a phone a run's identity (28 characters, one token) stays on one line and the table scrolls in its box: broken
+ * at 68 px it was three lines of «run_01M713D9YN08AR3K34MXWNPX» per row, on «Журнал» and on the run page.
+ */
+@media (max-width: 600px) {
+  .identity code {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+}
+
 .paging {
   display: flex;
   flex-wrap: wrap;

@@ -60,7 +60,7 @@ import { withColdBrowser } from './cdp.mjs';
 import { runWritePhase } from './write.mjs';
 import { openSession } from './session.mjs';
 import { provisionAccounts } from './accounts.mjs';
-import { measureWidth, widthFindings } from './width.mjs';
+import { collapsedFindings, measureCollapsed, measureWidth, widthFindings } from './width.mjs';
 import {
   parseDimension,
   declaredRefusals,
@@ -466,6 +466,7 @@ try {
         startedWith,
         viewport: page.viewport ?? null,
         width: await measureWidth(page),
+        collapsed: await measureCollapsed(page),
         pauseStrip,
         stateWait,
         landedOn,
@@ -498,6 +499,10 @@ try {
       );
     } else {
       for (const finding of widthFindings(route.name, record.width, READ_VIEWPORT)) {
+        failures.push(finding);
+      }
+      // D-565: a squeezed column makes the page taller, not wider, so the comparison above cannot see it.
+      for (const finding of collapsedFindings(route.name, record.collapsed, READ_VIEWPORT)) {
         failures.push(finding);
       }
     }
@@ -677,6 +682,7 @@ try {
         `console=${record.consoleErrors.length} ` +
         `jar=[${record.startedWith.join(',')}] ` +
         `w=${record.width?.scrollWidth ?? '?'}/${record.width?.innerWidth ?? '?'} ` +
+        `collapsed=${record.collapsed?.count ?? '?'} ` +
         `${args.paused ? `strip=${record.pauseStrip ?? '-'} ` : ''}` +
         `${record.state ? `state=${record.state.reached ? 'yes' : 'NO'} ` : ''}` +
         `${record.captured ? JSON.stringify(record.captured) : ''}`,

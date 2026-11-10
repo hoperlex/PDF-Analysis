@@ -69,3 +69,13 @@
     max-height: none;
   }
 }
+
+/*
+ * `WALK-V5`: on a phone the table keeps 40 rem and its frame scrolls. The work's name and note took what the other columns left:
+ * 57 px and 219 px of «Документ «AR baseline …»» at 360 and 414 px.
+ */
+@media (max-width: 600px) {
+  .table {
+    min-width: 40rem;
+  }
+}
