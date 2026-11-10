@@ -1957,7 +1957,10 @@ All commands run from the repository root on the host, as the operator who will 
    `objects-deleted: <n>`, the tool's summary (`manifest-sha256`, `manifest`, `plan-sha256`, `rows-deleted`), the list of what an
    erase does not reach, and the script's `done. prj_... was erased as era_...`. Exit 0.
 
-   `--stop-worker` stops the `worker` service for the apply and starts it again afterwards, whatever the result. Use it when the
+   `--stop-worker` stops the `worker` service for the apply and starts it again afterwards, whatever the result. Only a worker that
+   `docker compose ps` lists as running is stopped and started again: one you had stopped on purpose stays stopped (the script says
+   `the worker service is not running; nothing to stop`), and a stack that cannot list its services is a failure before anything is
+   stopped (`N3-3`, `D-625`). Use it when the
    tool refuses with `could not lock the tables`: the worker's heartbeat is the usual writer. If it still cannot lock, the script
    prints the two commands that stop and start `api` and `web` around the run. To wait longer than the module's `15s`, set
    `PROJECT_ERASE_LOCK_TIMEOUT` in the environment of the command (`PROJECT_ERASE_LOCK_TIMEOUT=60s infra/deploy/erase-project.sh ...`); the

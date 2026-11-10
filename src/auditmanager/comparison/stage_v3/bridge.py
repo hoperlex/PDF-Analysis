@@ -60,8 +60,8 @@ class V3Method(StageAiMethod):
                     or profile.row.version_uid != row["version_uid"]):
                 raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_ai_profile_changed")
             fragments = extract_fragments(profile, side=row["side"])
-            if not fragments:
-                raise StageAiValidationError("v3_native_page_without_text")
+            # A page without text gives no row here and is not refused here: the plan's own source rule below refuses it, in
+            # the plan's own order (its budgets are judged before its pages) and with the plan's own code (D-532, N3-2).
             characters += sum(len(f.normalised_text) for f in fragments)
             count += len(fragments)
             if row["profile_id"] not in stored:
@@ -77,9 +77,13 @@ class V3Method(StageAiMethod):
         self.source_signature = digest({"engine": ENGINE, "bundle": self.bundle_version, "revision": revision, "profiles": facts})
         # Explicit one-call consent window. Resume estimates the exact next
         # known request rather than charging every possible region in advance.
+        # A request is "known" only once step 2 has written the rows of EVERY page profile (`not derived`). With the rows of
+        # some profiles only -- a new document version on one side of a pair whose other side was written before, the chain
+        # cancelled inside step 2 -- no plan result exists yet and the plan cannot be built from the stored rows alone, so the
+        # estimate is the opening window, as at start (N3-1).
         selected = None
         run_id = request.scope.stage_chain_run_id
-        remaining = request.mode is AiMode.LEFT and run_id and snapshot["fragments"]
+        remaining = request.mode is AiMode.LEFT and run_id and snapshot["fragments"] and not derived
         if remaining:
             implementation = _implementation(self.v3_policy)
             saved = results(session, run_id, bundle=self.bundle_version)
