@@ -3029,10 +3029,12 @@ class MemoryCaptureAssembler:
 
     def assemble(self, session: Session, event: Any, origin_kind: str) -> Any:
         from auditmanager.decision_memory.public import (
-            CaptureSnapshot, CaseContent, CaseOrigin, DecisionFact, EvidenceItem, select_page_image_crops,
+            BlockEvidenceFact, CaptureSnapshot, CaseContent, CaseOrigin, DecisionFact, EvidenceItem, select_case_crops,
         )
         from auditmanager.documents.public import DocumentRepository
-        from auditmanager.findings import finding_by_uid, published_finding_evidence, published_findings
+        from auditmanager.findings import (
+            finding_by_uid, published_finding_block_evidence, published_finding_evidence, published_findings,
+        )
         from auditmanager.shared.identity import VersionUid
 
         head = finding_by_uid(session, event.finding_uid)
@@ -3055,6 +3057,18 @@ class MemoryCaptureAssembler:
             (item for item in published_finding_evidence(session, head.run_id)
              if item.finding_observation_id == row.finding_observation_id),
             key=lambda item: item.evidence_ordinal,
+        )
+        # `dm-capture/2` (`F8-PUBLISH`, `CRIT-CAPTURE-01`): the blocks a candidate finding stands on come from the database, so they are
+        # read on EVERY capture, as the text evidence is. The digest is compared with the stored one, so a later decision handed none
+        # would compute another digest than the case captured with them and read as a conflict. Empty for a text finding, which stays
+        # `dm-capture/1` with its digest byte for byte.
+        block_evidence = tuple(
+            BlockEvidenceFact(
+                ordinal=item.ordinal, page_number=item.page_number, portal_block_id=item.portal_block_id, bbox=item.bbox_norm,
+                crop_sha256=item.crop_sha256, recognised_quote=item.recognised_quote,
+            )
+            for item in published_finding_block_evidence(session, head.run_id)
+            if item.finding_observation_id == row.finding_observation_id
         )
 
         # The version carries its current classification (the section as of now, which is the section as of capture).
@@ -3081,14 +3095,14 @@ class MemoryCaptureAssembler:
             )
 
         evidence = tuple(_item(item) for item in stored)
-        crops = () if known else select_page_image_crops(evidence, self._geometry.portal_crops_in(session, head.run_id))
+        crops = () if known else select_case_crops(evidence, block_evidence, self._geometry.portal_crops_in(session, head.run_id))
 
         content = CaseContent(
             category=row.category, finding_text=row.finding_text, recommendation_text=row.recommendation_text,
             proposed_severity=row.proposed_severity, required_value=None, stated_value=None,
             stage_id=row.stage_id, analysis_profile_id=row.analysis_profile_id, prompt_bundle_id=row.prompt_bundle_id,
             provider_mode=row.provider_mode, evidence=evidence,
-            norm_refs=(),
+            norm_refs=(), block_evidence=block_evidence,
         )
         return CaptureSnapshot(
             origin=CaseOrigin(
