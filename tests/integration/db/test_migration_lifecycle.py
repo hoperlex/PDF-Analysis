@@ -159,6 +159,21 @@ EXPECTED_TABLES = {
     "stage_layout_revision",
     "stage_layout_switch_event",
     "audit_run_cell_binding",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the memory's comments, block evidence, encoder queue and vectors; the probe of a run's candidate text, the
+    # pass of a run and its advice; a finding's block evidence; the settings journal; the vectors' control and its journal; the journal of reference
+    # data handed to an agent.
+    "decision_memory_comment",
+    "decision_memory_block_evidence",
+    "decision_memory_embedding_intent",
+    "decision_memory_embedding",
+    "decision_memory_probe",
+    "decision_memory_precedent_run",
+    "decision_memory_precedent_advice",
+    "finding_block_evidence",
+    "precedent_setting_event",
+    "vector_control",
+    "vector_control_event",
+    "executor_task_context_delivery",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
     "norm_current_snapshot",
     "norm_current_snapshot_event",

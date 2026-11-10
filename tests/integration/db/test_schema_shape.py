@@ -47,6 +47,9 @@ APPEND_ONLY_TABLES = {
     "expert_decision_event", "audit_event", "executor_route_event",
     "executor_routing_rule_revision", "executor_routing_mode_event",
     "executor_host_use_event", "executor_host_slot_event", "stage_layout_revision", "stage_layout_switch_event",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the journal of the vectors' pause and of the night window's states is appended, never edited; the
+    # state in force is the one row of `vector_control`.
+    "vector_control_event",
 }
 
 IMMUTABLE_TABLES = {
@@ -138,6 +141,11 @@ IMMUTABLE_TABLES = {
     # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): the one seeded stage layout row and a cell binding are written once and never changed or removed;
     # a host row is never deleted (``am_immutable_row`` guards its DELETE only: its name is frozen and its archive write-once).
     "stage_layout", "audit_run_cell_binding", "executor_host",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the advice a pass gave a finding, a finding's block evidence, the settings journal and the journal of
+    # reference data handed to an agent are written once; the vectors' control is one seeded row that is never deleted (``am_immutable_row`` guards
+    # its DELETE only: its key is frozen and its state moves).
+    "decision_memory_precedent_advice", "finding_block_evidence", "precedent_setting_event", "executor_task_context_delivery",
+    "vector_control",
 }
 
 
@@ -242,9 +250,11 @@ def test_exactly_the_declared_tables_are_append_only(migrated_engine: Engine) ->
 
 
 #: `0061_decision_memory_m2` (`D-394`): the content side of the decision memory, deletable only by a forget of its case.
+#: `0064_precedents_seal` (`CRIT-SEAL-50`) adds the memory's comments, block evidence, encoder queue and vectors to it.
 FORGET_GUARDED_TABLES = {
     "decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref",
     "decision_memory_crop",
+    "decision_memory_comment", "decision_memory_block_evidence", "decision_memory_embedding_intent", "decision_memory_embedding",
 }
 
 
@@ -350,6 +360,13 @@ PREFIX_BY_TABLE_COLUMN = {
     # proposal decision (`opd`) in the first, an expert decision event (`dec`) in the second (this map lacked both).
     ("optimisation_proposal_decision", "carried_from_decision_id"): "opd",
     ("expert_decision_event", "carried_from_decision_id"): "dec",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the identities of the Precedents storage that no other table names by the same column, and the
+    # ledger event a memory comment was captured from.
+    ("decision_memory_comment", "comment_id"): "dmk",
+    ("decision_memory_embedding_intent", "intent_id"): "dmi",
+    ("vector_control_event", "control_event_id"): "vce",
+    ("executor_task_context_delivery", "delivery_id"): "etd",
+    ("executor_task_context_delivery", "task_id"): "ext",
 }
 
 #: ``stage_ai_*.group_id`` is not an entity identity: it is the stage AI's own grouping label -- ``grp:`` plus the first 24 hex
