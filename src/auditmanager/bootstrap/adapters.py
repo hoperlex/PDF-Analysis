@@ -2954,6 +2954,10 @@ class MemoryCaptureAssembler:
     decision on a known observation reads nothing outside the database.
 
     A failure propagates (the decision fails loudly): nothing here falls back to a case without its crops or its citations.
+
+    The experts' ``comment`` events are kept too (`ADR-0029` decision 10, `CRIT-CAPTURE-01`): :meth:`capture_comment` hands one to the
+    memory in the same transaction (a comment is not a decision and never makes a case), and the first ✓/✕ of a case carries over the
+    comments written before it (:meth:`assemble` takes the observation's comment lock, then reads the ledger).
     """
 
     def __init__(self, *, geometry: Any, data_class: str | None = None) -> None:
@@ -2967,15 +2971,61 @@ class MemoryCaptureAssembler:
         self._reader = MemoryReader()
 
     def __call__(self, session: Session, event: Any, origin_kind: str) -> None:
-        self.capture(session, event, origin_kind)
+        from auditmanager.decision_memory.public import COMMENT_EVENT_TYPE
+
+        if event.event_type == COMMENT_EVENT_TYPE:
+            self.capture_comment(session, event)
+        else:
+            self.capture(session, event, origin_kind)
 
     def capture(self, session: Session, event: Any, origin_kind: str) -> Any:
-        """Capture one ledger event; ``None`` for an event the memory does not keep (a ``comment``, `Q8`)."""
+        """Capture one ledger decision (a ✓ or a ✕); ``None`` for any other event. A ``comment`` goes through :meth:`capture_comment`."""
         from auditmanager.decision_memory.public import CAPTURED_EVENT_TYPES
 
         if event.event_type not in CAPTURED_EVENT_TYPES:
             return None
         return self._repository.capture(session, self.assemble(session, event, origin_kind))
+
+    def capture_comment(self, session: Session, event: Any) -> Any:
+        """Keep one ledger ``comment`` event in the case of its observation, in the caller's transaction (`ADR-0029` decision 10).
+
+        ``waits_for_case`` (no ✓/✕ yet: the first one carries the comment over) and ``case_forgotten`` (a forgotten case takes no words
+        back) write nothing and are not errors. Any other refusal propagates, so the decision fails (`ADR-0027` decision 4).
+        """
+        return self._repository.capture_comment(
+            session, observation_id=event.finding_observation_id, comment=self._comment_fact(event)
+        )
+
+    def captured_comment_sources(self, session: Session, decision_ids: Sequence[str]) -> frozenset[str]:
+        """Which of these ledger ``comment`` events the memory already keeps (the sweep's question)."""
+        return self._repository.captured_comment_sources(session, decision_ids)
+
+    @staticmethod
+    def _comment_fact(event: Any) -> Any:
+        from auditmanager.decision_memory.public import CommentFact
+
+        # `or ""`: the memory's own check answers a comment without words (the ledger refuses one, so this is not reached today).
+        return CommentFact(
+            source_decision_id=event.decision_id, comment=event.comment or "", author_user_uid=event.author_user_uid,
+            decided_at=event.recorded_at,
+        )
+
+    def _earlier_comments(self, session: Session, event: Any) -> tuple[Any, ...]:
+        """The ``comment`` events of this observation that the ledger holds before ``event``, in the order they were written.
+
+        The caller holds the observation's comment lock (:meth:`assemble` takes it first), so a comment of a concurrent transaction is
+        either committed and seen here, or waits for this transaction and finds the case made.
+        """
+        from auditmanager.decision_memory.public import COMMENT_EVENT_TYPE
+        from auditmanager.decisions.public import decision_history
+
+        earlier = []
+        for entry in decision_history(session, event.finding_uid):
+            if entry.decision_id == event.decision_id:
+                break
+            if entry.event_type == COMMENT_EVENT_TYPE and entry.finding_observation_id == event.finding_observation_id:
+                earlier.append(self._comment_fact(entry))
+        return tuple(earlier)
 
     def assemble(self, session: Session, event: Any, origin_kind: str) -> Any:
         from auditmanager.decision_memory.public import (
@@ -3011,6 +3061,9 @@ class MemoryCaptureAssembler:
         version = DocumentRepository().get_version(session, VersionUid.parse(head.version_uid))
         classification = version.classification
 
+        # The observation's comment lock comes BEFORE the question "has it a case?" and before the ledger is read for its earlier
+        # comments (`MemoryRepository.lock_observation_comments`): a comment that overlaps this first ✓/✕ then cannot be missed by both.
+        self._repository.lock_observation_comments(session, row.finding_observation_id)
         # What lives in published artifacts is read only for an observation that has no case yet.
         known = self._repository.case_content_digest(session, row.finding_observation_id) is not None
         boxes: Mapping[str, Any] = {}
@@ -3046,6 +3099,9 @@ class MemoryCaptureAssembler:
             section_code=None if classification is None else classification.section_code,
             data_class=self._pinned_data_class or self._reader.settings(session).data_class,
             crops=crops,
+            # The first ✓/✕ of a case carries the notes written before it; a known case has them already (each comment was kept when
+            # it was written, or is the sweep's to repair).
+            earlier_comments=() if known else self._earlier_comments(session, event),
             decision=DecisionFact(
                 source_decision_id=event.decision_id, event_type=event.event_type, severity=event.severity,
                 # The memory keeps the expert's own words. A carried event's comment is the system sentence of
@@ -3070,16 +3126,51 @@ _UNCAPTURED_EVENTS = sql_text(
 )
 
 
+#: The ledger's ``comment`` events of observations that already have a case (`ADR-0029` decision 10). A comment of an observation with no
+#: case yet is not a candidate: the first ✓/✕ carries it over. A comment the memory already keeps is not a candidate either (the anti-join,
+#: as for decisions: once everything is repaired, a pass lists nothing). ``MemoryRepository.captured_comment_sources`` is asked again
+#: below, on the rows read, to guard the gap between this read and the capture; the cursor is the sequence number, as for decisions.
+_COMMENT_EVENTS_OF_CASES = sql_text(
+    """
+    SELECT e.sequence_no, e.decision_id, e.finding_uid, e.finding_observation_id, e.event_type, e.verdict, e.severity,
+           e.comment, e.author_label, e.author_user_uid, e.command_id, e.recorded_at, e.carried_from_decision_id
+      FROM expert_decision_event e
+     WHERE e.event_type = 'comment' AND e.sequence_no > :after
+       AND EXISTS (SELECT 1 FROM decision_memory_case k WHERE k.origin_observation_id = e.finding_observation_id)
+       AND NOT EXISTS (SELECT 1 FROM decision_memory_comment c WHERE c.source_decision_id = e.decision_id)
+     ORDER BY e.sequence_no
+     LIMIT :batch
+    """
+)
+
+
 class MemorySweepReport:
-    """What one sweep pass did: events captured, events that failed (they stay uncaptured and are retried)."""
+    """What one sweep pass did: decisions captured, decisions that failed (they stay uncaptured and are retried), and the same two
+    counts for the experts' comments (``comments_captured`` counts rows newly written; a comment of a forgotten case writes none)."""
 
-    __slots__ = ("captured", "failed")
+    __slots__ = ("captured", "failed", "comments_captured", "comments_failed")
 
-    def __init__(self, captured: int, failed: int) -> None:
+    def __init__(self, captured: int, failed: int, comments_captured: int = 0, comments_failed: int = 0) -> None:
         self.captured, self.failed = captured, failed
+        self.comments_captured, self.comments_failed = comments_captured, comments_failed
 
     def __repr__(self) -> str:
-        return f"MemorySweepReport(captured={self.captured}, failed={self.failed})"
+        return (
+            f"MemorySweepReport(captured={self.captured}, failed={self.failed}, "
+            f"comments_captured={self.comments_captured}, comments_failed={self.comments_failed})"
+        )
+
+
+def _ledger_event(row: Mapping[str, Any]) -> Any:
+    from auditmanager.decisions.public import DecisionEvent
+
+    return DecisionEvent(
+        decision_id=row["decision_id"], finding_uid=row["finding_uid"],
+        finding_observation_id=row["finding_observation_id"], event_type=row["event_type"], verdict=row["verdict"],
+        comment=row["comment"], author_label=row["author_label"], author_user_uid=row["author_user_uid"],
+        command_id=row["command_id"], recorded_at=row["recorded_at"], severity=row["severity"],
+        carried_from_decision_id=row["carried_from_decision_id"],
+    )
 
 
 class MemoryCaptureSweep:
@@ -3093,6 +3184,10 @@ class MemoryCaptureSweep:
     identity and the error's type, the event stays uncaptured -- and guard G1 keeps an erase or a purge from deleting its source -- and
     the next pass tries it again. Called as one pass of the worker's housekeeping loop (``__call__`` returns what it captured), at
     most once per ``interval_seconds``.
+
+    The same pass repairs the experts' comments of cases that exist (`CRIT-CAPTURE-01`): a ``comment`` event whose observation has a
+    case and which the memory does not keep yet is handed to :meth:`MemoryCaptureAssembler.capture_comment`, one transaction each, with a
+    cursor of its own. It runs after the decisions, so a case made in this pass has its later comments repaired in this pass.
     """
 
     def __init__(
@@ -3115,17 +3210,17 @@ class MemoryCaptureSweep:
         self._clock = clock or time.monotonic
         self._next_at: float | None = None
         self._after = 0
+        self._comments_after = 0
 
     def __call__(self) -> int:
         now = self._clock()
         if self._next_at is not None and now < self._next_at:
             return 0
         self._next_at = now + self._interval
-        return self.run_once().captured
+        report = self.run_once()
+        return report.captured + report.comments_captured
 
     def run_once(self) -> MemorySweepReport:
-        from auditmanager.decisions.public import DecisionEvent
-
         with self._sessions() as session:
             rows = session.execute(_UNCAPTURED_EVENTS, {"after": self._after, "batch": self._batch}).mappings().all()
         # A full batch means there may be more beyond the last one seen; a short one means the end was reached, so the next pass
@@ -3133,13 +3228,7 @@ class MemoryCaptureSweep:
         self._after = int(rows[-1]["sequence_no"]) if len(rows) == self._batch else 0
         captured = failed = 0
         for row in rows:
-            event = DecisionEvent(
-                decision_id=row["decision_id"], finding_uid=row["finding_uid"],
-                finding_observation_id=row["finding_observation_id"], event_type=row["event_type"], verdict=row["verdict"],
-                comment=row["comment"], author_label=row["author_label"], author_user_uid=row["author_user_uid"],
-                command_id=row["command_id"], recorded_at=row["recorded_at"], severity=row["severity"],
-                carried_from_decision_id=row["carried_from_decision_id"],
-            )
+            event = _ledger_event(row)
             origin_kind = "carried" if event.carried_from_decision_id else "direct"
             try:
                 with self._sessions() as session:
@@ -3156,7 +3245,39 @@ class MemoryCaptureSweep:
                 captured += 1
         if captured:
             logging.getLogger(__name__).info("decision memory: captured %d earlier decision(s)", captured)
-        return MemorySweepReport(captured, failed)
+        comments_captured, comments_failed = self._repair_comments()
+        return MemorySweepReport(captured, failed, comments_captured, comments_failed)
+
+    def _repair_comments(self) -> tuple[int, int]:
+        """Hand the memory the ``comment`` events of existing cases that it does not keep yet: (written, failed)."""
+        with self._sessions() as session:
+            rows = session.execute(
+                _COMMENT_EVENTS_OF_CASES, {"after": self._comments_after, "batch": self._batch}
+            ).mappings().all()
+            kept = self._assembler.captured_comment_sources(session, [row["decision_id"] for row in rows])
+        # As for decisions: a full batch means there may be more, a short one sends the next pass back to the beginning.
+        self._comments_after = int(rows[-1]["sequence_no"]) if len(rows) == self._batch else 0
+        written = failed = 0
+        for row in rows:
+            if row["decision_id"] in kept:
+                continue
+            event = _ledger_event(row)
+            try:
+                with self._sessions() as session:
+                    result = self._assembler.capture_comment(session, event)
+                    session.commit()
+            except Exception as error:  # noqa: BLE001 - one comment's failure is reported and retried, never hidden
+                failed += 1
+                logging.getLogger(__name__).error(
+                    "decision memory: could not capture comment %s (%s); it stays uncaptured and is retried",
+                    event.decision_id, type(error).__name__,
+                )
+                continue
+            if result.comment_created:
+                written += 1
+        if written:
+            logging.getLogger(__name__).info("decision memory: captured %d earlier comment(s)", written)
+        return written, failed
 
 
 #: The command types of the keyed status operations. The product purge keeps both (`KEEP_COMMAND_TYPES`): a status event, a KEEP row,
