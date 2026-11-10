@@ -41,7 +41,7 @@ is marked "assumption".
   the official PostgreSQL image that bootstrap user is a superuser (assumption: the image's
   documented behaviour; the check is the query of row 7 below). Pool 5 plus 5 overflow
   (`src/auditmanager/shared/db/config.py`). Migrations run only through the one-shot `migrate`
-  service; the head is `0033_ar_v3_cite_stage_id` (it was `0032_ar_v3_run_group` when this ADR was written). The S3 bucket is private; `bucket-init.sh` and the
+  service; the head was `0033` when this ADR was accepted (it was `0032` when this ADR was written; the current head is in `db/migrations`). The S3 bucket is private; `bucket-init.sh` and the
   adapter configure no versioning, lifecycle or encryption at rest (a search found none).
 - **Copies.** No scheduled backup exists. A verified dump is taken by `reset.sh` and
   `purge-product-data.sh`, both of which then destroy data, and by the owner's forced-command key
@@ -139,7 +139,7 @@ cannot live in an Alembic revision), then derives every grant from the catalog (
 classification above, sequences, `ALTER DEFAULT PRIVILEGES` for later tables) and can be run any number of
 times. `deploy.sh` runs it after `migrate` and before `api` and `worker` start; `reset.sh --restore` and
 `copy-serve.sh restore-db` run it after the restore. **No Alembic revision is added**, so the migration
-head `0033_ar_v3_cite_stage_id` is not moved by this ADR's work (migration `0033` came from `D-225`, not from here) and none of the files that pin the head changes for it. The proof that the
+head `0033` is not moved by this ADR's work (migration `0033` came from `D-225`, not from here) and none of the files that pin the head changes for it. The proof that the
 grants are enough is the `tests/integration` directories of the contexts running as the application role,
 plus a test that a database restored from a `--no-privileges` dump is readable by the application role after
 the step. Connection: `DATABASE_URL` stays the application's; the migrator's URL is a second variable that
@@ -196,7 +196,7 @@ pre-migration copy keeps leaving the host for the restore test (section 9).
 The deployment path is unchanged: owner instruction naming the SHA, fast-forward to `main`, the
 workflow, `deploy.sh`, `verify-deployed.sh` (`AGENTS.md` section 6). **Rollback is a forward fix.**
 An older image is not guaranteed to run against a newer schema, and the migrations' downgrades refuse where data would be lost
-(`0006_app_user` and `0032_ar_v3_run_group` say so). A failed migrating release is recovered by a reviewed revert deployed
+(`0006_app_user` and revision `0032` say so). A failed migrating release is recovered by a reviewed revert deployed
 through the same path and, if the schema must go back, by the owner's way back of the copy key:
 `copy-serve.sh restore-db <STAMP> <dump-sha256>` consumes exactly the `db.dump` that the receipt names, and the runbook
 gives the order (restore, then a reviewed revert re-attested for its SHA, then `resume`; a revert alone would fail

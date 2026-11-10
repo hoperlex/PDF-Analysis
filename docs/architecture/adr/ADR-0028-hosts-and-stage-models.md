@@ -1,9 +1,9 @@
 # ADR-0028: Executor hosts, system-managed groups, and per-stage models frozen at dispatch
 
-- Status: accepted by the repository owner on 2026-11-09 (`R-153a`…`R-153f`; the plan was approved whole, `R-153c`). The product decisions are the owner's; the engineering choices below are the planner's inside them. They are revisable by a dated addendum. **Amended 2026-11-10 (`LIMITS-01`, `R-153n`…`R-153p`):** decisions 5, 9 and 12 no longer carry an answer limit or a stored timeout per cell, and the agent's silence window is 600 s; see the addendum at the end.
+- Status: accepted by the repository owner on 2026-11-09 (`R-153a`…`R-153f`; the plan was approved whole, `R-153c`). The product decisions are the owner's; the engineering choices below are the planner's inside them. They are revisable by a dated addendum. **Amended 2026-11-10 (`R-154b`):** plan v3 of the extended review is opt-in by `AUDITMANAGER_EXTENDED_ANALYSIS_PLAN`, the default is `v2` (context and decision 10). **Amended 2026-11-10 (`LIMITS-01`, `R-153n`…`R-153p`):** decisions 5, 9 and 12 no longer carry an answer limit or a stored timeout per cell, and the agent's silence window is 600 s; see the addendum at the end.
 - Date: 2026-11-09
 - Owners: repository owner / HOSTS integrator (the planning session)
-- Amends: `ADR-0026` decisions 1, 2, 3, 5, 8, 9, 10, 12–15 and 17 for runs that carry a `stage_plan` (table below). Decision 16 is unchanged. Nothing in `ADR-0026` is removed: the connections, groups, rules and the cut-over keep serving everything that does not start from a `stage_plan` (the five `comparison_*` kinds until `HOSTS-CMP-01`, AR v3, the SSH connection «kzSonnet»).
+- Amends: `ADR-0026` decisions 1, 2, 3, 5, 8, 9, 10, 12–15 and 17 for runs that carry a `stage_plan` (table below). Decision 16 is unchanged. Nothing in `ADR-0026` is removed: the connections, groups, rules and the cut-over keep serving everything that does not start from a `stage_plan` (the five `comparison_*` kinds until `HOSTS-CMP-01`, the SSH connection «kzSonnet»).
 - Related ADRs: `ADR-0024` (AI execution), `ADR-0025` (comparison spend), `ADR-0026` (capacity, enrollment, groups)
 - Plan: `docs/program/dispatch/HOSTS-PLAN.md`
 
@@ -26,7 +26,7 @@ The code on `origin/dev` `8f76b4ed6` (VERSION 0.20.0, contract 1.44.0, migration
 - the pin set is closed (`analysis/text/lock.py:133`, `pinned_models`); `R-143g` forbade new pins;
 - effort and limits are code constants (the limits are gone since 2026-11-10, `R-153n`; see the addendum): effort `high` (`analysis/extended/workflow.py:95`, `analysis/text/prompt.py:304`) and answer limits of 16000 tokens (`analysis/text/prompt.py:230`), 6000 (`analysis/extended/workflow.py:93`, `core.py:258`, `cross_window_review.py:120`) and 12000 (`analysis/extended/workflow.py:143`);
 - waiting is allowed only for `binding_state = 'pending'` (`db/migrations/versions/20261102_0048_dispatch_time_binding.py:308`, `ck_audit_run_wait_pending`), and three lost attempts are a dead letter (`jobs/repository.py:1006`);
-- the extended review that runs by default is v3. Its merge is deterministic (`runs/extended_review.py:1061`, `analysis.public.deterministic_extended_merge`), so «Свод» has no model.
+- the extended review that ran by default was plan v3. Its merge is deterministic (`runs/extended_review.py:1061`, `analysis.public.deterministic_extended_merge`), so «Свод» has no model. *(Amended 2026-11-10, `R-154b`: the default plan is `v2`; plan v3 is opt-in by `AUDITMANAGER_EXTENDED_ANALYSIS_PLAN=v3`, see decision 10.)*
 
 ## Decision
 
@@ -86,8 +86,10 @@ The code on `origin/dev` `8f76b4ed6` (VERSION 0.20.0, contract 1.44.0, migration
     | `blocks` | Анализ блоков | `blocks:N`; with an ensemble `blocks:N:leg1`, `:leg2`, `:judge` | v2, v3 | `block_batch` |
     | `cross_check` | Комплексная сверка | `comprehensive_analysis` (windowed and cross-window), parameter passport | v2, v3 | none; valued by analogy with «Свод» |
     | `norms` | Нормы | `norm_verification:N` | v2, v3 | `norm_verify` / `norm_fix` |
-    | `review` | Критик | `finding_review` | v3 | `findings_critic` (no model in the original) |
-    | `correction` | Уточнение | `finding_correction` | v3 | `findings_corrector` (guard on absence) |
+    | `review` | Критик | `finding_review` | v3 (opt-in) | `findings_critic` (no model in the original) |
+    | `correction` | Уточнение | `finding_correction` | v3 (opt-in) | `findings_corrector` (guard on absence) |
+
+    Plan v3 is opt-in *(amended 2026-11-10, `R-154b`)*. The default plan is `v2`, and the server environment variable `AUDITMANAGER_EXTENDED_ANALYSIS_PLAN=v3` opts in; unlike the layout switch of decision 14, there is no UI switch. Plan v3 adds the cross-window check, the parameter passport, the critic and the correction. Under `v2` the layout freezes the rows `text`, `blocks`, `cross_check` and `norms` (`runs/preflight.py`, `stage_rows_in_use`): the `review` and `correction` cells are not bound and take no server slot, and the cross-window check and the passport do not run. «Модели по этапам» still lists all six rows.
 
     Without a model: the three PC-01 preparation stages, the merge, the norm-citation check and the report. Their rail tiles show no model.
 11. **Closed block schemes; ensemble identities.**
@@ -138,7 +140,7 @@ The code on `origin/dev` `8f76b4ed6` (VERSION 0.20.0, contract 1.44.0, migration
     - The original sends a *capability* and each worker maps it by its local policy. Here the agent receives the exact `model_id` and `effort` from the catalogue; the stand decides, the host only executes.
     - The original distributes work per call; here distribution is per run (decision 5).
     - The original has no «Комплексная сверка» row; it is valued by analogy with its «Свод».
-19. **Out of scope of this ADR.** The five `comparison_*` kinds stay on legacy routing until `HOSTS-CMP-01` (`D-541`), AR v3 keeps its own path, and optimisation calls no model. `--upgrade` of a pull agent whose connection is used by rules or comparisons is refused until `HOSTS-CMP-01`. The SSH connection «kzSonnet» on production is untouched; during the transition it shares the `adm1.hlab.kz` Claude subscription outside the capacity pool (`D-540`). There is no reserve set when a quota runs out (`R-153e`, `D-498`).
+19. **Out of scope of this ADR.** The five `comparison_*` kinds stay on legacy routing until `HOSTS-CMP-01` (`D-541`), and optimisation calls no model. `--upgrade` of a pull agent whose connection is used by rules or comparisons is refused until `HOSTS-CMP-01`. The SSH connection «kzSonnet» on production is untouched; during the transition it shares the `adm1.hlab.kz` Claude subscription outside the capacity pool (`D-540`). There is no reserve set when a quota runs out (`R-153e`, `D-498`).
 
 ## What ADR-0028 changes in ADR-0026
 

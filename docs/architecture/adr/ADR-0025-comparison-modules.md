@@ -188,7 +188,7 @@ row.
 
 ### 6. Priority and operator control (plan `R3-07`)
 
-Section and АР v3 runs have strict priority. The comparison loop claims only when no Run is claimable, and yields between items; an
+Section runs have strict priority. The comparison loop claims only when no Run is claimable, and yields between items; an
 item is one page or one pair, never a series. Comparison AI takes the executor connection per call, not per job. Comparison work honours
 the global pause (`execution_control.paused`) and a module that is off (decision 23). The pause is read through the public entry of the
 context that exports a reader — in the tree that is `execution/public.py:189`, because `jobs/public.py` exports only the setter — and

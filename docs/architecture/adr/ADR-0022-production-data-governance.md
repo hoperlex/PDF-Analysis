@@ -187,8 +187,8 @@ keys, identities, counts and digests only: `project_uid`, `actor_uid`, `reason_c
 
 `AD-09`, confirmed by `R-146w` as written at commit `83600aed`. At the 1.0 release the operator runs `infra/deploy/purge-product-data.sh`.
 The tool has no selector for the removed AR v1 and v2 paths: it removes **all** product data, which is
-the stated intent ("the production stand starts clean"), including the v3 beta runs and every other
-section's test runs. It keeps accounts, the norm corpus, executor configuration and release notes, so
+the stated intent ("the production stand starts clean"), including the test runs of every
+section. It keeps accounts, the norm corpus, executor configuration and release notes, so
 the operator reviews the account list afterwards and archives or purges the test accounts
 (`archiveUser`, `purgeUser`). Preconditions: the owner confirms that the stand holds only test data
 (`R-141c`: no real client document is uploaded to the closed beta); the tool's own verified dump is
@@ -200,8 +200,7 @@ those events (`ADR-0023`).
 
 OpenRouter is the base connection; `R-133` is unchanged. What leaves the host on a call: the system
 prompt of the profile and the recorded text layer of the document being analysed (all pages in one
-request for the text profiles; the target-only prompt parts and the retrieved norm text for an AR v3
-check), and, once a stage is activated that sends them, selected PNG crops of pages. The source PDF is
+request for the text profiles), and, once a stage is activated that sends them, selected PNG crops of pages. The source PDF is
 not sent. No project name, file name, account name or run identity is in the body. The destination
 is the administrator-configured connection; `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` narrows it and stays
 optional. Any other executor connection an administrator configures (a pull-channel runner, an SSH
