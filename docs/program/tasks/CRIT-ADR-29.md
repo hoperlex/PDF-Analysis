@@ -9,11 +9,11 @@ Owner: the planning lane (the «Прецеденты» programme).
 - none (this task has no predecessor)
 
 ## Frozen inputs
-- domain contract: 1.49.0, unchanged until the seal
-- API contract: 1.49.0, unchanged until the seal
-- analysis/comparison/event contract: 1.49.0, unchanged until the seal
-- migration head: `0062_hosts_stage_models`, unchanged until the seal
-- the seal: 1.50.0 / `0063`, or the next free numbers if the AR v3 removal wave merges first
+- domain contract: 1.49.0 at the base; 1.50.0 once the AR v3 removal wave merges (`R-154h`)
+- API contract: 1.49.0 at the base; 1.50.0 once the AR v3 removal wave merges (`R-154h`)
+- analysis/comparison/event contract: 1.49.0 at the base; 1.50.0 once the AR v3 removal wave merges (`R-154h`)
+- migration head: `0062_hosts_stage_models` at the base; `0063` once the AR v3 removal wave merges (`R-154h`)
+- the seals: the first seal of this programme is 1.51.0 / `0064` (`R-154h`: the AR v3 removal wave takes 1.50.0 / `0063` first); the second is 1.52.0 / `0065` (`R-154h`)
 - base commit: `47c90e1ec6adf160f788e69279819c0e9c048e8e`
 - plan: wave 0 of the «Прецеденты» plan (the integrator's copy, git-ignored)
 - ADR: `ADR-0027`, `ADR-0028`, `ADR-0021`; `docs/program/DECISION-MEMORY-01.md`

@@ -1,7 +1,7 @@
 # Task CRIT-SEAL-51 — the second seal: patterns, cross-document evidence, parameter facts
 
 ## Outcome
-One contract version and one migration for the wave 5 tables: `decision_memory_pattern` and its status journal, `finding_cross_evidence`, `project_parameter_fact`, `FindingCategory += parameter_mismatch`. Numbers: the numbers after the first seal (planned 1.51.0 / `0064`, or the next free numbers).
+One contract version and one migration for the wave 5 tables: `decision_memory_pattern` and its status journal, `finding_cross_evidence`, `project_parameter_fact`, `FindingCategory += parameter_mismatch`. Numbers: 1.52.0 / `0065` (`R-154h`).
 
 Owner: the slot holder, appointed by the integrator.
 
@@ -12,14 +12,14 @@ Owner: the slot holder, appointed by the integrator.
 Dispatch the lane only when every task above is merged into the base it works from.
 
 ## Frozen inputs
-- domain contract: 1.49.0, unchanged until the seal
-- API contract: 1.49.0, unchanged until the seal
-- analysis/comparison/event contract: 1.49.0, unchanged until the seal
-- migration head: `0062_hosts_stage_models`, unchanged until the seal
-- the seal: 1.50.0 / `0063`, or the next free numbers if the AR v3 removal wave merges first
+- domain contract: 1.49.0 at the base; 1.50.0 once the AR v3 removal wave merges (`R-154h`)
+- API contract: 1.49.0 at the base; 1.50.0 once the AR v3 removal wave merges (`R-154h`)
+- analysis/comparison/event contract: 1.49.0 at the base; 1.50.0 once the AR v3 removal wave merges (`R-154h`)
+- migration head: `0062_hosts_stage_models` at the base; `0063` once the AR v3 removal wave merges (`R-154h`)
+- the seals: the first seal of this programme is 1.51.0 / `0064` (`R-154h`: the AR v3 removal wave takes 1.50.0 / `0063` first); the second is 1.52.0 / `0065` (`R-154h`)
 - base commit: `47c90e1ec6adf160f788e69279819c0e9c048e8e`
 - ADR: `ADR-0029` decisions 11 and 12
-- paths and pins: as `CRIT-SEAL-50`, with the next numbers
+- paths and pins: as `CRIT-SEAL-50`, with 1.52.0 / `0065`, after the first seal 1.51.0 / `0064`; the id `CRIT-SEAL-51` is a label kept from the plan
 - plan: the «Прецеденты» plan (version 5, with the R-154 correction) is the integrator's working copy `.local/evidence/lane-common-prec/plan-v5.md` and is not in git; the decisions it carries are in `ADR-0029`
 - rules: the common rules of the programme (`.local/evidence/lane-common-prec-2026-11-10.md`, git-ignored): minimal checks only, tests under the host lock, no push, merge or tag
 - the plan read the code at `5342b7178`, which has the same code as the base; every `path:line` the lane relies on is checked in its own worktree before use
@@ -28,7 +28,7 @@ Dispatch the lane only when every task above is merged into the base it works fr
 - enumerated_set_changed: yes
 - enumerator_path: `contracts/api/v1/openapi.json`, `db/migrations/versions/` and the recovery sets in `scripts/recovery/product_purge.py`
 - enumerator_owner: CRIT-SEAL-51
-- totality_query: `git grep -n "0064" -- db/migrations/versions` and the operation ids added to `contracts/api/v1/openapi.json`
+- totality_query: `git grep -n "0065" -- db/migrations/versions` and the operation ids added to `contracts/api/v1/openapi.json`
 
 ## Captured premise evidence
 - premise: none
@@ -97,7 +97,7 @@ Dispatch the lane only when every task above is merged into the base it works fr
 - as `CRIT-SEAL-50`: migration up/down/up, the classification guard, the inventories, `tests/contract/api_v1`
 
 ## Integration contract
-Takes the numbers after the first seal, or the next free ones if another wave merged in between.
+The numbers are fixed by `R-154h`: 1.52.0 / `0065`, after the first seal 1.51.0 / `0064`. A lane that finds a different version or head on its base stops and reports it.
 
 ## Failure/idempotency/security cases
 - an unclassified table, command or event makes the recovery guard refuse
