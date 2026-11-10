@@ -713,3 +713,36 @@ def attach_project_parameter_context(request, **kwargs):
 
 
 __all__.extend(["project_parameter_context_policy", "validate_project_parameter_context_policy", "attach_project_parameter_context"])
+
+
+# `V2-ORIGINAL-REVIEW-01` (R-154f): the original's deterministic critic and corrector for plan v2. Advice only, no model.
+from auditmanager.analysis.extended.original_deterministic import ORIGINAL_REVIEW_V2
+
+
+def original_review_procedures():
+    from auditmanager.analysis.extended.original_deterministic import procedures
+    return procedures()
+
+
+def original_review_plan():
+    from auditmanager.analysis.extended.original_deterministic import plan
+    return plan()
+
+
+def original_review_critic(observations, sources, pages):
+    from auditmanager.analysis.extended.original_deterministic import review
+    return review(observations, sources, pages)
+
+
+def original_review_corrector(done):
+    from auditmanager.analysis.extended.original_deterministic import correct
+    return correct(done)
+
+
+def original_review_summary(done, corrections):
+    from auditmanager.analysis.extended.original_deterministic import summary
+    return summary(done, corrections)
+
+
+__all__.extend(["ORIGINAL_REVIEW_V2", "original_review_procedures", "original_review_plan", "original_review_critic",
+    "original_review_corrector", "original_review_summary"])
