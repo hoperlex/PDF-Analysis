@@ -189,14 +189,11 @@ MEMORY_LOSS_HINT = (
 MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 
 #: Truncated together, in one statement (they reference each other).
-#: `0032_ar_v3_run_group`: a group of six runs of one version, with their pins and members.
-#: ``ar_v3_run_group`` references the product ``project``, ``document_version`` and command
-#: receipt; ``ar_v3_run_group_member`` references the group and ``audit_run``. Both are
-#: immutable rows (``am_immutable_row``), so a row DELETE is refused by design: the one
-#: multi-table TRUNCATE below is the only way out, and PostgreSQL refuses it unless a table and
-#: every table that references it are named in the same statement.
+#: The immutable rows (``am_immutable_row``) refuse a row DELETE by design: the one multi-table TRUNCATE below is the only way out, and
+#: PostgreSQL refuses it unless a table and every table that references it are named in the same statement. (`0063_drop_ar_v3_beta` dropped
+#: the six-scope beta's two tables, which were the first of this kind.)
 PRODUCT_TABLES = frozenset((
-    "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
+    "analysis_artifact_publication", "attempt",
     "audit_run", "audit_run_cell_binding", "comparison_ai_job", "comparison_ai_link", "comparison_ai_pair_answer", "comparison_ai_pair_question",
     "comparison_ai_sheet_item", "comparison_launch_entry", "comparison_launch_queue", "comparison_matrix",
     "comparison_matrix_edit", "comparison_model_call", "comparison_report", "comparison_report_artifact",
@@ -299,8 +296,8 @@ PRODUCT_COMMAND_TYPES = frozenset((
     # pass's proposals, product commands like `decide_optimisation_proposal`; ``optimisation_proposal_decision.command_id``
     # references the second, so it is deleted only after the decision table is truncated.
     "carry_over_proposal_decisions", "carry_over_proposal_decision",
-    # `0032_ar_v3_run_group`: the receipt of a group start. ``ar_v3_run_group.command_id``
-    # references it, and it is deleted only after the group is truncated.
+    # The receipt of the removed six-scope beta's group start (`0032`, dropped by `0063_drop_ar_v3_beta`): a database that served the beta
+    # may still hold such a command record, so the command type stays classified.
     "start_ar_v3_beta_group",
     "start_audit_run", "start_optimisation_pass", "upload_price_list", "upload_source_document",
     # `0035_comparison_records`: the receipt of a withdrawal. ``comparison_sheet_link.command_id``
