@@ -36,6 +36,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from auditmanager.jobs.public import append_execution_event
+from auditmanager.precedents.public import one_list_enabled
 
 from auditmanager.shared.db import SQLSTATE_TO_CATALOG_CODE
 from auditmanager.shared.errors import DomainError, ErrorCode, screen_details
@@ -48,6 +49,12 @@ RUN_MACHINE: Final[str] = "audit_run"
 
 #: The one state an ``audit_run`` INSERT may create (P02 §3.3).
 INITIAL_STATE: Final[str] = "created"
+
+#: `F8-PUBLISH`: the two values of ``audit_run.publication_mode`` (``ck_audit_run_publication_mode``, migration 0064). ``text_only`` is the
+#: default and what every run written before 0064 is; ``one_list`` publishes the extended-review candidates that pass gate v2 as well.
+PUBLICATION_TEXT_ONLY: Final[str] = "text_only"
+PUBLICATION_ONE_LIST: Final[str] = "one_list"
+PUBLICATION_MODES: Final[tuple[str, ...]] = (PUBLICATION_TEXT_ONLY, PUBLICATION_ONE_LIST)
 
 #: The four stages PC-01 drives, in the order the registry's ``depends_on`` declares.
 #: Read by the executor and by terminal selection; not a second registry, just the
@@ -66,7 +73,7 @@ _RUN_COLUMNS = (
     "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id, "
     "connection_revision_id, norm_retrieval_set_id, preset_revision_id, "
     "binding_state, executor_group_revision_id, routing_rule_revision_id, wait_reason, waiting_since, "
-    "started_by_user_uid, started_from_run_id, start_stage_id, stage_plan"
+    "started_by_user_uid, started_from_run_id, start_stage_id, stage_plan, publication_mode"
 )
 
 _INSERT_RUN = text(
@@ -76,13 +83,13 @@ _INSERT_RUN = text(
         norms_snapshot_id, provider_mode, frozen_input_digest, command_id,
         reaudit_of_run_id, connection_revision_id, norm_retrieval_set_id, preset_revision_id,
         binding_state, executor_group_revision_id, routing_rule_revision_id, started_by_user_uid,
-        started_from_run_id, start_stage_id, stage_plan
+        started_from_run_id, start_stage_id, stage_plan, publication_mode
     ) VALUES (
         :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
         :prompt_bundle_id, :norms_snapshot_id, :provider_mode, :frozen_input_digest, :command_id,
         :reaudit_of_run_id, :connection_revision_id, :norm_retrieval_set_id, :preset_revision_id,
         :binding_state, :executor_group_revision_id, :routing_rule_revision_id, :started_by_user_uid,
-        :started_from_run_id, :start_stage_id, CAST(:stage_plan AS jsonb)
+        :started_from_run_id, :start_stage_id, CAST(:stage_plan AS jsonb), :publication_mode
     )
     """
 )
@@ -333,6 +340,10 @@ class RunRow:
     #: legacy route. Written once at INSERT and frozen. A run with a plan has no connection, group or preset of its own: it is
     #: ``pending`` until dispatch binds each cell (``audit_run_cell_binding``).
     stage_plan: Mapping[str, Any] | None = None
+    #: `F8-PUBLISH` (migration 0064, ADR-0029 decision 7, plan-v5 section 3.6): how the run publishes -- ``text_only`` (the gate publishes text
+    #: findings only, as every run did before 0064) or ``one_list`` (the extended-review candidates that pass gate v2 become findings as well).
+    #: Written once at INSERT and frozen by the database; ``one_list`` needs a ``stage_plan`` (``ck_audit_run_publication_mode_stage_plan``).
+    publication_mode: str = "text_only"
 
 
 @dataclass(frozen=True, slots=True)
@@ -413,6 +424,7 @@ def _run_row(row: Any) -> RunRow:
         started_from_run_id,
         start_stage_id,
         stage_plan,
+        publication_mode,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -444,6 +456,7 @@ def _run_row(row: Any) -> RunRow:
         started_from_run_id=started_from_run_id,
         start_stage_id=start_stage_id,
         stage_plan=stage_plan,
+        publication_mode=publication_mode,
     )
 
 
@@ -487,8 +500,15 @@ class RunRepository:
         started_from_run_id: str | None = None,
         start_stage_id: str | None = None,
         stage_plan: Mapping[str, Any] | None = None,
+        publication_mode: str | None = None,
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
+
+        `F8-PUBLISH`: ``publication_mode`` is the marker of how the run publishes (plan-v5 section 3.6). A caller that leaves it ``None``
+        gets ``one_list`` exactly when the run has a ``stage_plan`` **and** the latest journalled ``one_list`` switch is on (nothing
+        journalled is off), and ``text_only`` otherwise; the switch is read here, once, in the transaction that creates the run, so a
+        later change of the switch acts on new runs only. A caller may pass a value of its own (the database refuses ``one_list`` for a
+        run without a plan). The database freezes the column, so the mode cannot change after this INSERT.
 
         ``started_by_user_uid`` (`R-151v`, migration 0051) is the account whose command created the run; frozen.
 
@@ -518,6 +538,12 @@ class RunRepository:
         """
         if norm_retrieval_set_id is not None and norms_snapshot_id is None:
             raise ValueError("a retrieval set pin requires a snapshot pin")
+        if publication_mode is None:
+            publication_mode = (
+                PUBLICATION_ONE_LIST if stage_plan is not None and one_list_enabled(session) else PUBLICATION_TEXT_ONLY
+            )
+        if publication_mode not in PUBLICATION_MODES:
+            raise ValueError(f"{publication_mode!r} is not a publication mode")
         assert_initial(self.topology(session), RUN_MACHINE, INITIAL_STATE)
         try:
             session.execute(
@@ -544,6 +570,7 @@ class RunRepository:
                     "started_from_run_id": started_from_run_id,
                     "start_stage_id": start_stage_id,
                     "stage_plan": None if stage_plan is None else json.dumps(dict(stage_plan), sort_keys=True),
+                    "publication_mode": publication_mode,
                 },
             )
         except DBAPIError as exc:
@@ -828,6 +855,9 @@ __all__ = [
     "EXECUTOR_CHOSEN_EVENT",
     "INITIAL_STATE",
     "PC01_STAGES",
+    "PUBLICATION_MODES",
+    "PUBLICATION_ONE_LIST",
+    "PUBLICATION_TEXT_ONLY",
     "RUN_MACHINE",
     "RunCost",
     "RunRepository",
