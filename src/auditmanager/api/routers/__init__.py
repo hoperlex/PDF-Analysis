@@ -153,6 +153,7 @@ from auditmanager.api.routers.registrations import build_registration_routes
 from auditmanager.api.routers.runs import build_run_routes
 from auditmanager.api.routers.sections import build_section_routes
 from auditmanager.api.routers.run_stages import build_run_stage_routes  # HOSTS-SEAL-2
+from auditmanager.api.routers.precedents import build_precedent_routes  # CRIT-SEAL-50
 from auditmanager.api.routers.stage_models import build_stage_model_routes  # HOSTS-SEAL-1
 from auditmanager.api.routers.users import build_user_routes
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
@@ -456,6 +457,10 @@ def build_router(
     # reason `blocks` gives; declared whatever the port, answerable only with one. The implementation is `runs/stage_facts.py` behind
     # `bootstrap/run_stage_adapter.py`; the integrator wires it into the composition root as `run_stages=`.
     build_run_stage_routes(router, run_stages)  # type: ignore[arg-type]
+    # `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2). The «Прецеденты» surface: the reference data of a task, the labels and the card of
+    # a finding, the pause of the vectors and the settings. Sealed and asleep: no port, every body answers `503 dependency_unavailable`
+    # until the lane that owns it fills it (`api/routers/precedents.py`).
+    build_precedent_routes(router)
     # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,
     # sealed as stubs answering `503 dependency_unavailable` until `CMP-INGEST-01`,
     # `CMP-INGEST-02` and `CMP-PROFILE-01` wire their ports. Optional with a default, for the
