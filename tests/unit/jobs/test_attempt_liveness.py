@@ -10,10 +10,12 @@ What these tests hold:
 * the **Attempt context** on an explicit clock (``now=``): an Attempt that never signals has
   exactly today's numbers; the first sign of life makes it *live*; a live one has the smaller of
   its silence window (600 s) and its ceiling (7200 s); a sign of life extends it past 900 s;
-* the **heartbeat thread** fences a silent non-live Attempt at 900 s and not before, fences a live
-  one at its stall and at its ceiling, and does not fence a live one that keeps signalling past
-  900 s -- driven tick by tick on a fake clock (no minute is slept), and once on a real thread
-  with tiny constants.
+* the **heartbeat thread** fences a silent non-live Attempt at 900 s and not before, and a live
+  one at its ceiling only -- never at its stall, since the worker's own work between two model
+  calls is not a silence to fence (`STALL-LOCAL-WORK-01`) -- driven tick by tick on a fake clock
+  (no minute is slept), and once on a real thread with tiny constants;
+* a **call starting** is a sign of life of a live Attempt, so the window of a call made after a
+  long stretch of the worker's own work is a whole silence window again.
 
 No database: the repository the thread calls is a recorder.
 """
@@ -293,22 +295,27 @@ def test_a_silent_attempt_is_not_fenced_before_900_seconds_and_is_at_900(
     assert repository.beats == 44
 
 
-def test_a_live_attempt_that_goes_silent_is_fenced_after_the_stall_window(
+def test_a_live_attempt_silent_between_calls_is_fenced_at_its_ceiling_not_its_stall(
     repository: _Repository, clock: _Clock,
 ) -> None:
+    """`STALL-LOCAL-WORK-01`: the prod runs of 2026-11-10 were fenced 600 s after their last answer while the stand prepared the
+    blocks, and failed with ``provider_outcome_unknown``. A live Attempt's silence is the worker's own work; only the ceiling ends it."""
     thread, ticks = heartbeat_thread(limit=400, clock=clock)
-    signalled = []
+    signalled, seen = [], {}
 
     def on_tick(elapsed: float) -> None:
         if elapsed == 60.0:  # the only sign of life
             thread.context.progress(now=clock.now)
             signalled.append(elapsed)
+        if elapsed == 1000.0:  # well past 60 s + the 600 s window
+            seen["reclaims"] = list(repository.reclaims)
 
     ticks._on_tick = on_tick
     thread._run()
     assert signalled == [60.0]
+    assert seen == {"reclaims": []}, "not fenced at 660 s: the stall window bounds a call, not the worker"
     assert repository.reclaims == ["att_1"]
-    assert fenced_at(repository, ticks) == 660.0, "60 s + the 600 s window, not the 900 s watchdog"
+    assert fenced_at(repository, ticks) == 7200.0, "the ceiling"
 
 
 def test_a_live_attempt_that_keeps_signalling_is_not_fenced_at_900_seconds(
@@ -328,7 +335,7 @@ def test_a_live_attempt_that_keeps_signalling_is_not_fenced_at_900_seconds(
     thread._run()
     assert reached["fenced_before"] == [], "a signalling attempt outlives the 900 s watchdog"
     assert reached["beats"] == 49
-    assert fenced_at(repository, ticks) == 2600.0, "600 s after the last sign of life, at 2000 s"
+    assert fenced_at(repository, ticks) == 7200.0, "the ceiling, not 600 s after the last sign of life at 2000 s"
 
 
 def test_a_live_attempt_that_never_stops_signalling_is_fenced_at_the_ceiling(
@@ -360,13 +367,13 @@ def test_the_context_reads_the_module_limits_when_the_thread_is_built(
 # --------------------------------------------------------------------------------------------
 
 
-def test_a_real_heartbeat_thread_fences_a_silent_then_a_stalled_attempt(
+def test_a_real_heartbeat_thread_fences_a_silent_attempt_and_a_live_one_at_its_ceiling(
     repository: _Repository, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(lease_module, "HEARTBEAT_SECONDS", 0.01)
     monkeypatch.setattr(lease_module, "ATTEMPT_WATCHDOG_SECONDS", 0.3)
-    monkeypatch.setattr(lease_module, "ATTEMPT_STALL_SECONDS", 0.6)
-    monkeypatch.setattr(lease_module, "ATTEMPT_HARD_CAP_SECONDS", 60)
+    monkeypatch.setattr(lease_module, "ATTEMPT_STALL_SECONDS", 0.3)
+    monkeypatch.setattr(lease_module, "ATTEMPT_HARD_CAP_SECONDS", 2.0)
 
     started = time.monotonic()
     silent = LeaseHeartbeat(object(), SimpleNamespace(run_id="run_1", attempt_id="att_s"))  # type: ignore[arg-type]
@@ -384,13 +391,69 @@ def test_a_real_heartbeat_thread_fences_a_silent_then_a_stalled_attempt(
     live.start()
     began = time.monotonic()
     try:
-        while time.monotonic() - began < 0.8:  # signals for longer than the watchdog
+        while time.monotonic() - began < 0.5:  # signals for longer than the watchdog
             live.context.progress()
             assert not repository.reclaimed.is_set(), "fenced while it was still signalling"
             time.sleep(0.03)
-        stopped_signalling = time.monotonic()
+        # Silent from 0.5 s: the old rule fenced it at 0.8 s (0.3 s of silence). At 1.3 s it still runs.
+        assert not repository.reclaimed.wait(timeout=max(0.0, 1.3 - (time.monotonic() - began))), "fenced at its stall"
         assert repository.reclaimed.wait(timeout=10)
     finally:
         live.stop()
-    assert time.monotonic() - stopped_signalling >= 0.3, "fenced after the silence window, not at once"
+    assert time.monotonic() - began >= 1.9, "fenced at the 2 s ceiling, not after the silence window"
     assert repository.reclaims == ["att_l"]
+
+
+# --------------------------------------------------------------------------------------------
+# `STALL-LOCAL-WORK-01`: the silence window bounds a call; a call starting is a sign of life
+# --------------------------------------------------------------------------------------------
+
+
+def test_the_fence_of_a_live_attempt_is_its_ceiling_alone() -> None:
+    attempt = context()
+    assert attempt.fence_remaining_seconds(START + 100) == attempt.remaining_seconds(START + 100) == 800.0, "not live: the watchdog"
+    attempt.progress(now=START + 10)
+    assert attempt.remaining_seconds(START + 700) == 0.0, "a call starting now without a sign of life would have no window"
+    assert attempt.fence_remaining_seconds(START + 700) == 6500.0, "but the Attempt is not fenced: the ceiling alone"
+    assert attempt.fence_remaining_seconds(START + 7200) == 0.0
+    assert attempt.fence_remaining_seconds(START + 9000) == 0.0, "never negative"
+
+
+def test_a_call_starting_is_a_sign_of_life_of_a_live_attempt() -> None:
+    attempt = context()
+    attempt.progress(now=START + 10)
+    attempt.call_started(now=START + 700)  # after 690 s of the worker's own work
+    assert attempt.remaining_seconds(START + 700) == 600.0, "the call has a whole silence window"
+    assert attempt.remaining_seconds(START + 1300) == 0.0, "and a model silent through it is ended by it"
+    late = context()
+    late.progress(now=START + 10)
+    late.call_started(now=START + 7100)
+    assert late.remaining_seconds(START + 7100) == 100.0, "never past the ceiling"
+
+
+def test_a_call_starting_leaves_an_attempt_that_is_not_live_as_it_is() -> None:
+    attempt = context()
+    attempt.call_started(now=START + 100)
+    assert not attempt.live
+    assert attempt.remaining_seconds(START + 100) == 800.0, "the watchdog's fixed deadline, as before"
+
+
+@pytest.mark.parametrize("helper", ["answer_window", "effective_timeout"])
+def test_the_window_helpers_give_a_call_after_long_local_work_a_whole_window(
+    helper: str, clock: _Clock,
+) -> None:
+    """The pull adapter (`answer_window`) and the HTTP and SSH adapters (`effective_timeout`) start every call through these."""
+    from auditmanager.executors.http_adapter import effective_timeout
+    from auditmanager.executors.pull import DEADLINE_MARGIN_SECONDS, answer_window
+
+    window_of = {"answer_window": lambda ceiling, ctx: answer_window(ceiling, ctx),
+                 "effective_timeout": lambda ceiling, ctx: effective_timeout(ceiling, ctx)}[helper]
+    attempt = context()
+    attempt.progress(now=START + 10)
+    clock.now = START + 700  # 690 s of the worker's own work since the last sign of life
+    assert window_of(1800, attempt) == 600.0 - DEADLINE_MARGIN_SECONDS, "a whole window, not None"
+    assert window_of(300, attempt) == 300.0, "a call that asks for less gets what it asked for"
+    silent = context()
+    clock.now = START + 700
+    assert window_of(1800, silent) == 200.0 - DEADLINE_MARGIN_SECONDS, "an Attempt that is not live keeps the watchdog's deadline"
+    assert not silent.live

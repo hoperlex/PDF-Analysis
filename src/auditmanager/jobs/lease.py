@@ -24,7 +24,9 @@ ATTEMPT_WATCHDOG_SECONDS = 900
 #: model call has shown a sign of life (:meth:`AttemptContext.progress`). Nothing else caps the
 #: model's effort, thinking or turns.
 ATTEMPT_HARD_CAP_SECONDS = 7200
-#: How long a live Attempt may be silent before the watchdog fences it.
+#: The silence window of a live Attempt's model call: a call starting now may take at most this
+#: (less its margin), so a model that stays silent is ended by the call's own deadline. Since
+#: `STALL-LOCAL-WORK-01` it no longer fences the Attempt itself (see :class:`AttemptContext`).
 ATTEMPT_STALL_SECONDS = 600
 
 _log = logging.getLogger(__name__)
@@ -45,10 +47,20 @@ class AttemptContext:
     **Signs of life** (`AR-V3-LIVENESS-01`). An Attempt that never signals is fenced
     ``watchdog_seconds`` after the claim, exactly as before. An adapter whose remote session
     reports that it is alive calls :meth:`progress`; the first call makes the Attempt *live*, and
-    from then on it is fenced after ``stall_seconds`` without a sign of life or at
-    ``hard_cap_seconds`` after the claim, whichever comes first
-    (:meth:`remaining_seconds`). The watchdog no longer applies to a live Attempt: a model that
-    is thinking is not a model that hangs, and what is silent for ``stall_seconds`` is.
+    from then on it is fenced at ``hard_cap_seconds`` after the claim
+    (:meth:`fence_remaining_seconds`). The watchdog no longer applies to a live Attempt: a model
+    that is thinking is not a model that hangs.
+
+    **The silence window bounds a model call, not the worker's own work** (`STALL-LOCAL-WORK-01`,
+    owner 2026-11-10). A call takes its window from :meth:`remaining_seconds` -- at most
+    ``stall_seconds`` after the last sign of life, less the call's margin -- and the start of a
+    call of a live Attempt is itself a sign of life (:meth:`call_started`). So a model that stays
+    silent is ended by the deadline of its own call, while the stand's work between two calls
+    (rendering pages, reading artifacts, planning batches) is bounded by the ceiling alone. Before,
+    the heartbeat fenced a live Attempt ``stall_seconds`` after its last sign of life wherever the
+    silence came from; the window of a call always closed first, so the only silences it ever
+    fenced were the worker's own, and a section whose preparation of the blocks took more than
+    ten minutes failed with ``provider_outcome_unknown`` on every run.
 
     Thread-safety: :meth:`progress` is called by the thread that makes the model call and
     :meth:`remaining_seconds` by the lease-heartbeat thread. The only state they share is one
@@ -87,8 +99,17 @@ class AttemptContext:
         """``True`` once the Attempt has shown a sign of life."""
         return self._last_progress is not None
 
+    def call_started(self, now: float | None = None) -> None:
+        """A model call is starting (`STALL-LOCAL-WORK-01`): for a live Attempt, a sign of life.
+
+        The call's window is then a whole silence window, however long the worker worked before
+        it. An Attempt that is not live is left as it is: it keeps the watchdog's fixed deadline.
+        """
+        if self._last_progress is not None:  # read once: see the class docstring
+            self.progress(now)
+
     def remaining_seconds(self, now: float | None = None) -> float:
-        """Seconds the watchdog leaves this Attempt, never negative.
+        """Seconds a model call starting now may take, never negative.
 
         Not live: ``watchdog_seconds`` less the time since the claim (the fixed deadline of
         before). Live: the smaller of the ceiling that is left and the silence window that is
@@ -105,6 +126,17 @@ class AttemptContext:
         """Seconds left to the absolute ceiling, never negative."""
         current = monotonic() if now is None else now
         return max(0.0, self.hard_cap_seconds - (current - self.started_monotonic))
+
+    def fence_remaining_seconds(self, now: float | None = None) -> float:
+        """Seconds before the heartbeat fences this Attempt, never negative (`STALL-LOCAL-WORK-01`).
+
+        Not live: the watchdog's fixed deadline, exactly as :meth:`remaining_seconds`. Live: the
+        ceiling alone -- a silent model is ended by its call's own window, and the worker's work
+        between calls is not a silence to fence.
+        """
+        if self._last_progress is None:  # read once: see the class docstring
+            return self.remaining_seconds(now)
+        return self.hard_remaining_seconds(now)
 
     def bind_call(self, call_id: str) -> None:
         self.call_id = call_id
@@ -141,8 +173,8 @@ class LeaseHeartbeat:
             try:
                 with self._sessions() as session:
                     # An Attempt that never signalled has the watchdog; a live one has its
-                    # silence window and its ceiling (`AttemptContext.remaining_seconds`).
-                    if self.context.remaining_seconds() <= 0:
+                    # ceiling (`AttemptContext.fence_remaining_seconds`, `STALL-LOCAL-WORK-01`).
+                    if self.context.fence_remaining_seconds() <= 0:
                         _log.warning(
                             "attempt %s of run %s is fenced (live=%s)",
                             self._authority.attempt_id, self._authority.run_id, self.context.live,

@@ -121,9 +121,15 @@ class HostCall:
 
 def answer_window(revision_deadline_seconds: int, context: Any | None) -> float | None:
     """Seconds a task may wait: the revision's answer deadline cut to what the watchdog leaves,
-    minus the margin. ``None`` when less than one second is left, which the caller refuses."""
+    minus the margin. ``None`` when less than one second is left, which the caller refuses.
+
+    The call is starting: for a live Attempt that is a sign of life (`STALL-LOCAL-WORK-01`), so the
+    window is not shrunk by the worker's own work before the call."""
     window = float(revision_deadline_seconds)
     if context is not None:
+        starting = getattr(context, "call_started", None)
+        if callable(starting):
+            starting()
         window = min(window, float(context.remaining_seconds()) - DEADLINE_MARGIN_SECONDS)
     return None if window < 1.0 else window
 
