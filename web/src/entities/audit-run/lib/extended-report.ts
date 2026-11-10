@@ -57,8 +57,12 @@ function observationMarkdown(item: RecordValue, index: number, sourceIndex: Read
   const candidate = object(correction?.candidate);
   if (item.origin_scope === 'global_cross_window') lines.push(`Происхождение: межоконная сверка; пакет ${md(item.cross_window_batch_key)}; исходные окна ${md(item.window_ids)}.`);
   if (item.source_evidence !== undefined) lines.push('Дословные цитаты исходного наблюдения:', evidenceMarkdown(item.source_evidence));
-  if (critic !== null) lines.push('#### Рекомендация машинного критика — не решение эксперта', md(EXTENDED_ADVICE[plain(critic.llm_decision)] ?? 'Требуется проверка'),
-    `Основание: ${md(extendedReasonText(critic.human_taxonomy_reason))}`, md(critic.explanation), `Предложение: ${md(critic.suggested_fix)}`, evidenceMarkdown(critic.source_evidence));
+  // The original's deterministic critic (`V2-ORIGINAL-REVIEW-01`) is a rule's word, not a model's, and has no taxonomy reason or fix of its own for a pass.
+  const rule = critic?.mode === 'deterministic';
+  if (critic !== null) lines.push(rule ? '#### Рекомендация критика по правилам оригинала, без модели — не решение эксперта' : '#### Рекомендация машинного критика — не решение эксперта',
+    md(EXTENDED_ADVICE[plain(critic.llm_decision)] ?? 'Требуется проверка'),
+    ...(rule && !critic.human_taxonomy_reason ? [] : [`Основание: ${md(extendedReasonText(critic.human_taxonomy_reason))}`]), md(critic.explanation),
+    ...(rule && !critic.suggested_fix ? [] : [`Предложение: ${md(critic.suggested_fix)}`]), evidenceMarkdown(critic.source_evidence));
   else lines.push('Машинная критика этого наблюдения не подтверждена переданными данными.');
   if (correction !== null) lines.push('#### Предложенное уточнение, исходник сохранён', md(EXTENDED_CORRECTION_ACTION[plain(correction.action)] ?? 'Требуется проверка'),
     `Основание: ${md(extendedReasonText(correction.reason))}`, 'Исходный вариант:', md(original?.title ?? item.title), md(original?.description ?? item.description),
@@ -117,7 +121,7 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
     phase_coverage: result?.phase_coverage, phase_call_limits: result?.phase_call_limits,
     norm_paragraph_context_policy: result?.norm_paragraph_context_policy,
     window_progress: result?.window_progress, primary_text_status: result?.primary_text_status,
-    visual_phase_complete: result?.visual_phase_complete, report: result?.report };
+    visual_phase_complete: result?.visual_phase_complete, report: result?.report, original_review: result?.original_review };
   const pendingPrimary = result?.primary_text_status === 'pending'
     ? 'Базовый текстовый анализ ещё выполняется. Сохранённый визуальный проход не является завершением всей проверки окна.' : '';
   if (format === 'md') {
@@ -143,7 +147,8 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
     const original = object(correction?.original);
     const candidate = object(correction?.candidate);
     const sources = (Array.isArray(item.source_ids) ? item.source_ids : []).map((id) => { const source = sourceIndex.get(plain(id)); return `<li>Источник ${html(id)}; физическая страница PDF: ${html(physicalPage(source?.page_number))}; версия: ${html(source?.version_uid)}; SHA256: ${html(source?.crop_sha256 ?? source?.artifact_sha256 ?? source?.text_sha256)}.${source?.quote ? `<blockquote>${html(source.quote)}</blockquote>` : '<p>Цитата не передана.</p>'}</li>`; }).join('');
-    const advice = critic === null ? '<p>Машинная критика не подтверждена переданными данными.</p>' : `<section><h4>Рекомендация критика — не решение эксперта</h4><strong>${html(EXTENDED_ADVICE[plain(critic.llm_decision)] ?? 'Требуется проверка')}</strong><p>${html(extendedReasonText(critic.human_taxonomy_reason))}</p><p>${html(critic.explanation)}</p><p>Предложение: ${html(critic.suggested_fix)}</p>${evidenceHtml(critic.source_evidence)}</section>`;
+    const rule = critic?.mode === 'deterministic';
+    const advice = critic === null ? '<p>Машинная критика не подтверждена переданными данными.</p>' : `<section><h4>${rule ? 'Рекомендация критика по правилам оригинала, без модели — не решение эксперта' : 'Рекомендация критика — не решение эксперта'}</h4><strong>${html(EXTENDED_ADVICE[plain(critic.llm_decision)] ?? 'Требуется проверка')}</strong>${rule && !critic.human_taxonomy_reason ? '' : `<p>${html(extendedReasonText(critic.human_taxonomy_reason))}</p>`}<p>${html(critic.explanation)}</p>${rule && !critic.suggested_fix ? '' : `<p>Предложение: ${html(critic.suggested_fix)}</p>`}${evidenceHtml(critic.source_evidence)}</section>`;
     const fixed = correction === null ? '' : `<section><h4>Уточнение, исходник сохранён</h4><p>${html(EXTENDED_CORRECTION_ACTION[plain(correction.action)] ?? 'Требуется проверка')}. ${html(extendedReasonText(correction.reason))}</p><h5>Исходный вариант</h5><strong>${html(original?.title ?? item.title)}</strong><p>${html(original?.description ?? item.description)}</p><h5>Предложенный кандидат</h5>${candidate === null ? '<p>Новый текст не предложен.</p>' : `<strong>${html(candidate.title)}</strong><p>${html(candidate.description)}</p>${evidenceHtml(candidate.source_evidence)}`}<p>Требуемый контекст: ${html(correction.required_context)}</p></section>`;
     const norms = `<section><h4>Нормативные данные — применимость не подтверждена</h4><p>Статус: ${html(EXTENDED_NORM_STATUS[plain(item.norm_status)] ?? 'Требует проверки')}</p>${objects(item.norm_candidates).map((norm) => `<p>${html(norm.designation)}, пункт ${html(norm.clause_number)}, страница ${html(norm.page_label)}</p><blockquote>${html(norm.quote)}</blockquote>`).join('')}${item.norm_assessment === undefined ? '' : `<details><summary>Сохранённая модельная сверка цитат</summary><pre>${html(JSON.stringify(item.norm_assessment, null, 2))}</pre></details>`}</section>`;
     const origin = item.origin_scope === 'global_cross_window' ? `<p>Происхождение: межоконная сверка; пакет ${html(item.cross_window_batch_key)}; исходные окна ${html(item.window_ids)}.</p>` : '';

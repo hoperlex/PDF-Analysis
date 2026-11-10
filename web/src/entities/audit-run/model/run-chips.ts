@@ -111,8 +111,11 @@ export function runChips({ status, procedures, reused }: RunChipsInput): readonl
     const finishedAt = computed.length > 0 && finished.length === computed.length ? latest(finished) : null;
     const failing = chipRows.find((row) => row.status === 'failed' || row.status === 'partial');
 
+    // A chip whose every procedure says it called no model (the original's critic and corrector under plan v2, `V2-ORIGINAL-REVIEW-01`)
+    // is drawn as a chip that does not: the rail and the dialog read `callsModel` from the chip's definition, and name no model for it.
+    const noModel = definition.callsModel && chipProcedures.length > 0 && chipProcedures.every((procedure) => procedure.deterministic === true);
     chips.push({
-      definition,
+      definition: noModel ? { ...definition, callsModel: false } : definition,
       state: stateOfRows(chipRows, open) ?? stateOfProcedures(chipProcedures) ?? 'pending',
       stages: chipRows,
       procedures: chipProcedures,

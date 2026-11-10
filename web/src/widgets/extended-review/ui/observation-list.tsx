@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { routes } from '@/shared/lib';
 import { CriticQueueTabs, queueTabId } from './critic-queue-tabs';
-import { CRITIC_QUEUES, CRITIC_QUEUE_NOTES, criticQueueCounts, criticQueueOf } from './critic-queues';
+import { CRITIC_QUEUES, CRITIC_QUEUE_NOTES, CRITIC_QUEUE_NOTES_DETERMINISTIC, criticIsDeterministic, criticQueueCounts, criticQueueOf } from './critic-queues';
 import { MachineAdvice } from './machine-advice';
 import { SourceInspector, sourceKind, sourcePage } from './source-inspector';
 import styles from './extended-review.module.css';
@@ -48,6 +48,7 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
     return { item, index, critic, fixed, candidate, ids, pages, searchable };
   }), [observations, sourceIndex]);
   const queueCounts = useMemo(() => criticQueueCounts(observations), [observations]);
+  const queueNotes = useMemo(() => (criticIsDeterministic(observations) ? CRITIC_QUEUE_NOTES_DETERMINISTIC : CRITIC_QUEUE_NOTES), [observations]);
   const requiredPage = /^[1-9]\d*$/.test(pageSearch.trim()) && Number.isSafeInteger(Number(pageSearch)) ? Number(pageSearch) : null;
   const invalidPage = pageSearch.trim() !== '' && requiredPage === null;
   const needle = search.trim().toLocaleLowerCase('ru');
@@ -85,7 +86,7 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
     </div>
     {invalidPage ? <p role="status">Введите целый положительный номер физической страницы. Пока фильтр страницы не применяется.</p> : null}
     <div role="tabpanel" id={`${anchorId}-queue`} aria-labelledby={queueTabId(`${anchorId}-queue`, advice)} data-critic-queue={advice}>
-      {CRITIC_QUEUE_NOTES[advice] === undefined ? null : <p data-critic-queue-note={advice}>{CRITIC_QUEUE_NOTES[advice]}</p>}
+      {queueNotes[advice] === undefined ? null : <p data-critic-queue-note={advice}>{queueNotes[advice]}</p>}
       <div className={styles.toolbar}><p aria-live="polite">По фильтрам: <strong>{matches.length}</strong> из {observations.length}. Показано {shown.length === 0 ? 0 : currentPage * pageSize + 1}–{currentPage * pageSize + shown.length}.</p><button type="button" className="am-button am-button--quiet" onClick={reset}>Сбросить фильтры</button></div>
       <div ref={sourcePanel} id={`${anchorId}-source`}>{selectedSource === null ? null : <SourceInspector key={`${text(selectedSource.source_id)}:${text(selectedSource.version_uid) || fallbackVersion}`} source={selectedSource} fallbackVersion={fallbackVersion} {...(projectUid === undefined ? {} : { projectUid })} onClose={() => setSelectedSource(null)} />}</div>
       {observations.length === 0 ? <p>Предварительные наблюдения не получены. Это не подтверждает отсутствие проблем в документе.</p> : matches.length === 0 ? <p>Под выбранные фильтры записи не попали. Полный набор сохранён и доступен в выгрузках.</p> : <ol className={styles.observations} start={currentPage * pageSize + 1}>{shown.map(({ item, index, ids, pages }) => <li key={`${text(item.observation_id)}:${index}`} data-extended-observation={text(item.observation_id)}>

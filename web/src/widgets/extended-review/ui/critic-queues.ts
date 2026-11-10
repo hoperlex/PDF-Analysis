@@ -55,6 +55,22 @@ export const CRITIC_QUEUE_NOTES: Readonly<Record<string, string>> = {
 };
 
 /**
+ * The same notes for a record whose critic is the original's deterministic one (`V2-ORIGINAL-REVIEW-01`): a rule's word, not a model's.
+ * A queue the rules never fill (`reject`, `borderline`) keeps its note.
+ */
+export const CRITIC_QUEUE_NOTES_DETERMINISTIC: Readonly<Record<string, string>> = {
+  ...CRITIC_QUEUE_NOTES,
+  accept: 'Правила критика оригинала не нашли структурных проблем. Смысловая проверка не выполнялась; это не решение эксперта.',
+  needs_human: 'Правила критика оригинала просят проверку человеком: нет источника, блок не найден или цитата стоит на другой странице. Ничего не удалено; это не одобрение и не отклонение.',
+  rewrite: 'Правила критика оригинала предлагают уточнить страницу; предложенный вариант показан в карточке наблюдения.',
+};
+
+/** Whether any observation carries a row of the original's deterministic critic. */
+export function criticIsDeterministic(observations: readonly RecordValue[]): boolean {
+  return observations.some((item) => object(item.review ?? item.critic)?.mode === 'deterministic');
+}
+
+/**
  * The queue a key press moves to, for the tabs pattern: `←` and `→` step round the row, `Home` and `End` go to its ends.
  * `null` for any other key, which the tabs leave to the browser.
  */

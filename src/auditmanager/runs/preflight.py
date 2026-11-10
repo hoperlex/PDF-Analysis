@@ -12,7 +12,7 @@ import os
 import threading
 
 from auditmanager.analysis.public import (
-    apply_to_bundle, count_native_text_characters, model_rate_sha256, pinned_models, relaxed_window_characters,
+    ORIGINAL_REVIEW_V2, apply_to_bundle, count_native_text_characters, model_rate_sha256, pinned_models, relaxed_window_characters,
 )
 from auditmanager.documents.public import DocumentRepository, UPLOAD_KIND_COMPARISON_PDF
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -565,7 +565,10 @@ class RunCostPreflight:
                     extra_calls *= 2
                 source["visual_scope"] = visual
             elif requested in {"v2", "extended-review-v2"}:
-                extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
+                # `V2-ORIGINAL-REVIEW-01` (R-154f): a fresh v2 consent also freezes the original's deterministic critic and corrector, which
+                # call no model: the cost is the same, the digest differs. A consent accepted without the marker keeps running without it.
+                extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2",
+                    "original_review": ORIGINAL_REVIEW_V2}
                 possible_images = source["image_block_count"]
                 if possible_images is None:
                     possible_images = min(1_000, version.page_count * 100)

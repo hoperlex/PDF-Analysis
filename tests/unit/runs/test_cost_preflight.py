@@ -61,7 +61,7 @@ def test_all_sections_price_before_start_under_the_v2_plan_when_it_is_named(regi
         # window) and 30 norm calls = 1 + 13 + 16 + 30. No section changes that sum.
         assert small.as_dict()["calls"] == 60
         assert json.loads(small.authority_json)["extended_review"] == {
-            "enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
+            "enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2", "original_review": "deterministic-v1"}
         assert large.as_dict()["calls"] > 12
         assert large.as_dict()["estimated_cost_micros"] > small.as_dict()["estimated_cost_micros"] > 0
         accepted = large.approve(consent(large), actor_user_uid="expert")
@@ -106,7 +106,8 @@ def test_all_sections_price_before_start_under_the_v3_plan_when_it_is_named(regi
         assert accepted["approved_by_user_uid"] == "expert"
 
 
-V2_AUTHORITY = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
+#: `V2-ORIGINAL-REVIEW-01` (R-154f): a fresh v2 estimate also freezes the marker of the original's deterministic critic and corrector.
+V2_AUTHORITY = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2", "original_review": "deterministic-v1"}
 
 
 @pytest.mark.parametrize("named", [None, "", "   ", "v2", "V2", " extended-review-v2 "])
@@ -346,3 +347,24 @@ def test_only_the_batched_coverage_can_lift_the_section_run_bounds(registry, mon
     with pytest.raises(DomainError) as failure:
         estimate(service(registry), version("AR", 300_000, 501), relaxed_limits=True)
     assert failure.value.detail_fields["reason"] == "cost_page_count_unavailable"
+
+
+def test_a_fresh_v2_estimate_freezes_the_original_review_marker_without_adding_a_call_or_a_cent(registry, monkeypatch):
+    """`V2-ORIGINAL-REVIEW-01`: the critic and corrector call no model, so the price is the price of the v2 plan; the digest carries the marker,
+    so a consent accepted before it never acquires the new procedures and one accepted after it always has them."""
+    from auditmanager.analysis.public import ORIGINAL_REVIEW_V2
+    from auditmanager.runs.stage_layout import rows_in_use
+    monkeypatch.setenv(PLAN_ENV, "v2")
+    value = estimate(service(registry), version("AR", 500, 1))
+    authority = json.loads(value.authority_json)
+    assert authority["extended_review"]["original_review"] == ORIGINAL_REVIEW_V2 == "deterministic-v1"
+    assert value.as_dict()["calls"] == 60 and "original_review" not in json.dumps(value.as_dict())
+    # the layout's rows are what they were: the critic and the corrector bind no cell
+    assert rows_in_use(authority["extended_review"]) == ("text", "blocks", "cross_check", "norms")
+    without = dict(authority)
+    without["extended_review"] = {k: v for k, v in authority["extended_review"].items() if k != "original_review"}
+    assert preflight._digest(authority) == value.estimate_digest != preflight._digest(without)
+    # the same estimate under v3 never carries it
+    monkeypatch.setenv(PLAN_ENV, "v3")
+    assert "original_review" not in json.loads(estimate(service(registry), version("AR", 500, 1)).authority_json)["extended_review"]
+
