@@ -21,7 +21,7 @@ from auditmanager.exports.xlsx.writer import CONTENT_TYPE
 _NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 _HEADER = {
     "run_id": "run_1", "project_uid": "prj_1", "version_uid": "ver_1",
-    "analysis_profile_id": "ar_v3", "norms_snapshot_id": "ns_1",
+    "analysis_profile_id": "profile_1", "norms_snapshot_id": "ns_1",
     "snapshot_key": "pinned-key",
 }
 

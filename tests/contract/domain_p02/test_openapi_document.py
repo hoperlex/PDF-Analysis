@@ -44,10 +44,6 @@ REQUIRED_OPERATIONS = {
     "getDocumentVersion",
     "streamDocumentVersionContent",
     "startRun",
-    "startArV3BetaGroup",
-    "getArV3BetaGroup",
-    "getArV3BetaGroupReview",
-    "getArV3BetaPackStatus",
     "getRunStatus",
     "listRunFindings",
     "getFinding",
@@ -170,8 +166,6 @@ REQUIRED_OPERATIONS = {
     "listNormSnapshots",
     "listNormSnapshotEvents",
     "setCurrentNormSnapshot",
-    # `W57A-SEAL-01B`. The refusing normative report of a v3 run (`D-151`).
-    "getRunNormVerification",
     # `W59-SECTION-SEAL-01`. A version's expert classification (stage and section) and its
     # fifteen-choice review, addressed through the version's document and project.
     "classifyDocumentVersion",
@@ -406,8 +400,8 @@ REQUIRED_OPERATIONS = {
     "listStageTextFragments", "listStageTextExclusions", "listStageRawDifferences",
     "listStageTextHints", "recomputeStageTextEvidence", "startStageChainRun",
     "listStageChainRuns", "getStageChainRun", "cancelStageChainRun",
-    # `BETA-COST-PREFLIGHT-1030` (contract 1.13.0): the two source-bound cost estimates a start must carry a consent for.
-    "estimateRunCost", "estimateArV3GroupCost",
+    # `BETA-COST-PREFLIGHT-1030` (contract 1.13.0): the source-bound cost estimate a start must carry a consent for.
+    "estimateRunCost",
     # `CMP-SEAL-C4` (contract 1.13.0): the stage AI review, link repair, full chain and batch, change cards, expert
     # verdicts and the journal with its three exports, and the stage text and assembly reads. `createStageReviewCard`
     # is the expert review escalation sealed after it, still under 1.13.0.
@@ -462,7 +456,6 @@ WRITE_OPERATIONS = {
     # `W59-VERSION-UPLOAD-01`: publishes a version, keyed exactly as `uploadDocument`.
     "uploadDocumentVersion",
     "startRun",
-    "startArV3BetaGroup",
     "appendDecision",
     "approveRegistration",
     "cancelRun",
@@ -600,8 +593,8 @@ WRITE_OPERATIONS = {
     "resumeStageUpload", "cancelStageUpload", "confirmStagePair", "createStageAssembly",
     "reviseStageAssembly", "setStagePairCompleteness", "applyStageSheetMap",
     "recomputeStageTextEvidence", "startStageChainRun", "cancelStageChainRun",
-    # `CMP-SEAL-C4`: the keyed writes of the full chain, its batches, the link repairs and the expert's cards. The two
-    # cost estimates (`estimateRunCost`, `estimateArV3GroupCost`) are POSTs that write nothing and take no key.
+    # `CMP-SEAL-C4`: the keyed writes of the full chain, its batches, the link repairs and the expert's cards. The
+    # cost estimate (`estimateRunCost`) is a POST that writes nothing and takes no key.
     "resumeStageChainRun", "startStageChainBatch", "pauseStageChainBatch", "resumeStageChainBatch",
     "cancelStageChainBatch", "undoStageLinkRepair", "applyStageCardVerdicts", "createStageReviewCard",
     # `HOTFIX-PRESENTATION-INT-1030`: the reviewed version ZIP intake stores versions, keyed like `uploadDocument`.
@@ -1010,8 +1003,6 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # `DECISION-MEMORY-M2` (1.44.0) adds ``getDecisionMemoryStatus``: the counts and the settings take no input.
     # `W59-ANALYSIS-SETTINGS-01` adds ``listAnalysisProfiles``: the registry takes no input.
     # `EXEC-SEAL-01` adds the two executor lists: a connection list and a route list take no input.
-    # `AR-V3-BETA-PACK-STATUS-API-01` adds ``getArV3BetaPackStatus``: it reads the server's own
-    # installed pack and addresses no identity.
     # `ANALYSIS-PRESETS-01` adds ``listAnalysisPresets``: the list takes no input.
     # `CMP-SEAL-C1` adds ``getComparisonQueueSummary``: the installation's comparison queue addresses no identity.
     # `CMP-SEAL-C2` adds ``getComparisonAiQueue``: the installation's AI queue addresses no identity either.
@@ -1021,7 +1012,7 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # declares the ``404`` and ``422`` an input-taking operation must (``listDecisions`` already had its own).
     # `UI-PARITY-P0E` adds ``getExecutionDispatch``: the installation's pause state addresses no identity.
     {"getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
-     "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
+     "listExecutorConnections", "listExecutorRoutes",
      "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue",
      "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting",
      "getExecutionDispatch", "getDecisionMemoryStatus",

@@ -34,9 +34,7 @@ REASONS = (
 def test_closed_vocabularies_match_0023() -> None:
     schemas = CONTRACT['components']['schemas']
     assert schemas['FindingCategory']['enum'] == list(CATEGORIES)
-    assert schemas['UngroundedReason']['enum'] == list(REASONS)
     assert {item.value for item in models.FindingCategory} == set(CATEGORIES)
-    assert {item.value for item in models.UngroundedReason} == set(REASONS)
     assert UNGROUNDED_REASONS == set(REASONS)
     source = (ROOT / 'db/migrations/versions/20261016_0023_norm_citations.py').read_text()
     for value in CATEGORIES[7:] + REASONS[6:]:

@@ -25,7 +25,7 @@ MAIN = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 
 
 def _run() -> RunRead:
-    return RunRead("prj_1", "ver_1", "run_1", "ar_v3", "ns_1", "recorded")
+    return RunRead("prj_1", "ver_1", "run_1", "profile_1", "ns_1", "recorded")
 
 
 def _observation(observation_id: str, *, page: int, label: str, text: str) -> ObservationRead:

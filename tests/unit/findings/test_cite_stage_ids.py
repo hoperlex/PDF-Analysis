@@ -7,11 +7,11 @@ import pytest
 from auditmanager.findings.citation_reader import CITE_STAGE_IDS, CitationReadRefused, read_verified_citations
 
 
-def test_the_two_certifying_stages_are_exactly_the_v1_v2_stage_and_the_ar_v3_beta_stage() -> None:
-    assert CITE_STAGE_IDS == {"norm_verification", "ar_v3_citation_review"}
+def test_the_one_certifying_stage_is_exactly_the_norm_verification_stage() -> None:
+    assert CITE_STAGE_IDS == {"norm_verification"}
 
 
-@pytest.mark.parametrize("stage", ["text_analysis", "finding_merge", "", "ar_v3_citation_review ", "AR_V3_CITATION_REVIEW"])
+@pytest.mark.parametrize("stage", ["text_analysis", "finding_merge", "", "norm_verification ", "NORM_VERIFICATION"])
 def test_any_other_stage_name_is_refused_before_the_database_is_asked(stage: str) -> None:
     class Untouched:
         def execute(self, *args: object, **kwargs: object) -> None:

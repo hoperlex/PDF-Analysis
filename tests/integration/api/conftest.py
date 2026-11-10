@@ -913,14 +913,6 @@ class SeamRunAdapter:
         self._view(run_id)
         raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="extended_review_reader")
 
-    def get_norm_verification(self, *, run_id: str) -> Any:
-        # `R-146at`: the shipping adapter reads the Run first (an absent one is 404), then
-        # answers the report or the declared 503. This stand-in holds no saved review.
-        self._view(run_id)
-        raise DomainError(
-            ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader"
-        )
-
     def get_run_norm_references(self, *, run_id: str) -> Any:
         """`NORM-REFS-RUN-01`. This stand-in holds no saved text and no snapshot catalogue.
 

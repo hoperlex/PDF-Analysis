@@ -332,7 +332,7 @@ def test_oversize_files_are_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     promote_cli.load_bundle(_bundle(tmp_path, name="exact"), require_expected=True)
 
 
-# --- the request is bound to the reviewed map (AR-V3-BETA-REVIEW-FIXES-02, finding A) ---------
+# --- the request is bound to the reviewed map (review finding A) ---------
 #
 # `candidate.py` compares only the SET of document ids and item ids with the map; the target
 # spans and the query vectors were taken from `request.json` unchecked, so the same map bytes
@@ -543,7 +543,7 @@ def test_a_float_in_the_map_is_refused(tmp_path: Path) -> None:
     assert _refusal(_bundle(tmp_path, map_bytes=data)).reason == "map_invalid"
 
 
-# --- the request's labels and snapshot are bound to the map as well (AR-V3-BETA-REVIEW-FIXES-03) -
+# --- the request's labels and snapshot are bound to the map as well (review finding) -
 #
 # The label a request gives a document is printed in every prompt row of that document and is a
 # sort key, so the same map bytes and `map_sha256` with another label would attribute a citation

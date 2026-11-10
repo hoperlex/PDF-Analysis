@@ -2960,7 +2960,7 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
                     findings.append(f"{label}: stage_c4 has no maintained driver")
             if kind == "approve_run_cost":
                 base = {"do", "scope", "value", "bound_ms"}
-                if set(action) not in (base, base | {"source_run_id"}, base | {"source_run_id", "stage_id"}) or action.get("scope") not in {"run", "ar_v3_group", "run_from_stage"}:
+                if set(action) not in (base, base | {"source_run_id"}, base | {"source_run_id", "stage_id"}) or action.get("scope") not in {"run", "run_from_stage"}:
                     findings.append(f"{label}: unknown cost approval action shape/scope")
                 if "source_run_id" in action and (action.get("scope") not in {"run", "run_from_stage"} or not re.fullmatch(r"\{[a-z_]+\}", str(action["source_run_id"]))):
                     findings.append(f"{label}: re-audit cost approval must bind one captured source Run")
@@ -4437,7 +4437,6 @@ def cost_preflight_findings(manifest: dict) -> list[str]:
     scopes = {
         # `RUN-START-ONE-01b`: one button; the approval action presses it and agrees in the dialog (or the click is the agreement), so there is no start click.
         'startRun': ('run', None, 'estimateRunCost', '/runs/cost-estimate'),
-        'startArV3BetaGroup': ('ar_v3_group', 'Запустить шесть проверок АР v3', 'estimateArV3GroupCost', '/ar-v3-beta/groups/cost-estimate'),
         # The click on the row's «Повторный аудит» is the request; the approval action observes the estimate and agrees in the dialog.
         'reauditRun': ('run', None, 'estimateRunCost', '/runs/cost-estimate'),
         # `UI-A-60`, moved by `RUN-SCREEN-01a`: the dialog of an ended run's chip; its estimate is read when the dialog opens on a chip with one startable stage
@@ -4496,7 +4495,6 @@ def test_control_reaudit_without_fresh_source_read_is_detected(manifest: dict) -
 
 @pytest.mark.parametrize('scope,start,label,estimate,path', [
     ('run', 'startRun', None, 'estimateRunCost', '/runs/cost-estimate'),
-    ('ar_v3_group', 'startArV3BetaGroup', 'Запустить шесть проверок АР v3', 'estimateArV3GroupCost', '/ar-v3-beta/groups/cost-estimate'),
 ])
 def test_control_missing_or_late_cost_approval_is_detected(scope, start, label, estimate, path) -> None:
     step = {'name': 'synthetic-cost', 'actions': [
@@ -4813,7 +4811,7 @@ def test_cost_approval_driver_rejects_changed_options_or_forged_consent() -> Non
     program = f"""
       import assert from 'node:assert/strict';
       import {{ costApprovalFromEstimate, assertCostApprovedStart, usdText }} from {module};
-      for (const scope of ['run', 'ar_v3_group']) {{
+      for (const scope of ['run']) {{
         const options = {{version_uid:'ver_fixture',relaxed_limits:true}};
         const estimate = {{scope,version_uid:options.version_uid,relaxed_limits:true,currency:'USD',
           provider_mode:'recorded',billing:'metered',estimate_digest:'a'.repeat(64),

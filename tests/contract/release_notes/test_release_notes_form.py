@@ -147,7 +147,7 @@ def test_authored_shape_and_form() -> None:
     # polish of 2026-10-13 (version history, sign-in, user filters); 0.6.0 by W55B-RELNOTES-01
     # (W55b released as 0.6.0 under R-123), revised once for W55B-NOTES-JUDGE's edits E2, E4-E6;
     # 0.7.0 by RELEASE-0-7-0-RECORD-01 (the owner's own merge of dev into main, R-141e), revised once
-    # for the independent judge's edits. 0.8.0 is an honestly limited AR v3 beta-status
+    # for the independent judge's edits. 0.8.0 is an honestly limited beta-status
     # development candidate; no six-Run or verified citation claim is authored. 0.8.1
     # (RELEASE-0-8-1-DEV-01) is the next development candidate: the pack status, the
     # pack-gated six-check start and its group review, and three interface repairs; it

@@ -5,7 +5,7 @@ run's budget, while a section's own system prompt and schema run from 7 163 (ÐŸÐ
 characters. The one-call figure was therefore too large by the difference, and a volume the figure admitted
 in one call could come out over the per-run cost ceiling. The figure now takes the prompt bundle of the run
 (``bundle=``); with no bundle it is the figure it always was (the start-up check of ``bootstrap/settings``
-and the AR v3 path pass none).
+passes none).
 
 Container-free. The figures are derived here a second time, from the prompt files on disk and the lock's
 JSON, so an arithmetic slip in the module is a disagreement and not a tautology.

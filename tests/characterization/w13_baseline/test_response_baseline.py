@@ -2039,7 +2039,7 @@ def test_the_contract_check_can_fail() -> None:
     assert _schema_problems(with_(estimate, estimate_digest="A" * 64), estimate_schema) == [
         f"$.estimate_digest: {'A' * 64!r} does not match ^[0-9a-f]{{64}}$"
     ]
-    assert _schema_problems(with_(estimate, scope="batch"), estimate_schema) == ["$.scope: 'batch' is not one of ['run', 'ar_v3_group']"]
+    assert _schema_problems(with_(estimate, scope="batch"), estimate_schema) == ["$.scope: 'batch' is not one of ['run']"]
     # The shape the product serves today: a null where the contract says a string. This is the deviation.
     assert _schema_problems(with_(estimate, pin_id=None), estimate_schema) == ["$.pin_id: None is not of type string"]
     assert _schema_problems(with_(refusal, contract_version="1.0.0"), envelope_schema) == [
@@ -2127,7 +2127,7 @@ def test_the_cost_path_records_redden_on_a_planted_difference(exchanges: dict[st
         "another window count": set_("windows", live["windows"] + 1),
         "the relaxed output allowance": set_("output_tokens", 64000),
         "another currency": set_("currency", "EUR"),
-        "another scope": set_("scope", "ar_v3_group"),
+        "another scope": set_("scope", "batch"),
         "a metered route that is unmetered": set_("billing", "unmetered"),
         "a missing figure": _json_plant(lambda body: body.pop("calls")),
         "a digest that is not the one the journey read": set_("estimate_digest", "0" * 64),

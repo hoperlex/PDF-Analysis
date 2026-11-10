@@ -555,7 +555,7 @@ def test_a_wrong_independent_proof_refuses_plan_and_promote_with_nothing_written
 def test_a_request_whose_label_differs_from_the_reviewed_map_writes_nothing(
     custody: CustodyKit, tmp_path: Path, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """AR-V3-BETA-REVIEW-FIXES-03: the label is printed in every prompt row, so another label
+    """The label is printed in every prompt row, so another label
     over the same map bytes and spans would build a different set that cites another norm."""
     seed = _seed(custody)
     stand = Stand(custody)

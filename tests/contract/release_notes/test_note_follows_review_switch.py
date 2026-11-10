@@ -1,7 +1,7 @@
 """While the beta switch is off, the current release note may not quote what the screens no longer show.
 
 ``R-146ba`` took two indications off the screens for the beta: the profile label «рабочая версия,
-проверка человеком не проводилась» and the wording that calls an AR v3 citation provisional and
+проверка человеком не проводилась» and the wording that calls a citation provisional and
 waiting for the expert. One web constant, ``SHOW_REVIEW_INDICATION``, decides whether they are drawn.
 A note that says a screen shows one of them while the constant is ``false`` says something untrue
 about the product, so this test reads the constant and the note of the current ``VERSION`` together.

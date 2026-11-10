@@ -1,6 +1,6 @@
 """An opaque identity is the whole string, never a prefix of it that ends in a newline.
 
-`AR-V3-BETA-REVIEW-FIXES-02` finding B. The value types anchored their pattern with `^...$`
+A review finding (B). The value types anchored their pattern with `^...$`
 and matched with `re.match`, and `$` also matches just before one trailing newline, so
 `"ndoc_<ULID>\\n"` parsed as a valid identity while the validators of the evidence bridge and
 the custody roles (`\\Z`, `fullmatch`) refuse it. Two checkers that disagree about one

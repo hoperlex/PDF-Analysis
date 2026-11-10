@@ -168,7 +168,7 @@ def test_several_images_reach_the_command_and_a_bad_list_never_runs_ssh(
         assert refusal.value.dispatch_class == "not_sent"
 
 
-# -- signs of life and effort, `AR-V3-LIVENESS-01` ---------------------------------------------
+# -- signs of life and effort ---------------------------------------------------------------
 
 from auditmanager.executors.http_adapter import DEADLINE_MARGIN_SECONDS  # noqa: E402
 from auditmanager.executors.ssh_transport import SshFailure  # noqa: E402

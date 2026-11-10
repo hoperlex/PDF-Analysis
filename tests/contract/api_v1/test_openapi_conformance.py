@@ -532,7 +532,6 @@ class TestN1ComponentReferenceResolution:
         # `W55A-SEAL-01` adds four more 404s: the three norm-document reads address a
         # document by identity and `setCurrentNormSnapshot` names a snapshot that may not exist.
         # `W55B-SEAL-01` adds two more: both portal-block reads address a version by identity.
-        # W57a adds a run-scoped v3 report with its own 404 response.
         # `W59-SECTION-SEAL-01` adds two: the classification and the section review address a
         # version through its document and project.
         # `W59-VERSION-COMPARE-01` adds one: the comparison addresses its source version the
@@ -561,8 +560,6 @@ class TestN1ComponentReferenceResolution:
         # `EXEC-PULL-01` adds five: issueRunnerToken and revokeRunnerToken address a connection
         # (and a token), and the three runner operations that address a task by identity.
         # EXEC-IMAGE-DELIVERY-01 adds the task-scoped PNG read with a 404.
-        # AR-V3-BETA-SIX-RUN-02 adds 404s for the named version and group.
-        # AR-V3-BETA-GROUP-API-SEAL-01 adds one: the group review addresses a group by identity.
         # `COMPARE-PERSISTED-SUMMARY-01` adds three: approving and withdrawing a sheet pairing and
         # asking for the summary address the comparison's source version through its document and
         # project.
@@ -603,7 +600,9 @@ class TestN1ComponentReferenceResolution:
         # case by identity. (`listDecisionMemoryCases` and `getDecisionMemoryStatus` name no parent and declare no `404`.)
         # `HOSTS-SEAL-1` took the figure to 235 (the servers, their details and their install sessions are addressed by identity).
         # `HOSTS-SEAL-2` adds one: `getRunStages` addresses a run.
-        assert len(report) == 236, report
+        # The removal of the six-scope АР beta (2026-11-10, `R-154a`) takes five off: its start, its cost estimate, its two
+        # group reads and the run's norm-verification read.
+        assert len(report) == 231, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

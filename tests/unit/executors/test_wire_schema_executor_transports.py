@@ -1,4 +1,4 @@
-"""The executor transports hand the model the wire form of the response schema (`AR-V3-WIRE-SCHEMA-01`).
+"""The executor transports hand the model the wire form of the response schema.
 
 Three of the four transports here (``http_api`` in both flavours, the SSH command, the pull task)
 are driven for real and asserted on what reached the far side: the body a local gateway received,
@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v3.response_schema import response_schema
+from tests.support.one_of_response_schema import one_of_response_schema as response_schema
 from auditmanager.analysis.public import ModelRequest, ProxyDispatchError
 from auditmanager.analysis.text.prompt import RESPONSE_SCHEMA
 from auditmanager.analysis.text.wire_schema import to_wire_schema
@@ -67,7 +67,7 @@ def _http(gateway: Any, flavour: str) -> Any:
     )
 
 
-def test_openai_chat_sends_the_gateway_the_wire_form_of_the_v3_schema(gateway_factory: Any) -> None:
+def test_openai_chat_sends_the_gateway_the_wire_form_of_a_one_of_schema(gateway_factory: Any) -> None:
     gateway = gateway_factory()
     request = _request(response_schema())
     body, sha = copy.deepcopy(dict(request.body)), request.request_sha256
@@ -80,7 +80,7 @@ def test_openai_chat_sends_the_gateway_the_wire_form_of_the_v3_schema(gateway_fa
     _assert_request_untouched(request, body, sha)
 
 
-def test_anthropic_messages_sends_the_gateway_the_wire_form_of_the_v3_schema(gateway_factory: Any) -> None:
+def test_anthropic_messages_sends_the_gateway_the_wire_form_of_a_one_of_schema(gateway_factory: Any) -> None:
     gateway = gateway_factory()
     request = _request(response_schema())
     body, sha = copy.deepcopy(dict(request.body)), request.request_sha256
@@ -213,7 +213,7 @@ def _pull(store: _Store) -> PullAdapter:
                        repository=store)  # type: ignore[arg-type]
 
 
-def test_the_pull_task_is_written_with_the_wire_form_of_the_v3_schema() -> None:
+def test_the_pull_task_is_written_with_the_wire_form_of_a_one_of_schema() -> None:
     store = _Store()
     request = _request(response_schema())
     body, sha = copy.deepcopy(dict(request.body)), request.request_sha256
@@ -250,7 +250,7 @@ def test_a_keyword_the_runner_validator_cannot_judge_is_still_refused_before_a_t
     assert store.payload is None, "nothing was written"
 
 
-def test_the_served_wire_schema_still_judges_the_shape_of_a_v3_answer() -> None:
+def test_the_served_wire_schema_still_judges_the_shape_of_an_answer() -> None:
     """The runner-side check now runs against the wire form: it still holds enums, required fields
     and the closed shape, and says nothing about the dropped length and pattern bounds (the local
     parser re-checks those)."""

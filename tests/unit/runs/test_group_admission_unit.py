@@ -358,7 +358,7 @@ def _source(**admission: Any) -> Any:
     return SimpleNamespace(
         run_id=SOURCE_RUN, project_uid=PROJECT, version_uid=VERSION, state="failed",
         frozen_input_digest="c" * 64, norms_snapshot_id=None,
-        # `AR-V3-OPT-IN`: the source's pinned pair (a standard analysis), which a repeat reads.
+        # The source's pinned pair.
         analysis_profile_id="ap_01M5M28ZCDD8VPSP1BTAEW92YF", prompt_bundle_id="pb_01M5M28ZCDVCR37BX1884JGSPN", **admission,
     )
 

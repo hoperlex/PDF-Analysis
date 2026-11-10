@@ -1,6 +1,6 @@
 """The non-identity value types are the whole string, never a prefix ending in a newline.
 
-`AR-V3-BETA-REVIEW-FIXES-03` (finding F4, sibling of the opaque-id fix of `-02`). The
+A review finding (F4, sibling of the opaque-id fix). The
 patterns are anchored with `^...$` and were applied with `re.match`; `$` also matches just
 before one trailing newline, so `"<valid>\\n"` was accepted as a correlation id, an
 idempotency key, a sha256 and a payload fingerprint.

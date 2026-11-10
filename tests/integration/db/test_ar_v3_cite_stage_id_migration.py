@@ -33,7 +33,7 @@ import pytest
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import IntegrityError
 
-from auditmanager.api.schemas.models import ArV3BetaStageId, StageId
+from auditmanager.api.schemas.models import StageId
 from auditmanager.shared.db.config import DatabaseSettings
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import (
@@ -174,18 +174,18 @@ def _upgrade(foundation_command: Any, database: DatabaseSettings, revision: str)
     assert result.returncode == 0, result.describe()
 
 
-def test_the_migrations_vocabulary_is_0002s_nine_ids_plus_the_profile_stage_of_the_api_and_the_contract() -> None:
+def test_the_migrations_vocabulary_is_0002s_nine_ids_plus_the_profile_stage_of_the_contract() -> None:
     """The migration restates its ids (history must not move), so something else must tie them.
 
-    No database: the nine are ``0002``'s ``STAGE_IDS`` and the API's legacy ``StageId``; the one is
-    the API's ``ArV3BetaStageId`` and the stage id of the AR v3 stage extension contract. An eleventh
+    No database: the nine are ``0002``'s ``STAGE_IDS`` and the API's ``StageId``; the one is
+    the stage id of the AR v3 stage extension contract. An eleventh
     id added to either side, or a typo in the migration, fails here before any server is asked.
     """
     this = _load_migration("20261026_0033_ar_v3_cite_stage_id.py", "ar_v3_cite_stage_id_under_test")
     first = _load_migration("20260910_0002_pc01_schema.py", "pc01_schema_under_test")
     contract = json.loads(CITE_CONTRACT.read_text(encoding="utf-8"))["stage"]["stage_id"]
     assert this._REGISTRY_STAGE_IDS == NINE == first.STAGE_IDS == tuple(item.value for item in StageId)
-    assert (this._ADDED_STAGE_ID,) == (CITE,) == (contract,) == tuple(item.value for item in ArV3BetaStageId)
+    assert (this._ADDED_STAGE_ID,) == (CITE,) == (contract,)
     assert this._NEW_STAGE_IDS == (*first.STAGE_IDS, contract)
     assert this.revision == THIS and this.down_revision == PREVIOUS
 

@@ -25,7 +25,7 @@ def _source(*findings: FindingRow) -> WorkbookInput:
         project_uid="prj_1",
         version_uid="ver_1",
         run_id="run_1",
-        profile_id="ar_v3",
+        profile_id="profile_1",
         snapshot_key="ns_1",
         attribution="recorded",
         findings=tuple(findings),
@@ -101,7 +101,7 @@ def test_summary_totals_use_decided_then_proposed_and_categories():
     )
     summary = _cells(_parts(source)["xl/worksheets/sheet1.xml"])
     assert [summary[f"B{row}"][0] for row in range(2, 8)] == [
-        "prj_1", "ver_1", "run_1", "ar_v3", "ns_1", "recorded"
+        "prj_1", "ver_1", "run_1", "profile_1", "ns_1", "recorded"
     ]
     assert [(summary[f"A{row}"][0], summary[f"B{row}"][0]) for row in range(9, 15)] == [
         ("Критическое", "1"),

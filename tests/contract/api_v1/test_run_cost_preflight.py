@@ -19,14 +19,11 @@ def test_cost_consent_requires_exact_digest_integer_ceiling_and_boolean_confirma
 def test_cost_requests_preserve_default_off_raised_limit_and_do_not_require_consent_for_read():
     version = "ver_01M2545JSD15ETSNNV904X991J"
     assert models.RunCostEstimateRequest(version_uid=version).relaxed_limits is None
-    assert models.ArV3GroupCostEstimateRequest(version_uid=version).relaxed_limits is None
     assert models.StartRunRequest(version_uid=version).cost_consent is None
-    assert models.StartArV3BetaGroupRequest(version_uid=version).cost_consent is None
 
 
-def test_both_estimates_have_the_same_expert_guard_as_their_starts():
+def test_the_estimate_has_the_same_expert_guard_as_its_start():
     assert OPERATION_ROLES["estimateRunCost"] == OPERATION_ROLES["startRun"]
-    assert OPERATION_ROLES["estimateArV3GroupCost"] == OPERATION_ROLES["startArV3BetaGroup"]
     assert models.ReauditRunRequest().cost_consent is None
 
 
