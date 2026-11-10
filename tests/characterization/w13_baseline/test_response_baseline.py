@@ -2039,7 +2039,7 @@ def test_the_contract_check_can_fail() -> None:
     assert _schema_problems(with_(estimate, estimate_digest="A" * 64), estimate_schema) == [
         f"$.estimate_digest: {'A' * 64!r} does not match ^[0-9a-f]{{64}}$"
     ]
-    assert _schema_problems(with_(estimate, scope="batch"), estimate_schema) == ["$.scope: 'batch' is not one of ['run']"]
+    assert _schema_problems(with_(estimate, scope="batch"), estimate_schema) == ["$.scope: 'batch' is not the const 'run'"]
     # The shape the product serves today: a null where the contract says a string. This is the deviation.
     assert _schema_problems(with_(estimate, pin_id=None), estimate_schema) == ["$.pin_id: None is not of type string"]
     assert _schema_problems(with_(refusal, contract_version="1.0.0"), envelope_schema) == [
