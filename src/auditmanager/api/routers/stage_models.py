@@ -60,7 +60,9 @@ def build_stage_model_routes(router: APIRouter, stage_models: StageModelPort) ->
         description=(
             "`HOSTS-SEAL-1`: save a new immutable revision of the layout (author and time are kept). Every cell must be a pair of "
             "`listModelCatalogue` (model and effort); the blocks row is chosen from the closed list of schemes, never leg by leg; a cell "
-            "key repeated or missing is `422 validation_failed`. A revision changes nothing for runs already started: they froze their "
+            "key repeated or missing is `422 validation_failed`. `LIMITS-01` (contract 1.49.0): a cell has no answer limit and no timeout, "
+            "so a cell (or comparison cell) that still names `max_output_tokens` or `timeout_seconds` is refused `422 validation_failed`, "
+            "not ignored. A revision changes nothing for runs already started: they froze their "
             "plan. `role:admin`, `Idempotency-Key` required."
         ),
     )

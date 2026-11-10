@@ -11,7 +11,30 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.48.0` (`HOSTS-L1`)
+## Current contract `1.49.0` (`LIMITS-01`)
+
+Slice for `LIMITS-01` (owner rulings `R-153n`, `R-153o` and `R-153p` of 2026-11-10): **no answer cap reaches a model, and the window of a call is a constant of its
+row**. **No operation, no schema added or removed, no migration, no new error code, no state machine and no identity prefix**; migration head stays `0062`. The paths
+and operations are those of `1.48.0`.
+
+- **`StageLayoutCell`, `StageComparisonCell` and `RunStageCell` lose `max_output_tokens` and `timeout_seconds`.** A layout cell (the six rows, with the roles of the blocks
+  ensemble, and the four kinds of comparison work) is a model and an effort, and a stage line of a run is the cell the run froze with its access and server.
+  `reviseStageModelLayout` refuses a cell that still names either member, `422 validation_failed` (the objects stay closed: an unknown member is refused, not ignored).
+  The layout of a revision stored before still reads: the two numbers it holds per cell are not read and not shown.
+- **`ClaimedExecutorTask` loses `max_output_tokens`.** The host members of a task are now `provider`, `access`, `model_id`, `effort`, `timeout_seconds` and `cell_key`, all
+  six or none. No answer cap reaches a model: the agent runs the Claude Code command without `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, Codex has none, OpenAI Responses and
+  OpenRouter get no output-token parameter, and Anthropic Messages, which requires `max_tokens`, gets the model's maximum. `timeout_seconds` stays: it is the constant of the
+  cell's row (text 1800, blocks 1800, cross-check 3600, norms 600, critic 600, refinement 600; the comparison kinds 900, 1800, 900 and 2400, the original's), cut to what the
+  attempt watchdog leaves.
+- **Compatibility.** An agent of this version reads a task of an older stand and ignores its `max_output_tokens`, so it can be installed first. An older agent refuses a
+  task without it (`host_task_incomplete`), so the agent is reinstalled before or with the stand. The `ComparisonAiRoute.cell` of an estimate stored before is shown without the
+  two numbers.
+- **Not changed.** Every operation, every other schema, the stage plan's key and model, and every error code. The agent's silence window (`R-153p`, 120 to 600 s) is not a
+  contract member.
+
+The API has 296 paths, 324 operations and 798 schemas; migration head `0062`. The domain catalogs are at candidate revision 66.
+
+## Contract `1.48.0` (`HOSTS-L1`, historical)
 
 Slice for `HOSTS-L1` (lane of the HOSTS wave, 2026-11-10; `D-660`): **a waiting planned run names the cells it waits for**. **No operation, two new
 schemas, one widened one, no migration, no new error code, no state machine and no identity prefix**; migration head stays `0062`. The paths and
