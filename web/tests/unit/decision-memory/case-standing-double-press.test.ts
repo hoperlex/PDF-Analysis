@@ -8,8 +8,10 @@
  * `disabled={isPending}` is a re-render late: a double click delivers its second press to the button as it was drawn.
  *
  * The live harness (`tests/unit/analysis-settings/live-render.ts`: real React, no DOM library) is used the way a double click is
- * delivered: both presses start in the SAME tick, before React has re-rendered the button disabled. The control that follows shows
- * the harness can see the fault: a button guarded only by `isPending` sends twice under the very same double press.
+ * delivered: `pressRepeatedly` hands both presses to the handler the button was drawn with, in the SAME act, before React has
+ * re-rendered the button disabled. (Two `press` calls started together overlap two `act` scopes, which React does not support: the
+ * first version of this test did that, and every live render after it in the process rendered nothing.) The control that follows
+ * shows the harness can see the fault: a button guarded only by `isPending` sends twice under the very same double press.
  */
 
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -83,9 +85,8 @@ describe('one press, one request', () => {
     live = await mountLive(drawn(createElement(CaseStandingControl, { caseId: CASE_A, status: 'active' })));
     await live.change('Причина', 'client_request');
 
-    const delivered = await Promise.all([live.press('Отозвать'), live.press('Отозвать')]);
+    expect(await live.pressRepeatedly('Отозвать', 2)).toBe(true);
 
-    expect(delivered).toEqual([true, true]);
     expect(vi.mocked(withdrawDecisionMemoryCase)).toHaveBeenCalledTimes(1);
     const sent = vi.mocked(withdrawDecisionMemoryCase).mock.calls[0]?.[0] as unknown as { body: { reason_code: string }; idempotencyKey: string; path: { case_id: string } };
     expect(sent.body).toEqual({ reason_code: 'client_request' });
@@ -99,7 +100,7 @@ describe('one press, one request', () => {
     live = await mountLive(drawn(createElement(GuardedByPendingOnly, { caseId: CASE_A })));
     await live.change('Причина', 'client_request');
 
-    await Promise.all([live.press('Отозвать'), live.press('Отозвать')]);
+    await live.pressRepeatedly('Отозвать', 2);
 
     expect(vi.mocked(withdrawDecisionMemoryCase)).toHaveBeenCalledTimes(2);
     const keys = vi.mocked(withdrawDecisionMemoryCase).mock.calls.map((call) => (call[0] as unknown as { idempotencyKey: string }).idempotencyKey);
@@ -125,7 +126,7 @@ describe('one press, one request', () => {
     vi.mocked(withdrawDecisionMemoryCase).mockRejectedValueOnce(new Error('network'));
     live = await mountLive(drawn(createElement(CaseStandingControl, { caseId: CASE_A, status: 'active' })));
     await live.change('Причина', 'client_request');
-    await Promise.all([live.press('Отозвать'), live.press('Отозвать')]);
+    await live.pressRepeatedly('Отозвать', 2);
     expect(vi.mocked(withdrawDecisionMemoryCase)).toHaveBeenCalledTimes(1);
     expect(live.markup()).toContain('Состояние дела не изменено');
 
