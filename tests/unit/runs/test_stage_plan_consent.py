@@ -404,14 +404,40 @@ def test_the_mixed_billing_is_for_a_planned_consent_only(monkeypatch):
 # --- the readiness of a start ---------------------------------------------------------------------------------------------------
 
 
-def test_with_the_layout_off_the_readiness_is_the_legacy_estimate(registry):
+def test_with_the_layout_off_the_readiness_is_the_legacy_estimate(registry, monkeypatch):
+    monkeypatch.setenv(PLAN_ENV, "v3")  # named, so the expectation does not move with the default plan
     policy = service(registry)
     answer = start_readiness(policy, None, None, version_uid=VERSION)
     legacy = estimate(policy, None).as_dict()
-    assert answer == {"route": "legacy", "ready": True, "cells": [], "estimate_digest": legacy["estimate_digest"],
+    assert answer == {"route": "legacy", "ready": True, "cells": [], "extended_plan": "v3", "estimate_digest": legacy["estimate_digest"],
                       "estimated_cost_micros": legacy["estimated_cost_micros"],
                       "recommended_ceiling_micros": legacy["recommended_ceiling_micros"]}
     models.RunStartReadiness.model_validate(answer)
+
+
+@pytest.mark.parametrize(("environment", "expected"), [
+    ({PLAN_ENV: "v2"}, "v2"), ({PLAN_ENV: "extended-review-v2"}, "v2"),
+    ({PLAN_ENV: "v3"}, "v3"), ({PLAN_ENV: "extended-review-v3"}, "v3"),
+    ({"AUDITMANAGER_EXTENDED_ANALYSIS": "0", PLAN_ENV: "v3"}, None),
+])
+def test_the_readiness_names_the_extended_plan_a_start_would_run_under_on_both_routes(registry, monkeypatch, environment, expected):
+    """`extended_plan` (contract 1.50.0) is read through the preflight the estimate prices with: ``v2``, ``v3``, or ``None`` when the
+    extended analysis is off. The legacy route and the stage-plan route say the same thing, and the answer validates against the wire model."""
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+    policy = service(registry)
+    legacy = start_readiness(policy, None, None, version_uid=VERSION)
+    planned = start_readiness(policy, None, draft(), version_uid=VERSION)
+    assert legacy["extended_plan"] == planned["extended_plan"] == policy.extended_plan() == expected
+    assert models.RunStartReadiness.model_validate(planned).extended_plan == expected
+    assert models.RunStartReadiness.model_validate(legacy).model_dump(mode="json", exclude_unset=True)["extended_plan"] == expected
+
+
+def test_an_unsupported_plan_name_is_refused_by_the_readiness_as_the_estimate_refuses_it(registry, monkeypatch):
+    monkeypatch.setenv(PLAN_ENV, "v9")
+    with pytest.raises(DomainError) as caught:
+        start_readiness(service(registry), None, None, version_uid=VERSION)
+    assert caught.value.code is ErrorCode.VALIDATION_FAILED and caught.value.detail_fields["constraint"] == "unsupported_plan"
 
 
 def test_the_readiness_names_the_set_the_access_of_each_cell_and_the_digest_to_confirm(registry):
