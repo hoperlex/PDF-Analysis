@@ -23,59 +23,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
-import { parseRules } from './contrast';
-
-const COMMENT = /\/\*[\s\S]*?\*\//g;
-
-/** The text inside every `@media (<query>) { ... }` of a stylesheet, with its braces matched. */
-function mediaBlocks(css: string, query: string): readonly string[] {
-  const text = css.replace(COMMENT, '');
-  const head = `@media (${query})`;
-  const blocks: string[] = [];
-  let at = text.indexOf(head);
-  while (at >= 0) {
-    const open = text.indexOf('{', at);
-    let depth = 1;
-    let end = open + 1;
-    while (end < text.length && depth > 0) {
-      if (text[end] === '{') depth += 1;
-      else if (text[end] === '}') depth -= 1;
-      end += 1;
-    }
-    blocks.push(text.slice(open + 1, end - 1));
-    at = text.indexOf(head, end);
-  }
-  return blocks;
-}
-
-/** The stylesheet without any `@media` block: its base rules. */
-function withoutMedia(css: string): string {
-  let text = css.replace(COMMENT, '');
-  for (let at = text.indexOf('@media'); at >= 0; at = text.indexOf('@media')) {
-    const open = text.indexOf('{', at);
-    let depth = 1;
-    let end = open + 1;
-    while (end < text.length && depth > 0) {
-      if (text[end] === '{') depth += 1;
-      else if (text[end] === '}') depth -= 1;
-      end += 1;
-    }
-    text = text.slice(0, at) + text.slice(end);
-  }
-  return text;
-}
-
-function declares(css: string, selector: string, property: string, value: RegExp): boolean {
-  return parseRules(css, 'test').some(
-    (rule) =>
-      rule.selector.split(',').some((part) => part.trim() === selector) && value.test(rule.declarations.get(property) ?? ''),
-  );
-}
-
-/** Whether some `@media (<query>)` block of the sheet declares it. */
-function declaresIn(css: string, query: string, selector: string, property: string, value: RegExp): boolean {
-  return mediaBlocks(css, query).some((block) => declares(block, selector, property, value));
-}
+import { COMMENT, declares, declaresIn, mediaBlocks, withoutMedia } from './css-reads';
 
 /** The `min-width` breakpoints (px) whose block gives the selector's grid more than one track. */
 function columnBreakpoints(css: string, selector: string): readonly number[] {
@@ -176,11 +124,11 @@ describe('«Версия документа»: classification and runs share a r
   });
 });
 
-describe('«Главная» and «Дашборд» on a phone: a section row is two lines (lane WALK-V4)', () => {
-  const PHONE = 'max-width: 600px';
+describe('«Главная» and «Дашборд» on a phone and a tablet: a section row is two lines (lane WALK-V4; the breakpoint moved from 600 to 1100 px by lane WALK-V5)', () => {
+  const PHONE = 'max-width: 1100px';
   const OLD =
-    '@media (max-width: 600px) { .row { grid-template-columns: minmax(0, 1fr) auto 12px; } .header { grid-template-columns: minmax(0, 1fr) auto 12px; } }\n' +
-    '@media (max-width: 600px) { .metrics { grid-template-columns: repeat(5, 2.5rem); } }';
+    '@media (max-width: 1100px) { .row { grid-template-columns: minmax(0, 1fr) auto 12px; } .header { grid-template-columns: minmax(0, 1fr) auto 12px; } }\n' +
+    '@media (max-width: 1100px) { .metrics { grid-template-columns: repeat(5, 2.5rem); } }';
 
   it('can fail: the old stylesheet, one line with the numbers on 216 px, reads as wrong', () => {
     expect(declaresIn(OLD, PHONE, '.row > .metrics', 'grid-column', /^1 \/ -1$/)).toBe(false);

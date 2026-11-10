@@ -78,7 +78,14 @@
   white-space: nowrap;
 }
 
+/*
+ * `WALK-V5`: a stage's name keeps eight rem. The instants and figures beside it do not wrap, so the name took what was left: 72 px
+ * and four lines of «Извлечение геометрии страниц и блоков» at every width from 360 to 1024 px, 71 to 85 px tall. The scroller
+ * takes the difference.
+ */
 .stageName {
+  display: inline-block;
+  min-width: 8rem;
   font-weight: 500;
 }
 

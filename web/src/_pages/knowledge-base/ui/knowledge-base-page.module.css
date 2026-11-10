@@ -11,6 +11,10 @@
 /*
  * `UI-PARITY-DENSE`: the three filters in one row, each label beside its control (the global `.am-kb__filter` stacks a
  * caption over the control, which made the bar two rows tall for three controls).
+ *
+ * `WALK-V5`: the row wraps. The type filter is a label and four buttons («Все», «Замечания», «Предложения», «Память решений») that do
+ * not shrink, 390 px of them: at 360 px the page scrolled sideways by 30 px (scrollWidth 390 > 360). A filter that does not fit now
+ * breaks onto its next line inside its own box.
  */
 .filters {
   align-items: center;
@@ -20,8 +24,11 @@
 
 .filters :global(.am-kb__filter) {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-sm);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .results {

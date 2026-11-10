@@ -38,3 +38,13 @@
   border-radius: var(--am-radius-sm);
   font-family: inherit;
 }
+
+/*
+ * `WALK-V5`: on a phone the four columns keep 9 rem each and the frame scrolls (the table is `table-layout: fixed` at the frame's
+ * width: 71 px a column at 360 px, rows of 134 px, and the instant, which does not wrap, ran over the next column). The instant
+ * may break at its spaces here, so it needs the width of «21:29:10 UTC» and not of the whole stamp.
+ */
+@media (max-width: 600px) {
+  .table { min-width: 36rem; }
+  .when { white-space: normal; }
+}
