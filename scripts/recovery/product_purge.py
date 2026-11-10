@@ -234,7 +234,7 @@ PRODUCT_TABLES = frozenset((
 #: ``memory.`` is the decision memory's forget tool (`DECISION-MEMORY-01` section 4.5): ``memory.forget_requested`` and
 #: ``memory.forget_completed`` record who made the memory forget what, with identities, counts and digests only; they are kept for
 #: the same reason ``erasure.`` is.
-KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.", "memory.")
+KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.", "memory.", "stage_layout.")
 PRODUCT_EVENT_PREFIXES = (
     "artifact.", "attempt.", "audit_run.", "comparison.", "execution.", "findings.", "job.",
     "provider.", "stage.",
@@ -266,6 +266,13 @@ KEEP_COMMAND_TYPES = frozenset((
     # `DECISION-MEMORY-01` phase M2: a withdrawn or restored memory case. The receipt is referenced by the status event
     # (`decision_memory_status_event.command_id`), a KEEP row, so it is kept with it.
     "restore_decision_memory_case", "withdraw_decision_memory_case",
+    # `HOSTS-SEAL-1` (`0062_hosts_stage_models`): the keyed administrator writes of a server (enrollment, «Использовать», slots,
+    # archive, install and its host-key confirmation) and of the stage layout (a revision, the switch). They configure where model
+    # work goes, like the connection commands above; their tables are KEEP (`KEEP_EXECUTOR_TABLES`) and the layout's events are
+    # kept by the ``stage_layout.`` prefix. Found unclassified by the production preflight on 2026-11-10.
+    "archive_executor_host", "confirm_executor_host_agent_install_host_key", "create_executor_host_agent_install",
+    "issue_executor_host_enrollment", "revise_stage_layout", "set_executor_host_enabled", "set_executor_host_slots",
+    "set_stage_layout_enabled",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
     # `UI-PARITY-P0G`..`P0L`, `P0P`: a document archived, renamed or tagged, an execution status, decisions imported from

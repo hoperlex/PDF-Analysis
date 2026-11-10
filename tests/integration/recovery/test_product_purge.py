@@ -122,8 +122,11 @@ def test_every_event_type_and_command_type_the_source_writes_is_classified() -> 
         commands |= set(re.findall(r'command_type\s*=\s*"([a-z][a-z0-9_]*)"', body))
         commands |= set(re.findall(
             r'^[A-Z_]*COMMAND(?:_TYPE[A-Z_]*)?(?::[^=\n]+)?\s*=\s*"([a-z][a-z0-9_]*)"', body, re.MULTILINE))
+        # a command begun positionally, `_begin(session, ledger, "issue_executor_host_enrollment", ...)` (`executors/host_commands.py`):
+        # the production preflight of 2026-11-10 found eight such types this scan had not read.
+        commands |= set(re.findall(r'\b_begin\(\s*\w+\s*,\s*\w+\s*,\s*"([a-z][a-z0-9_]*)"', body))
     assert {"audit_run.created", "norm_custody.bound", "provider.prepared"} <= events
-    assert {"create_project", "approve_registration", "upload_price_list"} <= commands
+    assert {"create_project", "approve_registration", "upload_price_list", "issue_executor_host_enrollment", "revise_stage_layout"} <= commands
     prefixes = tool.KEEP_EVENT_PREFIXES + tool.PRODUCT_EVENT_PREFIXES
     assert sorted(e for e in events if not e.startswith(prefixes)) == []
     assert sorted(commands - tool.KEEP_COMMAND_TYPES - tool.PRODUCT_COMMAND_TYPES) == []
