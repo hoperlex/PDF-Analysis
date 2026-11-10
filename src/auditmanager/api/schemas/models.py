@@ -381,6 +381,8 @@ __all__ = [
     "ExecutorOccupancy",
     "ExecutorIntegrationAuthorisation",
     "RunQueueReason",
+    "RunWaitCause",
+    "RunWaitCell",
     "RunnerCliName",
     "RunnerCliAuthState",
     "RunnerExecutionProfile",
@@ -1127,7 +1129,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.47.0"]
+    contract_version: Literal["1.48.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1897,6 +1899,31 @@ class RunQueueReason(str, enum.Enum):
     MODEL_UNAVAILABLE = "model_unavailable"
 
 
+class RunWaitCause(str, enum.Enum):
+    """`HOSTS-L1` (contract 1.48.0): why one cell of a waiting planned run cannot be bound now. The six words of `ModelUnavailableReason` (no
+    available server for the cell's model and access: switched off, off line, not logged in, the model not verified, cooling down, on no
+    server) and `at_capacity`: a server serves the model and every place for it is taken."""
+
+    HOST_DISABLED = "host_disabled"
+    HOST_OFFLINE = "host_offline"
+    LOGIN_REQUIRED = "login_required"
+    MODEL_NOT_VERIFIED = "model_not_verified"
+    MODEL_COOLING_DOWN = "model_cooling_down"
+    NOT_ON_ANY_SERVER = "not_on_any_server"
+    AT_CAPACITY = "at_capacity"
+
+
+class RunWaitCell(_Object):
+    """`HOSTS-L1` (contract 1.48.0, `D-660`): a cell of the run's frozen stage plan that has no server to take it now, and why. The model
+    and the access are the plan's own; the cause is read at the moment of the status, from the same evaluation that keeps the run's
+    `wait_reason` true. It names a model and a cause, never a server."""
+
+    cell_key: StageCellKey
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    access: ExecutorModelAccess
+    cause: RunWaitCause
+
+
 class RunStatus(_Object):
     run_id: RunId
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1970,6 +1997,10 @@ class RunStatus(_Object):
     binding: ExecutorBinding = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     wait_reason: RunQueueReason = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     waiting_since: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `HOSTS-L1` (contract 1.48.0, `D-660`). The cells of a planned (stage-layout) run that waits and cannot be bound now, each with its
+    #: model, its access and the cause; present only for a ``pending`` planned run that is ``queued`` with a ``wait_reason``.
+    wait_cells: Annotated[list[RunWaitCell], Field(min_length=1, max_length=32)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
     #: `R-151v` (contract 1.21.0): the account that started the run and its display label; absent for a run
     #: created before migration 0051.
     started_by_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
