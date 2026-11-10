@@ -68,6 +68,16 @@
   margin-left: auto;
 }
 
+/*
+ * `D-564`: «все версии» is a 24 px target (it was 17 px, one line of 11.5 px text). The surplus is padding, and the same amount of
+ * margin is taken back, so the top row of the card keeps its height; a title that wraps keeps its lines.
+ */
+.history {
+  min-height: var(--am-target-min);
+  padding-block: calc((var(--am-target-min) - 1lh) / 2);
+  margin-block: calc((1lh - var(--am-target-min)) / 2);
+}
+
 /* `UI-A-53`: the Σ card that opens the grid, a control of the section and not a document. */
 .leading {
   display: flex;

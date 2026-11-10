@@ -50,6 +50,8 @@
 .formLead { margin: var(--am-gap-sm) 0 var(--am-gap-md); color: var(--am-showcase-muted); font-size: var(--am-text-sm); line-height: 1.5; text-wrap: pretty; }
 .register { display: flex; flex-wrap: wrap; gap: var(--am-gap-xs) var(--am-gap-md); margin: var(--am-gap-md) 0 0; color: var(--am-showcase-muted); font-size: var(--am-text-sm); }
 .register a { color: var(--am-showcase-accent-strong); font-weight: 700; }
+/* `D-564`: «Подать заявку на доступ» is a 24 px target (it was 19 px); the surplus is padding with the margin taken back, so the card keeps its height (one screen, no scroll). */
+.register a { min-height: var(--am-target-min); padding-block: calc((var(--am-target-min) - 1lh) / 2); margin-block: calc((1lh - var(--am-target-min)) / 2); }
 .register a:focus-visible { outline: 2px solid var(--am-showcase-accent); outline-offset: 3px; border-radius: 2px; }
 .accessNote { margin: var(--am-gap-md) 0 0; padding-top: var(--am-gap-sm); border-top: 1px solid color-mix(in srgb, var(--am-showcase-line) 36%, transparent); color: var(--am-showcase-soft); font-size: var(--am-text-xs); }
 

@@ -108,7 +108,7 @@ export function DocumentCardGrid({
               <span className={styles.pages}>{version.page_count} стр.</span>
               {version.archived_at === undefined ? null : <span className={styles.archived}>В архиве</span>}
               <span className={styles.topEnd}>
-                <Link href={documentHref} title="История версий документа">все версии</Link>
+                <Link className={styles.history} href={documentHref} title="История версий документа">все версии</Link>
                 {control === null ? null : <span className={styles.select}>{control}</span>}
               </span>
             </div>
