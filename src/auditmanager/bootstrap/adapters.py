@@ -2187,7 +2187,7 @@ class BlockAdapter(_SessionHolder):
 
         super().__init__(session_factory)
         self._blob_store = blob_store
-        # `listRunFindingBlocks`'s derived inputs, by the digests of the three documents they come from (see `_run_geometry`).
+        # `listRunFindingBlocks`'s derived inputs, by the digests of the documents they come from (see `_run_geometry`).
         self._geometry_cache: "OrderedDict[tuple[Any, ...], tuple[BlockAdapter._RunGeometry, int]]" = OrderedDict()
         self._geometry_cache_bytes = 0
         self._geometry_cache_lock = threading.Lock()
@@ -2456,8 +2456,13 @@ class BlockAdapter(_SessionHolder):
         Three saved documents are joined, each read with the digest its stage result recorded: the **run's** block
         index (``geometry.block_index``, the line boxes the evidence's character spans index) and page inventory
         (``prepared.page_inventory``, the page sizes), and the **version's** portal blocks (the document
-        ``listVersionPortalBlocks`` serves). The rule and its known misses are
-        ``analysis.geometry.finding_blocks``'s; nothing is stored and no evidence is changed.
+        ``listVersionPortalBlocks`` serves). A fourth and a fifth, the portal's recognised text of the same run
+        (``prepared.recognised_text``) and the run's text layer (``prepared.text_layer``, which says whether a quotation is unique
+        on its page), are the rule's **second witness** (`D-450`, `D-590`): they are read when the version has a recognised text
+        and give a link where a line crosses a block's edge and the recognised text of exactly one touching block holds the
+        evidence's quotation, under the conditions of step 5 of the rule; a version without a recognised text is answered by the
+        geometry alone, as before. The rule and its known misses are ``analysis.geometry.finding_blocks``'s; nothing is stored and
+        no evidence is changed.
 
         A finding's blocks are those that hold the evidence of **any** of its published observations (the canonical one and
         every one it merged, `D-520`), each block once, the canonical observation's blocks first.
@@ -2465,6 +2470,7 @@ class BlockAdapter(_SessionHolder):
         from auditmanager.analysis.public import (
             ROLE_BLOCK_INDEX,
             ROLE_PAGE_INVENTORY,
+            ROLE_TEXT_LAYER,
             EvidenceSpan,
             link_evidence,
         )
@@ -2502,12 +2508,15 @@ class BlockAdapter(_SessionHolder):
         if index_ref is None or inventory_ref is None or source is None:
             return absent()
 
-        geometry_of_run = self._run_geometry(index_ref, inventory_ref, source.portal_blocks, run.version_uid)
+        geometry_of_run = self._run_geometry(
+            index_ref, inventory_ref, source.portal_blocks, run.version_uid, source.recognised_text,
+            self._artifact_reference(preparation.artifacts, ROLE_TEXT_LAYER),
+        )
         pages, lines, boxes = geometry_of_run.pages, geometry_of_run.lines, geometry_of_run.boxes
         spans_of: dict[str, list[EvidenceSpan]] = {}
         for item in evidence:
             spans_of.setdefault(item.finding_observation_id, []).append(
-                EvidenceSpan(item.page_number, item.char_start, item.char_end),
+                EvidenceSpan(item.page_number, item.char_start, item.char_end, item.quote),
             )
         items = []
         for group in sorted(groups, key=lambda group: group.canonical.finding_uid):
@@ -2523,7 +2532,9 @@ class BlockAdapter(_SessionHolder):
             for observation in observations:
                 spans = spans_of.get(observation)
                 if spans:
-                    linked.update(dict.fromkeys(link_evidence(spans, lines=lines, pages=pages, blocks=boxes)))
+                    linked.update(dict.fromkeys(link_evidence(
+                        spans, lines=lines, pages=pages, blocks=boxes, readings=geometry_of_run.readings,
+                    )))
             items.append(models.FindingBlockLink(
                 finding_uid=group.canonical.finding_uid,
                 portal_block_ids=list(linked),
@@ -2535,30 +2546,44 @@ class BlockAdapter(_SessionHolder):
         )
 
     class _RunGeometry:
-        """What :meth:`list_run_finding_blocks` derives from the run's block index and page inventory and the version's portal
-        blocks, and nothing else: immutable, so a cached copy can be shared by concurrent reads."""
+        """What :meth:`list_run_finding_blocks` derives from the run's block index and page inventory, the version's portal
+        blocks and, when it has one, its recognised text, and nothing else: immutable, so a cached copy can be shared by
+        concurrent reads.
 
-        __slots__ = ("pages", "lines", "boxes", "unlinked_pages")
+        ``readings`` (the recognised text of the portal's **text** blocks by block id, never an image's description, the blocks whose
+        reading the witness must not trust, and the text layer's page texts, folded once on first use) is ``None`` when the version
+        has no recognised-text document, which is no second witness. Its memo of folds only ever holds what a recomputation would give."""
+
+        __slots__ = ("pages", "lines", "boxes", "unlinked_pages", "readings")
 
         def __init__(
             self, *, pages: Mapping[int, tuple[float, float]], lines: Mapping[int, tuple[Any, ...]],
-            boxes: tuple[Any, ...], unlinked_pages: tuple[int, ...],
+            boxes: tuple[Any, ...], unlinked_pages: tuple[int, ...], readings: Any = None,
         ) -> None:
             self.pages, self.lines, self.boxes, self.unlinked_pages = pages, lines, boxes, unlinked_pages
+            self.readings = readings
 
-    #: How many runs' derived geometry one adapter keeps, and the most the three documents of all of them may declare together.
+    #: Whether ``listRunFindingBlocks`` asks the rule's second witness (`D-450`, `D-590`): the version's recognised text and the run's text
+    #: layer are read and handed to the rule. ``False`` is the relation of `D-353` (the geometry alone) and reads neither document. A code
+    #: constant, not a setting (the adapter reads no environment): the one line that rolls the witness back until a setting exists (`D-640`).
+    _SECOND_WITNESS = True
+
+    #: How many runs' derived geometry one adapter keeps, and the most the documents (three, and the recognised text and the text layer when the second witness is on) of all of them may declare together.
     #: A document larger than the budget is read and derived as before, and not kept.
     _GEOMETRY_CACHE_ENTRIES = 8
     _GEOMETRY_CACHE_BYTES = 48 * 1024 * 1024
 
     def _run_geometry(
         self, index_ref: Mapping[str, Any], inventory_ref: Mapping[str, Any], portal_ref: Mapping[str, Any], version_uid: str,
+        recognised_ref: Mapping[str, Any] | None = None, text_layer_ref: Mapping[str, Any] | None = None,
     ) -> "BlockAdapter._RunGeometry":
-        """The derived inputs of one run's relation, from a per-process cache when the same three documents were derived before.
+        """The derived inputs of one run's relation, from a per-process cache when the same documents were derived before.
 
-        The key is the version and the SHA-256 and size each ``stage_result`` recorded for the three artifacts, so a hit is the
-        very content a miss verified and parsed (the blob store is content-addressed, ``_verified_bytes`` holds every read to that
-        declaration): **a miss is the whole truth** and a hit changes no answer. The cache is lost with the process and is never
+        The documents are the three of the geometry and, when the version has a recognised text (``recognised_ref``; ``None`` is no second
+        witness), that text and the run's text layer (``text_layer_ref``). The key is the version and the SHA-256 and size each ``stage_result`` recorded for each of
+        them, so a changed recognised text is another key, and a hit is the very content a miss verified and parsed (the blob
+        store is content-addressed, ``_verified_bytes`` holds every read to that declaration): **a miss is the whole truth** and
+        a hit changes no answer. The cache is lost with the process and is never
         read by anything but this method. What a hit does not do is read the object store again, so an object that disappears
         or is damaged afterwards is noticed by the next miss (another document, an eviction, a restart), not by a hit; the
         findings and their evidence, which decide the answer, are read from the database on every call.
@@ -2569,17 +2594,22 @@ class BlockAdapter(_SessionHolder):
             ROLE_BLOCK_INDEX,
             ROLE_PAGE_INVENTORY,
             ROLE_PORTAL_BLOCKS,
+            ROLE_RECOGNISED_TEXT,
+            ROLE_TEXT_LAYER,
             PortalBox,
+            Readings,
             TextLine,
             linkable_pages,
         )
 
-        declared = [
-            (role, reference.get("sha256"), reference.get("size_bytes"))
-            for role, reference in (
-                (ROLE_BLOCK_INDEX, index_ref), (ROLE_PAGE_INVENTORY, inventory_ref), (ROLE_PORTAL_BLOCKS, portal_ref),
-            )
-        ]
+        if not self._SECOND_WITNESS:
+            recognised_ref = text_layer_ref = None
+        references = [(ROLE_BLOCK_INDEX, index_ref), (ROLE_PAGE_INVENTORY, inventory_ref), (ROLE_PORTAL_BLOCKS, portal_ref)]
+        if recognised_ref is not None:
+            references.append((ROLE_RECOGNISED_TEXT, recognised_ref))
+            if text_layer_ref is not None:
+                references.append((ROLE_TEXT_LAYER, text_layer_ref))
+        declared = [(role, reference.get("sha256"), reference.get("size_bytes")) for role, reference in references]
         weight = sum(int(size) for _, sha, size in declared if sha is not None and size is not None)
         key = (version_uid, *declared) if all(sha is not None and size is not None for _, sha, size in declared) else None
         if key is not None:
@@ -2592,6 +2622,17 @@ class BlockAdapter(_SessionHolder):
         portal = self._portal_document(portal_ref, ROLE_PORTAL_BLOCKS, version_uid)
         index = self._portal_document(index_ref, ROLE_BLOCK_INDEX, version_uid)
         inventory = self._portal_document(inventory_ref, ROLE_PAGE_INVENTORY, version_uid)
+        readings: Readings | None = None
+        if recognised_ref is not None:
+            recognised = self._portal_document(recognised_ref, ROLE_RECOGNISED_TEXT, version_uid)
+            texts, doubtful = self._witness_inputs(portal["blocks"], recognised["entries"])
+            # The text the evidence's offsets index: the witness asks it whether a quotation is unique on its page. A run that
+            # recorded none is `storage_integrity_error` (a reference the run did not record), never a witness without it.
+            layer = self._portal_document(text_layer_ref, ROLE_TEXT_LAYER, version_uid)
+            readings = Readings(
+                MappingProxyType(texts), doubtful,
+                MappingProxyType({int(page["page_number"]): page["text"] for page in layer["pages"]}),
+            )
         collected: dict[int, list[Any]] = {}
         for block in index["blocks"]:
             box = block["bbox"]
@@ -2616,6 +2657,7 @@ class BlockAdapter(_SessionHolder):
                 for block in portal["blocks"]
             ),
             unlinked_pages=tuple(sorted(int(page["page_number"]) for page in portal["pages"] if int(page["page_number"]) not in pages)),
+            readings=readings,
         )
         if key is not None and weight <= self._GEOMETRY_CACHE_BYTES:
             with self._geometry_cache_lock:
@@ -2629,6 +2671,37 @@ class BlockAdapter(_SessionHolder):
                     _, (_, evicted) = self._geometry_cache.popitem(last=False)
                     self._geometry_cache_bytes -= evicted
         return built
+
+    def _witness_inputs(
+        self, blocks: Sequence[Mapping[str, Any]], entries: Sequence[Mapping[str, Any]],
+    ) -> tuple[dict[str, str], frozenset[str]]:
+        """``(block_texts, doubtful_blocks)`` for the rule's second witness (`D-450`, `D-590`), from the version's portal blocks
+        and the entries of its recognised text.
+
+        ``block_texts`` is the recognised text of each **text** block that has one: an image's ``portal_description`` is what the
+        portal says of a picture and not what the page says, so it is never a text. ``doubtful_blocks`` are the blocks whose reading
+        must not be trusted: a text block with a quality flag on it, and every block of the list that has no text (an image, a stamp,
+        a text block with an empty body or with no entry at all): a block that cannot be read can neither hold the quotation nor
+        rule it out, and the rule abstains on a line it touches. The entries are held to the join ``listVersionPortalBlocks`` holds
+        them to (an entry of a block the list does not hold, or of a kind that is not its block's, is ``storage_integrity_error``),
+        never skipped.
+        """
+        from auditmanager.analysis.public import KIND_PORTAL_DESCRIPTION, KIND_RECOGNISED_TEXT, ROLE_RECOGNISED_TEXT
+
+        types = {block["portal_block_id"]: block["block_type"] for block in blocks}
+        texts: dict[str, str] = {}
+        flagged: set[str] = set()
+        for entry in entries:
+            identifier, kind = entry["portal_block_id"], entry["kind"]
+            block_type = types.get(identifier)
+            if kind == KIND_RECOGNISED_TEXT and block_type == "text":
+                if entry["text"]:
+                    texts[identifier] = entry["text"]
+                if entry["flags"]:
+                    flagged.add(identifier)
+            elif not (kind == KIND_PORTAL_DESCRIPTION and block_type == "image"):
+                raise self._portal_integrity(ROLE_RECOGNISED_TEXT)
+        return texts, frozenset(flagged | {identifier for identifier in types if identifier not in texts})
 
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         from auditmanager.analysis.public import (

@@ -29,9 +29,11 @@ import pdfplumber
 
 from auditmanager.analysis.geometry.finding_blocks import (
     COVERAGE,
+    WITNESS_MAX_GAP_LINE_HEIGHTS,
     WITNESS_MIN_CHARACTERS,
     EvidenceSpan,
     PortalBox,
+    Readings,
     link_evidence,
 )
 from auditmanager.analysis.recognised.flags import flags_for
@@ -197,30 +199,37 @@ class MemoOracle:
 
 
 def doubtful_blocks(blocks: Sequence[BlockFact], texts: Mapping[str, str]) -> set[str]:
-    """The text blocks whose reading ``texts`` may have wrong: a quality flag (``analysis.recognised.flags``) on it, or nothing
-    recognised. A block that is not a text block (an image) is never doubtful: it is not read."""
+    """The blocks whose reading ``texts`` may have wrong or does not have: a quality flag (``analysis.recognised.flags``) on it, or
+    nothing recognised. **Every** block counts, whatever its type: an image or a stamp has no reading, and a block that cannot be read
+    can neither hold the quotation nor rule it out (the adapter names the same set; ``JUDGE-N2`` H1, M3)."""
     return {
         block.portal_block_id for block in blocks
-        if block.block_type == "text" and (not texts.get(block.portal_block_id) or flags_for(texts[block.portal_block_id]))
+        if not texts.get(block.portal_block_id) or flags_for(texts[block.portal_block_id])
     }
 
 
 def rule_links(
     evidence: Sequence[EvidenceFact], lines: Sequence[Any], sizes: Mapping[int, tuple[float, float]], blocks: Sequence[BlockFact],
     unlinked: set[int], texts: Mapping[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS,
-    doubtful: Collection[str] = (),
+    doubtful: Collection[str] = (), page_texts: Mapping[int, str] | None = None,
+    max_gap_line_heights: float | None = WITNESS_MAX_GAP_LINE_HEIGHTS, readings: Readings | None = None,
 ) -> list[str]:
     """``finding_blocks.link_evidence`` over the stored documents: the shipped rule, called as the adapter calls it, with the
-    recognised text (the second witness) when ``texts`` is given. ``unlinked`` are the adapter's ``unlinked_pages``."""
+    recognised text (the second witness) when ``texts`` and ``page_texts`` (the text layer's text by page) are given.
+    ``unlinked`` are the adapter's ``unlinked_pages``. ``readings`` (a :class:`Readings` built once for ``texts``, ``doubtful`` and
+    ``page_texts``) replaces the three, as the adapter hands its own, so that a sweep folds each text once and not once per finding."""
     by_page: dict[int, list[Any]] = {}
     for line in lines:
         by_page.setdefault(line.page_number, []).append(line)
     boxes = [PortalBox(b.portal_block_id, b.page_number, *b.bbox_norm) for b in blocks]
     spans = [EvidenceSpan(f.page_number, f.char_start, f.char_end, f.quote) for f in evidence if f.page_number not in unlinked]
     pages = {n: size for n, size in sizes.items() if n not in unlinked}
+    given = {"readings": readings} if readings is not None else {
+        "block_texts": texts, "doubtful_blocks": doubtful, "page_texts": page_texts,
+    }
     return list(link_evidence(
-        spans, lines=by_page, pages=pages, blocks=boxes, block_texts=texts, doubtful_blocks=doubtful,
-        witness_min_characters=min_characters,
+        spans, lines=by_page, pages=pages, blocks=boxes, witness_min_characters=min_characters,
+        witness_max_gap_line_heights=max_gap_line_heights, **given,
     ))
 
 

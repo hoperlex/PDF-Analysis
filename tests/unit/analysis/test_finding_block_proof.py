@@ -134,11 +134,13 @@ def test_a_damaged_reading_stops_matching_the_quotation_and_an_unlinked_page_lin
     line = TextLine(1, 100, 140, 50.0, 200.0, 550.0, 212.0)
     blocks = [BlockFact("blk_l", 1, "text", (0.0, 0.2, 0.5, 0.3), "Итого"), BlockFact("blk_r", 1, "text", (0.5, 0.2, 1.0, 0.3), None)]
     quote = "Огнестойкость узла не менее R30"
-    fact, sizes = EvidenceFact(1, 100, 140, quote), {1: (600.0, 800.0)}
-    assert rule_links([fact], [line], sizes, blocks, set(), {"blk_r": quote}) == ["blk_r"]
-    assert rule_links([fact], [line], sizes, blocks, set(), {"blk_r": degrade("blk_r", quote, 1.0)}) == []
-    assert rule_links([fact], [line], sizes, blocks, set(), None) == []
-    assert rule_links([fact], [line], sizes, blocks, {1}, {"blk_r": quote}) == []
+    fact, sizes, layer = EvidenceFact(1, 100, 140, quote), {1: (600.0, 800.0)}, {1: quote}
+    texts = {"blk_l": "Итого", "blk_r": quote}
+    assert rule_links([fact], [line], sizes, blocks, set(), texts, page_texts=layer) == ["blk_r"]
+    assert rule_links([fact], [line], sizes, blocks, set(), {**texts, "blk_r": degrade("blk_r", quote, 1.0)}, page_texts=layer) == []
+    assert rule_links([fact], [line], sizes, blocks, set(), None, page_texts=layer) == []
+    assert rule_links([fact], [line], sizes, blocks, set(), texts) == [], "without the text layer's pages the witness is not asked"
+    assert rule_links([fact], [line], sizes, blocks, {1}, texts, page_texts=layer) == []
 
 
 def test_the_reproduction_guard_passes_on_the_same_answers():
@@ -183,21 +185,29 @@ def test_degrade_without_the_look_alikes_damages_what_no_quality_flag_names():
     assert not flags_for(unseen) and unseen != TEXT, "the letter-short damage is not"
 
 
-def test_a_text_block_is_doubtful_when_its_reading_is_flagged_or_empty_and_an_image_never():
+def test_a_block_is_doubtful_when_its_reading_is_flagged_or_empty_and_an_image_or_a_stamp_has_none():
     blocks = [
         BlockFact("blk_ok", 1, "text", (0.0, 0.0, 0.5, 0.5), "Огнестойкость узла"),
         BlockFact("blk_flag", 1, "text", (0.5, 0.0, 1.0, 0.5), "Огнестойкоcть узла"),  # a Latin c in a Cyrillic word
         BlockFact("blk_empty", 1, "text", (0.0, 0.5, 0.5, 1.0), None),
         BlockFact("blk_image", 1, "image", (0.5, 0.5, 1.0, 1.0), None),
+        BlockFact("blk_stamp", 1, "stamp", (0.5, 0.5, 1.0, 1.0), None),
     ]
     texts = {b.portal_block_id: b.text for b in blocks if b.text}
-    assert doubtful_blocks(blocks, texts) == {"blk_flag", "blk_empty"}
+    # `JUDGE-N2` H1/M3: an image never was doubtful here ("it is not read"), which is how it came to be passed over.
+    assert doubtful_blocks(blocks, texts) == {"blk_flag", "blk_empty", "blk_image", "blk_stamp"}
 
 
 def test_rule_links_passes_the_doubtful_blocks_to_the_rule():
     line = TextLine(1, 100, 140, 50.0, 200.0, 550.0, 212.0)
     blocks = [BlockFact("blk_l", 1, "text", (0.0, 0.2, 0.5, 0.3), "Итого"), BlockFact("blk_r", 1, "text", (0.5, 0.2, 1.0, 0.3), None)]
     quote = "Огнестойкость узла не менее R30"
-    fact, sizes, texts = EvidenceFact(1, 100, 140, quote), {1: (600.0, 800.0)}, {"blk_r": quote}
-    assert rule_links([fact], [line], sizes, blocks, set(), texts, doubtful={"blk_l"}) == []
-    assert rule_links([fact], [line], sizes, blocks, set(), texts, doubtful=set()) == ["blk_r"]
+    fact, sizes, texts, layer = EvidenceFact(1, 100, 140, quote), {1: (600.0, 800.0)}, {"blk_l": "Итого", "blk_r": quote}, {1: quote}
+    assert rule_links([fact], [line], sizes, blocks, set(), texts, doubtful={"blk_l"}, page_texts=layer) == []
+    assert rule_links([fact], [line], sizes, blocks, set(), texts, doubtful=set(), page_texts=layer) == ["blk_r"]
+    # The limit on an unboxed stretch of the line reaches the rule: with the left column unboxed (500 pt line, 12 pt tall) it abstains,
+    # and without the limit (the ablation of the measurement) the right column's reading decides.
+    right_only = [blocks[1]]
+    assert rule_links([fact], [line], sizes, right_only, set(), texts, page_texts=layer) == []
+    assert rule_links([fact], [line], sizes, right_only, set(), texts, page_texts=layer, max_gap_line_heights=None) == ["blk_r"]
+    assert rule_links([fact], [line], sizes, right_only, set(), texts, page_texts=layer, max_gap_line_heights=25.0) == ["blk_r"]
