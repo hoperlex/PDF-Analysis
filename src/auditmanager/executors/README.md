@@ -27,6 +27,7 @@ and built from the worker's `KindRuntime`.
 | `operations.py` / `__main__.py` | `python -m auditmanager.executors import-env | rewrap | reach` |
 | `runner_repository.py` | the only reader and writer of `executor_runner_token` and `executor_task` (migration `0031`, `EXEC-PULL-01`) |
 | `runner.py` | the pull channel's `api` side: issue and revoke a runner token, authenticate it, claim (long poll), extend, answer and fail a task |
+| `task_context.py` / `task_context_repository.py` | `CTX-STAND` (`ADR-0029` decision 3): the critic's reference data -- the consent's `executor_context_policy`, the claim's `context_request`, the answer of `getExecutorTaskContext` (404 rules, idempotent by (task, kind), the budget, `unavailable / until_move` while the encoder runs by night) and the `KEEP` journal `executor_task_context_delivery` (no foreign key, no text). Dormant: the policy joins a consent only while the «контекст критику» switch is on |
 | `answers.py` | a runner's answer held to the task's output schema (a small validator for the keywords the stage's schemas use; anything else is refused) |
 | `pull.py` | the `pull` kind as a model adapter (writes a task and waits inside the Attempt) and its «Проверить» |
 
