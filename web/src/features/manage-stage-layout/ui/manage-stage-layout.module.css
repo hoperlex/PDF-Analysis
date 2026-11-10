@@ -40,6 +40,16 @@
   margin: var(--am-gap-sm) 0 0;
 }
 
+.fold {
+  margin: var(--am-gap-sm) 0;
+}
+
+.fold summary {
+  cursor: pointer;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
 .journal {
   display: grid;
   gap: var(--am-gap-2xs);
