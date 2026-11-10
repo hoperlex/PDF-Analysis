@@ -328,9 +328,15 @@
   white-space: nowrap;
 }
 
+/*
+ * A counter is a circle while it holds one digit and a pill after that: as tall as it is wide at the least. The figure is centred on
+ * its cap height, not on the font's line box (`text-box`), since Ubuntu Sans puts the line box's middle a pixel under the digits'.
+ */
 .sectionCount {
   flex: 0 0 auto;
-  min-width: 2ch;
+  display: inline-block;
+  min-width: 18px;
+  height: 18px;
   white-space: nowrap;
   padding: 0 var(--am-gap-xs);
   border-radius: var(--am-radius-pill);
@@ -338,8 +344,10 @@
   color: var(--am-ink);
   font-size: var(--am-text-xs);
   font-variant-numeric: tabular-nums;
-  line-height: var(--am-leading-base);
+  line-height: 1;
   text-align: center;
+  align-content: center;
+  text-box: trim-both cap alphabetic;
 }
 
 /* `R-153g`: a section with no document is in the list too, its 0 in the muted ink of a note, not the ink of a count. */
@@ -361,16 +369,20 @@
   white-space: nowrap;
 }
 
+/* The shape and the centring of `.sectionCount`; the red one carries no outline, its tint is the signal. */
 .badge {
-  min-width: 2ch;
+  display: inline-block;
+  min-width: 18px;
+  height: 18px;
   white-space: nowrap;
   padding: 0 var(--am-gap-xs);
-  border: 1px solid transparent;
   border-radius: var(--am-radius-pill);
   font-size: var(--am-text-xs);
   font-variant-numeric: tabular-nums;
-  line-height: var(--am-leading-base);
+  line-height: 1;
   text-align: center;
+  align-content: center;
+  text-box: trim-both cap alphabetic;
 }
 
 .badgeCount {
@@ -379,7 +391,6 @@
 }
 
 .badgeAlert {
-  border-color: var(--am-failed);
   background: var(--am-failed-light);
   color: var(--am-failed);
 }
@@ -469,7 +480,11 @@
   box-shadow: var(--am-shadow-1);
 }
 
+/* The icon is centred in its button; as an inline box it stood on the text baseline, two pixels high. */
 .end :global(.am-theme__option) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 26px;
   min-height: 24px;
   padding: var(--am-gap-2xs) var(--am-gap-xs);
@@ -480,18 +495,24 @@
   color: var(--am-accent-strong);
 }
 
+/*
+ * The stand's label: a 28 px pill whose capitals sit on its middle. A `min-height` with the text at the top of the box left them
+ * three pixels high; the box is now exactly that tall and its one line, trimmed to the capitals, is centred in it.
+ */
 .end :global(.am-app__instance) {
   position: relative;
   display: block;
   max-width: 170px;
-  min-height: 28px;
-  padding: var(--am-gap-2xs) var(--am-gap-md) var(--am-gap-2xs) var(--am-gap-lg);
+  height: 28px;
+  padding: 0 var(--am-gap-md) 0 var(--am-gap-lg);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent);
   border-radius: var(--am-radius-pill);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
-  line-height: var(--am-leading-base);
+  line-height: 1;
+  align-content: center;
+  text-box: trim-both cap alphabetic;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

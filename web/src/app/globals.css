@@ -1387,11 +1387,10 @@ input[type='file']::file-selector-button:hover {
   text-align: right;
 }
 
+/* The initials are centred on their cap height (`text-box`), not on the font's line box, whose middle sits under the capitals. */
 .am-avatar {
-  display: inline-flex;
+  display: inline-block;
   flex: none;
-  align-items: center;
-  justify-content: center;
   width: 28px;
   height: 28px;
   overflow: hidden;
@@ -1400,6 +1399,10 @@ input[type='file']::file-selector-button:hover {
   font-weight: 650;
   line-height: 1;
   letter-spacing: 0.02em;
+  text-align: center;
+  text-indent: 0.02em;
+  align-content: center;
+  text-box: trim-both cap alphabetic;
   white-space: nowrap;
   user-select: none;
 }
