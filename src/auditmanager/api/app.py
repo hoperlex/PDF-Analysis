@@ -207,7 +207,7 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     FastAPI's own 422 must be *displaced, not deleted*: declaring the contract's own
     ``422: {"model": ErrorEnvelope, ...}`` replaces it and keeps ``HTTPValidationError`` and
     ``ValidationError`` out of ``components.schemas``. **Two hundred and twenty-four** of the 318
-    operations do exactly that (226 of 324 until `AR-V3-BE-RM-01` removed six operations, two of which declared one) -- measured from the contract, not recalled: this paragraph
+    operations do exactly that (226 of 324 until `AR-V3-BE-RM-01` removed the beta's operation set, two of which declared one) -- measured from the contract, not recalled: this paragraph
     read *"Twelve of the seventeen"* until wave 39, and twelve plus the four below is
     sixteen, which was never the size of this surface. It was thirteen of seventeen before
     ``changePassword``, which declares its own 422 like every other operation with a body,
