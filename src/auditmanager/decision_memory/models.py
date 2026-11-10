@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Final
 
 from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.shared.identity import DecisionId, IdentityError
 from auditmanager.storage.public import parse_blob_id
 
 #: The shape of what a capture writes. A change to the content of a case is a new version here, never an edit of an old case.
@@ -26,8 +27,25 @@ ORIGIN_KINDS: Final[frozenset[str]] = frozenset({"direct", "carried", "imported"
 #: ``test`` or ``real``; an installation setting from phase M2 on (`D-390`). Every case of this phase is ``test``.
 DATA_CLASSES: Final[frozenset[str]] = frozenset({"test", "real"})
 
-#: The event types that are captured (`Q8`): a ``comment`` is not a decision.
+#: The event types that are captured as decisions (`Q8`): a ``comment`` is not a decision.
 CAPTURED_EVENT_TYPES: Final[frozenset[str]] = frozenset({"accept", "reject"})
+#: The ledger event whose text is kept in ``decision_memory_comment``, a table of its own beside the decisions (`ADR-0029` decision 10,
+#: `R-153ag`). It never makes a case and never changes a vote.
+COMMENT_EVENT_TYPE: Final[str] = "comment"
+#: The length ceiling of ``decision_memory_comment.comment`` (the ledger's own is the same, ``ck_expert_decision_event_comment_length``).
+COMMENT_MAX_CHARS: Final[int] = 4000
+
+#: What :meth:`MemoryRepository.capture_comment` did with a comment event.
+COMMENT_CAPTURED: Final[str] = "captured"
+COMMENT_ALREADY_CAPTURED: Final[str] = "already_captured"
+#: The observation has no case yet. Nothing is lost: the comment is carried over by the capture of the case's first ✓/✕, which is handed
+#: the earlier comments of the observation (:attr:`CaptureSnapshot.earlier_comments`).
+COMMENT_WAITS_FOR_CASE: Final[str] = "waits_for_case"
+#: The case was forgotten: it takes no words back (`ADR-0027`, the forget guard). Not an error, and not stored.
+COMMENT_REFUSED_CASE_FORGOTTEN: Final[str] = "case_forgotten"
+COMMENT_OUTCOMES: Final[frozenset[str]] = frozenset(
+    {COMMENT_CAPTURED, COMMENT_ALREADY_CAPTURED, COMMENT_WAITS_FOR_CASE, COMMENT_REFUSED_CASE_FORGOTTEN}
+)
 VERDICT_FOR_CAPTURED_EVENT: Final[dict[str, str]] = {"accept": "accepted", "reject": "rejected"}
 
 #: At most this many crop images a case references (`Q6`).
@@ -166,6 +184,30 @@ class DecisionFact:
 
 
 @dataclass(frozen=True, slots=True)
+class CommentFact:
+    """One ``comment`` ledger event, as the memory keeps it: the expert's own words on a finding's observation.
+
+    The words are never the system's: a ``comment`` event is written by an expert only (the carry-over writes ``accept`` and ``reject``
+    events), so unlike a decision's comment there is no provenance sentence to leave out.
+    """
+
+    source_decision_id: str
+    comment: str
+    author_user_uid: str | None
+    decided_at: datetime
+
+    def __post_init__(self) -> None:
+        try:
+            DecisionId.parse(self.source_decision_id)
+        except IdentityError:
+            raise _invalid("a comment names the ledger event it comes from by its identity") from None
+        if not self.comment.strip():
+            raise _invalid("a comment carries words")
+        if len(self.comment) > COMMENT_MAX_CHARS:
+            raise _invalid(f"a comment is at most {COMMENT_MAX_CHARS} characters")
+
+
+@dataclass(frozen=True, slots=True)
 class CaptureSnapshot:
     """Everything one capture writes.
 
@@ -179,6 +221,10 @@ class CaptureSnapshot:
     data_class: str
     crops: tuple[CropRef, ...]
     decision: DecisionFact
+    #: The ``comment`` events of this observation recorded before the decision. The capture of a case carries them over (idempotently:
+    #: a comment already kept is left alone), so an expert's note written before the first ✓/✕ is not lost to the memory. The memory
+    #: reads no ledger: the assembler passes them in.
+    earlier_comments: tuple[CommentFact, ...] = ()
 
     def __post_init__(self) -> None:
         if self.data_class not in DATA_CLASSES:
@@ -195,6 +241,24 @@ class CaptureResult:
     memory_decision_id: str | None
     case_created: bool
     decision_created: bool
+    #: How many earlier comments this capture newly stored; ``0`` for a replay, for a forgotten case and when none were handed in.
+    comments_carried: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class CommentCaptureResult:
+    """What :meth:`MemoryRepository.capture_comment` did. ``case_id`` is ``None`` while the observation has no case."""
+
+    case_id: str | None
+    outcome: str
+
+    def __post_init__(self) -> None:
+        if self.outcome not in COMMENT_OUTCOMES:
+            raise _invalid(f"{self.outcome!r} is not a comment capture outcome")
+
+    @property
+    def comment_created(self) -> bool:
+        return self.outcome == COMMENT_CAPTURED
 
 
 def content_digest(content: CaseContent) -> str:

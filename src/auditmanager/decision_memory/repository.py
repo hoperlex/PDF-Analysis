@@ -17,18 +17,30 @@ from sqlalchemy.orm import Session
 
 from auditmanager.decision_memory.models import (
     CAPTURE_VERSION,
+    COMMENT_ALREADY_CAPTURED,
+    COMMENT_CAPTURED,
+    COMMENT_REFUSED_CASE_FORGOTTEN,
+    COMMENT_WAITS_FOR_CASE,
     CROP_STATE_NONE_AVAILABLE,
     CROP_STATE_REFERENCED,
     CaptureResult,
     CaptureSnapshot,
+    CommentCaptureResult,
+    CommentFact,
     content_digest,
 )
+from auditmanager.decision_memory.service import STATUS_LOCK_PREFIX
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     DecisionMemoryCaseId,
+    DecisionMemoryCommentId,
     DecisionMemoryCropId,
     DecisionMemoryDecisionId,
 )
+
+#: The advisory-lock key prefix of the comments of one observation. A comment written before its observation has a case and the first
+#: ✓/✕ that makes the case must not pass each other unseen (see :meth:`MemoryRepository.lock_observation_comments`).
+COMMENT_LOCK_PREFIX = "decision_memory_comment_observation:"
 
 _INSERT_CASE = text(
     """
@@ -126,6 +138,23 @@ _FORGOTTEN = text(
     "SELECT 1 FROM decision_memory_status_event WHERE case_id = :case_id AND kind = 'forget' LIMIT 1"
 )
 
+_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
+
+_CASE_OF_OBSERVATION = text("SELECT case_id FROM decision_memory_case WHERE origin_observation_id = :observation_id")
+
+_INSERT_COMMENT = text(
+    """
+    INSERT INTO decision_memory_comment (comment_id, case_id, source_decision_id, author_user_uid, comment, decided_at)
+    VALUES (:comment_id, :case_id, :source_decision_id, :author_user_uid, :comment, :decided_at)
+    ON CONFLICT (source_decision_id) DO NOTHING
+    RETURNING comment_id
+    """
+)
+
+_CAPTURED_COMMENT_SOURCES = text(
+    "SELECT source_decision_id FROM decision_memory_comment WHERE source_decision_id IN :ids"
+).bindparams(bindparam("ids", expanding=True))
+
 _CAPTURED_SOURCES = text(
     "SELECT source_decision_id FROM decision_memory_decision WHERE source_decision_id IN :ids"
 ).bindparams(bindparam("ids", expanding=True))
@@ -148,14 +177,82 @@ class MemoryRepository:
             return frozenset()
         return frozenset(session.execute(_CAPTURED_SOURCES, {"ids": wanted}).scalars())
 
+    def captured_comment_sources(self, session: Session, decision_ids: Sequence[str]) -> frozenset[str]:
+        """Which of these ledger ``comment`` event identities already have a memory comment (the sweep's anti-join)."""
+        wanted = sorted({value for value in decision_ids if isinstance(value, str)})
+        if not wanted:
+            return frozenset()
+        return frozenset(session.execute(_CAPTURED_COMMENT_SOURCES, {"ids": wanted}).scalars())
+
+    def lock_observation_comments(self, session: Session, observation_id: str) -> None:
+        """Take the transaction-scoped lock of this observation's comments; released at commit or rollback.
+
+        :meth:`capture_comment` and :meth:`capture` take it themselves. A caller that **reads the ledger for the observation's earlier
+        comments** before it calls :meth:`capture` must take it first: then a comment written by a concurrent transaction is either
+        committed and read (this transaction waited for it) or waits for this one and finds the case already made. Without it a comment
+        and a first ✓/✕ that overlap in time can each miss the other.
+        """
+        session.execute(_LOCK, {"key": COMMENT_LOCK_PREFIX + observation_id})
+
+    def capture_comment(self, session: Session, *, observation_id: str, comment: CommentFact) -> CommentCaptureResult:
+        """Keep an expert's ``comment`` event in the case of its observation, idempotently (``ADR-0029`` decision 10).
+
+        * no case yet: ``waits_for_case`` and nothing is written -- the capture of the case's first ✓/✕ carries the comment over;
+        * a forgotten case: ``case_forgotten`` and nothing is written, because a forgotten case takes no words back (the database
+          refuses the row as well, with ``AM003``; this answer keeps that refusal from failing the expert's decision);
+        * otherwise one row, once: the same ledger event again is ``already_captured``.
+
+        A database refusal other than that one propagates: a capture that fails must fail the decision that asked for it (`ADR-0027`
+        decision 4). A comment never makes a case, never touches a decision row and never changes a vote.
+        """
+        self.lock_observation_comments(session, observation_id)
+        case_id = session.execute(_CASE_OF_OBSERVATION, {"observation_id": observation_id}).scalar_one_or_none()
+        if case_id is None:
+            return CommentCaptureResult(case_id=None, outcome=COMMENT_WAITS_FOR_CASE)
+        session.execute(_LOCK, {"key": STATUS_LOCK_PREFIX + case_id})   # a forget of this case in flight finishes first
+        if session.execute(_FORGOTTEN, {"case_id": case_id}).first() is not None:
+            return CommentCaptureResult(case_id=case_id, outcome=COMMENT_REFUSED_CASE_FORGOTTEN)
+        created = self._insert_comment(session, case_id, comment)
+        return CommentCaptureResult(case_id=case_id, outcome=COMMENT_CAPTURED if created else COMMENT_ALREADY_CAPTURED)
+
+    @staticmethod
+    def _insert_comment(session: Session, case_id: str, comment: CommentFact) -> bool:
+        return session.execute(
+            _INSERT_COMMENT,
+            {
+                "comment_id": DecisionMemoryCommentId.new().value,
+                "case_id": case_id,
+                "source_decision_id": comment.source_decision_id,
+                "author_user_uid": comment.author_user_uid,
+                "comment": comment.comment,
+                "decided_at": comment.decided_at,
+            },
+        ).scalar_one_or_none() is not None
+
+    def _carry_comments(self, session: Session, case_id: str, comments: Sequence[CommentFact], *, case_created: bool) -> int:
+        """Store the earlier comments of a case, each once; how many were new. A forgotten case takes none."""
+        if not comments:
+            return 0
+        if not case_created:
+            session.execute(_LOCK, {"key": STATUS_LOCK_PREFIX + case_id})
+            if session.execute(_FORGOTTEN, {"case_id": case_id}).first() is not None:
+                return 0
+        once = {fact.source_decision_id: fact for fact in comments}.values()
+        ordered = sorted(once, key=lambda fact: (fact.decided_at, fact.source_decision_id))
+        return sum(1 for fact in ordered if self._insert_comment(session, case_id, fact))
+
     def capture(self, session: Session, snapshot: CaptureSnapshot) -> CaptureResult:
         """Write the snapshot, idempotently, and say what was created.
 
         A new observation gets its case, content, evidence, normative references and crop references and then its decision. A known
         observation has its stored digest compared with the snapshot's -- a difference is ``conflict`` -- and gets only the decision.
         A decision that is already captured changes nothing.
+
+        The snapshot's ``earlier_comments`` are carried over into the case, each once (``ADR-0029`` decision 10): the first ✓/✕ carries
+        the notes written before it, and a replay, or a later decision handed the same comments, adds none. A forgotten case takes none.
         """
         origin, content, decision = snapshot.origin, snapshot.content, snapshot.decision
+        self.lock_observation_comments(session, origin.observation_id)
         digest = content_digest(content)
         case_id = DecisionMemoryCaseId.new().value
         inserted = session.execute(
@@ -205,7 +302,10 @@ class MemoryRepository:
             },
         ).scalar_one_or_none()
         if created is None:
-            return CaptureResult(case_id=case_id, memory_decision_id=None, case_created=case_created, decision_created=False)
+            carried = self._carry_comments(session, case_id, snapshot.earlier_comments, case_created=case_created)
+            return CaptureResult(
+                case_id=case_id, memory_decision_id=None, case_created=case_created, decision_created=False, comments_carried=carried
+            )
         if not case_created and session.execute(_FORGOTTEN, {"case_id": case_id}).first() is not None:
             # A forgotten case is a tombstone (`DECISION-MEMORY-01` section 4.5): its content was removed on the owner's order and
             # it accepts none back. The decision row is still recorded -- its verdict, severity and time hold no words of the
@@ -214,8 +314,10 @@ class MemoryRepository:
                 case_id=case_id, memory_decision_id=memory_decision_id, case_created=False, decision_created=True
             )
         session.execute(_INSERT_DECISION_TEXT, {"memory_decision_id": memory_decision_id, "comment": decision.comment})
+        carried = self._carry_comments(session, case_id, snapshot.earlier_comments, case_created=case_created)
         return CaptureResult(
-            case_id=case_id, memory_decision_id=memory_decision_id, case_created=case_created, decision_created=True
+            case_id=case_id, memory_decision_id=memory_decision_id, case_created=case_created, decision_created=True,
+            comments_carried=carried,
         )
 
     @staticmethod

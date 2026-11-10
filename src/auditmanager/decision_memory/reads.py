@@ -8,11 +8,12 @@ history. A **forgotten** case answers its tombstone only -- the content rows are
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from auditmanager.decision_memory.settings import SETTING_DATA_CLASS, SETTING_DEFAULTS, SETTING_TRAINING_USE, MemorySettings
@@ -37,6 +38,10 @@ _DECISIONS = text(
     "FROM decision_memory_decision d LEFT JOIN decision_memory_decision_text t ON t.memory_decision_id = d.memory_decision_id "
     "WHERE d.case_id = :case_id ORDER BY d.decided_at, d.memory_decision_id"
 )
+_COMMENTS = text(
+    "SELECT case_id, comment_id, author_user_uid, comment, decided_at FROM decision_memory_comment "
+    "WHERE case_id IN :case_ids ORDER BY case_id, decided_at, comment_id"
+).bindparams(bindparam("case_ids", expanding=True))
 _CONTENT = text(
     "SELECT revision, finding_text, recommendation_text, proposed_severity, required_value, stated_value, stage_id, "
     "analysis_profile_id, prompt_bundle_id, provider_mode FROM decision_memory_content WHERE case_id = :case_id "
@@ -91,7 +96,11 @@ class CaseSummary:
 
 @dataclass(frozen=True, slots=True)
 class CaseDetail:
-    """A case with everything it keeps. ``content`` is ``None`` for a forgotten case: it answers its tombstone and nothing else."""
+    """A case with everything it keeps. ``content`` is ``None`` for a forgotten case: it answers its tombstone and nothing else.
+
+    ``comments`` are the experts' ``comment`` events kept beside the decisions (``decision_memory_comment``), oldest first, each
+    ``{comment_id, author_user_uid, comment, decided_at}``; empty for a forgotten case. The 1.51.0 API contract has no field for them.
+    """
 
     summary: CaseSummary
     decisions: tuple[dict[str, Any], ...]
@@ -100,6 +109,7 @@ class CaseDetail:
     norm_refs: tuple[dict[str, Any], ...]
     crops: tuple[dict[str, Any], ...]
     status_events: tuple[dict[str, Any], ...]
+    comments: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,8 +187,21 @@ class MemoryReader:
         more = len(rows) > limit
         return CasePage(items=items, next_after=(items[-1].captured_at, items[-1].case_id) if more and items else None)
 
+    def comments_for_cases(self, session: Session, case_ids: Sequence[str]) -> dict[str, tuple[dict[str, Any], ...]]:
+        """The experts' comments of these cases, oldest first: ``{case_id: ({comment_id, author_user_uid, comment, decided_at}, ...)}``.
+
+        A case without comments, and an unknown or forgotten one, is not a key. The standing of a case is not read here: a caller that
+        feeds a hint or a prompt reads the standing of the case (``withdrawn`` is out) before it uses what this answers.
+        """
+        wanted = sorted({value for value in case_ids if isinstance(value, str)})
+        found: dict[str, list[dict[str, Any]]] = {}
+        if wanted:
+            for row in session.execute(_COMMENTS, {"case_ids": wanted}).mappings():
+                found.setdefault(row["case_id"], []).append({key: row[key] for key in row if key != "case_id"})
+        return {case_id: tuple(rows) for case_id, rows in found.items()}
+
     def get_case(self, session: Session, case_id: str) -> CaseDetail | None:
-        """The case with its decisions, content, evidence, normative references, crops and status history; ``None`` when unknown."""
+        """The case with its decisions, content, evidence, normative references, crops, comments and status history; ``None`` when unknown."""
         summary = self.case_summary(session, case_id)
         if summary is None:
             return None
@@ -189,7 +212,9 @@ class MemoryReader:
         evidence: tuple[dict[str, Any], ...] = ()
         norm_refs: tuple[dict[str, Any], ...] = ()
         crops: tuple[dict[str, Any], ...] = ()
+        comments: tuple[dict[str, Any], ...] = ()
         if summary.status != STATUS_FORGOTTEN:
+            comments = self.comments_for_cases(session, [case_id]).get(case_id, ())
             head = session.execute(_CONTENT, params).mappings().one_or_none()
             if head is not None:
                 content = dict(head)
@@ -200,7 +225,7 @@ class MemoryReader:
         else:
             # A forgotten case keeps its decisions' identities (verdict, severity, author, time) but no words of the expert.
             decisions = tuple({**row, "comment": None} for row in decisions)
-        return CaseDetail(summary, decisions, content, evidence, norm_refs, crops, events)
+        return CaseDetail(summary, decisions, content, evidence, norm_refs, crops, events, comments)
 
     def counts(self, session: Session) -> MemoryCounts:
         rows = tuple((str(status), str(klass), int(cases)) for status, klass, cases in session.execute(_COUNTS).all())
