@@ -34,7 +34,9 @@ function block(source: string, marker: string, close: string): string {
 
 /** `"comparison_report": 8_000` -> {comparison_report: 8000}. */
 function numbers(text: string): Map<string, number> {
-  return new Map([...text.matchAll(/"(comparison_[a-z_]+)": ([0-9_]+)/g)].map((match) => [match[1] as string, Number((match[2] as string).replaceAll('_', ''))]));
+  return new Map([...text.matchAll(/"(comparison_[a-z_]+)": ([0-9_]+)/g)].map(
+    (match): [string, number] => [match[1] as string, Number((match[2] as string).replaceAll('_', ''))],
+  ));
 }
 
 interface ServerComparison {
@@ -83,12 +85,12 @@ function web(): ServerComparison {
   const kinds = [...COMPARISON_LAYOUT_KIND_VALUES] as string[];
   const presets = new Map<string, Map<string, string>>();
   for (const kit of NAMED_KITS) {
-    presets.set(kit, new Map(comparisonKitCells(kit, []).map((cell) => [cell.work_kind, `${cell.model_id}:${cell.effort}`])));
+    presets.set(kit, new Map(comparisonKitCells(kit, []).map((cell): [string, string] => [cell.work_kind, `${cell.model_id}:${cell.effort}`])));
   }
   return {
     kinds,
-    tokens: new Map(COMPARISON_LAYOUT_KIND_VALUES.map((kind) => [kind, COMPARISON_DEFAULT_TOKENS[kind]])),
-    timeouts: new Map(COMPARISON_LAYOUT_KIND_VALUES.map((kind) => [kind, COMPARISON_DEFAULT_TIMEOUT[kind]])),
+    tokens: new Map(COMPARISON_LAYOUT_KIND_VALUES.map((kind): [string, number] => [kind, COMPARISON_DEFAULT_TOKENS[kind]])),
+    timeouts: new Map(COMPARISON_LAYOUT_KIND_VALUES.map((kind): [string, number] => [kind, COMPARISON_DEFAULT_TIMEOUT[kind]])),
     presets,
   };
 }
