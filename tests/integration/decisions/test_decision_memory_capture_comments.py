@@ -177,6 +177,8 @@ def test_the_first_decision_carries_only_the_comments_of_its_own_observation_whe
         "SELECT :new, run_id, finding_uid, stage_id, category, finding_text, recommendation_text, grounded, ungrounded_reason, "
         "analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode FROM finding_observation "
         "WHERE finding_observation_id = :old"), {"new": other, "old": published.finding_observation_id})
+    session.execute(text("UPDATE finding SET canonical_observation_id = :o WHERE finding_uid = :f"),
+                    {"o": published.finding_observation_id, "f": published.finding_uid})   # with siblings the canonical one is named
     mine = _event(session, published, "comment", "Заметка к этому наблюдению.")
     _event(session, published, "comment", "Заметка к другому наблюдению того же замечания.", finding_observation_id=other)
     _event(session, published, "accept", "ок")
