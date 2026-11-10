@@ -12,11 +12,14 @@ import {
   pickFollowed,
   queryString,
   readViewport,
+  requiredReads,
   routeQuery,
   stateExpression,
   stateFindings,
   stateProbeExpression,
   stateReached,
+  stateRouteQuery,
+  stateView,
 } from './walk-options.mjs';
 import { widthFindings } from './width.mjs';
 
@@ -149,4 +152,69 @@ test('D-380: a refusal a read route declares is the state under test, and only t
   assert.equal(isDeclaredRefusal(refusals, 'GET /bff/v1/stage-pairs/{id}/chain-runs', 404), false, 'an optional call is not a declared refusal');
   assert.equal(isDeclaredRefusal(refusals, 'POST /bff/v1/stage-pairs/{id}/sheet-map', 404), false, 'another method is another call');
   assert.deepEqual(declaredRefusals({}, '/bff/v1'), []);
+});
+
+/** The knowledge base as the manifest declares it: a default tab that reads the journal, and two states that are not that tab. */
+const KNOWLEDGE_BASE = {
+  name: 'knowledge-base',
+  path: '/knowledge-base',
+  expects_api: [{ method: 'GET', path: '/decisions', operationId: 'listDecisions' }],
+};
+const MEMORY_LIST = {
+  bound_ms: 30000,
+  query: { kind: 'memory' },
+  expects_api: [{ method: 'GET', path: '/decision-memory/cases', operationId: 'listDecisionMemoryCases' }],
+  present: [{ selector: 'table[data-memory-table] tr[data-memory-case]' }],
+};
+const MEMORY_CASE = {
+  bound_ms: 30000,
+  query: { kind: 'memory', mcase: '{memory_case_id}' },
+  bind: { case_id: 'memory_case_id' },
+  expects_api: [{ method: 'GET', path: '/decision-memory/cases/{case_id}', operationId: 'getDecisionMemoryCase' }],
+  present: [{ selector: '[data-memory-case-view]' }],
+};
+const fillFrom = (known) => (template) => template.replace(/\{([a-z_]+)\}/g, (_, name) => {
+  if (known[name] === undefined) throw new Error(`route needs {${name}} but no earlier route captured it`);
+  return known[name];
+});
+
+test('D-503: a named state opens the tab or the case the route\'s ordinary address does not, and no state changes the address', () => {
+  const fill = fillFrom({ memory_case_id: 'dmc_01ABC' });
+  // No state: the route's address, exactly as before (the cold walk of the knowledge base is «Замечания»).
+  assert.deepEqual(stateRouteQuery(KNOWLEDGE_BASE, undefined, fill), {});
+  assert.equal(queryString(stateRouteQuery(KNOWLEDGE_BASE, undefined, fill)), '');
+  assert.deepEqual(stateRouteQuery({ query: { project: '{memory_case_id}' } }, undefined, fill), { project: 'dmc_01ABC' });
+  // A state that declares no query (the confirmed pair) leaves the route's own query alone.
+  assert.deepEqual(stateRouteQuery({ query: { project: '{memory_case_id}' } }, { bound_ms: 1, present: [] }, fill), { project: 'dmc_01ABC' });
+  // A state that does declare one opens what it names, the route's keys kept and the state's winning.
+  assert.equal(queryString(stateRouteQuery(KNOWLEDGE_BASE, MEMORY_LIST, fill)), '?kind=memory');
+  assert.equal(queryString(stateRouteQuery(KNOWLEDGE_BASE, MEMORY_CASE, fill)), '?kind=memory&mcase=dmc_01ABC');
+  assert.deepEqual(stateRouteQuery({ query: { kind: 'all', project: 'prj_X' } }, MEMORY_LIST, fill), { kind: 'memory', project: 'prj_X' });
+  // An identity nothing captured fails loudly: a case state on a stand whose write half made no case is not a quiet default.
+  assert.throws(() => stateRouteQuery(KNOWLEDGE_BASE, MEMORY_CASE, fillFrom({})), /needs \{memory_case_id\}/);
+});
+
+test('D-503: a state\'s own reads replace the route\'s, and a state with none leaves them', () => {
+  assert.deepEqual(requiredReads(KNOWLEDGE_BASE, undefined).map((e) => e.operationId), ['listDecisions']);
+  assert.deepEqual(requiredReads(KNOWLEDGE_BASE, MEMORY_LIST).map((e) => e.operationId), ['listDecisionMemoryCases'], 'the memory tab does not read the journal');
+  assert.deepEqual(requiredReads(KNOWLEDGE_BASE, { bound_ms: 1, present: [] }).map((e) => e.operationId), ['listDecisions']);
+  assert.deepEqual(requiredReads({ name: 'x' }, undefined), []);
+  assert.deepEqual(requiredReads({ name: 'x' }, { bound_ms: 1, present: [] }), []);
+  // An empty list is a statement ("this state reads nothing"), not a missing one.
+  assert.deepEqual(requiredReads(KNOWLEDGE_BASE, { ...MEMORY_LIST, expects_api: [] }), []);
+});
+
+test('D-503: a state names an identity the write half captured, under the contract\'s own name when it binds one', () => {
+  const known = { project_uid: 'prj_X', memory_case_id: 'dmc_01ABC' };
+  assert.equal(stateView(known, undefined), known, 'no state: the very same map');
+  assert.equal(stateView(known, null), known);
+  assert.deepEqual(stateView(known, MEMORY_LIST), known, 'a state with no bind adds nothing');
+  const view = stateView(known, MEMORY_CASE);
+  assert.equal(view.case_id, 'dmc_01ABC');
+  assert.equal(view.memory_case_id, 'dmc_01ABC');
+  assert.equal(known.case_id, undefined, 'the captured map is not written to');
+  // The read it declares is addressed by the bound name.
+  assert.equal(fillFrom(view)(MEMORY_CASE.expects_api[0].path), '/decision-memory/cases/dmc_01ABC');
+  // A bind to a name nothing captured stays undefined, so the path fails loudly instead of reading `/cases/undefined`.
+  assert.throws(() => fillFrom(stateView({ project_uid: 'prj_X' }, MEMORY_CASE))(MEMORY_CASE.expects_api[0].path), /needs \{case_id\}/);
 });

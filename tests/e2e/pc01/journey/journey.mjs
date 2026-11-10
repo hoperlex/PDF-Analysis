@@ -69,11 +69,13 @@ import {
   pickFollowed,
   queryString,
   readViewport,
-  routeQuery,
+  requiredReads,
   stateExpression,
   stateFindings,
   stateProbeExpression,
   stateReached,
+  stateRouteQuery,
+  stateView,
 } from './walk-options.mjs';
 import { pauseDispatch, restoreDispatch } from './dispatch.mjs';
 
@@ -223,6 +225,8 @@ const PARTIAL = args.steps !== null || args.routes !== null || args.seed !== nul
 // `D-380`: identities the walk prefers to "the first link a page renders": what --seed handed it, then what the write half of this
 // same run captured (set after that half). Only names a route's `follow` captures are looked at.
 const HINTS = { ...SEED };
+// `D-503`: the identities the write half of THIS run captured, for a named read state to name (`--seed` is in `captured`).
+const HINTS_OF_WRITE = {};
 
 function fail(route, message) {
   failures.push(`${route}: ${message}`);
@@ -366,6 +370,7 @@ if (PHASE === 'read') {
   });
   failures.push(...write.failures);
   Object.assign(HINTS, write.captured);
+  Object.assign(HINTS_OF_WRITE, write.captured);
   if (write.stopped !== null) {
     failures.push(
       `write: the write half stopped at '${write.stopped}'; ` +
@@ -414,9 +419,13 @@ try {
     // `D-380`: a screen that follows the header's project reads it from the address, and with two or more projects on the
     // stand it draws a chooser and nothing else. A route's `query` names the journey's project there, from what an
     // earlier route captured, so what the walk reads does not depend on how many projects the stand holds.
-    const query = routeQuery(route, (template) => fill(template, captured, route.sample_identifiers ?? {}));
-    const url = ORIGIN + fill(route.path, captured, route.sample_identifiers ?? {}) + queryString(query);
     const readState = args.state === null ? undefined : route.read_state?.[args.state];
+    // `D-503`: a named state may be a tab or a case the route's ordinary address does not open (`?kind=memory`, `?mcase=`). Its
+    // templates name what the walk knows: the identities this run's write half (or `--seed`) captured, under what the routes
+    // captured, with the state's own `bind` of a contract name to a captured one. Without a state this is `captured`, as before.
+    const known = readState === undefined ? captured : stateView({ ...HINTS_OF_WRITE, ...captured }, readState);
+    const query = stateRouteQuery(route, readState, (template) => fill(template, known, route.sample_identifiers ?? {}));
+    const url = ORIGIN + fill(route.path, captured, route.sample_identifiers ?? {}) + queryString(query);
 
     const record = await withColdBrowser(async (page) => {
       // Before anything is navigated: what this profile actually holds. An empty profile
@@ -611,7 +620,7 @@ try {
       );
     }
 
-    const required = (route.expects_api ?? []).map((e) => concreteApi(e, captured, route.constants ?? {}));
+    const required = requiredReads(route, readState).map((e) => concreteApi(e, known, route.constants ?? {}));
     // An optional call may name an identifier this walk never captured -- the review screen
     // opens a *finding*, and no earlier route hands out a finding uid. Optional calls are
     // therefore matched by shape, with every identifier segment collapsed to `{id}`.
