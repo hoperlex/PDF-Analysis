@@ -30,7 +30,7 @@ from auditmanager.decision_memory.public import MemoryReader
 from auditmanager.decisions import append_decision_under_key, record_decision
 from auditmanager.decisions import public as decisions_public
 from auditmanager.decisions.public import register_decision_recorded, registered_decision_recorded
-from auditmanager.shared.identity import DecisionMemoryStatusEventId
+from auditmanager.shared.identity import DecisionMemoryStatusEventId, FindingObservationId
 
 
 class _Geometry:
@@ -163,6 +163,24 @@ def test_a_comment_before_the_case_waits_and_the_first_decision_carries_over_its
     # the other observation's own first decision carries its own comment, and only that one
     _event(session, published, "reject", "иное", second=True)
     assert (elsewhere.decision_id, "Заметка к другому наблюдению.") in _comments(session) and len(_comments(session)) == 4
+
+
+def test_the_first_decision_carries_only_the_comments_of_its_own_observation_when_a_finding_has_two(
+    session: Session, published: Any, memory: SimpleNamespace
+) -> None:
+    """A finding identity outlives a run: a later run's observation carries the same ``finding_uid`` (the ledger's history is read by
+    finding), but a case is one reviewed OBSERVATION, so a note on the other observation is not this case's."""
+    other = FindingObservationId.new().value
+    session.execute(text(
+        "INSERT INTO finding_observation (finding_observation_id, run_id, finding_uid, stage_id, category, finding_text, "
+        "recommendation_text, grounded, ungrounded_reason, analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode) "
+        "SELECT :new, run_id, finding_uid, stage_id, category, finding_text, recommendation_text, grounded, ungrounded_reason, "
+        "analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode FROM finding_observation "
+        "WHERE finding_observation_id = :old"), {"new": other, "old": published.finding_observation_id})
+    mine = _event(session, published, "comment", "Заметка к этому наблюдению.")
+    _event(session, published, "comment", "Заметка к другому наблюдению того же замечания.", finding_observation_id=other)
+    _event(session, published, "accept", "ок")
+    assert _comments(session) == [(mine.decision_id, "Заметка к этому наблюдению.")]
 
 
 def test_the_assembler_takes_the_comment_lock_before_it_asks_for_the_case_and_before_it_reads_the_ledger(
