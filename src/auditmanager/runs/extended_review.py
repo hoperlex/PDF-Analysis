@@ -2151,6 +2151,13 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
             item.update(critic=review, review_status='reviewed', review_reason=None)
             if review['needs_correction']:
                 correction_targets.append(item)
+        if refused:
+            # `_received_reply` keeps the records that parsed and returns instead of raising, so an item the reply did not
+            # carry (all of them when the reply was unreadable) would keep the default `approved_phase_call_limit` set above:
+            # it was not left out of the plan, its answer was refused. The refusal itself is in `state['reply_refusals']`.
+            for item in indexed.values():
+                if item['review_status'] != 'reviewed':
+                    item['review_reason'] = f'{kind}_reply_refused'
         _coverage_complete(state, kind=kind, index=batch['index'], partial=cut or refused,
             reason=f'{kind}_reply_refused' if refused else 'context_window_truncated' if cut else None)
         phase(kind, 'running')
