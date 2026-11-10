@@ -32,8 +32,8 @@ REASONS_0023 = (
     'norm_quote_absent', 'norm_value_not_in_quote', 'stated_value_not_in_evidence',
 )
 #: `CRIT-SEAL-50`: the three refusals of the gate of block evidence, in `ck_finding_observation_ungrounded_reason` since `0064`. The contract carries
-#: no `UngroundedReason` (the AR v3 removal took it); the gate's own vocabulary (`findings.grounding.UNGROUNDED_REASONS`) takes the three when
-#: `F8-GATE` writes the gate, and until then the database knows them and the gate does not emit them.
+#: no `UngroundedReason` (the AR v3 removal took it); the gate's own vocabulary (`findings.grounding.UNGROUNDED_REASONS`) takes the three since
+#: `F8-GATE` wrote the gate of block evidence.
 REASONS = (*REASONS_0023, 'block_not_in_run_geometry', 'block_crop_mismatch', 'block_quote_not_in_recognised')
 
 
@@ -41,7 +41,7 @@ def test_closed_vocabularies_match_0023() -> None:
     schemas = CONTRACT['components']['schemas']
     assert schemas['FindingCategory']['enum'] == list(CATEGORIES)
     assert {item.value for item in models.FindingCategory} == set(CATEGORIES)
-    assert UNGROUNDED_REASONS == set(REASONS_0023)
+    assert UNGROUNDED_REASONS == set(REASONS)  # F8-GATE: the gate's vocabulary takes the three refusals of block evidence
     source = (ROOT / 'db/migrations/versions/20261016_0023_norm_citations.py').read_text()
     for value in CATEGORIES_0023[7:] + REASONS_0023[6:]:
         assert f'"{value}"' in source

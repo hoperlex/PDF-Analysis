@@ -131,7 +131,7 @@ def test_the_reason_vocabulary_is_declared_but_unproduced(ungrounded_run, sessio
     """
     from auditmanager.findings import UNGROUNDED_REASONS
 
-    assert len(UNGROUNDED_REASONS) == 12
+    assert len(UNGROUNDED_REASONS) == 15  # F8-GATE: twelve of 0023 and the three refusals of block evidence of 0064
 
     metrics = _text_analysis_metrics(session, ungrounded_run["run_id"])
     dropped = metrics["observations_dropped_unresolved"]
