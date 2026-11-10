@@ -7,6 +7,26 @@
 - closes: `D-541`
 - facts: `.local/reports/hosts-cmp-facts-2026-11-10.md` (read-only census of 2026-11-10, `path:line` for every claim)
 
+## Enumerator ownership
+
+- enumerated_set_changed: yes
+- enumerator_path: src/auditmanager/runs/stage_layout.py
+- enumerator_owner: HOSTS-CMP-01 (`COMPARISON_KINDS`, the four comparison kinds of the stage layout)
+- totality_query: `git grep -n "COMPARISON_KINDS" -- src web/src`
+
+## Captured premise evidence
+
+- premise: none
+
+## Historical evidence
+
+- correction_mode: none
+
+## Publication authority
+
+- development_target: origin/dev
+- origin_main_authority: none; `origin/main` moves only by the owner's own merge (`R-153i`)
+
 ## Outcome
 
 With the stage layout switched on, the four comparison kinds that call a model are served by the same system groups as the
