@@ -325,6 +325,21 @@ class _ComparisonRoutes:
         if pin is None or settings.pin_id != job.pinned_model or bound.revision.revision_id != job.connection_revision_id:
             raise route_missing()
         adapter = bound.adapter
+        # `HOSTS-CMP-01`: a job admitted on the stage layout froze its cell. When it is bound to a server's system member (a
+        # connection with a capacity pool), the host agent is told the cell's effort, limit, window and key (`payload.host`) and
+        # the cell's timeout is the task's window, as a planned run's call is (`bootstrap/providers.py`).
+        cell = getattr(job, "cell", None)
+        pool = getattr(getattr(bound, "connection", None), "capacity_pool", None)
+        if cell is not None and pool is not None:
+            from auditmanager.comparison.spend.cell import host_call_of
+            from auditmanager.executors.public import access_of_billing, build_pull_adapter, split_pool
+
+            _host_id, provider = split_pool(pool)
+            adapter = build_pull_adapter(
+                session_factory=self._runtime.session_factory, revision=bound.revision, context=context,
+                engine=getattr(self._runtime, "engine", None),
+                host_call=host_call_of(cell, provider=provider, access=access_of_billing(settings.billing)),
+            )
         if getattr(getattr(bound, "connection", None), "kind", None) == "pull":
             from auditmanager.comparison.profile.publish import ProfileBlobPublisher
 
