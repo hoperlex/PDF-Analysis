@@ -2035,6 +2035,30 @@ def test_the_instrument_still_asserts_a_width_on_every_route() -> None:
     )
 
 
+COLLAPSED_PROOF = JOURNEY_DIR / "prove_the_collapsed_reading_can_fail.mjs"
+
+
+def test_the_collapsed_column_reading_is_wired_and_its_proof_uses_it() -> None:
+    """`D-565`: the read walk takes the collapsed-column reading, and its live proof imports that same reading.
+
+    `scrollWidth <= innerWidth` cannot see a squeezed grid column (the page grows taller, not wider), so the journey takes a
+    second reading of the boxes. This checks it is wired and that the proof does not carry a second copy of it; the firing is
+    `width.test.mjs` (a fake page) and `prove_the_collapsed_reading_can_fail.mjs` (a live one, which needs a stand).
+    """
+    width = _require(WIDTH_MODULE).read_text(encoding="utf-8")
+    assert "COLLAPSED_READING" in width and "collapsedFindings" in width and "measureCollapsed" in width, (
+        "width.mjs no longer holds the collapsed-column reading"
+    )
+    journey = _require(JOURNEY_SCRIPT).read_text(encoding="utf-8")
+    assert "collapsedFindings(" in journey and "measureCollapsed(" in journey, (
+        "journey.mjs no longer takes the collapsed-column reading, so a squeezed column passes every walk again"
+    )
+    proof = _require(COLLAPSED_PROOF).read_text(encoding="utf-8")
+    assert "from './width.mjs'" in proof and "collapsedFindings" in proof and "measureCollapsed" in proof, (
+        "the proof no longer imports the journey's own reading, so it would prove a second copy of it can fail"
+    )
+
+
 # --------------------------------------------------------------------------------------
 # `D-380` (lane J2): the read walk's width, its paused state and its named states.
 #
