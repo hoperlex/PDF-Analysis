@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "f240a2af7e8b28a5a129229018e0d3753517af0677e59e165c8bb2fce50cef6b",
-    "content_commit": "20c5edcb",
-    "content_commit_subject": "feat(contract): 1.48.0 -- RunStatus.wait_cells names the cells a waiting planned run waits for; RunWaitCell, RunWaitCause (HOSTS-L1, D-660)",
-    "dispatch_named_commit": "20c5edcb22543a536f55f12e00890b4d7c005c61",
-    "commit_note": "Resealed by HOSTS-L1: contract 1.48.0 (RunStatus.wait_cells: RunWaitCell, RunWaitCause; the model catalogue gains gpt-6-luna).",
+    "sha256": "0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19",
+    "content_commit": "b084039d",
+    "content_commit_subject": "feat(contract): 1.49.0 -- the layout, comparison and stage cells lose the answer limit and the timeout; the host task loses max_output_tokens (LIMITS-01, R-153n, R-153o)",
+    "dispatch_named_commit": "b084039d15d777604de26b8aa6d48ac6262c2d5f",
+    "commit_note": "Resealed by LIMITS-01: contract 1.49.0 (StageLayoutCell, StageComparisonCell and RunStageCell lose max_output_tokens and timeout_seconds; ClaimedExecutorTask loses max_output_tokens; no schema added or removed).",
     "openapi_version": "3.1.0",
-    "info_version": "1.48.0",
+    "info_version": "1.49.0",
     "paths": 296,
     "operations": 324,
     "component_schemas": 798,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "f240a2af7e8b28a5a129229018e0d3753517af0677e59e165c8bb2fce50cef6b",
+    "snapshot_sha256": "0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "7e6bb8da699fdf63c96a9ef2e9c3fe0ecbb8b2d50a028d57564291f0eafb9769",
-      "index.ts": "7f50dd5fe10617e87032270d4f0edaab30bfd5a5dc88212e73aadfdc71866c23",
-      "operations.gen.ts": "bbda3af2cee73f6775e89bf6a0fa0fda2b6b0371ef37cc2881c7273b4b6bfe6c",
-      "types.gen.ts": "3e99d2d7d9fd81d44b94ebaada144836f914ae55a3457830ec919f4c54f26fa4"
+      "client.gen.ts": "0eb89e185c2a062544678ced697f1b64597c2a78613e8a34b087844a9457c322",
+      "index.ts": "04fbdba12860ac6495b9e636d4130372870451a7caee2adfae3b33221240bdc5",
+      "operations.gen.ts": "f00d9707c81753b65eb1a8379c22b4d0935c0ed24016d0a91559f7fff0acb242",
+      "types.gen.ts": "936be3b1386bbaeaed2480aff4ba328f30e6e19b2fe4e01ce1d46dbc491bcf1f"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
