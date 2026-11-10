@@ -125,6 +125,12 @@ SLICES: dict[str, str] = {
     "finding_observation": f"finding_uid IN ({_FINDINGS})",
     "finding_evidence": f"finding_observation_id IN ({_OBSERVATIONS})",
     "finding_observation_norm_citation": f"finding_observation_id IN ({_OBSERVATIONS})",
+    # `0062`: the cells a planned run was bound to; `0064`: block grounding and the «Прецеденты» run state, advice and probes.
+    "audit_run_cell_binding": f"run_id IN ({_RUNS})",
+    "finding_block_evidence": f"finding_observation_id IN ({_OBSERVATIONS})",
+    "decision_memory_probe": f"run_id IN ({_RUNS})",
+    "decision_memory_precedent_run": f"run_id IN ({_RUNS})",
+    "decision_memory_precedent_advice": f"run_id IN ({_RUNS})",
     "expert_decision_event": f"finding_uid IN ({_FINDINGS})",
     "work_assignment": "project_uid = :p",
     "work_assignment_event": "assignment_uid IN (SELECT assignment_uid FROM work_assignment WHERE project_uid = :p)",
@@ -452,7 +458,7 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # `0042_comparison_stage_review`: the twelve tables of the stage AI review, repairs, expert cards and batches join
     # it (76 -> 88); only the batch references the project directly. `0053`..`0055` add the document's tags, the
     # finding's execution status and the assignment's planned dates (88 -> 91); none references the project directly.
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 89
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 94
     assert set(closure.direct) == {
         "audit_run", "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question",
         "comparison_ai_sheet_item", "comparison_launch_queue", "comparison_matrix", "comparison_matrix_edit",
