@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Finding, PortalBlock, RunStatus } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
-import { AR_V3_BETA_PROFILE_ID, runListQueryOptions } from '@/entities/audit-run';
+import { runListQueryOptions } from '@/entities/audit-run';
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -260,9 +260,6 @@ describe('the findings a tile counts are those that cite its PAGE', () => {
     expect(latestPublishedRunId([older, published])).toBe(older.run_id);
     expect(latestPublishedRunId([newest])).toBeNull();
     expect(latestPublishedRunId([])).toBeNull();
-    // A run of the AR v3 beta profile publishes no canonical findings, so it is not the run in scope.
-    const beta = runStatus({ run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q9D', state: 'published', analysis_profile_id: AR_V3_BETA_PROFILE_ID });
-    expect(latestPublishedRunId([beta, published])).toBe(published.run_id);
   });
 
   it('prefers that run to the one that read the bundle, and falls back to the latter only when none published', () => {

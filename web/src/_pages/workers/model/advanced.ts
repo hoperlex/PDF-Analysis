@@ -3,8 +3,8 @@
  *
  * It keeps what the screen had before it became two tabs, folded: «Подключения», «Группы», «Правила», «Назначения»,
  * «Процессы» (with the working switch of intake), the analysis presets moved here, and «Модели по этапам» with the switch
- * «Модели по этапам: включены», its journal and the revisions. It is still needed for the comparisons until `HOSTS-CMP-01`,
- * for AR v3 and for the SSH connection «kzSonnet».
+ * «Модели по этапам: включены», its journal and the revisions. It is still needed for the comparisons until `HOSTS-CMP-01`
+ * and for the SSH connection «kzSonnet».
  *
  * An old address keeps working: `/workers?tab=connections` and its kin are sent here by the route (`legacyAdvancedTab`).
  */

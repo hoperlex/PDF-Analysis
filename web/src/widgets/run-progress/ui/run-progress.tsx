@@ -62,7 +62,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import type { RunStatus } from '@/shared/api';
 import { isTerminalRunState } from '@/shared/api';
-import { SHOW_REVIEW_INDICATION } from '@/shared/config';
 import { formatInstant, routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import { RunWorkerLine, runHoldsLease, runWorker, useWorkerLookup } from '@/entities/execution';
@@ -85,7 +84,6 @@ import {
   PROVIDER_MODE_UNKNOWN_LABEL,
 } from '@/shared/ui';
 import {
-  arV3GroupReviewAddress,
   costBasisCaption,
   diagnosticObservationCount,
   elapsedMs,
@@ -95,12 +93,9 @@ import {
   hasKnownRunVocabulary,
   interruptedReason,
   isRunAnimating,
-  looksLikeArV3GroupId,
   extendedLiveProgress,
   procedureReadings,
   providerModeCaption,
-  runAnalysis,
-  runAnalysisKind,
   runChips,
   runCost,
   runExecutorLine,
@@ -111,7 +106,6 @@ import {
   runWaitingSentence,
   shortModelName,
   terminalReasonNote,
-  useArV3StartAllowed,
   useRunStages,
   useRunStatus,
 } from '@/entities/audit-run';
@@ -150,69 +144,8 @@ const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное 
 /** «1 находка», «2 находки», «5 находок»: the forms `pluralRu` picks from. */
 const FINDING_FORMS: readonly [string, string, string] = ['находка', 'находки', 'находок'];
 
-/**
- * The second sentence of a published AR v3 beta Run (`R-146as`, `R-146ba`).
- *
- * A Run whose reading carries at least one published finding says so and who decides on it; a Run
- * that publishes none (a count of zero, or a count the server did not report) keeps the sentence that
- * says no canonical finding is published here. The words that call a citation provisional or say
- * it needs the expert are `SHOW_REVIEW_INDICATION`'s: with it off they are left out and nothing else
- * changes. «решение по каждой записывает эксперт» is not one of them: it says whose decision a verdict is.
- */
-function V3PublishedSentence({ findingCount }: { readonly findingCount: number | null }) {
-  if (findingCount !== null && findingCount > 0) {
-    return SHOW_REVIEW_INDICATION ? (
-      <p>Находки с предварительными нормативными ссылками опубликованы; решение по каждой записывает эксперт. Числовой или правовой вывод не утверждён.</p>
-    ) : (
-      <p>Находки с нормативными ссылками опубликованы; решение по каждой записывает эксперт. Числовой или правовой вывод не утверждён.</p>
-    );
-  }
-  return SHOW_REVIEW_INDICATION ? (
-    <p>Канонические находки здесь не публикуются. Каждая тема и цитата требует проверки эксперта; числовой или правовой вывод не утверждён.</p>
-  ) : (
-    <p>Канонические находки здесь не публикуются. Числовой или правовой вывод не утверждён.</p>
-  );
-}
-
-/**
- * `AR-V3-OPT-IN`: «Анализ» in the run's facts -- which analysis produced it. A run of AR v3 (beta) always says so, with its
- * scope, and links to the review of its group; a standard run says «Стандартный» only where the deployment allows a
- * start of v3 (`start_allowed`), so a deployment with one analysis shows no line about the other. Only a standard run asks
- * the server whether v3 is allowed; a v3 run needs no answer.
- */
-function AnalysisFact({ status }: { readonly status: RunStatus }) {
-  return runAnalysisKind(status) === 'standard' ? <StandardAnalysisFact status={status} /> : <AnalysisLine status={status} />;
-}
-
-/** The only run page that asks the server: a standard run, to learn whether there is another analysis to tell it from. */
-function StandardAnalysisFact({ status }: { readonly status: RunStatus }) {
-  return useArV3StartAllowed() ? <AnalysisLine status={status} /> : null;
-}
-
-function AnalysisLine({ status }: { readonly status: RunStatus }) {
-  const analysis = runAnalysis(status);
-  return (
-    <>
-      <dt>Анализ</dt>
-      <dd data-run-analysis={analysis.kind} data-run-scope={analysis.scope ?? undefined}>
-        {analysis.label}
-        {looksLikeArV3GroupId(analysis.groupId) ? (
-          <>
-            {' · '}
-            <Link href={arV3GroupReviewAddress(analysis.groupId)} data-run-group-review>
-              шесть проверок группы
-            </Link>
-          </>
-        ) : null}
-      </dd>
-    </>
-  );
-}
-
 function Outcome({ status }: { readonly status: RunStatus }) {
   const outcome = runOutcome(status);
-  const v3Beta = runAnalysisKind(status) === 'ar_v3_beta';
-
   switch (outcome.kind) {
     case 'in_flight':
       return (
@@ -223,12 +156,6 @@ function Outcome({ status }: { readonly status: RunStatus }) {
         </p>
       );
     case 'published':
-      if (v3Beta) return (
-        <div className={styles.outcome} data-run-outcome="published" data-review-only="ar-v3-beta">
-          <p>{SHOW_REVIEW_INDICATION ? 'Прогон завершён. Предварительный нормативный разбор АР v3 сохранён.' : 'Прогон завершён. Нормативный разбор АР v3 сохранён.'}</p>
-          <V3PublishedSentence findingCount={outcome.findingCount} />
-        </div>
-      );
       return (
         <div className={styles.outcome} data-run-outcome="published">
           <p>
@@ -240,12 +167,6 @@ function Outcome({ status }: { readonly status: RunStatus }) {
         </div>
       );
     case 'partial':
-      if (v3Beta) return (
-        <div className={styles.outcome} data-run-outcome="partial" data-review-only="ar-v3-beta">
-          <p>{SHOW_REVIEW_INDICATION ? 'Предварительный нормативный разбор АР v3 завершился частично. Полный проверенный результат не подтверждён.' : 'Нормативный разбор АР v3 завершился частично. Полный проверенный результат не подтверждён.'}</p>
-          <p>{SHOW_REVIEW_INDICATION ? 'Канонические находки не публикуются; требуется проверка эксперта.' : 'Канонические находки не публикуются.'}</p>
-        </div>
-      );
       return (
         <div className={styles.outcome} data-run-outcome="partial">
           <p>
@@ -514,8 +435,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
   const interrupted = interruptedReason(status);
   const executor = runExecutorLine(status);
   const from = startedFrom(status);
-  const v3Beta = runAnalysisKind(status) === 'ar_v3_beta';
-  const reviewable = !v3Beta && runHasPublishedResult(status.state, status.analysis_profile_id);
+  const reviewable = runHasPublishedResult(status.state);
   const showServer = maySeeServer(me.data?.roles);
   const modelShort = shortModelName(executor?.model);
   const pin = executor?.model ?? null;
@@ -538,16 +458,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
         ) : (
           <section className={styles.tile} aria-label="Находки" data-run-findings-tile="">
             <h2>Находки</h2>
-            {v3Beta ? (
-              <NotApplicableState
-                title={SHOW_REVIEW_INDICATION ? 'Предварительный разбор АР v3' : 'Разбор АР v3'}
-                detail={
-                  <p>
-                    Для просмотра шести прогонов откройте «Настройки анализа» и укажите идентификатор группы из ответа запуска. Здесь нет канонических находок для разбора или принятия решения.
-                  </p>
-                }
-              />
-            ) : !isTerminalRunState(status.state) ? (
+            {!isTerminalRunState(status.state) ? (
               // An open run has no result yet; «Разбирать нечего» is the sentence of a run that ended without one (`RUN-SCREEN-FIX-01`).
               <p className={styles.spendNote} data-run-findings-pending="">Появятся по ходу прогона.</p>
             ) : (
@@ -595,7 +506,6 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
                   <code>{status.version_uid}</code>
                 </Link>
               </dd>
-              <AnalysisFact status={status} />
               <dt>Режим провайдера</dt>
               <dd><strong data-provider-mode={mode}>{modeText}</strong></dd>
               {/* `R-151v`: who started the run; a run created before contract 1.21.0 does not know. */}

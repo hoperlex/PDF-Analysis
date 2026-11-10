@@ -14,9 +14,10 @@
  * already handed out, a finding that arrives twice, a list that never ends -- which is
  * reported as `RunFindingsReadFault` rather than cut short.
  *
- * **One shape per key** (`D-57`). Two screens read this key: the review screen and the AR v3
- * group review's per-run list. Each used to build its own `queryFn`; with the list now
- * paged, a screen that filled the key with one page would silently truncate the other. The
+ * **One shape per key** (`D-57`). Several screens read this key: the review screen, the run
+ * screen's findings tile and the portal page's findings. Each used to build its own `queryFn`;
+ * with the list now paged, a screen that filled the key with one page would silently truncate
+ * the others. The
  * cached value is the generated client's `{ data: FindingPage }` -- `items` is the whole
  * list and `page.next_cursor` is `null`, because nothing follows it -- so every reader that
  * took `.data.items` before takes it now. The `queryFn` lives here, beside the key it

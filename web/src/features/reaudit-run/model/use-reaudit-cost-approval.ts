@@ -43,7 +43,7 @@ export function useReauditCostApproval(sourceRunId: string | null, requestKey: s
       }
       const body = { version_uid: run.version_uid, reaudit_of_run_id: sourceRunId };
       const estimate = (await estimateRunCost({ body }, { signal })).data;
-      if (!usableCostEstimate(estimate) || estimate.scope !== 'run' || estimate.version_uid !== run.version_uid
+      if (!usableCostEstimate(estimate) || estimate.version_uid !== run.version_uid
           || estimate.relaxed_limits !== false) {
         throw new Error('Оценка стоимости не соответствует повторному прогону.');
       }

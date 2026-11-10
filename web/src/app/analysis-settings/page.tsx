@@ -11,10 +11,7 @@
  * screen showing somebody else's session.
  */
 
-import { notFound } from 'next/navigation';
-
 import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
-import { looksLikeArV3GroupId } from '@/entities/audit-run';
 
 import type { ScreenRouteProps } from '../bff/session/screen-lock';
 import { requireScreen } from '../bff/session/screen-lock';
@@ -23,8 +20,5 @@ export const dynamic = 'force-dynamic';
 
 export default async function AnalysisSettingsRoute({ params, searchParams }: ScreenRouteProps) {
   await requireScreen('/analysis-settings', { params, searchParams });
-  const query = searchParams === undefined ? {} : await searchParams;
-  const groupId = query.group_id;
-  if (groupId !== undefined && !looksLikeArV3GroupId(groupId)) notFound();
-  return <AnalysisSettingsPage groupId={groupId ?? null} />;
+  return <AnalysisSettingsPage />;
 }

@@ -55,7 +55,7 @@
  */
 
 import type { StageId, StageStatus } from '@/shared/api';
-import { AR_V3_BETA_STAGE_ID_VALUES, STAGE_ID_VALUES, STAGE_STATUS_VALUES } from '@/shared/api';
+import { STAGE_ID_VALUES, STAGE_STATUS_VALUES } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
 
 import { elapsedMs, formatElapsed } from '../model/run-presentation';
@@ -78,7 +78,7 @@ export interface StageTableProps {
 const UNKNOWN_STAGE_TITLE = 'Этап содержит неизвестное значение.';
 
 function hasKnownVocabulary(row: StageRow): boolean {
-  const stageIds: readonly unknown[] = [...STAGE_ID_VALUES, ...AR_V3_BETA_STAGE_ID_VALUES];
+  const stageIds: readonly unknown[] = STAGE_ID_VALUES;
   const statuses: readonly unknown[] = STAGE_STATUS_VALUES;
   return (
     stageIds.includes(row.stageId) &&
@@ -112,12 +112,10 @@ function StatusCell({
  * with no dependency is the entry point and says so rather than rendering an empty cell,
  * which would read as "not stated".
  */
-function DependencyNote({ dependsOn, stageId }: { readonly dependsOn: readonly StageId[]; readonly stageId: StageRow['stageId'] }) {
+function DependencyNote({ dependsOn }: { readonly dependsOn: readonly StageId[] }) {
   return (
     <span className={styles.dependency} data-depends-on={dependsOn.join(' ') || 'none'}>
-      {stageId === 'ar_v3_citation_review'
-        ? 'этап отдельного профиля АР v3'
-        : dependsOn.length === 0
+      {dependsOn.length === 0
         ? 'первый этап'
         : `после: ${dependsOn.map((stageId) => STAGE_LABELS[stageId]).join(', ')}`}
     </span>
@@ -164,7 +162,7 @@ export function StageTable({ rows, reused }: StageTableProps) {
                 {row.expected ? null : (
                   <span className={styles.aside}> (на этом этапе не планируется)</span>
                 )}
-                <DependencyNote dependsOn={row.dependsOn} stageId={row.stageId} />
+                <DependencyNote dependsOn={row.dependsOn} />
               </td>
               <td>
                 <StatusCell status={row.status} errorCode={row.errorCode} />

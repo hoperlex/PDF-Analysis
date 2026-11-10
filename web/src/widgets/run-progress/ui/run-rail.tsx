@@ -27,7 +27,7 @@ export interface RunRailProps {
   readonly model: { readonly short: string; readonly pin: string } | null;
   /** The stages read for the run; absent until they are, and then the line is the run's model. */
   readonly stages?: RunStages | undefined;
-  readonly onOpen: (chip: RunChipId | 'ar_v3') => void;
+  readonly onOpen: (chip: RunChipId) => void;
 }
 
 /** The model shows on a chip that calls one and has not been ruled out. */

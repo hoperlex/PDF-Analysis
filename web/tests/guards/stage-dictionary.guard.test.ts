@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import { STAGE_ID_VALUES } from '@/shared/api';
 import {
-  AR_V3_RUN_CHIP, RUN_CHIP, RUN_CHIPS, RUN_CHIP_IDS, chipById, chipOfStage, phaseFullLabel,
+  RUN_CHIP, RUN_CHIPS, RUN_CHIP_IDS, chipById, chipOfStage, phaseFullLabel,
 } from '@/entities/audit-run';
 import { BatchProgress } from '@/widgets/extended-review/ui/batch-progress';
 import { CHIP_ALGORITHMS } from '@/widgets/run-stages-dialog';
@@ -46,14 +46,14 @@ describe('the eight chips', () => {
   });
 
   it('are named in the reader\'s language, short and full, and never by an identifier', () => {
-    for (const chip of [...RUN_CHIPS, AR_V3_RUN_CHIP]) {
+    for (const chip of RUN_CHIPS) {
       for (const label of [chip.short, chip.full]) {
         expect({ id: chip.id, cyrillic: /[а-яА-Я]/.test(label) }).toEqual({ id: chip.id, cyrillic: true });
         expect({ id: chip.id, identifier: chip.stageIds.includes(label) || label.includes('_') }).toEqual({ id: chip.id, identifier: false });
       }
       expect({ id: chip.id, fitsAChip: chip.short.length <= 14 }).toEqual({ id: chip.id, fitsAChip: true });
     }
-    // The eight carry no Latin word at all; the AR v3 profile's chip names the profile and may.
+    // The eight carry no Latin word at all.
     for (const chip of RUN_CHIPS) {
       expect({ id: chip.id, latin: /[A-Za-z]/.test(chip.short + chip.full) }).toEqual({ id: chip.id, latin: false });
     }
@@ -92,7 +92,7 @@ describe('the dictionary is the registry\'s, not a recollection of it', () => {
 
 describe('«Как устроен этап»', () => {
   it('has a memo for every chip: three or four steps, a one-line summary, the last step the result', () => {
-    for (const chip of [...RUN_CHIPS, AR_V3_RUN_CHIP]) {
+    for (const chip of RUN_CHIPS) {
       const memo = CHIP_ALGORITHMS[chip.id];
       expect({ id: chip.id, steps: memo.steps.length >= 3 && memo.steps.length <= 4 }).toEqual({ id: chip.id, steps: true });
       expect(memo.summary.trim()).not.toBe('');

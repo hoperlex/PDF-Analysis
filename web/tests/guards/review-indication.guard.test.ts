@@ -5,7 +5,7 @@
  * ## Why this reads source
  *
  * The per-state tests (`tests/unit/review-indication/`) prove the strings that exist today. They
- * cannot prove that the NEXT string of this kind, added to an AR v3 view next month, goes behind
+ * cannot prove that the NEXT string of this kind, added to a result view next month, goes behind
  * the switch: that is a property of the source. So this guard parses each owned file with the
  * TypeScript compiler, takes every string literal, template part, JSX text and JSX attribute
  * string, and for each one that reads as «provisional», «needs the expert's check» or «no person
@@ -22,10 +22,9 @@
  *
  * ## What stays out of the switch
  *
- * The label above the version-comparison summary, the attestation record of the sealed pack and the
- * statements that a verdict is the expert's own decision are NOT behind the switch (owner and
- * integrator rule). The second half of this file holds them out: none of their files reads the
- * constant.
+ * The label above the version-comparison summary and the statements that a verdict is the expert's own
+ * decision are NOT behind the switch (owner and integrator rule). The second half of this file holds
+ * them out: none of their files reads the constant.
  */
 
 import { readFileSync } from 'node:fs';
@@ -46,13 +45,9 @@ const INDICATION = /предварительн|проверк\p{L}*\s+(?:экс�
 const SWITCH = 'SHOW_REVIEW_INDICATION';
 const SWITCH_MODULES: ReadonlySet<string> = new Set(['@/shared/config', '@/shared/config/review-indication']);
 
-/** The trees that draw an AR v3 result or the profile label. Everything under them is read. */
+/** The trees that draw a run result or the profile label. Everything under them is read. */
 const OWNED_TREES: readonly string[] = [
-  'src/widgets/ar-v3-beta-review',
-  'src/widgets/ar-v3-beta-pack',
-  'src/widgets/ar-v3-beta-status',
   'src/widgets/run-progress',
-  'src/features/start-ar-v3-group',
   'src/entities/analysis-profile',
 ];
 
@@ -62,20 +57,12 @@ const ALLOWED_UNGATED: Readonly<Record<string, Readonly<Record<string, string>>>
     'черновик, требует экспертной проверки':
       'the label of a draft profile; the owner removed the label of a reviewed profile only (R-146ba)',
   },
-  'src/widgets/ar-v3-beta-pack/model/pack-presentation.ts': {
-    'остаются предварительными и требуют проверки эксперта.':
-      'the attestation record of the sealed pack, as «Настройки анализа» shows it (integrator rule)',
-  },
 };
 
 /** Files that must never read the switch: what it does not govern. */
 const NEVER_GATED: readonly string[] = [
   'src/entities/version-comparison/ui/comparison-summary.tsx',
   'src/entities/version-comparison/model/summary.ts',
-  'src/widgets/ar-v3-beta-pack/model/pack-presentation.ts',
-  'src/widgets/ar-v3-beta-pack/ui/ar-v3-beta-pack.tsx',
-  'src/widgets/ar-v3-beta-review/ui/run-findings.tsx',
-  'src/widgets/ar-v3-beta-review/model/may-decide.ts',
 ];
 
 /** The files allowed to name the switch at all: the module, its index and the owners above. */
@@ -83,10 +70,6 @@ const MAY_NAME_THE_SWITCH: readonly string[] = [
   'src/shared/config/review-indication.ts',
   'src/shared/config/index.ts',
   'src/entities/analysis-profile/model/presentation.ts',
-  'src/features/start-ar-v3-group/ui/start-ar-v3-group-control.tsx',
-  'src/widgets/ar-v3-beta-review/ui/ar-v3-beta-review.tsx',
-  'src/widgets/ar-v3-beta-status/ui/ar-v3-beta-status.tsx',
-  'src/widgets/run-progress/ui/run-progress.tsx',
 ];
 
 interface Reading {
@@ -215,14 +198,9 @@ describe('every indication of «no human reviewed this» is behind the switch', 
   const readings = new Map(files.map((file) => [file, readSource(file, readFile(file))] as const));
 
   it('reads the owned trees: the scan is not vacuous', () => {
-    expect(files.length).toBeGreaterThanOrEqual(20);
+    expect(files.length).toBeGreaterThanOrEqual(10);
     for (const required of [
-      'src/widgets/ar-v3-beta-review/ui/ar-v3-beta-review.tsx',
-      'src/widgets/ar-v3-beta-review/ui/run-findings.tsx',
-      'src/widgets/ar-v3-beta-status/ui/ar-v3-beta-status.tsx',
-      'src/widgets/ar-v3-beta-pack/model/pack-presentation.ts',
       'src/widgets/run-progress/ui/run-progress.tsx',
-      'src/features/start-ar-v3-group/ui/start-ar-v3-group-control.tsx',
       'src/entities/analysis-profile/model/presentation.ts',
     ]) expect(files, required).toContain(required);
   });
@@ -236,10 +214,6 @@ describe('every indication of «no human reviewed this» is behind the switch', 
   it('finds the gated strings where they are (the counts are minimums, so a removed string is noticed)', () => {
     const gatedIn = (file: string): number => readings.get(file)?.gated ?? 0;
     expect(gatedIn('src/entities/analysis-profile/model/presentation.ts')).toBeGreaterThanOrEqual(1);
-    expect(gatedIn('src/widgets/ar-v3-beta-review/ui/ar-v3-beta-review.tsx')).toBeGreaterThanOrEqual(8);
-    expect(gatedIn('src/widgets/ar-v3-beta-status/ui/ar-v3-beta-status.tsx')).toBeGreaterThanOrEqual(5);
-    expect(gatedIn('src/widgets/run-progress/ui/run-progress.tsx')).toBeGreaterThanOrEqual(6);
-    expect(gatedIn('src/features/start-ar-v3-group/ui/start-ar-v3-group-control.tsx')).toBeGreaterThanOrEqual(1);
   });
 
   it('has no fault in how a file reads the switch (no local copy, no missing import)', () => {
@@ -270,10 +244,6 @@ describe('what the switch does not govern never reads it', () => {
   it('still holds the sentences the owner and the integrator kept', () => {
     expect(readFile('src/entities/version-comparison/ui/comparison-summary.tsx'))
       .toContain('проверка человеком не проводится');
-    expect(readFile('src/widgets/ar-v3-beta-pack/model/pack-presentation.ts'))
-      .toContain('остаются предварительными и требуют проверки эксперта.');
-    expect(readFile('src/widgets/ar-v3-beta-review/ui/run-findings.tsx'))
-      .toContain('Формулировка модели, не решение эксперта.');
   });
 });
 
@@ -304,7 +274,7 @@ describe('there is one switch', () => {
 });
 
 describe('the guard can fail', () => {
-  const view = 'src/widgets/ar-v3-beta-status/ui/ar-v3-beta-status.tsx';
+  const view = 'src/widgets/run-progress/ui/run-progress.tsx';
   const head = `import { SHOW_REVIEW_INDICATION } from '@/shared/config';\n`;
   const read = (body: string, file = view): Reading => readSource(file, head + body);
 
@@ -369,11 +339,11 @@ describe('the guard can fail', () => {
   });
 
   it('allows an allowlisted text only in the file it is allowed in', () => {
-    const attestation = `export const a = 'остаются предварительными и требуют проверки эксперта.';`;
-    expect(readSource('src/widgets/ar-v3-beta-pack/model/pack-presentation.ts', attestation).ungated).toEqual([]);
-    expect(readSource(view, attestation).ungated).toHaveLength(1);
-    expect(readSource('src/widgets/ar-v3-beta-pack/model/pack-presentation.ts', `export const a = 'Предварительный разбор';`).ungated)
-      .toHaveLength(1);
+    const draft = `export const a = 'черновик, требует экспертной проверки';`;
+    const owner = 'src/entities/analysis-profile/model/presentation.ts';
+    expect(readSource(owner, draft).ungated).toEqual([]);
+    expect(readSource(view, draft).ungated).toHaveLength(1);
+    expect(readSource(owner, `export const a = 'Предварительный разбор';`).ungated).toHaveLength(1);
   });
 
   it('ignores words that are not the removed wording, a module specifier and a comment', () => {

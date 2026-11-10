@@ -66,9 +66,6 @@ import { SectionFilterBar, SectionOptimisationPage, readSectionOptimisationAddre
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
-import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
-import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
-import { StartArV3GroupView, classifyArV3GroupStartFailure } from '@/features/start-ar-v3-group';
 import { SpecificationPricesAnswer, SpecificationPricesChooser } from '@/widgets/specification-prices';
 import { OptimisationByDocument, ProposalSetChooser } from '@/widgets/optimisation-proposals';
 import { VersionComparison } from '@/widgets/version-comparison';
@@ -151,7 +148,7 @@ import {
   VERSION_PAGE_LIMIT,
 } from '@/entities/document-version';
 import type { RunStagesView, StageRow } from '@/entities/audit-run';
-import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, StageTable, runChips, runStagesKey } from '@/entities/audit-run';
+import { RUN_PAGE_LIMIT, StageTable, runChips, runStagesKey } from '@/entities/audit-run';
 
 import {
   DOCUMENT_UID,
@@ -216,12 +213,6 @@ import {
 import { carryOverShapes, proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
 import { ACCEPTED_PROJECT_A, acceptedPage } from '../section-optimisation/fixtures';
-import {
-  AVAILABLE_RUN_ID, GROUP_ID, accountFixture, groupReviewFixture, runFindingsPage, v3FindingFixture,
-} from '../analysis-settings/ar-v3-beta-review-fixtures';
-import {
-  NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
-} from '../analysis-settings/ar-v3-beta-pack-fixtures';
 
 import type { Screen } from './contrast';
 import { auditCounts, sectionAudit } from '../dashboard/audit-counts';
@@ -371,9 +362,6 @@ function populatedClient() {
   client.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
   client.setQueryData(queryKeys.versions.sectionReview(VERSION_UID), sectionReview());
   client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [runStatus({ run_id: RUN_ID })], page });
-  // `AR-V3-BETA-PACK-STATUS-WEB-01`: an installed reviewed pack, so every screen drawn from this
-  // client that holds the run list also draws the six-check start and its separating rule.
-  client.setQueryData(queryKeys.runs.arV3PackStatus(), installedPackFixture());
   // `diagnostic_observation_count` on purpose: the review header's diagnostics sentence
   // renders only above zero, and every fixture in this file left it at the default.
   client.setQueryData(
@@ -1425,64 +1413,6 @@ export function screens(): Screen[] {
   add('AnalysisProfileTable one section without a profile', render(createElement(AnalysisProfileTable, {
     items: [{ section_code: UNPROFILED, section_name: 'Генеральный план', profile: null }],
   })));
-  /*
-   * `AR-V3-BETA-GROUP-REVIEW-SCREEN-01`: the AR v3 group review LOADED. `/analysis-settings` is
-   * derived above, but with no `group_id` in its address the panel draws only its lookup form --
-   * so `.member details` (the per-scope disclosure) and `.quote` (the blockquote carrying a page
-   * quotation and a norm quotation) were reached by no screen, and `names every colour-bearing
-   * rule that NO rendered screen reaches` said so. The address carries the group, the shape is
-   * answered here: six scopes, each in a different state (available with provisional evidence,
-   * failed, verification refused, three pending), seeded as the server's answer.
-   */
-  {
-    const client = newClient();
-    client.setQueryData(queryKeys.runs.arV3GroupReview(GROUP_ID), groupReviewFixture());
-    // `AR-V3-DECISIONS-01`: the available scope's published finding and an expert, so `.finding`,
-    // `.findings` and `.verdicts` (the findings list and the verdict controls) are reached.
-    client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([v3FindingFixture()]) });
-    client.setQueryData(queryKeys.account.me(), accountFixture(['expert']));
-    add('ArV3BetaReview six scopes loaded', renderScreen(client, createElement(ArV3BetaReview, { groupId: GROUP_ID })));
-  }
-  /*
-   * `AR-V3-BETA-PACK-STATUS-WEB-01`: the pack panel in each of its five states, and the
-   * six-check control in its three. `/analysis-settings` is derived above, but with no pack
-   * answer seeded its panel is only the loading line -- so `.panel`, `.facts` and `.attestation`
-   * (the installed state alone carries the last two) were reached by no screen. The control keeps
-   * its refusals in a mutation observer one pass cannot settle, so its presentational view is
-   * rendered with the pending state and with one warning refusal (which carries the link) and one
-   * transient failure (which carries the retry).
-   */
-  {
-    const answered = (answer: unknown): ReturnType<typeof newClient> => {
-      const client = newClient();
-      client.setQueryData(queryKeys.runs.arV3PackStatus(), answer);
-      return client;
-    };
-    const pack = createElement(ArV3BetaPack);
-    add('ArV3BetaPack installed', renderScreen(answered(installedPackFixture()), pack));
-    add('ArV3BetaPack not installed', renderScreen(answered(NOT_INSTALLED_PACK), pack));
-    add('ArV3BetaPack contract fault', renderScreen(answered(withoutMember(installedPackFixture(), 'review')), pack));
-    add('ArV3BetaPack loading', renderScreen(newClient(), pack));
-    {
-      const client = newClient();
-      seedError(client, queryKeys.runs.arV3PackStatus(), apiError(503, 'dependency_unavailable', true));
-      add('ArV3BetaPack read failed', renderScreen(client, pack));
-    }
-    const startView = (pending: boolean, failure: ReturnType<typeof classifyArV3GroupStartFailure> | null): string =>
-      renderScreen(newClient(), createElement(StartArV3GroupView, {
-        projectUid: PROJECT_UID, versionUid: VERSION_UID, pending, failure, onSend: noop,
-      }));
-    add('StartArV3GroupView idle', startView(false, null));
-    add('StartArV3GroupView pending', startView(true, null));
-    add(
-      'StartArV3GroupView refused with the classification link',
-      startView(false, classifyArV3GroupStartFailure(apiError(422, 'version_classification_required', false))),
-    );
-    add(
-      'StartArV3GroupView transient failure with a retry',
-      startView(false, classifyArV3GroupStartFailure(apiError(503, 'dependency_unavailable', true))),
-    );
-  }
   // `W60-PRICE-LIST-01`: the «Оптимизация» tab loaded (revisions, a positions page with its
   // report, the fifteen vendor lists), and every other shape its widgets have.
   {
@@ -2442,8 +2372,7 @@ export function screens(): Screen[] {
     add('RunList loaded', at(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
     // `RunTable`: the dense run table in the states its cells branch on — the executor and preset lines
     // under the badge (a queued run waiting for its executor, a published run started with a preset), a
-    // run with a starter's label, a failed run (no «Разобрать», no findings count), a partial run, and the
-    // AR v3 beta run (published, yet no canonical review to open) — so the muted second line, the
+    // run with a starter's label, a failed run (no «Разобрать», no findings count) and a partial run — so the muted second line, the
     // «неизвестно» of an absent starter, the figures and the action links are measured where they are drawn.
     {
       const runsClient = populatedClient();
@@ -2461,7 +2390,6 @@ export function screens(): Screen[] {
           runStatus({ run_id: otherId('8'), state: 'running', terminal_at: null, published_finding_count: 0 }),
           runStatus({ run_id: otherId('7'), state: 'failed', terminal_reason: 'dependency_unavailable' as ErrorCode, published_finding_count: 0 }),
           runStatus({ run_id: otherId('6'), state: 'partial', degradation_set: ['text_analysis'], started_by_label: 'Проверкина А. С.' }),
-          runStatus({ run_id: otherId('5'), analysis_profile_id: AR_V3_BETA_PROFILE_ID }),
         ],
         page: { next_cursor: null },
       });

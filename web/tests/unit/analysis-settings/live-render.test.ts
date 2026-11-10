@@ -1,5 +1,5 @@
 /**
- * `AR-V3-BETA-PACK-STATUS-WEB-FIX-02`: the instrument itself. `live-render.ts` stands in for a
+ * The instrument itself. `live-render.ts` stands in for a
  * browser's click, and a browser dispatches no click to a disabled button. A `press` that called
  * `onClick` whatever the button's state let a test press a button the page had disabled and pass.
  */

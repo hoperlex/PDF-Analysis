@@ -37,7 +37,7 @@ export interface VersionTabFacts {
 
 /** The newest run that published a result, or `null`. The list is the server's, newest first. */
 export function latestResultRun(runs: readonly RunStatus[] | undefined): RunStatus | null {
-  return runs?.find((run) => runHasPublishedResult(run.state, run.analysis_profile_id)) ?? null;
+  return runs?.find((run) => runHasPublishedResult(run.state)) ?? null;
 }
 
 export function versionTabs(facts: VersionTabFacts): readonly VersionTab[] {

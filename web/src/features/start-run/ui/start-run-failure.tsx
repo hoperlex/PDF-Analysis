@@ -3,7 +3,7 @@
 /**
  * What a refused or failed start says, and the one thing it offers (`EXEC-PAR-WEB-01` moved this
  * out of the control so the states a settled mutation produces can be rendered by instruments
- * that cannot settle one, as `start-ar-v3-group` does).
+ * that cannot settle one).
  *
  * There is no provider-mode choice here and no offer to start the run "in recorded mode instead".
  * `dependency_unavailable` is rendered as itself, with a retry under the same key and nothing else

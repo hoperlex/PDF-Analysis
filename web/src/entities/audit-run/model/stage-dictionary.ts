@@ -18,8 +18,6 @@
  * the «Сверка» chip. It is listed with the stage ids because the extended review's `procedures` are keyed by it.
  */
 
-import { AR_V3_BETA_STAGE_LABELS } from '@/shared/ui';
-
 /** The eight chips, in the order the rail draws them. */
 export const RUN_CHIP_IDS = [
   'preparation',
@@ -34,11 +32,8 @@ export const RUN_CHIP_IDS = [
 
 export type RunChipId = (typeof RUN_CHIP_IDS)[number];
 
-/** The chip of the separate AR v3 beta profile, which has one stage of its own and none of the eight. */
-export const AR_V3_CHIP_ID = 'ar_v3' as const;
-
 export interface RunChipDefinition {
-  readonly id: RunChipId | typeof AR_V3_CHIP_ID;
+  readonly id: RunChipId;
   /** The name on the rail and in the dialog's list. */
   readonly short: string;
   /** The name in a sentence and in the dialog's heading. */
@@ -71,19 +66,11 @@ export const RUN_CHIP: Readonly<Record<RunChipId, RunChipDefinition>> = Object.f
   RUN_CHIPS.map((chip) => [chip.id, chip] as const),
 ) as Record<RunChipId, RunChipDefinition>;
 
-export const AR_V3_RUN_CHIP: RunChipDefinition = {
-  id: AR_V3_CHIP_ID,
-  short: 'Ссылки АР v3',
-  full: AR_V3_BETA_STAGE_LABELS.ar_v3_citation_review,
-  stageIds: ['ar_v3_citation_review'],
-  callsModel: true,
-};
-
 const BY_STAGE: ReadonlyMap<string, RunChipDefinition> = new Map(
-  [...RUN_CHIPS, AR_V3_RUN_CHIP].flatMap((chip) => chip.stageIds.map((stageId) => [stageId, chip] as const)),
+  RUN_CHIPS.flatMap((chip) => chip.stageIds.map((stageId) => [stageId, chip] as const)),
 );
 
-const BY_ID: ReadonlyMap<string, RunChipDefinition> = new Map([...RUN_CHIPS, AR_V3_RUN_CHIP].map((chip) => [chip.id, chip] as const));
+const BY_ID: ReadonlyMap<string, RunChipDefinition> = new Map(RUN_CHIPS.map((chip) => [chip.id, chip] as const));
 
 /** The chip that covers a code id (a contract stage id or a procedure id), or `null` for an id no chip covers. */
 export function chipOfStage(stageId: string): RunChipDefinition | null {

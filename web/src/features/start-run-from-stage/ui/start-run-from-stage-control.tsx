@@ -55,7 +55,7 @@ export function StartRunFromStageControl({ runId, stageIds, label }: StartRunFro
   const cost = useStartFromStageCostApproval(open ? runId : null, choice?.stageId ?? null, choice?.key ?? null);
 
   const offered = stageIds === undefined ? STARTABLE_STAGE_IDS : STARTABLE_STAGE_IDS.filter((id) => stageIds.includes(id));
-  const eligible = offered.length > 0 && mayStartFromStage(me.data?.roles) && startableState(run.data?.state) && run.data?.analysis_kind !== 'ar_v3_beta';
+  const eligible = offered.length > 0 && mayStartFromStage(me.data?.roles) && startableState(run.data?.state);
   if (!eligible) return null;
   const onlyStage = offered.length === 1 ? (offered[0] as StageId) : null;
 
