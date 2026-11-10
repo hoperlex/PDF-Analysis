@@ -14,7 +14,14 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
-from auditmanager.decision_memory.models import CROP_CAP, SELECTION_RULE_PAGE_IMAGES, CropRef, EvidenceItem
+from auditmanager.decision_memory.models import (
+    CROP_CAP,
+    SELECTION_RULE_BLOCK_CROP,
+    SELECTION_RULE_PAGE_IMAGES,
+    BlockEvidenceFact,
+    CropRef,
+    EvidenceItem,
+)
 
 #: The width of ``decision_memory_crop.portal_description``.
 DESCRIPTION_MAX_CHARS: Final[int] = 4000
@@ -57,3 +64,63 @@ def select_page_image_crops(
             if len(chosen) == CROP_CAP:
                 return tuple(chosen)
     return tuple(chosen)
+
+
+def select_block_crops(
+    block_evidence: Sequence[BlockEvidenceFact], records: Sequence[Mapping[str, Any]]
+) -> tuple[CropRef, ...]:
+    """Selection rule ``block_crop/1`` (`dm-capture/2`, `F8-PUBLISH`): the crop **of the block** the evidence names, at most :data:`CROP_CAP`.
+
+    Where ``page_images/1`` guesses (the ledger does not link a text anchor to a block), a candidate finding names its blocks, so each evidence
+    item takes the record of ``geometry.page_crops`` whose ``portal_block_id`` is its own **and whose ``sha256`` is the digest the evidence
+    recorded**: a record that no longer matches is not taken (nothing is substituted), and an item with no matching record has no crop. A block is
+    taken once; the evidence item that names it is the one the crop is recorded against. The record's own ``bbox_norm`` is the crop's box, and its
+    portal description is cut at :data:`DESCRIPTION_MAX_CHARS` as in ``page_images/1``.
+    """
+    chosen: list[CropRef] = []
+    taken: set[str] = set()
+    for item in sorted(block_evidence, key=lambda candidate: candidate.ordinal):
+        if item.portal_block_id in taken:
+            continue
+        record = next(
+            (
+                candidate
+                for candidate in records
+                if str(candidate["portal_block_id"]) == item.portal_block_id and str(candidate["sha256"]) == item.crop_sha256
+            ),
+            None,
+        )
+        if record is None:
+            continue
+        taken.add(item.portal_block_id)
+        description = record.get("portal_description")
+        chosen.append(
+            CropRef(
+                ordinal=len(chosen) + 1,
+                evidence_ordinal=item.ordinal,
+                selection_rule=SELECTION_RULE_BLOCK_CROP,
+                page_number=int(record["page_number"]),
+                bbox=tuple(float(value) for value in record["bbox_norm"]),  # type: ignore[arg-type]
+                blob_id=str(record["blob_id"]),
+                sha256=str(record["sha256"]),
+                size_bytes=int(record["size_bytes"]),
+                width_px=int(record["width_px"]),
+                height_px=int(record["height_px"]),
+                source_ref=item.portal_block_id,
+                portal_description=(str(description)[:DESCRIPTION_MAX_CHARS] or None) if description else None,
+            )
+        )
+        if len(chosen) == CROP_CAP:
+            break
+    return tuple(chosen)
+
+
+def select_case_crops(
+    evidence: Sequence[EvidenceItem],
+    block_evidence: Sequence[BlockEvidenceFact],
+    records: Sequence[Mapping[str, Any]],
+) -> tuple[CropRef, ...]:
+    """The crops a case references: ``block_crop/1`` for a case whose evidence is blocks (``dm-capture/2``), ``page_images/1`` for every other."""
+    if block_evidence:
+        return select_block_crops(block_evidence, records)
+    return select_page_image_crops(evidence, records)

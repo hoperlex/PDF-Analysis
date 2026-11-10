@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Final
@@ -19,6 +20,9 @@ from auditmanager.storage.public import parse_blob_id
 
 #: The shape of what a capture writes. A change to the content of a case is a new version here, never an edit of an old case.
 CAPTURE_VERSION: Final[str] = "dm-capture/1"
+#: `F8-PUBLISH` (ADR-0029 decision 7): the capture of a case whose evidence is blocks. A case with block evidence is written under this version;
+#: a case without it stays ``dm-capture/1`` byte for byte (:func:`capture_version_of`), so an old case and its digest are never touched.
+CAPTURE_VERSION_BLOCK_EVIDENCE: Final[str] = "dm-capture/2"
 
 #: Where a memory decision came from. ``carried`` is exactly an event with ``carried_from_decision_id`` (`D-337`); ``imported`` is a
 #: decision read back from a run's workbook (`D-391`: the import does not say so yet, so it is captured ``direct``).
@@ -54,6 +58,9 @@ CROP_CAP: Final[int] = 4
 #: The rule that picked a case's crops. v1 takes the portal image-block crops of the pages the evidence names, with no geometric test
 #: against the evidence block (`D-392`); the name is stored on every crop so a better rule is distinguishable later.
 SELECTION_RULE_PAGE_IMAGES: Final[str] = "page_images/1"
+
+#: The rule of ``dm-capture/2``: the crop of the block the evidence names, not the crops of the page (`F8-PUBLISH`).
+SELECTION_RULE_BLOCK_CROP: Final[str] = "block_crop/1"
 
 CROP_KIND_PORTAL_IMAGE_BLOCK: Final[str] = "portal_image_block"
 CROP_MEDIA_TYPE: Final[str] = "image/png"
@@ -95,6 +102,40 @@ class EvidenceItem:
     def __post_init__(self) -> None:
         if (self.bbox is None) != (self.bbox_unit is None) or (self.bbox is None) != (self.bbox_origin is None):
             raise _invalid("an evidence box carries its unit and origin, and neither without the box")
+
+
+_PORTAL_BLOCK_ID = re.compile(r"blk_[0-9a-f]{32}")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+#: ``ck_decision_memory_block_evidence_recognised_quote``.
+BLOCK_QUOTE_MAX_CHARS: Final[int] = 2000
+
+
+@dataclass(frozen=True, slots=True)
+class BlockEvidenceFact:
+    """One block a candidate case stood on (`dm-capture/2`, ``decision_memory_block_evidence``): where it is, the crop on record, an optional quote.
+
+    ``bbox`` is the block's normalised box in the page, ``(x0, y0, x1, y1)``, from the run's verified geometry. A block link proves a place,
+    not a content (ADR-0029 decision 7); the quote, when there is one, was verbatim in the block's recognised text when the finding was
+    published.
+    """
+
+    ordinal: int
+    page_number: int
+    portal_block_id: str
+    bbox: tuple[float, float, float, float]
+    crop_sha256: str
+    recognised_quote: str | None = None
+
+    def __post_init__(self) -> None:
+        x0, y0, x1, y1 = self.bbox
+        if self.ordinal < 0 or self.page_number < 1:
+            raise _invalid("block evidence has a non-negative ordinal and a page from 1")
+        if not _PORTAL_BLOCK_ID.fullmatch(self.portal_block_id) or not _SHA256.fullmatch(self.crop_sha256):
+            raise _invalid("block evidence names a portal block and the digest of its crop")
+        if not (0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1):
+            raise _invalid("a block's box lies in the normalised page and has an area")
+        if self.recognised_quote is not None and not 1 <= len(self.recognised_quote) <= BLOCK_QUOTE_MAX_CHARS:
+            raise _invalid(f"a block's quote is 1 to {BLOCK_QUOTE_MAX_CHARS} characters")
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +194,8 @@ class CaseContent:
     provider_mode: str
     evidence: tuple[EvidenceItem, ...]
     norm_refs: tuple[NormRef, ...]
+    #: `F8-PUBLISH`: the blocks of a candidate finding of a ``one_list`` run. Empty for a text finding, whose case is ``dm-capture/1``.
+    block_evidence: tuple[BlockEvidenceFact, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,6 +304,11 @@ class CommentCaptureResult:
         return self.outcome == COMMENT_CAPTURED
 
 
+def capture_version_of(content: CaseContent) -> str:
+    """``dm-capture/2`` for a case whose evidence is blocks, ``dm-capture/1`` for every other case."""
+    return CAPTURE_VERSION_BLOCK_EVIDENCE if content.block_evidence else CAPTURE_VERSION
+
+
 def content_digest(content: CaseContent) -> str:
     """SHA-256 over the observation's immutable content, as sorted-key JSON without insignificant whitespace.
 
@@ -269,6 +317,9 @@ def content_digest(content: CaseContent) -> str:
     from artifacts or settings that may differ between the first decision on an observation and a later one. So a later decision on the
     same observation always produces the digest of the first, and a different digest means the stored observation itself differs, which
     no ledger event can cause (a conflict, never an overwrite).
+
+    `F8-PUBLISH`: the block evidence (ordinal, page, block, crop digest, quote; **not** the box, which is geometry) joins the body **only when there
+    is some**, so the digest of every case without it is the one it always was.
     """
     body = {
         "category": content.category,
@@ -292,5 +343,9 @@ def content_digest(content: CaseContent) -> str:
             for n in content.norm_refs
         ],
     }
+    if content.block_evidence:
+        body["block_evidence"] = [
+            [b.ordinal, b.page_number, b.portal_block_id, b.crop_sha256, b.recognised_quote] for b in content.block_evidence
+        ]
     encoded = json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

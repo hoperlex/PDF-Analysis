@@ -16,7 +16,6 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from auditmanager.decision_memory.models import (
-    CAPTURE_VERSION,
     COMMENT_ALREADY_CAPTURED,
     COMMENT_CAPTURED,
     COMMENT_REFUSED_CASE_FORGOTTEN,
@@ -27,6 +26,7 @@ from auditmanager.decision_memory.models import (
     CaptureSnapshot,
     CommentCaptureResult,
     CommentFact,
+    capture_version_of,
     content_digest,
 )
 from auditmanager.decision_memory.service import STATUS_LOCK_PREFIX
@@ -82,6 +82,18 @@ _INSERT_EVIDENCE = text(
     ) VALUES (
         :case_id, 1, :ordinal, :page_number, :quote, :char_start, :char_end, :block_ref,
         :bbox_x0, :bbox_y0, :bbox_x1, :bbox_y1, :bbox_unit, :bbox_origin
+    )
+    """
+)
+
+_INSERT_BLOCK_EVIDENCE = text(
+    """
+    INSERT INTO decision_memory_block_evidence (
+        case_id, revision, ordinal, page_number, portal_block_id,
+        bbox_x0, bbox_y0, bbox_x1, bbox_y1, crop_sha256, recognised_quote
+    ) VALUES (
+        :case_id, 1, :ordinal, :page_number, :portal_block_id,
+        :bbox_x0, :bbox_y0, :bbox_x1, :bbox_y1, :crop_sha256, :recognised_quote
     )
     """
 )
@@ -269,7 +281,7 @@ class MemoryRepository:
                 "section_code": snapshot.section_code,
                 "data_class": snapshot.data_class,
                 "crop_state": CROP_STATE_REFERENCED if snapshot.crops else CROP_STATE_NONE_AVAILABLE,
-                "capture_version": CAPTURE_VERSION,
+                "capture_version": capture_version_of(content),
                 "content_sha256": digest,
             },
         ).scalar_one_or_none()
@@ -358,6 +370,25 @@ class MemoryRepository:
                         "bbox_origin": item.bbox_origin,
                     }
                     for item in content.evidence
+                ],
+            )
+        if content.block_evidence:
+            session.execute(
+                _INSERT_BLOCK_EVIDENCE,
+                [
+                    {
+                        "case_id": case_id,
+                        "ordinal": item.ordinal,
+                        "page_number": item.page_number,
+                        "portal_block_id": item.portal_block_id,
+                        "bbox_x0": item.bbox[0],
+                        "bbox_y0": item.bbox[1],
+                        "bbox_x1": item.bbox[2],
+                        "bbox_y1": item.bbox[3],
+                        "crop_sha256": item.crop_sha256,
+                        "recognised_quote": item.recognised_quote,
+                    }
+                    for item in content.block_evidence
                 ],
             )
         if content.norm_refs:

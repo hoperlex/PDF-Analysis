@@ -7,7 +7,9 @@ The composition root's capture assembler builds a :class:`CaptureSnapshot` from 
 from __future__ import annotations
 
 from auditmanager.decision_memory.models import (
+    BLOCK_QUOTE_MAX_CHARS,
     CAPTURE_VERSION,
+    CAPTURE_VERSION_BLOCK_EVIDENCE,
     CAPTURED_EVENT_TYPES,
     COMMENT_ALREADY_CAPTURED,
     COMMENT_CAPTURED,
@@ -22,7 +24,9 @@ from auditmanager.decision_memory.models import (
     CROP_STATE_REFERENCED,
     DATA_CLASSES,
     ORIGIN_KINDS,
+    SELECTION_RULE_BLOCK_CROP,
     SELECTION_RULE_PAGE_IMAGES,
+    BlockEvidenceFact,
     CaptureResult,
     CaptureSnapshot,
     CaseContent,
@@ -33,6 +37,7 @@ from auditmanager.decision_memory.models import (
     DecisionFact,
     EvidenceItem,
     NormRef,
+    capture_version_of,
     content_digest,
 )
 from auditmanager.decision_memory.reads import (
@@ -44,7 +49,12 @@ from auditmanager.decision_memory.reads import (
     MemoryReader,
 )
 from auditmanager.decision_memory.repository import MemoryRepository
-from auditmanager.decision_memory.selection import DESCRIPTION_MAX_CHARS, select_page_image_crops
+from auditmanager.decision_memory.selection import (
+    DESCRIPTION_MAX_CHARS,
+    select_block_crops,
+    select_case_crops,
+    select_page_image_crops,
+)
 from auditmanager.decision_memory.service import StatusChange, restore_case, withdraw_case
 from auditmanager.decision_memory.settings import (
     SETTING_DATA_CLASS,
@@ -71,9 +81,11 @@ from auditmanager.decision_memory.status import (
 )
 
 __all__ = [
+    "BLOCK_QUOTE_MAX_CHARS",
     "CASE_MACHINE",
     "CASE_STATUSES",
     "CAPTURE_VERSION",
+    "CAPTURE_VERSION_BLOCK_EVIDENCE",
     "CAPTURED_EVENT_TYPES",
     "COMMENT_ALREADY_CAPTURED",
     "COMMENT_CAPTURED",
@@ -94,6 +106,7 @@ __all__ = [
     "KIND_WITHDRAW",
     "MAX_PAGE",
     "ORIGIN_KINDS",
+    "SELECTION_RULE_BLOCK_CROP",
     "SELECTION_RULE_PAGE_IMAGES",
     "SETTING_DATA_CLASS",
     "SETTING_DEFAULTS",
@@ -105,6 +118,7 @@ __all__ = [
     "STATUS_KINDS",
     "STATUS_REASON_CODES",
     "STATUS_WITHDRAWN",
+    "BlockEvidenceFact",
     "CaptureResult",
     "CaptureSnapshot",
     "CaseContent",
@@ -123,9 +137,12 @@ __all__ = [
     "MemorySettings",
     "NormRef",
     "StatusChange",
+    "capture_version_of",
     "content_digest",
     "next_status",
     "restore_case",
+    "select_block_crops",
+    "select_case_crops",
     "select_page_image_crops",
     "status_after_events",
     "withdraw_case",
