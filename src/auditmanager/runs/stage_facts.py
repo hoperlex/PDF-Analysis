@@ -507,7 +507,10 @@ def assemble_run_stage_facts(
         chip_calls = calls_by_chip.get(chip.id, [])
         if not (rows or chip_procedures or cells or chip_calls):
             continue  # a chip no place mentions is not in this run
-        if not chip.calls_model:
+        # A chip whose every procedure says it called no model (`V2-ORIGINAL-REVIEW-01`: the original's critic and corrector under plan v2) has
+        # no plan line either: no cell was bound for it, and «модель прогона» would name a model that did none of its work.
+        deterministic = bool(chip_procedures) and all(p.get("model_called") is False for p in chip_procedures)
+        if not chip.calls_model or deterministic:
             plan: list[dict[str, Any]] = []
         elif run.stage_plan is not None:
             plan = [

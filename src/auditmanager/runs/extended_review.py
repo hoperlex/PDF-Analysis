@@ -12,7 +12,9 @@ from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelRe
     build_extended_request, extended_canonical, extended_digest, finalize_extended_items,
     parse_extended_reply, plan_extended_inputs, EXTENDED_REVIEW_ROLE, EXTENDED_REPLY_ROLE,
     pinned_models, request_cost_upper_usd, require_approved_model, extended_block_payload,
-    block_leg_refs, build_block_judge_request, parse_block_judge_reply, reconcile_block_batch)
+    block_leg_refs, build_block_judge_request, parse_block_judge_reply, reconcile_block_batch,
+    ORIGINAL_REVIEW_V2, original_review_critic, original_review_corrector, original_review_plan,
+    original_review_procedures, original_review_summary)
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.executors.public import CropImage, attach_images
 from auditmanager.jobs.public import extended_unit
@@ -30,6 +32,47 @@ FORMAT = "extended-review-v1"
 
 def _refuse(reason: str):
     return DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason=reason)
+
+
+def _original_review_enabled(policy, *, strict=False) -> bool:
+    """`V2-ORIGINAL-REVIEW-01`: whether the frozen plan-v2 policy carries the marker of the original's deterministic critic and corrector.
+
+    A v2 consent without it runs exactly as it ran before. ``strict`` refuses a marker this code does not know, as a failed review.
+    """
+    if not isinstance(policy, dict) or policy.get("plan_version") != "extended-review-v2" or "original_review" not in policy:
+        return False
+    if policy["original_review"] != ORIGINAL_REVIEW_V2:
+        if strict:
+            raise _refuse("original_review_policy_invalid")
+        return False
+    return True
+
+
+def _review_original_v2(*, state, phase, pages) -> None:
+    """The two procedures after the norm verification, over the saved observations. No model, no executor, no call.
+
+    A defect here is a visible failed procedure (and a warning); it does not discard the results the paid calls above have saved.
+    """
+    phase("finding_review", "running")
+    try:
+        done = original_review_critic(state["observations"], state["sources"], pages)
+    except (ValueError, TypeError, KeyError, AttributeError):
+        state["warnings"].append("original_review_failed")
+        phase("finding_review", "failed", "original_review_failed")
+        phase("finding_correction", "skipped", "dependency_failed")
+        return
+    phase("finding_review", "completed", None if done else "no_observations")
+    phase("finding_correction", "running")
+    try:
+        corrections = original_review_corrector(done)
+    except (ValueError, TypeError, KeyError, AttributeError):
+        for item, _, _ in done:
+            item.pop("correction", None)
+        state["warnings"].append("original_review_failed")
+        phase("finding_correction", "failed", "original_review_failed")
+        return
+    state["original_review"] = {**state.get("original_review", original_review_plan()), **original_review_summary(done, corrections)}
+    phase("finding_correction", "completed", None if corrections else "no_corrections_requested")
 
 
 def _cell(binding, row, role="main"):
@@ -558,7 +601,7 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
         return _run_workflow_v2(session,run=run,authority=authority,jobs=jobs,journal=journal,binding=binding,
             outputs=outputs,store=store,meter=meter,publish=publish,progress=progress,checkpoint=checkpoint,
             observations_document=observations_document,snapshot_id=snapshot_id,profile_sha256=profile_sha256,
-            bind_native=bind_native,full_document=policy.get("max_blocks") == "all")
+            bind_native=bind_native,full_document=policy.get("max_blocks") == "all",policy=policy)
     from auditmanager.analysis.public import read_artifact
     state: dict[str, Any] = {"format": FORMAT, "preliminary": True, "section": "unknown",
         "observations": [], "sources": [], "warnings": [], "coverage": {
@@ -784,11 +827,16 @@ def _planned_global_cross_window(policy, *, reason=None, terminal=False):
 def planned_workflow_result(*, reason=None, terminal=False, policy=None):
     from auditmanager.analysis.public import extended_workflow_procedures
     v3=isinstance(policy,dict) and policy.get("plan_version")=="extended-review-v3"
+    original=False
     if v3:
         from auditmanager.analysis.public import extended_workflow_procedures_v3
         procedures=extended_workflow_procedures_v3()
     else:
         procedures = extended_workflow_procedures()
+        # `V2-ORIGINAL-REVIEW-01`: a v2 consent that carries the marker plans the original's critic and corrector after the norms.
+        original=_original_review_enabled(policy)
+        if original:
+            procedures = [*procedures, *original_review_procedures()]
     if reason:
         for procedure in procedures:
             procedure.update(status="skipped" if terminal else "queued", reason=reason)
@@ -798,6 +846,7 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         from .project_parameters import planned_parameters
         parameter_result = {"project_parameters": planned_parameters(policy["project_parameters_policy"], reason=reason, terminal=terminal)}
     return {"format":version,"workflow_version":version,"preliminary":True,
+        **({"original_review": original_review_plan()} if original else {}),
         **parameter_result,
         **({"project_parameter_context_policy": deepcopy(policy["project_parameter_context_policy"])}
            if v3 and "project_parameter_context_policy" in policy else {}),
@@ -1011,13 +1060,13 @@ def _received_reply(*, state, request, response, parse, call, identity, policy):
 
 def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
         publish, progress, checkpoint, observations_document, snapshot_id, profile_sha256, bind_native=None,
-        window_context=None, full_document=False):
+        window_context=None, full_document=False, policy=None):
     from auditmanager.analysis.public import (read_artifact, prepare_native_page_sources,
         build_comprehensive_request, deterministic_extended_merge,
         build_norm_review_request, parse_norm_review)
     v3=window_context is not None
     batched=v3 and window_context["policy"].get("coverage_version")=="batched-v1"
-    state = planned_workflow_result(policy=None if not v3 else window_context["policy"])
+    state = planned_workflow_result(policy=policy if not v3 else window_context["policy"])
     if v3 and _source_sized(window_context["policy"]):
         state.update(source_sized_calls=True, completion_policy=window_context["policy"].get("completion_policy"))
     # The separately accepted global budget belongs only to the parent Run;
@@ -1164,6 +1213,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         return response
     save("running")
     try:
+        # A marker this code does not know is a failed review, never a v2 run without the original's critic.
+        original_review=not v3 and _original_review_enabled(policy,strict=True)
         if v3:
             section=window_context["policy"]["section_code"]
         else:
@@ -1449,6 +1500,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         elif v3:
             _review_window_v3(session=session,run=run,binding=binding,state=state,phase=phase,call=call,
                 window_id=window_context["window_id"],section=section,contexts=contexts)
+        elif original_review:
+            _review_original_v2(state=state,phase=phase,pages=by_page)
         degraded=any(p["status"] in {"failed","partial","unavailable","skipped"}
             and p.get("reason") not in {"no_corrections_requested","no_observations"} for p in state["procedures"])
         save("partial" if degraded else "completed")
