@@ -1,6 +1,6 @@
 """Unserved, fail-closed read of 0023's certified citation partitions.
 
-The caller supplies the registered v3 profile identity and holds one consistent
+The caller supplies the registered profile identity and holds one consistent
 database read transaction. This module returns persisted facts for a later
 report assembler; it does not authorize a route or infer a certified zero.
 """
@@ -137,9 +137,8 @@ _CITATIONS = text("""
      ORDER BY c.finding_observation_id COLLATE "C", c.citation_ordinal
 """)
 
-#: The two stages whose succeeded StageResult certifies a citation partition: the v1/v2
-#: ``norm_verification`` stage and, since migration ``0036``, the AR v3 beta CITE stage.
-CITE_STAGE_IDS = frozenset({"norm_verification", "ar_v3_citation_review"})
+#: The stage whose succeeded StageResult certifies a citation partition: ``norm_verification``.
+CITE_STAGE_IDS = frozenset({"norm_verification"})
 
 _NORMATIVE = frozenset({
     "evacuation", "fire_safety", "accessibility", "insulation", "sound",
@@ -203,7 +202,7 @@ def read_verified_citations(
 ) -> VerifiedCitationRead:
     """Read one terminal Run's exact certified finding partitions, without a commit.
 
-    ``profile_id`` must be the later registered v3 identity, not a caller chosen
+    ``profile_id`` must be the registered profile identity, not a caller chosen
     assertion. The caller also owns authorization and a repeatable-read snapshot.
     ``cite_stage_id`` names the succeeded StageResult that certifies the partitions;
     it is one of :data:`CITE_STAGE_IDS`, never free text.

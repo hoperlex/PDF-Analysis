@@ -51,40 +51,6 @@ from auditmanager.analysis.profiles.ar_shared.recognised_context import (
     RecognisedContextError,
     select_context as select_recognised_context,  # SECTION-CATEGORY-OCR-01
 )
-from auditmanager.analysis.profiles.ar_v3.local_evaluation import (
-    LocalV3Evaluation,
-    SuppliedV3Response,
-    V3LocalEvaluationRefused,
-    evaluate_v3_supplied_response,
-)
-from auditmanager.analysis.profiles.ar_v3.v3_profile import (
-    PROFILE_ID as AR_V3_BETA_PROFILE_ID,
-    PROMPT_BUNDLE_ID as AR_V3_BETA_BUNDLE_ID,
-    BetaV3Profile,
-    BetaV3ProfileRefused,
-    SealedV3Request,
-    prepare_beta_v3_request,
-    resolve_beta_v3_profile,
-)
-from auditmanager.analysis.profiles.ar_v3.request_delivery import (
-    V3DeliveryRefused,
-    V3GenerationSettings,
-    build_v3_model_request,
-)
-from auditmanager.analysis.profiles.ar_v3.request_candidate import (
-    V3RequestCandidate,
-    V3RequestRefused,
-    prepare_v3_request_candidate,
-    prepare_v3_scoped_request_candidate,
-)
-from auditmanager.analysis.profiles.ar_v3.norm_map.beta_sources import (
-    BetaSourcePolicyRefused,
-    load_beta_source_policy,
-)
-from auditmanager.analysis.profiles.ar_v3.set_input import (
-    V3SetInputRefused,
-    parse_v3_set_input,
-)
 from auditmanager.analysis.stages.extraction import (
     NORMALIZATION_DESCRIPTION,
     NORMALIZATION_ID,
@@ -196,7 +162,7 @@ from auditmanager.analysis.text.cell_settings import (  # HOSTS-LAYOUT-01
     limit_of,
 )
 from auditmanager.analysis.text.recorded import RecordedAdapter
-from auditmanager.analysis.text.wire_schema import to_wire_schema, with_wire_schema  # AR-V3-WIRE-SCHEMA-01
+from auditmanager.analysis.text.wire_schema import to_wire_schema, with_wire_schema
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
 from auditmanager.analysis.text.textlayer import TextLayer
@@ -214,19 +180,9 @@ __all__ = [
     "link_evidence",
     "linkable_pages",
     "Readings",
-    "BetaV3Profile",
-    "BetaV3ProfileRefused",
-    "SealedV3Request",
-    "prepare_beta_v3_request",
-    "V3DeliveryRefused",
-    "V3GenerationSettings",
-    "build_v3_model_request",
-    "resolve_beta_v3_profile",
     "ARTIFACT_MEDIA_TYPE",
     "ARTIFACT_VERSION",
     "ARTIFACT_ROLE",
-    "AR_V3_BETA_BUNDLE_ID",
-    "AR_V3_BETA_PROFILE_ID",
     "BlockIndex",
     "CheckedCropBytes",
     "CheckedCropItem",
@@ -322,24 +278,12 @@ __all__ = [
     "StageResult",
     "StageStatus",
     "TextAnalysisOutcome",
-    "LocalV3Evaluation",
-    "BetaSourcePolicyRefused",
-    "SuppliedV3Response",
-    "V3LocalEvaluationRefused",
-    "V3RequestCandidate",
-    "V3RequestRefused",
-    "V3SetInputRefused",
     "default_registry",
     "count_native_text_characters",
     "document_text",
     "input_budget_characters",
     "load_provider_config",
-    "load_beta_source_policy",
     "publish_artifact",
-    "prepare_v3_request_candidate",
-    "prepare_v3_scoped_request_candidate",
-    "parse_v3_set_input",
-    "evaluate_v3_supplied_response",
     "check_saved_crop_bytes",
     "check_saved_crop_item_bytes",
     "check_run_text_window_input",

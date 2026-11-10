@@ -24,7 +24,6 @@ from typing import Final
 from fastapi import APIRouter
 
 from auditmanager.api.routers.auth import build_auth_routes
-from auditmanager.api.routers.ar_v3_groups import build_ar_v3_group_routes
 from auditmanager.api.routers.blocks import build_block_routes
 from auditmanager.api.routers.comparison_uploads import build_comparison_upload_routes
 from auditmanager.api.routers.comparison_version_orders import (
@@ -144,7 +143,6 @@ from auditmanager.api.routers.ports import (
     RegistrationPort,
     ReleasesPort,
     RunPort,
-    ArV3GroupPort,
     SectionPort,
     SectionSpecificationPort,
     SpecificationPricesPort,
@@ -316,7 +314,6 @@ def build_router(
     executor_hosts: ExecutorHostPort | None = None,
     stage_models: StageModelPort | None = None,
     run_stages: RunStagePort | None = None,
-    ar_v3_groups: ArV3GroupPort | None = None,
     comparison_uploads: ComparisonUploadPort | None = None,
     comparison_version_orders: ComparisonVersionOrderPort | None = None,
     version_pages: VersionPagePort | None = None,
@@ -384,7 +381,6 @@ def build_router(
     build_document_routes(router, documents)
     build_block_routes(router, blocks)  # type: ignore[arg-type]
     build_run_routes(router, runs)
-    build_ar_v3_group_routes(router, ar_v3_groups)  # type: ignore[arg-type]
     # `D-67`. Two collections address a parent that another port owns: `listRunFindings`
     # hangs off a run and `listDecisionHistory` off a finding. Each builder is handed the
     # port that can answer whether that parent exists, so the operation can refuse an

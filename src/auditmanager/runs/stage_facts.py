@@ -60,8 +60,7 @@ __all__ = [
 class Chip:
     """One chip: its id, the code stage and procedure ids it covers, and whether its work calls a model.
 
-    ``row`` is the row of the stage layout whose cells are the chip's plan (``None`` for a chip with no row of its own: the AR v3 stage
-    runs outside the layout)."""
+    ``row`` is the row of the stage layout whose cells are the chip's plan (``None`` for a chip with no row of its own)."""
 
     id: str
     stage_ids: tuple[str, ...]
@@ -80,7 +79,6 @@ CHIPS: Final[tuple[Chip, ...]] = (
     Chip("norms", ("norm_verification",), True, "norms"),
     Chip("review", ("finding_review",), True, "review"),
     Chip("correction", ("finding_correction",), True, "correction"),
-    Chip("ar_v3", ("ar_v3_citation_review",), True),
 )
 
 _CHIP_BY_ID: Final[Mapping[str, Chip]] = {chip.id: chip for chip in CHIPS}
@@ -232,7 +230,7 @@ def chip_of_call(stage_key: str | None, parameters: Mapping[str, Any] | None) ->
     """The chip a journal row belongs to.
 
     In order: the ``stage_key`` the row carries (since ``0062``: a row of the stage layout, which is a chip's id); else its extended
-    phase; else an AR v3 candidate (the run's one call of the AR v3 profile); else the text stage, whose windows are the only calls with
+    phase; else the text stage, whose windows are the only calls with
     no phase. A key or a phase the map does not know is ``storage_integrity_error``."""
     if stage_key is not None:
         chip = _CHIP_OF_ROW.get(stage_key)
@@ -246,8 +244,6 @@ def chip_of_call(stage_key: str | None, parameters: Mapping[str, Any] | None) ->
         if chip is None:
             raise _integrity("model_call.extended_phase")
         return chip
-    if "ar_v3_candidate_sha256" in parameters:
-        return "ar_v3"
     return "text"
 
 

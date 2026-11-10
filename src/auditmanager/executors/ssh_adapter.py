@@ -37,8 +37,7 @@ MAX_TASK_BYTES = 24 << 20
 #: A task with several images: 32 MiB of PNG is about 42.7 MiB as base64, plus the text.
 MAX_MULTI_IMAGE_TASK_BYTES = 48 << 20
 MAX_ANSWER_BYTES = 2 << 20
-#: The efforts the remote command accepts in the task's ``effort`` member
-#: (`AR-V3-LIVENESS-01`). The sealed request's ``output_config.effort`` is passed on when it is
+#: The efforts the remote command accepts in the task's ``effort`` member. The sealed request's ``output_config.effort`` is passed on when it is
 #: one of these and left out otherwise; the command sets no other cap on the model's work.
 _EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max"})
 #: The ``dependency`` a live call cut for silence / at its ceiling names. The error code
@@ -84,7 +83,7 @@ def _task(request: ModelRequest, model: str) -> bytes:
     if isinstance(output, Mapping) and isinstance(output.get("format"), Mapping):
         schema = output["format"].get("schema")
         if isinstance(schema, Mapping):
-            # The wire form (`AR-V3-WIRE-SCHEMA-01`): what the remote command may hand a provider.
+            # The wire form: what the remote command may hand a provider.
             task["output_schema"] = to_wire_schema(schema)
     if isinstance(output, Mapping):
         effort = output.get("effort")

@@ -78,7 +78,7 @@ class LiveAdapter:
     def complete(self, request: ModelRequest) -> ModelResponse:
         started = time.monotonic()
         try:
-            # The provider is told the wire form of the response schema (`AR-V3-WIRE-SCHEMA-01`); the
+            # The provider is told the wire form of the response schema; the
             # request's own body and its checksum are not changed.
             from auditmanager.executors.public import request_with_provider_images
             body = request_with_provider_images(with_wire_schema(request.body), request, "anthropic")

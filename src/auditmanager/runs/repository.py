@@ -300,7 +300,7 @@ class RunRow:
     #: `EXEC-HTTP-01`: the executor connection revision the run froze at start, or ``None`` for
     #: a run of the ``environment`` source. Written once by ``create`` and frozen by the database.
     connection_revision_id: str | None = None
-    #: The 0023 immutable verified set pin, present only for future v3 runs.
+    #: The 0023 immutable verified set pin, present only for a run that pinned a verified retrieval set.
     norm_retrieval_set_id: str | None = None
     #: `ANALYSIS-PRESETS-01`: the analysis-preset revision the run was started with, or ``None``
     #: for a run started by hand, by the route or by a repeat. Written once by ``create`` and
@@ -504,7 +504,7 @@ class RunRepository:
 
         The optional 0023 set pin is written at INSERT time only. The database
         requires its row to be verified under the same snapshot. The served
-        commands do not supply it until a later v3 runtime integration owns that
+        commands do not supply it until a later integration owns that
         selection and the associated frozen-input digest.
 
         `EXEC2-GROUP-RUN-01`: a run admitted by a rule or a group is written ``binding_state = 'pending'`` with the

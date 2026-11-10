@@ -192,7 +192,7 @@ class AnthropicMessagesAdapter:
         allowed = effective_timeout(self._timeout_seconds, self._context)
         if allowed is None:
             raise _no_time_left()
-        # The provider is told the wire form of the response schema (`AR-V3-WIRE-SCHEMA-01`); the
+        # The provider is told the wire form of the response schema; the
         # request's own body and its checksum are not changed.
         body = {**with_wire_schema(request.body), "model": self._gateway_model}
         body.pop("images", None)

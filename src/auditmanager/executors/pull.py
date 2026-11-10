@@ -283,7 +283,7 @@ class PullAdapter:
                          "the output schema uses a keyword runners cannot be held to",
                          code=ErrorCode.ANALYSIS_INPUT_INVALID) from None
         # What is written, served to the runner and held against its answer is the wire form
-        # (`AR-V3-WIRE-SCHEMA-01`); the refusal above was judged on the sealed schema, unchanged.
+        # the refusal above was judged on the sealed schema, unchanged.
         payload = {**payload, "output_schema": to_wire_schema(payload["output_schema"])}
         if self._host_call is not None:
             payload["host"] = self._host_call.members(window)

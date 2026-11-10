@@ -64,7 +64,7 @@ sweep at process start (``__main__``) takes what is older than the live attempt'
 minute, and the files of the kill that *caused* the restart are younger than that, so they stay
 until a later start -- never, in a worker that is not restarted again. This thread repeats the
 sweep while the worker runs, with a margin of :data:`TEMPORARIES_LIVE_MARGIN_SECONDS` over the
-live attempt's absolute ceiling (``ATTEMPT_HARD_CAP_SECONDS``, two hours, `AR-V3-LIVENESS-01`)
+live attempt's absolute ceiling (``ATTEMPT_HARD_CAP_SECONDS``, two hours)
 because this process's own attempts may be live. Housekeeping: a sweep that fails is
 logged at error and tried again; it never stops the worker.
 

@@ -194,10 +194,6 @@ class RunId(OpaqueId, prefix="run", entity="AuditRun"):
     """Identity of one audit execution request and its result history."""
 
 
-class ArV3RunGroupId(OpaqueId, prefix="arg", entity="ArV3RunGroup"):
-    """Identity of one immutable six-scope AR beta request."""
-
-
 class JobId(OpaqueId, prefix="job", entity="Job"):
     """Identity of the durable schedulable work item for one local run."""
 
@@ -412,8 +408,7 @@ class ExecutorAgentInstallId(OpaqueId, prefix="exai", entity="ExecutorAgentInsta
 class ExecutorGroupId(OpaqueId, prefix="exg", entity="ExecutorGroup"):
     """Identity of one executor group (`EXEC2-SEAL-2`, migration ``0047``, ADR-0026 decision 10).
 
-    Minted by ``auditmanager.executors``. The display name is an attribute and never an identity; the
-    name of the table avoids ``ar_v3_run_group``, whose identity is ``arg``.
+    Minted by ``auditmanager.executors``. The display name is an attribute and never an identity.
     """
 
 

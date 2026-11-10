@@ -139,19 +139,6 @@ __all__ = [
     "ReleaseList",
     "MarkReleaseNotesReadRequest",
     "RunId",
-    "ArV3RunGroupId",
-    "StartArV3BetaGroupRequest",
-    "ArV3BetaGroupMember",
-    "ArV3BetaGroup",
-    "ArV3BetaGroupReview",
-    "ArV3BetaGroupReviewMember",
-    "ArV3BetaPackReview",
-    "ArV3BetaPackStatus",
-    "ArV3BetaVisibleReview",
-    "ArV3BetaVisibleTopic",
-    "ArV3BetaVisibleProposal",
-    "ArV3BetaVisibleCitation",
-    "ArV3BetaVisibleEvidence",
     "JobId",
     "RunState",
     "RunExecutor",
@@ -178,10 +165,6 @@ __all__ = [
     "NormSourceAttribution",
     "NormCitationState",
     "NormCitation",
-    "UngroundedReason",
-    "NormObservationCitationPartition",
-    "NormFindingVerification",
-    "NormVerificationReport",
     "NormReferenceCounts",
     "NormReferenceAnchor",
     "NormReferenceItem",
@@ -217,14 +200,12 @@ __all__ = [
     "SectionReviewOption",
     "SectionSuggestion",
     "Sha256",
-    "ArV3BetaStageId",
     "StageId",
     "StageState",
     "StageStatus",
     "StartRunRequest",
     "RunCostConsent",
     "RunCostEstimateRequest",
-    "ArV3GroupCostEstimateRequest",
     "RunCostEstimate",
     "ReauditRunRequest",
     "StartRunFromStageRequest",
@@ -778,9 +759,6 @@ VersionUid = TypeAliasType(
     "VersionUid", Annotated[str, Field(pattern=rf"^ver_{_ULID}$")]
 )
 RunId = TypeAliasType("RunId", Annotated[str, Field(pattern=rf"^run_{_ULID}$")])
-ArV3RunGroupId = TypeAliasType(
-    "ArV3RunGroupId", Annotated[str, Field(pattern=rf"^arg_{_ULID}$")]
-)
 JobId = TypeAliasType("JobId", Annotated[str, Field(pattern=rf"^job_{_ULID}$")])
 #: `W54-SEAL-01`. One registered worker process (``worker_id``, ``wrk``), migration ``0019``.
 WorkerId = TypeAliasType("WorkerId", Annotated[str, Field(pattern=rf"^wrk_{_ULID}$")])
@@ -999,10 +977,6 @@ class StageId(str, enum.Enum):
     NORM_VERIFICATION = "norm_verification"
 
 
-class ArV3BetaStageId(str, enum.Enum):
-    CITATION_REVIEW = "ar_v3_citation_review"
-
-
 class ProviderMode(str, enum.Enum):
     LIVE = "live"
     RECORDED = "recorded"
@@ -1153,8 +1127,7 @@ class DocumentAuditCounts(_Object):
     Every figure counts documents by their **current version only** (`R-150p`) and reads that version's
     **result run**: its latest run in state `published` or `partial`, ordered by `(created_at, run_id)` as
     `listRuns` orders them. A newer run still in flight does not displace it, and a `failed` or `cancelled`
-    run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`); AR v3
-    six-run groups follow the same per-run rule for now (`R-150t`).
+    run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`).
 
     A document is in exactly one of four states, so `document_count` is `not_run + clean + awaiting_decision
     + checked`: `not_run` has no result run; `clean` has a result run with no published finding (a state of its
@@ -1348,8 +1321,7 @@ class DocumentActiveRun(_Object):
     """`UI-A-47` (contract 1.40.0): the run of a version that is in flight -- admitted and not yet terminal.
 
     `state` is `queued` (waiting for an executor), `running` or `validating`; a `created` run has not been admitted and
-    a terminal run is not active. Only the standard analysis is named here: a run of an AR v3 group is not (as it is
-    never the version's result). No progress figure is carried: the run reports its stages, and a figure of
+    a terminal run is not active. No progress figure is carried: the run reports its stages, and a figure of
     «пакет n/m» would need a plan of its own (`D-345`).
     """
 
@@ -1652,14 +1624,9 @@ class RunCostEstimateRequest(_Object):
     start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
-class ArV3GroupCostEstimateRequest(_Object):
-    version_uid: VersionUid
-    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
-
-
 class RunCostEstimate(_Object):
     estimate_digest: Sha256
-    scope: Literal["run", "ar_v3_group"]
+    scope: Literal["run"]
     version_uid: VersionUid
     provider_mode: ProviderMode
     #: `HOSTS-SEAL-1`: ``mixed`` is a run on the stage layout whose cells are paid in both ways; ``models`` then has a line per model.
@@ -1730,131 +1697,8 @@ class StartRunFromStageRequest(_Object):
     cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
-class StartArV3BetaGroupRequest(_Object):
-    version_uid: VersionUid
-    cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    # Optional temporary per-group override. Absent and false keep the existing limits.
-    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
-
-
-class ArV3BetaGroupMember(_Object):
-    scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"]
-    run_id: RunId
-    state: RunState
-    map_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-    norm_retrieval_set_id: NormRetrievalSetId
-
-
-class ArV3BetaGroup(_Object):
-    group_id: ArV3RunGroupId
-    project_uid: ProjectUid
-    version_uid: VersionUid
-    norms_snapshot_id: NormsSnapshotId
-    analysis_profile_id: AnalysisProfileId
-    prompt_bundle_id: PromptBundleId
-    pack_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-    provider_mode: ProviderMode
-    members: Annotated[list[ArV3BetaGroupMember], Field(min_length=6, max_length=6)]
-
-
-class ArV3BetaVisibleTopic(_Object):
-    item_id: str
-    mode: str
-    reason: str
-    source_ids: list[str]
-    review_status: str
-    provisional_citation_count: Annotated[int, Field(ge=0)]
-
-
-class ArV3BetaVisibleEvidence(_Object):
-    page_number: Annotated[int, Field(ge=1)]
-    quote: str
-
-
-class ArV3BetaVisibleCitation(_Object):
-    item_id: str
-    label: str
-    document_id: str
-    paragraph_id: str
-    raw_quote: str
-    state: str
-
-
-class ArV3BetaVisibleProposal(_Object):
-    proposal_ordinal: Annotated[int, Field(ge=0)]
-    evidence: list[ArV3BetaVisibleEvidence]
-    citations: list[ArV3BetaVisibleCitation]
-
-
-class ArV3BetaVisibleReview(_Object):
-    topics: list[ArV3BetaVisibleTopic]
-    provisional_citations: list[ArV3BetaVisibleProposal]
-    withheld_proposal_count: Annotated[int, Field(ge=0)]
-    rejected_proposal_count: Annotated[int, Field(ge=0)]
-
-
-class ArV3BetaGroupReviewMember(_Object):
-    scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"]
-    run_id: RunId
-    run_state: RunState
-    review_state: Literal["pending", "failed", "verification_refused", "available"]
-    terminal_reason: str | None
-    refusal_code: str | None
-    review: ArV3BetaVisibleReview | None
-
-
-class ArV3BetaGroupReview(_Object):
-    group_id: ArV3RunGroupId
-    version_uid: VersionUid
-    members: Annotated[list[ArV3BetaGroupReviewMember], Field(min_length=6, max_length=6)]
-
-
-class ArV3BetaPackReview(_Object):
-    """The human attestation that travelled with the installed pack's manifest.
-
-    A record, not a check: the server shows what the manifest says and nothing about
-    whether anyone really reviewed anything.
-    """
-
-    reviewer: str
-    capacity: str
-    reviewed_at: Annotated[str, Field(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
-    decision_ref: str
-    scope_statement: str
-
-
-class ArV3BetaPackStatus(_Object):
-    """Whether a reviewed AR v3 beta pack is installed on this server, and its attestation.
-
-    Everything but `state` is absent, never null, while no pack is installed. No map, set or
-    snapshot identity, digest of a scope, path or environment value is ever a property.
-    """
-
-    state: Literal["installed", "not_installed"]
-    analysis_profile_id: AnalysisProfileId = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    prompt_bundle_id: PromptBundleId = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    pack_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    scope_ids: Annotated[
-        list[Literal["F1", "F2", "A1", "A2", "S1", "S2"]],
-        Field(min_length=6, max_length=6),
-    ] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    review: ArV3BetaPackReview = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    #: `AR-V3-OPT-IN` (contract 1.38.0). Present exactly when `state` is `installed`: whether this deployment allows a
-    #: start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`). Installed is the capability, this is the permission;
-    #: a pack that is installed with `start_allowed` false still executes, shows and reviews what was accepted.
-    start_allowed: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-
-
 class StageState(_Object):
-    stage_id: StageId | ArV3BetaStageId
+    stage_id: StageId
     stage_version: Annotated[str, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
@@ -1950,7 +1794,7 @@ class RunStatus(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     stages: list[StageState]
-    degradation_set: list[StageId | ArV3BetaStageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    degradation_set: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     terminal_reason: ErrorCode | None = Field(default=None, json_schema_extra=optional_property)
     #: `D-46`. **The same shape as ``ErrorEnvelope.details``, and the same constant**: it
     #: is the same rule -- safe scalar classifiers, restricted to the ``safe_detail_keys``
@@ -2005,15 +1849,6 @@ class RunStatus(_Object):
     #: created before migration 0051.
     started_by_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     started_by_label: Annotated[str, Field(min_length=1, max_length=254)] = Field(  # type: ignore[assignment]
-        default=None, json_schema_extra=optional_property)
-    #: `AR-V3-OPT-IN` (contract 1.38.0). Which analysis produced the run: `standard` (the text profile the section table
-    #: routes to) or `ar_v3_beta` (one run of a six-run AR v3 group). Derived from the pinned profile and bundle pair,
-    #: nothing else. A run holds exactly one analysis; no field of a run mixes the results of the two.
-    analysis_kind: Literal["standard", "ar_v3_beta"] = Field(  # type: ignore[assignment]
-        default=None, json_schema_extra=optional_property)
-    #: Members of an AR v3 group only: the group and the scope (`F1` .. `S2`) the run is one of.
-    ar_v3_group_id: ArV3RunGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    ar_v3_scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
     #: `UI-A-65` / `UI-B-45` (contract 1.40.0): the run's estimated finish, by the rule of
     #: `ExecutionQueueItem.estimated_finish_at` (`R-151u`) and by the same function -- the job's first attempt plus the
@@ -2526,21 +2361,6 @@ class NormCitationState(str, enum.Enum):
     REBOUND = "rebound"
 
 
-class UngroundedReason(str, enum.Enum):
-    QUOTATION_ABSENT = "quotation_absent"
-    QUOTATION_ON_DIFFERENT_PAGE = "quotation_on_different_page"
-    SPAN_OUTSIDE_PAGE = "span_outside_page"
-    SPAN_OUTSIDE_BLOCK = "span_outside_block"
-    SPAN_LENGTH_MISMATCH = "span_length_mismatch"
-    QUOTE_IN_RECOGNISED_TEXT = "quote_in_recognised_text"
-    NORM_LABEL_UNKNOWN = "norm_label_unknown"
-    NORM_QUOTE_TOO_SHORT = "norm_quote_too_short"
-    NORM_QUOTE_AMBIGUOUS = "norm_quote_ambiguous"
-    NORM_QUOTE_ABSENT = "norm_quote_absent"
-    NORM_VALUE_NOT_IN_QUOTE = "norm_value_not_in_quote"
-    STATED_VALUE_NOT_IN_EVIDENCE = "stated_value_not_in_evidence"
-
-
 class NormCitation(_Object):
     norms_snapshot_id: NormsSnapshotId
     norm_document_id: NormDocumentId
@@ -2650,41 +2470,6 @@ class FindingDetail(_Object):
     decision_event_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
-
-
-class NormObservationCitationPartition(_Object):
-    finding_observation_id: FindingObservationId
-    norm_citations: Annotated[list[NormCitation], Field(max_length=5)]
-    required_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    stated_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-
-
-class NormFindingVerification(_Object):
-    finding_uid: FindingUid
-    canonical: NormObservationCitationPartition
-    merged_observations: list[NormObservationCitationPartition]
-
-
-class NormVerificationReport(_Object):
-    run_id: RunId
-    norms_snapshot_id: NormsSnapshotId
-    norm_retrieval_set_id: NormRetrievalSetId
-    status: Literal["complete", "partial"]
-    findings: list[NormFindingVerification]
-    withheld_by_reason: Annotated[
-        dict[UngroundedReason, Annotated[int, Field(ge=0)]],
-        WithJsonSchema({
-            "type": "object",
-            "propertyNames": {"$ref": "#/components/schemas/UngroundedReason"},
-            "additionalProperties": {"type": "integer", "minimum": 0},
-        }),
-    ]
-    textless_pages: list[Annotated[int, Field(ge=1)]]
-    error_code: ErrorCode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 # --- the norms a run's text cites (`NORM-REFS-RUN-01`) ----------------------------------------
@@ -3584,7 +3369,6 @@ class ComparisonRefusal(_Object):
         "analysis_missing",
         "run_not_of_version",
         "run_not_published",
-        "analysis_not_comparable",
         "text_unavailable",
         "text_too_large",
     ]
@@ -9695,7 +9479,7 @@ class RunStageChip(str, enum.Enum):
     """A chip of a run: a reader's name for the phase or phases of code that do one kind of work. The eight chips in the order the
     rail draws them -- `preparation` (the three PC-01 preparation stages), `text` (analysis of the text), `blocks` (analysis of the
     blocks), `cross_check` (the complex cross-check and the parameter passport), `merge` (the deterministic merge), `norms` (the
-    norms), `review` (the critic) and `correction` (the refinement) -- and `ar_v3`, the one stage of the separate AR v3 profile.
+    norms), `review` (the critic) and `correction` (the refinement).
     A chip order is a display order, not the order of the stage graph."""
 
     PREPARATION = "preparation"
@@ -9706,7 +9490,6 @@ class RunStageChip(str, enum.Enum):
     NORMS = "norms"
     REVIEW = "review"
     CORRECTION = "correction"
-    AR_V3 = "ar_v3"
 
 
 class RunStageState(str, enum.Enum):

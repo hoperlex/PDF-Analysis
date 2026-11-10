@@ -1,11 +1,11 @@
-"""The provider-safe wire form of a response schema (`AR-V3-WIRE-SCHEMA-01`).
+"""The provider-safe wire form of a response schema.
 
-Strict structured-output providers refuse part of JSON Schema outright: the live stand's first AR v3
-Runs all failed with ``output_config.format.schema: Schema type 'oneOf' is not supported``. The sealed
-AR v3 schema (``analysis/profiles/ar_v3/response_schema.py``) uses ``oneOf`` and a set of value
-constraints (``minLength``, ``maxLength``, ``minimum``, ``maxItems``, ``pattern``) that the same providers
-reject, so every transport hands the provider the **wire form** of the schema instead. The sealed schema,
-the prompt, the pack and every digest stay as they are; the request's own body is not changed.
+Strict structured-output providers refuse part of JSON Schema outright: the live stand's first Runs of a
+schema that used ``oneOf`` all failed with ``output_config.format.schema: Schema type 'oneOf' is not
+supported``. A schema may use ``oneOf`` and a set of value constraints (``minLength``, ``maxLength``,
+``minimum``, ``maxItems``, ``pattern``) that the same providers reject, so every transport hands the
+provider the **wire form** of the schema instead. The sealed schema, the prompt and every digest stay as
+they are; the request's own body is not changed.
 
 What the wire form is, rule by rule (each rule has a test):
 
@@ -27,9 +27,9 @@ What the wire form is, rule by rule (each rule has a test):
    key order included.
 
 Dropping a constraint from what the provider is told does not drop it from what is accepted. The model's
-answer is read by the local parser (``analysis/profiles/ar_v3/response.py``), which re-checks every
-dropped constraint itself and drops a malformed proposal, so the local parser stays the authority on what
-is accepted; the wire form only keeps the provider from refusing the request.
+answer is read by the profile's local parser, which re-checks every dropped constraint itself, so the
+local parser stays the authority on what is accepted; the wire form only keeps the provider from refusing
+the request.
 
 A schema node that carries both ``oneOf`` and ``anyOf`` cannot hold two ``anyOf`` keys. The converted
 ``oneOf`` is then appended to ``allOf`` as ``{"anyOf": [...]}``, which says the same thing (both

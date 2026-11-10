@@ -63,7 +63,7 @@ already started has become too large for today's configuration.
 
 **Windows (`SECTION-CHUNKED-ANALYSIS-01`).** ``input_budget_characters`` is the budget of **one model
 call**. A section run above it is analysed in whole-page windows of at most that size, so these two
-commands (not the AR v3 group, which keeps the one-call refusal) refuse a count above
+commands refuse a count above
 ``MAX_ANALYSIS_WINDOWS`` windows' worth, ``input_budget_characters * MAX_ANALYSIS_WINDOWS``, and the
 refusal's ``budget_characters`` is that figure. A count not above the one-call budget is the run it always
 was. The stage refuses, before any call, a text that packs into more windows than the limit.
@@ -142,8 +142,6 @@ from auditmanager.ingest.public import (
     CommandStarted,
     payload_fingerprint,
 )
-from auditmanager.runs.analysis_kind import ANALYSIS_AR_V3_BETA, analysis_kind
-from auditmanager.runs.v3_start_switch import refuse_member_repeat
 from auditmanager.runs.provider import (
     AdmittedGroup,
     ChosenPreset,
@@ -267,10 +265,6 @@ def frozen_input_digest(
     prompt_bundle_id: str,
     norms_snapshot_id: str | None,
     norm_retrieval_set_sha256: str | None = None,
-    ar_v3_group_id: str | None = None,
-    ar_v3_scope_id: str | None = None,
-    ar_v3_map_sha256: str | None = None,
-    ar_v3_set_id: str | None = None,
 ) -> str:
     """The stored ``frozen_input_digest``: the input basis plus the pinned snapshot.
 
@@ -279,8 +273,8 @@ def frozen_input_digest(
     so a NULL run's stored digest is **byte-identical** to its basis -- and to what the
     same run would have stored before W55. ``norms_snapshot_id`` has no default: a caller
     that forgot the pin would silently store a digest that claims none. A
-    future v3 caller may also pass the verified retrieval-set digest; existing
-    v1/v2 calls leave it absent and retain their exact stored bytes.
+    caller that pinned a verified retrieval set may also pass its digest; existing
+    calls leave it absent and retain their exact stored bytes.
     """
     document = _frozen_document(
         version_uid=version_uid,
@@ -298,22 +292,6 @@ def frozen_input_digest(
         ):
             raise ValueError("retrieval set digest must be lowercase SHA-256")
         document["norm_retrieval_set_sha256"] = norm_retrieval_set_sha256
-    group_fields = (ar_v3_group_id, ar_v3_scope_id, ar_v3_map_sha256, ar_v3_set_id)
-    if any(value is not None for value in group_fields):
-        if any(value is None for value in group_fields) or norm_retrieval_set_sha256 is None:
-            raise ValueError("an AR v3 group digest requires all four group pins and set digest")
-        from auditmanager.shared.identity import ArV3RunGroupId, NormRetrievalSetId
-
-        ArV3RunGroupId.parse(ar_v3_group_id)
-        NormRetrievalSetId.parse(ar_v3_set_id)
-        if ar_v3_scope_id not in ("F1", "F2", "A1", "A2", "S1", "S2"):
-            raise ValueError("invalid AR v3 scope")
-        if len(ar_v3_map_sha256) != 64 or any(c not in "0123456789abcdef" for c in ar_v3_map_sha256):
-            raise ValueError("invalid AR v3 map digest")
-        document["ar_v3_group_id"] = ar_v3_group_id
-        document["ar_v3_scope_id"] = ar_v3_scope_id
-        document["ar_v3_map_sha256"] = ar_v3_map_sha256
-        document["ar_v3_set_id"] = ar_v3_set_id
     return _sha256_of(document)
 
 
@@ -1207,11 +1185,6 @@ def reaudit_run(
         "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
-    # `AR-V3-OPT-IN` (Q4). This repeat routes by the section **now**, so on a member of an AR v3 group it would start the
-    # standard analysis and call it a repeat. It is refused before the key is claimed and before anything is written; the
-    # repeat of v3 is a new group start from the form. An accepted key never has a member as its source, so no replay is lost.
-    if analysis_kind(source.analysis_profile_id, source.prompt_bundle_id) == ANALYSIS_AR_V3_BETA:
-        raise refuse_member_repeat()
     source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
     frozen: FrozenRoute | None = None
     admitted: AdmittedGroup | None = None
@@ -1389,10 +1362,6 @@ def start_run_from_stage(
         "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
-    # `AR-V3-OPT-IN` (Q4), as for a re-audit: a member of an AR v3 group has no stages of the standard chain to reuse, and
-    # starting the standard analysis from it would silently turn one analysis into the other.
-    if analysis_kind(source.analysis_profile_id, source.prompt_bundle_id) == ANALYSIS_AR_V3_BETA:
-        raise refuse_member_repeat()
     source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
     key = IdempotencyKey(idempotency_key)
     frozen: FrozenRoute | None = None

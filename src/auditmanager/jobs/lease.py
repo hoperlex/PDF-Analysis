@@ -20,7 +20,7 @@ from auditmanager.jobs.repository import AttemptAuthority, JobRepository
 HEARTBEAT_SECONDS = 20
 #: The deadline of an Attempt that never shows a sign of life, counted from the claim.
 ATTEMPT_WATCHDOG_SECONDS = 900
-#: The absolute ceiling of a **live** Attempt (`AR-V3-LIVENESS-01`, owner 2026-10-29): one whose
+#: The absolute ceiling of a **live** Attempt (owner 2026-10-29): one whose
 #: model call has shown a sign of life (:meth:`AttemptContext.progress`). Nothing else caps the
 #: model's effort, thinking or turns.
 ATTEMPT_HARD_CAP_SECONDS = 7200
@@ -42,7 +42,7 @@ class AttemptContext:
     model call, set when its intent is committed, so an adapter can name the call it is
     serving; it is ``None`` before the first call.
 
-    **Signs of life** (`AR-V3-LIVENESS-01`). An Attempt that never signals is fenced
+    **Signs of life.** An Attempt that never signals is fenced
     ``watchdog_seconds`` after the claim, exactly as before. An adapter whose remote session
     reports that it is alive calls :meth:`progress`; the first call makes the Attempt *live*, and
     from then on it is fenced after ``stall_seconds`` without a sign of life or at

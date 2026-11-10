@@ -175,12 +175,6 @@ class RunStatusView:
     #: ``None`` for a run created before 0051, rendered only when present.
     started_by_user_uid: str | None = None
     started_by_label: str | None = None
-    #: `AR-V3-OPT-IN` (contract 1.38.0): which analysis produced the run -- ``standard`` or ``ar_v3_beta`` -- derived from the
-    #: pinned profile and bundle pair; and, for a member of an AR v3 group only, its group and scope. Each is rendered
-    #: only when set. A producer that does not know sets none (a stand-in older suites hand a port).
-    analysis_kind: str | None = None
-    ar_v3_group_id: str | None = None
-    ar_v3_scope_id: str | None = None
     #: `UI-A-65` / `UI-B-45` (contract 1.40.0): the estimated finish of a run being worked on, by the queue item's own
     #: rule (``execution.eta.job_estimated_finish``); ``None`` when the run has none, rendered only when present.
     estimated_finish_at: datetime | None = None
@@ -218,12 +212,6 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
     if view.started_from_run_id is not None and view.start_stage_id is not None:
         body["started_from_run_id"] = view.started_from_run_id
         body["start_stage_id"] = view.start_stage_id
-    if view.analysis_kind is not None:
-        body["analysis_kind"] = view.analysis_kind
-        if view.ar_v3_group_id is not None:
-            body["ar_v3_group_id"] = view.ar_v3_group_id
-        if view.ar_v3_scope_id is not None:
-            body["ar_v3_scope_id"] = view.ar_v3_scope_id
     if view.analysis_profile_id is not None:
         body["analysis_profile_id"] = view.analysis_profile_id
     if view.prompt_bundle_id is not None:

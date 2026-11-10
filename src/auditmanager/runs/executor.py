@@ -1,4 +1,4 @@
-"""The sequential executor: the four v1 stages of a section run, or the AR v3 beta worker chain.
+"""The sequential executor: the four v1 stages of a section run.
 
 This is the composition point of the whole prototype. Every module it drives already
 exists and is merged; nothing here reimplements any of them:
@@ -92,8 +92,6 @@ from auditmanager.analysis.public import (
 )
 from auditmanager.analysis.public import apply_to_bundle, publish_artifact
 from auditmanager.analysis.public import (
-    AR_V3_BETA_BUNDLE_ID,
-    AR_V3_BETA_PROFILE_ID,
     ARTIFACT_ROLE as ROLE_TEXT_OBSERVATIONS,
     CostMeter,
     MAX_ANALYSIS_WINDOWS,
@@ -148,7 +146,6 @@ from auditmanager.runs.retry import (
     not_attempted,
 )
 from auditmanager.runs.section_recognised_input import load_section_recognised_pages
-from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.runs.window_reply_custody import MAX_REPLY_BYTES, WindowReplyCustody
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
@@ -197,8 +194,7 @@ class ExecutionResult:
     diagnostic_count: int
     gate_ran: bool
     #: How many attempts the model stage took, and why a second one happened.
-    #: v1 facts are persisted on the stage row; the AR v3 beta chain makes one call per Run
-    #: and does not use the v1 retry ladder.
+    #: v1 facts are persisted on the stage row.
     model_attempts: AttemptSummary
 
     @property
@@ -886,7 +882,6 @@ def _execute_run_body(
     blob_metadata: BlobMetadataRepository | None = None,
     text_profiles: TextProfileResolver | None = None,
     providers: ProviderResolver | None = None,
-    ar_v3_pack_registry: TrustedPackRegistry | None = None,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
 
@@ -904,9 +899,8 @@ def _execute_run_body(
     called before any state change or effect; a pair it cannot resolve fails the run with
     ``required_norm_unavailable`` (``reference_kind: analysis_profile``) and no stage runs.
     The served application always passes the section-keyed registry
-    (``bootstrap/composition.py``). ``None`` supplies no registry and a run that is not the
-    AR v3 beta pair is refused like an unregistered pair; it used to run the v1 AR profile
-    (`PROD-11-AR-V1-V2-REMOVAL-01`, ``AD-12``).
+    (``bootstrap/composition.py``). ``None`` supplies no registry and the run is refused like an
+    unregistered pair; it used to run the v1 AR profile (`PROD-11-AR-V1-V2-REMOVAL-01`, ``AD-12``).
 
     The executor owns the authority and external-effect commits; the caller commits the
     final stage/result transaction on normal return. Every stage result is persisted as it
@@ -945,13 +939,7 @@ def _execute_run_body(
             meter.unpriced_contributions = max(meter.unpriced_contributions, 1)
 
     run = run_repo.get(session, run_id)
-    # Only the exact sealed pair and an installed server-owned reviewed pack may
-    # enter the v3 branch. In production the registry is still empty; either
-    # mismatched half refuses before Job, Blob or provider effects begin.
-    v3_profile = run.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID)
-    v3_bundle = run.prompt_bundle_id == str(AR_V3_BETA_BUNDLE_ID)
-    v3_exact = v3_profile and v3_bundle
-    relaxed_limits = False if v3_exact else _section_relaxed_limits(session, run)
+    relaxed_limits = _section_relaxed_limits(session, run)
     meter.enforce_ceiling = not relaxed_limits
     # Cost preflight owns the accepted immutable consent. Import the public seam
     # at execution time because runs.public also exports this executor.
@@ -966,7 +954,7 @@ def _execute_run_body(
     if cost_policy.native_page_piece_policy is not None:
         from auditmanager.analysis.public import validate_native_page_piece_policy
         try:
-            if v3_exact or not validate_native_page_piece_policy(cost_policy.native_page_piece_policy):
+            if not validate_native_page_piece_policy(cost_policy.native_page_piece_policy):
                 raise ValueError()
         except ValueError:
             raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis",
@@ -990,23 +978,10 @@ def _execute_run_body(
             approved_models=cost_policy.models,
             approved_stage_plan_digest=cost_policy.stage_plan_digest,
         )
-    if (v3_profile or v3_bundle) and (
-        not v3_exact
-        or not isinstance(ar_v3_pack_registry, TrustedPackRegistry)
-        or ar_v3_pack_registry.select_beta() is None
-    ):
-        raise DomainError(
-            ErrorCode.REQUIRED_NORM_UNAVAILABLE,
-            message="the pinned AR v3 beta reviewed pack is not installed",
-            reference_kind="analysis_profile",
-            analysis_profile_id=run.analysis_profile_id,
-            prompt_bundle_id=run.prompt_bundle_id,
-        )
-    text_profile = None if v3_exact else _pinned_text_profile(run, text_profiles)
-    if text_profile is not None:
-        output_cap = text_profile.prompt_bundle.max_output_tokens
-        if (relaxed_limits and output_cap != 64_000) or (not relaxed_limits and output_cap == 64_000):
-            raise DomainError(ErrorCode.INTERNAL_ERROR, message="section Run limit policy and bundle disagree")
+    text_profile = _pinned_text_profile(run, text_profiles)
+    output_cap = text_profile.prompt_bundle.max_output_tokens
+    if (relaxed_limits and output_cap != 64_000) or (not relaxed_limits and output_cap == 64_000):
+        raise DomainError(ErrorCode.INTERNAL_ERROR, message="section Run limit policy and bundle disagree")
 
     # The run declares a provider mode; the adapter *is* one. Nothing compared them, so a
     # run started with provider_mode="live" and executed entirely by the recorded adapter
@@ -1258,44 +1233,6 @@ def _execute_run_body(
             # ``missing_required_input`` failures that say nothing extra.
             halted = True
             break
-
-    if v3_exact:
-        # The last deterministic artifact binding holds the Lease row until
-        # commit. The v3 request and reply readers do external Blob I/O without
-        # that lock, and the journal commits each intent before its effect.
-        session.commit()
-        from auditmanager.runs.v3_review_terminal import finish_v3_review_run
-        from auditmanager.runs.v3_worker import run_v3_worker_chain
-
-        if halted:
-            terminal = finish_v3_review_run(
-                session, authority=authority, registry=ar_v3_pack_registry,
-                jobs=job_repo, runs=run_repo,
-            )
-            dispatched = False
-        else:
-            outcome = run_v3_worker_chain(
-                session, authority=authority, registry=ar_v3_pack_registry,
-                blob_store=blob_store,
-                provider_for_dispatch=lambda: _bind_provider(
-                    session, run, attempt_context, providers, adapter, config,
-                ),
-                cost_ceiling_usd=config.run_cost_ceiling_usd,
-                jobs=job_repo, runs=run_repo, documents=document_repo,
-                blobs=blob_repo,
-            )
-            terminal, dispatched = outcome.terminal, outcome.dispatched
-        attempts = not_attempted(policy)
-        if dispatched:
-            ledger = AttemptLedger(attempt_budget=1)
-            ledger.record(status="succeeded", error=None, waited_seconds=0.0)
-            attempts = ledger.close()
-        return ExecutionResult(
-            run_id=run_id, selection=terminal.selection,
-            stage_statuses=terminal.stage_statuses,
-            published_finding_count=0, diagnostic_count=0,
-            gate_ran=not halted, model_attempts=attempts,
-        )
 
     # -- the AI stage ---------------------------------------------------------
     # A halted chain never reaches the provider, so it has no attempts rather than one
