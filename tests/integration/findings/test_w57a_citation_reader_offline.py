@@ -6,6 +6,7 @@ from copy import deepcopy
 
 import pytest
 
+from auditmanager.findings import citation_reader
 from auditmanager.findings.citation_reader import (
     CitationReadRefused, read_verified_citations,
 )
@@ -65,7 +66,7 @@ def _fixture():
         "version_uid": "ver_current", "canonical_observation_id": "fobs_one",
         "finding_observation_id": "fobs_one", "observation_run_id": "run_current",
         "observation_finding_uid": "fnd_one", "stage_id": "text_analysis",
-        "grounded": True, "category": "evacuation", "analysis_profile_id": "ap_v3",
+        "grounding_kind": "text_span", "grounded": True, "category": "evacuation", "analysis_profile_id": "ap_v3",
         "prompt_bundle_id": "pb_v3", "provider_mode": "recorded",
         "norm_citation_count": 1, "required_value": "1,4 м", "stated_value": "1,2 м",
     }]
@@ -175,3 +176,145 @@ def test_foreign_citation_observation_refuses():
     rows[2][0]["finding_observation_id"] = "fobs_other"
     with pytest.raises(CitationReadRefused, match="orphan_citation_partition"):
         _read(rows)
+
+
+# --- block findings (D-685) ---------------------------------------------------------------------
+#
+# A candidate finding of a ``one_list`` run stands on portal blocks. ``publish_candidate_groups`` writes its observations with
+# ``grounding_kind = 'portal_block'``, ``stage_id`` ``block_analysis`` or ``finding_merge``, category ``drawing_discrepancy`` or
+# ``cross_source`` and no norm citation. The reader gives such an observation an empty partition, and refuses what it refused before.
+
+def _block_observation(finding_uid: str = "fnd_block", observation_id: str = "fobs_block", **changes):
+    row = {
+        "finding_uid": finding_uid, "project_uid": "prj_current",
+        "version_uid": "ver_current", "canonical_observation_id": observation_id,
+        "finding_observation_id": observation_id, "observation_run_id": "run_current",
+        "observation_finding_uid": finding_uid, "stage_id": "block_analysis",
+        "grounding_kind": "portal_block", "grounded": True,
+        "category": "drawing_discrepancy", "analysis_profile_id": "ap_v3",
+        "prompt_bundle_id": "pb_v3", "provider_mode": "recorded",
+        "norm_citation_count": None, "required_value": None, "stated_value": None,
+    }
+    row.update(changes)
+    return row
+
+
+def _with_block(**changes):
+    """The certified text finding of ``_fixture`` and one block finding beside it, in one run that pins a norm snapshot."""
+    header, observations, citations = deepcopy(_fixture())
+    observations.append(_block_observation(**changes))
+    return header, observations, citations
+
+
+@pytest.mark.parametrize("stage,category,count", [
+    ("block_analysis", "drawing_discrepancy", None),
+    ("finding_merge", "drawing_discrepancy", None),
+    ("finding_merge", "cross_source", None),
+    ("block_analysis", "drawing_discrepancy", 0),
+])
+def test_a_block_finding_has_an_empty_partition_beside_a_certified_text_finding(stage, category, count):
+    result = _read(_with_block(stage_id=stage, category=category, norm_citation_count=count))
+    by_uid = {finding.finding_uid: finding for finding in result.findings}
+    assert set(by_uid) == {"fnd_one", "fnd_block"}
+    block = by_uid["fnd_block"].canonical
+    assert (block.finding_observation_id, block.citation_count, block.citations,
+            block.required_value, block.stated_value) == ("fobs_block", 0, (), None, None)
+    assert by_uid["fnd_block"].merged_observations == ()
+    # the text finding's certified partition is read exactly as before
+    assert by_uid["fnd_one"].canonical.citation_count == 1
+
+
+def test_the_members_of_a_block_finding_each_have_an_empty_partition():
+    header, observations, citations = _with_block()
+    observations.append(_block_observation(observation_id="fobs_member", canonical_observation_id="fobs_block"))
+    block = next(f for f in _read((header, observations, citations)).findings if f.finding_uid == "fnd_block")
+    assert block.canonical.finding_observation_id == "fobs_block"
+    assert [m.finding_observation_id for m in block.merged_observations] == ["fobs_member"]
+    assert block.merged_observations[0].citations == ()
+
+
+@pytest.mark.parametrize("changes,reason", [
+    # a block observation comes from a block stage and no other
+    ({"stage_id": "text_analysis"}, "finding_provenance_invalid"),
+    ({"stage_id": "comprehensive_analysis"}, "finding_provenance_invalid"),
+    ({"stage_id": ""}, "finding_provenance_invalid"),
+    ({"grounding_kind": "unknown_kind"}, "finding_provenance_invalid"),
+    ({"grounding_kind": None}, "finding_provenance_invalid"),
+    # the provenance checks of a text observation hold for a block one
+    ({"version_uid": "ver_other"}, "finding_provenance_invalid"),
+    ({"project_uid": "prj_other"}, "finding_provenance_invalid"),
+    ({"observation_run_id": "run_other"}, "finding_provenance_invalid"),
+    ({"observation_finding_uid": "fnd_other"}, "finding_provenance_invalid"),
+    ({"analysis_profile_id": "ap_v2"}, "finding_provenance_invalid"),
+    ({"prompt_bundle_id": "pb_other"}, "finding_provenance_invalid"),
+    ({"provider_mode": "live"}, "finding_provenance_invalid"),
+    ({"grounded": False}, "finding_provenance_invalid"),
+    # a block observation carries no norm claim
+    ({"category": "evacuation"}, "citation_partition_invalid"),
+    ({"category": "layout"}, "citation_partition_invalid"),
+    ({"category": "unregistered_category"}, "citation_partition_invalid"),
+    ({"norm_citation_count": 1}, "citation_partition_invalid"),
+    ({"norm_citation_count": True}, "citation_partition_invalid"),
+    ({"norm_citation_count": False}, "citation_partition_invalid"),
+    ({"required_value": "1,4 м", "stated_value": "1,2 м"}, "citation_partition_invalid"),
+    ({"required_value": "1,4 м"}, "citation_partition_invalid"),
+])
+def test_a_forged_or_stale_block_observation_refuses(changes, reason):
+    with pytest.raises(CitationReadRefused, match=reason):
+        _read(_with_block(**changes))
+
+
+def test_a_citation_row_under_a_block_observation_refuses():
+    header, observations, citations = deepcopy(_fixture())
+    observations.append(_block_observation())
+    foreign = deepcopy(citations[0])
+    foreign["finding_observation_id"] = "fobs_block"
+    with pytest.raises(CitationReadRefused, match="citation_partition_invalid"):
+        _read((header, observations, [*citations, foreign]))
+
+
+def test_the_header_checks_still_bind_a_run_that_has_only_block_findings():
+    header, observations, citations = _with_block()
+    observations.pop(0)
+    citations.clear()
+    assert [f.finding_uid for f in _read((header, observations, citations)).findings] == ["fnd_block"]
+    for key, value in (("cite_status", "failed"), ("set_state", "rejected"), ("catalogue_binding_count", 0),
+                       ("run_state", "validating"), ("snapshot_content_key", "other-corpus-key")):
+        refused = deepcopy((header, observations, citations))
+        refused[0][0][key] = value
+        with pytest.raises(CitationReadRefused, match="verified_run_authority_invalid"):
+            _read(refused)
+
+
+@pytest.mark.parametrize("stage", ["block_analysis", "finding_merge", "comprehensive_analysis", "norm_verification", ""])
+def test_a_text_observation_of_another_stage_is_still_refused(stage):
+    rows = deepcopy(_fixture())
+    rows[1][0]["stage_id"] = stage
+    with pytest.raises(CitationReadRefused, match="finding_provenance_invalid"):
+        _read(rows)
+
+
+def test_a_text_observation_still_needs_its_certified_partition():
+    rows = deepcopy(_fixture())
+    rows[1][0]["norm_citation_count"] = None
+    with pytest.raises(CitationReadRefused, match="citation_partition_invalid"):
+        _read(rows)
+
+
+def test_the_stage_guard_of_a_text_observation_is_load_bearing(monkeypatch):
+    """The refusal above is the stage table's; widening the text row to a block stage turns it into a read, so it can fail."""
+    rows = deepcopy(_fixture())
+    rows[1][0]["stage_id"] = "block_analysis"
+    with pytest.raises(CitationReadRefused, match="finding_provenance_invalid"):
+        _read(deepcopy(rows))
+    monkeypatch.setitem(citation_reader._STAGES_BY_GROUNDING, "text_span", frozenset({"text_analysis", "block_analysis"}))
+    assert _read(rows).findings[0].canonical.citation_count == 1
+
+
+def test_the_block_partition_guard_is_load_bearing(monkeypatch):
+    """A block row with a norm category is refused by ``_BLOCK_CATEGORIES``; widening it turns the refusal into a read."""
+    rows = _with_block(category="evacuation")
+    with pytest.raises(CitationReadRefused, match="citation_partition_invalid"):
+        _read(deepcopy(rows))
+    monkeypatch.setattr(citation_reader, "_BLOCK_CATEGORIES", frozenset({"drawing_discrepancy", "cross_source", "evacuation"}))
+    assert _read(rows).findings[1].canonical.citations == ()
