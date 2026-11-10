@@ -145,6 +145,10 @@ READ_WRITE = frozenset((
     # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): a host is archived once (`trg_executor_host_no_delete` refuses a DELETE), its latest report
     # is replaced when it changes, and a cooldown row is replaced by the next refusal and removed when it lapses. No statement exists yet.
     "executor_host", "executor_host_report", "executor_model_cooldown",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the encoder's queue changes state (pending, done, poisoned; a DELETE only beside a forget), a probe
+    # takes its vector and later its observation, the pass of a run changes state, and the control of the vectors is one row whose pause and
+    # window state change. No statement exists yet; `EMBED-01` and `PREC-PASS` write them.
+    "decision_memory_embedding_intent", "decision_memory_precedent_run", "decision_memory_probe", "vector_control",
     "executor_probe",
     "executor_runner_token",
     "executor_secret",
@@ -213,6 +217,11 @@ APPEND_ONLY = frozenset((
     # a cell binding is `am_immutable_row` (written once, in the transaction that binds the run).
     "audit_run_cell_binding", "executor_host_slot_event", "executor_host_use_event", "stage_layout_revision",
     "stage_layout_switch_event",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the comments, the block evidence and the vectors of the memory take the forget guard (`UPDATE` is
+    # refused, `DELETE` only beside a forget event of the case); the pass's advice, a finding's block evidence, the settings journal, the vectors'
+    # control journal and the context-delivery journal are `am_immutable_row` or `am_append_only`. Only inserted into.
+    "decision_memory_block_evidence", "decision_memory_comment", "decision_memory_embedding", "decision_memory_precedent_advice",
+    "executor_task_context_delivery", "finding_block_evidence", "precedent_setting_event", "vector_control_event",
 ))
 
 #: The ``append-only`` tables that no trigger protects, and the evidence that the code only inserts.
@@ -247,6 +256,13 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # and the cell binding, until `HOSTS-BACKEND-01` and `HOSTS-LAYOUT-01` write them. `stage_layout` is seeded by the migration and read only.
     "audit_run_cell_binding", "executor_host", "executor_host_report", "executor_host_slot_event", "executor_host_use_event",
     "executor_model_cooldown", "stage_layout_revision", "stage_layout_switch_event",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): every table of the Precedents storage, until the lane that writes it does: `MEM-COMMENTS-01` the
+    # comments, `CRIT-CAPTURE-01` the label columns, `EMBED-01` the encoder's queue, the vectors and the control, `PREC-PASS` the probe, the pass
+    # and its advice, `F8-PUBLISH` the block evidence, `PREC-WEB` the settings and `CTX-STAND` the delivery journal. `vector_control` is seeded
+    # by the migration.
+    "decision_memory_block_evidence", "decision_memory_comment", "decision_memory_embedding", "decision_memory_embedding_intent",
+    "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "executor_task_context_delivery",
+    "finding_block_evidence", "precedent_setting_event", "vector_control", "vector_control_event",
 ))
 
 #: Writes whose table name is not a literal in the SQL text, so :func:`observed_statements` cannot read it from the string: an f-string

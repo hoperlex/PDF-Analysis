@@ -103,10 +103,17 @@ _BY_DECISION = (
     "t.memory_decision_id IN (SELECT d.memory_decision_id FROM public.decision_memory_decision d "
     "WHERE d.case_id = ANY(CAST(:cases AS text[])))"
 )
+#: `0064_precedents_seal` (`CRIT-SEAL-50`) adds four tables to the side a forget deletes: the memory's copy of a finding's block evidence, the
+#: encoder's queue and the vectors of the case (all three point at ``decision_memory_content`` and go before it), and the case's comments. A
+#: vector is derived from the forgotten text and goes with it.
 CONTENT_TABLES: dict[str, str] = {
     "decision_memory_crop": _BY_CASE,
     "decision_memory_evidence": _BY_CASE,
+    "decision_memory_block_evidence": _BY_CASE,
     "decision_memory_norm_ref": _BY_CASE,
+    "decision_memory_embedding": _BY_CASE,
+    "decision_memory_embedding_intent": _BY_CASE,
+    "decision_memory_comment": _BY_CASE,
     "decision_memory_decision_text": _BY_DECISION,
     "decision_memory_content": _BY_CASE,
 }

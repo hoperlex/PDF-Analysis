@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0063_drop_ar_v3_beta"
+HEAD = "0064_precedents_seal"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -96,6 +96,12 @@ TABLES = frozenset((
     # but for the cell binding, which belongs to a run (`PRODUCT` in the purge).
     "audit_run_cell_binding", "executor_host", "executor_host_report", "executor_host_slot_event", "executor_host_use_event",
     "executor_model_cooldown", "stage_layout", "stage_layout_revision", "stage_layout_switch_event",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the memory's comments, block evidence, encoder queue and vectors (KEEP, the content side of a case);
+    # the probe of a candidate text, the pass of a run with its advice, and the block evidence of a finding (PRODUCT); the settings journal and
+    # the vectors' control with its journal (configuration, KEEP); and the journal of reference data handed to an agent (KEEP, no foreign key).
+    "decision_memory_block_evidence", "decision_memory_comment", "decision_memory_embedding", "decision_memory_embedding_intent",
+    "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "executor_task_context_delivery",
+    "finding_block_evidence", "precedent_setting_event", "vector_control", "vector_control_event",
 ))
 
 #: Views at ``HEAD``. A view carries no rows; it is restored from the dump and checked by name.
@@ -431,6 +437,35 @@ TRIGGERS = (
     # A cell is bound once, for a pending planned run, to a system member that pins the cell's model.
     ("audit_run_cell_binding", "trg_audit_run_cell_binding_immutable", "am_immutable_row", 27),
     ("audit_run_cell_binding", "trg_audit_run_cell_binding_member", "am_check_audit_run_cell_binding", 7),
+    # `0064_precedents_seal` (`CRIT-SEAL-50`). 19 = ROW | BEFORE | UPDATE; 11 = ROW | BEFORE | DELETE; 27 = ROW | BEFORE | DELETE | UPDATE;
+    # 7 = ROW | BEFORE | INSERT. The memory's comments, block evidence and vectors take the forget guard of `0061` and a guard on INSERT
+    # (`am_guard_decision_memory_forgotten_insert`: nothing is added to a forgotten case, `D-497` item 1); the encoder's queue changes state, so
+    # it has a frozen-column guard on UPDATE and the forget guard on DELETE alone.
+    ("decision_memory_block_evidence", "trg_decision_memory_block_evidence_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_block_evidence", "trg_decision_memory_block_evidence_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_comment", "trg_decision_memory_comment_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_comment", "trg_decision_memory_comment_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_embedding", "trg_decision_memory_embedding_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_embedding", "trg_decision_memory_embedding_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_embedding_intent", "trg_decision_memory_embedding_intent_forget_guard", "am_guard_decision_memory_forget", 11),
+    ("decision_memory_embedding_intent", "trg_decision_memory_embedding_intent_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_embedding_intent", "trg_decision_memory_embedding_intent_frozen_guard", "am_guard_frozen_columns", 19),
+    # The probe's key and input are frozen and its observation is write-once; the pass's run keeps its identity; the advice, a finding's block
+    # evidence, the settings journal, the control's journal and the delivery journal are append-only or immutable.
+    ("decision_memory_precedent_advice", "trg_decision_memory_precedent_advice_immutable", "am_immutable_row", 27),
+    ("decision_memory_precedent_run", "trg_decision_memory_precedent_run_frozen_guard", "am_guard_frozen_columns", 19),
+    ("decision_memory_probe", "trg_decision_memory_probe_frozen_guard", "am_guard_frozen_columns", 19),
+    ("decision_memory_probe", "trg_decision_memory_probe_write_once", "am_guard_write_once_columns", 19),
+    ("executor_task_context_delivery", "trg_executor_task_context_delivery_immutable", "am_immutable_row", 27),
+    ("finding_block_evidence", "trg_finding_block_evidence_immutable", "am_immutable_row", 27),
+    # The switches and settings are numbered per name without a gap; the control is one seeded row with a frozen key and no delete; its journal
+    # is append-only and numbered.
+    ("precedent_setting_event", "trg_precedent_setting_event_immutable", "am_immutable_row", 27),
+    ("precedent_setting_event", "trg_precedent_setting_event_number", "am_check_gapless_number", 7),
+    ("vector_control", "trg_vector_control_frozen_guard", "am_guard_frozen_columns", 19),
+    ("vector_control", "trg_vector_control_no_delete", "am_immutable_row", 11),
+    ("vector_control_event", "trg_vector_control_event_append_only", "am_append_only", 27),
+    ("vector_control_event", "trg_vector_control_event_number", "am_check_gapless_number", 7),
 )
 
 #: The constraint triggers that are ``DEFERRABLE INITIALLY DEFERRED``: a parent row must

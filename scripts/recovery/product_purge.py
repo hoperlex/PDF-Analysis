@@ -131,14 +131,25 @@ KEEP_SCHEDULE_TABLES = frozenset((
 #: copy of its context once the product tables are truncated.
 #: `0061_decision_memory_m2` adds the installation settings' journal (`data_class`, `training_use`): an installation fact like the
 #: schedule's settings, never reset by a purge of product data.
+#: `0064_precedents_seal` (`CRIT-SEAL-50`) adds four tables to the content side of a case: its comments, the memory's copy of the block evidence
+#: of a finding, the encoder's queue and the vectors. Each references the case or its content (a KEEP table), never a PRODUCT one, takes the forget
+#: guard (`DELETE` only beside a forget of the case) and is removed by the forget tool (`scripts/recovery/memory_forget.py`).
 KEEP_MEMORY_TABLES = frozenset((
-    "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
-    "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_setting_event",
-    "decision_memory_status_event",
+    "decision_memory_block_evidence", "decision_memory_case", "decision_memory_comment", "decision_memory_content", "decision_memory_crop",
+    "decision_memory_decision", "decision_memory_decision_text", "decision_memory_embedding", "decision_memory_embedding_intent",
+    "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_setting_event", "decision_memory_status_event",
+))
+#: `0064_precedents_seal` (`CRIT-SEAL-50`): the installation's switches and settings of the «Прецеденты» programme and their journal, the vectors'
+#: control (the pause and the state of the night window) with its journal, and the journal of reference data the stand handed to an agent. They
+#: are the stand's configuration and its own record, like the schedule's settings and the executor connections: they reference accounts, never a
+#: project, a document or a run (the delivery journal names its task, run and call by bare identities and holds no text, so it outlives an erase of
+#: the project it was handed for), and a purge of product data keeps them.
+KEEP_PRECEDENT_TABLES = frozenset((
+    "executor_task_context_delivery", "precedent_setting_event", "vector_control", "vector_control_event",
 ))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
-    | KEEP_EXECUTOR_TABLES | KEEP_SCHEDULE_TABLES | KEEP_MEMORY_TABLES
+    | KEEP_EXECUTOR_TABLES | KEEP_SCHEDULE_TABLES | KEEP_MEMORY_TABLES | KEEP_PRECEDENT_TABLES
 )
 
 #: The ledger events the decision memory keeps (`Q8`: a comment is not a decision) that have no memory decision yet. Selecting from it
@@ -220,6 +231,10 @@ PRODUCT_TABLES = frozenset((
     # finding's execution status and an assignment's planned dates belong to the project's document, finding and
     # assignment. The two journals are immutable rows, so they leave in the same multi-table TRUNCATE.
     "document_tag", "finding_execution_status", "work_assignment_schedule_event",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the query vector of a run's candidate text, the state of a run's «Прецеденты» pass with its advice per
+    # finding, and a finding's block evidence belong to a run and its findings: each references `audit_run`, `finding` or `finding_observation`, so
+    # the project erase's foreign-key closure reaches them. The advice and the block evidence are immutable rows, so they leave in the TRUNCATE.
+    "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "finding_block_evidence",
 ))
 
 #: ``audit_event.event_type`` families. ``norm_custody.`` is the custody ledger's, ``executor.``
@@ -231,7 +246,10 @@ PRODUCT_TABLES = frozenset((
 #: ``memory.`` is the decision memory's forget tool (`DECISION-MEMORY-01` section 4.5): ``memory.forget_requested`` and
 #: ``memory.forget_completed`` record who made the memory forget what, with identities, counts and digests only; they are kept for
 #: the same reason ``erasure.`` is.
-KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.", "memory.", "stage_layout.")
+#: ``precedent.`` and ``vector.`` (`0064_precedents_seal`, `CRIT-SEAL-50`): who changed a switch or a setting of the Precedents programme, and the
+#: pause and the night window of the vectors, journalled with identities, names and counts only (no finding or case text): the settings'
+#: and the control's own record, kept like ``stage_layout.``.
+KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.", "memory.", "stage_layout.", "precedent.", "vector.")
 PRODUCT_EVENT_PREFIXES = (
     "artifact.", "attempt.", "audit_run.", "comparison.", "execution.", "findings.", "job.",
     "provider.", "stage.",
@@ -270,6 +288,9 @@ KEEP_COMMAND_TYPES = frozenset((
     "archive_executor_host", "confirm_executor_host_agent_install_host_key", "create_executor_host_agent_install",
     "issue_executor_host_enrollment", "revise_stage_layout", "set_executor_host_enabled", "set_executor_host_slots",
     "set_stage_layout_enabled",
+    # `CRIT-SEAL-50` (contract 1.51.0): the keyed administrator writes of the Precedents programme -- a new revision of a switch or a setting, and
+    # the pause of the vectors. Their tables (`KEEP_PRECEDENT_TABLES`) and events (``precedent.``, ``vector.``) are kept with them.
+    "append_precedent_setting", "set_vector_paused",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
     # `UI-PARITY-P0G`..`P0L`, `P0P`: a document archived, renamed or tagged, an execution status, decisions imported from

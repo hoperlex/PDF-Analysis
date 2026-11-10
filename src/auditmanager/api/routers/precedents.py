@@ -21,7 +21,7 @@ answer (``CMP-SEAL-C0`` onwards), and there is no fallback: a caller is told tha
 
 from __future__ import annotations
 
-from typing import Annotated, NoReturn
+from typing import Annotated, Final, NoReturn
 
 from fastapi import APIRouter, Path
 
@@ -31,7 +31,15 @@ from auditmanager.api.schemas import models
 from auditmanager.api.security import CurrentRunner
 from auditmanager.shared.errors import DomainError, ErrorCode
 
-__all__ = ["DEPENDENCIES", "build_precedent_routes"]
+__all__ = [
+    "APPEND_PRECEDENT_SETTING_COMMAND_TYPE", "DEPENDENCIES", "SET_VECTOR_PAUSED_COMMAND_TYPE", "build_precedent_routes",
+]
+
+#: The command types of the two keyed writes, as ``command_record.command_type`` will hold them: the lane that fills a body writes them. Both
+#: are classified in ``scripts/recovery/product_purge.py`` (kept configuration, like the executor commands), and the guard that reads the source
+#: for command constants (`test_every_event_type_and_command_type_the_source_writes_is_classified`) sees them here.
+APPEND_PRECEDENT_SETTING_COMMAND_TYPE: Final[str] = "append_precedent_setting"
+SET_VECTOR_PAUSED_COMMAND_TYPE: Final[str] = "set_vector_paused"
 
 #: The stable class names a sleeping route refuses with, one per owning lane.
 DEPENDENCIES = {
