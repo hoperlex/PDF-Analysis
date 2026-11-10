@@ -57,6 +57,8 @@ CURRENT_DECLARED = DECLARED | frozenset({
     "quote_in_recognised_text", "norm_label_unknown", "norm_quote_too_short",
     "norm_quote_ambiguous", "norm_quote_absent", "norm_value_not_in_quote",
     "stated_value_not_in_evidence",
+    # `F8-GATE` (0064): the three refusals of a block as evidence.
+    "block_not_in_run_geometry", "block_crop_mismatch", "block_quote_not_in_recognised",
 })
 
 #: A value that is not one of them, and is exactly the one the stale docstring says the
