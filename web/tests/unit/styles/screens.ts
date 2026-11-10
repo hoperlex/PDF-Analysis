@@ -54,11 +54,12 @@ import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
 import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
-import { ExecutorStageModels, StageLayoutAdvanced } from '@/widgets/executor-stage-models';
+import { ExecutorStageModels, StageLayoutAdvanced, StageModelsTable } from '@/widgets/executor-stage-models';
 import { CommandTabView, ConnectWindow, DeleteHostView, InstallSessionView, SshFormView } from '@/features/manage-executor-host';
 import { LayoutEditorView } from '@/features/manage-stage-layout';
 import {
-  CATALOGUE as HOSTS_CATALOGUE, ISSUED as HOSTS_ISSUED, LAYOUT as HOSTS_LAYOUT, LAYOUT_EMPTY as HOSTS_LAYOUT_EMPTY, LAYOUT_OFF as HOSTS_LAYOUT_OFF,
+  CATALOGUE as HOSTS_CATALOGUE, COMPARISON_CELLS as HOSTS_COMPARISON_CELLS, ISSUED as HOSTS_ISSUED, LAYOUT as HOSTS_LAYOUT,
+  LAYOUT_COMPARISON as HOSTS_LAYOUT_COMPARISON, LAYOUT_EMPTY as HOSTS_LAYOUT_EMPTY, LAYOUT_OFF as HOSTS_LAYOUT_OFF,
   SERVER_ONLINE as HOSTS_ONLINE, install as hostsInstall, seedDetails as seedHostDetails, seedHosts, seedLayout,
 } from '../workers/hosts-fixtures';
 import { SectionFilterBar, SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
@@ -1538,6 +1539,24 @@ export function screens(): Screen[] {
       availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6-astra'], currentKit: 'custom', pending: false,
       problem: 'Набор моделей пуст: выберите модели по этапам.', failure: null, onKit: noop, onModel: noop, onEffort: noop, onLimit: noop, onSave: noop, onCancel: noop,
     })));
+    /*
+     * `CMP-WEB-01`: the comparison of versions in «Модели по этапам». Under «Свой набор» the form draws the group «Сравнение версий» open:
+     * four rows with the kind, a model and an effort (and the limit of each in «Дополнительно»), and the same group with no model chosen,
+     * which carries the one-line note and the disabled effort. The table folds the four lines under the six rows (the mark «нет на
+     * серверах» on one of them), and says in a sentence that none will run when a «Свой набор» stored none.
+     */
+    const comparisonProps = {
+      catalogue: HOSTS_CATALOGUE, availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'],
+      currentKit: 'custom' as const, pending: false, problem: null, failure: null, onKit: noop, onModel: noop, onEffort: noop, onLimit: noop,
+      onComparisonModel: noop, onComparisonEffort: noop, onComparisonLimit: noop, onSave: noop, onCancel: noop,
+    };
+    add('LayoutEditorView comparison group', renderScreen(client, createElement(LayoutEditorView, {
+      ...comparisonProps, draft: { kit: 'custom', cells: HOSTS_LAYOUT.current!.cells, comparison: HOSTS_COMPARISON_CELLS },
+    })));
+    add('LayoutEditorView comparison group, no model chosen', renderScreen(client, createElement(LayoutEditorView, {
+      ...comparisonProps, draft: { kit: 'custom', cells: HOSTS_LAYOUT.current!.cells },
+    })));
+    add('StageModelsTable comparison lines', renderScreen(client, createElement(StageModelsTable, { layout: HOSTS_LAYOUT_COMPARISON, admin: true, onEdit: noop })));
   }
   {
     const client = newClient();

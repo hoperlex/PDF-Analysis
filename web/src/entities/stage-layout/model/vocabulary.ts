@@ -5,7 +5,7 @@
  * Russian sentence. The contract value stays in a `data-` attribute; the screen says it in Russian.
  */
 
-import type { ModelEffort, StageCellRole, StageModelKit, StageRowKey } from '@/shared/api';
+import type { ComparisonLayoutKind, ModelEffort, StageCellRole, StageModelKit, StageRowKey } from '@/shared/api';
 
 export const STAGE_MODELS_TITLE = 'Модели по этапам';
 
@@ -43,6 +43,26 @@ export const STAGE_EFFORT_LABELS: Readonly<Record<ModelEffort, string>> = {
   medium: 'среднее',
   high: 'высокое',
 };
+
+/**
+ * The four kinds of work of the comparison of versions that call a model (`HOSTS-CMP-01`, web part `CMP-WEB-01`), in the order the
+ * server lists them. The contract value stays in `data-comparison-kind`; the screen says it in Russian.
+ */
+export const COMPARISON_KIND_LABELS: Readonly<Record<ComparisonLayoutKind, string>> = {
+  comparison_pair_check: 'Пары листов',
+  comparison_sheet_changes: 'Изменения листов',
+  comparison_spec: 'Спецификация',
+  comparison_report: 'Отчёт',
+};
+
+export const COMPARISON_GROUP_TITLE = 'Сравнение версий';
+export const COMPARISON_KIND_HEADER = 'Вид работы';
+/** Said when a «Свой набор» revision holds no model for the comparison: it is refused, never served by a model nobody chose. */
+export const COMPARISON_NONE_NOTE = 'Сравнения версий не запустятся, пока модели не выбраны.';
+export const COMPARISON_NOT_CHOSEN = 'не выбрана';
+export const COMPARISON_NO_EFFORT = '—';
+export const COMPARISON_PARTIAL_PROBLEM = 'Для сравнения версий выберите модель во всех четырёх строках или ни в одной.';
+export const COMPARISON_PAIR_PROBLEM = 'Для одной из строк сравнения версий выбрано сочетание модели и усилия, которого нет в каталоге.';
 
 export const NO_LAYOUT = 'Набор моделей ещё не задан.';
 export const NO_LAYOUT_ADMIN = 'Набор моделей ещё не задан. Нажмите «Изменить», чтобы выбрать модели по этапам.';

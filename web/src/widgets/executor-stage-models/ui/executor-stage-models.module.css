@@ -26,6 +26,20 @@
   margin: 0;
 }
 
+.fold {
+  margin: var(--am-gap-sm) 0 0;
+}
+
+.fold summary {
+  cursor: pointer;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.fold .cells {
+  margin-top: var(--am-gap-xs);
+}
+
 .missing {
   margin-left: var(--am-gap-sm);
   color: var(--am-degraded);

@@ -13,6 +13,7 @@ import type {
   ExecutorHostList,
   IssuedExecutorEnrollment,
   ModelCatalogue,
+  StageComparisonCell,
   StageLayoutCell,
   StageModelLayout,
 } from '@/shared/api';
@@ -146,6 +147,34 @@ export const LAYOUT_ENSEMBLE: StageModelLayout = {
       cell('review', 'claude-sonnet-5-5'),
       cell('correction', 'claude-sonnet-5-5'),
     ],
+  },
+  unavailable_cell_keys: [],
+};
+
+/**
+ * The four comparison cells of a «Свой набор» revision (`CMP-WEB-01`): every kind has its model and effort, the limits are the code's constants
+ * of the kind. Spec is served by no server (see `LAYOUT_COMPARISON`).
+ */
+export const COMPARISON_CELLS: StageComparisonCell[] = [
+  { work_kind: 'comparison_pair_check', model_id: 'gpt-6-astra', effort: 'high', max_output_tokens: 1200, timeout_seconds: 900 },
+  { work_kind: 'comparison_sheet_changes', model_id: 'gpt-6.1-sol', effort: 'high', max_output_tokens: 8192, timeout_seconds: 1800 },
+  { work_kind: 'comparison_spec', model_id: 'claude-sonnet-5-5', effort: 'medium', max_output_tokens: 32000, timeout_seconds: 900 },
+  { work_kind: 'comparison_report', model_id: 'claude-opus-5-5', effort: 'high', max_output_tokens: 8000, timeout_seconds: 2400 },
+];
+
+/** «Свой набор» with the four comparison cells stored; the cell of the specification names a model no server serves. */
+export const LAYOUT_COMPARISON: StageModelLayout = {
+  ...LAYOUT,
+  current: { ...LAYOUT.current!, comparison_cells: COMPARISON_CELLS },
+  unavailable_cell_keys: ['review:main', 'comparison_spec:main'],
+};
+
+/** A named set: the server serves its table (`comparison_cells` are present for a named set whatever the revision stored). */
+export const LAYOUT_COMPARISON_KIT: StageModelLayout = {
+  ...LAYOUT,
+  current: {
+    ...LAYOUT.current!, kit: 'codex_only',
+    comparison_cells: COMPARISON_CELLS.map((c) => ({ ...c, model_id: 'gpt-6.1-sol', effort: 'high' as const })),
   },
   unavailable_cell_keys: [],
 };

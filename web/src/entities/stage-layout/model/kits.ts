@@ -28,6 +28,7 @@ import { STAGE_ROW_KEY_VALUES } from '@/shared/api';
 
 import { blockSchemeById } from './block-schemes';
 import type { BlockScheme } from './block-schemes';
+import { comparisonKitPairs } from './comparison';
 
 export const DEFAULT_TIMEOUT_SECONDS = 1800;
 
@@ -91,9 +92,12 @@ function kitTable(kit: NamedKit): readonly { readonly row: StageRowKey; readonly
   return STAGE_ROW_KEY_VALUES.flatMap((row) => KIT_TABLES[kit][row].map((cell) => ({ row, cell })));
 }
 
-/** The models a set names, the legs and the judge of the blocks row among them. */
+/**
+ * The models a set names, the legs and the judge of the blocks row among them, and the models of its four comparison cells
+ * (`./comparison.ts`).
+ */
 export function kitModelIds(kit: NamedKit): readonly string[] {
-  return [...new Set(kitTable(kit).map(({ cell }) => cell.model_id))];
+  return [...new Set([...kitTable(kit).map(({ cell }) => cell.model_id), ...comparisonKitPairs(kit).map((pair) => pair.model_id)])];
 }
 
 /**
@@ -158,12 +162,12 @@ function cellsAreOffered(
 }
 
 /**
- * Whether a set can be offered: every cell of it (the legs and the judge of the blocks row too) is a pair of the catalogue, and
- * every model it names is served by some server now. A set that cannot be used is not drawn (plan §6: an unavailable thing is not
+ * Whether a set can be offered: every cell of it (the legs and the judge of the blocks row, and the four comparison cells, too) is a
+ * pair of the catalogue, and every model it names is served by some server now. A set that cannot be used is not drawn (plan §6: an unavailable thing is not
  * listed).
  */
 export function kitIsOffered(kit: NamedKit, catalogue: ModelCatalogue | undefined, availableModelIds: readonly string[]): boolean {
-  return cellsAreOffered(kitTable(kit).map(({ cell }) => cell), catalogue, availableModelIds);
+  return cellsAreOffered([...kitTable(kit).map(({ cell }) => cell), ...comparisonKitPairs(kit)], catalogue, availableModelIds);
 }
 
 /** Whether a scheme of the blocks row can be offered, on the same terms as a set. */

@@ -7,28 +7,16 @@
  * removed or re-modelled on one side and not the other is red here instead of a refusal an administrator meets.
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { BLOCK_SCHEMES, kitCells } from '@/entities/stage-layout';
 
-import { REPO_ROOT } from '../../guards/lib/repo';
+import { modelConstants as constantsOf, readStageLayoutSource } from './stage-layout-source';
 
-const SOURCE = readFileSync(join(REPO_ROOT, 'src/auditmanager/runs/stage_layout.py'), 'utf8');
+const SOURCE = readStageLayoutSource();
 
 /** `_OPUS, _SONNET = "claude-opus-5-5", "claude-sonnet-5-5"` -> {_OPUS: ..., _SONNET: ...}. */
-function modelConstants(): Map<string, string> {
-  const constants = new Map<string, string>();
-  for (const line of SOURCE.split('\n')) {
-    const match = /^(_[A-Z0-9_]+(?:, _[A-Z0-9_]+)*) = ("[^"]+"(?:, "[^"]+")*)$/.exec(line);
-    if (match === null) continue;
-    const names = (match[1] as string).split(', ');
-    const values = [...(match[2] as string).matchAll(/"([^"]+)"/g)].map((value) => value[1] as string);
-    names.forEach((name, at) => constants.set(name, values[at] as string));
-  }
-  return constants;
-}
+const modelConstants = (): Map<string, string> => constantsOf(SOURCE);
 
 /** The (role, model, effort) triples of one `(("leg1", _OPUS, "medium"), ...)` tuple. */
 function triples(text: string, constants: Map<string, string>): string[] {

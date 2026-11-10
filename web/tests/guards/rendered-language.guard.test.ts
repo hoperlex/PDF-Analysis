@@ -171,6 +171,7 @@ import {
   CATALOGUE as STAGE_CATALOGUE, HOST_DETAILS_OFF, LAYOUT_ENSEMBLE as STAGE_LAYOUT_ENSEMBLE,
   ISSUED, SERVER_ONLINE, install as hostInstall, seedDetails as seedHostDetails, seedHosts, seedLayout,
   LAYOUT as STAGE_LAYOUT, LAYOUT_EMPTY as STAGE_LAYOUT_EMPTY, LAYOUT_OFF as STAGE_LAYOUT_OFF,
+  COMPARISON_CELLS as STAGE_COMPARISON_CELLS, LAYOUT_COMPARISON as STAGE_LAYOUT_COMPARISON,
 } from '../unit/workers/hosts-fixtures';
 import {
   CommandFailure, CreateConnectionForm, HostKeyControl, IssuedTokenView, ReviseConnectionForm,
@@ -3403,6 +3404,37 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     make: () => createElement(StageModelsTable, { layout: STAGE_LAYOUT_ENSEMBLE, admin: false }),
   },
   {
+    // `CMP-WEB-01`: the four folded lines of the comparison of versions under the six rows, one of them with the mark «нет на серверах».
+    name: 'workers-models-comparison',
+    make: () => createElement(StageModelsTable, { layout: STAGE_LAYOUT_COMPARISON, admin: false }),
+  },
+  {
+    // `CMP-WEB-01`: the sentence that says no comparison will run, for a «Свой набор» stored without the four cells.
+    name: 'workers-models-comparison-none',
+    make: () => createElement(StageModelsTable, { layout: STAGE_LAYOUT, admin: false }),
+  },
+  {
+    // `CMP-WEB-01`: the form under «Свой набор» with the group «Сравнение версий» (four rows) and the limits of each kind in «Дополнительно».
+    name: 'workers-models-editing-comparison',
+    make: () => createElement(LayoutEditorView, {
+      draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells, comparison: STAGE_COMPARISON_CELLS }, catalogue: STAGE_CATALOGUE,
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
+      onLimit: () => undefined, onComparisonModel: () => undefined, onComparisonEffort: () => undefined, onComparisonLimit: () => undefined,
+      onSave: () => undefined, onCancel: () => undefined,
+    }),
+  },
+  {
+    // `CMP-WEB-01`: the group with no model chosen: the one-line note, «не выбрана» in each row, an effort that cannot be chosen yet.
+    name: 'workers-models-editing-comparison-none',
+    make: () => createElement(LayoutEditorView, {
+      draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
+      onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
+    }),
+  },
+  {
     // The form with every model served: the three segments, and an effort select with all three efforts.
     name: 'workers-models-editing-all',
     make: () => createElement(LayoutEditorView, {
@@ -4550,6 +4582,10 @@ const TRANSLATED_SCHEMAS = [
   'StageCellRole',
   'StageModelKit',
   'ModelEffort',
+  // `CMP-WEB-01` (contract 1.47.0): «Сравнение версий» in «Модели по этапам» says the four kinds of comparison work in Russian («Пары листов»,
+  // «Изменения листов», «Спецификация», «Отчёт»), with the contract value in `data-comparison-kind`. `comparison_spec` and the others are
+  // identifiers a person is not shown.
+  'ComparisonLayoutKind',
   'ExecutorModelAccess',
   'ProviderAuthState',
   'ModelProbeState',
@@ -5406,6 +5442,11 @@ const SCHEMA_MARKERS: readonly {
     schema: 'ModelEffort',
     attribute: 'data-model-effort',
     why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx` and the effort select of `features/manage-stage-layout/ui/layout-editor.tsx`: низкое, среднее, высокое.',
+  },
+  {
+    schema: 'ComparisonLayoutKind',
+    attribute: 'data-comparison-kind',
+    why: '`features/manage-stage-layout/ui/layout-editor.tsx` (the four rows of «Сравнение версий» under «Свой набор») and `widgets/executor-stage-models/ui/executor-stage-models.tsx` (the four folded lines): Пары листов, Изменения листов, Спецификация, Отчёт.',
   },
   {
     schema: 'ExecutorModelAccess',
