@@ -142,7 +142,11 @@
     "executor_host_use_event_id": "exhu",
     "executor_host_slot_event_id": "exhs",
     "stage_layout_revision_id": "slr",
-    "stage_layout_switch_event_id": "sls"
+    "stage_layout_switch_event_id": "sls",
+    "decision_memory_comment_id": "dmk",
+    "decision_memory_embedding_intent_id": "dmi",
+    "vector_control_event_id": "vce",
+    "executor_task_context_delivery_id": "etd"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -272,7 +276,11 @@
     "ExecutorHostUseEvent": "executor_host_use_event_id",
     "ExecutorHostSlotEvent": "executor_host_slot_event_id",
     "StageLayoutRevision": "stage_layout_revision_id",
-    "StageLayoutSwitchEvent": "stage_layout_switch_event_id"
+    "StageLayoutSwitchEvent": "stage_layout_switch_event_id",
+    "DecisionMemoryComment": "decision_memory_comment_id",
+    "DecisionMemoryEmbeddingIntent": "decision_memory_embedding_intent_id",
+    "VectorControlEvent": "vector_control_event_id",
+    "ExecutorTaskContextDelivery": "executor_task_context_delivery_id"
   },
   "distinct_identities": [
     {
@@ -603,6 +611,43 @@
       "evidence": [
         "HOSTS-SEAL-1",
         "0062_hosts_stage_models"
+      ]
+    },
+    {
+      "name": "decision_memory_precedent_identity",
+      "identifiers": [
+        "decision_memory_comment_id",
+        "decision_memory_embedding_intent_id"
+      ],
+      "rule": "DecisionMemoryComment identifies one expert comment kept with a memory case; DecisionMemoryEmbeddingIntent one queued encoder job for a case view. Each is allocated independently. The vector of a case view is keyed by case, revision, view and profile and has no identity of its own; a comment's source ledger event and the case it belongs to are bare references. Neither identity is a case identity.",
+      "authority": "plan-v5 section 3.1; ADR-0027",
+      "evidence": [
+        "CRIT-SEAL-50",
+        "0064_precedents_seal"
+      ]
+    },
+    {
+      "name": "vector_control_identity",
+      "identifiers": [
+        "vector_control_event_id"
+      ],
+      "rule": "VectorControlEvent identifies one change of the vectors' pause or of the state of the night window. The state in force is the one row of the control, never the latest event alone; the journal says who and when. A window state and a pause are attributes and never identities.",
+      "authority": "plan-v5 sections 3.1 and 5",
+      "evidence": [
+        "CRIT-SEAL-50",
+        "0064_precedents_seal"
+      ]
+    },
+    {
+      "name": "executor_context_delivery_identity",
+      "identifiers": [
+        "executor_task_context_delivery_id"
+      ],
+      "rule": "ExecutorTaskContextDelivery identifies one record of reference data the stand handed to an agent with a task. The task, the run and the model call it names are bare identities, not foreign keys: the record outlives the erase of the project it was handed for, and it holds no document text.",
+      "authority": "plan-v5 sections 3.1 and 3.2",
+      "evidence": [
+        "CRIT-SEAL-50",
+        "0064_precedents_seal"
       ]
     }
   ],
