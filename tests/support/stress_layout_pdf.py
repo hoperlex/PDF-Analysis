@@ -19,6 +19,7 @@ resolves to one place.
 from __future__ import annotations
 
 import io
+from collections.abc import Sequence
 from pathlib import Path
 
 from reportlab.lib.pagesizes import A4
@@ -38,6 +39,12 @@ SIZE = 10.0
 
 _WORDS = ("плита", "балка", "колонна", "перемычка", "ригель", "панель", "стойка", "связь", "опора", "анкер")
 _MATERIALS = ("бетон B25", "сталь С255", "кирпич М100", "пенобетон D600", "дерево сосна", "алюминий АД31")
+
+
+def ensure_font() -> None:
+    """Register the Cyrillic TrueType font the generators draw with (once per process; a second call changes nothing)."""
+    if "StressSans" not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont("StressSans", font_path()))
 
 
 def font_path() -> str:
@@ -119,3 +126,23 @@ def build_repeated() -> tuple[bytes, list[tuple[int, str]]]:
     page.showPage()
     page.save()
     return buffer.getvalue(), phrases
+
+
+def build_grid(pages: Sequence[Sequence[Sequence[tuple[float, str] | tuple[float, str, float]]]]) -> bytes:
+    """A PDF from rows of cells, one A4 page per entry of ``pages`` (D-649).
+
+    A row is a sequence of ``(x, text)`` or ``(x, text, size)`` cells; row ``n`` (counting from 1) stands on the baseline
+    ``TOP - n * LEADING``, so every cell of a row is at one height and the extractor joins them into ONE line however far apart they
+    stand. The scenarios of ``tests/support/witness_scenarios.py`` draw their schedules, drawing sheets and notes with it.
+    """
+    ensure_font()
+    buffer = io.BytesIO()
+    page = canvas.Canvas(buffer, pagesize=A4, invariant=True)
+    for rows in pages:
+        for index, row in enumerate(rows, start=1):
+            for cell in row:
+                page.setFont("StressSans", cell[2] if len(cell) > 2 else SIZE)
+                page.drawString(cell[0], TOP - index * LEADING, cell[1])
+        page.showPage()
+    page.save()
+    return buffer.getvalue()
