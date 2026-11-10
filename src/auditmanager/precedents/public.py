@@ -57,6 +57,15 @@ from auditmanager.precedents.replay import (
 )
 from auditmanager.precedents.similarity import VECTOR_PROFILE, Thresholds, band
 from auditmanager.precedents.stemming import StopWordMatcher, compile_stop_words, stem
+# `EMBED-01` (`ADR-0029` decision 8): the night encoder -- the window, the queue of intents, the exchange with the host's timer, the pause of the
+# vectors and the wait a queued run is told. The composition root wires `VectorWindowPass` into the worker's housekeeping pass,
+# `VectorControlService` into `build_router(vector_control=...)` and asks `window_wait` for the status of a queued run.
+from auditmanager.precedents.vectors.control import SET_VECTOR_PAUSED_COMMAND_TYPE, VectorControlService
+from auditmanager.precedents.vectors.exchange import EXCHANGE_DIR_ENV, Exchange
+from auditmanager.precedents.vectors.wait import CAUSE as VECTOR_WINDOW_CAUSE
+from auditmanager.precedents.vectors.wait import WindowWait, window_wait
+from auditmanager.precedents.vectors.window import DEFAULT_WINDOW, WindowSetting, wait_text
+from auditmanager.precedents.vectors.window_pass import VectorWindowPass
 from auditmanager.precedents.votes import (
     MAX_VOTES_PER_VERSION,
     WINDOW_MONTHS,

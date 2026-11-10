@@ -263,6 +263,10 @@ _NEXT_JOB = text(
     "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
     "AND j.available_at <= statement_timestamp() "
     "AND NOT EXISTS (SELECT 1 FROM execution_control WHERE singleton AND paused) "
+    # `EMBED-01` (ADR-0029 decision 8): the night window of the vectors takes no new run, the way the analysis pause takes none. In the
+    # same statement, so a claim cannot pass one check and miss the other; `draining` and `encoding` are the two open states
+    # (`precedents/vectors/window.py`), and a run that is waiting then is told so by `precedents.public.window_wait`.
+    "AND NOT EXISTS (SELECT 1 FROM vector_control WHERE control_key = 'default' AND window_state IN ('draining', 'encoding')) "
     "AND j.run_id <> ALL (CAST(:submitted AS text[])) "
     "AND ("
     # frozen_at_start and bound: the connection test, exactly as it was (a NULL revision is the environment source).
