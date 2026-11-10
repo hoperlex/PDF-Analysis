@@ -42,6 +42,16 @@ blocks and the noise runs of those sets show what a damaged reading costs in cov
 is the set that can show the wrong link (`D-590`): a schedule whose rows repeat one phrase in two cells, quoted by an authored
 finding whose evidence is the FIRST occurrence (what the chain's anchor resolution gives), with cell blocks.
 
+**The scenarios that can fail (`D-649`).** ``witness_image``, ``witness_schedule``, ``witness_damage``, ``witness_a1`` and
+``witness_gutter`` (``tests/support/witness_scenarios.py``) are PDFs with portal blocks and readings authored the way a portal fails
+(an IMAGE block over the line with the phrase repeated, wrapped or bled into the notes; a schedule whose rows differ in two words of
+four with damaged readings; Latin look-alikes, a letter O for a zero, a lost space, a dropped sign; the judge's A1; wide gutters, a cell
+the portal did not box and A2b). Each result carries ``ablation``: the shipped rule and the rule with every subset of its guards (unique
+quotation, reading of the touching blocks, quality flags, unboxed stretch, near copy) removed, and the rule with the pre-`D-626` unit of
+the unboxed-stretch limit, each held against the PDF's glyphs by kind of case: a scenario is worth something only when some subset links
+wrongly. ``ablation_offline`` is the same table computed from the PDF alone (no database) and ``ablation_offline_equals_the_stand`` says
+whether the stored documents gave the same counts.
+
 **What is authored.** The model's reply is never live: it is an authored recording (``recording_document``, token counts invented
 and small, keyed by the request checksum the real chain computes), so a finding here is "a quotation somebody chose", not a
 model's. The portal's blocks of the ``pz_*`` scenarios are an algorithm's, not a portal's. What is real is the chain from the
@@ -98,7 +108,7 @@ from tests.support.finding_block_proof import (  # noqa: E402
     require_same_links,
     rule_links,
 )
-from tests.support import stress_layout_pdf  # noqa: E402
+from tests.support import stress_layout_pdf, witness_scenarios  # noqa: E402
 from tests.support.xy_cut_blocks import CELLS, PARAGRAPHS, Layout, block_text, page_blocks  # noqa: E402
 
 MODEL_ID = "claude-opus-5"
@@ -237,6 +247,12 @@ def raster_bundle(pdf: bytes, stem: str, layout: Layout, oracle: PdfOracle) -> B
     return BundleMembers(name=f"{stem}.zip", pdf=pdf, markdown=files.results_md, block_list=files.blocks_json)
 
 
+def sheet_bundle(sheet: witness_scenarios.Sheet, stem: str, oracle: PdfOracle) -> BundleMembers:
+    """A portal bundle for a sheet of ``tests/support/witness_scenarios.py``: its blocks as authored, over the PDF's own pages."""
+    markdown, block_list = witness_scenarios.portal_files(sheet, stem, oracle.layer)
+    return BundleMembers(name=f"{stem}.zip", pdf=sheet.pdf, markdown=markdown, block_list=block_list)
+
+
 # -- the rule as it was before the measurement --------------------------------------------------
 
 
@@ -289,6 +305,7 @@ class Scenario:
     recording_dir: Path
     skipped: Counter
     authored: int | None
+    sheet: Any = None            # a ``witness_scenarios.Sheet``: the scenario's ablation table is computed (`D-649`)
 
 
 def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
@@ -402,7 +419,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
         sensitivity["gap_4"] = witnessed(texts, max_gap=4.0)
         sensitivity["gap_1"] = witnessed(texts, max_gap=1.0)
         sensitivity["no_unique_gate"] = witnessed(texts, unique=False)
-        for rate in NOISE_RATES:
+        for rate in NOISE_RATES if scenario.sheet is None else ():     # the scenarios of `D-649` carry their own damage and their ablation table
             damaged = {key: degrade(key, text, rate) for key, text in texts.items()}
             name = f"noise{round(rate * 100)}"
             sensitivity[name] = witnessed(damaged)
@@ -415,6 +432,18 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             sensitivity[f"naive_dropped{round(rate * 100)}"] = witnessed(unseen, guarded=False, veto=False)
             sensitivity[f"no_unique_gate_dropped{round(rate * 100)}"] = witnessed(unseen, unique=False)
         sensitivity["naive_exact"] = witnessed(texts, guarded=False, veto=False)
+        ablation: dict[str, Any] = {}
+        if scenario.sheet is not None:
+            # `D-649`: the rule once for every subset of its guards removed, over the stored documents, and the same table from the PDF
+            # alone. The counts must agree: the stored readings are the authored ones, the evidence the first occurrence, the lines the same.
+            stored = witness_scenarios.Inputs(
+                evidence, labels, lines, sizes, layer, blocks, memo, unlinked=frozenset(unlinked),
+            )
+            ablation["ablation"] = witness_scenarios.matrix(stored)
+            ablation["ablation_offline"] = witness_scenarios.evaluate(scenario.sheet)
+            differences = witness_scenarios.table_differences(ablation["ablation"], ablation["ablation_offline"])
+            ablation["ablation_offline_equals_the_stand"] = not differences
+            ablation["ablation_differences"] = differences[:50]
         before_pairs = {(p["finding_uid"], p["portal_block_id"]) for p in now["pairs"]}
         added = Counter(p["geometry"] for p in with_witness["pairs"] if (p["finding_uid"], p["portal_block_id"]) not in before_pairs)
         lost = sorted(before_pairs - {(p["finding_uid"], p["portal_block_id"]) for p in with_witness["pairs"]})
@@ -432,7 +461,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             "figures_of_the_adapter": adapter_figures,
             "witness_pairs_added_by_geometry_verdict": dict(added),
             "figures_with_the_witness_sensitivity": {name: figures(report) for name, report in sensitivity.items()},
-            "reproduction_matches_the_adapter": True,
+            "reproduction_matches_the_adapter": True, **ablation,
             "analysis": now, "analysis_before_the_fix": before, "analysis_with_the_witness": with_witness,
         }
     finally:
@@ -458,6 +487,16 @@ def render(results: list[dict[str, Any]]) -> str:
                 f"{f['link_precision_by_glyphs']} | {f['precision_text_contains']} / {f['precision_text_most_words']} "
                 f"(of {f['links_with_recognised_text']}) |"
             )
+    ablated = [r for r in results if "ablation" in r]
+    if ablated:
+        lines += ["", "# Scenarios that can fail (`D-649`): the shipped rule and the rule with guards removed, by kind of case", "",
+                  "A kind's `wrong` is a link to a block that does not touch the quotation's glyphs. The last column names the smallest sets "
+                  "of guards whose removal makes the kind link wrongly (`SHIPPED`: no guard is left to remove).", ""]
+        for r in ablated:
+            lines.append(witness_scenarios.render_table(r["name"], r["ablation"]))
+            lines.append(f"The same table from the PDF alone equals the stand's: {r['ablation_offline_equals_the_stand']} "
+                         f"({len(r['ablation_differences'])} differences listed).")
+            lines.append("")
     for r in results:
         lines += ["", f"## {r['name']}", "", r["note"], ""]
         lines.append(f"pages {r['pages']}, portal blocks {r['portal_blocks']}, text-layer lines {r['text_layer_lines']}, "
@@ -560,6 +599,17 @@ def build_scenarios(pz_pdf: Path | None, work: Path, only: set[str], cap: int) -
             name, "tests/support/stress_layout_pdf.py build_repeated (a schedule whose every row repeats one phrase in two cells): an authored "
             f"finding per row quoting the phrase, whose evidence is its first occurrence; blocks from an XY-cut at {CELLS.name} level.",
             bundle, directory, Counter(), len(units)))
+    for name, build in witness_scenarios.SCENARIOS.items():
+        if only and name not in only:
+            continue
+        sheet = build()
+        oracle = PdfOracle(sheet.pdf)
+        directory = work / name
+        units = [Unit(quote.kind, quote.page, quote.text) for quote in sheet.quotes]
+        author_recording(oracle, directory, observations([[unit] for unit in units]), f"authored findings of {name}")
+        bundle = sheet_bundle(sheet, name, oracle)
+        oracle.close()
+        scenarios.append(Scenario(name, f"tests/support/witness_scenarios.py: {sheet.note} (`D-649`).", bundle, directory, Counter(), len(units), sheet))
     return scenarios
 
 
