@@ -48,10 +48,12 @@ __all__ = [
     "CellBinding",
     "RunBinding",
     "RunRow",
+    "PRIMARY_TEXT_PENDING_METRIC",
     "StageRow",
     "assemble_run_stage_facts",
     "chip_of_call",
     "chip_of_phase",
+    "is_primary_text_placeholder",
     "read_run_stage_facts",
 ]
 
@@ -126,6 +128,19 @@ _ACCESSES: Final = frozenset({"subscription", "api"})
 #: ``stage_result.metrics`` key a reused row carries (``runs.stage_reuse.REUSED_FROM_METRIC``; a unit test holds the two equal).
 _REUSED_FROM_METRIC: Final[str] = "reused_from_run_id"
 
+#: `STAGE-PENDING-TEXT-01`. The multi-stage workflow runs its visual pass before the primary text analysis. At its start the executor
+#: (``runs/executor.py``) writes a ``text_analysis`` row only so the workflow's artifacts have a stage to hang on: ``partial``, the code
+#: ``analysis_input_invalid`` with the reason ``primary_text_pending``, and this metric ``true``. It is not a result of the text stage --
+#: nothing has run -- so the readers treat it as a stage not reported yet. The text stage's own result replaces it (the metric is then
+#: absent or ``false``).
+PRIMARY_TEXT_PENDING_METRIC: Final[str] = "primary_text_pending"
+TEXT_STAGE_ID: Final[str] = "text_analysis"
+
+
+def is_primary_text_placeholder(stage_id: str, metrics: Mapping[str, Any] | None) -> bool:
+    """Whether a ``stage_result`` row is the text stage's placeholder (:data:`PRIMARY_TEXT_PENDING_METRIC` is ``true``)."""
+    return stage_id == TEXT_STAGE_ID and isinstance(metrics, Mapping) and metrics.get(PRIMARY_TEXT_PENDING_METRIC) is True
+
 #: Sorts a failed call that has no time before every call that has one.
 _EPOCH: Final[datetime] = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
@@ -189,6 +204,8 @@ class StageRow:
     started_at: datetime | None = None
     finished_at: datetime | None = None
     reused_from_run_id: str | None = None
+    #: The row is the text stage's placeholder (:func:`is_primary_text_placeholder`); the facts read it as not reported yet.
+    primary_text_pending: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -489,7 +506,10 @@ def assemble_run_stage_facts(
     ``review`` is what the extended review reader returned (``{"status", "result"}``). With ``include_server`` false no cell carries
     ``server`` or ``access`` (and none is looked up)."""
     run_open = run.state not in _TERMINAL_RUN_STATES
-    rows_by_stage = {row.stage_id: row for row in stage_rows}
+    # STAGE-PENDING-TEXT-01: the text stage's placeholder is not a result; the chip reads as not started until the stage runs.
+    rows_by_stage = {
+        row.stage_id: row for row in stage_rows if not (row.primary_text_pending and row.stage_id == TEXT_STAGE_ID)
+    }
     procedures = _procedures(review)
     coverage = _coverage(review)
     plan_cells = _plan_cells(run.stage_plan)
@@ -554,7 +574,8 @@ _SELECT_CELL_BINDINGS = text(
 )
 _SELECT_STAGE_ROWS = text(
     "SELECT stage_id, status, error ->> 'code' AS error_code, started_at, finished_at, "
-    f"metrics ->> '{_REUSED_FROM_METRIC}' AS reused_from_run_id "
+    f"metrics ->> '{_REUSED_FROM_METRIC}' AS reused_from_run_id, "
+    f"COALESCE(metrics -> '{PRIMARY_TEXT_PENDING_METRIC}' = CAST('true' AS jsonb), false) AS primary_text_pending "
     "FROM stage_result WHERE run_id = :run_id ORDER BY stage_id"
 )
 #: Every call the journal holds for the run: each effect with the ``model_call`` row it ended in (``final_model_call_id``, else its own id),
@@ -617,6 +638,7 @@ def _read_stage_rows(session: Session, run_id: str) -> list[StageRow]:
         StageRow(
             stage_id=str(row["stage_id"]), status=str(row["status"]), error_code=row["error_code"],
             started_at=row["started_at"], finished_at=row["finished_at"], reused_from_run_id=row["reused_from_run_id"],
+            primary_text_pending=row["primary_text_pending"] is True,
         )
         for row in rows
     ]
