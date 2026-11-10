@@ -159,7 +159,7 @@ export function StageTable({ rows, reused }: StageTableProps) {
               <td className={styles.ordinal} data-stage-ordinal={row.ordinal ?? 'unscheduled'}>
                 {row.ordinal ?? '—'}
               </td>
-              <td>
+              <td className={styles.stage}>
                 <span className={styles.name}>{runStageLabel(row.stageId)}</span>
                 {row.expected ? null : (
                   <span className={styles.aside}> (на этом этапе не планируется)</span>
