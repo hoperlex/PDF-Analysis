@@ -657,6 +657,35 @@ __all__ = [
     "RunStagePlanSource",
     "RunStageState",
     "RunStages",
+    "ExecutorContextInput",
+    "ExecutorTaskContext",
+    "ExecutorTaskContextCase",
+    "ExecutorTaskContextItem",
+    "ExecutorTaskContextKind",
+    "ExecutorTaskContextRequest",
+    "ExecutorTaskContextStatus",
+    "FindingBlockBox",
+    "FindingBlockEvidence",
+    "FindingGroundingKind",
+    "FindingOrigin",
+    "PossibleNorm",
+    "PrecedentCase",
+    "PrecedentFindingLabel",
+    "PrecedentHint",
+    "PrecedentHintCode",
+    "PrecedentLabelCode",
+    "PrecedentPassState",
+    "PrecedentSetting",
+    "PrecedentSettingList",
+    "PrecedentSettingName",
+    "PrecedentVotes",
+    "AppendPrecedentSettingRequest",
+    "FindingPrecedents",
+    "RunPrecedents",
+    "SetVectorPausedRequest",
+    "VectorControl",
+    "VectorWindow",
+    "VectorWindowState",
 ]
 
 
@@ -1755,6 +1784,9 @@ class RunWaitCause(str, enum.Enum):
     MODEL_COOLING_DOWN = "model_cooling_down"
     NOT_ON_ANY_SERVER = "not_on_any_server"
     AT_CAPACITY = "at_capacity"
+    #: `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2): the night window of the vectors is open and the stand issues no new run until it
+    #: closes (`vector_control.window_state` is `draining` or `encoding`). Every cell of the run waits for the same reason.
+    VECTOR_WINDOW = "vector_window"
 
 
 class RunWaitCell(_Object):
@@ -2374,6 +2406,47 @@ class NormCitation(_Object):
     source_attribution: NormSourceAttribution
 
 
+class FindingGroundingKind(str, enum.Enum):
+    """`CRIT-SEAL-50` (contract 1.51.0, migration ``0064``): how an observation is anchored. `text_span`: a span of the text layer, as every
+    observation was until now. `portal_block`: a block of the portal's geometry, proved to be in the run's own geometry (plan-v5 section 4)."""
+
+    TEXT_SPAN = "text_span"
+    PORTAL_BLOCK = "portal_block"
+
+
+class FindingOrigin(str, enum.Enum):
+    """`CRIT-SEAL-50` (contract 1.51.0): where a finding of «Разбор» comes from, the «Источник» chip: `text` (the text analysis), `drawing`
+    (a drawing candidate of the extended review) or `cross_check` (the cross-check of sources)."""
+
+    TEXT = "text"
+    DRAWING = "drawing"
+    CROSS_CHECK = "cross_check"
+
+
+class FindingBlockBox(_Object):
+    """A box on a page, normalised to the page (0 to 1), the origin at the top left."""
+
+    x0: Annotated[float, Field(ge=0, le=1)]
+    y0: Annotated[float, Field(ge=0, le=1)]
+    x1: Annotated[float, Field(ge=0, le=1)]
+    y1: Annotated[float, Field(ge=0, le=1)]
+
+
+class FindingBlockEvidence(_Object):
+    """`CRIT-SEAL-50` (contract 1.51.0): one block of the portal that holds a finding's evidence -- the place, never the content: the
+    block is proved to be in the run's geometry and its crop to match, and the quote, when there is one, to be in the block's recognised
+    text. `Evidence` is untouched."""
+
+    ordinal: Annotated[int, Field(ge=0)]
+    page_number: Annotated[int, Field(ge=1)]
+    portal_block_id: PortalBlockId
+    bbox_norm: FindingBlockBox
+    crop_sha256: Sha256
+    recognised_quote: Annotated[str, Field(min_length=1, max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
 class FindingObservation(_Object):
     finding_observation_id: FindingObservationId
     run_id: RunId
@@ -2392,6 +2465,8 @@ class FindingObservation(_Object):
     stated_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `CRIT-SEAL-50` (contract 1.51.0): absent means `text_span`, the only kind before.
+    grounding_kind: FindingGroundingKind = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class Finding(_Object):
@@ -2426,6 +2501,12 @@ class Finding(_Object):
     #: before the field existed).
     current_verdict_carried_from: DecisionCarriedFrom = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `CRIT-SEAL-50` (contract 1.51.0): the blocks of the portal that hold the evidence of a finding grounded on blocks; absent for a
+    #: finding grounded on text spans only. `origin` is the «Источник» chip; absent means `text`.
+    block_evidence: Annotated[list[FindingBlockEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class FindingDetail(_Object):
@@ -2466,6 +2547,11 @@ class FindingDetail(_Object):
     #: `UI-A-73` (contract 1.39.0): as on ``Finding``.
     current_verdict_carried_from: DecisionCarriedFrom = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `CRIT-SEAL-50` (contract 1.51.0): as on ``Finding``.
+    block_evidence: Annotated[list[FindingBlockEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     latest_comment: str | None = Field(default=None, json_schema_extra=optional_property)
     decision_event_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
@@ -5808,6 +5894,16 @@ class RunnerImage(_Object):
     media_type: Literal["image/png"]
 
 
+class ExecutorContextInput(_Object):
+    """`CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2): one candidate text of a `review:main` task the agent may ask reference data for
+    (`getExecutorTaskContext`). `input_id` is the task's own name for the text, `text_sha256` the digest of it, `section` the section the
+    run's version belongs to."""
+
+    input_id: Annotated[str, Field(min_length=1, max_length=128)]
+    text_sha256: Sha256
+    section: Annotated[str, Field(min_length=1, max_length=64)]
+
+
 class ClaimedExecutorTask(_Object):
     """A task, now claimed by the calling token. ``system`` and ``user_text`` are untrusted,
     document-derived text. ``model`` is the pinned gateway model the answer must declare."""
@@ -5837,6 +5933,11 @@ class ClaimedExecutorTask(_Object):
         default=None, json_schema_extra=optional_property
     )
     cell_key: StageCellKey = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `CRIT-SEAL-50` (contract 1.51.0): present only on a `review:main` task of a run on the stage layout. The agent may ask
+    #: `getExecutorTaskContext` once per kind; a task without it is never offered reference data.
+    context_request: Annotated[list[ExecutorContextInput], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ExtendedExecutorTaskClaim(_Object):
@@ -5866,6 +5967,9 @@ class SubmitExecutorTaskAnswerRequest(_Object):
         default=None, json_schema_extra=optional_property
     )
     usage: ExecutorTaskUsage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `CRIT-SEAL-50` (contract 1.51.0): the `context_sha256` of the reference data the agent appended to the prompt, as the stand gave it;
+    #: absent when none was appended.
+    context_sha256: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class FailExecutorTaskRequest(_Object):
@@ -9674,3 +9778,265 @@ class RunStages(_Object):
     state: RunState
     plan_source: RunStagePlanSource
     items: Annotated[list[RunStage], Field(max_length=9)]
+
+
+# --- the «Прецеденты» programme (`CRIT-SEAL-50`, contract 1.51.0, plan-v5 sections 3.1 and 3.2; migration ``0064``) ----------------
+#
+# Sealed with the storage and nothing that behaves: every operation below answers ``503 dependency_unavailable`` until the lane that owns it
+# (`CTX-STAND`, `EMBED-01`, `PREC-PASS`, `PREC-WEB`) fills its body in the router. A lane that needs another field stops to the integrator.
+
+
+class ExecutorTaskContextKind(str, enum.Enum):
+    """What an agent asks the stand for: the decisions of experts on similar findings (`similar_cases`) or the approved patterns of rejection
+    (`patterns`, wave 5)."""
+
+    SIMILAR_CASES = "similar_cases"
+    PATTERNS = "patterns"
+
+
+class ExecutorTaskContextStatus(str, enum.Enum):
+    """`available`: the answer holds the reference data. `unavailable`: the stand has none to give and says why in `reason` (while the
+    night encoder is the only one, `until_move`); the agent calls the model without it."""
+
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+
+
+class ExecutorTaskContextRequest(_Object):
+    """The body of `getExecutorTaskContext`: the kind of reference data. One call per kind and task is paid for; a repeat answers the same."""
+
+    kind: ExecutorTaskContextKind
+
+
+_PrecedentVerdict = Literal["accepted", "rejected"]
+
+
+class ExecutorTaskContextCase(_Object):
+    """One earlier decision, with the texts of its case. The cases are those of the same section and data class, of any project, never of
+    this run, never withdrawn or forgotten (the policy of the consent)."""
+
+    case_id: DecisionMemoryCaseId
+    verdict: _PrecedentVerdict
+    category: Annotated[str, Field(min_length=1, max_length=64)]
+    similarity: Annotated[float, Field(ge=0, le=1)]
+    finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    recommendation_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    comment: Annotated[str, Field(min_length=1, max_length=4000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorTaskContextItem(_Object):
+    """The cases found for one `input_id` of the task's `context_request`, at most three, the most similar first."""
+
+    input_id: Annotated[str, Field(min_length=1, max_length=128)]
+    cases: Annotated[list[ExecutorTaskContextCase], Field(max_length=3)]
+
+
+class ExecutorTaskContext(_Object):
+    """`getExecutorTaskContext` (contract 1.51.0): the reference data of a task, laid out by `input_id`. `reason` is present exactly when
+    `status` is `unavailable`, and `context_sha256` exactly when it is `available`: the digest of `items` as the stand delivered them, which
+    the agent echoes in `submitExecutorTaskAnswer`. `not_fitted` counts the cases that did not fit the budget of characters of the task."""
+
+    kind: ExecutorTaskContextKind
+    status: ExecutorTaskContextStatus
+    reason: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    items: Annotated[list[ExecutorTaskContextItem], Field(max_length=64)]
+    not_fitted: Annotated[int, Field(ge=0)]
+    context_sha256: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class PrecedentLabelCode(str, enum.Enum):
+    """The label of a finding (plan-v5 section 2.3). `none` and `few` show nothing in the row. `cancel_suggested` is a part of
+    `often_rejected`: it additionally needs the critic's review and no veto, and it is the one that fills the queue «Рекомендовано снять»."""
+
+    NONE = "none"
+    FEW = "few"
+    OFTEN_REJECTED = "often_rejected"
+    CANCEL_SUGGESTED = "cancel_suggested"
+    LIKELY_ACCEPTED = "likely_accepted"
+    MIXED = "mixed"
+
+
+class PrecedentHintCode(str, enum.Enum):
+    """A hint of the card (plan-v5 section 2.5; at most two per finding, never a model's text): `p1` the reason of the rejections, `p4` the
+    critic disagrees, `p5` the history of the document."""
+
+    P1 = "p1"
+    P4 = "p4"
+    P5 = "p5"
+
+
+class PrecedentPassState(str, enum.Enum):
+    """The state of the «Прецеденты» pass of a run."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class PrecedentVotes(_Object):
+    """The counts behind a label: the decisions counted (`total`), how many rejected and accepted, how many of them are independent (not
+    given under a label to reject, plan-v5 section 2.1) and from how many projects."""
+
+    total: Annotated[int, Field(ge=0)]
+    rejected: Annotated[int, Field(ge=0)]
+    accepted: Annotated[int, Field(ge=0)]
+    independent: Annotated[int, Field(ge=0)]
+    projects: Annotated[int, Field(ge=0)]
+
+
+class PrecedentFindingLabel(_Object):
+    """What the pass gave one finding of a run at `revision`. `critic_reviewed` is false for a finding the AI critic did not review: its
+    rejection labels are then shown neutrally and it is not in the queue."""
+
+    finding_uid: FindingUid
+    label: PrecedentLabelCode
+    critic_reviewed: bool
+    votes: PrecedentVotes
+    hint_codes: Annotated[list[PrecedentHintCode], Field(max_length=2)]
+    revision: Annotated[int, Field(ge=1)]
+
+
+class RunPrecedents(_Object):
+    """`getRunPrecedents` (contract 1.51.0): the labels of the findings of a run, and with them the queue (the items whose `label` is
+    `cancel_suggested`). `available` is false while the run has no result of the pass (the vectors are computed at night or are paused): the
+    screen then shows one line over the list and no label in a row. `pass_state` and `revision` are absent until a pass has started."""
+
+    run_id: RunId
+    available: bool
+    pass_state: PrecedentPassState = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    revision: Annotated[int, Field(ge=1)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    items: Annotated[list[PrecedentFindingLabel], Field(max_length=5000)]
+
+
+class PrecedentHint(_Object):
+    """A hint of the card. `text` is the words of an expert (the comment of a rejecting decision for `p1`), never a model's; `case_id` is the
+    case it comes from."""
+
+    code: PrecedentHintCode
+    text: Annotated[str, Field(min_length=1, max_length=4000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    case_id: DecisionMemoryCaseId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class PrecedentCase(_Object):
+    """One similar case on the card of a finding."""
+
+    case_id: DecisionMemoryCaseId
+    verdict: _PrecedentVerdict
+    category: Annotated[str, Field(min_length=1, max_length=64)]
+    similarity: Annotated[float, Field(ge=0, le=1)]
+    finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    comment: Annotated[str, Field(min_length=1, max_length=4000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class PossibleNorm(_Object):
+    """A paragraph of the norms the run already holds that the finding may rest on («Возможные нормы»): from the same paragraphs the
+    critic gets, never from the encoder."""
+
+    norm_document_id: NormDocumentId
+    norm_paragraph_id: NormParagraphId
+    designation: Annotated[str, Field(min_length=1, max_length=500)]
+    clause_number: Annotated[str, Field(min_length=1, max_length=100)] | None
+    page_label: Annotated[int, Field(ge=1)]
+
+
+class FindingPrecedents(_Object):
+    """`getFindingPrecedents` (contract 1.51.0): the card of a finding -- its label, its at most two hints, the similar cases and the possible
+    norms. `available` is false while the pass has not given this finding a result; `label` is then absent."""
+
+    finding_uid: FindingUid
+    run_id: RunId
+    available: bool
+    label: PrecedentFindingLabel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    hints: Annotated[list[PrecedentHint], Field(max_length=2)]
+    cases: Annotated[list[PrecedentCase], Field(max_length=10)]
+    possible_norms: Annotated[list[PossibleNorm], Field(max_length=5)]
+
+
+class VectorWindowState(str, enum.Enum):
+    """The night window of the vectors: `closed`; `draining` (no new run is issued, the running ones finish); `encoding` (the encoder runs);
+    `skipped` (the window did not take place, `window_reason` says why)."""
+
+    CLOSED = "closed"
+    DRAINING = "draining"
+    ENCODING = "encoding"
+    SKIPPED = "skipped"
+
+
+_CLOCK_TIME = r"^([01][0-9]|2[0-3]):[0-5][0-9]$"
+
+
+class VectorWindow(_Object):
+    """The configured window: local `start` and `end` (`HH:MM`) in the IANA zone `tz` (the setting `vector_window`)."""
+
+    start: Annotated[str, Field(pattern=_CLOCK_TIME)]
+    end: Annotated[str, Field(pattern=_CLOCK_TIME)]
+    tz: Annotated[str, Field(min_length=1, max_length=64)]
+
+
+class VectorControl(_Object):
+    """`getVectorControl` and the answer of `setVectorPaused` (contract 1.51.0): whether the vectors are paused and since when, the state of
+    the night window and the window itself. The counts of queued and poisoned jobs are for an administrator and absent for an expert."""
+
+    paused: bool
+    paused_since: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    window_state: VectorWindowState
+    window_reason: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    window_changed_at: datetime
+    window: VectorWindow
+    pending_intents: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    poisoned_intents: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class SetVectorPausedRequest(_Object):
+    """`setVectorPaused`: pause the vectors or resume them. The window does not start on a pause and the queue keeps filling."""
+
+    paused: bool
+
+
+class PrecedentSettingName(str, enum.Enum):
+    """The names of the journal of settings: the three switches (`one_list`, `critic_context`, `section_labels`; all off while nothing is
+    journalled), the stop words of the owner, the night window and the thresholds."""
+
+    ONE_LIST = "one_list"
+    CRITIC_CONTEXT = "critic_context"
+    SECTION_LABELS = "section_labels"
+    STOP_WORDS = "stop_words"
+    VECTOR_WINDOW = "vector_window"
+    THRESHOLDS = "thresholds"
+
+
+class PrecedentSetting(_Object):
+    """One revision of one setting. `value` is an object: `{"enabled": boolean}` for `one_list` and `critic_context`, `{"start", "end", "tz"}`
+    for `vector_window`, the lane's own shape for the others."""
+
+    setting_name: PrecedentSettingName
+    revision: Annotated[int, Field(ge=1)]
+    value: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
+    actor_user_uid: UserUid
+    created_at: datetime
+
+
+class PrecedentSettingList(_Object):
+    """`listPrecedentSettings`: the revision in force of each setting that was ever journalled (`current`, at most one per name) and the
+    journal, newest first (`events`)."""
+
+    current: Annotated[list[PrecedentSetting], Field(max_length=6)]
+    events: Annotated[list[PrecedentSetting], Field(max_length=200)]
+
+
+class AppendPrecedentSettingRequest(_Object):
+    """`appendPrecedentSetting`: a new revision of a setting. The revision number is the next one of the name; the actor is the caller."""
+
+    setting_name: PrecedentSettingName
+    value: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
