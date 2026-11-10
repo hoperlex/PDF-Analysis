@@ -431,8 +431,10 @@ def test_a_pause_before_the_night_keeps_the_window_from_opening(
         store.lock_control(session)
         store.set_paused(session, paused=True, actor=_admin(session))
         session.commit()
+    mark = w.last_event_no(sessions)
     open_the_night(made(), exchange)
     assert w.control(sessions) == {"paused": True, "state": "closed", "reason": None}
+    assert w.journal(sessions, since=mark) == [], "the stand was never stopped: no window opened and closed again"
 
 
 def test_a_pause_during_the_drain_closes_the_window_and_gives_the_stand_back(

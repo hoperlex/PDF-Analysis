@@ -77,6 +77,10 @@ def test_a_short_case_is_the_category_the_finding_and_the_recommendation() -> No
     assert text == "Категория: dimensions\nНаходка: Высота помещения менее 2,5 м.\nРекомендация: Увеличить высоту до 2,7 м по СП 54."
 
 
+def test_the_budget_is_the_plans_thousand_characters() -> None:
+    assert INPUT_BUDGET_CHARS == 1000   # plan-v5 section 2.2: about 400 tokens, below the 512 at which the encoder refuses
+
+
 def test_the_view_never_exceeds_the_budget_and_marks_every_cut() -> None:
     long = ("слово " * 400).strip()
     for finding, recommendation in ((long, "коротко"), ("коротко", long), (long, long)):
