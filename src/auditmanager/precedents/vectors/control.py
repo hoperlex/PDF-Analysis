@@ -19,7 +19,6 @@ from typing import Any, Final
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
 from auditmanager.precedents.vectors import repository as store
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
@@ -76,6 +75,10 @@ class VectorControlService:
     # -- the write ----------------------------------------------------------------------------------------------
 
     def set_vector_paused(self, *, paused: bool, user_uid: str, idempotency_key: str) -> dict[str, Any]:
+        # Imported here, not at the top: the command ledger lives in `ingest`, whose import pulls the document and storage stacks, and
+        # `precedents.public` is the surface of a pure core that other contexts import without wanting them.
+        from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
+
         with self._sessions() as session:
             if _ADMIN not in self._roles_of(session, user_uid):
                 raise DomainError(ErrorCode.PERMISSION_DENIED, required_capability="role:admin")

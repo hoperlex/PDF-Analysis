@@ -854,7 +854,7 @@ host is 4 GB and the encoder peaks at about 3,2 GiB, so while it runs the stand 
   writes a heartbeat, and when the worker has left a batch runs the `embedder` over it, stops it at the window's deadline (or when the worker says
   `abort`), and reports how it ended. Install it once, as root: `infra/deploy/embed-window.sh install` (it fills in the checkout and the environment
   file, enables the timer). **To stop the night encoder: `systemctl disable --now auditmanager-embed-window.timer`** -- the worker opens no window for
-  a host whose timer is silent, so nothing stops a run for nothing; the intents wait. Pausing «Векторы» in the top strip does the same from the screen.
+  a host whose timer is silent, so nothing stops a run for nothing; the intents wait. Pausing the vectors (`setVectorPaused`; its button in the top strip is `PAUSE-WEB-01`'s) keeps a window from opening and stops a running one.
 * **`ALPHA_EMBEDDER=yes`** (default `no`) makes `deploy.sh` build the image after the other two and **after a check of the disk** (the image is 5,5 GB and
   its rebuild took 9,5 GB, `docs/program/W54-EMBED-BUILD-01.md`; `ALPHA_EMBEDDER_BUILD_MIN_FREE_GB`, default 12; an image that is already there is not
   rebuilt), and makes `verify-deployed.sh` check that the image, the timer and a heartbeat of the last ten minutes are in place. Both call
