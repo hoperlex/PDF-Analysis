@@ -113,7 +113,7 @@ sys.exit(99)
 
 
 def plan_text(*, sha: str = SHA, project: str = PROJECT) -> str:
-    return (f"erase-project: database {DATABASE} (migration head 0062_hosts_stage_models), bucket {BUCKET}\n"
+    return (f"erase-project: database {DATABASE} (migration head 0063_drop_ar_v3_beta), bucket {BUCKET}\n"
             f"project: {project}\n\n-- rows of the project, by table (every one is deleted) --\n  project  (1 rows)\n"
             f"  total: 7 rows in 3 tables\n\nblobs-exclusive: 2\nblobs-shared: 0\nrows-to-delete: 7\nplan-sha256: {sha}")
 

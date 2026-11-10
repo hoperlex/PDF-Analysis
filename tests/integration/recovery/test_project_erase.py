@@ -141,8 +141,6 @@ SLICES: dict[str, str] = {
     "optimisation_pass": "project_uid = :p",
     "optimisation_proposal": f"optimisation_pass_id IN ({_PASSES})",
     "optimisation_proposal_decision": f"optimisation_proposal_id IN ({_PROPOSALS})",
-    "ar_v3_run_group": "project_uid = :p",
-    "ar_v3_run_group_member": "group_id IN (SELECT group_id FROM ar_v3_run_group WHERE project_uid = :p)",
     "comparison_sheet_link": "project_uid = :p",
     "comparison_summary": "project_uid = :p",
     "comparison_upload": "project_uid = :p",
@@ -454,9 +452,9 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # `0042_comparison_stage_review`: the twelve tables of the stage AI review, repairs, expert cards and batches join
     # it (76 -> 88); only the batch references the project directly. `0053`..`0055` add the document's tags, the
     # finding's execution status and the assignment's planned dates (88 -> 91); none references the project directly.
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 91
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 89
     assert set(closure.direct) == {
-        "ar_v3_run_group", "audit_run", "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question",
+        "audit_run", "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question",
         "comparison_ai_sheet_item", "comparison_launch_queue", "comparison_matrix", "comparison_matrix_edit",
         "comparison_report", "comparison_series", "comparison_sheet_description", "comparison_sheet_link",
         "comparison_sheet_pair_result", "comparison_spec_comparison", "comparison_spec_extraction",
@@ -468,7 +466,7 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # `0038_comparison_foundation`: an upload batch and an order revision carry the receipt of the write
     # that made them.
     assert {key.child for key in closure.receipt_edges} == {
-        "ar_v3_run_group", "audit_run", "comparison_ai_job", "comparison_launch_entry", "comparison_matrix_edit",
+        "audit_run", "comparison_ai_job", "comparison_launch_entry", "comparison_matrix_edit",
         "comparison_report", "comparison_series", "comparison_sheet_link",
         "comparison_summary", "comparison_upload", "comparison_version_order", "expert_decision_event",
         "optimisation_proposal_decision",

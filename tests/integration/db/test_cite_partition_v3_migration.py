@@ -200,7 +200,7 @@ def test_a_certified_v3_finding_is_refused_at_0035_and_accepted_at_0036_and_the_
 
 
 @pytest.mark.parametrize("stage,status", [
-    (V3, "failed"), (V1, "failed"), ("text_analysis", "succeeded"), ("source_preparation", "succeeded"), (None, "succeeded"),
+    (V1, "failed"), ("text_analysis", "succeeded"), ("source_preparation", "succeeded"), (None, "succeeded"),
 ])
 def test_nothing_but_a_succeeded_cite_stage_certifies_a_partition(
     migrated_engine: Engine, stage: str | None, status: str
@@ -218,7 +218,7 @@ def test_a_wrong_count_is_still_refused_by_the_same_function(migrated_engine: En
     with pytest.raises(DBAPIError, match="citation partition count mismatch"):
         with migrated_engine.begin() as connection:
             ids = _seed_run(connection)
-            _stage(connection, ids["run"], V3)
+            _stage(connection, ids["run"], V1)
             _certified_observation(connection, ids, count=2)  # one citation row, two certified
     assert _count(migrated_engine) == before
 

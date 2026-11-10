@@ -1,18 +1,15 @@
 """`PROD-07A-PROJECT-ERASE-CORE-01`: shapes of project the stand in miniature does not hold.
 
 ``test_project_erase.py`` runs the tool on the stand of ``purge_seed`` (documents, a published run,
-findings, decisions, price and vendor lists, an optimisation pass). Two kinds of rows the erase must
-reach are not in it, and each is built here the way the owning code writes it:
+findings, decisions, price and vendor lists, an optimisation pass). A kind of row the erase must
+reach is not in it, and it is built here the way the owning code writes it:
 
 * an **executor task** (`EXEC-PULL-01`): it carries what a remote executor was sent and answered
   (``payload``, ``answer_text``), references the run, the Attempt and the connection, and a task that
   is open or claimed is work in flight even when the run, job and attempt around it are terminal
-  (`D-215`). The task goes with the project, the connection, revision and runner token stay;
-* an **AR v3 group** (`0032_ar_v3_run_group`): six runs, the group, its six immutable members and the
-  receipt of the group start, in a database of its own (the fixture of
-  ``test_product_purge_run_group.py``).
+  (`D-215`). The task goes with the project, the connection, revision and runner token stay.
 
-Both are measured with the test's own digests, as in the main file.
+It is measured with the test's own digests, as in the main file.
 """
 
 from __future__ import annotations
@@ -28,7 +25,6 @@ from tests.integration.recovery.purge_seed import digest_of
 from tests.integration.recovery.purge_stand import (  # noqa: F401  (the fixtures are used by name)
     Stand, _line, invoke, seeded, stand,
 )
-from tests.integration.recovery.test_product_purge_run_group import grouped  # noqa: F401
 from tests.integration.recovery.test_project_erase import REFERENCE, apply_flags, count, events, rows, sql
 
 
@@ -104,35 +100,3 @@ def test_the_in_flight_guard_has_the_executor_task_in_its_table_and_loses_it_wit
                                                        if k != "executor_task"})
     code, out, err = invoke(tool, stand, "--project", project)
     assert code == 0, err  # the mutated table lets the project through while a task is still open
-
-
-def test_an_ar_v3_group_goes_with_its_runs_members_and_receipt_and_the_pinned_corpus_stays(
-    grouped: Stand, tmp_path: Path
-) -> None:
-    project = rows(grouped, "SELECT project_uid FROM project")[0][0]
-    for (run,) in rows(grouped, "SELECT run_id FROM audit_run"):
-        _terminal_run(grouped, run)
-    keep = {t: digest_of(grouped.engine, t) for t in sorted(purge.KEEP_TABLES)}
-    keep_blobs = count(grouped, "blob")
-    assert keep["norms_snapshot"][0] == 1 and keep["norm_retrieval_set"][0] == 6  # what the group pins
-
-    code, out, err = invoke(tool, grouped, "--project", project)
-    assert code == 0, err
-    for line in ("  ar_v3_run_group  (1 rows)", "  ar_v3_run_group_member  (6 rows)", "  audit_run  (6 rows)",
-                 "  command_record  (1 idempotency receipts of those rows)"):
-        assert line in out, line
-    sha = _line(out, "plan-sha256")
-    code, out, err = invoke(tool, grouped, *apply_flags(project, sha, tmp_path / "dump"))
-    assert code == 0, (out, err)
-
-    for table in ("ar_v3_run_group", "ar_v3_run_group_member", "audit_run", "project", "document_version",
-                  "input_manifest_entry", "command_record"):
-        assert count(grouped, table) == 0, table
-    assert {t: digest_of(grouped.engine, t) for t in sorted(purge.KEEP_TABLES)} == keep
-    requested, completed = events(grouped)[0], events(grouped)[1]
-    assert requested[3]["owner_permission_ref"] == REFERENCE
-    # the fixture's one Blob is the version's PDF and also the bytes of the retrieval sets: shared with the corpus,
-    # so the erase deletes the binding and keeps the row (and would have kept its object)
-    assert (completed[3]["blobs_exclusive"], completed[3]["blobs_shared"]) == (0, 1)
-    assert completed[3]["objects_deleted"] == 0 and count(grouped, "blob") == keep_blobs
-    assert count(grouped, "blob", "state IN ('erasure_pending', 'erased')") == 0

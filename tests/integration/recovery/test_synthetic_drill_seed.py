@@ -129,15 +129,15 @@ def test_the_seeded_lane_holds_the_realistic_dataset_and_both_audits_accept_it(
                                    "expert_decision_event")}
     finally:
         engine.dispose()
-    # `EXEC-SEAL-01`: +5 executor tables; `EXEC-PULL-01` (0031): +2; `0032_ar_v3_run_group`: +2;
+    # `EXEC-SEAL-01`: +5 executor tables; `EXEC-PULL-01` (0031): +2; `0032`: +2 (dropped again by `0063`);
     # `0035_comparison_records`: +2; `0037_analysis_presets`: +1.
     # `0041_comparison_stage_core`: fifteen project-reachable stage tables.
     # `0042_comparison_stage_review`: twelve more, nine of them immutable.
     # `0046_executor_capacity_enroll` (`EXEC2-SEAL-1`): `executor_enrollment`, `executor_agent_install`.
     # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): the group store (five tables, none seeded); `0048` adds none.
     # `0053_document_tags`, `0054_finding_execution_status`, `0055_work_schedule`: seven more (129 -> 136).
-    # `0059_decision_memory`: the eight append-only tables of the decision memory (136 -> 144); `0061_decision_memory_m2` adds the settings' journal (145); `0062_hosts_stage_models` nine more (154).
-    assert schema.tables == 154 and schema.guarded_tables >= 29
+    # `0059_decision_memory`: the eight append-only tables of the decision memory (136 -> 144); `0061_decision_memory_m2` adds the settings' journal (145); `0062_hosts_stage_models` nine more (154); `0063_drop_ar_v3_beta` drops the two of `0032` (152).
+    assert schema.tables == 152 and schema.guarded_tables >= 29
     assert len(references.available_blobs) >= 5
     assert dict(references.source_counts)["price_list_revision"] == 2
     assert {"geometry_crop_image", "prepared_text_layer"} <= roles
