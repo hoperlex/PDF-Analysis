@@ -101,9 +101,18 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0061_decision_memory_m2` adds the installation settings' journal, kept like the schedule's settings (KEEP 49 -> 50).
     # `0062_hosts_stage_models` keeps eight tables of the host and the stage layout, like the executor connections (KEEP 50 -> 58), and
     # a planned run's cell binding is a run's own row (PRODUCT 92 -> 93); `0063_drop_ar_v3_beta` drops two tables (PRODUCT 93 -> 91).
-    assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 9
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the memory's comments, block evidence, encoder queue and vectors join its KEEP set (KEEP_MEMORY 9 -> 13);
+    # the settings journal, the vectors' control with its journal and the delivery journal are kept configuration and records (KEEP 58 -> 66 with
+    # the four above); the probe, the pass of a run with its advice and a finding's block evidence are product data (PRODUCT 91 -> 95).
+    assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 13
     assert not tool.KEEP_MEMORY_TABLES & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
-    assert len(tool.PRODUCT_TABLES) == 91 and len(tool.KEEP_TABLES) == 58 and len(tool.MIXED_TABLES) == 3
+    assert tool.KEEP_PRECEDENT_TABLES == {"executor_task_context_delivery", "precedent_setting_event", "vector_control", "vector_control_event"}
+    assert tool.KEEP_PRECEDENT_TABLES <= tool.KEEP_TABLES and not tool.KEEP_PRECEDENT_TABLES & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
+    assert {"decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "finding_block_evidence"} \
+        <= tool.PRODUCT_TABLES
+    assert not {"decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "finding_block_evidence"} \
+        & tool.KEEP_TABLES
+    assert len(tool.PRODUCT_TABLES) == 95 and len(tool.KEEP_TABLES) == 66 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
@@ -129,6 +138,10 @@ def test_every_event_type_and_command_type_the_source_writes_is_classified() -> 
     assert sorted(e for e in events if not e.startswith(prefixes)) == []
     assert sorted(commands - tool.KEEP_COMMAND_TYPES - tool.PRODUCT_COMMAND_TYPES) == []
     assert not (tool.KEEP_COMMAND_TYPES & tool.PRODUCT_COMMAND_TYPES)
+    # `CRIT-SEAL-50`: the two keyed writes of the Precedents programme are read out of the source (the constants of `api/routers/precedents.py`) and kept
+    assert {"append_precedent_setting", "set_vector_paused"} <= commands
+    assert {"append_precedent_setting", "set_vector_paused"} <= tool.KEEP_COMMAND_TYPES
+    assert {"precedent.", "vector."} <= set(tool.KEEP_EVENT_PREFIXES)
 
 
 def test_the_temporary_prefix_is_the_storage_adapters(tmp_path: Path) -> None:
