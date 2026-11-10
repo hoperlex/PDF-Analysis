@@ -626,3 +626,31 @@ single-model agent to host mode with a new enrollment secret.
 5. `failure_code` is free-form within `^[a-z][a-z0-9_]{0,63}$`; the stand may group the three access codes of 10.3.
 6. `cli_path` is not sent unless the operator opts in.
 7. `enabled: false` is not a reason for the agent to stop claiming; the stand stops handing out new runs.
+
+## 11. `CRIT-SEAL-50`: reference data for a task (contract 1.51.0)
+
+One more operation, sealed asleep: the stand answers `503 dependency_unavailable` until `CTX-STAND` serves it. The client built on this section
+(`CTX-RUNNER`) must work against a stand that does not serve it yet, and against one that does.
+
+### 11.1 `getExecutorTaskContext` - `POST /api/v1/runner/tasks/{task_id}/context`
+
+Runner token only (the same principal as the five operations of section 4). Body: `{"kind": "similar_cases" | "patterns"}`.
+
+- **When to ask.** Only for a task whose claim carries `context_request`: a non-empty array of
+  `{"input_id": string (1..128), "text_sha256": sha256, "section": string (1..64)}`, at most 64, present on a `review:main` task of a run on the
+  stage layout and absent everywhere else. A task without it is never asked about: the stand answers `404 not_found`, which is also the
+  answer for a task that is not a model call of a run, a run without a stage plan and a consent without the same `executor_context_policy`.
+- **Once per kind, before the CLI call, with a timeout of 8 seconds and no retry.** The stand is idempotent by (task, kind): a repeat returns
+  the same answer and spends no budget of the task.
+- **Answer.** `{"kind", "status": "available" | "unavailable", "reason"?: string, "items": [{"input_id", "cases": [...]}], "not_fitted": int,
+  "context_sha256"?: sha256}`. `reason` is present exactly when `status` is `unavailable` (while the night encoder is the only one:
+  `until_move`); `context_sha256` exactly when it is `available`: the digest of `items` as delivered. A case is
+  `{"case_id", "verdict": "accepted" | "rejected", "category", "similarity", "finding_text", "recommendation_text", "comment"?}`, at most three
+  per `input_id`, the most similar first; `not_fitted` counts the cases that did not fit the 12 000 characters of the task.
+- **Errors never fail the task.** On `401`, `409`, `429`, `5xx` and a timeout the agent calls the model without reference data, with the line
+  `Справочные данные недоступны: <причина>`. The rule of waiting for `Retry-After` for at least 30 seconds (sections 1 and 3) does not apply to this operation.
+- **Placement.** The data goes in a separate section after the JSON of `user_text`, headed `=== СПРАВОЧНО (не основание) ===`; nothing is
+  inserted at the start of the text, and the tools of the CLI stay closed. The agent echoes `context_sha256` in the answer
+  (`submitExecutorTaskAnswer`, optional member `context_sha256`) when, and only when, it appended the data.
+- **What the stand keeps.** A journal row (`executor_task_context_delivery`) with the task, the run, the kind, the status, the cases by
+  identity, the number of characters and the digest: no text. It outlives the erase of the project.
