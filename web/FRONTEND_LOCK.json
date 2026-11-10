@@ -17,9 +17,9 @@
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
     "sha256": "dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a",
-    "content_commit": "86cb33a2",
-    "content_commit_subject": "feat(contract): DecisionMemoryCase.comments and an evidence array that may be empty for a block observation (CRIT-SEAL-52, D-682, D-683)",
-    "dispatch_named_commit": "86cb33a20ddd2da17838bb57b559e8adcefff790",
+    "content_commit": "f0bc496e",
+    "content_commit_subject": "feat(contract): contract 1.52.0 -- the version literals, the surface (296/325/809), the reseal paragraph, the catalogs at candidate revision 69, the head 0065 (CRIT-SEAL-52)",
+    "dispatch_named_commit": "f0bc496e5446dcbc8089ed54c528f975d3d9726a",
     "commit_note": "Resealed by CRIT-SEAL-52: contract 1.52.0 (no operation; one schema, DecisionMemoryComment; the optional DecisionMemoryCase.comments; FindingObservation.evidence may be empty when grounding_kind is portal_block, as an if/else on grounding_kind instead of minItems 1), on top of 1.51.0.",
     "openapi_version": "3.1.0",
     "info_version": "1.52.0",
