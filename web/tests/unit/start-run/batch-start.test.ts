@@ -79,7 +79,7 @@ describe('the batch panel, mounted', () => {
     vi.mocked(startRun).mockReset();
     vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => {
       if (body.version_uid === C) {
-        throw new ApiError(503, { contract_version: '1.49.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'cid-1', retryable: true }, 'cid-1');
+        throw new ApiError(503, { contract_version: '1.50.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'cid-1', retryable: true }, 'cid-1');
       }
       return { data: estimateFor(body.version_uid as VersionUid) } as never;
     });
