@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 290,
+    "path_count": 296,
     "operations": [
       [
         "DELETE",
@@ -295,6 +295,11 @@
       ],
       [
         "GET",
+        "/findings/{finding_uid}/precedents",
+        "getFindingPrecedents"
+      ],
+      [
+        "GET",
         "/knowledge-base/entries",
         "listKnowledgeBaseEntries"
       ],
@@ -397,6 +402,11 @@
         "GET",
         "/page-profiles/{comparison_page_profile_id}/tile",
         "streamVersionPageTile"
+      ],
+      [
+        "GET",
+        "/precedent-settings",
+        "listPrecedentSettings"
       ],
       [
         "GET",
@@ -585,6 +595,11 @@
       ],
       [
         "GET",
+        "/runs/{run_id}/precedents",
+        "getRunPrecedents"
+      ],
+      [
+        "GET",
         "/runs/{run_id}/stages",
         "getRunStages"
       ],
@@ -747,6 +762,11 @@
         "GET",
         "/users/{user_uid}",
         "getUser"
+      ],
+      [
+        "GET",
+        "/vector-control",
+        "getVectorControl"
       ],
       [
         "GET",
@@ -1145,6 +1165,11 @@
       ],
       [
         "POST",
+        "/precedent-settings",
+        "appendPrecedentSetting"
+      ],
+      [
+        "POST",
         "/projects",
         "createProject"
       ],
@@ -1312,6 +1337,11 @@
         "POST",
         "/runner/tasks/{task_id}/answer",
         "submitExecutorTaskAnswer"
+      ],
+      [
+        "POST",
+        "/runner/tasks/{task_id}/context",
+        "getExecutorTaskContext"
       ],
       [
         "POST",
@@ -1570,6 +1600,11 @@
       ],
       [
         "PUT",
+        "/vector-control/paused",
+        "setVectorPaused"
+      ],
+      [
+        "PUT",
         "/vendor-lists/{section_code}",
         "setGlobalVendorList"
       ],
@@ -1613,6 +1648,7 @@
       "AppendComparisonVersionOrderRequest",
       "AppendDecisionRequest",
       "AppendDecisionResponse",
+      "AppendPrecedentSettingRequest",
       "ApplyComparisonMatrixEditsRequest",
       "ApplyStageCardVerdictsRequest",
       "ApplyStageSheetMapRequest",
@@ -1911,6 +1947,7 @@
       "ExecutorConnectionDetail",
       "ExecutorConnectionId",
       "ExecutorConnectionList",
+      "ExecutorContextInput",
       "ExecutorEnrollmentId",
       "ExecutorEnrollmentMetadata",
       "ExecutorEnrollmentState",
@@ -1973,6 +2010,12 @@
       "ExecutorSshKey",
       "ExecutorSshProfile",
       "ExecutorTaskAck",
+      "ExecutorTaskContext",
+      "ExecutorTaskContextCase",
+      "ExecutorTaskContextItem",
+      "ExecutorTaskContextKind",
+      "ExecutorTaskContextRequest",
+      "ExecutorTaskContextStatus",
       "ExecutorTaskId",
       "ExecutorTaskState",
       "ExecutorTaskUsage",
@@ -1982,16 +2025,21 @@
       "ExtendedRunReview",
       "FailExecutorTaskRequest",
       "Finding",
+      "FindingBlockBox",
+      "FindingBlockEvidence",
       "FindingBlockLink",
       "FindingCategory",
       "FindingComparison",
       "FindingDetail",
       "FindingExecutionState",
       "FindingExecutionStatus",
+      "FindingGroundingKind",
       "FindingMatchProposal",
       "FindingObservation",
       "FindingObservationId",
+      "FindingOrigin",
       "FindingPage",
+      "FindingPrecedents",
       "FindingRef",
       "FindingUid",
       "GenerateComparisonSummaryRequest",
@@ -2064,6 +2112,17 @@
       "PortalCrop",
       "PortalGeometryState",
       "PortalRecognisedText",
+      "PossibleNorm",
+      "PrecedentCase",
+      "PrecedentFindingLabel",
+      "PrecedentHint",
+      "PrecedentHintCode",
+      "PrecedentLabelCode",
+      "PrecedentPassState",
+      "PrecedentSetting",
+      "PrecedentSettingList",
+      "PrecedentSettingName",
+      "PrecedentVotes",
       "PrepareComparisonClientReportRequest",
       "PresetId",
       "PresetRevisionId",
@@ -2142,6 +2201,7 @@
       "RunFindingBlockLinks",
       "RunId",
       "RunNormReferences",
+      "RunPrecedents",
       "RunPreset",
       "RunQueueReason",
       "RunStage",
@@ -2204,6 +2264,7 @@
       "SetProjectVendorListRequest",
       "SetStageModelLayoutEnabledRequest",
       "SetStagePairCompletenessRequest",
+      "SetVectorPausedRequest",
       "SetWorkCalendarDaysRequest",
       "SetWorkSchedulePlansRequest",
       "SetWorkerIntakeRequest",
@@ -2343,6 +2404,9 @@
       "UploadDocumentVersionRequest",
       "UploadPriceListRequest",
       "UserUid",
+      "VectorControl",
+      "VectorWindow",
+      "VectorWindowState",
       "VendorListEntry",
       "VendorListId",
       "VendorListMode",

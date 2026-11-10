@@ -446,6 +446,8 @@ RUNNER_OPERATIONS_WITHOUT_A_403 = {
     # `EXEC2-SEAL-1`. The health report is called with a runner token; the enrollment exchange with an
     # enrollment secret, a principal of its own with no role to lack either.
     "reportRunnerHealth", "redeemExecutorEnrollment",
+    # `CRIT-SEAL-50` (1.51.0): the reference data of a task is asked for with the runner token that holds the task's claim.
+    "getExecutorTaskContext",
 }
 
 #: The keyed writes: every one requires `Idempotency-Key` and declares the `409` a key
@@ -464,6 +466,8 @@ WRITE_OPERATIONS = {
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",
+    # `CRIT-SEAL-50` (1.51.0): the pause of the vectors and a new revision of a setting of the Precedents programme are keyed administrator writes.
+    "setVectorPaused", "appendPrecedentSetting",
     # `UI-A-93` (1.36.0): ending an account's sessions is keyed, so an exact repeat ends nothing more.
     "endUserSessions",
     # `UI-PARITY-P0G`. Keyed like `setExecutionPaused`: a replay answers the same state and writes no second event.
@@ -1016,7 +1020,9 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
      "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue",
      "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting",
      "getExecutionDispatch", "getDecisionMemoryStatus",
-     "listExecutorHosts", "getStageModelLayout", "listModelCatalogue"}
+     "listExecutorHosts", "getStageModelLayout", "listModelCatalogue",
+     # `CRIT-SEAL-50` (1.51.0): the state of the vectors and the settings of the Precedents programme are the installation's own, with no input.
+     "getVectorControl", "listPrecedentSettings"}
 )
 
 
