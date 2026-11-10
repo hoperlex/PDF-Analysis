@@ -19,26 +19,36 @@ from auditmanager.findings.grounding import UNGROUNDED_REASONS
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = json.loads((ROOT / 'contracts/api/v1/openapi.json').read_text())
-CATEGORIES = (
+CATEGORIES_0023 = (
     'internal_contradiction', 'explicit_placeholder', 'dimensions', 'layout', 'facade',
     'roof', 'documentation', 'evacuation', 'fire_safety', 'accessibility', 'insulation', 'sound',
 )
-REASONS = (
+#: `CRIT-SEAL-50` (contract 1.51.0, migration 0064): the two categories of the groups of candidates.
+CATEGORIES = (*CATEGORIES_0023, 'drawing_discrepancy', 'cross_source')
+REASONS_0023 = (
     'quotation_absent', 'quotation_on_different_page', 'span_outside_page',
     'span_outside_block', 'span_length_mismatch', 'quote_in_recognised_text',
     'norm_label_unknown', 'norm_quote_too_short', 'norm_quote_ambiguous',
     'norm_quote_absent', 'norm_value_not_in_quote', 'stated_value_not_in_evidence',
 )
+#: `CRIT-SEAL-50`: the three refusals of the gate of block evidence, in `ck_finding_observation_ungrounded_reason` since `0064`. The contract carries
+#: no `UngroundedReason` (the AR v3 removal took it); the gate's own vocabulary (`findings.grounding.UNGROUNDED_REASONS`) takes the three when
+#: `F8-GATE` writes the gate, and until then the database knows them and the gate does not emit them.
+REASONS = (*REASONS_0023, 'block_not_in_run_geometry', 'block_crop_mismatch', 'block_quote_not_in_recognised')
 
 
 def test_closed_vocabularies_match_0023() -> None:
     schemas = CONTRACT['components']['schemas']
     assert schemas['FindingCategory']['enum'] == list(CATEGORIES)
     assert {item.value for item in models.FindingCategory} == set(CATEGORIES)
-    assert UNGROUNDED_REASONS == set(REASONS)
+    assert UNGROUNDED_REASONS == set(REASONS_0023)
     source = (ROOT / 'db/migrations/versions/20261016_0023_norm_citations.py').read_text()
-    for value in CATEGORIES[7:] + REASONS[6:]:
+    for value in CATEGORIES_0023[7:] + REASONS_0023[6:]:
         assert f'"{value}"' in source
+    # the two vocabularies 0064 adds are in the migration that adds them
+    later = (ROOT / 'db/migrations/versions/20261110_0064_precedents_seal.py').read_text()
+    for value in CATEGORIES[12:] + REASONS[12:]:
+        assert f'"{value}"' in later
 
 
 def test_citation_schema_rejects_short_quote_and_bad_identity() -> None:

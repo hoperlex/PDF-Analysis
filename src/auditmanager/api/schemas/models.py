@@ -1040,6 +1040,10 @@ class FindingCategory(str, enum.Enum):
     ACCESSIBILITY = "accessibility"
     INSULATION = "insulation"
     SOUND = "sound"
+    #: `CRIT-SEAL-50` (contract 1.51.0): the categories of the groups of candidates of the extended review published as findings
+    #: (plan-v5 section 4): a group of drawing candidates, and a group that mixes the sources of the blocks and the cross-check.
+    DRAWING_DISCREPANCY = "drawing_discrepancy"
+    CROSS_SOURCE = "cross_source"
 
 
 class Severity(str, enum.Enum):

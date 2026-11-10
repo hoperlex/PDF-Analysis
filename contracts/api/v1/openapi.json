@@ -26858,7 +26858,7 @@
       },
       "FindingCategory": {
         "type": "string",
-        "description": "Closed finding categories: seven prior categories and five v3 normative categories.",
+        "description": "Closed finding categories: seven prior categories, five v3 normative categories and, since 1.51.0, two categories of the groups of candidates of the extended review published as findings (`drawing_discrepancy`, `cross_source`).",
         "enum": [
           "internal_contradiction",
           "explicit_placeholder",
@@ -26871,7 +26871,9 @@
           "fire_safety",
           "accessibility",
           "insulation",
-          "sound"
+          "sound",
+          "drawing_discrepancy",
+          "cross_source"
         ]
       },
       "Severity": {
