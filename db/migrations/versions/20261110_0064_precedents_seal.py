@@ -18,10 +18,12 @@ The decision memory (KEEP, content side: deletable only by a forget of the case)
     (``am_guard_decision_memory_forget``: ``DELETE`` only beside a ``forget`` event of the same case in the same transaction) **and** a guard
     on ``INSERT`` (``am_guard_decision_memory_forgotten_insert``: nothing is added to a forgotten case, ``D-497`` item 1). The intent keeps its
     state transitions, so its guard is ``DELETE`` only plus a frozen-column guard on ``UPDATE``.
-``decision_memory_decision.precedent_label_at_decision`` and ``precedent_revision``
+``decision_memory_decision.precedent_label_at_decision``, ``precedent_revision`` and ``precedent_history_verdict_shown``
     The label the server was giving the finding at the moment of the expert's decision, and the revision of the pass that gave it (plan
-    section 2.1: a decision under a rejection label is not an independent vote). Written at insertion by the capture; NULL for every decision
-    written before this revision and for a decision the memory captured with no label in force known. Both or neither.
+    section 2.1: a decision under a rejection label is not an independent vote); and the verdict of the history fact (hint `p5`, the earlier
+    decision on the same document) that was shown at that moment, ``accepted`` or ``rejected``, NULL when none was shown. Written at insertion
+    by the capture; NULL for every decision written before this revision. The label and the revision: both or neither; the verdict shown is
+    independent of them.
 The product side (PRODUCT: leaves with the project)
     ``decision_memory_probe`` -- the query vector of a candidate text of a run, key ``(run_id, input_id, text_sha256)``, a foreign key to
     ``audit_run`` **only**: the finding it becomes is not known yet, and the link to the observation (a bare identity) is written after
@@ -196,7 +198,8 @@ def upgrade() -> None:
     op.execute("""
         ALTER TABLE decision_memory_decision
             ADD COLUMN precedent_label_at_decision text NULL,
-            ADD COLUMN precedent_revision integer NULL
+            ADD COLUMN precedent_revision integer NULL,
+            ADD COLUMN precedent_history_verdict_shown text NULL
     """)
     op.execute(f"""
         ALTER TABLE decision_memory_decision
@@ -205,7 +208,9 @@ def upgrade() -> None:
             ADD CONSTRAINT ck_decision_memory_decision_precedent_revision
                 CHECK (precedent_revision IS NULL OR precedent_revision >= 1),
             ADD CONSTRAINT ck_decision_memory_decision_precedent_pair
-                CHECK ((precedent_label_at_decision IS NULL) = (precedent_revision IS NULL))
+                CHECK ((precedent_label_at_decision IS NULL) = (precedent_revision IS NULL)),
+            ADD CONSTRAINT ck_decision_memory_decision_precedent_history_verdict_shown
+                CHECK (precedent_history_verdict_shown IS NULL OR precedent_history_verdict_shown IN ('accepted', 'rejected'))
     """)
 
     # --- the decision memory: block evidence --------------------------------------------------------
@@ -677,6 +682,11 @@ def upgrade() -> None:
         "likely_accepted, mixed); NULL when none was known. With precedent_revision: both or neither.';"
     )
     op.execute(
+        "COMMENT ON COLUMN decision_memory_decision.precedent_history_verdict_shown IS "
+        "'The verdict of the history fact (hint p5: the earlier decision on the same document) shown when the expert decided "
+        "(accepted or rejected); NULL when no such fact was shown.';"
+    )
+    op.execute(
         "COMMENT ON COLUMN audit_run.publication_mode IS "
         "'CRIT-SEAL-50: text_only (the old publication) or one_list (candidates of the extended review become findings); frozen at the "
         "start of the run; one_list needs a stage plan.';"
@@ -698,8 +708,9 @@ def downgrade() -> None:
     for label, query in (
         ("vector_control state",
          "SELECT EXISTS (SELECT 1 FROM vector_control WHERE paused OR window_state <> 'closed' OR window_reason IS NOT NULL)"),
-        ("decision_memory_decision.precedent_label_at_decision",
-         "SELECT EXISTS (SELECT 1 FROM decision_memory_decision WHERE precedent_label_at_decision IS NOT NULL)"),
+        ("decision_memory_decision.precedent_label_at_decision or precedent_history_verdict_shown",
+         "SELECT EXISTS (SELECT 1 FROM decision_memory_decision "
+         "WHERE precedent_label_at_decision IS NOT NULL OR precedent_history_verdict_shown IS NOT NULL)"),
         ("audit_run.publication_mode", "SELECT EXISTS (SELECT 1 FROM audit_run WHERE publication_mode <> 'text_only')"),
         ("finding_observation grounding_kind, extended_observation_ref or related_finding_uid",
          "SELECT EXISTS (SELECT 1 FROM finding_observation WHERE grounding_kind <> 'text_span' "
@@ -753,12 +764,14 @@ def downgrade() -> None:
 
     op.execute("""
         ALTER TABLE decision_memory_decision
+            DROP CONSTRAINT ck_decision_memory_decision_precedent_history_verdict_shown,
             DROP CONSTRAINT ck_decision_memory_decision_precedent_pair,
             DROP CONSTRAINT ck_decision_memory_decision_precedent_revision,
             DROP CONSTRAINT ck_decision_memory_decision_precedent_label
     """)
     op.execute("""
         ALTER TABLE decision_memory_decision
+            DROP COLUMN precedent_history_verdict_shown,
             DROP COLUMN precedent_revision,
             DROP COLUMN precedent_label_at_decision
     """)
