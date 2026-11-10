@@ -413,13 +413,20 @@ from sqlalchemy import Engine, text
 #: the assignment reference, and the plan's month and count, the setting's plan and time zone and the calendar's kind
 #: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
 #: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
+#: Resealed 2026-11-10 for ``0063_drop_ar_v3_beta`` (`AR-V3-BE-RM-01`, `R-154c`), chained after ``0062``, from this test's own observed output on a
+#: throwaway PostgreSQL (the project image, container ``am-arv3rm-pg``) migrated fresh to ``0063``: relations -2 (``ar_v3_run_group`` and
+#: ``ar_v3_run_group_member``, to 165), columns -19 (their 19, to 1753), constraints -31 (18 checks, 7 foreign keys, two primary keys and three unique
+#: constraints, to 2125), indexes -5 (two primary keys and three unique constraints, to 502), triggers -3 (the two frozen guards and the deferred group
+#: check, to 270), functions -1 (``am_ar_v3_group_complete``, to 83); ``ck_stage_result_stage_id`` and ``am_verify_norm_citation_partition`` are back to
+#: ``0002``'s and ``0023``'s text, which moves the digests of constraints and functions beside their counts. Views, extensions, sequences, policies and the
+#: state topology are byte-identical to the ``0062`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1772, "b4b711f933b981c2bec62c4500b19bd73773bc6f59f5aba507f56da6e24205b9"),
-    "relations": (167, "ef1026a801186590cb7afd9dd28d9536f98793a6e573cc21249cfae50b6db2f2"),
-    "constraints": (2156, "26ed0190df417b6a86f7ba3b6e94aee873a8f535554fd8cb0099d9eba005c2e3"),
-    "indexes": (507, "5dfa2ed9cfbd0adadc6c670ef8dbf1f84af08977501415c69502272a561b6a5e"),
-    "triggers": (273, "7cff7a6099027a986fd0df2a12896d5ef33d62030b21e95f7df7faea1eefdaf1"),
-    "functions": (84, "14338b5dc4ffcb6620a587a4fe67c558e28614758c0334090260874196f3ca3d"),
+    "columns": (1753, "3bb35fe94e449b50e7b20011096d21d4d09a4d34f4068c204a181c584079dd79"),
+    "relations": (165, "58100168ae67b591bdbdb4258e9c87b8e631efbd4c0f9102af281a3ca25ad2e4"),
+    "constraints": (2125, "c841fe25c37d03a3ce8dd8a79ae6309ceeedea3360ca0749529824b7507c284a"),
+    "indexes": (502, "667c5a0002f5010a02138584b2a58cb3956aa32b3a7f4249c663437d23eeff0f"),
+    "triggers": (270, "1f49f24dcc5cf6ec6cdeae5e70792e3d62c6e8deeb8a85cd3e311642a97e163b"),
+    "functions": (83, "69a98e62fbe22932f32f1acfce241a396b4cf55b00f38ce8b76dbd0c24443e48"),
     "views": (6, "0bd9b7927321000af88e44410f7f431c918230428ac258d472d294d62d08043e"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
