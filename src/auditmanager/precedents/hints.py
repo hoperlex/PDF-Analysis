@@ -5,7 +5,7 @@ order, and it is the priority when all three apply: the cap of two drops the las
 
 * P1, the reason for the rejections: only while the label is a rejection label shown with its push (not neutral). Its text is the comment
   of a rejecting voice, the most similar one that has a comment (a later approved pattern text will replace it).
-* P4, the critic diverges: the finding has exactly one linked candidate, with a record, and the critic's advice contradicts the precedents.
+* P4, the critic diverges: the critic reviewed the finding, it has exactly one linked candidate, and the critic's advice contradicts the precedents.
   The precedents lean to cancel (judged before the critic's veto, which would otherwise make the case impossible) and the critic says
   ``accept``, or the label is ``likely_accepted`` and the critic says ``reject``.
 * P5, the document's history: a counted vote from another version of the same document with cosine at or above the history threshold. It
@@ -69,7 +69,7 @@ def _rejection_reason(vote_set: VoteSet, as_of: datetime) -> Hint | None:
 
 
 def _critic_diverges(label: PrecedentLabel, review: CriticReview) -> Hint | None:
-    if len(review.linked) != 1:
+    if not review.reviewed or len(review.linked) != 1:
         return None
     decision = review.linked[0].decision
     if decision is None:

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 
+from auditmanager.precedents.advice import PrecedentAdvice, evaluate
 from auditmanager.precedents.models import (
     CaseComment,
     CriticCandidate,
@@ -89,3 +91,15 @@ def corpus(rejected: int, accepted: int = 0, *, projects: int = 2, prefix: str =
     for index in range(accepted):
         items.append(scored(case(f"{prefix}a{index:02d}", ACCEPTED, days_ago=300 - index, project=f"p{index % projects}"), cosine))
     return items
+
+
+def advise(
+    items: Sequence[ScoredCase] | None,
+    candidates: Sequence[CriticCandidate] = (),
+    *,
+    f: FindingContext | None = None,
+    critic_in_plan: bool = True,
+    **kwargs: object,
+) -> PrecedentAdvice:
+    """``evaluate`` at ``NOW`` for the default finding, with a critic in the plan unless a test says otherwise."""
+    return evaluate(f or finding(), items, candidates, now=NOW, critic_in_plan=critic_in_plan, **kwargs)  # type: ignore[arg-type]

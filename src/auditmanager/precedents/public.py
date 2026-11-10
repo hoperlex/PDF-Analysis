@@ -19,7 +19,7 @@ from auditmanager.precedents.budget import (
     not_fitted_line,
     select_within_budget,
 )
-from auditmanager.precedents.critic import CriticReview, link_candidates, review_of
+from auditmanager.precedents.critic import CriticReview, critic_reviewed, link_candidates, review_of
 from auditmanager.precedents.hints import MAX_HINTS_PER_FINDING, Hint, build_hints
 from auditmanager.precedents.labels import LabelPolicy, PrecedentLabel, compute_label
 from auditmanager.precedents.models import (

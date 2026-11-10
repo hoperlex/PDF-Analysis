@@ -30,6 +30,7 @@ BLOCKER_CANCEL_SHARE: Final[str] = "rejected_share_below_cancel_share"
 BLOCKER_LAST_VOTE: Final[str] = "last_vote_not_a_rejection"
 BLOCKER_PROJECTS: Final[str] = "fewer_than_two_projects"
 BLOCKER_NOT_REVIEWED: Final[str] = "not_reviewed_by_critic"
+BLOCKER_CRITIC_NOT_IN_PLAN: Final[str] = "critic_not_in_plan"
 BLOCKER_CRITIC_VETO: Final[str] = "critic_veto"
 BLOCKER_STOP_WORD: Final[str] = "stop_word"
 
@@ -131,7 +132,7 @@ def compute_label(
             blockers.append(BLOCKER_PROJECTS)
         eligible = not blockers
         if not review.reviewed:
-            blockers.append(BLOCKER_NOT_REVIEWED)
+            blockers.append(BLOCKER_NOT_REVIEWED if review.critic_in_plan else BLOCKER_CRITIC_NOT_IN_PLAN)
         if review.veto:
             blockers.append(BLOCKER_CRITIC_VETO)
         if stop_words_found:

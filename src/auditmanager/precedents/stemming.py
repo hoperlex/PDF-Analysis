@@ -6,6 +6,10 @@ dependency, and is not a claim of conformance with any library: the only contrac
 stem, and that the same input gives the same stem on every host.
 
 A word that is not wholly Cyrillic (a digit, a Latin designation) is left as it is, casefolded.
+
+Known limit, shared with the Snowball rule it follows: only what lies after the word's first vowel is stripped, so a short word whose first
+vowel is its last or last-but-one letter (шов, шва, швов) keeps its form and meets only itself. The owner lists such a word in the forms
+that matter.
 """
 
 from __future__ import annotations
