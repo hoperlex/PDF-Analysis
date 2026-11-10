@@ -59,6 +59,11 @@ MAX_SLOTS = 8
 MAX_REPORTED_CONCURRENCY = 16
 
 MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$")
+#: A string an answer may report for a model (``RunnerCatalogueEntry.accepted_reported``: 1 to 200 characters, no pattern). It is
+#: only compared with what the client reported, never put on a command line, so it is held to the contract's bound and no tighter:
+#: the stand's own catalogue names ``claude-opus-5-5[1m]``, which ``MODEL_ID_RE`` (the id the agent passes as ``--model``) refused,
+#: and the whole entry went unserved. Control characters stay out.
+REPORTED_ID_RE = re.compile(r"^[^\x00-\x1f\x7f]{1,200}$")
 EFFORT_RE = re.compile(r"^[a-z]{3,16}$")
 FAILURE_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 #: What a failed call says about the host's access: the model leaves service until the next successful check.
@@ -149,7 +154,7 @@ def parse_catalogue(raw: object) -> "tuple[tuple, list]":
             problems.append(f"entry {index} has a bad model_id")
         elif not isinstance(efforts, list) or not efforts or not all(isinstance(e, str) and EFFORT_RE.fullmatch(e) for e in efforts):
             problems.append(f"entry {index} has bad efforts")
-        elif not isinstance(reported, list) or not all(isinstance(r, str) and MODEL_ID_RE.fullmatch(r) for r in reported):
+        elif not isinstance(reported, list) or not all(isinstance(r, str) and REPORTED_ID_RE.fullmatch(r) for r in reported):
             problems.append(f"entry {index} has bad accepted_reported")
         elif (provider, model_id) in seen:
             problems.append(f"entry {index} repeats a model")
