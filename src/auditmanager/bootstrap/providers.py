@@ -43,6 +43,7 @@ from auditmanager.analysis.public import (
 from auditmanager.analysis.text import CallBinding, ModelRequest, ModelResponse, ProviderMode
 from auditmanager.bootstrap.stage_plan_providers import BoundMember, StagePlanProviders
 from auditmanager.executors.public import (
+    IDENTITY_BASIS_BY_KIND,
     ExecutorRepository,
     HostCall,
     SecretUnreadableError,
@@ -54,6 +55,7 @@ from auditmanager.executors.resolver import admit_group, group_of_revision
 from auditmanager.executors.runtime import (
     DestinationPolicy,
     KindRuntime,
+    adapter_for,
     bind_connection,
     freeze_connection,
     route_missing,
@@ -247,9 +249,20 @@ class DatabaseProviders(ProviderSource):
         if revision.settings.gateway_model != cell.model_id:
             raise DomainError(
                 ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cell_member_serves_another_model")
+        # `D-673`: the label of the call row's ``provider`` and the basis of its model identity are facts of the member's kind and revision
+        # (the kind table's ``provider_label(revision)``, ``IDENTITY_BASIS_BY_KIND``), so they are read from there. This method used to call
+        # ``bind_connection`` for them, which built a whole pull adapter that was thrown away one line later by ``build_pull_adapter`` below.
+        # What ``bind_connection`` also checked is checked here: the kind is served, and it is a channel kind (a host's member is a ``pull``
+        # connection; a kind that keeps a sealed key has nothing to do on a host).
+        entry = adapter_for(connection.kind)
+        if entry is None or entry.channel is None:
+            raise route_missing()
+        if not entry.serves(revision):
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, message="this kind of connection is not served yet",
+                field="kind", constraint="kind_not_served")
+        provider_label, identity_basis = entry.provider_label(revision), IDENTITY_BASIS_BY_KIND[connection.kind]
         runtime = self._runtime_for(session)
-        bound = bind_connection(
-            session, connection_revision_id, ring=self._ring, policy=self._policy, context=context, runtime=runtime)
         host_id, provider = split_pool(connection.capacity_pool)
         access = access_of_billing(revision.settings.billing)
         host_call = HostCall(
@@ -259,7 +272,7 @@ class DatabaseProviders(ProviderSource):
             session_factory=runtime.session_factory, revision=revision, context=context, engine=runtime.engine,
             host_call=host_call)
         return BoundMember(
-            adapter=adapter, provider_label=bound.provider_label, identity_basis=bound.identity_basis,
+            adapter=adapter, provider_label=provider_label, identity_basis=identity_basis,
             connection_revision_id=revision.revision_id, unmetered=access == "subscription", host_id=host_id)
 
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:

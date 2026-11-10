@@ -274,6 +274,7 @@ def test_a_run_on_the_stage_layout_is_bound_called_by_each_cells_model_and_held_
         assert (one.call.expected_model, one.call.cell_key, one.call.access, one.call.host_id, one.call.unmetered, one.call.check_identity) == (
             cell.model_id, cell.cell_key, "subscription", server.host_id, True, True)
         assert one.call.connection_revision_id == bound[cell.cell_key].connection_revision_id and one.call.identity_basis == "declared"
+        assert one.call.provider_label == "agent", "`D-673`: the label is the member revision's pull client, read from the revision (no adapter built for it)"
         assert one.config.model_id == cell.model_id and one.config.cell_settings == cell
     assert by_cell["text:main"].call.expected_model == SONNET and by_cell["blocks:leg1"].call.expected_model == OPUS, "not one model for the run"
 

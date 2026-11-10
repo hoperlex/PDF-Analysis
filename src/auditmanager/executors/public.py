@@ -81,6 +81,7 @@ from auditmanager.executors.image_input import (
     image_load,
 )
 from auditmanager.executors.model import (
+    IDENTITY_BASIS_BY_KIND,
     ConnectionRecord,
     ConnectionSummary,
     ProbeRecord,
@@ -464,6 +465,7 @@ __all__ = [
     "access_of_billing",
     "pair_group_name",  # HOSTS-CMP-01
     "split_pool",
+    "IDENTITY_BASIS_BY_KIND",  # HOSTS-DEBTS-01 (D-673): how a kind's model identity is known, read without building an adapter
     # EXEC2-CUTOVER-01
     "MappingEntry",
     "ModeChange",
