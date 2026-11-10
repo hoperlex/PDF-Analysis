@@ -330,6 +330,8 @@ A guard needs a test proving it can fail; both follow the `# >>> guard:` convent
 
 ### 5.3 Hints for the expert («Похожие случаи»)
 
+*Replaced 2026-11-10 by `ADR-0029` (the owner's polls `R-153q`…`R-153ar`): the panel «Подсказка: похожие случаи» and `listSimilarDecisionCases` are not built as described below. The expert gets a neutral mark in each row of «Разбор», a collapsed queue «Рекомендовано снять», other experts' comments and «Возможные нормы» in the finding card, read through `getRunPrecedents` and `getFindingPrecedents`; the votes, the thresholds and the protections are `ADR-0029` decisions 4 to 6. The text below stays as the original design.*
+
 - **Read operation `listSimilarDecisionCases(finding_uid)`.** No write on `GET`: the embedder fills
   `decision_memory_probe` for canonical observations of undecided findings ahead of time. Status `ready`,
   `not_ready` or `unavailable`; items (≤ 5, similarity floor, `basis: evidence|finding`): case id, similarity,
@@ -537,6 +539,8 @@ Sizes are relative: **S** ≈ one lane, **M** ≈ two to three lanes, **L** ≈ 
 
 M7 can run in parallel with the memory phases; M3 and M4 can run in parallel after M1.
 
+*Amended 2026-11-10 (`ADR-0029`): phase M4 is built **without the hint panel and without a measurement** (`R-153an`: «Никакие, сразу строим»). It builds the intents and the embeddings; the search is an exact scan inside a section, with no HNSW index; the producer is an offline container with no database access run in a night window (sections 3.6 «Index» and «Producer» and risk R6 are superseded for this period); and the hint operation and the panel are replaced by the precedents operations and the marks of `ADR-0029` decisions 5 and 6. The measured figures M4 was to record are replaced by the list «observed at first operation» in `ADR-0029`.*
+
 ### Built 2026-11-09 (phases M0 and M1)
 
 What exists, as built; where it differs from sections 3 and 7, this list is the fact:
@@ -662,6 +666,7 @@ them** (the owner was unreachable; the answers are recorded in `ADR-0027`). Q2, 
 - **Q4. Cross-client examples.** May a decided case from client A's document appear as an example in a provider call
   about client B's document (`R-146d`: one organisation, but `A-2`: provider side)? *Recommendation: allowed only
   within one project until you decide otherwise.*
+  *Decided 2026-11-10 by the owner (`R-153z`, `ADR-0029`): «Любой проект, целиком» — a case of any project may be shown to a model whole, with quotes. The risk is accepted (`D-291`); the delivery journal is `KEEP` and holds no text.*
 - **Q5. Who may forget.** An operator tool needing your permission reference (recommended, as for the project erase),
   or also an admin API request that an operator then executes?
 - **Q6. Crops for text evidence.** Only existing portal image-block crops in v1, or also rendered regions of text
@@ -673,11 +678,14 @@ them** (the owner was unreachable; the answers are recorded in `ADR-0027`). Q2, 
 - **Q8. Which decisions.** Only `accept`/`reject`, or also `comment`; are carried and imported decisions kept (proposed:
   kept, excluded from training, shown in hints with a label)?
   *Decided 2026-11-09 (autonomous window, by recommendation; the owner may revise): `accept` and `reject` are captured (the ledger has no `revise`), `comment` is not; carried and imported decisions are kept with their `origin_kind`.*
+  *Amended 2026-11-10 (the owner, `R-153ag`: «Своя таблица комментариев»; `ADR-0029` decision 10): `comment` events are now captured, into the table `decision_memory_comment` (`KEEP`), and the earlier comments are carried into it at a case's first ✓/✕. A comment never changes a vote. The rest of the answer stands.*
 - **Q9. Normative material.** (a) May norm text and page crops leave the host to a configured executor at all
   (`NORM-Q04`: internal use only)? (b) Page crops as PNG renders (recommended) or as PDF (a contract change)?
   (c) Per-task caps (proposed 12 paragraphs, 24 000 characters)?
+  *Answered in part 2026-11-10 (the owner, `R-153aa`: «+ картинки-кропы страниц»; `ADR-0029` decision 9): (b) PNG renders, kept in `norm_crop_render`, declared among a task's images for the AI critic's cell only when its model accepts images, at most 2 per task. (a) and (c) are not decided here; the critic's reference block has its own budget (`ADR-0029` decision 3).*
 - **Q10. Embedder.** A resident process with database access in the norms-worker image (recommended; the only way to live hints
   and dynamic prompts; latency unmeasured), or batch embedding at night only (no live hints, no dynamic prompts)?
+  *Decided 2026-11-10 (the owner, `R-153w`, `R-153ab`, `R-153ap`; `ADR-0029` decision 8): the batch alternative, as a **temporary** decision — an offline container with no database and no network in a night window, until the database and the storage move to Yandex (`docs/program/YC-MOVE-PLAN.md`) or one of the other end conditions of `ADR-0029` holds.*
 - **Q11. Fine-tuning target.** Text-only model or vision-language model, and which provider's format? It decides whether
   crops are exported and the line format.
 - **Q12. Retention.** No automatic limit for the memory, consistent with `R-146c` — confirm.
