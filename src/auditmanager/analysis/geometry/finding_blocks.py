@@ -45,9 +45,14 @@ The rule
       area, a stamp, a text block nobody read, an empty body) or with a reading the caller names doubtful (a quality flag on it) cannot match
       and cannot veto, so it is **not** passed over: the witness abstains. Without this the quotation could stand in exactly the block that
       cannot speak and a neighbour's copy would win.
-   d. *No stretch of the line is unboxed.* The touching blocks cover the line's width but for gaps of at most
-      :data:`WITNESS_MAX_GAP_CHARACTERS` characters of the line (its width divided by its number of characters), the line's two ends
-      included: a stamp's text the portal did not box, or a block it did not detect, may be exactly where the evidence stands.
+   d. *No wide stretch of the line is unboxed.* The touching blocks cover the line's width but for gaps of at most
+      :data:`WITNESS_MAX_GAP_LINE_HEIGHTS` heights of the line (the height of its box, in points: the proxy of its font size), the line's
+      two ends included: a stamp's text the portal did not box, or a block it did not detect, may be exactly where the evidence stands.
+      The unit is the line's height and not its mean character (its width divided by its number of characters) because the extractor
+      joins words at one height into one line however far apart they stand (step 2): a wide column gap makes the mean character wide,
+      and a limit of four of them then lets a label through that stands in a stretch no block boxes (`D-626`). The height does not
+      depend on how many characters the line holds or where the gaps in it are (the block index publishes no glyph widths, so a median
+      glyph width is not available).
    e. *Exactly one touching block contains the quotation*, as a run of whole words of its text (case, ``ё``/``е``, soft and end-of-line
       hyphens, whitespace and punctuation folded; a number keeps its sign and its decimal or range separator), and that block **crosses**
       the line (:data:`COVERAGE` of its height). Two matches give nothing.
@@ -81,10 +86,11 @@ portal rasterises what a viewer shows). :func:`linkable_pages` refuses such a pa
 which proves the shift, but a page whose shifted lines still fall inside it passes (`D-353`).
 
 What the second witness can get wrong, and the geometry cannot: it trusts the portal's reading. With the quotation unique on its page, the
-reading of the touching blocks all present and unflagged, and no stretch of the line unboxed, a link needs a portal that **reads a phrase
-into a block that does not print it** (the same words from the raster at a place the text layer does not have), or a text layer whose
-page text is not the page's. It is not excluded. The recognised text must be the reading of **text** blocks: the portal's description of
-an image is not what the page says and is never passed (an image block is a block without a reading, step 5c).
+reading of the touching blocks all present and unflagged, and no unboxed stretch of the line wider than two of its heights (a gutter of
+that width holds about four characters of ordinary text, fewer than the quotation's least length), a link needs a portal that **reads a
+phrase into a block that does not print it** (the same words from the raster at a place the text layer does not have), or a text layer
+whose page text is not the page's. It is not excluded. The recognised text must be the reading of **text** blocks: the portal's description
+of an image is not what the page says and is never passed (an image block is a block without a reading, step 5c).
 
 A link by geometry is a containment the arithmetic proves; a link by the witness is a choice among the blocks a line touches and is
 as good as the recognised text. The stored evidence is never touched, and no evidence is linked to a block its line does not
@@ -110,7 +116,7 @@ __all__ = [
     "Readings",
     "TOUCH_COVERAGE",
     "TextLine",
-    "WITNESS_MAX_GAP_CHARACTERS",
+    "WITNESS_MAX_GAP_LINE_HEIGHTS",
     "WITNESS_MIN_CHARACTERS",
     "fold_text",
     "link_evidence",
@@ -137,10 +143,11 @@ NEAR_COPY_MISSES_PER_WORDS: Final[int] = 4
 #: reading): a block that covers less than the :data:`COVERAGE` of a *crossing* block still may be where the evidence stands.
 TOUCH_COVERAGE: Final[float] = 0.1
 
-#: The widest stretch of a line that no touching block covers, for the second witness to be asked, in characters of that line (its
-#: width divided by its number of characters, so a line with a wide gap in it has wide "characters"): the gutter between two cells is
-#: a few characters wide, a stamp's text the portal did not box is not.
-WITNESS_MAX_GAP_CHARACTERS: Final[float] = 4.0
+#: The widest stretch of a line that no touching block covers, for the second witness to be asked, in heights of that line (the height of
+#: its box in points, the proxy of its font size: about four characters of ordinary text are two heights): the gutter between two
+#: cells is a few characters wide, a stamp's text the portal did not box is not. Not in characters of the line (its width divided by its
+#: number of characters): a line with a wide gap in it has wide "characters" and so a wide limit (`D-626`).
+WITNESS_MAX_GAP_LINE_HEIGHTS: Final[float] = 2.0
 
 #: How far a line may lie outside its page before the page is taken to be shifted, in points: the glyph boxes of a font may
 #: reach a hair past the edge of the page they are set on.
@@ -439,7 +446,7 @@ def link_evidence(
     page_texts: Mapping[int, str] | None = None,
     readings: Readings | None = None,
     witness_min_characters: int = WITNESS_MIN_CHARACTERS,
-    witness_max_gap_characters: float | None = WITNESS_MAX_GAP_CHARACTERS,
+    witness_max_gap_line_heights: float | None = WITNESS_MAX_GAP_LINE_HEIGHTS,
 ) -> tuple[str, ...]:
     """The ids of the portal blocks that hold any of ``evidence``, in the order of ``blocks``.
 
@@ -452,8 +459,8 @@ def link_evidence(
     no text in ``block_texts`` is not trusted either) and ``page_texts`` (the text layer's text of each page, which says whether the
     quotation is unique on its page), or ``readings`` (a :class:`Readings` the caller built once for them and keeps; not together with
     the three). Without ``block_texts`` or without ``page_texts`` it is the geometry alone, as before the witness.
-    ``witness_min_characters`` is the shortest folded quotation the witness is asked about, ``witness_max_gap_characters`` the widest
-    stretch of a line, in characters of that line, the touching blocks may leave uncovered (``None``: no limit; an ablation, not a
+    ``witness_min_characters`` is the shortest folded quotation the witness is asked about, ``witness_max_gap_line_heights`` the widest
+    stretch of a line, in heights of that line's box, the touching blocks may leave uncovered (``None``: no limit; an ablation, not a
     policy).
     """
     if readings is not None and (block_texts or doubtful_blocks or page_texts is not None):
@@ -493,8 +500,10 @@ def link_evidence(
             touching = [block for block in on_page if _touches(box, block)]
             if any(not readings.trusted(block.portal_block_id) for block in touching):
                 continue
-            if witness_max_gap_characters is not None and _uncovered(box, touching) > max(
-                EDGE_TOLERANCE, witness_max_gap_characters * (box[2] - box[0]) / max(1, line.char_end - line.char_start),
+            # `_uncovered` is a share of the page's width; the line's height is a share of the page's height, so it is turned into points
+            # (`* size[1]`) and back into a share of the width (`/ size[0]`) to be the same unit.
+            if witness_max_gap_line_heights is not None and _uncovered(box, touching) > max(
+                EDGE_TOLERANCE, witness_max_gap_line_heights * (box[3] - box[1]) * size[1] / size[0],
             ):
                 continue
             matching = [block for block in touching if needle in (readings.text(block.portal_block_id) or "")]

@@ -25,7 +25,7 @@ Scenarios (each prints one JSON block and writes ``<out>/<name>.json`` plus ``<o
 **The second witness (`D-450`, `D-590`).** Each result also carries the relation as ``link_evidence`` computes it with the recognised text of the
 portal's text blocks and the text layer's page texts (``figures_with_the_witness``; the witness is asked only when the quotation is unique on
 its page and every block that touches the line has a reading, `JUDGE-N2` H1), over the same stored documents, with these sensitivity runs:
-the widest unboxed stretch of a line tolerated (``gap_none``, ``gap_8``, ``gap_2`` characters instead of the shipped four), the page-uniqueness
+the widest unboxed stretch of a line tolerated (``gap_none``, ``gap_4``, ``gap_1`` heights of the line instead of the shipped two), the page-uniqueness
 condition patched out (``no_unique_gate``, an ablation: what it keeps out), the shortest
 quotation the witness is asked about set to 1 (``..._min1``), and the recognised text damaged the way a reading damages it (a word
 in ten, in three, written with a look-alike Latin letter or a letter short; ``..._noise10`` and ``..._noise30``, each also without
@@ -71,7 +71,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "tools" / "fixtures"))  # portal_bundle
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from auditmanager.analysis.geometry import finding_blocks as rule_module  # noqa: E402
-from auditmanager.analysis.geometry.finding_blocks import COVERAGE, WITNESS_MAX_GAP_CHARACTERS, WITNESS_MIN_CHARACTERS, Readings  # noqa: E402
+from auditmanager.analysis.geometry.finding_blocks import COVERAGE, WITNESS_MAX_GAP_LINE_HEIGHTS, WITNESS_MIN_CHARACTERS, Readings  # noqa: E402
 from auditmanager.analysis.stages.extraction import NORMALIZATION_DESCRIPTION  # noqa: E402
 from auditmanager.analysis.text import ProviderConfig, ProviderMode, RecordedAdapter  # noqa: E402
 from auditmanager.analysis.text.adapter import build_request  # noqa: E402
@@ -375,7 +375,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
 
         def witnessed(
             texts_given: dict[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS, *, guarded: bool = True,
-            veto: bool = True, unique: bool = True, max_gap: float | None = WITNESS_MAX_GAP_CHARACTERS,
+            veto: bool = True, unique: bool = True, max_gap: float | None = WITNESS_MAX_GAP_LINE_HEIGHTS,
         ) -> dict[str, Any]:
             """The relation with the witness; ``guarded=False`` drops the doubtful-reading abstention, ``veto=False`` the near-copy
             one and ``unique=False`` the page-uniqueness condition (each patched out of the rule for this call: an ablation, to see
@@ -389,7 +389,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
                     patched.enter_context(mock.patch.object(rule_module.Readings, "occurrences", lambda *_a, **_k: 1))
                 result = [
                     (uid, rule_links(facts, lines, sizes, blocks, unlinked, texts_given, min_characters, readings=variant,
-                                     max_gap_characters=max_gap), labels[uid])
+                                     max_gap_line_heights=max_gap), labels[uid])
                     for uid, facts in usable
                 ]
             return analyse(items=result, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=memo)
@@ -399,8 +399,8 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
         # How much each condition of the rule costs in coverage (and, on the sets where an error is possible, what it keeps out):
         # the widest unboxed stretch of a line tolerated, and the page-uniqueness condition dropped.
         sensitivity["gap_none"] = witnessed(texts, max_gap=None)
-        sensitivity["gap_8"] = witnessed(texts, max_gap=8.0)
-        sensitivity["gap_2"] = witnessed(texts, max_gap=2.0)
+        sensitivity["gap_4"] = witnessed(texts, max_gap=4.0)
+        sensitivity["gap_1"] = witnessed(texts, max_gap=1.0)
         sensitivity["no_unique_gate"] = witnessed(texts, unique=False)
         for rate in NOISE_RATES:
             damaged = {key: degrade(key, text, rate) for key, text in texts.items()}
