@@ -103,6 +103,7 @@ from auditmanager.executors.preset_commands import (
 )
 from auditmanager.executors.presets import ChosenPreset, PresetRecord, RunPresetRecord
 from auditmanager.executors.pull import (
+    DEADLINE_MARGIN_SECONDS,
     PullAdapter,
     TaskWaiter,
     answer_window,
@@ -466,6 +467,7 @@ __all__ = [
     "pair_group_name",  # HOSTS-CMP-01
     "split_pool",
     "IDENTITY_BASIS_BY_KIND",  # HOSTS-DEBTS-01 (D-673): how a kind's model identity is known, read without building an adapter
+    "DEADLINE_MARGIN_SECONDS",  # HOSTS-DEBTS-01 (D-674): what a pull call leaves of the watchdog; the comparison grants a call's window plus it
     # EXEC2-CUTOVER-01
     "MappingEntry",
     "ModeChange",

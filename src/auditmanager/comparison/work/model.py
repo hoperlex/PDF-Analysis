@@ -35,6 +35,7 @@ __all__ = [
     "HEARTBEAT_SECONDS",
     "HandlerFactory",
     "ItemAuthority",
+    "ItemWatchdog",
     "KIND_PATTERN",
     "LEASE_SECONDS",
     "LIVE_STATES",
@@ -78,6 +79,10 @@ HEARTBEAT_SECONDS: Final[float] = 20.0
 #: attempt (the `jobs` watchdog, ``ATTEMPT_WATCHDOG_SECONDS``); the render and registration
 #: children of ADR-0025 decision 8 are bounded by a 600 s wall, so an item that is still running
 #: after 900 s has lost its child or its handler.
+#:
+#: `D-674` (`HOSTS-DEBTS-01`): an item whose job froze a **cell** may run longer, but only for as long
+#: as one model call of the cell's own timeout needs (:class:`ItemWatchdog`, granted by the call's
+#: context when the call is bound). An item whose job has no cell keeps exactly this number.
 ATTEMPT_WATCHDOG_SECONDS: Final[float] = 900.0
 
 #: The shape of a ``kind`` (the CHECK of migration ``0038``).
@@ -146,6 +151,33 @@ class ItemAuthority:
     execution_token: str = field(repr=False)
 
 
+class ItemWatchdog:
+    """How long one running item may run (`D-674`): the queue's watchdog, or -- once a call of a job's frozen cell has been bound -- as long as that
+    call needs.
+
+    The heartbeat reads :meth:`limit` on every beat, so a grant made while the handler runs is seen by the thread that fences. A grant only ever
+    **raises** the limit and never lowers it: an item that has no cell never has one, and a cell with a short timeout leaves the queue's number alone
+    (the render and registration children of ADR-0025 decision 8 still need it). Plain and thread-safe: it is written by the handler's thread and
+    read by the heartbeat's."""
+
+    __slots__ = ("_granted", "_lock")
+
+    def __init__(self) -> None:
+        self._granted = 0.0
+        self._lock = threading.Lock()
+
+    def allow(self, seconds: float) -> None:
+        """The item may run for ``seconds`` from the moment its attempt began (the heartbeat's clock starts a moment later, which only
+        lengthens the fence)."""
+        with self._lock:
+            self._granted = max(self._granted, float(seconds))
+
+    def limit(self, default: float) -> float:
+        """What the watchdog allows this item: ``default`` (the queue's) unless a grant is larger."""
+        with self._lock:
+            return max(float(default), self._granted)
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class WorkItem:
     """One claimed item, as the handler sees it."""
@@ -170,6 +202,8 @@ class WorkItem:
     #: Set by the item's heartbeat when a cancel was requested while the item runs.
     cancelled: threading.Event = field(default_factory=threading.Event, repr=False)
     _repository: "ComparisonWorkRepository | None" = field(default=None, repr=False)
+    #: `D-674`: what the watchdog allows this item. The queue's number until the context of a call of a frozen cell grants more.
+    watchdog: ItemWatchdog = field(default_factory=ItemWatchdog, repr=False)
 
     def require_current(self, session: Session) -> None:
         """Lock the item and refuse (``stale_attempt`` / ``execution_token_invalid``) unless this
