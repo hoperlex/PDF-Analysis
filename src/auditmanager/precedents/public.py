@@ -44,6 +44,17 @@ from auditmanager.precedents.models import (
     PrecedentCase,
     ScoredCase,
 )
+from auditmanager.precedents.replay import (
+    REPORT_SCHEMA,
+    ReplayCase,
+    ReplayReport,
+    SectionReport,
+    SectionRule,
+    ShownLabelCounts,
+    SliceMetrics,
+    replay_history,
+    rule_failures,
+)
 from auditmanager.precedents.similarity import VECTOR_PROFILE, Thresholds, band
 from auditmanager.precedents.stemming import StopWordMatcher, compile_stop_words, stem
 from auditmanager.precedents.votes import (
