@@ -186,15 +186,20 @@ catalogue accepts (`accepted_reported`). The agent claims only while some model 
 set them in `[slots]` of `agent.toml` (`claude_code = 1`, `anthropic_api = 2`, ...).
 
 **A claim is extended only while the call produces output** (stdout or stderr bytes of the CLI, a streamed chunk or keep-alive
-of an API response) within `[host] activity_window_seconds` (120). A hung CLI or API call lets its claim lapse, is stopped and
-frees its slot. Codex prints its events when an item completes, so a Codex call that reasons silently for longer than the
-window is treated as hung: raise the window for such a host.
+of an API response) within `[host] activity_window_seconds` (600, owner ruling `R-153p`; it was 120). A hung CLI or API call lets
+its claim lapse, is stopped and frees its slot. Codex prints its events when an item completes, so a Codex call that reasons
+silently for longer than the window is treated as hung. The window is deliberately **equal to the stand's stall window**
+(`ATTEMPT_STALL_SECONDS` of `jobs/lease.py`, 600 s): a call silent that long is fenced by the stand at the moment the agent stops it. A
+host whose `agent.toml` names `activity_window_seconds` keeps that value until the line is removed.
 
 Answers carry the `provider`, the `access`, the model the CLI or API **reported** (exactly) and `usage`. The Claude Code
 command takes `--effort`; Codex gets `-c model_reasoning_effort="<effort>"`; the APIs get the effort in their own parameter
-(`output_config.effort` for Anthropic, `reasoning.effort` for OpenAI and OpenRouter) and `max_output_tokens` in theirs; the
-Claude Code command gets it as `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, the Codex command has no such limit and is bounded by the
-task's time. The service stays one process; `journalctl -u pdf-analysis-agent` shows the recount (`probe:`), the catalogue and
+(`output_config.effort` for Anthropic, `reasoning.effort` for OpenAI and OpenRouter). **No answer cap reaches any model** (owner
+ruling `R-153n`, restoring his instruction of 2026-11-06; the task carries no `max_output_tokens`): the Claude Code command is run
+without `CLAUDE_CODE_MAX_OUTPUT_TOKENS` and the variable is removed from its environment if the agent inherited it; the Codex command
+has no such limit; OpenAI Responses and OpenRouter get no output-token parameter; Anthropic Messages requires `max_tokens`, so it gets
+64000, the largest Claude answer the repository records (`api_answer.ANTHROPIC_MAX_OUTPUT_TOKENS`). The one exception is the availability
+probe (`PROBE_MAX_OUTPUT_TOKENS`, 4096), which is not an analysis answer and reaches an API provider only. A call is bound by its task's time. The service stays one process; `journalctl -u pdf-analysis-agent` shows the recount (`probe:`), the catalogue and
 the reason a key file was ignored. `sudo -u pdf-agent -H python3 /opt/pdf-analysis-agent/detect.py --host` shows what the agent
 would report, without calling a model.
 

@@ -284,9 +284,12 @@ NEVER_PASS = frozenset({
     "CODEX_API_KEY", "PDF_ANALYSIS_RUNNER_TOKEN", "AUDITMANAGER_ENROLLMENT_SECRET",
 })
 _SECRET_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_PASSWORD")
+#: Claude Code's answer ceiling.  The agent never sets it and never lets it through from its own environment: no answer cap reaches the
+#: model (`LIMITS-01`, owner ruling `R-153n`; the original strips every ``CLAUDE*`` variable for the same reason).
+NEVER_SET = frozenset({"CLAUDE_CODE_MAX_OUTPUT_TOKENS"})
 
 
-def _environment(max_output_tokens: int | None = None) -> dict[str, str]:
+def _environment() -> dict[str, str]:
     # The CLI needs its own stored login (subscription or API key), never a key or the runner token
     # inherited from the agent.  The three switches keep project, user and memory files out of
     # the prompt: the answer must depend on the task alone.
@@ -296,15 +299,15 @@ def _environment(max_output_tokens: int | None = None) -> dict[str, str]:
     )
     environment = {
         name: os.environ[name] for name in allowed
-        if name in os.environ and name not in NEVER_PASS and not name.endswith(_SECRET_SUFFIXES)
+        if name in os.environ and name not in NEVER_PASS and name not in NEVER_SET and not name.endswith(_SECRET_SUFFIXES)
     }
     environment.update({
         "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     })
-    if max_output_tokens is not None:  # host mode: the task's output ceiling, in Claude Code's own variable
-        environment["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(max_output_tokens)
+    for name in NEVER_SET:  # whatever the allowlist and the updates above did, the answer ceiling is never in the child's environment
+        environment.pop(name, None)
     return environment
 
 
@@ -467,7 +470,7 @@ def _feed_prompt(process: subprocess.Popen, prompt: bytes) -> None:
 
 def _run(task: dict, *, claude: str | None, timeout: float, model: str,
          stall: float | None = None, heartbeat: bool = False, accepted: frozenset[str] | None = None,
-         activity: object = None, should_stop: object = None, max_output_tokens: int | None = None) -> dict:
+         activity: object = None, should_stop: object = None) -> dict:
     """Run the CLI on one task and return its accepted ``result`` report.
 
     ``timeout`` is the wall-clock ceiling of the call.  With ``stall`` the call also ends after that
@@ -508,7 +511,7 @@ def _run(task: dict, *, claude: str | None, timeout: float, model: str,
             command += ["--effort", effort]
         process = subprocess.Popen(
             command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            cwd=area, env=_environment(max_output_tokens), start_new_session=True,
+            cwd=area, env=_environment(), start_new_session=True,
         )
         stream = _Stream()
         started = time.monotonic()
@@ -580,9 +583,8 @@ def _failed_turn_kind(raw: bytes | None) -> str | None:
 
 
 def run_host(task: dict, *, model: str, effort: str | None, timeout: float, claude: str | None = None,
-             accepted: tuple[str, ...] = (), activity: object = None, should_stop: object = None,
-             max_output_tokens: int | None = None) -> dict:
-    """One call for the host agent (``RUNNER_API.md`` section 10).
+             accepted: tuple[str, ...] = (), activity: object = None, should_stop: object = None) -> dict:
+    """One call for the host agent (``RUNNER_API.md`` section 10).  The CLI gets no answer cap (`R-153n`): there is no parameter for one.
 
     ``task`` holds ``system``, ``user_text`` and ``output_schema``; ``model`` is the catalogue's id (checked by the
     caller against the catalogue), ``effort`` one of its efforts.  Returns ``output_text`` (the structured answer),
@@ -595,7 +597,7 @@ def run_host(task: dict, *, model: str, effort: str | None, timeout: float, clau
     read_task(json.dumps(call, ensure_ascii=False).encode("utf-8"), model=model)
     allowed = frozenset(accepted) | {model}
     report = _run(call, claude=claude, timeout=timeout, model=model, accepted=allowed,
-                  activity=activity, should_stop=should_stop, max_output_tokens=max_output_tokens)
+                  activity=activity, should_stop=should_stop)
     reported = next(iter(report["modelUsage"]))
     text = _structured_answer(report)
     usage = report["modelUsage"][reported]

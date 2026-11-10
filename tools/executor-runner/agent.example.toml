@@ -76,7 +76,7 @@ accept_images = false
 #   # report_seconds = 60              # the heartbeat; the snapshot in it is rebuilt only when something changed
 #   # probe_interval_seconds = 21600   # a minimal call per catalogue model: when a login/key/version changed, and this often
 #   # failed_retry_seconds = 900       # ... and this often for a model whose last call failed
-#   # activity_window_seconds = 120    # a claim is extended only while the call produced output in this many seconds
+#   # activity_window_seconds = 600    # a claim is extended only while the call produced output in this many seconds (equal to the stand's stall window)
 #   # report_cli_path = false          # true: send the CLI's absolute path in the report (ADR-0026 decision 8 says it stays local)
 #   # accept_images = false            # true: serve tasks with images (Codex and the API providers; not Claude Code)
 #

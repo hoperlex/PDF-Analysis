@@ -38,8 +38,19 @@ def test_a_host_task_is_returned_with_its_members_and_a_task_without_them_is_unc
         host, plain = _client(stand).claim(1), _client(stand).claim(1)
     assert (host["provider"], host["access"], host["model_id"], host["model"], host["effort"]) == (
         "codex", "subscription", "gpt-6.1-sol", "gpt-6.1-sol", "low")
-    assert (host["max_output_tokens"], host["timeout_seconds"], host["cell_key"]) == (4000, 20, "text:main")
+    assert (host["timeout_seconds"], host["cell_key"]) == (20, "text:main")
+    assert "max_output_tokens" not in host and "max_output_tokens" not in rc.HOST_TASK_KEYS, "no answer cap among the members (`R-153n`)"
     assert not any(key in plain for key in rc.HOST_TASK_KEYS)
+
+
+@pytest.mark.parametrize("cap", [4000, 0, True, "4000", 10 ** 9])
+def test_the_cap_a_stand_older_than_the_limits_still_sent_is_ignored_not_judged(cap):
+    """The agent can be installed before the stand is upgraded: an old task carries ``max_output_tokens``, and it is neither required, nor
+    validated, nor used (`LIMITS-01`)."""
+    with H.HostStand() as stand:
+        stand.add_task(stand.host_task("ext_L1", "codex", "gpt-6.1-sol", legacy_cap=True, max_output_tokens=cap))
+        claimed = _client(stand).claim(1)
+    assert claimed["task_id"] == "ext_L1" and claimed["model_id"] == "gpt-6.1-sol"
 
 
 def test_a_task_that_names_only_model_id_gets_its_model_from_it_and_two_different_names_are_refused():
@@ -54,8 +65,8 @@ def test_a_task_that_names_only_model_id_gets_its_model_from_it_and_two_differen
 
 
 @pytest.mark.parametrize("change", [
-    {"provider": "gemini"}, {"access": "free"}, {"effort": ""}, {"effort": 3}, {"max_output_tokens": 0},
-    {"max_output_tokens": True}, {"max_output_tokens": "4000"}, {"timeout_seconds": 0}, {"timeout_seconds": 10 ** 7},
+    {"provider": "gemini"}, {"access": "free"}, {"effort": ""}, {"effort": 3}, {"timeout_seconds": True},
+    {"timeout_seconds": "20"}, {"timeout_seconds": 0}, {"timeout_seconds": 10 ** 7},
     {"cell_key": ""}, {"cell_key": None}, {"provider": None},
 ])
 def test_a_host_member_that_is_missing_or_ill_typed_makes_the_whole_task_malformed(change):

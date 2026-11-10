@@ -11,9 +11,11 @@ shows signs of life (every chunk, keep-alive comments included, is reported to `
 shows none: the host agent extends the claim only while they arrive.  A read that is silent for ``idle_timeout``
 seconds ends the call.  What each answerer sends:
 
-* the requested ``model`` exactly, the requested ``effort`` in the provider's own parameter
-  (``output_config.effort`` for Anthropic, ``reasoning.effort`` for OpenAI and OpenRouter) and
-  ``max_output_tokens`` in the provider's parameter (``max_tokens`` / ``max_output_tokens`` / ``max_tokens``);
+* the requested ``model`` exactly and the requested ``effort`` in the provider's own parameter
+  (``output_config.effort`` for Anthropic, ``reasoning.effort`` for OpenAI and OpenRouter);
+* **no answer cap** (`LIMITS-01`, owner ruling `R-153n`): OpenAI Responses and OpenRouter get no output-token parameter (it is optional there).
+  Anthropic Messages refuses a request without ``max_tokens``, so it gets :data:`ANTHROPIC_MAX_OUTPUT_TOKENS`, the largest answer the
+  repository records for a Claude model. Only the availability probe passes a ceiling of its own (``host_mode.PROBE_MAX_OUTPUT_TOKENS``);
 * the task's ``system`` text with the output schema appended as an instruction (OpenAI also gets the schema as a
   constrained ``json_schema`` format when the caller provides a strict copy) and the ``user_text`` as the user turn;
 * nothing else: no tools, no stored conversation (``store: false`` at OpenAI), no sampling parameters.
@@ -51,6 +53,11 @@ DEFAULT_BASE_URLS = {
     PROVIDER_OPENROUTER: "https://openrouter.ai/api",
 }
 ANTHROPIC_VERSION = "2023-06-01"
+#: ``max_tokens`` of an Anthropic Messages request that names no ceiling of its own: the largest Claude answer the repository records
+#: (``analysis/profiles/ar_v3/request_delivery.py``: 64000). The repository records no per-model maximum -- ``docs/program/P02_LOCK.json`` and
+#: the model catalogue hold the context and the rates only -- so this is that figure, not a provider fact; a model whose real maximum is lower
+#: would answer such a request with an invalid-request error (see the debt row candidate of `LIMITS-01`).
+ANTHROPIC_MAX_OUTPUT_TOKENS = 64_000
 _PATHS = {
     PROVIDER_ANTHROPIC: "/v1/messages",
     PROVIDER_OPENAI: "/v1/responses",
@@ -211,9 +218,11 @@ def image_data_url(raw: bytes) -> str:
 # ------------------------------------------------------------------------------------ the requests
 
 
-def build_request(provider: str, *, model: str, effort: str, max_output_tokens: int, system: str, user_text: str,
-                  output_schema: dict, images: Sequence[bytes] = (), strict_schema: Optional[dict] = None) -> dict:
-    """The JSON body of one streamed request."""
+def build_request(provider: str, *, model: str, effort: str, max_output_tokens: Optional[int] = None, system: str,
+                  user_text: str, output_schema: dict, images: Sequence[bytes] = (),
+                  strict_schema: Optional[dict] = None) -> dict:
+    """The JSON body of one streamed request.  ``max_output_tokens`` is the availability probe's ceiling; ``None`` (every analysis call) sends
+    none to OpenAI and OpenRouter and the model's maximum, :data:`ANTHROPIC_MAX_OUTPUT_TOKENS`, to Anthropic, which requires the parameter."""
     instruction = system + schema_note(output_schema)
     if provider == PROVIDER_ANTHROPIC:
         content: Any = user_text
@@ -221,14 +230,17 @@ def build_request(provider: str, *, model: str, effort: str, max_output_tokens: 
             content = [*({"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                                       "data": base64.b64encode(raw).decode("ascii")}} for raw in images),
                        {"type": "text", "text": user_text}]
-        return {"model": model, "max_tokens": max_output_tokens, "stream": True, "system": instruction,
+        return {"model": model, "max_tokens": ANTHROPIC_MAX_OUTPUT_TOKENS if max_output_tokens is None else max_output_tokens,
+                "stream": True, "system": instruction,
                 "messages": [{"role": "user", "content": content}], "output_config": {"effort": effort}}
     if provider == PROVIDER_OPENAI:
         content = [{"type": "input_text", "text": user_text},
                    *({"type": "input_image", "image_url": image_data_url(raw)} for raw in images)]
-        body: dict = {"model": model, "max_output_tokens": max_output_tokens, "stream": True, "store": False,
+        body: dict = {"model": model, "stream": True, "store": False,
                       "instructions": instruction, "reasoning": {"effort": effort},
                       "input": [{"role": "user", "content": content}]}
+        if max_output_tokens is not None:
+            body["max_output_tokens"] = max_output_tokens
         if strict_schema is not None:
             body["text"] = {"format": {"type": "json_schema", "name": "answer", "schema": strict_schema, "strict": True}}
         return body
@@ -237,11 +249,14 @@ def build_request(provider: str, *, model: str, effort: str, max_output_tokens: 
         if images:
             content = [{"type": "text", "text": user_text},
                        *({"type": "image_url", "image_url": {"url": image_data_url(raw)}} for raw in images)]
-        return {"model": model, "max_tokens": max_output_tokens, "stream": True, "usage": {"include": True},
+        body = {"model": model, "stream": True, "usage": {"include": True},
                 "reasoning": {"effort": effort},
                 # a document must not be routed to a provider that keeps it or trains on it
                 "provider": {"data_collection": "deny"},
                 "messages": [{"role": "system", "content": instruction}, {"role": "user", "content": content}]}
+        if max_output_tokens is not None:
+            body["max_tokens"] = max_output_tokens
+        return body
     raise ValueError("not an API provider")
 
 
@@ -493,8 +508,8 @@ def _quiet_close(response: Any) -> None:
         pass
 
 
-def call(provider: str, *, api_key: str, model: str, effort: str, max_output_tokens: int, timeout: float,
-         system: str, user_text: str, output_schema: dict, base_url: Optional[str] = None,
+def call(provider: str, *, api_key: str, model: str, effort: str, timeout: float,
+         system: str, user_text: str, output_schema: dict, max_output_tokens: Optional[int] = None, base_url: Optional[str] = None,
          idle_timeout: float = 120.0, images: Sequence[bytes] = (), strict_schema: Optional[dict] = None,
          accepted: Sequence[str] = (), activity: object = None, should_stop: object = None) -> ApiReply:
     """One streamed request; the answer, the reported model and the token counts.
@@ -507,7 +522,7 @@ def call(provider: str, *, api_key: str, model: str, effort: str, max_output_tok
         raise ApiError("invalid_model")
     if effort not in EFFORTS[provider]:
         raise ApiError("invalid_effort")
-    if type(max_output_tokens) is not int or max_output_tokens < 1:
+    if max_output_tokens is not None and (type(max_output_tokens) is not int or max_output_tokens < 1):
         raise ApiError("invalid_max_output_tokens")
     if not api_key:
         raise ApiError("api_auth_failed", "auth_failed")

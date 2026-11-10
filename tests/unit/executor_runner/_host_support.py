@@ -434,10 +434,15 @@ class HostStand(S.FakeRunner):
         raise AssertionError(f"no health report matched; the last was {json.dumps(self.health_reports()[-1:] or None)[:600]}")
 
     def host_task(self, task_id: str, provider: str, model_id: str, *, access: str = "subscription", effort: str = "medium",
-                  timeout_seconds: int = 20, window: int = 60, lease: int = 3, **overrides: Any) -> dict:
+                  timeout_seconds: int = 20, window: int = 60, lease: int = 3, legacy_cap: bool = False,
+                  **overrides: Any) -> dict:
+        """A host task of the stand: the six members (`LIMITS-01`, no answer cap).  ``legacy_cap`` adds the ``max_output_tokens`` that a stand
+        older than contract 1.49.0 still sent, to prove the agent reads none of it."""
         task = S.make_task(task_id, model_id, lease=lease, window=window, output_schema=TASK_SCHEMA)
         task.update({"provider": provider, "access": access, "model_id": model_id, "effort": effort,
-                     "max_output_tokens": 4000, "timeout_seconds": timeout_seconds, "cell_key": "text:main"})
+                     "timeout_seconds": timeout_seconds, "cell_key": "text:main"})
+        if legacy_cap:
+            task["max_output_tokens"] = 4000
         task.update(overrides)
         return task
 

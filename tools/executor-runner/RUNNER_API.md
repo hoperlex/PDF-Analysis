@@ -547,15 +547,15 @@ at once, so that the next report tells the stand.
 ### 10.4 Claim (`claimExecutorTask`)
 
 Called with the host token, with the body of 2.1. The agent claims only while at least one model is `verified` and a slot is
-free behind one. The task gains these members, all present or none:
+free behind one. The task gains these members, all present or none (`LIMITS-01`, contract 1.49.0: the six below; a stand older than that
+also sent `max_output_tokens`, which this agent never reads -- no answer cap reaches a model, owner ruling `R-153n`):
 
 | Member | Values |
 | --- | --- |
 | `provider`, `access` | as in 10.3 |
 | `model_id` | the catalogue's id; `model` (section 2.1) is the same string |
 | `effort` | one of that model's catalogue `efforts` |
-| `max_output_tokens` | integer, the ceiling of the answer |
-| `timeout_seconds` | integer, the time the call may take (the agent also stops at `deadline_at`) |
+| `timeout_seconds` | integer, the time the call may take: the stand's constant of the stage row or comparison kind (the original's, `R-153o`) cut to what the attempt watchdog leaves (the agent also stops at `deadline_at`) |
 | `cell_key` | opaque string naming the stage cell the task is for; logged, otherwise echoed nowhere |
 
 **The agent refuses any task whose model it does not currently report as verified for that provider and access**, and a
@@ -566,7 +566,8 @@ carries images the host does not take (or that the provider's command cannot tak
 
 ### 10.5 Extension (`extendExecutorTaskClaim`)
 
-Sent as in 2.2, but **only while the call has produced output** in the last 120 s (configurable): bytes on the CLI's stdout or
+Sent as in 2.2, but **only while the call has produced output** in the last 600 s (configurable; `R-153p`, it was 120 s -- deliberately equal to the
+stand's stall window of 600 s): bytes on the CLI's stdout or
 stderr, or a streamed chunk or keep-alive of an API response. A hung CLI or API call therefore lets its claim lapse: the agent
 stops extending, stops the call, frees its slot, and submits nothing and fails nothing (the stand's lease rule takes the task
 back). A call that is only waiting for a free slot counts as silent for this purpose.

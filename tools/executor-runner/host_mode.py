@@ -50,9 +50,13 @@ REPORT_SECONDS = 60.0
 PROBE_INTERVAL_SECONDS = 6 * 3600.0
 FAILED_RETRY_SECONDS = 900.0
 PROBE_TIMEOUT_SECONDS = 180.0
-PROBE_MAX_OUTPUT_TOKENS = 4096  # a ceiling, not a target: the check answers in a few tokens, thinking included
-#: A claim is extended only while the call has produced output in this many seconds.
-ACTIVITY_WINDOW_SECONDS = 120.0
+#: The availability probe's own ceiling on an API call (a ceiling, not a target: the check answers in a few tokens, thinking included). It is
+#: not an analysis answer and the only answer cap this agent ever sends; the Claude Code command gets none, the probe included.
+PROBE_MAX_OUTPUT_TOKENS = 4096
+#: A claim is extended only while the call has produced output in this many seconds (`R-153p`: 600, up from 120). It is deliberately equal to
+#: the server's stall window (``ATTEMPT_STALL_SECONDS`` of ``jobs/lease.py``): a call that is silent this long is fenced by the stand at the same
+#: moment the agent stops it, so neither gives up on a long, silent reasoning (Codex prints its events when an item completes) before the other.
+ACTIVITY_WINDOW_SECONDS = 600.0
 #: Concurrent calls per provider: one on a subscription, two on an API (plan section 5, point 8).
 DEFAULT_SLOTS = {detect.ACCESS_SUBSCRIPTION: 1, detect.ACCESS_API: 2}
 MAX_SLOTS = 8
@@ -648,7 +652,8 @@ class HostRuntime:
             raise HostFailure("timeout", "no time remains before the task deadline")
         call = {"system": task["system"], "user_text": task["user_text"], "output_schema": task["output_schema"]}
         try:
-            return self.dispatch(facts, model, task["effort"], call, max_output_tokens=task["max_output_tokens"],
+            # No answer cap (`R-153n`): the task carries none and `dispatch` is given none; an API provider that requires one gets the model's maximum.
+            return self.dispatch(facts, model, task["effort"], call,
                                  timeout=timeout, activity=activity, should_stop=should_stop, local_images=local_images)
         except HostFailure as error:
             if error.code in ACCESS_KINDS:
@@ -658,9 +663,12 @@ class HostRuntime:
             raise
 
     def dispatch(self, facts: detect.ProviderFacts, model: CatalogueModel, effort: str, call: Mapping, *,
-                 max_output_tokens: int, timeout: float, activity: Activity, should_stop: Callable[[], str],
-                 local_images: tuple = ()) -> dict:
-        """One call to the answerer of the provider; its errors become :class:`HostFailure` or :class:`Stopped`."""
+                 timeout: float, activity: Activity, should_stop: Callable[[], str],
+                 local_images: tuple = (), max_output_tokens: Optional[int] = None) -> dict:
+        """One call to the answerer of the provider; its errors become :class:`HostFailure` or :class:`Stopped`.
+
+        ``max_output_tokens`` is the availability probe's ceiling and nothing else (``None`` for every analysis call, `R-153n`). It reaches an
+        API provider only; the Claude Code and Codex commands never get an answer cap, a probe included."""
         provider = model.provider
         if local_images and provider == detect.PROVIDER_CLAUDE_CODE:
             raise HostFailure("image_input_unsupported", "the Claude Code command takes no image")
@@ -668,8 +676,7 @@ class HostRuntime:
             if provider == detect.PROVIDER_CLAUDE_CODE:
                 reply = claude_answer.run_host(
                     call, model=model.model_id, effort=effort, timeout=timeout, claude=facts.cli_path,
-                    accepted=model.accepted_reported, activity=activity, should_stop=should_stop,
-                    max_output_tokens=max_output_tokens)
+                    accepted=model.accepted_reported, activity=activity, should_stop=should_stop)
             elif provider == detect.PROVIDER_CODEX:
                 extra: dict = {}
                 if local_images:

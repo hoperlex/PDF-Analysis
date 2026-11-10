@@ -3,8 +3,8 @@
 * ``claude_answer.run_host`` and ``codex_answer.run_host`` serve any catalogue model, pass the effort, return the model
   the CLI itself reported (exactly), classify an access failure and keep every key out of the child's environment;
 * ``api_answer.call`` speaks the streamed Anthropic Messages, OpenAI Responses and OpenRouter chat completions, sends the
-  model, effort and ``max_output_tokens``, returns the reported model and the usage, times out on silence and on the
-  total, and never lets the key reach an exception, a message or a return value.
+  model and effort and **no answer cap** (`LIMITS-01`: Anthropic, which requires one, gets the model's maximum), returns the reported model
+  and the usage, times out on silence and on the total, and never lets the key reach an exception, a message or a return value.
 """
 
 from __future__ import annotations
@@ -72,14 +72,29 @@ def test_claude_serves_a_catalogue_model_with_its_effort_and_returns_what_the_cl
     cli = H.make_fake(tmp_path, "claude")
     activity = Activity()
     reply = claude_answer.run_host(_claude_task(), model="claude-opus-5-5", effort="medium", timeout=20, claude=str(cli),
-                                   activity=activity, max_output_tokens=4000)
+                                   activity=activity)
     assert reply == {"output_text": '{"findings":[]}', "reported_model": "claude-opus-5-5", "input_tokens": 24, "output_tokens": 3}
     call = H.model_calls(tmp_path)[0].split()
     assert call[call.index("--model") + 1] == "claude-opus-5-5" and call[call.index("--effort") + 1] == "medium"
     assert activity.touches >= 2, "the start and the stream's bytes are signs of life"
     env = json.loads((tmp_path / "last_env_values.json").read_text())
-    assert env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == "4000"
+    assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" not in env, "`R-153n`: the CLI is run without an answer ceiling"
     assert "claude-opus-5-5" not in claude_answer.ALLOWED_MODELS, "the single-model command line keeps its own two models"
+
+
+def test_the_claude_command_never_gets_an_answer_cap_even_when_the_agents_environment_has_one(tmp_path, monkeypatch):
+    """`R-153n`: ``CLAUDE_CODE_MAX_OUTPUT_TOKENS`` is never set and is removed from the child's environment if the agent inherited it.  There is no
+    parameter left through which a caller could pass a cap: the guard that would fail if one came back."""
+    import inspect
+
+    monkeypatch.setenv("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "999")
+    cli = H.make_fake(tmp_path, "claude")
+    claude_answer.run_host(_claude_task(), model="claude-opus-5-5", effort="medium", timeout=20, claude=str(cli))
+    assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" not in json.loads((tmp_path / "last_env_values.json").read_text())
+    assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" not in claude_answer._environment()
+    assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" in claude_answer.NEVER_SET
+    for function in (claude_answer._environment, claude_answer.run_host, claude_answer._run):
+        assert "max_output_tokens" not in inspect.signature(function).parameters, function.__name__
 
 
 def test_the_exact_reported_string_is_returned_when_the_catalogue_accepts_it(tmp_path):
@@ -252,14 +267,14 @@ PROVIDERS = [
 
 
 def _call(api, provider, model, effort, **kwargs):
-    base = dict(api_key=KEY, model=model, effort=effort, max_output_tokens=4321, timeout=20, system=TASK["system"],
+    base = dict(api_key=KEY, model=model, effort=effort, timeout=20, system=TASK["system"],
                 user_text=TASK["user_text"], output_schema=TASK["output_schema"], base_url=api.url, idle_timeout=5)
     base.update(kwargs)
     return api_answer.call(provider, **base)
 
 
 @pytest.mark.parametrize("provider,model,path,effort", PROVIDERS)
-def test_each_api_answerer_sends_the_model_effort_and_ceiling_and_returns_the_reported_model_and_usage(provider, model, path, effort):
+def test_each_api_answerer_sends_the_model_effort_and_no_cap_and_returns_the_reported_model_and_usage(provider, model, path, effort):
     with H.FakeApi() as api:
         activity = Activity()
         reply = _call(api, provider, model, effort, activity=activity)
@@ -269,7 +284,9 @@ def test_each_api_answerer_sends_the_model_effort_and_ceiling_and_returns_the_re
     assert (reply.input_tokens, reply.output_tokens) == {"anthropic_api": (30, 9), "openai_api": (31, 8), "openrouter_api": (33, 7)}[provider]
     assert body["model"] == model and body["stream"] is True
     ceiling = body.get("max_tokens") or body.get("max_output_tokens")
-    assert ceiling == 4321
+    # `R-153n`: OpenAI and OpenRouter get no output-token parameter; Anthropic requires one and gets the model's maximum
+    assert ceiling == (api_answer.ANTHROPIC_MAX_OUTPUT_TOKENS if provider == "anthropic_api" else None)
+    assert api_answer.ANTHROPIC_MAX_OUTPUT_TOKENS == 64_000
     efforts = body.get("output_config", {}).get("effort") or body.get("reasoning", {}).get("effort")
     assert efforts == effort
     assert "findings" in json.dumps(body), "the output schema is part of what the model is told"
@@ -284,6 +301,19 @@ def test_each_api_answerer_sends_the_model_effort_and_ceiling_and_returns_the_re
         assert body["store"] is False
     if provider == "openrouter_api":
         assert body["provider"] == {"data_collection": "deny"}
+
+
+def test_a_probe_ceiling_is_sent_only_when_the_caller_names_one():
+    """The availability probe passes its own ceiling to an API call; an analysis call passes none (`R-153n`)."""
+    for provider, key in (("anthropic_api", "max_tokens"), ("openai_api", "max_output_tokens"), ("openrouter_api", "max_tokens")):
+        capped = api_answer.build_request(provider, model="m", effort="low", max_output_tokens=4096, system="s", user_text="u", output_schema={})
+        assert capped[key] == 4096
+        uncapped = api_answer.build_request(provider, model="m", effort="low", system="s", user_text="u", output_schema={})
+        assert uncapped.get(key) == (64_000 if provider == "anthropic_api" else None)
+        assert key in uncapped if provider == "anthropic_api" else key not in uncapped
+    for provider in ("openai_api", "openrouter_api"):
+        body = api_answer.build_request(provider, model="m", effort="low", system="s", user_text="u", output_schema={})
+        assert not {"max_tokens", "max_output_tokens", "max_completion_tokens"} & set(body), provider
 
 
 def test_openai_gets_a_strict_schema_when_the_caller_has_one_and_the_others_never_do():
@@ -363,7 +393,8 @@ def test_what_the_model_returns_is_one_compact_json_object_or_an_error():
 def test_the_arguments_are_checked_before_a_request_is_made():
     with H.FakeApi() as api:
         for kwargs, code in (({"effort": "ludicrous"}, "invalid_effort"), ({"model": "a b"}, "invalid_model"),
-                             ({"max_output_tokens": 0}, "invalid_max_output_tokens"), ({"api_key": ""}, "api_auth_failed")):
+                             ({"max_output_tokens": 0}, "invalid_max_output_tokens"), ({"max_output_tokens": True}, "invalid_max_output_tokens"),
+                             ({"api_key": ""}, "api_auth_failed")):
             with pytest.raises(api_answer.ApiError, match=code):
                 _call(api, "anthropic_api", kwargs.pop("model", "claude-opus-5-5"), kwargs.pop("effort", "medium"), **kwargs)
         assert api.requests == []

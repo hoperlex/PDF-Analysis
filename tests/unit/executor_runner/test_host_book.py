@@ -311,11 +311,22 @@ def test_a_provider_never_runs_more_calls_than_its_slots_even_under_contention()
 # --------------------------------------------------------------------------------------------- config
 
 
+def test_the_agents_silence_window_is_600_seconds_and_equals_the_stands_stall_window():
+    """`R-153p`: a claim is extended only while the call produced output in the last 600 s (it was 120).  The window is deliberately the stand's own
+    stall window (``ATTEMPT_STALL_SECONDS``), so a silent call is stopped by the agent and fenced by the stand together."""
+    from auditmanager.jobs.lease import ATTEMPT_STALL_SECONDS
+
+    assert host_mode.ACTIVITY_WINDOW_SECONDS == 600.0
+    assert host_mode.ACTIVITY_WINDOW_SECONDS == float(ATTEMPT_STALL_SECONDS)
+    assert host_mode.parse_host_config({}, {}, {}).activity_window_seconds == 600.0
+    assert host_mode.parse_host_config({"activity_window_seconds": 90}, {}, {}).activity_window_seconds == 90.0, "an explicit setting still wins"
+
+
 def test_the_host_config_defaults_and_its_checks():
     cfg = host_mode.parse_host_config({}, {}, {})
     assert cfg.key_file == "/etc/pdf-analysis-agent/keys.env" and cfg.slots == {} and cfg.report_cli_path is False
     assert (cfg.detect_seconds, cfg.report_seconds, cfg.probe_interval_seconds) == (60.0, 60.0, 21600.0)
-    assert (cfg.failed_retry_seconds, cfg.activity_window_seconds, cfg.accept_images) == (900.0, 120.0, False)
+    assert (cfg.failed_retry_seconds, cfg.activity_window_seconds, cfg.accept_images) == (900.0, 600.0, False)
     custom = host_mode.parse_host_config({"key_file": "/srv/keys.env", "probe_interval_seconds": 3600, "report_cli_path": True},
                                          {"codex": 2}, {"anthropic_base_url": "http://127.0.0.1:9999"})
     assert custom.key_file == "/srv/keys.env" and custom.probe_interval_seconds == 3600.0 and custom.report_cli_path is True

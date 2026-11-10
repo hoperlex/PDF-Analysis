@@ -466,7 +466,7 @@ def test_an_api_key_in_the_key_file_makes_a_provider_that_is_checked_called_and_
         assert answer["body"]["reported_model"] == "claude-opus-5-5" and answer["body"]["usage"] == {"input_tokens": 30, "output_tokens": 9}
         assert api.of("/v1/messages")[-1]["headers"]["x-api-key"] == KEY_A
         assert api.of("/v1/messages")[-1]["body"]["output_config"] == {"effort": "high"}
-        assert api.of("/v1/messages")[-1]["body"]["max_tokens"] == 4000
+        assert api.of("/v1/messages")[-1]["body"]["max_tokens"] == 64_000, "Anthropic requires max_tokens: the model's maximum"
         everything = json.dumps([r["body"] for r in host.stand.requests]) + host.log
         for secret in (KEY_A, KEY_O, "sk-ant-", "sk-proj-"):
             assert secret not in everything, "a key never travels to the stand and never reaches a log"
@@ -476,6 +476,29 @@ def test_an_api_key_in_the_key_file_makes_a_provider_that_is_checked_called_and_
         seen = (host.claude_dir / "last_env_values.json").read_text()
         for name, value in PROVIDER_ENV.items():
             assert name not in seen and value not in seen
+
+
+def test_no_answer_cap_reaches_a_model_even_when_an_older_stand_or_the_agents_own_environment_names_one(make_host, monkeypatch):
+    """`LIMITS-01` (`R-153n`): the agent sends no answer cap on any analysis call.  The task of a stand older than contract 1.49.0 still carries
+    ``max_output_tokens`` (``legacy_cap``) and the agent's environment names ``CLAUDE_CODE_MAX_OUTPUT_TOKENS``; neither reaches a model.  Anthropic
+    requires ``max_tokens``, so it gets the model's maximum (64000); OpenAI gets none.  The availability probe keeps its own 4096 on an API call."""
+    monkeypatch.setenv("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "999")
+    with H.FakeApi() as api:
+        host = make_host(claude={}, keys=f"ANTHROPIC_API_KEY={KEY_A}\nOPENAI_API_KEY={KEY_O}\n", api=api)
+        host.stand.wait_report(lambda r: H.model_state(r, "anthropic_api", "claude-opus-5-5") == "verified"
+                               and H.model_state(r, "openai_api", "gpt-6.1-sol") == "verified" and host.verified(r))
+        assert api.of("/v1/messages")[0]["body"]["max_tokens"] == 4096 and api.of("/v1/responses")[0]["body"]["max_output_tokens"] == 4096, \
+            "the probe is not an analysis answer: its own ceiling stays"
+        probes = {path: len(api.of(path)) for path in ("/v1/messages", "/v1/responses")}
+        host.stand.add_task(host.stand.host_task("ext_C1", "claude_code", "claude-sonnet-5-5", effort="low", legacy_cap=True))
+        host.stand.add_task(host.stand.host_task("ext_C2", "anthropic_api", "claude-opus-5-5", access="api", effort="high", legacy_cap=True))
+        host.stand.add_task(host.stand.host_task("ext_C3", "openai_api", "gpt-6.1-sol", access="api", effort="high", legacy_cap=True))
+        host.stand.wait_for("answer", 3, timeout=40)
+        seen = json.loads((host.claude_dir / "last_env_values.json").read_text())
+        assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" not in seen, "the CLI is run without an answer ceiling, whatever the agent's own environment says"
+        messages, responses = api.of("/v1/messages")[probes["/v1/messages"]:], api.of("/v1/responses")[probes["/v1/responses"]:]
+        assert [m["body"]["max_tokens"] for m in messages] == [64_000], "Anthropic's required parameter: the model's maximum, not the task's 4000"
+        assert len(responses) == 1 and "max_output_tokens" not in responses[0]["body"] and "max_tokens" not in responses[0]["body"]
 
 
 def test_a_rotated_key_is_noticed_checked_again_and_used_at_once(make_host):

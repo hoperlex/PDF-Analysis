@@ -55,10 +55,11 @@ RUNNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{56}$")
 HOST_ID_RE = re.compile(r"^exh_[0-9A-HJKMNP-TV-Z]{26}$")
 HOST_PROVIDERS = ("claude_code", "codex", "anthropic_api", "openai_api", "openrouter_api")
 HOST_ACCESSES = ("subscription", "api")
-HOST_TASK_KEYS = {"provider": str, "access": str, "model_id": str, "effort": str, "max_output_tokens": int,
-                  "timeout_seconds": int, "cell_key": str}
+#: The six members of a host task.  A task of a stand older than `LIMITS-01` also carries ``max_output_tokens``; this agent never reads it (no
+#: answer cap reaches a model, `R-153n`), so it is not among the keys and its presence or absence changes nothing.  That is what lets the agent
+#: be installed before the stand is upgraded.
+HOST_TASK_KEYS = {"provider": str, "access": str, "model_id": str, "effort": str, "timeout_seconds": int, "cell_key": str}
 MAX_HOST_TIMEOUT_SECONDS = 86400
-MAX_HOST_OUTPUT_TOKENS = 10_000_000
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 BLOCK_ID_RE = re.compile(r"^blk_[0-9a-f]{32}$")
 #: The opaque crop reference of a comparison crop (the contract's pattern). Echoed, never parsed.
@@ -244,15 +245,14 @@ def serves_images(task: dict, declared: int) -> bool:
 
 def valid_host_task(task: dict) -> bool:
     """Whether the host members of a claimed task are all there and well typed (``HOSTS-AGENT-01``): ``provider``,
-    ``access``, ``model_id``, ``effort``, ``max_output_tokens``, ``timeout_seconds`` and ``cell_key``.  ``model``
-    is the same string as ``model_id``."""
+    ``access``, ``model_id``, ``effort``, ``timeout_seconds`` and ``cell_key``.  ``model`` is the same string as
+    ``model_id``."""
     for key, kind in HOST_TASK_KEYS.items():
         value = task.get(key)
         if type(value) is not kind or (kind is str and not value):
             return False
     return (task["provider"] in HOST_PROVIDERS and task["access"] in HOST_ACCESSES
             and task["model_id"] == task["model"]
-            and 1 <= task["max_output_tokens"] <= MAX_HOST_OUTPUT_TOKENS
             and 1 <= task["timeout_seconds"] <= MAX_HOST_TIMEOUT_SECONDS
             and len(task["effort"]) <= 16 and len(task["cell_key"]) <= 200)
 
