@@ -56,7 +56,7 @@ _RUNNER_422 = (
 
 class ExecutorTaskContextPort(Protocol):
     """`CTX-STAND` (contract 1.51.0): what answers ``getExecutorTaskContext``. The shipped implementation is the runner adapter's method over
-    ``executors.public.get_task_context``; the composition root hands it to :func:`build_runner_routes`. ``None`` keeps the sealed answer."""
+    ``executors.public.get_task_context``; the composition root hands it to :func:`build_task_context_route`. With none the route sleeps as sealed."""
 
     def get_task_context(self, *, runner: RunnerIdentity, task_id: str, kind: str) -> models.ExecutorTaskContext: ...
 
@@ -66,9 +66,14 @@ class ModelNotTheTasks(Exception):
     ``on_mismatch`` it is given; the router turns it into the 422 below."""
 
 
-def build_task_context_route(router: APIRouter, task_context: ExecutorTaskContextPort) -> None:
+def build_task_context_route(router: APIRouter, task_context: ExecutorTaskContextPort | None = None) -> None:
     """``getExecutorTaskContext`` -- `CRIT-SEAL-50` sealed it asleep in ``api/routers/precedents.py``; `CTX-STAND` serves it from here, beside the
-    runner's other operations. The declaration is the seal's, word for word, so the contract's document does not move."""
+    runner's other operations. The declaration is the seal's, word for word, so the contract's document does not move.
+
+    **Dormant until wired.** Nothing in this tree calls the builder: the seal's sleeping route in ``precedents.py`` still declares the operation. The
+    integrator's move is one step: delete that route, call this builder (as ``build_runner_routes`` is called) with the runner adapter as the port.
+    With no port the route is declared and answers what the seal answered, ``503 dependency_unavailable`` with ``dependency: executor_task_context``,
+    so the served document is the same whether or not a port stands behind it."""
 
     @router.post(
         "/runner/tasks/{task_id}/context", operation_id="getExecutorTaskContext", tags=_TAGS,
@@ -93,15 +98,13 @@ def build_task_context_route(router: APIRouter, task_context: ExecutorTaskContex
     def get_executor_task_context(
         identity: CurrentRunner, task_id: Annotated[models.ExecutorTaskId, Path()], body: models.ExecutorTaskContextRequest,
     ) -> WireResponse:
+        if task_context is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="executor_task_context")
         view = task_context.get_task_context(runner=identity, task_id=task_id, kind=body.kind.value)
         return json_response(200, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
 
-def build_runner_routes(router: APIRouter, runner: RunnerPort, task_context: ExecutorTaskContextPort | None = None) -> None:
-    """The pull channel's routes. ``task_context`` (`CTX-STAND`) is optional with a default, for the reason ``blocks`` gives in ``build_router``:
-    without it ``getExecutorTaskContext`` stays the seal's sleeping route in ``api/routers/precedents.py`` and nothing here registers it."""
-    if task_context is not None:
-        build_task_context_route(router, task_context)
+def build_runner_routes(router: APIRouter, runner: RunnerPort) -> None:
     @router.post(
         "/executor-connections/{connection_id}/runner-tokens",
         operation_id="issueRunnerToken", tags=_TAGS, status_code=201,

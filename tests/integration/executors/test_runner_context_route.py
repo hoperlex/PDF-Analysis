@@ -45,13 +45,15 @@ class StubContext:
         return models.ExecutorTaskContext.model_validate({**self.answer, "kind": kind})
 
 
-def surface_of(port: StubContext | None) -> Any:
+def surface_of(port: StubContext | None, *, moved: bool = True) -> Any:
+    """The tree's router; with ``moved`` the seal's sleeping route is taken out and ``build_task_context_route`` declares the operation in its place (what
+    the composition root does when it wires the lane), with ``port`` behind it or, for ``None``, nothing."""
     router = build_router(
         projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
         credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
         registrations=driver.SuiteRegistrationAdapter(), runner=StubRunner())  # type: ignore[arg-type]
-    if port is not None:
+    if moved:
         router.routes[:] = [route for route in router.routes if getattr(route, "operation_id", None) != OPERATION]
         build_task_context_route(router, port)
     return driver.Surface(router)
@@ -116,27 +118,32 @@ def test_the_ports_refusals_are_the_envelopes() -> None:
     assert conflict.status == 409 and conflict.json()["details"]["conflict_reason"] == "claim_lost"
 
 
-def test_without_a_port_the_seals_sleeping_route_is_all_there_is() -> None:
-    port_less = surface_of(None)
-    answer = post(port_less)
-    assert answer.status == 503 and answer.json()["details"]["dependency"] == "executor_task_context"
-    assert [route.operation_id for route in port_less.routes].count(OPERATION) == 1
+def test_the_moved_route_without_a_port_sleeps_exactly_as_the_seal_did() -> None:
+    surface = surface_of(None)
+    answer = post(surface)
+    assert answer.status == 503 and answer.json()["error_code"] == "dependency_unavailable"
+    assert answer.json()["details"]["dependency"] == "executor_task_context"
+    assert [route.operation_id for route in surface.routes].count(OPERATION) == 1
 
 
-def test_build_runner_routes_registers_the_served_route_only_when_it_is_given_a_port() -> None:
+def test_this_tree_is_dormant_the_seals_route_is_all_it_declares_and_it_still_sleeps() -> None:
+    """Nothing calls ``build_task_context_route`` here: the runner's own builder does not declare the operation, and the router as built is the seal's."""
     from fastapi import APIRouter
 
-    without, with_port = APIRouter(), APIRouter()
-    build_runner_routes(without, StubRunner())  # type: ignore[arg-type]
-    build_runner_routes(with_port, StubRunner(), StubContext())  # type: ignore[arg-type]
-    names = lambda router: sorted(route.operation_id for route in router.routes)  # noqa: E731
-    assert OPERATION not in names(without) and names(with_port) == sorted([*names(without), OPERATION])
+    runners = APIRouter()
+    build_runner_routes(runners, StubRunner())  # type: ignore[arg-type]
+    assert OPERATION not in [route.operation_id for route in runners.routes]
+    sealed = surface_of(None, moved=False)
+    answer = post(sealed)
+    assert answer.status == 503 and answer.json()["details"]["dependency"] == "executor_task_context"
+    assert [route.operation_id for route in sealed.routes].count(OPERATION) == 1
 
 
 def test_the_declaration_is_the_seals_word_for_word() -> None:
     """Moving the route from ``precedents.py`` to ``runner.py`` leaves the served document unchanged: the operation's whole path item is equal."""
     sealed = create_documentation_app().openapi()
-    moved = surface_of(StubContext()).app.openapi()
     path = next(item for item in sealed["paths"] if item.endswith("/runner/tasks/{task_id}/context"))
-    assert sealed["paths"][path] == moved["paths"][path]
-    assert sorted(sealed["paths"]) == sorted(moved["paths"]), "no operation was added or lost by the move"
+    for port in (StubContext(), None):
+        moved = surface_of(port).app.openapi()
+        assert sealed["paths"][path] == moved["paths"][path], "served or sleeping, the operation's declaration is the same"
+        assert sorted(sealed["paths"]) == sorted(moved["paths"]), "no operation was added or lost by the move"
