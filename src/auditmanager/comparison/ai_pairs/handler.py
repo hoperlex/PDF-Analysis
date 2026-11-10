@@ -244,7 +244,7 @@ class PairCheckHandler:
         title = self._pairs.require_document(session, job.project_uid, job.document_uid)
         return PlanContext(
             project_uid=job.project_uid, model_identity=job.pinned_model, provider_mode=job.provider_mode, order=order,
-            page_counts=counts, facts=facts, document_title=title,
+            page_counts=counts, facts=facts, document_title=title, cell=job.cell,
         )
 
     def _obtain(self, item: WorkItem, job: AiJobRecord, context: PlanContext, plan: CallPlan) -> _Obtained:

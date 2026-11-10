@@ -18,12 +18,16 @@ import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.comparison.ai_jobs.model import cell_key_document
 from auditmanager.shared.identity import ComparisonAiSheetItemId, ComparisonSheetDescriptionId
+
+if TYPE_CHECKING:
+    from auditmanager.analysis.public import CellSettings
 
 __all__ = [
     "AiSheetRepository",
@@ -180,12 +184,15 @@ def prompt_version_of(version: str, digest: str) -> str:
 
 
 def content_key(
-    *, project_uid: str, kind: str, subject_key: str, prompt_version: str, model: str,
+    *, project_uid: str, kind: str, subject_key: str, prompt_version: str, model: str, cell: "CellSettings | None" = None,
 ) -> str:
     """The content key of a description (``UNIQUE (project_uid, content_key)``): the project (a description is reused within a project
     only, ADR-0025 decision 15), what is described (the content key of the stored result, or of the page profile of a single sheet),
-    the prompt version and the pinned model. Nothing else: not the job, the pair, the time, the user."""
-    document = {"v": 1, "project": project_uid, "kind": kind, "subject": subject_key, "prompt": prompt_version, "model": model}
+    the prompt version and the pinned model -- and, for a job that froze a stage-layout cell, the cell's model, effort and answer limit
+    (`D-675`; a job with no cell has the key it always had). Nothing else: not the job, the pair, the time, the user."""
+    document: dict[str, Any] = {"v": 1, "project": project_uid, "kind": kind, "subject": subject_key, "prompt": prompt_version, "model": model}
+    if cell is not None:
+        document["cell"] = cell_key_document(cell)
     encoded = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
