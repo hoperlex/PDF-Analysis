@@ -362,8 +362,9 @@ def upgrade() -> None:
             state_changed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
             CONSTRAINT pk_decision_memory_probe PRIMARY KEY (run_id, input_id, text_sha256),
             CONSTRAINT ck_decision_memory_probe_poison_pair CHECK ((state = 'poisoned') = (poison_reason IS NOT NULL)),
-            CONSTRAINT ck_decision_memory_probe_vector_pair
-                CHECK ((state = 'done') = (embedding IS NOT NULL AND embedding_sha256 IS NOT NULL AND model_revision IS NOT NULL)),
+            CONSTRAINT ck_decision_memory_probe_vector_pair CHECK ((state = 'done') = (embedding IS NOT NULL)),
+            CONSTRAINT ck_decision_memory_probe_vector_whole
+                CHECK ((embedding IS NULL) = (embedding_sha256 IS NULL) AND (embedding IS NULL) = (model_revision IS NULL)),
             CONSTRAINT ck_decision_memory_probe_unit_norm CHECK (embedding IS NULL OR {_UNIT_NORM})
         )
     """)
