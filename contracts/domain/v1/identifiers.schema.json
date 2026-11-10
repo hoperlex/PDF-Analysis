@@ -36,13 +36,13 @@
       "const": "auditmanager.domain.identifiers"
     },
     "contract_version": {
-      "const": "1.49.0"
+      "const": "1.50.0"
     },
     "supersedes": {
-      "const": "1.48.0"
+      "const": "1.49.0"
     },
     "candidate_revision": {
-      "const": 66,
+      "const": 67,
       "description": "Review round of this contract. At the 1.0.0 seal it is the sealed round: it is pinned here so the contract cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned, and after the seal such an edit follows the freeze-break and version procedure of VERSIONING_AND_FREEZE_POLICY.md."
     },
     "revision_note": {
@@ -136,7 +136,6 @@
         "worker_id",
         "audit_event_id",
         "erasure_request_id",
-        "ar_v3_run_group_id",
         "norm_custody_admission_id",
         "norm_custody_binding_id",
         "norm_repair_call_id",
@@ -317,7 +316,6 @@
         "Worker",
         "AuditEvent",
         "ErasureRequest",
-        "ArV3RunGroup",
         "NormCustodyAdmission",
         "NormCustodyBinding",
         "NormRepairCall",
@@ -497,7 +495,6 @@
           "erasure_request_id",
           "user_uid",
           "request_id",
-          "ar_v3_run_group_id",
           "stage_ai_unit_id",
           "stage_ai_review_id",
           "stage_ai_classification_id",
@@ -550,7 +547,6 @@
                 "import_id",
                 "blob_id",
                 "run_id",
-                "ar_v3_run_group_id",
                 "job_id",
                 "attempt_id",
                 "lease_id",

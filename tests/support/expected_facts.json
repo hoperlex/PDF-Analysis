@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 296,
+    "path_count": 290,
     "operations": [
       [
         "DELETE",
@@ -17,21 +17,6 @@
         "GET",
         "/analysis/profiles",
         "listAnalysisProfiles"
-      ],
-      [
-        "GET",
-        "/ar-v3-beta/groups/{group_id}",
-        "getArV3BetaGroup"
-      ],
-      [
-        "GET",
-        "/ar-v3-beta/groups/{group_id}/review",
-        "getArV3BetaGroupReview"
-      ],
-      [
-        "GET",
-        "/ar-v3-beta/pack",
-        "getArV3BetaPackStatus"
       ],
       [
         "GET",
@@ -600,11 +585,6 @@
       ],
       [
         "GET",
-        "/runs/{run_id}/norm-verification",
-        "getRunNormVerification"
-      ],
-      [
-        "GET",
         "/runs/{run_id}/stages",
         "getRunStages"
       ],
@@ -842,16 +822,6 @@
         "POST",
         "/analysis/presets/{preset_id}/revisions",
         "reviseAnalysisPreset"
-      ],
-      [
-        "POST",
-        "/ar-v3-beta/groups",
-        "startArV3BetaGroup"
-      ],
-      [
-        "POST",
-        "/ar-v3-beta/groups/cost-estimate",
-        "estimateArV3GroupCost"
       ],
       [
         "POST",
@@ -1652,20 +1622,6 @@
       "ApprovedSheetDiff",
       "ApprovedSheetPair",
       "ApprovedSheetPairs",
-      "ArV3BetaGroup",
-      "ArV3BetaGroupMember",
-      "ArV3BetaGroupReview",
-      "ArV3BetaGroupReviewMember",
-      "ArV3BetaPackReview",
-      "ArV3BetaPackStatus",
-      "ArV3BetaStageId",
-      "ArV3BetaVisibleCitation",
-      "ArV3BetaVisibleEvidence",
-      "ArV3BetaVisibleProposal",
-      "ArV3BetaVisibleReview",
-      "ArV3BetaVisibleTopic",
-      "ArV3GroupCostEstimateRequest",
-      "ArV3RunGroupId",
       "Assignment",
       "AssignmentDetail",
       "AssignmentEvent",
@@ -2068,11 +2024,9 @@
       "NormCurrentSnapshot",
       "NormDocument",
       "NormDocumentId",
-      "NormFindingVerification",
       "NormFragment",
       "NormHighlight",
       "NormKindCount",
-      "NormObservationCitationPartition",
       "NormParagraph",
       "NormParagraphId",
       "NormParagraphKind",
@@ -2090,7 +2044,6 @@
       "NormSnapshotPage",
       "NormSourceAttribution",
       "NormTextReliability",
-      "NormVerificationReport",
       "NormsSnapshotId",
       "ObservationProvenance",
       "OptimisationPass",
@@ -2371,7 +2324,6 @@
       "StageUploadId",
       "StageUploadPage",
       "StageUploadPartReceipt",
-      "StartArV3BetaGroupRequest",
       "StartComparisonAiJobRequest",
       "StartComparisonAiSheetChangesRequest",
       "StartComparisonSeriesRequest",
@@ -2385,7 +2337,6 @@
       "TransitionAssignmentRequest",
       "UndoComparisonMatrixEditRequest",
       "UndoStageLinkRepairRequest",
-      "UngroundedReason",
       "UpdateMyProfileRequest",
       "UpdateUserRequest",
       "UploadDocumentRequest",
@@ -2429,6 +2380,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0062_hosts_stage_models",
-  "contract_version": "1.49.0"
+  "migration_head": "0063_drop_ar_v3_beta",
+  "contract_version": "1.50.0"
 }

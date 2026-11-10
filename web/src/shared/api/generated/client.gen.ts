@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.49.0 (OpenAPI 3.1.0)
- *   sha256 0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19
+ *   AuditManager PC-01 API 1.50.0 (OpenAPI 3.1.0)
+ *   sha256 df22c7e1f4987c1be779c1b851152550ec6b9bae730b51c408b33b1524e597f9
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -130,8 +130,6 @@ import type {
   EndUserSessionsResult,
   EnqueueComparisonLaunchInput,
   EnqueueComparisonLaunchResult,
-  EstimateArV3GroupCostInput,
-  EstimateArV3GroupCostResult,
   EstimateComparisonAiPairCheckInput,
   EstimateComparisonAiPairCheckResult,
   EstimateComparisonAiSheetChangesInput,
@@ -166,12 +164,6 @@ import type {
   GenerateComparisonSummaryResult,
   GenerateExecutorSshKeyInput,
   GenerateExecutorSshKeyResult,
-  GetArV3BetaGroupInput,
-  GetArV3BetaGroupResult,
-  GetArV3BetaGroupReviewInput,
-  GetArV3BetaGroupReviewResult,
-  GetArV3BetaPackStatusInput,
-  GetArV3BetaPackStatusResult,
   GetAssignmentInput,
   GetAssignmentResult,
   GetComparisonAiPairCheckInput,
@@ -246,8 +238,6 @@ import type {
   GetProjectResult,
   GetRunNormReferencesInput,
   GetRunNormReferencesResult,
-  GetRunNormVerificationInput,
-  GetRunNormVerificationResult,
   GetRunStagesInput,
   GetRunStagesResult,
   GetRunStartReadinessInput,
@@ -582,8 +572,6 @@ import type {
   SetWorkScheduleSettingsResult,
   SetWorkerIntakeInput,
   SetWorkerIntakeResult,
-  StartArV3BetaGroupInput,
-  StartArV3BetaGroupResult,
   StartComparisonAiPairCheckInput,
   StartComparisonAiPairCheckResult,
   StartComparisonAiSheetChangesInput,
@@ -1342,18 +1330,6 @@ export function enqueueComparisonLaunch(
 }
 
 /**
- * Estimate all six AR v3 checks before spend.
- *
- * `POST /ar-v3-beta/groups/cost-estimate`.
- */
-export function estimateArV3GroupCost(
-  input: EstimateArV3GroupCostInput,
-  options?: RequestOptions,
-): Promise<ApiResponse<EstimateArV3GroupCostResult>> {
-  return request<EstimateArV3GroupCostResult>(OPERATIONS.estimateArV3GroupCost, input, options);
-}
-
-/**
  * Estimate the AI check of the doubtful pairs of a document set.
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate`.
@@ -1555,42 +1531,6 @@ export function generateExecutorSshKey(
   options?: RequestOptions,
 ): Promise<ApiResponse<GenerateExecutorSshKeyResult>> {
   return request<GenerateExecutorSshKeyResult>(OPERATIONS.generateExecutorSshKey, input, options);
-}
-
-/**
- * Get Ar V3 Beta Group
- *
- * `GET /ar-v3-beta/groups/{group_id}`.
- */
-export function getArV3BetaGroup(
-  input: GetArV3BetaGroupInput,
-  options?: RequestOptions,
-): Promise<ApiResponse<GetArV3BetaGroupResult>> {
-  return request<GetArV3BetaGroupResult>(OPERATIONS.getArV3BetaGroup, input, options);
-}
-
-/**
- * Get Ar V3 Beta Group Review
- *
- * `GET /ar-v3-beta/groups/{group_id}/review`.
- */
-export function getArV3BetaGroupReview(
-  input: GetArV3BetaGroupReviewInput,
-  options?: RequestOptions,
-): Promise<ApiResponse<GetArV3BetaGroupReviewResult>> {
-  return request<GetArV3BetaGroupReviewResult>(OPERATIONS.getArV3BetaGroupReview, input, options);
-}
-
-/**
- * Get Ar V3 Beta Pack Status
- *
- * `GET /ar-v3-beta/pack`.
- */
-export function getArV3BetaPackStatus(
-  input: GetArV3BetaPackStatusInput,
-  options?: RequestOptions,
-): Promise<ApiResponse<GetArV3BetaPackStatusResult>> {
-  return request<GetArV3BetaPackStatusResult>(OPERATIONS.getArV3BetaPackStatus, input, options);
 }
 
 /**
@@ -2035,18 +1975,6 @@ export function getRunNormReferences(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetRunNormReferencesResult>> {
   return request<GetRunNormReferencesResult>(OPERATIONS.getRunNormReferences, input, options);
-}
-
-/**
- * Get Run Norm Verification
- *
- * `GET /runs/{run_id}/norm-verification`.
- */
-export function getRunNormVerification(
-  input: GetRunNormVerificationInput,
-  options?: RequestOptions,
-): Promise<ApiResponse<GetRunNormVerificationResult>> {
-  return request<GetRunNormVerificationResult>(OPERATIONS.getRunNormVerification, input, options);
 }
 
 /**
@@ -4054,18 +3982,6 @@ export function setWorkerIntake(
 }
 
 /**
- * Start Ar V3 Beta Group
- *
- * `POST /ar-v3-beta/groups` - a write; carries a required Idempotency-Key.
- */
-export function startArV3BetaGroup(
-  input: StartArV3BetaGroupInput,
-  options?: RequestOptions,
-): Promise<ApiResponse<StartArV3BetaGroupResult>> {
-  return request<StartArV3BetaGroupResult>(OPERATIONS.startArV3BetaGroup, input, options);
-}
-
-/**
  * Start the AI check of the doubtful pairs of a document set.
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check` - a write; carries a required Idempotency-Key.
@@ -4618,7 +4534,6 @@ export const apiClient = {
   downloadAgentPackage,
   endUserSessions,
   enqueueComparisonLaunch,
-  estimateArV3GroupCost,
   estimateComparisonAiPairCheck,
   estimateComparisonAiSheetChanges,
   estimateComparisonSheetDescription,
@@ -4636,9 +4551,6 @@ export const apiClient = {
   finishComparisonSeries,
   generateComparisonSummary,
   generateExecutorSshKey,
-  getArV3BetaGroup,
-  getArV3BetaGroupReview,
-  getArV3BetaPackStatus,
   getAssignment,
   getComparisonAiPairCheck,
   getComparisonAiQueue,
@@ -4676,7 +4588,6 @@ export const apiClient = {
   getProductVersion,
   getProject,
   getRunNormReferences,
-  getRunNormVerification,
   getRunStages,
   getRunStartReadiness,
   getRunStatus,
@@ -4844,7 +4755,6 @@ export const apiClient = {
   setWorkSchedulePlans,
   setWorkScheduleSettings,
   setWorkerIntake,
-  startArV3BetaGroup,
   startComparisonAiPairCheck,
   startComparisonAiSheetChanges,
   startComparisonReport,

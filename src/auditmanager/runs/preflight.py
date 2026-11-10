@@ -325,6 +325,15 @@ class RunCostPreflight:
             "currency": "USD", "relaxed_limits": relaxed, "stage_plan_digest": plan.digest, "models": lines}
         return RunCostEstimateValue(_json(public), _json(authority), None, None, None, plan)
 
+    def extended_plan(self):
+        """The extended plan a run started now would be priced and frozen under: ``"v2"``, ``"v3"``, or ``None`` when the extended
+        analysis is off (text only). Derived from :meth:`stage_rows_in_use`, so it is the one environment read the estimate makes
+        and cannot disagree with it; an unsupported name is refused there (``unsupported_plan``)."""
+        rows = self.stage_rows_in_use()
+        if rows == ("text",):
+            return None
+        return "v3" if rows == STAGE_ROWS else "v2"
+
     def _pin(self, model_id):
         pin = next((row for row in self.prices() if row.model_id == model_id), None)
         if pin is None:

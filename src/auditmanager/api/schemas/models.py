@@ -1103,7 +1103,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.49.0"]
+    contract_version: Literal["1.50.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -9450,11 +9450,15 @@ class RunStartReadiness(_Object):
     """What the one button «Запустить» says (ADR-0028): the route, the kit, every cell with its access, whether the start is
     possible and, when it is, the digest of the estimate to confirm. `access` is the total: all cells on a subscription (the
     estimate is 0 and the press of the button is the consent), all on an API key, or mixed (one dialog with the estimate by
-    model). An unavailable cell makes `ready` false and names itself in `cells`."""
+    model). An unavailable cell makes `ready` false and names itself in `cells`.
+
+    `extended_plan` (contract 1.50.0): the extended plan a start would run under -- `v2`, `v3`, or `null` when the extended analysis is
+    off. Under `v2` the critic and the refinement rows are not called, and a client labels them from this field."""
 
     route: RunStartRoute
     ready: bool
     kit: StageModelKit = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    extended_plan: Literal["v2", "v3"] | None = Field(default=None, json_schema_extra=optional_property)
     access: Literal["subscription", "api", "mixed"] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     estimate_digest: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     stage_plan_digest: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
