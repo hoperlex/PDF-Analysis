@@ -15,7 +15,6 @@ from auditmanager.analysis.public import (
     apply_to_bundle, count_native_text_characters, model_rate_sha256, pinned_models, relaxed_window_characters,
 )
 from auditmanager.documents.public import DocumentRepository, UPLOAD_KIND_COMPARISON_PDF
-from auditmanager.norms.public import PromotionRefused, current_snapshot, qualification, select_verified_retrieval_set
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import VersionUid
 from auditmanager.storage.public import parse_blob_id
@@ -152,8 +151,6 @@ class RunCostEstimateValue:
             result["extended_review"] = authority["extended_review"]
         if "native_page_piece_policy" in authority:
             result["native_page_piece_policy"] = authority["native_page_piece_policy"]
-        if "scope_costs_micros" in authority:
-            result["scope_costs_micros"] = authority["scope_costs_micros"]
         if authority.get("stage_plan_digest") is not None:
             # Consent v2 (`HOSTS-LAYOUT-01`): the digest of the plan, and per model the rates and the access it was priced with.
             # ``require_approved_model`` holds every call to membership of this map.
@@ -167,14 +164,14 @@ class RunCostPreflight:
     """No I/O in construction; every estimate is recomputed in the start transaction."""
 
     def __init__(self, *, section_profiles, text_profiles, provider_config, provider_mode,
-                 connection_route=None, preset_resolver=None, pack_registry=None, prices=None,
+                 connection_route=None, preset_resolver=None, prices=None,
                  blob_store=None, group_admitter=None, stage_plans=None):
         #: `HOSTS-LAYOUT-01`: the seam that reads the stage layout (``stage_plans(session)``: ``None`` while it is off, else the draft).
         #: With it an estimate is by model while the layout is on, whoever asks; without it only an explicit ``stage_plan`` is.
         self.stage_plans = stage_plans
         self.sections, self.profiles = section_profiles, text_profiles
         self.config, self.mode = provider_config, provider_mode
-        self.route, self.presets, self.packs = connection_route, preset_resolver, pack_registry
+        self.route, self.presets = connection_route, preset_resolver
         self.group_admitter = group_admitter
         self.prices = prices or pinned_models
         self.blob_store = blob_store
@@ -230,7 +227,7 @@ class RunCostPreflight:
             "manifest": sorted((str(row.role), str(row.blob_id)) for row in version.manifest)}
         return version, chars, facts
 
-    def _route(self, session, *, executor_connection_id=None, preset_id=None, group=False):
+    def _route(self, session, *, executor_connection_id=None, preset_id=None):
         if executor_connection_id is not None and preset_id is not None:
             raise _invalid("preset_id", "conflicts_with_executor_connection_id")
         chosen = None
@@ -246,7 +243,7 @@ class RunCostPreflight:
         pin = next((row for row in self.prices() if row.model_id == model), None)
         if pin is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="model_price_pin")
-        billing = ("unmetered" if group and frozen is None and self.mode == "recorded" else "metered") if frozen is None else frozen.billing
+        billing = "metered" if frozen is None else frozen.billing
         facts = {"model_id": pin.model_id, "rate_sha256": model_rate_sha256(pin), "billing": billing,
                  "provider_mode": self.mode, "connection_revision_id": None if frozen is None else frozen.revision_id,
                  "preset_revision_id": None if chosen is None else chosen.revision_id}
@@ -271,18 +268,15 @@ class RunCostPreflight:
         return pin, facts, None, None
 
     def _value(self, *, version, chars, source, pricing, pin, frozen, chosen, relaxed, scope,
-               windows, calls, input_tokens, output_tokens, window_characters=None, scope_costs=None,
+               windows, calls, input_tokens, output_tokens, window_characters=None,
                extended_review=None, native_page_piece_policy=None, admitted=None):
-        cost = (sum(scope_costs.values()) if scope_costs is not None else
-                0 if pricing["billing"] == "unmetered" else estimated_micros(pin, input_tokens, output_tokens))
+        cost = 0 if pricing["billing"] == "unmetered" else estimated_micros(pin, input_tokens, output_tokens)
         source_sha = _digest(source)
         authority = dict(pricing, format=FORMAT, source_sha256=source_sha,
             window_characters=window_characters,
             max_windows=(max(12, version.page_count) if relaxed and native_page_piece_policy is None else max(12, windows)) if scope == "run" else None,
             relaxed_limits=relaxed, scope=scope, windows=windows, calls=calls,
             input_tokens=input_tokens, output_tokens=output_tokens)
-        if scope_costs is not None:
-            authority["scope_costs_micros"] = scope_costs
         if extended_review is not None:
             authority["extended_review"] = extended_review
         if native_page_piece_policy is not None:
@@ -343,6 +337,15 @@ class RunCostPreflight:
             "estimated_cost_micros": cost, "recommended_ceiling_micros": max(1, (cost * 6 + 4) // 5) if cost else 0,
             "currency": "USD", "relaxed_limits": relaxed, "stage_plan_digest": plan.digest, "models": lines}
         return RunCostEstimateValue(_json(public), _json(authority), None, None, None, plan)
+
+    def extended_plan(self):
+        """The extended plan a run started now would be priced and frozen under: ``"v2"``, ``"v3"``, or ``None`` when the extended
+        analysis is off (text only). Derived from :meth:`stage_rows_in_use`, so it is the one environment read the estimate makes
+        and cannot disagree with it; an unsupported name is refused there (``unsupported_plan``)."""
+        rows = self.stage_rows_in_use()
+        if rows == ("text",):
+            return None
+        return "v3" if rows == STAGE_ROWS else "v2"
 
     def _pin(self, model_id):
         pin = next((row for row in self.prices() if row.model_id == model_id), None)
@@ -599,23 +602,16 @@ class RunCostPreflight:
         from .repository import RunRepository
         runs = RunRepository()
         source_run = runs.get(session, run_id)
-        # `AR-V3-OPT-IN` (Q4): the estimate of a repeat that the start would refuse is the same refusal, not a price.
-        from .analysis_kind import ANALYSIS_AR_V3_BETA, analysis_kind
-        from .v3_start_switch import refuse_member_repeat
-        if analysis_kind(source_run.analysis_profile_id, source_run.prompt_bundle_id) == ANALYSIS_AR_V3_BETA:
-            raise refuse_member_repeat()
         if stage_plan is _UNSET:
             stage_plan = None if self.stage_plans is None else self.stage_plans(session)
         # `HOSTS-LAYOUT-01`: with the layout on, a repeat takes today's plan whatever the source ran on; its named connection or group is
         # not carried over (the stand chooses the servers).
         executor = None if stage_plan is not None else runs.chosen_executor_connection(session, run_id)
-        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
         # `EXEC2-GROUP-RUN-01`: a re-audit keeps the kind of selector the original start used. A named connection stays
         # that connection, a named group is admitted again on its current revision, and a start that named nothing
         # (the route, or a rule) names nothing now either: today's mode decides.
         value = self.estimate_run(session, version_uid=source_run.version_uid,
             executor_connection_id=executor, version_record=version_record,
-            allow_native_page_pieces=str(source_run.analysis_profile_id) != str(AR_V3_BETA_PROFILE_ID),
             parse_native_text=parse_native_text,
             executor_group_id=None if stage_plan is not None else _named_group_of(session, source_run, executor, self.group_admitter),
             stage_plan=stage_plan)
@@ -652,40 +648,3 @@ class RunCostPreflight:
             reused_stage_ids=list(plan.reused_stage_ids), computed_stage_ids=list(plan.computed_stage_ids))
         public["estimate_digest"] = _digest(authority)
         return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group, value.stage_plan)
-
-    def estimate_group(self, session, *, version_uid, relaxed_limits=False, version_record=None):
-        from .v3_group import _validate_pack
-        if type(relaxed_limits) is not bool:
-            raise _invalid("relaxed_limits", "boolean")
-        version, chars, source = self._source(session, version_uid, version_record)
-        if version.classification.section_code != "AR":
-            raise DomainError(ErrorCode.SECTION_PROFILE_UNAVAILABLE)
-        pack = None if self.packs is None else self.packs.select_beta()
-        if pack is None:
-            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="ar_v3_trusted_pack")
-        profile = _validate_pack(pack)
-        current, qualified = current_snapshot(session), qualification(session, profile.snapshot_id)
-        if current is None or current.norms_snapshot_id != profile.snapshot_id or qualified is None or not qualified.build_complete or not qualified.sources_confirmed:
-            raise DomainError(ErrorCode.REQUIRED_NORM_UNAVAILABLE, reference_kind="norms_snapshot")
-        pin, pricing, frozen, chosen = self._route(session, group=True)
-        sets, input_tokens, scope_costs = [], 0, {}
-        try:
-            for scope in pack.scopes:
-                ref = select_verified_retrieval_set(session, identity=scope.identity, chunking_profile=scope.chunking_profile)
-                if ref.set_id != scope.set_id or ref.set_sha256 != scope.set_sha256:
-                    raise ValueError()
-                sets.append({"scope": scope.scope_id, "set_id": ref.set_id, "sha256": ref.set_sha256,
-                             "bytes": ref.set_size_bytes})
-                # The verified artifact's byte size bounds its rendered normative
-                # part; JSON quoting of document text is reserved independently.
-                characters = chars * 2 + ref.set_size_bytes + len(profile.system_prompt) + len(profile.response_schema_json) + 16_000 + version.page_count * 40
-                scope_tokens = math.ceil(Fraction(characters * 5, 7))
-                input_tokens += scope_tokens
-                scope_costs[scope.scope_id] = 0 if pricing["billing"] == "unmetered" else estimated_micros(
-                    pin, scope_tokens, 64_000 if relaxed_limits else 16_000)
-        except (PromotionRefused, ValueError):
-            raise DomainError(ErrorCode.REQUIRED_NORM_UNAVAILABLE, reference_kind="norm_retrieval_set") from None
-        source.update(pack_sha256=pack.sha256, profile_sha256=profile.content_sha256, sets=sets, relaxed_limits=relaxed_limits)
-        return self._value(version=version, chars=chars, source=source, pricing=pricing, pin=pin,
-            frozen=frozen, chosen=chosen, relaxed=relaxed_limits, scope="ar_v3_group", windows=6, calls=6,
-            input_tokens=input_tokens, output_tokens=6 * (64_000 if relaxed_limits else 16_000), scope_costs=scope_costs)

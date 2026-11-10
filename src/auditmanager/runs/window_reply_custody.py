@@ -7,7 +7,7 @@ killed between two windows could only call the finished window again.
 
 * :meth:`WindowReplyCustody.preserve` runs after the answer is journaled (``response_received``) and before
   the call is completed. It writes the parsed adapter answer, with the call binding, as a private blob
-  (the shape of the AR v3 reply blob, role :data:`REPLY_BLOB_ROLE`) and returns the three
+  (role :data:`REPLY_BLOB_ROLE`) and returns the three
   ``model_call.parameters`` that name it. The read-back must equal what was written.
 * :meth:`WindowReplyCustody.recover` answers a window key with the saved reply of the finished call that
   carries it (:meth:`~auditmanager.jobs.repository.JobRepository.completed_window_calls`: the call and its

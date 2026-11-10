@@ -60,15 +60,6 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "listVersions": ("GET", "/documents/doc_01M2545JSD15ETSNNV904X991H/versions"),
     "startRun": ("POST", "/runs"),
     "getRunStatus": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K"),
-    "startArV3BetaGroup": ("POST", "/ar-v3-beta/groups"),
-    "getArV3BetaGroup": ("GET", "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K"),
-    "getArV3BetaGroupReview": (
-        "GET", "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K/review",
-    ),
-    "getArV3BetaPackStatus": ("GET", "/ar-v3-beta/pack"),
-    "getRunNormVerification": (
-        "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-verification"
-    ),
     "listExecutionQueue": ("GET", "/execution/queue"),
     "listExecutionJournal": ("GET", "/execution/journal"),
     "cancelRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
@@ -301,7 +292,6 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "getExtendedRunReview": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/extended-review"),
     "streamComparisonTechnicalReport": ("GET", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/technical-report"),
     "estimateRunCost": ("POST", "/runs/cost-estimate"),
-    "estimateArV3GroupCost": ("POST", "/ar-v3-beta/groups/cost-estimate"),
     "importComparisonZip": ("POST", "/projects/prj_01M2545JSD15ETSNNV904X991K/comparison-zip-uploads"),
     # `EXEC-PULL-01`. Runner tokens are an administrator's (the runner's own four operations
     # are not role-gated: they are authenticated by the token, see RUNNER_OPERATIONS).
@@ -523,10 +513,6 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listVersions": _READ,
     "listRuns": _READ,
     "getRunStatus": _READ,
-    "getArV3BetaGroup": _READ,
-    "getArV3BetaGroupReview": _READ,
-    "getArV3BetaPackStatus": _READ,
-    "getRunNormVerification": _READ,
     "listExecutionQueue": _ANY_ROLE,
     "getExecutionDispatch": _ANY_ROLE,
     "setDocumentArchived": _ANY_ROLE,
@@ -737,7 +723,6 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "applyStageCardVerdicts": _EXPERT,
     "createStageReviewCard": _EXPERT,
     "estimateRunCost": _EXPERT,
-    "estimateArV3GroupCost": _EXPERT,
     "importComparisonZip": _EXPERT,
     "searchNorms": _READ,
     "getNormDocument": _READ,
@@ -781,7 +766,6 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     # `W59-VERSION-UPLOAD-01`: the next version takes exactly the first upload's roles.
     "uploadDocumentVersion": _EXPERT,
     "startRun": _EXPERT,
-    "startArV3BetaGroup": _EXPERT,
     # `W59-SECTION-SEAL-01`: only an expert confirms a section; admin alone does not.
     "classifyDocumentVersion": _EXPERT,
     # `CLASSIFICATION-CORRECTION-01`: only an expert corrects a classification; admin alone does not.

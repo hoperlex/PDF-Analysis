@@ -1,8 +1,4 @@
-"""Real child + durable journal before both provider branches, on two-page PDFs.
-
-The invalid-input AR v3 case supplies only the reviewed-pack selection/binding:
-no norm content is read because source preparation must fail before that stage.
-"""
+"""Real child + durable journal before the provider branch, on two-page PDFs."""
 
 from __future__ import annotations
 
@@ -16,20 +12,18 @@ from pypdf.generic import ArrayObject, DecodedStreamObject, DictionaryObject, Na
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.analysis.public import AR_V3_BETA_BUNDLE_ID, AR_V3_BETA_PROFILE_ID
 from auditmanager.analysis.stages import source_preparation
 from auditmanager.documents.public import DocumentRepository, ManifestEntry, MANIFEST_ROLE_SOURCE_DOCUMENT
 from auditmanager.runs import execute_run
 from auditmanager.runs.commands import cancel_audit_run
 from auditmanager.runs.repository import RunRepository
-from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
 from auditmanager.storage.public import BlobMetadataRepository, VerifiedBlob, parse_blob_role
 from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 
-def _seed(session, store, *, broken=False, v3=False):
+def _seed(session, store, *, broken=False):
     writer = PdfWriter()
     for ordinal in (1, 2):
         page = writer.add_blank_page(width=400, height=500)
@@ -71,8 +65,8 @@ def _seed(session, store, *, broken=False, v3=False):
     run_id = str(RunId.new())
     RunRepository().create(
         session, run_id=run_id, project_uid=str(project.project_uid), version_uid=str(version),
-        analysis_profile_id=str(AR_V3_BETA_PROFILE_ID if v3 else V1_REFERENCE_PROFILE.analysis_profile_id),
-        prompt_bundle_id=str(AR_V3_BETA_BUNDLE_ID if v3 else V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id),
+        analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
+        prompt_bundle_id=str(V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id),
         provider_mode="recorded", frozen_input_digest="a" * 64, command_id=None,
     )
     return run_id
@@ -116,17 +110,11 @@ def test_completed_precheck_is_visible_to_another_session_before_provider_bindin
         assert result.model_attempts.attempts == 0
 
 
-@pytest.mark.parametrize("v3", [False, True], ids=["ordinary", "ar-v3"])
-def test_interpreter_refusal_is_durable_and_never_reaches_either_provider_branch(
-    engine, blob_store, recorded_adapter, provider_config, monkeypatch, v3,
+def test_interpreter_refusal_is_durable_and_never_reaches_the_provider_branch(
+    engine, blob_store, recorded_adapter, provider_config,
 ):
-    if v3:
-        monkeypatch.setattr(TrustedPackRegistry, "select_beta", lambda self: object())
-        from auditmanager.runs import v3_review_terminal
-        monkeypatch.setattr(v3_review_terminal, "resolve_v3_execution_binding",
-                            lambda *args, **kwargs: SimpleNamespace())
     with Session(engine) as session:
-        run_id = _seed(session, blob_store, broken=True, v3=v3)
+        run_id = _seed(session, blob_store, broken=True)
         session.commit()
 
         def no_provider(*args, **kwargs):
@@ -136,7 +124,6 @@ def test_interpreter_refusal_is_durable_and_never_reaches_either_provider_branch
             session, run_id, blob_store=blob_store, adapter=recorded_adapter,
             provider_config=provider_config, providers=no_provider,
             text_profiles=resolve_reference_profile,
-            ar_v3_pack_registry=TrustedPackRegistry.empty() if v3 else None,
         )
         session.commit()
         assert result.terminal_state == "failed"

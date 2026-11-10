@@ -65,7 +65,7 @@ def make_bundle(directory: Path, name: str = BUNDLE) -> Path:
 
 
 def test_the_threshold_is_the_live_attempts_ceiling_and_a_minute() -> None:
-    """`AR-V3-LIVENESS-01`: the threshold was the 900 s watchdog plus a minute (960). A **live**
+    """Signs of life: the threshold was the 900 s watchdog plus a minute (960). A **live**
     attempt (its model call shows signs of life) now runs until 7200 s, and the file it made after
     its claim is its own until then; 960 would sweep it from under a call that is thinking."""
     assert ATTEMPT_WATCHDOG_SECONDS == 900

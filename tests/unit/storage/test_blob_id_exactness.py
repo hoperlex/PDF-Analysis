@@ -1,6 +1,6 @@
 """A blob identity is the whole string, never one that ends in a newline.
 
-`AR-V3-BETA-REVIEW-FIXES-03` finding F4, the sibling of `AR-V3-BETA-REVIEW-FIXES-02` finding B.
+A review finding (F4), the sibling of the opaque-id finding (B).
 `BLOB_ID_PATTERN` ends in `$`, which also matches just before one trailing newline, and
 `parse_blob_id` matched with `re.match`, so `"blob_<ULID>\\n"` came back as a `BlobId`
 while the database CHECK and the API schema refuse it.

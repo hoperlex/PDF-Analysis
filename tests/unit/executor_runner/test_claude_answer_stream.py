@@ -1,6 +1,6 @@
 """The subscription Claude command streams the CLI and judges a call by its signs of life.
 
-``AR-V3-LIVENESS-01`` lane A: a fake ``claude`` writes newline-delimited JSON over time; the tests
+Signs of life, lane A: a fake ``claude`` writes newline-delimited JSON over time; the tests
 check the heartbeat lines on stderr (frozen format, no task text), that a stream that keeps writing is
 not cut by any short deadline, that a silent CLI is cut as ``claude_stalled``, that the hard cap cuts a
 CLI that never stops, the optional ``effort`` and the result checks on the last ``result`` line.  No
@@ -425,7 +425,7 @@ def test_report_still_refuses_a_line_that_is_not_a_result() -> None:
 
 def test_the_cli_is_read_through_a_pipe_because_it_writes_nothing_to_a_file_until_it_exits(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """`AR-V3-LIVENESS-PIPE-01`: the real CLI buffers a file until exit (400 s, 0 bytes, measured); the first
+    """The real CLI buffers a file until exit (400 s, 0 bytes, measured); the first
     live calls were cut at the stall window because the command watched a file.  This fake does the same and
     streams only to a pipe: a stream that keeps writing for longer than the stall window must not be cut."""
     monkeypatch.setattr(claude_answer, "STALL_SECONDS", 0.4)

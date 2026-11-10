@@ -11,7 +11,35 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.49.0` (`LIMITS-01`)
+## Current contract `1.50.0` (`AR-V3-BE-RM-01`)
+
+Slice for the removal of the six-scope АР beta (owner rulings `R-154a`, `R-154c` and `R-154h` of 2026-11-10), with one additive member of the run-start readiness.
+**Six operations, nineteen schemas, three `RunStatus` properties and four enum members are removed; one optional property is added**; migration `0063_drop_ar_v3_beta` drops the
+beta's two tables and restores two earlier database objects (head `0063`). No error code and no state machine changes.
+
+- **Version.** A strict reading of `VERSIONING_AND_FREEZE_POLICY` makes this a major; the owner chose 1.50.0 (`R-154h`) because the removed operations were a beta that never went
+  live, and their only consumer, our web client, is regenerated here; 2.0.0 stays reserved for `D-233`.
+- **Operations removed (6).** `startArV3BetaGroup`, `estimateArV3GroupCost`, `getArV3BetaGroup`, `getArV3BetaGroupReview`, `getArV3BetaPackStatus` and `getRunNormVerification`. The
+  last one served the beta only: it answered `404 not_found` for a run of any other profile. The standard analysis of every section, the extended review and the stage comparison are
+  not changed.
+- **Schemas removed (19).** `ArV3BetaGroup`, `ArV3BetaGroupMember`, `ArV3BetaGroupReview`, `ArV3BetaGroupReviewMember`, `ArV3BetaPackReview`, `ArV3BetaPackStatus`, `ArV3BetaStageId`,
+  `ArV3BetaVisibleCitation`, `ArV3BetaVisibleEvidence`, `ArV3BetaVisibleProposal`, `ArV3BetaVisibleReview`, `ArV3BetaVisibleTopic`, `ArV3GroupCostEstimateRequest`, `ArV3RunGroupId`,
+  `StartArV3BetaGroupRequest`, `NormVerificationReport`, `NormFindingVerification`, `NormObservationCitationPartition` and `UngroundedReason` (referenced by nothing else).
+- **Narrowed.** `RunStatus` loses `analysis_kind`, `ar_v3_group_id` and `ar_v3_scope_id` and its `degradation_set` holds `StageId`; `StageState.stage_id` is `StageId`;
+  `RunCostEstimate.scope` is `run`; `RunStageChip` loses `ar_v3`; `ComparisonRefusal.reason` loses `analysis_not_comparable`. The prose that named the beta is corrected
+  (`ExecutionQueuePage.live_failure_count`, `DocumentActiveRun`, `DocumentAuditCounts`, `RunStageChip`, `uploadDocument`, `estimateRunCost`, `reauditRun`, `getRunStages`,
+  `startRunFromStage`); the history of the earlier seals in `info.description` is kept.
+- **Added (optional).** `RunStartReadiness.extended_plan`: `v2`, `v3`, or `null` when the extended analysis is off. It is read through the same call the estimate prices with, so it cannot
+  disagree with it; under `v2` the critic and refinement rows are not called, and the client labels them from this field.
+- **Domain and analysis contracts.** The identity prefix `arg` (`ar_v3_run_group_id`, entity `ArV3RunGroup`) leaves the identifier catalogue and its schema; the conflict reasons
+  `ar_v3_start_not_enabled` and `ar_v3_member_not_repeatable` leave the `conflict` notes of the error catalogue (the catalogue keeps its 27 codes); the candidate revision is 67.
+  `contracts/analysis/ar_v3_beta/**` is deleted, and the optional `norms.snapshot` input of `text_analysis` no longer says it serves the beta.
+- **Compatibility.** A client that read a removed operation or property must stop reading it; no consumer outside this repository is known. A server of this version answers the
+  removed paths with `404`. The database refuses the upgrade while any row of the beta exists (see migration `0063`).
+
+The API has 290 paths, 318 operations and 779 schemas; migration head `0063`. The domain catalogs are at candidate revision 67.
+
+## Contract `1.49.0` (`LIMITS-01`, historical)
 
 Slice for `LIMITS-01` (owner rulings `R-153n`, `R-153o` and `R-153p` of 2026-11-10): **no answer cap reaches a model, and the window of a call is a constant of its
 row**. **No operation, no schema added or removed, no migration, no new error code, no state machine and no identity prefix**; migration head stays `0062`. The paths

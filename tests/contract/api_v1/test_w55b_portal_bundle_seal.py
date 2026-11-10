@@ -215,7 +215,7 @@ def test_portal_block_id_is_an_external_identifier_and_not_one_of_the_identities
     # so 106 at contract 1.16.0; the decision memory (`ADR-0027`, migration `0059`) adds four (`dmc_` a case, `dmd_` a
     # decision, `dmw_` a status event, `dmx_` a crop reference), so 110; `HOSTS-SEAL-1` adds five (`exh_` a server, `exhu_` and `exhs_` the journals of its
     # use switch and its slots, `slr_` a stage layout revision, `sls_` a change of the layout's switch), so 115.
-    assert len(IDENTIFIERS["identifiers"]) == 115
+    assert len(IDENTIFIERS["identifiers"]) == 114
     assert {
         "executor_enrollment_id", "executor_agent_install_id", "executor_group_id", "executor_group_revision_id",
         "executor_routing_rule_revision_id", "executor_routing_mode_event_id",

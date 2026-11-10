@@ -1,4 +1,4 @@
-"""An Attempt lives while its model call shows signs of life (`AR-V3-LIVENESS-01`, lane B).
+"""An Attempt lives while its model call shows signs of life (lane B).
 
 Owner rule 2026-10-29: do not limit the model's thinking; check that the session is alive and
 extend the limits. Before, the heartbeat thread fenced every Attempt at a fixed 900 s counted from

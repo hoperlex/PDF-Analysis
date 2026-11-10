@@ -34,9 +34,7 @@ REASONS = (
 def test_closed_vocabularies_match_0023() -> None:
     schemas = CONTRACT['components']['schemas']
     assert schemas['FindingCategory']['enum'] == list(CATEGORIES)
-    assert schemas['UngroundedReason']['enum'] == list(REASONS)
     assert {item.value for item in models.FindingCategory} == set(CATEGORIES)
-    assert {item.value for item in models.UngroundedReason} == set(REASONS)
     assert UNGROUNDED_REASONS == set(REASONS)
     source = (ROOT / 'db/migrations/versions/20261016_0023_norm_citations.py').read_text()
     for value in CATEGORIES[7:] + REASONS[6:]:
@@ -117,5 +115,5 @@ def test_stage_registry_has_one_norm_verification_and_optional_v3_input() -> Non
     assert text['stage_version'] == '1.1.0'
     assert [input_ for input_ in text['required_inputs'] if input_['role'] == 'norms.snapshot'] == [{
         'role': 'norms.snapshot', 'media_type': 'application/json', 'required': False,
-        'description': 'Optional pinned qualified norms snapshot and verified retrieval set for AR v3; v1/v2 stages do not consume it. An absent verified set never silently falls back.',
+        'description': 'Optional pinned qualified norms snapshot and verified retrieval set; no current text profile consumes it. An absent verified set never silently falls back.',
     }]

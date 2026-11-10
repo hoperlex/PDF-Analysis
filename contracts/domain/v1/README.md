@@ -17,7 +17,8 @@ additive installed-pack status read, with the same effect on the catalogues. `AR
 additive review read, with the same effect on the catalogues. `AR-V3-BETA-RUN-STAGE-SEAL-01` advanced the prior shared version for an
 additive API stage identity; the domain catalogues themselves add no code,
 identity or machine. `AR-V3-BETA-SIX-RUN-02` added `ar_v3_run_group_id` (`arg`)
-as a distinct opaque identity at revision 20. Revision 19 was the
+as a distinct opaque identity at revision 20 and removed it, with the conflict reasons of the beta, at revision 67
+(`AR-V3-BE-RM-01`, `R-154a`, contract 1.50.0). Revision 19 was the
 `1.1.0` seal after `EXEC-IMAGE-DELIVERY-01`. Revision 13 added the fail-closed `model_identity_mismatch` code for the recorded-only
 W56a seal; revisions 14 to 17 moved the identity register with the later waves; revision 18
 (`BETA-CONTRACT-SEAL-01` phase A, `D-179`) added the two codes

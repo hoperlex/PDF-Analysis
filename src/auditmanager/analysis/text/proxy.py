@@ -437,7 +437,7 @@ def _to_openai_body(request: ModelRequest, model: str) -> dict[str, Any]:
         else None
     )
     if schema is not None:
-        # The provider is told the wire form (`AR-V3-WIRE-SCHEMA-01`): the request's own body, and so its
+        # The provider is told the wire form: the request's own body, and so its
         # checksum, keep the sealed schema; the local parser still checks what the wire form no longer says.
         body["response_format"] = {
             "type": "json_schema",

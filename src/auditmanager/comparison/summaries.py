@@ -335,8 +335,7 @@ class SummaryService:
         cost.before_call()
         reply = self._model.complete(prompt)
         if not self._model.unmetered:
-            # This wave builds no metered path: a reply whose cost cannot be verified is refused, as the
-            # AR v3 worker refuses «a metered call without a verifiable cost amount».
+            # This wave builds no metered path: a reply whose cost cannot be verified is refused.
             raise DomainError(
                 ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="comparison_summary",
                 reason="cost_unverifiable",

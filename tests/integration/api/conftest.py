@@ -913,14 +913,6 @@ class SeamRunAdapter:
         self._view(run_id)
         raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="extended_review_reader")
 
-    def get_norm_verification(self, *, run_id: str) -> Any:
-        # `R-146at`: the shipping adapter reads the Run first (an absent one is 404), then
-        # answers the report or the declared 503. This stand-in holds no saved review.
-        self._view(run_id)
-        raise DomainError(
-            ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader"
-        )
-
     def get_run_norm_references(self, *, run_id: str) -> Any:
         """`NORM-REFS-RUN-01`. This stand-in holds no saved text and no snapshot catalogue.
 
@@ -1047,22 +1039,6 @@ def router(ingest: IngestService, session: Session, suite_account: str) -> Surfa
     declarations, the middlewares and the exception handlers are the application's, and a
     test that drove the router alone would be testing half the edge. See ``driver.py``.
     """
-    class MissingBetaGroup:
-        def estimate_ar_v3_group_cost(self, **_: Any) -> Any:
-            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
-
-        def start_ar_v3_group(self, **_: Any) -> Any:
-            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
-
-        def get_ar_v3_group(self, **_: Any) -> Any:
-            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
-
-        def get_ar_v3_group_review(self, **_: Any) -> Any:
-            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
-
-        def get_ar_v3_pack_status(self) -> Any:
-            return models.ArV3BetaPackStatus(state="not_installed")
-
     return Surface(build_router(
         projects=IngestProjectAdapter(ingest),
         documents=IngestDocumentAdapter(ingest, session),
@@ -1075,7 +1051,6 @@ def router(ingest: IngestService, session: Session, suite_account: str) -> Surfa
         # the operation's own kind, never a 403: see `driver.SuiteAccountAdapter`.
         accounts=SuiteAccountAdapter(),
         registrations=SuiteRegistrationAdapter(),
-        ar_v3_groups=MissingBetaGroup(),
     ))
 
 

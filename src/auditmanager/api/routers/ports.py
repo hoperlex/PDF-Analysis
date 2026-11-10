@@ -68,7 +68,6 @@ __all__ = [
     "RegistrationPort",
     "ReleasesPort",
     "RunPort",
-    "ArV3GroupPort",
     "ExecutionPort",
     "ExecutorPort",
     "RunnerPort",
@@ -675,33 +674,6 @@ class SectionPort(Protocol):
 
 
 @runtime_checkable
-class ArV3GroupPort(Protocol):
-    """The explicitly gated AR beta group, independent of legacy Run start."""
-
-    def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate: ...
-
-    def start_ar_v3_group(
-        self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
-        cost_consent: Mapping[str, Any] | None = None,
-        cost_actor_uid: str | None = None,
-        started_by_user_uid: str | None = None,  # `R-151v`: the account whose request this is
-    ) -> models.ArV3BetaGroup:
-        """Create six pinned runs, or replay the same group.
-
-        `AR-V3-OPT-IN`: refused with ``409 conflict`` / ``ar_v3_start_not_enabled`` (nothing written) while a pack is
-        installed and the deployment has not allowed starts; an accepted key still replays."""
-
-    def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
-        """Read the six current child states without reselecting normative inputs."""
-
-    def get_ar_v3_group_review(self, *, group_id: str) -> models.ArV3BetaGroupReview:
-        """Read six verified, user-safe scope review outcomes."""
-
-    def get_ar_v3_pack_status(self) -> models.ArV3BetaPackStatus:
-        """Whether a reviewed pack is installed on this server, with its attestation record."""
-
-
-@runtime_checkable
 class RunPort(Protocol):
     def get_extended_review(self, *, run_id: str) -> models.ExtendedRunReview: ...
 
@@ -755,9 +727,6 @@ class RunPort(Protocol):
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         """Current run state and per-stage state."""
-
-    def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
-        """Verified v3 report only. Until CITE supplies its reader, typed refusal."""
 
     def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
         """The norms the run's saved text cites, each against the run's pinned snapshot.

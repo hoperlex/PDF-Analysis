@@ -2,8 +2,7 @@
 
 "No served Run starts without a confirmed priced consent" is carried by a single keyword of the
 composition root: ``RunAdapter(..., require_cost_consent=True)`` (``bootstrap/composition.py``), read by
-``bootstrap/adapters.py`` to hand the cost preflight to ``start_audit_run`` / ``reaudit_run`` /
-``start_ar_v3_group``. Before this module nothing in the tree read that keyword, so flipping it to
+``bootstrap/adapters.py`` to hand the cost preflight to ``start_audit_run`` / ``reaudit_run``. Before this module nothing in the tree read that keyword, so flipping it to
 ``False`` broke no test. The behavioural proof over HTTP needs a database
 (``tests/integration/composition/test_the_served_start_requires_a_priced_consent.py``); this is the
 container-free half and runs everywhere: it reads the composition source as syntax, not as text, and a

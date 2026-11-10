@@ -128,7 +128,7 @@ P02_TABLES = (
     "registration_request",
     "stage_result",
     # `0023_norm_citations`. Retrieval-set custody and the certified norm-citation partition
-    # of an observation belong to the AR v3 citation path. The journey runs the AR text
+    # of an observation belong to the citation path no profile serves any more. The journey runs the AR text
     # profile, which retrieves no norm and cites none, so both counts are expected
     # unchanged across a replay -- a claim worth counting rather than leaving unread.
     "norm_retrieval_set",
@@ -182,11 +182,6 @@ P02_TABLES = (
     "executor_group_member",
     "executor_routing_rule_revision",
     "executor_routing_mode_event",
-    # `0032_ar_v3_run_group`. A group of six runs of one version and its members. Only
-    # `start_ar_v3_group` writes them (behind the reviewed-pack registry, empty here); the
-    # journey starts single runs, so both counts are expected unchanged across a replay.
-    "ar_v3_run_group",
-    "ar_v3_run_group_member",
     # `0035_comparison_records` (`COMPARE-PERSISTED-SUMMARY-01`). The comparison of two versions
     # as a record, both tables append-only. `comparison_sheet_link` holds an expert's approval or
     # withdrawal of a sheet pairing and is written only by the commands `approve_sheet_pairing`
@@ -195,8 +190,7 @@ P02_TABLES = (
     # `generate_comparison_summary` (`generateComparisonSummary`). The journey uploads, runs,
     # decides and exports; it never compares two versions, pairs a sheet or asks for a summary
     # (nothing under this directory names those operations), so both counts are expected
-    # unchanged across a replay -- counted rather than skipped, the same claim as for
-    # `ar_v3_run_group`.
+    # unchanged across a replay -- counted rather than skipped.
     "comparison_sheet_link",
     "comparison_summary",
     # `0038_comparison_foundation` (`CMP-SEAL-C0`). The comparison upload, version-order, page-profile,
@@ -256,8 +250,7 @@ P02_TABLES = (
     # append-only (archive is a new revision). Written only by the preset commands (create,
     # revise, archive; administrator role); the journey starts runs by hand and never creates a
     # preset (nothing under this directory names those operations), so the count is expected
-    # unchanged across a replay -- counted rather than skipped, the same claim as for
-    # `ar_v3_run_group`.
+    # unchanged across a replay -- counted rather than skipped.
     "analysis_preset_revision",
 )
 

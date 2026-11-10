@@ -1,7 +1,7 @@
 """`EXEC-PULL-01`: a runner's answer held to the task's output schema (``executors/answers.py``).
 
 The validator stands in for a JSON Schema library the runtime lock does not carry, so it is held
-to the three response schemas the stage actually sends, and every refusal is shown to name a
+to the response schemas the stage sends, and every refusal is shown to name a
 location and a keyword and nothing of the document.
 """
 
@@ -11,7 +11,6 @@ import json
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v3.response_schema import response_schema as ar_v3
 from auditmanager.analysis.text.prompt import RESPONSE_SCHEMA
 from auditmanager.executors.answers import (
     AnswerInvalid,
@@ -20,11 +19,12 @@ from auditmanager.executors.answers import (
     read_answer,
     validate,
 )
+from tests.support.one_of_response_schema import one_of_response_schema
 
 SENTINEL = "SENTINEL-DOCUMENT-TEXT-0451"
 
 
-@pytest.mark.parametrize("schema", [RESPONSE_SCHEMA, ar_v3()], ids=["v1", "ar_v3"])
+@pytest.mark.parametrize("schema", [RESPONSE_SCHEMA, one_of_response_schema()], ids=["v1", "one_of"])
 def test_every_response_schema_the_stage_sends_is_judgeable(schema) -> None:
     check_supported(schema)
 

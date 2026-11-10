@@ -18,7 +18,7 @@ a stand with both has two connections and two ``authorized_keys`` lines.
 The CLI runs with ``--output-format stream-json --verbose --include-partial-messages``: it writes
 newline-delimited JSON while the model generates (thinking included), and the last ``result`` line
 is the report.  A call is therefore judged by its signs of life, not by one short wall-clock
-deadline (``AR-V3-LIVENESS-01``): in ``--ssh-envelope`` mode the command writes a heartbeat line to
+deadline: in ``--ssh-envelope`` mode the command writes a heartbeat line to
 stderr every ``HEARTBEAT_SECONDS``, ends the call after ``STALL_SECONDS`` without a new stream byte
 and, at the very latest, after ``SSH_HARD_CAP_SECONDS``.  Nothing limits the model's effort,
 thinking or turns.
@@ -72,7 +72,7 @@ HEARTBEAT_SECONDS = 30
 STALL_SECONDS = 600
 SSH_HARD_CAP_SECONDS = 7140
 POLL_SECONDS = 0.2
-#: The frozen interface with the stand (``AR-V3-LIVENESS-01``): the stand recognises a sign of life
+#: The frozen interface with the stand: the stand recognises a sign of life
 #: only by ``^pdf-analysis-forced-command: hb [0-9]+ [0-9]+ [0-9]+$`` on a whole stderr line.
 HEARTBEAT_PREFIX = "pdf-analysis-forced-command: hb"
 EFFORTS = ("low", "medium", "high", "xhigh", "max")

@@ -143,7 +143,7 @@ def test_every_contract_stage_belongs_to_exactly_one_chip() -> None:
     covered = [stage_id for chip in CHIPS for stage_id in chip.stage_ids]
     assert len(covered) == len(set(covered))
     assert stage_ids <= set(covered), sorted(stage_ids - set(covered))
-    assert set(covered) - stage_ids == {"comprehensive_analysis", "ar_v3_citation_review"}  # a procedure, and the AR v3 stage
+    assert set(covered) - stage_ids == {"comprehensive_analysis"}  # a procedure
 
 
 def test_the_reused_metric_is_the_one_the_executor_writes() -> None:
@@ -335,13 +335,6 @@ def test_an_extended_legacy_run_lists_the_chips_its_procedures_and_its_old_journ
     assert item(doc, "norms")["facts"]["state"] == "pending"  # called, and no procedure says it ended
 
 
-def test_a_run_of_the_ar_v3_profile_lists_its_own_chip() -> None:
-    rows = [*prep(), StageRow("ar_v3_citation_review", "succeeded", started_at=at(3), finished_at=at(5))]
-    doc = legacy(stage_rows=rows, calls=[call("ar_v3", n=0, start=3.1, end=4.9, subscription=True)])
-    assert [entry["chip"] for entry in doc["items"]] == ["preparation", "ar_v3"]
-    assert item(doc, "ar_v3")["stage_ids"] == ["ar_v3_citation_review"] and item(doc, "ar_v3")["plan"][0]["role"] == "main"
-
-
 # --- the journal rows of a run written before 0062 -------------------------------------------------------------------------------
 
 
@@ -360,10 +353,9 @@ def test_an_extended_phase_is_placed_on_its_chip_by_the_map(phase: str, chip: st
     assert chip_of_call(None, {"extended_phase": phase}) == chip
 
 
-def test_a_row_with_no_phase_is_a_call_of_the_text_stage_and_an_ar_v3_candidate_is_the_ar_v3_call() -> None:
+def test_a_row_with_no_phase_is_a_call_of_the_text_stage() -> None:
     assert chip_of_call(None, {"text_window_key": "w001"}) == "text"
     assert chip_of_call(None, None) == "text"
-    assert chip_of_call(None, {"ar_v3_candidate_sha256": "0" * 64}) == "ar_v3"
 
 
 def test_the_stage_key_of_a_new_row_wins_over_everything_else() -> None:

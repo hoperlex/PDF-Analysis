@@ -62,7 +62,6 @@ from auditmanager.api.schemas.findings import (
     EvidenceView,
     FindingDetailView,
     FindingView,
-    NormCitationView,
     ObservationView,
     ProvenanceView,
 )
@@ -1257,14 +1256,11 @@ class RunAdapter(_SessionHolder):
         text_profiles: Any = None,
         providers: Any = None,
         route_freezer: Any = None,
-        ar_v3_pack_registry: Any = None,
         dispatch_groups: bool = True,
-        ar_v3_installed_pack: Any = None,
         preset_resolver: Any = None,
         cost_preflight: Any = None,
         require_cost_consent: bool = False,
         group_admitter: Any = None,
-        ar_v3_start_allowed: bool = False,
         stage_plans: Any = None,
     ) -> None:
         super().__init__(session_factory)
@@ -1273,13 +1269,6 @@ class RunAdapter(_SessionHolder):
         # same object is handed to the three start commands and to the cost preflight, so the estimate, the consent and the plan a run
         # freezes are one reading. ``None`` is a bare adapter (and the many tests that build one): the legacy route, exactly as before.
         self._stage_plans = stage_plans
-        # `AR-V3-OPT-IN` (design 4.2). The deployment's allowance to **start** an AR v3 group or to ask what one costs
-        # (``AR_V3_BETA_START_ALLOWED``, read once by the composition root, ``False`` by default and for every bare
-        # adapter a test builds). The pack alone no longer allows a start; execution, reading and review need only the
-        # pack. ``test_composition_pins_the_v3_start_allowance`` pins what the root passes.
-        if type(ar_v3_start_allowed) is not bool:
-            raise ValueError("ar_v3_start_allowed must be a boolean")
-        self._ar_v3_start_allowed = ar_v3_start_allowed
         # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 13). Admits a start on an executor group, or by the routing rules
         # while the mode is `rules`, in the start's own transaction; ``None`` is the `environment` source (and the many
         # tests that build a bare adapter): a start that names a group is then refused, and one that names nothing is
@@ -1296,13 +1285,8 @@ class RunAdapter(_SessionHolder):
         # start. Both ``None`` keeps the many tests that build a bare adapter as they are.
         self._providers = providers
         self._route_freezer = route_freezer
-        self._ar_v3_pack_registry = ar_v3_pack_registry
         # `EXEC2-INT-3`: the in-process claim refuses pending group Runs unless the source is `database`.
         self._dispatch_groups = dispatch_groups
-        # `AR-V3-BETA-PACK-STATUS-API-01`. The parsed manifest the registry above was built from
-        # (``ParsedPackManifest``), or ``None`` while none is installed. Only the status read uses
-        # it; group start and the executor still decide from the registry.
-        self._ar_v3_installed_pack = ar_v3_installed_pack
         # `W59-SECTION-SEAL-01`. The sealed section -> (profile, bundle) table run start and
         # re-audit route through, and the registry resolver the executor runs a run's pinned
         # profile with. The composition root always passes both
@@ -1337,7 +1321,7 @@ class RunAdapter(_SessionHolder):
             from auditmanager.runs.preflight import RunCostPreflight
             self._cost_preflight = RunCostPreflight(section_profiles=section_profiles, text_profiles=text_profiles,
                 provider_config=provider_config, provider_mode=provider_mode, connection_route=route_freezer,
-                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry, blob_store=blob_store,
+                preset_resolver=preset_resolver, blob_store=blob_store,
                 group_admitter=group_admitter, stage_plans=stage_plans)
         if require_cost_consent and self._cost_preflight is None:
             raise ValueError("served analysis starts require a cost preflight policy")
@@ -1377,122 +1361,6 @@ class RunAdapter(_SessionHolder):
                 **({"executor_group_id": executor_group_id} if executor_group_id is not None else {}))
         value = self._read(estimate)
         return models.RunCostEstimate.model_validate(value.as_dict())
-
-    def _ar_v3_installed_pack_state(self) -> bool:
-        """Whether a reviewed pack is installed, as group start decides it (the registry, not the manifest record)."""
-        registry = self._ar_v3_pack_registry
-        return registry is not None and registry.select_beta() is not None
-
-    def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate:
-        if self._cost_preflight is None:
-            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
-        # `AR-V3-OPT-IN`: asked for a price the start would refuse, the answer is the start's refusal, not a figure. With no
-        # pack installed this passes and the estimate gives the answer it always gave (`dependency_unavailable`).
-        from auditmanager.runs.public import require_start_allowed
-
-        require_start_allowed(
-            pack_installed=self._ar_v3_installed_pack_state(),
-            start_allowed=self._ar_v3_start_allowed,
-        )
-        value = self._read(lambda session: self._cost_preflight.estimate_group(session,
-            version_uid=version_uid, relaxed_limits=relaxed_limits))
-        return models.RunCostEstimate.model_validate(value.as_dict())
-
-    def start_ar_v3_group(
-        self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
-        cost_consent: Mapping[str, Any] | None = None,
-        cost_actor_uid: str | None = None,
-        started_by_user_uid: str | None = None,
-    ) -> models.ArV3BetaGroup:
-        """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
-
-        The ordinary ``start_run`` does three things after its command and this method did
-        none: it advanced the Run ``created -> queued`` and enqueued its Job in the
-        accepting transaction, and after the commit it submitted the work to the carrier. A
-        group left six ``created`` Runs and no Job, which a served carrier's poller
-        (``JobRepository.next_queued_run``: a queued Job of a queued or running Run) never
-        finds. The same three steps are taken here for each member, with the same ordering and
-        the same replay rule, and the domain command stays free of both Job and carrier.
-        """
-        from dataclasses import replace
-
-        from auditmanager.jobs.public import JobRepository
-        from auditmanager.runs import RunRepository
-        from auditmanager.runs.public import get_ar_v3_group, start_ar_v3_group
-
-        def work(session: Session) -> Any:
-            started = start_ar_v3_group(
-                session,
-                version_uid=version_uid,
-                idempotency_key=idempotency_key,
-                relaxed_limits=relaxed_limits,
-                provider_mode=self._provider_mode,
-                pack=(None if self._ar_v3_pack_registry is None
-                      else self._ar_v3_pack_registry.select_beta()),
-                input_budget_characters=self._input_budget_characters,
-                connection_route=self._route_freezer,
-                cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
-                cost_consent=cost_consent,
-                cost_actor_uid=cost_actor_uid,
-                # `AR-V3-OPT-IN`: the allowance is checked inside the command, after the replay branches; the starter is
-                # recorded on each member as the ordinary start records it (`R-151v`).
-                start_allowed=self._ar_v3_start_allowed,
-                started_by_user_uid=started_by_user_uid,
-            )
-            if started.replayed:
-                return started
-            # `D-20`, as in `start_run`: `created -> queued` is taken in the transaction that
-            # accepts the Runs, which has just resolved the pack, the profile, the snapshot and
-            # the six verified sets, and the Job shares it, so a process dying after the 202
-            # leaves claimable rows. Member order is scope order, so the Jobs queue F1 .. S2.
-            for member in started.group.members:
-                RunRepository().advance(
-                    session, run_id=member.run_id, from_state="created", to_state="queued",
-                )
-                JobRepository().enqueue(session, run_id=member.run_id)
-            # The answer says what was accepted (`queued`), not the state read before the edge.
-            return replace(started, group=get_ar_v3_group(session, started.group.group_id))
-
-        started = self._write(work)
-        if not started.replayed:
-            # A replay submits nothing: the key's first request already did.
-            for member in started.group.members:
-                self._carrier.submit(self._job(member.run_id))
-        return models.ArV3BetaGroup.model_validate(asdict(started.group))
-
-    def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
-        from auditmanager.runs.public import get_ar_v3_group
-
-        view = self._read(lambda session: get_ar_v3_group(session, group_id))
-        return models.ArV3BetaGroup.model_validate(asdict(view))
-
-    def get_ar_v3_group_review(self, *, group_id: str) -> models.ArV3BetaGroupReview:
-        from auditmanager.runs.v3_group_review import read_v3_group_review
-
-        view = self._read(lambda session: read_v3_group_review(
-            session, group_id, blob_store=self._blob_store,
-        ))
-        return models.ArV3BetaGroupReview.model_validate(asdict(view))
-
-    def get_ar_v3_pack_status(self) -> models.ArV3BetaPackStatus:
-        """What the server holds, as the manifest said it: no database, no provider.
-
-        The review is the human attestation the manifest carried; nothing here says it is true.
-        """
-        installed = self._ar_v3_installed_pack
-        if installed is None:
-            return models.ArV3BetaPackStatus(state="not_installed")
-        pack = installed.pack
-        return models.ArV3BetaPackStatus(
-            state="installed",
-            # `AR-V3-OPT-IN`: whether this deployment allows a start now (installed is capability; this is permission).
-            start_allowed=self._ar_v3_start_allowed,
-            analysis_profile_id=pack.analysis_profile_id,
-            prompt_bundle_id=pack.prompt_bundle_id,
-            pack_sha256=pack.sha256,
-            scope_ids=[scope.scope_id for scope in pack.scopes],
-            review=models.ArV3BetaPackReview.model_validate(asdict(installed.review)),
-        )
 
     def start_run(
         self,
@@ -1653,7 +1521,6 @@ class RunAdapter(_SessionHolder):
                 provider_config=self._provider_config,
                 text_profiles=self._text_profiles,
                 providers=self._providers,
-                ar_v3_pack_registry=self._ar_v3_pack_registry,
                 dispatch_groups=self._dispatch_groups,
             )
 
@@ -1720,51 +1587,6 @@ class RunAdapter(_SessionHolder):
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._read(lambda session: _run_status_view(session, run_id))
 
-    def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
-        """`R-146at`. The canonical report of an AR v3 beta Run, from its saved CITE stage.
-
-        The runs context owns the rule (``runs.v3_norm_report``: the sealed review, the
-        certified citation partitions and their one-to-one comparison); this adapter owns the
-        read snapshot, the refusals the operation declares and the mapping into the frozen
-        ``NormVerificationReport``. A Run of any other profile is ``not_found``. A v3 Run that
-        has no verified saved review (not terminal, failed, cancelled, or a saved review that
-        fails verification) answers the declared ``503 dependency_unavailable`` and returns
-        nothing unverified; the reason goes to the log, not to the wire.
-        """
-        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
-        from auditmanager.runs import RunRepository
-        from auditmanager.runs.v3_norm_report import read_v3_norm_verification
-
-        def unavailable() -> DomainError:
-            return DomainError(
-                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader",
-            )
-
-        def work(session: Session) -> models.NormVerificationReport:
-            session.connection(execution_options={
-                "isolation_level": "REPEATABLE READ", "postgresql_readonly": True,
-            })
-            run = RunRepository().get(session, run_id)
-            if run.analysis_profile_id != str(AR_V3_BETA_PROFILE_ID):
-                raise _not_found("NormVerificationReport")
-            if run.state not in {"published", "partial"}:
-                raise unavailable()
-            try:
-                view = read_v3_norm_verification(session, run_id, blob_store=self._blob_store)
-            except DomainError as error:
-                if error.code not in {
-                    ErrorCode.ANALYSIS_INPUT_INVALID, ErrorCode.STORAGE_INTEGRITY_ERROR,
-                }:
-                    raise
-                logging.getLogger(__name__).warning(
-                    "norm verification refused for %s: %s", run_id,
-                    dict(error.detail_fields).get("reason"),
-                )
-                raise unavailable() from error
-            return models.NormVerificationReport.model_validate(_norm_verification_body(view))
-
-        return self._read(work)
-
     def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
         """`NORM-REFS-RUN-01`. The norms the run's saved text cites, against its snapshot.
 
@@ -1816,51 +1638,6 @@ class RunAdapter(_SessionHolder):
             )
 
         return self._read(work)
-
-
-def _norm_verification_body(view: Any) -> dict[str, Any]:
-    """The frozen ``NormVerificationReport`` of one AR v3 beta Run.
-
-    ``required_value`` and ``stated_value`` are never put on the wire for this profile: they are
-    stored (the database requires them for a normative finding) but the beta policy
-    ``numeric_output_policy`` is ``expert_review_required`` and no edition check exists, so a
-    number is not served. Both properties are optional in the contract.
-    """
-
-    def citation(item: Any) -> dict[str, Any]:
-        return {
-            "norms_snapshot_id": item.norms_snapshot_id,
-            "norm_document_id": item.norm_document_id,
-            "norm_paragraph_id": item.norm_paragraph_id,
-            "designation": item.designation, "title": item.title,
-            "clause_number": item.clause_number, "page_label": item.page_label,
-            "quote": item.quote, "state": item.state,
-            "source_attribution": item.source_attribution,
-        }
-
-    def partition(item: Any) -> dict[str, Any]:
-        return {
-            "finding_observation_id": item.finding_observation_id,
-            "norm_citations": [citation(entry) for entry in item.citations],
-        }
-
-    body: dict[str, Any] = {
-        "run_id": view.run_id, "norms_snapshot_id": view.norms_snapshot_id,
-        "norm_retrieval_set_id": view.norm_retrieval_set_id, "status": view.status,
-        "findings": [
-            {
-                "finding_uid": finding.finding_uid,
-                "canonical": partition(finding.canonical),
-                "merged_observations": [partition(m) for m in finding.merged_observations],
-            }
-            for finding in view.findings
-        ],
-        "withheld_by_reason": dict(view.withheld_by_reason),
-        "textless_pages": list(view.textless_pages),
-    }
-    if view.error_code is not None:
-        body["error_code"] = view.error_code
-    return body
 
 
 def resolve_analysis_preset(session: Session, preset_id: str) -> Any:
@@ -1926,16 +1703,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     # `stage_result.metrics` -- `D-15` measures that pair as a sum over attempts wearing
     # one attempt's provenance, and that ambiguity is not being inherited into a contract.
     cost = repository.cost(session, run_id)
-    # `AR-V3-OPT-IN` (design 4.4): which analysis produced the run, derived from its pinned pair (one definition,
-    # ``runs.analysis_kind``); a member of an AR v3 group also names its group and scope, read from the membership row.
-    from auditmanager.runs.public import ANALYSIS_AR_V3_BETA, analysis_kind, ar_v3_membership
-
-    kind = analysis_kind(run.analysis_profile_id, run.prompt_bundle_id)
-    membership = ar_v3_membership(session, run_id) if kind == ANALYSIS_AR_V3_BETA else None
     return RunStatusView(
-        analysis_kind=kind,
-        ar_v3_group_id=None if membership is None else membership[0],
-        ar_v3_scope_id=None if membership is None else membership[1],
         started_by_user_uid=started_by,
         started_by_label=started_by_label,
         reaudit_of_run_id=run.reaudit_of_run_id,
@@ -2116,10 +1884,7 @@ def _queue_binding_facts(session: Session, run_ids: Sequence[str]) -> dict[str, 
     return found
 
 
-def _observation_view(
-    row: Any, evidence: Sequence[Any],
-    citations: Mapping[str, tuple[NormCitationView, ...]] | None = None,
-) -> ObservationView:
+def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
     return ObservationView(
         finding_observation_id=row.finding_observation_id,
         run_id=row.run_id,
@@ -2146,60 +1911,12 @@ def _observation_view(
             model_call_id=row.model_call_id,
         ),
         proposed_severity=getattr(row, "proposed_severity", None),
-        # `R-146as`: the certified citations of an AR v3 beta finding; ``None`` (as before) for
-        # every other observation. ``required_value`` / ``stated_value`` are never served for
-        # this profile (see ``_norm_verification_body``).
-        norm_citations=None if citations is None else citations.get(row.finding_observation_id),
     )
-
-
-def _v3_beta_citations(
-    session: Session, rows: Sequence[Any],
-) -> Mapping[str, tuple[NormCitationView, ...]]:
-    """The certified citations of the AR v3 beta findings among ``rows``, by observation.
-
-    Read through the same certified-partition reader the report uses, so a finding is never
-    shown with a citation the database has not certified. It fails closed: an inconsistent
-    partition is a ``storage_integrity_error``, never a finding listed without its citations.
-    """
-    from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
-    from auditmanager.findings.public import CitationReadRefused, read_verified_citations
-
-    beta = str(AR_V3_BETA_PROFILE_ID)
-    mine = [row for row in rows if row.analysis_profile_id == beta]
-    if not mine:
-        return {}
-    try:
-        read = read_verified_citations(
-            session, run_id=mine[0].run_id, version_uid=mine[0].version_uid,
-            profile_id=beta, cite_stage_id="ar_v3_citation_review",
-        )
-    except CitationReadRefused as error:
-        logging.getLogger(__name__).warning(
-            "certified citations refused for %s: %s", mine[0].run_id, error,
-        )
-        raise DomainError(
-            ErrorCode.STORAGE_INTEGRITY_ERROR,
-            message="the certified citation partitions of the run are inconsistent",
-        ) from error
-    return {
-        partition.finding_observation_id: tuple(
-            NormCitationView(
-                norms_snapshot_id=item.norms_snapshot_id, norm_document_id=item.norm_document_id,
-                norm_paragraph_id=item.norm_paragraph_id, designation=item.designation,
-                title=item.title, clause_number=item.clause_number, page_label=item.page_label,
-                quote=item.quote, state=item.state, source_attribution=item.source_attribution,
-            ) for item in partition.citations
-        )
-        for finding in read.findings
-        for partition in (finding.canonical, *finding.merged_observations)
-    }
 
 
 def _finding_view(
     row: Any, evidence: Sequence[Any], verdict: Any,
     merged_rows: Sequence[Any] = (),
-    citations: Mapping[str, tuple[NormCitationView, ...]] | None = None,
 ) -> FindingView:
     return FindingView(
         finding_uid=row.finding_uid,
@@ -2211,9 +1928,9 @@ def _finding_view(
         decided_severity=getattr(verdict, "decided_severity", None),
         latest_decision_id=getattr(verdict, "latest_decision_id", None),
         decision_recorded_at=getattr(verdict, "decision_recorded_at", None),
-        observation=_observation_view(row, evidence, citations),
+        observation=_observation_view(row, evidence),
         merged_observations=(
-            tuple(_observation_view(member, evidence, citations) for member in merged_rows)
+            tuple(_observation_view(member, evidence) for member in merged_rows)
             if merged_rows else None
         ),
     )
@@ -2965,11 +2682,10 @@ class FindingAdapter(_SessionHolder):
         def work(session: Session) -> Sequence[FindingView]:
             rows = published_findings(session, run_id)
             evidence = published_finding_evidence(session, run_id)
-            citations = _v3_beta_citations(session, rows)
             views = [
                 _finding_view(group.canonical, evidence,
                               current_verdict(session, group.canonical.finding_uid),
-                              group.merged, citations)
+                              group.merged)
                 for group in group_published_findings(rows)
             ]
             if category is not None:
@@ -3008,7 +2724,6 @@ class FindingAdapter(_SessionHolder):
             return FindingDetailView(
                 finding=_with_carried_origin(session, _with_execution_status(session, [_finding_view(
                     row, evidence, verdict, matches[0].merged,
-                    _v3_beta_citations(session, members),
                 )]))[0],
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),
@@ -3263,13 +2978,11 @@ class MemoryCaptureAssembler:
         return self._repository.capture(session, self.assemble(session, event, origin_kind))
 
     def assemble(self, session: Session, event: Any, origin_kind: str) -> Any:
-        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
         from auditmanager.decision_memory.public import (
-            CaptureSnapshot, CaseContent, CaseOrigin, DecisionFact, EvidenceItem, NormRef, select_page_image_crops,
+            CaptureSnapshot, CaseContent, CaseOrigin, DecisionFact, EvidenceItem, select_page_image_crops,
         )
         from auditmanager.documents.public import DocumentRepository
         from auditmanager.findings import finding_by_uid, published_finding_evidence, published_findings
-        from auditmanager.findings.public import CitationReadRefused, read_verified_citations
         from auditmanager.shared.identity import VersionUid
 
         head = finding_by_uid(session, event.finding_uid)
@@ -3293,33 +3006,6 @@ class MemoryCaptureAssembler:
              if item.finding_observation_id == row.finding_observation_id),
             key=lambda item: item.evidence_ordinal,
         )
-
-        required_value = stated_value = None
-        references: list[Any] = []
-        if row.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID):
-            # The same certified-partition reader the finding views use; it fails closed on an inconsistent partition.
-            try:
-                certified = read_verified_citations(
-                    session, run_id=head.run_id, version_uid=head.version_uid,
-                    profile_id=str(AR_V3_BETA_PROFILE_ID), cite_stage_id="ar_v3_citation_review",
-                )
-            except CitationReadRefused as error:
-                raise DomainError(
-                    ErrorCode.STORAGE_INTEGRITY_ERROR,
-                    message="the certified citation partitions of the run are inconsistent",
-                ) from error
-            partition = next(
-                (
-                    candidate
-                    for finding in certified.findings
-                    for candidate in (finding.canonical, *finding.merged_observations)
-                    if candidate.finding_observation_id == row.finding_observation_id
-                ),
-                None,
-            )
-            if partition is not None:
-                required_value, stated_value = partition.required_value, partition.stated_value
-                references = list(partition.citations)
 
         # The version carries its current classification (the section as of now, which is the section as of capture).
         version = DocumentRepository().get_version(session, VersionUid.parse(head.version_uid))
@@ -3346,17 +3032,10 @@ class MemoryCaptureAssembler:
 
         content = CaseContent(
             category=row.category, finding_text=row.finding_text, recommendation_text=row.recommendation_text,
-            proposed_severity=row.proposed_severity, required_value=required_value, stated_value=stated_value,
+            proposed_severity=row.proposed_severity, required_value=None, stated_value=None,
             stage_id=row.stage_id, analysis_profile_id=row.analysis_profile_id, prompt_bundle_id=row.prompt_bundle_id,
             provider_mode=row.provider_mode, evidence=evidence,
-            norm_refs=tuple(
-                NormRef(
-                    ordinal=number, norms_snapshot_id=ref.norms_snapshot_id, norm_document_id=ref.norm_document_id,
-                    norm_paragraph_id=ref.norm_paragraph_id, designation=ref.designation, clause_number=ref.clause_number,
-                    page_label=ref.page_label, quote=ref.quote, citation_state=ref.state,
-                )
-                for number, ref in enumerate(references, start=1)
-            ),
+            norm_refs=(),
         )
         return CaptureSnapshot(
             origin=CaseOrigin(
@@ -3666,25 +3345,14 @@ class CsvExportAdapter(_SessionHolder):
 def _read_citations_for_export(
     session: Session, *, run_id: str, version_uid: str, profile_id: str,
 ) -> Any:
-    """W57a's verified citation reader, told which stage certifies this profile's partitions.
+    """W57a's verified citation reader, with the stage that certifies a run's partitions (``norm_verification``, the reader's default).
 
-    An AR v3 beta Run's partitions are certified by the succeeded ``ar_v3_citation_review`` stage
-    (migration ``0036``); every other profile's by ``norm_verification``, the reader's default. The
-    export context calls the injected reader with the Run's identity and profile only, so the choice
-    is made here, from the profile, and nowhere else. Without it the reader's header query (an inner
-    join on the stage) finds no row for a v3 Run and ``exportRunXlsx`` answers
-    ``required_norm_unavailable`` for every AR v3 beta Run
-    (``AR-V3-JUDGE-FIXES-01``).
+    The export context calls the injected reader with the Run's identity and profile only.
     """
-    from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
     from auditmanager.findings.citation_reader import read_verified_citations
 
     return read_verified_citations(
         session, run_id=run_id, version_uid=version_uid, profile_id=profile_id,
-        cite_stage_id=(
-            "ar_v3_citation_review" if profile_id == str(AR_V3_BETA_PROFILE_ID)
-            else "norm_verification"
-        ),
     )
 
 
@@ -5258,16 +4926,8 @@ class _AnalysisReader:
         from auditmanager.comparison.public import RunCandidate
         from auditmanager.runs import RunRepository
 
-        from auditmanager.runs.public import ANALYSIS_STANDARD, analysis_kind
-
-        # `AR-V3-OPT-IN` (design 4.4): every run is listed, each saying whether it is of the standard analysis. The
-        # consumers choose «the result of a version» among the standard ones; a run the caller names that is not one is
-        # refused by the comparison, not silently replaced.
         return tuple(
-            RunCandidate(
-                str(run.run_id), run.state,
-                analysis_kind(run.analysis_profile_id, run.prompt_bundle_id) == ANALYSIS_STANDARD,
-            )
+            RunCandidate(str(run.run_id), run.state)
             for run in RunRepository().list_for_version(session, version_uid)
         )
 
@@ -5442,7 +5102,7 @@ class _SpecificationTextReader:
         from auditmanager.optimisation.public import RunCandidate
 
         return tuple(
-            RunCandidate(run.run_id, run.state, run.standard_analysis)
+            RunCandidate(run.run_id, run.state)
             for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
         )
 
@@ -6804,7 +6464,7 @@ class _ProposalTextReader:
         from auditmanager.optimisation.public import RunCandidate
 
         return tuple(
-            RunCandidate(run.run_id, run.state, run.standard_analysis)
+            RunCandidate(run.run_id, run.state)
             for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
         )
 

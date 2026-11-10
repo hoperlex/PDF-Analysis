@@ -385,8 +385,8 @@ def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
     # tags, the execution status of a finding, and the five «График работ» journals); 0049-0052 and 0056-0058 add none:
     # 129 + 7 = 136 (measured 2026-11-08; lane C4 saw this pin red at 136 on its stand); `0059_decision_memory` adds the eight
     # tables of the decision memory: 136 + 8 = 144; `0061_decision_memory_m2` adds the settings' journal: 145; `0062_hosts_stage_models` adds nine (the host with its journals,
-    # report and cooldown, the stage layout with its revisions and switch, and the cell binding): 154, which is `len(coverage.TABLES)`.
-    assert refused == sorted(coverage.TABLES) and len(refused) == 154
+    # report and cooldown, the stage layout with its revisions and switch, and the cell binding): 154; `0063_drop_ar_v3_beta` drops the two tables of `0032`: 152, which is `len(coverage.TABLES)`.
+    assert refused == sorted(coverage.TABLES) and len(refused) == 152
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------
@@ -424,8 +424,8 @@ def test_append_only_tables_refuse_update_and_delete_by_privilege(applied: Stand
     # ``executor_routing_mode_event``; ``executor_group`` is read-write: its rotation cursor advances and its archive is
     # write-once): 55 + 9 + 4 = 68; 0053-0055 add five append-only tables (`len(grants.APPEND_ONLY)` is 73, measured
     # 2026-11-08): 68 + 5 = 73; `0059_decision_memory` adds eight (all immutable): 73 + 8 = 81; `0062_hosts_stage_models` adds five (the host's use
-    # and slot journals, the stage layout's revisions and switch, and the cell binding): 81 + 5 = 86.
-    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 86
+    # and slot journals, the stage layout's revisions and switch, and the cell binding): 81 + 5 = 86; `0063_drop_ar_v3_beta` drops the two append-only tables of `0032`: 84.
+    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 84
 
 
 def test_read_only_tables_refuse_every_write(applied: Stand) -> None:

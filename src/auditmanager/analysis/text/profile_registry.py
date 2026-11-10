@@ -6,8 +6,7 @@ every v1-style text run executes with its own prompt bundle. A section with no e
 refused at run start -- there is no AR fallback.
 
 **АР is registered again** by `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` as a new
-text profile sourced from the original application's AR files. The previous six-Run
-v3 group retains its distinct identity for already accepted Runs. A new ordinary
+text profile sourced from the original application's AR files. A new ordinary
 start for a version classified АР resolves this package.
 
 One source: the **data packages** ``profiles/<code_lower>/{profile.json, system_prompt.md}`` in the format

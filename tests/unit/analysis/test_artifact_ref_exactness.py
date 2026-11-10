@@ -1,6 +1,6 @@
 """A stage artifact reference carries its identifier and digest exactly, no trailing newline.
 
-`AR-V3-BETA-REVIEW-FIXES-03` finding F4. `_BLOB_ID` and `_SHA256` end in `$`, which also
+A review finding (F4). `_BLOB_ID` and `_SHA256` end in `$`, which also
 matches just before one trailing newline, and `ArtifactRef.__post_init__` matched with
 `re.match`, so `blob_id="blob_<ULID>\\n"` and `sha256="<hex>\\n"` constructed a reference whose
 document the contract schema refuses.

@@ -169,7 +169,7 @@ READ_WRITE = frozenset((
 #: refuses ``UPDATE`` (and, but for the four ``norm_*`` ``no_update`` tables, ``DELETE``) or is
 #: inserted into by the code and by nothing else.
 APPEND_ONLY = frozenset((
-    "analysis_preset_revision", "ar_v3_run_group", "ar_v3_run_group_member", "audit_event",
+    "analysis_preset_revision", "audit_event",
     "comparison_sheet_link", "comparison_summary", "comparison_version_order",
     # `0039_comparison_core`: the builds of the matrix, the manual edit history and the accepted AI links.
     "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit",

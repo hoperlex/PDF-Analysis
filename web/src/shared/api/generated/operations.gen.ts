@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.49.0 (OpenAPI 3.1.0)
- *   sha256 0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19
+ *   AuditManager PC-01 API 1.50.0 (OpenAPI 3.1.0)
+ *   sha256 a67e0b1b205554259d97bd53ea93b48adbe15c49b5d14feb648db40a2d1a8ec6
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -30,11 +30,6 @@ import type {
   ApplyStageSheetMapRequest,
   ApproveRegistrationRequest,
   ApproveSheetPairingRequest,
-  ArV3BetaGroup,
-  ArV3BetaGroupReview,
-  ArV3BetaPackStatus,
-  ArV3GroupCostEstimateRequest,
-  ArV3RunGroupId,
   Assignment,
   AssignmentDetail,
   AssignmentPage,
@@ -198,7 +193,6 @@ import type {
   NormSearchPage,
   NormSnapshotEventPage,
   NormSnapshotPage,
-  NormVerificationReport,
   NormsSnapshotId,
   OptimisationPass,
   OptimisationPassId,
@@ -325,7 +319,6 @@ import type {
   StageUploadId,
   StageUploadPage,
   StageUploadPartReceipt,
-  StartArV3BetaGroupRequest,
   StartComparisonAiJobRequest,
   StartComparisonAiSheetChangesRequest,
   StartComparisonSeriesRequest,
@@ -418,7 +411,6 @@ export const OPERATION_IDS = [
   'downloadAgentPackage',
   'endUserSessions',
   'enqueueComparisonLaunch',
-  'estimateArV3GroupCost',
   'estimateComparisonAiPairCheck',
   'estimateComparisonAiSheetChanges',
   'estimateComparisonSheetDescription',
@@ -436,9 +428,6 @@ export const OPERATION_IDS = [
   'finishComparisonSeries',
   'generateComparisonSummary',
   'generateExecutorSshKey',
-  'getArV3BetaGroup',
-  'getArV3BetaGroupReview',
-  'getArV3BetaPackStatus',
   'getAssignment',
   'getComparisonAiPairCheck',
   'getComparisonAiQueue',
@@ -476,7 +465,6 @@ export const OPERATION_IDS = [
   'getProductVersion',
   'getProject',
   'getRunNormReferences',
-  'getRunNormVerification',
   'getRunStages',
   'getRunStartReadiness',
   'getRunStatus',
@@ -644,7 +632,6 @@ export const OPERATION_IDS = [
   'setWorkSchedulePlans',
   'setWorkScheduleSettings',
   'setWorkerIntake',
-  'startArV3BetaGroup',
   'startComparisonAiPairCheck',
   'startComparisonAiSheetChanges',
   'startComparisonReport',
@@ -2238,29 +2225,6 @@ export type EnqueueComparisonLaunchInput = {
 export type EnqueueComparisonLaunchResult = ComparisonLaunchQueue;
 
 // ------------------------------------------------------------------------------------
-// estimateArV3GroupCost - POST /ar-v3-beta/groups/cost-estimate
-// ------------------------------------------------------------------------------------
-
-/**
- * Estimate all six AR v3 checks before spend.
- *
- * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend.
- *
- * `AR-V3-OPT-IN`: the price of the six checks of one AR v3 beta group, asked before startArV3BetaGroup. While a reviewed pack is installed and the deployment has not allowed starts (`AR_V3_BETA_START_ALLOWED`, off by default), the answer is `409 conflict` with `conflict_reason` `ar_v3_start_not_enabled` and no figure, as the start's is. With no pack installed the answer is the `503 dependency_unavailable` it always was.
- */
-export type EstimateArV3GroupCostInput = {
-  /** Request body, sent as `application/json`. */
-  body: ArV3GroupCostEstimateRequest;
-  /**
-   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
-   */
-  correlationId?: CorrelationId;
-};
-
-/** Success body of `estimateArV3GroupCost` (`application/json`, HTTP 200). */
-export type EstimateArV3GroupCostResult = RunCostEstimate;
-
-// ------------------------------------------------------------------------------------
 // estimateComparisonAiPairCheck - GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate
 // ------------------------------------------------------------------------------------
 
@@ -2364,7 +2328,7 @@ export type EstimateComparisonSpecificationResult = ComparisonAiEstimate;
 /**
  * Estimate selected section analysis before spend.
  *
- * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest. `EXEC2-SEAL-2`: `executor_group_id` (exclusive with `executor_connection_id` and `preset_id`, with the same refusals as `startRun`) estimates a run on the group's current revision; the estimate then carries `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` (when a rule routed it) and the planned `pin_id`, and no `connection_revision_id`. The estimate digest binds them. `AR-V3-OPT-IN`: with reaudit_of_run_id naming a member of an AR v3 group the answer is the repeat's refusal, `409 conflict` with `conflict_reason` `ar_v3_member_not_repeatable`, and no figure.
+ * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest. `EXEC2-SEAL-2`: `executor_group_id` (exclusive with `executor_connection_id` and `preset_id`, with the same refusals as `startRun`) estimates a run on the group's current revision; the estimate then carries `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` (when a rule routed it) and the planned `pin_id`, and no `connection_revision_id`. The estimate digest binds them.
  *
  * `HOSTS-SEAL-1` (ADR-0028): while the stage layout is switched on, the estimate is for the plan a start would freeze: `billing` is `unmetered` when every cell runs on a subscription, `metered` when every cell is on an API key and `mixed` otherwise; `models` has one line per model with the digest of its rates, its access, its calls, tokens and share of the cost, and `stage_plan_digest` is the digest of the plan. `estimate_digest` binds all of them (consent v2). The explicit executor selectors are `422 validation_failed` with constraint `stage_layout_enabled`. With the layout off the estimate is what it was.
  */
@@ -2692,63 +2656,6 @@ export type GenerateExecutorSshKeyInput = {
 
 /** Success body of `generateExecutorSshKey` (`application/json`, HTTP 201). */
 export type GenerateExecutorSshKeyResult = ExecutorSshKey;
-
-// ------------------------------------------------------------------------------------
-// getArV3BetaGroup - GET /ar-v3-beta/groups/{group_id}
-// ------------------------------------------------------------------------------------
-
-/** Get Ar V3 Beta Group */
-export type GetArV3BetaGroupInput = {
-  /** Path parameters, substituted into `/ar-v3-beta/groups/{group_id}`. */
-  path: {
-    group_id: ArV3RunGroupId;
-  };
-  /**
-   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
-   */
-  correlationId?: CorrelationId;
-};
-
-/** Success body of `getArV3BetaGroup` (`application/json`, HTTP 200). */
-export type GetArV3BetaGroupResult = ArV3BetaGroup;
-
-// ------------------------------------------------------------------------------------
-// getArV3BetaGroupReview - GET /ar-v3-beta/groups/{group_id}/review
-// ------------------------------------------------------------------------------------
-
-/** Get Ar V3 Beta Group Review */
-export type GetArV3BetaGroupReviewInput = {
-  /** Path parameters, substituted into `/ar-v3-beta/groups/{group_id}/review`. */
-  path: {
-    group_id: ArV3RunGroupId;
-  };
-  /**
-   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
-   */
-  correlationId?: CorrelationId;
-};
-
-/** Success body of `getArV3BetaGroupReview` (`application/json`, HTTP 200). */
-export type GetArV3BetaGroupReviewResult = ArV3BetaGroupReview;
-
-// ------------------------------------------------------------------------------------
-// getArV3BetaPackStatus - GET /ar-v3-beta/pack
-// ------------------------------------------------------------------------------------
-
-/**
- * Get Ar V3 Beta Pack Status
- *
- * `AR-V3-OPT-IN`: when the pack is installed, `start_allowed` says whether this deployment allows a start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`). The pack is the capability to execute, read and review; `start_allowed` is the separate permission to start. A screen offers the choice of AR v3 only when the pack is installed and `start_allowed` is true, and never makes it the default.
- */
-export type GetArV3BetaPackStatusInput = {
-  /**
-   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
-   */
-  correlationId?: CorrelationId;
-};
-
-/** Success body of `getArV3BetaPackStatus` (`application/json`, HTTP 200). */
-export type GetArV3BetaPackStatusResult = ArV3BetaPackStatus;
 
 // ------------------------------------------------------------------------------------
 // getAssignment - GET /assignments/{assignment_uid}
@@ -3564,36 +3471,13 @@ export type GetRunNormReferencesInput = {
 export type GetRunNormReferencesResult = RunNormReferences;
 
 // ------------------------------------------------------------------------------------
-// getRunNormVerification - GET /runs/{run_id}/norm-verification
-// ------------------------------------------------------------------------------------
-
-/**
- * Get Run Norm Verification
- *
- * Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A run that is not an AR v3 beta run answers not_found. For an AR v3 beta run the report is computed from the run's saved citation-review stage and the certified citation partitions of its findings (R-146at): findings are the run's published grounded findings, withheld_by_reason counts the proposals the grounding gates rejected, textless_pages comes from the version, and the numeric claims of a finding (required_value, stated_value) are never returned for this profile. A run with no verified saved review (not yet terminal, failed or cancelled, or whose saved review fails verification) answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).
- */
-export type GetRunNormVerificationInput = {
-  /** Path parameters, substituted into `/runs/{run_id}/norm-verification`. */
-  path: {
-    run_id: RunId;
-  };
-  /**
-   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
-   */
-  correlationId?: CorrelationId;
-};
-
-/** Success body of `getRunNormVerification` (`application/json`, HTTP 200). */
-export type GetRunNormVerificationResult = NormVerificationReport;
-
-// ------------------------------------------------------------------------------------
 // getRunStages - GET /runs/{run_id}/stages
 // ------------------------------------------------------------------------------------
 
 /**
  * Get Run Stages
  *
- * `HOSTS-SEAL-2` (ADR-0028, plan section 9.4): the data of the window «Этапы анализа раздела». For each chip of the run -- `preparation`, `text`, `blocks`, `cross_check`, `merge`, `norms`, `review`, `correction` and, for the AR v3 profile, `ar_v3`, in that order, only those the run has -- the code stage ids it covers, its **plan** (the cells the run froze in its `stage_plan`: role, model, effort, access and the server the cell is bound to; for a run that froze none, one line from its binding) and its **facts**: the state; the first and last call (or the stage result's times); the calls succeeded, failed and retried; the input and output tokens, the part of them served by a subscription and the cost; the last error code; and the batches planned and completed where the extended review keeps them. The facts come from the stage results, the extended review artifact and the call journal; a call journalled before migration `0062` has no `stage_key` and is placed by its extended phase. `role:admin|expert|viewer`: the viewer reads the run's stages but never the server or the access (`R-150w`), which are absent from the answer. `404 not_found` for an unknown run.
+ * `HOSTS-SEAL-2` (ADR-0028, plan section 9.4): the data of the window «Этапы анализа раздела». For each chip of the run -- `preparation`, `text`, `blocks`, `cross_check`, `merge`, `norms`, `review`, `correction`, in that order, only those the run has -- the code stage ids it covers, its **plan** (the cells the run froze in its `stage_plan`: role, model, effort, access and the server the cell is bound to; for a run that froze none, one line from its binding) and its **facts**: the state; the first and last call (or the stage result's times); the calls succeeded, failed and retried; the input and output tokens, the part of them served by a subscription and the cost; the last error code; and the batches planned and completed where the extended review keeps them. The facts come from the stage results, the extended review artifact and the call journal; a call journalled before migration `0062` has no `stage_key` and is placed by its extended phase. `role:admin|expert|viewer`: the viewer reads the run's stages but never the server or the access (`R-150w`), which are absent from the answer. `404 not_found` for an unknown run.
  */
 export type GetRunStagesInput = {
   /** Path parameters, substituted into `/runs/{run_id}/stages`. */
@@ -6515,7 +6399,7 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 /**
  * Reaudit Run
  *
- * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). `AR-V3-OPT-IN`: the source must be a run of the standard analysis. A member of an AR v3 group is refused with `409 conflict` and `conflict_reason` `ar_v3_member_not_repeatable` before the key is claimed, and nothing is written: the repeat would route by the section now and silently become the other analysis. AR v3 is repeated by a new startArV3BetaGroup. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection. New served re-audits require fresh confirmed cost consent from estimateRunCost with reaudit_of_run_id before any new spend; the parent approval is never reused. Accepted historical command keys replay their recorded outcome.
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection. New served re-audits require fresh confirmed cost consent from estimateRunCost with reaudit_of_run_id before any new spend; the parent approval is never reused. Accepted historical command keys replay their recorded outcome.
  *
  * `HOSTS-SEAL-1` (ADR-0028): while the stage layout is switched on, a re-audit takes today's layout like a new start: a fresh plan, the consent v2 of `startRun` (the digest of the plan, per model the rate digest and access) and the same waiting for a model. With the layout off it is what it was.
  */
@@ -7936,32 +7820,6 @@ export type SetWorkerIntakeInput = {
 export type SetWorkerIntakeResult = ExecutionWorker;
 
 // ------------------------------------------------------------------------------------
-// startArV3BetaGroup - POST /ar-v3-beta/groups
-// ------------------------------------------------------------------------------------
-
-/**
- * Start Ar V3 Beta Group
- *
- * `AR-V3-OPT-IN`: AR v3 is an opt-in analysis and its own operation; `startRun` and `reauditRun` never reach it, and no default, preset or repeat starts it. While a reviewed pack is installed and the deployment has not allowed starts (`AR_V3_BETA_START_ALLOWED`, off by default; getArV3BetaPackStatus.start_allowed says which), the answer is `409 conflict` with `conflict_reason` `ar_v3_start_not_enabled` and nothing is written (no command, run, group or job). A repeat of an accepted key replays the group it created whether or not starts are still allowed, and runs already accepted finish when the allowance is withdrawn. With no pack installed the answer is the `503 dependency_unavailable` it always was. Each member records the account that started it.
- */
-export type StartArV3BetaGroupInput = {
-  /** Request body, sent as `application/json`. */
-  body: StartArV3BetaGroupRequest;
-  /**
-   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
-   * value on every retry: a new key is a new command, not a retry.
-   */
-  idempotencyKey: IdempotencyKey;
-  /**
-   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
-   */
-  correlationId?: CorrelationId;
-};
-
-/** Success body of `startArV3BetaGroup` (`application/json`, HTTP 202). */
-export type StartArV3BetaGroupResult = ArV3BetaGroup;
-
-// ------------------------------------------------------------------------------------
 // startComparisonAiPairCheck - POST /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check
 // ------------------------------------------------------------------------------------
 
@@ -8217,7 +8075,7 @@ export type StartRunResult = RunStatus;
 /**
  * Start Run From Stage
  *
- * `R-151i` (`UI-A-60`): a NEW run of the earlier run's document version that reuses the earlier run's completed outputs of every PC-01 stage before `stage_id` and computes `stage_id` and the stages after it. The earlier run is immutable history and is not changed; the new run is linked to it by `started_from_run_id` and `start_stage_id` on its `RunStatus` (not by `reaudit_of_run_id`) and records today's configuration, exactly as a re-audit does (R-82). `stage_id` is one of `page_geometry_extraction`, `document_context_build` or `text_analysis`: the first stage reuses nothing (`422 validation_failed`, `field` `stage_id`, `constraint` `nothing_to_reuse`; use `reauditRun`) and any other stage is not startable (`constraint` `stage_not_startable`). The earlier run must have ended (`409 state_transition_not_allowed`) and be a run of the standard analysis (a member of an AR v3 group is `409 conflict`, `conflict_reason` `ar_v3_member_not_repeatable`). A stage output that cannot be taken is `422 analysis_input_invalid` with `details.stage_id` (the first stage that cannot) and `details.reason`: `source_stage_not_completed`, `source_stage_version_changed`, `source_stage_output_incomplete`, `source_artifact_unavailable`, `source_artifact_changed` or `source_stage_inputs_changed`. Nothing is recomputed in place of a refused output and nothing is written. Served starts require fresh confirmed cost consent from estimateRunCost with `start_from_run_id` and `start_stage_id`: the price is for the stages the new run computes, and the digest is bound to this earlier run and stage. While a run from this earlier run and stage has not ended, a second is `409 conflict`. Accepted keys replay their recorded outcome.
+ * `R-151i` (`UI-A-60`): a NEW run of the earlier run's document version that reuses the earlier run's completed outputs of every PC-01 stage before `stage_id` and computes `stage_id` and the stages after it. The earlier run is immutable history and is not changed; the new run is linked to it by `started_from_run_id` and `start_stage_id` on its `RunStatus` (not by `reaudit_of_run_id`) and records today's configuration, exactly as a re-audit does (R-82). `stage_id` is one of `page_geometry_extraction`, `document_context_build` or `text_analysis`: the first stage reuses nothing (`422 validation_failed`, `field` `stage_id`, `constraint` `nothing_to_reuse`; use `reauditRun`) and any other stage is not startable (`constraint` `stage_not_startable`). The earlier run must have ended (`409 state_transition_not_allowed`). A stage output that cannot be taken is `422 analysis_input_invalid` with `details.stage_id` (the first stage that cannot) and `details.reason`: `source_stage_not_completed`, `source_stage_version_changed`, `source_stage_output_incomplete`, `source_artifact_unavailable`, `source_artifact_changed` or `source_stage_inputs_changed`. Nothing is recomputed in place of a refused output and nothing is written. Served starts require fresh confirmed cost consent from estimateRunCost with `start_from_run_id` and `start_stage_id`: the price is for the stages the new run computes, and the digest is bound to this earlier run and stage. While a run from this earlier run and stage has not ended, a second is `409 conflict`. Accepted keys replay their recorded outcome.
  *
  * `HOSTS-SEAL-1` (ADR-0028): while the stage layout is switched on, the new run takes **today's** plan and the consent v2 of `startRun`; only the PC-01 stages that use no model are reused from the earlier run. With the layout off it is what it was.
  */
@@ -8909,7 +8767,7 @@ export type UploadComparisonUploadPartResult = ComparisonUploadPartReceipt;
  *
  * A bare PDF is refused with `validation_failed` and the constraint `portal_bundle_required`; the message says how to obtain the bundle. The PDF must be unencrypted; the temporary statistics intake removes application size and page-count ceilings. Every page must carry an embedded text layer or at least one portal block. Every refusal is `validation_failed` (or `storage_integrity_error`) with a `constraint` detail, and the registered values are in the domain error catalog (`error-codes.json`, `validation_failed`).
  *
- * OCR is always marked: the portal's recognised text is kept as its own artifact with quality flags and is never merged into the PDF's text layer (R-116). The portal's descriptions of images are shown, marked, and never used in analysis (R-117). The upload runs no analysis. Which analysis a version gets is decided later, from the classification an expert confirms for it (`classifyDocumentVersion`, one of the fifteen sections): `startRun` routes the fourteen sections that have a registered text profile to their profile and refuses an unclassified version or a section with none, and АР is analysed only by the six-Run group (`startArV3BetaGroup`). A stated `section` here is the legacy label: it is stored and counted, it neither selects nor refuses an analysis, and it never makes a version classified (D-110, closed by W59-SECTION-SEAL-01).
+ * OCR is always marked: the portal's recognised text is kept as its own artifact with quality flags and is never merged into the PDF's text layer (R-116). The portal's descriptions of images are shown, marked, and never used in analysis (R-117). The upload runs no analysis. Which analysis a version gets is decided later, from the classification an expert confirms for it (`classifyDocumentVersion`, one of the fifteen sections): `startRun` routes a section that has a registered text profile (АР included) to its profile and refuses an unclassified version or a section with none. A stated `section` here is the legacy label: it is stored and counted, it neither selects nor refuses an analysis, and it never makes a version classified (D-110, closed by W59-SECTION-SEAL-01).
  *
  * A third upload in flight in one API process is refused before its body is read: `503 dependency_unavailable` with `details.dependency: upload_capacity` and a `Retry-After` header. Nothing was created; the caller sends the same upload again later.
  *
@@ -9888,20 +9746,6 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
-  estimateArV3GroupCost: {
-    operationId: 'estimateArV3GroupCost',
-    method: 'POST',
-    path: '/ar-v3-beta/groups/cost-estimate',
-    pathParams: [],
-    queryParams: [],
-    headerParams: [],
-    requiresIdempotencyKey: false,
-    requestMediaType: 'application/json',
-    responseMediaType: 'application/json',
-    successStatuses: [200],
-    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
-    tags: ['runs'],
-  },
   estimateComparisonAiPairCheck: {
     operationId: 'estimateComparisonAiPairCheck',
     method: 'GET',
@@ -10139,48 +9983,6 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
-  },
-  getArV3BetaGroup: {
-    operationId: 'getArV3BetaGroup',
-    method: 'GET',
-    path: '/ar-v3-beta/groups/{group_id}',
-    pathParams: ['group_id'],
-    queryParams: [],
-    headerParams: [],
-    requiresIdempotencyKey: false,
-    requestMediaType: null,
-    responseMediaType: 'application/json',
-    successStatuses: [200],
-    errorStatuses: [401, 403, 404, 500, 503],
-    tags: ['runs'],
-  },
-  getArV3BetaGroupReview: {
-    operationId: 'getArV3BetaGroupReview',
-    method: 'GET',
-    path: '/ar-v3-beta/groups/{group_id}/review',
-    pathParams: ['group_id'],
-    queryParams: [],
-    headerParams: [],
-    requiresIdempotencyKey: false,
-    requestMediaType: null,
-    responseMediaType: 'application/json',
-    successStatuses: [200],
-    errorStatuses: [401, 403, 404, 500, 503],
-    tags: ['runs'],
-  },
-  getArV3BetaPackStatus: {
-    operationId: 'getArV3BetaPackStatus',
-    method: 'GET',
-    path: '/ar-v3-beta/pack',
-    pathParams: [],
-    queryParams: [],
-    headerParams: [],
-    requiresIdempotencyKey: false,
-    requestMediaType: null,
-    responseMediaType: 'application/json',
-    successStatuses: [200],
-    errorStatuses: [401, 403, 500, 503],
-    tags: ['runs'],
   },
   getAssignment: {
     operationId: 'getAssignment',
@@ -10690,20 +10492,6 @@ export const OPERATIONS = {
     operationId: 'getRunNormReferences',
     method: 'GET',
     path: '/runs/{run_id}/norm-references',
-    pathParams: ['run_id'],
-    queryParams: [],
-    headerParams: [],
-    requiresIdempotencyKey: false,
-    requestMediaType: null,
-    responseMediaType: 'application/json',
-    successStatuses: [200],
-    errorStatuses: [401, 403, 404, 500, 503],
-    tags: ['runs'],
-  },
-  getRunNormVerification: {
-    operationId: 'getRunNormVerification',
-    method: 'GET',
-    path: '/runs/{run_id}/norm-verification',
     pathParams: ['run_id'],
     queryParams: [],
     headerParams: [],
@@ -13051,20 +12839,6 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
-  },
-  startArV3BetaGroup: {
-    operationId: 'startArV3BetaGroup',
-    method: 'POST',
-    path: '/ar-v3-beta/groups',
-    pathParams: [],
-    queryParams: [],
-    headerParams: [],
-    requiresIdempotencyKey: true,
-    requestMediaType: 'application/json',
-    responseMediaType: 'application/json',
-    successStatuses: [202],
-    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
-    tags: ['runs'],
   },
   startComparisonAiPairCheck: {
     operationId: 'startComparisonAiPairCheck',

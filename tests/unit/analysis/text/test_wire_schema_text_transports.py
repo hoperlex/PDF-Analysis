@@ -1,4 +1,4 @@
-"""The two transports of `analysis/text` hand the provider the wire form (`AR-V3-WIRE-SCHEMA-01`).
+"""The two transports of `analysis/text` hand the provider the wire form.
 
 Each test drives the adapter and asserts on what its fake opener / fake client actually received:
 the bytes of the proxy's POST, the keyword arguments of the SDK call. The request's own body, its
@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v3.response_schema import response_schema
+from tests.support.one_of_response_schema import one_of_response_schema as response_schema
 from auditmanager.analysis.text.adapter import ModelRequest
 from auditmanager.analysis.text.live import LiveAdapter
 from auditmanager.analysis.text.prompt import RESPONSE_SCHEMA
@@ -75,7 +75,7 @@ def _proxy() -> tuple[ProxyAdapter, _Opener]:
     return ProxyAdapter(ProxySettings(base_url="https://proxy.example", token="tok"), opener=opener), opener
 
 
-def test_the_proxy_post_carries_the_wire_form_of_the_v3_schema() -> None:
+def test_the_proxy_post_carries_the_wire_form_of_a_one_of_schema() -> None:
     request = _request(response_schema())
     adapter, opener = _proxy()
     adapter.complete(request)
@@ -167,7 +167,7 @@ class _Client:
             usage=SimpleNamespace(input_tokens=5, output_tokens=2), model="claude-opus-5")
 
 
-def test_the_direct_adapter_hands_the_sdk_the_wire_form_of_the_v3_schema() -> None:
+def test_the_direct_adapter_hands_the_sdk_the_wire_form_of_a_one_of_schema() -> None:
     request = _request(response_schema())
     client = _Client()
     LiveAdapter(api_key=None, client=client).complete(request)

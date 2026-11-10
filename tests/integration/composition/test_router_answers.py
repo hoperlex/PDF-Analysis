@@ -48,9 +48,9 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 #: `W55B-SEAL-01` named the two portal-block reads its port served as sealed stubs, each
 #: answering exactly `503 dependency_unavailable`. `W55B-GEOMETRY-01` serves them and empties
 #: this set, so they meet the sweep's ordinary rule: an absent `ver_` is `404`, never a `5xx`.
-#: `W57A-SEAL-01B` sealed the normative report as a refusing stub until the CITE reader; it
-#: answered exactly `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`).
-#: `AR-V3-DECISIONS-01` (`R-146at`) serves it and empties this set: an absent `run_` is `404`.
+#: `W57A-SEAL-01B` sealed the normative report as a refusing stub; it answered exactly
+#: `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`). The report was served for a
+#: beta that was removed on 2026-11-10 (`R-154a`), and the operation went with it.
 #: `CMP-SEAL-C0` (ADR-0025 decision 25) names the nine comparison reads its ports serve as sealed
 #: stubs, each answering exactly `503 dependency_unavailable` until its lane wires the port
 #: (`CMP-INGEST-01`, `CMP-INGEST-02`, `CMP-PROFILE-01`); the lane that wires one removes its path
@@ -543,8 +543,7 @@ def test_the_composed_product_version_reports_the_sealed_contract_version(app: C
     seal), not the catalog the adapter reads it from: the adapter takes ``contract_version`` from
     the domain error catalog at start-up, so a seal that moved the document and left the catalog
     behind would answer a different version from the one the served OpenAPI declares. It said
-    ``1.0.0`` until the reseals to ``1.5.0`` (the last one `AR-V3-BETA-PACK-STATUS-API-01`) moved
-    the family without moving this literal.
+    ``1.0.0`` until the reseals to ``1.5.0`` moved the family without moving this literal.
     """
     status, body = call(app, "GET", "/system/version")
     assert status == 200, body

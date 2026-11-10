@@ -53,11 +53,10 @@ after capture in one way**: the six `null` pairs were removed from the body text
 `test_the_served_estimate_carries_the_six_nulls_the_contract_forbids` measures it on the live body (exactly those six, and nothing
 else in the body fails the schema) and goes red, on purpose, the day the route stops emitting them (measured: with the dump
 changed to `exclude_none`, 02d differs at byte 174); then the projection and that test are deleted and the record needs no edit.
-`estimateArV3GroupCost` renders `RunCostEstimate` the same way and is not in the corpus.
 
 **Fixed the same day:** `estimateRunCost` now dumps with `exclude_none`, so the served body is the record's contract-correct form;
 the projection and its tripwire were deleted as described, and `test_the_served_estimate_has_no_null_property_and_meets_its_schema`
-reddens on any `null` coming back. `estimateArV3GroupCost` (AR v3, not touched) still renders the nulls.
+reddens on any `null` coming back.
 
 *What 02d pins, and how each figure is justified.* Derived, not copied from the server (`test_the_estimate_follows_from_the_records_around_it`):
 `page_count` is the version's (record 13); `output_tokens` is `windows` x 16 000, the allowance the contract gives for
@@ -84,7 +83,7 @@ derive it. `test_the_refused_unconsented_start_left_no_run_behind` reads record 
 of the consented start.
 
 *Not recorded here.* The other refusals of a consent (`409 run_cost_estimate_stale`, `422` `ceiling_micros` `below_estimate`, a
-metered `positive_metered_limit`), `reauditRun`'s consent, the group and preset estimates and `estimateArV3GroupCost`; with the
+metered `positive_metered_limit`), `reauditRun`'s consent, the preset estimates; with the
 token above each is now one case and one record, with its own contract-grounded reason.
 
 *How the records were produced: not by `capture.py`.* It rewrites every record, including record 12 and every `Authorization`

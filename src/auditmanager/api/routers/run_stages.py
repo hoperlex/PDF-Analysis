@@ -35,8 +35,8 @@ def build_run_stage_routes(router: APIRouter, run_stages: RunStagePort) -> None:
                    **envelope_responses(401, 403, 404, 422, 500, 503)},
         description=(
             "`HOSTS-SEAL-2` (ADR-0028, plan section 9.4): the data of the window «Этапы анализа раздела». For each chip of the run -- "
-            "`preparation`, `text`, `blocks`, `cross_check`, `merge`, `norms`, `review`, `correction` and, for the AR v3 profile, "
-            "`ar_v3`, in that order, only those the run has -- the code stage ids it covers, its **plan** (the cells the run froze in its "
+            "`preparation`, `text`, `blocks`, `cross_check`, `merge`, `norms`, `review`, `correction`, "
+            "in that order, only those the run has -- the code stage ids it covers, its **plan** (the cells the run froze in its "
             "`stage_plan`: role, model, effort, access and the server the cell is bound to; for a run that froze "
             "none, one line from its binding) and its **facts**: the state; the first and last call (or the stage result's times); the "
             "calls succeeded, failed and retried; the input and output tokens, the part of them served by a subscription and the cost; "

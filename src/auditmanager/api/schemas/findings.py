@@ -86,8 +86,8 @@ class ObservationView:
     evidence: tuple[EvidenceView, ...]
     provenance: ProvenanceView
     proposed_severity: str | None = None
-    # None means a legacy observation without a certified partition. An empty tuple is
-    # the explicit v3 proof that CITE completed with zero citations.
+    # None means an observation without a certified partition. An empty tuple is
+    # the explicit proof that the certifying stage completed with zero citations.
     norm_citations: tuple[NormCitationView, ...] | None = None
     required_value: str | None = None
     stated_value: str | None = None

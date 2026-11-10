@@ -161,7 +161,7 @@ export function nightWindowMayRun({ providerMode, allowSpend }) {
  * `PROD-11-AR-V1-V2-REMOVAL-01`. Why a step is not run, or `null` when it is.
  *
  * A step the manifest marks `pending_v3_activation: true` needs a published АР run, and none can exist
- * until the six-run АР v3 group is activated (`D-204`): `startRun` refuses an АР version. The driver
+ * until the АР activation (`D-204`) lands: `startRun` refused an АР version. The driver
  * does not run such a step, does not count it as checked and does not call it a pass -- it reports it,
  * with this reason, and the run ends `OK WITH PENDING` at best. Removing the mark is how a step is
  * reactivated; deleting it is not allowed (`tests/e2e/test_pc01_journey_section.py`).
@@ -202,7 +202,6 @@ const COST_SCOPES = {
   // charges nothing is agreed to by the click and the run starts at once. A re-audit on the queue is the same (the dialog is on the page,
   // the click is on the row's «Повторный аудит»), so for it the journey observes the estimate instead of asking for it.
   run: { root: '[data-start-run-control]', startButton: '[data-start-run-button]', dialog: '[data-start-run-dialog]', confirm: '[data-start-run-confirm]', estimatePath: '/runs/cost-estimate', startPath: '/runs' },
-  ar_v3_group: { root: '[data-ar-v3-group-start]', label: 'Оценить стоимость шести проверок', estimatePath: '/ar-v3-beta/groups/cost-estimate', startPath: '/ar-v3-beta/groups' },
   // `UI-A-60` / `R-151i`, «Запустить с этапа» of an ended run. Since `RUN-SCREEN-01a` it is not on the run page: a chip of the rail opens
   // «Этапы анализа раздела», and the control sits in that modal (`[data-run-stages-dialog]`) under the words «Запустить с этого этапа».
   // The dialog has no estimate button: it reads the source run and asks the price of the chosen stage as soon as the stage is chosen,
@@ -353,8 +352,7 @@ async function agreeToRunCost(page, { estimate, request, allowSpend, dialog, con
 async function approveRunCost(page, action, expectedVersion, allowSpend, sourceRunId = null, providerMode = null) {
   const standard = COST_SCOPES[action.scope];
   assert.ok(standard, `unknown cost approval scope ${action.scope}`);
-  // `run` is the one-button start (and the queue's re-audit); a start from a stage is asked in its dialog («Этапы анализа раздела», opened on a chip), and the six АР v3
-  // checks keep their own estimate button and tick-box. A re-audit and a start from a stage have no button of this control to press: the
+  // `run` is the one-button start (and the queue's re-audit); a start from a stage is asked in its dialog («Этапы анализа раздела», opened on a chip). A re-audit and a start from a stage have no button of this control to press: the
   // estimate is read when the source is chosen, so the journey observes it instead of asking for it.
   const oneButton = action.scope === 'run';
   const fromStage = action.scope === 'run_from_stage';
@@ -625,7 +623,7 @@ export async function runWritePhase({
     };
     records.push(record);
 
-    // ---- a step that waits for the АР v3 group is reported, not run, not passed --------
+    // ---- a step that waits for the АР activation is reported, not run, not passed --------
     const pendingReason = pendingActivation(step, spec);
     if (pendingReason !== null) {
       record.verdict = 'PENDING';

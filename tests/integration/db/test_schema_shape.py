@@ -68,8 +68,6 @@ IMMUTABLE_TABLES = {
     # current row itself moves, so its own guard refuses DELETE and an unrecorded change.
     "norm_current_snapshot_event",
     "norm_retrieval_set",
-    "ar_v3_run_group",
-    "ar_v3_run_group_member",
     "finding_observation_norm_citation",
     # `0024_version_classification`: the first expert classification stands (``AM003``).
     "document_version_classification",
@@ -339,8 +337,8 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
 #: A column name that two tables use for two different identities (or for a label) cannot carry one prefix in the
 #: name-keyed map inside the test below, so the table-qualified exceptions live here and the sweep consults them first.
 #:
-#: ``group_id`` is the Run group of an AR v3 run (``arg``) in ``ar_v3_run_group*``, the executor group (``exg``,
-#: ``0047_executor_groups_rules``, ADR-0026 decision 10) in ``executor_group`` and ``executor_group_revision``, and --
+#: ``group_id`` is the executor group (``exg``, ``0047_executor_groups_rules``, ADR-0026 decision 10) in ``executor_group`` and
+#: ``executor_group_revision``, and --
 #: in the four ``stage_ai_*`` tables of ``0042_comparison_stage_review`` -- a grouping label, see below.
 #: ``stage_link_repair_event.revision_id`` names a stage link revision (``slk``); everywhere else ``revision_id`` is an
 #: executor connection revision (``excr``).
@@ -382,7 +380,6 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "version_uid": "ver",
         "blob_id": "blob",
         "run_id": "run",
-        "group_id": "arg",
         "allocated_by_run_id": "run",
         "reaudit_of_run_id": "run",
         # `0060_run_from_stage` (`R-151i`): the run whose stage outputs a run reuses.

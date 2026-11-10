@@ -593,10 +593,6 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "cancelStageChainRun": _EXPERT,
         "getRunStatus": _PRODUCT_READ,
         "getExtendedRunReview": _PRODUCT_READ,
-        "getArV3BetaGroup": _PRODUCT_READ,
-        "getArV3BetaGroupReview": _PRODUCT_READ,
-        "getArV3BetaPackStatus": _PRODUCT_READ,
-        "getRunNormVerification": _PRODUCT_READ,
         "listRunFindings": _PRODUCT_READ,
         "getFinding": _PRODUCT_READ,
         "listDecisionHistory": _PRODUCT_READ,
@@ -662,8 +658,6 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "uploadDocumentVersion": _EXPERT,
         "startRun": _EXPERT,
         "estimateRunCost": _EXPERT,
-        "startArV3BetaGroup": _EXPERT,
-        "estimateArV3GroupCost": _EXPERT,
         # `W59-SECTION-SEAL-01`. Only an expert confirms a section; admin alone does not
         # imply expert (the decision's authorization rule). The command re-reads the role
         # set in its own transaction.

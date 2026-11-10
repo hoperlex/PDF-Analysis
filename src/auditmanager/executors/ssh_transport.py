@@ -12,7 +12,7 @@ What it does, and the rule each part serves:
   line is visible in the process list). The remote side is a forced command
   (``tools/executor-runner/ssh-forced-command.sh`` or a ``custom_command`` script): the client names
   no command at all, so a stolen admin session cannot choose what runs (plan T-6). A command that
-  prints **heartbeat lines** on stderr (`AR-V3-LIVENESS-01`, see below) may run past ``timeout_s``.
+  prints **heartbeat lines** on stderr (see below) may run past ``timeout_s``.
 * ``open_tunnel`` -- a short-lived ``ssh -N -L`` to the remote HTTP model for ``http_api`` over
   ``transport: ssh_tunnel``. Local end on ``127.0.0.1`` only, closed when the context exits.
 * ``scan_host_key`` -- read the host key of a machine. **Probe only**: there is no TOFU in the call
@@ -46,7 +46,7 @@ already started that fails or times out is *outcome-unknown*: the model may have
 API key, spent. A caller must not retry it three times over. ``sent`` is ``False`` only when the
 failure is one that ssh reports *before* authentication completed.
 
-Signs of life (`AR-V3-LIVENESS-01`). Until now ``timeout_s`` bounded the whole call, so a model
+Signs of life. Until now ``timeout_s`` bounded the whole call, so a model
 that is thinking could not be told from one that hangs. With ``live_hard_cap_s`` given, a call
 whose remote command writes a **heartbeat line** to stderr is *live* from the first such line:
 ``timeout_s`` stops applying, the call may run until ``live_hard_cap_s`` after it started, and it
@@ -122,7 +122,7 @@ TMPFS_DIR = Path("/dev/shm")
 STDERR_LIMIT_CHARS = 500
 _STDERR_CAPTURE_BYTES = 64 * 1024
 
-#: The one stderr line that is a sign of life (`AR-V3-LIVENESS-01`, the frozen interface with
+#: The one stderr line that is a sign of life (the frozen interface with
 #: ``tools/executor-runner/claude_answer.py``): three non-negative integers -- elapsed seconds,
 #: events read, output tokens -- and nothing else. Matched against a **whole** line without its
 #: terminator; never a substring, never a prefix.
@@ -776,7 +776,7 @@ def run_command(
     ``max_output_bytes`` kills the connection. Raises ``SshFailure``; see the module doc for
     ``outcome`` and ``sent``.
 
-    The three keyword parameters switch on the signs of life (`AR-V3-LIVENESS-01`; see the module
+    The three keyword parameters switch on the signs of life (see the module
     doc). With ``live_hard_cap_s`` the call is *live* from the first heartbeat line on stderr:
     ``timeout_s`` no longer bounds it, it is cut as ``hard_cap`` ``live_hard_cap_s`` seconds after
     it started, and -- when ``live_stall_s`` is given -- as ``stalled`` once more than

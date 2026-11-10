@@ -1,4 +1,4 @@
-"""A running worker does not sweep what a live Attempt may still hold (`AR-V3-LIVENESS-01`).
+"""A running worker does not sweep what a live Attempt may still hold.
 
 A live Attempt (its model call shows signs of life) may run until ``ATTEMPT_HARD_CAP_SECONDS``
 (two hours); before, the worker's running sweep took a temporary file at the 900 s watchdog plus

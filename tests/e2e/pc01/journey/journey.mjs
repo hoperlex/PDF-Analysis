@@ -845,7 +845,7 @@ if (PARTIAL) {
 }
 
 if (write !== null && write.pending.length > 0) {
-  // Not a pass of the whole journey: the steps that wait for the АР v3 group were not run.
+  // Not a pass of the whole journey: the steps that wait for the АР activation were not run.
   console.log(
     `e2e:pc01 OK WITH PENDING -- no finding in the ${WRITE_STEPS.length - write.pending.length} step(s) ` +
       `that ran; ${write.pending.length} step(s) are PENDING pending_v3_activation and were NOT RUN, so ` +

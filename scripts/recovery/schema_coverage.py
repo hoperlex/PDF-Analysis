@@ -38,12 +38,12 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0062_hosts_stage_models"
+HEAD = "0063_drop_ar_v3_beta"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
     "account_release_mark", "alembic_version", "analysis_artifact_publication", "analysis_preset_revision", "app_user", "app_user_role",
-    "ar_v3_run_group", "ar_v3_run_group_member", "attempt", "audit_event", "audit_run", "blob", "command_record", "comparison_model_call", "comparison_page_profile", "comparison_sheet_link", "comparison_summary",
+    "attempt", "audit_event", "audit_run", "blob", "command_record", "comparison_model_call", "comparison_page_profile", "comparison_sheet_link", "comparison_summary",
     "comparison_upload", "comparison_upload_file", "comparison_upload_part", "comparison_upload_set", "comparison_version_order", "comparison_work", "comparison_work_attempt",
     "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_series", "comparison_sheet_pair",
     "comparison_sheet_pair_result", "comparison_transition",
@@ -125,11 +125,6 @@ TRIGGERS = (
     ("account_release_mark", "trg_account_release_mark", "am_guard_account_release_mark", 31),
     ("analysis_artifact_publication", "trg_analysis_artifact_frozen_guard", "am_guard_frozen_columns", 19),
     ("analysis_artifact_publication", "trg_analysis_artifact_state_guard", "am_guard_durable_effect_transition", 23),
-    # `0032_ar_v3_run_group`: the group and its six members are immutable; the group's
-    # co-commit check is a deferred AFTER INSERT constraint trigger (5 = ROW | INSERT).
-    ("ar_v3_run_group", "trg_ar_v3_group_complete", "am_ar_v3_group_complete", 5),
-    ("ar_v3_run_group", "trg_ar_v3_run_group_frozen", "am_immutable_row", 27),
-    ("ar_v3_run_group_member", "trg_ar_v3_run_group_member_frozen", "am_immutable_row", 27),
     # `0037_analysis_presets`: the revisions of a preset are append-only (27 = ROW | BEFORE | DELETE |
     # UPDATE) and chained on INSERT (7 = ROW | BEFORE | INSERT); a run records its preset only with
     # the executor that preset names (an INSERT check on `audit_run`).
@@ -441,7 +436,6 @@ TRIGGERS = (
 #: The constraint triggers that are ``DEFERRABLE INITIALLY DEFERRED``: a parent row must
 #: commit together with its children. They fire at commit, never during ``pg_restore``.
 DEFERRED_TRIGGERS = frozenset((
-    "trg_ar_v3_group_complete",
     "trg_executor_group_revision_has_members",
     "trg_finding_observation_partition",
     "trg_norm_citation_partition",
@@ -508,7 +502,9 @@ SEQUENCES = {
 #: 2026-11-09).
 #: `G-1` (the sealed key of a host's SSH install is a secret of the host): `executor_secret.host_id` adds its foreign key, its format check and the
 #: exactly-one-of check: c 1455, f 400.
-CONSTRAINT_COUNTS = {"c": 1455, "f": 400, "p": 153, "t": 10, "u": 138}
+#: `0063_drop_ar_v3_beta` (`AR-V3-BE-RM-01`) drops the six-scope beta's two tables: 18 checks, 7 foreign keys, two primary keys, one constraint
+#: trigger and three unique constraints: c 1437, f 393, p 151, t 9, u 135 (measured on a throwaway database at ``0063``, 2026-11-10).
+CONSTRAINT_COUNTS = {"c": 1437, "f": 393, "p": 151, "t": 9, "u": 135}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -525,7 +521,8 @@ CONSTRAINT_COUNTS = {"c": 1455, "f": 400, "p": 153, "t": 10, "u": 138}
 #: `0062` adds 22 (nine primary keys, five unique constraints, and eight lookups and partial unique indexes): 506 (measured on a throwaway
 #: database at ``0062``, 2026-11-09).
 #: `G-1` adds the partial unique index of one current secret per host and purpose: 507.
-INDEX_COUNT = 507
+#: `0063_drop_ar_v3_beta` drops the beta's two tables with their five indexes: 502 (measured on a throwaway database at ``0063``, 2026-11-10).
+INDEX_COUNT = 502
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

@@ -1,7 +1,7 @@
 """Priced consent for a Run started through the composed application (`REVIEW-FIX-TESTS-1102`, S6-02).
 
 The composition root sets ``require_cost_consent=True`` (``bootstrap/composition.py``), so the served
-``startRun``, ``reauditRun`` and ``startArV3BetaGroup`` refuse a start that carries no confirmed consent
+``startRun`` and ``reauditRun`` refuse a start that carries no confirmed consent
 (``422 validation_failed``, ``constraint=confirmation_required``). A suite that drives the composed
 application therefore does what the web client does: it asks ``POST /runs/cost-estimate`` for the price of
 *this* version, then starts with a ``cost_consent`` built from that estimate -- the estimate's digest, its
@@ -26,7 +26,6 @@ from typing import Any, Protocol
 import pytest
 
 __all__ = [
-    "ESTIMATE_GROUP_PATH",
     "ESTIMATE_RUN_PATH",
     "consented_body",
     "estimate_run_cost",
@@ -35,7 +34,6 @@ __all__ = [
 ]
 
 ESTIMATE_RUN_PATH = "/runs/cost-estimate"
-ESTIMATE_GROUP_PATH = "/ar-v3-beta/groups/cost-estimate"
 
 #: Headers that belong to the start, not to the estimate: the estimate is a read and carries no key.
 _START_ONLY_HEADERS = frozenset({"idempotency-key", "content-type", "content-length"})
