@@ -25593,6 +25593,422 @@
           }
         }
       }
+    },
+    "/runner/tasks/{task_id}/context": {
+      "post": {
+        "operationId": "getExecutorTaskContext",
+        "tags": [
+          "execution"
+        ],
+        "summary": "Get Executor Task Context",
+        "description": "`CRIT-SEAL-50` (plan-v5 section 3.2): the agent behind the claim of a `review:main` task asks once per kind for the decisions of experts on findings like the task's own. The stand answers by the `input_id` of the task's `context_request` and journals what it gave (no text). **Idempotent by (task, kind)**: a repeat returns the same answer and spends no budget. While the night encoder is the only one the answer is `status: unavailable, reason: until_move`. The agent appends the data to the prompt as reference, never as ground, and echoes `context_sha256` in `submitExecutorTaskAnswer`; an error here never fails the task. Runner token only; no role.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExecutorTaskId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecutorTaskContextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The reference data of the task by `input_id`, or `status: unavailable` with a `reason`. A repeat of the same kind answers the same and spends no budget.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutorTaskContext"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/precedents": {
+      "get": {
+        "operationId": "getRunPrecedents",
+        "tags": [
+          "findings"
+        ],
+        "summary": "Get Run Precedents",
+        "description": "`CRIT-SEAL-50` (plan-v5 sections 2.3 and 6): what the «Прецеденты» pass gave the findings of a run -- the neutral label of each, and the items with `label: cancel_suggested` are the queue «Рекомендовано снять». `404 not_found` for an unknown run. `role:admin|expert`; the viewer («Наблюдатель») is denied.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RunId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The labels of the findings of the run, and `available: false` while the pass has no result.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunPrecedents"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/findings/{finding_uid}/precedents": {
+      "get": {
+        "operationId": "getFindingPrecedents",
+        "tags": [
+          "findings"
+        ],
+        "summary": "Get Finding Precedents",
+        "description": "`CRIT-SEAL-50` (plan-v5 sections 2.5 and 3.4): the card of a finding -- its label, at most two hints, the similar cases and the possible norms (paragraphs the run already holds). `404 not_found` for an unknown finding. `role:admin|expert`; the viewer is denied.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FindingUid"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The card of the finding.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingPrecedents"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/vector-control": {
+      "get": {
+        "operationId": "getVectorControl",
+        "tags": [
+          "execution"
+        ],
+        "summary": "Get Vector Control",
+        "description": "`CRIT-SEAL-50` (plan-v5 section 5): the pause of the vectors and the state of the night window. The queued and poisoned jobs are shown to an administrator only. `role:admin|expert`; the viewer is denied.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether the vectors are paused, the state of the night window and the window.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VectorControl"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/vector-control/paused": {
+      "put": {
+        "operationId": "setVectorPaused",
+        "tags": [
+          "execution"
+        ],
+        "summary": "Set Vector Paused",
+        "description": "`CRIT-SEAL-50` (plan-v5 section 5): pause the vectors or resume them. On a pause the night window does not start and the queue keeps filling. Each change is an append-only event with its actor and time; setting the value already in force answers the control as it stands. `role:admin`, `Idempotency-Key` required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVectorPausedRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The control with the pause as it now stands.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VectorControl"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/precedent-settings": {
+      "get": {
+        "operationId": "listPrecedentSettings",
+        "tags": [
+          "execution"
+        ],
+        "summary": "List Precedent Settings",
+        "description": "`CRIT-SEAL-50` (plan-v5 sections 3.1 and 3.6): the switches (`one_list`, `critic_context`, `section_labels`; every one is off while nothing is journalled), the stop words, the night window and the thresholds, and the journal of their changes. `role:admin`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The revision in force of each setting and the journal.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrecedentSettingList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "appendPrecedentSetting",
+        "tags": [
+          "execution"
+        ],
+        "summary": "Append Precedent Setting",
+        "description": "`CRIT-SEAL-50` (plan-v5 sections 3.1 and 3.6): a new revision of a setting, journalled with the administrator who made it. `422 validation_failed` for a value that is not the shape of its setting. A switch changes the behaviour of runs started after it; a run's publication mode is frozen at its start. `role:admin`, `Idempotency-Key` required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppendPrecedentSettingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new revision of the setting, or the recorded outcome of an identical earlier request.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrecedentSetting"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -28930,7 +29346,8 @@
           "model_not_verified",
           "model_cooling_down",
           "not_on_any_server",
-          "at_capacity"
+          "at_capacity",
+          "vector_window"
         ],
         "title": "RunWaitCause",
         "description": "`HOSTS-L1` (contract 1.48.0): why one cell of a waiting planned run cannot be bound now. The six words of `ModelUnavailableReason` (no\navailable server for the cell's model and access: switched off, off line, not logged in, the model not verified, cooling down, on no\nserver) and `at_capacity`: a server serves the model and every place for it is taken."
@@ -29368,6 +29785,9 @@
             "minLength": 1,
             "maxLength": 200,
             "description": "Document value grounded in the project evidence; absent for legacy and nonnormative observations."
+          },
+          "grounding_kind": {
+            "$ref": "#/components/schemas/FindingGroundingKind"
           }
         }
       },
@@ -29467,6 +29887,17 @@
           },
           "current_verdict_carried_from": {
             "$ref": "#/components/schemas/DecisionCarriedFrom"
+          },
+          "block_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/FindingBlockEvidence"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Block Evidence"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/FindingOrigin"
           }
         }
       },
@@ -29581,6 +30012,17 @@
           },
           "current_verdict_carried_from": {
             "$ref": "#/components/schemas/DecisionCarriedFrom"
+          },
+          "block_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/FindingBlockEvidence"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Block Evidence"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/FindingOrigin"
           }
         }
       },
@@ -37962,6 +38404,14 @@
           },
           "cell_key": {
             "$ref": "#/components/schemas/StageCellKey"
+          },
+          "context_request": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutorContextInput"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Context Request"
           }
         },
         "additionalProperties": false,
@@ -38806,6 +39256,9 @@
           },
           "usage": {
             "$ref": "#/components/schemas/ExecutorTaskUsage"
+          },
+          "context_sha256": {
+            "$ref": "#/components/schemas/Sha256"
           }
         },
         "additionalProperties": false,
@@ -51544,6 +51997,809 @@
             "state": "published"
           }
         ]
+      },
+      "AppendPrecedentSettingRequest": {
+        "properties": {
+          "setting_name": {
+            "$ref": "#/components/schemas/PrecedentSettingName"
+          },
+          "value": {
+            "type": "object",
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "setting_name",
+          "value"
+        ],
+        "title": "AppendPrecedentSettingRequest",
+        "description": "`appendPrecedentSetting`: a new revision of a setting. The revision number is the next one of the name; the actor is the caller."
+      },
+      "ExecutorContextInput": {
+        "properties": {
+          "input_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Input Id"
+          },
+          "text_sha256": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "section": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Section"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_id",
+          "text_sha256",
+          "section"
+        ],
+        "title": "ExecutorContextInput",
+        "description": "`CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2): one candidate text of a `review:main` task the agent may ask reference data for\n(`getExecutorTaskContext`). `input_id` is the task's own name for the text, `text_sha256` the digest of it, `section` the section the\nrun's version belongs to."
+      },
+      "ExecutorTaskContext": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ExecutorTaskContextKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutorTaskContextStatus"
+          },
+          "reason": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Reason"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutorTaskContextItem"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Items"
+          },
+          "not_fitted": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Not Fitted"
+          },
+          "context_sha256": {
+            "$ref": "#/components/schemas/Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "status",
+          "items",
+          "not_fitted"
+        ],
+        "title": "ExecutorTaskContext",
+        "description": "`getExecutorTaskContext` (contract 1.51.0): the reference data of a task, laid out by `input_id`. `reason` is present exactly when\n`status` is `unavailable`, and `context_sha256` exactly when it is `available`: the digest of `items` as the stand delivered them, which\nthe agent echoes in `submitExecutorTaskAnswer`. `not_fitted` counts the cases that did not fit the budget of characters of the task."
+      },
+      "ExecutorTaskContextCase": {
+        "properties": {
+          "case_id": {
+            "$ref": "#/components/schemas/DecisionMemoryCaseId"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected"
+            ],
+            "title": "Verdict"
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Category"
+          },
+          "similarity": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Similarity"
+          },
+          "finding_text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Finding Text"
+          },
+          "recommendation_text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Recommendation Text"
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Comment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "verdict",
+          "category",
+          "similarity",
+          "finding_text",
+          "recommendation_text"
+        ],
+        "title": "ExecutorTaskContextCase",
+        "description": "One earlier decision, with the texts of its case. The cases are those of the same section and data class, of any project, never of\nthis run, never withdrawn or forgotten (the policy of the consent)."
+      },
+      "ExecutorTaskContextItem": {
+        "properties": {
+          "input_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Input Id"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutorTaskContextCase"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Cases"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_id",
+          "cases"
+        ],
+        "title": "ExecutorTaskContextItem",
+        "description": "The cases found for one `input_id` of the task's `context_request`, at most three, the most similar first."
+      },
+      "ExecutorTaskContextKind": {
+        "type": "string",
+        "enum": [
+          "similar_cases",
+          "patterns"
+        ],
+        "title": "ExecutorTaskContextKind",
+        "description": "What an agent asks the stand for: the decisions of experts on similar findings (`similar_cases`) or the approved patterns of rejection\n(`patterns`, wave 5)."
+      },
+      "ExecutorTaskContextRequest": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ExecutorTaskContextKind"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ExecutorTaskContextRequest",
+        "description": "The body of `getExecutorTaskContext`: the kind of reference data. One call per kind and task is paid for; a repeat answers the same."
+      },
+      "ExecutorTaskContextStatus": {
+        "type": "string",
+        "enum": [
+          "available",
+          "unavailable"
+        ],
+        "title": "ExecutorTaskContextStatus",
+        "description": "`available`: the answer holds the reference data. `unavailable`: the stand has none to give and says why in `reason` (while the\nnight encoder is the only one, `until_move`); the agent calls the model without it."
+      },
+      "FindingBlockBox": {
+        "properties": {
+          "x0": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "X0"
+          },
+          "y0": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Y0"
+          },
+          "x1": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "X1"
+          },
+          "y1": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Y1"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "title": "FindingBlockBox",
+        "description": "A box on a page, normalised to the page (0 to 1), the origin at the top left."
+      },
+      "FindingBlockEvidence": {
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Ordinal"
+          },
+          "page_number": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page Number"
+          },
+          "portal_block_id": {
+            "$ref": "#/components/schemas/PortalBlockId"
+          },
+          "bbox_norm": {
+            "$ref": "#/components/schemas/FindingBlockBox"
+          },
+          "crop_sha256": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "recognised_quote": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Recognised Quote"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ordinal",
+          "page_number",
+          "portal_block_id",
+          "bbox_norm",
+          "crop_sha256"
+        ],
+        "title": "FindingBlockEvidence",
+        "description": "`CRIT-SEAL-50` (contract 1.51.0): one block of the portal that holds a finding's evidence -- the place, never the content: the\nblock is proved to be in the run's geometry and its crop to match, and the quote, when there is one, to be in the block's recognised\ntext. `Evidence` is untouched."
+      },
+      "FindingGroundingKind": {
+        "type": "string",
+        "enum": [
+          "text_span",
+          "portal_block"
+        ],
+        "title": "FindingGroundingKind",
+        "description": "`CRIT-SEAL-50` (contract 1.51.0, migration ``0064``): how an observation is anchored. `text_span`: a span of the text layer, as every\nobservation was until now. `portal_block`: a block of the portal's geometry, proved to be in the run's own geometry (plan-v5 section 4)."
+      },
+      "FindingOrigin": {
+        "type": "string",
+        "enum": [
+          "text",
+          "drawing",
+          "cross_check"
+        ],
+        "title": "FindingOrigin",
+        "description": "`CRIT-SEAL-50` (contract 1.51.0): where a finding of «Разбор» comes from, the «Источник» chip: `text` (the text analysis), `drawing`\n(a drawing candidate of the extended review) or `cross_check` (the cross-check of sources)."
+      },
+      "FindingPrecedents": {
+        "properties": {
+          "finding_uid": {
+            "$ref": "#/components/schemas/FindingUid"
+          },
+          "run_id": {
+            "$ref": "#/components/schemas/RunId"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "label": {
+            "$ref": "#/components/schemas/PrecedentFindingLabel"
+          },
+          "hints": {
+            "items": {
+              "$ref": "#/components/schemas/PrecedentHint"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "title": "Hints"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/PrecedentCase"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Cases"
+          },
+          "possible_norms": {
+            "items": {
+              "$ref": "#/components/schemas/PossibleNorm"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Possible Norms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "finding_uid",
+          "run_id",
+          "available",
+          "hints",
+          "cases",
+          "possible_norms"
+        ],
+        "title": "FindingPrecedents",
+        "description": "`getFindingPrecedents` (contract 1.51.0): the card of a finding -- its label, its at most two hints, the similar cases and the possible\nnorms. `available` is false while the pass has not given this finding a result; `label` is then absent."
+      },
+      "PossibleNorm": {
+        "properties": {
+          "norm_document_id": {
+            "$ref": "#/components/schemas/NormDocumentId"
+          },
+          "norm_paragraph_id": {
+            "$ref": "#/components/schemas/NormParagraphId"
+          },
+          "designation": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Designation"
+          },
+          "clause_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clause Number"
+          },
+          "page_label": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "norm_document_id",
+          "norm_paragraph_id",
+          "designation",
+          "clause_number",
+          "page_label"
+        ],
+        "title": "PossibleNorm",
+        "description": "A paragraph of the norms the run already holds that the finding may rest on («Возможные нормы»): from the same paragraphs the\ncritic gets, never from the encoder."
+      },
+      "PrecedentCase": {
+        "properties": {
+          "case_id": {
+            "$ref": "#/components/schemas/DecisionMemoryCaseId"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected"
+            ],
+            "title": "Verdict"
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Category"
+          },
+          "similarity": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Similarity"
+          },
+          "finding_text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Finding Text"
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Comment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "verdict",
+          "category",
+          "similarity",
+          "finding_text"
+        ],
+        "title": "PrecedentCase",
+        "description": "One similar case on the card of a finding."
+      },
+      "PrecedentFindingLabel": {
+        "properties": {
+          "finding_uid": {
+            "$ref": "#/components/schemas/FindingUid"
+          },
+          "label": {
+            "$ref": "#/components/schemas/PrecedentLabelCode"
+          },
+          "critic_reviewed": {
+            "type": "boolean",
+            "title": "Critic Reviewed"
+          },
+          "votes": {
+            "$ref": "#/components/schemas/PrecedentVotes"
+          },
+          "hint_codes": {
+            "items": {
+              "$ref": "#/components/schemas/PrecedentHintCode"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "title": "Hint Codes"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "finding_uid",
+          "label",
+          "critic_reviewed",
+          "votes",
+          "hint_codes",
+          "revision"
+        ],
+        "title": "PrecedentFindingLabel",
+        "description": "What the pass gave one finding of a run at `revision`. `critic_reviewed` is false for a finding the AI critic did not review: its\nrejection labels are then shown neutrally and it is not in the queue."
+      },
+      "PrecedentHint": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/PrecedentHintCode"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "case_id": {
+            "$ref": "#/components/schemas/DecisionMemoryCaseId"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "PrecedentHint",
+        "description": "A hint of the card. `text` is the words of an expert (the comment of a rejecting decision for `p1`), never a model's; `case_id` is the\ncase it comes from."
+      },
+      "PrecedentHintCode": {
+        "type": "string",
+        "enum": [
+          "p1",
+          "p4",
+          "p5"
+        ],
+        "title": "PrecedentHintCode",
+        "description": "A hint of the card (plan-v5 section 2.5; at most two per finding, never a model's text): `p1` the reason of the rejections, `p4` the\ncritic disagrees, `p5` the history of the document."
+      },
+      "PrecedentLabelCode": {
+        "type": "string",
+        "enum": [
+          "none",
+          "few",
+          "often_rejected",
+          "cancel_suggested",
+          "likely_accepted",
+          "mixed"
+        ],
+        "title": "PrecedentLabelCode",
+        "description": "The label of a finding (plan-v5 section 2.3). `none` and `few` show nothing in the row. `cancel_suggested` is a part of\n`often_rejected`: it additionally needs the critic's review and no veto, and it is the one that fills the queue «Рекомендовано снять»."
+      },
+      "PrecedentPassState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "done",
+          "failed"
+        ],
+        "title": "PrecedentPassState",
+        "description": "The state of the «Прецеденты» pass of a run."
+      },
+      "PrecedentSetting": {
+        "properties": {
+          "setting_name": {
+            "$ref": "#/components/schemas/PrecedentSettingName"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          },
+          "value": {
+            "type": "object",
+            "title": "Value"
+          },
+          "actor_user_uid": {
+            "$ref": "#/components/schemas/UserUid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "setting_name",
+          "revision",
+          "value",
+          "actor_user_uid",
+          "created_at"
+        ],
+        "title": "PrecedentSetting",
+        "description": "One revision of one setting. `value` is an object: `{\"enabled\": boolean}` for `one_list` and `critic_context`, `{\"start\", \"end\", \"tz\"}`\nfor `vector_window`, the lane's own shape for the others."
+      },
+      "PrecedentSettingList": {
+        "properties": {
+          "current": {
+            "items": {
+              "$ref": "#/components/schemas/PrecedentSetting"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Current"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/PrecedentSetting"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Events"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "current",
+          "events"
+        ],
+        "title": "PrecedentSettingList",
+        "description": "`listPrecedentSettings`: the revision in force of each setting that was ever journalled (`current`, at most one per name) and the\njournal, newest first (`events`)."
+      },
+      "PrecedentSettingName": {
+        "type": "string",
+        "enum": [
+          "one_list",
+          "critic_context",
+          "section_labels",
+          "stop_words",
+          "vector_window",
+          "thresholds"
+        ],
+        "title": "PrecedentSettingName",
+        "description": "The names of the journal of settings: the three switches (`one_list`, `critic_context`, `section_labels`; all off while nothing is\njournalled), the stop words of the owner, the night window and the thresholds."
+      },
+      "PrecedentVotes": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          },
+          "rejected": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Rejected"
+          },
+          "accepted": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Accepted"
+          },
+          "independent": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Independent"
+          },
+          "projects": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Projects"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "rejected",
+          "accepted",
+          "independent",
+          "projects"
+        ],
+        "title": "PrecedentVotes",
+        "description": "The counts behind a label: the decisions counted (`total`), how many rejected and accepted, how many of them are independent (not\ngiven under a label to reject, plan-v5 section 2.1) and from how many projects."
+      },
+      "RunPrecedents": {
+        "properties": {
+          "run_id": {
+            "$ref": "#/components/schemas/RunId"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "pass_state": {
+            "$ref": "#/components/schemas/PrecedentPassState"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PrecedentFindingLabel"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "run_id",
+          "available",
+          "items"
+        ],
+        "title": "RunPrecedents",
+        "description": "`getRunPrecedents` (contract 1.51.0): the labels of the findings of a run, and with them the queue (the items whose `label` is\n`cancel_suggested`). `available` is false while the run has no result of the pass (the vectors are computed at night or are paused): the\nscreen then shows one line over the list and no label in a row. `pass_state` and `revision` are absent until a pass has started."
+      },
+      "SetVectorPausedRequest": {
+        "properties": {
+          "paused": {
+            "type": "boolean",
+            "title": "Paused"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "paused"
+        ],
+        "title": "SetVectorPausedRequest",
+        "description": "`setVectorPaused`: pause the vectors or resume them. The window does not start on a pause and the queue keeps filling."
+      },
+      "VectorControl": {
+        "properties": {
+          "paused": {
+            "type": "boolean",
+            "title": "Paused"
+          },
+          "paused_since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Paused Since"
+          },
+          "window_state": {
+            "$ref": "#/components/schemas/VectorWindowState"
+          },
+          "window_reason": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Window Reason"
+          },
+          "window_changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Window Changed At"
+          },
+          "window": {
+            "$ref": "#/components/schemas/VectorWindow"
+          },
+          "pending_intents": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Pending Intents"
+          },
+          "poisoned_intents": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Poisoned Intents"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "paused",
+          "window_state",
+          "window_changed_at",
+          "window"
+        ],
+        "title": "VectorControl",
+        "description": "`getVectorControl` and the answer of `setVectorPaused` (contract 1.51.0): whether the vectors are paused and since when, the state of\nthe night window and the window itself. The counts of queued and poisoned jobs are for an administrator and absent for an expert."
+      },
+      "VectorWindow": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "title": "End"
+          },
+          "tz": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Tz"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "tz"
+        ],
+        "title": "VectorWindow",
+        "description": "The configured window: local `start` and `end` (`HH:MM`) in the IANA zone `tz` (the setting `vector_window`)."
+      },
+      "VectorWindowState": {
+        "type": "string",
+        "enum": [
+          "closed",
+          "draining",
+          "encoding",
+          "skipped"
+        ],
+        "title": "VectorWindowState",
+        "description": "The night window of the vectors: `closed`; `draining` (no new run is issued, the running ones finish); `encoding` (the encoder runs);\n`skipped` (the window did not take place, `window_reason` says why)."
       }
     }
   }
