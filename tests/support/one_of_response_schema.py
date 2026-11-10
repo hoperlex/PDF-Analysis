@@ -26,18 +26,17 @@ def _evidence() -> dict[str, Any]:
     }
 
 
-def _proposal(categories: tuple[str, ...], extra: dict[str, Any], required: list[str]) -> dict[str, Any]:
-    return {
-        "type": "object", "additionalProperties": False,
-        "required": ["category", "finding_text", "recommendation_text", "evidence", *required],
-        "properties": {
-            "category": {"type": "string", "enum": list(categories)},
-            "finding_text": {"type": "string", "minLength": 1, "maxLength": 4000},
-            "recommendation_text": {"type": "string", "minLength": 1, "maxLength": 4000},
-            "evidence": _evidence(),
-            **extra,
-        },
+def _proposal(categories: tuple[str, ...], extra: dict[str, Any]) -> dict[str, Any]:
+    """Every property is required, as the strict providers want it."""
+    properties = {
+        "category": {"type": "string", "enum": list(categories)},
+        "finding_text": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "recommendation_text": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "proposed_severity": {"type": "string", "enum": ["critical", "operational", "economic"]},
+        "evidence": _evidence(),
+        **extra,
     }
+    return {"type": "object", "additionalProperties": False, "required": list(properties), "properties": properties}
 
 
 def one_of_response_schema() -> dict[str, Any]:
@@ -58,14 +57,14 @@ def one_of_response_schema() -> dict[str, Any]:
             "observations": {
                 "type": "array",
                 "items": {"oneOf": [
-                    _proposal(PLAIN_CATEGORIES, {}, []),
+                    _proposal(PLAIN_CATEGORIES, {}),
                     _proposal(
                         NORMATIVE_CATEGORIES,
                         {
                             "norm_citations": citations,
                             "required_value": {"type": "string", "minLength": 1, "maxLength": 200},
+                            "stated_value": {"type": "string", "minLength": 1, "maxLength": 200},
                         },
-                        ["norm_citations"],
                     ),
                 ]},
             },

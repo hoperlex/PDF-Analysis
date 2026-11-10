@@ -344,7 +344,7 @@ class RunCostPreflight:
         raise _invalid("analysis_workflow", "unsupported_plan")
 
     def estimate_run(self, session, *, version_uid, executor_connection_id=None, preset_id=None, relaxed_limits=False, version_record=None,
-                     parse_native_text=True, executor_group_id=None, stage_plan=_UNSET):
+                     allow_native_page_pieces=True, parse_native_text=True, executor_group_id=None, stage_plan=_UNSET):
         if type(relaxed_limits) is not bool:
             raise _invalid("relaxed_limits", "boolean")
         # `HOSTS-LAYOUT-01`: with the stage layout on, the estimate is by model: the plan's cells decide the model, the effort, the answer
@@ -397,7 +397,7 @@ class RunCostPreflight:
         windows = 1 if chars + version.page_count * 32 <= window else min(version.page_count,
             max(2, 2 * math.ceil((chars + version.page_count * 32) / window)))
         page_pieces = None
-        if os.environ.get("AUDITMANAGER_NATIVE_PAGE_PIECES", "1").strip().lower() not in {"0", "false", "off"}:
+        if allow_native_page_pieces and os.environ.get("AUDITMANAGER_NATIVE_PAGE_PIECES", "1").strip().lower() not in {"0", "false", "off"}:
             from auditmanager.analysis.public import native_page_piece_policy
             page_pieces = native_page_piece_policy()
             rendered_upper = 2 * chars + version.page_count * page_pieces["page_frame_characters"]
