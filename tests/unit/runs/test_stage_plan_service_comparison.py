@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from auditmanager.api.schemas import models
 from auditmanager.bootstrap import stage_plan_service as service_module
@@ -43,20 +44,30 @@ def test_a_revision_with_the_comparison_cells_stores_them_and_the_view_returns_t
     service, store = make()
     view = service.revise_layout(body=body(), user_uid=ADMIN, idempotency_key="k")
     assert [item["work_kind"] for item in view["current"]["comparison_cells"]] == list(KINDS)
-    assert view["current"]["comparison_cells"][0] == {
-        "work_kind": "comparison_pair_check", "model_id": "gpt-6-luna", "effort": "high", "max_output_tokens": 1_200,
-        "timeout_seconds": 900}
+    assert view["current"]["comparison_cells"][0] == {"work_kind": "comparison_pair_check", "model_id": "gpt-6-luna", "effort": "high"}
     assert store.revisions[0].comparison_cells == layout.comparison_preset_cells("codex_only")
     assert not {cell["row"] for cell in view["current"]["cells"]} & set(KINDS), "the analysis cells stay the six rows"
     models.StageModelLayout.model_validate(view)
 
 
-def test_a_kit_may_lengthen_a_window_and_custom_may_choose_any_pair_of_the_catalogue(events):
+@pytest.mark.parametrize("member,value", [("max_output_tokens", 4_000), ("timeout_seconds", 3_000)])
+def test_a_comparison_cell_that_names_a_limit_or_a_timeout_is_refused_not_ignored(member, value):
+    """`R-153n`, `R-153o` (contract 1.49.0): the cell has neither member any more, and a request that still sends one is refused."""
+    with pytest.raises(ValidationError) as caught:
+        body("claude_only", edit={"comparison_report": {member: value}})
+    assert [error["type"] for error in caught.value.errors()] == ["extra_forbidden"]
+    assert member in caught.value.errors()[0]["loc"]
+
+
+@pytest.mark.parametrize("member,value", [("max_output_tokens", 4_000), ("timeout_seconds", 3_000)])
+def test_a_layout_cell_that_names_a_limit_or_a_timeout_is_refused_not_ignored(member, value):
+    with pytest.raises(ValidationError) as caught:
+        body("claude_only", rows_edit={"text": {member: value}})
+    assert [error["type"] for error in caught.value.errors()] == ["extra_forbidden"]
+
+
+def test_custom_may_choose_any_pair_of_the_catalogue(events):
     service, store = make()
-    longer = body("claude_only", edit={"comparison_report": {"timeout_seconds": 3_000, "max_output_tokens": 4_000}})
-    view = service.revise_layout(body=longer, user_uid=ADMIN, idempotency_key="a")
-    report = view["current"]["comparison_cells"][3]
-    assert (report["timeout_seconds"], report["max_output_tokens"], view["current"]["kit"]) == (3_000, 4_000, "claude_only")
     other = body("custom", edit={"comparison_spec": {"model_id": "claude-opus-5-5", "effort": "medium"}})
     custom = service.revise_layout(body=other, user_uid=ADMIN, idempotency_key="b")
     assert custom["current"]["comparison_cells"][2]["model_id"] == "claude-opus-5-5" and custom["current"]["kit"] == "custom"

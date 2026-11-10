@@ -34,10 +34,8 @@ from auditmanager.shared.identity import (
 
 ACTOR = f"usr_{'0' * 26}"
 PLAN = {"cells": [
-    {"cell_key": "text:main", "model_id": "claude-sonnet-5-5", "effort": "medium", "max_output_tokens": 16000, "timeout_seconds": 900,
-     "access": "subscription"},
-    {"cell_key": "norms:main", "model_id": "claude-sonnet-5-5", "effort": "medium", "max_output_tokens": 6000, "timeout_seconds": 900,
-     "access": "subscription"},
+    {"cell_key": "text:main", "model_id": "claude-sonnet-5-5", "effort": "medium", "access": "subscription"},
+    {"cell_key": "norms:main", "model_id": "claude-sonnet-5-5", "effort": "medium", "access": "subscription"},
 ]}
 
 

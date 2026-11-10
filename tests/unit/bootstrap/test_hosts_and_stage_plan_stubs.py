@@ -22,8 +22,7 @@ from auditmanager.bootstrap.stage_plan_adapter import StageModelAdapter
 HOST = "exh_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 INSTALL = "exai_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 USER = "usr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
-CELL = {"cell_key": "text:main", "row": "text", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium",
-        "max_output_tokens": 16000, "timeout_seconds": 600}
+CELL = {"cell_key": "text:main", "row": "text", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium"}
 
 HOST_CALLS: list[tuple[str, dict[str, Any]]] = [
     ("list_hosts", {}),

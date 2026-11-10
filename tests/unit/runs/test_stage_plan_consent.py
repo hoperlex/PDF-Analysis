@@ -1,8 +1,8 @@
 """`HOSTS-LAYOUT-01`: consent v2 and the readiness of a start -- priced by model, bound to the plan, the models and the access.
 
 The estimate is the real :class:`~auditmanager.runs.preflight.RunCostPreflight`; only the version record is a stand-in. What it prices is
-compared with the legacy estimate of the same version (the totals must agree when every cell keeps today's constants) and with itself under
-another access, another limit and another set of rows.
+compared with the legacy estimate of the same version (the totals must agree: a row's output figure is today's constant) and with itself under
+another access, another figure and another set of rows. A cell has no answer limit (`R-153n`): the figure prices a call, it caps nothing.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from auditmanager.analysis.public import (
-    ProviderConfig, ProviderMode, model_rate_sha256, pinned_models, project_parameters_policy, require_approved_model,
+    ProviderConfig, ProviderMode, ROW_ESTIMATE_OUTPUT_TOKENS, model_rate_sha256, pinned_models, project_parameters_policy, require_approved_model,
 )
 from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.profile_registry import load_text_profile_registry
@@ -71,12 +71,8 @@ def single_blocks_draft(kit: str = "claude_only") -> StagePlanDraft:
     """The set with one model on the blocks row (gpt-6-astra, the single scheme the original allows): one call per batch, as before the
     ensemble. What the legacy estimate prices."""
     base = draft(kit=kit)
-    cells = tuple(c for c in base.cells if c.row != "blocks") + (layout.CellSettings("blocks:main", "gpt-6-astra", "medium", 6000, 1800),)
+    cells = tuple(c for c in base.cells if c.row != "blocks") + (layout.CellSettings("blocks:main", "gpt-6-astra", "medium"),)
     return replace(base, cells=tuple(sorted(cells, key=layout._position)), availability={**base.availability, "gpt-6-astra": SUBSCRIPTION})
-
-
-def with_limits(base: StagePlanDraft, **limits: int) -> StagePlanDraft:
-    return replace(base, cells=tuple(replace(c, max_output_tokens=limits.get(c.row, c.max_output_tokens)) for c in base.cells))
 
 
 def estimate(policy, plan=None, **kwargs):
@@ -109,7 +105,7 @@ def test_with_todays_constants_the_plan_prices_the_same_work_as_the_legacy_estim
     policy = service(registry)
     Preflight.version = source_version(section, count, pages)
     legacy, planned = estimate(policy, None), estimate(policy, single_blocks_draft())
-    # One difference, by design: the parameter passport's calls carry the cross-check cell's answer limit (6000) and not the consented
+    # One difference, by design: the parameter passport's calls are priced at the cross-check row's figure (6000) and not the consented
     # policy's 8000, so the plan prices what the request will carry. Everything else is the legacy estimate's, call for call.
     parameters = project_parameters_policy(section, full_coverage=True, candidate_refusals=True)
     passport_difference = 0 if plan_env == "v2" else parameters["max_calls"] * (parameters["output_tokens"] - 6000)
@@ -137,9 +133,9 @@ def test_an_ensemble_prices_every_block_batch_once_per_leg_and_once_for_the_judg
     assert lines(claude)[OPUS] == base
     sonnet = tuple(a - b for a, b in zip(lines(claude)[SONNET], lines(single)[SONNET]))
     assert sonnet == base, "the judge's calls, input and answer tokens"
-    # a judge with another answer limit moves the estimate by exactly that
-    wide = estimate(policy, replace(draft(), cells=tuple(replace(c, max_output_tokens=12_000) if c.cell_key == "blocks:judge" else c
-                                                          for c in draft().cells)))
+    # a bigger output figure of the blocks row (a code constant) moves the estimate
+    monkeypatch.setitem(ROW_ESTIMATE_OUTPUT_TOKENS, "blocks", 12_000)
+    wide = estimate(policy, draft())
     assert wide.as_dict()["output_tokens"] - claude.as_dict()["output_tokens"] > 0
     assert len({single.estimate_digest, claude.estimate_digest, codex.estimate_digest, wide.estimate_digest}) == 4, \
         "the number of calls and the plan are in the digest the person confirms"
@@ -181,11 +177,16 @@ def test_a_model_is_priced_at_its_own_rates_and_a_subscription_costs_nothing(reg
     models.RunCostEstimate.model_validate(mixed.as_dict())
 
 
-def test_a_cell_limit_moves_the_estimate_and_its_digest(registry):
+def test_a_rows_output_figure_moves_the_estimate_and_its_digest_and_never_the_plan(registry, monkeypatch):
+    """The figure is the estimate's: it prices the call. The plan the consent binds (model, effort, access) does not carry it, and nothing
+    sends it to a model as a cap."""
     policy = service(registry)
-    base, wider = estimate(policy, draft()), estimate(policy, with_limits(draft(), norms=20_000))
+    base = estimate(policy, draft())
+    with monkeypatch.context() as patched:
+        patched.setitem(ROW_ESTIMATE_OUTPUT_TOKENS, "norms", 20_000)
+        wider = estimate(policy, draft())
     assert wider.as_dict()["output_tokens"] > base.as_dict()["output_tokens"]
-    assert wider.estimate_digest != base.estimate_digest and wider.stage_plan.digest != base.stage_plan.digest
+    assert wider.estimate_digest != base.estimate_digest and wider.stage_plan.digest == base.stage_plan.digest
     assert estimate(policy, draft()).estimate_digest == base.estimate_digest, "the same plan prices to the same digest"
 
 

@@ -342,7 +342,7 @@ def test_each_batch_is_read_by_the_legs_in_order_and_then_by_the_judge_on_the_ce
 
 def test_a_run_whose_blocks_row_is_one_model_calls_one_model_per_batch_as_before(monkeypatch):
     single = tuple(c for c in layout.preset_cells("codex_only") if c.row != "blocks") + (
-        layout.CellSettings("blocks:main", ASTRA, "medium", 6000, 1800),)
+        layout.CellSettings("blocks:main", ASTRA, "medium"),)
     harness = Harness(monkeypatch, kit="custom", cells=tuple(sorted(single, key=layout._position)))
     result = harness.run_v2(monkeypatch, blocks=10)
     assert block_calls(harness) == ["blocks:main"] * 2

@@ -98,24 +98,23 @@ _ECHO_SYSTEM: Final[str] = (
 @dataclasses.dataclass(frozen=True, slots=True)
 class HostCall:
     """What a call to a host agent asks for beyond the prompt (`HOSTS-BACKEND-01`, ADR-0028 decisions 5 and 9, RUNNER_API 10.4): the exact
-    provider, access, model and effort of the cell the call belongs to, the ceiling of the answer, the cell's timeout and the cell key.
-    ``timeout_seconds`` is the cell's own limit; the task carries the smaller of it and what the watchdog leaves
-    (:func:`answer_window`). The caller -- the layout's ``binding_for(cell)`` -- builds it from the frozen ``stage_plan`` and the member the
-    cell was bound to."""
+    provider, access, model and effort of the cell the call belongs to, the cell's timeout and the cell key. **No answer cap**: since
+    `LIMITS-01` (`R-153n`) the task carries no ``max_output_tokens`` and the agent sets none on any model.
+    ``timeout_seconds`` is the call's own window -- the constant of the cell's row or kind (`R-153o`); the task carries the smaller of it and
+    what the watchdog leaves (:func:`answer_window`). The caller -- the layout's ``binding_for(cell)`` -- builds it from the frozen
+    ``stage_plan`` and the member the cell was bound to."""
 
     provider: str
     access: str
     model_id: str
     effort: str
-    max_output_tokens: int
     timeout_seconds: int
     cell_key: str
 
     def members(self, window_seconds: float) -> dict[str, Any]:
-        """The seven members of ``payload.host``; the timeout is the window the task is given, within the contract's 1 to 7200."""
+        """The six members of ``payload.host``; the timeout is the window the task is given, within the contract's 1 to 7200."""
         return {
             "provider": self.provider, "access": self.access, "model_id": self.model_id, "effort": self.effort,
-            "max_output_tokens": self.max_output_tokens,
             "timeout_seconds": max(1, min(7200, int(window_seconds))), "cell_key": self.cell_key,
         }
 
@@ -346,8 +345,9 @@ class PullAdapter:
 
     def _sign_of_life(self, task: TaskRecord, seen_lease: Any) -> Any:
         """A claim or an extension of it is a sign of life (`AttemptContext.progress`, ADR-0028 decision 9). A host agent extends only while its
-        CLI produced output in the last 120 s, so an extension is the proof the model is working, and a hung CLI -- whose claim lapses -- stops
-        signalling and lets the stall window fence the Attempt. ``seen_lease`` is the lease as last read; the new one is returned."""
+        CLI produced output in the last 600 s (`R-153p`: the window the agent keeps equals the server's stall window of ``jobs/lease.py``,
+        deliberately), so an extension is the proof the model is working, and a hung CLI -- whose claim lapses -- stops signalling and lets the
+        stall window fence the Attempt. ``seen_lease`` is the lease as last read; the new one is returned."""
         lease = task.claim_expires_at
         if lease is not None and lease != seen_lease:
             progress = getattr(self._context, "progress", None)

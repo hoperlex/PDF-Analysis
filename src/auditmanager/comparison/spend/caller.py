@@ -142,9 +142,9 @@ class ComparisonModelCaller:
         journal says ``failed``), ``OutcomeUnknown`` (it says ``unknown``; the call is **not** repeated
         here) or ``CallLost`` (the attempt lost the item). Each has ``as_outcome()`` for the handler.
 
-        `HOSTS-CMP-01`: a job the stage layout admitted consented to its cell, and the request is sent with the cell's effort and with the answer limit
-        held to the cell's (:func:`~auditmanager.comparison.spend.cell.apply_cell`) -- before it is hashed, priced and journalled, so the journal
-        holds the request that goes out. A consent with no cell leaves the request as the method built it.
+        `HOSTS-CMP-01`: a job the stage layout admitted consented to its cell, and the request is sent with the cell's effort
+        (:func:`~auditmanager.comparison.spend.cell.apply_cell`) -- before it is hashed, priced and journalled, so the journal holds the request
+        that goes out. The cell adds no answer cap (`R-153n`). A consent with no cell leaves the request as the method built it.
         """
         if consent is not None and consent.cell is not None:
             request, estimate = apply_cell(consent.cell, request, estimate)

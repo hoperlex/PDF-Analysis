@@ -251,13 +251,13 @@ class ClaimedTask:
     user_text: str
     output_schema: Mapping[str, Any]
     images: tuple[Mapping[str, Any], ...] = ()
-    #: `HOSTS-BACKEND-01` (ADR-0028 decision 9, RUNNER_API 10.4): the members of a task claimed with a host token -- all seven or none.
-    #: The agent runs exactly this provider, access, model and effort; ``model`` above is then ``model_id``.
+    #: `HOSTS-BACKEND-01` (ADR-0028 decision 9, RUNNER_API 10.4): the members of a task claimed with a host token -- all six or none.
+    #: The agent runs exactly this provider, access, model and effort; ``model`` above is then ``model_id``. There is no answer cap among
+    #: them (`LIMITS-01`, `R-153n`).
     provider: str | None = None
     access: str | None = None
     model_id: str | None = None
     effort: str | None = None
-    max_output_tokens: int | None = None
     timeout_seconds: int | None = None
     cell_key: str | None = None
 
@@ -446,9 +446,9 @@ def _own_task(
     return task
 
 
-#: The seven members of a host task (RUNNER_API 10.4), as ``payload.host`` holds them (the pull adapter writes them).
-HOST_TASK_MEMBERS: Final[tuple[str, ...]] = (
-    "provider", "access", "model_id", "effort", "max_output_tokens", "timeout_seconds", "cell_key")
+#: The six members of a host task (RUNNER_API 10.4), as ``payload.host`` holds them (the pull adapter writes them). A task written before
+#: `LIMITS-01` also holds ``max_output_tokens``; it is not among the members, so it is never served.
+HOST_TASK_MEMBERS: Final[tuple[str, ...]] = ("provider", "access", "model_id", "effort", "timeout_seconds", "cell_key")
 
 
 def _claimed(row: ClaimedRow) -> ClaimedTask:
@@ -456,7 +456,7 @@ def _claimed(row: ClaimedRow) -> ClaimedTask:
     host = payload.get("host")
     extra: dict[str, Any] = {}
     if isinstance(host, Mapping):
-        # All seven or none (the contract's rule): a task that carries the key carries every member, or it is not served.
+        # All six or none (the contract's rule): a task that carries the key carries every member, or it is not served.
         if any(host.get(name) is None for name in HOST_TASK_MEMBERS):
             raise DomainError(ErrorCode.INTERNAL_ERROR, message="a host task is missing a member")
         extra = {name: host[name] for name in HOST_TASK_MEMBERS}

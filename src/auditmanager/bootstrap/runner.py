@@ -132,9 +132,9 @@ class RunnerAdapter(_SessionHolder):
 
     @staticmethod
     def _host_members(task: Any) -> dict[str, Any]:
-        """The seven members of a task claimed with a host token (RUNNER_API 10.4): all of them or none. A task that carries some but not
+        """The six members of a task claimed with a host token (RUNNER_API 10.4): all of them or none. A task that carries some but not
         all is a defect of the stand, refused here rather than sent half made -- the agent would fail it as ``host_task_incomplete``."""
-        names = ("provider", "access", "model_id", "effort", "max_output_tokens", "timeout_seconds", "cell_key")
+        names = ("provider", "access", "model_id", "effort", "timeout_seconds", "cell_key")
         found = {name: getattr(task, name, None) for name in names}
         present = {name: value for name, value in found.items() if value is not None}
         if present and len(present) != len(names):

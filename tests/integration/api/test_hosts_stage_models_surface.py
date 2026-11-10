@@ -39,8 +39,7 @@ from .identity_surface import SIGNER, credential_for, make_account
 HOST = "exh_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 INSTALL = "exai_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 FINGERPRINT = "SHA256:" + "A" * 43
-CELL = {"cell_key": "text:main", "row": "text", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium",
-        "max_output_tokens": 16000, "timeout_seconds": 600}
+CELL = {"cell_key": "text:main", "row": "text", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium"}
 
 #: (operationId, method, path, body, administrator only, the answers the service gives an administrator: (status, ``details.dependency``))
 OPERATIONS: list[tuple[str, str, str, Any, bool, frozenset[tuple[int, str | None]]]] = [

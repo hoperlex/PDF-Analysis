@@ -82,10 +82,7 @@ def _cells_of(body: Any) -> tuple[CellSettings, ...]:
         key, row, role = str(item.cell_key), str(_value(item.row)), str(_value(item.role))
         if key != f"{row}:{role}":
             raise DomainError(ErrorCode.VALIDATION_FAILED, field="cells", constraint="cell_key_mismatch")
-        cells.append(CellSettings(
-            cell_key=key, model_id=str(item.model_id), effort=str(_value(item.effort)),
-            max_output_tokens=int(item.max_output_tokens), timeout_seconds=int(item.timeout_seconds),
-        ))
+        cells.append(CellSettings(cell_key=key, model_id=str(item.model_id), effort=str(_value(item.effort))))
     return tuple(cells)
 
 
@@ -96,10 +93,7 @@ def _comparison_cells_of(body: Any) -> tuple[CellSettings, ...] | None:
     if items is None:
         return None
     return tuple(
-        CellSettings(
-            cell_key=f"{_value(item.work_kind)}:main", model_id=str(item.model_id), effort=str(_value(item.effort)),
-            max_output_tokens=int(item.max_output_tokens), timeout_seconds=int(item.timeout_seconds),
-        )
+        CellSettings(cell_key=f"{_value(item.work_kind)}:main", model_id=str(item.model_id), effort=str(_value(item.effort)))
         for item in items
     )
 

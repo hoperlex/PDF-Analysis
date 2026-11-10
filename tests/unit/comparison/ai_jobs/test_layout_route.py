@@ -34,7 +34,7 @@ SUB_GROUP, API_GROUP = str(ExecutorGroupId.new()), str(ExecutorGroupId.new())
 SUB_REV, API_REV = str(ExecutorGroupRevisionId.new()), str(ExecutorGroupRevisionId.new())
 CONNECTION, CONNECTION_REV = str(ExecutorConnectionId.new()), str(ExecutorConnectionRevisionId.new())
 KIND = "comparison_pair_check"
-CELL = CellSettings(f"{KIND}:main", ASTRA, "high", 1_200, 900)
+CELL = CellSettings(f"{KIND}:main", ASTRA, "high")
 
 
 def group_revision(identity: str, group: str, *, model: str, billing: str) -> SimpleNamespace:
@@ -242,37 +242,50 @@ def route_with(cell: CellSettings | None, *, billing: str = "metered", kind: str
 
 def test_the_cell_is_in_the_routes_document_and_so_in_the_digest_the_user_consents_to():
     with_cell, without = route_with(CELL).as_document(), route_with(None).as_document()
-    assert with_cell["cell"] == {"work_kind": KIND, "model_id": ASTRA, "effort": "high", "max_output_tokens": 1_200, "timeout_seconds": 900}
+    assert with_cell["cell"] == {"work_kind": KIND, "model_id": ASTRA, "effort": "high"}, "no answer limit and no timeout in the cell (`LIMITS-01`)"
     assert "cell" not in without, "a route with no cell is the document it always was"
     assert {k: v for k, v in with_cell.items() if k != "cell"} == without
     digests = {
         cell: estimate_module.build_estimate(scope=scope(), mode=AiMode.START, prompt_version="p", counts=AiCounts(groups=(), units=0), route=route_with(cell)).estimate_digest
-        for cell in (None, CELL, replace(CELL, effort="medium"), replace(CELL, timeout_seconds=60), replace(CELL, max_output_tokens=500))
+        for cell in (None, CELL, replace(CELL, effort="medium"), replace(CELL, model_id=SONNET))
     }
-    assert len(set(digests.values())) == 5, "a moved effort, window or limit is another estimate: the consent covers what will run"
+    assert len(set(digests.values())) == 4, "a moved effort or model is another estimate: the consent covers what will run"
 
 
-def test_the_cells_limit_caps_the_output_the_estimate_counts_and_never_raises_it():
+def test_nothing_caps_the_output_the_estimate_counts():
+    """`R-153n`: a cell has no answer limit, so the estimate counts the module's own figure of every call, with or without a cell."""
     def build(cell):
         return estimate_module.build_estimate(scope=scope(), mode=AiMode.START, prompt_version="p", counts=counts(), route=route_with(cell))
 
-    uncapped, capped, above = build(None), build(replace(CELL, max_output_tokens=1_200)), build(replace(CELL, max_output_tokens=65_000))
-    assert uncapped.totals.output_tokens == 10 * 8_192 and capped.totals.output_tokens == 10 * 1_200
-    assert above.totals.output_tokens == uncapped.totals.output_tokens, "a ceiling is not a floor"
-    assert capped.estimate_micros < uncapped.estimate_micros and above.estimate_micros == uncapped.estimate_micros
-    assert capped.as_dict(with_state=False)["route"]["cell"]["max_output_tokens"] == 1_200
+    uncelled, celled = build(None), build(CELL)
+    assert uncelled.totals.output_tokens == celled.totals.output_tokens == 10 * 8_192
+    assert uncelled.estimate_micros == celled.estimate_micros
+    assert "max_output_tokens" not in celled.as_dict(with_state=False)["route"]["cell"]
 
 
-def test_a_subclass_of_the_counts_survives_the_cap():
+def test_a_subclass_of_the_counts_is_untouched_by_a_cell():
     from auditmanager.comparison.specification.method import SpecCounts
 
     spec = SpecCounts(groups=(AiCallGroup(calls=1, prompt_chars=10, output_tokens=32_000),), units=1, can_run_without_model=True)
-    cell = replace(CELL, cell_key="comparison_spec:main", max_output_tokens=4_000)
+    cell = replace(CELL, cell_key="comparison_spec:main")
     built = estimate_module.build_estimate(
         scope=AiScope(method="spec", project_uid=str(ProjectUid.new()), document_uid=str(DocumentUid.new()), transition_id="cmt_" + "1" * 26),
         mode=AiMode.START, prompt_version="p", counts=spec, route=route_with(cell, kind="comparison_spec"))
     assert type(built.counts) is SpecCounts and built.counts.can_run_without_model is True
-    assert built.totals.output_tokens == 4_000
+    assert built.totals.output_tokens == 32_000, "the specification's own 32 000, not lowered by the cell"
+
+
+def test_a_job_that_froze_its_cell_before_the_limits_left_is_shown_without_them():
+    """`estimate_view`: the stored estimate of such a job holds an answer limit and a timeout in ``route.cell``; the contract's cell has neither, so
+    the view drops them (the stored row is not rewritten) and the cell read back is the same cell."""
+    from auditmanager.comparison.ai_jobs.model import cell_of_document, estimate_view
+
+    stored = {"route": {"pinned_model": ASTRA, "cell": {**route_with(CELL).as_document()["cell"], "max_output_tokens": 1_200, "timeout_seconds": 900}}}
+    shown = estimate_view(stored)
+    assert shown["route"]["cell"] == {"work_kind": KIND, "model_id": ASTRA, "effort": "high"}
+    assert "max_output_tokens" in stored["route"]["cell"], "the stored document is not changed"
+    assert cell_of_document(stored["route"]["cell"]) == CELL
+    assert estimate_view({"route": {"pinned_model": ASTRA}}) == {"route": {"pinned_model": ASTRA}}
 
 
 def test_a_cell_belongs_to_a_group_route_and_to_its_own_kind():

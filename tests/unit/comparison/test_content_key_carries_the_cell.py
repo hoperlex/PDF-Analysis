@@ -1,12 +1,12 @@
 """`D-675`: the content key of a stored comparison answer carries the job's frozen cell; a job with no cell keeps the key it always had.
 
-A job the stage layout admitted froze a cell -- model, effort, answer limit and timeout (`HOSTS-CMP-01`) -- and the spend wrapper sends every
-call of it with that effort and that limit. The answer a call stores is found again by its **content key**; if the key did not carry the cell, a
-job with another effort or limit would be handed the answer of the first one and never ask. This file holds, for the pair check and the sheet
+A job the stage layout admitted froze a cell -- model and effort (`HOSTS-CMP-01`; since `LIMITS-01` it has no answer limit and no timeout) -- and
+the spend wrapper sends every call of it with that effort. The answer a call stores is found again by its **content key**; if the key did not carry
+the cell, a job with another model or effort would be handed the answer of the first one and never ask. This file holds, for the pair check and the sheet
 description (the two kinds whose key names a model and is built where the job's cell is at hand):
 
 * the key of a job **with no cell** is the key of the base commit, byte for byte -- pinned digests computed on ``0b5b1eaf3`` before the change;
-* a cell moves the key, each of its model, effort and limit moves it alone, and its timeout does not (a timeout changes no answer);
+* a cell moves the key, and each of its model and effort moves it alone;
 * the estimate (the route's cell) and the handler (the job's cell) read the same cell into the key, so what was priced is what is looked up;
 * an answer stored under one cell is reused by a job with that cell and by no job with another.
 
@@ -39,9 +39,8 @@ LEGACY_REVERSE = "81f654a21dee5ad59b73cd1f6ba5d6a99648ea95ef0038b68f998a3b6712d9
 LEGACY_DIRECT = "cb7bb3d3d1784f6e22d85445d99a3e77255947fa73ea1fb308582fdc6df44a58"
 LEGACY_SHEET = "e816a82fef4ce960caa0c01b63842409c2fecaa66a032b5b768d85c09582849b"
 
-CELL = CellSettings(cell_key="comparison_pair_check:main", model_id="gpt-6-sol", effort="high", max_output_tokens=1200, timeout_seconds=1800)
-SHEET_CELL = CellSettings(
-    cell_key="comparison_sheet_changes:main", model_id="gpt-6-sol", effort="high", max_output_tokens=8192, timeout_seconds=1800)
+CELL = CellSettings(cell_key="comparison_pair_check:main", model_id="gpt-6-sol", effort="high")
+SHEET_CELL = CellSettings(cell_key="comparison_sheet_changes:main", model_id="gpt-6-sol", effort="high")
 
 
 def facts(version: str, number: int, *, sheet: str = "", title: str = "") -> PageFacts:
@@ -83,20 +82,23 @@ def test_a_job_with_no_cell_keeps_every_key_byte_identical() -> None:
     assert cell_key_document(None) is None
 
 
-# -- a cell moves the key; its model, effort and limit each alone; its timeout not -------------------------------------------------
+# -- a cell moves the key; its model and effort each alone ---------------------------------------------------------------------------
 
 
-def test_a_cell_moves_the_pair_check_key_and_each_of_its_model_effort_and_limit_moves_it_alone() -> None:
+def test_the_cells_key_document_names_the_model_and_the_effort_and_no_answer_limit() -> None:
+    """`R-153n`: the answer limit left the cell, so it left the key; this is what makes an answer stored under the old key be asked again."""
+    assert cell_key_document(CELL) == {"model_id": "gpt-6-sol", "effort": "high"}
+
+
+def test_a_cell_moves_the_pair_check_key_and_each_of_its_model_and_effort_moves_it_alone() -> None:
     plain = forward_plan(question(), context()).key
     celled = forward_plan(question(), context(CELL)).key
     assert celled != plain and celled == forward_plan(question(), context(replace(CELL))).key
     moved = {
         forward_plan(question(), context(replace(CELL, model_id="gpt-6-astra"))).key,
         forward_plan(question(), context(replace(CELL, effort="medium"))).key,
-        forward_plan(question(), context(replace(CELL, max_output_tokens=600))).key,
     }
-    assert len(moved | {celled, plain}) == 5, "the three changes and the two bases are five different keys"
-    assert forward_plan(question(), context(replace(CELL, timeout_seconds=60))).key == celled, "a timeout changes no answer"
+    assert len(moved | {celled, plain}) == 4, "the two changes and the two bases are four different keys"
     reverse = reverse_plan(question(), 3, context(CELL))
     assert reverse is not None and reverse.key != LEGACY_REVERSE and reverse.key != celled
 
@@ -105,9 +107,8 @@ def test_a_cell_moves_the_sheet_description_key_the_same_way() -> None:
     base = dict(project_uid="prj_1", kind="pair", subject_key="a" * 64, prompt_version="v", model="m")
     celled = sheet_content_key(**base, cell=SHEET_CELL)  # type: ignore[arg-type]
     assert celled != LEGACY_SHEET and celled == sheet_content_key(**base, cell=replace(SHEET_CELL))  # type: ignore[arg-type]
-    for other in (replace(SHEET_CELL, model_id="gpt-6-astra"), replace(SHEET_CELL, effort="medium"), replace(SHEET_CELL, max_output_tokens=4096)):
+    for other in (replace(SHEET_CELL, model_id="gpt-6-astra"), replace(SHEET_CELL, effort="medium")):
         assert sheet_content_key(**base, cell=other) not in (celled, LEGACY_SHEET), other  # type: ignore[arg-type]
-    assert sheet_content_key(**base, cell=replace(SHEET_CELL, timeout_seconds=60)) == celled  # type: ignore[arg-type]
 
 
 # -- the estimate and the handler read the same cell into the key -----------------------------------------------------------------

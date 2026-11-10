@@ -1,7 +1,7 @@
 """`HOSTS-BACKEND-01` (ADR-0028 decisions 7 and 9, RUNNER_API 10.4 to 10.6): the host token in the pull channel.
 
 No database: the runner repository is a stand-in. What is proved: a token or a claim names exactly one of a connection and a host; a host principal owns the
-tasks of the connections of its host and no other; a host task carries all seven members or none; a host answer is held to its task (provider, access) and its
+tasks of the connections of its host and no other; a host task carries all six members or none; a host answer is held to its task (provider, access) and its
 ``reported_model`` to the catalogue's exact accepted strings (`R-133`: no prefix, no case folding), and what is recorded as the call's model is the reported
 string; a connection token that sends a host member is refused; a failure about the host's access starts the cooldown of the task's pair and any other failure
 starts none; a retry served by another host finds the saved reply, because the answer of a task is keyed by the task and its model, never by a host.
@@ -27,8 +27,8 @@ CONNECTION = "exc_01M2545JSD15ETSNNV904X991K"
 TOKEN = "ern_01M2545JSD15ETSNNV904X991K"
 TASK = "ext_01M2545JSD15ETSNNV904X991K"
 OPUS = "claude-opus-5-5"
-HOST_SEVEN = {"provider": "claude_code", "access": "subscription", "model_id": OPUS, "effort": "medium",
-              "max_output_tokens": 16000, "timeout_seconds": 600, "cell_key": "text:main"}
+HOST_SIX = {"provider": "claude_code", "access": "subscription", "model_id": OPUS, "effort": "medium",
+            "timeout_seconds": 600, "cell_key": "text:main"}
 SCHEMA = {"type": "object", "properties": {"observations": {"type": "array"}}, "required": ["observations"],
           "additionalProperties": False}
 
@@ -70,7 +70,7 @@ class FakeRunnerRepo(RunnerRepository):
 
 
 def _payload(**host: Any) -> dict[str, Any]:
-    return {"system": "s", "user_text": "u", "output_schema": SCHEMA, "host": {**HOST_SEVEN, **host}}
+    return {"system": "s", "user_text": "u", "output_schema": SCHEMA, "host": {**HOST_SIX, **host}}
 
 
 class Refused(Exception):
@@ -119,27 +119,35 @@ def test_a_connection_principal_keeps_the_task_of_its_own_connection_and_no_othe
         _submit(FakeRunnerRepo(_task(), payload=_payload()), stranger, provider=None, access=None, reported_model=None, usage=None)
 
 
-# --- the seven members ----------------------------------------------------------------------------------------------
+# --- the six members -------------------------------------------------------------------------------------------------
 
 
 def _row(payload: dict[str, Any]) -> ClaimedRow:
     return ClaimedRow(TASK, T0, T0, OPUS, payload)
 
 
-def test_a_host_task_is_handed_over_with_all_seven_members() -> None:
+def test_a_host_task_is_handed_over_with_all_six_members_and_no_answer_cap() -> None:
     task = _claimed(_row(_payload()))
-    assert (task.provider, task.access, task.model_id, task.effort, task.max_output_tokens, task.timeout_seconds, task.cell_key) == (
-        "claude_code", "subscription", OPUS, "medium", 16000, 600, "text:main")
+    assert (task.provider, task.access, task.model_id, task.effort, task.timeout_seconds, task.cell_key) == (
+        "claude_code", "subscription", OPUS, "medium", 600, "text:main")
+    assert not hasattr(task, "max_output_tokens"), "`R-153n`: no answer cap reaches the agent"
+
+
+def test_a_task_written_before_the_cap_left_is_served_without_it() -> None:
+    """A queued task of the previous release still holds ``max_output_tokens`` in its payload; it is not among the members, so it is dropped."""
+    task = _claimed(_row(_payload(max_output_tokens=16000)))
+    assert (task.provider, task.timeout_seconds, task.cell_key) == ("claude_code", 600, "text:main")
+    assert not hasattr(task, "max_output_tokens")
     assert task.model == task.model_id == OPUS, "the earlier tooling reads ``model``: it equals ``model_id``"
 
 
-@pytest.mark.parametrize("missing", list(HOST_SEVEN))
+@pytest.mark.parametrize("missing", list(HOST_SIX))
 def test_a_host_task_that_lacks_a_member_is_not_served_at_all(missing: str) -> None:
     payload = _payload()
     del payload["host"][missing]
     with pytest.raises(DomainError) as refused:
         _claimed(_row(payload))
-    assert refused.value.code is ErrorCode.INTERNAL_ERROR, "all seven or none (the contract): a partial task is the writer's defect"
+    assert refused.value.code is ErrorCode.INTERNAL_ERROR, "all six or none (the contract): a partial task is the writer's defect"
 
 
 def test_a_task_of_a_connection_token_carries_none_of_them() -> None:

@@ -94,14 +94,16 @@ def test_the_token_metadata_of_a_host_names_the_host_and_no_connection() -> None
     assert metadata.connection_id is None and metadata.host_id == HOST
 
 
-def test_a_host_task_carries_all_seven_members_and_the_old_task_none_of_them() -> None:
+def test_a_host_task_carries_all_six_members_and_the_old_task_none_of_them() -> None:
     base = {"task_id": "ext_01ARZ3NDEKTSV4RRFFQ69G5FAV", "claim_expires_at": NOW, "deadline_at": NOW, "model": "claude-opus-5-5",
             "system": "s", "user_text": "u", "output_schema": {"type": "object"}}
     host = models.ClaimedExecutorTask.model_validate({
         **base, "provider": "claude_code", "access": "subscription", "model_id": "claude-opus-5-5", "effort": "medium",
-        "max_output_tokens": 16000, "timeout_seconds": 600, "cell_key": "blocks:leg1"})
+        "timeout_seconds": 600, "cell_key": "blocks:leg1"})
     assert host.model == host.model_id
     assert models.ClaimedExecutorTask.model_validate(base).provider is None
+    with pytest.raises(ValidationError):
+        models.ClaimedExecutorTask.model_validate({**base, "max_output_tokens": 16000})  # `R-153n` (contract 1.49.0): no answer cap
     with pytest.raises(ValidationError):
         models.ClaimedExecutorTask.model_validate({**base, "effort": "xhigh"})  # never offered
     with pytest.raises(ValidationError):

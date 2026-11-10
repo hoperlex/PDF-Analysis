@@ -28,13 +28,12 @@ def at(minutes: float) -> datetime:
 
 
 def cell(key: str, model: str, **extra: Any) -> dict[str, Any]:
-    return {"cell_key": key, "model_id": model, "effort": "medium", "max_output_tokens": 6000, "timeout_seconds": 1800,
-            "access": "subscription", **extra}
+    return {"cell_key": key, "model_id": model, "effort": "medium", "access": "subscription", **extra}
 
 
 # the judge and the legs are listed out of role order on purpose: the reader orders them
 PLAN = {"cells": [
-    cell("text:main", SOL61, max_output_tokens=16000),
+    cell("text:main", SOL61),
     cell("blocks:judge", SOL61),
     cell("blocks:leg2", SOL),
     cell("blocks:leg1", ASTRA),
@@ -74,7 +73,7 @@ def test_the_three_cells_of_the_blocks_row_are_drawn_in_role_order_with_their_mo
     assert [(c["cell_key"], c["role"], c["model_id"], c["server"]) for c in chip["plan"]] == [
         ("blocks:leg1", "leg1", ASTRA, "adm1.hlab.kz"), ("blocks:leg2", "leg2", SOL, "adm2.hlab.kz"),
         ("blocks:judge", "judge", SOL61, "adm1.hlab.kz")]
-    assert {(c["effort"], c["max_output_tokens"], c["access"]) for c in chip["plan"]} == {("medium", 6000, "subscription")}
+    assert {(c["effort"], c["access"]) for c in chip["plan"]} == {("medium", "subscription")}
     viewer = assemble_run_stage_facts(run=RunRow(RUN, "running", PLAN, None), stage_rows=[], calls=[call("blocks:leg1", n=0)], review=None,
                                       cell_bindings=BINDINGS, include_server=False)
     blocks = next(item for item in viewer["items"] if item["chip"] == "blocks")

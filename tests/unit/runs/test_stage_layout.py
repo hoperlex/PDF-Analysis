@@ -1,7 +1,12 @@
-"""`HOSTS-LAYOUT-01`: the six rows, the two sets cell by cell, the closed validation and the plan's digest and immutability."""
+"""`HOSTS-LAYOUT-01`, `LIMITS-01`: the six rows, the two sets cell by cell, the closed validation and the plan's digest and immutability.
+
+A cell is a model and an effort. It has no answer limit and no timeout of its own (`R-153n`, `R-153o`): the timeout is a constant of the row.
+"""
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import replace
 
 import pytest
@@ -46,11 +51,20 @@ def test_a_set_is_the_adr_table_cell_by_cell(kit, table):
     layout.require_valid_layout(kit, cells)
 
 
-def test_the_default_limits_are_the_code_constants():
-    cells = {c.row: c for c in layout.preset_cells("claude_only")}
-    assert {row: c.max_output_tokens for row, c in cells.items()} == {
-        "text": 16000, "blocks": 6000, "cross_check": 6000, "norms": 12000, "review": 12000, "correction": 12000}
-    assert {c.timeout_seconds for c in cells.values()} == {1800}
+def test_each_rows_timeout_is_its_code_constant_from_the_original():
+    """`R-153o`: the call window of a row's cells is the constant of the row, whichever set serves it."""
+    for kit in ("claude_only", "codex_only"):
+        windows = {c.row: c.timeout_seconds for c in layout.preset_cells(kit)}
+        assert windows == {"text": 1800, "blocks": 1800, "cross_check": 3600, "norms": 600, "review": 600, "correction": 600}
+        assert {c.cell_key: c.timeout_seconds for c in layout.preset_cells(kit) if c.row == "blocks"} == {
+            c.cell_key: 1800 for c in layout.preset_cells(kit) if c.row == "blocks"}, "every leg and the judge take the row's value"
+
+
+def test_a_cell_of_a_layout_carries_no_answer_limit_and_no_timeout():
+    wire = layout.cells_to_wire(layout.preset_cells("claude_only"))
+    assert {tuple(sorted(cell)) for cell in wire} == {("cell_key", "effort", "model_id", "role", "row")}
+    assert not hasattr(layout.preset_cells("claude_only")[0], "max_output_tokens")
+    assert not any(name.startswith("COMPARISON_DEFAULT") for name in dir(layout)), "the comparison limits are gone from the layout"
 
 
 def test_the_claude_set_is_named_plainly_now_that_the_ensemble_has_landed():
@@ -76,7 +90,7 @@ def _edited(kit, row, **changes):
 def _blocks_as(kit, *cells):
     """The set with its blocks cells replaced by ``cells`` (role, model, effort)."""
     others = tuple(c for c in layout.preset_cells(kit) if c.row != "blocks")
-    return tuple(sorted(others + tuple(CellSettings(f"blocks:{role}", model, effort, 6000, 1800) for role, model, effort in cells),
+    return tuple(sorted(others + tuple(CellSettings(f"blocks:{role}", model, effort) for role, model, effort in cells),
                         key=layout._position))
 
 
@@ -87,9 +101,6 @@ def _blocks_as(kit, *cells):
     ("text", {"effort": "max"}, "effort_not_offered_for_model"),
     ("blocks", {"effort": "low"}, "effort_not_offered_for_model"),             # Opus low (the leg of the Claude ensemble)
     ("norms", {"effort": "ultra"}, "effort_not_offered_for_model"),
-    ("text", {"max_output_tokens": 0}, "limit_out_of_range"),
-    ("text", {"max_output_tokens": 65537}, "limit_out_of_range"),
-    ("text", {"timeout_seconds": 7201}, "limit_out_of_range"),
 ])
 def test_a_layout_outside_the_catalogue_is_refused(row, changes, constraint):
     _refused(constraint, layout.validate_cells, _edited("claude_only", row, **changes))
@@ -131,13 +142,13 @@ def test_the_cells_are_the_main_cell_of_each_row_and_the_cells_of_one_blocks_sch
     _refused("cell_missing", layout.validate_cells, tuple(c for c in cells if c.row != "blocks"))
     _refused("cell_repeated", layout.validate_cells, cells + (cells[0],))
     _refused("cell_repeated", layout.validate_cells, cells + (cells[1],))
-    _refused("unknown_cell", layout.validate_cells, cells + (CellSettings("nothing:main", "claude-sonnet-5-5", "low", 1, 1),))
-    _refused("unknown_cell", layout.validate_cells, cells + (CellSettings("blocks:third", "claude-sonnet-5-5", "low", 1, 1),))
+    _refused("unknown_cell", layout.validate_cells, cells + (CellSettings("nothing:main", "claude-sonnet-5-5", "low"),))
+    _refused("unknown_cell", layout.validate_cells, cells + (CellSettings("blocks:third", "claude-sonnet-5-5", "low"),))
     # only the blocks row has legs and a judge; every other row is one `main` cell
     for role in ("judge", "leg1", "leg2"):
-        _refused("role_not_offered", layout.validate_cells, cells + (CellSettings(f"text:{role}", "claude-sonnet-5-5", "medium", 6000, 1800),))
+        _refused("role_not_offered", layout.validate_cells, cells + (CellSettings(f"text:{role}", "claude-sonnet-5-5", "medium"),))
     _refused("block_scheme_not_listed", layout.validate_cells,
-             cells + (CellSettings("blocks:main", "gpt-6-astra", "medium", 6000, 1800),))
+             cells + (CellSettings("blocks:main", "gpt-6-astra", "medium"),))
 
 
 def test_a_named_kit_must_match_its_table_and_anything_else_is_custom():
@@ -146,8 +157,6 @@ def test_a_named_kit_must_match_its_table_and_anything_else_is_custom():
     _refused("kit_does_not_match_cells", layout.require_valid_layout, "claude_only", edited)
     assert layout.require_valid_layout("custom", edited)
     _refused("unknown_kit", layout.require_valid_layout, "mine", edited)
-    # a changed timeout alone keeps the set's models
-    assert layout.kit_of(_edited("codex_only", "text", timeout_seconds=60)) == "codex_only"
 
 
 def _plan(access="subscription", **kw):
@@ -164,6 +173,39 @@ def test_the_plan_round_trips_and_its_digest_follows_every_cell():
     assert other.digest != plan.digest
     assert plan.models == ("claude-sonnet-5-5", "claude-opus-5-5")        # the judge is Sonnet too: three cells' worth of models is two
     assert plan.access == "subscription"
+
+
+def _legacy_document(plan, *, limit=16000, timeout=900):
+    """The document a run froze before `LIMITS-01`: the same cells with an answer limit and a timeout each."""
+    document = plan.to_json()
+    document["cells"] = [{**cell, "max_output_tokens": limit, "timeout_seconds": timeout} for cell in document["cells"]]
+    return document
+
+
+def test_a_plan_frozen_before_the_limits_left_is_read_and_keeps_the_digest_its_consent_approved():
+    """A run in flight at the upgrade: its stored plan carries two members per cell. They are dropped unread, the call window is the
+    row's constant (not the 900 the old plan froze), and the digest is the one of the document the owner approved."""
+    plan = _plan()
+    old = _legacy_document(plan)
+    parsed = layout.parse_plan(old)
+    assert parsed == plan, "the same cells: model, effort, access"
+    assert [c.timeout_seconds for c in parsed.cells if c.row == "text"] == [1800], "never the 900 the old plan stored"
+    approved = hashlib.sha256(json.dumps(old, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    assert parsed.digest == approved != plan.digest
+    assert layout.parse_plan(plan.to_json()).digest == plan.digest, "a plan written since is judged by its own document"
+    assert parsed.restricted_to(("text",)).digest != approved, "a narrowed plan is another document"
+
+
+def test_a_half_old_plan_is_refused():
+    plan = _plan()
+    half = plan.to_json()
+    half["cells"][0] = {**half["cells"][0], "max_output_tokens": 16000}                          # one old member only
+    mixed = _legacy_document(plan)
+    mixed["cells"][1] = {k: v for k, v in mixed["cells"][1].items() if k not in ("max_output_tokens", "timeout_seconds")}   # one cell new
+    for broken in (half, mixed):
+        with pytest.raises(DomainError) as caught:
+            layout.parse_plan(broken)
+        assert caught.value.code is ErrorCode.INTERNAL_ERROR
 
 
 def test_a_plan_is_immutable_and_a_layout_revision_does_not_move_it():
@@ -217,19 +259,19 @@ def test_the_catalogue_is_the_only_source_of_the_pairs_and_of_the_reported_names
 
 
 def test_a_plan_cell_carries_exactly_the_keys_the_readers_take_and_the_stage_key_is_the_row():
-    """`getRunStages` and the cell-binding trigger read the frozen plan: each cell is exactly these six keys, and a call's `stage_key` is
+    """`getRunStages` and the cell-binding trigger read the frozen plan: each cell is exactly these four keys, and a call's `stage_key` is
     the layout row (`text`, `blocks`, `cross_check`, `norms`, `review`, `correction`)."""
     from auditmanager.analysis.text.binding import CallBinding
     from auditmanager.runs.stage_facts import _plan_cells
 
     document = _plan("subscription").to_json()
     assert {tuple(sorted(cell)) for cell in document["cells"]} == {
-        ("access", "cell_key", "effort", "max_output_tokens", "model_id", "timeout_seconds")}
+        ("access", "cell_key", "effort", "model_id")}
     seen = _plan_cells(document)       # the reader of `getRunStages` accepts it and reads every field
     assert sorted(cell["cell_key"] for views in seen.values() for cell in views) == sorted(c.cell_key for c in layout.preset_cells("claude_only"))
     assert [cell["cell_key"] for cell in seen["blocks"]] == ["blocks:leg1", "blocks:judge"], "a chip lists its cells in role order"
     for views in seen.values():
         for view in views:
-            assert {"model_id", "effort", "max_output_tokens", "timeout_seconds", "access"} <= set(view)
+            assert {"model_id", "effort", "access"} <= set(view) and not {"max_output_tokens", "timeout_seconds"} & set(view)
     for cell in layout.preset_cells("codex_only"):
         assert CallBinding(expected_model="m", check_identity=True, cell_key=cell.cell_key, access="api").stage_key == cell.row

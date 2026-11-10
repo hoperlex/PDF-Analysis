@@ -56,7 +56,7 @@ def test_the_latest_revision_is_the_one_whose_comparison_cells_are_in_force(sess
     store, by = SqlStageLayoutStore(), user(session)
     store.append_revision(session, kit="codex_only", cells=layout.preset_cells("codex_only"), created_by=by,
                           comparison_cells=layout.comparison_preset_cells("codex_only"))
-    longer = tuple(c.__class__(c.cell_key, c.model_id, c.effort, c.max_output_tokens, 3_000) for c in layout.comparison_preset_cells("codex_only"))
-    store.append_revision(session, kit="codex_only", cells=layout.preset_cells("codex_only"), created_by=by, comparison_cells=longer)
-    assert {c.timeout_seconds for c in store.current_revision(session).comparison_cells} == {3_000}
-    assert {c.timeout_seconds for c in store.history(session, limit=10)[1].comparison_cells} == {900, 1_800, 2_400}
+    other = tuple(c.__class__(c.cell_key, c.model_id, "medium") for c in layout.comparison_preset_cells("codex_only"))
+    store.append_revision(session, kit="codex_only", cells=layout.preset_cells("codex_only"), created_by=by, comparison_cells=other)
+    assert {c.effort for c in store.current_revision(session).comparison_cells} == {"medium"}
+    assert {c.effort for c in store.history(session, limit=10)[1].comparison_cells} == {"high"}

@@ -53,12 +53,11 @@ def call(chip: str, outcome: str = "succeeded", *, n: int = 0, request: str | No
 
 
 def cell(key: str, model: str, **extra: Any) -> dict[str, Any]:
-    return {"cell_key": key, "model_id": model, "effort": "medium", "max_output_tokens": 6000, "timeout_seconds": 900,
-            "access": "subscription", **extra}
+    return {"cell_key": key, "model_id": model, "effort": "medium", "access": "subscription", **extra}
 
 
 PLAN = {"cells": [
-    cell("text:main", "claude-sonnet-5-5", max_output_tokens=16000),
+    cell("text:main", "claude-sonnet-5-5"),
     cell("blocks:main", "claude-opus-5-5"),
     cell("cross_check:main", "claude-sonnet-5-5"),
     cell("norms:main", "claude-sonnet-5-5", access="api"),
@@ -163,8 +162,8 @@ def test_a_planned_run_lists_the_chips_it_has_in_order_with_its_frozen_plan_and_
         "preparation", "text", "blocks", "cross_check", "merge", "norms", "review", "correction"]
     assert item(doc, "preparation")["plan"] == [] and item(doc, "merge")["plan"] == []
     assert item(doc, "text")["plan"] == [{
-        "cell_key": "text:main", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium", "max_output_tokens": 16000,
-        "timeout_seconds": 900, "access": "subscription", "server": "adm1.hlab.kz"}]
+        "cell_key": "text:main", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium",
+        "access": "subscription", "server": "adm1.hlab.kz"}]
     norms = item(doc, "norms")["plan"][0]
     assert (norms["access"], norms["server"]) == ("api", "api.hlab.kz")
     # a cell that is not bound yet has no server, and keeps the access it froze
@@ -414,6 +413,17 @@ def test_a_new_row_is_placed_by_its_key_and_an_old_one_in_the_same_run_by_its_ph
     assert (item(doc, "review")["facts"]["calls_succeeded"], item(doc, "blocks")["facts"]["calls_succeeded"]) == (1, 1)
 
 
+def test_a_plan_frozen_before_the_limits_left_is_read_and_shows_neither_of_them() -> None:
+    """`LIMITS-01`: a run in flight at the upgrade froze an answer limit and a timeout per cell. They are not shown (the contract's cell has
+    neither), and everything else of the cell is as it was."""
+    old = {"cells": [{**c, "max_output_tokens": 16000, "timeout_seconds": 900} for c in PLAN["cells"]]}
+    doc = planned(run=RunRow(RUN, "running", old, None))
+    assert doc == planned()
+    for entry in doc["items"]:
+        for line in entry["plan"]:
+            assert not {"max_output_tokens", "timeout_seconds"} & set(line)
+
+
 def test_a_call_with_no_chip_in_the_dictionary_refuses_the_whole_answer() -> None:
     with pytest.raises(DomainError):
         planned(calls=[call("nowhere")])
@@ -424,7 +434,7 @@ def test_a_call_with_no_chip_in_the_dictionary_refuses_the_whole_answer() -> Non
 
 @pytest.mark.parametrize("plan", [
     {"cells": "text:main"}, {"nothing": []}, {"cells": [{"model_id": "m"}]}, {"cells": [{"cell_key": "text:other", "model_id": "m"}]},
-    {"cells": [cell("text:main", "m", effort="xhigh")]}, {"cells": [cell("text:main", "m", timeout_seconds=0)]},
+    {"cells": [cell("text:main", "m", effort="xhigh")]},
     {"cells": [cell("text:main", "m", access="free")]}, {"cells": ["text:main"]},
 ])
 def test_a_malformed_plan_is_an_integrity_error_and_not_a_silently_smaller_plan(plan: Any) -> None:

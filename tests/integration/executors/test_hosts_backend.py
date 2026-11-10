@@ -10,7 +10,7 @@ Real rows, real triggers, real locks. Each test makes its own hosts and its own 
 * **the wait** -- a run whose model is on no server waits ``model_unavailable`` and ends ``no_executor_online`` after the limit, with no attempt ever made;
 * **the lock** -- two concurrent binds on one subscription: the second blocks until the first commits and then finds the pool full; the claim, the cell binding
   and the comparison mirror take one lock (a lock held by the mirror blocks the pool's);
-* **the host token** -- it claims only tasks of its own host that carry the seven members, extends, answers with the exact reported model, and a refusal about
+* **the host token** -- it claims only tasks of its own host that carry the six members, extends, answers with the exact reported model, and a refusal about
   access starts the cooldown that ends the model's availability until a changed report.
 """
 
@@ -124,8 +124,8 @@ class World:
 def _plan(*cells: tuple[str, str], access: str = "subscription") -> str:
     import json
 
-    return json.dumps({"cells": [{"cell_key": key, "model_id": model, "effort": "medium", "max_output_tokens": 16000,
-                                  "timeout_seconds": 600, "access": access} for key, model in cells]})
+    return json.dumps({"cells": [{"cell_key": key, "model_id": model, "effort": "medium", "access": access}
+                                 for key, model in cells]})
 
 
 def _planned_run(sessions: sessionmaker[Session], plan: str) -> str:
@@ -469,7 +469,7 @@ def _write_task(sessions: sessionmaker[Session], run: str, authority: Any, bound
     from auditmanager.executors.pull import HostCall
 
     schema = {"type": "object", "properties": {"observations": {"type": "array"}}, "required": ["observations"], "additionalProperties": False}
-    call = HostCall(provider=provider, access=access, model_id=model, effort="medium", max_output_tokens=16000, timeout_seconds=600, cell_key=cell)
+    call = HostCall(provider=provider, access=access, model_id=model, effort="medium", timeout_seconds=600, cell_key=cell)
     with sessions() as s:
         task = RunnerRepository().insert_task(
             s, connection_id=bound.connection_id, revision_id=bound.connection_revision_id, origin="run_call", run_id=run,
@@ -492,8 +492,9 @@ def test_a_host_token_claims_extends_answers_and_fails_its_hosts_tasks_only(sess
     assert claim_task(sessions, other.principal(), wait_seconds=0) is None, "another host's token never sees it"
     claimed = claim_task(sessions, mine.principal(), wait_seconds=0, runner_instance_id="agent-instance-0001")
     assert claimed is not None and claimed.task_id == task_id
-    assert (claimed.provider, claimed.access, claimed.model_id, claimed.effort, claimed.max_output_tokens, claimed.cell_key) == (
-        "codex", "subscription", GPT_SOL, "medium", 16000, "text:main")
+    assert (claimed.provider, claimed.access, claimed.model_id, claimed.effort, claimed.cell_key) == (
+        "codex", "subscription", GPT_SOL, "medium", "text:main")
+    assert not hasattr(claimed, "max_output_tokens"), "`R-153n`: no answer cap on a claimed task"
     assert claimed.model == claimed.model_id
     with sessions() as s:
         assert extend_claim(s, mine.principal(), task_id) >= claimed.claim_expires_at

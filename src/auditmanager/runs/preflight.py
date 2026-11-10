@@ -388,14 +388,14 @@ class RunCostPreflight:
         ledger = {cell.cell_key: [0, 0, 0] for cell in (plan.cells if planned else ())}
 
         def led(row, calls, input_tokens_added, floor=0):
-            """Add ``calls`` calls (and the input tokens of their requests) to every cell of ``row``, each answering at its own limit (at
-            least ``floor`` tokens: a repair of a reply is asked for the larger of the two)."""
+            """Add ``calls`` calls (and the input tokens of their requests) to every cell of ``row``, each priced at the row's estimate figure
+            (at least ``floor`` tokens: a repair of a reply is asked for the larger of the two). The figure prices a call; it caps nothing."""
             if planned:
                 for cell in plan.cells_of_row(row):
                     entry = ledger[cell.cell_key]
                     entry[0] += calls
                     entry[1] += input_tokens_added
-                    entry[2] += calls * max(floor, cell.max_output_tokens)
+                    entry[2] += calls * max(floor, cell.estimate_output_tokens)
         if window <= 0:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_window_policy")
         # Ordered whole-page packing can require twice the aggregate quotient;
@@ -424,8 +424,9 @@ class RunCostPreflight:
         input_tokens = math.ceil(Fraction(input_characters * 5, 7))
         output_tokens = windows * (64_000 if relaxed_limits else bundle.max_output_tokens)
         if planned:
-            # The cell's answer limit wins over the relaxed limit's 64000: the layout is the explicit configuration of the call.
-            output_tokens = windows * text_cell.max_output_tokens
+            # The row's estimate figure wins over the relaxed limit's 64000: the layout is the explicit configuration of the call. It prices the
+            # call; no answer cap reaches the model (`R-153n`).
+            output_tokens = windows * text_cell.estimate_output_tokens
             led("text", windows, input_tokens)
         # A new plan is accepted explicitly. Previous accepted v1/v2 commands keep
         # their historical semantics and never acquire this larger call allowance.

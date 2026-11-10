@@ -23,7 +23,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 HOST = "exh_01M2545JSD15ETSNNV904X991A"
 REVISION = "excr_01M2545JSD15ETSNNV904X991R"
-CELL = CellSettings("blocks:leg1", "claude-opus-5-5", "high", 6000, 1800, access="subscription")
+CELL = CellSettings("blocks:leg1", "claude-opus-5-5", "high", access="subscription")
 
 
 def _revision(**settings: Any) -> SimpleNamespace:

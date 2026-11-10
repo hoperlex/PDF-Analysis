@@ -27,8 +27,8 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 RUN = "run_01M2545JSD15ETSNNV904X991K"
 USER = "usr_01M2545JSD15ETSNNV904X991K"
-PLAN = {"cells": [{"cell_key": "text:main", "model_id": "claude-sonnet-5-5", "effort": "medium", "max_output_tokens": 16000,
-                   "timeout_seconds": 900, "access": "subscription"}]}
+PLAN = {"cells": [{"cell_key": "text:main", "model_id": "claude-sonnet-5-5", "effort": "medium",
+                   "access": "subscription"}]}
 
 
 class _Sessions:

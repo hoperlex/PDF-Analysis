@@ -277,8 +277,8 @@ def a_call(s: Scene, item: Any, adapter: Adapter, *, unmetered: bool) -> Any:
 
 def test_a_start_with_the_layout_on_is_admitted_by_the_system_group_and_freezes_the_cell(db: Db) -> None:
     server(db, "layout-1", report("codex", "api", ASTRA))
-    cell = CellSettings(f"{KIND}:main", ASTRA, "medium", 900, 600)
-    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "medium", "max_output_tokens": 900, "timeout_seconds": 600}))
+    cell = CellSettings(f"{KIND}:main", ASTRA, "medium")
+    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "medium"}))
     s = scene(db)
     group_revision = group_revision_of_pair(db, ASTRA, "api")
 
@@ -286,17 +286,16 @@ def test_a_start_with_the_layout_on_is_admitted_by_the_system_group_and_freezes_
     route = estimate.route
     assert route.executor_group_revision_id == group_revision and route.connection_id is None and route.routing_rule_revision_id is None
     assert (route.pinned_model, route.billing, route.cell) == (ASTRA, "metered", cell)
-    assert estimate.totals.output_tokens == 10 * 900, "the estimate counts the answer at the cell's limit, not the module's 8192"
+    assert estimate.totals.output_tokens == 10 * 8_192, "the estimate counts the module's own figure: the cell has no limit (`R-153n`)"
     assert estimate.estimate_micros > 0
     shown = models.ComparisonAiEstimate.model_validate(estimate.as_dict())
-    assert shown.route.cell is not None and shown.route.cell.work_kind.value == KIND and shown.route.cell.max_output_tokens == 900
+    assert shown.route.cell is not None and shown.route.cell.work_kind.value == KIND and shown.route.cell.effort.value == "medium"
 
     view = s.start()
     stored = db.job(view.record.job_id)
     assert (stored["state"], stored["binding_state"], stored["connection_revision_id"]) == ("queued", "pending", None)
     assert (stored["executor_group_revision_id"], stored["routing_rule_revision_id"], stored["pinned_model"]) == (group_revision, None, ASTRA)
-    assert stored["estimate"]["route"]["cell"] == {
-        "work_kind": KIND, "model_id": ASTRA, "effort": "medium", "max_output_tokens": 900, "timeout_seconds": 600}
+    assert stored["estimate"]["route"]["cell"] == {"work_kind": KIND, "model_id": ASTRA, "effort": "medium"}
     assert stored["estimate_digest"] == estimate.estimate_digest and stored["estimate_micros"] == estimate.estimate_micros
     assert view.record.cell == cell
 
@@ -312,9 +311,9 @@ def test_a_start_with_the_layout_on_is_admitted_by_the_system_group_and_freezes_
 # -- 2. the first call ---------------------------------------------------------------------------------------------------------
 
 
-def test_the_first_call_binds_a_servers_system_connection_and_sends_the_cells_effort_and_limit(db: Db) -> None:
+def test_the_first_call_binds_a_servers_system_connection_and_sends_the_cells_effort_and_no_cap(db: Db) -> None:
     host = server(db, "layout-2", report("codex", "subscription", ASTRA))
-    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "medium", "max_output_tokens": 900, "timeout_seconds": 600}))
+    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "medium"}))
     s = scene(db)
     job_id = s.start().record.job_id
     adapter = Adapter(reply=ai.live_reply(cost=None, tokens=(1_000, 200), model=ASTRA))
@@ -323,7 +322,7 @@ def test_the_first_call_binds_a_servers_system_connection_and_sends_the_cells_ef
 
     assert result.call_id and len(adapter.requests) == 1
     sent = adapter.requests[0]
-    assert sent.body["max_tokens"] == 900, "the cell's limit is a ceiling over the module's 8192"
+    assert sent.body["max_tokens"] == 8_192, "the module's own figure, not lowered by the cell"
     assert sent.body["output_config"]["effort"] == "medium" and sent.body["output_config"]["format"]["type"] == "json_schema"
     bound = db.job(job_id)
     assert bound["binding_state"] == "bound" and bound["connection_revision_id"] is not None
@@ -391,15 +390,15 @@ def test_with_the_switch_off_the_job_is_what_it_always_was(db: Db) -> None:
 
 def test_a_job_keeps_its_own_cell_when_the_layout_is_revised_afterwards(db: Db) -> None:
     server(db, "layout-6", report("codex", "api", ASTRA))
-    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "medium", "max_output_tokens": 900}))
+    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "medium"}))
     s = scene(db)
     started = s.start().record
-    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "low", "max_output_tokens": 300}), on=False)  # the layout moves on
+    layout_on(db, "codex_only", cells(comparison_pair_check={"effort": "low"}), on=False)  # the layout moves on
     assert s.service.estimate(AiScope(method="pair_check", project_uid=s.world["project"], document_uid=s.world["document"],
                                       matrix_id=s.world["build"])).route.cell.effort == "low", "a new start reads the layout in force"
     with db.sessions() as session:
         again = s.service.estimate_in(session, s.scope, AiMode.LEFT, job=s.service.job(session, started.job_id))
-    assert again.route.cell == started.cell and again.route.cell.effort == "medium" and again.totals.output_tokens == 10 * 900
+    assert again.route.cell == started.cell and again.route.cell.effort == "medium" and again.totals.output_tokens == 10 * 8_192
     assert again.route.executor_group_revision_id == started.executor_group_revision_id
 
 
@@ -417,7 +416,7 @@ def test_the_layout_the_real_service_revises_is_the_layout_the_route_reads_and_t
         session.commit()
     server(db, "layout-7", report("codex", "api", LUNA))
     service = StagePlanService(session_factory=db.sessions, availability=HostModelAvailability(), provider_source="database")
-    wire = layout.comparison_cells_to_wire(cells(comparison_pair_check={"effort": "medium", "max_output_tokens": 900}))
+    wire = layout.comparison_cells_to_wire(cells(comparison_pair_check={"effort": "medium"}))
     # « Свой набор »: a named set must keep its table's models and efforts, and the medium effort of the pair check is the owner's own choice
     body = models.ReviseStageModelLayoutRequest.model_validate({
         "kit": "custom", "cells": layout.cells_to_wire(layout.preset_cells("codex_only")), "comparison_cells": wire})
@@ -426,7 +425,7 @@ def test_the_layout_the_real_service_revises_is_the_layout_the_route_reads_and_t
 
     shown = models.StageModelLayout.model_validate(view)
     assert shown.enabled and [item.work_kind.value for item in shown.current.comparison_cells] == list(layout.COMPARISON_KINDS)
-    assert shown.current.comparison_cells[0].effort.value == "medium" and shown.current.comparison_cells[0].max_output_tokens == 900
+    assert shown.current.comparison_cells[0].effort.value == "medium"
     unserved = set(view["unavailable_cell_keys"])
     assert "comparison_pair_check:main" not in unserved and "comparison_spec:main" not in unserved, "gpt-6-luna is on the server: the pair check and the specification of « Только Codex » name it (R-153m)"
     assert {"comparison_sheet_changes:main", "comparison_report:main"} <= unserved, "gpt-6.1-sol is on no server: named, as the rows' cells are"
@@ -436,7 +435,7 @@ def test_the_layout_the_real_service_revises_is_the_layout_the_route_reads_and_t
         port = HostModelAvailability().availability(session, [LUNA])[LUNA]
     assert (port.subscription, port.api, port.access) == (False, True, "api")
     route = s.service.estimate(s.scope).route
-    assert (route.billing, route.cell.effort, route.cell.max_output_tokens) == ("metered", "medium", 900), "the access of the port, the cell of the revision"
+    assert (route.billing, route.cell.effort) == ("metered", "medium"), "the access of the port, the cell of the revision"
     server(db, "layout-7b", report("codex", "subscription", LUNA))
     with db.sessions() as session:
         port = HostModelAvailability().availability(session, [LUNA])[LUNA]

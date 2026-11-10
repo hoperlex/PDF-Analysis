@@ -27,8 +27,8 @@ TOKEN = "ern_01M2545JSD15ETSNNV904X991K"
 TASK = "ext_01M2545JSD15ETSNNV904X991K"
 OPUS = "claude-opus-5-5"
 SCHEMA = {"type": "object", "properties": {"observations": {"type": "array"}}, "required": ["observations"], "additionalProperties": False}
-HOST_SEVEN = {"provider": "claude_code", "access": "subscription", "model_id": OPUS, "effort": "medium",
-              "max_output_tokens": 16000, "timeout_seconds": 600, "cell_key": "text:main"}
+HOST_SIX = {"provider": "claude_code", "access": "subscription", "model_id": OPUS, "effort": "medium",
+            "timeout_seconds": 600, "cell_key": "text:main"}
 
 
 class Refused(Exception):
@@ -65,7 +65,7 @@ CONNECTION_PRINCIPAL = RunnerPrincipal(token_id=TOKEN, connection_id=CONNECTION)
 
 
 def _host_answer(reported: str, *, repo: Repo | None = None) -> Repo:
-    repo = repo or Repo({"system": "s", "user_text": "u", "output_schema": SCHEMA, "host": dict(HOST_SEVEN)})
+    repo = repo or Repo({"system": "s", "user_text": "u", "output_schema": SCHEMA, "host": dict(HOST_SIX)})
     submit_answer(
         None, HOST_PRINCIPAL, TASK, output_text='{"observations": []}', model=OPUS, input_tokens=None, output_tokens=None,
         on_mismatch=_mismatch, repository=repo, provider="claude_code", access="subscription", reported_model=reported,
@@ -84,7 +84,7 @@ def test_an_alias_of_the_catalogue_is_accepted_and_recorded_as_the_model_that_an
     "anthropic/claude-opus-5-5",  # another provider's alias of the same model: the list is per provider
 ])
 def test_a_string_outside_the_exact_list_is_refused_and_nothing_is_recorded(reported: str) -> None:
-    repo = Repo({"system": "s", "user_text": "u", "output_schema": SCHEMA, "host": dict(HOST_SEVEN)})
+    repo = Repo({"system": "s", "user_text": "u", "output_schema": SCHEMA, "host": dict(HOST_SIX)})
     with pytest.raises(Refused):
         _host_answer(reported, repo=repo)
     assert repo.recorded == []

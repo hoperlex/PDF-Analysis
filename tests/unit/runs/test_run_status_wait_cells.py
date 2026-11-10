@@ -30,9 +30,9 @@ SINCE = datetime(2026, 11, 10, 9, 30, tzinfo=timezone.utc)
 PLAN = {
     "format": "stage-plan/1", "layout_revision_id": "slr_01M2545JSD15ETSNNV904X991A", "kit": "codex_only",
     "cells": [
-        {"cell_key": "text:main", "model_id": "gpt-6-sol", "effort": "medium", "max_output_tokens": 16000, "timeout_seconds": 1800, "access": "subscription"},
-        {"cell_key": "blocks:leg1", "model_id": "gpt-6-astra", "effort": "medium", "max_output_tokens": 6000, "timeout_seconds": 1800, "access": "subscription"},
-        {"cell_key": "review:main", "model_id": "gpt-6-sol", "effort": "medium", "max_output_tokens": 12000, "timeout_seconds": 1800, "access": "api"},
+        {"cell_key": "text:main", "model_id": "gpt-6-sol", "effort": "medium", "access": "subscription"},
+        {"cell_key": "blocks:leg1", "model_id": "gpt-6-astra", "effort": "medium", "access": "subscription"},
+        {"cell_key": "review:main", "model_id": "gpt-6-sol", "effort": "medium", "access": "api"},
     ],
 }
 

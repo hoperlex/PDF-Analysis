@@ -43,7 +43,7 @@ def build_stage_model_routes(router: APIRouter, stage_models: StageModelPort) ->
         responses={**success(200, "The layout in force, its history and the switch."), **envelope_responses(401, 403, 500, 503)},
         description=(
             "`HOSTS-SEAL-1` (ADR-0028): the layout of models over the analysis stages -- for each row (text, blocks, cross-check, norms, "
-            "critic, refinement) and role the model, the effort, the output limit and the timeout -- the revision in force, the revisions "
+            "critic, refinement) and role the model and the effort (no answer limit and no timeout: `LIMITS-01`) -- the revision in force, the revisions "
             "newest first, the switch and its journal, and the cells whose model no server can serve now. An expert reads it; only an "
             "administrator changes it. `role:admin|expert`; the viewer is denied."
         ),

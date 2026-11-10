@@ -249,9 +249,8 @@ def build_estimate(
     new job); ``day_committed_micros`` is what the installation has spent or reserved today. Neither is in the digest."""
     if route.work_kind != scope.work_kind:
         raise ValueError("the route is the route of another kind of work")
-    if route.cell is not None:
-        # The cell's answer limit is a ceiling over the module's own: the estimate counts what a call may answer at most (`HOSTS-CMP-01`).
-        counts = counts.capped(route.cell.max_output_tokens)
+    # `LIMITS-01`: a frozen cell has no answer limit, so nothing caps the counts: the estimate prices each call at the output figure of the
+    # module that makes it (``AiCallGroup.output_tokens``) -- an estimate, not a cap on what the model answers.
     totals = counts.totals()
     if route.metered:
         if route.pin is None:

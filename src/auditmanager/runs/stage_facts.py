@@ -339,7 +339,8 @@ def _state_of_procedures(statuses: Sequence[str]) -> str | None:
 
 def _plan_cells(stage_plan: Mapping[str, Any] | None) -> dict[str, list[dict[str, Any]]]:
     """The frozen cells of a planned run, by chip, in the order of their roles. A malformed plan is ``storage_integrity_error``: the
-    database checks the shape of the array and the cell key and model that binding reads, and nothing else about a cell."""
+    database checks the shape of the array and the cell key and model that binding reads, and nothing else about a cell. A plan frozen before
+    `LIMITS-01` holds an answer limit and a timeout per cell; they are **not shown** (the contract's cell has neither)."""
     if stage_plan is None:
         return {}
     cells = stage_plan.get("cells") if isinstance(stage_plan, Mapping) else None
@@ -359,8 +360,6 @@ def _plan_cells(stage_plan: Mapping[str, Any] | None) -> dict[str, list[dict[str
         for field, valid in (
             ("model_id", lambda v: isinstance(v, str) and 1 <= len(v) <= 200),
             ("effort", lambda v: v in _EFFORTS),
-            ("max_output_tokens", lambda v: type(v) is int and 1 <= v <= 65536),
-            ("timeout_seconds", lambda v: type(v) is int and 1 <= v <= 7200),
             ("access", lambda v: v in _ACCESSES),
         ):
             if field in cell:

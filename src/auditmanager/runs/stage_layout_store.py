@@ -106,13 +106,11 @@ _LOCK_SWITCH = text("SELECT pg_advisory_xact_lock(hashtextextended('stage_layout
 
 def _cells_of(document: Any) -> tuple[tuple[CellSettings, ...], tuple[CellSettings, ...] | None]:
     """``(the rows' cells, the comparison cells or None)`` of a stored ``cells`` array: a cell is a comparison cell when the row of its key is
-    a kind of comparison work."""
+    a kind of comparison work. A revision stored before `LIMITS-01` holds an answer limit and a timeout per cell; they are **not read** (a
+    cell's window is its row's constant, and there is no answer limit), so an old revision is served exactly as a new one."""
     try:
         found = tuple(
-            CellSettings(
-                cell_key=str(item["cell_key"]), model_id=str(item["model_id"]), effort=str(item["effort"]),
-                max_output_tokens=int(item["max_output_tokens"]), timeout_seconds=int(item["timeout_seconds"]),
-            )
+            CellSettings(cell_key=str(item["cell_key"]), model_id=str(item["model_id"]), effort=str(item["effort"]))
             for item in document
         )
     except (KeyError, TypeError, ValueError):

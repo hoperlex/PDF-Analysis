@@ -6038,19 +6038,17 @@ class ClaimedExecutorTask(_Object):
     images: Annotated[list[RunnerImage], Field(max_length=8)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
-    #: `HOSTS-SEAL-1`: present on a task claimed with a host token -- all seven members (`provider`, `access`, `model_id`, `effort`,
-    #: `max_output_tokens`, `timeout_seconds`, `cell_key`) or none. The agent runs exactly this provider, access, model and
-    #: effort and refuses a model it does not report as verified (`failExecutorTask`, code `model_not_available`); `model` is
-    #: then equal to `model_id`.
+    #: `HOSTS-SEAL-1`: present on a task claimed with a host token -- all six members (`provider`, `access`, `model_id`, `effort`,
+    #: `timeout_seconds`, `cell_key`) or none. The agent runs exactly this provider, access, model and effort and refuses a model it
+    #: does not report as verified (`failExecutorTask`, code `model_not_available`); `model` is then equal to `model_id`.
+    #: `LIMITS-01` (contract 1.49.0, `R-153n`): there is no `max_output_tokens`; no answer cap reaches a model. `timeout_seconds` is the
+    #: call's window, the constant of its row or kind (`R-153o`).
     provider: ExecutorProvider = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     access: ExecutorModelAccess = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     model_id: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
     effort: ModelEffort = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    max_output_tokens: Annotated[int, Field(ge=1, le=65536)] = Field(  # type: ignore[assignment]
-        default=None, json_schema_extra=optional_property
-    )
     timeout_seconds: Annotated[int, Field(ge=1, le=7200)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
@@ -7667,15 +7665,13 @@ class ComparisonLayoutKind(str, enum.Enum):
 
 
 class StageComparisonCell(_Object):
-    """The settings of one kind of comparison work (`HOSTS-CMP-01`): model, effort, the output limit in tokens and the timeout in seconds.
-    The model and the effort must be a pair of `listModelCatalogue`. The limit is a ceiling over the limit of the work itself: a call is made
-    with the smaller of the two. The timeout is the window of one call to a server. A comparison job freezes its cell when it starts."""
+    """The settings of one kind of comparison work (`HOSTS-CMP-01`): model and effort. The model and the effort must be a pair of
+    `listModelCatalogue`. A comparison job freezes its cell when it starts. `LIMITS-01` (contract 1.49.0): no answer limit and no
+    timeout per cell -- a call carries no answer cap, and its window is the constant of its kind (`R-153n`, `R-153o`)."""
 
     work_kind: ComparisonLayoutKind
     model_id: Annotated[str, Field(min_length=1, max_length=200)]
     effort: ModelEffort
-    max_output_tokens: Annotated[int, Field(ge=1, le=65536)]
-    timeout_seconds: Annotated[int, Field(ge=1, le=7200)]
 
 
 class ComparisonAiRoute(_Object):
@@ -7684,7 +7680,7 @@ class ComparisonAiRoute(_Object):
     process is in recorded mode, in which case every answer is a recorded test answer.
 
     `HOSTS-CMP-01` (ADR-0028 decision 19): a route chosen by the stage layout also carries the `cell` of its kind of work -- the
-    effort, the answer limit and the timeout the job froze. The estimate digest binds it, so the consent names what will run."""
+    model and effort the job froze. The estimate digest binds it, so the consent names what will run."""
 
     #: `EXEC2-SEAL-2` (ADR-0026 decisions 12 and 13). For work admitted by a rule or a group the connection and its
     #: revision are absent until dispatch binds the work, and the group, the rule revision and the planned model
@@ -9563,16 +9559,15 @@ class StageModelKit(str, enum.Enum):
 
 
 class StageLayoutCell(_Object):
-    """The settings of one cell (a row and a role): model, effort, the output limit in tokens and the timeout in seconds. The
-    model and the effort must be a pair of `listModelCatalogue`."""
+    """The settings of one cell (a row and a role): model and effort. The model and the effort must be a pair of `listModelCatalogue`.
+    `LIMITS-01` (contract 1.49.0, `R-153n`, `R-153o`): a cell has no answer limit and no timeout -- no answer cap reaches a model, and a
+    call's timeout is a constant of its row. A request that still names either member is refused (`validation_failed`), not ignored."""
 
     cell_key: StageCellKey
     row: StageRowKey
     role: StageCellRole
     model_id: Annotated[str, Field(min_length=1, max_length=200)]
     effort: ModelEffort
-    max_output_tokens: Annotated[int, Field(ge=1, le=65536)]
-    timeout_seconds: Annotated[int, Field(ge=1, le=7200)]
 
 
 class StageLayoutRevision(_Object):
@@ -9738,8 +9733,8 @@ class RunStagePlanSource(str, enum.Enum):
 
 
 class RunStageCell(_Object):
-    """One line of a chip's plan: the part it plays (`main`, `leg1`, `leg2`, `judge`), the model, the effort, the answer limit and the
-    timeout the run froze, and -- for an expert and an administrator -- the access and the server the cell is bound to. Of a run
+    """One line of a chip's plan: the part it plays (`main`, `leg1`, `leg2`, `judge`), the model and the effort the run froze, and -- for an
+    expert and an administrator -- the access and the server the cell is bound to. `LIMITS-01` (contract 1.49.0): no answer limit and no timeout. Of a run
     without a stage plan the line has `role` `main`, the model of the run's binding and nothing else it does not know.
     `access` and `server` are omitted for the viewer («Наблюдатель», `R-150w`); `server` is also absent while the cell is not bound."""
 
@@ -9749,12 +9744,6 @@ class RunStageCell(_Object):
         default=None, json_schema_extra=optional_property
     )
     effort: ModelEffort = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    max_output_tokens: Annotated[int, Field(ge=1, le=65536)] = Field(  # type: ignore[assignment]
-        default=None, json_schema_extra=optional_property
-    )
-    timeout_seconds: Annotated[int, Field(ge=1, le=7200)] = Field(  # type: ignore[assignment]
-        default=None, json_schema_extra=optional_property
-    )
     access: ExecutorModelAccess = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     server: Annotated[str, Field(min_length=1, max_length=120)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
@@ -9823,7 +9812,7 @@ _RUN_STAGES_EXAMPLES: list[dict[str, Any]] = [
                 "stage_ids": ["text_analysis"],
                 "plan": [{
                     "cell_key": "text:main", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium",
-                    "max_output_tokens": 16000, "timeout_seconds": 1200, "access": "subscription", "server": "adm1.hlab.kz",
+                    "access": "subscription", "server": "adm1.hlab.kz",
                 }],
                 "facts": {
                     "state": "done", "started_at": "2026-11-10T09:01:13Z", "finished_at": "2026-11-10T09:06:40Z",
@@ -9837,7 +9826,7 @@ _RUN_STAGES_EXAMPLES: list[dict[str, Any]] = [
                 "stage_ids": ["block_analysis"],
                 "plan": [{
                     "cell_key": "blocks:main", "role": "main", "model_id": "claude-opus-5-5", "effort": "medium",
-                    "max_output_tokens": 6000, "timeout_seconds": 900, "access": "subscription", "server": "adm1.hlab.kz",
+                    "access": "subscription", "server": "adm1.hlab.kz",
                 }],
                 "facts": {
                     "state": "running", "started_at": "2026-11-10T09:06:41Z",
@@ -9857,7 +9846,6 @@ _RUN_STAGES_EXAMPLES: list[dict[str, Any]] = [
             "stage_ids": ["norm_verification"],
             "plan": [{
                 "cell_key": "norms:main", "role": "main", "model_id": "claude-sonnet-5-5", "effort": "medium",
-                "max_output_tokens": 6000, "timeout_seconds": 900,
             }],
             "facts": {
                 "state": "done", "started_at": "2026-11-10T09:30:00Z", "finished_at": "2026-11-10T09:41:10Z",

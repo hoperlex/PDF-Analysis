@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import text
 
 from auditmanager.analysis.public import ProxyDispatchError
-from auditmanager.comparison.spend.cell import answer_limit_of
 from auditmanager.comparison.work.model import ATTEMPT_WATCHDOG_SECONDS, WorkItem
 from auditmanager.executors.public import DEADLINE_MARGIN_SECONDS, checked_descriptors, checked_pngs
 from auditmanager.shared.errors import ErrorCode
@@ -103,6 +102,4 @@ class PublishedPullAdapter:
                     ErrorCode.ANALYSIS_INPUT_INVALID, dispatch_class="not_sent", retry_safe=False,
                     message="a published crop did not match its descriptor",
                 )
-        # `D-677`: the task tells the agent the answer limit of this request (the module's, held to the cell's), not the cell's alone.
-        with answer_limit_of(request):
-            return self._adapter.complete(request)
+        return self._adapter.complete(request)

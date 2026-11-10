@@ -3,7 +3,7 @@
 No database and no network. What is proved, each by a test that fails without the line it names:
 
 * the runner seam carries the host: ``RunnerIdentity`` and ``EnrollmentIdentity`` name a host, the principal handed to the executors carries it, a claimed
-  task carries its seven members (all or none) and a host agent's answer reaches ``submit_answer`` with provider, access, reported model and usage;
+  task carries its six members (all or none) and a host agent's answer reaches ``submit_answer`` with provider, access, reported model and usage;
 * the enrollment adapter takes a host grant through the host adapter, a host token's health report likewise, and refuses a connection token that sends the
   host's members before anything is written;
 * the three start commands and the cost preflight read the stage layout through **one** object, and the composition root builds it once (read as syntax);
@@ -44,8 +44,8 @@ TASK = "ext_01M2545JSD15ETSNNV904X991K"
 ENROLLMENT = "exe_01M2545JSD15ETSNNV904X991K"
 USER = "usr_01M2545JSD15ETSNNV904X991K"
 OPUS = "claude-opus-5-5"
-SEVEN = {"provider": "claude_code", "access": "subscription", "model_id": OPUS, "effort": "medium",
-         "max_output_tokens": 16000, "timeout_seconds": 600, "cell_key": "text:main"}
+SIX = {"provider": "claude_code", "access": "subscription", "model_id": OPUS, "effort": "medium",
+       "timeout_seconds": 600, "cell_key": "text:main"}
 COMPOSITION = Path(composition.__file__).resolve()
 
 
@@ -118,20 +118,21 @@ def _claimed(**members: Any) -> executors_public.ClaimedTask:
         task_id=TASK, claim_expires_at=T0, deadline_at=T0, model=OPUS, system="s", user_text="u", output_schema={"type": "object"}, **members)
 
 
-def test_a_claimed_host_task_reaches_the_wire_with_its_seven_members(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_claimed_host_task_reaches_the_wire_with_its_six_members_and_no_answer_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[Any] = []
 
     def claim(factory: Any, principal: Any, **kwargs: Any) -> Any:
         seen.append(principal)
-        return _claimed(**SEVEN)
+        return _claimed(**SIX)
 
     monkeypatch.setattr(executors_public, "claim_task", claim)
     task = RunnerAdapter(fake_sessions).claim_task(runner=HOST_IDENTITY, wait_seconds=0)  # type: ignore[arg-type]
     assert task is not None and seen[0].host_id == HOST and seen[0].connection_id is None
     wire = task.model_dump(mode="json", exclude_unset=True)
-    for name, value in SEVEN.items():
+    for name, value in SIX.items():
         assert wire[name] == value
     assert wire["model"] == wire["model_id"]
+    assert "max_output_tokens" not in wire, "`R-153n`: no answer cap on the wire"
 
 
 def test_a_claimed_legacy_task_carries_none_of_the_members(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -139,12 +140,12 @@ def test_a_claimed_legacy_task_carries_none_of_the_members(monkeypatch: pytest.M
     task = RunnerAdapter(fake_sessions).claim_task(runner=CONNECTION_IDENTITY, wait_seconds=0)  # type: ignore[arg-type]
     assert task is not None
     wire = task.model_dump(mode="json", exclude_unset=True)
-    assert not set(SEVEN) & set(wire) - {"model"}, "the earlier wire is unchanged: no host member is sent"
+    assert not set(SIX) & set(wire) - {"model"}, "the earlier wire is unchanged: no host member is sent"
 
 
-@pytest.mark.parametrize("missing", list(SEVEN))
+@pytest.mark.parametrize("missing", list(SIX))
 def test_a_half_made_host_task_is_never_sent(monkeypatch: pytest.MonkeyPatch, missing: str) -> None:
-    half = {name: value for name, value in SEVEN.items() if name != missing}
+    half = {name: value for name, value in SIX.items() if name != missing}
     monkeypatch.setattr(executors_public, "claim_task", lambda *a, **k: _claimed(**half))
     with pytest.raises(DomainError) as refused:
         RunnerAdapter(fake_sessions).claim_task(runner=HOST_IDENTITY, wait_seconds=0)  # type: ignore[arg-type]

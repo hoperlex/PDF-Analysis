@@ -1,6 +1,6 @@
 """`HOSTS-BACKEND-01` (ADR-0028 decision 9): a call to a host agent, and what counts as its sign of life.
 
-The task carries the seven members of the cell (provider, access, model, effort, answer ceiling, timeout, cell key); the window it is given is the **smaller** of
+The task carries the six members of the cell (provider, access, model, effort, timeout, cell key -- and no answer cap, `R-153n`); the window it is given is the **smaller** of
 the cell's timeout and what the watchdog leaves less the margin; and a claim -- or an extension of it, which the agent makes only while its CLI produced output --
 is a sign of life that the Attempt's context records (``AttemptContext.progress``), so a hung CLI, whose claim lapses, stops signalling. A call made on a
 connection's own revision is as it was: no ``host`` in its payload, no sign of life taken from its claim. No database and no sleeping (the scripted task table of
@@ -21,8 +21,8 @@ from auditmanager.executors.pull import HostCall, PullAdapter, answer_window
 from auditmanager.jobs.lease import AttemptContext
 from tests.unit.executors.test_pull_adapter import MODEL, REQUEST, Clock, FakeStore, Sessions, revision
 
-CALL = HostCall(provider="claude_code", access="subscription", model_id=MODEL, effort="medium", max_output_tokens=16000,
-                timeout_seconds=900, cell_key="text:main")
+CALL = HostCall(provider="claude_code", access="subscription", model_id=MODEL, effort="medium", timeout_seconds=900,
+                cell_key="text:main")
 T0 = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
 
 
@@ -48,18 +48,18 @@ def _answer(c: Clock, store: FakeStore) -> None:
         store.answered('{"observations": []}', MODEL)
 
 
-# --- the seven members ------------------------------------------------------------------------------------------------
+# --- the six members --------------------------------------------------------------------------------------------------
 
 
-def test_the_task_of_a_cell_carries_the_seven_members_beside_the_prompt(clock: Clock) -> None:
+def test_the_task_of_a_cell_carries_the_six_members_and_no_answer_cap_beside_the_prompt(clock: Clock) -> None:
     store = FakeStore(clock, _answer)
     _adapter(clock, store, context=_context()).complete(REQUEST)
     assert store.payload is not None
     host = store.payload["host"]
-    assert set(host) == {"provider", "access", "model_id", "effort", "max_output_tokens", "timeout_seconds", "cell_key"}
+    assert set(host) == {"provider", "access", "model_id", "effort", "timeout_seconds", "cell_key"}
+    assert "max_output_tokens" not in host and "max_tokens" not in host, "no answer cap reaches a model"
     assert (host["provider"], host["access"], host["model_id"], host["effort"], host["cell_key"]) == (
         "claude_code", "subscription", MODEL, "medium", "text:main")
-    assert host["max_output_tokens"] == 16000
     assert {"system", "user_text", "output_schema"} <= set(store.payload)
 
 

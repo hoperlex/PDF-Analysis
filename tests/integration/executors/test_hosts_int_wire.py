@@ -13,7 +13,7 @@ One throwaway database, committed rows (the claim, the binding, the pull task an
    own cases) starts from an empty store -- a committed revision of this test would break it whenever it runs after;
 3. **the run is bound** -- the claim binds every cell to a member of the host, once;
 4. **each cell is called by its own model** -- ``DatabaseProviders.resolve`` of the planned run answers one adapter and one ``CallBinding`` per cell;
-   the call is written as a task carrying the seven members of *its* cell, claimed through the host token, and journaled on the member that serves it;
+   the call is written as a task carrying the six members of *its* cell, claimed through the host token, and journaled on the member that serves it;
 5. **the identity check holds** -- an answer whose reported model is an alias of the catalogue's list is accepted, one that names another model is refused
    (and the task keeps its claim), a declared model that is not the task's is refused.
 
@@ -305,8 +305,9 @@ def test_a_run_on_the_stage_layout_is_bound_called_by_each_cells_model_and_held_
 
         waiting = Call(one.adapter, _request(model))
         claimed = _claim_one(sessions, server)
-        assert (claimed.provider, claimed.access, claimed.model_id, claimed.effort, claimed.max_output_tokens, claimed.cell_key) == (
-            "claude_code", "subscription", model, cell.effort, cell.max_output_tokens, cell_key), "the task carries the cell's own settings"
+        assert (claimed.provider, claimed.access, claimed.model_id, claimed.effort, claimed.cell_key) == (
+            "claude_code", "subscription", model, cell.effort, cell_key), "the task carries the cell's own settings"
+        assert not hasattr(claimed, "max_output_tokens"), "`R-153n`: and no answer cap"
         assert claimed.model == model and claimed.timeout_seconds == cell.timeout_seconds
 
         # 5. the identity check: another model is refused and the task keeps its claim; a declared model that is not the task's is refused

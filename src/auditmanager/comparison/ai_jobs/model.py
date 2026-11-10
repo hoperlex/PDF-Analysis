@@ -97,6 +97,7 @@ __all__ = [
     "cell_document",
     "cell_key_document",
     "cell_of_document",
+    "estimate_view",
     "digest_of",
     "work_kind_of",
 ]
@@ -163,31 +164,43 @@ def work_kind_of(method: str) -> str:
 
 
 def cell_document(cell: "CellSettings") -> dict[str, Any]:
-    """The contract's ``StageComparisonCell`` of a frozen cell: the kind of work (the key's row), the model, the effort, the answer limit and the
-    timeout. What the estimate stores and its digest binds (`HOSTS-CMP-01`)."""
-    return {
-        "work_kind": cell.row, "model_id": cell.model_id, "effort": cell.effort,
-        "max_output_tokens": cell.max_output_tokens, "timeout_seconds": cell.timeout_seconds,
-    }
+    """The contract's ``StageComparisonCell`` of a frozen cell: the kind of work (the key's row), the model and the effort. What the estimate
+    stores and its digest binds (`HOSTS-CMP-01`). `LIMITS-01`: no answer limit and no timeout -- the call carries no cap and its window is the
+    kind's constant."""
+    return {"work_kind": cell.row, "model_id": cell.model_id, "effort": cell.effort}
 
 
 def cell_key_document(cell: "CellSettings | None") -> dict[str, Any] | None:
-    """What a frozen cell adds to the content key of a stored answer (`D-675`): the model, the effort and the answer limit it asked for -- not the
-    timeout, which changes no answer. ``None`` for a job with no cell: its key is the key it always had, byte for byte (a method adds nothing
-    to its key document then)."""
+    """What a frozen cell adds to the content key of a stored answer (`D-675`): the model and the effort it asked for -- not the timeout, which
+    changes no answer. `LIMITS-01`: the answer limit left the cell, so it left the key; an answer stored under the old key is not reused by a
+    job of the new one (it is asked again). ``None`` for a job with no cell: its key is the key it always had, byte for byte (a method adds
+    nothing to its key document then)."""
     if cell is None:
         return None
-    return {"model_id": cell.model_id, "effort": cell.effort, "max_output_tokens": cell.max_output_tokens}
+    return {"model_id": cell.model_id, "effort": cell.effort}
 
 
 def cell_of_document(document: Mapping[str, Any]) -> "CellSettings":
-    """The cell a job froze, read back from the estimate it stored (the inverse of :func:`cell_document`)."""
+    """The cell a job froze, read back from the estimate it stored (the inverse of :func:`cell_document`). An estimate stored before
+    `LIMITS-01` also holds an answer limit and a timeout; they are not read (:func:`estimate_view` drops them from what is shown)."""
     from auditmanager.analysis.public import CellSettings
 
-    return CellSettings(
-        cell_key=f"{document['work_kind']}:main", model_id=str(document["model_id"]), effort=str(document["effort"]),
-        max_output_tokens=int(document["max_output_tokens"]), timeout_seconds=int(document["timeout_seconds"]),
-    )
+    return CellSettings(cell_key=f"{document['work_kind']}:main", model_id=str(document["model_id"]), effort=str(document["effort"]))
+
+
+#: The two members a frozen cell carried in a stored estimate before `LIMITS-01`.
+_LEGACY_CELL_MEMBERS: Final[tuple[str, str]] = ("max_output_tokens", "timeout_seconds")
+
+
+def estimate_view(estimate: Mapping[str, Any]) -> dict[str, Any]:
+    """A stored estimate as the contract shows it: a job that froze its cell before `LIMITS-01` keeps the answer limit and the timeout in its
+    stored ``route.cell``, and the contract's cell has neither, so they are dropped here -- from the view only; the stored row is never
+    rewritten."""
+    shown = dict(estimate)
+    route = shown.get("route")
+    if isinstance(route, Mapping) and isinstance(route.get("cell"), Mapping):
+        shown["route"] = {**route, "cell": {k: v for k, v in route["cell"].items() if k not in _LEGACY_CELL_MEMBERS}}
+    return shown
 
 
 class AiMode(str, Enum):
@@ -353,12 +366,6 @@ class AiCounts:
         ):
             if value is not None:
                 _natural(value, what)
-
-    def capped(self, output_tokens: int) -> "AiCounts":
-        """The same counts with the answer each call may give held to ``output_tokens`` at most (``min``, never raised): what the estimate of a
-        job with a frozen cell counts (`HOSTS-CMP-01`). A subclass keeps its own members."""
-        return replace(
-            self, groups=tuple(replace(group, output_tokens=min(group.output_tokens, output_tokens)) for group in self.groups))
 
     def totals(self) -> AiTotals:
         return AiTotals(
@@ -681,7 +688,7 @@ class AiJobView:
         record = self.record
         document: dict[str, Any] = {
             "job_id": record.job_id, "method": record.method, "project_uid": record.project_uid,
-            "document_uid": record.document_uid, "state": record.state, "estimate": dict(record.estimate),
+            "document_uid": record.document_uid, "state": record.state, "estimate": estimate_view(record.estimate),
             "consented_by": record.consented_by_user_uid, "consented_at": record.consented_at,
             "spend": {
                 "spent_micros": self.spend.spent_micros, "reserved_micros": self.spend.reserved_micros,

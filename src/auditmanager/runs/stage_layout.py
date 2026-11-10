@@ -14,28 +14,29 @@ This module is pure: no database, no clock, no environment. It is the single def
 * the **plan** (:class:`FrozenStagePlan`): the cells of a layout revision with the access chosen for each model when a run starts, its
   JSON form (what ``audit_run.stage_plan`` stores) and its digest;
 * the **comparison cells** (`HOSTS-CMP-01`, ADR-0028 decision 19): one cell ``<kind>:main`` for each of the four kinds of the version
-  comparison that call a model (:data:`COMPARISON_KINDS`), with the same four settings as a row. They are part of a layout revision and
+  comparison that call a model (:data:`COMPARISON_KINDS`), with the same two settings as a row. They are part of a layout revision and
   of no run: a run's plan holds the six rows only (:func:`rows_in_use`), and a comparison job freezes its cell when it starts.
 
-Nothing here decides a model from a model's output (``AGENTS.md`` section 4): a model, an effort and a limit come from the stored
-layout, the access from the availability the stand reads at the start.
+A cell is a **model and an effort** (and, in a plan, an access). Since `LIMITS-01` (`R-153n`, `R-153o`) it has no answer limit and no
+timeout of its own: no answer cap reaches a model, and a call's timeout is the code constant of its row or kind
+(``analysis.text.cell_settings``). A layout revision stored before that carries the two old numbers per cell; they are **not read**.
+
+Nothing here decides a model from a model's output (``AGENTS.md`` section 4): a model and an effort come from the stored layout, the
+access from the availability the stand reads at the start.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Final, Iterable, Mapping, Sequence
 
-from auditmanager.analysis.public import (
-    CellSettings, DEFAULT_TIMEOUT_SECONDS, ModelCatalogue, ROW_DEFAULT_MAX_OUTPUT_TOKENS, model_catalogue,
-)
+from auditmanager.analysis.public import CellSettings, COMPARISON_TIMEOUT_SECONDS, ModelCatalogue, model_catalogue
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
-    "BLOCK_SCHEMES", "BLOCKS_ENSEMBLE_LANDED", "BlockScheme", "CELL_ROLES", "COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS",
-    "COMPARISON_DEFAULT_TIMEOUT_SECONDS", "COMPARISON_KINDS", "COMPARISON_LABELS", "COMPARISON_PRESET_CELLS", "ENSEMBLE_ROLES",
+    "BLOCK_SCHEMES", "BLOCKS_ENSEMBLE_LANDED", "BlockScheme", "CELL_ROLES", "COMPARISON_KINDS", "COMPARISON_LABELS", "COMPARISON_PRESET_CELLS", "ENSEMBLE_ROLES",
     "ENSEMBLE_ROW", "FrozenStagePlan", "ROLE_ORDER", "KITS", "KIT_CLAUDE_ONLY",
     "KIT_CODEX_ONLY", "KIT_CUSTOM", "KIT_LABELS", "MODELLESS_PHASES", "PHASE_ALIASES", "PHASE_LABELS", "PHASE_ROWS", "PLAN_FORMAT", "PRESET_CELLS",
     "ROW_LABELS", "ROW_PHASES", "STAGE_ROWS", "cell_key", "cells_to_wire", "kit_of", "parse_plan", "preset_cells", "require_valid_layout",
@@ -193,14 +194,13 @@ if any(table["blocks"] not in {scheme.cells for scheme in BLOCK_SCHEMES} for tab
 
 
 def preset_cells(kit: str) -> tuple[CellSettings, ...]:
-    """The cells of a set with the default answer limits and timeout, in row order and, inside a row, in role order (``main``, the legs,
-    the judge). ``custom`` has no table: it is whatever was saved."""
+    """The cells of a set, in row order and, inside a row, in role order (``main``, the legs, the judge). ``custom`` has no table: it is
+    whatever was saved."""
     table = PRESET_CELLS.get(kit)
     if table is None:
         raise ValueError("only the two sets have a table of cells")
     return tuple(
-        CellSettings(cell_key=cell_key(row, role), model_id=model, effort=effort,
-                     max_output_tokens=ROW_DEFAULT_MAX_OUTPUT_TOKENS[row], timeout_seconds=DEFAULT_TIMEOUT_SECONDS)
+        CellSettings(cell_key=cell_key(row, role), model_id=model, effort=effort)
         for row in STAGE_ROWS for role, model, effort in table[row]
     )
 
@@ -215,8 +215,7 @@ def _model_effort(cells: Iterable[CellSettings]) -> tuple[tuple[str, str, str], 
 
 
 def kit_of(cells: Sequence[CellSettings]) -> str:
-    """The set whose model · effort table the cells follow exactly, else « Свой набор ». Limits and timeouts are not part of a set: an
-    administrator who only lengthens a timeout still has the set's models, and the kit says so."""
+    """The set whose model · effort table the cells follow exactly, else « Свой набор »."""
     mine = _model_effort(sorted(cells, key=_position))
     for kit in (KIT_CLAUDE_ONLY, KIT_CODEX_ONLY):
         if mine == _model_effort(preset_cells(kit)):
@@ -240,7 +239,7 @@ def validate_cells(cells: Sequence[CellSettings], *, catalogue: ModelCatalogue |
     * every (model, effort) pair is one the catalogue offers (so never a Haiku, ``xhigh``, ``max`` or Opus ``low``);
     * the blocks row is one scheme of the closed list, whole, and its roles are the scheme's: the legs and the judge are not edited
       one by one;
-    * a limit and a timeout are integers inside the wire's bounds.
+    A cell is a model and an effort: it has no limit or timeout to range-check (`LIMITS-01`).
     """
     catalogue = catalogue or model_catalogue()
     by_key: dict[str, CellSettings] = {}
@@ -259,9 +258,6 @@ def validate_cells(cells: Sequence[CellSettings], *, catalogue: ModelCatalogue |
     ordered = tuple(sorted(by_key.values(), key=_position))
     for cell in ordered:
         catalogue.require_pair(cell.model_id, cell.effort)
-        if (type(cell.max_output_tokens) is not int or not 1 <= cell.max_output_tokens <= 65_536
-                or type(cell.timeout_seconds) is not int or not 1 <= cell.timeout_seconds <= 7_200):
-            raise _invalid("limit_out_of_range")
     if tuple((cell.role, cell.model_id, cell.effort) for cell in ordered if cell.row == ENSEMBLE_ROW) not in {
             scheme.cells for scheme in BLOCK_SCHEMES}:
         raise _invalid("block_scheme_not_listed")
@@ -282,17 +278,17 @@ def require_valid_layout(
 
 
 def cells_to_wire(cells: Iterable[CellSettings]) -> list[dict[str, Any]]:
-    """The JSON of a layout cell (``StageLayoutCell``): what the revision stores and the API returns."""
+    """The JSON of a layout cell (``StageLayoutCell``): what the revision stores and the API returns -- the key, the row and role it names,
+    the model and the effort. A revision stored before `LIMITS-01` holds two more members per cell; they are never written again."""
     return [
-        {"cell_key": cell.cell_key, "row": cell.row, "role": cell.role, "model_id": cell.model_id, "effort": cell.effort,
-         "max_output_tokens": cell.max_output_tokens, "timeout_seconds": cell.timeout_seconds}
+        {"cell_key": cell.cell_key, "row": cell.row, "role": cell.role, "model_id": cell.model_id, "effort": cell.effort}
         for cell in cells
     ]
 
 
 # --- the comparison cells -----------------------------------------------------------------------------------------------------
 # `HOSTS-CMP-01` (ADR-0028 decision 19). The four kinds of work of the version comparison that call a model are served by the same
-# system groups as the analysis. A kind has one cell ``<kind>:main`` (model, effort, answer limit, timeout), kept in the layout revision
+# system groups as the analysis. A kind has one cell ``<kind>:main`` (model, effort), kept in the layout revision
 # beside the six rows and never in a run's plan. ``comparison_stage_review`` is not here: it is an enum value with no handler (`CMP-SEAL-C4`).
 
 #: The kinds of comparison work a cell is chosen for, in the order the owner sees them. ``git grep -n "COMPARISON_KINDS" -- src`` is the
@@ -304,17 +300,8 @@ COMPARISON_LABELS: Final[Mapping[str, str]] = {
     "comparison_pair_check": "Проверка пар листов", "comparison_sheet_changes": "Описание изменений листов",
     "comparison_spec": "Сравнение спецификаций", "comparison_report": "Отчёт по сравнению версий",
 }
-#: The answer limit, in tokens, that each kind's calls carried as a code constant before the layout: ``ai_pairs`` 1200, ``ai_sheets`` 8192,
-#: ``specification`` 32000, and 8000 for ``report`` (the largest of its roles; the client's is 4000). A cell's limit is a ceiling over the
-#: module's own (``min``), so a default equal to the constant changes nothing a call sends.
-COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS: Final[Mapping[str, int]] = {
-    "comparison_pair_check": 1_200, "comparison_sheet_changes": 8_192, "comparison_spec": 32_000, "comparison_report": 8_000,
-}
-#: The call window of each kind, as the original sets it (``version_comparison_ai``: ``sheet_match`` 900 s, ``VC_SC`` 1800 s, the whole
-#: specification 900 s, ``VC_MR`` 2400 s).
-COMPARISON_DEFAULT_TIMEOUT_SECONDS: Final[Mapping[str, int]] = {
-    "comparison_pair_check": 900, "comparison_sheet_changes": 1_800, "comparison_spec": 900, "comparison_report": 2_400,
-}
+# The call window of each kind is a code constant, ``analysis.text.cell_settings.COMPARISON_TIMEOUT_SECONDS`` (the original's values), and a
+# comparison call has no answer limit: the estimate counts the figure of the module that makes the call (`LIMITS-01`, `R-153n`).
 #: Model · effort of every kind of each set (the original's models mapped onto the catalogue: its ``sheet_match`` and its whole-specification
 #: comparison run on ``gpt-6-luna``, a pin since `R-153m` / `D-667`). The Claude set serves all four on Sonnet.
 COMPARISON_PRESET_CELLS: Final[Mapping[str, Mapping[str, tuple[str, str]]]] = {
@@ -325,9 +312,8 @@ COMPARISON_PRESET_CELLS: Final[Mapping[str, Mapping[str, tuple[str, str]]]] = {
     },
 }
 if any(set(table) != set(COMPARISON_KINDS) for table in COMPARISON_PRESET_CELLS.values()) or any(
-        set(table) != set(COMPARISON_KINDS) for table in (
-            COMPARISON_LABELS, COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS, COMPARISON_DEFAULT_TIMEOUT_SECONDS)):  # pragma: no cover
-    raise AssertionError("every comparison kind has a label, a limit, a timeout and a cell in each set")
+        set(table) != set(COMPARISON_KINDS) for table in (COMPARISON_LABELS, COMPARISON_TIMEOUT_SECONDS)):  # pragma: no cover
+    raise AssertionError("every comparison kind has a label, a timeout and a cell in each set")
 
 
 def comparison_cell_key(kind: str) -> str:
@@ -335,14 +321,12 @@ def comparison_cell_key(kind: str) -> str:
 
 
 def comparison_preset_cells(kit: str) -> tuple[CellSettings, ...]:
-    """The comparison cells of a set with the original's answer limits and call windows, in the order of :data:`COMPARISON_KINDS`."""
+    """The comparison cells of a set, in the order of :data:`COMPARISON_KINDS`."""
     table = COMPARISON_PRESET_CELLS.get(kit)
     if table is None:
         raise ValueError("only the two sets have a table of comparison cells")
     return tuple(
-        CellSettings(cell_key=comparison_cell_key(kind), model_id=table[kind][0], effort=table[kind][1],
-                     max_output_tokens=COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS[kind],
-                     timeout_seconds=COMPARISON_DEFAULT_TIMEOUT_SECONDS[kind])
+        CellSettings(cell_key=comparison_cell_key(kind), model_id=table[kind][0], effort=table[kind][1])
         for kind in COMPARISON_KINDS
     )
 
@@ -361,7 +345,7 @@ def validate_comparison_cells(
 ) -> tuple[CellSettings, ...]:
     """Check the comparison cells of a layout and return them in the order of :data:`COMPARISON_KINDS`, or raise ``validation_failed``
     (field ``comparison_cells``): a cell is ``<kind>:main`` of a known kind and appears once; every kind has its cell; every (model, effort)
-    pair is one the catalogue offers; a limit and a timeout are integers inside the wire's bounds."""
+    pair is one the catalogue offers."""
     catalogue = catalogue or model_catalogue()
     by_key: dict[str, CellSettings] = {}
     for cell in cells:
@@ -378,9 +362,6 @@ def validate_comparison_cells(
     ordered = tuple(by_key[comparison_cell_key(kind)] for kind in COMPARISON_KINDS)
     for cell in ordered:
         catalogue.require_pair(cell.model_id, cell.effort, field="comparison_cells")
-        if (type(cell.max_output_tokens) is not int or not 1 <= cell.max_output_tokens <= 65_536
-                or type(cell.timeout_seconds) is not int or not 1 <= cell.timeout_seconds <= 7_200):
-            raise _invalid("limit_out_of_range", "comparison_cells")
     return ordered
 
 
@@ -388,7 +369,7 @@ def require_valid_comparison_cells(
     kit: str, cells: Sequence[CellSettings], *, catalogue: ModelCatalogue | None = None,
 ) -> tuple[CellSettings, ...]:
     """:func:`validate_comparison_cells` plus the rule that a named set is that set: the models and efforts of the comparison cells of
-    « Только Codex » are its table's (a limit or a timeout may differ, as for the rows). ``kit`` itself is judged by
+    « Только Codex » are its table's. ``kit`` itself is judged by
     :func:`require_valid_layout`."""
     ordered = validate_comparison_cells(cells, catalogue=catalogue)
     if kit in PRESET_CELLS and _model_effort(ordered) != _model_effort(comparison_preset_cells(kit)):
@@ -398,11 +379,7 @@ def require_valid_comparison_cells(
 
 def comparison_cells_to_wire(cells: Iterable[CellSettings]) -> list[dict[str, Any]]:
     """The JSON of a comparison cell (``StageComparisonCell``): what the API returns. The kind is the cell key's row."""
-    return [
-        {"work_kind": cell.row, "model_id": cell.model_id, "effort": cell.effort,
-         "max_output_tokens": cell.max_output_tokens, "timeout_seconds": cell.timeout_seconds}
-        for cell in cells
-    ]
+    return [{"work_kind": cell.row, "model_id": cell.model_id, "effort": cell.effort} for cell in cells]
 
 
 # --- the plan -----------------------------------------------------------------------------------------------------------------
@@ -416,7 +393,7 @@ def _canonical(value: Any) -> str:
 
 @dataclass(frozen=True, slots=True)
 class FrozenStagePlan:
-    """The cells a run froze at its start: model, effort, answer limit, timeout and access, from one layout revision.
+    """The cells a run froze at its start: model, effort and access, from one layout revision.
 
     ``access`` is a property of the **model** in the plan, not of a cell: one model is bought one way for the whole run, so the consent
     (a map model -> rate digest and access) and the plan agree by construction.
@@ -425,6 +402,10 @@ class FrozenStagePlan:
     layout_revision_id: str
     kit: str
     cells: tuple[CellSettings, ...]
+    #: The digest of the document a plan was read back from when that document is the one a run froze **before** `LIMITS-01`: it carried
+    #: an answer limit and a timeout per cell, so its canonical form -- the form the owner's consent approved -- is not :meth:`to_json`'s
+    #: any more. ``None`` for every plan written since (its digest is computed from :meth:`to_json`).
+    frozen_digest: str | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if not self.cells:
@@ -439,20 +420,24 @@ class FrozenStagePlan:
             raise ValueError("a cell appears once in a plan")
 
     def to_json(self) -> dict[str, Any]:
-        """The document ``audit_run.stage_plan`` stores. Each cell carries exactly ``cell_key`` (``<row>:<role>``), ``model_id``, ``effort``,
-        ``max_output_tokens``, ``timeout_seconds`` and ``access``: the row and the role are the key's, and the readers (the database trigger
-        of the cell binding, ``getRunStages``) take them from it."""
+        """The document ``audit_run.stage_plan`` stores. Each cell carries exactly ``cell_key`` (``<row>:<role>``), ``model_id``, ``effort`` and
+        ``access``: the row and the role are the key's, and the readers (the database trigger of the cell binding, ``getRunStages``) take them
+        from it. The database requires only the key and the model of a cell (migration ``0062``), so the answer limit and the timeout a plan
+        carried before `LIMITS-01` need no migration to go."""
         return {
             "format": PLAN_FORMAT, "layout_revision_id": self.layout_revision_id, "kit": self.kit,
             "cells": [
-                {"cell_key": cell.cell_key, "model_id": cell.model_id, "effort": cell.effort,
-                 "max_output_tokens": cell.max_output_tokens, "timeout_seconds": cell.timeout_seconds, "access": cell.access}
+                {"cell_key": cell.cell_key, "model_id": cell.model_id, "effort": cell.effort, "access": cell.access}
                 for cell in self.cells
             ],
         }
 
     @property
     def digest(self) -> str:
+        """What the consent approved: the digest of this plan's document -- of the document it was read from, for a plan frozen before
+        `LIMITS-01` (:attr:`frozen_digest`), so a run in flight at the upgrade is not refused as « changed »."""
+        if self.frozen_digest is not None:
+            return self.frozen_digest
         return hashlib.sha256(_canonical(self.to_json()).encode("utf-8")).hexdigest()
 
     def cell(self, key: str) -> CellSettings:
@@ -510,22 +495,38 @@ def rows_in_use(extended_review: Mapping[str, Any] | None) -> tuple[str, ...]:
     return ("text", "blocks", "cross_check", "norms")
 
 
+#: The two members a cell of a plan (and of a layout revision) carried before `LIMITS-01`. They are read from nothing now: a run's call window is
+#: the row's constant whatever the plan froze.
+_LEGACY_CELL_MEMBERS: Final[tuple[str, str]] = ("max_output_tokens", "timeout_seconds")
+
+
 def parse_plan(document: object) -> FrozenStagePlan:
     """Read ``audit_run.stage_plan`` back. A document that is not exactly what :meth:`FrozenStagePlan.to_json` writes is refused: a
-    run whose plan cannot be read calls nothing."""
+    run whose plan cannot be read calls nothing.
+
+    The one other shape read is the plan of a run frozen before `LIMITS-01`: the same cells with an answer limit and a timeout each. A cell
+    must then carry **both** members (a half-old cell is refused), they are dropped unread, and the plan keeps the digest of the document the
+    consent approved (:attr:`FrozenStagePlan.frozen_digest`). A run in flight at the upgrade finishes under it; the call window it runs with
+    is the row's constant, not the number the old plan froze."""
     try:
         if not isinstance(document, Mapping) or document.get("format") != PLAN_FORMAT:
             raise ValueError("format")
+        raw_cells = document["cells"]
+        legacy = [item for item in raw_cells if isinstance(item, Mapping) and any(name in item for name in _LEGACY_CELL_MEMBERS)]
+        if legacy and (len(legacy) != len(raw_cells) or any(name not in item for item in legacy for name in _LEGACY_CELL_MEMBERS)):
+            raise ValueError("legacy shape")
         cells = tuple(
             CellSettings(
-                cell_key=str(item["cell_key"]), model_id=str(item["model_id"]), effort=str(item["effort"]),
-                max_output_tokens=int(item["max_output_tokens"]), timeout_seconds=int(item["timeout_seconds"]),
-                access=str(item["access"]),
+                cell_key=str(item["cell_key"]), model_id=str(item["model_id"]), effort=str(item["effort"]), access=str(item["access"]),
             )
-            for item in document["cells"]
+            for item in raw_cells
         )
-        plan = FrozenStagePlan(str(document["layout_revision_id"]), str(document["kit"]), cells)
-        if _canonical(plan.to_json()) != _canonical(document):
+        plan = FrozenStagePlan(
+            str(document["layout_revision_id"]), str(document["kit"]), cells,
+            frozen_digest=hashlib.sha256(_canonical(document).encode("utf-8")).hexdigest() if legacy else None,
+        )
+        current = {**document, "cells": [{k: v for k, v in item.items() if k not in _LEGACY_CELL_MEMBERS} for item in raw_cells]}
+        if _canonical(plan.to_json()) != _canonical(current):
             raise ValueError("shape")
         return plan
     except (KeyError, TypeError, ValueError):

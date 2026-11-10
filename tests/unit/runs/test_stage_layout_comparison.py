@@ -10,7 +10,7 @@ from dataclasses import replace
 
 import pytest
 
-from auditmanager.analysis.public import CellSettings
+from auditmanager.analysis.public import CellSettings, COMPARISON_TIMEOUT_SECONDS
 from auditmanager.runs import stage_layout as layout
 from auditmanager.runs import stage_layout_store as store
 from auditmanager.runs.public import COMPARISON_KINDS, LayoutRevisionRow
@@ -28,8 +28,8 @@ def refused(call, *args, **kwargs) -> dict:
     return caught.value.detail_fields
 
 
-def table(kit: str) -> dict[str, tuple[str, str, int, int]]:
-    return {c.row: (c.model_id, c.effort, c.max_output_tokens, c.timeout_seconds) for c in layout.comparison_preset_cells(kit)}
+def table(kit: str) -> dict[str, tuple[str, str, int]]:
+    return {c.row: (c.model_id, c.effort, c.timeout_seconds) for c in layout.comparison_preset_cells(kit)}
 
 
 def test_the_kinds_are_the_four_that_call_a_model_and_not_the_stage_review():
@@ -39,18 +39,19 @@ def test_the_kinds_are_the_four_that_call_a_model_and_not_the_stage_review():
     assert not set(layout.COMPARISON_KINDS) & set(layout.STAGE_ROWS), "a kind is never a row: a run's plan holds the rows only"
 
 
-def test_each_set_has_the_table_of_the_task_with_the_originals_limits_and_windows():
+def test_each_set_has_the_table_of_the_task_with_the_originals_windows_and_no_answer_limit():
     assert table("codex_only") == {
-        "comparison_pair_check": ("gpt-6-luna", "high", 1_200, 900),
-        "comparison_sheet_changes": ("gpt-6.1-sol", "high", 8_192, 1_800),
-        "comparison_spec": ("gpt-6-luna", "high", 32_000, 900),
-        "comparison_report": ("gpt-6.1-sol", "high", 8_000, 2_400),
+        "comparison_pair_check": ("gpt-6-luna", "high", 900),
+        "comparison_sheet_changes": ("gpt-6.1-sol", "high", 1_800),
+        "comparison_spec": ("gpt-6-luna", "high", 900),
+        "comparison_report": ("gpt-6.1-sol", "high", 2_400),
     }
     assert table("claude_only") == {
-        kind: ("claude-sonnet-5-5", "high", tokens, seconds) for kind, tokens, seconds in (
-            ("comparison_pair_check", 1_200, 900), ("comparison_sheet_changes", 8_192, 1_800),
-            ("comparison_spec", 32_000, 900), ("comparison_report", 8_000, 2_400))
+        kind: ("claude-sonnet-5-5", "high", seconds) for kind, seconds in (
+            ("comparison_pair_check", 900), ("comparison_sheet_changes", 1_800), ("comparison_spec", 900), ("comparison_report", 2_400))
     }
+    assert dict(COMPARISON_TIMEOUT_SECONDS) == {kind: seconds for kind, (_, _, seconds) in table("codex_only").items()}
+    assert not any(hasattr(cell, "max_output_tokens") for cell in layout.comparison_preset_cells("codex_only"))
     assert [c.cell_key for c in layout.comparison_preset_cells("codex_only")] == [f"{kind}:main" for kind in KINDS]
 
 
@@ -67,7 +68,7 @@ def test_only_the_two_sets_have_a_table():
 
 
 def test_the_cells_of_a_revision_are_what_it_stored_else_its_sets_table_else_none():
-    stored = tuple(replace(cell, timeout_seconds=60) for cell in layout.comparison_preset_cells("codex_only"))
+    stored = tuple(replace(cell, effort="medium") for cell in layout.comparison_preset_cells("codex_only"))
     assert layout.comparison_cells_in_force("codex_only", stored) == stored
     assert layout.comparison_cells_in_force("codex_only", None) == layout.comparison_preset_cells("codex_only")
     assert layout.comparison_cells_in_force("claude_only", ()) == layout.comparison_preset_cells("claude_only")
@@ -92,7 +93,7 @@ def test_a_cell_of_every_kind_is_required_once_each():
     ("comparison_spec", "unknown_cell"),
 ])
 def test_a_cell_that_is_not_a_kind_and_main_is_refused(key, constraint):
-    cells = [*layout.comparison_preset_cells("codex_only"), CellSettings(key, "gpt-6-astra", "high", 100, 100)]
+    cells = [*layout.comparison_preset_cells("codex_only"), CellSettings(key, "gpt-6-astra", "high")]
     assert refused(layout.validate_comparison_cells, cells)["constraint"] == constraint
 
 
@@ -102,24 +103,18 @@ def test_a_cell_that_is_not_a_kind_and_main_is_refused(key, constraint):
     ({"effort": "xhigh"}, "effort_not_offered_for_model"),
     ({"effort": "max"}, "effort_not_offered_for_model"),
     ({"model_id": "claude-opus-5-5", "effort": "low"}, "effort_not_offered_for_model"),
-    ({"max_output_tokens": 0}, "limit_out_of_range"),
-    ({"max_output_tokens": 65_537}, "limit_out_of_range"),
-    ({"timeout_seconds": 0}, "limit_out_of_range"),
-    ({"timeout_seconds": 7_201}, "limit_out_of_range"),
-    ({"timeout_seconds": 90.5}, "limit_out_of_range"),
 ])
-def test_a_pair_the_catalogue_does_not_offer_and_a_limit_outside_the_wire_are_refused(edit, constraint):
+def test_a_pair_the_catalogue_does_not_offer_is_refused(edit, constraint):
     cells = list(layout.comparison_preset_cells("codex_only"))
     cells[2] = replace(cells[2], **edit)
     assert refused(layout.validate_comparison_cells, cells) == {"field": "comparison_cells", "constraint": constraint}
 
 
-def test_a_named_set_must_be_its_table_in_model_and_effort_and_may_differ_in_limit_and_window():
+def test_a_named_set_must_be_its_table_in_model_and_effort():
     claude = layout.comparison_preset_cells("claude_only")
     assert refused(layout.require_valid_comparison_cells, "codex_only", claude) == {
         "field": "kit", "constraint": "kit_does_not_match_cells"}
-    longer = tuple(replace(cell, timeout_seconds=3_000, max_output_tokens=4_000) for cell in claude)
-    assert layout.require_valid_comparison_cells("claude_only", longer) == longer, "a longer window is still the set"
+    assert layout.require_valid_comparison_cells("claude_only", claude) == claude
     assert layout.require_valid_comparison_cells("custom", claude) == claude, "« Свой набор » is whatever was saved"
     mixed = tuple(replace(cell, effort="medium") if cell.row == "comparison_spec" else cell for cell in claude)
     assert refused(layout.require_valid_comparison_cells, "claude_only", mixed)["constraint"] == "kit_does_not_match_cells"
@@ -127,7 +122,7 @@ def test_a_named_set_must_be_its_table_in_model_and_effort_and_may_differ_in_lim
 
 def test_the_wire_names_the_kind_and_no_key():
     wire = layout.comparison_cells_to_wire(layout.comparison_preset_cells("codex_only"))
-    assert [sorted(item) for item in wire] == [["effort", "max_output_tokens", "model_id", "timeout_seconds", "work_kind"]] * 4
+    assert [sorted(item) for item in wire] == [["effort", "model_id", "work_kind"]] * 4, "no answer limit and no timeout on the wire"
     assert [item["work_kind"] for item in wire] == list(KINDS)
 
 
@@ -137,6 +132,17 @@ def test_the_wire_names_the_kind_and_no_key():
 def stored(kit: str = "codex_only", *, comparison: bool = True) -> list[dict]:
     cells = [*layout.preset_cells(kit), *(layout.comparison_preset_cells(kit) if comparison else ())]
     return layout.cells_to_wire(cells)
+
+
+def test_a_revision_stored_before_the_limits_left_is_read_and_its_numbers_are_not():
+    """`R-153n`, `R-153o`: an old revision holds an answer limit and a timeout per cell. They are not read: the cells are the same cells,
+    and their windows are the constants of their rows and kinds."""
+    old = [{**item, "max_output_tokens": 77, "timeout_seconds": 5} for item in stored()]
+    rows, comparison = store._cells_of(old)
+    assert comparison == layout.comparison_preset_cells("codex_only") and rows == layout.preset_cells("codex_only")
+    assert {c.row: c.timeout_seconds for c in comparison} == dict(COMPARISON_TIMEOUT_SECONDS), "never the 5 the old revision stored"
+    assert {c.row: c.timeout_seconds for c in rows}["cross_check"] == 3600
+    assert layout.cells_to_wire([*rows, *comparison]) == stored(), "and what is written again carries neither"
 
 
 def test_a_stored_array_is_split_into_the_rows_and_the_comparison_cells():

@@ -172,8 +172,8 @@ def _system_group(connection: Any, connection_id: str, revision_id: str, *, mode
 
 def _plan(*cell_keys: str, model: str = MODEL) -> str:
     return json.dumps({"layout_revision_id": str(StageLayoutRevisionId.new()), "cells": [
-        {"cell_key": key, "model_id": model, "effort": "medium", "max_output_tokens": 16000, "timeout_seconds": 600,
-         "access": "subscription"} for key in cell_keys]})
+        {"cell_key": key, "model_id": model, "effort": "medium", "access": "subscription"}
+        for key in cell_keys]})
 
 
 def _planned_run(connection: Any, plan: str | None, *, binding_state: str = "pending", wait_reason: str | None = None) -> str:

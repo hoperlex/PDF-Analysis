@@ -32,8 +32,14 @@ from tests.unit.executors.test_pull_adapter import MODEL, REQUEST, Clock, FakeSt
 ELAPSED = 30.0
 
 
+#: A cell's timeout is the constant of its kind (`LIMITS-01`, `R-153o`), so a timeout under test is reached by naming the kind that has it.
+KIND_OF_TIMEOUT = {900: "comparison_pair_check", 1800: "comparison_sheet_changes", 2400: "comparison_report"}
+
+
 def cell(timeout: int) -> CellSettings:
-    return CellSettings("comparison_sheets:main", MODEL, "medium", 800, timeout)
+    made = CellSettings(f"{KIND_OF_TIMEOUT[timeout]}:main", MODEL, "medium")
+    assert made.timeout_seconds == timeout
+    return made
 
 
 def work_item() -> WorkItem:

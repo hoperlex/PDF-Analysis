@@ -33,7 +33,7 @@ from auditmanager.executors.public import HostCall, pinned_models
 from auditmanager.executors.pull import PullAdapter
 
 PIN = pinned_models()[0].model_id
-CELL = CellSettings(cell_key="comparison_pair_check:main", model_id=PIN, effort="medium", max_output_tokens=1200, timeout_seconds=1500)
+CELL = CellSettings(cell_key="comparison_pair_check:main", model_id=PIN, effort="medium")
 ENGINE = object()
 SESSIONS = object()
 
@@ -71,10 +71,10 @@ def test_a_job_with_a_cell_on_a_server_member_gets_a_pull_adapter_carrying_the_c
     call = adapter._host_call
     assert isinstance(call, HostCall)
     assert (call.provider, call.access) == ("codex", "subscription"), "the provider is the pool's, the access the connection's billing"
-    assert (call.model_id, call.effort, call.max_output_tokens, call.timeout_seconds, call.cell_key) == (
-        CELL.model_id, "medium", 1200, 1500, "comparison_pair_check:main")
+    assert (call.model_id, call.effort, call.timeout_seconds, call.cell_key) == (
+        CELL.model_id, "medium", 900, "comparison_pair_check:main"), "the window is the kind's constant"
     assert call.members(900) == {
-        "provider": "codex", "access": "subscription", "model_id": CELL.model_id, "effort": "medium", "max_output_tokens": 1200,
+        "provider": "codex", "access": "subscription", "model_id": CELL.model_id, "effort": "medium",
         "timeout_seconds": 900, "cell_key": "comparison_pair_check:main",
     }
     assert adapter._engine is ENGINE and adapter._sessions is SESSIONS, "the runtime's engine and sessions reach the adapter it builds"

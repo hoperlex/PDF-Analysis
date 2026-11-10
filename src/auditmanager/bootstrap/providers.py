@@ -238,8 +238,8 @@ class DatabaseProviders(ProviderSource):
 
     def _bind_member(self, session: Session, *, connection_revision_id: str, cell: CellSettings, context: Any) -> BoundMember:
         """The adapter of the member a cell was bound to (``binding_for(cell)``, ADR-0028 decision 6): the pull adapter of the member's
-        revision, built with **this cell's** provider, access, model, effort, answer limit, timeout and key, so the task the host agent claims
-        carries exactly what the frozen plan says. Nothing is chosen here: the member was written once at dispatch, and a revision that does
+        revision, built with **this cell's** provider, access, model, effort, the row's timeout and key (no answer limit: `R-153n`), so the
+        task the host agent claims carries exactly what the frozen plan says. Nothing is chosen here: the member was written once at dispatch, and a revision that does
         not serve the cell's model is refused, never substituted."""
         store = ExecutorRepository()
         revision = store.get_revision(session, connection_revision_id)
@@ -267,7 +267,7 @@ class DatabaseProviders(ProviderSource):
         access = access_of_billing(revision.settings.billing)
         host_call = HostCall(
             provider=provider, access=access, model_id=cell.model_id, effort=cell.effort,
-            max_output_tokens=cell.max_output_tokens, timeout_seconds=cell.timeout_seconds, cell_key=cell.cell_key)
+            timeout_seconds=cell.timeout_seconds, cell_key=cell.cell_key)
         adapter = build_pull_adapter(
             session_factory=runtime.session_factory, revision=revision, context=context, engine=runtime.engine,
             host_call=host_call)
