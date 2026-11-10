@@ -117,6 +117,20 @@ def test_a_pull_call_context_reads_the_claimed_attempt_watchdog(db: Any, h: Any,
     context.bind(item, "cmc_prepared")
     assert context.comparison_attempt_id == item.attempt_id and context.call_id == "cmc_prepared"
     assert 0.0 < context.remaining_seconds() <= 900.0
+    assert item.watchdog.limit(900.0) == 900.0, "a job with no cell keeps the queue's 900 s"
+
+
+@pytest.mark.parametrize("timeout", [1800, 2400])
+def test_a_call_of_a_frozen_cell_is_granted_its_timeout_on_the_database_clock(db: Any, h: Any, w: Any, timeout: int) -> None:
+    """`D-674` on real rows: the elapsed time and the remainder are read from ``comparison_work_attempt``, and the heartbeat's limit is the same grant."""
+    item = db.claim(db.worker(), KIND)
+    assert item is not None
+    context = ComparisonCallContext(db.sessions)
+    context.bind(item, "cmc_prepared", window_seconds=timeout)
+    left = context.remaining_seconds()
+    assert timeout - 5 < left - 60 <= timeout, "the attempt may run the cell's timeout, and the margin, from now"
+    granted = item.watchdog.limit(900.0)
+    assert timeout + 60 <= granted < timeout + 60 + 30, "the heartbeat fences after the call: elapsed (seconds) + timeout + margin"
 
 
 def test_a_pause_leaves_the_item_in_flight_to_finish(db: Any, h: Any, w: Any) -> None:

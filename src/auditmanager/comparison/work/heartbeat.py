@@ -4,7 +4,9 @@ Same shape as ``jobs/lease.py`` (`LeaseHeartbeat`): the lease is extended on dat
 thread that does not share the handler's transaction, three heartbeats fit in one lease, and a
 transient fault is logged and retried on the next tick -- the lease expiry is the durable fence if
 heartbeats cannot commit. After the watchdog interval the thread stops extending and fences its own
-attempt, because an item that is still running after that long has lost its handler or its child.
+attempt, because an item that is still running after that long has lost its handler or its child. The interval is the
+queue's, or -- for an item whose job froze a cell, once a call of the cell is bound -- the longer one that call needs
+(`D-674`, ``WorkItem.watchdog``).
 The thread also carries two facts to the handler: the lease is gone, and a cancel was requested.
 """
 
@@ -56,7 +58,8 @@ class ItemHeartbeat:
         while not self._stop.wait(self._interval):
             try:
                 with self._sessions() as session:
-                    if monotonic() - started >= self._watchdog:
+                    # `D-674`: the queue's watchdog, or the longer one a bound call of a frozen cell was granted (read on every beat).
+                    if monotonic() - started >= item.watchdog.limit(self._watchdog):
                         self._fence(session, item.attempt_id)
                         session.commit()
                         item.lease_lost.set()

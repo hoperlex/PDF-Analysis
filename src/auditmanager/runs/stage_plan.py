@@ -190,11 +190,13 @@ def settings_of(binding: Any) -> Any:
 
 
 def call_journal_columns(call: Any) -> dict[str, Any]:
-    """The keywords ``prepare_provider_call`` takes for a planned call: the layout row (``stage_key``), the serving host and the access.
-    Empty for every other call, which is then written exactly as before (``NULL`` in all three columns)."""
+    """The keywords ``prepare_provider_call`` takes for a planned call: the layout row (``stage_key``), the serving host and the access, and
+    the plan cell's key (``row:role``, e.g. ``blocks:leg1``). The key is what makes the journal **check** the call: ``prepare_provider_call``
+    reads the member the cell was bound to and refuses a host or an access that is not the member's (`D-668`). Empty for every other call,
+    which is then written exactly as before (``NULL`` in all three columns)."""
     if call is None or getattr(call, "cell_key", None) is None:
         return {}
-    return {"stage_key": call.stage_key, "host_id": call.host_id, "access": call.access}
+    return {"stage_key": call.stage_key, "host_id": call.host_id, "access": call.access, "cell_key": call.cell_key}
 
 
 # --- the estimate of a request and the readiness of a start -----------------------------------------------------------------------

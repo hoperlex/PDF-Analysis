@@ -168,7 +168,10 @@ class ComparisonModelCaller:
             consent=consent, job_key=job_key,
         )
         if route.call_context is not None:
-            route.call_context.bind(item, call_id)
+            # `D-674`: a job with a cell is held to the cell's timeout, so the attempt may run for as long as this call needs; a job without
+            # one binds exactly as before (the queue's 900 s).
+            window = {} if consent is None or consent.cell is None else {"window_seconds": consent.cell.timeout_seconds}
+            route.call_context.bind(item, call_id, **window)
         self._mark_sent(item, call_id)
         response = self._dispatch(call_id, route, request, mode=mode, unmetered=unmetered)
         cost_basis, cost_micros = self._cost(response, route, unmetered=unmetered)

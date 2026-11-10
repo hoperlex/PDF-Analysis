@@ -22,6 +22,7 @@ The same suite proves the sources: with the switch off a start reads no plan (th
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
 import threading
@@ -207,6 +208,11 @@ class Call:
         return self.response
 
 
+def _effect_count(sessions: sessionmaker[Session], run: str) -> int:
+    with sessions() as s:
+        return int(s.execute(text("SELECT count(*) FROM provider_call_effect WHERE run_id = :r"), {"r": run}).scalar_one())
+
+
 def _request(cell_model: str) -> ModelRequest:
     return ModelRequest(model_id=cell_model, body={
         "system": "you answer with one JSON document", "messages": [{"role": "user", "content": "an observation, please"}],
@@ -268,6 +274,7 @@ def test_a_run_on_the_stage_layout_is_bound_called_by_each_cells_model_and_held_
         assert (one.call.expected_model, one.call.cell_key, one.call.access, one.call.host_id, one.call.unmetered, one.call.check_identity) == (
             cell.model_id, cell.cell_key, "subscription", server.host_id, True, True)
         assert one.call.connection_revision_id == bound[cell.cell_key].connection_revision_id and one.call.identity_basis == "declared"
+        assert one.call.provider_label == "agent", "`D-673`: the label is the member revision's pull client, read from the revision (no adapter built for it)"
         assert one.config.model_id == cell.model_id and one.config.cell_settings == cell
     assert by_cell["text:main"].call.expected_model == SONNET and by_cell["blocks:leg1"].call.expected_model == OPUS, "not one model for the run"
 
@@ -283,6 +290,18 @@ def test_a_run_on_the_stage_layout_is_bound_called_by_each_cells_model_and_held_
             row = s.execute(text("SELECT host_id, access, stage_key, connection_revision_id, identity_basis FROM provider_call_effect "
                                  "WHERE model_call_id = :c"), {"c": str(call_id)}).one()
         assert tuple(row) == (server.host_id, "subscription", cell_key.partition(":")[0], bound[cell_key].connection_revision_id, "declared")
+
+        # `D-668`: the columns of a planned call carry its cell, so the journal reads the member the cell was bound to and refuses a call that
+        # names another host or access -- nothing is written for it. (Before, no `cell_key` was passed and the drifted row was journalled.)
+        before = _effect_count(sessions, run)
+        for drifted in (dataclasses.replace(one.call, host_id="exh_01ARZ3NDEKTSV4RRFFQ69G5FAV"), dataclasses.replace(one.call, access="api")):
+            with sessions() as s, pytest.raises(DomainError) as refused:
+                JobRepository().prepare_provider_call(
+                    s, authority, provider=drifted.provider_label, model_identity=model, provider_mode="live", parameters={},
+                    request_sha256=uuid.uuid4().hex + uuid.uuid4().hex, connection_revision_id=drifted.connection_revision_id,
+                    identity_basis=drifted.identity_basis, **call_journal_columns(drifted))
+            assert refused.value.code is ErrorCode.INTERNAL_ERROR, "the call names another host or access than its cell was bound to"
+        assert _effect_count(sessions, run) == before, "a refused call leaves no effect row"
 
         waiting = Call(one.adapter, _request(model))
         claimed = _claim_one(sessions, server)
