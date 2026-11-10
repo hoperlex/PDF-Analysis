@@ -11,7 +11,36 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.50.0` (`AR-V3-BE-RM-01`)
+## Current contract `1.51.0` (`CRIT-SEAL-50`)
+
+Slice for the «Прецеденты» programme (plan-v5, ADR-0029, ruling `R-154h` of 2026-11-10, which gave this seal the slot after the removal of the АР beta). It is a seal of
+storage and surface only: **nothing behaves**, every operation answers `503 dependency_unavailable` (`details.dependency` the lane that owns it) until that lane fills its body.
+The error catalogue is closed and has no 501, so this is the answer every earlier seal's stubs give. **Seven operations, twenty-nine schemas and a handful of optional members are
+added; nothing is removed**; migration `0064_precedents_seal` (head `0064`); four identity prefixes; no error code and no state machine.
+
+- **Operations (7).** `getExecutorTaskContext` (`POST /runner/tasks/{task_id}/context`): a runner token with the claim of the task asks, once per kind, for the decisions of experts on
+  findings like the task's own; idempotent by (task, kind); `status: unavailable, reason: until_move` while the night encoder is the only one. `getRunPrecedents`
+  (`GET /runs/{run_id}/precedents`) and `getFindingPrecedents` (`GET /findings/{finding_uid}/precedents`): the labels, the queue «Рекомендовано снять» and the card. `getVectorControl`
+  (`GET /vector-control`) and `setVectorPaused` (`PUT /vector-control/paused`): the pause of the vectors and the state of the night window. `listPrecedentSettings` and
+  `appendPrecedentSetting` (`GET` and `POST /precedent-settings`): the switches (`one_list`, `critic_context`, `section_labels`), the stop words, the window and the thresholds, journalled
+  with the administrator. An expert and an administrator read; the viewer is denied (`permission_denied`); the writes and the settings are the administrator's, the two writes keyed.
+- **Schemas added (29).** `ExecutorContextInput`, `ExecutorTaskContext`, `ExecutorTaskContextCase`, `ExecutorTaskContextItem`, `ExecutorTaskContextKind`, `ExecutorTaskContextRequest`,
+  `ExecutorTaskContextStatus`; `FindingBlockBox`, `FindingBlockEvidence`, `FindingGroundingKind`, `FindingOrigin`; `PossibleNorm`, `PrecedentCase`, `PrecedentFindingLabel`, `PrecedentHint`,
+  `PrecedentHintCode`, `PrecedentLabelCode`, `PrecedentPassState`, `PrecedentVotes`, `FindingPrecedents`, `RunPrecedents`; `PrecedentSetting`, `PrecedentSettingList`,
+  `PrecedentSettingName`, `AppendPrecedentSettingRequest`; `SetVectorPausedRequest`, `VectorControl`, `VectorWindow`, `VectorWindowState`.
+- **Optional members added.** `ClaimedExecutorTask.context_request` (a `review:main` task of a run on the stage layout only), `SubmitExecutorTaskAnswerRequest.context_sha256`, `block_evidence`
+  and `origin` on `Finding` and `FindingDetail`, `FindingObservation.grounding_kind`. `FindingCategory` gains `drawing_discrepancy` and `cross_source`; `RunWaitCause` gains `vector_window`.
+- **Not changed.** `Evidence` (a block is proved in `block_evidence`, a list of its own) and `RunStageChip` (the rail keeps its chips). No error code, no state machine.
+- **Hints.** `PrecedentHintCode` is `p1`, `p4` and `p5`: the hints that were to serve the АР beta (`p2`, `p3`) are not built (`R-154`).
+- **Storage (migration `0064`).** The memory's comments, block evidence, encoder queue and vectors (the forget guard, and a guard on INSERT into a forgotten case), the label in force and the
+  history verdict shown on a decision, the probe, the pass and its advice, a finding's block evidence, the settings journal, the vectors' control and its journal, the journal of
+  reference data handed to an agent (no foreign key, no text), `audit_run.publication_mode` (frozen at the start) and the grounding columns of an observation. `norm_crop_render` follows
+  when `scripts/recovery/blob_reference_audit.py`, the closed registry of Blob references, is granted to the lane that owns the seal.
+- **Compatibility.** Additive: a client of 1.50.0 reads every answer of 1.51.0 unchanged (the added members are optional, the added enum values appear only where a later lane writes them).
+
+The API has 296 paths, 325 operations and 808 schemas; migration head `0064`. The domain catalogs are at candidate revision 68.
+
+## Contract `1.50.0` (`AR-V3-BE-RM-01`, historical)
 
 Slice for the removal of the six-scope АР beta (owner rulings `R-154a`, `R-154c` and `R-154h` of 2026-11-10), with one additive member of the run-start readiness.
 **Six operations, nineteen schemas, three `RunStatus` properties and four enum members are removed; one optional property is added**; migration `0063_drop_ar_v3_beta` drops the
@@ -37,7 +66,7 @@ beta's two tables and restores two earlier database objects (head `0063`). No er
 - **Compatibility.** A client that read a removed operation or property must stop reading it; no consumer outside this repository is known. A server of this version answers the
   removed paths with `404`. The database refuses the upgrade while any row of the beta exists (see migration `0063`).
 
-The API has 290 paths, 318 operations and 779 schemas; migration head `0063`. The domain catalogs are at candidate revision 67.
+At that version the API had 290 paths, 318 operations and 779 schemas; migration head `0063`; the domain catalogs were at candidate revision 67.
 
 ## Contract `1.49.0` (`LIMITS-01`, historical)
 

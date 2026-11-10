@@ -2444,6 +2444,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0063_drop_ar_v3_beta",
-  "contract_version": "1.50.0"
+  "migration_head": "0064_precedents_seal",
+  "contract_version": "1.51.0"
 }

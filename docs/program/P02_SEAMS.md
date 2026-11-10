@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-318 operations, sealed. `A5` generates the typed client from this document; `B6`
+325 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1477,6 +1477,13 @@ could.
 | `listModelCatalogue` | `GET /model-catalogue` |
 | `getRunStartReadiness` | `POST /runs/start-readiness` |
 | `getRunStages` | `GET /runs/{run_id}/stages` |
+| `getExecutorTaskContext` | `POST /runner/tasks/{task_id}/context` |
+| `getRunPrecedents` | `GET /runs/{run_id}/precedents` |
+| `getFindingPrecedents` | `GET /findings/{finding_uid}/precedents` |
+| `getVectorControl` | `GET /vector-control` |
+| `setVectorPaused` | `PUT /vector-control/paused` |
+| `listPrecedentSettings` | `GET /precedent-settings` |
+| `appendPrecedentSetting` | `POST /precedent-settings` |
 | `downloadAgentPackage` | `GET /runner/agent-package/{version}` |
 | `estimateStageChainRun` | `GET /stage-link-revisions/{stage_link_revision_id}/chain-estimate` |
 | `resumeStageChainRun` | `POST /stage-chain-runs/{stage_chain_run_id}/resume` |
@@ -1522,6 +1529,7 @@ Rules that hold across the whole surface:
   `issueRunnerToken`, `revokeRunnerToken`,
   `setExecutorHostEnabled`, `setExecutorHostSlots`, `archiveExecutorHost`, `issueExecutorHostEnrollment`, `createExecutorHostAgentInstall`,
   `confirmExecutorHostAgentInstallHostKey`, `reviseStageModelLayout`, `setStageModelLayoutEnabled`,
+  `setVectorPaused`, `appendPrecedentSetting`,
   `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `appendComparisonVersionOrder`, `prepareComparisonMatrix`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `startComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries`, `finishComparisonSeries`, `startComparisonAiPairCheck`, `pauseComparisonAiPairCheck`, `resumeComparisonAiPairCheck`, `cancelComparisonAiPairCheck`, `startComparisonAiSheetChanges`, `pauseComparisonAiSheetChanges`, `resumeComparisonAiSheetChanges`, `cancelComparisonAiSheetChanges`, `finishComparisonAiSheetChanges`, `dequeueComparisonAiSheetChanges`, `retryComparisonAiSheetChanges`, `startComparisonSheetDescription`, `startComparisonSpecification`, `cancelComparisonSpecification`, `enqueueComparisonLaunch`, `pauseComparisonLaunchQueue`, `resumeComparisonLaunchQueue`, `clearComparisonLaunchQueue`, `removeComparisonLaunchEntry`, `createComparisonReport`, `uploadComparisonReportSource`, `startComparisonReport`, `cancelComparisonReport`, `continueComparisonReport`, `rebuildComparisonReportPdf`, `deleteComparisonReport` and `prepareComparisonClientReport`, `confirmStagePair`, `createStageAssembly`, `reviseStageAssembly`, `setStagePairCompleteness`, `createStageUpload`, `uploadStageUploadPart`, `completeStageUploadFile`, `confirmStageUploadCandidate`, `rejectStageUploadCandidate`, `pauseStageUpload`, `resumeStageUpload`, `cancelStageUpload`, `applyStageSheetMap`, `recomputeStageTextEvidence`, `startStageChainRun`, `cancelStageChainRun`, `resumeStageChainRun`, `startStageChainBatch`, `pauseStageChainBatch`, `resumeStageChainBatch`, `cancelStageChainBatch`, `undoStageLinkRepair`, `applyStageCardVerdicts`, `createStageReviewCard`, `importComparisonZip`, `issueExecutorEnrollment`, `setExecutorIntegrationAuthorisation`, `createExecutorAgentInstall`, `confirmExecutorAgentInstallHostKey`, `createExecutorGroup`, `reviseExecutorGroup`, `archiveExecutorGroup`, `setExecutorRoutingRule`, `setExecutorRoutingMode`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
