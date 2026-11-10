@@ -71,6 +71,38 @@ export function routeQuery(route, fill) {
 }
 
 /**
+ * A route's address in a named state (`D-503`, lane MEM-JOURNEY): the route's own `query` with the state's laid over it.
+ *
+ * Most states are a screen drawn from the route's ordinary address (the pair catalog with a confirmed pair), and declare no
+ * `query`. A state may also be a TAB or a CASE the ordinary address does not open: «Память решений» is `?kind=memory`, and an
+ * open case adds `?mcase=<id>`, neither of which a cold walk of `/knowledge-base` ever asks for. The state's own keys win.
+ */
+export function stateRouteQuery(route, state, fill) {
+  return routeQuery({ query: { ...(route.query ?? {}), ...(state?.query ?? {}) } }, fill);
+}
+
+/**
+ * The reads a route must make. A state that draws another body than the route's default (the memory tab does not read the
+ * journal that «Замечания» reads) declares its own `expects_api`, and that list replaces the route's; without one the route's
+ * list stands. Never both: the default screen's reads are not made in a state that is not the default screen.
+ */
+export function requiredReads(route, state) {
+  return state?.expects_api ?? route.expects_api ?? [];
+}
+
+/**
+ * What a state's templates are filled from. `known` is every identity the walk can name (what its routes captured, over what
+ * the write half of the same run or `--seed` captured); a state may `bind` a name the contract uses in a path to the name
+ * the journey captured it under (`case_id` -> `memory_case_id`), as a write step does. Without a state it is `known` itself.
+ */
+export function stateView(known, state) {
+  if (state === undefined || state === null) return known;
+  const view = { ...known };
+  for (const [name, from] of Object.entries(state.bind ?? {})) view[name] = known[from];
+  return view;
+}
+
+/**
  * What the screen shows, condition by condition: `{ ok, seen }`, `seen` being how many nodes each condition found
  * (a condition may demand a pattern its text must match). The screen is in the state when every condition holds.
  * Always answers, so a finding can say what was there.

@@ -522,9 +522,14 @@ def test_the_journey_consumes_the_declared_sample_only_for_route_address() -> No
     assert "const value = captured[name] ?? samples[name]" in source, (
         "a captured real user identity must take precedence over the placeholder sample"
     )
-    assert "concreteApi(e, captured, route.constants ?? {})" in source, (
+    # `D-503`: a read state may name an identity the write half captured, so the expectations are filled from `known` -- `captured`
+    # itself when no state is asked for, never the placeholder sample.
+    assert "concreteApi(e, known, route.constants ?? {})" in source, (
         "API expectations must not use the placeholder sample; they take captured identities "
         "and the route's own declared enumeration constants (`BETA-LIVE-JOURNEY-01`)"
+    )
+    assert "readState === undefined ? captured : stateView(" in source, (
+        "without a named state the expectations take exactly what the routes captured, as before `D-503`"
     )
     assert "sample_identifiers" not in source[source.index("function concreteApi"):
                                               source.index("function shapeOf")], (
@@ -2238,7 +2243,7 @@ def test_the_read_walk_is_wired_to_its_options() -> None:
     journey = _require(JOURNEY_SCRIPT).read_text(encoding="utf-8")
     for needle in (
         "'--width'", "'--paused'", "'--state'", "readViewport(", "widthFindings(route.name, record.width, READ_VIEWPORT)",
-        "routeQuery(", "queryString(", "stateExpression(", "stateFindings(", "pausedFindings(", "pauseDispatch(", "restoreDispatch(",
+        "stateRouteQuery(", "requiredReads(", "stateView(", "queryString(", "stateExpression(", "stateFindings(", "pausedFindings(", "pauseDispatch(", "restoreDispatch(",
         "pickFollowed(", "Object.assign(HINTS, write.captured)", "declaredRefusals(", "isDeclaredRefusal(",
     ):
         assert needle in journey, f"journey.mjs no longer contains {needle}: an option is parsed and does nothing"
@@ -2727,6 +2732,8 @@ NIGHT_SCREENS = (
     "norms-document",
     # `RUN-FROM-STAGE-01` (lane J4): «Запустить с этапа» on an ended run's page
     "run-from-stage",
+    # `D-503` (lane MEM-JOURNEY): the «Память решений» tab of «База знаний»
+    "decision-memory",
 )
 
 #: Operations the write half must perform at least once, because each is a thing the matrix
@@ -2774,6 +2781,12 @@ NIGHT_OPERATIONS = (
     "streamNormDocumentContent",
     # `RUN-FROM-STAGE-01` (lane J4)
     "startRunFromStage",
+    # `D-503` (lane MEM-JOURNEY)
+    "listDecisionMemoryCases",
+    "getDecisionMemoryCase",
+    "getDecisionMemoryStatus",
+    "withdrawDecisionMemoryCase",
+    "restoreDecisionMemoryCase",
 )
 
 _TEMPLATE = re.compile(r"\{([a-z_]+)\}")
@@ -4823,3 +4836,288 @@ def test_cost_approval_driver_rejects_changed_options_or_forged_consent() -> Non
     result = subprocess.run([node, '--input-type=module', '-e', program], cwd=REPOSITORY_ROOT,
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# --------------------------------------------------------------------------------------
+# `D-503` (lane MEM-JOURNEY). «Память решений» is walked by eight write steps and two read states, pinned by NAME so that one which
+# disappears, or quietly stops asserting what it was written to assert, is a red test and not a shrinking journey that still
+# reports OK. The steps stand right after `record-decision` (whose accept is captured into the memory in the same transaction,
+# `DECISION-MEMORY-01` 7.2) and BEFORE `carry-over-decision` (which captures a second case): the first step takes the newest case
+# of the project, and it is the only one.
+# --------------------------------------------------------------------------------------
+
+#: step name -> (case, the operations the step must declare), in the order the steps must run.
+MEMORY_STEPS: dict[str, tuple[str, frozenset[str]]] = {
+    "memory-tab-lists-the-captured-case": ("action", frozenset({"listDecisionMemoryCases", "getDecisionMemoryStatus"})),
+    "memory-case-opens-from-the-list": ("action", frozenset({"getDecisionMemoryCase"})),
+    "memory-withdraw-needs-a-reason": ("refused", frozenset()),
+    "memory-case-withdraw": ("action", frozenset({"withdrawDecisionMemoryCase"})),
+    "memory-list-shows-the-withdrawn-case": ("action", frozenset({"listDecisionMemoryCases"})),
+    "memory-list-by-standing-excludes-the-withdrawn-case": ("refused", frozenset({"listDecisionMemoryCases"})),
+    "memory-case-restore": ("action", frozenset({"restoreDecisionMemoryCase"})),
+    "memory-case-for-an-expert-is-read-only": ("refused", frozenset({"listDecisionMemoryCases", "getDecisionMemoryCase"})),
+}
+MEMORY_TAB_STEP, MEMORY_OPEN_STEP, MEMORY_NEEDS_REASON_STEP, MEMORY_WITHDRAW_STEP, *_ = MEMORY_STEPS
+MEMORY_RESTORE_STEP = "memory-case-restore"
+MEMORY_EXPERT_STEP = "memory-case-for-an-expert-is-read-only"
+
+
+def _keyed_command_findings(step: dict, operation: str, reason: str, kind: str, status: str) -> list[str]:
+    """A withdraw or a restore: pressed twice, one keyed request with the closed reason, and the answer says what happened."""
+    name = step["name"]
+    findings: list[str] = []
+    call = next((c for c in step.get("expects_api") or () if c.get("operationId") == operation), None)
+    if call is None or not (call.get("expect_status") == 200 and call.get("count") == 1 and call.get("method") == "POST"):
+        findings.append(f"{name}: {operation} is not declared as exactly one 200 POST (pressed twice, one request)")
+    if not any(a.get("do") == "click" and a.get("times") == 2 for a in step.get("actions") or ()):
+        findings.append(f"{name}: never presses the button twice, so a second identical submit is not tried")
+    if not any(a.get("do") == "select" for a in step.get("actions") or ()):
+        findings.append(f"{name}: never chooses the closed reason the operation requires")
+    request = next((c for c in step.get("expects_request") or () if c.get("of") == operation), {})
+    if request.get("requires_idempotency_key") is not True:
+        findings.append(f"{name}: does not require the Idempotency-Key of the keyed command")
+    if f'"reason_code":"{reason}"' not in (request.get("body_contains") or ()):
+        findings.append(f"{name}: does not require the request to carry the reason {reason!r}")
+    answered = {(c.get("json_path"), c.get("equals")) for c in step.get("expects_response") or () if c.get("of") == operation}
+    if not {("kind", kind), ("status", status), ("reason_code", reason)} <= answered:
+        findings.append(f"{name}: does not require the answer to say kind {kind!r}, status {status!r} and reason {reason!r}")
+    if not any(f'data-memory-event-kind=\"{kind}\"' in p.get("selector", "") for p in step.get("expects_present") or ()):
+        findings.append(f"{name}: does not require the history to show the {kind!r} event")
+    return findings
+
+
+def memory_step_findings(manifest: dict) -> list[str]:
+    """The eight steps are there, in their order and place, and say what each is for."""
+    steps = write_steps(manifest)
+    by_name = {step["name"]: step for step in steps}
+    order = [step["name"] for step in steps]
+    findings: list[str] = []
+    for name, (case, operations) in MEMORY_STEPS.items():
+        step = by_name.get(name)
+        if step is None:
+            findings.append(f"the memory step '{name}' is gone from the manifest")
+            continue
+        if step.get("screen") != "decision-memory":
+            findings.append(f"{name}: belongs to screen {step.get('screen')!r}, not 'decision-memory'")
+        if step.get("case") != case:
+            findings.append(f"{name}: is a {step.get('case')!r} case, not {case!r}")
+        missing = sorted(operations - _declared_operations(step))
+        if missing:
+            findings.append(f"{name}: no longer declares {missing}")
+    if findings:
+        return findings
+
+    positions = [order.index(name) for name in MEMORY_STEPS]
+    if positions != sorted(positions):
+        findings.append("the memory steps no longer run in their order: the tab, the case, the refusal, the withdrawal, the lists, the restore, the expert")
+    if "record-decision" in order and positions[0] < order.index("record-decision"):
+        findings.append(f"{MEMORY_TAB_STEP}: comes before 'record-decision', so there is no decision to find in the memory")
+    if "carry-over-decision" in order and positions[-1] > order.index("carry-over-decision"):
+        findings.append("a memory step comes after 'carry-over-decision', which captures a second case: the newest case of the project is no longer the journey's first")
+
+    tab = by_name[MEMORY_TAB_STEP]
+    captures = [c for c in [tab.get("capture"), *(tab.get("captures") or ())] if c]
+    if not any(c.get("as") == ["memory_case_id"] and c.get("attribute") == "data-memory-case" and "dmc_" in c.get("matches", "") for c in captures):
+        findings.append(f"{MEMORY_TAB_STEP}: does not capture the case's identity (dmc_...) from the row the list draws")
+    if not any(a.get("do") == "click" and a.get("selector") == '[data-kb-kind="memory"]' for a in tab.get("actions") or ()):
+        findings.append(f"{MEMORY_TAB_STEP}: does not press the tab «Память решений»")
+    if not any(c.get("of") == "listDecisionMemoryCases" and c.get("json_path") == "items.0.current_verdict" and c.get("equals") == "accepted"
+               for c in tab.get("expects_response") or ()):
+        findings.append(f"{MEMORY_TAB_STEP}: does not require the case to carry the accept the journey recorded")
+
+    opened = by_name[MEMORY_OPEN_STEP]
+    if not any(a.get("do") == "click" and "data-memory-open" in a.get("selector", "") for a in opened.get("actions") or ()):
+        findings.append(f"{MEMORY_OPEN_STEP}: does not press «Открыть» on the case's row")
+    if not any("data-memory-finding-text" in p.get("selector", "") for p in opened.get("expects_present") or ()):
+        findings.append(f"{MEMORY_OPEN_STEP}: does not require the case to show the finding as it stood")
+
+    needs = by_name[MEMORY_NEEDS_REASON_STEP]
+    if not any(c.get("method") == "POST" and c.get("path") == "/decision-memory/cases/{case_id}/withdraw" for c in needs.get("expects_not_called") or ()):
+        findings.append(f"{MEMORY_NEEDS_REASON_STEP}: does not require that no withdrawal is sent without a reason")
+    if needs.get("actions"):
+        findings.append(f"{MEMORY_NEEDS_REASON_STEP}: presses something; the step reads the hold of a button that cannot be pressed")
+    if not any("button[disabled]" in p.get("selector", "") for p in needs.get("expects_present") or ()):
+        findings.append(f"{MEMORY_NEEDS_REASON_STEP}: does not require the button to be held")
+
+    findings += _keyed_command_findings(by_name[MEMORY_WITHDRAW_STEP], "withdrawDecisionMemoryCase", "test_data", "withdraw", "withdrawn")
+    findings += _keyed_command_findings(by_name[MEMORY_RESTORE_STEP], "restoreDecisionMemoryCase", "other", "restore", "active")
+
+    expert = by_name[MEMORY_EXPERT_STEP]
+    if expert.get("as") != "expert_only":
+        findings.append(f"{MEMORY_EXPERT_STEP}: runs as {expert.get('as', 'admin')!r}, not as the expert-only account")
+    if not any(c.get("method") == "GET" and c.get("path") == "/decision-memory/status" for c in expert.get("expects_not_called") or ()):
+        findings.append(f"{MEMORY_EXPERT_STEP}: does not require that the administrator's status read is not made")
+    absent = {a.get("selector") for a in expert.get("expects_absent") or ()}
+    if not {"[data-memory-standing-control]", "[data-memory-status-line]"} <= absent:
+        findings.append(f"{MEMORY_EXPERT_STEP}: does not require the expert to be offered no withdrawal control and no status line")
+    for name in MEMORY_STEPS:
+        if name != MEMORY_EXPERT_STEP and by_name[name].get("as", "admin") != "admin":
+            findings.append(f"{name}: runs as {by_name[name]['as']!r}; only the expert's step does")
+    return findings
+
+
+def memory_state_findings(manifest: dict, openapi: dict, source: str) -> list[str]:
+    """A read state that opens a tab or a case names an address the screen reads, identities the journey has, and reads the contract has."""
+    findings: list[str] = []
+    contract = {operation_id: (method, path) for method, path, operation_id in operations_in_contract(openapi)}
+    write_captured = {
+        name
+        for step in write_steps(manifest)
+        for capture in [step.get("capture"), *(step.get("captures") or ())]
+        if capture
+        for name in capture.get("as") or ()
+    }
+    routes_captured: set[str] = set()
+    seen_states: set[str] = set()
+    for route in manifest["routes"]:
+        for name, state in (route.get("read_state") or {}).items():
+            label = f"route '{route['name']}' state '{name}'"
+            seen_states.add(name)
+            bind = state.get("bind") or {}
+            known = routes_captured | write_captured | set(route.get("sample_identifiers") or {})
+            for alias, target in bind.items():
+                if target not in known:
+                    findings.append(f"{label}: binds {alias} to '{target}', which neither a route nor a write step captures")
+            query = state.get("query")
+            if query is not None:
+                if not isinstance(query, dict) or not query:
+                    findings.append(f"{label}: `query` must be a non-empty object of templates")
+                    query = {}
+                for key, template in query.items():
+                    if not isinstance(template, str) or not template:
+                        findings.append(f"{label}: query '{key}' is not a template string")
+                        continue
+                    if f"'{key}'" not in source:
+                        findings.append(f"{label}: the address parameter '{key}' is no longer read by web/src")
+                    for needed in _TEMPLATE_NAME.findall(template):
+                        if needed not in known and needed not in bind:
+                            findings.append(f"{label}: query '{key}' names {{{needed}}}, which neither a route nor a write step captures")
+            reads = state.get("expects_api")
+            if reads is not None:
+                if not isinstance(reads, list) or not reads:
+                    findings.append(f"{label}: `expects_api` must list the reads the state makes, or be absent")
+                    reads = []
+                for call in reads:
+                    published = contract.get(call.get("operationId"))
+                    if published != (str(call.get("method", "")).upper(), call.get("path")):
+                        findings.append(f"{label}: {call.get('operationId')} is not {call.get('method')} {call.get('path')} in the contract ({published})")
+                    for needed in _TEMPLATE_NAME.findall(call.get("path", "")):
+                        if needed not in bind and needed not in known:
+                            findings.append(f"{label}: {call.get('operationId')} names {{{needed}}}, which the state neither binds nor the journey captures")
+        follow = route.get("follow")
+        if follow:
+            routes_captured.add(follow["capture"])
+    for required in ("memory_list", "memory_case"):
+        if required not in seen_states:
+            findings.append(f"the read state '{required}' is gone from the manifest")
+    return findings
+
+
+def test_the_memory_steps_are_there_and_say_what_they_are_for(manifest: dict) -> None:
+    assert memory_step_findings(manifest) == []
+
+
+def test_the_memory_read_states_open_an_address_the_screen_reads_and_reads_the_contract_has(manifest: dict, openapi: dict) -> None:
+    assert memory_state_findings(manifest, openapi, application_source(_require(WEB_SRC))) == []
+    kb = next(route for route in manifest["routes"] if route["name"] == "knowledge-base")
+    assert kb["read_state"]["memory_list"]["query"] == {"kind": "memory"}
+    assert kb["read_state"]["memory_case"]["query"] == {"kind": "memory", "mcase": "{memory_case_id}"}
+    # The three memory reads stay OPTIONAL on the route itself: a cold walk opens «Замечания» and never asks for them.
+    optional = {entry["operationId"] for entry in kb["optional_api"]}
+    assert {"listDecisionMemoryCases", "getDecisionMemoryCase", "getDecisionMemoryStatus"} <= optional
+    assert {entry["operationId"] for entry in kb["expects_api"]} == {"listDecisions"}
+
+
+def test_the_journey_has_no_viewer_account_which_is_why_the_viewer_is_not_walked(manifest: dict) -> None:
+    """``D-650``: the tab is hidden from a viewer, and no browser step proves it until the roster holds one.
+
+    When this fails because a viewer account was added, walk the viewer (the tab button absent, ``?kind=memory`` showing «Замечания»)
+    and close ``D-650``.
+    """
+    roles = {role for entry in (manifest["accounts"]["roster"]) for role in entry["roles"]}
+    assert roles == {"expert", "admin"}
+
+
+def test_control_a_memory_step_that_goes_or_stops_asserting_is_detected(manifest: dict) -> None:
+    assert memory_step_findings(manifest) == []
+    for name in MEMORY_STEPS:
+        assert any(f"'{name}' is gone" in f for f in memory_step_findings(_without_step(manifest, name))), name
+    for mutate, expected in (
+        (lambda s: s.update(screen="queue"), "belongs to screen 'queue'"),
+        (lambda s: s.update(case="refused"), "is a 'refused' case"),
+        (lambda s: s.update(expects_api=[]), "no longer declares"),
+    ):
+        changed = json.loads(json.dumps(manifest))
+        mutate(_step_of(changed, MEMORY_WITHDRAW_STEP))
+        assert any(expected in f for f in memory_step_findings(changed)), expected
+    mutations: list[tuple[str, object, str]] = [
+        (MEMORY_TAB_STEP, lambda s: s.pop("captures"), "capture the case's identity"),
+        (MEMORY_TAB_STEP, lambda s: s["actions"].pop(), "press the tab"),
+        (MEMORY_TAB_STEP, lambda s: s["expects_response"].pop(2), "carry the accept"),
+        (MEMORY_OPEN_STEP, lambda s: s["actions"].pop(), "press «Открыть»"),
+        (MEMORY_OPEN_STEP, lambda s: s["expects_present"].pop(1), "show the finding as it stood"),
+        (MEMORY_NEEDS_REASON_STEP, lambda s: s.pop("expects_not_called"), "no withdrawal is sent without a reason"),
+        (MEMORY_NEEDS_REASON_STEP, lambda s: s.update(actions=[{"do": "click", "selector": "button"}]), "presses something"),
+        (MEMORY_NEEDS_REASON_STEP, lambda s: s["expects_present"].clear(), "button to be held"),
+        (MEMORY_WITHDRAW_STEP, lambda s: next(c for c in s["expects_api"]).pop("count"), "exactly one 200 POST"),
+        (MEMORY_WITHDRAW_STEP, lambda s: next(a for a in s["actions"] if a["do"] == "click").update(times=1), "second identical submit"),
+        (MEMORY_WITHDRAW_STEP, lambda s: s.update(actions=[a for a in s["actions"] if a["do"] != "select"]), "closed reason"),
+        (MEMORY_WITHDRAW_STEP, lambda s: s["expects_request"][0].pop("requires_idempotency_key"), "Idempotency-Key"),
+        (MEMORY_WITHDRAW_STEP, lambda s: s["expects_request"][0].update(body_contains=[]), "carry the reason 'test_data'"),
+        (MEMORY_WITHDRAW_STEP, lambda s: s["expects_response"].pop(1), "status 'withdrawn'"),
+        (MEMORY_WITHDRAW_STEP, lambda s: s["expects_present"].pop(2), "'withdraw' event"),
+        (MEMORY_RESTORE_STEP, lambda s: s["expects_request"][0].pop("requires_idempotency_key"), "Idempotency-Key"),
+        (MEMORY_RESTORE_STEP, lambda s: s["expects_response"].pop(1), "status 'active'"),
+        (MEMORY_EXPERT_STEP, lambda s: s.pop("as"), "not as the expert-only account"),
+        (MEMORY_EXPERT_STEP, lambda s: s.pop("expects_not_called"), "status read is not made"),
+        (MEMORY_EXPERT_STEP, lambda s: s["expects_absent"].pop(), "no withdrawal control and no status line"),
+    ]
+    for name, mutate, expected in mutations:
+        changed = json.loads(json.dumps(manifest))
+        mutate(_step_of(changed, name))
+        assert any(expected in f for f in memory_step_findings(changed)), (name, expected)
+    # Only the expert's step is not the administrator's.
+    other = json.loads(json.dumps(manifest))
+    _step_of(other, MEMORY_RESTORE_STEP)["as"] = "expert_only"
+    assert any("only the expert's step does" in f for f in memory_step_findings(other))
+    # The order: a withdrawal before the case is known, and a restore before the withdrawal, are both wrong.
+    swapped = json.loads(json.dumps(manifest))
+    steps = swapped["write"]["steps"]
+    names = [s["name"] for s in steps]
+    i, j = names.index(MEMORY_WITHDRAW_STEP), names.index(MEMORY_RESTORE_STEP)
+    steps[i], steps[j] = steps[j], steps[i]
+    assert any("no longer run in their order" in f for f in memory_step_findings(swapped))
+    # The place: before the decision there is nothing to find, and after the carried decision the newest case is another.
+    early = json.loads(json.dumps(manifest))
+    moved = [s for s in early["write"]["steps"] if s["name"] in MEMORY_STEPS]
+    rest = [s for s in early["write"]["steps"] if s["name"] not in MEMORY_STEPS]
+    early["write"]["steps"] = moved + rest
+    assert any("comes before 'record-decision'" in f for f in memory_step_findings(early))
+    late = json.loads(json.dumps(manifest))
+    moved = [s for s in late["write"]["steps"] if s["name"] in MEMORY_STEPS]
+    rest = [s for s in late["write"]["steps"] if s["name"] not in MEMORY_STEPS]
+    late["write"]["steps"] = rest + moved
+    assert any("after 'carry-over-decision'" in f for f in memory_step_findings(late))
+
+
+def test_control_a_memory_state_that_names_nothing_is_detected(manifest: dict, openapi: dict) -> None:
+    source = application_source(_require(WEB_SRC))
+    assert memory_state_findings(manifest, openapi, source) == []
+
+    def with_state(mutate) -> dict:
+        changed = json.loads(json.dumps(manifest))
+        mutate(next(r for r in changed["routes"] if r["name"] == "knowledge-base")["read_state"])
+        return changed
+
+    for mutate, expected in (
+        (lambda s: s["memory_case"]["query"].update(mcase="{no_such_identity}"), "names {no_such_identity}"),
+        (lambda s: s["memory_case"].update(bind={"case_id": "no_such_identity"}), "binds case_id to 'no_such_identity'"),
+        (lambda s: s["memory_case"]["expects_api"][0].update(operationId="listDecisionMemoryCases"), "is not GET /decision-memory/cases/{case_id}"),
+        (lambda s: s["memory_case"]["expects_api"][0].update(path="/decision-memory/cases/{no_such}"), "names {no_such}"),
+        (lambda s: s["memory_list"].update(query={}), "non-empty object"),
+        (lambda s: s["memory_list"].update(expects_api=[]), "must list the reads"),
+        (lambda s: s.pop("memory_case"), "'memory_case' is gone"),
+    ):
+        assert any(expected in f for f in memory_state_findings(with_state(mutate), openapi, source)), expected
+    # An address parameter the screen no longer reads is red.
+    assert any("'mcase' is no longer read" in f for f in memory_state_findings(manifest, openapi, source.replace("'mcase'", "'other'")))

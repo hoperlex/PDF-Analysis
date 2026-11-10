@@ -199,6 +199,14 @@ export interface LiveRender {
    */
   press(label: string): Promise<boolean>;
   /**
+   * Deliver `times` presses to the one button whose whole text is `label` in the SAME act, before React has re-rendered it: a double
+   * click, whose second press reaches the handler the button was drawn with (`D-503`). Two `press` calls started together would
+   * overlap two `act` scopes, which React does not support and which leaves the process unable to flush any later render, so a test
+   * of a double press goes through here. The disabled attribute is read once, before the first press. Resolves `false` and delivers
+   * nothing when the button is disabled.
+   */
+  pressRepeatedly(label: string, times: number): Promise<boolean>;
+  /**
    * Press the one button carrying `attribute="value"` (a `data-*` marker), for a control whose text is shared by its
    * siblings (the arrow of each row of a list). Same rules as {@link press}: throws unless exactly one matches, and a
    * disabled button is not pressed.
@@ -268,6 +276,20 @@ export async function mountLive(element: ReactElement): Promise<LiveRender> {
       if (onClick === undefined) throw new Error(`button «${label}» has no onClick`);
       await act(async () => {
         onClick({ type: 'click', preventDefault() {}, stopPropagation() {} });
+        await tick();
+        await tick();
+      });
+      return true;
+    },
+    pressRepeatedly: async (label, times) => {
+      const found = buttons(label);
+      if (found.length !== 1) throw new Error(`expected one button «${label}», found ${found.length}`);
+      const button = found[0] as FakeNode;
+      if (button.getAttribute('disabled') !== null) return false;
+      const onClick = propsOf(button).onClick;
+      if (onClick === undefined) throw new Error(`button «${label}» has no onClick`);
+      await act(async () => {
+        for (let press = 0; press < times; press += 1) onClick({ type: 'click', preventDefault() {}, stopPropagation() {} });
         await tick();
         await tick();
       });

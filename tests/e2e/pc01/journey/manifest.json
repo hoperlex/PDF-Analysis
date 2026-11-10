@@ -712,8 +712,43 @@
         "`admin`. A cold walk opens the default «Замечания», so the memory's reads are OPTIONAL: they are made only",
         "once the tab is chosen (the case read once a case is opened, the status read only by `admin`). The two",
         "keyed writes of the tab (`withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase`) are the administrator's",
-        "and are not walked here."
+        "and are not walked here: the write half walks them (`memory-*`, `D-503`).",
+        "",
+        "`read_state` (`D-503`): `--state memory_list` opens the tab (`?kind=memory`) and `--state memory_case` opens the",
+        "journey's own case (`?mcase=`, from the write half's `memory_case_id`, or `--seed`), so a width (`--width 390`) is",
+        "held over the tab and over a case, which a cold walk never draws. A state of this route declares its own",
+        "`expects_api` (the tab does not read the journal the default tab reads), and `bind` for a contract name. A stand",
+        "that holds no case is a finding, not a pass of a state that was never read. The viewer, who is offered no tab,",
+        "is not walked: the journey has no viewer account (`D-650`)."
       ],
+      "read_state": {
+        "memory_list": {
+          "bound_ms": 30000,
+          "query": {"kind": "memory"},
+          "expects_api": [
+            {"method": "GET", "path": "/decision-memory/cases", "operationId": "listDecisionMemoryCases"},
+            {"method": "GET", "path": "/decision-memory/status", "operationId": "getDecisionMemoryStatus"}
+          ],
+          "present": [
+            {"selector": "table[data-memory-table] tr[data-memory-case]"},
+            {"selector": "[data-memory-status-line]", "text_matches": "дел:"}
+          ]
+        },
+        "memory_case": {
+          "bound_ms": 30000,
+          "query": {"kind": "memory", "mcase": "{memory_case_id}"},
+          "bind": {"case_id": "memory_case_id"},
+          "expects_api": [
+            {"method": "GET", "path": "/decision-memory/cases/{case_id}", "operationId": "getDecisionMemoryCase"},
+            {"method": "GET", "path": "/decision-memory/status", "operationId": "getDecisionMemoryStatus"}
+          ],
+          "present": [
+            {"selector": "[data-memory-case-view]"},
+            {"selector": "[data-memory-finding-text]", "text_matches": "\\S"},
+            {"selector": "[data-memory-standing-control]"}
+          ]
+        }
+      },
       "expects_api": [
         {
           "method": "GET",
@@ -2021,6 +2056,589 @@
         ],
         "screen": "run-review",
         "case": "action"
+      },
+      {
+        "name": "memory-tab-lists-the-captured-case",
+        "at": "/knowledge-base?project={project_uid}",
+        "page_module": "web/src/app/knowledge-base/page.tsx",
+        "control_module": "web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx",
+        "$comment": [
+          "`D-503`. «Память решений» is the fourth «Тип» of «База знаний». The expert's accept of the first finding",
+          "(`record-decision`) was captured into the memory in the SAME transaction (`DECISION-MEMORY-01` 7.2), so the tab",
+          "must list exactly that case for the journey's project: this step chooses the tab by pressing it, as a reader",
+          "does, and captures the case's identity for the steps that open, withdraw and restore it.",
+          "",
+          "The three memory reads are OPTIONAL on the route (a cold walk opens the default «Замечания»); here the step needs",
+          "them, so they are declared required: the list, and the administrator's status line. The case is the newest",
+          "capture of the project, and it is the only one: the step stands before `carry-over-decision`, which captures a second."
+        ],
+        "actions": [
+          {
+            "do": "wait_for",
+            "selector": "[data-kb-kind=\"memory\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-kb-kind=\"memory\"]",
+            "settle": true
+          }
+        ],
+        "captures": [
+          {
+            "kind": "attribute",
+            "selector": "tr[data-memory-case]",
+            "attribute": "data-memory-case",
+            "as": [
+              "memory_case_id"
+            ],
+            "matches": "^(dmc_%ID%)$",
+            "bound_ms": 30000,
+            "$why": "the case the decision just taken was captured as; its address carries it in the steps after this one"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/decision-memory/cases",
+            "operationId": "listDecisionMemoryCases",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/decision-memory/status",
+            "operationId": "getDecisionMemoryStatus",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listDecisionMemoryCases",
+            "json_path": "items",
+            "nonempty_array": true
+          },
+          {
+            "of": "listDecisionMemoryCases",
+            "json_path": "items.0.status",
+            "equals": "active"
+          },
+          {
+            "of": "listDecisionMemoryCases",
+            "json_path": "items.0.current_verdict",
+            "equals": "accepted"
+          },
+          {
+            "of": "getDecisionMemoryStatus",
+            "json_path": "cases",
+            "at_least": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-kb-kind=\"memory\"][aria-pressed=\"true\"]"
+          },
+          {
+            "selector": "[data-memory-scope=\"project\"]"
+          },
+          {
+            "selector": "[data-memory-status-line]",
+            "text_contains": "дел:"
+          },
+          {
+            "selector": "table[data-memory-table] tr[data-memory-case][data-memory-status=\"active\"][data-memory-verdict=\"accepted\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-memory-results] [role=\"alert\"]"
+        ],
+        "screen": "decision-memory",
+        "case": "action"
+      },
+      {
+        "name": "memory-case-opens-from-the-list",
+        "at": "/knowledge-base?kind=memory&project={project_uid}",
+        "page_module": "web/src/app/knowledge-base/page.tsx",
+        "control_module": "web/src/widgets/decision-memory/ui/decision-memory-case.tsx",
+        "$comment": [
+          "`D-503`. «Открыть» on the case's row reads that one case (`getDecisionMemoryCase`, only once a case is opened) and",
+          "draws what the expert saw and said: the model's finding and recommendation as they stood, the evidence quotes, the",
+          "decision with its verdict, and -- for the administrator -- the control that withdraws it."
+        ],
+        "actions": [
+          {
+            "do": "wait_for",
+            "selector": "[data-memory-open=\"{memory_case_id}\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-memory-open=\"{memory_case_id}\"]"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/decision-memory/cases/{case_id}",
+            "operationId": "getDecisionMemoryCase",
+            "expect_status": 200,
+            "bind": {
+              "case_id": "memory_case_id"
+            }
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getDecisionMemoryCase",
+            "json_path": "summary.case_id",
+            "matches": "^(dmc_%ID%)$"
+          },
+          {
+            "of": "getDecisionMemoryCase",
+            "json_path": "summary.status",
+            "equals": "active"
+          },
+          {
+            "of": "getDecisionMemoryCase",
+            "json_path": "decisions",
+            "nonempty_array": true
+          },
+          {
+            "of": "getDecisionMemoryCase",
+            "json_path": "evidence",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-memory-case-view=\"{memory_case_id}\"][data-memory-status=\"active\"]"
+          },
+          {
+            "selector": "[data-memory-finding-text]",
+            "text_matches": "\\S"
+          },
+          {
+            "selector": "[data-memory-decisions] li[data-memory-verdict=\"accepted\"]"
+          },
+          {
+            "selector": "[data-memory-evidence-list] li"
+          },
+          {
+            "selector": "[data-memory-standing-control=\"withdraw\"]"
+          },
+          {
+            "selector": "[data-memory-back]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-memory-results] [role=\"alert\"]",
+          "[data-memory-standing-note]"
+        ],
+        "screen": "decision-memory",
+        "case": "action"
+      },
+      {
+        "name": "memory-withdraw-needs-a-reason",
+        "at": "/knowledge-base?kind=memory&mcase={memory_case_id}",
+        "page_module": "web/src/app/knowledge-base/page.tsx",
+        "control_module": "web/src/features/manage-decision-memory/ui/case-standing-control.tsx",
+        "$comment": [
+          "`D-503`. The reason of a withdrawal is a closed list the operation requires, so the button is held until one is chosen",
+          "and nothing is sent. (A disabled control cannot be pressed by this instrument either: the step reads the hold.)"
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-memory-standing-control=\"withdraw\"] button[disabled]",
+            "text_contains": "Отозвать"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/decision-memory/cases/{case_id}/withdraw",
+            "bind": {
+              "case_id": "memory_case_id"
+            },
+            "why": "a withdrawal without a reason is no withdrawal"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-memory-standing-failure]",
+          "[data-memory-standing-note]"
+        ],
+        "screen": "decision-memory",
+        "case": "refused"
+      },
+      {
+        "name": "memory-case-withdraw",
+        "at": "/knowledge-base?kind=memory&mcase={memory_case_id}",
+        "page_module": "web/src/app/knowledge-base/page.tsx",
+        "control_module": "web/src/features/manage-decision-memory/ui/case-standing-control.tsx",
+        "$comment": [
+          "`D-503`, `withdrawDecisionMemoryCase`. The administrator chooses the reason and presses «Отозвать» twice: one keyed",
+          "request carrying the closed reason, one status event, and the case says it is withdrawn, why, and offers «Вернуть»",
+          "instead. The list is the memory's own read, so the next step reads the standing from it."
+        ],
+        "actions": [
+          {
+            "do": "wait_for",
+            "selector": "[data-memory-standing-control=\"withdraw\"] select",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "[data-memory-standing-control=\"withdraw\"] select",
+            "option_text": "Тестовые данные"
+          },
+          {
+            "do": "click",
+            "selector": "[data-memory-standing-control=\"withdraw\"] button",
+            "text": "Отозвать",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/decision-memory/cases/{case_id}/withdraw",
+            "operationId": "withdrawDecisionMemoryCase",
+            "expect_status": 200,
+            "count": 1,
+            "bind": {
+              "case_id": "memory_case_id"
+            }
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "withdrawDecisionMemoryCase",
+            "requires_idempotency_key": true,
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"reason_code\":\"test_data\""
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "withdrawDecisionMemoryCase",
+            "json_path": "kind",
+            "equals": "withdraw"
+          },
+          {
+            "of": "withdrawDecisionMemoryCase",
+            "json_path": "status",
+            "equals": "withdrawn"
+          },
+          {
+            "of": "withdrawDecisionMemoryCase",
+            "json_path": "reason_code",
+            "equals": "test_data"
+          },
+          {
+            "of": "withdrawDecisionMemoryCase",
+            "json_path": "case_id",
+            "matches": "^(dmc_%ID%)$"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-memory-case-view=\"{memory_case_id}\"][data-memory-status=\"withdrawn\"]"
+          },
+          {
+            "selector": "[data-memory-standing-note=\"withdrawn\"]",
+            "text_contains": "Причина: тестовые данные",
+            "text_is_data": true
+          },
+          {
+            "selector": "[data-memory-status-event][data-memory-event-kind=\"withdraw\"]"
+          },
+          {
+            "selector": "[data-memory-standing-control=\"restore\"] button",
+            "text_contains": "Вернуть"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-memory-standing-failure]",
+          "[data-memory-standing-control=\"withdraw\"]"
+        ],
+        "screen": "decision-memory",
+        "case": "action"
+      },
+      {
+        "name": "memory-list-shows-the-withdrawn-case",
+        "at": "/knowledge-base?kind=memory&project={project_uid}",
+        "page_module": "web/src/app/knowledge-base/page.tsx",
+        "control_module": "web/src/widgets/decision-memory/ui/decision-memory-filters.tsx",
+        "$comment": [
+          "`D-503`. A withdrawn case stays in the memory: the list under «Состояние: Отозвано» (chosen in the filter, which",
+          "writes `?mstatus=` into the address) holds it with the reason, and the same list under «Действует» (the next step)",
+          "holds nothing and says the selection is empty rather than the memory."
+        ],
+        "actions": [
+          {
+            "do": "wait_for",
+            "selector": "#memory-filter-status",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "#memory-filter-status",
+            "option_text": "Отозвано"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/decision-memory/cases",
+            "operationId": "listDecisionMemoryCases",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listDecisionMemoryCases",
+            "json_path": "items.0.status",
+            "equals": "withdrawn"
+          },
+          {
+            "of": "listDecisionMemoryCases",
+            "json_path": "items.0.status_reason_code",
+            "equals": "test_data"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "table[data-memory-table] tr[data-memory-case=\"{memory_case_id}\"][data-memory-status=\"withdrawn\"]"
+          },
+          {
+            "selector": "tr[data-memory-case=\"{memory_case_id}\"] [data-memory-reason=\"test_data\"]",
+            "text_contains": "Тестовые данные"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-memory-results] [role=\"alert\"]"
+        ],
+        "screen": "decision-memory",
+        "case": "action"
+      },
+      {
+        "name": "memory-list-by-standing-excludes-the-withdrawn-case",
+        "at": "/knowledge-base?kind=memory&project={project_uid}",
+        "page_module": "web/src/app/knowledge-base/page.tsx",
+        "control_module": "web/src/widgets/decision-memory/ui/decision-memory-filters.tsx",
+        "$comment": [
+          "`D-503`. The refusal of a selection: the withdrawn case is not among those in force, and the screen says that the",
+          "SELECTION holds nothing (with the way back, «Сбросить отбор»), not that the memory is empty."
+        ],
+        "actions": [
+          {
+            "do": "wait_for",
+            "selector": "#memory-filter-status",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "#memory-filter-status",
+            "option_text": "Действует"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/decision-memory/cases",
+            "operationId": "listDecisionMemoryCases",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-memory-results]",
+            "text_contains": "В памяти решений нет дел под этот отбор."
+          },
+          {
+            "selector": "[data-memory-results] button",
+            "text_contains": "Сбросить отбор"
+          }
+        ],
+        "forbids_rendered": [
+          "tr[data-memory-case]",
+          "[data-memory-results] [role=\"alert\"]"
+        ],
+        "screen": "decision-memory",
+        "case": "refused"
+      },
+      {
+        "name": "memory-case-restore",
+        "at": "/knowledge-base?kind=memory&mcase={memory_case_id}",
+        "page_module": "web/src/app/knowledge-base/page.tsx",
+        "control_module": "web/src/features/manage-decision-memory/ui/case-standing-control.tsx",
+        "$comment": [
+          "`D-503`, `restoreDecisionMemoryCase`. «Вернуть» undoes the withdrawal with its own closed reason, pressed twice: one",
+          "keyed request, a second status event (the history keeps both), the case in force again and the note gone. The journey",
+          "leaves the memory as it found it: a case in force."
+        ],
+        "actions": [
+          {
+            "do": "wait_for",
+            "selector": "[data-memory-standing-control=\"restore\"] select",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "[data-memory-standing-control=\"restore\"] select",
+            "option_text": "Другая причина"
+          },
+          {
+            "do": "click",
+            "selector": "[data-memory-standing-control=\"restore\"] button",
+            "text": "Вернуть",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/decision-memory/cases/{case_id}/restore",
+            "operationId": "restoreDecisionMemoryCase",
+            "expect_status": 200,
+            "count": 1,
+            "bind": {
+              "case_id": "memory_case_id"
+            }
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "restoreDecisionMemoryCase",
+            "requires_idempotency_key": true,
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"reason_code\":\"other\""
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "restoreDecisionMemoryCase",
+            "json_path": "kind",
+            "equals": "restore"
+          },
+          {
+            "of": "restoreDecisionMemoryCase",
+            "json_path": "status",
+            "equals": "active"
+          },
+          {
+            "of": "restoreDecisionMemoryCase",
+            "json_path": "reason_code",
+            "equals": "other"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-memory-case-view=\"{memory_case_id}\"][data-memory-status=\"active\"]"
+          },
+          {
+            "selector": "[data-memory-status-event][data-memory-event-kind=\"restore\"]"
+          },
+          {
+            "selector": "[data-memory-status-event][data-memory-event-kind=\"withdraw\"]"
+          },
+          {
+            "selector": "[data-memory-standing-control=\"withdraw\"] button",
+            "text_contains": "Отозвать"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-memory-standing-failure]",
+          "[data-memory-standing-note]",
+          "[data-memory-standing-control=\"restore\"]"
+        ],
+        "screen": "decision-memory",
+        "case": "action"
+      },
+      {
+        "name": "memory-case-for-an-expert-is-read-only",
+        "as": "expert_only",
+        "at": "/knowledge-base?project={project_uid}",
+        "page_module": "web/src/app/knowledge-base/page.tsx",
+        "control_module": "web/src/widgets/decision-memory/ui/decision-memory-case.tsx",
+        "$comment": [
+          "`D-503`. An expert is offered the tab and reads the case, and is offered neither «Отозвать» nor «Вернуть» nor the",
+          "administrator's status line (`getDecisionMemoryStatus` is the administrator's, so the screen does not ask it). The",
+          "viewer, who is offered no tab at all, is NOT walked: the roster has no viewer account (`D-650`)."
+        ],
+        "actions": [
+          {
+            "do": "wait_for",
+            "selector": "[data-kb-kind=\"memory\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-kb-kind=\"memory\"]",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-memory-open=\"{memory_case_id}\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-memory-open=\"{memory_case_id}\"]"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/decision-memory/cases",
+            "operationId": "listDecisionMemoryCases",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/decision-memory/cases/{case_id}",
+            "operationId": "getDecisionMemoryCase",
+            "expect_status": 200,
+            "bind": {
+              "case_id": "memory_case_id"
+            }
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/decision-memory/status",
+            "why": "the memory's counts and settings are the administrator's read"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-memory-case-view=\"{memory_case_id}\"][data-memory-status=\"active\"]"
+          },
+          {
+            "selector": "[data-memory-finding-text]",
+            "text_matches": "\\S"
+          },
+          {
+            "selector": "[data-memory-decisions] li[data-memory-verdict=\"accepted\"]"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "[data-memory-standing-control]"
+          },
+          {
+            "selector": "[data-memory-status-line]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-memory-results] [role=\"alert\"]"
+        ],
+        "screen": "decision-memory",
+        "case": "refused"
       },
       {
         "name": "review-view-and-filter-follow-the-address",
