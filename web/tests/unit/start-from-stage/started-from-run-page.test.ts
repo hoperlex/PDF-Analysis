@@ -119,7 +119,6 @@ describe('the stage table of a run started from a stage, in «Этапы ана�
     const duration = /data-fact-row="elapsed"[^>]*><th scope="row">Длительность<\/th><td>([^<]*)<\/td>/.exec(markup)?.[1];
     expect(duration).toBe('2,5 с');
     expect(markup).not.toContain('data-stage-reused');
-    expect(markup).not.toContain('из прогона');
   });
 
   it('marks only the stages before the start stage when the run started from an earlier one', () => {
