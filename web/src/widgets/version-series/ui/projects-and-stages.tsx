@@ -325,7 +325,7 @@ function SetRow(props: ProjectsAndStagesViewProps & { readonly set: ComparisonOv
           </details>}
         </div>
       </th>
-      <td>
+      <td className={styles.versionsCell}>
         <span>{set.version_count}</span>
         {set.updated_at === undefined ? null : <span className={styles.note}>{set.updated_at.slice(0, 10)}</span>}
       </td>

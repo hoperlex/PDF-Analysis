@@ -399,6 +399,15 @@ sides** — `wrap`, then `nowrap` — which is what makes the scratch copy and t
 the same mutation rather than a claim that they are. It imports `width.mjs`, the
 journey's own assertion, rather than a second copy written to agree with it.
 
+**A second reading: the collapsed column** (lane WALK-V5, 2026-11-10, `D-565`). `scrollWidth <= innerWidth` cannot see a squeezed grid
+track: the text wraps one word to a line inside the narrow box and the page grows taller, not wider (`D-560` and `D-561` passed every walk
+since the section table got its five numbers). The read walk therefore also takes `width.mjs`'s `COLLAPSED_READING` on every route: a visible
+leaf box with 10 characters of text or more that is under 90 px wide (0 included) and whose text is over 70 px tall. It is held by
+`width.test.mjs` (`node --test`, the real expression over a fake page, with the cases it must not read, each shown failing by a mutation) and
+by `prove_the_collapsed_reading_can_fail.mjs` against a stand after the write half, which puts `D-560`'s two-track rule back on «Главная»
+and requires the reading red where the width assertion is blind. The first draft of the reading missed that very layout (the name box was
+0 px wide); the live proof is what found it.
+
 **Other widths and other states are flags, not copies of the manifest** (lane J2, 2026-11-09, `D-380`). The journey declares one
 width and walks the quiet state, and a layout fault that needs a particular width or state to show is outside it: the frame's end
 group ended at 471 px only while dispatch was paused; the stage comparison's controls ended at 399 px only while the list held exactly
@@ -440,7 +449,7 @@ with dispatch paused and at 1280 px with dispatch paused; `confirmed_pair` reach
 (a cold browser per route). Before the fix of «Оптимизация разделов» the 390 px walk read 31 of 35 (409 px on that route).
 
 `walk-options.mjs` holds the pure rules (the dimension parser, the viewport, the address query, the state expression and the
-paused-strip verdict) and `dispatch.mjs` the pause; `walk-options.test.mjs` and `dispatch.test.mjs` (`node --test`) hold them without a
+paused-strip verdict) and `dispatch.mjs` the pause; `walk-options.test.mjs`, `dispatch.test.mjs` and `width.test.mjs` (`node --test`) hold them without a
 browser, and `test_pc01_journey_conformance.py` runs both and reads the manifest's `query` and `read_state` against `web/src`.
 
 **A step that could not be driven keeps what its browser did** (`D-382`). A control that is not there, or a wait that ran out, threw

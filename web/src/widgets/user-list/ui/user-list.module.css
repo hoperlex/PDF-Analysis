@@ -29,3 +29,11 @@
 .scopes { display: inline-flex; flex-wrap: wrap; gap: var(--am-gap-xs); }
 .filter { display: inline-flex; align-items: center; gap: var(--am-gap-sm); }
 .filter select, .filter input[type='search'] { padding: var(--am-gap-xs) var(--am-gap-sm); font-size: var(--am-text-sm); font-weight: 400; }
+
+/*
+ * `WALK-V5`: on a phone the four columns keep 9 rem each and the frame scrolls. The table is `table-layout: fixed` at the frame's
+ * width, so at 360 px each column was 71 px: a name with its e-mail, the roles and the last sign-in broke to 102 and 176 px rows.
+ */
+@media (max-width: 600px) {
+  .table { min-width: 36rem; }
+}

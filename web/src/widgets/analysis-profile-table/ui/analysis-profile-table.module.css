@@ -41,12 +41,45 @@
 }
 
 /*
+ * `WALK-V5`: the first two columns keep the width of their words (the section a floor of 8 rem, the version its own line). `overflow-wrap: anywhere` lets a cell shrink to one character, so
+ * under the table's 752 px (the nowrap badge, the hash and the details) the section was 67 px wide and 102 to 139 px tall and the
+ * version 80 px, at every width from 360 to 1024 px; the frame scrolls instead.
+ */
+.section {
+  min-width: 8rem;
+}
+
+.version {
+  white-space: nowrap;
+}
+
+/*
  * The badge says "черновик, требует экспертной проверки": on a phone the global badge wraps its words, and a row of one line
  * became four. It stays on its line and the table scrolls in its region instead.
  */
 .state :global(.am-badge) {
   white-space: nowrap;
   overflow-wrap: normal;
+}
+
+/*
+ * `WALK-V5`: the short digest (twelve characters) is one line. It was a `code` that may break anywhere, so in the third column of a
+ * table at 821 px it was squeezed to a few characters and the rows were 83 to 102 px tall instead of one line.
+ */
+.digest code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/*
+ * `WALK-V5`: between a phone and 1100 px the state badge may break at its spaces (two lines, about 150 px) so that the table fits the
+ * frame (687 px at 1024, 661 at 768) instead of scrolling by 134 to 160 px; on a phone it stays on its line and the frame scrolls, as above.
+ */
+@media (min-width: 601px) and (max-width: 1100px) {
+  .state :global(.am-badge) {
+    white-space: normal;
+    overflow-wrap: normal;
+  }
 }
 
 .details summary {
