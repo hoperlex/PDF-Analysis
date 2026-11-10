@@ -39,14 +39,13 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from auditmanager.findings.artifacts import (
-    GROUNDING_PORTAL_BLOCK,
     MAX_EXTENDED_OBSERVATION_REF_CHARS,
     BlockEvidenceItem,
     BlockGateInputs,
     BlockObservation,
     ObservationSet,
 )
-from auditmanager.findings.grounding import GateResult, run_block_gate
+from auditmanager.findings.grounding import GateResult, ObservationVerdict, run_block_gate
 from auditmanager.shared.db import SQLSTATE_TO_CATALOG_CODE, nested_transaction
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import FindingObservationId, FindingUid
@@ -477,6 +476,13 @@ _SET_CANONICAL = text(
 )
 
 
+def _candidate_ref(verdict: ObservationVerdict) -> str | None:
+    """The reference the candidate carried into the gate: the verdict's own observation is the ``BlockObservation`` the publisher built."""
+    observation = verdict.observation
+    assert isinstance(observation, BlockObservation)
+    return observation.extended_observation_ref
+
+
 def publish_candidate_groups(
     session: Session,
     *,
@@ -567,7 +573,6 @@ def publish_candidate_groups(
                     "analysis_profile_id": analysis_profile_id,
                     "prompt_bundle_id": prompt_bundle_id,
                     "provider_mode": provider_mode,
-                    "grounding_kind": GROUNDING_PORTAL_BLOCK,
                 }
                 for member, verdict in passing:
                     observation_id = FindingObservationId.new().value
@@ -582,7 +587,9 @@ def publish_candidate_groups(
                             "recommendation_text": member.recommendation_text,
                             "grounded": True,
                             "ungrounded_reason": None,
-                            "extended_observation_ref": member.extended_observation_ref,
+                            # how it was grounded and which candidate it came from are the verdict's and the observation's own
+                            "grounding_kind": verdict.grounding_kind,
+                            "extended_observation_ref": _candidate_ref(verdict),
                             "related_finding_uid": related,
                         },
                     )
@@ -625,7 +632,8 @@ def publish_candidate_groups(
                             "recommendation_text": member.recommendation_text,
                             "grounded": False,
                             "ungrounded_reason": failing.value,
-                            "extended_observation_ref": member.extended_observation_ref,
+                            "grounding_kind": verdict.grounding_kind,
+                            "extended_observation_ref": _candidate_ref(verdict),
                             "related_finding_uid": None,
                         },
                     )

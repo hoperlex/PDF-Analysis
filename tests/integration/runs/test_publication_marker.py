@@ -188,3 +188,23 @@ def test_a_mode_the_database_does_not_know_is_refused_before_it_is_written(sessi
             session, run_id=RunId.new().value, project_uid=world["project"], version_uid=str(world["version"]),
             analysis_profile_id=AnalysisProfileId.new().value, prompt_bundle_id=PromptBundleId.new().value, provider_mode="recorded",
             frozen_input_digest="0" * 64, command_id=None, publication_mode="both")
+
+
+# --- the executor reads the marker from the row ---------------------------------------------------------------------------------
+
+
+def test_static_the_executor_reads_the_marker_from_the_row_and_tells_the_gate_inputs_the_run() -> None:
+    import ast
+    import inspect
+
+    import auditmanager.runs.executor as executor_module
+
+    mode_source = inspect.getsource(executor_module._publication_mode)
+    assert "run.publication_mode" in mode_source and "getattr" not in mode_source, "no fallback: the row carries the column"
+
+    tree = ast.parse(inspect.getsource(executor_module._execute_run_body))
+    reads = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and ast.unparse(node.func) == "_read_gate_inputs"]
+    assert len(reads) == 1
+    keywords = {keyword.arg: ast.unparse(keyword.value) for keyword in reads[0].keywords}
+    assert keywords["publication_mode"] == "_publication_mode(run)"
+    assert keywords["run_id"] == "run_id" and keywords["version_uid"] == "run.version_uid"
