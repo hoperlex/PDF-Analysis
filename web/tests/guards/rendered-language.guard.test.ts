@@ -1074,6 +1074,9 @@ const FINDINGS: readonly Finding[] = [
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}P`, category: 'accessibility' }),
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}Q`, category: 'insulation' }),
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}R`, category: 'sound' }),
+  // `CRIT-SEAL-50` (contract 1.51.0): the two categories of the groups of candidates of the extended review published as findings.
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}S`, category: 'drawing_discrepancy' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}T`, category: 'cross_source' }),
 ];
 
 /*
@@ -4137,7 +4140,7 @@ export const CACHE_STATES: readonly {
   { state: 'queued-run', run: { state: 'queued', terminal_at: null, published_finding_count: 0 } },
   /*
    * `HOSTS-L1` (`D-660`, contract 1.48.0): a run on the stage layout that waits names the model it waits for and the cause. A line names two
-   * models at most, so four states put all seven members of `RunWaitCause` on the screen, the last with «и ещё N».
+   * models at most, so five states put all eight members of `RunWaitCause` on the screen, one with «и ещё N».
    */
   ...(
     [
@@ -4149,6 +4152,8 @@ export const CACHE_STATES: readonly {
         'executor_at_capacity',
         [['text:main', 'gpt-6-sol', 'at_capacity'], ['blocks:judge', 'gpt-6.1-sol', 'at_capacity'], ['norms:main', 'gpt-6-astra', 'at_capacity']],
       ],
+      // `CRIT-SEAL-50` (contract 1.51.0): the night window of the vectors is open, so the stand issues no new run until it closes.
+      ['queued-run-waits-vector-window', 'model_unavailable', [['text:main', 'gpt-6-sol', 'vector_window']]],
     ] as const
   ).map(([state, reason, cells]) => ({
     state,
