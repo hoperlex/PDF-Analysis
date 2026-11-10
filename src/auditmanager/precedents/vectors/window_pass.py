@@ -39,7 +39,6 @@ from auditmanager.precedents.vectors import repository as store
 from auditmanager.precedents.vectors.exchange import HEARTBEAT_FRESH_SECONDS, Exchange
 from auditmanager.precedents.vectors.intents import (
     POISON_DIGEST_MISMATCH,
-    POISON_TOKEN_LIMIT,
     ImportRefused,
     build_request,
     parse_answer,
