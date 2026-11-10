@@ -59,4 +59,3 @@ export function declares(css: string, selector: string, property: string, value:
 export function declaresIn(css: string, query: string, selector: string, property: string, value: RegExp): boolean {
   return mediaBlocks(css, query).some((block) => declares(block, selector, property, value));
 }
-
