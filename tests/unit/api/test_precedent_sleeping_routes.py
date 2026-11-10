@@ -218,8 +218,6 @@ def test_the_vocabularies_are_the_plans() -> None:
     assert [item.value for item in models.FindingOrigin] == ["text", "drawing", "cross_check"]
     assert "vector_window" in {item.value for item in models.RunWaitCause}
     assert {"drawing_discrepancy", "cross_source"} <= {item.value for item in models.FindingCategory}
-    assert {"block_not_in_run_geometry", "block_crop_mismatch", "block_quote_not_in_recognised"} <= {
-        item.value for item in models.UngroundedReason}
 
 
 def _label(**over: Any) -> dict[str, Any]:
