@@ -342,6 +342,12 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     "claimed_by_instance_id",
     # `0062_hosts_stage_models`: ``model_id`` of a cooldown names a model of the catalogue (``claude-opus-5-5``), as ``pin_id`` does.
     "model_id",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): ``portal_block_id`` is the portal's own identifier (``blk_`` and 32 hexadecimal digits), registered in the
+    # catalogue as an external identifier and not an identity (``external_identifiers.portal_block_id``); its shape is a CHECK of both block-evidence
+    # tables, asserted in ``test_precedents_seal_migration.py``. ``input_id`` of a probe is the task's own name for a candidate text (a string of 1 to
+    # 128 characters the agent is handed in ``context_request``), not an entity this product mints.
+    "portal_block_id",
+    "input_id",
 }
 
 #: A column name that two tables use for two different identities (or for a label) cannot carry one prefix in the
