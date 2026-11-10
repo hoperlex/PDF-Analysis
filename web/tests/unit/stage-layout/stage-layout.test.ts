@@ -29,7 +29,7 @@ import {
   CATALOGUE, COMPARISON_CELLS, LAYOUT, LAYOUT_CELLS, LAYOUT_COMPARISON, LAYOUT_COMPARISON_KIT, LAYOUT_EMPTY, LAYOUT_OFF, cell, seedHosts, seedLayout,
 } from '../workers/hosts-fixtures';
 
-const ALL_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'];
+const ALL_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'];
 const CLAUDE_ONLY_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5'];
 
 function seeded(roles: Role[], layout: StageModelLayout = LAYOUT, tab: WorkersPageProps['initialTab'] = 'models'): string {
@@ -160,8 +160,8 @@ describe('the sets', () => {
     expect(codex.map((c) => c.max_output_tokens)).toEqual([16000, 6000, 6000, 6000, 6000, 12000, 12000, 12000]);
     expect(codex.every((c) => c.effort === 'medium')).toBe(true);
     expect([...kitModelIds('claude_only')].sort()).toEqual([...CLAUDE_ONLY_MODELS].sort());
-    // The legs and the judge are models of the set: «Только Codex» names all three Codex pins, the judge's among them.
-    expect([...kitModelIds('codex_only')].sort()).toEqual(['gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol']);
+    // The legs and the judge are models of the set: «Только Codex» names the Codex pins, the judge's among them, and gpt-6-luna of the comparison.
+    expect([...kitModelIds('codex_only')].sort()).toEqual(['gpt-6-astra', 'gpt-6-luna', 'gpt-6-sol', 'gpt-6.1-sol']);
   });
 
   it('give a cell the revision does not have the timeout the server defaults to: 1800 seconds, not 600', () => {
@@ -381,7 +381,7 @@ describe('the form «Изменить»', () => {
   });
 
   it('shows a refusal of the server in words and never an identifier', () => {
-    const refusal = new ApiError(422, { contract_version: '1.47.0', error_code: 'validation_failed', message: 'x', correlation_id: 'cid-layout-1', retryable: false, details: { field: 'cells', constraint: 'catalogue' } }, null);
+    const refusal = new ApiError(422, { contract_version: '1.48.0', error_code: 'validation_failed', message: 'x', correlation_id: 'cid-layout-1', retryable: false, details: { field: 'cells', constraint: 'catalogue' } }, null);
     expect(layoutRefusalSentence(refusal)).toContain('парой из каталога');
     expect(layoutFailure(refusal, true).kind).toBe('refusal');
     const markup = view({ failure: layoutFailure(refusal, true) });
@@ -425,7 +425,7 @@ describe('the switch «Модели по этапам: включены» and th
   });
 
   it('says the two refusals of the server in words', () => {
-    const conflict = (reason: string) => new ApiError(409, { contract_version: '1.47.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-l-2', retryable: false, details: { conflict_reason: reason } }, null);
+    const conflict = (reason: string) => new ApiError(409, { contract_version: '1.48.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-l-2', retryable: false, details: { conflict_reason: reason } }, null);
     expect(layoutFailure(conflict('no_layout_revision'), true).detail).toContain('набор моделей ещё не сохранён');
     expect(layoutFailure(conflict('provider_source_not_database'), true).detail).toContain('не из базы данных');
     expect(layoutFailure(conflict('something_new'), true).detail).not.toContain('something_new');
@@ -463,9 +463,9 @@ describe('the comparison of versions in the layout (`CMP-WEB-01`)', () => {
 
   it('fills «Только Codex» and «Только Claude» with their tables, and each kind with its own limit and window', () => {
     expect(comparisonKitCells('codex_only', []).map((c) => [c.work_kind, c.model_id, c.effort, c.max_output_tokens, c.timeout_seconds])).toEqual([
-      ['comparison_pair_check', 'gpt-6-astra', 'high', 1200, 900],
+      ['comparison_pair_check', 'gpt-6-luna', 'high', 1200, 900],
       ['comparison_sheet_changes', 'gpt-6.1-sol', 'high', 8192, 1800],
-      ['comparison_spec', 'gpt-6-astra', 'high', 32000, 900],
+      ['comparison_spec', 'gpt-6-luna', 'high', 32000, 900],
       ['comparison_report', 'gpt-6.1-sol', 'high', 8000, 2400],
     ]);
     expect(comparisonKitCells('claude_only', []).map((c) => [c.work_kind, c.model_id, c.effort, c.max_output_tokens, c.timeout_seconds])).toEqual([
@@ -484,12 +484,12 @@ describe('the comparison of versions in the layout (`CMP-WEB-01`)', () => {
   });
 
   it('counts the comparison models of a set when it decides whether the set can be offered', () => {
-    // Astra at «высокое» is only in the comparison cells of «Только Codex»: the six rows and the blocks scheme use it at «среднее».
-    const noAstraHigh: ModelCatalogue = { ...CATALOGUE, items: CATALOGUE.items.map((e) => (e.model_id === 'gpt-6-astra' ? { ...e, efforts: ['low', 'medium'] } : e)) };
+    // Luna is only in the comparison cells of «Только Codex» (at «высокое»; `R-153m`): no row and no blocks scheme uses it.
+    const noLunaHigh: ModelCatalogue = { ...CATALOGUE, items: CATALOGUE.items.map((e) => (e.model_id === 'gpt-6-luna' ? { ...e, efforts: ['low', 'medium'] } : e)) };
     expect(kitIsOffered('codex_only', CATALOGUE, ALL_MODELS)).toBe(true);
-    expect(kitIsOffered('codex_only', noAstraHigh, ALL_MODELS)).toBe(false);
-    expect(kitIsOffered('claude_only', noAstraHigh, ALL_MODELS)).toBe(true);
-    expect([...kitModelIds('codex_only')].sort()).toEqual(['gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol']);
+    expect(kitIsOffered('codex_only', noLunaHigh, ALL_MODELS)).toBe(false);
+    expect(kitIsOffered('claude_only', noLunaHigh, ALL_MODELS)).toBe(true);
+    expect([...kitModelIds('codex_only')].sort()).toEqual(['gpt-6-astra', 'gpt-6-luna', 'gpt-6-sol', 'gpt-6.1-sol']);
   });
 
   it('reads the lines of the revision in force in the order of the kinds, and none for a revision that stored none', () => {

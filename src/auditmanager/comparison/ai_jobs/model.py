@@ -95,6 +95,7 @@ __all__ = [
     "WAIT_REASONS",
     "WAIT_RUNNER_OFFLINE",
     "cell_document",
+    "cell_key_document",
     "cell_of_document",
     "digest_of",
     "work_kind_of",
@@ -168,6 +169,15 @@ def cell_document(cell: "CellSettings") -> dict[str, Any]:
         "work_kind": cell.row, "model_id": cell.model_id, "effort": cell.effort,
         "max_output_tokens": cell.max_output_tokens, "timeout_seconds": cell.timeout_seconds,
     }
+
+
+def cell_key_document(cell: "CellSettings | None") -> dict[str, Any] | None:
+    """What a frozen cell adds to the content key of a stored answer (`D-675`): the model, the effort and the answer limit it asked for -- not the
+    timeout, which changes no answer. ``None`` for a job with no cell: its key is the key it always had, byte for byte (a method adds nothing
+    to its key document then)."""
+    if cell is None:
+        return None
+    return {"model_id": cell.model_id, "effort": cell.effort, "max_output_tokens": cell.max_output_tokens}
 
 
 def cell_of_document(document: Mapping[str, Any]) -> "CellSettings":

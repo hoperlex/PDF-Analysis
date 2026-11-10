@@ -9,11 +9,16 @@ Every guard here has been shown able to fail: the break-it-once runs of `HOSTS-E
 retry of ``outcome_unknown``, a retry outside the four classes, an unbounded retry, a leg failure that aborts the batch or skips the judge,
 a judge that rewrites a leg's observation, the role dropped from the call identity, the cell resolved by the row alone) and record that this
 file turns red.
+
+The per-run leg breaker of D-662 (a leg that failed after its retries in three consecutive batches is no longer asked) is held to the same
+rule: its break-it-once run is recorded in the commit that added it.
 """
 
 from __future__ import annotations
 
 import json
+from collections import Counter
+from copy import deepcopy
 from dataclasses import replace
 from hashlib import sha256
 from types import SimpleNamespace as NS
@@ -142,6 +147,7 @@ class Harness:
         self.plan = layout.FrozenStagePlan(REVISION, kit, tuple(replace(c, access=access) for c in cells))
         self.answer, self.reported, self.log, self.sleeps, self.unit_keys, self.ambiguous = answer, reported, [], [], [], False
         self.checkpoints: list[str] = []
+        self.stop_at_window: int | None = None
         self.adapters: dict[str, CellAdapter] = {}
         self.jobs, self.journal, self.saved = Jobs(), Journal(), []
         self.blobs: dict[str, bytes] = {}
@@ -204,6 +210,8 @@ class Harness:
 
     def checkpoint(self, boundary: str) -> None:
         self.checkpoints.append(boundary)
+        if self.stop_at_window is not None and boundary == "extended_v3_window" and self.checkpoints.count(boundary) > self.stop_at_window:
+            raise Interrupted(boundary)
 
     def run_v2(self, monkeypatch: pytest.MonkeyPatch, blocks: int = 10) -> dict[str, Any]:
         """The accepted v2 plan: one flat loop, eight images a batch, no batch receipts."""
@@ -235,8 +243,28 @@ class Harness:
                   "visual_only": True, "primary_text_status": "pending", **extra}
         return runtime._run_workflow_v2(Session(), run=self.run, window_context=window, full_document=False, **self.common(docs))
 
+    def run_v3_run(self, monkeypatch: pytest.MonkeyPatch, blocks: int = 32, *, resume: dict[str, Any] | None = None) -> dict[str, Any]:
+        """The whole v3 run of ``blocks`` images, sixteen a window, up to the end of its block analysis (``visual_only``, the first pass of
+        production); ``resume`` is the state a previous attempt saved. This is the path that lends one breaker to every window."""
+        self.checkpoints = []
+        docs, _ = self.documents(blocks)
+        self._wire(monkeypatch, docs)
+        windows = (blocks + 15) // 16
+        policy = {"enabled": True, "plan_version": "extended-review-v3", "max_blocks": 16 * windows, "window_size": 16, "max_windows": windows,
+                  "text_page_limit": 16, "review": True, "review_scope": "full_document", "section_code": "AR",
+                  "rules_sha256": extended_review_bundle_digest("AR"), **extended_coverage_policy()}
+        kwargs = self.common(docs)
+        kwargs["outputs"] = NS(refs={role: NS(blob_id=role, sha256=sha256(self.blobs[role]).hexdigest(), size_bytes=len(self.blobs[role]))
+                                     for role in docs})
+        return runtime._run_workflow_v3(Session(), run=self.run, policy=policy, resume_state=resume, visual_only=True, bind_native=None,
+                                        **kwargs)
+
     def calls(self) -> list[str]:
         return [cell_key for cell_key, _ in self.log]
+
+
+class Interrupted(Exception):
+    """The attempt dies here. It is not a ``DomainError``, so no layer of the workflow turns it into a failed window."""
 
 
 class Session:
@@ -537,6 +565,239 @@ def test_a_refused_judge_reply_is_repaired_once_on_the_judge_cell_and_a_refused_
     assert phases == ["v3:w001:blocks:0:leg1", "v3:w001:blocks:0:leg1:repair:1", "v3:w001:blocks:0:judge", "v3:w001:blocks:0:judge:repair:1"]
     batch = next(b for b in state["batches"] if b["procedure"] == "block_analysis")
     assert [a["cell"] for a in batch["repair_attempts"]] == ["blocks:leg1", "blocks:judge"] and batch["status"] == "completed"
+
+
+# --- the per-run leg breaker (D-662) -----------------------------------------------------------------------------------------
+#
+# Batches are numbered across the run: eight images each, two to a window, so batch 2 is the first of window w001. A leg that fails
+# is asked 1 + 5 times, 30 s apart (150 s a batch); the breaker exists so that a persistently failing leg stops costing that.
+
+
+def batch_of(request: Any) -> int:
+    return (json.loads(request.body["messages"][0]["content"])["sources"][0]["page_number"] - 1) // 8
+
+
+def leg_fails(cell_key: str, batches: set[int] | None = None, klass: str = "rate_limited", base: Callable = default_answer):
+    """``cell_key`` fails with ``klass`` on the given batches of the run (on every batch when ``None``)."""
+    def answer(key, request, nth):
+        if key == cell_key and (batches is None or batch_of(request) in batches):
+            return dispatch_error(klass)
+        return base(key, request, nth)
+    return answer
+
+
+def block_batches(state: dict[str, Any]) -> list[dict[str, Any]]:
+    return [b for b in state["batches"] if b["procedure"] == "block_analysis"]
+
+
+def asked(harness: Harness, cell_key: str) -> dict[int, int]:
+    return dict(Counter(batch_of(r) for k, r in harness.log if k == cell_key))
+
+
+def breaker_of(state: dict[str, Any]) -> dict[str, Any]:
+    return state["block_ensemble"]["breaker"]["legs"]
+
+
+def breaker_doc(role: str = "leg1", model: str = ASTRA, streak=((16, 0), (16, 1), (32, 0)), frm=(16, 0), at=(32, 0)) -> dict[str, Any]:
+    return {"format": "block-leg-breaker/1", "legs": {role: {"model_id": model, "streak": [list(p) for p in streak], "open": {
+        "model_id": model, "consecutive": len(streak), "from": list(frm), "at": list(at), "batch": "w002:blocks:0"}}}}
+
+
+def resumed_with(saved: dict[str, Any], breaker: dict[str, Any]) -> dict[str, Any]:
+    state = deepcopy(saved)
+    state["block_ensemble"] = {"breaker": breaker}
+    return state
+
+
+def test_the_breaker_threshold_is_three_batches():
+    assert runtime.LEG_BREAKER_CONSECUTIVE_BATCHES == 3
+
+
+def test_the_breaker_opens_after_three_consecutive_failed_batches_and_the_fourth_asks_only_the_other_leg(monkeypatch):
+    harness = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg1"))
+    state = harness.run_v3_run(monkeypatch, blocks=32)                 # two windows, four batches
+    assert asked(harness, "blocks:leg1") == {0: 6, 1: 6, 2: 6}, "three batches pay their five retries; the fourth does not ask the leg"
+    assert asked(harness, "blocks:leg2") == {0: 1, 1: 1, 2: 1, 3: 1} and asked(harness, "blocks:judge") == {0: 1, 1: 1, 2: 1, 3: 1}
+    assert sum(harness.sleeps) == 3 * 150, "the fourth batch waits for nothing"
+    batches = block_batches(state)
+    assert [b["status"] for b in batches] == ["partial"] * 4
+    assert [b["reason"] for b in batches] == ["block_ensemble_leg_failed"] * 3 + ["block_ensemble_leg_skipped"]
+    # the fourth batch: leg1 is named skipped and made no call, leg2 and the judge answered, the judge only searched for gaps
+    fourth = batches[3]
+    assert fourth["cells"]["leg1"] == {"cell": "blocks:leg1", "status": "skipped", "attempts": 0, "reason": "block_ensemble_leg_breaker_open"}
+    assert fourth["cells"]["leg2"]["status"] == "completed" and fourth["cells"]["judge"]["status"] == "completed"
+    assert fourth["reconciliation"]["skipped_legs"] == ["leg1"] and fourth["reconciliation"]["failed_legs"] == []
+    assert fourth["reconciliation"]["mode"] == "gap_search_only"
+    judge = json.loads([r for k, r in harness.log if k == "blocks:judge"][3].body["messages"][0]["content"])
+    assert judge["legs_failed"] == ["leg1"] and [leg["leg"] for leg in judge["legs"]] == ["leg2"] and judge["mode"] == "gap_search_only"
+    # coverage and the call counts stay honest: a skipped leg is not a call, and a batch that lost a leg is not covered
+    phases = [p["parameters"]["extended_phase"] for p in harness.jobs.prepared]
+    assert "v3:w001:blocks:1:leg1" not in phases and "v3:w001:blocks:1:leg2" in phases
+    assert state["phase_call_counts"]["block_analysis"]["completed_calls"] == 8
+    assert state["coverage"]["blocks_processed"] == 0 and state["coverage"]["blocks_remaining"] == 32
+    # journalled once, on the batch that opened it, and kept in the run's saved state
+    event = batches[2]["reconciliation"]["leg_breaker"]
+    assert event == {"leg": "leg1", "model_id": ASTRA, "consecutive": 3, "from": [0, 0], "at": [16, 0], "batch": "w001:blocks:0"}
+    assert ["leg_breaker" in b["reconciliation"] for b in batches] == [False, False, True, False]
+    saved = harness.saved[-1][1]
+    assert saved["block_ensemble"]["breaker"]["legs"]["leg1"]["open"] == {k: v for k, v in event.items() if k != "leg"}
+    assert "leg2" not in breaker_of(saved)
+
+
+def test_a_success_in_between_resets_the_count(monkeypatch):
+    # fails on batches 0 and 1, answers batch 2, fails on 3, 4 and 5: the count restarts at 2, so it opens on 5 and not on 3
+    harness = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg1", {0, 1, 3, 4, 5}))
+    state = harness.run_v3_run(monkeypatch, blocks=64)                 # four windows, eight batches
+    assert asked(harness, "blocks:leg1") == {0: 6, 1: 6, 2: 1, 3: 6, 4: 6, 5: 6}, "batches 6 and 7 are not asked; 4 and 5 still are"
+    batches = block_batches(state)
+    assert [b.get("reason") for b in batches] == ["block_ensemble_leg_failed"] * 2 + [None] + ["block_ensemble_leg_failed"] * 3 + [
+        "block_ensemble_leg_skipped"] * 2
+    assert batches[5]["reconciliation"]["leg_breaker"] == {"leg": "leg1", "model_id": ASTRA, "consecutive": 3, "from": [16, 1], "at": [32, 1],
+                                                           "batch": "w002:blocks:1"}
+    assert sum(harness.sleeps) == 5 * 150
+
+
+def test_an_unknown_outcome_never_opens_the_breaker_and_is_not_counted(monkeypatch):
+    def answer(key, request, nth):
+        if key == "blocks:leg1" and batch_of(request) == 2:
+            return dispatch_error("outcome_unknown")
+        return leg_fails("blocks:leg1", {0, 1, 4})(key, request, nth)
+
+    harness = Harness(monkeypatch, kit="codex_only", answer=answer)
+    state = harness.run_v3_run(monkeypatch, blocks=48)                 # three windows
+    # batch 2 is the unknown outcome: asked once, never again, no judge, its window failed. It is neither a failure to count nor a success
+    # to reset on: the third retryable failure is batch 4, and the breaker opens there, not before
+    assert asked(harness, "blocks:leg1") == {0: 6, 1: 6, 2: 1, 4: 6}
+    assert 2 not in asked(harness, "blocks:judge") and harness.journal.events.count(("unknown", None)) == 1
+    assert next(p for p in state["windows"][1]["procedures"] if p["id"] == "block_analysis")["status"] == "failed"
+    assert breaker_of(state)["leg1"]["open"] == {"model_id": ASTRA, "consecutive": 3, "from": [0, 0], "at": [32, 0], "batch": "w002:blocks:0"}
+    assert sum(harness.sleeps) == 3 * 150
+
+
+def test_a_leg_that_only_ever_fails_with_an_unknown_outcome_is_asked_in_every_window(monkeypatch):
+    harness = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg1", klass="outcome_unknown"))
+    state = harness.run_v3_run(monkeypatch, blocks=64)
+    assert asked(harness, "blocks:leg1") == {0: 1, 2: 1, 4: 1, 6: 1}, "one ask a window, the first batch of each, never retried and never skipped"
+    assert harness.sleeps == [] and "block_ensemble" not in state
+
+
+def test_when_the_other_leg_trips_too_the_last_error_propagates_and_the_window_fails_as_today(monkeypatch):
+    # leg1 fails everywhere and opens on batch 2; leg2 then fails on every batch from 3 on, with nobody left to answer
+    harness = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg2", {3, 4, 5}, base=leg_fails("blocks:leg1")))
+    state = harness.run_v3_run(monkeypatch, blocks=48)
+    assert asked(harness, "blocks:leg1") == {0: 6, 1: 6, 2: 6}
+    assert asked(harness, "blocks:leg2") == {0: 1, 1: 1, 2: 1, 3: 6, 4: 6}, "the surviving leg keeps its retries; the breaker does not open on it"
+    assert asked(harness, "blocks:judge") == {0: 1, 1: 1, 2: 1}, "a batch no leg answered has no judge"
+    failed = [(w["window_id"], next(p for p in w["procedures"] if p["id"] == "block_analysis")["status"]) for w in state["windows"]]
+    assert failed == [("w000", "partial"), ("w001", "failed"), ("w002", "failed")]
+    third = next(b for b in block_batches(state) if b["index"] == 1 and b["window_id"] == "w001")
+    assert third["cells"]["leg1"]["status"] == "skipped" and third["cells"]["leg2"]["status"] == "failed" and third["cells"]["leg2"]["attempts"] == 6
+    assert set(breaker_of(state)) == {"leg1"}, "no state for the leg that was never silenced"
+
+
+def test_a_batch_in_which_every_leg_failed_counts_for_no_leg(monkeypatch):
+    harness = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg2", base=leg_fails("blocks:leg1")))
+    state = harness.run_v3_run(monkeypatch, blocks=48)
+    assert asked(harness, "blocks:leg1") == asked(harness, "blocks:leg2") == {0: 6, 2: 6, 4: 6}, "the first batch of each window, nothing skipped"
+    assert "block_ensemble" not in state, "no leg answered, so nothing says either of them is the bad one"
+    assert {n for n in asked(harness, "blocks:judge")} == set()
+
+
+def test_a_run_with_one_leg_never_opens_it_and_never_silences_it(monkeypatch):
+    harness = Harness(monkeypatch, kit="claude_only", answer=leg_fails("blocks:leg1"))
+    state = harness.run_v3_run(monkeypatch, blocks=48)
+    assert asked(harness, "blocks:leg1") == {0: 6, 2: 6, 4: 6} and "block_ensemble" not in state
+    # a saved breaker that names the only leg open does not silence it
+    healthy = Harness(monkeypatch, kit="claude_only")
+    healthy.run_v3_run(monkeypatch, blocks=32)
+    resumed = Harness(monkeypatch, kit="claude_only")
+    resumed.run_v3_run(monkeypatch, blocks=32, resume=resumed_with(healthy.saved[-1][1], breaker_doc(model=OPUS, frm=(0, 0), at=(0, 1))))
+    assert asked(resumed, "blocks:leg1") == {0: 1, 1: 1, 2: 1, 3: 1}
+
+
+def test_a_resumed_attempt_keeps_the_open_breaker_and_never_asks_the_leg_again(monkeypatch):
+    first = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg1"))
+    first.run_v3_run(monkeypatch, blocks=32)
+    saved = first.saved[-1][1]
+    assert breaker_of(saved)["leg1"]["open"] is not None
+    second = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg1"))
+    state = second.run_v3_run(monkeypatch, blocks=32, resume=json.loads(json.dumps(saved)))
+    assert "blocks:leg1" not in second.calls() and second.sleeps == [], "no ask and no wait: the state came with the resume"
+    assert asked(second, "blocks:leg2") == {0: 1, 1: 1, 2: 1, 3: 1}
+    assert [b["reason"] for b in block_batches(state)] == ["block_ensemble_leg_skipped"] * 4
+    assert breaker_of(state) == breaker_of(saved), "and it is handed on to the next pass"
+
+
+def test_a_batch_is_counted_once_however_often_a_resumed_attempt_runs_it_again(monkeypatch):
+    first = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg1"))
+    first.stop_at_window = 1                                           # the attempt dies as the second window is about to start
+    with pytest.raises(Interrupted):
+        first.run_v3_run(monkeypatch, blocks=32)
+    saved = first.saved[-1][1]
+    assert breaker_of(saved)["leg1"]["streak"] == [[0, 0], [0, 1]] and breaker_of(saved)["leg1"]["open"] is None
+    second = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg1"))
+    state = second.run_v3_run(monkeypatch, blocks=32, resume=json.loads(json.dumps(saved)))
+    # the first window runs again and fails its two batches again: they are the same two, so the breaker opens on the third batch, as in
+    # an attempt that was never interrupted, and not on the first one it meets
+    assert asked(second, "blocks:leg1") == {0: 6, 1: 6, 2: 6}
+    assert breaker_of(state)["leg1"]["open"] == {"model_id": ASTRA, "consecutive": 3, "from": [0, 0], "at": [16, 0], "batch": "w001:blocks:0"}
+
+
+def test_a_window_run_again_before_the_streak_keeps_the_reply_its_leg_already_gave(monkeypatch):
+    healthy = Harness(monkeypatch, kit="codex_only")
+    healthy.run_v3_run(monkeypatch, blocks=32)
+    resumed = Harness(monkeypatch, kit="codex_only")
+    state = resumed.run_v3_run(monkeypatch, blocks=32, resume=resumed_with(healthy.saved[-1][1], breaker_doc(frm=(16, 0), at=(32, 0))))
+    assert asked(resumed, "blocks:leg1") == {0: 1, 1: 1}, "batches 0 and 1 are before the first failure of the streak: asked, and answered"
+    assert [b.get("reason") for b in block_batches(state)] == [None, None, "block_ensemble_leg_skipped", "block_ensemble_leg_skipped"]
+
+
+def test_a_saved_breaker_of_another_model_is_not_honoured(monkeypatch):
+    healthy = Harness(monkeypatch, kit="codex_only")
+    healthy.run_v3_run(monkeypatch, blocks=32)
+    resumed = Harness(monkeypatch, kit="codex_only")
+    resumed.run_v3_run(monkeypatch, blocks=32, resume=resumed_with(healthy.saved[-1][1], breaker_doc(model="gpt-6-old", frm=(0, 0), at=(0, 1))))
+    assert asked(resumed, "blocks:leg1") == {0: 1, 1: 1, 2: 1, 3: 1}
+
+
+@pytest.mark.parametrize("saved", [
+    breaker_doc("leg1") | {"legs": breaker_doc("leg1")["legs"] | breaker_doc("leg2", model=SOL)["legs"]},   # both legs open
+    {"format": "block-leg-breaker/0", "legs": {}},
+    {"format": "block-leg-breaker/1", "legs": {"judge": {"model_id": SOL61, "streak": [], "open": None}}},
+    {"format": "block-leg-breaker/1", "legs": {"leg1": {"model_id": ASTRA, "streak": [[0]], "open": None}}},
+    {"format": "block-leg-breaker/1", "legs": {"leg1": {"model_id": ASTRA, "streak": [], "open": None, "extra": 1}}},
+    {"format": "block-leg-breaker/1", "legs": []},
+    {"format": "block-leg-breaker/1", "legs": {}, "extra": 1},
+    "open",
+    {},
+])
+def test_a_saved_breaker_that_cannot_be_trusted_is_dropped_loudly_and_the_legs_are_asked_again(monkeypatch, saved):
+    assert runtime._restore_breaker(saved) == ({"format": "block-leg-breaker/1", "legs": {}}, False)
+    healthy = Harness(monkeypatch, kit="codex_only")
+    healthy.run_v3_run(monkeypatch, blocks=32)
+    resumed = Harness(monkeypatch, kit="codex_only")
+    state = resumed.run_v3_run(monkeypatch, blocks=32, resume=resumed_with(healthy.saved[-1][1], saved))
+    assert "block_ensemble_breaker_state_invalid" in state["warnings"]
+    assert asked(resumed, "blocks:leg1") == {0: 1, 1: 1, 2: 1, 3: 1} and asked(resumed, "blocks:leg2") == {0: 1, 1: 1, 2: 1, 3: 1}
+
+
+def test_a_trustworthy_saved_breaker_is_restored_as_it_was_and_nothing_saved_is_an_empty_one():
+    assert runtime._restore_breaker(None) == ({"format": "block-leg-breaker/1", "legs": {}}, True)
+    saved = breaker_doc()
+    restored, valid = runtime._restore_breaker(saved)
+    assert valid and restored == saved and restored is not saved and restored["legs"]["leg1"] is not saved["legs"]["leg1"]
+
+
+def test_a_run_without_windows_keeps_the_breaker_beside_its_batches(monkeypatch):
+    monkeypatch.setattr(runtime, "LEG_BREAKER_CONSECUTIVE_BATCHES", 1)
+    harness = Harness(monkeypatch, kit="codex_only", answer=leg_fails("blocks:leg1"))
+    result = harness.run_v2(monkeypatch, blocks=10)
+    assert asked(harness, "blocks:leg1") == {0: 6}, "the second batch does not ask the leg"
+    ensemble = result["block_ensemble"]
+    assert ensemble["batches"][0]["leg_breaker"]["batch"] == "v2:blocks:0" and ensemble["batches"][1]["skipped_legs"] == ["leg1"]
+    assert ensemble["breaker"]["legs"]["leg1"]["open"]["consecutive"] == 1
+    procedure = next(p for p in result["procedures"] if p["id"] == "block_analysis")
+    assert (procedure["status"], procedure["reason"]) == ("partial", "block_ensemble_leg_failed")
 
 
 # --- the judge: request, reply, reconciliation -------------------------------------------------------------------------------

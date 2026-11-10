@@ -197,7 +197,7 @@ class SheetChangesHandler:
             if pair.subject_key is None:
                 session.commit()
                 return Failed(REASON_NO_RESULT)
-            key = keys_for([pair], job.pinned_model)[pair_id]
+            key = keys_for([pair], job.pinned_model, job.cell)[pair_id]
             self._repo.ensure_item(session, job_id=job_id, project_uid=job.project_uid, pair_id=pair_id)
             self._repo.requeue_item(session, job_id=job_id, pair_id=pair_id)
             self._repo.move_item(session, job_id=job_id, pair_id=pair_id, from_states=("queued",), to_state="running")

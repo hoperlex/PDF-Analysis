@@ -43,15 +43,19 @@ OPUS_5_5_MODEL_ID = "claude-opus-5-5"
 SONNET_5_5_MODEL_ID = "claude-sonnet-5-5"
 CODEX_6_1_SOL_MODEL_ID = "gpt-6.1-sol"
 CODEX_ASTRA_MODEL_ID = "gpt-6-astra"
+#: `HOSTS-L1` (`D-667`, owner ruling `R-153m`): the eighth pin, the original's model of the sheet pair check and the whole-specification
+#: comparison. Standard text-token rates read from https://developers.openai.com/api/docs/models/gpt-6-luna on 2026-11-10.
+CODEX_LUNA_MODEL_ID = "gpt-6-luna"
 PINNED_MODEL_IDS = {
     PRIMARY_MODEL_ID, CHEAPER_MODEL_ID, CODEX_MODEL_ID,
-    OPUS_5_5_MODEL_ID, SONNET_5_5_MODEL_ID, CODEX_6_1_SOL_MODEL_ID, CODEX_ASTRA_MODEL_ID,
+    OPUS_5_5_MODEL_ID, SONNET_5_5_MODEL_ID, CODEX_6_1_SOL_MODEL_ID, CODEX_ASTRA_MODEL_ID, CODEX_LUNA_MODEL_ID,
 }
 NEW_PIN_RATES_USD_PER_MTOK = {
     OPUS_5_5_MODEL_ID: (4.0, 20.0),
     SONNET_5_5_MODEL_ID: (2.0, 10.0),
     CODEX_6_1_SOL_MODEL_ID: (2.0, 10.0),
     CODEX_ASTRA_MODEL_ID: (10.0, 50.0),
+    CODEX_LUNA_MODEL_ID: (0.1, 0.5),
 }
 PRIMARY_INPUT_PER_MTOK_USD = 5.0
 PRIMARY_OUTPUT_PER_MTOK_USD = 25.0
@@ -72,7 +76,7 @@ def test_the_lock_document_still_says_what_this_file_pins() -> None:
     assert new == NEW_PIN_RATES_USD_PER_MTOK
 
 
-def test_the_loaded_lock_carries_exactly_the_seven_pinned_identities() -> None:
+def test_the_loaded_lock_carries_exactly_the_eight_pinned_identities() -> None:
     lock = provider_lock()
     assert set(lock.models) == PINNED_MODEL_IDS
     assert lock.primary_model_id == PRIMARY_MODEL_ID

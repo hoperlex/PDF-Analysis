@@ -203,6 +203,82 @@ LEG_RETRY_CLASSES = frozenset({"not_sent", "rate_limited", "proxy_unavailable", 
 #: The wait is taken in slices so that a cancelled run is noticed (the checkpoint re-reads the attempt and the run) within seconds.
 _RETRY_WAIT_SLICE_SECONDS = 5
 _sleep = time.sleep
+#: The per-run leg breaker (D-662, approved by the owner 2026-11-10; the original has none). A leg that ended **failed after its retries**
+#: in this many consecutive batches while the other leg answered is no longer asked for the rest of the run: the next batches go straight to
+#: the surviving leg and the judge only searches for gaps, as it does when a leg fails. Without it a persistently failing model costs
+#: ``LEG_RETRY_ATTEMPTS`` x ``LEG_RETRY_DELAY_SECONDS`` = 150 s on every batch and can push the attempt towards its 7200 s cap.
+LEG_BREAKER_CONSECUTIVE_BATCHES = 3
+_BREAKER_FORMAT = "block-leg-breaker/1"
+_BREAKER_LEGS = ("leg1", "leg2")
+
+
+def _new_breaker() -> dict:
+    return {"format": _BREAKER_FORMAT, "legs": {}}
+
+
+def _restore_breaker(saved) -> tuple[dict, bool]:
+    """The breaker of a resumed attempt: ``(breaker, valid)``. ``saved`` is ``None`` when nothing was saved (valid, empty). A saved breaker of
+    another shape, or one that has silenced both legs, is **not** trusted: the caller gets an empty breaker and ``valid`` false, and says so
+    (a damaged breaker must cost a leg its retries again, never silence a leg on a guess)."""
+    if saved is None:
+        return _new_breaker(), True
+    try:
+        if saved["format"] != _BREAKER_FORMAT or set(saved) != {"format", "legs"} or not isinstance(saved["legs"], dict):
+            raise ValueError()
+        legs = {}
+        for role, entry in saved["legs"].items():
+            if (role not in _BREAKER_LEGS or set(entry) != {"model_id", "streak", "open"} or not isinstance(entry["model_id"], str)
+                    or not isinstance(entry["streak"], list)
+                    or any(not isinstance(p, list) or len(p) != 2 or any(type(n) is not int for n in p) for p in entry["streak"])):
+                raise ValueError()
+            opened = entry["open"]
+            if opened is not None:
+                if (set(opened) != {"model_id", "consecutive", "from", "at", "batch"} or type(opened["consecutive"]) is not int
+                        or opened["model_id"] != entry["model_id"] or not isinstance(opened["batch"], str)
+                        or any(not isinstance(opened[k], list) or len(opened[k]) != 2 or any(type(n) is not int for n in opened[k])
+                               for k in ("from", "at"))):
+                    raise ValueError()
+            legs[role] = {"model_id": entry["model_id"], "streak": deepcopy(entry["streak"]), "open": deepcopy(opened)}
+        if sum(entry["open"] is not None for entry in legs.values()) > 1:
+            raise ValueError()
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return _new_breaker(), False
+    return {"format": _BREAKER_FORMAT, "legs": legs}, True
+
+
+def _breaker_skips(breaker, role, model_id, position) -> bool:
+    """Whether the batch at ``position`` (``[window offset, batch index]``) does not ask ``role``. Only the batches from the first failure
+    of the streak that opened the breaker on: an earlier batch of a re-run window keeps the reply the leg already gave it."""
+    entry = breaker["legs"].get(role)
+    return (entry is not None and entry["open"] is not None and entry["model_id"] == model_id
+            and position >= entry["open"]["from"])
+
+
+def _observe_breaker(breaker, *, position, batch, cells, answered, failed):
+    """Fold the end of a batch's legs into the breaker; the opening event (``leg``, ``model_id``, ``consecutive``...) or ``None``.
+
+    Evidence is a batch in which a leg **failed after its retries while another leg answered**. A batch in which no leg answered propagates
+    and counts for none (it is today's failure, and the breaker would silence a leg on the word of a run with no survivor); a leg that
+    answered, even with a reply refused after repair, ends its streak. A leg already open is not touched. Opening needs an answering leg,
+    and an open leg never answers: the breaker cannot silence both. A batch is counted once however often a resumed attempt re-runs it."""
+    for role in answered:
+        entry = breaker["legs"].get(role)
+        if entry is not None and entry["open"] is None:
+            entry["streak"] = []
+    event = None
+    for role in failed:
+        entry = breaker["legs"].setdefault(role, {"model_id": cells[role], "streak": [], "open": None})
+        if entry["model_id"] != cells[role]:
+            entry.update(model_id=cells[role], streak=[], open=None)
+        if entry["open"] is not None:
+            continue
+        if position not in entry["streak"]:
+            entry["streak"].append(list(position))
+        if len(entry["streak"]) >= LEG_BREAKER_CONSECUTIVE_BATCHES:
+            entry["open"] = {"model_id": cells[role], "consecutive": len(entry["streak"]), "from": list(entry["streak"][0]),
+                             "at": list(position), "batch": batch}
+            event = {"leg": role, **deepcopy(entry["open"])}
+    return event
 
 
 def _block_roles(run):
@@ -253,7 +329,7 @@ def _cell_receipt(state, index, role):
 
 
 def _ensemble_block_batch(*, run, binding, state, call, roles, section, index, batch, payload, crops, builder, extra, window_context,
-                          policy, checkpoint):
+                          policy, checkpoint, breaker):
     """One block batch of the ensemble: ``(observations, partial_reason)``.
 
     * each leg asks the ordinary block request on its own cell, retried as :data:`LEG_RETRY_CLASSES` allow; a leg whose retries are spent
@@ -262,15 +338,26 @@ def _ensemble_block_batch(*, run, binding, state, call, roles, section, index, b
     * the judge then reads the batch with the observations of the legs that answered (and the names of those that did not). It is asked
       once. If it fails on a harmless class, or its reply holds nothing valid, the batch is partial and the legs' observations stand
       unreviewed; any other failure propagates;
-    * the observations are the legs' as they wrote them (annotated with how the judge related them) and the judge's gap observations.
+    * the observations are the legs' as they wrote them (annotated with how the judge related them) and the judge's gap observations;
+    * a leg the run's ``breaker`` has opened (:data:`LEG_BREAKER_CONSECUTIVE_BATCHES`, D-662) is not asked: it makes no call, the batch is
+      partial with ``block_ensemble_leg_skipped`` and the judge is told the leg did not answer, as for a failed one. The breaker never
+      opens for ``outcome_unknown`` (that propagates before it is consulted), never on a batch no leg answered, and never silences every
+      leg.
     """
     allowed = {s["source_id"] for s in batch}
     identity = f"blocks:{index}"
     v3 = window_context is not None
     cells = {role: _cell(binding, "blocks", role).config.model_id for role in roles}
     legs = tuple(role for role in roles if role != "judge")
-    leg_items, failed, last_error, refused_any = {}, [], None, False
+    position = [window_context["offset"] if v3 else 0, index]
+    silent = {role for role in legs if _breaker_skips(breaker, role, cells[role], position)}
+    if len(silent) == len(legs):
+        silent = set()  # the breaker never silences every leg: with no leg asked there would be no batch at all
+    leg_items, failed, skipped, last_error, refused_any = {}, [], [], None, False
     for role in legs:
+        if role in silent:
+            skipped.append(role)
+            continue
         request = attach_images(builder(**_kw(binding, "blocks", role), run_id=run.run_id, phase="blocks", section=section,
                                         payload=payload, **extra), crops)
         # A leg's request differs from its neighbour's by the model alone; the scope the transport may deduplicate on says the leg.
@@ -295,12 +382,20 @@ def _ensemble_block_batch(*, run, binding, state, call, roles, section, index, b
         cell = _cell_receipt(state, index, role)
         if cell is not None:
             cell.update(status="partial" if refused else "completed", attempts=1 + retries, observations=len(parsed))
+    for role in skipped:  # written after the legs: the batch's receipt is made by its first call
+        cell = _cell_receipt(state, index, role)
+        if cell is not None:
+            for stale in ("error_code", "dispatch_class", "request_sha256", "response_received", "response_sha256", "observations"):
+                cell.pop(stale, None)
+            cell.update(cell=f"blocks:{role}", status="skipped", attempts=0, reason="block_ensemble_leg_breaker_open")
     if not leg_items:
         raise last_error
+    opened = _observe_breaker(breaker, position=position, batch=f"{window_context['window_id'] if v3 else 'v2'}:{identity}", cells=cells,
+                              answered=list(leg_items), failed=failed)
     refs = block_leg_refs(leg_items)
     judge_records, judge_failed = None, False
     judge_request = attach_images(build_block_judge_request(
-        **_kw(binding, "blocks", "judge"), run_id=run.run_id, section=section, payload=payload, legs=leg_items, failed_legs=failed,
+        **_kw(binding, "blocks", "judge"), run_id=run.run_id, section=section, payload=payload, legs=leg_items, failed_legs=[*failed, *skipped],
         window_id=window_context["window_id"] if v3 else None,
         relaxed_limits=v3 and _bounds_lifted(window_context["policy"])), crops)
     judge_identity = f"{identity}:judge"
@@ -325,12 +420,20 @@ def _ensemble_block_batch(*, run, binding, state, call, roles, section, index, b
             cell.update(status="failed" if judge_failed else "partial" if refused else "completed", attempts=1)
     items, report = reconcile_block_batch(batch=identity, legs=leg_items, cells=cells, judge=judge_records, sources=batch)
     report.update(failed_legs=failed, judge_failed=judge_failed)
+    if skipped:
+        report["skipped_legs"] = skipped
+    if opened is not None:
+        report["leg_breaker"] = opened  # journalled once: on the batch that opened it
     holder = next((row for row in state.get("batches", []) if row.get("procedure") == "block_analysis" and row.get("index") == index), None)
     if holder is not None:
         holder["reconciliation"] = report
     else:
-        state.setdefault("block_ensemble", {"format": report["format"], "cells": cells, "batches": []})["batches"].append(report)
-    reason = ("block_ensemble_leg_failed" if failed else "block_ensemble_judge_failed" if judge_failed
+        ensemble = state.setdefault("block_ensemble", {"format": report["format"], "cells": cells, "batches": []})
+        ensemble["batches"].append(report)
+        if breaker["legs"]:
+            ensemble["breaker"] = deepcopy(breaker)  # a run without windows keeps it beside its batches
+    reason = ("block_ensemble_leg_failed" if failed else "block_ensemble_leg_skipped" if skipped
+              else "block_ensemble_judge_failed" if judge_failed
               else "block_analysis_reply_refused" if refused_any else None)
     return items, reason
 
@@ -932,6 +1035,10 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             state["normative_context_receipts"]={}
     current = None
     used_batches={}
+    # The run's leg breaker (D-662): the parent of a v3 window owns it and lends it to every window; a run without windows keeps its own.
+    breaker=window_context.get("block_breaker") if v3 else None
+    if breaker is None:
+        breaker=_new_breaker()
     def save(status):
         public = {k:v for k,v in state.items() if k not in {"text_items","context_sections"}}
         public["sources"] = [{k:v for k,v in s.items() if k != "context"} for s in state["sources"]]
@@ -1175,7 +1282,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                     parsed, batch_reason = _ensemble_block_batch(run=run, binding=binding, state=state, call=call,
                         roles=block_roles, section=section, index=start//8, batch=batch, payload=payload, crops=crops,
                         builder=builder, extra=extra, window_context=window_context,
-                        policy=window_context["policy"] if v3 else {}, checkpoint=checkpoint)
+                        policy=window_context["policy"] if v3 else {}, checkpoint=checkpoint, breaker=breaker)
                     refused = batch_reason is not None
                 else:
                     request=attach_images(builder(**_kw(binding,"blocks"),run_id=run.run_id,
@@ -1509,6 +1616,15 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             and isinstance(resume_state.get("project_parameters"), dict)
             and resume_state["project_parameters"].get("policy") == policy["project_parameters_policy"]):
         state["project_parameters"] = deepcopy(resume_state["project_parameters"])
+    # The run's leg breaker (D-662) lives in this saved state, so an attempt that resumes it (the second pass included) keeps what the
+    # first one learned. A saved breaker that cannot be trusted is dropped loudly, never silently.
+    saved_breaker=None
+    if resume_state is not None and "block_ensemble" in resume_state:
+        saved_holder=resume_state["block_ensemble"]
+        saved_breaker=saved_holder.get("breaker") if isinstance(saved_holder,dict) else {}
+    breaker,breaker_valid=_restore_breaker(saved_breaker)
+    if not breaker_valid:
+        state["warnings"].append("block_ensemble_breaker_state_invalid")
     state["primary_text_status"]=("pending" if visual_only else "unavailable" if
         isinstance(observations_document,dict) and observations_document.get("input_disposition")=="image_only_no_native_text"
         else "completed" if observations_document is not None else "failed")
@@ -1533,6 +1649,8 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             checkpoint=checkpoint, aggregate=aggregate, save=save)
     def aggregate():
         records=state["windows"]
+        if breaker["legs"]:
+            state["block_ensemble"]={"breaker":breaker}
         source_index={}
         observations=[]
         for record in records:
@@ -1784,7 +1902,7 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 checkpoint=checkpoint,observations_document=window_observations,snapshot_id=snapshot_id,
                 profile_sha256=profile_sha256,bind_native=bind_native,window_context={"window_id":window_id,
                     "offset":index*16,"policy":policy,"global_sha256":global_sha,"visual_only":visual_only,
-                    "project_parameters": state.get("project_parameters"),
+                    "project_parameters": state.get("project_parameters"),"block_breaker":breaker,
                     "primary_text_status":state["primary_text_status"],"saved_visual":visual_windows.get(window_id),
                     "page_count":version.page_count,"known_visual_refusals":known_visual_refusals})
             budget_exhausted=any("cost_budget_exceeded" in str(warning) for warning in record.get("warnings",[]))

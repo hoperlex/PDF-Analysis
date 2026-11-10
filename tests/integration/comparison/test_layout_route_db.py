@@ -21,7 +21,7 @@ What each shows:
    a model is the access the route is made with.
 
 Break-it-once (the lane's mutation script, in a scratch copy of ``src``): without the third branch of ``estimate.read_route`` tests 1, 2, 3 and 6 fail
-(the route is the legacy connection's or ``executor_route_missing``); without the host-aware reading of a system member (``dispatch.member_facts_of``)
+(the route is the legacy connection's or ``executor_route_missing``); without the host-aware reading of a system member (``executors.group_commands._facts``, `D-676`)
 test 2 fails (no member is eligible: the call waits ``runner_offline``).
 """
 
@@ -82,7 +82,7 @@ EXPERT = frozenset({"expert"})
 ROLES = ("admin",)
 ORIGIN = "https://stand.example"
 PACKAGE = AgentPackage(version="0.9.0", sha256="a" * 64, size_bytes=1, path=None)  # type: ignore[arg-type]
-ASTRA, SONNET = "gpt-6-astra", "claude-sonnet-5-5"
+ASTRA, LUNA, SONNET = "gpt-6-astra", "gpt-6-luna", "claude-sonnet-5-5"
 KIND = "comparison_pair_check"
 _RUN = uuid.uuid4().hex[:10]
 _counter = iter(range(1, 100_000))
@@ -415,7 +415,7 @@ def test_the_layout_the_real_service_revises_is_the_layout_the_route_reads_and_t
         admin = str(UserRepository().create_user(session, "cmp-layout-" + uuid.uuid4().hex, "layout-test-password").user_uid)
         AccountRepository().grant_role(session, user_uid=admin, role="admin", granted_by=None)
         session.commit()
-    server(db, "layout-7", report("codex", "api", ASTRA))
+    server(db, "layout-7", report("codex", "api", LUNA))
     service = StagePlanService(session_factory=db.sessions, availability=HostModelAvailability(), provider_source="database")
     wire = layout.comparison_cells_to_wire(cells(comparison_pair_check={"effort": "medium", "max_output_tokens": 900}))
     # « Свой набор »: a named set must keep its table's models and efforts, and the medium effort of the pair check is the owner's own choice
@@ -428,18 +428,18 @@ def test_the_layout_the_real_service_revises_is_the_layout_the_route_reads_and_t
     assert shown.enabled and [item.work_kind.value for item in shown.current.comparison_cells] == list(layout.COMPARISON_KINDS)
     assert shown.current.comparison_cells[0].effort.value == "medium" and shown.current.comparison_cells[0].max_output_tokens == 900
     unserved = set(view["unavailable_cell_keys"])
-    assert "comparison_pair_check:main" not in unserved and "comparison_spec:main" not in unserved, "gpt-6-astra is on the server"
+    assert "comparison_pair_check:main" not in unserved and "comparison_spec:main" not in unserved, "gpt-6-luna is on the server: the pair check and the specification of « Только Codex » name it (R-153m)"
     assert {"comparison_sheet_changes:main", "comparison_report:main"} <= unserved, "gpt-6.1-sol is on no server: named, as the rows' cells are"
 
     s = scene(db)
     with db.sessions() as session:
-        port = HostModelAvailability().availability(session, [ASTRA])[ASTRA]
+        port = HostModelAvailability().availability(session, [LUNA])[LUNA]
     assert (port.subscription, port.api, port.access) == (False, True, "api")
     route = s.service.estimate(s.scope).route
     assert (route.billing, route.cell.effort, route.cell.max_output_tokens) == ("metered", "medium", 900), "the access of the port, the cell of the revision"
-    server(db, "layout-7b", report("codex", "subscription", ASTRA))
+    server(db, "layout-7b", report("codex", "subscription", LUNA))
     with db.sessions() as session:
-        port = HostModelAvailability().availability(session, [ASTRA])[ASTRA]
+        port = HostModelAvailability().availability(session, [LUNA])[LUNA]
     assert (port.subscription, port.access) == (True, "subscription")
     assert s.service.estimate(s.scope).route.billing == "not_metered", "a subscription, once one serves the model, for the route as for the port"
     # the kind whose model no server serves is refused through the same layout

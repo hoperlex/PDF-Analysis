@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy.orm import Session
 
@@ -58,6 +58,9 @@ from auditmanager.comparison.profile.limits import ALGO_VERSION as PAGE_PROFILE_
 from auditmanager.comparison.spend.model import JOB_KEY as SPEND_JOB_KEY
 from auditmanager.comparison.work.repository import ComparisonWorkRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
+
+if TYPE_CHECKING:
+    from auditmanager.analysis.public import CellSettings
 
 __all__ = [
     "ASK_STEP",
@@ -200,7 +203,8 @@ class PairCheckMethod:
         """The plan context of this process: the pinned model of the routed connection answers (``recorded`` in a recorded
         process), the versions are named by their place in the matrix's order."""
         route = self._route_reader(session, work_kind, self._provider_mode)
-        return plan_context(snapshot, project_uid=project_uid, model_identity=route.pinned_model, provider_mode=self._provider_mode)
+        return plan_context(
+            snapshot, project_uid=project_uid, model_identity=route.pinned_model, provider_mode=self._provider_mode, cell=route.cell)
 
     def _questions_for(self, session: Session, snapshot: Snapshot, mode: AiMode, document_uid: str) -> list[Question]:
         if mode is AiMode.START:
@@ -304,10 +308,12 @@ class PairCheckMethod:
         )
 
 
-def plan_context(snapshot: Snapshot, *, project_uid: str, model_identity: str, provider_mode: str) -> PlanContext:
+def plan_context(
+    snapshot: Snapshot, *, project_uid: str, model_identity: str, provider_mode: str, cell: CellSettings | None = None,
+) -> PlanContext:
     return PlanContext(
         project_uid=project_uid, model_identity=model_identity, provider_mode=provider_mode, order=snapshot.order,
-        page_counts=snapshot.page_counts, facts=snapshot.facts, document_title=snapshot.document_title,
+        page_counts=snapshot.page_counts, facts=snapshot.facts, document_title=snapshot.document_title, cell=cell,
     )
 
 

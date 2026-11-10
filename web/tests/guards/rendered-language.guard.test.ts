@@ -478,8 +478,9 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
     word: 'MiB',
     why:
       'A unit symbol. IEC 80000-13 fixes the spelling and it is not localised; the ' +
-      'upload envelope states a size in it. `MB`, `KiB`, `GiB` are matched by the unit ' +
-      'pattern for the same reason; this entry covers a bare one.',
+      'upload envelope states a size in it. `KiB`, `GiB` attached to a number are matched by the ' +
+      'IEC pattern for the same reason; this entry covers a bare one. The decimal `MB` and `KB` ' +
+      'are NOT covered (`D-666`): they have a Russian form, «МБ» and «КБ».',
   },
 ];
 
@@ -573,14 +574,30 @@ const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp
     pattern: /\b[vV][1-9][0-9]*\b/g,
   },
   {
-    name: 'units attached to a number',
-    // A unit is Latin because the unit is Latin. Bound to a preceding number so that a
-    // bare `MB` in a sentence is still an offence.
-    // `m` and `s` are here because the run screen renders a duration as "4 m 0 s". They
-    // are bound to a preceding number like every other unit, so a bare `s` is an offence.
-    pattern: /\b\d+(?:[.,]\d+)?\s*(?:[KMGT]i?B|ms|[smhd]|px|rem|%)\b/g,
+    // `D-666`. This entry used to mask EVERY unit after a number (`s`, `ms`, `m`, `h`, `d`, `px`, `rem`, `MB`, `KB`, ...), on the
+    // reading that "a unit is Latin because the unit is Latin". That excused the class it was meant to catch: a duration
+    // rendered «2.5 s» to a Russian reviewer and only a unit test that expected the Latin text noticed «2,5 с». The units that
+    // have a Russian form are now refused (see `LATIN_UNIT_AFTER_NUMBER`); what stays masked is the one family with no
+    // Russian form that this application prints, the IEC 80000-13 binary symbols (`25 MiB`, the upload envelope), which the
+    // `MiB` entry of `NOT_DERIVABLE` reasons and which `tests/e2e/pc01/journey/manifest.json` names by text.
+    name: 'IEC binary units attached to a number',
+    pattern: /(?<![A-Za-z0-9_.])\d+(?:[.,]\d+)?\s*[KMGT]iB(?![A-Za-z0-9_])/g,
   },
 ];
+
+/**
+ * `D-666`. A number followed by a Latin unit: `2.5 s`, `300 ms`, `3 min`, `1 h`, `12 MB`, `64 KB`, `320 px`.
+ *
+ * The Russian forms exist and the screens have formatters for them (`2,5 с`, `мс`, `мин`, `ч`, `МБ`), so a Latin unit here is
+ * chrome the application wrote, not a standard's symbol. It is looked for in the text left AFTER the machine shapes are taken out
+ * (a model name, an identifier, a digest, a filename, a timestamp, an IEC binary unit), so what those legitimately contain cannot
+ * trip it, and BEFORE the contract vocabulary and the residue list are applied, so no enum value or listed word can excuse a unit.
+ *
+ * Both sides are bounded: the digit must not continue a word, a version or a decimal (`v3 s`, `1.2.3 s` are not read from the
+ * middle), and the unit must be the whole token (`3 sections` is not `3 s`; it is reported as the word `sections` by the word pass).
+ * Only Latin letters are matched, so «2,5 с» (Cyrillic `с`) and «3 мин» are never touched.
+ */
+export const LATIN_UNIT_AFTER_NUMBER = /(?<![A-Za-z0-9_.,])\d+(?:[.,]\d+)?\s*(?:min|ms|px|rem|[KMGT]B|[smhd])(?![A-Za-z0-9_])/g;
 
 /** Entities `renderToStaticMarkup` writes, decoded so `&amp;` is not read as `amp`. */
 function decodeEntities(text: string): string {
@@ -641,6 +658,14 @@ export function unexplainedLatin(text: string, vocabulary: ReadonlySet<string>):
   let residue = text;
   for (const { pattern } of MACHINE_SHAPES) residue = residue.replace(pattern, ' ');
 
+  // `D-666`: a number and a Latin unit are reported whole (`2.5 s`), not as the bare letter they leave (`s`), and before the
+  // vocabulary is applied so that no contract value can excuse them.
+  const units: string[] = [];
+  residue = residue.replace(LATIN_UNIT_AFTER_NUMBER, (found: string) => {
+    units.push(found.replace(/\s+/g, ' '));
+    return ' ';
+  });
+
   // Longest first, so `needs_manual_review` is consumed before `review` could be.
   //
   // AND ON A WORD BOUNDARY, which `split`/`join` did not do. `accept` is a permitted
@@ -670,7 +695,7 @@ export function unexplainedLatin(text: string, vocabulary: ReadonlySet<string>):
   }
 
   const words = residue.match(/[A-Za-z][A-Za-z'’]*/g) ?? [];
-  return [...new Set(words)];
+  return [...new Set([...units, ...words])];
 }
 
 // ===================================================================== the screens
@@ -1148,7 +1173,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.47.0',
+    contract_version: '1.48.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1160,7 +1185,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.47.0',
+    contract_version: '1.48.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2027,7 +2052,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.47.0',
+    contract_version: '1.48.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2220,7 +2245,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.47.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.48.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -3418,7 +3443,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'workers-models-editing-comparison',
     make: () => createElement(LayoutEditorView, {
       draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells, comparison: STAGE_COMPARISON_CELLS }, catalogue: STAGE_CATALOGUE,
-      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'], currentKit: 'custom',
       pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
       onLimit: () => undefined, onComparisonModel: () => undefined, onComparisonEffort: () => undefined, onComparisonLimit: () => undefined,
       onSave: () => undefined, onCancel: () => undefined,
@@ -3429,7 +3454,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'workers-models-editing-comparison-none',
     make: () => createElement(LayoutEditorView, {
       draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
-      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'], currentKit: 'custom',
       pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
       onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
     }),
@@ -3439,7 +3464,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'workers-models-editing-all',
     make: () => createElement(LayoutEditorView, {
       draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
-      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'], currentKit: 'custom',
+      availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'], currentKit: 'custom',
       pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
       onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
     }),
@@ -4330,6 +4355,29 @@ export const CACHE_STATES: readonly {
   { state: 'cancelled-run', run: { state: 'cancelled', published_finding_count: 0 } },
   { state: 'created-run', run: { state: 'created', terminal_at: null, published_finding_count: 0 } },
   { state: 'queued-run', run: { state: 'queued', terminal_at: null, published_finding_count: 0 } },
+  /*
+   * `HOSTS-L1` (`D-660`, contract 1.48.0): a run on the stage layout that waits names the model it waits for and the cause. A line names two
+   * models at most, so four states put all seven members of `RunWaitCause` on the screen, the last with «и ещё N».
+   */
+  ...(
+    [
+      ['queued-run-waits-none-served-and-host-disabled', 'model_unavailable', [['text:main', 'gpt-6-sol', 'not_on_any_server'], ['blocks:leg1', 'gpt-6-astra', 'host_disabled']]],
+      ['queued-run-waits-host-offline-and-login', 'model_unavailable', [['text:main', 'gpt-6.1-sol', 'host_offline'], ['review:main', 'claude-opus-5-5', 'login_required']]],
+      ['queued-run-waits-not-verified-and-cooling-down', 'model_unavailable', [['norms:main', 'gpt-6-astra', 'model_not_verified'], ['correction:main', 'claude-sonnet-5-5', 'model_cooling_down']]],
+      [
+        'queued-run-waits-at-capacity',
+        'executor_at_capacity',
+        [['text:main', 'gpt-6-sol', 'at_capacity'], ['blocks:judge', 'gpt-6.1-sol', 'at_capacity'], ['norms:main', 'gpt-6-astra', 'at_capacity']],
+      ],
+    ] as const
+  ).map(([state, reason, cells]) => ({
+    state,
+    run: {
+      state: 'queued' as const, terminal_at: null, published_finding_count: 0, binding_state: 'pending' as const, wait_reason: reason,
+      waiting_since: '2026-09-10T08:00:30.000Z',
+      wait_cells: cells.map(([cell_key, model_id, cause]) => ({ cell_key, model_id, access: 'subscription' as const, cause })),
+    } satisfies Partial<RunStatus>,
+  })),
   { state: 'validating-run', run: { state: 'validating', terminal_at: null, published_finding_count: 0 } },
   /*
    * The OTHER provider mode and the OTHER cost basis, added by `W41-BLIND`.
@@ -4591,6 +4639,9 @@ const TRANSLATED_SCHEMAS = [
   'ModelProbeState',
   'ExecutorHostState',
   'ModelUnavailableReason',
+  // `HOSTS-L1` (contract 1.48.0, `D-660`): the run page names the model a waiting run waits for and the cause in Russian («нет сервера с этой
+  // моделью», «все места сервера заняты»), with the contract value in `data-run-wait-cause`. `at_capacity` and `host_offline` are English words.
+  'RunWaitCause',
   'RunStartRoute',
   // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
   // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
@@ -4807,7 +4858,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.47.0',
+            contract_version: '1.48.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4829,7 +4880,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.47.0',
+            contract_version: '1.48.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4903,6 +4954,57 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('needs', VOCABULARY)).toEqual(['needs']);
     expect(unexplainedLatin('analysis', VOCABULARY)).toEqual(['analysis']);
   });
+
+  it('D-666: refuses a number followed by a Latin unit, and names it with its number', () => {
+    // The form that was let through: `RUN-SCREEN-FIX-01` found «2.5 s» rendered, and only a unit test that expected the Latin text
+    // noticed the change to «2,5 с». The unit used to be masked along with every other machine shape.
+    const refused: readonly (readonly [string, readonly string[]])[] = [
+      ['Заняло 2.5 s', ['2.5 s']],
+      ['Заняло 2,5 s', ['2,5 s']],
+      ['Заняло 10s', ['10s']],
+      ['Ответ за 300 ms', ['300 ms']],
+      ['Ожидание 3 min', ['3 min']],
+      ['Осталось 1 h', ['1 h']],
+      ['Осталось 2 d', ['2 d']],
+      ['Размер 12 MB', ['12 MB']],
+      ['Размер 64 KB', ['64 KB']],
+      ['Ширина 320 px', ['320 px']],
+      ['Отступ 1.5 rem', ['1.5 rem']],
+      // The run screen's old duration, each half named on its own.
+      ['Заняло 4 m 0 s', ['4 m', '0 s']],
+      ['Заняло 4m 0s', ['4m', '0s']],
+    ];
+    for (const [text, expected] of refused) expect(unexplainedLatin(text, VOCABULARY), text).toEqual(expected);
+    // Not excused by an element around it, or by the attribute it is in: `<code>` is for identifiers, not for units.
+    expect(visibleText('<code>2.5 s</code>').flatMap((text) => unexplainedLatin(text, VOCABULARY))).toEqual(['2.5 s']);
+    expect(visibleText('<span title="1 h">Время</span>').flatMap((text) => unexplainedLatin(text, VOCABULARY))).toEqual(['1 h']);
+    // Not excused by a contract word either: the unit is looked for before the vocabulary is applied, so a vocabulary that
+    // happened to contain the letters would still not let «3 s» through.
+    const permissive = new Set([...VOCABULARY, 's', 'ms', 'min', 'h', 'd', 'MB', 'KB', 'px']);
+    for (const unit of ['s', 'ms', 'min', 'h', 'MB', 'KB', 'px']) {
+      expect(unexplainedLatin(`Заняло 3 ${unit}`, permissive), unit).toEqual([`3 ${unit}`]);
+    }
+  });
+
+  it('D-666: leaves the Russian units and the legitimate Latin around a number alone', () => {
+    // The Russian forms the screens print.
+    for (const text of ['Заняло 2,5 с', 'Ответ за 300 мс', 'Ожидание 3 мин', 'Осталось 1 ч', 'Размер 12 МБ', 'Размер 64 КБ', 'Заняло 4 м 0 с']) {
+      expect(unexplainedLatin(text, VOCABULARY), text).toEqual([]);
+    }
+    // A model is named as the catalogue spells it and as the screens name it, and a duration beside it is Russian.
+    for (const name of catalogueModelNames()) {
+      expect(unexplainedLatin(`Модель ${name}, 2,5 с`, VOCABULARY), name).toEqual([]);
+      expect(unexplainedLatin(`${name} 3 мин`, VOCABULARY), name).toEqual([]);
+    }
+    expect(visibleText('<p>Модель <code>gpt-6-sol</code>, 2,5 с</p>').flatMap((text) => unexplainedLatin(text, VOCABULARY))).toEqual([]);
+    // The IEC binary units are a symbol with no Russian form this application prints, and the upload envelope names one.
+    for (const text of ['Не более 25 MiB.', 'До 512 KiB', '1 GiB']) expect(unexplainedLatin(text, VOCABULARY), text).toEqual([]);
+    // The unit must be the whole token: `3 sections` is the word `sections`, not `3 s`, and a bare letter without a number is a word.
+    expect(unexplainedLatin('3 sections', VOCABULARY)).toEqual(['sections']);
+    expect(unexplainedLatin('Заняло s', VOCABULARY)).toEqual(['s']);
+    // A digit that continues a word or a version is not read from its middle.
+    expect(unexplainedLatin('АР v3 s', VOCABULARY)).toEqual(['s']);
+  });
 });
 
 describe('the guard renders the screens it claims to render', () => {
@@ -4945,6 +5047,23 @@ describe('the guard renders the screens it claims to render', () => {
     // quietly became a list of state blocks.
     const substantial = screens.filter((screen) => screen.markup.length > 2000);
     expect(substantial.length, 'no screen rendered a whole page').toBeGreaterThan(20);
+  });
+
+  /**
+   * `D-666`: a Latin unit is read off EVERY state the matrix renders, not only off the strings of the unit cases above.
+   *
+   * Each rendered state gets «2.5 s» in a text node and «1 h» in a `title`, the two places a reviewer reads text, and the extraction
+   * the R-18 case below uses must return both from it. The states are real (their markup is what the screens render), so a state
+   * whose markup swallowed what follows it, or whose text the extraction skipped, is named here. Judging the whole of every state a
+   * second time would repeat the R-18 case (it timed out at the default 120 s), so the judgement is made once, on the two strings.
+   */
+  it('D-666: reads «2.5 s» in a text node and «1 h» in a title off every rendered state, and refuses both', () => {
+    for (const { where, markup } of screens) {
+      const read = visibleText(`${markup}<p>Заняло 2.5 s</p><span title="1 h">Время</span>`);
+      expect(read, where).toContain('Заняло 2.5 s');
+      expect(read, where).toContain('1 h');
+    }
+    expect(['Заняло 2.5 s', '1 h'].flatMap((text) => unexplainedLatin(text, VOCABULARY))).toEqual(['2.5 s', '1 h']);
   });
 
   /**
@@ -5462,6 +5581,11 @@ const SCHEMA_MARKERS: readonly {
     schema: 'ExecutorHostState',
     attribute: 'data-host-state',
     why: '`widgets/executor-hosts/ui/executor-hosts.tsx`, the dot of a server row: на связи, все места заняты, нет связи.',
+  },
+  {
+    schema: 'RunWaitCause',
+    attribute: 'data-run-wait-cause',
+    why: '`widgets/run-progress/ui/run-wait-cells.tsx`, the line under the sentence of a waiting run on the stage layout (`entities/audit-run` `WAIT_CAUSE_LABELS`): сервер выключен, сервер не на связи, на сервере нужно войти в клиент, нет сервера с этой моделью, все места сервера заняты.',
   },
   {
     schema: 'ModelUnavailableReason',

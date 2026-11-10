@@ -123,6 +123,26 @@ def test_a_batch_that_lost_a_leg_is_a_partial_chip_whose_reason_is_the_procedure
     assert (facts["planned"], facts["completed"]) == (1, 0)
 
 
+def test_a_leg_the_breaker_skipped_makes_no_call_and_the_chip_counts_only_the_calls_made():
+    """D-662: after three failed batches leg1 is no longer asked. Its later batches have no journal row at all; the chip says what the review
+    says (a partial batch, the reason `block_ensemble_leg_skipped`) and counts the calls the journal holds, not the ones the plan implies."""
+    calls = [call("blocks:leg1", "failed", n=k, request="r", start=k, error="dependency_unavailable") for k in range(6)]     # the batch that failed it
+    calls += [call("blocks:leg2", n=0, start=7), call("blocks:judge", n=0, start=8)]
+    calls += [call("blocks:leg2", n=1, start=9), call("blocks:judge", n=1, start=10)]     # the batch after it: no leg1 call, so no row
+    document = assemble_run_stage_facts(
+        run=RunRow(RUN, "published", PLAN, None), stage_rows=[], calls=calls,
+        review={"run_id": RUN, "status": "partial", "result": {
+            "procedures": [{"id": "block_analysis", "title": "Анализ блоков", "status": "partial", "reason": "block_ensemble_leg_skipped"}],
+            "phase_coverage": {"block_analysis": {"planned": 2, "completed": 0, "remaining": 2, "limit": 2}}}},
+        cell_bindings=BINDINGS, include_server=True)
+    chip = next(item for item in document["items"] if item["chip"] == "blocks")
+    assert [c["cell_key"] for c in chip["plan"]] == ["blocks:leg1", "blocks:leg2", "blocks:judge"], "the frozen plan still draws the leg"
+    facts = chip["facts"]
+    assert (facts["calls_succeeded"], facts["calls_failed"], facts["calls_retried"]) == (4, 6, 5), "no phantom call for the skipped leg"
+    assert facts["state"] == "partial" and facts["reason"] == "block_ensemble_leg_skipped"
+    assert (facts["planned"], facts["completed"]) == (2, 0)
+
+
 @pytest.mark.parametrize("phase", [
     "v3:w001:blocks:0:leg1", "v3:w001:blocks:0:leg2", "v3:w001:blocks:3:judge", "v3:w002:blocks:b001:leg1:repair:1",
     "v3:w001:blocks:0:judge:repair:1", "v2:blocks:1:leg2",

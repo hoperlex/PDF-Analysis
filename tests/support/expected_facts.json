@@ -2205,6 +2205,8 @@
       "RunStateCount",
       "RunStatus",
       "RunStatusPage",
+      "RunWaitCause",
+      "RunWaitCell",
       "RunnerCatalogueEntry",
       "RunnerCliAuthState",
       "RunnerCliHealth",
@@ -2428,5 +2430,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0062_hosts_stage_models",
-  "contract_version": "1.47.0"
+  "contract_version": "1.48.0"
 }

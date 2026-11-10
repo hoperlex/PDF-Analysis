@@ -27,6 +27,7 @@ __all__ = [
     "RunGroupPlanView",
     "RunPresetView",
     "RunStatusView",
+    "RunWaitCellView",
     "StageStateView",
     "run_status_body",
     "stage_state_body",
@@ -84,6 +85,17 @@ class RunBindingView:
     display_name: str
     pin_id: str
     gateway_model: str
+
+
+@dataclass(frozen=True, slots=True)
+class RunWaitCellView:
+    """Exactly the frozen ``RunWaitCell`` (`HOSTS-L1`, contract 1.48.0): a cell of a waiting planned run that has no server to take it now.
+    ``cause`` is a ``RunWaitCause`` word (``ModelUnavailableReason`` or ``at_capacity``)."""
+
+    cell_key: str
+    model_id: str
+    access: str
+    cause: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +167,10 @@ class RunStatusView:
     binding: RunBindingView | None = None
     wait_reason: str | None = None
     waiting_since: datetime | None = None
+    #: `HOSTS-L1` (contract 1.48.0, `D-660`): the cells of a ``pending`` planned (stage-layout) Run that cannot be bound now, each with
+    #: its model, access and cause, in the order of the frozen plan. ``None`` (and omitted) for every other Run and for a planned Run
+    #: that is not waiting; never an empty tuple.
+    wait_cells: tuple[RunWaitCellView, ...] | None = None
     #: `R-151v` (contract 1.21.0, migration 0051): the account that started the run and its display label; both
     #: ``None`` for a run created before 0051, rendered only when present.
     started_by_user_uid: str | None = None
@@ -301,4 +317,9 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         body["wait_reason"] = view.wait_reason
         if view.waiting_since is not None:
             body["waiting_since"] = timestamp(view.waiting_since)
+    if view.wait_cells:
+        body["wait_cells"] = [
+            {"cell_key": cell.cell_key, "model_id": cell.model_id, "access": cell.access, "cause": cell.cause}
+            for cell in view.wait_cells
+        ]
     return body
