@@ -27,6 +27,7 @@ from auditmanager.analysis.geometry.crops import (
 from auditmanager.analysis.geometry.finding_blocks import (
     EvidenceSpan,
     PortalBox,
+    Readings,
     TextLine,
     link_evidence,
     linkable_pages,
@@ -85,6 +86,7 @@ __all__ = [
     "image_blocks_to_crop",
     "link_evidence",
     "linkable_pages",
+    "Readings",
     "pdfium_lock",
     "plan_crop",
     "portal_blocks_body",
