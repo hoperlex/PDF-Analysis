@@ -76,7 +76,10 @@ from sqlalchemy.orm import Session
 from auditmanager.analysis.public import (
     ROLE_BLOCK_INDEX,
     ROLE_DOCUMENT_GRAPH,
+    ROLE_PAGE_CROPS,
     ROLE_PAGE_INVENTORY,
+    ROLE_PORTAL_BLOCKS,
+    ROLE_RECOGNISED_TEXT,
     ROLE_SOURCE_DOCUMENT,
     ROLE_SOURCE_MARKDOWN,
     ROLE_SOURCE_STRUCTURED_COMPANION,
@@ -696,13 +699,47 @@ def _run_text_analysis_stage(
     return result, outcome.artifact, attempts
 
 
+#: `F8-GATE`: the two values of ``audit_run.publication_mode`` (``ck_audit_run_publication_mode``, migration 0064). A run
+#: in ``one_list`` mode is judged by gate v2 for block evidence as well; a run in ``text_only`` mode only by the text gate.
+_PUBLICATION_TEXT_ONLY = "text_only"
+_PUBLICATION_ONE_LIST = "one_list"
+#: The artifacts of the run's own geometry and recognised text that gate v2 judges a block against.
+_BLOCK_GATE_ROLES = (ROLE_PORTAL_BLOCKS, ROLE_PAGE_CROPS, ROLE_RECOGNISED_TEXT)
+
+
 @dataclass(frozen=True)
 class _GateInputs:
-    """The three artifacts the evidence gate consumes, read before the run row is locked."""
+    """The artifacts the evidence gate consumes, read before the run row is locked.
+
+    ``block_documents`` is `F8-GATE`'s: the saved documents of the run's ``geometry.portal_blocks``,
+    ``geometry.page_crops`` and ``prepared.recognised_text`` that gate v2 judges a block as evidence
+    against, keyed by role. It is ``None`` for a run in ``text_only`` mode, which reads none of them; in
+    ``one_list`` mode a role the run did not publish (a version without a portal bundle) is absent, and the
+    gate then finds every block unverifiable and refuses it. They are raw documents: gate v2 builds its views
+    over them (``findings`` ``BlockGateInputs.from_artifacts``) where the publisher of groups calls it.
+    """
 
     observation_set: ObservationSet
     text_layer: TextLayer
     block_index: BlockIndex
+    block_documents: Mapping[str, Mapping[str, Any]] | None = None
+
+
+def _publication_mode(run: RunRow) -> str:
+    """The run's publication mode, frozen at its start (``audit_run.publication_mode``).
+
+    ``RunRow`` does not carry the column yet, so a row without it is a run of the legacy ``text_only`` mode,
+    which is what every row written before migration 0064 is. A value outside the two the database allows is
+    refused, never read as ``text_only``.
+    """
+    mode = getattr(run, "publication_mode", _PUBLICATION_TEXT_ONLY)
+    if mode not in (_PUBLICATION_TEXT_ONLY, _PUBLICATION_ONE_LIST):
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="the run declares a publication mode the gate does not know",
+            reason="publication_mode_unknown",
+        )
+    return mode
 
 
 def _read_gate_inputs(
@@ -710,6 +747,7 @@ def _read_gate_inputs(
     observations_document: Mapping[str, Any] | None,
     outputs: _StageOutputs,
     blob_store: BlobStore,
+    publication_mode: str = _PUBLICATION_TEXT_ONLY,
 ) -> _GateInputs | None:
     """Read what the evidence gate consumes from the store. No database statement.
 
@@ -720,6 +758,10 @@ def _read_gate_inputs(
     commit is untouched: it precedes this read, so the Lease is free throughout.
 
     ``None`` when the gate has nothing to ground (no observations, or no text layer).
+
+    `F8-GATE`: for a run in ``one_list`` mode, and for it only, the run's own ``geometry.portal_blocks``,
+    ``geometry.page_crops`` and ``prepared.recognised_text`` are read here as well (``_BLOCK_GATE_ROLES``), under
+    the same rule as the text artifacts: before the run row is locked. A ``text_only`` run reads none of them.
     """
     if observations_document is None:
         return None
@@ -738,10 +780,20 @@ def _read_gate_inputs(
             blob_store, parse_blob_id(block_ref.blob_id), expected_role=ROLE_BLOCK_INDEX
         )
         block_index = BlockIndex.from_artifact(block_document)
+    block_documents: dict[str, Mapping[str, Any]] | None = None
+    if publication_mode == _PUBLICATION_ONE_LIST:
+        block_documents = {}
+        for role in _BLOCK_GATE_ROLES:
+            reference = outputs.refs.get(role)
+            if reference is not None:
+                block_documents[role], _ = read_artifact(
+                    blob_store, parse_blob_id(reference.blob_id), expected_role=role
+                )
     return _GateInputs(
         observation_set=ObservationSet.from_artifact(observations_document),
         text_layer=TextLayer.from_artifact(text_layer_document),
         block_index=block_index,
+        block_documents=block_documents,
     )
 
 
@@ -1508,7 +1560,8 @@ def _execute_run_body(
     # `W54-JUDGE-Y` F5: the gate's artifacts are read from the store here, before the
     # advance below locks the run row, so no S3 read happens under that lock.
     gate_inputs = _read_gate_inputs(
-        observations_document=observations_document, outputs=outputs, blob_store=blob_store
+        observations_document=observations_document, outputs=outputs, blob_store=blob_store,
+        publication_mode=_publication_mode(run),
     )
 
     run_repo.advance(session, run_id=run_id, from_state="running", to_state="validating")
