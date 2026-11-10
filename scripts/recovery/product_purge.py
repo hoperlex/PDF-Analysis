@@ -87,6 +87,9 @@ KEEP_RELEASE_TABLES = frozenset(("release", "release_revision"))
 #: the one to resume it).
 KEEP_LOOKUP_TABLES = frozenset(("alembic_version", "contract_state_transition", "execution_control"))
 #: The whole normative corpus -- the exemption list of ``stand-fingerprint-v1``, reused.
+#: `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`) adds the PNG render of a norm page, a derived row of a custody binding that names a Blob: it is the
+#: corpus's own, not the decision memory's (`KEEP_MEMORY_TABLES`, which a forget of a case empties), so it is KEEP here by the ``norm`` prefix rule and a
+#: purge keeps its Blob like it keeps the custody ledger's.
 KEEP_NORM_TABLES = EXEMPT_FROM_FINGERPRINT
 #: `EXEC-SEAL-01` (R-143). Executor connections, revisions, sealed secrets, probes and route
 #: events are configuration, like accounts: a purge of product data never touches them. They are

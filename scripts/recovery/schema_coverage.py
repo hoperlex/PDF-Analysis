@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0064_precedents_seal"
+HEAD = "0065_norm_crop_render"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -102,6 +102,8 @@ TABLES = frozenset((
     "decision_memory_block_evidence", "decision_memory_comment", "decision_memory_embedding", "decision_memory_embedding_intent",
     "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "executor_task_context_delivery",
     "finding_block_evidence", "precedent_setting_event", "vector_control", "vector_control_event",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page, a derived row of a custody binding (the norm side, KEEP).
+    "norm_crop_render",
 ))
 
 #: Views at ``HEAD``. A view carries no rows; it is restored from the dump and checked by name.
@@ -118,6 +120,8 @@ EXEMPT_FROM_FINGERPRINT = frozenset((
     "norm_custody_admission", "norm_custody_binding", "norm_document", "norm_embedding",
     "norm_embedding_build", "norm_embedding_profile", "norm_paragraph", "norm_repair_call",
     "norm_retrieval_set", "norms_snapshot",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`): its name starts with ``norm``, so the frozen SQL does not count it; it is the norm side's.
+    "norm_crop_render",
 ))
 
 #: Tables whose rows ``stand-fingerprint-v1`` counts and digests: what a restore proves equal.
@@ -466,6 +470,8 @@ TRIGGERS = (
     ("vector_control", "trg_vector_control_no_delete", "am_immutable_row", 11),
     ("vector_control_event", "trg_vector_control_event_append_only", "am_append_only", 27),
     ("vector_control_event", "trg_vector_control_event_number", "am_check_gapless_number", 7),
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`): a render is immutable (27 = ROW | BEFORE | DELETE | UPDATE).
+    ("norm_crop_render", "trg_norm_crop_render_immutable", "am_immutable_row", 27),
 )
 
 #: The constraint triggers that are ``DEFERRABLE INITIALLY DEFERRED``: a parent row must

@@ -222,6 +222,8 @@ APPEND_ONLY = frozenset((
     # control journal and the context-delivery journal are `am_immutable_row` or `am_append_only`. Only inserted into.
     "decision_memory_block_evidence", "decision_memory_comment", "decision_memory_embedding", "decision_memory_precedent_advice",
     "executor_task_context_delivery", "finding_block_evidence", "precedent_setting_event", "vector_control_event",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): a norm page's render is `am_immutable_row` and only inserted into (once, by `M7-NORM-PNG`).
+    "norm_crop_render",
 ))
 
 #: The ``append-only`` tables that no trigger protects, and the evidence that the code only inserts.
@@ -265,6 +267,8 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     "decision_memory_block_evidence", "decision_memory_comment", "decision_memory_embedding", "decision_memory_embedding_intent",
     "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "executor_task_context_delivery",
     "finding_block_evidence", "precedent_setting_event", "vector_control", "vector_control_event",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`): until `M7-NORM-PNG` renders and records the first page.
+    "norm_crop_render",
 ))
 
 #: Writes whose table name is not a literal in the SQL text, so :func:`observed_statements` cannot read it from the string: an f-string
