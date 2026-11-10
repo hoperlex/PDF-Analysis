@@ -84,10 +84,8 @@ describe('who is offered it', () => {
     }
   });
 
-  it('not a viewer, and not a run of AR v3 (beta)', async () => {
+  it('not a viewer', async () => {
     expect((await mount({}, ['viewer'])).markup()).toBe('');
-    await live?.unmount();
-    expect((await mount({ analysis_kind: 'ar_v3_beta' })).markup()).toBe('');
   });
 });
 

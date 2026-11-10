@@ -48,7 +48,7 @@ export function batchConsent(estimate: RunCostEstimate): RunCostConsent {
 
 /** Whether an estimate answered for this version can be agreed to. */
 export function estimateFits(estimate: RunCostEstimate, versionUid: VersionUid): boolean {
-  return usableCostEstimate(estimate) && estimate.scope === 'run' && estimate.version_uid === versionUid
+  return usableCostEstimate(estimate) && estimate.version_uid === versionUid
     && estimate.relaxed_limits === false;
 }
 

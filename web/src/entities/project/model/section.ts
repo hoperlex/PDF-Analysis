@@ -72,10 +72,7 @@ export type ProjectSectionCode =
   | 'POS'
   | 'PS';
 
-/**
- * The route that analyses a section. Old six-Run AR records remain readable, but new
- * starts on the section screen use its text profile.
- */
+/** The route that analyses a section: starts on the section screen use its text profile. */
 export type SectionAnalysis = 'text_profile';
 
 export interface ProjectSection {

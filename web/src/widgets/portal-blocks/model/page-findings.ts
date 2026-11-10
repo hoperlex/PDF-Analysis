@@ -161,11 +161,10 @@ export function blockReading(reading: PageFindingsReading, block: PortalBlock): 
  *
  * `listRuns` answers newest first and this keeps its order: the first run that
  * `runHasPublishedResult` accepts is the latest, so nothing is sorted here (a sort would hide a
- * server that broke its order). A run of the v3 beta profile publishes no canonical findings and is
- * not taken for one.
+ * server that broke its order).
  */
 export function latestPublishedRunId(runs: readonly RunStatus[]): RunId | null {
-  const published = runs.find((run) => runHasPublishedResult(run.state, run.analysis_profile_id));
+  const published = runs.find((run) => runHasPublishedResult(run.state));
   return published === undefined ? null : published.run_id;
 }
 

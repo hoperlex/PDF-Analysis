@@ -232,7 +232,6 @@ const fetchSpy = vi.fn(async () => {
   throw new Error('a guarded route made a network call');
 });
 
-const GROUP_ID = 'arg_01M2545JSD15ETSNNV904X991K';
 
 /** The route's element for `/analysis-settings` carrying the given query-string. */
 async function analysisSettingsRoute(query: Record<string, string | string[]>): Promise<ReactElement> {
@@ -288,7 +287,7 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     expect(client.getQueryCache().getAll().map((query) => query.queryKey[1])).toEqual(['snapshots']);
   });
 
-  it('/analysis-settings graduated (W59-ANALYSIS-SETTINGS-01): its ruled row and place are kept, and it reads the profile registry, the group review and the pack status', async () => {
+  it('/analysis-settings graduated (W59-ANALYSIS-SETTINGS-01): its ruled row and place are kept, and it reads the profile registry alone', async () => {
     expect(screenAt('/analysis-settings')).toEqual({
       address: '/analysis-settings',
       label: 'Настройки анализа',
@@ -303,44 +302,13 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     const markup = renderScreen(client, routed);
     expect(markup).not.toContain('Раздел пока недоступен');
     expect(markup).not.toContain('data-route="/analysis-settings"');
-    // Exactly these reads, each under its own key: the registry, the AR v3 beta group review
-    // (`AR-V3-BETA-GROUP-REVIEW-SCREEN-01`) and the installed-pack status
-    // (`AR-V3-BETA-PACK-STATUS-WEB-01`). The section «Пресеты запуска» (`ANALYSIS-PRESETS-01`) moved to
+    // Exactly this read, under its own key: the registry. The section «Пресеты запуска» (`ANALYSIS-PRESETS-01`) moved to
     // `/workers/advanced` (`HOSTS-WEB-01b`), so the account, the presets and the connection list are no
-    // longer read here: a read that came back with the section reddens this list.
-    // With no `group_id` in the address the review has no
-    // group to ask about: its query is registered under the empty address and DISABLED, so the
-    // screen asks the server nothing about any group; the pack status is always read, because
-    // it names no group. An extra read, or a lost one, reddens this list.
+    // longer read here: a read that came back with the section reddens this list. An extra read, or a lost one,
+    // reddens this list.
     expect(readsOf(client)).toEqual([
       { key: ['analysis', 'profiles'], enabled: true },
-      { key: ['runs', 'ar-v3-group-review', ''], enabled: false },
-      { key: ['runs', 'ar-v3-pack-status'], enabled: true },
     ]);
-  });
-
-  it('/analysis-settings with a valid group_id: the group review read is ENABLED for exactly that group', async () => {
-    const routed = await analysisSettingsRoute({ group_id: GROUP_ID });
-    const client = newClient();
-    renderScreen(client, routed);
-    expect(readsOf(client)).toEqual([
-      { key: ['analysis', 'profiles'], enabled: true },
-      { key: ['runs', 'ar-v3-group-review', GROUP_ID], enabled: true },
-      { key: ['runs', 'ar-v3-pack-status'], enabled: true },
-    ]);
-  });
-
-  it('/analysis-settings with a malformed group_id: the route answers not-found and reads nothing', async () => {
-    for (const bad of ['arg_bad', GROUP_ID.toLowerCase(), [GROUP_ID, GROUP_ID]]) {
-      let digest: string | null = null;
-      try {
-        await analysisSettingsRoute({ group_id: bad });
-      } catch (thrown) {
-        digest = String((thrown as { digest?: unknown }).digest ?? '');
-      }
-      expect(digest, JSON.stringify(bad)).toBe('NEXT_HTTP_ERROR_FALLBACK;404');
-    }
-    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('/section-optimisation graduated (W63-SECTION-FORM7-01): its ruled row and place are kept, and it reads the AR section', async () => {

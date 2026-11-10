@@ -28,11 +28,7 @@
  * The findings count is drawn only for a state that can publish (`published`, `partial`): the reading
  * of any other state carries a count the run did not publish, and a number there would be read as a
  * result. «Разобрать» is offered only where the canonical finding review exists — a run with a
- * published result that is not the AR v3 beta profile, whose citation review has its own screen.
- *
- * `AR-V3-OPT-IN`: the state cell says which analysis produced the run (`data-run-analysis`): a run of AR v3 (beta) always,
- * with its scope («АР v3 (бета) · F1»), a standard run only while `bothAnalyses` (the deployment allows v3, so the reader
- * has two to tell apart). A member of a group links to the group's review, where its six runs are read together.
+ * published result.
  *
  * `data-run-id` is on the state cell's content, the one place a reader and a test can both find a run.
  * Hrefs are built by the screen, never by the table.
@@ -48,7 +44,6 @@ import { formatInstant } from '@/shared/lib';
 
 import { runExecutorLine, runExecutorSentence } from '../model/run-executor';
 import { runPresetLine, runPresetSentence } from '../model/run-preset';
-import { runAnalysisLabel } from '../model/run-analysis';
 import { elapsedMs, formatElapsed, runHasPublishedResult } from '../model/run-presentation';
 
 import styles from './run-table.module.css';
@@ -59,27 +54,17 @@ export interface RunTableProps {
   readonly runHref: (run: RunStatus) => string;
   /** Where a run's findings open. Built by the screen, never by the table. */
   readonly reviewHref: (run: RunStatus) => string;
-  /** Both analyses are on offer on this server: a standard run is then named too. Default: only a v3 run is named. */
-  readonly bothAnalyses?: boolean | undefined;
-  /** Where the review of a member's group opens, or `null` for a run that has none. Built by the screen. */
-  readonly groupReviewHref?: ((run: RunStatus) => string | null) | undefined;
 }
 
 /** Said in the «Запустил» column when the reading carries no label (a run created before migration 0051). */
 export const STARTED_BY_UNKNOWN = 'неизвестно';
 
-function StateCell({ run, bothAnalyses }: { readonly run: RunStatus; readonly bothAnalyses: boolean }) {
+function StateCell({ run }: { readonly run: RunStatus }) {
   const executor = runExecutorLine(run);
   const preset = runPresetLine(run);
-  const analysis = runAnalysisLabel(run, bothAnalyses);
   return (
     <div className={styles.state} data-run-id={run.run_id}>
       <RunStateBadge state={run.state} providerMode={run.provider_mode} />
-      {analysis === null ? null : (
-        <p className={styles.line} data-run-analysis={analysis.kind} data-run-scope={analysis.scope ?? undefined}>
-          {analysis.label}
-        </p>
-      )}
       {executor === null ? null : (
         <p className={styles.line} data-run-executor data-run-queue-reason={executor.queueReason} data-run-binding={executor.phase}>
           {runExecutorSentence(executor)}
@@ -90,14 +75,6 @@ function StateCell({ run, bothAnalyses }: { readonly run: RunStatus; readonly bo
   );
 }
 
-function GroupReviewLink({ href }: { readonly href: string | null }) {
-  return href === null ? null : (
-    <Link className="am-button am-button--small" href={href} data-run-group-review>
-      Шесть проверок
-    </Link>
-  );
-}
-
 function StartedBy({ run }: { readonly run: RunStatus }) {
   const label = run.started_by_label?.trim();
   return label === undefined || label === ''
@@ -105,9 +82,9 @@ function StartedBy({ run }: { readonly run: RunStatus }) {
     : <>{label}</>;
 }
 
-export function RunTable({ runs, runHref, reviewHref, bothAnalyses = false, groupReviewHref }: RunTableProps) {
+export function RunTable({ runs, runHref, reviewHref }: RunTableProps) {
   const columns: readonly TableColumn<RunStatus>[] = [
-    { key: 'state', header: 'Состояние', cell: (run) => <StateCell run={run} bothAnalyses={bothAnalyses} /> },
+    { key: 'state', header: 'Состояние', cell: (run) => <StateCell run={run} /> },
     { key: 'started', header: 'Начат', cell: (run) => <span className={styles.figure}>{formatInstant(run.created_at)}</span> },
     { key: 'startedBy', header: 'Запустил', cell: (run) => <StartedBy run={run} /> },
     {
@@ -132,12 +109,11 @@ export function RunTable({ runs, runHref, reviewHref, bothAnalyses = false, grou
           <Link className="am-button am-button--quiet am-button--small" href={runHref(run)} title={run.run_id}>
             Прогон
           </Link>
-          {runHasPublishedResult(run.state, run.analysis_profile_id) ? (
+          {runHasPublishedResult(run.state) ? (
             <Link className="am-button am-button--small" href={reviewHref(run)}>
               Разобрать
             </Link>
           ) : null}
-          <GroupReviewLink href={groupReviewHref?.(run) ?? null} />
         </div>
       ),
     },

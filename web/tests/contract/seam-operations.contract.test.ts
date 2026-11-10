@@ -253,7 +253,6 @@ describe('the seam operations', () => {
       'setWorkScheduleSettings',
       // `W54-SEAL-01`: the worker intake switch is keyed like the other execution controls.
       'setWorkerIntake',
-      'startArV3BetaGroup',
       'startComparisonAiPairCheck',
       'startComparisonAiSheetChanges',
       'startComparisonReport',

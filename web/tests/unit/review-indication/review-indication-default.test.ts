@@ -14,18 +14,12 @@ import { describe, expect, it } from 'vitest';
 import { analysisProfileStatusLabel } from '@/entities/analysis-profile';
 import { SHOW_REVIEW_INDICATION } from '@/shared/config';
 import { SHOW_REVIEW_INDICATION as FROM_THE_MODULE } from '@/shared/config/review-indication';
-import { ATTESTATION_SENTENCE } from '@/widgets/ar-v3-beta-pack';
 
 import {
   SUMMARY_LABEL,
-  betaStatus,
   comparisonSummary,
-  groupLookup,
-  groupReview,
-  packPanel,
   profileTable,
-  startControl,
-  v3Run,
+  runScreen,
   visible,
 } from './surfaces';
 
@@ -53,29 +47,23 @@ describe('the beta default', () => {
 
 /**
  * The run screen also mounts the section-analysis panel (`widgets/extended-review`, emergency analysis,
- * `af8c69f7`) on EVERY run, including an AR v3 one, and while its read is pending it says
+ * `af8c69f7`) on EVERY run, and while its read is pending it says
  * «Загрузка: предварительный обзор блоков…». That panel is another feature with its own wording, pinned
  * by `tests/unit/analysis-extended/*`; it is not the beta's review indication that `R-146ba` removed, and
  * the switch does not govern it. It is cut out of what this file reads, and ONLY it: the rest of each
- * screen is still held to the pattern. `EXEC2-FIX-WEB` reports the question this leaves to the owner: the
- * panel's «предварительный» is on the AR v3 run screen, which `R-146ba` otherwise cleared of the word.
+ * screen is still held to the pattern.
  */
 const EXTENDED_PANEL = /<section id="extended-analysis"[\s\S]*?<\/section>/g;
 const shipped = (markup: string): string => visible(markup.replace(EXTENDED_PANEL, ''));
 
 describe('the shipped screens carry none of the removed wording', () => {
   const SCREENS: readonly (readonly [string, () => string])[] = [
-    ['the group review, for an expert', () => groupReview({ roles: ['expert'] })],
-    ['the group review, for an administrator', () => groupReview({ roles: ['admin'] })],
-    ['the group lookup', () => groupLookup()],
-    ['the beta source preview', () => betaStatus()],
-    ['the control that starts the six checks', () => startControl()],
-    ['a published AR v3 Run with findings', () => v3Run('published', 2)],
-    ['a published AR v3 Run with no finding', () => v3Run('published', 0)],
-    ['a published AR v3 Run whose count is not reported', () => v3Run('published', null)],
-    ['a partial AR v3 Run', () => v3Run('partial', 0)],
-    ['a queued AR v3 Run', () => v3Run('queued', 0)],
-    ['a failed AR v3 Run', () => v3Run('failed', 0)],
+    ['a published Run with findings', () => runScreen({ state: 'published' }, 2)],
+    ['a published Run with no finding', () => runScreen({ state: 'published' }, 0)],
+    ['a published Run whose count is not reported', () => runScreen({ state: 'published' }, null)],
+    ['a partial Run', () => runScreen({ state: 'partial' }, 0)],
+    ['a queued Run', () => runScreen({ state: 'queued' }, 0)],
+    ['a failed Run', () => runScreen({ state: 'failed' }, 0)],
   ];
 
   for (const [name, draw] of SCREENS) {
@@ -88,9 +76,8 @@ describe('the shipped screens carry none of the removed wording', () => {
 
   it('can fail: the pattern does see the wording on the screen that is not the switch\'s', () => {
     // And the cut above removes the panel and nothing else: the run screen, uncut, does carry the word.
-    expect(visible(v3Run('published', 2))).toMatch(REMOVED);
-    expect(shipped(v3Run('published', 2))).not.toMatch(REMOVED);
-    expect(visible(packPanel())).toMatch(REMOVED);
+    expect(visible(runScreen({ state: 'published' }, 2))).toMatch(REMOVED);
+    expect(shipped(runScreen({ state: 'published' }, 2))).not.toMatch(REMOVED);
     expect(visible(comparisonSummary())).toMatch(REMOVED);
   });
 });
@@ -100,29 +87,5 @@ describe('what the shipped screens still say', () => {
     const text = visible(comparisonSummary());
     expect(text).toContain(SUMMARY_LABEL);
     expect(text).toContain('Сводка не заменяет и не меняет различия; проверка человеком не проводится.');
-  });
-
-  it('the attestation record of the sealed pack', () => {
-    const text = visible(packPanel());
-    expect(text).toContain(ATTESTATION_SENTENCE);
-    expect(text).toContain('Запись рецензента приложена при установке пакета; система её не проверяет');
-  });
-
-  it('that a verdict is the expert\'s own decision, and the limit on numbers', () => {
-    const expert = visible(groupReview({ roles: ['expert'] }));
-    expect(expert).toContain('Находки и решения эксперта');
-    expect(expert).toContain('Формулировка модели, не решение эксперта.');
-    expect(expert).toContain('Числовой или правовой вывод здесь не утверждён.');
-    expect(visible(groupReview({ roles: ['admin'] }))).toContain('Решение записывает эксперт.');
-    expect(visible(v3Run('published', 2))).toContain('решение по каждой записывает эксперт');
-  });
-
-  it('a published AR v3 Run that published findings no longer says that none is published', () => {
-    const published = visible(v3Run('published', 2));
-    expect(published).toContain('Находки с нормативными ссылками опубликованы');
-    expect(published).not.toContain('Канонические находки здесь не публикуются');
-    const none = visible(v3Run('published', 0));
-    expect(none).toContain('Канонические находки здесь не публикуются.');
-    expect(none).not.toContain('опубликованы; решение');
   });
 });

@@ -5,15 +5,15 @@
  * `tests/unit/screens/harness.ts` renders one static pass and says so: it cannot press a
  * button, run an effect or render the same instance twice. That is the right instrument for
  * "what does this state look like" and the wrong one for "what happens to this control while
- * the page around it changes" (`AR-V3-BETA-PACK-STATUS-WEB-FIX-01`: a start in flight must
- * survive the status panel's re-read failing). This file is the smallest thing that closes the
+ * the page around it changes" (a start in flight must
+ * survive a status re-read failing). This file is the smallest thing that closes the
  * gap: `react-dom/client` against a hand-written node tree — ~100 lines, no dependency, and
  * `FRONTEND_LOCK.json` untouched.
  *
  * What it is NOT: a browser. There is no layout, no event propagation, no focus, no style, no
  * text selection. A press calls the `onClick` the React element carries, which is exactly what
  * a click on that button would call — except that a browser dispatches no click to a disabled
- * button, so neither does `press` (`AR-V3-BETA-PACK-STATUS-WEB-FIX-02`): it does nothing and
+ * button, so neither does `press`: it does nothing and
  * returns `false`, and a test that means to press a disabled button asserts that flag. Anything
  * that depends on a real event path (a label, a form submit, a portal) is outside it and must
  * not be tested here.

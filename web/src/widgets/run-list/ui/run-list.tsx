@@ -15,12 +15,8 @@
  * The empty state carries the Start-run control as its action, because a version with no
  * run is exactly the state from which a user needs one.
  *
- * АР has an ordinary text profile sourced from the original application, and that is the default start. AR v3
- * (beta) is an **opt-in** analysis (`AR-V3-OPT-IN`): the start form of an АР version offers the choice of it
- * (`./analysis-start.tsx`) only where the server says a start is allowed (`ArV3BetaPackStatus.start_allowed`), and the
- * standard analysis is selected every time. Where it is not allowed the form is the ordinary start and nothing else, and
- * the version of any other section never asks. Each row says which analysis produced the run: a v3 run always
- * («АР v3 (бета) · F1»), a standard run only where both are on offer («Стандартный»).
+ * АР has an ordinary text profile sourced from the original application, so its start form is the ordinary start of
+ * every other section; only the heading above it says «Запустить анализ АР».
  *
  * A `comparison_pdf` has no portal companion. Ordinary section analysis now reads its native
  * PDF text and pages; portal-specific operations remain separate.
@@ -38,9 +34,8 @@ import type {
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import type { RunTableProps } from '@/entities/audit-run';
-import { RunTable, arV3GroupReviewAddress, looksLikeArV3GroupId, useArV3StartAllowed, useRunList } from '@/entities/audit-run';
+import { RunTable, useRunList } from '@/entities/audit-run';
 
-import { AnalysisStart } from './analysis-start';
 import { StartRunWithReadiness } from './start-run-with-readiness';
 
 export interface RunListProps {
@@ -60,15 +55,6 @@ export interface RunListProps {
   readonly onRunStarted?: ((run: RunStatus) => void) | undefined;
 }
 
-/**
- * The table of an АР version, which names a standard run too where the deployment allows a start of v3
- * (`AR-V3-OPT-IN`). A separate component so that only an АР version mounts the status read; every other table is the
- * entity's own, and a v3 run is named in it all the same.
- */
-function AnalysedRunTable(props: RunTableProps) {
-  return <RunTable {...props} bothAnalyses={useArV3StartAllowed()} />;
-}
-
 export function RunList(props: RunListProps) {
   return <VersionRunList key={props.versionUid} {...props} />;
 }
@@ -84,24 +70,14 @@ function VersionRunList({
   const query = useRunList(versionUid, cursor);
   const comparisonOnly = uploadKind === 'comparison_pdf';
   const isAr = sectionCode === 'AR';
-  // `AR-V3-OPT-IN`: asked of the server for an АР version that can take a start, and of nobody else.
-  const choosesAnalysis = isAr && !comparisonOnly;
   const startControl = (
     <>
       {comparisonOnly ? <p className="am-note">Анализ будет выполнен по исходному PDF без разметки портала.</p> : null}
-      {choosesAnalysis ? (
-        <AnalysisStart
-          projectUid={projectUid}
-          versionUid={versionUid}
-          {...(onRunStarted === undefined ? {} : { onRunStarted })}
-        />
-      ) : (
-        <StartRunWithReadiness
-          projectUid={projectUid}
-          versionUid={versionUid}
-          {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}
-        />
-      )}
+      <StartRunWithReadiness
+        projectUid={projectUid}
+        versionUid={versionUid}
+        {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}
+      />
     </>
   );
 
@@ -141,12 +117,11 @@ function VersionRunList({
     runs: page.items,
     runHref: (run) => routes.run(projectUid, run.run_id),
     reviewHref: (run) => routes.review(projectUid, run.run_id),
-    groupReviewHref: (run) => (looksLikeArV3GroupId(run.ar_v3_group_id) ? arV3GroupReviewAddress(run.ar_v3_group_id) : null),
   };
 
   return (
     <div data-run-count={page.items.length}>
-      {choosesAnalysis ? <AnalysedRunTable {...tableProps} /> : <RunTable {...tableProps} />}
+      <RunTable {...tableProps} />
       <div className="am-pager">
         {cursor === undefined ? null : (
           <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(undefined)}>

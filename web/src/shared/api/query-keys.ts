@@ -38,7 +38,6 @@ import type { DataTag } from '@tanstack/react-query';
 
 import type { ListDecisionMemoryCasesInput } from './generated/operations.gen';
 import type {
-  ArV3RunGroupId,
   AssignmentStatus,
   AssignmentUid,
   DecisionMemoryCaseId,
@@ -467,16 +466,6 @@ export const queryKeys = {
   },
   runs: {
     all: () => ['runs'] as const,
-    /** One durable six-Run AR v3 beta group, including its review-only outcomes. */
-    arV3GroupReview: (groupId: ArV3RunGroupId) =>
-      ['runs', 'ar-v3-group-review', groupId] as const,
-    /**
-     * Whether a reviewed AR v3 beta pack is installed on the server, and its attestation
-     * (`getArV3BetaPackStatus`). Under `runs` because it gates the six-Run start and changes
-     * only when the server is redeployed with another manifest. One reader, one key: the
-     * settings panel and the version's run list share this entry.
-     */
-    arV3PackStatus: () => ['runs', 'ar-v3-pack-status'] as const,
     /**
      * One run's status. Holds the **model**, never the transport envelope.
      *

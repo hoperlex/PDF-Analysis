@@ -24,7 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PortalBlock, RunFindingBlockLinks } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
-import { AR_V3_BETA_PROFILE_ID, runListQueryOptions } from '@/entities/audit-run';
+import { runListQueryOptions } from '@/entities/audit-run';
 import {
   blocksOfFinding,
   effectiveSelection,
@@ -504,13 +504,13 @@ describe('the widget reads the block links of the run in scope', () => {
   });
 
   it('does not ask for the links of a run that is not in scope', () => {
-    // The v3 beta profile publishes no canonical findings: no findings are read, and the links are not used.
+    // A run that published nothing has no canonical findings: no findings are read, and the links are not used.
     const client = seeded(links());
     client.setQueryData(runListQueryOptions(BLOCKS_VERSION_UID).queryKey, {
-      items: [runStatus({ run_id: run, version_uid: BLOCKS_VERSION_UID, analysis_profile_id: AR_V3_BETA_PROFILE_ID })],
+      items: [runStatus({ run_id: run, version_uid: BLOCKS_VERSION_UID, state: 'failed' })],
       page: { next_cursor: null },
     });
-    client.setQueryData(queryKeys.runs.detail(run), runStatus({ run_id: run, analysis_profile_id: AR_V3_BETA_PROFILE_ID }));
+    client.setQueryData(queryKeys.runs.detail(run), runStatus({ run_id: run, state: 'failed' }));
     const markup = widget(client);
     expect(markup).not.toContain('data-tile-badge');
     expect(markup).not.toContain('Без сущностей');

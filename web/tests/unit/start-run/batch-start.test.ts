@@ -64,10 +64,9 @@ describe('the arithmetic of one agreement', () => {
     expect(batchConsent(free(A).estimate)).toEqual({ estimate_digest: free(A).estimate.estimate_digest, ceiling_micros: 0, confirmed: true });
   });
 
-  it('agrees only to an estimate of this version, of one run, under the standard limits', () => {
+  it('agrees only to an estimate of this version under the standard limits', () => {
     expect(estimateFits(estimateFor(A), A)).toBe(true);
     expect(estimateFits(estimateFor(A), B)).toBe(false);
-    expect(estimateFits(estimateFor(A, { scope: 'ar_v3_group' }), A)).toBe(false);
     expect(estimateFits(estimateFor(A, { relaxed_limits: true }), A)).toBe(false);
   });
 });

@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 import type { RunState, RunStatus } from '@/shared/api';
 import { RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
-import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, RunTable, STARTED_BY_UNKNOWN } from '@/entities/audit-run';
+import { RUN_PAGE_LIMIT, RunTable, STARTED_BY_UNKNOWN } from '@/entities/audit-run';
 import { RunList } from '@/widgets/run-list';
 
 import { PROJECT_UID, RUN_ID, VERSION_UID, render, runStatus } from '../review/fixtures';
@@ -152,12 +152,6 @@ describe('the two ways into a run', () => {
       expect(markup, state).not.toContain('Разобрать');
       expect(markup, state).not.toContain('/reviews/');
     }
-  });
-
-  it('offer no review for the AR v3 beta profile, which publishes a separate citation review', () => {
-    const markup = table(runStatus({ state: 'published', analysis_profile_id: AR_V3_BETA_PROFILE_ID }));
-    expect(markup).not.toContain('Разобрать');
-    expect(links(markup)).toEqual([{ href: `/runs/${RUN_ID}`, label: 'Прогон' }]);
   });
 });
 

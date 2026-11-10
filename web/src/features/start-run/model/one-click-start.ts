@@ -42,7 +42,7 @@ export function estimateRequest(versionUid: VersionUid, relaxed: boolean): RunCo
 
 /** Whether an answer is the estimate of this version for this kind of start, and can be agreed to. */
 export function estimateAnswers(estimate: RunCostEstimate, versionUid: VersionUid, relaxed: boolean): boolean {
-  return usableCostEstimate(estimate) && estimate.scope === 'run' && estimate.version_uid === versionUid
+  return usableCostEstimate(estimate) && estimate.version_uid === versionUid
     && estimate.relaxed_limits === relaxed;
 }
 

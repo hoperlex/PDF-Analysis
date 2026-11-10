@@ -16,13 +16,10 @@
 import { useAnalysisProfiles } from '@/entities/analysis-profile';
 import { failureMessage } from '@/shared/api/failure-message';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
-import { ArV3BetaStatus } from '@/widgets/ar-v3-beta-status';
-import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
-import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
 import { ErrorState, LoadingState, PageShell } from '@/shared/ui';
 import styles from './analysis-settings-page.module.css';
 
-export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: string | null }) {
+export function AnalysisSettingsPage() {
   const profiles = useAnalysisProfiles();
   const failure = profiles.error === null ? null : failureMessage(profiles.error);
   return (
@@ -31,17 +28,6 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
       subtitle="Профиль анализа каждого раздела, с которым сервер выполняет прогон. Профили здесь только показываются, изменить их нельзя."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void profiles.refetch()}>Обновить</button>}
     >
-      <div className={styles.stack}>
-        <section className={styles.panel} role="region" aria-label="Состояние анализа АР v3" tabIndex={0}>
-          <ArV3BetaStatus />
-        </section>
-        <section className={styles.panel} role="region" aria-label="Пакет анализа АР v3" tabIndex={0}>
-          <ArV3BetaPack />
-        </section>
-        <section className={styles.panel} role="region" aria-label="Разбор анализа АР v3" tabIndex={0}>
-          <ArV3BetaReview groupId={groupId} />
-        </section>
-      </div>
       {profiles.isPending ? <LoadingState what="профилей анализа" /> : null}
       {failure !== null ? (
         <div data-analysis-profiles-failure={failure.kind}>

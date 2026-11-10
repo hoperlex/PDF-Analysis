@@ -31,8 +31,7 @@ export function usePageFindings(versionUid: VersionUid, geometryRunId: RunId | n
   const runs = useRunList(versionUid);
   const runId = scopeRunId(runs.isPending ? 'pending' : runs.data === undefined ? 'unreadable' : runs.data.items, geometryRunId);
   const status = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== null });
-  const published =
-    status.data !== undefined && runHasPublishedResult(status.data.state, status.data.analysis_profile_id);
+  const published = status.data !== undefined && runHasPublishedResult(status.data.state);
   const findings = useQuery({ ...runFindingsQueryOptions((runId ?? '') as RunId), enabled: runId !== null && published });
   const links = useRunFindingBlocks(runId, published && findings.data !== undefined);
 

@@ -48,7 +48,7 @@ const REFUSAL_TEXT: Readonly<Record<RefusalReason, (side: string) => string>> = 
   run_not_of_version: (side) => `Указанный прогон не относится к ${side} версии.`,
   run_not_published: (side) => `Указанный прогон ${side} версии не завершён.`,
   analysis_not_comparable: (side) =>
-    `Указанный прогон ${side} версии выполнен другим анализом (АР v3): результаты двух анализов не сравниваются.`,
+    `Указанный прогон ${side} версии выполнен другим анализом: результаты двух анализов не сравниваются.`,
   text_unavailable: (side) => `Текстовый слой ${side} версии недоступен.`,
   text_too_large: (side) => `Текст ${side} версии больше допустимого для сравнения.`,
 };
