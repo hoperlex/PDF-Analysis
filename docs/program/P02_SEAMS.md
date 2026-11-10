@@ -1538,6 +1538,8 @@ Rules that hold across the whole surface:
   is refused by `expected_vendor_list_id` (`conflict_reason: vendor_list_changed`).
   A new key over exactly the inputs of a stored optimisation pass answers that pass and
   writes nothing; every decision under a new key is a new appended event.
+  `getExecutorTaskContext` (`CRIT-SEAL-50`) takes no key: a runner token asks for the reference data of its task, and a repeat of the same kind
+  returns the same answer and spends no budget (idempotent by task and kind, journalled once).
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same
   key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does

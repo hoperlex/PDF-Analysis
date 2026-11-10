@@ -389,6 +389,11 @@ REQUIRED_OPERATIONS = {
     "getRunStartReadiness",
     # `HOSTS-SEAL-2` (contract 1.46.0): the stages of a run, plan and fact -- a read, so neither keyed nor in the writes below.
     "getRunStages",
+    # `CRIT-SEAL-50` (contract 1.51.0): the sleeping surface of the Precedents programme -- the reference data of a task (a runner token), the labels
+    # and the card, the vectors' control and the settings. Neither `getExecutorTaskContext` (idempotent by task and kind) nor the reads are keyed;
+    # `setVectorPaused` and `appendPrecedentSetting` are, and are in the writes above.
+    "getExecutorTaskContext", "getRunPrecedents", "getFindingPrecedents", "getVectorControl", "setVectorPaused", "listPrecedentSettings",
+    "appendPrecedentSetting",
     # `CMP-SEAL-C3`: stage intake, pairs, sheet map, raw text and chain runs.
     "listStagePairs", "confirmStagePair", "getStagePair", "listStagePairSuggestions",
     "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",

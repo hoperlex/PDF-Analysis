@@ -15,7 +15,7 @@ Minimum conventions:
 
 Slice for the «Прецеденты» programme (plan-v5, ADR-0029, ruling `R-154h` of 2026-11-10, which gave this seal the slot after the removal of the АР beta). It is a seal of
 storage and surface only: **nothing behaves**, every operation answers `503 dependency_unavailable` (`details.dependency` the lane that owns it) until that lane fills its body.
-The error catalogue is closed and has no 501, so this is the answer every earlier seal's stubs give. **Seven operations, twenty-nine schemas and a handful of optional members are
+The error catalogue is closed and has no 501, so this is the answer every earlier seal's stubs give. **Seven operations (listed below), twenty-nine schemas and a handful of optional members are
 added; nothing is removed**; migration `0064_precedents_seal` (head `0064`); four identity prefixes; no error code and no state machine.
 
 - **Operations (7).** `getExecutorTaskContext` (`POST /runner/tasks/{task_id}/context`): a runner token with the claim of the task asks, once per kind, for the decisions of experts on

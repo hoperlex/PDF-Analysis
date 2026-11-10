@@ -26,8 +26,8 @@ def test_c4_surface_is_additive_and_authorized() -> None:
     assert doc["info"]["version"] == frozen["info"]["version"] == "1.51.0"
     actual = {op["operationId"] for item in doc["paths"].values() for key,op in item.items()
               if key in {"get","post","put","delete","patch"}}
-    assert OPS <= actual and len(actual) == 318
-    assert len(doc["paths"]) == 290
+    assert OPS <= actual and len(actual) == 325
+    assert len(doc["paths"]) == 296
     assert set(doc["components"]["schemas"]) == set(frozen["components"]["schemas"])
     for item in doc["paths"].values():
         for method,op in item.items():

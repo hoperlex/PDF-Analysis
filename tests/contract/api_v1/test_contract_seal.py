@@ -32,7 +32,7 @@ from tests.support.expected_facts import FACTS
 ROOT = Path(__file__).resolve().parents[3]
 SEALED = "1.51.0"
 DRAFT = "1.0.0-draft.1"
-PREVIOUS = "1.49.0"
+PREVIOUS = "1.50.0"
 FAMILIES = ("analysis", "domain", "events")
 DOMAIN = ROOT / "contracts/domain/v1"
 CATALOGS = ("error-codes.json", "identifiers.json", "state-machines.json")

@@ -602,7 +602,8 @@ class TestN1ComponentReferenceResolution:
         # `HOSTS-SEAL-2` adds one: `getRunStages` addresses a run.
         # The removal of the six-scope АР beta (2026-11-10, `R-154a`) takes five off: its start, its cost estimate, its two
         # group reads and the run's norm-verification read.
-        assert len(report) == 231, report
+        # `CRIT-SEAL-50` adds three: `getExecutorTaskContext`, `getRunPrecedents` and `getFindingPrecedents` address a task, a run and a finding.
+        assert len(report) == 234, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

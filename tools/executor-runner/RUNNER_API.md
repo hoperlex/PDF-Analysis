@@ -634,7 +634,7 @@ One more operation, sealed asleep: the stand answers `503 dependency_unavailable
 
 ### 11.1 `getExecutorTaskContext` - `POST /api/v1/runner/tasks/{task_id}/context`
 
-Runner token only (the same principal as the five operations of section 4). Body: `{"kind": "similar_cases" | "patterns"}`.
+Runner token only (the same principal as the operations of section 4). Body: `{"kind": "similar_cases" | "patterns"}`.
 
 - **When to ask.** Only for a task whose claim carries `context_request`: a non-empty array of
   `{"input_id": string (1..128), "text_sha256": sha256, "section": string (1..64)}`, at most 64, present on a `review:main` task of a run on the
