@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.48.0 (OpenAPI 3.1.0)
- *   sha256 f240a2af7e8b28a5a129229018e0d3753517af0677e59e165c8bb2fce50cef6b
+ *   AuditManager PC-01 API 1.49.0 (OpenAPI 3.1.0)
+ *   sha256 0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.48.0';
+export const CONTRACT_VERSION = '1.49.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f240a2af7e8b28a5a129229018e0d3753517af0677e59e165c8bb2fce50cef6b';
+export const CONTRACT_DIGEST = '0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -1488,7 +1488,6 @@ export type ClaimedExecutorTask = {
   deadline_at: string;
   effort?: ModelEffort;
   images?: Array<RunnerImage>;
-  max_output_tokens?: number;
   model: string;
   model_id?: string;
   output_schema: Record<string, never>;
@@ -1943,10 +1942,8 @@ export type ComparisonAiQueueItem = {
  * revision pins (a reply from another model is refused, ``R-133``), how it is billed and whether the
  * process is in recorded mode, in which case every answer is a recorded test answer.
  *
- * `EXEC2-SEAL-2` (ADR-0026 decisions 12 and 13): for work admitted by a rule or a group, `executor_group_id`, `executor_group_revision_id` and (when a rule routed it) `routing_rule_revision_id` name what admission froze, `pinned_model` and `billing` follow the group revision, and `connection_id` and `revision_id` are absent until dispatch binds the work to a member. The estimate digest binds every field that is present.
- *
  * `HOSTS-CMP-01` (ADR-0028 decision 19): a route chosen by the stage layout also carries the `cell` of its kind of work -- the
- * effort, the answer limit and the timeout the job froze. The estimate digest binds it, so the consent names what will run.
+ * model and effort the job froze. The estimate digest binds it, so the consent names what will run.
  */
 export type ComparisonAiRoute = {
   billing: ExecutorBilling;
@@ -4384,7 +4381,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.48.0";
+  contract_version: "1.49.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -7096,8 +7093,8 @@ export type RunStage = {
 };
 
 /**
- * One line of a chip's plan: the part it plays (`main`, `leg1`, `leg2`, `judge`), the model, the effort, the answer limit and the
- * timeout the run froze, and -- for an expert and an administrator -- the access and the server the cell is bound to. Of a run
+ * One line of a chip's plan: the part it plays (`main`, `leg1`, `leg2`, `judge`), the model and the effort the run froze, and -- for an
+ * expert and an administrator -- the access and the server the cell is bound to. `LIMITS-01` (contract 1.49.0): no answer limit and no timeout. Of a run
  * without a stage plan the line has `role` `main`, the model of the run's binding and nothing else it does not know.
  * `access` and `server` are omitted for the viewer («Наблюдатель», `R-150w`); `server` is also absent while the cell is not bound.
  */
@@ -7105,11 +7102,9 @@ export type RunStageCell = {
   access?: ExecutorModelAccess;
   cell_key?: StageCellKey;
   effort?: ModelEffort;
-  max_output_tokens?: number;
   model_id?: string;
   role: StageCellRole;
   server?: string;
-  timeout_seconds?: number;
 };
 
 /**
@@ -8412,15 +8407,13 @@ export type StageClassificationCard = {
 };
 
 /**
- * The settings of one kind of comparison work (`HOSTS-CMP-01`): model, effort, the output limit in tokens and the timeout in seconds.
- * The model and the effort must be a pair of `listModelCatalogue`. The limit is a ceiling over the limit of the work itself: a call is made
- * with the smaller of the two. The timeout is the window of one call to a server. A comparison job freezes its cell when it starts.
+ * The settings of one kind of comparison work (`HOSTS-CMP-01`): model and effort. The model and the effort must be a pair of
+ * `listModelCatalogue`. A comparison job freezes its cell when it starts. `LIMITS-01` (contract 1.49.0): no answer limit and no
+ * timeout per cell -- a call carries no answer cap, and its window is the constant of its kind (`R-153n`, `R-153o`).
  */
 export type StageComparisonCell = {
   effort: ModelEffort;
-  max_output_tokens: number;
   model_id: string;
-  timeout_seconds: number;
   work_kind: ComparisonLayoutKind;
 };
 
@@ -8466,17 +8459,16 @@ export const STAGE_ID_VALUES = [
 export type StageId = (typeof STAGE_ID_VALUES)[number];
 
 /**
- * The settings of one cell (a row and a role): model, effort, the output limit in tokens and the timeout in seconds. The
- * model and the effort must be a pair of `listModelCatalogue`.
+ * The settings of one cell (a row and a role): model and effort. The model and the effort must be a pair of `listModelCatalogue`.
+ * `LIMITS-01` (contract 1.49.0, `R-153n`, `R-153o`): a cell has no answer limit and no timeout -- no answer cap reaches a model, and a
+ * call's timeout is a constant of its row. A request that still names either member is refused (`validation_failed`), not ignored.
  */
 export type StageLayoutCell = {
   cell_key: StageCellKey;
   effort: ModelEffort;
-  max_output_tokens: number;
   model_id: string;
   role: StageCellRole;
   row: StageRowKey;
-  timeout_seconds: number;
 };
 
 /**

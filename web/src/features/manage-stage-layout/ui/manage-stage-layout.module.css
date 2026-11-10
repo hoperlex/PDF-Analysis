@@ -40,36 +40,6 @@
   margin: var(--am-gap-sm) 0 0;
 }
 
-.fold {
-  margin: var(--am-gap-sm) 0;
-}
-
-.fold summary {
-  cursor: pointer;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-}
-
-.limits {
-  display: grid;
-  gap: var(--am-gap-xs);
-  margin: var(--am-gap-xs) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.limit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--am-gap-xs) var(--am-gap);
-  margin: 0;
-}
-
-.number {
-  width: 6.5rem;
-}
-
 .journal {
   display: grid;
   gap: var(--am-gap-2xs);

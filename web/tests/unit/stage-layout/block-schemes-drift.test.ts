@@ -62,7 +62,7 @@ describe('the schemes of the blocks row are the server\'s closed list', () => {
       return serverSchemes()[index]?.cells ?? [];
     };
     const blocksOf = (kit: 'claude_only' | 'codex_only') =>
-      kitCells(kit, []).filter((cell) => cell.row === 'blocks').map((cell) => `${cell.role}:${cell.model_id}:${cell.effort}`);
+      kitCells(kit).filter((cell) => cell.row === 'blocks').map((cell) => `${cell.role}:${cell.model_id}:${cell.effort}`);
     expect(blocksOf('claude_only')).toEqual(server('KIT_CLAUDE_ONLY'));
     expect(blocksOf('codex_only')).toEqual(server('KIT_CODEX_ONLY'));
   });

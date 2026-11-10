@@ -30,7 +30,6 @@ export interface CellLine {
   /** The pin as the answer has it, for the tooltip and the small code beside a short name. */
   readonly pin: string | null;
   readonly effort: string | null;
-  readonly limit: string | null;
   /** The server and the access, or `null` when the reader may not see them or the answer has neither. */
   readonly server: string | null;
 }
@@ -50,7 +49,6 @@ export function cellLines(plan: readonly RunStageCell[], showServer: boolean): r
     model: shortModelName(cell.model_id),
     pin: cell.model_id ?? null,
     effort: cell.effort === undefined ? null : `усилие: ${STAGE_EFFORT_LABELS[cell.effort]}`,
-    limit: cell.max_output_tokens === undefined ? null : `ответ до ${groupDigits(cell.max_output_tokens)} токенов`,
     server: showServer ? serverText(cell) : null,
   }));
 }

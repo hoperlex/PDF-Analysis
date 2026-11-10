@@ -29,7 +29,7 @@ function apiError(
   retryable = false,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.48.0', error_code: code, message: 'A caller-safe English sentence.',
+    contract_version: '1.49.0', error_code: code, message: 'A caller-safe English sentence.',
     correlation_id: 'cid-grp', retryable, details,
   };
   return new ApiError(status, envelope, 'cid-grp');

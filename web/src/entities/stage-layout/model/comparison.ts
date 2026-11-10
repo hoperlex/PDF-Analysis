@@ -6,8 +6,8 @@
  *   These are the tables `COMPARISON_PRESET_CELLS` of `src/auditmanager/runs/stage_layout.py`; the server accepts a named set only if its
  *   comparison cells have these models and efforts, so a copy that drifted is refused, never stored. `tests/unit/stage-layout/comparison-drift.test.ts`
  *   reads the Python source and compares.
- * - **The limits.** The answer limit and the call window of each kind are the constants of the code (`COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS`,
- *   `COMPARISON_DEFAULT_TIMEOUT_SECONDS`); a revision in force keeps its own for a kind the form changes, and these apply to a kind it has none for.
+ * - **No limits.** A comparison cell is a model and an effort (`LIMITS-01`, `R-153n` and `R-153o`): no answer cap reaches a model, and the call window
+ *   of each kind is a constant of the server, the original's. The web keeps no copy of either.
  * - **«Свой набор» has no table.** A custom revision stored without comparison cells has none: the comparison is then refused by the server, so
  *   the form shows the four rows empty and says so. **Nothing here invents a model for a kind nobody chose.**
  */
@@ -18,22 +18,6 @@ import { COMPARISON_LAYOUT_KIND_VALUES } from '@/shared/api';
 import type { NamedKit } from './kits';
 import { cellText } from './table';
 import { COMPARISON_KIND_LABELS } from './vocabulary';
-
-/** The answer limit, in tokens, of each kind: the constant its module carried before the layout. */
-export const COMPARISON_DEFAULT_TOKENS: Readonly<Record<ComparisonLayoutKind, number>> = {
-  comparison_pair_check: 1200,
-  comparison_sheet_changes: 8192,
-  comparison_spec: 32000,
-  comparison_report: 8000,
-};
-
-/** The call window, in seconds, of each kind, as the original sets it. */
-export const COMPARISON_DEFAULT_TIMEOUT: Readonly<Record<ComparisonLayoutKind, number>> = {
-  comparison_pair_check: 900,
-  comparison_sheet_changes: 1800,
-  comparison_spec: 900,
-  comparison_report: 2400,
-};
 
 /** The effort a kind takes when a model is first chosen for it in «Свой набор»: both sets, and the original, use the high one. */
 export const COMPARISON_DEFAULT_EFFORT: ModelEffort = 'high';
@@ -71,32 +55,18 @@ export function comparisonKitPairs(kit: NamedKit): readonly KitPair[] {
   return COMPARISON_LAYOUT_KIND_VALUES.map((kind) => KIT_TABLES[kit][kind]);
 }
 
-/**
- * The four comparison cells of a set. A kind the draft or the revision already has keeps its limits; the rest take the constants of the
- * code. The kind is the cell's own row, so the order is the order of the kinds.
- */
-export function comparisonKitCells(kit: NamedKit, current: readonly StageComparisonCell[]): StageComparisonCell[] {
-  return COMPARISON_LAYOUT_KIND_VALUES.map((kind) => {
-    const had = current.find((candidate) => candidate.work_kind === kind);
-    return {
-      work_kind: kind,
-      model_id: KIT_TABLES[kit][kind].model_id,
-      effort: KIT_TABLES[kit][kind].effort,
-      max_output_tokens: had?.max_output_tokens ?? COMPARISON_DEFAULT_TOKENS[kind],
-      timeout_seconds: had?.timeout_seconds ?? COMPARISON_DEFAULT_TIMEOUT[kind],
-    };
-  });
+/** The four comparison cells of a set. The kind is the cell's own row, so the order is the order of the kinds. */
+export function comparisonKitCells(kit: NamedKit): StageComparisonCell[] {
+  return COMPARISON_LAYOUT_KIND_VALUES.map((kind) => ({
+    work_kind: kind,
+    model_id: KIT_TABLES[kit][kind].model_id,
+    effort: KIT_TABLES[kit][kind].effort,
+  }));
 }
 
-/** The cell a model is first chosen for in «Свой набор»: the model, the effort the caller allows, the constants of the code for the limits. */
+/** The cell a model is first chosen for in «Свой набор»: the model and the effort the caller allows. */
 export function newComparisonCell(kind: ComparisonLayoutKind, modelId: string, effort: ModelEffort): StageComparisonCell {
-  return {
-    work_kind: kind,
-    model_id: modelId,
-    effort,
-    max_output_tokens: COMPARISON_DEFAULT_TOKENS[kind],
-    timeout_seconds: COMPARISON_DEFAULT_TIMEOUT[kind],
-  };
+  return { work_kind: kind, model_id: modelId, effort };
 }
 
 /** The cells in the order of the kinds, whatever order they came in; a kind that is not one of the four is left out. */

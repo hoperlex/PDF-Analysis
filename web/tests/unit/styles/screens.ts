@@ -233,7 +233,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.48.0',
+    contract_version: '1.49.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1026,7 +1026,7 @@ export function screens(): Screen[] {
      * The words and the colours of the new rows are judged here like every other screen's.
      */
     const planned = (role: 'main' | 'leg1' | 'judge', model_id: string, extra: Record<string, unknown> = {}) => ({
-      role, model_id, effort: 'medium' as const, max_output_tokens: 6000, timeout_seconds: 900, ...extra,
+      role, model_id, effort: 'medium' as const, ...extra,
     });
     const noFacts = {
       calls_succeeded: 0, calls_failed: 0, calls_retried: 0, input_tokens: 0, output_tokens: 0, subscription_input_tokens: 0,
@@ -1050,7 +1050,7 @@ export function screens(): Screen[] {
             chip: 'blocks', stage_ids: ['block_analysis'],
             plan: [
               planned('leg1', 'claude-opus-5-5', { cell_key: 'blocks:leg1', access: 'subscription', server: 'adm1.hlab.kz' }),
-              planned('judge', 'claude-sonnet-5-5', { cell_key: 'blocks:judge', access: 'api', max_output_tokens: 12000 }),
+              planned('judge', 'claude-sonnet-5-5', { cell_key: 'blocks:judge', access: 'api' }),
             ],
             facts: {
               ...noFacts, state: 'running', calls_succeeded: 12, input_tokens: 102400, output_tokens: 18800, subscription_input_tokens: 90000,
@@ -1563,18 +1563,18 @@ export function screens(): Screen[] {
     add('LayoutEditorView', renderScreen(client, createElement(LayoutEditorView, {
       draft: { kit: HOSTS_LAYOUT.current!.kit, cells: HOSTS_LAYOUT.current!.cells }, catalogue: HOSTS_CATALOGUE,
       availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6-astra'], currentKit: 'custom', pending: false,
-      problem: 'Набор моделей пуст: выберите модели по этапам.', failure: null, onKit: noop, onModel: noop, onEffort: noop, onLimit: noop, onSave: noop, onCancel: noop,
+      problem: 'Набор моделей пуст: выберите модели по этапам.', failure: null, onKit: noop, onModel: noop, onEffort: noop, onSave: noop, onCancel: noop,
     })));
     /*
      * `CMP-WEB-01`: the comparison of versions in «Модели по этапам». Under «Свой набор» the form draws the group «Сравнение версий» open:
-     * four rows with the kind, a model and an effort (and the limit of each in «Дополнительно»), and the same group with no model chosen,
+     * four rows with the kind, a model and an effort, and the same group with no model chosen,
      * which carries the one-line note and the disabled effort. The table folds the four lines under the six rows (the mark «нет на
      * серверах» on one of them), and says in a sentence that none will run when a «Свой набор» stored none.
      */
     const comparisonProps = {
       catalogue: HOSTS_CATALOGUE, availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'],
-      currentKit: 'custom' as const, pending: false, problem: null, failure: null, onKit: noop, onModel: noop, onEffort: noop, onLimit: noop,
-      onComparisonModel: noop, onComparisonEffort: noop, onComparisonLimit: noop, onSave: noop, onCancel: noop,
+      currentKit: 'custom' as const, pending: false, problem: null, failure: null, onKit: noop, onModel: noop, onEffort: noop,
+      onComparisonModel: noop, onComparisonEffort: noop, onSave: noop, onCancel: noop,
     };
     add('LayoutEditorView comparison group', renderScreen(client, createElement(LayoutEditorView, {
       ...comparisonProps, draft: { kit: 'custom', cells: HOSTS_LAYOUT.current!.cells, comparison: HOSTS_COMPARISON_CELLS },

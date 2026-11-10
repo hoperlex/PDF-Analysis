@@ -41,7 +41,7 @@ const RACE_TEXT = 'Параллельная запись проиграла';
 
 function refusal(code: ErrorCode, status: number, details?: Record<string, string | number | boolean | null>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.48.0', error_code: code, message: 'A caller-safe sentence.', correlation_id: 'cid-arv3',
+    contract_version: '1.49.0', error_code: code, message: 'A caller-safe sentence.', correlation_id: 'cid-arv3',
     retryable: false, ...(details === undefined ? {} : { details }),
   };
   return new ApiError(status, envelope, 'cid-arv3');

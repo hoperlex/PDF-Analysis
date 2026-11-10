@@ -8,12 +8,9 @@
  * (`./block-schemes.ts`, `HOSTS-ENSEMBLE-01`): «Только Claude» is an Opus leg and a Sonnet judge, «Только Codex» is two legs and a
  * judge, so a set has more than six cells, and the legs and the judge count as models of the set.
  *
- * The limits of a cell (answer tokens, timeout) are today's constants of the code (`ROW_DEFAULT_MAX_OUTPUT_TOKENS` of
- * `analysis/text/cell_settings.py`: 16000, 6000 and 12000 tokens, the legs and the judge of the blocks row taking the row's 6000);
- * a revision in force keeps its own limits for a cell the form changes, and these apply only to a cell the revision has not
- * got. The timeout has no constant in the code to copy for the new kinds of cell; the default is 1800 seconds
- * (`DEFAULT_TIMEOUT_SECONDS`, the same as the server's default of a cell, `HOSTS-LAYOUT-01`) and the server bounds it
- * (1 to 7200).
+ * A cell is a model and an effort, and nothing about the length of an answer or the time of a call (`LIMITS-01`, `R-153n` and
+ * `R-153o`): no answer cap reaches a model, and the window of a call is a constant of the server, from the original. The form has no
+ * field for either, and the web keeps no copy of them.
  */
 
 import type {
@@ -29,18 +26,6 @@ import { STAGE_ROW_KEY_VALUES } from '@/shared/api';
 import { blockSchemeById } from './block-schemes';
 import type { BlockScheme } from './block-schemes';
 import { comparisonKitPairs } from './comparison';
-
-export const DEFAULT_TIMEOUT_SECONDS = 1800;
-
-/** The answer limits that are constants of the code today. */
-export const DEFAULT_ANSWER_TOKENS: Readonly<Record<StageRowKey, number>> = {
-  text: 16000,
-  blocks: 6000,
-  cross_check: 6000,
-  norms: 12000,
-  review: 12000,
-  correction: 12000,
-};
 
 interface KitCell { readonly role: StageCellRole; readonly model_id: string; readonly effort: ModelEffort }
 
@@ -100,41 +85,26 @@ export function kitModelIds(kit: NamedKit): readonly string[] {
   return [...new Set([...kitTable(kit).map(({ cell }) => cell.model_id), ...comparisonKitPairs(kit).map((pair) => pair.model_id)])];
 }
 
-/**
- * The cells of a set. A cell the revision in force already has keeps its limits; the rest take today's constants, the legs and the
- * judge of the blocks row the row's.
- */
-export function kitCells(kit: NamedKit, current: readonly StageLayoutCell[]): StageLayoutCell[] {
-  return kitTable(kit).map(({ row, cell }) => {
-    const key = cellKeyOf(row, cell.role);
-    const had = current.find((candidate) => candidate.cell_key === key);
-    return {
-      cell_key: key,
-      row,
-      role: cell.role,
-      model_id: cell.model_id,
-      effort: cell.effort,
-      max_output_tokens: had?.max_output_tokens ?? DEFAULT_ANSWER_TOKENS[row],
-      timeout_seconds: had?.timeout_seconds ?? DEFAULT_TIMEOUT_SECONDS,
-    };
-  });
+/** The cells of a set, row by row, in the order of the roles inside a row. */
+export function kitCells(kit: NamedKit): StageLayoutCell[] {
+  return kitTable(kit).map(({ row, cell }) => ({
+    cell_key: cellKeyOf(row, cell.role),
+    row,
+    role: cell.role,
+    model_id: cell.model_id,
+    effort: cell.effort,
+  }));
 }
 
-/** The cells of the blocks row for a scheme, with the limits of each cell the revision or the draft already has. */
-export function blockSchemeCells(candidate: BlockScheme, current: readonly StageLayoutCell[]): StageLayoutCell[] {
-  return candidate.cells.map((cell) => {
-    const key = cellKeyOf('blocks', cell.role);
-    const had = current.find((other) => other.cell_key === key);
-    return {
-      cell_key: key,
-      row: 'blocks',
-      role: cell.role,
-      model_id: cell.model_id,
-      effort: cell.effort,
-      max_output_tokens: had?.max_output_tokens ?? DEFAULT_ANSWER_TOKENS.blocks,
-      timeout_seconds: had?.timeout_seconds ?? DEFAULT_TIMEOUT_SECONDS,
-    };
-  });
+/** The cells of the blocks row for a scheme. */
+export function blockSchemeCells(candidate: BlockScheme): StageLayoutCell[] {
+  return candidate.cells.map((cell) => ({
+    cell_key: cellKeyOf('blocks', cell.role),
+    row: 'blocks',
+    role: cell.role,
+    model_id: cell.model_id,
+    effort: cell.effort,
+  }));
 }
 
 /** The efforts the catalogue allows for a model, or none when the catalogue does not name it. */

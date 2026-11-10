@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.48.0 (OpenAPI 3.1.0)
- *   sha256 f240a2af7e8b28a5a129229018e0d3753517af0677e59e165c8bb2fce50cef6b
+ *   AuditManager PC-01 API 1.49.0 (OpenAPI 3.1.0)
+ *   sha256 0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -1394,7 +1394,7 @@ export type ChangePasswordResult = IssueTokenResponse;
 /**
  * Claim Executor Task
  *
- * `HOSTS-SEAL-1` (ADR-0028): with a **host token** the task gains `provider`, `access`, `model_id`, `effort`, `max_output_tokens`, `timeout_seconds` and `cell_key` -- all seven or none -- and `model` equals `model_id`. The agent claims only while at least one model is verified and a slot is free behind one (no per-provider free capacity is sent: the stand's capacity pool decides). It refuses a task whose model it does not report as verified for that provider and access, or whose effort is not one of the model's, with `failExecutorTask` before anything runs (`model_not_available`, `effort_not_allowed`), a task with none of the host members with `host_task_incomplete`, and one with images the host cannot take with `image_input_unsupported`.
+ * `HOSTS-SEAL-1` (ADR-0028): with a **host token** the task gains `provider`, `access`, `model_id`, `effort`, `timeout_seconds` and `cell_key` -- all six or none; since contract 1.49.0 there is no `max_output_tokens`: no answer cap reaches a model (`R-153n`), and `timeout_seconds` is the constant of the task's row or kind (`R-153o`) -- and `model` equals `model_id`. The agent claims only while at least one model is verified and a slot is free behind one (no per-provider free capacity is sent: the stand's capacity pool decides). It refuses a task whose model it does not report as verified for that provider and access, or whose effort is not one of the model's, with `failExecutorTask` before anything runs (`model_not_available`, `effort_not_allowed`), a task with none of the host members with `host_task_incomplete`, and one with images the host cannot take with `image_input_unsupported`.
  */
 export type ClaimExecutorTaskInput = {
   /** Request body, sent as `application/json`. */
@@ -3593,7 +3593,7 @@ export type GetRunNormVerificationResult = NormVerificationReport;
 /**
  * Get Run Stages
  *
- * `HOSTS-SEAL-2` (ADR-0028, plan section 9.4): the data of the window «Этапы анализа раздела». For each chip of the run -- `preparation`, `text`, `blocks`, `cross_check`, `merge`, `norms`, `review`, `correction` and, for the AR v3 profile, `ar_v3`, in that order, only those the run has -- the code stage ids it covers, its **plan** (the cells the run froze in its `stage_plan`: role, model, effort, answer limit, timeout, access and the server the cell is bound to; for a run that froze none, one line from its binding) and its **facts**: the state; the first and last call (or the stage result's times); the calls succeeded, failed and retried; the input and output tokens, the part of them served by a subscription and the cost; the last error code; and the batches planned and completed where the extended review keeps them. The facts come from the stage results, the extended review artifact and the call journal; a call journalled before migration `0062` has no `stage_key` and is placed by its extended phase. `role:admin|expert|viewer`: the viewer reads the run's stages but never the server or the access (`R-150w`), which are absent from the answer. `404 not_found` for an unknown run.
+ * `HOSTS-SEAL-2` (ADR-0028, plan section 9.4): the data of the window «Этапы анализа раздела». For each chip of the run -- `preparation`, `text`, `blocks`, `cross_check`, `merge`, `norms`, `review`, `correction` and, for the AR v3 profile, `ar_v3`, in that order, only those the run has -- the code stage ids it covers, its **plan** (the cells the run froze in its `stage_plan`: role, model, effort, access and the server the cell is bound to; for a run that froze none, one line from its binding) and its **facts**: the state; the first and last call (or the stage result's times); the calls succeeded, failed and retried; the input and output tokens, the part of them served by a subscription and the cost; the last error code; and the batches planned and completed where the extended review keeps them. The facts come from the stage results, the extended review artifact and the call journal; a call journalled before migration `0062` has no `stage_key` and is placed by its extended phase. `role:admin|expert|viewer`: the viewer reads the run's stages but never the server or the access (`R-150w`), which are absent from the answer. `404 not_found` for an unknown run.
  */
 export type GetRunStagesInput = {
   /** Path parameters, substituted into `/runs/{run_id}/stages`. */
@@ -3823,7 +3823,7 @@ export type GetStageChangeJournalResult = StageChangeJournal;
 /**
  * Get Stage Model Layout
  *
- * `HOSTS-SEAL-1` (ADR-0028): the layout of models over the analysis stages -- for each row (text, blocks, cross-check, norms, critic, refinement) and role the model, the effort, the output limit and the timeout -- the revision in force, the revisions newest first, the switch and its journal, and the cells whose model no server can serve now. An expert reads it; only an administrator changes it. `role:admin|expert`; the viewer is denied.
+ * `HOSTS-SEAL-1` (ADR-0028): the layout of models over the analysis stages -- for each row (text, blocks, cross-check, norms, critic, refinement) and role the model and the effort (no answer limit and no timeout: `LIMITS-01`) -- the revision in force, the revisions newest first, the switch and its journal, and the cells whose model no server can serve now. An expert reads it; only an administrator changes it. `role:admin|expert`; the viewer is denied.
  */
 export type GetStageModelLayoutInput = {
   /**
@@ -7244,7 +7244,7 @@ export type ReviseStageAssemblyResult = StageAssembly;
 /**
  * Revise Stage Model Layout
  *
- * `HOSTS-SEAL-1`: save a new immutable revision of the layout (author and time are kept). Every cell must be a pair of `listModelCatalogue` (model and effort); the blocks row is chosen from the closed list of schemes, never leg by leg; a cell key repeated or missing is `422 validation_failed`. A revision changes nothing for runs already started: they froze their plan. `role:admin`, `Idempotency-Key` required.
+ * `HOSTS-SEAL-1`: save a new immutable revision of the layout (author and time are kept). Every cell must be a pair of `listModelCatalogue` (model and effort); the blocks row is chosen from the closed list of schemes, never leg by leg; a cell key repeated or missing is `422 validation_failed`. `LIMITS-01` (contract 1.49.0): a cell has no answer limit and no timeout, so a cell (or comparison cell) that still names `max_output_tokens` or `timeout_seconds` is refused `422 validation_failed`, not ignored. A revision changes nothing for runs already started: they froze their plan. `role:admin`, `Idempotency-Key` required.
  */
 export type ReviseStageModelLayoutInput = {
   /** Request body, sent as `application/json`. */

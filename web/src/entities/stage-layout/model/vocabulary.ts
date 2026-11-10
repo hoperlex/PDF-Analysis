@@ -79,9 +79,6 @@ export const CANCEL_LABEL = 'Отменить';
 export const KIT_LEGEND = 'Набор';
 export const ROW_MODEL_LABEL = 'Модель';
 export const ROW_EFFORT_LABEL = 'Усилие';
-export const ADVANCED_SUMMARY = 'Дополнительно';
-export const TOKENS_LABEL = 'Ответ, токенов';
-export const TIMEOUT_LABEL = 'Таймаут, с';
 /** The blocks row is one of three schemes, chosen whole (`HOSTS-ENSEMBLE-01`); its legs and judge are never edited one by one. */
 export const BLOCKS_SCHEME_LABEL = 'Схема';
 export const BLOCKS_SCHEME_UNLISTED = 'не из списка';

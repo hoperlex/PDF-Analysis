@@ -2,8 +2,8 @@
 
 /**
  * «Изменить» in «Модели по этапам» (`HOSTS-WEB-01`, plan 2026-11-09 §7.4; **administrator only**). The segments
- * «Только Claude · Только Codex · Свой набор», and for each of the six rows a model and an effort. «Дополнительно» holds the
- * answer limit and the timeout of every cell.
+ * «Только Claude · Только Codex · Свой набор», and for each of the six rows a model and an effort. There is nothing else to set:
+ * no answer length and no timeout (`LIMITS-01`, `R-153n` and `R-153o`; the former «Дополнительно» is gone).
  *
  * **What the form offers.** A set only when every model it names can be served now; a model only when some server can serve
  * it (and the model already in the cell, so the draft never drops what is in force); an effort only from the catalogue's
@@ -14,7 +14,7 @@
  * **«Сравнение версий»** (`CMP-WEB-01`) is one small group of four rows, a model and an effort for each kind of work of the comparison
  * of versions that calls a model, and it is drawn under «Свой набор» **only**: with a named set the set's table applies and nothing is
  * drawn (fewer concepts on the screen). A custom revision stored without these cells shows the four rows empty and says the comparison will not
- * run; a kind is given a model only by the person. Their limit and timeout are in «Дополнительно» beside the others.
+ * run; a kind is given a model only by the person.
  *
  * One idempotency key per intent, kept for an explicit repeat after an unknown outcome and released when the command settles.
  */
@@ -34,7 +34,6 @@ import { COMPARISON_LAYOUT_KIND_VALUES, MODEL_EFFORT_VALUES, STAGE_ROW_KEY_VALUE
 import type { ExecutionFailure } from '@/entities/execution';
 import { modelLabel } from '@/entities/executor-host';
 import {
-  ADVANCED_SUMMARY,
   BLOCKS_SCHEME_LABEL,
   BLOCKS_SCHEME_UNLISTED,
   CANCEL_LABEL,
@@ -51,10 +50,7 @@ import {
   SAVE_LABEL,
   STAGE_EFFORT_LABELS,
   STAGE_KIT_LABELS,
-  STAGE_ROLE_LABELS,
   STAGE_ROW_LABELS,
-  TIMEOUT_LABEL,
-  TOKENS_LABEL,
   blockSchemeOf,
   effortsOf,
   layoutFailure,
@@ -77,10 +73,8 @@ import {
   offeredKits,
   setBlockScheme,
   setCellEffort,
-  setCellLimit,
   setCellModel,
   setComparisonEffort,
-  setComparisonLimit,
   setComparisonModel,
 } from '../model/draft';
 import type { LayoutDraft } from '../model/draft';
@@ -103,14 +97,12 @@ export interface LayoutEditorViewProps {
    */
   readonly onScheme?: ((scheme: BlockSchemeId) => void) | undefined;
   readonly onEffort: (cellKey: string, effort: ModelEffort) => void;
-  readonly onLimit: (cellKey: string, field: 'max_output_tokens' | 'timeout_seconds', value: number) => void;
   /**
-   * A model, an effort and the limits of one kind of the comparison of versions. Optional only for a view drawn to be read, like `onScheme`;
+   * A model and an effort of one kind of the comparison of versions. Optional only for a view drawn to be read, like `onScheme`;
    * `LayoutEditor` always passes them.
    */
   readonly onComparisonModel?: ((kind: ComparisonLayoutKind, modelId: string) => void) | undefined;
   readonly onComparisonEffort?: ((kind: ComparisonLayoutKind, effort: ModelEffort) => void) | undefined;
-  readonly onComparisonLimit?: ((kind: ComparisonLayoutKind, field: 'max_output_tokens' | 'timeout_seconds', value: number) => void) | undefined;
   readonly onSave: () => void;
   readonly onCancel: () => void;
 }
@@ -308,65 +300,6 @@ export function LayoutEditorView(props: LayoutEditorViewProps) {
           onEffort={props.onComparisonEffort}
         />
       )}
-      <details className={styles.fold}>
-        <summary>{ADVANCED_SUMMARY}</summary>
-        <ul className={styles.limits}>
-          {rows.flatMap((entry) => entry.cells).map((cell) => (
-            <li key={cell.cell_key} className={styles.limit} data-layout-limits={cell.cell_key}>
-              <strong>{STAGE_ROW_LABELS[cell.row]}{STAGE_ROLE_LABELS[cell.role] === '' ? '' : ` · ${STAGE_ROLE_LABELS[cell.role]}`}</strong>
-              <label>
-                {TOKENS_LABEL}{' '}
-                <input
-                  className={styles.number}
-                  type="number"
-                  min={1}
-                  max={65536}
-                  value={cell.max_output_tokens}
-                  onChange={(event) => props.onLimit(cell.cell_key, 'max_output_tokens', Number(event.currentTarget.value))}
-                />
-              </label>
-              <label>
-                {TIMEOUT_LABEL}{' '}
-                <input
-                  className={styles.number}
-                  type="number"
-                  min={1}
-                  max={7200}
-                  value={cell.timeout_seconds}
-                  onChange={(event) => props.onLimit(cell.cell_key, 'timeout_seconds', Number(event.currentTarget.value))}
-                />
-              </label>
-            </li>
-          ))}
-          {(comparison ?? []).map((cell) => (
-            <li key={cell.work_kind} className={styles.limit} data-layout-comparison-limits={cell.work_kind}>
-              <strong>{`${COMPARISON_GROUP_TITLE} · ${COMPARISON_KIND_LABELS[cell.work_kind]}`}</strong>
-              <label>
-                {TOKENS_LABEL}{' '}
-                <input
-                  className={styles.number}
-                  type="number"
-                  min={1}
-                  max={65536}
-                  value={cell.max_output_tokens}
-                  onChange={(event) => props.onComparisonLimit?.(cell.work_kind, 'max_output_tokens', Number(event.currentTarget.value))}
-                />
-              </label>
-              <label>
-                {TIMEOUT_LABEL}{' '}
-                <input
-                  className={styles.number}
-                  type="number"
-                  min={1}
-                  max={7200}
-                  value={cell.timeout_seconds}
-                  onChange={(event) => props.onComparisonLimit?.(cell.work_kind, 'timeout_seconds', Number(event.currentTarget.value))}
-                />
-              </label>
-            </li>
-          ))}
-        </ul>
-      </details>
       {problem === null ? null : <p className="am-form__problem" role="alert" data-layout-problem>{problem}</p>}
       <div className="am-form__row">
         <button className="am-button" type="submit" disabled={pending || problem !== null} data-layout-save>{SAVE_LABEL}</button>
@@ -429,10 +362,8 @@ export function LayoutEditor({ layout, catalogue, availableModelIds, onClose }: 
       onModel={(key, id) => setDraft((was) => (was === null ? was : setCellModel(was, key, id, catalogue)))}
       onScheme={(scheme) => setDraft((was) => (was === null ? was : setBlockScheme(was, scheme)))}
       onEffort={(key, effort) => setDraft((was) => (was === null ? was : setCellEffort(was, key, effort)))}
-      onLimit={(key, field, value) => setDraft((was) => (was === null ? was : setCellLimit(was, key, field, value)))}
       onComparisonModel={(kind, id) => setDraft((was) => (was === null ? was : setComparisonModel(was, kind, id, catalogue)))}
       onComparisonEffort={(kind, effort) => setDraft((was) => (was === null ? was : setComparisonEffort(was, kind, effort)))}
-      onComparisonLimit={(kind, field, value) => setDraft((was) => (was === null ? was : setComparisonLimit(was, kind, field, value)))}
       onSave={() => void save(draft)}
       onCancel={onClose}
     />

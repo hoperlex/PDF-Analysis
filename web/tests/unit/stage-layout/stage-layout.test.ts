@@ -12,12 +12,12 @@ import { describe, expect, it } from 'vitest';
 import type { ModelCatalogue, Role, StageModelLayout } from '@/shared/api';
 import { ApiError, COMPARISON_LAYOUT_KIND_VALUES, queryKeys } from '@/shared/api';
 import {
-  BLOCK_SCHEMES, COMPARISON_KIND_LABELS, COMPARISON_NONE_NOTE, DEFAULT_TIMEOUT_SECONDS, NAMED_KITS, blockSchemeOf, cellText, comparisonKitCells, comparisonTable, effortsOf, kitCells,
+  BLOCK_SCHEMES, COMPARISON_KIND_LABELS, COMPARISON_NONE_NOTE, NAMED_KITS, blockSchemeOf, cellText, comparisonKitCells, comparisonTable, effortsOf, kitCells,
   kitIsOffered, kitModelIds, layoutFailure, layoutRefusalSentence, layoutTable, pairIsInCatalogue, rowOfStageKey,
 } from '@/entities/stage-layout';
 import {
   LayoutEditorView, LayoutSwitchView, chooseKit, draftChanged, draftProblem, draftRequest, initialDraft, modelOptions, offeredBlockSchemes,
-  offeredKits, setBlockScheme, setCellEffort, setCellModel, setComparisonEffort, setComparisonLimit, setComparisonModel,
+  offeredKits, setBlockScheme, setCellEffort, setCellModel, setComparisonEffort, setComparisonModel,
 } from '@/features/manage-stage-layout';
 import type { LayoutDraft as LayoutDraftType } from '@/features/manage-stage-layout';
 import { WorkersPage } from '@/_pages/workers';
@@ -141,47 +141,34 @@ describe('the expert reads the table and has no control', () => {
 });
 
 describe('the sets', () => {
-  it('are the two tables of the original, the blocks row a scheme, with today\'s answer limits for a cell the revision does not have', () => {
-    const claude = kitCells('claude_only', []);
+  it('are the two tables of the original, the blocks row a scheme, a cell being a model and an effort and nothing else', () => {
+    const claude = kitCells('claude_only');
     expect(claude.map((c) => [c.cell_key, c.model_id, c.effort])).toEqual([
       ['text:main', 'claude-sonnet-5-5', 'medium'],
       ['blocks:leg1', 'claude-opus-5-5', 'medium'], ['blocks:judge', 'claude-sonnet-5-5', 'medium'],
       ['cross_check:main', 'claude-sonnet-5-5', 'medium'], ['norms:main', 'claude-sonnet-5-5', 'medium'],
       ['review:main', 'claude-sonnet-5-5', 'medium'], ['correction:main', 'claude-sonnet-5-5', 'medium'],
     ]);
-    // Review and correction follow the backend's `ROW_DEFAULT_MAX_OUTPUT_TOKENS`: 12000, not 6000; the legs and the judge take the row's 6000.
-    expect(claude.map((c) => c.max_output_tokens)).toEqual([16000, 6000, 6000, 6000, 12000, 12000, 12000]);
-    const codex = kitCells('codex_only', []);
+    // `LIMITS-01` (`R-153n`, `R-153o`): no answer length and no timeout on a cell, nothing to carry in a request.
+    expect(claude.every((c) => Object.keys(c).sort().join() === 'cell_key,effort,model_id,role,row')).toBe(true);
+    const codex = kitCells('codex_only');
     expect(codex.map((c) => [c.cell_key, c.model_id])).toEqual([
       ['text:main', 'gpt-6.1-sol'],
       ['blocks:leg1', 'gpt-6-astra'], ['blocks:leg2', 'gpt-6-sol'], ['blocks:judge', 'gpt-6.1-sol'],
       ['cross_check:main', 'gpt-6-sol'], ['norms:main', 'gpt-6-astra'], ['review:main', 'gpt-6-sol'], ['correction:main', 'gpt-6.1-sol'],
     ]);
-    expect(codex.map((c) => c.max_output_tokens)).toEqual([16000, 6000, 6000, 6000, 6000, 12000, 12000, 12000]);
     expect(codex.every((c) => c.effort === 'medium')).toBe(true);
     expect([...kitModelIds('claude_only')].sort()).toEqual([...CLAUDE_ONLY_MODELS].sort());
     // The legs and the judge are models of the set: «Только Codex» names the Codex pins, the judge's among them, and gpt-6-luna of the comparison.
     expect([...kitModelIds('codex_only')].sort()).toEqual(['gpt-6-astra', 'gpt-6-luna', 'gpt-6-sol', 'gpt-6.1-sol']);
   });
 
-  it('give a cell the revision does not have the timeout the server defaults to: 1800 seconds, not 600', () => {
-    expect(DEFAULT_TIMEOUT_SECONDS).toBe(1800);
-    for (const kit of NAMED_KITS) {
-      expect(kitCells(kit, []).every((c) => c.timeout_seconds === 1800)).toBe(true);
-    }
-    // A cell the revision has keeps its own timeout, so the default reaches only a cell with none.
-    const onlyText = LAYOUT_CELLS.filter((c) => c.row === 'text').map((c) => ({ ...c, timeout_seconds: 99 }));
-    expect(kitCells('claude_only', onlyText).map((c) => c.timeout_seconds)).toEqual([99, 1800, 1800, 1800, 1800, 1800, 1800]);
-  });
-
-  it('keep the limits of a cell the revision in force already has, the legs and the judge each its own', () => {
-    const current = LAYOUT_CELLS.map((c) => ({ ...c, max_output_tokens: 1234, timeout_seconds: 99 }));
-    // «Только Codex» has a leg and a judge the revision has no cell for: they take the row's defaults, not another cell's limits.
-    const cells = kitCells('codex_only', [...current, cell('blocks', 'gpt-6-astra', 'medium', 'leg1')].map((c) => (c.cell_key === 'blocks:leg1' ? { ...c, max_output_tokens: 777 } : c)));
-    expect(cells.find((c) => c.cell_key === 'blocks:leg1')?.max_output_tokens).toBe(777);
-    expect(cells.find((c) => c.cell_key === 'blocks:leg2')?.max_output_tokens).toBe(6000);
-    expect(cells.find((c) => c.cell_key === 'blocks:judge')?.timeout_seconds).toBe(1800);
-    expect(cells.filter((c) => c.row !== 'blocks').every((c) => c.max_output_tokens === 1234 && c.timeout_seconds === 99)).toBe(true);
+  it('keep the cells of a draft free of any limit: a draft of a revision read from the server has none to keep', () => {
+    // A cell read from the server (an old revision included) carries the model and the effort; choosing a set again gives the same cells.
+    const current = LAYOUT_CELLS.map((c) => ({ ...c }));
+    expect(kitCells('codex_only').map((c) => c.cell_key)).toEqual(['text:main', 'blocks:leg1', 'blocks:leg2', 'blocks:judge', 'cross_check:main', 'norms:main', 'review:main', 'correction:main']);
+    expect(current.every((c) => !('max_output_tokens' in c) && !('timeout_seconds' in c))).toBe(true);
+    expect(JSON.stringify(draftRequest({ kit: 'custom', cells: current }))).not.toMatch(/max_output_tokens|timeout_seconds/);
   });
 
   it('are offered only when every model they name can be served, and every pair is in the catalogue', () => {
@@ -227,7 +214,7 @@ describe('the draft of a revision', () => {
     expect(edited.cells.find((c) => c.cell_key === 'review:main')?.model_id).toBe('gpt-6-sol');
     const back = chooseKit(edited, 'codex_only');
     expect(back.kit).toBe('codex_only');
-    expect(back.cells.map((c) => c.model_id)).toEqual(kitCells('codex_only', []).map((c) => c.model_id));
+    expect(back.cells.map((c) => c.model_id)).toEqual(kitCells('codex_only').map((c) => c.model_id));
     expect(chooseKit(back, 'custom')).toEqual({ kit: 'custom', cells: back.cells, comparison: back.comparison });
   });
 
@@ -246,12 +233,10 @@ describe('the draft of a revision', () => {
     expect(modelOptions(c, CATALOGUE, ['not-in-the-catalogue'])).toEqual(['gpt-6-astra']);
   });
 
-  it('refuses to save a pair the catalogue does not have, an empty draft and a limit out of range', () => {
+  it('refuses to save a pair the catalogue does not have and an empty draft', () => {
     expect(draftProblem(initialDraft(LAYOUT, CATALOGUE, ALL_MODELS)!, CATALOGUE)).toBeNull();
     expect(draftProblem({ kit: 'custom', cells: [] }, CATALOGUE)).toContain('пуст');
     expect(draftProblem({ kit: 'custom', cells: [cell('text', 'claude-opus-5-5', 'low')] }, CATALOGUE)).toContain('каталоге');
-    expect(draftProblem({ kit: 'custom', cells: [{ ...cell('text', 'claude-sonnet-5-5'), max_output_tokens: 0 }] }, CATALOGUE)).toContain('Ответ, токенов');
-    expect(draftProblem({ kit: 'custom', cells: [{ ...cell('text', 'claude-sonnet-5-5'), timeout_seconds: 7201 }] }, CATALOGUE)).toContain('Таймаут');
   });
 
   it('builds the request from the draft, and calls an unchanged draft unchanged', () => {
@@ -275,8 +260,8 @@ describe('the blocks row is one of three schemes (`HOSTS-ENSEMBLE-01`)', () => {
 
   it('reads a scheme off the blocks cells by role, model and effort, and says none for anything else', () => {
     expect(blockSchemeOf(LAYOUT_CELLS)?.id).toBe('codex_astra_single');
-    expect(blockSchemeOf(kitCells('claude_only', []))?.id).toBe('claude_opus_judge_sonnet');
-    expect(blockSchemeOf(kitCells('codex_only', []))?.id).toBe('codex_astra_sol_judge');
+    expect(blockSchemeOf(kitCells('claude_only'))?.id).toBe('claude_opus_judge_sonnet');
+    expect(blockSchemeOf(kitCells('codex_only'))?.id).toBe('codex_astra_sol_judge');
     // A single Claude, the Claude ensemble at another effort, and the legs without their judge are not on the list.
     expect(blockSchemeOf([cell('blocks', 'claude-opus-5-5')])).toBeNull();
     expect(blockSchemeOf([cell('blocks', 'claude-opus-5-5', 'high', 'leg1'), cell('blocks', 'claude-sonnet-5-5', 'medium', 'judge')])).toBeNull();
@@ -284,16 +269,15 @@ describe('the blocks row is one of three schemes (`HOSTS-ENSEMBLE-01`)', () => {
     expect(blockSchemeOf([cell('text', 'claude-sonnet-5-5')])).toBeNull();
   });
 
-  it('chooses the whole row at once: the other rows stay, the cells become the scheme\'s, each keeps the limits it had', () => {
-    const tuned = { ...start(), cells: start().cells.map((c) => (c.row === 'blocks' ? { ...c, max_output_tokens: 4321 } : c.row === 'text' ? { ...c, max_output_tokens: 999 } : c)) };
+  it('chooses the whole row at once: the other rows stay and the cells become the scheme\'s', () => {
+    const tuned = { ...start(), cells: start().cells.map((c) => (c.row === 'text' ? { ...c, model_id: 'gpt-6-sol' } : c)) };
     const chosen = setBlockScheme(tuned, 'claude_opus_judge_sonnet');
     expect(chosen.kit).toBe('custom');
     expect(chosen.cells.map((c) => c.cell_key)).toEqual(['text:main', 'blocks:leg1', 'blocks:judge', 'cross_check:main', 'norms:main', 'review:main', 'correction:main']);
     expect(blockSchemeOf(chosen.cells)?.id).toBe('claude_opus_judge_sonnet');
-    // The old `blocks:main` is gone; the new cells had no saved limits, so they take the row's 6000.
-    expect(chosen.cells.filter((c) => c.row === 'blocks').map((c) => c.max_output_tokens)).toEqual([6000, 6000]);
-    expect(chosen.cells.find((c) => c.row === 'text')?.max_output_tokens).toBe(999);
-    // Choosing again a scheme that keeps a cell key keeps that cell's limits.
+    // The old `blocks:main` is gone, and the cell of another row is as the person left it.
+    expect(chosen.cells.filter((c) => c.row === 'blocks').map((c) => c.cell_key)).toEqual(['blocks:leg1', 'blocks:judge']);
+    expect(chosen.cells.find((c) => c.row === 'text')?.model_id).toBe('gpt-6-sol');
     const back = setBlockScheme(chosen, 'codex_astra_sol_judge');
     expect(back.cells.filter((c) => c.row === 'blocks').map((c) => c.cell_key)).toEqual(['blocks:leg1', 'blocks:leg2', 'blocks:judge']);
     expect(draftProblem(back, CATALOGUE)).toBeNull();
@@ -317,16 +301,15 @@ describe('the blocks row is one of three schemes (`HOSTS-ENSEMBLE-01`)', () => {
   it('is one select in the form and replaces the model and the effort of the row; a stored pairing off the list says so', () => {
     const view = (draft: LayoutDraftType) => renderScreen(newClient(), createElement(LayoutEditorView, {
       draft, catalogue: CATALOGUE, availableModelIds: ALL_MODELS, currentKit: 'custom', pending: false, problem: null, failure: null,
-      onKit: () => {}, onModel: () => {}, onScheme: () => {}, onEffort: () => {}, onLimit: () => {}, onSave: () => {}, onCancel: () => {},
+      onKit: () => {}, onModel: () => {}, onScheme: () => {}, onEffort: () => {}, onSave: () => {}, onCancel: () => {},
     }));
     const markup = view(setBlockScheme(start(), 'codex_astra_sol_judge'));
     const select = markup.match(/<select[^>]*data-layout-scheme="blocks"[^>]*>[\s\S]*?<\/select>/)?.[0] ?? '';
     expect(select).toMatch(/<option value="codex_astra_sol_judge"[^>]*selected=""|<option[^>]*selected=""[^>]*value="codex_astra_sol_judge"/);
     for (const label of ['Opus 5.5, судья Sonnet 5.5', 'gpt-6-astra + gpt-6-sol, судья gpt-6.1-sol', 'gpt-6-astra, без судьи']) expect(select).toContain(label);
     expect(select).not.toContain('не из списка');
-    // The limits of the legs and the judge are in «Дополнительно», one entry per cell, each named by its part.
-    expect(markup.match(/data-layout-limits="blocks:/g)).toHaveLength(3);
-    expect(markup).toContain('Анализ блоков · судья');
+    // Nothing but the scheme is chosen for the legs and the judge: no entry per cell, no limit (`LIMITS-01`).
+    expect(markup).not.toContain('data-layout-limits');
     const legacy = { ...start(), cells: start().cells.map((c) => (c.row === 'blocks' ? { ...c, model_id: 'claude-opus-5-5' } : c)) };
     expect(view(legacy)).toContain('не из списка');
   });
@@ -335,11 +318,11 @@ describe('the blocks row is one of three schemes (`HOSTS-ENSEMBLE-01`)', () => {
 describe('the form «Изменить»', () => {
   const view = (over: Partial<Parameters<typeof LayoutEditorView>[0]> = {}) => renderScreen(newClient(), createElement(LayoutEditorView, {
     draft: initialDraft(LAYOUT, CATALOGUE, ALL_MODELS)!, catalogue: CATALOGUE, availableModelIds: ALL_MODELS, currentKit: 'custom',
-    pending: false, problem: null, failure: null, onKit: () => {}, onModel: () => {}, onScheme: () => {}, onEffort: () => {}, onLimit: () => {},
+    pending: false, problem: null, failure: null, onKit: () => {}, onModel: () => {}, onScheme: () => {}, onEffort: () => {},
     onSave: () => {}, onCancel: () => {}, ...over,
   }));
 
-  it('draws the segments, a model and an effort for each of the six rows, and «Дополнительно» folded', () => {
+  it('draws the segments, a model and an effort for each of the six rows, and nothing else to set', () => {
     const markup = view();
     expect(markup).toContain('>Только Claude<');
     expect(markup).toContain('>Только Codex<');
@@ -350,10 +333,22 @@ describe('the form «Изменить»', () => {
     expect(markup.match(/data-layout-scheme="blocks"/g)).toHaveLength(1);
     expect(markup.match(/data-layout-scheme-id=/g)).toHaveLength(3);
     expect(markup).not.toContain('data-layout-model="blocks"');
-    expect(markup).toMatch(/<details[^>]*><summary>Дополнительно<\/summary>/);
-    expect(markup).toContain('Ответ, токенов');
-    expect(markup).toContain('Таймаут, с');
+    // `LIMITS-01` (`R-153n`, `R-153o`): no «Дополнительно», no answer length and no timeout.
+    expect(markup).not.toContain('Дополнительно');
+    expect(markup).not.toContain('Ответ, токенов');
+    expect(markup).not.toContain('Таймаут');
+    expect(markup).not.toContain('<details');
+    expect(markup).not.toContain('<input');
     expect(markup).toMatch(/aria-checked="true"[^>]*data-layout-kit="custom"|data-layout-kit="custom"[^>]*aria-checked="true"/);
+  });
+
+  it('has, for «Только Codex», three segments, eleven selects and the two buttons: sixteen controls, where it had thirty-three', () => {
+    // Counted on the rendered form (R-153f): before `LIMITS-01` the same draft also had the «Дополнительно» summary and two numeric
+    // fields for each of the eight cells of the set (the blocks row of «Только Codex» is two legs and a judge): 3 + 11 + 1 + 16 + 2 = 33.
+    const markup = view({ draft: chooseKit(initialDraft(LAYOUT, CATALOGUE, ALL_MODELS)!, 'codex_only'), currentKit: 'codex_only' });
+    const count = (pattern: RegExp) => (markup.match(pattern) ?? []).length;
+    expect({ segments: count(/role="radio"/g), selects: count(/<select/g), inputs: count(/<input/g), summaries: count(/<summary/g), buttons: count(/<button/g) })
+      .toEqual({ segments: 3, selects: 11, inputs: 0, summaries: 0, buttons: 5 });
   });
 
   it('does not offer a set no server can serve, nor a model none can', () => {
@@ -381,7 +376,7 @@ describe('the form «Изменить»', () => {
   });
 
   it('shows a refusal of the server in words and never an identifier', () => {
-    const refusal = new ApiError(422, { contract_version: '1.48.0', error_code: 'validation_failed', message: 'x', correlation_id: 'cid-layout-1', retryable: false, details: { field: 'cells', constraint: 'catalogue' } }, null);
+    const refusal = new ApiError(422, { contract_version: '1.49.0', error_code: 'validation_failed', message: 'x', correlation_id: 'cid-layout-1', retryable: false, details: { field: 'cells', constraint: 'catalogue' } }, null);
     expect(layoutRefusalSentence(refusal)).toContain('парой из каталога');
     expect(layoutFailure(refusal, true).kind).toBe('refusal');
     const markup = view({ failure: layoutFailure(refusal, true) });
@@ -425,7 +420,7 @@ describe('the switch «Модели по этапам: включены» and th
   });
 
   it('says the two refusals of the server in words', () => {
-    const conflict = (reason: string) => new ApiError(409, { contract_version: '1.48.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-l-2', retryable: false, details: { conflict_reason: reason } }, null);
+    const conflict = (reason: string) => new ApiError(409, { contract_version: '1.49.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-l-2', retryable: false, details: { conflict_reason: reason } }, null);
     expect(layoutFailure(conflict('no_layout_revision'), true).detail).toContain('набор моделей ещё не сохранён');
     expect(layoutFailure(conflict('provider_source_not_database'), true).detail).toContain('не из базы данных');
     expect(layoutFailure(conflict('something_new'), true).detail).not.toContain('something_new');
@@ -461,26 +456,21 @@ describe('the comparison of versions in the layout (`CMP-WEB-01`)', () => {
     expect(KINDS.map((kind) => COMPARISON_KIND_LABELS[kind])).toEqual(['Пары листов', 'Изменения листов', 'Спецификация', 'Отчёт']);
   });
 
-  it('fills «Только Codex» and «Только Claude» with their tables, and each kind with its own limit and window', () => {
-    expect(comparisonKitCells('codex_only', []).map((c) => [c.work_kind, c.model_id, c.effort, c.max_output_tokens, c.timeout_seconds])).toEqual([
-      ['comparison_pair_check', 'gpt-6-luna', 'high', 1200, 900],
-      ['comparison_sheet_changes', 'gpt-6.1-sol', 'high', 8192, 1800],
-      ['comparison_spec', 'gpt-6-luna', 'high', 32000, 900],
-      ['comparison_report', 'gpt-6.1-sol', 'high', 8000, 2400],
+  it('fills «Только Codex» and «Только Claude» with their tables: a model and an effort for each kind, no limit and no window', () => {
+    expect(comparisonKitCells('codex_only').map((c) => [c.work_kind, c.model_id, c.effort])).toEqual([
+      ['comparison_pair_check', 'gpt-6-luna', 'high'],
+      ['comparison_sheet_changes', 'gpt-6.1-sol', 'high'],
+      ['comparison_spec', 'gpt-6-luna', 'high'],
+      ['comparison_report', 'gpt-6.1-sol', 'high'],
     ]);
-    expect(comparisonKitCells('claude_only', []).map((c) => [c.work_kind, c.model_id, c.effort, c.max_output_tokens, c.timeout_seconds])).toEqual([
-      ['comparison_pair_check', 'claude-sonnet-5-5', 'high', 1200, 900],
-      ['comparison_sheet_changes', 'claude-sonnet-5-5', 'high', 8192, 1800],
-      ['comparison_spec', 'claude-sonnet-5-5', 'high', 32000, 900],
-      ['comparison_report', 'claude-sonnet-5-5', 'high', 8000, 2400],
+    expect(comparisonKitCells('claude_only').map((c) => [c.work_kind, c.model_id, c.effort])).toEqual([
+      ['comparison_pair_check', 'claude-sonnet-5-5', 'high'],
+      ['comparison_sheet_changes', 'claude-sonnet-5-5', 'high'],
+      ['comparison_spec', 'claude-sonnet-5-5', 'high'],
+      ['comparison_report', 'claude-sonnet-5-5', 'high'],
     ]);
-  });
-
-  it('keeps the limits a kind already has when a set is chosen, and gives the rest the code\'s', () => {
-    const tuned = COMPARISON_CELLS.map((c) => (c.work_kind === 'comparison_spec' ? { ...c, max_output_tokens: 777, timeout_seconds: 99 } : c)).slice(0, 3);
-    const filled = comparisonKitCells('claude_only', tuned);
-    expect(filled.find((c) => c.work_kind === 'comparison_spec')).toMatchObject({ max_output_tokens: 777, timeout_seconds: 99, model_id: 'claude-sonnet-5-5' });
-    expect(filled.find((c) => c.work_kind === 'comparison_report')).toMatchObject({ max_output_tokens: 8000, timeout_seconds: 2400 });
+    // `LIMITS-01`: a comparison cell is the kind, the model and the effort, and nothing the server would refuse as an unknown member.
+    expect(comparisonKitCells('claude_only').every((c) => Object.keys(c).sort().join() === 'effort,model_id,work_kind')).toBe(true);
   });
 
   it('counts the comparison models of a set when it decides whether the set can be offered', () => {
@@ -508,35 +498,33 @@ describe('the comparison of versions in the layout (`CMP-WEB-01`)', () => {
     it('starts with what the revision stored; a «Свой набор» stored without cells starts with none, and nothing is invented', () => {
       expect(start(LAYOUT).comparison).toEqual([]);
       expect(start(LAYOUT_COMPARISON).comparison).toEqual(COMPARISON_CELLS);
-      expect(start(LAYOUT_EMPTY).comparison).toEqual(comparisonKitCells('claude_only', []));
+      expect(start(LAYOUT_EMPTY).comparison).toEqual(comparisonKitCells('claude_only'));
     });
 
     it('fills the four from a set, and «Свой набор» keeps what the draft has', () => {
       const claude = chooseKit(start(LAYOUT), 'claude_only');
-      expect(claude.comparison).toEqual(comparisonKitCells('claude_only', []));
+      expect(claude.comparison).toEqual(comparisonKitCells('claude_only'));
       const back = chooseKit(claude, 'custom');
       expect(back.comparison).toEqual(claude.comparison);
       expect(chooseKit(start(LAYOUT_COMPARISON), 'custom').comparison).toEqual(COMPARISON_CELLS);
     });
 
-    it('gives a kind a model only when the person chooses one: the high effort the catalogue allows, the kind\'s limits, the other kinds still empty', () => {
+    it('gives a kind a model only when the person chooses one: the high effort the catalogue allows, the other kinds still empty', () => {
       const one = setComparisonModel(start(LAYOUT), 'comparison_report', 'gpt-6-sol', CATALOGUE);
       expect(one.kit).toBe('custom');
-      expect(one.comparison).toEqual([{ work_kind: 'comparison_report', model_id: 'gpt-6-sol', effort: 'high', max_output_tokens: 8000, timeout_seconds: 2400 }]);
+      expect(one.comparison).toEqual([{ work_kind: 'comparison_report', model_id: 'gpt-6-sol', effort: 'high' }]);
       expect(setComparisonModel(start(LAYOUT), 'comparison_spec', 'claude-sonnet-5-5', noSonnetHigh).comparison?.[0]?.effort).toBe('medium');
-      // An effort or a limit of a kind with no model changes nothing: there is nothing to give it to.
+      // An effort of a kind with no model changes nothing: there is nothing to give it to.
       expect(setComparisonEffort(start(LAYOUT), 'comparison_spec', 'low').comparison).toEqual([]);
-      expect(setComparisonLimit(start(LAYOUT), 'comparison_spec', 'timeout_seconds', 5).comparison).toEqual([]);
     });
 
-    it('changes the model, the effort and the limits of a kind that has them, and keeps the others as they were', () => {
+    it('changes the model and the effort of a kind that has them, and keeps the others as they were', () => {
       const base = start(LAYOUT_COMPARISON);
       const model = setComparisonModel(base, 'comparison_pair_check', 'claude-opus-5-5', CATALOGUE);
-      expect(model.comparison?.find((c) => c.work_kind === 'comparison_pair_check')).toMatchObject({ model_id: 'claude-opus-5-5', effort: 'high', max_output_tokens: 1200, timeout_seconds: 900 });
+      expect(model.comparison?.find((c) => c.work_kind === 'comparison_pair_check')).toMatchObject({ model_id: 'claude-opus-5-5', effort: 'high' });
       // Opus has no «низкое»: a model whose catalogue lacks the effort of the cell takes «среднее».
       const low = setComparisonEffort(base, 'comparison_spec', 'low');
       expect(setComparisonModel(low, 'comparison_spec', 'claude-opus-5-5', CATALOGUE).comparison?.find((c) => c.work_kind === 'comparison_spec')?.effort).toBe('medium');
-      expect(setComparisonLimit(base, 'comparison_report', 'max_output_tokens', 4000).comparison?.find((c) => c.work_kind === 'comparison_report')?.max_output_tokens).toBe(4000);
       expect(model.comparison?.map((c) => c.work_kind)).toEqual(KINDS);
       expect(model.comparison?.filter((c) => c.work_kind !== 'comparison_pair_check')).toEqual(COMPARISON_CELLS.filter((c) => c.work_kind !== 'comparison_pair_check'));
     });
@@ -545,18 +533,16 @@ describe('the comparison of versions in the layout (`CMP-WEB-01`)', () => {
       const base = start(LAYOUT_COMPARISON);
       expect(setCellModel(base, 'norms:main', 'gpt-6-sol', CATALOGUE).comparison).toEqual(COMPARISON_CELLS);
       expect(setBlockScheme(base, 'codex_astra_sol_judge').comparison).toEqual(COMPARISON_CELLS);
-      expect(setCellEffort(chooseKit(base, 'claude_only'), 'norms:main', 'high').comparison).toEqual(comparisonKitCells('claude_only', COMPARISON_CELLS));
+      expect(setCellEffort(chooseKit(base, 'claude_only'), 'norms:main', 'high').comparison).toEqual(comparisonKitCells('claude_only'));
     });
 
-    it('refuses to save a part of the four, a pair the catalogue lacks and a limit out of range, and accepts none or all', () => {
+    it('refuses to save a part of the four and a pair the catalogue lacks, and accepts none or all', () => {
       expect(draftProblem(start(LAYOUT), CATALOGUE)).toBeNull();
       expect(draftProblem(start(LAYOUT_COMPARISON), CATALOGUE)).toBeNull();
       expect(draftProblem(setComparisonModel(start(LAYOUT), 'comparison_spec', 'gpt-6-sol', CATALOGUE), CATALOGUE)).toContain('во всех четырёх строках');
       const three = { ...start(LAYOUT_COMPARISON), comparison: COMPARISON_CELLS.slice(0, 3) };
       expect(draftProblem(three, CATALOGUE)).toContain('во всех четырёх строках');
       expect(draftProblem(setComparisonEffort(start(LAYOUT_COMPARISON), 'comparison_report', 'low'), CATALOGUE)).toContain('сравнения версий');
-      expect(draftProblem(setComparisonLimit(start(LAYOUT_COMPARISON), 'comparison_report', 'max_output_tokens', 0), CATALOGUE)).toContain('Ответ, токенов');
-      expect(draftProblem(setComparisonLimit(start(LAYOUT_COMPARISON), 'comparison_report', 'timeout_seconds', 7201), CATALOGUE)).toContain('Таймаут');
     });
 
     it('sends comparison_cells with all four kinds, each once and in the order of the kinds, when they are chosen', () => {
@@ -569,7 +555,7 @@ describe('the comparison of versions in the layout (`CMP-WEB-01`)', () => {
       expect(request.kit).toBe('custom');
       expect(request.cells).toEqual(LAYOUT_CELLS);
       // A named set sends its table.
-      expect(draftRequest(chooseKit(start(LAYOUT), 'codex_only')).comparison_cells).toEqual(comparisonKitCells('codex_only', []));
+      expect(draftRequest(chooseKit(start(LAYOUT), 'codex_only')).comparison_cells).toEqual(comparisonKitCells('codex_only'));
     });
 
     it('sends none for a «Свой набор» with none chosen, so the server stores none and never serves a model nobody chose', () => {
@@ -581,7 +567,7 @@ describe('the comparison of versions in the layout (`CMP-WEB-01`)', () => {
       expect(draftChanged(start(LAYOUT_COMPARISON), LAYOUT_COMPARISON)).toBe(false);
       expect(draftChanged(start(LAYOUT_COMPARISON_KIT), LAYOUT_COMPARISON_KIT)).toBe(false);
       expect(draftChanged(setComparisonEffort(start(LAYOUT_COMPARISON), 'comparison_spec', 'high'), LAYOUT_COMPARISON)).toBe(true);
-      expect(draftChanged(setComparisonLimit(start(LAYOUT_COMPARISON), 'comparison_pair_check', 'timeout_seconds', 901), LAYOUT_COMPARISON)).toBe(true);
+      expect(draftChanged(setComparisonModel(start(LAYOUT_COMPARISON), 'comparison_pair_check', 'claude-opus-5-5', CATALOGUE), LAYOUT_COMPARISON)).toBe(true);
       // A model chosen for one kind of a revision that stored none is a change, though the six rows are the same.
       expect(draftChanged(setComparisonModel(start(LAYOUT), 'comparison_spec', 'gpt-6-sol', CATALOGUE), LAYOUT)).toBe(true);
     });
@@ -590,8 +576,8 @@ describe('the comparison of versions in the layout (`CMP-WEB-01`)', () => {
   describe('the group in the form «Изменить»', () => {
     const view = (draft = start(LAYOUT_COMPARISON), over: Partial<Parameters<typeof LayoutEditorView>[0]> = {}) => renderScreen(newClient(), createElement(LayoutEditorView, {
       draft, catalogue: CATALOGUE, availableModelIds: ALL_MODELS, currentKit: 'custom', pending: false, problem: null, failure: null,
-      onKit: () => {}, onModel: () => {}, onScheme: () => {}, onEffort: () => {}, onLimit: () => {},
-      onComparisonModel: () => {}, onComparisonEffort: () => {}, onComparisonLimit: () => {}, onSave: () => {}, onCancel: () => {}, ...over,
+      onKit: () => {}, onModel: () => {}, onScheme: () => {}, onEffort: () => {},
+      onComparisonModel: () => {}, onComparisonEffort: () => {}, onSave: () => {}, onCancel: () => {}, ...over,
     }));
     const select = (markup: string, attribute: string) => markup.match(new RegExp(`<select[^>]*${attribute}[^>]*>[\\s\\S]*?</select>`))?.[0] ?? '';
 
@@ -650,14 +636,12 @@ describe('the comparison of versions in the layout (`CMP-WEB-01`)', () => {
       expect(markup).not.toContain('data-layout-comparison-limits');
     });
 
-    it('lists the limit and the timeout of each chosen kind in «Дополнительно», beside those of the rows', () => {
+    it('has no limit and no timeout for a chosen kind either: the four rows are a model and an effort and the form has no numeric field', () => {
       const markup = view();
-      const folded = markup.slice(markup.indexOf('<summary>Дополнительно</summary>'));
-      expect(folded.match(/data-layout-comparison-limits=/g)).toHaveLength(4);
-      expect(folded).toContain('Сравнение версий · Пары листов');
-      expect(folded).toContain('Сравнение версий · Отчёт');
-      expect(folded).toMatch(/data-layout-comparison-limits="comparison_spec"[\s\S]*?value="32000"[\s\S]*?value="900"/);
-      expect(folded.match(/data-layout-limits=/g)).toHaveLength(6);
+      expect(markup).not.toContain('data-layout-comparison-limits');
+      expect(markup).not.toContain('Дополнительно');
+      expect(markup).not.toContain('<input');
+      expect(markup.match(/data-layout-comparison-model=/g)).toHaveLength(4);
     });
 
     it('says in words what stops a partial choice and disables saving', () => {

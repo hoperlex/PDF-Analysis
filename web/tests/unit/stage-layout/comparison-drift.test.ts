@@ -1,12 +1,12 @@
 /**
- * `CMP-WEB-01` — the comparison cells of the two sets and their limits are the server's own tables.
+ * `CMP-WEB-01` — the comparison cells of the two sets are the server's own tables.
  *
  * The form fills «Только Claude» and «Только Codex» from `comparisonKitCells` of `entities/stage-layout`; the server accepts a named set only
  * if the models and efforts of its four comparison cells are the table `COMPARISON_PRESET_CELLS` of `src/auditmanager/runs/stage_layout.py`
- * (`kit_does_not_match_cells`), and a cell the revision lacks takes `COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS` and
- * `COMPARISON_DEFAULT_TIMEOUT_SECONDS`. The web has no other way to know them, so this test reads the Python source and compares, exactly as
- * `block-schemes-drift.test.ts` does for the schemes: a kind, a model, an effort or a limit changed on one side and not the other is red here
- * instead of a refusal an administrator meets.
+ * (`kit_does_not_match_cells`). The web has no other way to know them, so this test reads the Python source and compares, exactly as
+ * `block-schemes-drift.test.ts` does for the schemes: a kind, a model or an effort changed on one side and not the other is red here
+ * instead of a refusal an administrator meets. Since `LIMITS-01` (`R-153n`, `R-153o`) a comparison cell has no answer limit and no window of its
+ * own, on the server or in the web, so there is no limit to compare; the test says the server's tables for them are gone.
  *
  * The parser is a function of the source text, so each case below can be shown to fail on a source that was altered.
  */
@@ -15,8 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import { COMPARISON_LAYOUT_KIND_VALUES } from '@/shared/api';
 import {
-  COMPARISON_DEFAULT_EFFORT, COMPARISON_DEFAULT_TIMEOUT, COMPARISON_DEFAULT_TOKENS, COMPARISON_KIND_LABELS, NAMED_KITS, comparisonKitCells,
-  newComparisonCell,
+  COMPARISON_DEFAULT_EFFORT, COMPARISON_KIND_LABELS, NAMED_KITS, comparisonKitCells, newComparisonCell,
 } from '@/entities/stage-layout';
 
 import { modelConstants, readStageLayoutSource } from './stage-layout-source';
@@ -32,17 +31,8 @@ function block(source: string, marker: string, close: string): string {
   return source.slice(start, end);
 }
 
-/** `"comparison_report": 8_000` -> {comparison_report: 8000}. */
-function numbers(text: string): Map<string, number> {
-  return new Map([...text.matchAll(/"(comparison_[a-z_]+)": ([0-9_]+)/g)].map(
-    (match): [string, number] => [match[1] as string, Number((match[2] as string).replaceAll('_', ''))],
-  ));
-}
-
 interface ServerComparison {
   readonly kinds: readonly string[];
-  readonly tokens: Map<string, number>;
-  readonly timeouts: Map<string, number>;
   /** kit -> kind -> "model:effort". */
   readonly presets: Map<string, Map<string, string>>;
 }
@@ -74,8 +64,6 @@ function parseServerComparison(source: string): ServerComparison {
   const codex = presetBlock.slice(presetBlock.indexOf('KIT_CODEX_ONLY: {'));
   return {
     kinds,
-    tokens: numbers(block(source, 'COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS: Final', '\n}')),
-    timeouts: numbers(block(source, 'COMPARISON_DEFAULT_TIMEOUT_SECONDS: Final', '\n}')),
     presets: new Map([['claude_only', presetOf(claude, kinds, constants)], ['codex_only', presetOf(codex, kinds, constants)]]),
   };
 }
@@ -85,29 +73,23 @@ function web(): ServerComparison {
   const kinds = [...COMPARISON_LAYOUT_KIND_VALUES] as string[];
   const presets = new Map<string, Map<string, string>>();
   for (const kit of NAMED_KITS) {
-    presets.set(kit, new Map(comparisonKitCells(kit, []).map((cell): [string, string] => [cell.work_kind, `${cell.model_id}:${cell.effort}`])));
+    presets.set(kit, new Map(comparisonKitCells(kit).map((cell): [string, string] => [cell.work_kind, `${cell.model_id}:${cell.effort}`])));
   }
   return {
     kinds,
-    tokens: new Map(COMPARISON_LAYOUT_KIND_VALUES.map((kind): [string, number] => [kind, COMPARISON_DEFAULT_TOKENS[kind]])),
-    timeouts: new Map(COMPARISON_LAYOUT_KIND_VALUES.map((kind): [string, number] => [kind, COMPARISON_DEFAULT_TIMEOUT[kind]])),
     presets,
   };
 }
 
 const plain = (comparison: ServerComparison) => ({
   kinds: comparison.kinds,
-  tokens: [...comparison.tokens],
-  timeouts: [...comparison.timeouts],
   presets: [...comparison.presets].map(([kit, table]) => [kit, [...table]]),
 });
 
 describe('the comparison cells of the sets are the server\'s tables', () => {
-  it('reads four kinds, four limits, four timeouts and four cells of each set out of the Python source, so the parser can be wrong only loudly', () => {
+  it('reads four kinds and four cells of each set out of the Python source, so the parser can be wrong only loudly', () => {
     const server = parseServerComparison(SOURCE);
     expect(server.kinds).toEqual(['comparison_pair_check', 'comparison_sheet_changes', 'comparison_spec', 'comparison_report']);
-    expect(server.tokens.size).toBe(4);
-    expect(server.timeouts.size).toBe(4);
     expect([...server.presets.keys()]).toEqual(['claude_only', 'codex_only']);
     for (const table of server.presets.values()) expect(table.size).toBe(4);
   });
@@ -117,33 +99,27 @@ describe('the comparison cells of the sets are the server\'s tables', () => {
     expect(Object.keys(COMPARISON_KIND_LABELS).sort()).toEqual([...COMPARISON_LAYOUT_KIND_VALUES].sort());
   });
 
-  it('has the same answer limit and call window for every kind', () => {
-    const server = parseServerComparison(SOURCE);
-    const mine = web();
-    expect([...mine.tokens]).toEqual([...server.tokens]);
-    expect([...mine.timeouts]).toEqual([...server.timeouts]);
+  it('has no answer limit and no call window table on the server any more: they are not the layout\'s (`R-153n`, `R-153o`)', () => {
+    expect(SOURCE).not.toContain('COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS');
+    expect(SOURCE).not.toContain('COMPARISON_DEFAULT_TIMEOUT_SECONDS');
+    expect(SOURCE).not.toMatch(/max_output_tokens=|timeout_seconds=/);
   });
 
-  it('fills each set with the model and the effort of every kind that the server\'s set has, and with the limits of the kind', () => {
+  it('fills each set with the model and the effort of every kind that the server\'s set has, and with nothing else', () => {
     const server = parseServerComparison(SOURCE);
     for (const kit of NAMED_KITS) {
       expect([...(web().presets.get(kit) ?? [])], kit).toEqual([...(server.presets.get(kit) ?? [])]);
-      expect(comparisonKitCells(kit, []).map((cell) => [cell.work_kind, cell.max_output_tokens, cell.timeout_seconds])).toEqual(
-        COMPARISON_LAYOUT_KIND_VALUES.map((kind) => [kind, server.tokens.get(kind), server.timeouts.get(kind)]),
-      );
+      expect(comparisonKitCells(kit).map((cell) => Object.keys(cell).sort().join())).toEqual(COMPARISON_LAYOUT_KIND_VALUES.map(() => 'effort,model_id,work_kind'));
     }
   });
 
-  it('gives a kind chosen in «Свой набор» the effort the sets use, and the limits of the kind', () => {
+  it('gives a kind chosen in «Свой набор» the effort the sets use', () => {
     expect(COMPARISON_DEFAULT_EFFORT).toBe('high');
     const server = parseServerComparison(SOURCE);
     for (const table of server.presets.values()) {
       for (const pair of table.values()) expect(pair.endsWith(`:${COMPARISON_DEFAULT_EFFORT}`)).toBe(true);
     }
-    expect(newComparisonCell('comparison_spec', 'gpt-6-astra', 'high')).toEqual({
-      work_kind: 'comparison_spec', model_id: 'gpt-6-astra', effort: 'high', max_output_tokens: server.tokens.get('comparison_spec'),
-      timeout_seconds: server.timeouts.get('comparison_spec'),
-    });
+    expect(newComparisonCell('comparison_spec', 'gpt-6-astra', 'high')).toEqual({ work_kind: 'comparison_spec', model_id: 'gpt-6-astra', effort: 'high' });
   });
 });
 
@@ -164,15 +140,6 @@ describe('the comparison of the web and the server can disagree, and this test s
     const altered = SOURCE.replace('{kind: (_SONNET, "high") for kind in COMPARISON_KINDS}', '{kind: (_SONNET, "medium") for kind in COMPARISON_KINDS}');
     expect(altered).not.toBe(SOURCE);
     expect(plain(parseServerComparison(altered))).not.toEqual(same);
-  });
-
-  it('is red when a limit or a window changes', () => {
-    const tokens = SOURCE.replace('"comparison_report": 8_000', '"comparison_report": 8_001');
-    const timeout = SOURCE.replace('"comparison_sheet_changes": 1_800', '"comparison_sheet_changes": 1_801');
-    expect(tokens).not.toBe(SOURCE);
-    expect(timeout).not.toBe(SOURCE);
-    expect(plain(parseServerComparison(tokens))).not.toEqual(same);
-    expect(plain(parseServerComparison(timeout))).not.toEqual(same);
   });
 
   it('is red when a fifth kind appears on the server', () => {

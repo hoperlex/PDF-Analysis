@@ -1173,7 +1173,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.48.0',
+    contract_version: '1.49.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1185,7 +1185,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.48.0',
+    contract_version: '1.49.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2052,7 +2052,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.48.0',
+    contract_version: '1.49.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2245,7 +2245,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.48.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.49.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -3439,13 +3439,13 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     make: () => createElement(StageModelsTable, { layout: STAGE_LAYOUT, admin: false }),
   },
   {
-    // `CMP-WEB-01`: the form under «Свой набор» with the group «Сравнение версий» (four rows) and the limits of each kind in «Дополнительно».
+    // `CMP-WEB-01`: the form under «Свой набор» with the group «Сравнение версий» (four rows).
     name: 'workers-models-editing-comparison',
     make: () => createElement(LayoutEditorView, {
       draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells, comparison: STAGE_COMPARISON_CELLS }, catalogue: STAGE_CATALOGUE,
       availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'], currentKit: 'custom',
       pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
-      onLimit: () => undefined, onComparisonModel: () => undefined, onComparisonEffort: () => undefined, onComparisonLimit: () => undefined,
+      onComparisonModel: () => undefined, onComparisonEffort: () => undefined,
       onSave: () => undefined, onCancel: () => undefined,
     }),
   },
@@ -3456,7 +3456,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
       availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'], currentKit: 'custom',
       pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
-      onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
+      onSave: () => undefined, onCancel: () => undefined,
     }),
   },
   {
@@ -3466,7 +3466,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       draft: { kit: 'custom', cells: STAGE_LAYOUT.current!.cells }, catalogue: STAGE_CATALOGUE,
       availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'], currentKit: 'custom',
       pending: false, problem: null, failure: null, onKit: () => undefined, onModel: () => undefined, onEffort: () => undefined,
-      onLimit: () => undefined, onSave: () => undefined, onCancel: () => undefined,
+      onSave: () => undefined, onCancel: () => undefined,
     }),
   },
   {
@@ -4858,7 +4858,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.48.0',
+            contract_version: '1.49.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4880,7 +4880,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.48.0',
+            contract_version: '1.49.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

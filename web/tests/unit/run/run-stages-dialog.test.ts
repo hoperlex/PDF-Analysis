@@ -1,5 +1,5 @@
 /**
- * `RUN-STAGES-WEB-01` — «Этапы анализа раздела» says, for each chip, the model of every plan cell with its effort, answer limit
+ * `RUN-STAGES-WEB-01` — «Этапы анализа раздела» says, for each chip, the model of every plan cell with its effort
  * and (to the reader who may see it) the server and the access, and then the facts: state, calls, tokens, cost, times, error.
  *
  * Rendered over a stages answer the way `getRunStages` states it, so the words a reader sees are the words asserted. Each state
@@ -28,7 +28,7 @@ const FACTS: RunStageFacts = {
   subscription_input_tokens: 0, subscription_output_tokens: 0, cost_micros: 0,
 };
 const cell = (role: RunStageCell['role'], model_id: string, extra: Partial<RunStageCell> = {}): RunStageCell => ({
-  role, model_id, effort: 'medium', max_output_tokens: 6000, timeout_seconds: 900, ...extra,
+  role, model_id, effort: 'medium', ...extra,
 });
 const stage = (chip: RunStage['chip'], plan: RunStageCell[], facts: Partial<RunStageFacts> = {}): RunStage => ({
   chip, stage_ids: ['x'], plan, facts: { ...FACTS, ...facts },
@@ -51,7 +51,7 @@ const RUNNING: Partial<RunStatus> = {
 
 const BLOCKS_ENSEMBLE = stage('blocks', [
   cell('leg1', 'claude-opus-5-5', { cell_key: 'blocks:leg1', access: 'subscription', server: 'adm1.hlab.kz' }),
-  cell('judge', 'claude-sonnet-5-5', { cell_key: 'blocks:judge', access: 'api', max_output_tokens: 12000 }),
+  cell('judge', 'claude-sonnet-5-5', { cell_key: 'blocks:judge', access: 'api' }),
 ], {
   state: 'running', calls_succeeded: 12, calls_failed: 1, calls_retried: 2, input_tokens: 102400, output_tokens: 18800,
   subscription_input_tokens: 90000, subscription_output_tokens: 15000, cost_micros: 412000, started_at: '2026-11-10T09:06:41Z',
@@ -73,14 +73,16 @@ describe('the plan of a chip with a blocks ensemble (a run that froze its stage 
     expect(markup).toContain('data-plan-source="stage_plan"');
   });
 
-  it('says the model, the effort and the answer limit of each cell, and the server and access of the ones that have them', () => {
+  it('says the model and the effort of each cell and never an answer length, and the server and access of the ones that have them', () => {
     // The short name only; the pin is the tooltip, never a second chip beside it.
     expect(markup).toContain('<strong title="claude-opus-5-5">Opus 5.5</strong> · усилие');
     expect(markup).toContain('<strong title="claude-sonnet-5-5">Sonnet 5.5</strong> · усилие');
     expect(markup).not.toContain('<code');
-    expect(markup).toContain(`усилие: среднее · ответ до 6${G}000 токенов · сервер adm1.hlab.kz · по подписке`);
+    expect(markup).toContain('усилие: среднее · сервер adm1.hlab.kz · по подписке');
     // The judge is bound to no server yet: its access is said and the server is said not to be chosen, nothing is invented.
-    expect(markup).toContain(`ответ до 12${G}000 токенов · по ключу API · сервер не назначен`);
+    expect(markup).toContain('усилие: среднее · по ключу API · сервер не назначен');
+    // `R-153n`: no answer has a limit, so no line promises one
+    expect(markup).not.toMatch(/ответ до|токенов</);
   });
 
   it('says the facts: state, batches, calls, tokens with the subscription part, cost, start and the end not yet reached', () => {
@@ -101,7 +103,7 @@ describe('the reader who may not see the server', () => {
     const markup = dialog(stages([BLOCKS_ENSEMBLE]), {}, { selected: 'blocks', showServer: false });
     expect(markup.match(/data-plan-row="cell"/g)).toHaveLength(2);
     expect(markup).toContain('Opus 5.5');
-    expect(markup).toContain(`усилие: среднее · ответ до 6${G}000 токенов</td>`);
+    expect(markup).toContain('усилие: среднее</td>');
     for (const hidden of ['adm1.hlab.kz', 'сервер', 'по ключу API', 'не назначен']) expect(markup, hidden).not.toContain(hidden);
   });
 });

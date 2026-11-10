@@ -78,13 +78,13 @@ export function initialDraft(
     };
   }
   const first = NAMED_KITS.find((kit) => kitIsOffered(kit, catalogue, availableModelIds));
-  return first === undefined ? null : { kit: first, cells: kitCells(first, []), comparison: comparisonKitCells(first, []) };
+  return first === undefined ? null : { kit: first, cells: kitCells(first), comparison: comparisonKitCells(first) };
 }
 
 /** Choosing a set. «Свой набор» keeps the cells as they are. */
 export function chooseKit(draft: LayoutDraft, kit: StageModelKit): LayoutDraft {
   if (!isNamedKit(kit)) return { ...draft, kit: 'custom' };
-  return { kit, cells: kitCells(kit as NamedKit, draft.cells), comparison: comparisonKitCells(kit as NamedKit, draft.comparison ?? []) };
+  return { kit, cells: kitCells(kit as NamedKit), comparison: comparisonKitCells(kit as NamedKit) };
 }
 
 function replaceCell(draft: LayoutDraft, cellKey: string, change: (cell: StageLayoutCell) => StageLayoutCell): LayoutDraft {
@@ -107,18 +107,14 @@ export function setCellEffort(draft: LayoutDraft, cellKey: string, effort: Model
   return replaceCell(draft, cellKey, (cell) => ({ ...cell, effort }));
 }
 
-export function setCellLimit(draft: LayoutDraft, cellKey: string, field: 'max_output_tokens' | 'timeout_seconds', value: number): LayoutDraft {
-  return replaceCell(draft, cellKey, (cell) => ({ ...cell, [field]: value }));
-}
-
 /**
  * The blocks row is chosen as one scheme of the closed list (`HOSTS-ENSEMBLE-01`), never cell by cell: the cells of the other
- * rows stay as they are, the cells of the row become the scheme's, and each cell keeps the limits it had.
+ * rows stay as they are and the cells of the row become the scheme's.
  */
 export function setBlockScheme(draft: LayoutDraft, schemeId: BlockSchemeId): LayoutDraft {
   const chosen = BLOCK_SCHEMES.find((candidate) => candidate.id === schemeId);
   if (chosen === undefined) return draft;
-  const cells = STAGE_ROW_KEY_VALUES.flatMap((row) => (row === 'blocks' ? blockSchemeCells(chosen, draft.cells) : rowCells(draft.cells, row)));
+  const cells = STAGE_ROW_KEY_VALUES.flatMap((row) => (row === 'blocks' ? blockSchemeCells(chosen) : rowCells(draft.cells, row)));
   return { ...draft, kit: 'custom', cells };
 }
 
@@ -135,7 +131,7 @@ function replaceComparison(
 
 /**
  * A model for one kind of the comparison of versions. A kind that has none yet takes the model, the high effort the catalogue allows
- * for it (else the effort `effortFor` falls back to) and the constants of the code for its limits; a kind that has one keeps its limits.
+ * for it (else the effort `effortFor` falls back to); a kind that has one keeps its effort where the new model allows it.
  */
 export function setComparisonModel(
   draft: LayoutDraft,
@@ -150,15 +146,6 @@ export function setComparisonModel(
 
 export function setComparisonEffort(draft: LayoutDraft, kind: ComparisonLayoutKind, effort: ModelEffort): LayoutDraft {
   return replaceComparison(draft, kind, (cell) => (cell === undefined ? undefined : { ...cell, effort }));
-}
-
-export function setComparisonLimit(
-  draft: LayoutDraft,
-  kind: ComparisonLayoutKind,
-  field: 'max_output_tokens' | 'timeout_seconds',
-  value: number,
-): LayoutDraft {
-  return replaceComparison(draft, kind, (cell) => (cell === undefined ? undefined : { ...cell, [field]: value }));
 }
 
 /**
@@ -185,20 +172,6 @@ export function modelOptions(
   return cell === undefined || offered.includes(cell.model_id) ? offered : [cell.model_id, ...offered];
 }
 
-const TOKENS = { min: 1, max: 65536 } as const;
-const TIMEOUT = { min: 1, max: 7200 } as const;
-
-/** The limits of a cell, as the wire bounds them; the same words for a row and for a kind of comparison. */
-function limitProblem(cell: Pick<StageLayoutCell, 'max_output_tokens' | 'timeout_seconds'>): string | null {
-  if (!Number.isInteger(cell.max_output_tokens) || cell.max_output_tokens < TOKENS.min || cell.max_output_tokens > TOKENS.max) {
-    return `Ответ, токенов — целое число от ${TOKENS.min} до ${TOKENS.max}.`;
-  }
-  if (!Number.isInteger(cell.timeout_seconds) || cell.timeout_seconds < TIMEOUT.min || cell.timeout_seconds > TIMEOUT.max) {
-    return `Таймаут — целое число секунд от ${TIMEOUT.min} до ${TIMEOUT.max}.`;
-  }
-  return null;
-}
-
 /** What stops the draft from being saved, in words; `null` when it can be saved. */
 export function draftProblem(draft: LayoutDraft, catalogue: ModelCatalogue | undefined): string | null {
   if (draft.cells.length === 0) return 'Набор моделей пуст: выберите модели по этапам.';
@@ -206,16 +179,12 @@ export function draftProblem(draft: LayoutDraft, catalogue: ModelCatalogue | und
     if (!pairIsInCatalogue(catalogue, cell.model_id, cell.effort)) {
       return 'Для одной из строк выбрано сочетание модели и усилия, которого нет в каталоге.';
     }
-    const limits = limitProblem(cell);
-    if (limits !== null) return limits;
   }
   // The comparison cells are all four or none: the server refuses a layout that names some kinds and not others.
   const comparison = draft.comparison ?? [];
   if (comparison.length > 0 && comparison.length !== COMPARISON_LAYOUT_KIND_VALUES.length) return COMPARISON_PARTIAL_PROBLEM;
   for (const cell of comparison) {
     if (!pairIsInCatalogue(catalogue, cell.model_id, cell.effort)) return COMPARISON_PAIR_PROBLEM;
-    const limits = limitProblem(cell);
-    if (limits !== null) return limits;
   }
   // The blocks row is one of the three schemes; a revision of any other pairing is refused by the server (`block_scheme_not_listed`).
   if (draft.cells.some((cell) => cell.row === 'blocks') && blockSchemeOf(draft.cells) === null) return BLOCKS_SCHEME_PROBLEM;
@@ -243,15 +212,13 @@ export function draftChanged(draft: LayoutDraft, layout: StageModelLayout): bool
   if (current.kit !== draft.kit || current.cells.length !== draft.cells.length) return true;
   const cellsChanged = draft.cells.some((cell) => {
     const was = rowCells(current.cells, cell.row).find((other) => other.cell_key === cell.cell_key);
-    return was === undefined || was.model_id !== cell.model_id || was.effort !== cell.effort
-      || was.max_output_tokens !== cell.max_output_tokens || was.timeout_seconds !== cell.timeout_seconds;
+    return was === undefined || was.model_id !== cell.model_id || was.effort !== cell.effort;
   });
   if (cellsChanged) return true;
   const comparison = draft.comparison ?? [];
   const stored = current.comparison_cells ?? [];
   return comparison.length !== stored.length || comparison.some((cell) => {
     const was = stored.find((other) => other.work_kind === cell.work_kind);
-    return was === undefined || was.model_id !== cell.model_id || was.effort !== cell.effort
-      || was.max_output_tokens !== cell.max_output_tokens || was.timeout_seconds !== cell.timeout_seconds;
+    return was === undefined || was.model_id !== cell.model_id || was.effort !== cell.effort;
   });
 }

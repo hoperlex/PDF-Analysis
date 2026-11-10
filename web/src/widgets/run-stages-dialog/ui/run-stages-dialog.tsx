@@ -160,7 +160,7 @@ function PlanCellRows({ stage, showServer }: { readonly stage: RunStage; readonl
         <th scope="colgroup" colSpan={2} className={styles.group}>План</th>
       </tr>
       {cellLines(stage.plan, showServer).map((line) => {
-        const parts = [line.effort, line.limit, line.server].filter((part): part is string => part !== null);
+        const parts = [line.effort, line.server].filter((part): part is string => part !== null);
         return (
           <tr key={line.key} data-plan-row="cell" data-plan-cell={line.key} data-stage-role={line.role}>
             <th scope="row">{line.roleLabel}</th>

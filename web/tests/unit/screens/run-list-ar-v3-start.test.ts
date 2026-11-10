@@ -61,7 +61,7 @@ describe('the six-check start is drawn on no answer of the pack status, for a ve
     [
       'a failed read',
       (client) => seedError(client, PACK, new ApiError(503, {
-        contract_version: '1.48.0', error_code: 'dependency_unavailable', message: 'm',
+        contract_version: '1.49.0', error_code: 'dependency_unavailable', message: 'm',
         correlation_id: 'c', retryable: true,
       }, 'c')),
     ],

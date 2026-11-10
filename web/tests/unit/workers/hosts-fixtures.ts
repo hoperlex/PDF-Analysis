@@ -96,7 +96,7 @@ export const HOST_DETAILS_OFF: ExecutorHostDetails = {
 };
 
 export const CATALOGUE: ModelCatalogue = {
-  contract_version: '1.48.0',
+  contract_version: '1.49.0',
   items: [
     { provider: 'claude_code', model_id: 'claude-opus-5-5', access: ['subscription', 'api'], efforts: ['medium', 'high'], accepted_reported: ['claude-opus-5-5'] },
     { provider: 'claude_code', model_id: 'claude-sonnet-5-5', access: ['subscription', 'api'], efforts: ['low', 'medium', 'high'], accepted_reported: ['claude-sonnet-5-5'] },
@@ -108,7 +108,7 @@ export const CATALOGUE: ModelCatalogue = {
 };
 
 export function cell(row: StageLayoutCell['row'], model: string, effort: StageLayoutCell['effort'] = 'medium', role: StageLayoutCell['role'] = 'main'): StageLayoutCell {
-  return { cell_key: `${row}:${role}`, row, role, model_id: model, effort, max_output_tokens: 6000, timeout_seconds: 1800 };
+  return { cell_key: `${row}:${role}`, row, role, model_id: model, effort };
 }
 
 /** The blocks row is a scheme of the closed list (`HOSTS-ENSEMBLE-01`): one Astra. A single Claude is refused by the server. */
@@ -153,14 +153,14 @@ export const LAYOUT_ENSEMBLE: StageModelLayout = {
 };
 
 /**
- * The four comparison cells of a «Свой набор» revision (`CMP-WEB-01`): every kind has its model and effort, the limits are the code's constants
- * of the kind. Spec is served by no server (see `LAYOUT_COMPARISON`).
+ * The four comparison cells of a «Свой набор» revision (`CMP-WEB-01`): every kind has its model and effort and nothing else (`LIMITS-01`).
+ * Spec is served by no server (see `LAYOUT_COMPARISON`).
  */
 export const COMPARISON_CELLS: StageComparisonCell[] = [
-  { work_kind: 'comparison_pair_check', model_id: 'gpt-6-astra', effort: 'high', max_output_tokens: 1200, timeout_seconds: 900 },
-  { work_kind: 'comparison_sheet_changes', model_id: 'gpt-6.1-sol', effort: 'high', max_output_tokens: 8192, timeout_seconds: 1800 },
-  { work_kind: 'comparison_spec', model_id: 'claude-sonnet-5-5', effort: 'medium', max_output_tokens: 32000, timeout_seconds: 900 },
-  { work_kind: 'comparison_report', model_id: 'claude-opus-5-5', effort: 'high', max_output_tokens: 8000, timeout_seconds: 2400 },
+  { work_kind: 'comparison_pair_check', model_id: 'gpt-6-astra', effort: 'high' },
+  { work_kind: 'comparison_sheet_changes', model_id: 'gpt-6.1-sol', effort: 'high' },
+  { work_kind: 'comparison_spec', model_id: 'claude-sonnet-5-5', effort: 'medium' },
+  { work_kind: 'comparison_report', model_id: 'claude-opus-5-5', effort: 'high' },
 ];
 
 /** «Свой набор» with the four comparison cells stored; the cell of the specification names a model no server serves. */
