@@ -42,6 +42,8 @@ import styles from './app-frame.module.css';
 
 /** What the account menu is told about the open session. */
 export interface AccountMenuSession {
+  /** The account's `user_uid`: the avatar's colour key. */
+  readonly userUid: string;
   readonly login: string;
   readonly displayLabel: string;
   readonly initials: string;
@@ -109,13 +111,13 @@ function header(session: AccountMenuSession): ReactNode {
 
 /**
  * The props of the account menu for `session`. The item addresses are the registry's; the
- * avatar's colour is keyed by the e-mail (`login`), never by the name, so a corrected name
- * keeps its colour.
+ * avatar's colour is keyed by the account's `user_uid`, never by the name or the e-mail, so a
+ * corrected name or a changed address keeps its colour.
  */
 export function accountMenuProps(session: AccountMenuSession, onHistory?: () => void): MenuProps {
   return {
     label: `Учётная запись: ${session.displayLabel}`,
-    trigger: <Avatar initials={session.initials} colourKey={session.login} />,
+    trigger: <Avatar initials={session.initials} colourKey={session.userUid} />,
     header: header(session),
     items: [
       { kind: 'link', label: profileLabel(), href: PROFILE_SCREEN },

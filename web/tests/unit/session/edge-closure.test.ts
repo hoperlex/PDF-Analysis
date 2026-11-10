@@ -407,6 +407,8 @@ describe('C-19: a self-targeted updateUser refreshes the subject', () => {
     const cookie = await signedIn();
     const before = subjectOf(idFrom(cookie));
     expect(before?.displayLabel).toBe('Проверяющая А. Б.');
+    // `AVATAR-PALETTE-01`: the row records the account's user_uid from `getMe`, the avatar's key.
+    expect(before?.userUid).toBe(OWN_UID);
 
     me = () => accountAnswer({ roles: ['admin'], display_label: 'Шмидт Ä.' });
     seen = [];
@@ -418,7 +420,7 @@ describe('C-19: a self-targeted updateUser refreshes the subject', () => {
       'GET /me',
     ]);
     const after = subjectOf(idFrom(cookie));
-    expect(after).toMatchObject({ displayLabel: 'Шмидт Ä.', initials: 'ШÄ' });
+    expect(after).toMatchObject({ displayLabel: 'Шмидт Ä.', initials: 'ШÄ', userUid: OWN_UID });
     expect(credentialOf(idFrom(cookie))).toBe('minted-1');
     expect(after?.openedAt).toBe(before?.openedAt);
     expect(after?.expiresAt).toBe(before?.expiresAt);
@@ -472,17 +474,31 @@ describe('C-19: a self-targeted updateUser refreshes the subject', () => {
     expect(openSessionCount()).toBe(1);
   });
 
-  it('signs in on a getMe without user_uid, and keeps the row when the edit cannot be placed', async () => {
+  // Since `AVATAR-PALETTE-01` the subject carries the account's user_uid, which the contract
+  // requires on every `Account`. A `getMe` without one is not a subject: sign-in refuses it as
+  // an answer this tier does not understand (this case used to sign in), and the edit below
+  // cannot be placed, so the row is kept as it was.
+  it('refuses to sign in on a getMe without user_uid, and opens no row', async () => {
     const withoutUid = accountBody({ roles: ['admin'] });
     delete withoutUid.user_uid;
     me = () => new Response(JSON.stringify(withoutUid), { status: 200 });
+    const response = await post('sign-in', SAME_ORIGIN);
+    expect(response.headers.get('location')).toBe('/login?refusal=upstream');
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(openSessionCount()).toBe(0);
+  });
+
+  it('keeps the row when the edit cannot be placed because getMe answers without user_uid', async () => {
+    me = () => accountAnswer({ roles: ['admin'] });
     const cookie = await signedIn();
-    expect(openSessionCount()).toBe(1);
+    const withoutUid = accountBody({ roles: ['admin'], display_label: 'Другое А. А.' });
+    delete withoutUid.user_uid;
+    me = () => new Response(JSON.stringify(withoutUid), { status: 200 });
     const response = await updateUser(cookie, OWN_UID);
     expect(response.status).toBe(200);
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(openSessionCount()).toBe(1);
-    expect(subjectOf(idFrom(cookie))?.displayLabel).toBe('Проверяющая А. Б.');
+    expect(subjectOf(idFrom(cookie))).toMatchObject({ displayLabel: 'Проверяющая А. Б.', userUid: OWN_UID });
   });
 
   it('reads nothing again when the edit was refused', async () => {

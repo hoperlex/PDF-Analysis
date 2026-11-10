@@ -20,6 +20,7 @@ import { UNKNOWN_ROLE_LINE, accountMenuProps, canReadReleaseHistory } from '@/_a
 import styles from '@/_app/app-frame.module.css';
 import { SESSION_CLOSE_PATH } from '@/features/sign-in';
 import { SCREEN_REGISTRY } from '@/shared/config';
+import { avatarColourIndex } from '@/shared/ui';
 
 import {
   ADMIN_AND_EXPERT,
@@ -83,9 +84,17 @@ describe('the account menu', () => {
     expect(markup).not.toMatch(/<div\b[^>]*aria-haspopup/);
   });
 
-  it('colours the avatar by the e-mail: the same login keeps its colour under another name', () => {
+  it('colours the avatar by the user_uid: the same account keeps its colour under another name and another e-mail', () => {
     const pair = (session: AppFrameSession): string => /data-avatar-pair="(\d\d)"/.exec(frame(session))?.[1] ?? '';
     expect(pair({ ...EXPERT, displayLabel: 'Другая В. Г.', initials: 'ДВ' })).toBe(pair(EXPERT));
+    expect(pair({ ...EXPERT, login: 'новый-адрес@пример.испытание' })).toBe(pair(EXPERT));
+    // Not vacuous: a different uid under the same e-mail does change the colour, so an avatar
+    // keyed on the e-mail would have failed the case above or this one.
+    const other = Array.from({ length: 50 }, (_, n) => `usr_01J9ZQ8K7NHVXW3T2R5M6P4Q${String(n).padStart(2, '0')}`).find(
+      (uid) => avatarColourIndex(uid) !== avatarColourIndex(EXPERT.userUid),
+    );
+    expect(other, 'no uid of another colour among fifty').toBeDefined();
+    expect(pair({ ...EXPERT, userUid: other as string })).not.toBe(pair(EXPERT));
   });
 
   it('names the account, its e-mail and its roles in the header', () => {

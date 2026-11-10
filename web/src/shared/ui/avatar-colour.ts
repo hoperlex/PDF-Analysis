@@ -1,39 +1,47 @@
 /**
- * Which of the fourteen avatar colours an account wears (`R-57`, `W50-PLAN.md` §3.5).
+ * Which of the twelve avatar colours an account wears (`R-57`, `W50-PLAN.md` §3.5;
+ * `AVATAR-PALETTE-01`).
  *
- * ## Keyed on the e-mail, never on the name
+ * ## Keyed on the account's `user_uid`, never on the name or the e-mail
  *
- * The input is the account's e-mail — the session subject's `login`, which every account
- * carries from its first sign-in after the identity upgrade (`R-59`). It is NOT the display
- * label and NOT the initials: a reviewer who corrects a misspelt surname keeps the colour
- * their colleagues already know them by. A legacy login that is not an address yet (the
- * seeded `admin` before its first sign-in) is hashed the same way, and so is an empty
- * string; both give a valid index, because a hash input is never a reason to render
- * nothing.
+ * The input is the account's `user_uid` — the identifier the API issues once, at creation,
+ * and never changes: `Account.user_uid` in `GET /me` and in the user card, the session
+ * subject's `userUid`. It is NOT the e-mail (`login`), which a profile change rewrites and
+ * which an archived account hands back to whoever registers it next, and it is NOT the
+ * display label or the initials. So a reviewer who corrects a misspelt surname, or changes
+ * their address, keeps the colour their colleagues already know them by, and a new account
+ * on a freed address starts with a colour of its own. The colour is computed whenever an
+ * avatar is drawn and stored nowhere: no column, no migration, no contract field.
  *
- * ## Normalised the way the access boundary normalises it
+ * ## No normalisation: the key is the uid exactly as the API wrote it
  *
- * The boundary folds a login to lower case and stores the folded value, so `Petrova@…` and
- * `petrova@…` are one account and must be one colour. Surrounding whitespace is not part of
- * an address either. Nothing else is folded: two addresses that differ in any other way are
- * two accounts.
+ * Every caller reads the uid from an `Account` answer, so every caller holds the same
+ * canonical string, and folding case or trimming would only hide a caller that did not. Two
+ * strings that differ in any way are two keys. The one thing that is refused is a key with
+ * nothing in it: an empty or blank uid is a broken promise upstream, and drawing a circle
+ * from it would move the defect somewhere nobody looks (`AvatarColourKeyError`, the same
+ * stance as `AvatarInitialsError` takes on empty initials, and `AGENTS.md` §4's ban on a
+ * silent fallback).
  *
  * ## The hash
  *
- * 32-bit FNV-1a over the UTF-8 bytes of the normalised key, unsigned, modulo the palette
- * size. Stable across sessions, browsers and the server render, needs no dependency, and
- * spreads short similar strings (`expert-1@…`, `expert-2@…`) across the palette.
+ * 32-bit FNV-1a over the UTF-8 bytes of the key, unsigned, modulo the palette size. Stable
+ * across sessions, browsers and the server render, needs no dependency, and spreads strings
+ * that share a long prefix (every uid starts `usr_`) across the palette.
  * `web/tests/unit/ui/avatar.test.ts` holds every index reachable and the same key to the
  * same index; `web/tests/unit/styles/avatar-palette.test.ts` holds the palette size to the
  * number of colour pairs `globals.css` actually declares.
  */
 
 /** The number of colour pairs in `globals.css`. The avatar palette test reads the stylesheet and holds this to it. */
-export const AVATAR_PALETTE_SIZE = 14;
+export const AVATAR_PALETTE_SIZE = 12;
 
-/** The key the hash reads: trimmed and lower-cased, as the access boundary stores a login. */
-export function normaliseColourKey(colourKey: string): string {
-  return colourKey.trim().toLowerCase();
+/** The colour key was empty or blank: the account's `user_uid` broke its promise upstream. */
+export class AvatarColourKeyError extends Error {
+  constructor() {
+    super('Аватар: пустой ключ цвета. У учётной записи всегда есть идентификатор user_uid.');
+    this.name = 'AvatarColourKeyError';
+  }
 }
 
 const FNV_OFFSET_BASIS = 0x811c9dc5;
@@ -52,10 +60,12 @@ function fnv1a32(text: string): number {
 /**
  * The zero-based colour index for an account, in `[0, AVATAR_PALETTE_SIZE)`.
  *
- * @param colourKey the account's e-mail (the session subject's `login`) — never its name.
+ * @param colourKey the account's `user_uid`, verbatim — never its e-mail or its name.
+ * @throws {AvatarColourKeyError} when the key is empty or only whitespace.
  */
 export function avatarColourIndex(colourKey: string): number {
-  return fnv1a32(normaliseColourKey(colourKey)) % AVATAR_PALETTE_SIZE;
+  if (colourKey.trim().length === 0) throw new AvatarColourKeyError();
+  return fnv1a32(colourKey) % AVATAR_PALETTE_SIZE;
 }
 
 /** The two-digit pair number `globals.css` names a colour by: index 0 is pair `01`. */

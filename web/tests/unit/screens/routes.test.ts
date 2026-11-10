@@ -80,6 +80,7 @@ import { screens as censusScreens } from '../styles/screens';
 
 /** The account the jar's session belongs to: one every W50 screen admits. */
 const SIGNED_IN = {
+  userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
   login: 'petrova@example.org',
   displayLabel: 'Петрова А. С.',
   initials: 'ПА',

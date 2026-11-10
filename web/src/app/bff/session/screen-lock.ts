@@ -155,6 +155,7 @@ export async function enforceScreen(
   if (screen.address === SIGN_IN_SCREEN) redirect(HOME_SCREEN);
 
   return {
+    userUid: subject.userUid,
     login: subject.login,
     displayLabel: subject.displayLabel,
     initials: subject.initials,

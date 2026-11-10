@@ -57,7 +57,7 @@ export function UserCard({ userUid, signedInLogin = null, variant = 'page', onCl
     <div data-user-state={archived ? 'archived' : 'active'}>
       {bar}
       <header className={styles.identity}>
-        <Avatar initials={initialsOf(label)} colourKey={account.login} label={`Аватар: ${label}`} />
+        <Avatar initials={initialsOf(label)} colourKey={account.user_uid} label={`Аватар: ${label}`} />
         <h2 className={styles.name}>{label}{isSelf ? ' (это вы)' : ''}</h2>
         {archived ? <span className="am-badge am-badge--inert">В архиве</span> : <span className="am-badge am-badge--ok">Действует</span>}
       </header>

@@ -1,8 +1,8 @@
 /**
- * The avatar palette: fourteen pairs, both palettes, every value measured (`W50-SHELL-UI`).
+ * The avatar palette: twelve pairs, both palettes, every value measured (`W50-SHELL-UI`, `AVATAR-PALETTE-01`).
  *
  * WHY A DEDICATED TEST AND NOT THE CENSUS. `contrast.test.ts` measures the pairs a seeded
- * screen happens to render, and an account's colour is a hash of its address: which pairs a
+ * screen happens to render, and an account's colour is a hash of its `user_uid`: which pairs a
  * screen shows depends on which accounts it holds. So the census can never claim the whole
  * palette, and it cannot ask the second question this palette has at all — whether the
  * CIRCLE stands out from the page, which WCAG 1.4.11 asks of a graphic that identifies
@@ -13,7 +13,7 @@
  *
  * WHAT IT READS. The declarations themselves, out of `globals.css`, by the block that holds
  * them — never a list written here. The palette size it asserts is the size it FINDS, and the
- * hash is then held to that size, so a fifteenth pair added without the hash (or the hash
+ * hash is then held to that size, so a thirteenth pair added without the hash (or the hash
  * widened without the pair) is red.
  *
  * WHAT A PAIR MUST CLEAR, in each of the three palette blocks:
@@ -276,9 +276,9 @@ function withDeclaration(css: string, block: PaletteBlock, name: string, value: 
 describe('the avatar palette is whole, and it is the palette the hash indexes', () => {
   const reading = readAvatarPalette(CSS);
 
-  it('declares exactly the pairs 01 … 14, each with a circle and an ink, in each of the three blocks', () => {
+  it('declares exactly the pairs 01 … 12, each with a circle and an ink, in each of the three blocks', () => {
     expect(reading.problems).toEqual([]);
-    const expected = Array.from({ length: 14 }, (_, i) => pairNumber(i + 1));
+    const expected = Array.from({ length: 12 }, (_, i) => pairNumber(i + 1));
     for (const block of PALETTE_BLOCKS) {
       expect({ block, pairs: [...(reading.blocks.get(block)?.keys() ?? [])].sort() }).toEqual({
         block,
@@ -295,10 +295,10 @@ describe('the avatar palette is whole, and it is the palette the hash indexes', 
   it("the hash's modulus is the number of pairs the stylesheet declares", () => {
     const found = reading.blocks.get(':root')?.size ?? 0;
     expect(AVATAR_PALETTE_SIZE).toBe(found);
-    // Measured, not only declared: over two thousand invented addresses the hash lands on
+    // Measured, not only declared: over two thousand invented uids the hash lands on
     // every pair and on nothing past the last one.
     const seen = new Set<number>();
-    for (let n = 0; n < 2000; n += 1) seen.add(avatarColourIndex(`account-${n}@example.test`));
+    for (let n = 0; n < 2000; n += 1) seen.add(avatarColourIndex(`usr_01J9ZQ8K7NHVXW3T2R5M6${String(n).padStart(5, '0')}`));
     expect([...seen].sort((a, b) => a - b)).toEqual(Array.from({ length: found }, (_, i) => i));
   });
 
@@ -328,22 +328,22 @@ describe('the avatar palette is whole, and it is the palette the hash indexes', 
     const drifted = readAvatarPalette(withDeclaration(CSS, DARK_MEDIA_SELECTOR, '--am-avatar-03-ink', '#111111'));
     expect(drifted.problems).toEqual(['pair 03 differs between the two dark blocks']);
 
-    const stray = readAvatarPalette(`${CSS}\n.am-x { --am-avatar-15: #000000; }\n`);
-    expect(stray.problems).toEqual(['.am-x declares --am-avatar-15 outside the palette blocks']);
+    const stray = readAvatarPalette(`${CSS}\n.am-x { --am-avatar-13: #000000; }\n`);
+    expect(stray.problems).toEqual(['.am-x declares --am-avatar-13 outside the palette blocks']);
 
-    // A whole pair gone from the light block: thirteen there, fourteen in the dark ones.
+    // A whole pair gone from the light block: eleven there, twelve in the dark ones.
     const gap = readAvatarPalette(
-      withDeclaration(withDeclaration(CSS, ':root', '--am-avatar-14', null), ':root', '--am-avatar-14-ink', null),
+      withDeclaration(withDeclaration(CSS, ':root', '--am-avatar-12', null), ':root', '--am-avatar-12-ink', null),
     );
-    expect(gap.problems).toEqual([':root: no pair 14, which another block declares']);
+    expect(gap.problems).toEqual([':root: no pair 12, which another block declares']);
   });
 });
 
 describe('every pair is legible in both palettes', () => {
   const rows = measureAvatarPalette(CSS);
 
-  it('measures all fourteen pairs in all three blocks', () => {
-    expect(rows.length).toBe(14 * PALETTE_BLOCKS.length);
+  it('measures all twelve pairs in all three blocks', () => {
+    expect(rows.length).toBe(12 * PALETTE_BLOCKS.length);
   });
 
   it('the initials clear 4.5:1 and the circle clears 3:1 against the page and the bar', () => {
@@ -372,9 +372,9 @@ describe('every pair is legible in both palettes', () => {
     expect(avatarFailures(wrong).some((f) => f.includes('near-black reads better'))).toBe(true);
   });
 
-  it('produces the measured table, fourteen rows per theme', () => {
+  it('produces the measured table, twelve rows per theme', () => {
     const table = avatarTable(rows);
-    expect(table.split('\n').length).toBe(2 + 14 * 2);
+    expect(table.split('\n').length).toBe(2 + 12 * 2);
     if (process.env.AM_AVATAR_TABLE === '1') console.log(`\n${table}\n`);
   });
 });

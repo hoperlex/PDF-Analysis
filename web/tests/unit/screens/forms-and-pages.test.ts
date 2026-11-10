@@ -209,6 +209,7 @@ describe('the application frame', () => {
     // `W50-SHELL-FRAME`: the frame is handed the whole subject, and the way out sits in the
     // account menu under the avatar, beside the account's name and e-mail.
     const session = {
+      userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
       login: 'проверяющий@пример.испытание',
       displayLabel: 'Проверяющий П. П.',
       initials: 'ПП',

@@ -103,8 +103,8 @@
  * ## Who the session belongs to (`W49-PLAN.md` §3.5)
  *
  * After a successful exchange this tier calls `getMe` with the credential it has just been
- * minted and opens the row with the subject that comes back — login, label, initials, roles,
- * the `R-50` flag and whether the profile is complete. A `getMe` answer this tier does not
+ * minted and opens the row with the subject that comes back — user_uid, login, label, initials,
+ * roles, the `R-50` flag and whether the profile is complete. A `getMe` answer this tier does not
  * understand is not a session: the sign-in is refused as `upstream`, never opened with a
  * guessed subject. After a successful `PATCH /me` through the catch-all, after a successful
  * `PATCH /users/{user_uid}` that `getMe` confirms was the session's own account (`W53-CLOSE`
@@ -691,31 +691,18 @@ function jsonHeaders(request: Request): Headers {
  *
  * A `401` and a body this tier does not understand are the same answer to every caller here:
  * there is no subject to record. Each caller says what that means for its own request.
+ *
+ * The subject carries the account's `user_uid`, and `accountFromMe` refuses a body without
+ * one: the contract requires it on every `Account`, and since `AVATAR-PALETTE-01` the row
+ * records it for the avatar's colour. `C-19`'s question — was that `PATCH /users/{user_uid}`
+ * this session's own account? — is still asked of `getMe` at the moment it matters, not of
+ * the copy taken at sign-in, so an answer that is not a subject keeps the session there.
  */
 async function readTheAccount(
   request: Request,
   upstream: string,
   credential: string,
 ): Promise<SessionAccount | null> {
-  return (await readWhoThisIs(request, upstream, credential))?.account ?? null;
-}
-
-/**
- * `getMe`'s subject and the account's `user_uid`, or `null` for any answer that is not a subject.
- *
- * The identifier is read beside the subject rather than kept in the register: the only thing
- * this tier needs it for is `C-19`'s question — was that `PATCH /users/{user_uid}` this
- * session's own account? — and that is asked of the API at the moment it matters, not of a
- * copy taken at sign-in. A body without a string `user_uid` still describes a subject — the
- * sign-in and the `PATCH /me` refresh never needed the identifier and do not start refusing
- * over it — and answers `userUid: null`, which `C-19` treats as "cannot say whose edit": the
- * session is kept and the row left as it is.
- */
-async function readWhoThisIs(
-  request: Request,
-  upstream: string,
-  credential: string,
-): Promise<{ readonly account: SessionAccount; readonly userUid: string | null } | null> {
   const headers = jsonHeaders(request);
   headers.delete('content-type');
   const answer = await forwardWithCredential(
@@ -730,10 +717,7 @@ async function readWhoThisIs(
   } catch {
     return null;
   }
-  const account = accountFromMe(body);
-  if (account === null) return null;
-  const userUid = (body as { readonly user_uid?: unknown }).user_uid;
-  return { account, userUid: typeof userUid === 'string' && userUid.length > 0 ? userUid : null };
+  return accountFromMe(body);
 }
 
 /**
@@ -1449,19 +1433,20 @@ async function handle(request: Request, context: RouteContext): Promise<Response
     // row alone.
     //
     // **Unlike `PATCH /me`, a `getMe` that fails here keeps the session** (integrator ruling at
-    // the `W53C-EDGE-01` review). The register holds no `user_uid`, so a failed read cannot
-    // tell the administrator's own account from somebody else's, and closing on it would
-    // sign an administrator out for a transient fault while editing another account. The
-    // edit's own answer goes back unchanged. A self-edit that changed the roles raised the
+    // the `W53C-EDGE-01` review). Whose account the edit was is read from `getMe` at this
+    // moment (the row's `userUid`, kept for the avatar's colour, is not what decides it), so a
+    // failed read cannot tell the administrator's own account from somebody else's, and
+    // closing on it would sign an administrator out for a transient fault while editing
+    // another account. The edit's own answer goes back unchanged. A self-edit that changed the roles raised the
     // epoch, so `getMe` answers `401` here and the session is kept for this one answer; the
     // next request presents the dead credential, meets `401` and closes it there. The session
     // ends here only when `getMe` confirms the own account and the row cannot be rewritten.
     const editedUser = userChangeTarget(request, segments);
     if (editedUser !== null && answer.status === 200) {
-      const self = await readWhoThisIs(request, upstream, held);
-      if (self === null || self.userUid === null) return answer;
+      const self = await readTheAccount(request, upstream, held);
+      if (self === null) return answer;
       const own = self.userUid.toLowerCase() === editedUser.toLowerCase();
-      if (own && !refreshSubject(sessionId, self.account)) return endedOn(request, sessionId, answer);
+      if (own && !refreshSubject(sessionId, self)) return endedOn(request, sessionId, answer);
     }
     return answer;
   }

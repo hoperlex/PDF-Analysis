@@ -464,6 +464,7 @@ const SEVERITY_EVENTS: readonly DecisionEvent[] = [
 
 /** The frame's sessions (`W50-SHELL-FRAME`): the whole subject the layout hands it. */
 const FRAME_EXPERT = {
+  userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
   login: 'эксперт@пример.испытание',
   displayLabel: 'Экспертова А. С.',
   initials: 'ЭА',
@@ -3217,7 +3218,7 @@ export function screens(): Screen[] {
     ];
     const account = (): MenuProps => ({
       label: 'Учётная запись: Петрова А. С.',
-      trigger: createElement(Avatar, { initials: 'ПА', colourKey: 'petrova@example.test' }),
+      trigger: createElement(Avatar, { initials: 'ПА', colourKey: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B' }),
       header: createElement('p', null, 'Петрова А. С.'),
       items,
     });
@@ -3234,22 +3235,22 @@ export function screens(): Screen[] {
       ),
     );
 
-    // One avatar per pair. The addresses are FOUND, by hashing invented ones until every
-    // pair is worn, because the pair is a property of the address and not of anything a
+    // One avatar per pair. The uids are FOUND, by hashing invented ones until every pair is
+    // worn, because the pair is a property of the account's `user_uid` and not of anything a
     // seed could name directly.
     const byPair = new Map<number, string>();
     for (let n = 1; byPair.size < AVATAR_PALETTE_SIZE && n < 1000; n += 1) {
-      const address = `seed-${n}@example.test`;
-      const index = avatarColourIndex(address);
-      if (!byPair.has(index)) byPair.set(index, address);
+      const uid = `usr_01J9ZQ8K7NHVXW3T2R5M6${String(n).padStart(5, '0')}`;
+      const index = avatarColourIndex(uid);
+      if (!byPair.has(index)) byPair.set(index, uid);
     }
     add(
       'Avatar, one per colour pair',
       inBar(
         ...[...byPair]
           .sort(([a], [b]) => a - b)
-          .map(([index, address]) =>
-            createElement(Avatar, { key: address, initials: 'ПА', colourKey: address, label: `Пара ${index + 1}` }),
+          .map(([index, uid]) =>
+            createElement(Avatar, { key: uid, initials: 'ПА', colourKey: uid, label: `Пара ${index + 1}` }),
           ),
       ),
     );

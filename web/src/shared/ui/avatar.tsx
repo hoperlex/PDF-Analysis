@@ -1,6 +1,6 @@
 /**
  * The generated avatar (`R-57`): the account's initials on a circle whose colour is hashed
- * from its e-mail. There is no upload in this programme.
+ * from its `user_uid`. There is no upload in this programme.
  *
  * A server component with no state. It takes exactly two facts — the initials and the
  * colour key — and no session, no account and no query: `shared/ui` may not import
@@ -13,8 +13,10 @@
  *   and which is never empty. An empty one is refused loudly (`AvatarInitialsError`) rather
  *   than drawn as a blank circle: a blank avatar is a broken promise upstream, and hiding it
  *   here would move the defect somewhere nobody looks.
- * - `colourKey`: the account's e-mail, the subject's `login`. See `avatar-colour.ts` for why
- *   it is the e-mail and never the name.
+ * - `colourKey`: the account's `user_uid` — the session subject's `userUid`, or `Account.user_uid`
+ *   from an API answer — passed verbatim. See `avatar-colour.ts` for why it is the uid and
+ *   never the e-mail or the name. An empty one is refused loudly (`AvatarColourKeyError`),
+ *   as empty initials are.
  * - `label`, optional: the accessible name. Leave it out where a visible name sits beside the
  *   circle — the account menu's header, a trigger with its own label — and the circle is
  *   `aria-hidden`, so a screen reader does not read the letters as a word. Pass it where the
@@ -38,7 +40,7 @@ export class AvatarInitialsError extends Error {
 export interface AvatarProps {
   /** The subject's `initials`, derived from its display label. Never empty. */
   readonly initials: string;
-  /** The account's e-mail (the subject's `login`). Never its name: a corrected name keeps its colour. */
+  /** The account's `user_uid`, verbatim. Never its e-mail or name: a corrected name or address keeps its colour. */
   readonly colourKey: string;
   /** The accessible name, where no visible name sits beside the circle. Omitted: `aria-hidden`. */
   readonly label?: string | undefined;

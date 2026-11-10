@@ -100,6 +100,7 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
 ];
 
 const COMPLETE: SessionAccount = {
+  userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
   login: 'qa-reviewer@qa.invalid',
   displayLabel: 'Проверка К. А.',
   initials: 'ПК',

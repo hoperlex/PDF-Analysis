@@ -61,6 +61,7 @@ const GATED: readonly ScreenEntry[] = [
 const FIXTURE: readonly ScreenEntry[] = [...SCREEN_REGISTRY, ...GATED];
 
 const COMPLETE: SessionAccount = {
+  userUid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
   login: 'qa-reviewer@qa.invalid',
   displayLabel: 'Проверка К. А.',
   initials: 'ПК',
