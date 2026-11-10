@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.50.0 (OpenAPI 3.1.0)
- *   sha256 a67e0b1b205554259d97bd53ea93b48adbe15c49b5d14feb648db40a2d1a8ec6
+ *   AuditManager PC-01 API 1.51.0 (OpenAPI 3.1.0)
+ *   sha256 35a4990f578b62e7074d974eae41b5c9cce2624aa6339e9562fc06787465d0b7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.50.0';
+export const CONTRACT_VERSION = '1.51.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'a67e0b1b205554259d97bd53ea93b48adbe15c49b5d14feb648db40a2d1a8ec6';
+export const CONTRACT_DIGEST = '35a4990f578b62e7074d974eae41b5c9cce2624aa6339e9562fc06787465d0b7';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -39,6 +39,7 @@ export const SCHEMA_NAMES = [
   'AppendComparisonVersionOrderRequest',
   'AppendDecisionRequest',
   'AppendDecisionResponse',
+  'AppendPrecedentSettingRequest',
   'ApplyComparisonMatrixEditsRequest',
   'ApplyStageCardVerdictsRequest',
   'ApplyStageSheetMapRequest',
@@ -337,6 +338,7 @@ export const SCHEMA_NAMES = [
   'ExecutorConnectionDetail',
   'ExecutorConnectionId',
   'ExecutorConnectionList',
+  'ExecutorContextInput',
   'ExecutorEnrollmentId',
   'ExecutorEnrollmentMetadata',
   'ExecutorEnrollmentState',
@@ -399,6 +401,12 @@ export const SCHEMA_NAMES = [
   'ExecutorSshKey',
   'ExecutorSshProfile',
   'ExecutorTaskAck',
+  'ExecutorTaskContext',
+  'ExecutorTaskContextCase',
+  'ExecutorTaskContextItem',
+  'ExecutorTaskContextKind',
+  'ExecutorTaskContextRequest',
+  'ExecutorTaskContextStatus',
   'ExecutorTaskId',
   'ExecutorTaskState',
   'ExecutorTaskUsage',
@@ -408,16 +416,21 @@ export const SCHEMA_NAMES = [
   'ExtendedRunReview',
   'FailExecutorTaskRequest',
   'Finding',
+  'FindingBlockBox',
+  'FindingBlockEvidence',
   'FindingBlockLink',
   'FindingCategory',
   'FindingComparison',
   'FindingDetail',
   'FindingExecutionState',
   'FindingExecutionStatus',
+  'FindingGroundingKind',
   'FindingMatchProposal',
   'FindingObservation',
   'FindingObservationId',
+  'FindingOrigin',
   'FindingPage',
+  'FindingPrecedents',
   'FindingRef',
   'FindingUid',
   'GenerateComparisonSummaryRequest',
@@ -490,6 +503,17 @@ export const SCHEMA_NAMES = [
   'PortalCrop',
   'PortalGeometryState',
   'PortalRecognisedText',
+  'PossibleNorm',
+  'PrecedentCase',
+  'PrecedentFindingLabel',
+  'PrecedentHint',
+  'PrecedentHintCode',
+  'PrecedentLabelCode',
+  'PrecedentPassState',
+  'PrecedentSetting',
+  'PrecedentSettingList',
+  'PrecedentSettingName',
+  'PrecedentVotes',
   'PrepareComparisonClientReportRequest',
   'PresetId',
   'PresetRevisionId',
@@ -568,6 +592,7 @@ export const SCHEMA_NAMES = [
   'RunFindingBlockLinks',
   'RunId',
   'RunNormReferences',
+  'RunPrecedents',
   'RunPreset',
   'RunQueueReason',
   'RunStage',
@@ -630,6 +655,7 @@ export const SCHEMA_NAMES = [
   'SetProjectVendorListRequest',
   'SetStageModelLayoutEnabledRequest',
   'SetStagePairCompletenessRequest',
+  'SetVectorPausedRequest',
   'SetWorkCalendarDaysRequest',
   'SetWorkSchedulePlansRequest',
   'SetWorkerIntakeRequest',
@@ -769,6 +795,9 @@ export const SCHEMA_NAMES = [
   'UploadDocumentVersionRequest',
   'UploadPriceListRequest',
   'UserUid',
+  'VectorControl',
+  'VectorWindow',
+  'VectorWindowState',
   'VendorListEntry',
   'VendorListId',
   'VendorListMode',
@@ -989,6 +1018,12 @@ export type AppendDecisionRequest = {
 export type AppendDecisionResponse = {
   current_verdict: Verdict;
   event: DecisionEvent;
+};
+
+/** `appendPrecedentSetting`: a new revision of a setting. The revision number is the next one of the name; the actor is the caller. */
+export type AppendPrecedentSettingRequest = {
+  setting_name: PrecedentSettingName;
+  value: Record<string, never>;
 };
 
 /**
@@ -1345,6 +1380,7 @@ export type ClaimedExecutorTask = {
   access?: ExecutorModelAccess;
   cell_key?: StageCellKey;
   claim_expires_at: string;
+  context_request?: Array<ExecutorContextInput>;
   deadline_at: string;
   effort?: ModelEffort;
   images?: Array<RunnerImage>;
@@ -4241,7 +4277,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.50.0";
+  contract_version: "1.51.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4502,6 +4538,17 @@ export const EXECUTOR_CONNECTION_ID_PATTERN = "^exc_[0-9A-HJKMNP-TV-Z]{26}$";
 export type ExecutorConnectionList = {
   items: Array<ExecutorConnection>;
   pinned_models: Array<ExecutorPinnedModel>;
+};
+
+/**
+ * `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2): one candidate text of a `review:main` task the agent may ask reference data for
+ * (`getExecutorTaskContext`). `input_id` is the task's own name for the text, `text_sha256` the digest of it, `section` the section the
+ * run's version belongs to.
+ */
+export type ExecutorContextInput = {
+  input_id: string;
+  section: string;
+  text_sha256: Sha256;
 };
 
 export type ExecutorEnrollmentId = string;
@@ -5131,6 +5178,69 @@ export type ExecutorTaskAck = {
   task_id: ExecutorTaskId;
 };
 
+/**
+ * `getExecutorTaskContext` (contract 1.51.0): the reference data of a task, laid out by `input_id`. `reason` is present exactly when
+ * `status` is `unavailable`, and `context_sha256` exactly when it is `available`: the digest of `items` as the stand delivered them, which
+ * the agent echoes in `submitExecutorTaskAnswer`. `not_fitted` counts the cases that did not fit the budget of characters of the task.
+ */
+export type ExecutorTaskContext = {
+  context_sha256?: Sha256;
+  items: Array<ExecutorTaskContextItem>;
+  kind: ExecutorTaskContextKind;
+  not_fitted: number;
+  reason?: string;
+  status: ExecutorTaskContextStatus;
+};
+
+/**
+ * One earlier decision, with the texts of its case. The cases are those of the same section and data class, of any project, never of
+ * this run, never withdrawn or forgotten (the policy of the consent).
+ */
+export type ExecutorTaskContextCase = {
+  case_id: DecisionMemoryCaseId;
+  category: string;
+  comment?: string;
+  finding_text: string;
+  recommendation_text: string;
+  similarity: number;
+  verdict: "accepted" | "rejected";
+};
+
+/** The cases found for one `input_id` of the task's `context_request`, at most three, the most similar first. */
+export type ExecutorTaskContextItem = {
+  cases: Array<ExecutorTaskContextCase>;
+  input_id: string;
+};
+
+/**
+ * What an agent asks the stand for: the decisions of experts on similar findings (`similar_cases`) or the approved patterns of rejection
+ * (`patterns`, wave 5).
+ */
+export const EXECUTOR_TASK_CONTEXT_KIND_VALUES = [
+  'similar_cases',
+  'patterns',
+] as const;
+
+/** ExecutorTaskContextKind - the closed value set above. */
+export type ExecutorTaskContextKind = (typeof EXECUTOR_TASK_CONTEXT_KIND_VALUES)[number];
+
+/** The body of `getExecutorTaskContext`: the kind of reference data. One call per kind and task is paid for; a repeat answers the same. */
+export type ExecutorTaskContextRequest = {
+  kind: ExecutorTaskContextKind;
+};
+
+/**
+ * `available`: the answer holds the reference data. `unavailable`: the stand has none to give and says why in `reason` (while the
+ * night encoder is the only one, `until_move`); the agent calls the model without it.
+ */
+export const EXECUTOR_TASK_CONTEXT_STATUS_VALUES = [
+  'available',
+  'unavailable',
+] as const;
+
+/** ExecutorTaskContextStatus - the closed value set above. */
+export type ExecutorTaskContextStatus = (typeof EXECUTOR_TASK_CONTEXT_STATUS_VALUES)[number];
+
 export type ExecutorTaskId = string;
 
 /** The contract pattern for `ExecutorTaskId`. Anchored; use with `new RegExp()`. */
@@ -5204,6 +5314,7 @@ export type FailExecutorTaskRequest = {
 
 /** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. `current_verdict_carried_from` (`UI-A-73`, contract 1.39.0) names where the decision that carries `current_verdict` came from, when an expert carried it over from an earlier version's finding; it is absent when the verdict was decided directly, was withdrawn, or was carried before migration `0058`. A later verdict an expert gives the finding replaces it, and a comment leaves it standing. */
 export type Finding = {
+  block_evidence?: Array<FindingBlockEvidence>;
   category: FindingCategory;
   current_verdict: Verdict;
   current_verdict_carried_from?: DecisionCarriedFrom;
@@ -5218,6 +5329,7 @@ export type Finding = {
   /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation. */
   norm_citations?: Array<NormCitation>;
   observation: FindingObservation;
+  origin?: FindingOrigin;
   project_uid: ProjectUid;
   /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
   required_value?: string;
@@ -5227,13 +5339,35 @@ export type Finding = {
   version_uid: VersionUid;
 };
 
+/** A box on a page, normalised to the page (0 to 1), the origin at the top left. */
+export type FindingBlockBox = {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+};
+
+/**
+ * `CRIT-SEAL-50` (contract 1.51.0): one block of the portal that holds a finding's evidence -- the place, never the content: the
+ * block is proved to be in the run's geometry and its crop to match, and the quote, when there is one, to be in the block's recognised
+ * text. `Evidence` is untouched.
+ */
+export type FindingBlockEvidence = {
+  bbox_norm: FindingBlockBox;
+  crop_sha256: Sha256;
+  ordinal: number;
+  page_number: number;
+  portal_block_id: PortalBlockId;
+  recognised_quote?: string;
+};
+
 /** `UI-PARITY-C6` (contract 1.41.0): the portal blocks that hold one finding's evidence. */
 export type FindingBlockLink = {
   finding_uid: FindingUid;
   portal_block_ids: Array<PortalBlockId>;
 };
 
-/** Closed finding categories: seven prior categories and five v3 normative categories. */
+/** Closed finding categories: seven prior categories, five v3 normative categories and, since 1.51.0, two categories of the groups of candidates of the extended review published as findings (`drawing_discrepancy`, `cross_source`). */
 export const FINDING_CATEGORY_VALUES = [
   'internal_contradiction',
   'explicit_placeholder',
@@ -5247,6 +5381,8 @@ export const FINDING_CATEGORY_VALUES = [
   'accessibility',
   'insulation',
   'sound',
+  'drawing_discrepancy',
+  'cross_source',
 ] as const;
 
 /** FindingCategory - the closed value set above. */
@@ -5263,6 +5399,7 @@ export type FindingComparison = {
 
 /** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. `current_verdict_carried_from` (`UI-A-73`) is as on `Finding`. */
 export type FindingDetail = {
+  block_evidence?: Array<FindingBlockEvidence>;
   category: FindingCategory;
   current_verdict: Verdict;
   current_verdict_carried_from?: DecisionCarriedFrom;
@@ -5280,6 +5417,7 @@ export type FindingDetail = {
   /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation. */
   norm_citations?: Array<NormCitation>;
   observation: FindingObservation;
+  origin?: FindingOrigin;
   project_uid: ProjectUid;
   /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
   required_value?: string;
@@ -5307,6 +5445,18 @@ export const FINDING_EXECUTION_STATUS_VALUES = [
 /** FindingExecutionStatus - the closed value set above. */
 export type FindingExecutionStatus = (typeof FINDING_EXECUTION_STATUS_VALUES)[number];
 
+/**
+ * `CRIT-SEAL-50` (contract 1.51.0, migration ``0064``): how an observation is anchored. `text_span`: a span of the text layer, as every
+ * observation was until now. `portal_block`: a block of the portal's geometry, proved to be in the run's own geometry (plan-v5 section 4).
+ */
+export const FINDING_GROUNDING_KIND_VALUES = [
+  'text_span',
+  'portal_block',
+] as const;
+
+/** FindingGroundingKind - the closed value set above. */
+export type FindingGroundingKind = (typeof FINDING_GROUNDING_KIND_VALUES)[number];
+
 /** A proposed label for a finding of either run; never a decision or a carryover. */
 export type FindingMatchProposal = {
   basis: "exact_issue_and_quotes" | "quotes_absent_from_paired_sheets" | "quote_still_on_paired_sheet" | "evidence_sheet_unpaired" | "evidence_over_limit" | "no_exact_source_match";
@@ -5321,6 +5471,7 @@ export type FindingObservation = {
   evidence: Array<Evidence>;
   finding_observation_id: FindingObservationId;
   finding_text: string;
+  grounding_kind?: FindingGroundingKind;
   /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. */
   norm_citations?: Array<NormCitation>;
   proposed_severity?: Severity;
@@ -5339,9 +5490,36 @@ export type FindingObservationId = string;
 /** The contract pattern for `FindingObservationId`. Anchored; use with `new RegExp()`. */
 export const FINDING_OBSERVATION_ID_PATTERN = "^fobs_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/**
+ * `CRIT-SEAL-50` (contract 1.51.0): where a finding of «Разбор» comes from, the «Источник» chip: `text` (the text analysis), `drawing`
+ * (a drawing candidate of the extended review) or `cross_check` (the cross-check of sources).
+ */
+export const FINDING_ORIGIN_VALUES = [
+  'text',
+  'drawing',
+  'cross_check',
+] as const;
+
+/** FindingOrigin - the closed value set above. */
+export type FindingOrigin = (typeof FINDING_ORIGIN_VALUES)[number];
+
 export type FindingPage = {
   items: Array<Finding>;
   page: PageInfo;
+};
+
+/**
+ * `getFindingPrecedents` (contract 1.51.0): the card of a finding -- its label, its at most two hints, the similar cases and the possible
+ * norms. `available` is false while the pass has not given this finding a result; `label` is then absent.
+ */
+export type FindingPrecedents = {
+  available: boolean;
+  cases: Array<PrecedentCase>;
+  finding_uid: FindingUid;
+  hints: Array<PrecedentHint>;
+  label?: PrecedentFindingLabel;
+  possible_norms: Array<PossibleNorm>;
+  run_id: RunId;
 };
 
 export type FindingRef = {
@@ -6055,6 +6233,140 @@ export type PortalRecognisedText = {
   flags: Array<string>;
   quote_source: "recognised";
   text: string;
+};
+
+/**
+ * A paragraph of the norms the run already holds that the finding may rest on («Возможные нормы»): from the same paragraphs the
+ * critic gets, never from the encoder.
+ */
+export type PossibleNorm = {
+  clause_number: string | null;
+  designation: string;
+  norm_document_id: NormDocumentId;
+  norm_paragraph_id: NormParagraphId;
+  page_label: number;
+};
+
+/** One similar case on the card of a finding. */
+export type PrecedentCase = {
+  case_id: DecisionMemoryCaseId;
+  category: string;
+  comment?: string;
+  finding_text: string;
+  similarity: number;
+  verdict: "accepted" | "rejected";
+};
+
+/**
+ * What the pass gave one finding of a run at `revision`. `critic_reviewed` is false for a finding the AI critic did not review: its
+ * rejection labels are then shown neutrally and it is not in the queue.
+ */
+export type PrecedentFindingLabel = {
+  critic_reviewed: boolean;
+  finding_uid: FindingUid;
+  hint_codes: Array<PrecedentHintCode>;
+  label: PrecedentLabelCode;
+  revision: number;
+  votes: PrecedentVotes;
+};
+
+/**
+ * A hint of the card. `text` is the words of an expert (the comment of a rejecting decision for `p1`), never a model's; `case_id` is the
+ * case it comes from.
+ */
+export type PrecedentHint = {
+  case_id?: DecisionMemoryCaseId;
+  code: PrecedentHintCode;
+  text?: string;
+};
+
+/**
+ * A hint of the card (plan-v5 section 2.5; at most two per finding, never a model's text): `p1` the reason of the rejections, `p4` the
+ * critic disagrees, `p5` the history of the document.
+ */
+export const PRECEDENT_HINT_CODE_VALUES = [
+  'p1',
+  'p4',
+  'p5',
+] as const;
+
+/** PrecedentHintCode - the closed value set above. */
+export type PrecedentHintCode = (typeof PRECEDENT_HINT_CODE_VALUES)[number];
+
+/**
+ * The label of a finding (plan-v5 section 2.3). `none` and `few` show nothing in the row. `cancel_suggested` is a part of
+ * `often_rejected`: it additionally needs the critic's review and no veto, and it is the one that fills the queue «Рекомендовано снять».
+ */
+export const PRECEDENT_LABEL_CODE_VALUES = [
+  'none',
+  'few',
+  'often_rejected',
+  'cancel_suggested',
+  'likely_accepted',
+  'mixed',
+] as const;
+
+/** PrecedentLabelCode - the closed value set above. */
+export type PrecedentLabelCode = (typeof PRECEDENT_LABEL_CODE_VALUES)[number];
+
+/** The state of the «Прецеденты» pass of a run. */
+export const PRECEDENT_PASS_STATE_VALUES = [
+  'pending',
+  'running',
+  'done',
+  'failed',
+] as const;
+
+/** PrecedentPassState - the closed value set above. */
+export type PrecedentPassState = (typeof PRECEDENT_PASS_STATE_VALUES)[number];
+
+/**
+ * One revision of one setting. `value` is an object: `{"enabled": boolean}` for `one_list` and `critic_context`, `{"start", "end", "tz"}`
+ * for `vector_window`, the lane's own shape for the others.
+ */
+export type PrecedentSetting = {
+  actor_user_uid: UserUid;
+  created_at: string;
+  revision: number;
+  setting_name: PrecedentSettingName;
+  value: Record<string, never>;
+};
+
+/**
+ * `listPrecedentSettings`: the revision in force of each setting that was ever journalled (`current`, at most one per name) and the
+ * journal, newest first (`events`).
+ */
+export type PrecedentSettingList = {
+  current: Array<PrecedentSetting>;
+  events: Array<PrecedentSetting>;
+};
+
+/**
+ * The names of the journal of settings: the three switches (`one_list`, `critic_context`, `section_labels`; all off while nothing is
+ * journalled), the stop words of the owner, the night window and the thresholds.
+ */
+export const PRECEDENT_SETTING_NAME_VALUES = [
+  'one_list',
+  'critic_context',
+  'section_labels',
+  'stop_words',
+  'vector_window',
+  'thresholds',
+] as const;
+
+/** PrecedentSettingName - the closed value set above. */
+export type PrecedentSettingName = (typeof PRECEDENT_SETTING_NAME_VALUES)[number];
+
+/**
+ * The counts behind a label: the decisions counted (`total`), how many rejected and accepted, how many of them are independent (not
+ * given under a label to reject, plan-v5 section 2.1) and from how many projects.
+ */
+export type PrecedentVotes = {
+  accepted: number;
+  independent: number;
+  projects: number;
+  rejected: number;
+  total: number;
 };
 
 /**
@@ -6888,6 +7200,19 @@ export type RunNormReferences = {
   version_uid: VersionUid;
 };
 
+/**
+ * `getRunPrecedents` (contract 1.51.0): the labels of the findings of a run, and with them the queue (the items whose `label` is
+ * `cancel_suggested`). `available` is false while the run has no result of the pass (the vectors are computed at night or are paused): the
+ * screen then shows one line over the list and no label in a row. `pass_state` and `revision` are absent until a pass has started.
+ */
+export type RunPrecedents = {
+  available: boolean;
+  items: Array<PrecedentFindingLabel>;
+  pass_state?: PrecedentPassState;
+  revision?: number;
+  run_id: RunId;
+};
+
 /** ANALYSIS-PRESETS-01: the preset revision a run was started with: the preset, the number of the revision and the name it had then (a later rename does not change it). */
 export type RunPreset = {
   name: string;
@@ -7181,6 +7506,7 @@ export const RUN_WAIT_CAUSE_VALUES = [
   'model_cooling_down',
   'not_on_any_server',
   'at_capacity',
+  'vector_window',
 ] as const;
 
 /** RunWaitCause - the closed value set above. */
@@ -7642,6 +7968,11 @@ export type SetStageModelLayoutEnabledRequest = {
 
 export type SetStagePairCompletenessRequest = {
   completeness: "full" | "partial";
+};
+
+/** `setVectorPaused`: pause the vectors or resume them. The window does not start on a pause and the queue keeps filling. */
+export type SetVectorPausedRequest = {
+  paused: boolean;
 };
 
 /** `R-152d`: days made days off or working days; ``default`` returns a day to the week's rule. */
@@ -8801,6 +9132,7 @@ export type StartStageChainRunRequest = {
  */
 export type SubmitExecutorTaskAnswerRequest = {
   access?: ExecutorModelAccess;
+  context_sha256?: Sha256;
   input_tokens?: number;
   model: string;
   output_text: string;
@@ -8900,6 +9232,42 @@ export type UserUid = string;
 
 /** The contract pattern for `UserUid`. Anchored; use with `new RegExp()`. */
 export const USER_UID_PATTERN = "^usr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * `getVectorControl` and the answer of `setVectorPaused` (contract 1.51.0): whether the vectors are paused and since when, the state of
+ * the night window and the window itself. The counts of queued and poisoned jobs are for an administrator and absent for an expert.
+ */
+export type VectorControl = {
+  paused: boolean;
+  paused_since?: string;
+  pending_intents?: number;
+  poisoned_intents?: number;
+  window: VectorWindow;
+  window_changed_at: string;
+  window_reason?: string;
+  window_state: VectorWindowState;
+};
+
+/** The configured window: local `start` and `end` (`HH:MM`) in the IANA zone `tz` (the setting `vector_window`). */
+export type VectorWindow = {
+  end: string;
+  start: string;
+  tz: string;
+};
+
+/**
+ * The night window of the vectors: `closed`; `draining` (no new run is issued, the running ones finish); `encoding` (the encoder runs);
+ * `skipped` (the window did not take place, `window_reason` says why).
+ */
+export const VECTOR_WINDOW_STATE_VALUES = [
+  'closed',
+  'draining',
+  'encoding',
+  'skipped',
+] as const;
+
+/** VectorWindowState - the closed value set above. */
+export type VectorWindowState = (typeof VECTOR_WINDOW_STATE_VALUES)[number];
 
 /** One entry: the material or equipment group it covers, the allowed vendor, a note. */
 export type VendorListEntry = {

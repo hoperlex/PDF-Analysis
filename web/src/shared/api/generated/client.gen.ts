@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.50.0 (OpenAPI 3.1.0)
- *   sha256 a67e0b1b205554259d97bd53ea93b48adbe15c49b5d14feb648db40a2d1a8ec6
+ *   AuditManager PC-01 API 1.51.0 (OpenAPI 3.1.0)
+ *   sha256 35a4990f578b62e7074d974eae41b5c9cce2624aa6339e9562fc06787465d0b7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -22,6 +22,8 @@ import type {
   AppendComparisonVersionOrderResult,
   AppendDecisionInput,
   AppendDecisionResult,
+  AppendPrecedentSettingInput,
+  AppendPrecedentSettingResult,
   ApplyComparisonMatrixEditsInput,
   ApplyComparisonMatrixEditsResult,
   ApplyStageCardVerdictsInput,
@@ -222,12 +224,16 @@ import type {
   GetExecutorHostAgentInstallResult,
   GetExecutorHostDetailsInput,
   GetExecutorHostDetailsResult,
+  GetExecutorTaskContextInput,
+  GetExecutorTaskContextResult,
   GetExecutorTaskImageInput,
   GetExecutorTaskImageResult,
   GetExtendedRunReviewInput,
   GetExtendedRunReviewResult,
   GetFindingInput,
   GetFindingResult,
+  GetFindingPrecedentsInput,
+  GetFindingPrecedentsResult,
   GetMeInput,
   GetMeResult,
   GetNormDocumentInput,
@@ -238,6 +244,8 @@ import type {
   GetProjectResult,
   GetRunNormReferencesInput,
   GetRunNormReferencesResult,
+  GetRunPrecedentsInput,
+  GetRunPrecedentsResult,
   GetRunStagesInput,
   GetRunStagesResult,
   GetRunStartReadinessInput,
@@ -274,6 +282,8 @@ import type {
   GetStageUploadResult,
   GetUserInput,
   GetUserResult,
+  GetVectorControlInput,
+  GetVectorControlResult,
   GetVersionBlocksInput,
   GetVersionBlocksResult,
   GetVersionPageProfileInput,
@@ -374,6 +384,8 @@ import type {
   ListOptimisationPassesResult,
   ListOptimisationProposalsInput,
   ListOptimisationProposalsResult,
+  ListPrecedentSettingsInput,
+  ListPrecedentSettingsResult,
   ListPriceListPositionsInput,
   ListPriceListPositionsResult,
   ListPriceListRevisionsInput,
@@ -564,6 +576,8 @@ import type {
   SetStageModelLayoutEnabledResult,
   SetStagePairCompletenessInput,
   SetStagePairCompletenessResult,
+  SetVectorPausedInput,
+  SetVectorPausedResult,
   SetWorkCalendarDaysInput,
   SetWorkCalendarDaysResult,
   SetWorkSchedulePlansInput,
@@ -679,6 +693,18 @@ export function appendDecision(
   options?: RequestOptions,
 ): Promise<ApiResponse<AppendDecisionResult>> {
   return request<AppendDecisionResult>(OPERATIONS.appendDecision, input, options);
+}
+
+/**
+ * Append Precedent Setting
+ *
+ * `POST /precedent-settings` - a write; carries a required Idempotency-Key.
+ */
+export function appendPrecedentSetting(
+  input: AppendPrecedentSettingInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<AppendPrecedentSettingResult>> {
+  return request<AppendPrecedentSettingResult>(OPERATIONS.appendPrecedentSetting, input, options);
 }
 
 /**
@@ -1882,6 +1908,18 @@ export function getExecutorHostDetails(
 }
 
 /**
+ * Get Executor Task Context
+ *
+ * `POST /runner/tasks/{task_id}/context`.
+ */
+export function getExecutorTaskContext(
+  input: GetExecutorTaskContextInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutorTaskContextResult>> {
+  return request<GetExecutorTaskContextResult>(OPERATIONS.getExecutorTaskContext, input, options);
+}
+
+/**
  * Get Executor Task Image
  *
  * `GET /runner/tasks/{task_id}/images/{blob_id}`.
@@ -1915,6 +1953,18 @@ export function getFinding(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetFindingResult>> {
   return request<GetFindingResult>(OPERATIONS.getFinding, input, options);
+}
+
+/**
+ * Get Finding Precedents
+ *
+ * `GET /findings/{finding_uid}/precedents`.
+ */
+export function getFindingPrecedents(
+  input: GetFindingPrecedentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetFindingPrecedentsResult>> {
+  return request<GetFindingPrecedentsResult>(OPERATIONS.getFindingPrecedents, input, options);
 }
 
 /**
@@ -1975,6 +2025,18 @@ export function getRunNormReferences(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetRunNormReferencesResult>> {
   return request<GetRunNormReferencesResult>(OPERATIONS.getRunNormReferences, input, options);
+}
+
+/**
+ * Get Run Precedents
+ *
+ * `GET /runs/{run_id}/precedents`.
+ */
+export function getRunPrecedents(
+  input: GetRunPrecedentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetRunPrecedentsResult>> {
+  return request<GetRunPrecedentsResult>(OPERATIONS.getRunPrecedents, input, options);
 }
 
 /**
@@ -2191,6 +2253,18 @@ export function getUser(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetUserResult>> {
   return request<GetUserResult>(OPERATIONS.getUser, input, options);
+}
+
+/**
+ * Get Vector Control
+ *
+ * `GET /vector-control`.
+ */
+export function getVectorControl(
+  input: GetVectorControlInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetVectorControlResult>> {
+  return request<GetVectorControlResult>(OPERATIONS.getVectorControl, input, options);
 }
 
 /**
@@ -2791,6 +2865,18 @@ export function listOptimisationProposals(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListOptimisationProposalsResult>> {
   return request<ListOptimisationProposalsResult>(OPERATIONS.listOptimisationProposals, input, options);
+}
+
+/**
+ * List Precedent Settings
+ *
+ * `GET /precedent-settings`.
+ */
+export function listPrecedentSettings(
+  input: ListPrecedentSettingsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListPrecedentSettingsResult>> {
+  return request<ListPrecedentSettingsResult>(OPERATIONS.listPrecedentSettings, input, options);
 }
 
 /**
@@ -3934,6 +4020,18 @@ export function setStagePairCompleteness(
 }
 
 /**
+ * Set Vector Paused
+ *
+ * `PUT /vector-control/paused` - a write; carries a required Idempotency-Key.
+ */
+export function setVectorPaused(
+  input: SetVectorPausedInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetVectorPausedResult>> {
+  return request<SetVectorPausedResult>(OPERATIONS.setVectorPaused, input, options);
+}
+
+/**
  * Set Work Calendar Days
  *
  * `PUT /work-calendar/days` - a write; carries a required Idempotency-Key.
@@ -4480,6 +4578,7 @@ export function withdrawSheetPairing(
 export const apiClient = {
   appendComparisonVersionOrder,
   appendDecision,
+  appendPrecedentSetting,
   applyComparisonMatrixEdits,
   applyStageCardVerdicts,
   applyStageSheetMap,
@@ -4580,14 +4679,17 @@ export const apiClient = {
   getExecutorHost,
   getExecutorHostAgentInstall,
   getExecutorHostDetails,
+  getExecutorTaskContext,
   getExecutorTaskImage,
   getExtendedRunReview,
   getFinding,
+  getFindingPrecedents,
   getMe,
   getNormDocument,
   getProductVersion,
   getProject,
   getRunNormReferences,
+  getRunPrecedents,
   getRunStages,
   getRunStartReadiness,
   getRunStatus,
@@ -4606,6 +4708,7 @@ export const apiClient = {
   getStageSynthesis,
   getStageUpload,
   getUser,
+  getVectorControl,
   getVersionBlocks,
   getVersionPageProfile,
   getVersionPageSpecPositions,
@@ -4656,6 +4759,7 @@ export const apiClient = {
   listNormSnapshots,
   listOptimisationPasses,
   listOptimisationProposals,
+  listPrecedentSettings,
   listPriceListPositions,
   listPriceListRevisions,
   listProjects,
@@ -4751,6 +4855,7 @@ export const apiClient = {
   setProjectVendorList,
   setStageModelLayoutEnabled,
   setStagePairCompleteness,
+  setVectorPaused,
   setWorkCalendarDays,
   setWorkSchedulePlans,
   setWorkScheduleSettings,

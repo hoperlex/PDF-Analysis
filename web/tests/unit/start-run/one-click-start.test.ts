@@ -44,7 +44,7 @@ function freeEstimate(body: RunCostEstimateRequest, digest = FREE_DIGEST): RunCo
 
 function refusal(status: number, code: 'conflict' | 'analysis_input_invalid', details: Record<string, string>): ApiError {
   return new ApiError(status, {
-    contract_version: '1.50.0', error_code: code, message: 'refused', correlation_id: 'cid-one-click', retryable: false, details,
+    contract_version: '1.51.0', error_code: code, message: 'refused', correlation_id: 'cid-one-click', retryable: false, details,
   }, 'cid-one-click');
 }
 
@@ -226,7 +226,7 @@ describe('an estimate that can charge opens exactly one dialog', () => {
 
   it('retries a refused send under the same key and the same consent, without a new estimate', async () => {
     vi.mocked(startRun).mockRejectedValueOnce(new ApiError(503, {
-      contract_version: '1.50.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'cid-down',
+      contract_version: '1.51.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'cid-down',
       retryable: true, details: { dependency: 'model_provider' },
     }, 'cid-down'));
     const { view } = await mount();

@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "a67e0b1b205554259d97bd53ea93b48adbe15c49b5d14feb648db40a2d1a8ec6",
-    "content_commit": "c90bdf85",
-    "content_commit_subject": "AR-V3-BE-RM-01 step B: re-measure the surface counts in src prose, the contract info paragraph and the baseline scope message",
-    "dispatch_named_commit": "c90bdf85b2e0361ee73ed6dc12b27353d04a32ba",
-    "commit_note": "Resealed by the AR-V3-REMOVE integration: contract 1.50.0 (AR-V3-BE-RM-01 removed the six-scope АР beta: startArV3BetaGroup, getArV3BetaGroup, getArV3BetaGroupReview, getArV3BetaPackStatus, estimateArV3GroupCost and getRunNormVerification with 19 schemas; RunStartReadiness.extended_plan added; RunStatus lost analysis_kind, ar_v3_group_id and ar_v3_scope_id). The content commit is the last to touch the bytes; the seal itself is c0483684 (R-154h).",
+    "sha256": "35a4990f578b62e7074d974eae41b5c9cce2624aa6339e9562fc06787465d0b7",
+    "content_commit": "b7dea404",
+    "content_commit_subject": "feat(contract): contract 1.51.0 -- the version literals, the surface counts (296/325/808), the reseal paragraph, the catalogs at candidate revision 68, the head 0064 (CRIT-SEAL-50)",
+    "dispatch_named_commit": "b7dea404a53e9bc4d760e5a358197e463a649e12",
+    "commit_note": "Resealed by CRIT-SEAL-50: contract 1.51.0 (seven sleeping operations of the Precedents programme -- getExecutorTaskContext, getRunPrecedents, getFindingPrecedents, getVectorControl, setVectorPaused, listPrecedentSettings, appendPrecedentSetting; twenty-nine schemas; optional ClaimedExecutorTask.context_request, SubmitExecutorTaskAnswerRequest.context_sha256, block_evidence and origin on Finding and FindingDetail, FindingObservation.grounding_kind; FindingCategory + drawing_discrepancy and cross_source; RunWaitCause + vector_window), on top of 1.50.0.",
     "openapi_version": "3.1.0",
-    "info_version": "1.50.0",
-    "paths": 290,
-    "operations": 318,
-    "component_schemas": 779,
+    "info_version": "1.51.0",
+    "paths": 296,
+    "operations": 325,
+    "component_schemas": 808,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "a67e0b1b205554259d97bd53ea93b48adbe15c49b5d14feb648db40a2d1a8ec6",
+    "snapshot_sha256": "35a4990f578b62e7074d974eae41b5c9cce2624aa6339e9562fc06787465d0b7",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "49bff7b6936cb4d14c2478581679f514f315a414784fded0d500bf440610bb1f",
-      "index.ts": "d4bd4acda0da5604d7a08f7785b9b53eb915532f50b5cdd65ca90b2907ecb7af",
-      "operations.gen.ts": "f4f8f67d129f4ed1b4f00c7dd6aade33cd371624de15c0152d4f8c307ce76b4f",
-      "types.gen.ts": "24978fb4921fcee77f1668593f81d46634f52d26aec10751c70b58b72bfb9ef1"
+      "client.gen.ts": "1a40238fb9c414927bb57c1fa28fdcb3bdb9a21655333287d7223b25577aaf68",
+      "index.ts": "baf1f63cd34a6ffd813e6e70d43431a066288b2eda2ac76492cfb7aa34a57404",
+      "operations.gen.ts": "52031994f776962ed16993153c066527cacc8526388ef8596dfa9c5096c44428",
+      "types.gen.ts": "8c95c20670a1228b6bfb67c383df94cbc2039f4606e42a825018adff8a722af0"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

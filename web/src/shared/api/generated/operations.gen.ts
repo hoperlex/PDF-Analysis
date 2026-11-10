@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.50.0 (OpenAPI 3.1.0)
- *   sha256 a67e0b1b205554259d97bd53ea93b48adbe15c49b5d14feb648db40a2d1a8ec6
+ *   AuditManager PC-01 API 1.51.0 (OpenAPI 3.1.0)
+ *   sha256 35a4990f578b62e7074d974eae41b5c9cce2624aa6339e9562fc06787465d0b7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -25,6 +25,7 @@ import type {
   AppendComparisonVersionOrderRequest,
   AppendDecisionRequest,
   AppendDecisionResponse,
+  AppendPrecedentSettingRequest,
   ApplyComparisonMatrixEditsRequest,
   ApplyStageCardVerdictsRequest,
   ApplyStageSheetMapRequest,
@@ -160,6 +161,8 @@ import type {
   ExecutorSecretMetadata,
   ExecutorSshKey,
   ExecutorTaskAck,
+  ExecutorTaskContext,
+  ExecutorTaskContextRequest,
   ExecutorTaskId,
   ExecutorWorkKind,
   ExtendedExecutorTaskClaim,
@@ -169,6 +172,7 @@ import type {
   FindingDetail,
   FindingExecutionState,
   FindingPage,
+  FindingPrecedents,
   FindingUid,
   GenerateComparisonSummaryRequest,
   GenerateComparisonSummaryResponse,
@@ -201,6 +205,8 @@ import type {
   OptimisationProposalPage,
   PortalBlockId,
   PortalBlockPage,
+  PrecedentSetting,
+  PrecedentSettingList,
   PrepareComparisonClientReportRequest,
   PresetId,
   PriceListId,
@@ -241,6 +247,7 @@ import type {
   RunFindingBlockLinks,
   RunId,
   RunNormReferences,
+  RunPrecedents,
   RunStages,
   RunStartReadiness,
   RunStatus,
@@ -271,6 +278,7 @@ import type {
   SetProjectVendorListRequest,
   SetStageModelLayoutEnabledRequest,
   SetStagePairCompletenessRequest,
+  SetVectorPausedRequest,
   SetWorkCalendarDaysRequest,
   SetWorkSchedulePlansRequest,
   SetWorkerIntakeRequest,
@@ -337,6 +345,7 @@ import type {
   UploadDocumentVersionRequest,
   UploadPriceListRequest,
   UserUid,
+  VectorControl,
   VendorListRevision,
   Verdict,
   VersionBlockIndex,
@@ -357,6 +366,7 @@ import type {
 export const OPERATION_IDS = [
   'appendComparisonVersionOrder',
   'appendDecision',
+  'appendPrecedentSetting',
   'applyComparisonMatrixEdits',
   'applyStageCardVerdicts',
   'applyStageSheetMap',
@@ -457,14 +467,17 @@ export const OPERATION_IDS = [
   'getExecutorHost',
   'getExecutorHostAgentInstall',
   'getExecutorHostDetails',
+  'getExecutorTaskContext',
   'getExecutorTaskImage',
   'getExtendedRunReview',
   'getFinding',
+  'getFindingPrecedents',
   'getMe',
   'getNormDocument',
   'getProductVersion',
   'getProject',
   'getRunNormReferences',
+  'getRunPrecedents',
   'getRunStages',
   'getRunStartReadiness',
   'getRunStatus',
@@ -483,6 +496,7 @@ export const OPERATION_IDS = [
   'getStageSynthesis',
   'getStageUpload',
   'getUser',
+  'getVectorControl',
   'getVersionBlocks',
   'getVersionPageProfile',
   'getVersionPageSpecPositions',
@@ -533,6 +547,7 @@ export const OPERATION_IDS = [
   'listNormSnapshots',
   'listOptimisationPasses',
   'listOptimisationProposals',
+  'listPrecedentSettings',
   'listPriceListPositions',
   'listPriceListRevisions',
   'listProjects',
@@ -628,6 +643,7 @@ export const OPERATION_IDS = [
   'setProjectVendorList',
   'setStageModelLayoutEnabled',
   'setStagePairCompleteness',
+  'setVectorPaused',
   'setWorkCalendarDays',
   'setWorkSchedulePlans',
   'setWorkScheduleSettings',
@@ -740,6 +756,32 @@ export type AppendDecisionInput = {
 
 /** Success body of `appendDecision` (`application/json`, HTTP 201). */
 export type AppendDecisionResult = AppendDecisionResponse;
+
+// ------------------------------------------------------------------------------------
+// appendPrecedentSetting - POST /precedent-settings
+// ------------------------------------------------------------------------------------
+
+/**
+ * Append Precedent Setting
+ *
+ * `CRIT-SEAL-50` (plan-v5 sections 3.1 and 3.6): a new revision of a setting, journalled with the administrator who made it. `422 validation_failed` for a value that is not the shape of its setting. A switch changes the behaviour of runs started after it; a run's publication mode is frozen at its start. `role:admin`, `Idempotency-Key` required.
+ */
+export type AppendPrecedentSettingInput = {
+  /** Request body, sent as `application/json`. */
+  body: AppendPrecedentSettingRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `appendPrecedentSetting` (`application/json`, HTTP 201). */
+export type AppendPrecedentSettingResult = PrecedentSetting;
 
 // ------------------------------------------------------------------------------------
 // applyComparisonMatrixEdits - POST /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits
@@ -3306,6 +3348,31 @@ export type GetExecutorHostDetailsInput = {
 export type GetExecutorHostDetailsResult = ExecutorHostDetails;
 
 // ------------------------------------------------------------------------------------
+// getExecutorTaskContext - POST /runner/tasks/{task_id}/context
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Executor Task Context
+ *
+ * `CRIT-SEAL-50` (plan-v5 section 3.2): the agent behind the claim of a `review:main` task asks once per kind for the decisions of experts on findings like the task's own. The stand answers by the `input_id` of the task's `context_request` and journals what it gave (no text). **Idempotent by (task, kind)**: a repeat returns the same answer and spends no budget. While the night encoder is the only one the answer is `status: unavailable, reason: until_move`. The agent appends the data to the prompt as reference, never as ground, and echoes `context_sha256` in `submitExecutorTaskAnswer`; an error here never fails the task. Runner token only; no role.
+ */
+export type GetExecutorTaskContextInput = {
+  /** Path parameters, substituted into `/runner/tasks/{task_id}/context`. */
+  path: {
+    task_id: ExecutorTaskId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ExecutorTaskContextRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutorTaskContext` (`application/json`, HTTP 200). */
+export type GetExecutorTaskContextResult = ExecutorTaskContext;
+
+// ------------------------------------------------------------------------------------
 // getExecutorTaskImage - GET /runner/tasks/{task_id}/images/{blob_id}
 // ------------------------------------------------------------------------------------
 
@@ -3362,6 +3429,29 @@ export type GetFindingInput = {
 
 /** Success body of `getFinding` (`application/json`, HTTP 200). */
 export type GetFindingResult = FindingDetail;
+
+// ------------------------------------------------------------------------------------
+// getFindingPrecedents - GET /findings/{finding_uid}/precedents
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Finding Precedents
+ *
+ * `CRIT-SEAL-50` (plan-v5 sections 2.5 and 3.4): the card of a finding -- its label, at most two hints, the similar cases and the possible norms (paragraphs the run already holds). `404 not_found` for an unknown finding. `role:admin|expert`; the viewer is denied.
+ */
+export type GetFindingPrecedentsInput = {
+  /** Path parameters, substituted into `/findings/{finding_uid}/precedents`. */
+  path: {
+    finding_uid: FindingUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getFindingPrecedents` (`application/json`, HTTP 200). */
+export type GetFindingPrecedentsResult = FindingPrecedents;
 
 // ------------------------------------------------------------------------------------
 // getMe - GET /me
@@ -3469,6 +3559,29 @@ export type GetRunNormReferencesInput = {
 
 /** Success body of `getRunNormReferences` (`application/json`, HTTP 200). */
 export type GetRunNormReferencesResult = RunNormReferences;
+
+// ------------------------------------------------------------------------------------
+// getRunPrecedents - GET /runs/{run_id}/precedents
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Run Precedents
+ *
+ * `CRIT-SEAL-50` (plan-v5 sections 2.3 and 6): what the «Прецеденты» pass gave the findings of a run -- the neutral label of each, and the items with `label: cancel_suggested` are the queue «Рекомендовано снять». `404 not_found` for an unknown run. `role:admin|expert`; the viewer («Наблюдатель») is denied.
+ */
+export type GetRunPrecedentsInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/precedents`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getRunPrecedents` (`application/json`, HTTP 200). */
+export type GetRunPrecedentsResult = RunPrecedents;
 
 // ------------------------------------------------------------------------------------
 // getRunStages - GET /runs/{run_id}/stages
@@ -3864,6 +3977,25 @@ export type GetUserInput = {
 
 /** Success body of `getUser` (`application/json`, HTTP 200). */
 export type GetUserResult = Account;
+
+// ------------------------------------------------------------------------------------
+// getVectorControl - GET /vector-control
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Vector Control
+ *
+ * `CRIT-SEAL-50` (plan-v5 section 5): the pause of the vectors and the state of the night window. The queued and poisoned jobs are shown to an administrator only. `role:admin|expert`; the viewer is denied.
+ */
+export type GetVectorControlInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getVectorControl` (`application/json`, HTTP 200). */
+export type GetVectorControlResult = VectorControl;
 
 // ------------------------------------------------------------------------------------
 // getVersionBlocks - GET /versions/{version_uid}/blocks
@@ -5219,6 +5351,25 @@ export type ListOptimisationProposalsInput = {
 
 /** Success body of `listOptimisationProposals` (`application/json`, HTTP 200). */
 export type ListOptimisationProposalsResult = OptimisationProposalPage;
+
+// ------------------------------------------------------------------------------------
+// listPrecedentSettings - GET /precedent-settings
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Precedent Settings
+ *
+ * `CRIT-SEAL-50` (plan-v5 sections 3.1 and 3.6): the switches (`one_list`, `critic_context`, `section_labels`; every one is off while nothing is journalled), the stop words, the night window and the thresholds, and the journal of their changes. `role:admin`.
+ */
+export type ListPrecedentSettingsInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listPrecedentSettings` (`application/json`, HTTP 200). */
+export type ListPrecedentSettingsResult = PrecedentSettingList;
 
 // ------------------------------------------------------------------------------------
 // listPriceListPositions - GET /price-lists/{price_list_id}/positions
@@ -7716,6 +7867,32 @@ export type SetStagePairCompletenessInput = {
 export type SetStagePairCompletenessResult = StagePair;
 
 // ------------------------------------------------------------------------------------
+// setVectorPaused - PUT /vector-control/paused
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Vector Paused
+ *
+ * `CRIT-SEAL-50` (plan-v5 section 5): pause the vectors or resume them. On a pause the night window does not start and the queue keeps filling. Each change is an append-only event with its actor and time; setting the value already in force answers the control as it stands. `role:admin`, `Idempotency-Key` required.
+ */
+export type SetVectorPausedInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetVectorPausedRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setVectorPaused` (`application/json`, HTTP 200). */
+export type SetVectorPausedResult = VectorControl;
+
+// ------------------------------------------------------------------------------------
 // setWorkCalendarDays - PUT /work-calendar/days
 // ------------------------------------------------------------------------------------
 
@@ -8989,6 +9166,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['decisions'],
+  },
+  appendPrecedentSetting: {
+    operationId: 'appendPrecedentSetting',
+    method: 'POST',
+    path: '/precedent-settings',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   applyComparisonMatrixEdits: {
     operationId: 'applyComparisonMatrixEdits',
@@ -10390,6 +10581,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['execution'],
   },
+  getExecutorTaskContext: {
+    operationId: 'getExecutorTaskContext',
+    method: 'POST',
+    path: '/runner/tasks/{task_id}/context',
+    pathParams: ['task_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   getExecutorTaskImage: {
     operationId: 'getExecutorTaskImage',
     method: 'GET',
@@ -10430,6 +10635,20 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['findings'],
+  },
+  getFindingPrecedents: {
+    operationId: 'getFindingPrecedents',
+    method: 'GET',
+    path: '/findings/{finding_uid}/precedents',
+    pathParams: ['finding_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['findings'],
   },
   getMe: {
@@ -10501,6 +10720,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['runs'],
+  },
+  getRunPrecedents: {
+    operationId: 'getRunPrecedents',
+    method: 'GET',
+    path: '/runs/{run_id}/precedents',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['findings'],
   },
   getRunStages: {
     operationId: 'getRunStages',
@@ -10753,6 +10986,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['users'],
+  },
+  getVectorControl: {
+    operationId: 'getVectorControl',
+    method: 'GET',
+    path: '/vector-control',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
   },
   getVersionBlocks: {
     operationId: 'getVersionBlocks',
@@ -11453,6 +11700,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['optimisation'],
+  },
+  listPrecedentSettings: {
+    operationId: 'listPrecedentSettings',
+    method: 'GET',
+    path: '/precedent-settings',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
   },
   listPriceListPositions: {
     operationId: 'listPriceListPositions',
@@ -12783,6 +13044,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
+  },
+  setVectorPaused: {
+    operationId: 'setVectorPaused',
+    method: 'PUT',
+    path: '/vector-control/paused',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   setWorkCalendarDays: {
     operationId: 'setWorkCalendarDays',
