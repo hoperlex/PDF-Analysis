@@ -11,7 +11,28 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.51.0` (`CRIT-SEAL-50`)
+## Current contract `1.52.0` (`CRIT-SEAL-52`)
+
+The second seal of the «Прецеденты» programme (plan-v5, ADR-0029). It closes three debts of the first seal ahead of the wave-5 tables, which move to 1.53.0 / `0066`:
+`D-681` (the table of norm page renders), `D-682` (a memory case's comments) and `D-683` (a block finding has no text evidence). **No operation, one schema and two member changes;
+nothing is removed**; migration `0065_norm_crop_render` (head `0065`); no identity prefix, no error code, no state machine.
+
+- **`DecisionMemoryCase.comments` (`D-682`).** Optional, not in `required`: the experts' comments on the case, oldest first. Each is the new schema `DecisionMemoryComment`:
+  `comment_id` (`dmk_...`), `decided_at` and `comment` (1 to 4000 characters), **no author**, as a decision names none. Absent when the server does not report them; present and empty when the case has none and for a forgotten case.
+- **`FindingObservation.evidence` may be empty for a block observation (`D-683`).** It had `minItems: 1`. It now has none on the property, and the schema carries a JSON Schema
+  `if`/`else`: `if` the observation has `grounding_kind: portal_block`, nothing more is required; `else` (every other observation, an absent `grounding_kind` included) `evidence` has `minItems: 1`.
+  A block observation stands on the blocks the finding lists in `block_evidence`, not on a text span. `Evidence` is not touched. The rule is an `if`/`else`, not a `oneOf` of two restated
+  objects, because the observation is a closed object (`additionalProperties: false`) and a branch of a `oneOf` would restate every member; the `else` adds no member. The generated web
+  types are unchanged (an array already admits no items); the web admission is the web lane's.
+- **Storage (migration `0065`).** `norm_crop_render`: the PNG of one norm page, made once from the page's one-page PDF and published as a Blob, one row per (custody binding, render profile),
+  immutable. It is the norm side and KEEP, not memory content: it is registered in `scripts/recovery/blob_reference_audit.py` (the closed registry of Blob references), classified with the norm
+  tables in the purge and the schema coverage, and the forget of a case does not touch it. Nothing writes it yet (`M7-NORM-PNG`).
+- **Compatibility.** Additive for a reader: a client of 1.51.0 reads every answer of 1.52.0 unchanged (`comments` is optional and appears only where a later lane maps it; an empty
+  `evidence` appears only on a block observation, which `one_list` runs publish and which stay off until the web admits them).
+
+The API has 296 paths, 325 operations and 809 schemas; migration head `0065`. The domain catalogs are at candidate revision 69.
+
+## Contract `1.51.0` (`CRIT-SEAL-50`, historical)
 
 Slice for the «Прецеденты» programme (plan-v5, ADR-0029, ruling `R-154h` of 2026-11-10, which gave this seal the slot after the removal of the АР beta). It is a seal of
 storage and surface only: **nothing behaves**, every operation answers `503 dependency_unavailable` (`details.dependency` the lane that owns it) until that lane fills its body.
@@ -34,11 +55,11 @@ added; nothing is removed**; migration `0064_precedents_seal` (head `0064`); fou
 - **Hints.** `PrecedentHintCode` is `p1`, `p4` and `p5`: the hints that were to serve the АР beta (`p2`, `p3`) are not built (`R-154`).
 - **Storage (migration `0064`).** The memory's comments, block evidence, encoder queue and vectors (the forget guard, and a guard on INSERT into a forgotten case), the label in force and the
   history verdict shown on a decision, the probe, the pass and its advice, a finding's block evidence, the settings journal, the vectors' control and its journal, the journal of
-  reference data handed to an agent (no foreign key, no text), `audit_run.publication_mode` (frozen at the start) and the grounding columns of an observation. `norm_crop_render` follows
-  when `scripts/recovery/blob_reference_audit.py`, the closed registry of Blob references, is granted to the lane that owns the seal.
+  reference data handed to an agent (no foreign key, no text), `audit_run.publication_mode` (frozen at the start) and the grounding columns of an observation. `norm_crop_render` followed
+  in 1.52.0 (migration `0065`), once `scripts/recovery/blob_reference_audit.py`, the closed registry of Blob references, was granted to the seal.
 - **Compatibility.** Additive: a client of 1.50.0 reads every answer of 1.51.0 unchanged (the added members are optional, the added enum values appear only where a later lane writes them).
 
-The API has 296 paths, 325 operations and 808 schemas; migration head `0064`. The domain catalogs are at candidate revision 68.
+At that version the API had 296 paths, 325 operations and 808 schemas; migration head `0064`; the domain catalogs were at candidate revision 68.
 
 ## Contract `1.50.0` (`AR-V3-BE-RM-01`, historical)
 
