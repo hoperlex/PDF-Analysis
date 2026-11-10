@@ -52,8 +52,10 @@ def _original_review_enabled(policy, *, strict=False) -> bool:
 
 #: `F8-PUBLISH` (plan-v5 section 2.4): the reference kinds a critic saw, stored on every candidate it reviewed (``context_kinds``), so that a
 #: veto is never an echo of the same neighbours. Today the AI critic of plan v3 sees the paragraph text of the norms its candidate carried
-#: (``norm_text``); the deterministic critic of plan v2 sees no reference at all. ``norm_images`` and ``precedents`` are added by the lanes that
-#: hand them to the critic; the literals are those of ``precedents.models`` (``CONTEXT_NORM_TEXT``).
+#: (``norm_text``). The deterministic critic of plan v2 sees no reference at all and stores no key: its row says ``mode: deterministic`` and
+#: ``model_called: false``, and a reader takes a reviewed candidate without ``context_kinds`` as one that saw none (writing ``[]`` there changed
+#: the saved shape that ``tests/unit/analysis_extended/test_original_review_runtime.py`` compares). ``norm_images`` and ``precedents`` are
+#: added by the lanes that hand them to the critic; the literals are those of ``precedents.models`` (``CONTEXT_NORM_TEXT``).
 CONTEXT_NORM_TEXT = "norm_text"
 
 
@@ -77,8 +79,6 @@ def _review_original_v2(*, state, phase, pages) -> None:
         phase("finding_review", "failed", "original_review_failed")
         phase("finding_correction", "skipped", "dependency_failed")
         return
-    for item, _, _ in done:
-        item["context_kinds"] = []   # the original's rules read the record only: no reference reaches the critic
     phase("finding_review", "completed", None if done else "no_observations")
     phase("finding_correction", "running")
     try:

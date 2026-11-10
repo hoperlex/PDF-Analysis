@@ -34,7 +34,8 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> FindingAdapter:
                 finding_observation_id text PRIMARY KEY, run_id text, finding_uid text,
                 category text, finding_text text, recommendation_text text, stage_id text,
                 analysis_profile_id text, prompt_bundle_id text, model_call_id text,
-                provider_mode text, proposed_severity text, grounded boolean, created_at text
+                provider_mode text, proposed_severity text, grounded boolean, created_at text,
+                grounding_kind text DEFAULT 'text_span', extended_observation_ref text, related_finding_uid text
             )
         """))
         conn.execute(text("""
@@ -48,7 +49,10 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> FindingAdapter:
                                         'dimensions', 'fobs_a')
         """))
         conn.execute(text("""
-            INSERT INTO finding_observation VALUES
+            INSERT INTO finding_observation (
+                finding_observation_id, run_id, finding_uid, category, finding_text, recommendation_text, stage_id,
+                analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode, proposed_severity, grounded, created_at
+            ) VALUES
             ('fobs_a', 'run_one', 'fnd_one', 'dimensions', 'Канонический вывод',
              'Проверить размер', 'text_analysis', 'ap_v2', 'pb_v2', 'mc_one',
              'recorded', 'critical', 1, '2026-10-23'),
