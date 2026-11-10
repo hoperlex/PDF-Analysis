@@ -257,6 +257,25 @@ def test_the_two_statements_share_one_copy_of_the_rules() -> None:
     assert "project_uid" not in audits
 
 
+def test_the_undecided_proposals_are_counted_in_one_pass_over_the_decisions_and_not_by_a_probe_each() -> None:
+    """`D-463`: the latest decision of a proposal decides, and it is found for all the proposals of the page's passes at once.
+
+    The first form of the statement looked the latest decision up with a ``LATERAL`` probe per proposal (106,000 probes for a
+    page of 200 documents of ~530 proposals: 0.83 s). A guard on the shape, not on the time -- the time is the stand's
+    (`DEBT_REGISTER.md` `D-463`); the answers are compared with the old form, proposal by proposal, in
+    ``tests/integration/dashboard/test_document_audit_optimisation_counts.py``.
+    """
+    sql = " ".join(module._OPTIMISATION_RULE.split())
+    assert "LATERAL" not in sql, "a per-proposal probe is the form `D-463` replaced"
+    assert "SELECT DISTINCT ON (d.optimisation_proposal_id)" in sql
+    assert "ORDER BY d.optimisation_proposal_id, d.seq DESC" in sql
+    # a withdrawal (`revoke`) is the one verdict that leaves a proposal undecided; the pass's own count is the base
+    assert "lp.proposal_count - count(*) FILTER (WHERE cur.verdict <> 'revoke')" in sql
+    # the latest pass is still chosen by (started_at DESC, optimisation_pass_id DESC) and the counters' statement still reads none of it
+    assert "ORDER BY p.version_uid, p.started_at DESC, p.optimisation_pass_id DESC" in sql
+    assert "optimisation" not in " ".join(str(module._AUDIT_GROUPS).split())
+
+
 def _record(result: str | None, findings: int = 0, undecided: int = 0) -> DocumentAuditRecord:
     return DocumentAuditRecord(
         version_uid="ver_x",

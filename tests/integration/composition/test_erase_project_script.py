@@ -30,10 +30,14 @@ from pathlib import Path
 
 import pytest
 
+from tests.support.wrapper_rig import guard_names, guard_names_in, runbook_guards_text
+
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "infra/deploy/erase-project.sh"
 MODULE_DIR = ROOT / "scripts/recovery"
 MODULES = ("project_erase", "product_purge", "schema_coverage", "blob_reference_audit")
+#: What an operator may set to make a module wait longer for a lock: this wrapper hands its own to the container, never the other wrappers' (`D-580`).
+LOCK_TIMEOUT_VARIABLES = ("PROJECT_ERASE_LOCK_TIMEOUT", "MEMORY_SETTING_LOCK_TIMEOUT", "MEMORY_FORGET_LOCK_TIMEOUT")
 
 INSTANCE, DATABASE, BUCKET, USER = "an-instance", "the_configured_database", "the-configured-bucket", "the_user"
 REFUSED, FAILED, USAGE = 3, 4, 2
@@ -76,6 +80,15 @@ config = json.load(open(os.environ["STUB_CONFIG"]))
 rest = argv
 while rest and rest[0] in ("compose", "--env-file", "--file"):
     rest = rest[1:] if rest[0] == "compose" else rest[2:]
+if rest[:1] == ["ps"]:  # `ps --status running --services`: the services the test says are running
+    if config.get("ps_status", 0):
+        sys.stderr.write("docker stub: compose ps failed\n")
+        sys.exit(config["ps_status"])
+    sys.stdout.write("".join(name + "\n" for name in config.get("running", [])))
+    sys.exit(0)
+if rest[:1] == ["stop"] and config.get("stop_status", 0):
+    sys.stderr.write("docker stub: compose stop failed\n")
+    sys.exit(config["stop_status"])
 if rest[:1] == ["stop"] or (rest[:1] == ["up"] and rest[-1] == "worker"):
     sys.exit(0)
 if "scripts.recovery.project_erase" in rest:
@@ -113,12 +126,13 @@ def done_text(*, manifest_sha: str = MANIFEST_SHA, erase: str = ERASE) -> str:
             "An erase does not reach:\n  - manual dumps, mirrors and copies on the host\n")
 
 
-def healthy() -> dict[str, dict[str, object]]:
+def healthy() -> dict[str, object]:
     written = {"erase_id": ERASE, "text": MANIFEST_TEXT}
     return {
         "plan": {"stdout": plan_text()},
         "apply": {"stdout": done_text(), "write_manifest": written},
         "resume": {"stdout": done_text(), "write_manifest": written},
+        "running": ["postgres", "s3", "api", "worker", "web"],
     }
 
 
@@ -176,6 +190,8 @@ class Rig:
     def run(self, *args: str, env: dict[str, str] | None = None, typed: str = "") -> subprocess.CompletedProcess[str]:
         self.config.write_text(json.dumps(self.answers), encoding="utf-8")
         environment = dict(os.environ)
+        for ambient in LOCK_TIMEOUT_VARIABLES:  # an operator's shell must not decide what a test passes to the container (`D-580`)
+            environment.pop(ambient, None)
         environment.update(
             PATH=f"{self.bin}{os.pathsep}{environment['PATH']}", ALPHA_ENV_FILE=str(self.env_file),
             ALPHA_DUMP_ROOT=str(self.dumps), ALPHA_ERASE_MODULE_DIR=str(self.module_dir),
@@ -255,6 +271,11 @@ CASES: tuple[tuple[str, tuple[str, ...], str, bool], ...] = (
      "--actor must be the login", True),
     ("actor-required", (*COMMON, "--resume", ERASE, "--actor", "two words", "--owner-permission-ref", REF),
      "--actor must be the login", True),
+    # `D-514`: a login that starts with `-` is a swallowed option, refused as `memory-setting.sh` and `memory-forget.sh` refuse it.
+    ("actor-required", (*COMMON, "--resume", ERASE, "--actor", "-x", "--owner-permission-ref", REF),
+     "--actor must be the login", True),
+    ("actor-required", (*PLAN, "--apply", "--actor", "--reason", "--reason", "test_data", "--owner-permission-ref", REF,
+                        "--plan-sha256", SHA), "--actor must be the login", True),
     ("reason-closed-list", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "because they asked",
                             "--owner-permission-ref", REF, "--plan-sha256", SHA), "--reason must be one of", True),
     ("reason-closed-list", (*PLAN, "--apply", "--actor", ACTOR, "--owner-permission-ref", REF, "--plan-sha256", SHA),
@@ -268,6 +289,11 @@ CASES: tuple[tuple[str, tuple[str, ...], str, bool], ...] = (
     ("owner-permission-ref", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "test_data", "--plan-sha256", SHA,
                               "--owner-permission-ref", "line one\nline two"), "--owner-permission-ref is required", True),
     ("owner-permission-ref", (*COMMON, "--resume", ERASE, "--actor", ACTOR), "--owner-permission-ref is required", True),
+    # `F4`: argparse of the module reads a value that begins with "-" (and has no space) as an option
+    ("owner-permission-ref", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "test_data", "--plan-sha256", SHA,
+                              "--owner-permission-ref", "-ticket42"), "--owner-permission-ref must not begin with '-'", True),
+    ("owner-permission-ref", (*COMMON, "--resume", ERASE, "--actor", ACTOR, "--owner-permission-ref", "  - see mail"),
+     "--owner-permission-ref must not begin with '-'", True),
     ("plan-digest-shape", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "test_data", "--owner-permission-ref", REF),
      "--apply needs --plan-sha256", True),
     ("plan-digest-shape", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "test_data", "--owner-permission-ref", REF,
@@ -299,6 +325,18 @@ def test_deleting_the_guard_removes_the_refusal(guard: str, args: tuple[str, ...
         f"the {guard} guard was deleted and the refusal happened anyway: it was never testing that guard")
     if reaches:
         assert broken.log.exists(), f"with {guard} gone the script should have gone on to the stack: {completed.stderr}"
+
+
+def test_the_leading_dash_rule_of_the_actor_is_its_own_clause_and_can_fail(rig: Rig) -> None:
+    """`D-514`: the block-deletion mutant above removes the whole `actor-required` guard; this removes only the clause that refuses a login
+    starting with `-`, and shows `-x` then goes on to the stack while a login with a space is still refused."""
+    args = (*COMMON, "--resume", ERASE, "--actor", "-x", "--owner-permission-ref", REF)
+    assert rig.run(*args).returncode == REFUSED
+    broken = rig.edited(' || [[ "$ACTOR" == -* ]]', "")
+    completed = broken.run(*args)
+    assert "--actor must be the login" not in completed.stderr and broken.log.exists(), completed.stderr
+    spaced = (*COMMON, "--resume", ERASE, "--actor", "two words", "--owner-permission-ref", REF)
+    assert "--actor must be the login" in broken.run(*spaced).stderr
 
 
 def test_a_missing_environment_file_is_refused_and_the_guard_can_fail(rig: Rig, tmp_path: Path) -> None:
@@ -387,6 +425,7 @@ def test_help_is_a_usage_error_with_its_own_status(rig: Rig) -> None:
     completed = rig.run("--help")
     assert completed.returncode == USAGE and "usage: erase-project.sh" in completed.stderr
     assert "NO DUMP IS TAKEN" in completed.stderr
+    assert "PROJECT_ERASE_LOCK_TIMEOUT" in completed.stderr  # `D-580`: the operator is told the variable exists
     assert not rig.log.exists()
 
 
@@ -549,6 +588,81 @@ def test_the_four_modules_are_mounted_read_only_and_nothing_else_of_the_checkout
         at = argv.index("--entrypoint")
         assert argv[at + 1 : at + 5] == ["python", "api", "-m", "scripts.recovery.project_erase"]
         assert "run" in argv and "--rm" in argv and "--no-deps" in argv and "-T" in argv
+
+
+# --- the lock timeout the operator sets (`D-580`) ---------------------------------------------------
+
+
+def lock_timeout_items(call: dict[str, object]) -> list[str]:
+    argv = [str(item) for item in call["argv"]]  # type: ignore[attr-defined]
+    return [item for item in argv if item.startswith(("PROJECT_ERASE_", "MEMORY_")) and "_LOCK_TIMEOUT" in item]
+
+
+def test_the_lock_timeout_the_operator_sets_is_handed_to_every_container_run_and_the_other_wrappers_is_not(rig: Rig) -> None:
+    completed = rig.run(*APPLY, env={"PROJECT_ERASE_LOCK_TIMEOUT": "45s", "MEMORY_FORGET_LOCK_TIMEOUT": "99s",
+                                     "MEMORY_SETTING_LOCK_TIMEOUT": "98s"}, typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert len(rig.tool_calls()) == 2  # the dry run it makes first, and the apply
+    for call in rig.tool_calls():
+        argv = [str(item) for item in call["argv"]]  # type: ignore[union-attr]
+        assert lock_timeout_items(call) == ["PROJECT_ERASE_LOCK_TIMEOUT=45s"], argv
+        assert argv[argv.index("PROJECT_ERASE_LOCK_TIMEOUT=45s") - 1] == "-e", "a variable of the one-off container is an -e of `compose run`"
+        # an option of `compose run` after the service name would be the tool's argument
+        assert argv.index("PROJECT_ERASE_LOCK_TIMEOUT=45s") < argv.index("--entrypoint")
+
+
+def test_a_resume_hands_the_lock_timeout_over_too(rig: Rig) -> None:
+    completed = rig.run(*RESUME, env={"PROJECT_ERASE_LOCK_TIMEOUT": "2min"})
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert [lock_timeout_items(call) for call in rig.tool_calls()] == [["PROJECT_ERASE_LOCK_TIMEOUT=2min"]]
+
+
+def test_no_lock_timeout_is_passed_when_the_operator_set_none_and_the_default_stays_the_modules(rig: Rig) -> None:
+    completed = rig.run(*APPLY, env={"MEMORY_FORGET_LOCK_TIMEOUT": "99s"}, typed=TYPED)  # another wrapper's variable is not ours
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert rig.tool_calls() and all(lock_timeout_items(call) == [] for call in rig.tool_calls()), [lock_timeout_items(c) for c in rig.tool_calls()]
+
+
+def test_the_pass_through_of_the_lock_timeout_can_fail(rig: Rig) -> None:
+    broken = rig.edited('"${LOCK_TIMEOUT_ENV[@]+"${LOCK_TIMEOUT_ENV[@]}"}" ', "")
+    completed = broken.run(*APPLY, env={"PROJECT_ERASE_LOCK_TIMEOUT": "45s"}, typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert broken.tool_calls() and all(lock_timeout_items(call) == [] for call in broken.tool_calls()), (
+        "with the pass-through removed the value still reached the container: the test above would prove nothing")
+
+
+def test_the_rig_does_not_let_the_operators_shell_decide_what_the_container_is_given(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PROJECT_ERASE_LOCK_TIMEOUT", "77s")
+    completed = rig.run(*PLAN)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert rig.tool_calls() and all(lock_timeout_items(call) == [] for call in rig.tool_calls())
+    # and the scrub is what does it: without it the shell's value reaches the container
+    monkeypatch.setattr(sys.modules[__name__], "LOCK_TIMEOUT_VARIABLES", ())
+    rig.log.unlink()
+    assert rig.run(*PLAN).returncode == 0
+    assert [lock_timeout_items(call) for call in rig.tool_calls()] == [["PROJECT_ERASE_LOCK_TIMEOUT=77s"]]
+
+
+@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s",
+                                   "35792min", "36000min", "999999min"),  # `F3`: PostgreSQL's lock_timeout ends at 2147483647 ms, 35791 min
+                         ids=lambda v: repr(v))
+def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_connection_and_the_guard_can_fail(value: str, rig: Rig) -> None:
+    completed = rig.run(*PLAN, env={"PROJECT_ERASE_LOCK_TIMEOUT": value})
+    assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+    assert "PROJECT_ERASE_LOCK_TIMEOUT must be a positive number of ms, s or min" in completed.stderr, completed.stderr
+    assert not rig.log.exists(), f"refused, but only after running docker: {rig.calls}"
+    broken = rig.mutant("lock-timeout-shape")
+    completed = broken.run(*PLAN, env={"PROJECT_ERASE_LOCK_TIMEOUT": value})
+    assert "must be a positive number" not in completed.stderr
+    assert broken.log.exists() and any("PROJECT_ERASE_LOCK_TIMEOUT=" + value in item for call in broken.tool_calls() for item in call["argv"]), (
+        "with the guard gone the bad value goes into the container as it is: this is why the guard exists")
+
+
+@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999ms", "999999s", "35791min"), ids=lambda v: repr(v))
+def test_a_lock_timeout_that_is_a_positive_duration_goes_through(value: str, rig: Rig) -> None:
+    completed = rig.run(*APPLY, env={"PROJECT_ERASE_LOCK_TIMEOUT": value}, typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert rig.tool_calls() and all(lock_timeout_items(call) == ["PROJECT_ERASE_LOCK_TIMEOUT=" + value] for call in rig.tool_calls())
 
 
 AMBIENT = "postgresql+psycopg://ambient:ambient@elsewhere:5432/ambient"
@@ -723,8 +837,9 @@ def test_the_worker_is_stopped_for_the_apply_only_and_started_again_after_it(rig
     completed = rig.run(*APPLY, "--stop-worker", typed=TYPED)
     assert completed.returncode == 0, completed.stderr
     plan_i = rig.index("scripts.recovery.project_erase")
-    stop_i, apply_i, up_i = rig.index("stop worker"), rig.index("--apply"), rig.index("up -d --no-deps worker")
-    assert plan_i < stop_i < apply_i < up_i, rig.calls
+    ps_i, stop_i = rig.index("ps --status running --services"), rig.index("stop worker")
+    apply_i, up_i = rig.index("--apply"), rig.index("up -d --no-deps worker")
+    assert plan_i < ps_i < stop_i < apply_i < up_i, rig.calls
 
 
 @pytest.mark.parametrize(("answer", "status"), (
@@ -743,15 +858,56 @@ def test_the_worker_comes_back_whatever_the_apply_did(answer: dict[str, object],
         "without the trap a refusal leaves the worker stopped")
 
 
+def test_a_stop_that_fails_still_brings_the_worker_back_and_the_check_can_fail(rig: Rig) -> None:
+    """The rule of `F2` (2026-11-10 judge report, found in `memory-forget.sh`): the worker is marked BEFORE `compose stop worker`, because a
+    stop that fails or is interrupted may already have stopped it."""
+    rig.answers["stop_status"] = 1
+    completed = rig.run(*APPLY, "--stop-worker", typed=TYPED)
+    assert completed.returncode == FAILED, (completed.stdout, completed.stderr)
+    assert not rig.reached_the_erase(), "a stop that failed is no reason to erase anything"
+    assert rig.index("up -d --no-deps worker") > rig.index("stop worker"), rig.calls
+    old_order = rig.edited("        WORKER_STOPPED=yes\n        compose stop worker\n", "        compose stop worker\n        WORKER_STOPPED=yes\n")
+    assert old_order.run(*APPLY, "--stop-worker", typed=TYPED).returncode == FAILED and old_order.called("stop worker")
+    assert not old_order.called("up -d --no-deps worker"), "with the mark made after the stop the failure leaves the worker down"
+
+
+def test_a_worker_that_was_not_running_is_neither_stopped_nor_started_and_the_check_can_fail(rig: Rig) -> None:
+    """`N3-3` of the 2026-11-10 judge report (`JUDGE-N3`): `--stop-worker` marked the worker as ours to restart because the compose file
+    declares it, so an operator who had stopped it on purpose (an incident, a queue under review) found it running again after the erase.
+    Only a worker that `docker compose ps` lists as running is stopped, and only that one is started again, as in `memory-forget.sh`."""
+    rig.answers["running"] = ["postgres", "s3", "api", "web"]
+    completed = rig.run(*APPLY, "--stop-worker", typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert rig.reached_the_erase(), "a worker that is down is no reason not to erase"
+    assert "the worker service is not running; nothing to stop" in completed.stdout
+    assert not rig.called("stop worker") and not rig.called("up -d"), rig.calls
+    resumed = Rig(rig.tmp / "resume")
+    resumed.answers["running"] = ["postgres", "s3", "api", "web"]
+    assert resumed.run(*RESUME, "--stop-worker").returncode == 0 and resumed.reached_the_erase()
+    assert not resumed.called("stop worker") and not resumed.called("up -d"), resumed.calls
+    old_logic = rig.edited('        if ! grep -qx worker <<<"$running"; then\n', "        if false; then\n")
+    old_logic.answers["running"] = ["postgres", "s3", "api", "web"]
+    assert old_logic.run(*APPLY, "--stop-worker", typed=TYPED).returncode == 0
+    assert old_logic.called("stop worker") and old_logic.called("up -d --no-deps worker"), (
+        "marking the worker because it is declared starts one the operator had stopped: this is the defect")
+
+
+def test_a_stack_that_cannot_list_its_services_is_a_failure_before_anything_is_stopped_or_erased(rig: Rig) -> None:
+    rig.answers["ps_status"] = 1
+    completed = rig.run(*APPLY, "--stop-worker", typed=TYPED)
+    assert completed.returncode == FAILED and "could not list the running services" in completed.stderr
+    assert not rig.reached_the_erase() and not rig.called("stop worker") and not rig.called("up -d"), rig.calls
+
+
 def test_no_worker_service_means_no_worker_is_touched(tmp_path: Path) -> None:
     bare = Rig(tmp_path, worker=False)
     assert bare.run(*APPLY, "--stop-worker", typed=TYPED).returncode == 0
-    assert not bare.called("stop worker") and not bare.called("up -d --no-deps worker")
+    assert not bare.called("stop worker") and not bare.called("up -d --no-deps worker") and not bare.called("ps --status")
 
 
 def test_without_the_option_the_worker_is_left_alone(rig: Rig) -> None:
     assert rig.run(*APPLY, typed=TYPED).returncode == 0
-    assert not rig.called("stop worker") and not rig.called("up -d")
+    assert not rig.called("stop worker") and not rig.called("up -d") and not rig.called("ps --status")
 
 
 # --- the manifest on disk is the one the database holds ---------------------------------------
@@ -847,12 +1003,22 @@ def test_the_script_is_executable_and_in_the_deploy_directory() -> None:
     assert SCRIPT.parent == ROOT / "infra/deploy"
 
 
+def test_the_runbook_names_every_guard_of_the_script_and_the_check_can_fail() -> None:
+    """`D-513`: runbook section 17 lists the script's guards by name. It once listed 23 of 25 (the two `D-470` guards were added to the
+    script and not to the list); the list is now held to the script's markers, so a guard added or renamed without the runbook is red."""
+    markers = guard_names(SCRIPT)
+    text = runbook_guards_text(17)
+    assert guard_names_in(text) == markers, (sorted(markers - guard_names_in(text)), sorted(guard_names_in(text) - markers))
+    assert guard_names_in(text.replace("`memory-loss-reason`", "")) != markers, "the comparison cannot see a name that is missing"
+    assert guard_names_in(text + " `a-guard-nobody-wrote`") != markers, "the comparison cannot see a name that is not in the script"
+
+
 def test_every_guard_in_the_script_has_a_case_here() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     markers = set(re.findall(r"^ *# >>> guard: ([a-z-]+)$", text, re.MULTILINE))
     me = Path(__file__).read_text(encoding="utf-8")
     missing = sorted(name for name in markers if f'"{name}"' not in me)
     assert not missing, f"guards with no case: {missing}"
-    assert len(markers) == 25, sorted(markers)
+    assert len(markers) == 26, sorted(markers)
     for name in markers:
         assert len(re.findall(rf"^ *# <<< guard: {re.escape(name)}$", text, re.MULTILINE)) == 1

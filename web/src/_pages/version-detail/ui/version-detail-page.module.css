@@ -22,7 +22,13 @@
   }
 }
 
-/* Classification and runs side by side on a wide screen, as the original's info page keeps its actions beside its pipeline. */
+/*
+ * Classification and runs side by side on a wide screen, as the original's info page keeps its actions beside its pipeline.
+ * `WALK-V4`: only where the runs' table fits its column. The table needs 714 px and its panel 34 px more (measured on a
+ * built stand); the second column is 1.2fr of the width left after the 303 px of the frame and the 16 px gap, so it
+ * reaches 748 px at 1691 px. The table scrolled inside its box at 490 px at 1280, at 577 px at 1440 and at 708 px at 1680;
+ * from 1760 px it has 786 px.
+ */
 .columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -30,7 +36,7 @@
   min-width: 0;
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1760px) {
   .columns {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
     align-items: start;

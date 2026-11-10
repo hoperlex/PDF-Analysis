@@ -16,17 +16,27 @@ version cannot hide in the oracle's.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import re
 import unicodedata
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import pdfplumber
 
-from auditmanager.analysis.geometry.finding_blocks import COVERAGE
+from auditmanager.analysis.geometry.finding_blocks import (
+    COVERAGE,
+    WITNESS_MAX_GAP_LINE_HEIGHTS,
+    WITNESS_MIN_CHARACTERS,
+    EvidenceSpan,
+    PortalBox,
+    Readings,
+    link_evidence,
+)
+from auditmanager.analysis.recognised.flags import flags_for
 from auditmanager.analysis.stages.extraction import TEXT_OPTIONS
 
 Box = tuple[float, float, float, float]
@@ -147,6 +157,90 @@ def holders(boxes: Sequence[Box], blocks: Mapping[str, Box]) -> tuple[set[str], 
         if any(share >= COVERAGE for share in shares):
             holding.add(identifier)
     return holding, touching
+
+
+# -- the rule with the second witness (D-450) ------------------------------------------------
+
+#: Cyrillic letters a reading writes with their Latin look-alikes.
+HOMOGLYPHS = str.maketrans("аеорсхАЕОРСХ", "aeopcxAEOPCX")
+NOISE_RATES = (0.1, 0.3)
+
+
+def degrade(block_id: str, text: str, rate: float, *, flaggable: bool = True) -> str:
+    """The recognised text as a damaging reading gives it: a deterministic ``rate`` of its words damaged.
+
+    A damaged word has a Cyrillic letter written as its Latin look-alike (``flaggable``: a damage the quality flags can see,
+    ``mixed_script`` / ``homoglyph``) or, with none to swap or with ``flaggable=False``, a letter short (a damage no flag names;
+    a one-letter word becomes a bar). Nothing is added to the text: damage makes a word stop matching the quotation's.
+    """
+    pieces = []
+    for number, piece in enumerate(re.split(r"(\s+)", text)):
+        if piece.strip():
+            draw = int(hashlib.sha256(f"{block_id}:{number}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+            if draw < rate:
+                swapped = piece.translate(HOMOGLYPHS) if flaggable else piece
+                piece = swapped if swapped != piece else (piece[:-1] or "|")
+        pieces.append(piece)
+    return "".join(pieces)
+
+
+class MemoOracle:
+    """``PdfOracle`` that answers a placement it has given before from memory: the same quotations are held against several rules."""
+
+    def __init__(self, oracle: PdfOracle) -> None:
+        self._oracle = oracle
+        self._memo: dict[tuple[int, int, str], Any] = {}
+
+    def quote_boxes(self, page_number: int, char_start: int, quote: str) -> Any:
+        key = (page_number, char_start, quote)
+        if key not in self._memo:
+            self._memo[key] = self._oracle.quote_boxes(page_number, char_start, quote)
+        return self._memo[key]
+
+
+def doubtful_blocks(blocks: Sequence[BlockFact], texts: Mapping[str, str]) -> set[str]:
+    """The blocks whose reading ``texts`` may have wrong or does not have: a quality flag (``analysis.recognised.flags``) on it, or
+    nothing recognised. **Every** block counts, whatever its type: an image or a stamp has no reading, and a block that cannot be read
+    can neither hold the quotation nor rule it out (the adapter names the same set; ``JUDGE-N2`` H1, M3)."""
+    return {
+        block.portal_block_id for block in blocks
+        if not texts.get(block.portal_block_id) or flags_for(texts[block.portal_block_id])
+    }
+
+
+def rule_links(
+    evidence: Sequence[EvidenceFact], lines: Sequence[Any], sizes: Mapping[int, tuple[float, float]], blocks: Sequence[BlockFact],
+    unlinked: set[int], texts: Mapping[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS,
+    doubtful: Collection[str] = (), page_texts: Mapping[int, str] | None = None,
+    max_gap_line_heights: float | None = WITNESS_MAX_GAP_LINE_HEIGHTS, readings: Readings | None = None,
+) -> list[str]:
+    """``finding_blocks.link_evidence`` over the stored documents: the shipped rule, called as the adapter calls it, with the
+    recognised text (the second witness) when ``texts`` and ``page_texts`` (the text layer's text by page) are given.
+    ``unlinked`` are the adapter's ``unlinked_pages``. ``readings`` (a :class:`Readings` built once for ``texts``, ``doubtful`` and
+    ``page_texts``) replaces the three, as the adapter hands its own, so that a sweep folds each text once and not once per finding."""
+    by_page: dict[int, list[Any]] = {}
+    for line in lines:
+        by_page.setdefault(line.page_number, []).append(line)
+    boxes = [PortalBox(b.portal_block_id, b.page_number, *b.bbox_norm) for b in blocks]
+    spans = [EvidenceSpan(f.page_number, f.char_start, f.char_end, f.quote) for f in evidence if f.page_number not in unlinked]
+    pages = {n: size for n, size in sizes.items() if n not in unlinked}
+    given = {"readings": readings} if readings is not None else {
+        "block_texts": texts, "doubtful_blocks": doubtful, "page_texts": page_texts,
+    }
+    return list(link_evidence(
+        spans, lines=by_page, pages=pages, blocks=boxes, witness_min_characters=min_characters,
+        witness_max_gap_line_heights=max_gap_line_heights, **given,
+    ))
+
+
+def require_same_links(reproduced: Mapping[str, Sequence[str]], shipped: Mapping[str, Sequence[str]]) -> None:
+    """The guard of the reproduction: the rule called without the text must give the shipped adapter's answer for every finding
+    (and for no other), or what is measured with the text is not the shipped rule's second witness."""
+    differing = sorted(uid for uid in set(reproduced) | set(shipped) if list(reproduced.get(uid, ())) != list(shipped.get(uid, ())))
+    if differing:
+        raise AssertionError(
+            f"the reproduction of the adapter's rule differs for {len(differing)} of {len(shipped)} findings, e.g. {differing[:3]}"
+        )
 
 
 # -- one run's links against the witnesses ---------------------------------------------------

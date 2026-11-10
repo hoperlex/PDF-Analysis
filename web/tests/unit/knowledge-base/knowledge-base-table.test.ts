@@ -55,7 +55,7 @@ function cells(markup: string): string[] {
 describe('the table', () => {
   it('has the original’s columns, in the original’s order, and one row a decision', () => {
     const markup = table([record(), record({ decision_id: 'dec_01M2545JSD15ETSNNV904X992A' })]);
-    const heads = [...markup.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map((head) => head[1]);
+    const heads = [...markup.matchAll(/<th scope="col"(?: class="[^"]*")?>([^<]*)<\/th>/g)].map((head) => head[1]);
     expect(heads).toEqual(['Тип', 'Проект', 'Раздел', 'Важность', 'Решение', 'Суть', 'Причина решения', 'Дата', 'Находка']);
     expect(markup.match(/<tr data-decision-id=/g) ?? []).toHaveLength(2);
     expect(markup).toContain('data-record-count="2"');

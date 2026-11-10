@@ -24,6 +24,19 @@ def _implementation(policy):
     return windowed
 
 
+def _source_rule(policy):
+    """The source admission of the plan the policy selects (legacy, `windowed-v1` and `windowed-global-v1` plan over `windowed`)."""
+    if policy is None: return p.source
+    from . import windowed
+    return windowed.source
+
+
+def _fragment_row(profile_id, fragment):
+    """The `stage_text_fragment` row shape of a fragment step 2 has not written yet; the content key stands for the row id."""
+    return {"stage_text_fragment_id": fragment.content_key, "page_profile_id": profile_id, "content_key": fragment.content_key,
+            "normalised_text": fragment.normalised_text, "box_anchor": fragment.box_anchor}
+
+
 class V3Method(StageAiMethod):
     def __init__(self, *args, v3_policy=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -39,28 +52,38 @@ class V3Method(StageAiMethod):
             revision = self._repo.run(session, request.scope.stage_chain_run_id)["revision_id"]
         snapshot = self._repo.revision(session, revision)
         facts, characters, count = [], 0, 0
+        stored = {f["page_profile_id"] for f in snapshot["fragments"]}
+        derived = []
         for row in snapshot["all_profiles"]:
             profile = self._profiles().read_page_profile(row["profile_id"])
             if (profile.row.profile_blob_id is None or profile.row.content_key != row["content_key"]
                     or profile.row.version_uid != row["version_uid"]):
                 raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_ai_profile_changed")
             fragments = extract_fragments(profile, side=row["side"])
-            if not fragments:
-                raise StageAiValidationError("v3_native_page_without_text")
+            # A page without text gives no row here and is not refused here: the plan's own source rule below refuses it, in
+            # the plan's own order (its budgets are judged before its pages) and with the plan's own code (D-532, N3-2).
             characters += sum(len(f.normalised_text) for f in fragments)
             count += len(fragments)
+            if row["profile_id"] not in stored:
+                derived.extend(_fragment_row(row["profile_id"], f) for f in fragments)
             facts.append({"profile_id": row["profile_id"], "version_uid": row["version_uid"],
                           "content_key": row["content_key"], "fragment_keys": [f.content_key for f in fragments]})
-        limits = self.v3_policy["limits"] if self.v3_policy else {"pages": p.MAX_PAGES, "characters": p.MAX_CHARACTERS, "fragments": p.MAX_FRAGMENTS}
-        if not 2 <= len(facts) <= limits["pages"] or characters > limits["characters"] or count > limits["fragments"]:
-            raise StageAiValidationError("v3_native_source_budget")
+        # The selected plan decides what it admits: the estimate asks the plan's own source rule, so it refuses exactly
+        # what the run would refuse at plan time, with the plan's own code (D-532). The estimate is asked before the
+        # chain's step 2 writes `stage_text_fragment`, so the rule reads the stored rows where they exist and, for a page
+        # profile without rows yet, the very rows step 2 will write from it (`extract_fragments`, read above).
+        _source_rule(self.v3_policy)(dict(snapshot, fragments=[*snapshot["fragments"], *derived]))
         self.source_profiles = facts
         self.source_signature = digest({"engine": ENGINE, "bundle": self.bundle_version, "revision": revision, "profiles": facts})
         # Explicit one-call consent window. Resume estimates the exact next
         # known request rather than charging every possible region in advance.
+        # A request is "known" only once step 2 has written the rows of EVERY page profile (`not derived`). With the rows of
+        # some profiles only -- a new document version on one side of a pair whose other side was written before, the chain
+        # cancelled inside step 2 -- no plan result exists yet and the plan cannot be built from the stored rows alone, so the
+        # estimate is the opening window, as at start (N3-1).
         selected = None
         run_id = request.scope.stage_chain_run_id
-        remaining = request.mode is AiMode.LEFT and run_id and snapshot["fragments"]
+        remaining = request.mode is AiMode.LEFT and run_id and snapshot["fragments"] and not derived
         if remaining:
             implementation = _implementation(self.v3_policy)
             saved = results(session, run_id, bundle=self.bundle_version)

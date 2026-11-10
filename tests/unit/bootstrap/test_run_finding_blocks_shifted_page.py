@@ -48,7 +48,7 @@ class Adapter(BlockAdapter):
         return work(None)
 
     def _portal_source(self, version_uid: str) -> Any:
-        return SimpleNamespace(portal_blocks={"role": ROLE_PORTAL_BLOCKS})
+        return SimpleNamespace(portal_blocks={"role": ROLE_PORTAL_BLOCKS}, recognised_text=None)
 
     def _portal_document(self, reference: Any, role: str, version_uid: str) -> dict[str, Any]:
         return self._documents[role]
@@ -68,7 +68,7 @@ def run(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(findings_module, "published_findings", lambda session, run_id: ())
     monkeypatch.setattr(findings_module, "group_published_findings", lambda rows: (finding,))
     monkeypatch.setattr(findings_module, "published_finding_evidence", lambda session, run_id: (
-        SimpleNamespace(finding_observation_id="obs_1", page_number=1, char_start=0, char_end=20),))
+        SimpleNamespace(finding_observation_id="obs_1", page_number=1, char_start=0, char_end=20, quote="Раздел разработан"),))
 
 
 def test_a_page_with_a_line_above_it_is_unlinked_and_its_evidence_links_to_nothing(run: None) -> None:

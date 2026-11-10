@@ -369,6 +369,22 @@
   background: var(--am-accent-light);
 }
 
+/*
+ * `WALK-V5`: the «Версии» cell is the count over the date of the last update. The two spans were inline, so the cell read «12026-11-09»
+ * (a count of 1 and the date of the 9th, run together) and, with `overflow-wrap: anywhere` and the steps' columns taking the width,
+ * it was 58 px wide and 71 to 107 px tall at every width from 360 to 1440 px. The date is the second line, on one line, and the
+ * column keeps the width of a date.
+ */
+.versionsCell {
+  min-width: 6.5rem;
+}
+
+.versionsCell .note {
+  display: block;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
 .progressCell {
   min-width: 8rem;
 }

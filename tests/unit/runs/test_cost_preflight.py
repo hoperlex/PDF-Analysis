@@ -81,16 +81,21 @@ def test_all_sections_price_before_start_under_the_default_v3_plan(registry, mon
         large_review = json.loads(large.authority_json)["extended_review"]
         # One page: 1 text window + 1 visual window of (2 block + 4 comprehensive + 8 norm +
         # 8 review + 8 correction) calls + 8 project-parameter calls. No global cross-window pass
-        # exists below 16 text pages.
-        assert small.as_dict()["calls"] == 39
+        # exists below 16 text pages. Fresh consent also reserves one received-reply repair for every
+        # initial extended call (`semantic_repair_attempts == 1`, `RunCostPreflight` doubles
+        # `extra_calls` after the visual, parameter and global calls are summed); the text window is
+        # not one of them: 1 + 2 * (30 + 8) = 77.
+        assert small_review["semantic_repair_attempts"] == 1
+        assert small.as_dict()["calls"] == 1 + 2 * (2 + 4 + 8 + 8 + 8 + 8)
         assert (small_review["plan_version"], small_review["max_blocks"], small_review["max_windows"]) == (
             "extended-review-v3", 1, 1)
         assert "global_cross_window_policy" not in small_review
         # 500 pages: the visual scope stops at 500 blocks over 32 windows of (2 + 128 + 8 + 8 + 8)
-        # calls, then 32 global calls and 8 project-parameter calls, on top of the text windows.
+        # calls, then 32 global calls and 8 project-parameter calls, each reserved twice for its
+        # repair, on top of the text windows.
         windows = large.as_dict()["windows"]
         assert windows > 12
-        assert large.as_dict()["calls"] == windows + 32 * 154 + 32 + 8
+        assert large.as_dict()["calls"] == windows + 2 * (32 * 154 + 32 + 8)
         assert (large_review["plan_version"], large_review["max_blocks"], large_review["max_windows"]) == (
             "extended-review-v3", 500, 32)
         assert large.as_dict()["estimated_cost_micros"] > small.as_dict()["estimated_cost_micros"] > 0
