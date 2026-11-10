@@ -20,6 +20,8 @@ import { MEMORY_REASON_CODES, MEMORY_REASON_LABELS } from '@/entities/decision-m
 import type { MemoryReason, MemoryStatus } from '@/entities/decision-memory';
 
 import { standingIntentSignature } from '../model/intent';
+import { pressStanding } from '../model/press-standing';
+import { createSingleFlight } from '../model/single-flight';
 import type { StandingKind } from '../model/use-change-standing';
 import { useChangeStanding } from '../model/use-change-standing';
 import styles from './case-standing-control.module.css';
@@ -44,6 +46,8 @@ export interface CaseStandingControlProps {
 
 export function CaseStandingControl({ caseId, status }: CaseStandingControlProps) {
   const [reason, setReason] = useState<MemoryReason | ''>('');
+  // One request per press, however many presses arrive before the answer (`D-503`): `disabled` alone is a re-render late.
+  const [flight] = useState(createSingleFlight);
   const change = useChangeStanding();
   const kind: StandingKind = status === 'withdrawn' ? 'restore' : 'withdraw';
   const idempotencyKey = useIntentKey(standingIntentSignature(kind, caseId, reason));
@@ -54,8 +58,7 @@ export function CaseStandingControl({ caseId, status }: CaseStandingControlProps
   const fieldId = `memory-standing-reason-${caseId}`;
 
   function submit() {
-    if (reason === '' || change.isPending) return;
-    change.mutate({ kind, caseId, reason, idempotencyKey }, { onSuccess: () => setReason('') });
+    pressStanding(flight, reason === '' ? null : { kind, caseId, reason, idempotencyKey }, change.mutateAsync, () => setReason(''));
   }
 
   return (
