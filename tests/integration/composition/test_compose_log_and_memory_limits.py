@@ -31,6 +31,8 @@ EXAMPLE = ROOT / "infra/deploy/env/alpha.env.example"
 
 LONG_RUNNING = ("postgres", "s3", "api", "worker", "web", "proxy")
 ONE_SHOT = ("s3-init", "migrate", "release-notes")
+#: `EMBED-01`: a service that is run by a round and not kept running, and whose limit has NO default (`${ALPHA_MEM_LIMIT_EMBEDDER:?...}`).
+ROUND = ("embedder",)
 VAR = "ALPHA_MEM_LIMIT_"
 
 
@@ -160,9 +162,9 @@ def problems(compose: str, example: str, env: dict[str, str] | None = None) -> l
     found: list[str] = []
     declared = services(compose)
     for name in declared:
-        if name not in LONG_RUNNING and name not in ONE_SHOT:
+        if name not in LONG_RUNNING and name not in ONE_SHOT and name not in ROUND:
             found.append(f"service {name!r} is neither long-running nor one-shot: decide its log and memory limits")
-    for name in (*LONG_RUNNING, *ONE_SHOT):
+    for name in (*LONG_RUNNING, *ONE_SHOT, *ROUND):
         if name not in declared:
             found.append(f"service {name!r} is gone from the file")
     raw = declared
@@ -193,6 +195,13 @@ def problems(compose: str, example: str, env: dict[str, str] | None = None) -> l
             found.append(f"{name}: max-size {options['max-size']!r} is not a quoted number with a unit k, m or g")
         if not re.fullmatch(r'"[1-9]\d*"', str(options["max-file"])):
             found.append(f"{name}: max-file {options['max-file']!r} is not a quoted positive whole number")
+    for name in ROUND:
+        if name in raw:
+            # `EMBED-01`: the default exists only so that the file renders with the variable unset; `embed-window.sh` and `deploy.sh` demand the real value.
+            expected = "${" + VAR + name.upper() + ":-3g}"
+            for key in ("mem_limit", "memswap_limit"):
+                if raw[name].get(key) != expected:
+                    found.append(f"{name}: {key} must be exactly {expected!r}, it is {raw[name].get(key)!r}")
     for name in ONE_SHOT:
         for key in ("mem_limit", "logging"):
             if name in raw and key in raw[name]:
@@ -237,10 +246,10 @@ def test_the_file_as_shipped_satisfies_every_rule() -> None:
 
 def test_the_long_running_services_are_the_six_the_adr_names() -> None:
     declared = set(services(_compose()))
-    assert declared == set(LONG_RUNNING) | set(ONE_SHOT)
+    assert declared == set(LONG_RUNNING) | set(ONE_SHOT) | set(ROUND)
     restarts = {n: b.get("restart") for n, b in services(_compose()).items()}
     assert {n for n, r in restarts.items() if r == "unless-stopped"} == set(LONG_RUNNING), restarts
-    assert {n for n, r in restarts.items() if r == '"no"'} == set(ONE_SHOT), restarts
+    assert {n for n, r in restarts.items() if r == '"no"'} == set(ONE_SHOT) | set(ROUND), restarts
 
 
 def test_without_any_variable_every_service_renders_no_limit_and_a_rotated_log() -> None:
@@ -362,6 +371,13 @@ def test_a_limit_read_from_another_services_variable_is_seen() -> None:
     assert any(line.startswith("web: mem_limit must be exactly") for line in problems(mutated, _example()))
 
 
+def test_a_round_service_with_a_required_or_missing_default_is_seen() -> None:
+    """`EMBED-01`: a `:?` would stop every compose command of a stack that has not set the variable; a number in the file would be a limit nobody chose."""
+    for new in ("${ALPHA_MEM_LIMIT_EMBEDDER:?unset}", "${ALPHA_MEM_LIMIT_EMBEDDER:-0}", "4g"):
+        mutated = _edit_service(_compose(), "embedder", "    mem_limit: ${ALPHA_MEM_LIMIT_EMBEDDER:-3g}\n", f"    mem_limit: {new}\n")
+        assert any(line.startswith("embedder: mem_limit must be exactly") for line in problems(mutated, _example())), new
+
+
 def test_a_new_service_must_decide_its_limits() -> None:
     mutated = _compose().rstrip("\n") + "\n\n  sidecar:\n    image: x\n    restart: unless-stopped\n"
     found = problems(mutated, _example())
@@ -414,4 +430,4 @@ def test_the_example_still_parses_as_data_lines() -> None:
     """`deploy.sh` and its neighbours read `alpha.env` with `sed`, never source it: the shipped lines must be plain
     `NAME=` pairs with nothing after the equals sign."""
     lines = [line for line in _example().splitlines() if line.startswith(VAR)]
-    assert len(lines) == 6 and all(re.fullmatch(rf"{VAR}[A-Z0-9_]+=", line) for line in lines), lines
+    assert len(lines) == 7 and all(re.fullmatch(rf"{VAR}[A-Z0-9_]+=", line) for line in lines), lines
