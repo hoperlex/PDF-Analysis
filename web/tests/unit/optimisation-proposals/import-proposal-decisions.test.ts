@@ -138,7 +138,7 @@ describe('the words', () => {
   it('say a whole refused file by the constraint the server names, else by the catalogue', () => {
     const refuse = (constraint: string) =>
       new ApiError(422, {
-        contract_version: '1.47.0', error_code: 'validation_failed', message: 'x',
+        contract_version: '1.48.0', error_code: 'validation_failed', message: 'x',
         correlation_id: 'cid-1', retryable: false, details: { field: 'file', constraint },
       }, 'cid-1');
     expect(importProposalFailure(refuse('not_our_export'))).toContain('лист «Предложения» с колонкой идентификаторов предложений');

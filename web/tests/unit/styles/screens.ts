@@ -133,7 +133,7 @@ import type {
 } from '@/shared/api';
 import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
 import type { Account, AnalysisPreset, AnalysisProfileListItem } from '@/shared/api';
-import type { RegistrationRequest, RunStartReadiness } from '@/shared/api';
+import type { RegistrationRequest, RunStartReadiness, RunWaitCell } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
@@ -233,7 +233,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.47.0',
+    contract_version: '1.48.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -882,6 +882,32 @@ export function screens(): Screen[] {
   );
   add('RunProgress validating', runScreen('validating'));
   add('RunProgress queued', runScreen('queued'));
+  /*
+   * `HOSTS-L1` (`D-660`, contract 1.48.0): a run on the stage layout that waits names the model it waits for, one line under the sentence of the
+   * reason. Four states put every cause of `RunWaitCause` on the screen, two models to a line, and the last one the tail «и ещё N».
+   */
+  {
+    const waitCell = (cell_key: string, model_id: string, cause: RunWaitCell['cause'], access: RunWaitCell['access'] = 'subscription'): RunWaitCell => ({
+      cell_key, model_id, access, cause,
+    });
+    const waitingRun = (reason: 'model_unavailable' | 'executor_at_capacity', cells: readonly RunWaitCell[]) =>
+      runScreen('queued', {
+        binding_state: 'pending', wait_reason: reason, waiting_since: '2026-09-10T08:00:30.000Z', terminal_at: null, wait_cells: [...cells],
+      });
+    add('RunProgress queued, waiting for a model that no server serves and one on a server that is off', waitingRun('model_unavailable', [
+      waitCell('text:main', 'gpt-6-sol', 'not_on_any_server'), waitCell('blocks:leg1', 'gpt-6-astra', 'host_disabled', 'api'),
+    ]));
+    add('RunProgress queued, waiting for a server that is off line and one that needs a login', waitingRun('model_unavailable', [
+      waitCell('text:main', 'gpt-6.1-sol', 'host_offline'), waitCell('review:main', 'claude-opus-5-5', 'login_required'),
+    ]));
+    add('RunProgress queued, waiting for a model not verified and one that cools down', waitingRun('model_unavailable', [
+      waitCell('norms:main', 'gpt-6-astra', 'model_not_verified'), waitCell('correction:main', 'claude-sonnet-5-5', 'model_cooling_down'),
+    ]));
+    add('RunProgress queued, waiting for places on a full server, with more models behind', waitingRun('executor_at_capacity', [
+      waitCell('text:main', 'gpt-6-sol', 'at_capacity'), waitCell('blocks:judge', 'gpt-6.1-sol', 'at_capacity'),
+      waitCell('norms:main', 'gpt-6-astra', 'at_capacity'), waitCell('review:main', 'claude-opus-5-5', 'at_capacity'),
+    ]));
+  }
   add('RunProgress cancelled', runScreen('cancelled'));
   add(
     'RunProgress unknown vocabulary',
@@ -1546,7 +1572,7 @@ export function screens(): Screen[] {
      * серверах» on one of them), and says in a sentence that none will run when a «Свой набор» stored none.
      */
     const comparisonProps = {
-      catalogue: HOSTS_CATALOGUE, availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra'],
+      catalogue: HOSTS_CATALOGUE, availableModelIds: ['claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'],
       currentKit: 'custom' as const, pending: false, problem: null, failure: null, onKit: noop, onModel: noop, onEffort: noop, onLimit: noop,
       onComparisonModel: noop, onComparisonEffort: noop, onComparisonLimit: noop, onSave: noop, onCancel: noop,
     };

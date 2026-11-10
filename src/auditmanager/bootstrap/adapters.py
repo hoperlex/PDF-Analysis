@@ -2041,6 +2041,11 @@ def _group_status_fields(session: Session, run: Any, executor: Any) -> dict[str,
     state = getattr(run, "binding_state", "frozen_at_start")
     if state == "frozen_at_start":
         return {}
+    # `HOSTS-L1`: a run started on the stage layout holds a plan and no group of its own (``ck_audit_run_binding_shape``); the group
+    # reading below would find no revision for it and refuse the whole status. It has its own reading.
+    plan = getattr(run, "stage_plan", None)
+    if plan is not None:
+        return _planned_run_status_fields(session, run, state, plan)
     revision = group_revision_of(session, run.executor_group_revision_id)
     if revision is None:  # a foreign key forbids it; a stored fact that contradicts its own constraint is not hidden
         raise DomainError(ErrorCode.INTERNAL_ERROR, message="a run's group revision is missing")
@@ -2060,6 +2065,35 @@ def _group_status_fields(session: Session, run: Any, executor: Any) -> dict[str,
     if state == "pending" and run.state == "queued" and run.wait_reason is not None:
         fields["wait_reason"] = run.wait_reason
         fields["waiting_since"] = run.waiting_since
+    return fields
+
+
+def _planned_run_status_fields(session: Session, run: Any, state: str, plan: Any) -> dict[str, Any]:
+    """``binding_state``, ``wait_reason``, ``waiting_since`` and ``wait_cells`` of a Run started on the stage layout (`HOSTS-L1`, `D-660`).
+
+    The run holds a frozen plan and no group, rule, connection or preset of its own, so ``planned`` and ``binding`` do not apply: the
+    cells are bound one by one at dispatch (``audit_run_cell_binding``). While a ``pending`` run is ``queued`` and waits, the stored
+    ``wait_reason`` is reported as for any group Run, and ``wait_cells`` names the cells that have no server to take them *now*: one read of
+    ``executors.public.evaluate_wait`` over the plan's cells, the evaluation the sweep keeps ``wait_reason`` true with. It writes nothing,
+    takes no lock and adds no table. A cell that can be bound is not named, and a run that could be bound now names none (the stored
+    reason is then one sweep behind, which is the sweep's own latency and not a second answer)."""
+    import json
+
+    from auditmanager.api.schemas.runs import RunWaitCellView
+    from auditmanager.executors.public import cell_requests, evaluate_wait
+
+    fields: dict[str, Any] = {"binding_state": state}
+    if state == "pending" and run.state == "queued" and run.wait_reason is not None:
+        fields["wait_reason"] = run.wait_reason
+        fields["waiting_since"] = run.waiting_since
+        document = json.loads(plan) if isinstance(plan, str) else plan
+        outcome = evaluate_wait(session, run_id=str(run.run_id), cells=cell_requests(document))
+        cells = tuple(
+            RunWaitCellView(cell_key=wait.cell_key, model_id=wait.model_id, access=wait.access, cause=wait.cause)
+            for wait in outcome.waits
+        )
+        if cells:
+            fields["wait_cells"] = cells
     return fields
 
 

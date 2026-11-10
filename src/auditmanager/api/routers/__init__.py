@@ -278,7 +278,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.47.0"
+CONTRACT_VERSION: Final[str] = "1.48.0"
 
 
 def build_router(

@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.47.0 (OpenAPI 3.1.0)
- *   sha256 d6843502b6ccd307fcf8a7576e4975e1393a1355732827be29b56cc7587706b6
+ *   AuditManager PC-01 API 1.48.0 (OpenAPI 3.1.0)
+ *   sha256 f240a2af7e8b28a5a129229018e0d3753517af0677e59e165c8bb2fce50cef6b
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.47.0';
+export const CONTRACT_VERSION = '1.48.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'd6843502b6ccd307fcf8a7576e4975e1393a1355732827be29b56cc7587706b6';
+export const CONTRACT_DIGEST = 'f240a2af7e8b28a5a129229018e0d3753517af0677e59e165c8bb2fce50cef6b';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -601,6 +601,8 @@ export const SCHEMA_NAMES = [
   'RunStateCount',
   'RunStatus',
   'RunStatusPage',
+  'RunWaitCause',
+  'RunWaitCell',
   'RunnerCatalogueEntry',
   'RunnerCliAuthState',
   'RunnerCliHealth',
@@ -4382,7 +4384,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.47.0";
+  contract_version: "1.48.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -7331,6 +7333,8 @@ export type RunStatus = {
   /** The catalog code a `failed` run terminated with. Null otherwise. */
   terminal_reason?: ErrorCode | null;
   version_uid: VersionUid;
+  /** `HOSTS-L1` (contract 1.48.0, `D-660`): the cells of a planned (stage-layout) run that cannot be bound now, each with its model, its access and the cause, in the order of the run's frozen plan. Present only while a `pending` planned run is `queued` and waiting (`wait_reason` is present) and at least one cell has no server to take it; omitted otherwise, and never an empty list. It is read at the time of the status, so it can differ from the stored `wait_reason` by one sweep. The run page uses it to name the model a run waits for. */
+  wait_cells?: Array<RunWaitCell>;
   /** `EXEC2-SEAL-2` (ADR-0026 decision 15): why a `pending` run is not dispatched, stored with `waiting_since`. Omitted when the run is not waiting for an executor. */
   wait_reason?: RunQueueReason;
   /** `EXEC2-SEAL-2`: when the run began waiting for the reason in `wait_reason`; present exactly when it is. */
@@ -7340,6 +7344,36 @@ export type RunStatus = {
 export type RunStatusPage = {
   items: Array<RunStatus>;
   page: PageInfo;
+};
+
+/**
+ * `HOSTS-L1` (contract 1.48.0): why one cell of a waiting planned run cannot be bound now. The six words of `ModelUnavailableReason` (no
+ * available server for the cell's model and access: switched off, off line, not logged in, the model not verified, cooling down, on no
+ * server) and `at_capacity`: a server serves the model and every place for it is taken.
+ */
+export const RUN_WAIT_CAUSE_VALUES = [
+  'host_disabled',
+  'host_offline',
+  'login_required',
+  'model_not_verified',
+  'model_cooling_down',
+  'not_on_any_server',
+  'at_capacity',
+] as const;
+
+/** RunWaitCause - the closed value set above. */
+export type RunWaitCause = (typeof RUN_WAIT_CAUSE_VALUES)[number];
+
+/**
+ * `HOSTS-L1` (contract 1.48.0, `D-660`): a cell of the run's frozen stage plan that has no server to take it now, and why. The model
+ * and the access are the plan's own; the cause is read at the moment of the status, from the same evaluation that keeps the run's
+ * `wait_reason` true. It names a model and a cause, never a server.
+ */
+export type RunWaitCell = {
+  access: ExecutorModelAccess;
+  cause: RunWaitCause;
+  cell_key: StageCellKey;
+  model_id: string;
 };
 
 /**

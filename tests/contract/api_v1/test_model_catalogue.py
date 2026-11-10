@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[3]
 CATALOGUE = json.loads((ROOT / "contracts/analysis/v1/model-catalogue.json").read_text(encoding="utf-8"))
 LOCK = json.loads((ROOT / "docs/program/P02_LOCK.json").read_text(encoding="utf-8"))
 
-OFFERED = {"claude-opus-5-5", "claude-sonnet-5-5", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra"}
+OFFERED = {"claude-opus-5-5", "claude-sonnet-5-5", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra", "gpt-6-luna"}
 CLAUDE = {"claude-opus-5-5", "claude-sonnet-5-5"}
-CODEX = {"gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra"}
+CODEX = {"gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra", "gpt-6-luna"}
 PROVIDERS = {"claude_code", "codex", "anthropic_api", "openai_api", "openrouter_api"}
 EFFORTS = {
     "claude-opus-5-5": ["medium", "high"],
@@ -26,6 +26,7 @@ EFFORTS = {
     "gpt-6.1-sol": ["low", "medium", "high"],
     "gpt-6-sol": ["low", "medium", "high"],
     "gpt-6-astra": ["low", "medium", "high"],
+    "gpt-6-luna": ["low", "medium", "high"],
 }
 
 
@@ -35,7 +36,7 @@ def _entries(provider: str | None = None) -> list[dict]:
 
 def test_the_catalogue_is_the_version_of_the_contract_it_was_sealed_with() -> None:
     assert CATALOGUE["contract"] == "auditmanager.analysis.model-catalogue"
-    assert CATALOGUE["contract_version"] == "1.47.0"
+    assert CATALOGUE["contract_version"] == "1.48.0"
     assert CATALOGUE["lock_file"] == "docs/program/P02_LOCK.json"
 
 
@@ -63,7 +64,7 @@ def test_no_haiku_and_no_effort_above_high_and_no_low_for_opus_is_ever_offered()
             assert "low" not in entry["efforts"], entry
 
 
-def test_the_cli_providers_cover_the_five_models_with_their_exact_reported_strings() -> None:
+def test_the_cli_providers_cover_the_six_models_with_their_exact_reported_strings() -> None:
     claude = {entry["model_id"]: entry for entry in _entries("claude_code")}
     codex = {entry["model_id"]: entry for entry in _entries("codex")}
     assert set(claude) == CLAUDE and set(codex) == CODEX

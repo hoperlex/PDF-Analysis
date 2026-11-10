@@ -2,7 +2,7 @@
  * The comparison cells of the layout (`HOSTS-CMP-01`, ADR-0028 decision 19; the web part is `CMP-WEB-01`): one cell for each of the four
  * kinds of work of the comparison of versions that call a model, kept in the revision beside the six rows and in no run's plan.
  *
- * - **The sets.** «Только Claude» serves all four kinds on Sonnet 5.5, «Только Codex» on gpt-6-astra and gpt-6.1-sol, each at the high effort.
+ * - **The sets.** «Только Claude» serves all four kinds on Sonnet 5.5, «Только Codex» on gpt-6-luna and gpt-6.1-sol, each at the high effort.
  *   These are the tables `COMPARISON_PRESET_CELLS` of `src/auditmanager/runs/stage_layout.py`; the server accepts a named set only if its
  *   comparison cells have these models and efforts, so a copy that drifted is refused, never stored. `tests/unit/stage-layout/comparison-drift.test.ts`
  *   reads the Python source and compares.
@@ -42,7 +42,7 @@ interface KitPair { readonly model_id: string; readonly effort: ModelEffort }
 type KitComparisonTable = Readonly<Record<ComparisonLayoutKind, KitPair>>;
 
 const SONNET: KitPair = { model_id: 'claude-sonnet-5-5', effort: 'high' };
-const ASTRA: KitPair = { model_id: 'gpt-6-astra', effort: 'high' };
+const LUNA: KitPair = { model_id: 'gpt-6-luna', effort: 'high' };
 const SOL_61: KitPair = { model_id: 'gpt-6.1-sol', effort: 'high' };
 
 const CLAUDE_ONLY: KitComparisonTable = {
@@ -53,9 +53,9 @@ const CLAUDE_ONLY: KitComparisonTable = {
 };
 
 const CODEX_ONLY: KitComparisonTable = {
-  comparison_pair_check: ASTRA,
+  comparison_pair_check: LUNA,
   comparison_sheet_changes: SOL_61,
-  comparison_spec: ASTRA,
+  comparison_spec: LUNA,
   comparison_report: SOL_61,
 };
 

@@ -41,9 +41,9 @@ def test_the_kinds_are_the_four_that_call_a_model_and_not_the_stage_review():
 
 def test_each_set_has_the_table_of_the_task_with_the_originals_limits_and_windows():
     assert table("codex_only") == {
-        "comparison_pair_check": ("gpt-6-astra", "high", 1_200, 900),
+        "comparison_pair_check": ("gpt-6-luna", "high", 1_200, 900),
         "comparison_sheet_changes": ("gpt-6.1-sol", "high", 8_192, 1_800),
-        "comparison_spec": ("gpt-6-astra", "high", 32_000, 900),
+        "comparison_spec": ("gpt-6-luna", "high", 32_000, 900),
         "comparison_report": ("gpt-6.1-sol", "high", 8_000, 2_400),
     }
     assert table("claude_only") == {
@@ -98,7 +98,7 @@ def test_a_cell_that_is_not_a_kind_and_main_is_refused(key, constraint):
 
 @pytest.mark.parametrize("edit,constraint", [
     ({"model_id": "claude-haiku-5"}, "model_not_in_catalogue"),
-    ({"model_id": "gpt-6-luna"}, "model_not_in_catalogue"),   # the original's model is not a pin (D-667)
+    ({"model_id": "gpt-6-terra"}, "model_not_in_catalogue"),   # a model that is not a pin (the original's gpt-6-luna is one since R-153m / D-667)
     ({"effort": "xhigh"}, "effort_not_offered_for_model"),
     ({"effort": "max"}, "effort_not_offered_for_model"),
     ({"model_id": "claude-opus-5-5", "effort": "low"}, "effort_not_offered_for_model"),

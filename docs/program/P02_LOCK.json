@@ -126,6 +126,12 @@
       "input_per_mtok_usd": 10.0,
       "output_per_mtok_usd": 50.0
     },
+    "codex_gpt_6_luna": {
+      "$comment": "HOSTS-L1 (D-667; owner ruling R-153m of 2026-11-10 lifts R-143g for this model: the original's sheet_match and whole-specification comparison run on it). A reference only, not_metered for subscription calls through the pull agent; Standard text-token rates read on 2026-11-10 from https://developers.openai.com/api/docs/models/gpt-6-luna ($0.10 input / $0.50 output per 1M tokens; cached input $0.01; context window 1,050,000).",
+      "model_id": "gpt-6-luna",
+      "input_per_mtok_usd": 0.1,
+      "output_per_mtok_usd": 0.5
+    },
     "run_cost_ceiling_usd": 1.0
   },
   "provider_configuration": {

@@ -11,7 +11,38 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.47.0` (`HOSTS-SEAL-3`)
+## Current contract `1.48.0` (`HOSTS-L1`)
+
+Slice for `HOSTS-L1` (lane of the HOSTS wave, 2026-11-10; `D-660`): **a waiting planned run names the cells it waits for**. **No operation, two new
+schemas, one widened one, no migration, no new error code, no state machine and no identity prefix**; migration head stays `0062`. The paths and
+operations are those of `1.47.0`.
+
+- **`RunStatus.wait_cells`** (optional, 1 to 32 items) lists the cells of a run started on the stage layout that cannot be bound now, in the order of
+  the run's frozen plan, as the new `RunWaitCell`: `cell_key`, `model_id` and `access` (the plan's own, `ExecutorModelAccess`) and `cause`, the new
+  closed enum `RunWaitCause`. It is present **only** while the run is `queued` with `binding_state` `pending` and a `wait_reason`, and at least one
+  cell has no server to take it; it is omitted otherwise and never an empty list.
+- **`RunWaitCause`** is the six words of `ModelUnavailableReason` (`host_disabled`, `host_offline`, `login_required`, `model_not_verified`,
+  `model_cooling_down`, `not_on_any_server`: no available server for the cell's model and access) and `at_capacity` (a server serves the model and
+  every place for it is taken). `wait_reason` keeps its meaning: `model_unavailable` when any cell has a cause other than `at_capacity`,
+  `executor_at_capacity` when every cell has only that. The status carries no server: a cell names a model and a cause, never a host.
+- **How it is read.** One read, no table: the status asks `executors.public.evaluate_wait` (the evaluation the sweep keeps `wait_reason` true with)
+  over the cells of the plan at the time of the request, so it can differ from the stored `wait_reason` by one sweep. A run that could be bound now
+  names no cell.
+- **A planned run has no `planned` and no `binding`.** It holds a plan and no group, rule, connection or preset of its own, so the status of a
+  `pending` or `bound` planned run reports `binding_state` (and, while it waits, `wait_reason`, `waiting_since` and `wait_cells`) and nothing of
+  `planned` and `binding`. Before this seal the status reading looked for a group revision that a planned run does not have
+  and would have refused with `internal_error`.
+- **The model catalogue gains `gpt-6-luna`** (`contracts/analysis/v1/model-catalogue.json`; `D-667`, owner ruling `R-153m`): the Codex client
+  (subscription and API), the OpenAI API and OpenRouter serve it at `low`, `medium` and `high`, and `docs/program/P02_LOCK.json` pins it with the
+  Standard rates read on 2026-11-10 ($0.10 input, $0.50 output per 1M tokens). The table of « Только Codex » now gives `comparison_pair_check` and
+  `comparison_spec` `gpt-6-luna` high (the original's `sheet_match` and whole-specification model), with the limits and windows of `1.47.0`
+  unchanged; `comparison_sheet_changes` and `comparison_report` stay `gpt-6.1-sol` high. A revision that stored its comparison cells keeps them; one
+  that follows the table of its set serves the new one. No schema changes for it: the model is a value of `model_id`.
+- **Not changed.** Every operation, every other schema, the stage plan a run freezes and every error code.
+
+The API has 296 paths, 324 operations and 798 schemas; migration head `0062`. The domain catalogs are at candidate revision 65.
+
+## Contract `1.47.0` (`HOSTS-SEAL-3`, historical)
 
 Slice for `HOSTS-SEAL-3` with `HOSTS-CMP-01` (ADR-0028 decision 19; decisions of the HOSTS integrator, 2026-11-10): **the comparison of versions on the stage
 layout**. **No operation, two new schemas, three widened ones, no migration, no new error code, no state machine and no identity prefix**; migration head
