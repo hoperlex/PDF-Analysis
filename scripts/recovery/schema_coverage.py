@@ -539,7 +539,13 @@ SEQUENCES = {
 #: exactly-one-of check: c 1455, f 400.
 #: `0063_drop_ar_v3_beta` (`AR-V3-BE-RM-01`) drops the six-scope beta's two tables: 18 checks, 7 foreign keys, two primary keys, one constraint
 #: trigger and three unique constraints: c 1437, f 393, p 151, t 9, u 135 (measured on a throwaway database at ``0063``, 2026-11-10).
-CONSTRAINT_COUNTS = {"c": 1437, "f": 393, "p": 151, "t": 9, "u": 135}
+#: `0064_precedents_seal` (`CRIT-SEAL-50`) adds twelve tables (twelve primary keys, four unique constraints -- a comment's source, an intent's view,
+#: a control event's number, a delivery's (task, kind) --, twelve foreign keys: the comment's case, the three content keys of the block evidence,
+#: the intent and the vector, the probe's run, the pass's run, the advice's run and finding, a finding's block evidence, the control journal's
+#: control and its actor, the settings' actor, and the actor of the control event is counted once) and 102 checks (the identity, shape, state-pair
+#: and range checks of the new columns and the new CHECKs of the decision, the run, the finding and the observation): c 1539, f 405, p 163, t 9, u 139
+#: (measured on a throwaway database at ``0064``, 2026-11-11).
+CONSTRAINT_COUNTS = {"c": 1539, "f": 405, "p": 163, "t": 9, "u": 139}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -557,7 +563,9 @@ CONSTRAINT_COUNTS = {"c": 1437, "f": 393, "p": 151, "t": 9, "u": 135}
 #: database at ``0062``, 2026-11-09).
 #: `G-1` adds the partial unique index of one current secret per host and purpose: 507.
 #: `0063_drop_ar_v3_beta` drops the beta's two tables with their five indexes: 502 (measured on a throwaway database at ``0063``, 2026-11-10).
-INDEX_COUNT = 502
+#: `0064_precedents_seal` adds 24 (twelve primary keys, four unique constraints and eight lookups and partial indexes): 526 (measured on a throwaway
+#: database at ``0064``, 2026-11-11).
+INDEX_COUNT = 526
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

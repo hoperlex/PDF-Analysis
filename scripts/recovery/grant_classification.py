@@ -253,9 +253,11 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # (`GroupRepository.insert_mode_event`). The scan counts INSERT, UPDATE, DELETE and LOCK statements, so a table that
     # is only selected is still never written.
     # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): the host, its journals and report, the cooldown, the stage layout's revisions and switch
-    # and the cell binding, until `HOSTS-BACKEND-01` and `HOSTS-LAYOUT-01` write them. `stage_layout` is seeded by the migration and read only.
-    "audit_run_cell_binding", "executor_host", "executor_host_report", "executor_host_slot_event", "executor_host_use_event",
-    "executor_model_cooldown", "stage_layout_revision", "stage_layout_switch_event",
+    # and the cell binding left the set when `HOSTS-BACKEND-01` and `HOSTS-LAYOUT-01` wrote them (found red on `90abbbbd3` by `CRIT-SEAL-50`: the
+    # scan sees a statement for each of the eight). `stage_layout` is seeded by the migration and read only.
+    # `finding_observation_norm_citation` joins it: its only writer was the beta's citation publication, which `AR-V3-BE-RM-01` removed; the table
+    # stays (the contract's `norm_citations` still reads it) until a lane writes it again.
+    "finding_observation_norm_citation",
     # `0064_precedents_seal` (`CRIT-SEAL-50`): every table of the Precedents storage, until the lane that writes it does: `MEM-COMMENTS-01` the
     # comments, `CRIT-CAPTURE-01` the label columns, `EMBED-01` the encoder's queue, the vectors and the control, `PREC-PASS` the probe, the pass
     # and its advice, `F8-PUBLISH` the block evidence, `PREC-WEB` the settings and `CTX-STAND` the delivery journal. `vector_control` is seeded
