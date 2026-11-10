@@ -34,6 +34,12 @@
   outline-offset: 2px;
 }
 
+.comparison {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: var(--am-gap-sm) 0 0;
+}
+
 .fold {
   margin: var(--am-gap-sm) 0;
 }

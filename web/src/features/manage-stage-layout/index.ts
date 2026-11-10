@@ -3,14 +3,14 @@
  *
  * The administrator's commands on the layout of models over the analysis stages: save a new revision (the form «Изменить» with
  * the segments «Только Claude · Только Codex · Свой набор», a model and an effort for each row but the blocks, which is one scheme of a
- * closed list of three, and «Дополнительно») and the
+ * closed list of three, «Сравнение версий» under «Свой набор» only, and «Дополнительно») and the
  * switch «Модели по этапам: включены» with its journal. The server's catalogue decides what may be chosen; the form offers
  * only that.
  */
 
 export {
   chooseKit, draftChanged, draftProblem, draftRequest, initialDraft, modelOptions, offeredBlockSchemes, offeredKits,
-  setBlockScheme, setCellEffort, setCellLimit, setCellModel,
+  setBlockScheme, setCellEffort, setCellLimit, setCellModel, setComparisonEffort, setComparisonLimit, setComparisonModel,
 } from './model/draft';
 export type { LayoutDraft } from './model/draft';
 export { useReviseStageModelLayout, useSetStageModelLayoutEnabled } from './model/use-manage-stage-layout';
