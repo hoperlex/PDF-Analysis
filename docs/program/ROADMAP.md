@@ -249,9 +249,8 @@ The output is a new beta/v1 roadmap with estimates based on actual P01–P04 thr
 Set by the owner on 2026-11-07. They come after the functional and navigational likeness to the
 original and the active product tasks around the beta, and are built when those leave room:
 
-1. **AR v3 as an opt-in mode.** The imported (current) analysis stays the default; v3 is
-   switched on per deployment or per run, never replacing the default silently. *Built switched off on 2026-11-08*
-   (P1 to P3 of `AR-V3-OPT-IN-01.md`, contract `1.38.0`); P4 and P5 are `D-338`.
+1. **Withdrawn 2026-11-10 (`R-154a`).** The owner goal of an opt-in analysis mode for the six-scope АР beta was built switched off
+   on 2026-11-08 and then removed from the tree with that beta (`D-338`). It is no longer a goal.
 2. **Expert decision memory.** Every expert decision is kept together with the crop or crops it
    concerns in a vectorised segment of PostgreSQL (pgvector, as the normative corpus already
    uses), so that it can feed fine-tuning data, dynamic prompts and hints to an expert facing a
@@ -269,8 +268,6 @@ Each becomes its own design task with a contract slice; none is started before t
 work, unless the lanes of that work run out.
 
 Design of items 2 and 3: [DECISION-MEMORY-01](DECISION-MEMORY-01.md) (design only; the questions only the owner can answer are in its section 9).
-
-Design of item 1: [AR-V3-OPT-IN-01](AR-V3-OPT-IN-01.md) (design only; a deployment allow switch, a per-start choice and provenance on every run; the questions only the owner can answer are in its section 9).
 
 ## Normative corpus — PostgreSQL authority, pgvector retrieval, S3 custody
 
