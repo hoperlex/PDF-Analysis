@@ -540,7 +540,7 @@ stage that sends crops is not active. (`ssh-forced-command.sh` reads the stand's
 as one `{"media_type","data"}` object, or a list of up to eight, 32 MiB of PNG together, and
 passes every image to the CLI as an image block; the reply envelope command above serves none.)
 
-**A call lives while the session is alive** (`AR-V3-LIVENESS-01`). Nothing limits the model's thinking,
+**A call lives while the session is alive.** Nothing limits the model's thinking,
 effort or turns. The command runs the CLI with `--output-format stream-json --verbose --include-partial-messages`
 and judges the call by its stream, not by one short deadline:
 

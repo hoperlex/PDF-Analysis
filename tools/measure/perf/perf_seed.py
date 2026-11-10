@@ -13,7 +13,7 @@ D-463 (the optimisation counts on listDocuments):
     10..109 findings (about two thirds decided, some revoked), a LATEST optimisation pass of 300 / 500 / 800 proposals
     (by hash), ~60 % of the proposals decided once, some revoked and re-decided; 40 % of the documents also have an OLDER
     pass on the same version; a fifth have a non-current V1 with its own pass; runs of other kinds beside the result run
-    (older published, newer failed, newer running, an AR v3 beta group run).
+    (older published, newer failed, newer running).
   project 2 ("background"): P2_DOCS documents with lighter data (passes of 100 proposals on half of the AR ones).
 D-494 (decision memory): ``seed_memory(engine, ids, upto)`` grows the memory to ``upto`` cases (decisions 1..3, text, content,
   two evidence rows, withdraw / restore / forget status events); called once per scale point.
@@ -29,7 +29,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from auditmanager.access.public import AccountRepository, UserRepository
-from auditmanager.analysis.public import AR_V3_BETA_BUNDLE_ID, AR_V3_BETA_PROFILE_ID
 
 P1_DOCS = int(os.environ.get("PERF_P1_DOCS", "400"))
 P2_DOCS = int(os.environ.get("PERF_P2_DOCS", "300"))
@@ -150,8 +149,8 @@ def seed_runs_and_findings(engine, ids: dict[str, str]) -> None:
             """
             CREATE TABLE perf_run_plan AS
             SELECT perf_id('run', kind || ':' || ver) AS run_id, ver AS version_uid, project_uid, kind, g, ts, n_find,
-                   CASE WHEN kind = 'v3' THEN CAST(:v3ap AS text) ELSE perf_id('ap', 'ap:' || kind || ':' || ver) END AS ap,
-                   CASE WHEN kind = 'v3' THEN CAST(:v3pb AS text) ELSE perf_id('pb', 'pb:' || kind || ':' || ver) END AS pb
+                   perf_id('ap', 'ap:' || kind || ':' || ver) AS ap,
+                   perf_id('pb', 'pb:' || kind || ':' || ver) AS pb
             FROM (
                 SELECT 'pub' AS kind, ver_uid AS ver, project_uid, g,
                        now() - interval '20 days' + g * interval '1 second' AS ts,
@@ -167,14 +166,10 @@ def seed_runs_and_findings(engine, ids: dict[str, str]) -> None:
                 SELECT 'running_new', ver_uid, project_uid, g, now() - interval '1 hour', 0
                   FROM perf_ver WHERE g % 4 = 3 AND (pn = 1 OR g % 7 <> 0)
                 UNION ALL
-                SELECT 'v3', ver_uid, project_uid, g, now() - interval '2 days', 0
-                  FROM perf_ver WHERE g % 20 = 4 AND (pn = 1 OR g % 7 <> 0)
-                UNION ALL
                 SELECT 'pub_oldver', old_ver_uid, project_uid, g, now() - interval '40 days', 15
                   FROM perf_ver WHERE old_ver_uid IS NOT NULL
             ) s
             """,
-            v3ap=str(AR_V3_BETA_PROFILE_ID), v3pb=str(AR_V3_BETA_BUNDLE_ID),
         )
         run(
             conn,
@@ -183,9 +178,9 @@ def seed_runs_and_findings(engine, ids: dict[str, str]) -> None:
             "SELECT run_id, project_uid, version_uid, 'created', ap, pb, 'recorded', md5(run_id) || md5(run_id || 'x'), ts FROM perf_run_plan",
         )
         walk = (
-            ("queued", "kind IN ('pub','pub_older','pub_oldver','v3','running_new','failed_new')", False, ""),
-            ("running", "kind IN ('pub','pub_older','pub_oldver','v3','running_new')", False, ""),
-            ("validating", "kind IN ('pub','pub_older','pub_oldver','v3')", False, ""),
+            ("queued", "kind IN ('pub','pub_older','pub_oldver','running_new','failed_new')", False, ""),
+            ("running", "kind IN ('pub','pub_older','pub_oldver','running_new')", False, ""),
+            ("validating", "kind IN ('pub','pub_older','pub_oldver')", False, ""),
         )
         for state, where, terminal, extra in walk:
             run(
@@ -195,7 +190,7 @@ def seed_runs_and_findings(engine, ids: dict[str, str]) -> None:
         run(
             conn,
             "UPDATE audit_run r SET state = 'published', terminal_at = now(), degradation_set = '[]'::jsonb "
-            "FROM perf_run_plan p WHERE r.run_id = p.run_id AND p.kind IN ('pub','pub_older','pub_oldver','v3')",
+            "FROM perf_run_plan p WHERE r.run_id = p.run_id AND p.kind IN ('pub','pub_older','pub_oldver')",
         )
         run(
             conn,
