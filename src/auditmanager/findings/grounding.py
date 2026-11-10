@@ -14,6 +14,27 @@ An item failing any check rejects the whole observation from the finding list. I
 retained only as a diagnostic. This v1 evidence gate emits five reasons; the closed
 0023 vocabulary also covers recognised-text and later normative citation refusals.
 
+**Gate v2: a block as evidence** (`F8-GATE`, ADR-0029 decision 7), for a run whose
+``publication_mode`` is ``one_list`` only. A candidate grounded by blocks passes only when,
+for every evidence item:
+
+1. the item's ``blk_…`` (and page) is in **this run's** ``geometry.portal_blocks``
+   (``block_not_in_run_geometry``);
+2. the item's crop digest equals the SHA-256 of that block's crop in this run's
+   ``geometry.page_crops`` (``block_crop_mismatch``);
+3. a quote, when the item has one, occurs verbatim in the recognised text of that block in
+   this run's ``prepared.recognised_text`` (``block_quote_not_in_recognised``).
+
+**A block link proves a place, not a content.** The checks above establish that the model
+looked at a block of this document and that the crop it was shown is the crop on record.
+They do not establish that the block says what the candidate claims; that is the expert's
+to judge. For that reason the text gate's refusal ``quote_in_recognised_text`` (a quote
+found only in recognised text) does not apply to block evidence: a quote in the recognised
+text of a block is exactly what the third check admits. For text evidence the rule is
+unchanged, and ``check_evidence`` is not touched. The block gate fails closed: an input it
+cannot verify (no geometry at all, no crop on record, a quote the store cannot keep) is a
+refusal with a reason, never a pass.
+
 Why the gate is deterministic and takes no model input beyond the artifact: everything
 downstream — expert usefulness rates, evidence-location correctness, the whole P04 field
 study — is measured over what this gate admits. If it admits something ungrounded, those
@@ -38,7 +59,11 @@ from enum import Enum
 from typing import Final, Sequence
 
 from auditmanager.findings.artifacts import (
+    MAX_BLOCK_QUOTE_CHARS,
+    BlockEvidenceItem,
+    BlockGateInputs,
     BlockIndex,
+    BlockObservation,
     EvidenceItem,
     Observation,
     ObservationSet,
@@ -47,7 +72,10 @@ from auditmanager.findings.artifacts import (
 
 
 class UngroundedReason(str, Enum):
-    """The 0023 diagnostic vocabulary; this gate still emits its original five."""
+    """The diagnostic vocabulary: ``ck_finding_observation_ungrounded_reason`` as ``0064`` left it.
+
+    The text gate emits its original five; the block gate (gate v2) emits the last three.
+    """
 
     QUOTATION_ABSENT = "quotation_absent"
     QUOTATION_ON_DIFFERENT_PAGE = "quotation_on_different_page"
@@ -61,6 +89,10 @@ class UngroundedReason(str, Enum):
     NORM_QUOTE_ABSENT = "norm_quote_absent"
     NORM_VALUE_NOT_IN_QUOTE = "norm_value_not_in_quote"
     STATED_VALUE_NOT_IN_EVIDENCE = "stated_value_not_in_evidence"
+    #: `F8-GATE` (``0064``): the refusals of a block as evidence.
+    BLOCK_NOT_IN_RUN_GEOMETRY = "block_not_in_run_geometry"
+    BLOCK_CROP_MISMATCH = "block_crop_mismatch"
+    BLOCK_QUOTE_NOT_IN_RECOGNISED = "block_quote_not_in_recognised"
 
 
 #: Restated as a frozen set so a caller can assert closure without importing the enum's
@@ -97,8 +129,13 @@ class ObservationVerdict:
     two runs over the same artifact record the same diagnostic.
     """
 
-    observation: Observation
+    observation: Observation | BlockObservation
     evidence_verdicts: tuple[EvidenceVerdict, ...]
+
+    @property
+    def grounding_kind(self) -> str:
+        """How the observation was grounded (``text_span`` or ``portal_block``): what the publisher records on its row."""
+        return self.observation.grounding_kind
 
     @property
     def grounded(self) -> bool:
@@ -264,4 +301,97 @@ def run_grounding_gate(
     return GateResult(
         verdicts=tuple(check_observation(item, text_layer, index) for item in items),
         normalization_id=text_layer.normalization_id,
+    )
+
+
+
+# ---------------------------------------------------------------------------------------------
+# Gate v2: a block as evidence (`F8-GATE`)
+# ---------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class BlockGateResult:
+    """Every block observation the gate judged. A verdict is the same type the text gate's is."""
+
+    verdicts: tuple[ObservationVerdict, ...]
+
+    @property
+    def grounded(self) -> tuple[ObservationVerdict, ...]:
+        return tuple(verdict for verdict in self.verdicts if verdict.grounded)
+
+    @property
+    def ungrounded(self) -> tuple[ObservationVerdict, ...]:
+        return tuple(verdict for verdict in self.verdicts if not verdict.grounded)
+
+    def reason_counts(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for verdict in self.ungrounded:
+            reason = verdict.reason
+            assert reason is not None  # an ungrounded verdict always carries one
+            counts[reason.value] = counts.get(reason.value, 0) + 1
+        return counts
+
+
+def _refused(item: BlockEvidenceItem, reason: UngroundedReason) -> EvidenceVerdict:
+    return EvidenceVerdict(evidence_ordinal=item.evidence_ordinal, resolved=False, reason=reason)
+
+
+def check_block_evidence(item: BlockEvidenceItem, inputs: BlockGateInputs) -> EvidenceVerdict:
+    """Resolve one block as evidence against this run's geometry, crops and recognised text.
+
+    The order makes each reason attributable: the place first, because a block that is not
+    in this run's geometry has no crop and no text worth looking up; then the crop on record;
+    then the quote. The comparison of the quote is ``in`` on two ``str`` values: no strip,
+    no casefold, no whitespace collapsing, no second normalisation.
+    """
+    # --- check 1: the block is in this run's geometry, on the page the item names ------
+    place = inputs.geometry.place(item.portal_block_id)
+    if place is None or place.page_number != item.page_number:
+        # A block of another run or version, a malformed identifier, and a real block under
+        # a page it does not stand on are one verdict: the place the item names is not in
+        # this run's geometry.
+        return _refused(item, UngroundedReason.BLOCK_NOT_IN_RUN_GEOMETRY)
+
+    # --- check 2: the crop is the crop on record ------------------------------------------
+    recorded = inputs.crops.sha256(item.portal_block_id)
+    if recorded is None or recorded != item.crop_sha256:
+        # No crop on record cannot match anything: an unverifiable crop is a mismatch, not a pass.
+        return _refused(item, UngroundedReason.BLOCK_CROP_MISMATCH)
+
+    # --- check 3: a quote, when there is one, is verbatim in the block's recognised text ---
+    quote = item.recognised_quote
+    if quote is not None:
+        if (
+            # "" is a substring of every string; the store holds no such quote (1 to 2000 characters).
+            not quote
+            or len(quote) > MAX_BLOCK_QUOTE_CHARS
+            or not any(quote in body for body in inputs.recognised.texts(item.portal_block_id))
+        ):
+            return _refused(item, UngroundedReason.BLOCK_QUOTE_NOT_IN_RECOGNISED)
+
+    return EvidenceVerdict(evidence_ordinal=item.evidence_ordinal, resolved=True)
+
+
+def check_block_observation(observation: BlockObservation, inputs: BlockGateInputs) -> ObservationVerdict:
+    """Judge one block observation. Every item is checked, as the text gate does, so the per-item record is whole."""
+    return ObservationVerdict(
+        observation=observation,
+        evidence_verdicts=tuple(check_block_evidence(item, inputs) for item in observation.evidence),
+    )
+
+
+def run_block_gate(
+    observations: Sequence[BlockObservation],
+    inputs: BlockGateInputs | None,
+) -> BlockGateResult:
+    """Run gate v2 over block observations. Pure: no I/O, no clock, no randomness.
+
+    ``inputs`` is ``None`` for a run that has none (a run in ``text_only`` mode builds none, and a
+    version without a portal bundle has no geometry): every block is then refused as not being in
+    this run's geometry. A ``text_only`` run therefore cannot publish a block even if a caller offers one.
+    """
+    judged = inputs if inputs is not None else BlockGateInputs.empty()
+    return BlockGateResult(
+        verdicts=tuple(check_block_observation(observation, judged) for observation in observations)
     )
