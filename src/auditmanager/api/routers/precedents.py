@@ -14,9 +14,11 @@ The viewer («Наблюдатель», `R-150w`) is denied the six user routes:
 runs, and a router decides nothing about roles. The runner route is reached with a runner token only (``RUNNER_OPERATIONS``).
 
 **Sealed, and asleep.** Nothing here reads or writes anything: every body refuses with ``503 dependency_unavailable`` (``details.dependency`` the
-stable class name of the lane that owns it) until that lane replaces it -- `CTX-STAND` the context, `PREC-PASS` the precedents, `PREC-WEB` the
-settings. **`EMBED-01` filled the vector control**: ``getVectorControl`` and ``setVectorPaused`` answer through ``VectorControlPort`` when the
-composition root hands ``build_router`` one, and keep the sleeping answer when it does not (`api/routers/precedents_ports.py`). The contract's error catalogue is closed and has no ``501``; ``503`` is what every earlier seal's stubs
+stable class name of the lane that owns it) until that lane replaces it -- `CTX-STAND` the context, `PREC-PASS` the precedents. **`EMBED-01` filled
+the vector control**: ``getVectorControl`` and ``setVectorPaused`` answer through ``VectorControlPort`` when the composition root hands
+``build_router`` one, and keep the sleeping answer when it does not (`api/routers/precedents_ports.py`). **`PREC-SETTINGS-01` filled the settings**
+the same way: ``listPrecedentSettings`` and ``appendPrecedentSetting`` answer through ``PrecedentSettingsPort``. The contract's error catalogue is
+closed and has no ``501``; ``503`` is what every earlier seal's stubs
 answer (``CMP-SEAL-C0`` onwards), and there is no fallback: a caller is told that the surface is not served, never given an empty answer.
 """
 
@@ -29,7 +31,7 @@ from fastapi import APIRouter, Path
 
 from auditmanager.api.routers.declarations import STATE_CONFLICT_DESCRIPTION, envelope_responses, success
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
-from auditmanager.api.routers.precedents_ports import VectorControlPort
+from auditmanager.api.routers.precedents_ports import PrecedentSettingsPort, VectorControlPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 from auditmanager.api.security import CurrentRunner, CurrentSubject
@@ -70,7 +72,14 @@ def _vector_control_body(view: Mapping[str, Any]) -> bytes:
     return encode_json(models.VectorControl.model_validate(dict(view)).model_dump(mode="json", exclude_unset=True))
 
 
-def build_precedent_routes(router: APIRouter, vector_control: VectorControlPort | None = None) -> None:
+def _settings_body(view: Mapping[str, Any], model: type[models.PrecedentSetting] | type[models.PrecedentSettingList]) -> bytes:
+    """The contract's ``PrecedentSetting`` or ``PrecedentSettingList``: every member is required, so nothing is left out and nothing is null."""
+    return encode_json(model.model_validate(dict(view)).model_dump(mode="json"))
+
+
+def build_precedent_routes(
+    router: APIRouter, vector_control: VectorControlPort | None = None, precedent_settings: PrecedentSettingsPort | None = None,
+) -> None:
     @router.post(
         "/runner/tasks/{task_id}/context", operation_id="getExecutorTaskContext", tags=_TAGS,
         response_model=models.ExecutorTaskContext,
@@ -167,8 +176,11 @@ def build_precedent_routes(router: APIRouter, vector_control: VectorControlPort 
             "`role:admin`."
         ),
     )
-    def list_precedent_settings() -> models.PrecedentSettingList:
-        _asleep(DEPENDENCIES["precedent_settings"])
+    def list_precedent_settings(subject: CurrentSubject) -> WireResponse:
+        if precedent_settings is None:
+            _asleep(DEPENDENCIES["precedent_settings"])
+        view = precedent_settings.list_precedent_settings(user_uid=subject.user_uid)
+        return json_response(200, _settings_body(view, models.PrecedentSettingList))
 
     @router.post(
         "/precedent-settings", operation_id="appendPrecedentSetting", tags=_TAGS, status_code=201,
@@ -182,6 +194,10 @@ def build_precedent_routes(router: APIRouter, vector_control: VectorControlPort 
         ),
     )
     def append_precedent_setting(
-        body: models.AppendPrecedentSettingRequest, idempotency_key: RequiredIdempotencyKey,
-    ) -> models.PrecedentSetting:
-        _asleep(DEPENDENCIES["precedent_settings"])
+        subject: CurrentSubject, body: models.AppendPrecedentSettingRequest, idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        if precedent_settings is None:
+            _asleep(DEPENDENCIES["precedent_settings"])
+        view = precedent_settings.append_precedent_setting(
+            setting_name=body.setting_name.value, value=body.value, user_uid=subject.user_uid, idempotency_key=idempotency_key)
+        return json_response(201, _settings_body(view, models.PrecedentSetting))

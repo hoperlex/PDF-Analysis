@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-__all__ = ["VectorControlPort"]
+__all__ = ["PrecedentSettingsPort", "VectorControlPort"]
 
 
 class VectorControlPort(Protocol):
@@ -21,3 +21,17 @@ class VectorControlPort(Protocol):
     def get_vector_control(self, *, user_uid: str) -> Mapping[str, Any]: ...
 
     def set_vector_paused(self, *, paused: bool, user_uid: str, idempotency_key: str) -> Mapping[str, Any]: ...
+
+
+class PrecedentSettingsPort(Protocol):
+    """The journal of the programme's switches and settings (`PREC-SETTINGS-01`): the read and the keyed write, both for ``admin``.
+
+    With no port ``listPrecedentSettings`` and ``appendPrecedentSetting`` keep the answer the seal gave them (``503 dependency_unavailable``,
+    ``details.dependency`` ``precedent_settings``); the composition root wires ``auditmanager.precedents.public.PrecedentSettingService`` into
+    ``build_router(precedent_settings=...)``. A rule -- a role, the shape of a value, what a repeated key answers -- is the implementation's."""
+
+    def list_precedent_settings(self, *, user_uid: str) -> Mapping[str, Any]: ...
+
+    def append_precedent_setting(
+        self, *, setting_name: str, value: Mapping[str, Any], user_uid: str, idempotency_key: str,
+    ) -> Mapping[str, Any]: ...

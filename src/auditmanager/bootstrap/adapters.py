@@ -1851,7 +1851,10 @@ def _planned_run_status_fields(session: Session, run: Any, state: str, plan: Any
     ``wait_reason`` is reported as for any group Run, and ``wait_cells`` names the cells that have no server to take them *now*: one read of
     ``executors.public.evaluate_wait`` over the plan's cells, the evaluation the sweep keeps ``wait_reason`` true with. It writes nothing,
     takes no lock and adds no table. A cell that can be bound is not named, and a run that could be bound now names none (the stored
-    reason is then one sweep behind, which is the sweep's own latency and not a second answer)."""
+    reason is then one sweep behind, which is the sweep's own latency and not a second answer).
+
+    A queued run with **no** stored reason is read once more, for the night window of the vectors (`EMBED-01`): while the window is open it is told
+    ``model_unavailable`` with every cell of its plan caused by ``vector_window`` (``precedents.public.window_wait``; derived, never stored)."""
     import json
 
     from auditmanager.api.schemas.runs import RunWaitCellView
@@ -1869,6 +1872,21 @@ def _planned_run_status_fields(session: Session, run: Any, state: str, plan: Any
         )
         if cells:
             fields["wait_cells"] = cells
+    elif state == "pending" and run.state == "queued":
+        # `EMBED-01` (ADR-0029 decision 8, `precedents/vectors/wait.py`), `CRIT-CAPTURE-01` part C. A queued run with no stored reason is held back by the
+        # night window of the vectors when it is open: the claim takes no run then. The wait is derived here and never stored (the sweep ends a stored
+        # `model_unavailable` after 30 minutes, and a window lasts hours), so the run is told `model_unavailable` with every cell of its plan caused
+        # by `vector_window`, and no `waiting_since`. The sentence (`window.text`) has no member of `RunStatus` to travel in; the cause is the word.
+        from auditmanager.precedents.public import window_wait
+
+        window = window_wait(session)
+        if window is not None:
+            document = json.loads(plan) if isinstance(plan, str) else plan
+            fields["wait_reason"] = "model_unavailable"
+            fields["wait_cells"] = tuple(
+                RunWaitCellView(cell_key=cell.cell_key, model_id=cell.model_id, access=cell.access, cause=window.cause)
+                for cell in cell_requests(document)
+            )
     return fields
 
 
