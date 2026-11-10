@@ -29,7 +29,7 @@ from auditmanager.analysis.geometry import (
 from auditmanager.analysis.geometry.finding_blocks import (
     EDGE_TOLERANCE,
     TOUCH_COVERAGE,
-    WITNESS_MAX_GAP_CHARACTERS,
+    WITNESS_MAX_GAP_LINE_HEIGHTS,
     WITNESS_MIN_CHARACTERS,
     _close,
     _near_copy,
@@ -244,9 +244,9 @@ def test_a_page_whose_lines_all_lie_inside_it_stays_linkable_and_other_pages_lin
 
 # --- the second witness (`D-450`, `D-590`) --------------------------------------------------------------------------------
 #
-# The line is WIDE: x 50..550 on the 600 pt page, 0.0833..0.9167 across, y 0.25..0.265 down, 40 characters (so a character is 0.0208
-# of the page's width and the widest gap the witness tolerates is four of them, 0.0833). Two column blocks stand at either side of
-# x = 0.5; neither holds the line (the evidence is somewhere on it), both of them touch and cross it.
+# The line is WIDE: x 50..550 on the 600 pt page, 0.0833..0.9167 across, y 0.25..0.265 down, 40 characters. It is 12 pt tall, so the widest
+# gap the witness tolerates (two heights, `D-626`) is 24 pt, 0.04 of the page's width, whatever the number of its characters. Two column
+# blocks stand at either side of x = 0.5; neither holds the line (the evidence is somewhere on it), both of them touch and cross it.
 
 LEFT = box("blk_l", 0.0, 0.2, 0.5, 0.3)
 RIGHT = box("blk_r", 0.5, 0.2, 1.0, 0.3)
@@ -539,29 +539,65 @@ def test_w_a_near_copy_in_a_block_the_line_does_not_touch_changes_nothing():
 
 
 def test_w_h1_p2_a_stretch_of_the_line_no_block_covers_makes_the_witness_abstain_unless_it_is_a_gutter():
-    # The line is 40 characters across 0.8333 of the page: a character is 0.0208, and four of them (0.0833) is the most a gap may be.
-    assert WITNESS_MAX_GAP_CHARACTERS == 4.0
+    # The line is 12 pt tall on a 600 pt wide page: a height is 0.02 of the width and two of them (0.04, 24 pt) is the most a gap may be.
+    assert WITNESS_MAX_GAP_LINE_HEIGHTS == 2.0
     right = box("blk_r", 0.5, 0.2, 1.0, 0.3)
     texts = {"blk_l": LEFT_TEXT, "blk_r": RIGHT_TEXT}
-    assert witness(QUOTE, texts, blocks=(box("blk_l", 0.0, 0.2, 0.5 - 0.05, 0.3), right)) == ("blk_r",), "a gutter of 0.05: two characters"
-    assert witness(QUOTE, texts, blocks=(box("blk_l", 0.0, 0.2, 0.5 - 0.1, 0.3), right)) == (), "a gap of 0.1: five characters"
+    assert witness(QUOTE, texts, blocks=(box("blk_l", 0.0, 0.2, 0.5 - 0.03, 0.3), right)) == ("blk_r",), "a gutter of 0.03: 18 pt, 1.5 heights"
+    assert witness(QUOTE, texts, blocks=(box("blk_l", 0.0, 0.2, 0.5 - 0.06, 0.3), right)) == (), "a gap of 0.06: 36 pt, 3 heights"
     # The judge's P2: the left half of the line is covered by no block at all (a stamp's text, a block the portal did not detect).
     assert witness(QUOTE, {"blk_r": RIGHT_TEXT}, blocks=(right,)) == ()
-    assert witness(QUOTE, {"blk_r": RIGHT_TEXT}, blocks=(right,), witness_max_gap_characters=None) == ("blk_r",), "the ablation: no limit"
+    assert witness(QUOTE, {"blk_r": RIGHT_TEXT}, blocks=(right,), witness_max_gap_line_heights=None) == ("blk_r",), "the ablation: no limit"
     # The ends of the line count: the right block stops before the line's end.
-    assert witness(QUOTE, texts, blocks=(LEFT, box("blk_r", 0.5, 0.2, 0.9167 - 0.1, 0.3))) == ()
-    assert witness(QUOTE, texts, blocks=(LEFT, box("blk_r", 0.5, 0.2, 0.9167 - 0.05, 0.3))) == ("blk_r",)
+    assert witness(QUOTE, texts, blocks=(LEFT, box("blk_r", 0.5, 0.2, 0.9167 - 0.06, 0.3))) == ()
+    assert witness(QUOTE, texts, blocks=(LEFT, box("blk_r", 0.5, 0.2, 0.9167 - 0.03, 0.3))) == ("blk_r",)
 
 
-def test_w_a_wide_gap_in_the_line_widens_the_character_and_so_the_gap_that_is_tolerated():
-    # 40 characters across 500 pt is a character of 12.5 pt; a line of the same width with 400 characters has one of 1.25 pt.
-    dense = TextLine(1, 100, 500, 50.0, 200.0, 550.0, 212.0)
-    gap = (box("blk_l", 0.0, 0.2, 0.4, 0.3), box("blk_r", 0.5, 0.2, 1.0, 0.3))      # a gap of 0.1 of the page
+def test_w_d626_a2_the_limit_is_two_heights_of_the_line_to_the_point():
+    # The judge's A2, in the unit of the rule: an unboxed stretch just under and just over two heights (24 pt), with a label of 13
+    # characters standing in it and the right block's reading holding the label (a portal that read it in from the neighbour).
+    quote = "Ось Б узел 12"
+    texts = {"blk_l": "Итого по разделу", "blk_r": "Ось Б узел 12 см. лист 4"}
+    page_text = f"{quote} прочее"
+    for gap_pt, linked in ((22.8, True), (25.2, False)):
+        left = box("blk_l", 50 / 600, 0.2, (300 - gap_pt) / 600, 0.3)
+        right = box("blk_r", 300 / 600, 0.2, 560 / 600, 0.3)
+        got = witness(quote, texts, blocks=(left, right), page_text=page_text)
+        assert got == (("blk_r",) if linked else ()), f"{gap_pt} pt of a 12 pt line: {gap_pt / 12:.2f} heights"
+
+
+def test_w_d626_a2b_a_wide_gap_in_the_line_does_not_widen_the_gap_that_is_tolerated():
+    # The judge's A2b (`D-626`). Words that stand side by side at one height are one line however far apart (step 2), so a line of 25
+    # characters across 500 pt has a "mean character" of 20 pt, and a limit of four of them was 80 pt: a 15-character label in a stretch
+    # of 65 pt that no block boxes passed when the portal had read it into the neighbouring block. In heights of the line (12 pt, so 24 pt)
+    # it abstains: the same stretch is five heights.
+    line = TextLine(1, 0, 25, 50.0, 200.0, 550.0, 212.0)
+    neighbour = box("blk_r", 115 / 600, 0.2, 560 / 600, 0.3)                      # starts 65 pt in; x 50..115 is boxed by nothing
+    quote = "Ось Б-12 узел 3"
+    texts = {"blk_r": "Ось Б-12 узел 3 по серии 2.240"}
+    page_text = f"{quote} прочее"
+    assert witness(quote, texts, blocks=(neighbour,), span=(0, 25), line=line, page_text=page_text) == ()
+    assert witness(quote, texts, blocks=(neighbour,), span=(0, 25), line=line, page_text=page_text,
+                   witness_max_gap_line_heights=None) == ("blk_r",), "the ablation: no limit, the case that passed"
+    # The answer is the same whatever the number of characters the line holds: the stretch is the same 65 pt of the same 12 pt line.
+    for characters in (5, 25, 400):
+        counted = TextLine(1, 0, characters, 50.0, 200.0, 550.0, 212.0)
+        assert witness(quote, texts, blocks=(neighbour,), span=(0, characters), line=counted, page_text=page_text) == (), characters
+    # And a stretch of 20 pt (under two heights) of that line is a gutter whatever the line's characters are.
+    gutter = box("blk_r", 70 / 600, 0.2, 560 / 600, 0.3)
+    for characters in (5, 25, 400):
+        counted = TextLine(1, 0, characters, 50.0, 200.0, 550.0, 212.0)
+        assert witness(quote, texts, blocks=(gutter,), span=(0, characters), line=counted, page_text=page_text) == ("blk_r",), characters
+
+
+def test_w_d626_the_unit_is_the_height_of_the_line_so_a_taller_line_tolerates_a_wider_gap():
+    # The same 30 pt unboxed stretch: 2.5 heights of a 12 pt line, 1.25 heights of a 24 pt one.
     texts = {"blk_l": LEFT_TEXT, "blk_r": RIGHT_TEXT}
-    assert witness(QUOTE, texts, blocks=gap, span=(100, 140)) == (), "the 40-character line: 0.1 is five of its characters"
-    assert witness(QUOTE, texts, blocks=gap, span=(100, 500), line=dense) == (), "the 400-character line: 0.1 is eighty"
-    wide = TextLine(1, 100, 110, 50.0, 200.0, 550.0, 212.0)        # 10 characters across the same width: 0.083 each, four are 0.33
-    assert witness(QUOTE, texts, blocks=gap, span=(100, 110), line=wide) == ("blk_r",)
+    right = box("blk_r", 0.5, 0.2, 1.0, 0.3)
+    left = box("blk_l", 0.0, 0.2, 0.5 - 0.05, 0.3)
+    assert witness(QUOTE, texts, blocks=(left, right)) == ()
+    tall = TextLine(1, 100, 140, 50.0, 200.0, 550.0, 224.0)
+    assert witness(QUOTE, texts, blocks=(left, right), line=tall) == ("blk_r",)
 
 
 def test_w_h1_p1_an_image_block_that_holds_the_label_while_the_notes_repeat_it_gives_no_link_to_the_notes():

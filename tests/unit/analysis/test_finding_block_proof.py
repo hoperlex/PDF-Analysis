@@ -205,4 +205,9 @@ def test_rule_links_passes_the_doubtful_blocks_to_the_rule():
     fact, sizes, texts, layer = EvidenceFact(1, 100, 140, quote), {1: (600.0, 800.0)}, {"blk_l": "Итого", "blk_r": quote}, {1: quote}
     assert rule_links([fact], [line], sizes, blocks, set(), texts, doubtful={"blk_l"}, page_texts=layer) == []
     assert rule_links([fact], [line], sizes, blocks, set(), texts, doubtful=set(), page_texts=layer) == ["blk_r"]
-    assert rule_links([fact], [line], sizes, blocks, set(), texts, page_texts=layer, max_gap_characters=None) == ["blk_r"]
+    # The limit on an unboxed stretch of the line reaches the rule: with the left column unboxed (500 pt line, 12 pt tall) it abstains,
+    # and without the limit (the ablation of the measurement) the right column's reading decides.
+    right_only = [blocks[1]]
+    assert rule_links([fact], [line], sizes, right_only, set(), texts, page_texts=layer) == []
+    assert rule_links([fact], [line], sizes, right_only, set(), texts, page_texts=layer, max_gap_line_heights=None) == ["blk_r"]
+    assert rule_links([fact], [line], sizes, right_only, set(), texts, page_texts=layer, max_gap_line_heights=25.0) == ["blk_r"]

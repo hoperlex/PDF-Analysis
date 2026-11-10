@@ -29,7 +29,7 @@ import pdfplumber
 
 from auditmanager.analysis.geometry.finding_blocks import (
     COVERAGE,
-    WITNESS_MAX_GAP_CHARACTERS,
+    WITNESS_MAX_GAP_LINE_HEIGHTS,
     WITNESS_MIN_CHARACTERS,
     EvidenceSpan,
     PortalBox,
@@ -212,7 +212,7 @@ def rule_links(
     evidence: Sequence[EvidenceFact], lines: Sequence[Any], sizes: Mapping[int, tuple[float, float]], blocks: Sequence[BlockFact],
     unlinked: set[int], texts: Mapping[str, str] | None, min_characters: int = WITNESS_MIN_CHARACTERS,
     doubtful: Collection[str] = (), page_texts: Mapping[int, str] | None = None,
-    max_gap_characters: float | None = WITNESS_MAX_GAP_CHARACTERS, readings: Readings | None = None,
+    max_gap_line_heights: float | None = WITNESS_MAX_GAP_LINE_HEIGHTS, readings: Readings | None = None,
 ) -> list[str]:
     """``finding_blocks.link_evidence`` over the stored documents: the shipped rule, called as the adapter calls it, with the
     recognised text (the second witness) when ``texts`` and ``page_texts`` (the text layer's text by page) are given.
@@ -229,7 +229,7 @@ def rule_links(
     }
     return list(link_evidence(
         spans, lines=by_page, pages=pages, blocks=boxes, witness_min_characters=min_characters,
-        witness_max_gap_characters=max_gap_characters, **given,
+        witness_max_gap_line_heights=max_gap_line_heights, **given,
     ))
 
 
