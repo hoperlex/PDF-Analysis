@@ -258,7 +258,8 @@ services:
       # run (`comparison/stage_v3/policy.py`); the worker executes the consent and the policy that
       # were frozen at the start and never reads them, so they are named here only. Each default
       # is the code's own default. A `1` switch is turned off by `0`, `false` or `off`; the plan
-      # names take `v2` / `legacy` as in `alpha.env.example`.
+      # is `v2` (default) or `v3` (opt-in, R-154b) and the coverage takes `legacy`, as in
+      # `alpha.env.example`.
       AUDITMANAGER_EXTENDED_ANALYSIS_PLAN: ${AUDITMANAGER_EXTENDED_ANALYSIS_PLAN:-v2}
       AUDITMANAGER_EXTENDED_COVERAGE: ${AUDITMANAGER_EXTENDED_COVERAGE:-batched-v1}
       AUDITMANAGER_EXTENDED_CROSS_WINDOW: ${AUDITMANAGER_EXTENDED_CROSS_WINDOW:-1}
