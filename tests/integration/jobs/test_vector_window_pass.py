@@ -155,6 +155,49 @@ def test_a_night_opens_drains_exports_imports_and_closes(
     assert not [p.name for p in exchange.directory.iterdir() if p.name != "heartbeat"], "the worker clears the round"
 
 
+def test_a_long_queue_is_several_rounds_of_one_night_and_each_round_is_kept_when_the_window_is_cut_short(
+    engine: Engine, sessions: sessionmaker[Session], made: Any, exchange: Exchange,
+) -> None:
+    with sessions() as session:   # the queue is this test's own: whatever other suites left is set aside
+        session.execute(text(
+            "UPDATE decision_memory_embedding_intent SET state = 'poisoned', poison_reason = 'test_cleanup', state_changed_at = clock_timestamp() "
+            "WHERE state = 'pending'"))
+        session.commit()
+    cases = [w.add_case(engine, finding=finding(f"rounds-{index}")) for index in range(5)]
+    vector_pass = made(round_limit=2)
+    open_the_night(vector_pass, exchange)
+    assert len(w.request_of(exchange.directory)["texts"]) == 2, "a round is bounded: the encoder keeps no partial answer"
+    w.host_answers(exchange.directory)
+    vector_pass.run(w.INSIDE)
+    assert w.control(sessions)["state"] == "encoding" and len(w.request_of(exchange.directory)["texts"]) == 2, "the next round is out in the same night"
+    assert sum(1 for v in w.intents_of(sessions, cases).values() if v["state"] == "done") == 2, "the first round is kept"
+    w.host_answers(exchange.directory)
+    vector_pass.run(w.INSIDE)
+    assert w.control(sessions)["state"] == "encoding" and len(w.request_of(exchange.directory)["texts"]) == 1
+    w.host_answers(exchange.directory)
+    vector_pass.run(w.INSIDE)
+    assert w.control(sessions)["state"] == "closed", "nothing left: the window closes"
+    assert {v["state"] for v in w.intents_of(sessions, cases).values()} == {"done"}
+
+
+def test_a_window_with_too_little_left_does_not_start_another_round_and_a_failed_round_does_not_repeat(
+    engine: Engine, sessions: sessionmaker[Session], made: Any, exchange: Exchange,
+) -> None:
+    with sessions() as session:
+        session.execute(text(
+            "UPDATE decision_memory_embedding_intent SET state = 'poisoned', poison_reason = 'test_cleanup', state_changed_at = clock_timestamp() "
+            "WHERE state = 'pending'"))
+        session.commit()
+    cases = [w.add_case(engine, finding=finding(f"late-round-{index}")) for index in range(3)]
+    vector_pass = made(round_limit=2)
+    open_the_night(vector_pass, exchange)
+    w.host_answers(exchange.directory)
+    nearly_over = datetime.fromisoformat("2026-11-11T05:50:00+05:00")   # ten minutes left: a round needs twenty
+    vector_pass.run(nearly_over)
+    assert w.control(sessions)["state"] == "closed"
+    assert sorted(v["state"] for v in w.intents_of(sessions, cases).values()) == ["done", "done", "pending"], "the third waits for the next night"
+
+
 def test_the_window_is_used_once_a_night_even_if_more_is_queued_after_it_closed(
     engine: Engine, sessions: sessionmaker[Session], made: Any, exchange: Exchange,
 ) -> None:

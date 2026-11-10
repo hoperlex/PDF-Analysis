@@ -39,8 +39,9 @@ __all__ = [
 
 #: One tick adds at most this many intents; a backfill of many cases takes as many ticks as it needs.
 BACKFILL_BATCH: Final[int] = 500
-#: At most this many texts go to the encoder in one window: the file stays small and the tail of a long queue is the next night's.
-EXPORT_LIMIT: Final[int] = 2000
+#: At most this many texts go to the encoder in one round. ``embed-texts`` is all or nothing (it keeps no partial answer), so a round is sized to
+#: end in minutes, not hours: a window that is cut short loses one round and not the night, and a long queue is several rounds of the same night.
+EXPORT_LIMIT: Final[int] = 500
 
 _CONTROL = text(
     "SELECT paused, paused_since, window_state, window_reason, window_changed_at FROM vector_control WHERE control_key = 'default'"

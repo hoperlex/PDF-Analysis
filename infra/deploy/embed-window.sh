@@ -16,7 +16,7 @@
 #   * a tick that finds `request.json` and no `result` runs the service `embedder` over it, with the HARD memory limit compose gives it
 #     (`mem_limit` from ALPHA_MEM_LIMIT_EMBEDDER, no default), and watches it: at the `deadline` the worker wrote, or when `abort` appears, the
 #     container is stopped (by its exact name: this script never kills by pattern);
-#   * then it writes `result` (`exit_code=<n>`): 0 done, 124 stopped at the deadline, 130 stopped by `abort`, 137 killed (the kernel's memory limit
+#   * what the container says, on either stream, goes to `stderr.log` (its tail is kept); then it writes `result` (`exit_code=<n>`): 0 done, 124 stopped at the deadline, 130 stopped by `abort`, 137 killed (the kernel's memory limit
 #     gives SIGKILL), 127 the image is not there, anything else the container's own status. The worker reads it, imports or skips LOUDLY.
 #
 # It removes nothing of the round: the worker clears the files after it has read them. A second tick while one runs does nothing (a lock).
@@ -121,7 +121,7 @@ tick() {
     "$DOCKER" rm -f "$name" >/dev/null 2>&1 || true
     : >"$dir/stderr.log"
     "$DOCKER" compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" --profile embedder \
-        run --rm --no-deps -T --name "$name" embedder >"$dir/stdout.log" 2>>"$dir/stderr.log" &
+        run --rm --no-deps -T --name "$name" embedder >>"$dir/stderr.log" 2>&1 &
     local pid=$!
     while kill -0 "$pid" 2>/dev/null; do
         if [ -e "$dir/abort" ]; then forced=130; "$DOCKER" stop --time 10 "$name" >/dev/null 2>&1 || true; break; fi

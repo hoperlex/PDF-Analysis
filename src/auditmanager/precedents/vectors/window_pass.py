@@ -10,7 +10,8 @@ it was, and a second worker's pass is serialized by the control row's lock.
     draining         --(nothing running)--> encoding           the batch is written for the host
     draining         --(paused)--> closed
     draining         --(window over, work still running)--> skipped  runs_did_not_finish
-    encoding         --(host reports the container done, answer accepted)--> closed   vectors stored, intents done
+    encoding         --(host reports the container done, answer accepted, clean)--> encoding   the next round, while time and intents remain
+    encoding         --(the last round imported, or too little of the window is left)--> closed   vectors stored, intents done
     encoding         --(host reports a failure)--> skipped     encoder_failed / encoder_out_of_memory / encoder_timed_out / ...
     encoding         --(window over, no report)--> skipped     window_ended_while_encoding   the host is told to stop
     encoding         --(paused)--> closed, once the host reports (the container is stopped, nothing is imported)
@@ -53,7 +54,7 @@ from auditmanager.precedents.vectors.window import (
     current_span,
 )
 
-__all__ = ["BACKFILL_ROUNDS", "MAX_LOOKS", "PassReport", "Step", "VectorWindowPass"]
+__all__ = ["BACKFILL_ROUNDS", "MAX_LOOKS", "MIN_ROUND_SECONDS", "PassReport", "Step", "VectorWindowPass"]
 
 _log = logging.getLogger(__name__)
 
@@ -61,6 +62,8 @@ _log = logging.getLogger(__name__)
 BACKFILL_ROUNDS: Final[int] = 4
 #: Looks that follow one another in one call: opened, drained, exported, and one more for the first wait.
 MAX_LOOKS: Final[int] = 4
+#: A new round starts after an import only if at least this much of the window is left: an encoder that is cut off loses its round.
+MIN_ROUND_SECONDS: Final[int] = 1200
 #: The container's exit statuses the host reports (`infra/deploy/embed-window.sh`): 0 done; 124 stopped at the deadline (the ``timeout`` convention);
 #: 137 killed (the kernel's memory limit gives SIGKILL); 127 the image is not there.
 _EXIT_DONE: Final[int] = 0
@@ -95,7 +98,7 @@ class VectorWindowPass:
     def __init__(
         self, session_factory: sessionmaker[Session], exchange: Exchange, *, interval_seconds: float = 15.0,
         clock: Callable[[], datetime] | None = None, monotonic: Callable[[], float] | None = None,
-        after_import: Callable[[], None] | None = None,
+        after_import: Callable[[], None] | None = None, round_limit: int = store.EXPORT_LIMIT,
     ) -> None:
         if interval_seconds < 0:
             raise ValueError("a pass needs a non-negative interval")
@@ -105,6 +108,7 @@ class VectorWindowPass:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._monotonic = monotonic or _time.monotonic
         self._after_import = after_import
+        self._round_limit = round_limit
         self._next_at: float | None = None
         self._moment: datetime = self._clock()
 
@@ -218,7 +222,7 @@ class VectorWindowPass:
             self._set(session, STATE_CLOSED)
             return Step(STATE_CLOSED, True, "paused; the encoder was stopped and nothing is imported"), False
         if result.exit_code == _EXIT_DONE:
-            return self._import(session)
+            return self._import(session, span)
         tail = self._exchange.stderr_tail()
         self._exchange.clear()
         reason = {
@@ -228,7 +232,7 @@ class VectorWindowPass:
 
     def _export(self, session: Session, span: WindowSpan) -> Step:
         """Write the batch for the host: the pending intents, one entry per distinct text. Whatever an earlier round left is cleared first."""
-        pending = store.pending_intent_texts(session)
+        pending = store.pending_intent_texts(session, limit=self._round_limit)
         changed = [item for item in pending if not item.matches]
         if changed:
             store.mark_poisoned(session, intent_ids=[item.intent_id for item in changed], reason=POISON_DIGEST_MISMATCH)
@@ -243,7 +247,7 @@ class VectorWindowPass:
             return self._skip(session, "export_failed", f"the exchange directory refused the batch: {exc}")
         return Step(STATE_ENCODING, False, f"{len(usable)} intents exported")
 
-    def _import(self, session: Session) -> tuple[Step, bool]:
+    def _import(self, session: Session, span: WindowSpan | None) -> tuple[Step, bool]:
         request = self._exchange.read_request()
         try:
             if not isinstance(request, dict):
@@ -256,11 +260,21 @@ class VectorWindowPass:
         outcome = store.import_vectors(
             session, vectors=list(parsed.vectors.values()), over_limit=parsed.over_limit, rejected=parsed.rejected, missing=parsed.missing)
         self._exchange.clear()
-        self._set(session, STATE_CLOSED)
         _log.info(
-            "the vector window closed: %d stored, %d over the token limit (poisoned), %d refused (retried), %d unanswered, %d for forgotten cases",
+            "a round of vectors was imported: %d stored, %d over the token limit (poisoned), %d refused (retried), %d unanswered, %d for forgotten cases",
             outcome.done, outcome.poisoned, outcome.retried, outcome.missing, outcome.skipped_forgotten)
-        return Step(STATE_CLOSED, True, "imported"), outcome.done > 0
+        stored = outcome.done > 0
+        # Another round only after a clean one that made progress: a round that stored nothing, or had a vector refused or a text unanswered, ends the
+        # window, so an encoder that is wrong is tried once a night (the attempts of an intent count nights) and not until it is poisoned by morning.
+        clean = outcome.retried == 0 and outcome.missing == 0 and (outcome.done + outcome.poisoned) > 0
+        if clean and span is not None and (span.closes_at - self._moment).total_seconds() >= MIN_ROUND_SECONDS:
+            following = self._export(session, span)
+            if following.state == STATE_ENCODING:
+                return Step(STATE_ENCODING, False, "imported; the next round is out"), stored
+            return following, stored
+        self._set(session, STATE_CLOSED)
+        _log.info("the vector window closed")
+        return Step(STATE_CLOSED, True, "imported"), stored
 
     # -- the loud skip -----------------------------------------------------------------------------------------
 
