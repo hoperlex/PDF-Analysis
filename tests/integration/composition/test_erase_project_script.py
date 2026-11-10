@@ -80,6 +80,12 @@ config = json.load(open(os.environ["STUB_CONFIG"]))
 rest = argv
 while rest and rest[0] in ("compose", "--env-file", "--file"):
     rest = rest[1:] if rest[0] == "compose" else rest[2:]
+if rest[:1] == ["ps"]:  # `ps --status running --services`: the services the test says are running
+    if config.get("ps_status", 0):
+        sys.stderr.write("docker stub: compose ps failed\n")
+        sys.exit(config["ps_status"])
+    sys.stdout.write("".join(name + "\n" for name in config.get("running", [])))
+    sys.exit(0)
 if rest[:1] == ["stop"] and config.get("stop_status", 0):
     sys.stderr.write("docker stub: compose stop failed\n")
     sys.exit(config["stop_status"])
@@ -120,12 +126,13 @@ def done_text(*, manifest_sha: str = MANIFEST_SHA, erase: str = ERASE) -> str:
             "An erase does not reach:\n  - manual dumps, mirrors and copies on the host\n")
 
 
-def healthy() -> dict[str, dict[str, object]]:
+def healthy() -> dict[str, object]:
     written = {"erase_id": ERASE, "text": MANIFEST_TEXT}
     return {
         "plan": {"stdout": plan_text()},
         "apply": {"stdout": done_text(), "write_manifest": written},
         "resume": {"stdout": done_text(), "write_manifest": written},
+        "running": ["postgres", "s3", "api", "worker", "web"],
     }
 
 
@@ -830,8 +837,9 @@ def test_the_worker_is_stopped_for_the_apply_only_and_started_again_after_it(rig
     completed = rig.run(*APPLY, "--stop-worker", typed=TYPED)
     assert completed.returncode == 0, completed.stderr
     plan_i = rig.index("scripts.recovery.project_erase")
-    stop_i, apply_i, up_i = rig.index("stop worker"), rig.index("--apply"), rig.index("up -d --no-deps worker")
-    assert plan_i < stop_i < apply_i < up_i, rig.calls
+    ps_i, stop_i = rig.index("ps --status running --services"), rig.index("stop worker")
+    apply_i, up_i = rig.index("--apply"), rig.index("up -d --no-deps worker")
+    assert plan_i < ps_i < stop_i < apply_i < up_i, rig.calls
 
 
 @pytest.mark.parametrize(("answer", "status"), (
@@ -853,7 +861,7 @@ def test_the_worker_comes_back_whatever_the_apply_did(answer: dict[str, object],
 def test_a_stop_that_fails_still_brings_the_worker_back_and_the_check_can_fail(rig: Rig) -> None:
     """The rule of `F2` (2026-11-10 judge report, found in `memory-forget.sh`): the worker is marked BEFORE `compose stop worker`, because a
     stop that fails or is interrupted may already have stopped it."""
-    rig.answers["stop_status"] = 1  # type: ignore[assignment]
+    rig.answers["stop_status"] = 1
     completed = rig.run(*APPLY, "--stop-worker", typed=TYPED)
     assert completed.returncode == FAILED, (completed.stdout, completed.stderr)
     assert not rig.reached_the_erase(), "a stop that failed is no reason to erase anything"
@@ -863,15 +871,43 @@ def test_a_stop_that_fails_still_brings_the_worker_back_and_the_check_can_fail(r
     assert not old_order.called("up -d --no-deps worker"), "with the mark made after the stop the failure leaves the worker down"
 
 
+def test_a_worker_that_was_not_running_is_neither_stopped_nor_started_and_the_check_can_fail(rig: Rig) -> None:
+    """`N3-3` of the 2026-11-10 judge report (`JUDGE-N3`): `--stop-worker` marked the worker as ours to restart because the compose file
+    declares it, so an operator who had stopped it on purpose (an incident, a queue under review) found it running again after the erase.
+    Only a worker that `docker compose ps` lists as running is stopped, and only that one is started again, as in `memory-forget.sh`."""
+    rig.answers["running"] = ["postgres", "s3", "api", "web"]
+    completed = rig.run(*APPLY, "--stop-worker", typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert rig.reached_the_erase(), "a worker that is down is no reason not to erase"
+    assert "the worker service is not running; nothing to stop" in completed.stdout
+    assert not rig.called("stop worker") and not rig.called("up -d"), rig.calls
+    resumed = Rig(rig.tmp / "resume")
+    resumed.answers["running"] = ["postgres", "s3", "api", "web"]
+    assert resumed.run(*RESUME, "--stop-worker").returncode == 0 and resumed.reached_the_erase()
+    assert not resumed.called("stop worker") and not resumed.called("up -d"), resumed.calls
+    old_logic = rig.edited('        if ! grep -qx worker <<<"$running"; then\n', "        if false; then\n")
+    old_logic.answers["running"] = ["postgres", "s3", "api", "web"]
+    assert old_logic.run(*APPLY, "--stop-worker", typed=TYPED).returncode == 0
+    assert old_logic.called("stop worker") and old_logic.called("up -d --no-deps worker"), (
+        "marking the worker because it is declared starts one the operator had stopped: this is the defect")
+
+
+def test_a_stack_that_cannot_list_its_services_is_a_failure_before_anything_is_stopped_or_erased(rig: Rig) -> None:
+    rig.answers["ps_status"] = 1
+    completed = rig.run(*APPLY, "--stop-worker", typed=TYPED)
+    assert completed.returncode == FAILED and "could not list the running services" in completed.stderr
+    assert not rig.reached_the_erase() and not rig.called("stop worker") and not rig.called("up -d"), rig.calls
+
+
 def test_no_worker_service_means_no_worker_is_touched(tmp_path: Path) -> None:
     bare = Rig(tmp_path, worker=False)
     assert bare.run(*APPLY, "--stop-worker", typed=TYPED).returncode == 0
-    assert not bare.called("stop worker") and not bare.called("up -d --no-deps worker")
+    assert not bare.called("stop worker") and not bare.called("up -d --no-deps worker") and not bare.called("ps --status")
 
 
 def test_without_the_option_the_worker_is_left_alone(rig: Rig) -> None:
     assert rig.run(*APPLY, typed=TYPED).returncode == 0
-    assert not rig.called("stop worker") and not rig.called("up -d")
+    assert not rig.called("stop worker") and not rig.called("up -d") and not rig.called("ps --status")
 
 
 # --- the manifest on disk is the one the database holds ---------------------------------------

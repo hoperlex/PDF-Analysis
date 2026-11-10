@@ -149,10 +149,78 @@ def test_a_page_profile_without_stored_rows_is_read_from_its_profile_beside_stor
 
 
 def test_a_page_without_text_or_a_changed_saved_profile_is_refused_before_any_spend(monkeypatch):
+    # The page without text is asked in the state in which one exists: its profile reads empty and step 2 has written no row for it
+    # (a stored row of a profile that reads empty is not a state step 2 can leave). The plan's own rule refuses it (N3-2).
     with pytest.raises(StageAiValidationError, match="v3_native_page_without_text"):
-        method(SMALL, WINDOWED, monkeypatch, text_less={"cpr_left_1"}).counts(None, request())
+        method(SMALL, WINDOWED, monkeypatch, text_less={"cpr_left_1"}, rows_written=False).counts(None, request())
     with pytest.raises(DomainError):
         method(SMALL, WINDOWED, monkeypatch, changed=True).counts(None, request())
+
+
+#: (the plan's policy, the plan's own source rule, a source over a budget of that plan, the page of it that has no text,
+#: the plan's code for the budget). The windowed plans are shown on the page-count, the fragment-count and the legacy plan on both.
+OVER_BUDGET = [
+    pytest.param(None, legacy.source, snapshot_of([["t"]] * 9, [["t"]] * 8), "cpr_left_1", "v3_native_source_budget", id="legacy-17-pages"),
+    pytest.param(None, legacy.source, snapshot_of([["t"] * 401, ["x"]], [["t"]]), "cpr_left_2", "v3_native_source_budget", id="legacy-401-fragments"),
+    pytest.param(WINDOWED, w.source, snapshot_of([["t"]] * 33, [["t"]] * 32), "cpr_left_1", "v3_windowed_source_budget", id="windowed-65-pages"),
+    pytest.param(WINDOWED, w.source, snapshot_of([["t"] * 1601, ["x"]], [["t"]]), "cpr_left_2", "v3_windowed_source_budget",
+                 id="windowed-1601-fragments"),
+    pytest.param(GLOBAL, w.source, snapshot_of([["t"]] * 33, [["t"]] * 32), "cpr_left_1", "v3_windowed_source_budget", id="global-65-pages"),
+    pytest.param(GLOBAL, w.source, snapshot_of([["t"] * 1601, ["x"]], [["t"]]), "cpr_left_2", "v3_windowed_source_budget",
+                 id="global-1601-fragments"),
+]
+
+
+@pytest.mark.parametrize("policy,rule,source,textless,code", OVER_BUDGET)
+def test_a_budget_the_source_exceeds_is_named_before_a_page_without_text_as_the_plan_does(monkeypatch, policy, rule, source, textless, code):
+    """N3-2: over a budget AND a page without text, the plan's rule says the budget (it judges its budgets before its pages), so the estimate
+    must say the same; the estimate used to refuse the page first, with a code the run would never give."""
+    after_step_2 = dict(source, fragments=[row for row in source["fragments"] if row["page_profile_id"] != textless])
+    with pytest.raises(StageAiValidationError, match=f"^{code}$"):
+        rule(after_step_2)                                                                                   # the plan on the rows step 2 writes ...
+    with pytest.raises(StageAiValidationError, match=f"^{code}$"):
+        method(source, policy, monkeypatch, text_less={textless}, rows_written=False).counts(None, request())    # ... the estimate must too
+
+
+@pytest.mark.parametrize("policy,rule,source,textless", [
+    pytest.param(None, legacy.source, snapshot_of([["я" * 40_001], ["x"]], [["я" * 40_000]]), "cpr_left_2", id="legacy-80001-characters"),
+    pytest.param(WINDOWED, w.source, snapshot_of([["я" * 120_001], ["x"]], [["я" * 120_000]]), "cpr_left_2", id="windowed-240001-characters"),
+    pytest.param(GLOBAL, w.source, snapshot_of([["я" * 120_001], ["x"]], [["я" * 120_000]]), "cpr_left_2", id="global-240001-characters"),
+])
+def test_a_page_without_text_is_named_before_the_character_budget_as_the_plan_does(monkeypatch, policy, rule, source, textless):
+    """The other order of the same rules: the plans judge the characters AFTER their pages, so a page without text wins there. Taking the
+    plan's own rule as the reference (and not a copy of its order) keeps the estimate from drifting either way."""
+    after_step_2 = dict(source, fragments=[row for row in source["fragments"] if row["page_profile_id"] != textless])
+    with pytest.raises(StageAiValidationError, match="^v3_native_page_without_text$"):
+        rule(after_step_2)
+    with pytest.raises(StageAiValidationError, match="^v3_native_page_without_text$"):
+        method(source, policy, monkeypatch, text_less={textless}, rows_written=False).counts(None, request())
+
+
+@pytest.mark.parametrize("policy", [None, WINDOWED, GLOBAL], ids=["legacy", "windowed-v1", "windowed-global-v1"])
+@pytest.mark.parametrize("stored", ["cpr_right_1", "cpr_left_1"], ids=["rows-of-the-right-side", "rows-of-the-left-side"])
+def test_a_resume_with_the_rows_of_some_pages_only_estimates_the_opening_window(monkeypatch, policy, stored):
+    """N3-1: a new document version on one side of a pair whose other side was written before; the chain is cancelled while step 2 has
+    written the rows of one side only. Nothing is planned yet, so the resume is the opening call, as at start, and it must be given (it
+    used to refuse `v3_native_page_without_text` for the pages without rows and the run could not be resumed)."""
+    source = snapshot_of([["ширина прохода 100 мм"]], [["ширина прохода 120 мм"]])
+    built = method(source, policy, monkeypatch)
+    built._repo = Repo(dict(source, fragments=[row for row in source["fragments"] if row["page_profile_id"] == stored]))
+    resumed = built.counts(None, request(AiMode.LEFT, "run-1"))
+    opening = method(source, policy, monkeypatch, rows_written=False).counts(None, request())
+    assert len(resumed.groups) == 1 and resumed.groups[0].calls == 1 and resumed.sheets == 2 and resumed.versions == 2
+    assert resumed == opening
+
+
+@pytest.mark.parametrize("policy", [None, WINDOWED, GLOBAL], ids=["legacy", "windowed-v1", "windowed-global-v1"])
+def test_a_resume_with_the_rows_of_some_pages_only_still_refuses_what_the_plan_refuses(monkeypatch, policy):
+    """The opening window is not an escape from D-532: a one-sided revision with the rows of one page stored is refused with the plan's code."""
+    code = "v3_native_source_budget" if policy is None else "v3_windowed_source_budget"
+    source = snapshot_of([["t"]] * 2, [])
+    built = method(source, policy, monkeypatch)
+    built._repo = Repo(dict(source, fragments=[row for row in source["fragments"] if row["page_profile_id"] == "cpr_left_1"]))
+    with pytest.raises(StageAiValidationError, match=f"^{code}$"):
+        built.counts(None, request(AiMode.LEFT, "run-1"))
 
 
 def test_a_resume_estimates_only_the_next_known_request_of_the_windowed_plan(monkeypatch):
