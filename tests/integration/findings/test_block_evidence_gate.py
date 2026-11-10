@@ -281,20 +281,19 @@ class TestAQuoteNotVerbatimInTheRecognisedTextIsRefused:
             "Высота помещения:  3,0 м.",  # a doubled space
             "Высота помещения: 3,0 м. ",  # a trailing space
             " Высота помещения: 3,0 м.",  # a leading space
-            "Высота помещения: 3,0 м.\n",  # a newline the text does not have at that place
+            "Высота помещения: 3,0 м.\r\n",  # a line ending the text does not have
             "Высота помещения: 3.0 м.",  # a decimal point for a comma
-            "Высота помещения: 3,0 м",  # one character short is still a substring: see the control below
             "Высота помещения: 3,0 м.",  # a no-break space
             "Высота помещения: 3,0 м.".replace("и", "й"),  # a combining mark: NFD, not NFC
         ],
     )
     def test_the_comparison_is_exact_and_normalises_nothing(self, this_run: BlockGateInputs, near_miss: str) -> None:
-        reason = _reason(self._text_item(near_miss), this_run)
-        if near_miss == "Высота помещения: 3,0 м":
-            # Verbatim, so admitted: the gate checks that the quote IS in the text, not that it is the whole text.
-            assert reason is None
-        else:
-            assert reason == "block_quote_not_in_recognised"
+        assert _reason(self._text_item(near_miss), this_run) == "block_quote_not_in_recognised"
+
+    def test_a_part_of_the_text_is_verbatim_and_admitted(self, this_run: BlockGateInputs) -> None:
+        """The gate checks that the quote IS in the text, not that it is the whole text."""
+        assert _reason(self._text_item("Высота помещения: 3,0 м"), this_run) is None
+        assert _reason(self._text_item("м.\n- пло"), this_run) is None
 
     def test_a_quote_that_belongs_to_another_block_of_the_page_is_refused(self, this_run: BlockGateInputs) -> None:
         """The recognised text is the block's own, not the page's: a quote of the neighbour proves nothing about this block."""
