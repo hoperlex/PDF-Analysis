@@ -55,6 +55,7 @@ from auditmanager.precedents.replay import (
     replay_history,
     rule_failures,
 )
+from auditmanager.precedents.settings import SETTING_ONE_LIST, latest_setting_value, one_list_enabled
 from auditmanager.precedents.similarity import VECTOR_PROFILE, Thresholds, band
 from auditmanager.precedents.stemming import StopWordMatcher, compile_stop_words, stem
 from auditmanager.precedents.votes import (

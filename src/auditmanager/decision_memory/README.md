@@ -73,3 +73,16 @@ The experts' `comment` ledger events are content of the memory, in a table of th
 - The 1.51.0 API contract has **no field** for a case's comments (`DecisionMemoryCase`), so the «Память решений» tab cannot show them until a
   later seal adds one.
 
+
+## Block evidence: `dm-capture/2` (`F8-PUBLISH`, ADR-0029 decision 7)
+
+- A candidate finding of a `one_list` run stands on blocks, not on a text span, so its observation has no `finding_evidence` and the capture would
+  have stored a case without its evidence. A case whose `CaseContent.block_evidence` is not empty is written as `dm-capture/2`: one row per block in
+  `decision_memory_block_evidence` (`BlockEvidenceFact`: ordinal, page, `blk_…`, the normalised box, the digest of the crop, an optional quote).
+  A case without block evidence is `dm-capture/1` and keeps its digest byte for byte: `content_digest` adds the block evidence to the body only
+  when there is some, and never the box (geometry, like the text evidence's).
+- The crop is taken **by block**: `select_block_crops` (rule `block_crop/1`) takes the record of `geometry.page_crops` of the block the evidence
+  names, whose digest is the one the evidence recorded; `select_case_crops` picks that rule for a block case and `page_images/1` for every other.
+- The assembler (composition root) must hand the block evidence on **every** capture of the observation, as it hands the text evidence: the digest
+  is compared with the stored one, and a case captured with block evidence would otherwise read as a conflict. The rows come from the database
+  (`findings.public.published_finding_block_evidence`), so no artifact is read for them. The wiring is `CRIT-CAPTURE-01`.

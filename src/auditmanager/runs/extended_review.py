@@ -4,6 +4,7 @@ from dataclasses import asdict, replace
 import hashlib
 import json
 import math
+import re
 import time
 from copy import deepcopy
 from typing import Any
@@ -17,6 +18,7 @@ from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelRe
     original_review_procedures, original_review_summary)
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.executors.public import CropImage, attach_images
+from auditmanager.findings.public import BlockEvidenceItem, CandidateGroup, CandidateMember
 from auditmanager.jobs.public import extended_unit
 from auditmanager.norms.public import SEARCH_WINDOW, search_norms
 from auditmanager.runs.repository import RunRepository
@@ -46,6 +48,22 @@ def _original_review_enabled(policy, *, strict=False) -> bool:
             raise _refuse("original_review_policy_invalid")
         return False
     return True
+
+
+#: `F8-PUBLISH` (plan-v5 section 2.4): the reference kinds a critic saw, stored on every candidate it reviewed (``context_kinds``), so that a
+#: veto is never an echo of the same neighbours. Today the AI critic of plan v3 sees the paragraph text of the norms its candidate carried
+#: (``norm_text``). The deterministic critic of plan v2 sees no reference at all and stores no key: its row says ``mode: deterministic`` and
+#: ``model_called: false``, and a reader takes a reviewed candidate without ``context_kinds`` as one that saw none (writing ``[]`` there changed
+#: the saved shape that ``tests/unit/analysis_extended/test_original_review_runtime.py`` compares). ``norm_images`` and ``precedents`` are
+#: added by the lanes that hand them to the critic; the literals are those of ``precedents.models`` (``CONTEXT_NORM_TEXT``).
+CONTEXT_NORM_TEXT = "norm_text"
+
+
+def _critic_context_kinds(item, payload) -> list:
+    """What the critic's request carried for this candidate: ``norm_text`` when a paragraph of the candidate's own norm candidates is in ``norm_context``."""
+    supplied = {row.get("paragraph_id") for row in payload.get("norm_context", []) if isinstance(row, dict)}
+    wanted = {row.get("paragraph_id") for row in item.get("norm_candidates", []) if isinstance(row, dict)}
+    return [CONTEXT_NORM_TEXT] if supplied & wanted else []
 
 
 def _review_original_v2(*, state, phase, pages) -> None:
@@ -1560,7 +1578,8 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
         state["reviews"]=reviews
         state["critiques"]=reviews
         for review in reviews:
-            indexed[review["input_id"]].update(critic=review,review_status="reviewed")
+            indexed[review["input_id"]].update(critic=review,review_status="reviewed",
+                context_kinds=_critic_context_kinds(indexed[review["input_id"]],critic_payload))
         phase("finding_review","partial" if len(selected)<len(state["observations"]) or critic_cut else "completed",
             "context_window_truncated" if critic_cut else None)
         request=build_corrector_request(**_kw(binding,"correction"),run_id=run.run_id,section=section,
@@ -2319,7 +2338,8 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         refused_replies += int(refused)
         for review in reviews:
             item = indexed[review['input_id']]
-            item.update(critic=review, review_status='reviewed', review_reason=None)
+            item.update(critic=review, review_status='reviewed', review_reason=None,
+                context_kinds=_critic_context_kinds(item, payload))
             if review['needs_correction']:
                 correction_targets.append(item)
         if refused:
@@ -2658,3 +2678,161 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
                 if receipt.get("status") == "running": receipt.update(status="failed", reason=reason)
                 elif receipt.get("status") == "queued": receipt.update(status="skipped", reason="dependency_failed")
         persist()
+
+
+# ---------------------------------------------------------------------------------------------
+# One list (`F8-PUBLISH`, ADR-0029 decision 7, plan-v5 section 4): the saved candidates, read as groups for the publisher
+# ---------------------------------------------------------------------------------------------
+
+_BLOCK_SOURCE_ID = re.compile(r"blk_[0-9a-f]{32}")
+#: A candidate's source that is a restatement of a text finding: plan v3 names it ``primary_text_<key>``, plan v2 ``text:<index>``.
+_PRIMARY_TEXT_SOURCE_ID = re.compile(r"primary_text_[0-9a-f]+|text:[0-9]+")
+_COMPLETE_STATUSES = frozenset({"completed", "partial"})
+_CONSOLIDATION_VERSION = "strict-cross-window-v1"
+_MAX_TEXT = 4000
+_REFINING_ACTION = "propose_revision"
+
+
+def _source_registry(result: dict) -> tuple[dict, set]:
+    """Every source row of the saved result by ``source_id`` (the result's own, then each window's), and the ids saved under two shapes."""
+    rows = list(result.get("sources") or [])
+    for window in result.get("windows") or []:
+        if isinstance(window, dict):
+            rows.extend(window.get("sources") or [])
+    registry: dict = {}
+    conflicts: set = set()
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("source_id"), str):
+            continue
+        known = registry.setdefault(row["source_id"], row)
+        if known != row:
+            conflicts.add(row["source_id"])
+    return registry, conflicts
+
+
+def _primary_ordinals(result: dict, text_observations) -> dict:
+    """``source_id -> observation_ordinal`` of the text observation each primary-text source restates.
+
+    Plan v2 numbers its sources ``text:<index>`` by the position in the saved text observations; plan v3 names them ``primary_text_<key>``
+    and keeps the original observation on the candidate that carries the key. A source that cannot be named is absent, and the candidate
+    then counts it as a primary source without a link (it is still never published twice).
+    """
+    ordinals: dict = {}
+    for item in result.get("observations") or []:
+        if not isinstance(item, dict):
+            continue
+        key, original = item.get("primary_observation_key"), item.get("original_primary_observation")
+        if isinstance(key, str) and isinstance(original, dict) and type(original.get("observation_ordinal")) is int:
+            ordinals["primary_text_" + key] = original["observation_ordinal"]
+    entries = text_observations.get("observations") if isinstance(text_observations, dict) else None
+    for index, entry in enumerate(entries if isinstance(entries, list) else []):
+        if isinstance(entry, dict) and type(entry.get("observation_ordinal")) is int:
+            ordinals[f"text:{index}"] = entry["observation_ordinal"]
+    return ordinals
+
+
+def _candidate_words(item: dict) -> str | None:
+    """The finding text of a candidate: its title over its description, within the column's 4000 characters; ``None`` when it has none."""
+    title = item.get("title") if isinstance(item.get("title"), str) else ""
+    description = item.get("description") if isinstance(item.get("description"), str) else ""
+    title, description = title.strip(), description.strip()
+    words = description if not title or description.startswith(title) else (f"{title}\n\n{description}" if description else title)
+    return words if 1 <= len(words) <= _MAX_TEXT else None
+
+
+def _candidate_refinement(item: dict) -> str | None:
+    """The corrector's refinement of the candidate's description, when it proposed a revision with words of its own."""
+    correction = item.get("correction")
+    if not isinstance(correction, dict) or correction.get("action") != _REFINING_ACTION:
+        return None
+    proposed = correction.get("candidate")
+    words = proposed.get("description") if isinstance(proposed, dict) else None
+    words = words.strip() if isinstance(words, str) else ""
+    return words if 1 <= len(words) <= _MAX_TEXT else None
+
+
+def _candidate_member(item, *, registry: dict, conflicts: set, ordinals: dict) -> CandidateMember | None:
+    """One saved candidate as the publisher's member, or ``None`` when it cannot be one (no identity of 1 to 128 characters, no words)."""
+    ref = item.get("observation_id") if isinstance(item, dict) else None
+    if not isinstance(ref, str) or not 1 <= len(ref) <= 128:
+        return None
+    words = _candidate_words(item)
+    if words is None:
+        return None
+    blocks: list = []
+    primary: list = []
+    unlinked = other = 0
+    seen: set = set()
+    for source_id in item.get("source_ids") if isinstance(item.get("source_ids"), list) else []:
+        if not isinstance(source_id, str) or source_id in seen:
+            continue
+        seen.add(source_id)
+        row = registry.get(source_id)
+        if (_BLOCK_SOURCE_ID.fullmatch(source_id) and row is not None and row.get("kind") == "image"
+                and source_id not in conflicts and type(row.get("page_number")) is int and row["page_number"] >= 1):
+            digest = row.get("crop_sha256")
+            blocks.append(BlockEvidenceItem(evidence_ordinal=len(blocks), page_number=row["page_number"],
+                portal_block_id=source_id, crop_sha256=digest if isinstance(digest, str) else ""))
+        elif _PRIMARY_TEXT_SOURCE_ID.fullmatch(source_id):
+            if source_id in ordinals:
+                primary.append(ordinals[source_id])
+            else:
+                unlinked += 1
+        else:
+            other += 1
+    window_id = item.get("window_id")
+    return CandidateMember(
+        extended_observation_ref=ref, finding_text=words, block_evidence=tuple(blocks),
+        refined_recommendation=_candidate_refinement(item), primary_text_ordinals=tuple(dict.fromkeys(primary)),
+        primary_text_unlinked=unlinked, other_source_count=other,
+        window_id=window_id if isinstance(window_id, str) else None,
+        cross_window=item.get("origin_scope") == "global_cross_window" or window_id == "global-cross-window")
+
+
+def read_candidate_groups(document: dict, *, run_id: str, version_uid: str,
+        text_observations=None) -> tuple[tuple[CandidateGroup, ...], tuple[str, ...]]:
+    """The groups of the strict consolidation of a saved ``analysis.extended_review`` document, as the publisher of groups takes them.
+
+    Returns ``(groups, unread)``: ``unread`` says why nothing could be read (the review did not complete, or the saved candidates cannot be
+    consolidated), never an empty answer without a reason. A document of another run or version is corruption, refused like
+    :func:`read_extended_review` refuses it. A candidate that cannot be a member (no identity, no words) is left out of its group and counted
+    in ``unread`` as ``candidate_invalid``; nothing is repaired, and no source is guessed: a source that is not a block of the run's geometry
+    stays a source the candidate is counted as standing on, never evidence.
+
+    The groups are those the saved result carries (plan v3) or that the consolidation computes over its observations and sources now (plan
+    v2); the first member of a group is the first one in the saved order.
+    """
+    try:
+        if (document.get("artifact_role") != EXTENDED_REVIEW_ROLE or document.get("run_id") != run_id
+                or document.get("version_uid") != version_uid or not isinstance(document.get("result"), dict)):
+            raise ValueError()
+        status, result = document["status"], document["result"]
+    except (ValueError, KeyError, AttributeError):
+        raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=EXTENDED_REVIEW_ROLE) from None
+    if status not in _COMPLETE_STATUSES:
+        return (), ("extended_review_not_complete",)
+    consolidation = result.get("consolidation")
+    if not (isinstance(consolidation, dict) and consolidation.get("version") == _CONSOLIDATION_VERSION
+            and isinstance(result.get("consolidated_observations"), list)):
+        result = _attach_consolidation(dict(result), version_uid=version_uid)
+        consolidation = result["consolidation"]
+    if not isinstance(consolidation, dict) or consolidation.get("complete") is not True:
+        return (), ("consolidation_unavailable",)
+    observations = result.get("observations") if isinstance(result.get("observations"), list) else []
+    registry, conflicts = _source_registry(result)
+    ordinals = _primary_ordinals(result, text_observations)
+    groups: list = []
+    unread: list = []
+    for group in result["consolidated_observations"]:
+        members: list = []
+        for origin in group.get("origin_records", []) if isinstance(group, dict) else []:
+            index = origin.get("raw_index") if isinstance(origin, dict) else None
+            member = (_candidate_member(observations[index], registry=registry, conflicts=conflicts, ordinals=ordinals)
+                if type(index) is int and 0 <= index < len(observations) else None)
+            if member is None:
+                unread.append("candidate_invalid")
+            else:
+                members.append(member)
+        if members and isinstance(group.get("group_id"), str) and group["group_id"]:
+            groups.append(CandidateGroup(group_id=group["group_id"], members=tuple(members)))
+    return tuple(groups), tuple(unread)

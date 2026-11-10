@@ -74,6 +74,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 MIGRATION_0064 = REPOSITORY_ROOT / "db" / "migrations" / "versions" / "20261110_0064_precedents_seal.py"
 
 VERSION = "ver_01M2545JSD15ETSNNV904X991J"
+RUN = "run_01M2545JSD15ETSNNV904X991J"
 OTHER_VERSION = "ver_01M2545JSD15ETSNNV904X991K"
 
 #: Block ids are the portal's: ``blk_`` and 32 lowercase hexadecimal digits.
@@ -672,7 +673,8 @@ class TestTheExecutorReadsTheBlockInputsOnlyForAOneListRun:
     def test_a_one_list_run_reads_its_own_three_documents(self) -> None:
         store, outputs, observations, blob_ids = _gate_world()
         inputs = _read_gate_inputs(
-            observations_document=observations, outputs=outputs, blob_store=store, publication_mode="one_list"
+            observations_document=observations, outputs=outputs, blob_store=store, publication_mode="one_list",
+            run_id=RUN, version_uid=VERSION,
         )
         assert inputs is not None and inputs.block_documents is not None
         saved = _documents()
@@ -686,7 +688,8 @@ class TestTheExecutorReadsTheBlockInputsOnlyForAOneListRun:
     def test_the_documents_read_make_a_working_gate(self) -> None:
         store, outputs, observations, _ = _gate_world()
         inputs = _read_gate_inputs(
-            observations_document=observations, outputs=outputs, blob_store=store, publication_mode="one_list"
+            observations_document=observations, outputs=outputs, blob_store=store, publication_mode="one_list",
+            run_id=RUN, version_uid=VERSION,
         )
         assert inputs is not None and inputs.block_documents is not None
         documents = inputs.block_documents
@@ -704,7 +707,8 @@ class TestTheExecutorReadsTheBlockInputsOnlyForAOneListRun:
     def test_a_one_list_run_over_a_version_without_a_bundle_has_no_documents_and_the_gate_refuses(self) -> None:
         store, outputs, observations, _ = _gate_world(geometry=False)
         inputs = _read_gate_inputs(
-            observations_document=observations, outputs=outputs, blob_store=store, publication_mode="one_list"
+            observations_document=observations, outputs=outputs, blob_store=store, publication_mode="one_list",
+            run_id=RUN, version_uid=VERSION,
         )
         assert inputs is not None and inputs.block_documents == {}
         gate_inputs = BlockGateInputs.from_artifacts(version_uid=VERSION, **{})
@@ -717,7 +721,8 @@ class TestTheExecutorReadsTheBlockInputsOnlyForAOneListRun:
             observations_document=observations, outputs=outputs, blob_store=store, publication_mode="text_only"
         )
         one_list = _read_gate_inputs(
-            observations_document=observations, outputs=outputs, blob_store=store, publication_mode="one_list"
+            observations_document=observations, outputs=outputs, blob_store=store, publication_mode="one_list",
+            run_id=RUN, version_uid=VERSION,
         )
         assert legacy is not None and one_list is not None
         assert legacy.text_layer.sequence == one_list.text_layer.sequence
@@ -726,7 +731,8 @@ class TestTheExecutorReadsTheBlockInputsOnlyForAOneListRun:
     def test_nothing_to_ground_is_still_none(self) -> None:
         store, outputs, _, _ = _gate_world()
         assert _read_gate_inputs(
-            observations_document=None, outputs=outputs, blob_store=store, publication_mode="one_list"
+            observations_document=None, outputs=outputs, blob_store=store, publication_mode="one_list",
+            run_id=RUN, version_uid=VERSION,
         ) is None
         assert store.reads == []
 
@@ -736,8 +742,15 @@ class TestThePublicationModeOfARun:
         assert _publication_mode(SimpleNamespace(publication_mode="one_list")) == "one_list"
         assert _publication_mode(SimpleNamespace(publication_mode="text_only")) == "text_only"
 
-    def test_a_row_without_the_column_is_a_text_only_run(self) -> None:
-        assert _publication_mode(SimpleNamespace()) == "text_only"
+    def test_the_run_row_carries_the_column_and_there_is_no_fallback_for_a_row_that_does_not(self) -> None:
+        # `F8-PUBLISH`: RunRow has the field (default text_only, what every run written before 0064 is); the executor no longer guesses.
+        from dataclasses import fields
+
+        from auditmanager.runs.repository import RunRow
+
+        assert {f.name: f.default for f in fields(RunRow)}["publication_mode"] == "text_only"
+        with pytest.raises(AttributeError):
+            _publication_mode(SimpleNamespace())
 
     @pytest.mark.parametrize("value", ["", "ONE_LIST", "one-list", None, 1, "both"])
     def test_a_value_the_database_would_refuse_is_refused_not_read_as_text_only(self, value: Any) -> None:
