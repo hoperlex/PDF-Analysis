@@ -40,11 +40,27 @@ export interface PlanStagesDialogProps {
   readonly editHref?: string | undefined;
   /** The census and the unit suite: drawn open without `showModal`. */
   readonly staticOpen?: boolean | undefined;
+  /**
+   * The extended-review plan the run would freeze, as the readiness answer states it (`extended_plan`: `"v2"`, `"v3"` or `null`). Under `"v2"` the
+   * Критик and Уточнение stages run by the original's rules, without a model (`V2-ORIGINAL-REVIEW-01`); the rows alone cannot say so, since
+   * those stages have no cell under v2. Absent (the answer without the field), `null` or `"v3"`, the dialog is what it was.
+   */
+  readonly extendedPlan?: string | null | undefined;
+}
+
+/** What a stage that runs by the original's rules says of itself. */
+const ORIGINAL_RULES_LABEL = 'без модели (правила оригинала)';
+const ORIGINAL_RULES_CHIPS: ReadonlySet<string> = new Set(['review', 'correction']);
+
+/** Whether the chip's work is the original's deterministic critic or corrector under plan v2. */
+function runsByOriginalRules(chip: RunChipDefinition, extendedPlan: string | null | undefined): boolean {
+  return extendedPlan === 'v2' && ORIGINAL_RULES_CHIPS.has(chip.id);
 }
 
 /** What the stage says of itself on the left, where the models are read at a glance. */
-function listLine(chip: RunChipDefinition, row: PlanRow | undefined): string {
+function listLine(chip: RunChipDefinition, row: PlanRow | undefined, extendedPlan: string | null | undefined): string {
   if (!chip.callsModel) return 'без модели';
+  if (row === undefined && runsByOriginalRules(chip, extendedPlan)) return ORIGINAL_RULES_LABEL;
   if (row === undefined) return 'не входит в запуск';
   return [...new Set(row.cells.map((cell) => cell.model))].join(' · ');
 }
@@ -77,7 +93,7 @@ function PlanTable({ row }: { readonly row: PlanRow }) {
   );
 }
 
-export function PlanStagesDialog({ rows, kit, onClose, editHref, staticOpen = false }: PlanStagesDialogProps) {
+export function PlanStagesDialog({ rows, kit, onClose, editHref, staticOpen = false, extendedPlan }: PlanStagesDialogProps) {
   const dialog = useModalDialog(staticOpen, onClose);
   const titleId = useId();
   const chipTitleId = useId();
@@ -117,7 +133,7 @@ export function PlanStagesDialog({ rows, kit, onClose, editHref, staticOpen = fa
                   onClick={() => setSelected(candidate.id)}
                 >
                   <span className={styles.itemName}>{candidate.short}</span>
-                  <span className={styles.itemState}>{listLine(candidate, byStage.get(candidate.id))}</span>
+                  <span className={styles.itemState}>{listLine(candidate, byStage.get(candidate.id), extendedPlan)}</span>
                 </button>
               </li>
             ))}
@@ -132,6 +148,8 @@ export function PlanStagesDialog({ rows, kit, onClose, editHref, staticOpen = fa
 
             {!chip.callsModel ? (
               <p className={styles.note} data-plan-none="no-model">Этап не вызывает модель.</p>
+            ) : row === undefined && runsByOriginalRules(chip, extendedPlan) ? (
+              <p className={styles.note} data-plan-none="original-rules">Этап выполняется по правилам оригинала, без модели и без исполнителя. Это рекомендации, решение остаётся за экспертом.</p>
             ) : row === undefined ? (
               <p className={styles.note} data-plan-none="not-in-run">Этот этап не входит в запуск.</p>
             ) : (
