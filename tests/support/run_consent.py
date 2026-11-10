@@ -85,8 +85,9 @@ def consented_body(
 def plain_analysis_pricing() -> Iterator[None]:
     """Price the plain recorded analysis, without the extended review, for the starts made inside it.
 
-    The shipped default plan is the extended review (`AUDITMANAGER_EXTENDED_ANALYSIS`, v3): a consent for it
-    approves dozens of further model calls per window, none of which exists in the committed recordings, so a
+    The shipped default plan is the extended review (`AUDITMANAGER_EXTENDED_ANALYSIS`, v2 since `V3-OPTIN-01`; v3 is
+    opt-in by `AUDITMANAGER_EXTENDED_ANALYSIS_PLAN`): a consent for either approves dozens of further model calls
+    (per window for v3, per page and image batch for v2), none of which exists in the committed recordings, so a
     recorded run under that consent cannot finish as the corpus run did. The suites that use this helper test
     what is read *after* a run (reports, findings, comparisons, specifications), and before consent became
     mandatory they ran exactly the plain analysis; this keeps them on it. The switch is read where the cost is

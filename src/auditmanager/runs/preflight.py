@@ -71,6 +71,19 @@ def _invalid(field, constraint):
     return DomainError(ErrorCode.VALIDATION_FAILED, field=field, constraint=constraint)
 
 
+#: `V3-OPTIN-01` (R-154b). A bare name, so that the contract test of the compose forwarding reads it as the code default of the plan switch.
+EXTENDED_PLAN_DEFAULT = "v2"
+
+
+def _requested_extended_plan() -> str:
+    """The plan name a fresh extended analysis asks for, read from the server environment in this one place.
+
+    The stages of plan v3 (the cross-window check, the parameter passport, the critic and the correction) are opt-in:
+    ``AUDITMANAGER_EXTENDED_ANALYSIS_PLAN`` unset or blank is ``v2``, and only ``v3`` (or ``extended-review-v3``) turns them on. A name that
+    is neither is not repaired here; the caller refuses it as ``unsupported_plan``."""
+    return os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", EXTENDED_PLAN_DEFAULT).strip().lower() or EXTENDED_PLAN_DEFAULT
+
+
 def estimated_micros(pin, input_tokens: int, output_tokens: int) -> int:
     # USD per million tokens × micro-USD per USD cancels the million exactly.
     return math.ceil(input_tokens * Fraction(str(pin.input_per_mtok_usd))
@@ -342,7 +355,7 @@ class RunCostPreflight:
         (`HOSTS-LAYOUT-01`; the same environment the estimate reads). The readiness read asks before it prices anything."""
         if os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS", "1").strip().lower() in {"0", "false", "off"}:
             return ("text",)
-        requested = os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3").strip().lower()
+        requested = _requested_extended_plan()
         if requested in {"v3", "extended-review-v3"}:
             return STAGE_ROWS
         if requested in {"v2", "extended-review-v2"}:
@@ -433,7 +446,7 @@ class RunCostPreflight:
         extended = None
         extra_calls = 0
         if os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS", "1").strip().lower() not in {"0", "false", "off"}:
-            requested = os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3").strip().lower()
+            requested = _requested_extended_plan()
             if requested in {"v3", "extended-review-v3"}:
                 from auditmanager.analysis.public import estimate_extended_visual_scope, extended_review_bundle_digest
                 coverage_mode = os.environ.get("AUDITMANAGER_EXTENDED_COVERAGE", "batched-v1").strip().lower()
