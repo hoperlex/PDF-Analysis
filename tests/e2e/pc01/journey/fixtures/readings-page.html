@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Readings fixture</title>
+<!--
+  The page `readings.page.test.mjs` serves to a real browser (`D-619`). It is a clean page with ONE style element, #fault, that puts the
+  four faults the walk's readings exist for back in; the test serves it with and without that element (`?clean=1` removes it).
+    1. an inner scroller whose content is wider than its box          (.scroll-inner)
+    2. a stacked menu that, once opened, is wider than the page         (.nav.open)
+    3. a table column squeezed to a sliver, so its row grows tall       (.c-name)
+    4. a box that clips its text                                        (.clip)
+  Nothing here is the product's own markup: the readings are page-side expressions and this is the smallest page that makes each answer.
+-->
+<style>
+  body { margin: 0; font: 16px/20px sans-serif; }
+  main { padding: 8px; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  .menu-button { display: none; }
+  .nav { display: none; margin: 0; padding: 0; list-style: none; }
+  @media (max-width: 1023px) {
+    .menu-button { display: inline-block; }
+    .nav.open { display: block; }
+  }
+  .scroll-box { width: 100%; max-width: 400px; overflow-x: auto; border: 1px solid #888; margin: 8px 0; }
+  .scroll-inner { width: 100%; height: 30px; background: #ddd; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; margin: 8px 0; }
+  td { border: 1px solid #888; padding: 2px 4px; vertical-align: top; overflow-wrap: anywhere; }
+  .c-name { width: 40%; }
+  .clip { width: auto; overflow: hidden; white-space: normal; }
+</style>
+<style id="fault">
+  .scroll-inner { width: 900px; }
+  .nav.open { width: 1500px; }
+  .c-name { width: 24px; }
+  .clip { width: 100px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Readings fixture</h1>
+  <div class="bar">
+    <button class="menu-button" aria-controls="nav" aria-expanded="false" id="menu-button">Меню</button>
+    <ul class="nav" id="nav">
+      <li><a href="#a">Главная</a></li>
+      <li><a href="#b">Проекты</a></li>
+    </ul>
+  </div>
+  <div class="scroll-box"><div class="scroll-inner">Широкое содержимое</div></div>
+  <table>
+    <colgroup><col class="c-name"><col><col></colgroup>
+    <tbody>
+      <tr><td>Заголовок</td><td>Статус</td><td>Дата</td></tr>
+      <tr><td>Выписка из реестра согласований</td><td>Принято</td><td>01.11.2026</td></tr>
+    </tbody>
+  </table>
+  <div class="clip">Очень длинная строка, которая не помещается в свою рамку и обрезается</div>
+</main>
+<script>
+  document.getElementById('menu-button').addEventListener('click', function () {
+    var nav = document.getElementById('nav');
+    var open = nav.classList.toggle('open');
+    this.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+</script>
+</body>
+</html>

@@ -76,6 +76,7 @@ import {
   stateReached,
 } from './walk-options.mjs';
 import { pauseDispatch, restoreDispatch } from './dispatch.mjs';
+import { baselineHeights, readingFindings, readingNotes, takeReadings } from './readings.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -97,6 +98,9 @@ function parseArgs(argv) {
     height: null,
     paused: false,
     state: null,
+    // `D-619`. The walk's DOM readings (`readings.mjs`) on top of the width assertions, and an earlier run's page heights to compare with.
+    readings: false,
+    readingsBaseline: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -117,6 +121,8 @@ function parseArgs(argv) {
       }
     } else if (flag === '--paused') args.paused = true;
     else if (flag === '--state') args.state = argv[++i];
+    else if (flag === '--readings') args.readings = true;
+    else if (flag === '--readings-baseline') args.readingsBaseline = argv[++i];
     else {
       console.error(`e2e:pc01: unknown argument '${flag}'`);
       process.exit(2);
@@ -128,6 +134,14 @@ function parseArgs(argv) {
   }
   if (args.phase === 'write' && (args.width !== null || args.height !== null || args.paused || args.state !== null)) {
     console.error('e2e:pc01: --width, --height, --paused and --state shape the READ walk, and --phase write makes none');
+    process.exit(2);
+  }
+  if (args.readingsBaseline !== null && !args.readings) {
+    console.error('e2e:pc01: --readings-baseline compares the readings of this run with an earlier one, so it needs --readings');
+    process.exit(2);
+  }
+  if (args.phase === 'write' && args.readings) {
+    console.error('e2e:pc01: --readings reads the READ walk, and --phase write makes none');
     process.exit(2);
   }
   return args;
@@ -163,6 +177,16 @@ const API_PREFIX = manifest.api_prefix;
 // the declared one (its steps and refusals are specified at it), and the width assertion below holds each route to
 // the viewport the walk was actually laid out at, never to a number nobody stated.
 const READ_VIEWPORT = readViewport(manifest.viewport, { width: args.width, height: args.height });
+// `D-619`, `--readings-baseline`: the page heights of an earlier run with readings, by route name. A file that holds none is a stop.
+let READINGS_BASELINE = null;
+if (args.readingsBaseline !== null) {
+  try {
+    READINGS_BASELINE = baselineHeights(JSON.parse(readFileSync(resolve(args.readingsBaseline), 'utf8')));
+  } catch (error) {
+    console.error(`e2e:pc01: --readings-baseline ${args.readingsBaseline}: ${error.message}`);
+    process.exit(2);
+  }
+}
 if (args.state !== null && !manifest.routes.some((route) => route.read_state?.[args.state] !== undefined)) {
   console.error(
     `e2e:pc01: --state '${args.state}' names no state: the routes declare ` +
@@ -476,6 +500,10 @@ try {
         exchanges: page.exchanges(),
         consoleErrors: page.consoleErrors(),
         pageErrors: page.pageErrors(),
+        // `D-619`, `--readings`: LAST, because opening the stacked menu is the one thing the readings change on the page.
+        ...(args.readings
+          ? { readings: await takeReadings(page, READ_VIEWPORT ?? page.viewport ?? null, { baselineHeight: READINGS_BASELINE?.get(route.name) ?? null }) }
+          : {}),
       };
     }, { cookies: SESSION_COOKIES, viewport: READ_VIEWPORT });
 
@@ -504,6 +532,10 @@ try {
       // D-565: a squeezed column makes the page taller, not wider, so the comparison above cannot see it.
       for (const finding of collapsedFindings(route.name, record.collapsed, READ_VIEWPORT)) {
         failures.push(finding);
+      }
+      // `D-619`: the stacked menu that widens the page once opened, and a page over three times its baseline twin.
+      if (record.readings !== undefined) {
+        for (const finding of readingFindings(route.name, record.readings, READ_VIEWPORT)) failures.push(finding);
       }
     }
 
@@ -683,10 +715,18 @@ try {
         `jar=[${record.startedWith.join(',')}] ` +
         `w=${record.width?.scrollWidth ?? '?'}/${record.width?.innerWidth ?? '?'} ` +
         `collapsed=${record.collapsed?.count ?? '?'} ` +
+        `${record.readings ? `h=${record.readings.facts.scrollH}${record.readings.ratio === null ? '' : ` x${record.readings.ratio}`} flags=[${record.readings.flags.join(',')}] ` : ''}` +
         `${args.paused ? `strip=${record.pauseStrip ?? '-'} ` : ''}` +
         `${record.state ? `state=${record.state.reached ? 'yes' : 'NO'} ` : ''}` +
         `${record.captured ? JSON.stringify(record.captured) : ''}`,
     );
+
+    // `D-619`: a wide inner scroller is a note, never a finding (a table in its frame is by design); the reader judges.
+    if (record.readings) {
+      for (const note of readingNotes(route.name, record.readings, READ_VIEWPORT ?? { width: record.readings.facts.vw })) {
+        console.log(`     note: ${note}`);
+      }
+    }
 
     // A route that could not capture the identifier the next route needs makes every
     // route after it meaningless rather than red. Stop and say so.
@@ -740,6 +780,8 @@ const envelopePath = writeEnvelope(
             }
           : null,
         state: args.state,
+        // `D-619`: present only when the walk took the readings.
+        ...(args.readings ? { readings: { baseline: args.readingsBaseline, baselineRoutes: READINGS_BASELINE?.size ?? null } } : {}),
       },
       partial: PARTIAL,
       accounts: accounts.record,

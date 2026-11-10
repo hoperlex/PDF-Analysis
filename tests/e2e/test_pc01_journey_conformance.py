@@ -2265,10 +2265,68 @@ def test_the_options_unit_tests_run_with_the_gate() -> None:
             str(JOURNEY_DIR / "walk-options.test.mjs"),
             str(JOURNEY_DIR / "dispatch.test.mjs"),
             str(JOURNEY_DIR / "width.test.mjs"),
+            str(JOURNEY_DIR / "readings.test.mjs"),
         ],
         cwd=REPOSITORY_ROOT, capture_output=True, text=True, timeout=120,
     )
     assert ran.returncode == 0, ran.stdout + ran.stderr
+
+
+READINGS_MODULE = JOURNEY_DIR / "readings.mjs"
+READINGS_PAGE_TEST = JOURNEY_DIR / "readings.page.test.mjs"
+READINGS_FIXTURE = JOURNEY_DIR / "fixtures" / "readings-page.html"
+
+
+def readings_wiring_findings(journey: str, readings: str, page_test: str, fixture: str) -> list[str]:
+    """`D-619`: what must stay true for ``--readings`` to read anything. Pure over the four texts, so a control can feed it a broken one."""
+    findings: list[str] = []
+    for needle in ("'--readings'", "'--readings-baseline'", "takeReadings(", "readingFindings(", "readingNotes(", "baselineHeights("):
+        if needle not in journey:
+            findings.append(f"journey.mjs no longer contains {needle}: the flag is parsed and the readings are never taken or judged")
+    if journey.find("pageErrors: page.pageErrors()") > journey.find("takeReadings("):
+        findings.append("journey.mjs takes the readings before the exchanges and errors are read: opening the stacked menu would leak into them")
+    for needle in ("PAGE_READING", "MENU_READING", "readingFindings", "takeReadings"):
+        if f"export const {needle}" not in readings and f"export function {needle}" not in readings and f"export async function {needle}" not in readings:
+            findings.append(f"readings.mjs no longer exports {needle}")
+    if "from './readings.mjs'" not in page_test or "takeReadings" not in page_test:
+        findings.append("the browser test no longer imports the journey's own readings, so it would prove a second copy of them can fail")
+    if not re.search(r'<style id="fault">', fixture):
+        findings.append("the fixture page lost its #fault style: the browser test would compare a page with itself")
+    return findings
+
+
+def test_the_walks_dom_readings_are_wired_and_their_browser_test_uses_them() -> None:
+    """`D-619`: ``--readings`` takes the page height, the inner scrollers, the stacked menu and the tallest table row over the journey's own module.
+
+    The verdicts are held by ``readings.test.mjs`` (in the list the gate runs); the page-side expressions by ``readings.page.test.mjs``, which
+    drives a real browser over ``fixtures/readings-page.html`` and so needs a Chrome the gate host does not name (like the ``prove_*`` scripts).
+    """
+    findings = readings_wiring_findings(
+        _require(JOURNEY_SCRIPT).read_text(encoding="utf-8"),
+        _require(READINGS_MODULE).read_text(encoding="utf-8"),
+        _require(READINGS_PAGE_TEST).read_text(encoding="utf-8"),
+        _require(READINGS_FIXTURE).read_text(encoding="utf-8"),
+    )
+    assert findings == [], findings
+
+
+def test_control_a_readings_flag_that_reads_nothing_is_detected() -> None:
+    journey = _require(JOURNEY_SCRIPT).read_text(encoding="utf-8")
+    readings = _require(READINGS_MODULE).read_text(encoding="utf-8")
+    page_test = _require(READINGS_PAGE_TEST).read_text(encoding="utf-8")
+    fixture = _require(READINGS_FIXTURE).read_text(encoding="utf-8")
+    assert readings_wiring_findings(journey, readings, page_test, fixture) == []
+    unwired = journey.replace("takeReadings(", "takeNothing(")
+    assert any("takeReadings(" in f for f in readings_wiring_findings(unwired, readings, page_test, fixture))
+    unjudged = journey.replace("readingFindings(", "readingNothing(")
+    assert any("readingFindings(" in f for f in readings_wiring_findings(unjudged, readings, page_test, fixture))
+    copied = page_test.replace("from './readings.mjs'", "from './elsewhere.mjs'")
+    assert any("second copy" in f for f in readings_wiring_findings(journey, readings, copied, fixture))
+    faultless = fixture.replace('<style id="fault">', "<style>")
+    assert any("#fault" in f for f in readings_wiring_findings(journey, readings, page_test, faultless))
+    # The readings taken BEFORE the page's errors are read: the menu click would reach them.
+    early = journey.replace("pageErrors: page.pageErrors()", "pageErrors: [] /* moved */", 1) + "\npageErrors: page.pageErrors()\n"
+    assert any("before the exchanges" in f for f in readings_wiring_findings(early, readings, page_test, fixture))
 
 
 def test_the_instrument_still_reads_back_the_jar_every_route_started_with() -> None:
