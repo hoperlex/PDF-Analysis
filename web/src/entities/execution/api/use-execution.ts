@@ -4,9 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 
 import type {
   ExecutionDispatchStatus, ExecutionJournalPage, ExecutionQueuePage, ExecutionWorkerPage, ListExecutionQueueInput,
-  RunId,
+  RunId, VectorControl,
 } from '@/shared/api';
-import { getExecutionDispatch, listExecutionJournal, listExecutionQueue, listWorkers, queryKeys } from '@/shared/api';
+import {
+  getExecutionDispatch, getVectorControl, listExecutionJournal, listExecutionQueue, listWorkers, queryKeys,
+} from '@/shared/api';
 
 import { OPERATIONAL_LIST_POLL, autoRefreshMeta } from './operational-poll';
 
@@ -85,6 +87,33 @@ export function dispatchQueryOptions(enabled = true) {
 
 export function useExecutionDispatch(enabled = true) {
   return useQuery<ExecutionDispatchStatus>(dispatchQueryOptions(enabled));
+}
+
+/**
+ * The key of the vectors' pause (`getVectorControl`, contract 1.51.0). It sits under `execution`, so every command that
+ * invalidates `execution.all()` refreshes it; the registry (`queryKeys`) is not this slice's to extend, so the key is built
+ * from its root, as the host-install poll does (`features/connect-remote-agent`).
+ */
+export const vectorControlKey = () => [...queryKeys.execution.all(), 'vector-control'] as const;
+
+/**
+ * The pause of the vectors and the state of the night window (`ADR-0029` decision 8). The top strip reads it on every
+ * screen for an expert and an administrator (the server refuses a viewer), on the same cadence as the queue's pause
+ * state. `enabled` is false until the account's roles are known and for a role the read is closed to.
+ */
+export function vectorControlQueryOptions(enabled = true) {
+  return {
+    queryKey: vectorControlKey(),
+    queryFn: async () => (await getVectorControl({})).data,
+    ...OPERATIONAL_LIST_POLL,
+    refetchOnWindowFocus: 'always',
+    staleTime: 0,
+    enabled,
+  } as const;
+}
+
+export function useVectorControl(enabled = true) {
+  return useQuery<VectorControl>(vectorControlQueryOptions(enabled));
 }
 
 /**

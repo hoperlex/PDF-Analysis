@@ -14,6 +14,14 @@ export function canExecute(roles: readonly Role[], action: ExecutionAction): boo
     : roles.includes('admin') || roles.includes('expert');
 }
 
+/**
+ * Whether the top strip reads the pause state (the queue's and the vectors'): the roles the queue is open to. A viewer reads
+ * neither (`R-150w`); the server refuses it, and this keeps the strip from asking.
+ */
+export function canSeePause(roles: readonly Role[]): boolean {
+  return roles.includes('admin') || roles.includes('expert');
+}
+
 export function canCancel(item: ExecutionQueueItem): boolean {
   return ['queued', 'leased', 'running', 'retry_wait'].includes(item.state);
 }
