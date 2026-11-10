@@ -55,7 +55,20 @@ from auditmanager.precedents.replay import (
     replay_history,
     rule_failures,
 )
-from auditmanager.precedents.settings import SETTING_ONE_LIST, latest_setting_value, one_list_enabled
+from auditmanager.precedents.settings import (
+    ONE_LIST_READY,
+    SETTING_NAMES,
+    SETTING_ONE_LIST,
+    latest_setting_value,
+    one_list_enabled,
+)
+# `PREC-SETTINGS-01`: the journal of the switches and settings behind `listPrecedentSettings` and `appendPrecedentSetting`. The composition root
+# wires `PrecedentSettingService` into `build_router(precedent_settings=...)`.
+from auditmanager.precedents.setting_journal.service import (
+    APPEND_PRECEDENT_SETTING_COMMAND_TYPE,
+    PrecedentSettingService,
+    checked_value,
+)
 from auditmanager.precedents.similarity import VECTOR_PROFILE, Thresholds, band
 from auditmanager.precedents.stemming import StopWordMatcher, compile_stop_words, stem
 # `EMBED-01` (`ADR-0029` decision 8): the night encoder -- the window, the queue of intents, the exchange with the host's timer, the pause of the

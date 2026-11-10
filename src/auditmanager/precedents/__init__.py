@@ -7,4 +7,7 @@ given as input; without a vector the answer is «unavailable», never a guess fr
 
 The one part of this context that does touch a store is :mod:`auditmanager.precedents.vectors` (`EMBED-01`, `ADR-0029` decision 8): the night encoder's
 window, its queue of intents and the vectors it produces. It is a subpackage of its own so that the core above stays pure; nothing in the core imports it.
+
+The other is :mod:`auditmanager.precedents.setting_journal` (`PREC-SETTINGS-01`): the administrator's write of the switches and settings, which needs the
+command ledger and the roles. The core keeps the reads of that journal and the one guard on the switch a run's start reads (``settings.py``).
 """

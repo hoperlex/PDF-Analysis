@@ -107,6 +107,7 @@ from auditmanager.decisions.public import register_decision_recorded
 from auditmanager.ingest.comparison_batch.public import BATCH_HANDLER_FACTORIES, ComparisonBatchService
 from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ComparisonVersionOrderService
 from auditmanager.jobs.public import JobRepository
+from auditmanager.precedents.public import Exchange, PrecedentSettingService, VectorControlService, VectorWindowPass
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import (
@@ -419,6 +420,10 @@ def build_worker_runtime(
     # that scans a host, installs the agent over SSH and replaces the install key. It rides the probe loop's
     # pass (`_passes`); every install runs in a thread of its own, so a slow host never holds a probe.
     install_runner = install_runner_for(sessions, ring=resolved.secrets_private_ring, environ=env)
+    # `EMBED-01`, `CRIT-CAPTURE-01` part C (ADR-0029 decision 8): the night encoder's window rides the same pass, when this process is set up for it
+    # (`AUDITMANAGER_EMBED_DIR` names the directory it shares with the host's timer). Without it nothing is added, and the stand never opens a window.
+    exchange = Exchange.from_environment(env)
+    vector_passes = () if exchange is None else (VectorWindowPass(sessions, exchange, after_import=None),)
 
     return WorkerRuntime(
         settings=resolved,
@@ -436,6 +441,7 @@ def build_worker_runtime(
         probe_runner=_passes(
             probe_runner, install_runner,
             MemoryCaptureSweep(sessions, MemoryCaptureAssembler(geometry=BlockAdapter(sessions, blob_store=store))),
+            *vector_passes,
         ),
         comparison_work=build_comparison_work(
             sessions=sessions, engine=engine, blob_store=store, environ=env, ring=resolved.secrets_private_ring,
@@ -791,6 +797,10 @@ def build_application(
         # `HOSTS-SEAL-2`, `RUN-STAGES-01`. The facts of a run's stages for the stage window, over the same sessions
         # and the same object store the extended review reads.
         run_stages=RunStageAdapter(sessions, blob_store=store),
+        # `EMBED-01` and `PREC-SETTINGS-01` (contract 1.51.0). The pause of the vectors and the journal of the programme's switches: both open their
+        # own session over the same factory and answer in the contract's shape; without them the two surfaces keep the sealed `503`.
+        vector_control=VectorControlService(sessions),
+        precedent_settings=PrecedentSettingService(sessions),
     )
     return Application(
         router=router,

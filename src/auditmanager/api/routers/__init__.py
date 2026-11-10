@@ -154,7 +154,7 @@ from auditmanager.api.routers.runs import build_run_routes
 from auditmanager.api.routers.sections import build_section_routes
 from auditmanager.api.routers.run_stages import build_run_stage_routes  # HOSTS-SEAL-2
 from auditmanager.api.routers.precedents import build_precedent_routes  # CRIT-SEAL-50
-from auditmanager.api.routers.precedents_ports import VectorControlPort  # EMBED-01
+from auditmanager.api.routers.precedents_ports import PrecedentSettingsPort, VectorControlPort  # EMBED-01, PREC-SETTINGS-01
 from auditmanager.api.routers.stage_models import build_stage_model_routes  # HOSTS-SEAL-1
 from auditmanager.api.routers.users import build_user_routes
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
@@ -335,6 +335,7 @@ def build_router(
     comparison_stage_runs: ComparisonStageRunPort | None = None,
     comparison_stage_c4: ComparisonStageC4Port | None = None,
     vector_control: VectorControlPort | None = None,
+    precedent_settings: PrecedentSettingsPort | None = None,
 ) -> Router:
     """Assemble the 325 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
@@ -462,8 +463,9 @@ def build_router(
     # `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2). The «Прецеденты» surface: the reference data of a task, the labels and the card of
     # a finding, the pause of the vectors and the settings. Sealed and asleep: no port, every body answers `503 dependency_unavailable`
     # until the lane that owns it fills it (`api/routers/precedents.py`). `EMBED-01` filled the vector control: `vector_control` is its port,
-    # optional with a default for the reason `blocks` gives above; None keeps the sleeping answer.
-    build_precedent_routes(router, vector_control)
+    # optional with a default for the reason `blocks` gives above; None keeps the sleeping answer. `PREC-SETTINGS-01` filled the settings:
+    # `precedent_settings` is its port, with the same default.
+    build_precedent_routes(router, vector_control, precedent_settings)
     # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,
     # sealed as stubs answering `503 dependency_unavailable` until `CMP-INGEST-01`,
     # `CMP-INGEST-02` and `CMP-PROFILE-01` wire their ports. Optional with a default, for the
