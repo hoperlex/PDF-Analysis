@@ -129,6 +129,9 @@ def test_a_comment_of_a_case_is_kept_once_with_its_words_and_changes_no_vote(
     again = memory.repository.capture_comment(session, observation_id=_observation(published), comment=_fact(note))
     assert (again.outcome, again.case_id) == (COMMENT_ALREADY_CAPTURED, case_id)
     assert _count(session, "decision_memory_comment") == 1                     # the same ledger event: one row
+    # the sweep's question: which comment events of the ledger already have a row
+    assert memory.repository.captured_comment_sources(session, [note.decision_id, "dec_01M5F21PBT7E8WRN3M61BDQFDD"]) == {note.decision_id}
+    assert memory.repository.captured_comment_sources(session, []) == frozenset()
 
     # a comment is not a decision: the case's vote, its decisions and its standing are exactly what they were
     after = MemoryReader().case_summary(session, case_id)
@@ -289,6 +292,8 @@ def test_a_comment_and_a_first_decision_contend_on_the_locks_the_repository_docu
         for key in ("decision_memory_comment_observation:" + _observation(published), "decision_memory_status:" + case_id):
             free = other.execute(text("SELECT pg_try_advisory_xact_lock(hashtextextended(:k, 0))"), {"k": key}).scalar_one()
             assert free is False, key
-        stranger = other.execute(text("SELECT pg_try_advisory_xact_lock(hashtextextended('decision_memory_comment_observation:fo_other', 0))")).scalar_one()
+        stranger = other.execute(
+            text("SELECT pg_try_advisory_xact_lock(hashtextextended('decision_memory_comment_observation:fobs_other', 0))")
+        ).scalar_one()
         assert stranger is True                                                # another observation's lock is free: no global serialisation
         other.rollback()
