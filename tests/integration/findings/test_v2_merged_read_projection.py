@@ -132,7 +132,10 @@ def test_exact_legacy_single_member_without_canonical_remains_readable(
                                         'layout', NULL)
         """))
         session.execute(text("""
-            INSERT INTO finding_observation VALUES
+            INSERT INTO finding_observation (
+                finding_observation_id, run_id, finding_uid, category, finding_text, recommendation_text, stage_id,
+                analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode, proposed_severity, grounded, created_at
+            ) VALUES
             ('fobs_legacy', 'run_one', 'fnd_legacy', 'layout', 'Проверить план',
              'Согласовать план', 'text_analysis', 'ap_v1', 'pb_v1', 'mc_one',
              'recorded', NULL, 1, '2026-10-23')
