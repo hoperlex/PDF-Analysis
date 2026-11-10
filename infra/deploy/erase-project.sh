@@ -493,7 +493,8 @@ resume_command() {
         "$env" "$SELF" "$(printf '%q' "$DATABASE")" "$(printf '%q' "$BUCKET")" "$1" "$login" "$ref"
 }
 
-# Same discovery as `reset.sh` and `purge-product-data.sh`: a compose file without a worker service has none.
+# Same discovery as `reset.sh` and `purge-product-data.sh`: a compose file without a worker service has none. Whether it RUNS is
+# asked of `docker compose ps` when it is about to be stopped (`stop_worker_if_asked`), not read from the file.
 WORKER_DECLARED=no
 if grep -q '^  worker:[[:space:]]*$' "$COMPOSE_FILE"; then
     WORKER_DECLARED=yes
@@ -506,7 +507,8 @@ start_worker() {
     WORKER_STOPPED=no
 }
 # Whatever happens after the worker was stopped -- a refusal, a failure, success -- it is started again: the stand is
-# left as it was found. The exit status is the step's, not the restart's.
+# left as it was found, so a worker the operator had stopped on purpose is never marked and stays stopped. The exit status is the
+# step's, not the restart's.
 cleanup() {
     local status=$?
     trap - ERR
@@ -567,6 +569,17 @@ after_step() {
 
 stop_worker_if_asked() {
     if [ "$STOP_WORKER" = yes ] && [ "$WORKER_DECLARED" = yes ]; then
+        # Declared is not running: `compose stop` of a service that is down (or was never created) succeeds, and the trap would
+        # then start a worker the operator had stopped on purpose (an incident, a queue under review). Only a running worker is
+        # ours to stop and to start again; the list comes from `docker compose ps`, as in `memory-forget.sh`.
+        local running
+        if ! running="$(compose ps --status running --services)"; then
+            fail "could not list the running services of the stack." "Nothing was changed. Is the stack up?"
+        fi
+        if ! grep -qx worker <<<"$running"; then
+            echo "erase-project.sh: the worker service is not running; nothing to stop"
+            return 0
+        fi
         echo "erase-project.sh: stopping the worker service"
         # Marked BEFORE the stop: a `compose stop` that fails or is interrupted may have stopped it, and the trap starts it again
         # (`up -d --no-deps` of a service that is still up changes nothing).
