@@ -1,8 +1,8 @@
 {
   "contract": "auditmanager.analysis.model-catalogue",
-  "contract_version": "1.47.0",
+  "contract_version": "1.48.0",
   "status": "frozen",
-  "description": "HOSTS-SEAL-1 (plan 2026-11-09 sections 4.2 and 5, ADR-0028): the models the stage layout may name, and for each provider that can serve one the accesses it can serve it with, the reasoning efforts it may be asked for and the exact strings an answer may report as its model. It covers the pins of docs/program/P02_LOCK.json that the layout offers (claude-opus-5-5, claude-sonnet-5-5, gpt-6.1-sol, gpt-6-sol, gpt-6-astra) and nothing else: the older claude-opus-5 and claude-sonnet-5 stay pinned to read past runs and are never offered. Never offered: any Haiku, the efforts xhigh and max, and low for Opus (the original's owner forbids them). Matching is exact: an answer whose reported model is not in accepted_reported is refused, there is no prefix or date-suffix rule.",
+  "description": "HOSTS-SEAL-1 (plan 2026-11-09 sections 4.2 and 5, ADR-0028): the models the stage layout may name, and for each provider that can serve one the accesses it can serve it with, the reasoning efforts it may be asked for and the exact strings an answer may report as its model. It covers the pins of docs/program/P02_LOCK.json that the layout offers (claude-opus-5-5, claude-sonnet-5-5, gpt-6.1-sol, gpt-6-sol, gpt-6-astra, gpt-6-luna; gpt-6-luna joined with HOSTS-L1, owner ruling R-153m) and nothing else: the older claude-opus-5 and claude-sonnet-5 stay pinned to read past runs and are never offered. Never offered: any Haiku, the efforts xhigh and max, and low for Opus (the original's owner forbids them). Matching is exact: an answer whose reported model is not in accepted_reported is refused, there is no prefix or date-suffix rule.",
   "lock_file": "docs/program/P02_LOCK.json",
   "efforts_vocabulary": [
     "low",
@@ -104,6 +104,22 @@
       ]
     },
     {
+      "provider": "codex",
+      "model_id": "gpt-6-luna",
+      "access": [
+        "subscription",
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "gpt-6-luna"
+      ]
+    },
+    {
       "provider": "anthropic_api",
       "model_id": "claude-opus-5-5",
       "access": [
@@ -175,6 +191,21 @@
       ],
       "accepted_reported": [
         "gpt-6-astra"
+      ]
+    },
+    {
+      "provider": "openai_api",
+      "model_id": "gpt-6-luna",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "gpt-6-luna"
       ]
     },
     {
@@ -254,6 +285,22 @@
       "accepted_reported": [
         "openai/gpt-6-astra",
         "gpt-6-astra"
+      ]
+    },
+    {
+      "provider": "openrouter_api",
+      "model_id": "gpt-6-luna",
+      "access": [
+        "api"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "accepted_reported": [
+        "openai/gpt-6-luna",
+        "gpt-6-luna"
       ]
     }
   ]

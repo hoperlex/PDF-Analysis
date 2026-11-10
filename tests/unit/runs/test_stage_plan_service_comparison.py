@@ -44,7 +44,7 @@ def test_a_revision_with_the_comparison_cells_stores_them_and_the_view_returns_t
     view = service.revise_layout(body=body(), user_uid=ADMIN, idempotency_key="k")
     assert [item["work_kind"] for item in view["current"]["comparison_cells"]] == list(KINDS)
     assert view["current"]["comparison_cells"][0] == {
-        "work_kind": "comparison_pair_check", "model_id": "gpt-6-astra", "effort": "high", "max_output_tokens": 1_200,
+        "work_kind": "comparison_pair_check", "model_id": "gpt-6-luna", "effort": "high", "max_output_tokens": 1_200,
         "timeout_seconds": 900}
     assert store.revisions[0].comparison_cells == layout.comparison_preset_cells("codex_only")
     assert not {cell["row"] for cell in view["current"]["cells"]} & set(KINDS), "the analysis cells stay the six rows"
@@ -116,10 +116,10 @@ def test_the_comparison_list_is_part_of_the_requests_identity_only_when_it_was_s
 
 
 def test_the_layout_names_the_comparison_cells_no_server_serves(events):
-    # Codex is on a server for the rows' models but nothing serves gpt-6-astra: its two comparison cells are « нет на серверах »
+    # Codex is on a server for the rows' models but nothing serves gpt-6-luna (nor gpt-6-astra): the two comparison cells that name luna are « нет на серверах »
     service, _ = make(availability=MemoryAvailability({
         "claude-opus-5-5": SUBSCRIPTION, "claude-sonnet-5-5": SUBSCRIPTION, "gpt-6.1-sol": SUBSCRIPTION, "gpt-6-sol": SUBSCRIPTION,
-        "gpt-6-astra": NOWHERE}))
+        "gpt-6-astra": NOWHERE, "gpt-6-luna": NOWHERE}))
     service.revise_layout(body=body("codex_only"), user_uid=ADMIN, idempotency_key="k")
     keys = service.get_layout()["unavailable_cell_keys"]
     assert "comparison_pair_check:main" in keys and "comparison_spec:main" in keys

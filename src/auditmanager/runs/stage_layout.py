@@ -136,7 +136,7 @@ KIT_LABELS: Final[Mapping[str, str]] = {
 }
 
 _OPUS, _SONNET = "claude-opus-5-5", "claude-sonnet-5-5"
-_SOL61, _SOL, _ASTRA = "gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra"
+_SOL61, _SOL, _ASTRA, _LUNA = "gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra", "gpt-6-luna"
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,13 +315,13 @@ COMPARISON_DEFAULT_MAX_OUTPUT_TOKENS: Final[Mapping[str, int]] = {
 COMPARISON_DEFAULT_TIMEOUT_SECONDS: Final[Mapping[str, int]] = {
     "comparison_pair_check": 900, "comparison_sheet_changes": 1_800, "comparison_spec": 900, "comparison_report": 2_400,
 }
-#: Model · effort of every kind of each set (the original's models mapped onto the catalogue: its ``gpt-6-luna`` is not a pin, and pinning a
-#: model is the owner's, so it is ``gpt-6-astra``; `D-667`). The Claude set serves all four on Sonnet.
+#: Model · effort of every kind of each set (the original's models mapped onto the catalogue: its ``sheet_match`` and its whole-specification
+#: comparison run on ``gpt-6-luna``, a pin since `R-153m` / `D-667`). The Claude set serves all four on Sonnet.
 COMPARISON_PRESET_CELLS: Final[Mapping[str, Mapping[str, tuple[str, str]]]] = {
     KIT_CLAUDE_ONLY: {kind: (_SONNET, "high") for kind in COMPARISON_KINDS},
     KIT_CODEX_ONLY: {
-        "comparison_pair_check": (_ASTRA, "high"), "comparison_sheet_changes": (_SOL61, "high"),
-        "comparison_spec": (_ASTRA, "high"), "comparison_report": (_SOL61, "high"),
+        "comparison_pair_check": (_LUNA, "high"), "comparison_sheet_changes": (_SOL61, "high"),
+        "comparison_spec": (_LUNA, "high"), "comparison_report": (_SOL61, "high"),
     },
 }
 if any(set(table) != set(COMPARISON_KINDS) for table in COMPARISON_PRESET_CELLS.values()) or any(

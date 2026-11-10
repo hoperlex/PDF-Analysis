@@ -40,9 +40,9 @@ def _refusal(kind: str, settings: RevisionSettings) -> tuple[str, str]:
     return refused.value.detail_fields["field"], refused.value.detail_fields["constraint"]
 
 
-def test_the_pins_are_the_lock_s_seven_models() -> None:
+def test_the_pins_are_the_lock_s_eight_models() -> None:
     assert PINS == {"claude-opus-5", "claude-sonnet-5", "gpt-6-sol",
-                    "claude-opus-5-5", "claude-sonnet-5-5", "gpt-6.1-sol", "gpt-6-astra"}
+                    "claude-opus-5-5", "claude-sonnet-5-5", "gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"}
 
 
 def test_claude_subscription_can_be_a_not_metered_pull_revision() -> None:
