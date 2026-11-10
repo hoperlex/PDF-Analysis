@@ -245,6 +245,8 @@ describe('a 401 from the wire reaches the screen as a 401', () => {
     const runner = [
       'claimExecutorTask', 'extendExecutorTaskClaim', 'failExecutorTask', 'submitExecutorTaskAnswer',
       'getExecutorTaskImage', 'reportRunnerHealth', 'redeemExecutorEnrollment',
+      // `CRIT-SEAL-50` (contract 1.51.0): the reference data of a task, asked for with the runner token that holds its claim.
+      'getExecutorTaskContext',
     ];
     const open = ['issueToken', 'readRegistrationStatus', 'submitRegistration', 'downloadAgentPackage', ...runner];
     const noCredentialToRefuse = ['submitRegistration', 'downloadAgentPackage'];
