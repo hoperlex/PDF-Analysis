@@ -3,8 +3,9 @@
 `REVIEW-FIX-BOUNDS-1102`. ``AUDITMANAGER_INTAKE_RELAXED`` is read by one function
 (``auditmanager.ingest.intake_mode.intake_relaxed``), once per process, when a module that
 declares a quota is imported. So the module constants are measured in a child process per mode.
-Two families of figures are pinned: the *quotas* move with the flag, and the *sandbox* -- the
-reader's memory and clock, the ZIP's ratio and sizes, the free disk, the body cap -- does not.
+Three families of figures are pinned: the *quotas* move with the flag; the *sandbox* -- the
+reader's memory and clock, the ZIP's ratio and sizes, the free disk, the body cap -- does not; and
+the counts an upload no longer bounds (`PDF-READER-ROOM-01`) are the representation limits in both.
 """
 
 from __future__ import annotations
@@ -39,14 +40,12 @@ set_policy = dataclasses.asdict(policy.DEFAULT_SET_POLICY)
 print(json.dumps({
     "quota": {
         "envelope.MAX_BYTES": envelope.MAX_BYTES, "envelope.MAX_PAGES": envelope.MAX_PAGES,
-        "envelope.PAGE_ELEMENTS_MAX": envelope.PAGE_ELEMENTS_MAX,
-        "envelope.PAGE_CHARACTERS_MAX": envelope.PAGE_CHARACTERS_MAX,
-        "envelope.DOCUMENT_ELEMENTS_MAX": envelope.DOCUMENT_ELEMENTS_MAX,
-        "envelope.DOCUMENT_CHARACTERS_MAX": envelope.DOCUMENT_CHARACTERS_MAX,
         "bundle.MAX_BLOCKS_PER_PAGE": bundle.MAX_BLOCKS_PER_PAGE, "bundle.MAX_BLOCKS": bundle.MAX_BLOCKS,
         "bundle.MAX_IMAGE_BLOCKS": bundle.MAX_IMAGE_BLOCKS,
         "comparison.page_elements": comparison.COMPARISON_POLICY.page_elements,
         "comparison.document_elements": comparison.COMPARISON_POLICY.document_elements,
+        "comparison.page_characters": comparison.COMPARISON_POLICY.page_characters,
+        "comparison.document_characters": comparison.COMPARISON_POLICY.document_characters,
         "comparison.max_bytes": comparison.COMPARISON_POLICY.max_bytes,
         "comparison.max_pages": comparison.COMPARISON_POLICY.max_pages,
         "batch.MAX_FILES": batch.MAX_FILES, "batch.MAX_SETS": batch.MAX_SETS,
@@ -56,6 +55,12 @@ print(json.dumps({
         "zip_import.MAX_ARCHIVE_BYTES": zip_import.MAX_ARCHIVE_BYTES, "zip_import.MAX_PDFS": zip_import.MAX_PDFS,
         "stage.RAW_BATCH_BYTES": stage.RAW_BATCH_BYTES, "stage.MAX_FILES": stage.MAX_FILES,
         "precheck.max_pages": precheck["max_pages"],
+    },
+    "unbounded": {
+        "envelope.PAGE_ELEMENTS_MAX": envelope.PAGE_ELEMENTS_MAX,
+        "envelope.PAGE_CHARACTERS_MAX": envelope.PAGE_CHARACTERS_MAX,
+        "envelope.DOCUMENT_ELEMENTS_MAX": envelope.DOCUMENT_ELEMENTS_MAX,
+        "envelope.DOCUMENT_CHARACTERS_MAX": envelope.DOCUMENT_CHARACTERS_MAX,
         "precheck.max_page_characters": precheck["max_page_characters"],
         "precheck.max_document_characters": precheck["max_document_characters"],
     },
@@ -86,42 +91,48 @@ print(json.dumps({
 
 #: ADR-0025 and the portal envelope (R-116): what applies unless the deployment is relaxed.
 ADR_QUOTAS = {
-    "envelope.MAX_BYTES": 250 * MiB, "envelope.MAX_PAGES": 500, "envelope.PAGE_ELEMENTS_MAX": 2_000_000,
-    "envelope.PAGE_CHARACTERS_MAX": 200_000, "envelope.DOCUMENT_ELEMENTS_MAX": 40_000_000,
-    "envelope.DOCUMENT_CHARACTERS_MAX": 20_000_000,
+    "envelope.MAX_BYTES": 250 * MiB, "envelope.MAX_PAGES": 500,
     "bundle.MAX_BLOCKS_PER_PAGE": 100, "bundle.MAX_BLOCKS": 3_000, "bundle.MAX_IMAGE_BLOCKS": 1_000,
     "comparison.page_elements": 1_000_000, "comparison.document_elements": 8_000_000,
+    "comparison.page_characters": 200_000, "comparison.document_characters": 20_000_000,
     "comparison.max_bytes": 250 * MiB, "comparison.max_pages": 500,
     "batch.MAX_FILES": 10_000, "batch.MAX_SETS": 100, "batch.MAX_BATCH_BYTES": 8 * GiB,
     "batch.MAX_BATCH_PAGES": 10_000, "batch.MAX_PROJECT_BYTES": 8 * GiB, "batch.MAX_FILE_BYTES": 250 * MiB,
     "set.entries": 1_000,
     "zip_import.MAX_ARCHIVE_BYTES": 16 * MiB, "zip_import.MAX_PDFS": 100,
     "stage.RAW_BATCH_BYTES": 2 * GiB, "stage.MAX_FILES": 1_000,
-    "precheck.max_pages": 500, "precheck.max_page_characters": 200_000,
-    "precheck.max_document_characters": 20_000_000,
+    "precheck.max_pages": 500,
 }
 
 #: What ``af581631`` set and the relaxed deployment restores.
 LIFTED_QUOTAS = {
-    "envelope.MAX_BYTES": LONG, "envelope.MAX_PAGES": INT, "envelope.PAGE_ELEMENTS_MAX": LONG,
-    "envelope.PAGE_CHARACTERS_MAX": INT, "envelope.DOCUMENT_ELEMENTS_MAX": LONG,
-    "envelope.DOCUMENT_CHARACTERS_MAX": INT,
+    "envelope.MAX_BYTES": LONG, "envelope.MAX_PAGES": INT,
     "bundle.MAX_BLOCKS_PER_PAGE": INT, "bundle.MAX_BLOCKS": INT, "bundle.MAX_IMAGE_BLOCKS": INT,
     "comparison.page_elements": LONG, "comparison.document_elements": LONG,
+    "comparison.page_characters": INT, "comparison.document_characters": INT,
     "comparison.max_bytes": LONG, "comparison.max_pages": INT,
     "batch.MAX_FILES": INT, "batch.MAX_SETS": INT, "batch.MAX_BATCH_BYTES": LONG,
     "batch.MAX_BATCH_PAGES": INT, "batch.MAX_PROJECT_BYTES": LONG, "batch.MAX_FILE_BYTES": LONG,
     "set.entries": INT,
     "zip_import.MAX_ARCHIVE_BYTES": LONG, "zip_import.MAX_PDFS": INT,
     "stage.RAW_BATCH_BYTES": LONG, "stage.MAX_FILES": INT,
-    "precheck.max_pages": INT, "precheck.max_page_characters": INT, "precheck.max_document_characters": INT,
+    "precheck.max_pages": INT,
+}
+
+#: `PDF-READER-ROOM-01` (owner, 2026-11-11): what an upload no longer counts, in either mode. Each is
+#: the representation limit its count is held in; the reader's sandbox (above) is what bounds the work,
+#: and the run's precheck mirrors the upload so that it does not refuse a document the upload admitted.
+UNBOUNDED = {
+    "envelope.PAGE_ELEMENTS_MAX": LONG, "envelope.PAGE_CHARACTERS_MAX": INT,
+    "envelope.DOCUMENT_ELEMENTS_MAX": LONG, "envelope.DOCUMENT_CHARACTERS_MAX": INT,
+    "precheck.max_page_characters": INT, "precheck.max_document_characters": INT,
 }
 
 #: Finite in both modes: the reader's memory and clock (portal and comparison), the archive readers'
 #: sizes and ratio, the free-disk reservation of a ZIP import, the API's body cap and the precheck child.
 SANDBOX = {
-    "envelope.PDF_MEMBER_BYTES": 250 * MiB, "envelope.READER_ADDRESS_SPACE": 512 * MiB,
-    "envelope.READER_SECONDS": 60,
+    "envelope.PDF_MEMBER_BYTES": 250 * MiB, "envelope.READER_ADDRESS_SPACE": 2 * GiB,
+    "envelope.READER_SECONDS": 120,
     "comparison.address_space": 768 * MiB, "comparison.seconds": 120,
     "archive.MEMBER_BYTES": 250 * MiB, "archive.TEXT_MEMBER_BYTES": 16 * MiB,
     "archive.BLOCKS_MEMBER_BYTES": 4 * MiB, "archive.STAMP_AUDIT_BYTES": 4 * MiB,
@@ -168,6 +179,10 @@ def test_the_sandbox_is_finite_by_default(strict: dict) -> None:
 
 def test_the_flag_does_not_move_the_sandbox(strict: dict, relaxed: dict) -> None:
     assert relaxed["sandbox"] == strict["sandbox"] == SANDBOX
+
+
+def test_what_an_upload_no_longer_counts_is_unbounded_in_both_modes(strict: dict, relaxed: dict) -> None:
+    assert strict["unbounded"] == relaxed["unbounded"] == UNBOUNDED
 
 
 def test_every_quota_the_flag_lifts_is_a_quota_the_adr_bounds(strict: dict, relaxed: dict) -> None:

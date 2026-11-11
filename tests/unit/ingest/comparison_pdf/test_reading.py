@@ -119,11 +119,10 @@ class TestTheCorpusAgainstItsAnswerKey:
 
 class TestThePolicy:
     def test_the_portal_envelope_is_as_recorded(self) -> None:
-        assert portal.PAGE_ELEMENTS_MAX == 2_000_000  # PDF-PAGE-CONTENT-01, owner 2026-11-11
-        assert portal.PAGE_CHARACTERS_MAX == 200_000
-        assert portal.DOCUMENT_ELEMENTS_MAX == 40_000_000  # PDF-PAGE-CONTENT-01, owner 2026-11-11
-        assert portal.DOCUMENT_CHARACTERS_MAX == 20_000_000
-        assert portal.READER_ADDRESS_SPACE == 512 * MiB and portal.READER_SECONDS == 60
+        # PDF-READER-ROOM-01 (owner, 2026-11-11): no count ceilings, a wider reader.
+        assert (portal.PAGE_ELEMENTS_MAX, portal.DOCUMENT_ELEMENTS_MAX) == (2**63 - 1, 2**63 - 1)
+        assert (portal.PAGE_CHARACTERS_MAX, portal.DOCUMENT_CHARACTERS_MAX) == (2**31 - 1, 2**31 - 1)
+        assert portal.READER_ADDRESS_SPACE == 2048 * MiB and portal.READER_SECONDS == 120
         assert portal.MAX_BYTES == 250 * MiB and (portal.MIN_PAGES, portal.MAX_PAGES) == (1, 500)
 
     def test_the_comparison_figures_are_the_recorded_ones(self) -> None:
@@ -132,9 +131,10 @@ class TestThePolicy:
         assert portal.PAGE_ELEMENTS_MAX > policy.page_elements > 536_426
         assert policy.address_space == 768 * MiB  # decision 8's default ceiling
         assert (policy.max_bytes, policy.min_pages, policy.max_pages) == (250 * MiB, 1, 500)
-        assert policy.page_characters == portal.PAGE_CHARACTERS_MAX
-        assert policy.document_elements == 8_000_000  # its own; the portal's moved to 40 000 000 without it
-        assert policy.document_characters == portal.DOCUMENT_CHARACTERS_MAX
+        # Its own figures; the portal's count ceilings were removed without them.
+        assert (policy.page_characters, policy.document_elements, policy.document_characters) == (
+            200_000, 8_000_000, 20_000_000,
+        )
 
     def test_a_page_of_450000_elements_is_admitted_here_and_by_the_portal(self) -> None:
         data = _pdf(1, PATHS_450K)
@@ -213,7 +213,7 @@ class TestTheChildren:
         dense = b"BT /F1 1 Tf 0 0 Td " + b"(AAAAAAAAAAAAAAAA) Tj " * 15_000 + b"ET"
         found = _refusal(lambda: inspect_comparison_pdf(_pdf(30, dense)))
         assert found["constraint"] == "pdf_page_content"
-        assert portal.PAGE_CHARACTERS_MAX == COMPARISON_POLICY.page_characters == 200_000
+        assert COMPARISON_POLICY.page_characters == 200_000
 
     def test_a_text_bomb_under_the_element_limit_is_stopped_by_the_ceiling_not_by_the_api(self) -> None:
         """500 000 strings pass the element rule (1 000 000 here, 2 000 000 for the portal), and the 8 M characters
