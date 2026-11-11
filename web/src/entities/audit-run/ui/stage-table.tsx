@@ -64,6 +64,7 @@ import { ErrorState, STAGE_LABELS, StageStatusBadge, runStageLabel } from '@/sha
 import styles from './stage-table.module.css';
 
 import type { StageRow } from '../model/run-presentation';
+import { stageActivityText, type StageActivity } from '../model/stage-activity';
 
 export interface StageTableProps {
   readonly rows: readonly StageRow[];
@@ -73,6 +74,11 @@ export interface StageTableProps {
    * cell says where the stage's result came from instead, as the pipeline rail does.
    */
   readonly reused?: ReadonlySet<string>;
+  /**
+   * `RUN-STAGE-PROGRESS-01`: the stages the execution journal says are under way (`stageActivity`). A row with no result
+   * that is under way reads «идёт», with its pages when the stage reports them, instead of «не начинался».
+   */
+  readonly activity?: ReadonlyMap<string, StageActivity>;
 }
 
 const UNKNOWN_STAGE_TITLE = 'Этап содержит неизвестное значение.';
@@ -91,10 +97,19 @@ function hasKnownVocabulary(row: StageRow): boolean {
 function StatusCell({
   status,
   errorCode,
+  activity,
 }: {
   readonly status: StageStatus | null;
   readonly errorCode: string | null;
+  readonly activity: StageActivity | undefined;
 }) {
+  if (status === null && activity !== undefined) {
+    return (
+      <em className={styles.aside} data-stage-status="running">
+        {stageActivityText(activity)}
+      </em>
+    );
+  }
   if (status === null) {
     return (
       <em className={styles.aside} data-stage-status="not-reported">
@@ -122,7 +137,7 @@ function DependencyNote({ dependsOn }: { readonly dependsOn: readonly StageId[] 
   );
 }
 
-export function StageTable({ rows, reused }: StageTableProps) {
+export function StageTable({ rows, reused, activity }: StageTableProps) {
   if (rows.some((row) => !hasKnownVocabulary(row))) {
     return (
       <div data-stage-table-fault="closed-vocabulary">
@@ -165,9 +180,15 @@ export function StageTable({ rows, reused }: StageTableProps) {
                 <DependencyNote dependsOn={row.dependsOn} />
               </td>
               <td>
-                <StatusCell status={row.status} errorCode={row.errorCode} />
+                <StatusCell
+                  status={row.status}
+                  errorCode={row.errorCode}
+                  activity={row.status === null ? activity?.get(row.stageId) : undefined}
+                />
               </td>
-              <td className={styles.instant}>{formatInstant(row.startedAt)}</td>
+              <td className={styles.instant}>
+                {formatInstant(row.startedAt ?? (row.status === null ? activity?.get(row.stageId)?.startedAt ?? null : null))}
+              </td>
               <td className={styles.instant}>{formatInstant(row.finishedAt)}</td>
               {reused?.has(row.stageId) ? (
                 <td className={styles.elapsed} data-stage-elapsed="reused">

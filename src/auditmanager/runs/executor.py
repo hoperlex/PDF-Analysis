@@ -91,6 +91,7 @@ from auditmanager.analysis.public import (
     StageStatus,
     read_artifact,
     run_stage,
+    run_page_geometry_with_progress,
     run_source_preparation_with_progress,
 )
 from auditmanager.analysis.public import apply_to_bundle, publish_artifact
@@ -1262,6 +1263,29 @@ def _execute_run_body(
         session.commit()
         last_pdf_event = last_pdf_check = now
 
+    # `RUN-STAGE-PROGRESS-01`: the geometry stage re-reads the whole document, as long on a large
+    # drawing set as the preparation; its pages read are journalled as `stage.progress`, at most
+    # one event in two seconds, the first and the last always, behind the same authority fence.
+    last_geometry_event = float("-inf")
+    last_geometry_pages = -1
+
+    def geometry_progress(done: int, total: int) -> None:
+        nonlocal last_geometry_event, last_geometry_pages
+        now = time.monotonic()
+        if done > last_geometry_pages and done > 0:
+            attempt_context.progress()
+        last_geometry_pages = max(last_geometry_pages, done)
+        if 0 < done < total and now - last_geometry_event < 2.0:
+            return
+        job_repo.require_current(session, authority)
+        append_execution_event(
+            session, event_type="stage.progress", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id,
+            payload={"stage_id": "page_geometry_extraction", "completed_pages": done, "total_pages": total},
+        )
+        session.commit()
+        last_geometry_event = now
+
     # -- the three deterministic stages, in registry dependency order ---------
     if v3_workflow:
         from auditmanager.analysis.public import run_document_context_with_visual_pages
@@ -1326,6 +1350,8 @@ def _execute_run_body(
                         checkpoint=pdf_checkpoint, expected_page_count=version.page_count,
                         **({"allow_visual_only_pages":True} if v3_workflow else {}))
                 if stage_id == "source_preparation" else
+                partial(run_page_geometry_with_progress, progress=geometry_progress)
+                if stage_id == "page_geometry_extraction" else
                 partial(run_document_context_with_visual_pages,allow_visual_only_pages=True)
                 if v3_workflow and stage_id == "document_context_build" else None
             ),
