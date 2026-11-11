@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "6c1189b17ef9162e5222ac57a379e906d34b9c7919d4b0b32c745d242a261924",
-    "content_commit": "d7713370",
-    "content_commit_subject": "feat(contract): contract 1.53.0 -- the version literals, the surface (299/328/820), the reseal paragraph, the catalogs at candidate revision 70, the head 0066 (CRIT-SEAL-53)",
-    "dispatch_named_commit": "d7713370558d1993bc622b30c4985ef276b4439e",
-    "commit_note": "Resealed by CRIT-SEAL-53: contract 1.53.0 (three operations: listDecisionPatterns, reviewDecisionPattern, getStageQuality; eleven schemas; FindingCategory parameter_mismatch; Finding.cross_evidence; FindingObservation.extended_observation_ref; RunStatus.publication_mode; SubmitExecutorTaskAnswerRequest.output_text maxLength 1000000), on top of 1.52.0.",
+    "sha256": "ba58ccca1b61b169012a6fc1096b971a679d1a448e662a66c7f37439cec8599a",
+    "content_commit": "bd044e66",
+    "content_commit_subject": "revert(contract): D-688 is withdrawn from this seal -- no maxLength on SubmitExecutorTaskAnswerRequest.output_text, in the contract or the model (CRIT-SEAL-53)",
+    "dispatch_named_commit": "bd044e66ceda68470579cd3d108bb1fbcb69fba1",
+    "commit_note": "Resealed by CRIT-SEAL-53: contract 1.53.0 (three operations: listDecisionPatterns, reviewDecisionPattern, getStageQuality; eleven schemas; FindingCategory parameter_mismatch; Finding.cross_evidence; FindingObservation.extended_observation_ref; RunStatus.publication_mode), on top of 1.52.0.",
     "openapi_version": "3.1.0",
     "info_version": "1.53.0",
     "paths": 299,
     "operations": 328,
     "component_schemas": 820,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "6c1189b17ef9162e5222ac57a379e906d34b9c7919d4b0b32c745d242a261924",
+    "snapshot_sha256": "ba58ccca1b61b169012a6fc1096b971a679d1a448e662a66c7f37439cec8599a",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "fbeffcae66a988412cadca0e8cbbf3bf8a0a083cc23753934258e8fca2fa7c67",
-      "index.ts": "a8b2c7c68b13ae1ffa7bf4cf462b28707002daa8715716d7002fe64bbd66d30f",
-      "operations.gen.ts": "3c8d57c7a479a810698283f4870e39c70d56e6ad271d36227f07cbfa9ae40665",
-      "types.gen.ts": "f567a9a2f1de5014ae4bfeabd2d1ca7db81b3ca05186657ee4a3ef8d3266ea17"
+      "client.gen.ts": "95431d782cba0e6d6df43cbb4aa51cf2c9f58f8de8d148a70be64f314949e29c",
+      "index.ts": "f73d727bf8a06b741a5d6336f1ffbd8b0bba606a20a812ca3e373a7a1829fb4b",
+      "operations.gen.ts": "ab47dff9d76278a2a7838c0d48fed00fb4ddad283ef93fd6e3e8e641b69a00d6",
+      "types.gen.ts": "3240b8a6a117534948af76f1fab37376ba38f09a39f3b5868dc2b53ca05b2ce6"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
