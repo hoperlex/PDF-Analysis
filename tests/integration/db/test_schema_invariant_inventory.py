@@ -443,12 +443,15 @@ from sqlalchemy import Engine, text
 #: (three checks, three foreign keys -- the run, the account and the command receipt --, the primary key and the unique constraint of the receipt, to 2274),
 #: indexes +2 (the primary key and the unique constraint, to 530), triggers +1 (``am_immutable_row``, to 293); functions, views, extensions, sequences,
 #: policies and the state topology are byte-identical to the ``0065`` seal (their digests are unchanged).
+#: Resealed 2026-11-11 for the main→dev merge (``0066_run_deletion`` then ``0067_precedents_wave5``), from this test's own observed output on a
+#: throwaway PostgreSQL (the project image, container ``rd02-pg``) migrated fresh to ``0067``: relations 184, columns 1934, constraints 2329, indexes
+#: 541, triggers 302, functions 86, views 7 -- the sum of the two seals above, each family reviewed.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1934, "c4cdc68a84f6794af9ff8d5042c2bb541e1e143f2cf4314c35afc08de983640b"),
-    "relations": (184, "04c8a22d37aa4e8dc598dbb1e1dfe2d389e6658157fade92760299a6f45ab2c1"),
-    "constraints": (2325, "0317acd11402ee08eab8887a56c512fd592a566c78faf0875e0995f1944a2494"),
-    "indexes": (541, "9284a062030f090fb898bd31002a0a507837cf827173356f4fef10de624b96bd"),
-    "triggers": (302, "5f20513d4b9f6b237f3143543bb2a684355d215ba8bb2cba3a4d89d98c2b712f"),
+    "columns": (1934, "ef02c2d585a9d5a59b1fd96e14845735129c7114974d43e4e690f32c840342c3"),
+    "relations": (184, "849589ed784729f5da1be0b20a1169b960001ad878d81a24590f5818ad429558"),
+    "constraints": (2329, "895c8c867f19498f459253b2680aea921fa4f86af2cfb1de0c4f883ef1e3fa34"),
+    "indexes": (541, "767aae4996dc76db5286600b622348413440cb73094b8972a9889ec25a7b890c"),
+    "triggers": (302, "841b211ddd2d2199d75a5cf2a548b64fb8ae0dcafc4fc9976eed11b2ca8764e7"),
     "functions": (86, "4ca8c9d63270876dad063cdea6c49a0e7aa5afba3ea7355ecb023b81cc22e664"),
     "views": (7, "5e78d3a1fd6d83febea265c402139aefd89d63afd83c1f38acd71979822d1ef8"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
