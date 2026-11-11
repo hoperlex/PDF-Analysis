@@ -497,3 +497,56 @@ def test_the_viewer_cell_reads_no_binding() -> None:
             raise AssertionError("the binding of a cell was looked up for the viewer")
 
     assert "server" not in set(walk(planned(include_server=False, cell_bindings=Forbidden(BINDINGS))))
+
+
+# --- STAGE-ROLLUP-TEXT-01: the extended review's roll-up on the text row ------------------------------------------------
+
+
+ROLLUP_ERROR = {"code": "analysis_failed", "message": "the accepted extended analysis workflow did not fully complete"}
+
+
+def test_the_rollup_messages_are_the_ones_the_executor_writes() -> None:
+    source = (Path(__file__).resolve().parents[3] / "src/auditmanager/runs/executor.py").read_text(encoding="utf-8")
+    for message in sf.EXTENDED_ROLLUP_MESSAGES:
+        assert f'message="{message}"' in source, message
+
+
+def test_a_text_row_partial_only_by_the_extended_review_is_a_rollup() -> None:
+    assert sf.is_extended_rollup("text_analysis", "partial", ROLLUP_ERROR)
+    assert sf.is_extended_rollup("text_analysis", "partial",
+                                 {"code": "analysis_failed", "message": "the accepted section workflow did not fully complete"})
+    for stage_id, status, error in (
+        ("text_analysis", "partial", {"code": "analysis_failed", "message": "the provider reply was cut short"}),  # its own partial
+        ("text_analysis", "failed", ROLLUP_ERROR),
+        ("text_analysis", "partial", {**ROLLUP_ERROR, "code": "analysis_input_invalid"}),
+        ("text_analysis", "partial", None),
+        ("block_analysis", "partial", ROLLUP_ERROR),
+    ):
+        assert not sf.is_extended_rollup(stage_id, status, error), (stage_id, status, error)
+
+
+def test_the_text_chip_of_a_rollup_reads_as_done_with_no_error() -> None:
+    rollup = StageRow("text_analysis", "partial", error_code="analysis_failed", started_at=at(3), finished_at=at(9),
+                      extended_rollup=True)
+    text = item(planned(stage_rows=[*prep(), rollup], calls=[call("text", n=0, start=3.2, end=4, subscription=True)]), "text")["facts"]
+    assert text["state"] == "done" and "last_error_code" not in text
+    plain = StageRow("text_analysis", "partial", error_code="analysis_failed", started_at=at(3), finished_at=at(9))
+    own = item(planned(stage_rows=[*prep(), plain], calls=[]), "text")["facts"]
+    assert (own["state"], own["last_error_code"]) == ("partial", "analysis_failed"), "a text stage's own partial stays partial"
+
+
+STAGES = {"text_analysis", "block_analysis", "finding_merge", "finding_review", "finding_correction", "norm_verification"}
+
+
+def test_the_degradation_names_the_incomplete_procedures_instead_of_the_text_stage() -> None:
+    metrics = {"extended_review_status": "partial", "extended_block_analysis": "completed",
+               "extended_comprehensive_analysis": "completed", "extended_norm_verification": "unavailable",
+               "extended_finding_review": "completed", "extended_finding_correction": "completed"}
+    assert sf.rollup_degradation(("text_analysis",), metrics, STAGES) == ("norm_verification",)
+    both = {**metrics, "extended_finding_review": "partial"}
+    assert sf.rollup_degradation(("block_analysis", "text_analysis"), both, STAGES) == (
+        "block_analysis", "norm_verification", "finding_review")
+    only_cross = {**metrics, "extended_norm_verification": "completed", "extended_comprehensive_analysis": "partial"}
+    assert sf.rollup_degradation(("text_analysis",), only_cross, STAGES) == ("text_analysis",), "never emptied"
+    assert sf.rollup_degradation(("block_analysis",), metrics, STAGES) == ("block_analysis",), "no text stage, nothing to replace"
+    assert sf.rollup_degradation(("text_analysis",), None, STAGES) == ("text_analysis",)

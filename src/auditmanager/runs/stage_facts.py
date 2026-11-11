@@ -31,8 +31,9 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import AbstractContextManager
+import dataclasses
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Final
@@ -48,12 +49,15 @@ __all__ = [
     "CellBinding",
     "RunBinding",
     "RunRow",
+    "EXTENDED_ROLLUP_MESSAGES",
     "PRIMARY_TEXT_PENDING_METRIC",
     "StageRow",
     "assemble_run_stage_facts",
     "chip_of_call",
     "chip_of_phase",
+    "is_extended_rollup",
     "is_primary_text_placeholder",
+    "rollup_degradation",
     "read_run_stage_facts",
 ]
 
@@ -139,6 +143,48 @@ def is_primary_text_placeholder(stage_id: str, metrics: Mapping[str, Any] | None
     """Whether a ``stage_result`` row is the text stage's placeholder (:data:`PRIMARY_TEXT_PENDING_METRIC` is ``true``)."""
     return stage_id == TEXT_STAGE_ID and isinstance(metrics, Mapping) and metrics.get(PRIMARY_TEXT_PENDING_METRIC) is True
 
+
+#: `STAGE-ROLLUP-TEXT-01`. The extended review keeps its result on the ``text_analysis`` row. When one of its procedures ends incomplete,
+#: the executor (``runs/executor.py``, ``extended_progress`` and ``v3_progress``) turns a **succeeded** text row into ``partial`` with
+#: ``analysis_failed`` and one of these messages. The run is rightly ``partial`` (its degradation set names ``text_analysis``), but the
+#: text stage itself succeeded: the readers show the row as succeeded and name the incomplete procedures instead (a unit test holds
+#: these messages to the executor's).
+EXTENDED_ROLLUP_MESSAGES: Final[frozenset[str]] = frozenset({
+    "the accepted extended analysis workflow did not fully complete",
+    "the accepted section workflow did not fully complete",
+})
+#: The prefix of the per-procedure statuses the executor copies onto the text row's metrics (``extended_<procedure id>``).
+EXTENDED_PROCEDURE_METRIC_PREFIX: Final[str] = "extended_"
+_INCOMPLETE_PROCEDURE: Final = frozenset({"partial", "failed", "unavailable"})
+
+
+def is_extended_rollup(stage_id: str, status: str, error: Mapping[str, Any] | None) -> bool:
+    """Whether a ``stage_result`` row is a succeeded text stage marked ``partial`` only by the extended review (`STAGE-ROLLUP-TEXT-01`)."""
+    return (stage_id == TEXT_STAGE_ID and status == "partial" and isinstance(error, Mapping)
+            and error.get("code") == "analysis_failed" and error.get("message") in EXTENDED_ROLLUP_MESSAGES)
+
+
+def rollup_degradation(
+    degradation: Sequence[str], metrics: Mapping[str, Any] | None, stage_ids: Collection[str],
+) -> tuple[str, ...]:
+    """A run's degradation set with ``text_analysis`` replaced by the incomplete extended procedures its row's metrics name.
+
+    Only procedures that are stages of the contract (``stage_ids``) are named; when none is, ``text_analysis`` stays, so the set is
+    never emptied by the reading (a ``partial`` run always names something)."""
+    if TEXT_STAGE_ID not in degradation or not isinstance(metrics, Mapping):
+        return tuple(degradation)
+    named = [key[len(EXTENDED_PROCEDURE_METRIC_PREFIX):] for key, value in metrics.items()
+             if isinstance(key, str) and key.startswith(EXTENDED_PROCEDURE_METRIC_PREFIX) and value in _INCOMPLETE_PROCEDURE]
+    named = [stage for stage in named if stage in stage_ids]
+    if not named:
+        return tuple(degradation)
+    out: list[str] = []
+    for stage in degradation:
+        for replacement in (named if stage == TEXT_STAGE_ID else [stage]):
+            if replacement not in out:
+                out.append(replacement)
+    return tuple(out)
+
 #: Sorts a failed call that has no time before every call that has one.
 _EPOCH: Final[datetime] = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
@@ -204,6 +250,8 @@ class StageRow:
     reused_from_run_id: str | None = None
     #: The row is the text stage's placeholder (:func:`is_primary_text_placeholder`); the facts read it as not reported yet.
     primary_text_pending: bool = False
+    #: The row is a succeeded text stage marked ``partial`` only by the extended review (:func:`is_extended_rollup`); read as succeeded.
+    extended_rollup: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -506,6 +554,11 @@ def assemble_run_stage_facts(
     rows_by_stage = {
         row.stage_id: row for row in stage_rows if not (row.primary_text_pending and row.stage_id == TEXT_STAGE_ID)
     }
+    # STAGE-ROLLUP-TEXT-01: a text row marked partial only by the extended review is the text stage's own success; the incomplete
+    # procedures are read from the review on their own chips.
+    text_row = rows_by_stage.get(TEXT_STAGE_ID)
+    if text_row is not None and text_row.extended_rollup:
+        rows_by_stage[TEXT_STAGE_ID] = dataclasses.replace(text_row, status="succeeded", error_code=None, extended_rollup=False)
     procedures = _procedures(review)
     coverage = _coverage(review)
     plan_cells = _plan_cells(run.stage_plan)
@@ -574,7 +627,8 @@ _SELECT_CELL_BINDINGS = text(
 _SELECT_STAGE_ROWS = text(
     "SELECT stage_id, status, error ->> 'code' AS error_code, started_at, finished_at, "
     f"metrics ->> '{_REUSED_FROM_METRIC}' AS reused_from_run_id, "
-    f"COALESCE(metrics -> '{PRIMARY_TEXT_PENDING_METRIC}' = CAST('true' AS jsonb), false) AS primary_text_pending "
+    f"COALESCE(metrics -> '{PRIMARY_TEXT_PENDING_METRIC}' = CAST('true' AS jsonb), false) AS primary_text_pending, "
+    "error AS error_document "
     "FROM stage_result WHERE run_id = :run_id ORDER BY stage_id"
 )
 #: Every call the journal holds for the run: each effect with the ``model_call`` row it ended in (``final_model_call_id``, else its own id),
@@ -638,6 +692,7 @@ def _read_stage_rows(session: Session, run_id: str) -> list[StageRow]:
             stage_id=str(row["stage_id"]), status=str(row["status"]), error_code=row["error_code"],
             started_at=row["started_at"], finished_at=row["finished_at"], reused_from_run_id=row["reused_from_run_id"],
             primary_text_pending=row["primary_text_pending"] is True,
+            extended_rollup=is_extended_rollup(str(row["stage_id"]), str(row["status"]), row["error_document"]),
         )
         for row in rows
     ]
