@@ -53322,7 +53322,7 @@
           "char_end"
         ],
         "title": "FindingCrossEvidence",
-        "description": "`CRIT-SEAL-53` (contract 1.53.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the\nversion, the page, the quote and its span in that version's text layer. `Evidence` is untouched; this is the other document's, with its `version_uid`."
+        "description": "`CRIT-SEAL-53` (contract 1.54.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the\nversion, the page, the quote and its span in that version's text layer. `Evidence` is untouched; this is the other document's, with its `version_uid`."
       },
       "ReviewDecisionPatternRequest": {
         "properties": {
@@ -53345,7 +53345,7 @@
           "one_list"
         ],
         "title": "RunPublicationMode",
-        "description": "`CRIT-SEAL-53` (contract 1.53.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan."
+        "description": "`CRIT-SEAL-53` (contract 1.54.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan."
       },
       "StageQualityRow": {
         "properties": {
