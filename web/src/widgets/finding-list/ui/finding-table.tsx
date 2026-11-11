@@ -19,7 +19,7 @@
 import { Fragment } from 'react';
 import type { ReactNode } from 'react';
 
-import type { Finding } from '@/shared/api';
+import type { Finding, PrecedentFindingLabel } from '@/shared/api';
 import {
   EXECUTION_STATUS_LABELS,
   EvidenceLimitation,
@@ -33,6 +33,7 @@ import {
 import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages, findingPages } from '@/entities/finding-observation';
 import { clauseLabel } from '@/entities/norms';
+import { PrecedentMark } from '@/entities/decision-memory';
 
 import { pagesParts, verdictBucket } from '../model/presentation';
 import styles from './finding-table.module.css';
@@ -59,6 +60,8 @@ export interface FindingTableProps {
    * has a count that is not all of its blocks, and the count says so (J3 F7). Absent, no count is called partial.
    */
   readonly unlinkedPages?: ReadonlySet<number> | undefined;
+  /** `PREC-WEB`: the neutral label of a finding's precedents, drawn in its «Замечание» cell. Absent, no mark. */
+  readonly precedentOf?: ((findingUid: string) => PrecedentFindingLabel | undefined) | undefined;
 }
 
 /**
@@ -149,6 +152,7 @@ export function FindingTable({
   sheetOf,
   blockCountOf,
   unlinkedPages,
+  precedentOf,
 }: FindingTableProps) {
   return (
     <div className={styles.scroll} data-finding-table="">
@@ -224,6 +228,8 @@ export function FindingTable({
                         <OriginChip origin={findingOriginOf(finding)} />
                       </span>
                     )}
+                    {/* `PREC-WEB`: the precedents' label, in its own line of the cell. */}
+                    <PrecedentMark label={precedentOf?.(finding.finding_uid)} />
                     {finding.execution_status === undefined ? null : (
                       <span className={styles.execution} data-execution-status={finding.execution_status}>
                         {EXECUTION_STATUS_LABELS[finding.execution_status]}

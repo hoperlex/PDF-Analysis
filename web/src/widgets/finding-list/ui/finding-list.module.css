@@ -207,3 +207,51 @@
 .severities [data-severity-filter='undetermined'] {
   border-left: 3px solid var(--am-inert);
 }
+
+/*
+ * `PREC-WEB`: the collapsed queue «Рекомендовано снять» (the box is the global `.am-note`; layout only here, no colour of its own).
+ * The summary is the handle; the finding's text is one line with an ellipsis, so a long list stays a short column.
+ */
+.queue {
+  min-width: 0;
+}
+
+.queueSummary {
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+.queueHint {
+  margin: var(--am-gap-xs) 0;
+  font-size: var(--am-text-xs);
+}
+
+.queueList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-2xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queueItem {
+  display: flex;
+  align-items: baseline;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+.queueText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queueCount {
+  flex: none;
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
+}

@@ -40,9 +40,10 @@ import { routes } from '@/shared/lib';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { useMayActAsExpert } from '@/entities/account';
+import { useMemoryAccess, useRunPrecedents, useVectorControl } from '@/entities/decision-memory';
 import { ExportPanel } from '@/widgets/export-panel';
 import { blocksOfFinding, findingBlockIndex, sheetOfPage, useRunFindingBlocks, useSheetLabels } from '@/entities/block';
-import { FindingList, FindingToolbar, filterBySeverity, filterGroups, findingViewOf, findingsAsShown, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
+import { FindingList, FindingToolbar, PrecedentsLine, filterBySeverity, filterGroups, findingViewOf, findingsAsShown, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
 import type { FindingView, SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
 import { CandidateNormAdvice, CriticAdviceLine, ExtendedReviewSummary, ReviewCandidates } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
@@ -146,6 +147,18 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     [findingsQuery.data],
   );
   const groups = useMemo(() => groupByCategory(admitted.findings), [admitted.findings]);
+  // `PREC-WEB`: what the «Прецеденты» say of each finding. An expert's or an administrator's read: the viewer is denied by the server,
+  // so for him (and while the account is not known) no request is made. A failed read draws nothing; the findings go on as they were.
+  const precedentsAccess = useMemoryAccess();
+  const runPrecedents = useRunPrecedents(runId, precedentsAccess.read);
+  const labelByFinding = useMemo(
+    () => new Map((runPrecedents.data?.items ?? []).map((label) => [label.finding_uid as string, label] as const)),
+    [runPrecedents.data],
+  );
+  // The line above the list: only once the server has answered that the run has no precedents yet, and there are findings to be marked.
+  const precedentsAbsent = precedentsAccess.read && runPrecedents.data !== undefined && !runPrecedents.data.available && admitted.findings.length > 0;
+  const vectorControl = useVectorControl(precedentsAbsent);
+  // The hours come with the line, not after it: a line that is drawn and then rewritten flashes. A failed read draws it without hours.
   const findingUids = useMemo(
     () => admitted.findings.map((finding) => finding.finding_uid),
     [admitted.findings],
@@ -523,6 +536,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         onViewChange={setView}
         actions={admitted.findings.length === 0 ? undefined : exportPanel}
       />
+      {precedentsAbsent && !vectorControl.isPending ? <PrecedentsLine window={vectorControl.data?.window ?? null} /> : null}
       <div className={view === 'table' ? `am-review ${styles.layout} ${styles.layoutTable}` : `am-review ${styles.layout}`}>
         <div className={view === 'table' ? `am-review__list ${styles.list} ${styles.listTable}` : `am-review__list ${styles.list}`}>
           <FindingList
@@ -536,6 +550,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             toolbar="outside"
             blockCountOf={blockLinks === null ? undefined : (findingUid) => blocksOfFinding(blockLinks, findingUid).length}
             unlinkedPages={blockLinks === null ? undefined : blockLinks.unlinkedPages}
+            precedentOf={precedentsAccess.read ? (findingUid) => labelByFinding.get(findingUid) : undefined}
+            onOpenQueued={(findingUid) => {
+              setSelection(selectFinding(findingUid));
+            }}
             selectedFindingUid={selectedUid}
             onSelect={(findingUid) => {
               // A second press on the open row of the table closes it, as the original's strip does.

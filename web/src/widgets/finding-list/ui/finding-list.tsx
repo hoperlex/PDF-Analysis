@@ -23,16 +23,18 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import type { Finding, FindingCategory, Severity } from '@/shared/api';
+import type { Finding, FindingCategory, PrecedentFindingLabel, Severity } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
 import { EXECUTION_STATUS_LABELS, EvidenceLimitation, OriginChip, SEVERITY_LABELS, SeverityBadge, countGrouped, findingOriginOf } from '@/entities/finding';
 import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
 import { findingPages } from '@/entities/finding-observation';
+import { PrecedentMark, isCancelSuggested } from '@/entities/decision-memory';
 
 import { findingNumbers, findingsAsShown, groupsInVerdictOrder, pagesLabel, verdictBucket } from '../model/presentation';
 import type { VerdictFilter } from '../model/presentation';
+import { CancelQueue, cancelQueueOf } from './cancel-queue';
 import { FindingTable } from './finding-table';
 import styles from './finding-list.module.css';
 
@@ -85,6 +87,14 @@ export interface FindingListProps {
    * `FindingToolbar` itself, across the whole width over the list and the open finding.
    */
   readonly toolbar?: 'inside' | 'outside' | undefined;
+  /**
+   * `PREC-WEB`: what the «Прецеденты» say of a finding: its label, or nothing. The row and the table's cell draw the neutral mark from it, and the
+   * queue «Рекомендовано снять» is made of the shown, still undecided findings whose label is `cancel_suggested`. Absent (a viewer, or no read yet),
+   * the list draws no mark and no queue.
+   */
+  readonly precedentOf?: ((findingUid: string) => PrecedentFindingLabel | undefined) | undefined;
+  /** Where a press on an item of the queue goes; absent, `onSelect`. The table's `onSelect` closes an open row, which a link must not do. */
+  readonly onOpenQueued?: ((findingUid: string) => void) | undefined;
 }
 
 /** The two ways to read the findings: the list beside the open finding, or the full-width table of the original. */
@@ -330,6 +340,8 @@ export function FindingList({
   toolbar,
   blockCountOf,
   unlinkedPages,
+  precedentOf,
+  onOpenQueued,
 }: FindingListProps) {
   const [ownFilter, setOwnFilter] = useState<VerdictFilter>('active');
   const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
@@ -400,6 +412,16 @@ export function FindingList({
         />
       ) : null}
 
+      <CancelQueue
+        items={cancelQueueOf(
+          shown.flatMap((group) => group.findings),
+          precedentOf,
+          (finding) => verdictBucket(finding.current_verdict) === 'waiting',
+          isCancelSuggested,
+        )}
+        onOpen={onOpenQueued ?? onSelect}
+      />
+
       {shown.length === 0 ? (
         <p className="am-note" data-verdict-filter-empty={filter}>
           {severity === 'all' ? 'Находок с таким вердиктом нет.' : 'Находок с таким отбором нет.'}
@@ -417,6 +439,7 @@ export function FindingList({
           sheetOf={sheetOf}
           blockCountOf={blockCountOf}
           unlinkedPages={unlinkedPages}
+          precedentOf={precedentOf}
         />
       ) : null}
 
@@ -484,6 +507,8 @@ export function FindingList({
                         </>
                       )}
                       {pagesLabel(pages, sheetOf)}
+                      {/* `PREC-WEB`: the neutral label of the precedents; nothing for a finding with none, and never a «Недоступно». */}
+                      <PrecedentMark label={precedentOf?.(finding.finding_uid)} />
                       {(finding.merged_observations?.length ?? 0) > 1 ? (
                         // The original's «×N» on a finding that stands for several observations.
                         <span

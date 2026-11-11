@@ -42,3 +42,14 @@ export { memoryAccessOf, useMemoryAccess } from './model/access';
 export type { MemoryAccess } from './model/access';
 
 export { MEMORY_PAGE_LIMIT, useDecisionMemoryCase, useDecisionMemoryCases, useDecisionMemoryStatus } from './api/use-decision-memory';
+
+/** `PREC-WEB`: the «Прецеденты» of a finding -- the neutral label, the queue, the line above the list, the card's hints. Reads only. */
+export {
+  CASE_VERDICT_MARK, MAX_HINTS, isCancelSuggested, precedentCaption, precedentHintLine, precedentTitle, precedentsUnavailableLine,
+  shownHints, similarityPercent,
+} from './model/precedents';
+export {
+  findingPrecedentsQueryOptions, precedentKeys, precedentSettingsQueryOptions, runPrecedentsQueryOptions, useFindingPrecedents,
+  usePrecedentSettings, useRunPrecedents, useVectorControl, vectorControlQueryOptions,
+} from './api/use-precedents';
+export { PrecedentMark } from './ui/precedent-mark';

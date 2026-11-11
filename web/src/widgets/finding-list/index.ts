@@ -10,3 +10,6 @@ export type { FindingTableProps } from './ui/finding-table';
 export { FindingTable } from './ui/finding-table';
 export type { FindingRowActionsProps, RowIntent, RowNote } from './ui/finding-row-actions';
 export { FindingRowActions } from './ui/finding-row-actions';
+export type { CancelQueueItem, CancelQueueProps } from './ui/cancel-queue';
+export { CancelQueue, cancelQueueOf } from './ui/cancel-queue';
+export { PrecedentsLine } from './ui/precedents-line';
