@@ -136,6 +136,8 @@ _ITEM_JOINS = """
         FROM job q
        WHERE q.state = 'queued'
   ) qp ON qp.job_id = page.job_id"""
+#: `RUN-DELETE-01`: the job of a run an expert deleted from the run lists (a row of ``audit_run_deletion``) is not in the queue, nor in its
+#: counts below; the run, its job and their journal stay stored (``getExecutionQueueItem`` and the journal of a run still answer by identity).
 #: The page of jobs is cut from ``job`` alone, sorted and limited first; only those rows are then joined to the run,
 #: the project and the document, so the cost of a read is the sort it always was plus one lookup per listed row.
 #: The optional filters bind as ``CAST(:name AS type) IS NULL OR ...``: a set of states (one state, or a group's), and the half-open period
@@ -146,6 +148,7 @@ _QUEUE = text(f"""
         SELECT j.job_id, j.run_id, j.state, j.priority, j.created_at, j.available_at, j.terminal_at
           FROM job j
          WHERE (CAST(:states AS text[]) IS NULL OR j.state = ANY(CAST(:states AS text[])))
+           AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = j.run_id)
            AND (CAST(:created_from AS timestamptz) IS NULL OR j.created_at >= CAST(:created_from AS timestamptz))
            AND (CAST(:created_to AS timestamptz) IS NULL OR j.created_at < CAST(:created_to AS timestamptz))
            AND (CAST(:cursor_job_id AS text) IS NULL OR j.job_id <> :cursor_job_id)
@@ -241,6 +244,7 @@ _OVERVIEW = text("""
       FROM job j
      WHERE (CAST(:created_from AS timestamptz) IS NULL OR j.created_at >= CAST(:created_from AS timestamptz))
        AND (CAST(:created_to AS timestamptz) IS NULL OR j.created_at < CAST(:created_to AS timestamptz))
+       AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = j.run_id)
      GROUP BY j.state
 """)
 
@@ -287,17 +291,22 @@ class ExecutionRepository:
         exactly one job (``uq_job_run_id``) and a re-audit makes a new run, so "a later job for the same run" -- the
         original's "retried" -- is read as a later job of the same version, which is what a retry is here. Over all
         history, with no window: a failure ages out only by being answered.
+
+        `RUN-DELETE-01`: a run an expert deleted from the run lists is not counted, and is not an answer either (a later run that
+        was deleted is not the last word on its version: the failure before it is again).
         """
         count = session.execute(text("""
             SELECT count(*)
               FROM job j
               JOIN audit_run r ON r.run_id = j.run_id
              WHERE j.state IN ('failed', 'dead_letter')
+               AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = r.run_id)
                AND NOT EXISTS (
                    SELECT 1
                      FROM job n
                      JOIN audit_run nr ON nr.run_id = n.run_id
                     WHERE nr.version_uid = r.version_uid
+                      AND NOT EXISTS (SELECT 1 FROM audit_run_deletion nd WHERE nd.run_id = nr.run_id)
                       AND (n.created_at, n.job_id) > (j.created_at, j.job_id)
                )
         """)).scalar_one()

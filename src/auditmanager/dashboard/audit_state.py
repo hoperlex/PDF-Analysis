@@ -137,7 +137,8 @@ _CURRENT_DOCS_OF_VERSIONS = """
 #:
 #: ``result_run`` takes, per version in scope, the first of its published or partial runs in ``(created_at DESC,
 #: run_id DESC)`` -- ``listRuns``' order, so the result run is the newest run ``listRuns`` would show among
-#: those. ``run_finding`` is the set of ``finding_uid`` the result run published; ``GROUP BY`` makes it a set,
+#: those. A run an expert deleted from the run lists (`RUN-DELETE-01`, a tombstone in ``audit_run_deletion``) is not one of them: ``listRuns`` does
+#: not show it, so a deleted partial run gives way to the published run before it, or to none. ``run_finding`` is the set of ``finding_uid`` the result run published; ``GROUP BY`` makes it a set,
 #: so a finding observed twice by one run counts once. ``version_findings`` counts them and the undecided ones.
 _RESULT_RUN_RULES = """,
     result_run AS (
@@ -145,6 +146,7 @@ _RESULT_RUN_RULES = """,
         FROM audit_run r
         WHERE r.state IN ('published', 'partial')
           AND r.version_uid IN (SELECT version_uid FROM current_docs)
+          AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = r.run_id)
         ORDER BY r.version_uid, r.created_at DESC, r.run_id DESC
     ),
     run_finding AS (

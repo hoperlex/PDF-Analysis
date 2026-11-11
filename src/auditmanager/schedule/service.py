@@ -96,7 +96,7 @@ _ABSENCES = text(
 )
 #: The ``checked`` documents of the audit read model (`dashboard/audit_state.py`, the same rules) whose latest verdict
 #: falls in ``[:start, :stop)`` of the schedule's zone, with that verdict's author. The result run is the newest published or
-#: partial run, as the audit state reads it.
+#: partial run, as the audit state reads it -- a run an expert deleted from the run lists (`RUN-DELETE-01`) is not one.
 _FACTS = text(
     """
     WITH current_docs AS (
@@ -111,6 +111,7 @@ _FACTS = text(
         FROM audit_run r
         WHERE r.state IN ('published', 'partial')
           AND r.version_uid IN (SELECT version_uid FROM current_docs)
+          AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = r.run_id)
         ORDER BY r.version_uid, r.created_at DESC, r.run_id DESC
     ),
     run_finding AS (

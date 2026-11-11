@@ -381,6 +381,16 @@ class ExecutionAdapter(_SessionHolder):
             return _run_status_view(session, run_id)
         return self._write(write)
 
+    def delete_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> RunStatusView:
+        """`RUN-DELETE-01`: a partial, failed or cancelled run leaves the run lists (a tombstone); the answer is the run, still readable."""
+        from auditmanager.runs.commands import delete_audit_run
+
+        def write(session: Session) -> RunStatusView:
+            delete_audit_run(session, run_id=run_id, roles=self._roles(session, user_uid), user_uid=user_uid,
+                             idempotency_key=idempotency_key)
+            return _run_status_view(session, run_id)
+        return self._write(write)
+
     def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str,
                     cost_consent: dict[str, Any] | None = None) -> RunStatusView:
         from auditmanager.runs.commands import reaudit_run
