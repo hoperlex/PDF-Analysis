@@ -102,19 +102,25 @@ def test_a_call_that_is_not_a_cells_is_written_as_it_was(clock: Clock, monkeypat
     assert set(payload) == {"system", "user_text", "output_schema", "__reads"} and payload["__reads"] == []
 
 
-def test_a_call_with_no_run_or_of_a_comparison_is_not_offered_any(clock: Clock, monkeypatch: pytest.MonkeyPatch) -> None:
-    class Comparison:
-        run_id = None
-        comparison_attempt_id = "cwa_1"
-        attempt_id = None
-        call_id = None
+class Comparison:
+    """The context of a comparison's call: a work attempt of its own. Whether it also names a run is not what decides."""
 
-        def remaining_seconds(self) -> float:
-            return 3000.0
+    comparison_attempt_id = "cwa_1"
+    attempt_id = None
+    call_id = None
 
-        def call_started(self) -> None: ...
+    def __init__(self, run_id: str | None) -> None:
+        self.run_id = run_id
 
-    payload = written(clock, monkeypatch, context=Comparison())
+    def remaining_seconds(self) -> float:
+        return 3000.0
+
+    def call_started(self) -> None: ...
+
+
+@pytest.mark.parametrize("run_id", [None, "run_1"])
+def test_a_call_with_no_run_or_of_a_comparison_is_not_offered_any(clock: Clock, monkeypatch: pytest.MonkeyPatch, run_id: str | None) -> None:
+    payload = written(clock, monkeypatch, context=Comparison(run_id))
     assert "context_request" not in payload and payload["__reads"] == []
 
 
