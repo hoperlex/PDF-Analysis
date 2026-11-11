@@ -49,7 +49,7 @@ _LOCK_RUN = text(
 )
 _SET_RUN = text(
     "UPDATE decision_memory_precedent_run SET revision = :revision, state = :state, failure_code = :code, "
-    "state_changed_at = clock_timestamp() WHERE run_id = :run_id"
+    "state_changed_at = COALESCE(:at, clock_timestamp()) WHERE run_id = :run_id"
 )
 _LATEST = text("SELECT max(revision) FROM decision_memory_precedent_advice WHERE run_id = :run_id")
 _ADVICE = text(
@@ -127,10 +127,14 @@ def ensure_run_row(session: Session, run_id: str) -> RunRow:
     return RunRow(int(row[0]), str(row[1]), None if row[2] is None else str(row[2]), row[3], row[4])
 
 
-def set_run_state(session: Session, run_id: str, *, state: str, revision: int, failure_code: str | None = None) -> None:
+def set_run_state(
+    session: Session, run_id: str, *, state: str, revision: int, failure_code: str | None = None, at: datetime | None = None,
+) -> None:
+    """Move the pass row of the run. ``at`` is the moment a computation **started reading** (:func:`database_now`): ``state_changed_at`` then says «the
+    standing of the memory as of this moment is in the advice», which is what a read compares the memory's own events with. Without it, the database's clock."""
     if (state == STATE_FAILED) != (failure_code is not None):
         raise ValueError("a failed pass has a failure code and no other state has one")
-    session.execute(_SET_RUN, {"run_id": run_id, "state": state, "revision": revision, "code": failure_code})
+    session.execute(_SET_RUN, {"run_id": run_id, "state": state, "revision": revision, "code": failure_code, "at": at})
 
 
 def mark_failed(session: Session, run_id: str, *, code: str) -> None:

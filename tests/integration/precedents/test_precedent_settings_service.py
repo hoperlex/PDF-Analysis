@@ -171,15 +171,23 @@ def test_a_value_that_is_not_the_shape_of_its_setting_is_refused_before_the_data
 
 def test_the_limit_on_the_size_of_a_value_is_the_databases_own(journalled_sessions: sessionmaker[Session], admin_uid: str) -> None:
     """The value that just meets the limit is accepted by the journal's CHECK (``octet_length(value::text) <= 16384``), the one octet more is refused
-    here: the service's count and the database's agree, so neither a refusal is spurious nor a database error reaches the administrator."""
+    here: the service's count and the database's agree, so neither a refusal is spurious nor a database error reaches the administrator.
+
+    `PREC-PASS` gave ``stop_words``, ``thresholds`` and ``section_labels`` their shapes, and no value of a shape is that large; so the database's side is
+    shown by an insert of its own (a revision of ``thresholds`` made by SQL), and the service's side by what it refuses first: the size, before the shape."""
     service = PrecedentSettingService(journalled_sessions, roles_of=ADMIN_ROLES)
-    at_limit = append(service, admin_uid, "stop_words", {"w": "x" * (journal.VALUE_MAX_OCTETS - 9)})
-    assert len(at_limit["value"]["w"]) == journal.VALUE_MAX_OCTETS - 9
-    cyrillic = append(service, admin_uid, "thresholds", {"w": "я" * ((journal.VALUE_MAX_OCTETS - 9) // 2)})
-    assert cyrillic["revision"] >= 1
-    with pytest.raises(DomainError) as caught:
-        append(service, admin_uid, "stop_words", {"w": "x" * (journal.VALUE_MAX_OCTETS - 8)})
-    assert caught.value.detail_fields["constraint"] == "value_too_large"
+    for count_of_octets, constraint in ((journal.VALUE_MAX_OCTETS - 9, "stop_words_shape"), (journal.VALUE_MAX_OCTETS - 8, "value_too_large")):
+        with pytest.raises(DomainError) as caught:
+            append(service, admin_uid, "stop_words", {"w": "x" * count_of_octets})
+        assert caught.value.detail_fields["constraint"] == constraint, "the size is judged before the shape, at the very octet"
+    insert = text("INSERT INTO precedent_setting_event (setting_name, revision, value, actor_user_uid) "
+                  "VALUES ('thresholds', (SELECT COALESCE(MAX(revision), 0) + 1 FROM precedent_setting_event WHERE setting_name = 'thresholds'), "
+                  "CAST(:value AS jsonb), :actor)")
+    with journalled_sessions() as session:
+        for letter, octets in (("x", journal.VALUE_MAX_OCTETS - 9), ("я", (journal.VALUE_MAX_OCTETS - 9) // 2)):
+            session.execute(insert, {"value": '{"w": "' + letter * octets + '"}', "actor": admin_uid})      # at the limit: the CHECK takes it
+        with pytest.raises(Exception, match="ck_precedent_setting_event_value"), session.begin_nested():
+            session.execute(insert, {"value": '{"w": "' + "x" * (journal.VALUE_MAX_OCTETS - 8) + '"}', "actor": admin_uid})   # one octet more: it does not
 
 
 def test_one_list_cannot_be_switched_on_while_it_is_not_ready_but_can_be_switched_off(
@@ -232,7 +240,7 @@ def test_the_same_key_with_another_body_is_refused_as_a_reuse_of_the_key(journal
     same = key("conflict")
     service.append_precedent_setting(setting_name="critic_context", value={"enabled": True}, user_uid=admin_uid, idempotency_key=same)
     rows = journal_rows(sessions)
-    for name, value in (("critic_context", {"enabled": False}), ("section_labels", {"enabled": True})):
+    for name, value in (("critic_context", {"enabled": False}), ("section_labels", {"AR": {"enabled": False}})):
         with pytest.raises(DomainError) as caught:
             service.append_precedent_setting(setting_name=name, value=value, user_uid=admin_uid, idempotency_key=same)
         assert caught.value.code == ErrorCode.IDEMPOTENCY_KEY_REUSE

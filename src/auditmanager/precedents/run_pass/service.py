@@ -179,7 +179,7 @@ class PrecedentService:
                 return body
             place = reads.version_place(session, run.version_uid)
             thresholds, on = evaluation.effective_thresholds(journal.read_thresholds(session), place.section, journal.read_section_labels(session))
-            if reads.memory_changed_since(session, max(item.computed_at for item in stored.values())):
+            if reads.memory_changed_since(session, self._computed_as_of(row, stored)):
                 views = self._evaluated_again(session, run, place, thresholds, on, stored, now)
             else:
                 views = {
@@ -189,6 +189,14 @@ class PrecedentService:
             body["items"] = [_label_body(uid, views[uid], latest) for uid in sorted(views)]
             body.update(available=bool(body["items"]), revision=latest)
             return body
+
+    @staticmethod
+    def _computed_as_of(row: store.RunRow, stored: Mapping[str, store.StoredAdvice]) -> datetime:
+        """The moment the advice speaks for: the last complete computation of the pass (``state_changed_at``, which the pass sets to the moment it started
+        reading, also when its result came out the same). A pass row that is ``failed`` says only when it failed, so the rows' own time is taken there:
+        the earlier moment, which can only make the read evaluate again."""
+        written = max(item.computed_at for item in stored.values())
+        return written if row.state == store.STATE_FAILED else max(written, row.state_changed_at)
 
     def _evaluated_again(
         self, session: Session, run: reads.RunFacts, place: reads.VersionPlace, thresholds: Any, on: bool,

@@ -187,14 +187,16 @@ class PrecedentPass:
                 return PassOutcome(run_id, OUTCOME_NO_FINDINGS, False)
             row = store.ensure_run_row(session, run_id)
             started = store.database_now(session)
-            store.ensure_probes(session, run_id, findings)
             probes = reads.probe_rows(session, run_id)
+            queued = store.ensure_probes(session, run_id, [item for item in findings if item.finding_uid not in probes])
+            if queued:
+                probes = reads.probe_rows(session, run_id)
             done = {uid for uid, probe in probes.items() if probe.state == "done"}
             waiting = any(probe.state == "pending" for probe in probes.values())
             state = store.STATE_PENDING if waiting else store.STATE_DONE
             latest = store.latest_revision(session, run_id)
             if not done:
-                changed = row.state != state or row.failure_code is not None
+                changed = queued > 0 or row.state != state or row.failure_code is not None
                 if changed:
                     store.set_run_state(session, run_id, state=state, revision=row.revision)
                 session.commit()
@@ -216,7 +218,8 @@ class PrecedentPass:
                 revision, wrote = (1 if latest is None else latest + 1), True
                 store.write_advice(session, run_id, revision, rows, computed_at=started)
             changed = wrote or row.state != state or row.revision != revision or row.failure_code is not None
-            if changed:
-                store.set_run_state(session, run_id, state=state, revision=revision)
+            # Always: a result that came out the same is still a result **as of this moment** (``started``), and the reader that asks whether the memory has moved
+            # since the advice was computed compares with this, not with the day the rows were first written.
+            store.set_run_state(session, run_id, state=state, revision=revision, at=started)
             session.commit()
             return PassOutcome(run_id, OUTCOME_COMPUTED if wrote else OUTCOME_UNCHANGED, changed, revision)
