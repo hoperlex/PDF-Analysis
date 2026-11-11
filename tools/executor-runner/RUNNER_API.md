@@ -24,14 +24,9 @@ payloads (document text) and returns model answers. It never reaches PostgreSQL 
   whose bearer is a one-time enrollment secret that is exchanged for such a token.
 - **Bodies.** Requests with a body use `Content-Type: application/json; charset=utf-8`.
   Responses with a body are `application/json`. Control request bodies are at most 1 MiB; a
-  larger one is rejected `422 validation_failed`. `POST .../answer` is not held to that 1 MiB:
-  its complete JSON answer is validated against the task schema without a character or byte
-  truncation (`HOTFIX-RUN-PARTIAL-1106`, contract 1.33.0), and `output_text` has one bound,
-  **1 000 000 characters** (`maxLength`, contract 1.53.0, `D-688`: the ceiling the contract
-  carried until 1.33.0, restored as a sanity bound on the field). It sits above the longest
-  answer any model of the catalogue can give (128 000 output tokens, `ANTHROPIC_MAX_OUTPUT_TOKENS`
-  in `api_answer.py`), so it caps nothing a model may say (`R-153n`); an answer beyond it is
-  `422 validation_failed` and a runner reports the task failed.
+  larger one is rejected `422 validation_failed`. `POST .../answer` has no application
+  response-size ceiling: its complete JSON answer is validated against the task schema
+  without a character or byte truncation (`HOTFIX-RUN-PARTIAL-1106`, contract 1.33.0).
 - **Time.** Timestamps are RFC 3339 in UTC with a `Z` suffix, for example
   `2026-10-22T07:30:15Z`. A runner never trusts its own clock alone: it derives the time
   left on a claim from `claim_expires_at` minus the response's `Date` header. The server

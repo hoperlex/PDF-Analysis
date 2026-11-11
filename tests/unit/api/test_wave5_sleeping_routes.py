@@ -7,7 +7,7 @@ Mounted alone on a bare ``FastAPI`` application with the principal the authoriza
   (an answer that is not the contract's shape is refused, never passed on); a keyed write without its key is ``422``;
 * **who may call what** is the register's, written here as literals: an expert and an administrator read and review the patterns, the administrator alone
   reads the quality table, the viewer none;
-* the schemas: the closed vocabularies, the closed bodies, the optional members, the answer bound of `D-688`.
+* the schemas: the closed vocabularies, the closed bodies, the optional members.
 """
 
 from __future__ import annotations
@@ -172,7 +172,8 @@ def test_the_document_declares_the_three_operations_and_the_new_members(document
     for name, member in (("Finding", "cross_evidence"), ("FindingDetail", "cross_evidence"), ("FindingObservation", "extended_observation_ref"),
                          ("RunStatus", "publication_mode")):
         assert member in schemas[name]["properties"] and member not in schemas[name].get("required", []), (name, member)
-    assert schemas["SubmitExecutorTaskAnswerRequest"]["properties"]["output_text"]["maxLength"] == 1_000_000
+    # the answer text keeps no bound (the owner removed the answer caps on 2026-11-06; `D-688` was withdrawn from this seal)
+    assert "maxLength" not in schemas["SubmitExecutorTaskAnswerRequest"]["properties"]["output_text"]
 
 
 def test_the_vocabularies_are_the_plans() -> None:
@@ -181,14 +182,6 @@ def test_the_vocabularies_are_the_plans() -> None:
     assert [i.value for i in models.DecisionPatternReview] == ["approve", "reject", "suspend"]
     assert [i.value for i in models.RunPublicationMode] == ["text_only", "one_list"]
     assert "parameter_mismatch" in {i.value for i in models.FindingCategory}
-
-
-def test_the_answer_body_is_bounded_at_one_million_characters() -> None:
-    """`D-688`: the ceiling the contract carried until 1.33.0, restored; one character over is refused, the bound itself is accepted."""
-    assert models.SubmitExecutorTaskAnswerRequest.model_validate({"output_text": "x" * 1_000_000, "model": "m"})
-    for bad in ("x" * 1_000_001, ""):
-        with pytest.raises(ValueError):
-            models.SubmitExecutorTaskAnswerRequest.model_validate({"output_text": bad, "model": "m"})
 
 
 def test_cross_evidence_names_the_other_version_and_is_a_span_of_its_quote() -> None:

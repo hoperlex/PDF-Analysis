@@ -28,12 +28,10 @@ the lane that owns it wires a port into `build_router`.
   `version_uid` of the other document, `page_number`, `quote`, `char_start`, `char_end`); absent for a finding with none. `Evidence` is untouched.
 - **Asked by `F8-WEB`.** `FindingObservation.extended_observation_ref` (optional, 1 to 128 characters: the candidate the observation was published from) and `RunStatus.publication_mode` (optional,
   `RunPublicationMode`: `text_only` or `one_list`, frozen at the run's start; absent reads as `text_only`). The server fills both.
-- **The answer bound (`D-688`).** `SubmitExecutorTaskAnswerRequest.output_text` has `maxLength: 1000000`: the ceiling the contract carried until 1.33.0 (`HOTFIX-RUN-PARTIAL-1106` removed it with the agents' delivery caps), restored as a sanity
-  bound on the field. It is above the longest answer any model of the catalogue can give (128 000 output tokens), so it caps nothing a model may say (`R-153n`), and it is far below the 26 MiB body cap of the API.
 - **Storage (migration `0066`).** `decision_memory_pattern` and its status journal `decision_memory_pattern_status_event` (KEEP, the content side of a case: the text is a copy of a comment, so the forget guard applies and
   a forget of the representative case removes both), the view `decision_memory_pattern_current`; `project_parameter_fact` and `finding_cross_evidence` (PRODUCT); the category check of `finding` and
   `finding_observation`. The command type `review_decision_pattern` is kept with its tables.
-- **Compatibility.** Additive for a reader: a client of 1.52.0 reads every answer of 1.53.0 unchanged, except that an answer body above 1 000 000 characters is now refused `422 validation_failed`.
+- **Compatibility.** Additive for a reader: a client of 1.52.0 reads every answer of 1.53.0 unchanged.
 
 The API has 299 paths, 328 operations and 820 schemas; migration head `0066`. The domain catalogs are at candidate revision 70.
 

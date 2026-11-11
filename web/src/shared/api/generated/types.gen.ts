@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
- *   sha256 6c1189b17ef9162e5222ac57a379e906d34b9c7919d4b0b32c745d242a261924
+ *   sha256 ba58ccca1b61b169012a6fc1096b971a679d1a448e662a66c7f37439cec8599a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.53.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '6c1189b17ef9162e5222ac57a379e906d34b9c7919d4b0b32c745d242a261924';
+export const CONTRACT_DIGEST = 'ba58ccca1b61b169012a6fc1096b971a679d1a448e662a66c7f37439cec8599a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -9268,8 +9268,7 @@ export type StartStageChainRunRequest = {
 
 /**
  * ``output_text`` is the bare JSON document (no code fence, no commentary) the task's
- * ``output_schema`` describes, at most 1 000 000 characters (`CRIT-SEAL-53`, `D-688`: the ceiling the contract carried until 1.33.0, restored as a
- * sanity bound; it is above the longest answer any model of the catalogue can give, 128 000 output tokens). ``model`` is the model that produced it, as the runner declares
+ * ``output_schema`` describes. ``model`` is the model that produced it, as the runner declares
  * it: an assertion the stand records as such, and holds equal to the connection's pinned model.
  * The token counts are the runner's own; the call is recorded as unmetered.
  */

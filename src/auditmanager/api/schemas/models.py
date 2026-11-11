@@ -6022,12 +6022,11 @@ class ExtendedExecutorTaskClaim(_Object):
 
 class SubmitExecutorTaskAnswerRequest(_Object):
     """``output_text`` is the bare JSON document (no code fence, no commentary) the task's
-    ``output_schema`` describes, at most 1 000 000 characters (`CRIT-SEAL-53`, `D-688`: the ceiling the contract carried until 1.33.0, restored as a
-    sanity bound; it is above the longest answer any model of the catalogue can give, 128 000 output tokens). ``model`` is the model that produced it, as the runner declares
+    ``output_schema`` describes. ``model`` is the model that produced it, as the runner declares
     it: an assertion the stand records as such, and holds equal to the connection's pinned model.
     The token counts are the runner's own; the call is recorded as unmetered."""
 
-    output_text: Annotated[str, Field(min_length=1, max_length=1000000)]
+    output_text: Annotated[str, Field(min_length=1)]
     model: Annotated[str, Field(min_length=1, max_length=200)]
     input_tokens: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
