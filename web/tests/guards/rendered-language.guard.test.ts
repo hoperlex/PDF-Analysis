@@ -100,6 +100,7 @@ import type { AnalysisProfileListItem, CarryoverCandidate, VersionClassification
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
 import { CarryOverDecisionView } from '@/features/carry-over-decision';
+import { DeleteRunConfirm, DeleteRunControl, deleteFailureText } from '@/features/delete-run';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
 import { SpecificationPricesAnswer, SpecificationPricesSection } from '@/widgets/specification-prices';
@@ -2341,6 +2342,19 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'start-run-cost-dialog',
     make: startRunCostDialogShapes,
+  },
+  // `RUN-DELETE-01`: «Удалить прогон» as it is drawn -- the offer on the page and in a row, the open confirmation, and each sentence a
+  // refusal puts under it (a run that cannot be deleted, a run already gone, any other refusal).
+  {
+    name: 'delete-run-control',
+    make: () => createElement('div', null,
+      createElement(DeleteRunControl, { runId: RUN_ID, state: 'failed' }),
+      createElement(DeleteRunControl, { runId: RUN_ID, state: 'failed', compact: true }),
+      createElement(DeleteRunControl, { runId: RUN_ID, state: 'partial', initiallyConfirming: true }),
+      ...[apiError(409, 'state_transition_not_allowed'), apiError(404, 'not_found'), apiError(403, 'permission_denied')].map((error, index) =>
+        createElement(DeleteRunConfirm, {
+          key: `refusal-${index}`, pending: false, failure: deleteFailureText(error), onConfirm: () => undefined, onCancel: () => undefined,
+        }))),
   },
   // `W60-PRICE-LIST-01`: the project's «Оптимизация» tab in every branch its widgets have.
   ...optimisationShapes(),

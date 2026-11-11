@@ -32,6 +32,7 @@ import { sectionNavigationOf } from '@/_app/section-navigation';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { SignInPage } from '@/_pages/sign-in';
 import { ManageUserControls } from '@/features/manage-user';
+import { DELETE_RUN_NOT_DELETABLE, DeleteRunConfirm, DeleteRunControl } from '@/features/delete-run';
 import { AuthEventList } from '@/widgets/auth-event-list';
 import { UserCard } from '@/widgets/user-card';
 import { UserList } from '@/widgets/user-list';
@@ -2394,6 +2395,11 @@ export function screens(): Screen[] {
         page: { next_cursor: null },
       });
       add('RunList table states', renderScreen(runsClient, createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+      // `RUN-DELETE-01`: the open confirmation of «Удалить прогон» in a row of a failed run, and the same group with the refusal under it, so the
+      // question, what deleting does and the alert are measured where they are drawn.
+      add('RunTable delete confirmation', renderScreen(runsClient, createElement('div', null,
+        createElement(DeleteRunControl, { runId: otherId('7'), state: 'failed', compact: true, initiallyConfirming: true }),
+        createElement(DeleteRunConfirm, { pending: false, failure: DELETE_RUN_NOT_DELETABLE, onConfirm: noop, onCancel: noop }))));
     }
     add('ProjectsPage loaded', at(createElement(ProjectsPage, {})));
     // `UI-A-35`, `UI-A-22`: the project's page with its figures and tabs, and the document's page with its tabs and
