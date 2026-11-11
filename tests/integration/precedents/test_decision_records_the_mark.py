@@ -102,9 +102,10 @@ def test_a_decision_records_the_mark_the_revision_and_the_history_verdict_that_w
     stand: Stand, session: Session, journalled_sessions: sessionmaker[Session], admin_uid: str, capture: SimpleNamespace,
 ) -> None:
     run = _answered_run(stand, session, history=True)
-    # the section's refusal labels are off: the mark in force is ``few`` and no history verdict is shown with it
+    # the section's refusal labels are off: the mark in force is ``few``. P5, the neutral fact of the document's history, is the one hint that stays
+    # when a label to refusal is hidden (``evaluation.apply_section_switch``), so its verdict was shown and is recorded with the hidden mark
     first = _decide(session, run, "accept")
-    assert _marks(session, first.decision_id) == ("few", 1, None), "the mark that WAS shown, with the revision of the pass it comes from"
+    assert _marks(session, first.decision_id) == ("few", 1, "rejected"), "the mark that WAS shown, with the revision of the pass it comes from"
     # the administrator turns the section on: the same finding now carries the refusal mark and the card shows the document's history
     turn_section_on(journalled_sessions, admin_uid)
     shown = shown_at_decision(session, run.findings[0])
@@ -120,7 +121,7 @@ def test_a_decision_records_the_mark_the_revision_and_the_history_verdict_that_w
 def test_a_finding_with_no_answer_records_none_and_the_columns_stay_null(stand: Stand, session: Session, capture: SimpleNamespace) -> None:
     run = _answered_run(stand, session, texts=("Находка с ответом", "Находка без вектора"))
     answered, silent = _decide(session, run, "reject"), _decide(session, run, "reject", position=1)
-    assert _marks(session, answered.decision_id)[:2] == ("few", 1)
+    assert _marks(session, answered.decision_id) == ("few", 1, None), "no document history in this run: no history verdict was shown"
     assert shown_at_decision(session, run.findings[1]) is None, "no vector, no answer"
     assert _marks(session, silent.decision_id) == (None, None, None), "«none was known» is NULL, never a made-up mark"
 
@@ -130,13 +131,15 @@ def test_a_carried_decision_and_the_sweeps_repair_record_none_though_a_mark_is_i
 ) -> None:
     run = _answered_run(stand, session, texts=("Находка перенесённая", "Находка до памяти"))
     assert shown_at_decision(session, run.findings[0]) is not None and shown_at_decision(session, run.findings[1]) is None
-    # (1) a carried decision: the system wrote it, no expert was shown anything
+    # (1) a carried decision: the system wrote it, no expert was shown anything. The ledger event is recorded with no port registered, and the assembler is
+    # handed the origin the way the sweep and the carry-over hand it
     before = registered_decision_recorded()
-    register_decision_recorded(MemoryCaptureAssembler(geometry=_Geometry()))
+    register_decision_recorded(None)
     try:
-        carried = _decide(session, run, "accept", origin_kind="carried")
+        carried = _decide(session, run, "accept")
     finally:
         register_decision_recorded(before)
+    MemoryCaptureAssembler(geometry=_Geometry()).capture(session, carried, "carried")
     assert _marks(session, carried.decision_id) == (None, None, None)
     # (2) a decision recorded before there was a memory, repaired by the sweep: the mark in force NOW is not the one in force THEN
     register_decision_recorded(None)

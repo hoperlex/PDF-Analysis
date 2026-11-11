@@ -81,18 +81,14 @@ def plan_v3(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def runner(session: Session) -> WiredRunner:
-    return WiredRunner(lambda: nullcontext(session))  # type: ignore[arg-type,return-value]
-
-
-@pytest.fixture
-def surface(session: Session, admin_account: str, rings, runner: WiredRunner):  # type: ignore[no-untyped-def]
+def surface(session: Session, admin_account: str, rings):  # type: ignore[no-untyped-def]
+    wired = WiredRunner(lambda: nullcontext(session))  # type: ignore[arg-type,return-value]
     router = build_router(
         projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
         credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
         registrations=driver.SuiteRegistrationAdapter(), executors=ExecutorAdapter(lambda: nullcontext(session), ring=rings.public),  # type: ignore[arg-type]
-        runner=runner, task_context=runner)
+        runner=wired, task_context=wired)
     return driver.Surface(router)
 
 
@@ -314,10 +310,11 @@ class Finds:
                                  for n in (1, 2)] for entry in inputs}
 
 
-def test_a_delivered_block_is_remembered_in_the_task_journalled_without_a_word_of_it_and_returned_again_without_asking(session, surface, world, runner) -> None:  # type: ignore[no-untyped-def]
+def test_a_delivered_block_is_remembered_in_the_task_journalled_without_a_word_of_it_and_returned_again_without_asking(session, surface, world, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     run = planned_run(session, world, switch=True)
     stand = Stand(session, surface)
-    source = runner.source = Finds()
+    source = Finds()
+    monkeypatch.setattr(WiredRunner, "source", source)      # the encoder's move: from here the adapter hands the function a source that finds cases
     task = stand.task(run, critic_payload())
     stand.claim()
     first = stand.context(task)

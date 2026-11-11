@@ -49,14 +49,20 @@ class StubContext:
 def surface_of(port: StubContext | None, *, moved: bool = True) -> Any:
     """The tree's router. With ``moved`` (the default) the operation is taken out and ``build_task_context_route`` declares it again by hand, with ``port``
     behind it or, for ``None``, nothing; without it the router is exactly what ``build_router(task_context=port)`` made (the composition root's call)."""
-    router = build_router(
-        projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
-        exports=None,  # type: ignore[arg-type]
-        credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
-        registrations=driver.SuiteRegistrationAdapter(), runner=StubRunner(), task_context=None if moved else port)  # type: ignore[arg-type]
     if moved:
+        router = build_router(
+            projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
+            exports=None,  # type: ignore[arg-type]
+            credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
+            registrations=driver.SuiteRegistrationAdapter(), runner=StubRunner(), task_context=None)  # type: ignore[arg-type]
         router.routes[:] = [route for route in router.routes if getattr(route, "operation_id", None) != OPERATION]
         build_task_context_route(router, port)
+    else:
+        router = build_router(
+            projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
+            exports=None,  # type: ignore[arg-type]
+            credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
+            registrations=driver.SuiteRegistrationAdapter(), runner=StubRunner(), task_context=port)  # type: ignore[arg-type]
     return driver.Surface(router)
 
 
