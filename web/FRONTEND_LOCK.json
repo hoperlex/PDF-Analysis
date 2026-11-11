@@ -22,7 +22,7 @@
     "dispatch_named_commit": "f0bc496e5446dcbc8089ed54c528f975d3d9726a",
     "commit_note": "Resealed by CRIT-SEAL-52: contract 1.52.0 (no operation; one schema, DecisionMemoryComment; the optional DecisionMemoryCase.comments; FindingObservation.evidence may be empty when grounding_kind is portal_block, as an if/else on grounding_kind instead of minItems 1), on top of 1.51.0.",
     "openapi_version": "3.1.0",
-    "info_version": "1.52.0",
+    "info_version": "1.53.0",
     "paths": 296,
     "operations": 325,
     "component_schemas": 809,

@@ -11,7 +11,33 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.52.0` (`CRIT-SEAL-52`)
+## Current contract `1.53.0` (`CRIT-SEAL-53`)
+
+The wave-5 seal of the «Прецеденты» programme (plan-v5 section 3.7, ADR-0029 decisions 11 and 12; `CRIT-SEAL-51` in the task files). Additive: **three operations, eleven schemas and four member
+changes; nothing is removed**; migration `0066_precedents_wave5` (head `0066`); two identity prefixes, no error code, no state machine. Every new operation is asleep (`503 dependency_unavailable`) until
+the lane that owns it wires a port into `build_router`.
+
+- **Failure patterns (`PAT-01`, owner ruling Н4).** `listDecisionPatterns` (`GET /decision-memory/patterns`; filters `status`, `section_code`; `limit` 1 to 500, default 200; answers `items` and `total`) and
+  `reviewDecisionPattern` (`POST /decision-memory/patterns/{pattern_id}/review`, `Idempotency-Key` required; the body is `{decision: approve | reject | suspend}`), both for `expert` or `admin`; the viewer is denied.
+  A pattern (`DecisionPattern`: `pattern_id` (`dmp`), `section_code`, `pattern_text`, `member_count`, `refusal_count`, `status`, `status_cause`, `status_changed_at`, `proposed_at`) is a refusing comment, verbatim and never
+  written by a model, of the representative case of a group of refusals in one section. Statuses: `proposed` by the algorithm; `approved`, `rejected`, `suspended` by an expert; the algorithm suspends a pattern
+  whose group dissolves (`status_cause: group_dissolved`). The transitions are the database's: `approve` from `proposed` or `suspended`, `reject` from `proposed`, `suspend` from `approved`. Only an `approved` pattern reaches hint P1.
+- **The quality table (`QUAL-01`, owner ruling Н7).** `getStageQuality` (`GET /stage-quality`, `admin`): `rows` of `StageQualityRow` -- per section, a cell of the stage plan (`cell_key`, the cell's own `model_id`) or
+  the blocks ensemble as one row (`ensemble: true`, neither `cell_key` nor `model_id`) -- with `decided_count`, `accepted_count` and `rejected_count`. Counts, not a score and not a share; a cell with no decision has no row.
+- **Cross-document evidence (`XDOC-01`, owner ruling Н6).** `FindingCategory` gains `parameter_mismatch`. `Finding` and `FindingDetail` gain the optional `cross_evidence` (`FindingCrossEvidence`: `evidence_ordinal`,
+  `version_uid` of the other document, `page_number`, `quote`, `char_start`, `char_end`); absent for a finding with none. `Evidence` is untouched.
+- **Asked by `F8-WEB`.** `FindingObservation.extended_observation_ref` (optional, 1 to 128 characters: the candidate the observation was published from) and `RunStatus.publication_mode` (optional,
+  `RunPublicationMode`: `text_only` or `one_list`, frozen at the run's start; absent reads as `text_only`). The server fills both.
+- **The answer bound (`D-688`).** `SubmitExecutorTaskAnswerRequest.output_text` has `maxLength: 1000000`: the ceiling the contract carried until 1.33.0 (`HOTFIX-RUN-PARTIAL-1106` removed it with the agents' delivery caps), restored as a sanity
+  bound on the field. It is above the longest answer any model of the catalogue can give (128 000 output tokens), so it caps nothing a model may say (`R-153n`), and it is far below the 26 MiB body cap of the API.
+- **Storage (migration `0066`).** `decision_memory_pattern` and its status journal `decision_memory_pattern_status_event` (KEEP, the content side of a case: the text is a copy of a comment, so the forget guard applies and
+  a forget of the representative case removes both), the view `decision_memory_pattern_current`; `project_parameter_fact` and `finding_cross_evidence` (PRODUCT); the category check of `finding` and
+  `finding_observation`. The command type `review_decision_pattern` is kept with its tables.
+- **Compatibility.** Additive for a reader: a client of 1.52.0 reads every answer of 1.53.0 unchanged, except that an answer body above 1 000 000 characters is now refused `422 validation_failed`.
+
+The API has 299 paths, 328 operations and 820 schemas; migration head `0066`. The domain catalogs are at candidate revision 70.
+
+## Contract `1.52.0` (`CRIT-SEAL-52`, historical)
 
 The second seal of the «Прецеденты» programme (plan-v5, ADR-0029). It closes three debts of the first seal ahead of the wave-5 tables, which move to 1.53.0 / `0066`:
 `D-681` (the table of norm page renders), `D-682` (a memory case's comments) and `D-683` (a block finding has no text evidence). **No operation, one schema and two member changes;
@@ -30,7 +56,7 @@ nothing is removed**; migration `0065_norm_crop_render` (head `0065`); no identi
 - **Compatibility.** Additive for a reader: a client of 1.51.0 reads every answer of 1.52.0 unchanged (`comments` is optional and appears only where a later lane maps it; an empty
   `evidence` appears only on a block observation, which `one_list` runs publish and which stay off until the web admits them).
 
-The API has 296 paths, 325 operations and 809 schemas; migration head `0065`. The domain catalogs are at candidate revision 69.
+At that version the API had 296 paths, 325 operations and 809 schemas; migration head `0065`; the domain catalogs were at candidate revision 69.
 
 ## Contract `1.51.0` (`CRIT-SEAL-50`, historical)
 

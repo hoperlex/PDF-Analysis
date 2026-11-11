@@ -376,7 +376,7 @@ describe('the form «Изменить»', () => {
   });
 
   it('shows a refusal of the server in words and never an identifier', () => {
-    const refusal = new ApiError(422, { contract_version: '1.52.0', error_code: 'validation_failed', message: 'x', correlation_id: 'cid-layout-1', retryable: false, details: { field: 'cells', constraint: 'catalogue' } }, null);
+    const refusal = new ApiError(422, { contract_version: '1.53.0', error_code: 'validation_failed', message: 'x', correlation_id: 'cid-layout-1', retryable: false, details: { field: 'cells', constraint: 'catalogue' } }, null);
     expect(layoutRefusalSentence(refusal)).toContain('парой из каталога');
     expect(layoutFailure(refusal, true).kind).toBe('refusal');
     const markup = view({ failure: layoutFailure(refusal, true) });
@@ -420,7 +420,7 @@ describe('the switch «Модели по этапам: включены» and th
   });
 
   it('says the two refusals of the server in words', () => {
-    const conflict = (reason: string) => new ApiError(409, { contract_version: '1.52.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-l-2', retryable: false, details: { conflict_reason: reason } }, null);
+    const conflict = (reason: string) => new ApiError(409, { contract_version: '1.53.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-l-2', retryable: false, details: { conflict_reason: reason } }, null);
     expect(layoutFailure(conflict('no_layout_revision'), true).detail).toContain('набор моделей ещё не сохранён');
     expect(layoutFailure(conflict('provider_source_not_database'), true).detail).toContain('не из базы данных');
     expect(layoutFailure(conflict('something_new'), true).detail).not.toContain('something_new');

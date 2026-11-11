@@ -1,4 +1,4 @@
-"""The 325 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 328 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the forty-three router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -280,7 +280,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.52.0"
+CONTRACT_VERSION: Final[str] = "1.53.0"
 
 
 def build_router(

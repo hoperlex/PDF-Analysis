@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 296,
+    "path_count": 299,
     "operations": [
       [
         "DELETE",
@@ -172,6 +172,11 @@
         "GET",
         "/decision-memory/cases/{case_id}",
         "getDecisionMemoryCase"
+      ],
+      [
+        "GET",
+        "/decision-memory/patterns",
+        "listDecisionPatterns"
       ],
       [
         "GET",
@@ -745,6 +750,11 @@
       ],
       [
         "GET",
+        "/stage-quality",
+        "getStageQuality"
+      ],
+      [
+        "GET",
         "/stage-uploads/{stage_upload_id}",
         "getStageUpload"
       ],
@@ -1037,6 +1047,11 @@
         "POST",
         "/decision-memory/cases/{case_id}/withdraw",
         "withdrawDecisionMemoryCase"
+      ],
+      [
+        "POST",
+        "/decision-memory/patterns/{pattern_id}/review",
+        "reviewDecisionPattern"
       ],
       [
         "POST",
@@ -1910,6 +1925,12 @@
       "DecisionMemoryStatusChange",
       "DecisionMemoryStatusChangeRequest",
       "DecisionMemoryStatusEvent",
+      "DecisionPattern",
+      "DecisionPatternId",
+      "DecisionPatternList",
+      "DecisionPatternReview",
+      "DecisionPatternStatus",
+      "DecisionPatternStatusCause",
       "DecisionRecord",
       "DecisionRecordPage",
       "DiffHunk",
@@ -2031,6 +2052,7 @@
       "FindingBlockLink",
       "FindingCategory",
       "FindingComparison",
+      "FindingCrossEvidence",
       "FindingDetail",
       "FindingExecutionState",
       "FindingExecutionStatus",
@@ -2187,6 +2209,7 @@
       "ResetUserPasswordRequest",
       "ResumeComparisonAiJobRequest",
       "ResumeStageChainRunRequest",
+      "ReviewDecisionPatternRequest",
       "ReviseExecutorConnectionRequest",
       "ReviseExecutorGroupRequest",
       "ReviseStageAssemblyRequest",
@@ -2204,6 +2227,7 @@
       "RunNormReferences",
       "RunPrecedents",
       "RunPreset",
+      "RunPublicationMode",
       "RunQueueReason",
       "RunStage",
       "RunStageCell",
@@ -2354,6 +2378,8 @@
       "StagePairSuggestionPage",
       "StageProfileText",
       "StageProfileWord",
+      "StageQualityRow",
+      "StageQualityTable",
       "StageReviewDecision",
       "StageRowKey",
       "StageSheetPassport",
@@ -2445,6 +2471,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0065_norm_crop_render",
-  "contract_version": "1.52.0"
+  "migration_head": "0066_precedents_wave5",
+  "contract_version": "1.53.0"
 }

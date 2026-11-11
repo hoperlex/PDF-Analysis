@@ -14,7 +14,7 @@
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.52.0';
+export const CONTRACT_VERSION = '1.53.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
 export const CONTRACT_DIGEST = 'dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a';
@@ -4290,7 +4290,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.52.0";
+  contract_version: "1.53.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
