@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from auditmanager.precedents.vectors import repository as store
 from auditmanager.precedents.vectors.window import OPEN_STATES, current_span, wait_text
 
-__all__ = ["CAUSE", "WindowWait", "window_wait"]
+__all__ = ["CAUSE", "WindowWait", "window_open", "window_wait"]
 
 #: The ``RunWaitCause`` word of the window.
 CAUSE: Final[str] = "vector_window"
@@ -54,3 +54,13 @@ def window_wait(session: Session, *, now: datetime | None = None) -> WindowWait 
     if span is None:
         return None
     return WindowWait(CAUSE, wait_text(span, setting), span.closes_at)
+
+
+def window_open(session: Session) -> bool:
+    """``True`` while ``vector_control.window_state`` is ``draining`` or ``encoding``: the stand starts no new work of its own.
+
+    The state alone, with no look at the clock: the very condition the dispatcher's hint holds new runs on (``jobs/repository.py``, the same
+    ``OPEN_STATES``), so work that reads this and the hint cannot disagree about whether the window holds. :func:`window_wait` is the other
+    read and answers ``None`` past the window's closing hour although the state is still open (it tells a waiting run how long); it is
+    the wrong read for a gate, which must hold until the pass has ended the state. Read-only: one read of the control row."""
+    return store.read_control(session).window_state in OPEN_STATES
