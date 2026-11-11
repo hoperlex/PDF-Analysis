@@ -619,6 +619,16 @@ def _any_words_query(query: str) -> str | None:
     return None
 
 
+#: `NORM-COVERAGE-01`. The reasons the lookup gives an observation that asked no norm question: a primary text finding (whose stage
+#: never names norms) or a cross-check point the model gave no query. Such an observation is not a gap of the norm verification.
+_NO_NORM_QUESTION = frozenset({"query_not_proposed", "no_normative_question"})
+
+
+def _asked_norm_question(item: dict) -> bool:
+    """Whether the lookup searched (or had to search) a norm for the observation; ``False`` for one that asked no norm question."""
+    return item.get("norm_status") != "not_applicable" and item.get("norm_reason") not in _NO_NORM_QUESTION
+
+
 def _norms(session, observations: list[dict], snapshot_id: str | None,
            *, full_document: bool = False, checkpoint=None, lookup_receipts=None,
            query_planning=False) -> list[str]:
@@ -1093,9 +1103,13 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
         item["norm_candidates"] = [registry.setdefault(candidate["paragraph_id"], candidate)
             for candidate in item.get("norm_candidates", [])]
     candidates = [item for item in items if item.get("norm_candidates")]
+    asked = [item for item in items if _asked_norm_question(item)]
     if not candidates:
-        phase("norm_verification", "unavailable",
-            "corpus_unavailable" if snapshot_id is None else "candidate_context_unavailable")
+        if snapshot_id is not None and not asked:
+            phase("norm_verification", "completed", "no_normative_question")  # NORM-COVERAGE-01
+        else:
+            phase("norm_verification", "unavailable",
+                "corpus_unavailable" if snapshot_id is None else "candidate_context_unavailable")
         return
     batches = []
     batch, characters = [], 0
@@ -1124,7 +1138,9 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
             observations=indexed, allowed_sources={source["source_id"] for source in state["sources"]})
         for result in reviewed:
             indexed[result["input_ids"][0]]["norm_assessment"] = result["norm_assessment"]
-    phase("norm_verification", "partial" if len(candidates) < len(items) else "completed")
+    # NORM-COVERAGE-01: complete when every observation that asked a norm question has its candidates; one that asked none (a primary
+    # text finding, a cross-check point without a normative question) is not a gap of this procedure.
+    phase("norm_verification", "partial" if any(not item.get("norm_candidates") for item in asked) else "completed")
 
 
 def _bounds_lifted(policy):
@@ -1622,7 +1638,10 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 bounded.append(item);remaining_chars-=size
             window=bounded
             registry={c["paragraph_id"]:c for item in window for c in item.get("norm_candidates",[])}
-            if not registry:
+            if not registry and snapshot_id is not None and len(window)==len(state["observations"]) and not any(
+                    _asked_norm_question(item) for item in window):
+                phase("norm_verification","completed","no_normative_question")  # NORM-COVERAGE-01
+            elif not registry:
                 reason="corpus_unavailable" if snapshot_id is None else "candidate_context_unavailable"
                 phase("norm_verification","unavailable",reason)
             else:
@@ -1643,7 +1662,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 for reviewed_item in reviewed:
                     target=indexed[reviewed_item["input_ids"][0]]
                     target["norm_assessment"]=reviewed_item["norm_assessment"]
-                phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(not item.get("norm_candidates") for item in window) else "completed")
+                phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(
+                    _asked_norm_question(item) and not item.get("norm_candidates") for item in window) else "completed")  # NORM-COVERAGE-01
         if batched:
             _review_batched_v3(run=run,binding=binding,state=state,phase=phase,call=call,
                 window_context=window_context,contexts=contexts,
