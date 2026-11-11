@@ -78,7 +78,10 @@ describe('the label in the row', () => {
     const markup = reviewPage({ findings: [A], roles: EXPERT, precedents });
     const row = markup.match(/<li[^>]*data-verdict-bucket[\s\S]*?<\/li>/)?.[0] ?? '';
     expect((row.match(/<button/g) ?? []).length).toBe(3); // the row itself, ✓ and ✕: the label is not a control
-    expect(row).not.toMatch(/<button[^>]*>[^<]*(<[^>]+>[^<]*)*Обычно отклоняют/);
+    // the label sits inside the row's button as a plain span: it is not a control of its own, as the «Источник» chip is not
+    const mark = row.match(/<[a-z]+[^>]*data-precedent-label=[^>]*>/)?.[0] ?? '';
+    expect(mark.startsWith('<span')).toBe(true);
+    expect(row).not.toMatch(/<(?:button|a)[^>]*data-precedent-label/);
   });
 });
 
