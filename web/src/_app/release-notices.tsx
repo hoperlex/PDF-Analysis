@@ -56,7 +56,7 @@ export function WhatsNewView({ listing, newest, onClose }: {
     <aside className={styles.notice} role="region" aria-label="Что нового" data-whats-new="">
       <details className={styles.details}>
         <summary className={styles.summary}>
-          <strong>Что нового</strong>
+          <strong className={styles.title}>Что нового</strong>
           <span className={styles.version}>версия {newest}</span>
           {first === null ? null : <span className={styles.first}>{first}</span>}
           <span className={styles.toggle}>
