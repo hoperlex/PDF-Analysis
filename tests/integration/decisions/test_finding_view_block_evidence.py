@@ -92,9 +92,9 @@ def adapter(session: Session) -> FindingAdapter:
 def _contract_gaps(model: Any, body: dict[str, Any]) -> list[tuple[Any, ...]]:
     """What the contract's own model refuses in a body, as the locations of the refusals (empty: the body is conformant).
 
-    A block finding has **no text evidence** (`F8-PUBLISH`: it stands on blocks), so its ``observation.evidence`` is ``[]``, and contract 1.51.0 still
-    says ``Evidence`` has ``minItems: 1``. That is a gap of the seal, not of the view: it is pinned here as the ONLY refusal, so the test
-    fails the day the contract (1.52.0) allows an empty ``evidence`` for a block observation -- and the day anything else is non-conformant.
+    A block finding has **no text evidence** (`F8-PUBLISH`: it stands on blocks), so its ``observation.evidence`` is ``[]``, and contract 1.51.0 said
+    ``Evidence`` has ``minItems: 1``; 1.52.0 (D-683) lets a ``portal_block`` observation carry an empty ``evidence``, so a block finding's body
+    is now conformant, and the tests pin that nothing is refused.
     """
     try:
         model.model_validate(body)
@@ -126,7 +126,7 @@ def test_a_block_finding_lists_its_blocks_its_origin_and_its_grounding(session: 
     assert "recognised_quote" not in body["block_evidence"][0]                                # absent, not null: the contract has no null here
     assert body["observation"]["evidence"] == []                                              # a block finding has no text evidence
     assert [models.FindingBlockEvidence.model_validate(item) for item in body["block_evidence"]]  # each block is conformant by itself
-    assert _contract_gaps(models.Finding, body) == [("observation", "evidence")]             # the seal's gap, and nothing else
+    assert _contract_gaps(models.Finding, body) == []                                          # 1.52.0 (D-683): a block observation may carry no text evidence
 
 
 def test_a_text_findings_body_is_what_it_was_the_new_members_are_omitted_not_empty(
@@ -155,7 +155,7 @@ def test_a_finding_of_a_drawing_and_another_source_is_a_cross_check_and_a_cross_
     assert (across.category, across.stage_id) == ("drawing_discrepancy", "finding_merge")    # the stage alone would say cross_check
     view = _by_uid(adapter.list_run_findings(run_id=published.run_id))[across.finding_uid]
     assert view.origin == "drawing"
-    assert _contract_gaps(models.Finding, finding_body(view)) == [("observation", "evidence")]
+    assert _contract_gaps(models.Finding, finding_body(view)) == []  # 1.52.0 (D-683)
 
 
 def test_the_detail_read_carries_the_canonicals_blocks_and_a_merged_members_are_not_the_findings_own(
@@ -171,7 +171,7 @@ def test_the_detail_read_carries_the_canonicals_blocks_and_a_merged_members_are_
     assert detail.finding.merged_observations[0].grounding_kind == "portal_block"
     body = finding_detail_body(detail)
     assert [b["portal_block_id"] for b in body["block_evidence"]] == [BLK_A, BLK_C] and body["merged_observations"][0]["grounding_kind"] == "portal_block"
-    assert _contract_gaps(models.FindingDetail, body) == [("observation", "evidence"), ("merged_observations", 0, "evidence")]
+    assert _contract_gaps(models.FindingDetail, body) == []  # 1.52.0 (D-683): neither the canonical nor a merged block observation is refused
 
     text_detail = adapter.get_finding(finding_uid=published.finding_uid)
     assert text_detail.finding.block_evidence is None and text_detail.finding.origin is None
