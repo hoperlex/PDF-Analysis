@@ -39,7 +39,7 @@ import io
 import os
 import threading
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, BinaryIO, Final, Union
@@ -202,11 +202,35 @@ def probe_envelope(source: PdfSource) -> int:
         raise unreadable from exc
 
 
-def extract_document(source: PdfSource) -> ExtractedDocument:
+#: Told ``(pages read, pages in all)`` as :func:`extract_document` goes (`RUN-STAGE-PROGRESS-01`).
+PageProgress = Callable[[int, int], None]
+
+
+class _ProgressFailed(Exception):
+    """The caller's :data:`PageProgress` raised: re-raised as itself, never read as the document's fault."""
+
+    def __init__(self, cause: BaseException) -> None:
+        super().__init__("the page progress callback raised")
+        self.cause = cause
+
+
+def _tell(progress: PageProgress | None, done: int, total: int) -> None:
+    if progress is None:
+        return
+    try:
+        progress(done, total)
+    except Exception as exc:  # noqa: BLE001 - carried out of the document's own handler below
+        raise _ProgressFailed(exc) from exc
+
+
+def extract_document(source: PdfSource, *, progress: PageProgress | None = None) -> ExtractedDocument:
     """Extract every page's normalized text and line geometry, in page order.
 
     ``source`` is the document's bytes or the path of a file holding them
     (:data:`PdfSource`); the result is the same for the same bytes either way.
+    ``progress``, when given, is told ``(0, pages)`` once the page count is known and
+    ``(n, pages)`` after each page; whatever it raises leaves this function as it was raised
+    (a fenced Attempt, a cancelled run), never as the document's ``source_unreadable``.
     """
     import pdfplumber
     from pdfminer.pdfparser import PDFSyntaxError
@@ -236,12 +260,16 @@ def extract_document(source: PdfSource) -> ExtractedDocument:
                     ),
                     reason="page_count_disagreement",
                 )
+            _tell(progress, 0, declared_pages)
             for ordinal, page in enumerate(pdf.pages, start=1):
                 try:
                     lay_out_text_only(page)
                     pages.append(_extract_page(page, ordinal))
                 finally:
                     _release(page)
+                _tell(progress, ordinal, declared_pages)
+    except _ProgressFailed as failed:
+        raise failed.cause from None
     except DomainError:
         raise
     except (PDFSyntaxError, ValueError, OSError, KeyError, TypeError) as exc:

@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0066_run_deletion"
+HEAD = "0067_precedents_wave5"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -106,11 +106,14 @@ TABLES = frozenset((
     "norm_crop_render",
     # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a run an expert deleted from the run lists (PRODUCT: it references `audit_run`).
     "audit_run_deletion",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern with its status journal (KEEP, the content side of a case), the parameters a run found
+    # and the evidence of a finding in another version (PRODUCT).
+    "decision_memory_pattern", "decision_memory_pattern_status_event", "finding_cross_evidence", "project_parameter_fact",
 ))
 
 #: Views at ``HEAD``. A view carries no rows; it is restored from the dump and checked by name.
 VIEWS = frozenset((
-    "decision_memory_case_current", "executor_route_current", "finding_current_verdict", "version_classification_current",
+    "decision_memory_case_current", "decision_memory_pattern_current", "executor_route_current", "finding_current_verdict", "version_classification_current",
     "version_classification_revision", "work_assignment_current",
 ))
 
@@ -476,6 +479,21 @@ TRIGGERS = (
     ("norm_crop_render", "trg_norm_crop_render_immutable", "am_immutable_row", 27),
     # `0066_run_deletion` (`RUN-DELETE-01`): a tombstone is immutable (27 = ROW | BEFORE | DELETE | UPDATE); there is no restore.
     ("audit_run_deletion", "trg_audit_run_deletion_immutable", "am_immutable_row", 27),
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`). 27 = ROW | BEFORE | DELETE | UPDATE; 7 = ROW | BEFORE | INSERT. A pattern and its journal take the forget
+    # guard of `0061` and the guard on INSERT of `0064`; the journal is numbered per pattern without a gap and has the database's own transition rule
+    # (the number trigger fires first, by name); the facts and the cross evidence are immutable, and the cross evidence is held to another version of the
+    # finding's own project.
+    ("decision_memory_pattern", "trg_decision_memory_pattern_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_pattern", "trg_decision_memory_pattern_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_pattern_status_event", "trg_decision_memory_pattern_status_event_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_pattern_status_event", "trg_decision_memory_pattern_status_event_forgotten_insert",
+     "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_pattern_status_event", "trg_decision_memory_pattern_status_event_number", "am_check_gapless_number", 7),
+    ("decision_memory_pattern_status_event", "trg_decision_memory_pattern_status_event_transition",
+     "am_guard_decision_memory_pattern_status", 7),
+    ("finding_cross_evidence", "trg_finding_cross_evidence_immutable", "am_immutable_row", 27),
+    ("finding_cross_evidence", "trg_finding_cross_evidence_version", "am_check_finding_cross_evidence", 7),
+    ("project_parameter_fact", "trg_project_parameter_fact_immutable", "am_immutable_row", 27),
 )
 
 #: The constraint triggers that are ``DEFERRABLE INITIALLY DEFERRED``: a parent row must
@@ -557,9 +575,11 @@ SEQUENCES = {
 #: (measured on a throwaway database at ``0064``, 2026-11-11).
 #: `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one table: eight checks, two foreign keys (the custody binding and the Blob) and the primary key:
 #: c 1547, f 407, p 164, t 9, u 139 (measured on a throwaway database at ``0065``, 2026-11-11).
-#: `0066_run_deletion` (`RUN-DELETE-01`) adds one table: three checks (the run, the account and the command identity), three foreign keys (the run, the account and
-#: the command receipt), the primary key and the unique constraint of the receipt: c 1550, f 410, p 165, t 9, u 140 (measured on a throwaway database at ``0066``, 2026-11-11).
-CONSTRAINT_COUNTS = {"c": 1550, "f": 410, "p": 165, "t": 9, "u": 140}
+#: `0066_run_deletion` (`RUN-DELETE-01`) adds one table: three checks, three foreign keys, the primary key and the unique constraint of the receipt;
+#: `0067_precedents_wave5` (`CRIT-SEAL-53`) adds four tables: 41 checks, seven foreign keys, four primary keys and three unique constraints. Over
+#: ``0065``'s c 1547, f 407, p 164, t 9, u 139 that is c 1591, f 417, p 169, t 9, u 143 (the sum of the two seals' measured deltas; re-measured by the
+#: inventory test on a throwaway database at ``0067``, 2026-11-11, main→dev merge).
+CONSTRAINT_COUNTS = {"c": 1591, "f": 417, "p": 169, "t": 9, "u": 143}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -580,8 +600,9 @@ CONSTRAINT_COUNTS = {"c": 1550, "f": 410, "p": 165, "t": 9, "u": 140}
 #: `0064_precedents_seal` adds 24 (twelve primary keys, four unique constraints and eight lookups and partial indexes): 526 (measured on a throwaway
 #: database at ``0064``, 2026-11-11).
 #: `0065_norm_crop_render` adds two (its primary key and the Blob lookup): 528 (measured on a throwaway database at ``0065``, 2026-11-11).
-#: `0066_run_deletion` adds two (its primary key and the unique receipt): 530 (measured on a throwaway database at ``0066``, 2026-11-11).
-INDEX_COUNT = 530
+#: `0066_run_deletion` adds two (its primary key and the unique receipt) and `0067_precedents_wave5` eleven (four primary keys, three unique
+#: constraints and four lookups): 528 + 13 = 541 (re-measured on a throwaway database at ``0067``, 2026-11-11, main→dev merge).
+INDEX_COUNT = 541
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

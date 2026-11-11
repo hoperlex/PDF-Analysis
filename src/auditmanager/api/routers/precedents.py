@@ -28,20 +28,25 @@ empty answer.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Any, Final, NoReturn
+from typing import Annotated, Any, Final, Literal, NoReturn
 
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Path, Query
+from pydantic import BeforeValidator, Field, WithJsonSchema
 
-from auditmanager.api.routers.declarations import STATE_CONFLICT_DESCRIPTION, envelope_responses, success
+from auditmanager.api.routers.declarations import STATE_CONFLICT_DESCRIPTION, LimitParam, envelope_responses, success
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
-from auditmanager.api.routers.precedents_ports import PrecedentsPort, PrecedentSettingsPort, VectorControlPort
+from auditmanager.api.routers.precedents_ports import (
+    DecisionPatternsPort, PrecedentsPort, PrecedentSettingsPort, StageQualityPort, VectorControlPort,
+)
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
+from auditmanager.api.schemas.models import optional_property
 from auditmanager.api.security import CurrentSubject
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
-    "APPEND_PRECEDENT_SETTING_COMMAND_TYPE", "DEPENDENCIES", "SET_VECTOR_PAUSED_COMMAND_TYPE", "build_precedent_routes",
+    "APPEND_PRECEDENT_SETTING_COMMAND_TYPE", "DEPENDENCIES", "REVIEW_DECISION_PATTERN_COMMAND_TYPE", "SET_VECTOR_PAUSED_COMMAND_TYPE",
+    "build_precedent_routes",
 ]
 
 #: The command types of the two keyed writes, as ``command_record.command_type`` will hold them: the lane that fills a body writes them. Both
@@ -49,18 +54,42 @@ __all__ = [
 #: for command constants (`test_every_event_type_and_command_type_the_source_writes_is_classified`) sees them here.
 APPEND_PRECEDENT_SETTING_COMMAND_TYPE: Final[str] = "append_precedent_setting"
 SET_VECTOR_PAUSED_COMMAND_TYPE: Final[str] = "set_vector_paused"
+#: `CRIT-SEAL-53` (contract 1.54.0): the keyed review of a failure pattern, as ``command_record.command_type`` will hold it. Classified in
+#: ``scripts/recovery/product_purge.py`` (kept, with the pattern tables).
+REVIEW_DECISION_PATTERN_COMMAND_TYPE: Final[str] = "review_decision_pattern"
 
 #: The stable class names a sleeping route refuses with, one per owning lane.
 DEPENDENCIES = {
     "precedents": "precedents",
     "vector_control": "vector_control",
     "precedent_settings": "precedent_settings",
+    "decision_patterns": "decision_patterns",
+    "stage_quality": "stage_quality",
 }
 
 _TAGS = ["execution"]
 _FINDING_TAGS = ["findings"]
+_MEMORY_TAGS = ["decision-memory"]
+
+
+def _absent(value: Any) -> Any:
+    """``?status=`` is the absent parameter, not a value of the empty string."""
+    return None if value == "" else value
+
+
+PatternStatusFilter = Annotated[
+    Literal["proposed", "approved", "rejected", "suspended"] | None, BeforeValidator(_absent),
+    WithJsonSchema({"type": "string", "enum": ["proposed", "approved", "rejected", "suspended"]}),
+    Query(json_schema_extra=optional_property),
+]
+PatternSectionFilter = Annotated[
+    Annotated[str, Field(min_length=1, max_length=64)] | None, BeforeValidator(_absent),
+    WithJsonSchema({"type": "string", "minLength": 1, "maxLength": 64}),
+    Query(json_schema_extra=optional_property),
+]
 
 RunIdPath = Annotated[models.RunId, Path()]
+PatternIdPath = Annotated[models.DecisionPatternId, Path()]
 FindingUidPath = Annotated[models.FindingUid, Path()]
 
 
@@ -86,7 +115,8 @@ def _settings_body(view: Mapping[str, Any], model: type[models.PrecedentSetting]
 
 def build_precedent_routes(
     router: APIRouter, vector_control: VectorControlPort | None = None, precedent_settings: PrecedentSettingsPort | None = None,
-    precedents: PrecedentsPort | None = None,
+    precedents: PrecedentsPort | None = None, decision_patterns: DecisionPatternsPort | None = None,
+    stage_quality: StageQualityPort | None = None,
 ) -> None:
     @router.get(
         "/runs/{run_id}/precedents", operation_id="getRunPrecedents", tags=_FINDING_TAGS,
@@ -189,3 +219,58 @@ def build_precedent_routes(
         view = precedent_settings.append_precedent_setting(
             setting_name=body.setting_name.value, value=body.value, user_uid=subject.user_uid, idempotency_key=idempotency_key)
         return json_response(201, _settings_body(view, models.PrecedentSetting))
+
+    @router.get(
+        "/decision-memory/patterns", operation_id="listDecisionPatterns", tags=_MEMORY_TAGS,
+        response_model=models.DecisionPatternList,
+        responses={**success(200, "The patterns that match, newest proposal first, and how many match."), **envelope_responses(401, 403, 422, 500, 503)},
+        description=(
+            "`CRIT-SEAL-53` (plan-v5 section 3.7, owner ruling Н4): the failure patterns -- a refusing comment of the representative case of a group of "
+            "refusals in one section, proposed by an algorithm and approved by an expert. Newest proposal first; `status` and `section_code` are "
+            "optional filters, `limit` (1 to 200, default 50) cuts `items` (`total` counts every match). Only an `approved` pattern reaches hint P1. `role:admin|expert`; the "
+            "viewer is denied."
+        ),
+    )
+    def list_decision_patterns(
+        subject: CurrentSubject, status: PatternStatusFilter = None, section_code: PatternSectionFilter = None, limit: LimitParam = 50,
+    ) -> WireResponse:
+        if decision_patterns is None:
+            _asleep(DEPENDENCIES["decision_patterns"])
+        view = decision_patterns.list_decision_patterns(status=status, section_code=section_code, limit=limit, user_uid=subject.user_uid)
+        return json_response(200, encode_json(models.DecisionPatternList.model_validate(dict(view)).model_dump(mode="json")))
+
+    @router.post(
+        "/decision-memory/patterns/{pattern_id}/review", operation_id="reviewDecisionPattern", tags=_MEMORY_TAGS, status_code=200,
+        response_model=models.DecisionPattern,
+        responses={**success(200, "The pattern as it now stands, or the recorded outcome of an identical earlier request."),
+                   **envelope_responses(401, 403, 404, 409, 422, 500, 503, descriptions={409: STATE_CONFLICT_DESCRIPTION})},
+        description=(
+            "`CRIT-SEAL-53` (plan-v5 section 3.7, owner ruling Н4): an expert's decision on a pattern -- `approve` (from `proposed` or `suspended`), `reject` "
+            "(from `proposed`) or `suspend` (from `approved`); an append-only status event with its actor. `404 not_found` for an unknown pattern, "
+            "`409 state_conflict` for a transition the status does not allow. `role:admin|expert`, `Idempotency-Key` required."
+        ),
+    )
+    def review_decision_pattern(
+        subject: CurrentSubject, pattern_id: PatternIdPath, body: models.ReviewDecisionPatternRequest, idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        if decision_patterns is None:
+            _asleep(DEPENDENCIES["decision_patterns"])
+        view = decision_patterns.review_decision_pattern(
+            pattern_id=pattern_id, decision=body.decision.value, user_uid=subject.user_uid, idempotency_key=idempotency_key)
+        return json_response(200, encode_json(models.DecisionPattern.model_validate(dict(view)).model_dump(mode="json")))
+
+    @router.get(
+        "/quality-table", operation_id="getQualityTable", tags=_TAGS,
+        response_model=models.StageQualityTable,
+        responses={**success(200, "One row per cell (or ensemble) and section that has a decision."), **envelope_responses(401, 403, 500, 503)},
+        description=(
+            "`CRIT-SEAL-53` (plan-v5 section 6, owner ruling Н7): the quality table of the stage plan -- for each cell of the plan and section, how many "
+            "findings experts decided and how many they accepted; the blocks ensemble is one row of its own, and the model is the cell's. Counts, not a "
+            "score; no cell with no decision appears, and the table changes no routing. `role:admin`."
+        ),
+    )
+    def get_quality_table(subject: CurrentSubject) -> WireResponse:
+        if stage_quality is None:
+            _asleep(DEPENDENCIES["stage_quality"])
+        view = stage_quality.get_stage_quality(user_uid=subject.user_uid)
+        return json_response(200, encode_json(models.StageQualityTable.model_validate(dict(view)).model_dump(mode="json", exclude_unset=True)))

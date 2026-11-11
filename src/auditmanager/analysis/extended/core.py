@@ -235,7 +235,8 @@ def response_schema(*, merge: bool = False) -> dict:
     return schema
 
 
-def build_request(*, model_id: str, run_id: str, phase: str, section: str, payload: dict, settings=None) -> ModelRequest:
+def build_request(*, model_id: str, run_id: str, phase: str, section: str, payload: dict, settings=None,
+                  bind_sources: bool = False) -> ModelRequest:
     instruction = ("Исследуй приложенные изображения блоков чертежей вместе с текстом их страниц и соседей. "
         "Найди конкретные внутренние расхождения, технические неясности и позиции для экспертной сверки. "
         "Картинка является источником: не выдумывай native цитату или текстовые координаты. "
@@ -261,7 +262,28 @@ def build_request(*, model_id: str, run_id: str, phase: str, section: str, paylo
         "messages": [{"role": "user", "content": canonical(payload)}],
         "thinking": {"type": "adaptive"},
         "output_config": {"effort": effort_of(settings), "format": {"type": "json_schema", "schema": response_schema(merge=phase == "merge")}}}
+    if bind_sources and phase == "blocks":
+        # `BLOCK-SOURCES-V2-01`: the v2 block request names its batch's sources, as the v3 one always has. Off by default: the default
+        # request stays byte-identical, so a caller that does not ask for the guard is asked for nothing new.
+        body = _bind_block_sources(body, payload)
     return ModelRequest(model_id, body, idempotency_scope=f"{run_id}:{phase}:{digest(payload)}")
+
+
+def _bind_block_sources(body: dict, payload: dict) -> dict:
+    """``body`` with the source guard of a block request: a closed list of this batch's source ids and the rule that says so.
+
+    These are generation constraints, not a replacement for the source-binding validator. Parameter/context IDs in the same prompt are not
+    visual evidence. The one definition of the guard: `build_request_v3` and the v2 request (``bind_sources=True``) both use it.
+    """
+    allowed = sorted({source["source_id"] for source in payload.get("sources", [])})
+    if allowed:
+        schema = deepcopy(body["output_config"]["format"]["schema"])
+        schema["properties"]["observations"]["items"]["properties"]["source_ids"]["items"]["enum"] = allowed
+        body = {**body, "output_config": {**body["output_config"], "format": {
+            **body["output_config"]["format"], "schema": schema}}}
+    return {**body, "system": body["system"] + ("\nsource_ids каждой записи копируй только из sources этого пакета. "
+        "Не используй context_fact_id, fact_id, text_id или идентификаторы из соседнего пакета. "
+        "Не повторяй source_id внутри одной записи. Если проверяемого наблюдения нет, верни пустой observations.")}
 
 
 def _reply_document(text):
@@ -520,16 +542,5 @@ def build_request_v3(*, model_id, run_id, phase, section, payload, window_id, se
     bound = {**payload,"workflow_version":PLAN_VERSION_V3,"window_id":window_id,
         "rules_sha256":review_bundle_digest(section)}
     request=build_request(model_id=model_id,run_id=run_id,phase=phase,section=section,payload=bound,settings=settings)
-    body={**request.body,"system":request.body["system"]+"\n\n"+rubric}
-    # These are generation constraints, not a replacement for the source-binding
-    # validator. Parameter/context IDs in the same prompt are not visual evidence.
-    allowed = sorted({source["source_id"] for source in payload.get("sources", [])})
-    if allowed:
-        schema = deepcopy(body["output_config"]["format"]["schema"])
-        schema["properties"]["observations"]["items"]["properties"]["source_ids"]["items"]["enum"] = allowed
-        body["output_config"] = {**body["output_config"], "format": {
-            **body["output_config"]["format"], "schema": schema}}
-    body["system"] += ("\nsource_ids каждой записи копируй только из sources этого пакета. "
-        "Не используй context_fact_id, fact_id, text_id или идентификаторы из соседнего пакета. "
-        "Не повторяй source_id внутри одной записи. Если проверяемого наблюдения нет, верни пустой observations.")
+    body=_bind_block_sources({**request.body,"system":request.body["system"]+"\n\n"+rubric},payload)
     return ModelRequest(model_id,body,idempotency_scope=f"{run_id}:v3:{window_id}:{phase}:{digest(bound)}")

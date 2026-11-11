@@ -133,6 +133,9 @@ SLICES: dict[str, str] = {
     "audit_run_deletion": f"run_id IN ({_RUNS})",
     "decision_memory_precedent_run": f"run_id IN ({_RUNS})",
     "decision_memory_precedent_advice": f"run_id IN ({_RUNS})",
+    # `0066`: the parameters a run's extraction found, and the evidence of a finding that stands in another version of the project.
+    "project_parameter_fact": f"run_id IN ({_RUNS})",
+    "finding_cross_evidence": f"finding_observation_id IN ({_OBSERVATIONS})",
     "expert_decision_event": f"finding_uid IN ({_FINDINGS})",
     "work_assignment": "project_uid = :p",
     "work_assignment_event": "assignment_uid IN (SELECT assignment_uid FROM work_assignment WHERE project_uid = :p)",
@@ -460,8 +463,9 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # `0042_comparison_stage_review`: the twelve tables of the stage AI review, repairs, expert cards and batches join
     # it (76 -> 88); only the batch references the project directly. `0053`..`0055` add the document's tags, the
     # finding's execution status and the assignment's planned dates (88 -> 91); none references the project directly.
-    # `0066_run_deletion` adds the tombstone of a deleted run (94 -> 95); it references `audit_run`, not the project.
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 95
+    # `0066_run_deletion` adds the tombstone of a deleted run (94 -> 95; it references `audit_run`, not the project); `0067_precedents_wave5`
+    # (`CRIT-SEAL-53`) adds `project_parameter_fact` (a run's) and `finding_cross_evidence` (an observation's): 95 -> 97.
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 97
     assert set(closure.direct) == {
         "audit_run", "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question",
         "comparison_ai_sheet_item", "comparison_launch_queue", "comparison_matrix", "comparison_matrix_edit",

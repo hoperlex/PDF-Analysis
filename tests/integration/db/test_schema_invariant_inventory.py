@@ -428,6 +428,11 @@ from sqlalchemy import Engine, text
 #: ``finding_observation`` are redefined in place, which moves the digest), indexes +24 (twelve primary keys, four unique constraints and eight
 #: lookups, to 526), triggers +21 (to 291), functions +1 (``am_guard_decision_memory_forgotten_insert``, to 84); views, extensions, sequences,
 #: policies and the state topology are byte-identical to the ``0063`` seal.
+#: Resealed 2026-11-11 for ``0067_precedents_wave5`` (`CRIT-SEAL-53`), chained after ``0065``, from this test's own observed output on a throwaway PostgreSQL (the
+#: project image, container ``am-prec-s53-pg``) migrated fresh to ``0066``: relations +5 (four tables and the view ``decision_memory_pattern_current``, to 183),
+#: columns +55 (to 1930), constraints +55 (to 2321), indexes +11 (to 539), triggers +9 (to 301), functions +2 (``am_guard_decision_memory_pattern_status`` and
+#: ``am_check_finding_cross_evidence``, to 86), views +1 (to 7); the two category checks are redefined in place; extensions, sequences, policies and the state
+#: topology are byte-identical to the ``0065`` seal.
 #: Resealed 2026-11-11 for ``0065_norm_crop_render`` (`CRIT-SEAL-52`, `D-681`), chained after ``0064``, from this test's own observed output on a
 #: throwaway PostgreSQL (the project image, container ``am-prec-s52-pg``) migrated fresh to ``0065``: relations +1 (``norm_crop_render``, to 178), columns +9
 #: (to 1875), constraints +11 (eight checks, two foreign keys -- the binding and the Blob -- and the primary key, to 2266), indexes +2 (the primary key
@@ -438,14 +443,17 @@ from sqlalchemy import Engine, text
 #: (three checks, three foreign keys -- the run, the account and the command receipt --, the primary key and the unique constraint of the receipt, to 2274),
 #: indexes +2 (the primary key and the unique constraint, to 530), triggers +1 (``am_immutable_row``, to 293); functions, views, extensions, sequences,
 #: policies and the state topology are byte-identical to the ``0065`` seal (their digests are unchanged).
+#: Resealed 2026-11-11 for the main→dev merge (``0066_run_deletion`` then ``0067_precedents_wave5``), from this test's own observed output on a
+#: throwaway PostgreSQL (the project image, container ``rd02-pg``) migrated fresh to ``0067``: relations 184, columns 1934, constraints 2329, indexes
+#: 541, triggers 302, functions 86, views 7 -- the sum of the two seals above, each family reviewed.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1879, "5cf2c6b3403865b103eebf4d97c20801aba8012388b7c30150ae597d0488447d"),
-    "relations": (179, "28bb620407d33ce9caece6036f9d583776f61abb4d36e5510814f289b21a2eb1"),
-    "constraints": (2274, "6eafea39228aa0790a23d2368eab6f84e03699c3ca98fabf35f531841de02949"),
-    "indexes": (530, "99986131949d6877398d9a0e49b7a5b3c3b3bd4f77c8758d04876ac2513c0dde"),
-    "triggers": (293, "10ea2fd8762dec9ac76db8bccca89f447ba930c9cd838586e037fca1212cbf92"),
-    "functions": (84, "ff83db6e92e6dcfbee71e81d6c1b7af0c3c50b88fdcdfd25d5905d648bf62f14"),
-    "views": (6, "0bd9b7927321000af88e44410f7f431c918230428ac258d472d294d62d08043e"),
+    "columns": (1934, "ef02c2d585a9d5a59b1fd96e14845735129c7114974d43e4e690f32c840342c3"),
+    "relations": (184, "849589ed784729f5da1be0b20a1169b960001ad878d81a24590f5818ad429558"),
+    "constraints": (2329, "895c8c867f19498f459253b2680aea921fa4f86af2cfb1de0c4f883ef1e3fa34"),
+    "indexes": (541, "767aae4996dc76db5286600b622348413440cb73094b8972a9889ec25a7b890c"),
+    "triggers": (302, "841b211ddd2d2199d75a5cf2a548b64fb8ae0dcafc4fc9976eed11b2ca8764e7"),
+    "functions": (86, "4ca8c9d63270876dad063cdea6c49a0e7aa5afba3ea7355ecb023b81cc22e664"),
+    "views": (7, "5e78d3a1fd6d83febea265c402139aefd89d63afd83c1f38acd71979822d1ef8"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
     "policies": (0, "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"),

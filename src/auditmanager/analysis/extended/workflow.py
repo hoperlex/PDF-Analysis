@@ -133,8 +133,13 @@ def deterministic_lossless_merge(items, *, full_document=False):
     return output
 
 
-def build_norm_review_request(*, model_id, run_id, section, payload, settings=None):
-    """Fourth bounded call: review actual corpus quotes for already merged observations."""
+def build_norm_review_request(*, model_id, run_id, section, payload, settings=None, quote_echo=True):
+    """Fourth bounded call: review actual corpus quotes for already merged observations.
+
+    ``quote_echo=False`` (`NORM-REPLY-PER-RECORD-01`): the model names the ``paragraph_id`` of a
+    citation only and the server fills the quote from that input's own candidate
+    (:func:`parse_norm_review`). The default keeps the historical bytes, which v3 inherits.
+    """
     from .core import build_request
     rows = payload.get("observations", [])
     if not isinstance(rows, list) or len(rows) > MAX_ITEMS:
@@ -142,25 +147,91 @@ def build_norm_review_request(*, model_id, run_id, section, payload, settings=No
     request = build_request(model_id=model_id, run_id=run_id, section=section, phase="merge", payload=payload, settings=settings)
     body = deepcopy(request.body)
     body["max_tokens"] = limit_of(settings, 12_000)
+    citation_rule = ("Объясни связь и приведи реальные paragraph_id "
+        "и ДОСЛОВНО ПОЛНУЮ переданную quote в citations; новые нормы и цитаты запрещены. ") if quote_echo else (
+        "Объясни связь и в citations укажи только paragraph_id из norm_candidate_ids этого входа, "
+        "каждый не более одного раза; текст цитаты не переписывай — его подставит сервер; новые нормы запрещены. ")
     body["system"] = (f"Ты выполняешь отдельную предварительную нормативную сверку раздела {section}. "
         "Отдельная процедура norm_verification: НЕ объединяй и НЕ переписывай наблюдения. "
         "Для каждого входного input_id верни ровно одно наблюдение с единственным соответствующим input_ids. "
         "Сохрани title, description, source_ids; оцени только реально переданные цитаты его norm_candidates. "
         "Используй norm_context и norm_candidate_ids соответствующих входов. norm_assessment.relation: "
         "supports — цитата предварительно поддерживает наблюдение; contradicts — противоречит ему; "
-        "insufficient — цитата не позволяет сделать вывод. Объясни связь и приведи реальные paragraph_id "
-        "и ДОСЛОВНО ПОЛНУЮ переданную quote в citations; новые нормы и цитаты запрещены. "
+        "insufficient — цитата не позволяет сделать вывод. " + citation_rule +
         "Верни пустые norm_queries. Без цитат norm_assessment=null, без подтверждения актуальности/применимости. "
         "Ответ observations по схеме по-русски. Это машинная сверка, решение принимает эксперт.")
-    return ModelRequest(model_id, body, idempotency_scope=f"{run_id}:norm-review:{digest(payload)}")
+    if quote_echo:
+        return ModelRequest(model_id, body, idempotency_scope=f"{run_id}:norm-review:{digest(payload)}")
+    citations = (body["output_config"]["format"]["schema"]["properties"]["observations"]["items"]
+        ["properties"]["norm_assessment"]["anyOf"][1]["properties"]["citations"])
+    citations["items"] = {"type": "object", "additionalProperties": False, "required": ["paragraph_id"],
+        "properties": {"paragraph_id": {"type": "string"}}}
+    return ModelRequest(model_id, body, idempotency_scope=f"{run_id}:norm-review-ids:{digest(payload)}")
 
 
-def parse_norm_review(text, *, observations, allowed_sources=None):
+def _with_candidate_quotes(text, observations):
+    """Fill the quote of every bare ``{"paragraph_id"}`` citation from that input's own candidate.
+
+    Only a citation that has exactly the key ``paragraph_id`` and names a candidate of the single
+    input its record binds is filled. Every other citation is left as received, so the core parser
+    refuses it (``norm_citation_not_in_context``); this never repairs an id or invents a quote.
+    A reply that is not an object with an ``observations`` list is returned as received for the
+    core parser to refuse by its own code. ``duplicate_key`` and ``nonfinite`` refusals of the
+    document are kept (`core._reply_document`).
+    """
+    from .core import _reply_document
+    value = _reply_document(text)
+    rows = value.get("observations") if isinstance(value, dict) else None
+    if not isinstance(rows, list):
+        return text
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        ids, assessment = row.get("input_ids"), row.get("norm_assessment")
+        if (not isinstance(ids, list) or len(ids) != 1 or not isinstance(ids[0], str)
+                or ids[0] not in observations or not isinstance(assessment, dict)
+                or not isinstance(assessment.get("citations"), list)):
+            continue
+        candidates = {candidate["paragraph_id"]: candidate
+            for candidate in observations[ids[0]].get("norm_candidates", [])}
+        for citation in assessment["citations"]:
+            if (isinstance(citation, dict) and set(citation) == {"paragraph_id"}
+                    and isinstance(citation["paragraph_id"], str) and citation["paragraph_id"] in candidates):
+                citation["quote"] = candidates[citation["paragraph_id"]]["quote"]
+    return json.dumps(value, ensure_ascii=False)
+
+
+def parse_norm_review(text, *, observations, allowed_sources=None, rejected=None, quote_echo=True):
+    """Read a norm review reply.
+
+    Without ``rejected`` the reply is read strictly: the first bad record raises. With a
+    ``rejected`` list (`NORM-REPLY-PER-RECORD-01`) every record is judged alone: the accepted
+    ones are returned, each refused one is appended to ``rejected`` and dropped, and an input
+    the reply did not carry is simply absent from the result (the caller accounts for it). A
+    reply that is invalid as a whole still raises ``ValueError``. ``quote_echo=False`` reads a
+    reply made for ``build_norm_review_request(quote_echo=False)``.
+    """
     if not isinstance(observations, dict) or len(observations) > MAX_ITEMS:
         raise ValueError("norm_review_window_exceeded")
     allowed = {source for item in observations.values() for source in item["source_ids"]}
-    parsed = parse_reply(text, allowed_sources=allowed if allowed_sources is None else allowed_sources,
-                         expected_inputs=observations)
+    sources = allowed if allowed_sources is None else allowed_sources
+    if not quote_echo:
+        text = _with_candidate_quotes(text, observations)
+    if rejected is not None:
+        accepted, seen = [], set()
+        for item in parse_reply(text, allowed_sources=sources, expected_inputs=observations, rejected=rejected):
+            ids = item["input_ids"]
+            if len(ids) != 1 or ids[0] in seen or item["norm_queries"]:
+                rejected.append({"reply_ordinal": None, "reason": "norm_review_input_partition_invalid",
+                    "record": deepcopy(item)})
+            elif any(item[field] != observations[ids[0]][field] for field in ("title", "description")):
+                rejected.append({"reply_ordinal": None, "reason": "norm_review_observation_changed",
+                    "record": deepcopy(item)})
+            else:
+                seen.add(ids[0])
+                accepted.append(item)
+        return accepted
+    parsed = parse_reply(text, allowed_sources=sources, expected_inputs=observations)
     seen = set()
     for item in parsed:
         if len(item["input_ids"]) != 1 or item["input_ids"][0] in seen or item["norm_queries"]:

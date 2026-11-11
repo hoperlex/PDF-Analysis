@@ -227,6 +227,9 @@ APPEND_ONLY = frozenset((
     # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a deleted run is `am_immutable_row` and only inserted into, by `delete_audit_run`
     # (`runs/repository.py`); there is no restore.
     "audit_run_deletion",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): a pattern and its journal take the forget guard (`UPDATE` refused, `DELETE` only beside a forget); the
+    # parameter facts and the cross evidence are `am_immutable_row`. Only inserted into.
+    "decision_memory_pattern", "decision_memory_pattern_status_event", "finding_cross_evidence", "project_parameter_fact",
 ))
 
 #: The ``append-only`` tables that no trigger protects, and the evidence that the code only inserts.
@@ -268,9 +271,11 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # and its advice, `F8-PUBLISH` the block evidence, `PREC-WEB` the settings and `CTX-STAND` the delivery journal. `vector_control` is seeded
     # by the migration. Seven of the twelve left the set when their lanes merged (found red on `823c1a738` by `CRIT-SEAL-52`: the scan sees a
     # statement for each): the memory's comments, block evidence and vectors, the encoder's queue, a finding's block evidence and the control of
-    # the vectors with its journal. Five remained: the probe, the pass with its advice, the settings journal and the delivery journal; and
-    # `0065_norm_crop_render` (`CRIT-SEAL-52`) joined them until `M7-NORM-PNG` rendered and recorded the first page. Those six left the set when
-    # `PREC-PASS`, `PREC-WEB`, `CTX-STAND` and `M7-NORM-PNG` merged (found red on `a64725862` by `RUN-DELETE-01`: the scan sees a statement for each).
+    # the vectors with its journal. The five that remained (the probe, the pass with its advice, the settings journal and the delivery journal) and
+    # `norm_crop_render` (`0065`, until `M7-NORM-PNG`) left it on the base of `CRIT-SEAL-53` (`00d3ac6a5`), when `PREC-PASS`, `PREC-SETTINGS-01`,
+    # `CTX-STAND` and `M7-NORM-PNG` merged: the scan sees a statement for each (found red by the recovery group of this seal).
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): until `PAT-01` writes the patterns and their journal and `XDOC-01` the parameter facts and the cross evidence.
+    "decision_memory_pattern", "decision_memory_pattern_status_event", "finding_cross_evidence", "project_parameter_fact",
 ))
 
 #: Writes whose table name is not a literal in the SQL text, so :func:`observed_statements` cannot read it from the string: an f-string

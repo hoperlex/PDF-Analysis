@@ -569,7 +569,8 @@ def test_an_observation_is_grounded_on_a_span_by_default_and_the_vocabularies_ar
     _accepted(at_head, observation(category="cross_source", related=str(FindingUid.new())))
     for reason in ("block_not_in_run_geometry", "block_crop_mismatch", "block_quote_not_in_recognised"):
         _accepted(at_head, observation(reason=reason))
-    _refused(at_head, observation(category="parameter_mismatch"), "23514")          # the second seal's, not this one
+    _accepted(at_head, observation(category="parameter_mismatch"))                   # the wave-5 seal's (`0066`, `CRIT-SEAL-53`)
+    _refused(at_head, observation(category="parameter_mismatches"), "23514")
     _refused(at_head, observation(reason="looked_wrong"), "23514")
     _refused(at_head, observation(kind="image"), "23514")
     _refused(at_head, observation(ref=""), "23514")
@@ -577,7 +578,8 @@ def test_an_observation_is_grounded_on_a_span_by_default_and_the_vocabularies_ar
     # the finding's own category takes the two new values too
     _accepted(at_head, lambda c: _finding(c, _run(c), category="cross_source"))
     _accepted(at_head, lambda c: _finding(c, _run(c), category="drawing_discrepancy"))
-    _refused(at_head, lambda c: _finding(c, _run(c), category="parameter_mismatch"), "23514")
+    _accepted(at_head, lambda c: _finding(c, _run(c), category="parameter_mismatch"))
+    _refused(at_head, lambda c: _finding(c, _run(c), category="parameter_mismatches"), "23514")
 
 
 # -- the freeze trigger ---------------------------------------------------------------------------------------------

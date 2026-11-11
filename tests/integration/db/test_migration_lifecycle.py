@@ -178,6 +178,11 @@ EXPECTED_TABLES = {
     "norm_crop_render",
     # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a run an expert deleted from the run lists.
     "audit_run_deletion",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern with its status journal, the parameters a run found, and cross-document evidence.
+    "decision_memory_pattern",
+    "decision_memory_pattern_status_event",
+    "project_parameter_fact",
+    "finding_cross_evidence",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
     "norm_current_snapshot",
     "norm_current_snapshot_event",
@@ -224,6 +229,8 @@ EXPECTED_VIEWS = {
     "version_classification_current",
     # `0061_decision_memory_m2`: a case's status from its latest event and its verdict from its latest decision.
     "decision_memory_case_current",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): a pattern with the status of its latest journal event.
+    "decision_memory_pattern_current",
 }
 
 #: The alpha runner instantiates none of these aggregates. Their absence is a deliverable, so

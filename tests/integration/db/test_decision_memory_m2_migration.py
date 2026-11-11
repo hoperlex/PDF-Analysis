@@ -30,11 +30,13 @@ from auditmanager.shared.identity import DecisionMemoryStatusEventId
 from tests.support.memory_seed import ensure_blob
 from tests.support.memory_seed import seed_case as _seed_case
 
-HEAD = "0066_run_deletion"  # the head the fixture migrates to; 0061 is the migration under test, five steps below it
+HEAD = "0067_precedents_wave5"  # the head the fixture migrates to; 0061 is the migration under test, five steps below it
 #: The tables `0064_precedents_seal` (`CRIT-SEAL-50`) adds to the family by name; their guards are `test_precedents_seal_migration.py`'s.
 SEAL_TABLES = frozenset({
     "decision_memory_comment", "decision_memory_block_evidence", "decision_memory_embedding_intent", "decision_memory_embedding",
     "decision_memory_probe", "decision_memory_precedent_run", "decision_memory_precedent_advice",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern and its journal.
+    "decision_memory_pattern", "decision_memory_pattern_status_event",
 })
 PREVIOUS = "0060_run_from_stage"
 CONTENT_TABLES = (

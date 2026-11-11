@@ -150,6 +150,9 @@ IMMUTABLE_TABLES = {
     "norm_crop_render",
     # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a deleted run is written once; there is no restore.
     "audit_run_deletion",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): the parameters a run's extraction found and the evidence of a finding in another version are written once
+    # (``am_immutable_row``); a pattern and its journal take the forget guard (see FORGET_GUARDED_TABLES).
+    "project_parameter_fact", "finding_cross_evidence",
 }
 
 
@@ -259,6 +262,8 @@ FORGET_GUARDED_TABLES = {
     "decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref",
     "decision_memory_crop",
     "decision_memory_comment", "decision_memory_block_evidence", "decision_memory_embedding_intent", "decision_memory_embedding",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern (its text is a copy of a refusing comment) and its status journal.
+    "decision_memory_pattern", "decision_memory_pattern_status_event",
 }
 
 
@@ -376,6 +381,10 @@ PREFIX_BY_TABLE_COLUMN = {
     ("decision_memory_embedding_intent", "intent_id"): "dmi",
     ("vector_control_event", "control_event_id"): "vce",
     ("executor_task_context_delivery", "delivery_id"): "etd",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern and the events of its status journal (the journal names the pattern and the case).
+    ("decision_memory_pattern", "pattern_id"): "dmp",
+    ("decision_memory_pattern_status_event", "pattern_id"): "dmp",
+    ("decision_memory_pattern_status_event", "pattern_event_id"): "dps",
     ("executor_task_context_delivery", "task_id"): "ext",
     # the finding an observation is related to (a bare identity, no foreign key)
     ("finding_observation", "related_finding_uid"): "fnd",

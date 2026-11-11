@@ -119,5 +119,8 @@ export { chipModelLine, modelsCount, planModelIds, stageOfChip } from './model/r
 export type { RunTableProps } from './ui/run-table';
 export { RunTable, STARTED_BY_UNKNOWN } from './ui/run-table';
 
+export type { StageActivity } from './model/stage-activity';
+export { chipPagesText, stageActivity, stageActivityText } from './model/stage-activity';
+
 export type { StageTableProps } from './ui/stage-table';
 export { StageTable } from './ui/stage-table';

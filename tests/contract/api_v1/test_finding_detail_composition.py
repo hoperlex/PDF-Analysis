@@ -84,7 +84,7 @@ def test_finding_vocabulary_is_closed_through_v3(openapi_document: dict[str, Any
         "internal_contradiction", "explicit_placeholder", "dimensions", "layout",
         "facade", "roof", "documentation",
         "evacuation", "fire_safety", "accessibility", "insulation", "sound",
-        "drawing_discrepancy", "cross_source",
+        "drawing_discrepancy", "cross_source", "parameter_mismatch",
     ]
     assert schemas["Severity"]["enum"] == [
         "critical", "economic", "operational", "recommendation", "check_adjacent",

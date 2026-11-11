@@ -11,7 +11,33 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.53.0` (`RUN-DELETE-01`)
+## Current contract `1.54.0` (`CRIT-SEAL-53`)
+
+The wave-5 seal of the «Прецеденты» programme (plan-v5 section 3.7, ADR-0029 decisions 11 and 12; `CRIT-SEAL-51` in the task files). Additive: **three operations, eleven schemas and four member
+changes; nothing is removed**; migration `0067_precedents_wave5` (head `0067`); two identity prefixes, no error code, no state machine. Every new operation is asleep (`503 dependency_unavailable`) until
+the lane that owns it wires a port into `build_router`.
+
+- **Failure patterns (`PAT-01`, owner ruling Н4).** `listDecisionPatterns` (`GET /decision-memory/patterns`; filters `status`, `section_code`; `limit` 1 to 200, default 50, the shared parameter; answers `items` and `total`) and
+  `reviewDecisionPattern` (`POST /decision-memory/patterns/{pattern_id}/review`, `Idempotency-Key` required; the body is `{decision: approve | reject | suspend}`), both for `expert` or `admin`; the viewer is denied.
+  A pattern (`DecisionPattern`: `pattern_id` (`dmp`), `section_code`, `pattern_text`, `member_count`, `refusal_count`, `status`, `status_cause`, `status_changed_at`, `proposed_at`) is a refusing comment, verbatim and never
+  written by a model, of the representative case of a group of refusals in one section. Statuses: `proposed` by the algorithm; `approved`, `rejected`, `suspended` by an expert; the algorithm suspends a pattern
+  whose group dissolves (`status_cause: group_dissolved`). The transitions are the database's: `approve` from `proposed` or `suspended`, `reject` from `proposed`, `suspend` from `approved`. Only an `approved` pattern reaches hint P1.
+- **The quality table (`QUAL-01`, owner ruling Н7).** `getQualityTable` (`GET /quality-table`, `admin`): `rows` of `StageQualityRow` -- per section, a cell of the stage plan (`cell_key`, the cell's own `model_id`) or
+  the blocks ensemble as one row (`ensemble: true`, neither `cell_key` nor `model_id`) -- with `decided_count`, `accepted_count` and `rejected_count`. Counts, not a score and not a share; a cell with no decision has no row.
+- **Cross-document evidence (`XDOC-01`, owner ruling Н6).** `FindingCategory` gains `parameter_mismatch`. `Finding` and `FindingDetail` gain the optional `cross_evidence` (`FindingCrossEvidence`: `evidence_ordinal`,
+  `version_uid` of the other document, `page_number`, `quote`, `char_start`, `char_end`); absent for a finding with none. `Evidence` is untouched.
+- **Asked by `F8-WEB`.** `FindingObservation.extended_observation_ref` (optional, 1 to 128 characters: the candidate the observation was published from) and `RunStatus.publication_mode` (optional,
+  `RunPublicationMode`: `text_only` or `one_list`, frozen at the run's start; absent reads as `text_only`). The server fills both.
+- **Storage (migration `0067`).** `decision_memory_pattern` and its status journal `decision_memory_pattern_status_event` (KEEP, the content side of a case: the text is a copy of a comment, so the forget guard applies and
+  a forget of the representative case removes both), the view `decision_memory_pattern_current`; `project_parameter_fact` and `finding_cross_evidence` (PRODUCT); the category check of `finding` and
+  `finding_observation`. The command type `review_decision_pattern` is kept with its tables.
+- **Compatibility.** Additive for a reader: a client of 1.53.0 reads every answer of 1.54.0 unchanged.
+
+The API has 300 paths, 329 operations and 820 schemas; migration head `0067`. The domain catalogs are at candidate revision 71.
+
+Planned and first sealed on `dev` as 1.53.0 / `0066_precedents_wave5`; resealed to 1.54.0 / `0067_precedents_wave5` (down revision `0066_run_deletion`) in the main→dev merge of 2026-11-11, because `RUN-DELETE-01` (below) reached `main` first with 1.53.0 / `0066`. The surface counts here include `deleteRun`.
+
+## Contract `1.53.0` (`RUN-DELETE-01`, historical)
 
 An owner hotfix to `main` (2026-11-11): «Добавь возможность удалять частичные и непрошедшие прогоны в UI — они необъективны и их нужно удалять, чтобы уменьшить шум.»
 **One operation, no schema; nothing is removed**; migration `0066_run_deletion` (head `0066`); no identity prefix, no error code, no state machine.
@@ -52,7 +78,7 @@ nothing is removed**; migration `0065_norm_crop_render` (head `0065`); no identi
 - **Compatibility.** Additive for a reader: a client of 1.51.0 reads every answer of 1.52.0 unchanged (`comments` is optional and appears only where a later lane maps it; an empty
   `evidence` appears only on a block observation, which `one_list` runs publish and which stay off until the web admits them).
 
-The API has 296 paths, 325 operations and 809 schemas; migration head `0065`. The domain catalogs are at candidate revision 69.
+At that version the API had 296 paths, 325 operations and 809 schemas; migration head `0065`; the domain catalogs were at candidate revision 69.
 
 ## Contract `1.51.0` (`CRIT-SEAL-50`, historical)
 

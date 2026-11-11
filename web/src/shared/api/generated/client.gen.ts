@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
- *   sha256 fb08eca469f2d9f5b11bba0606780fef0504e17cad80e22983c634fab40aeb91
+ *   AuditManager PC-01 API 1.54.0 (OpenAPI 3.1.0)
+ *   sha256 6f53dce1aecdcd4a7545f68e09e6369bea1282747575d640b34d4ef121cef8e7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -244,6 +244,8 @@ import type {
   GetProductVersionResult,
   GetProjectInput,
   GetProjectResult,
+  GetQualityTableInput,
+  GetQualityTableResult,
   GetRunNormReferencesInput,
   GetRunNormReferencesResult,
   GetRunPrecedentsInput,
@@ -350,6 +352,8 @@ import type {
   ListDecisionHistoryResult,
   ListDecisionMemoryCasesInput,
   ListDecisionMemoryCasesResult,
+  ListDecisionPatternsInput,
+  ListDecisionPatternsResult,
   ListDecisionsInput,
   ListDecisionsResult,
   ListDocumentTagsInput,
@@ -526,6 +530,8 @@ import type {
   RetryComparisonAiSheetChangesResult,
   RetryComparisonUploadSetInput,
   RetryComparisonUploadSetResult,
+  ReviewDecisionPatternInput,
+  ReviewDecisionPatternResult,
   ReviseAnalysisPresetInput,
   ReviseAnalysisPresetResult,
   ReviseExecutorConnectionInput,
@@ -2030,6 +2036,18 @@ export function getProject(
 }
 
 /**
+ * Get Quality Table
+ *
+ * `GET /quality-table`.
+ */
+export function getQualityTable(
+  input: GetQualityTableInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetQualityTableResult>> {
+  return request<GetQualityTableResult>(OPERATIONS.getQualityTable, input, options);
+}
+
+/**
  * Get Run Norm References
  *
  * `GET /runs/{run_id}/norm-references`.
@@ -2663,6 +2681,18 @@ export function listDecisionMemoryCases(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListDecisionMemoryCasesResult>> {
   return request<ListDecisionMemoryCasesResult>(OPERATIONS.listDecisionMemoryCases, input, options);
+}
+
+/**
+ * List Decision Patterns
+ *
+ * `GET /decision-memory/patterns`.
+ */
+export function listDecisionPatterns(
+  input: ListDecisionPatternsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListDecisionPatternsResult>> {
+  return request<ListDecisionPatternsResult>(OPERATIONS.listDecisionPatterns, input, options);
 }
 
 /**
@@ -3722,6 +3752,18 @@ export function retryComparisonUploadSet(
 }
 
 /**
+ * Review Decision Pattern
+ *
+ * `POST /decision-memory/patterns/{pattern_id}/review` - a write; carries a required Idempotency-Key.
+ */
+export function reviewDecisionPattern(
+  input: ReviewDecisionPatternInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ReviewDecisionPatternResult>> {
+  return request<ReviewDecisionPatternResult>(OPERATIONS.reviewDecisionPattern, input, options);
+}
+
+/**
  * Revise an analysis preset.
  *
  * `POST /analysis/presets/{preset_id}/revisions` - a write; carries a required Idempotency-Key.
@@ -4703,6 +4745,7 @@ export const apiClient = {
   getNormDocument,
   getProductVersion,
   getProject,
+  getQualityTable,
   getRunNormReferences,
   getRunPrecedents,
   getRunStages,
@@ -4756,6 +4799,7 @@ export const apiClient = {
   listComparisonVersionOrders,
   listDecisionHistory,
   listDecisionMemoryCases,
+  listDecisionPatterns,
   listDecisions,
   listDocumentTags,
   listDocuments,
@@ -4844,6 +4888,7 @@ export const apiClient = {
   resumeStageUpload,
   retryComparisonAiSheetChanges,
   retryComparisonUploadSet,
+  reviewDecisionPattern,
   reviseAnalysisPreset,
   reviseExecutorConnection,
   reviseExecutorGroup,

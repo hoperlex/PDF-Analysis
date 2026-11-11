@@ -25,7 +25,7 @@ from sqlalchemy.exc import DBAPIError
 
 from auditmanager.shared.db.engine import create_database_engine
 
-HEAD = "0066_run_deletion"  # the head the fixture migrates to; 0056 is ten steps below it
+HEAD = "0067_precedents_wave5"  # the head the fixture migrates to; 0056 is eleven steps below it
 PREVIOUS = "0055_work_schedule"
 CHECK = "ck_optimisation_proposal_decision_verdict"
 

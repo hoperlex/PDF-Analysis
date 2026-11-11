@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "fb08eca469f2d9f5b11bba0606780fef0504e17cad80e22983c634fab40aeb91",
-    "content_commit": "e5ea3cfa",
-    "content_commit_subject": "feat(contract): contract 1.53.0 -- deleteRun, the version literals, the surface (297/326/809), the reseal paragraph, the catalogs at candidate revision 70, the head 0066 (RUN-DELETE-01)",
-    "dispatch_named_commit": "e5ea3cfa637f873568550efc0ee6c7d38f7d3da3",
-    "commit_note": "Resealed by RUN-DELETE-01: contract 1.53.0 (one operation, deleteRun -- POST /runs/{run_id}/deletion, keyed, answers RunStatus; no schema, no error code), on top of 1.52.0.",
+    "sha256": "6f53dce1aecdcd4a7545f68e09e6369bea1282747575d640b34d4ef121cef8e7",
+    "content_commit": "ccf8d47b",
+    "content_commit_subject": "fix(contract): the two wave-5 schema descriptions name contract 1.54.0 (main→dev merge)",
+    "dispatch_named_commit": "ccf8d47bd4dedb4ffc2eb613fba28267f4557202",
+    "commit_note": "Resealed by CRIT-SEAL-53: contract 1.53.0 (three operations: listDecisionPatterns, reviewDecisionPattern, getQualityTable; eleven schemas; FindingCategory parameter_mismatch; Finding.cross_evidence; FindingObservation.extended_observation_ref; RunStatus.publication_mode), on top of 1.52.0.",
     "openapi_version": "3.1.0",
-    "info_version": "1.53.0",
-    "paths": 297,
-    "operations": 326,
-    "component_schemas": 809,
+    "info_version": "1.54.0",
+    "paths": 300,
+    "operations": 329,
+    "component_schemas": 820,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "fb08eca469f2d9f5b11bba0606780fef0504e17cad80e22983c634fab40aeb91",
+    "snapshot_sha256": "6f53dce1aecdcd4a7545f68e09e6369bea1282747575d640b34d4ef121cef8e7",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "70787fc5c69033f3b0f816d0f47cbd85edb08e02a431eb884e5b5635c11471a2",
-      "index.ts": "32dd303db80cc588b4f28a8be07c118b2cc457424443923e9dfb3cc8d049c510",
-      "operations.gen.ts": "82ba0190d532bbfc912a3e2e59325f83562bc60ae1b1733fe63b43e7e9e32252",
-      "types.gen.ts": "f8389f32289cbbd7663f4b00e3688138be6e24130c806b1019a76fabd4f38e1d"
+      "client.gen.ts": "b61559da5dae5b9b6697cdf449c5d90a59ec4e53c4864c5245cbe16cf431ed74",
+      "index.ts": "6fdcbd1bf04d2f0a1e152eb6aa54c3b19ddaa0db52afae38ff4b0267578dea09",
+      "operations.gen.ts": "a18c8754135bd4f2eb575dca50f6e99b8c903eac4c55a9ecb615109294025390",
+      "types.gen.ts": "fcd922a1fbdbe69b755094736372af424fca83f4c137ab83bc08e5277a578584"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

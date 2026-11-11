@@ -200,7 +200,7 @@ function json(body: unknown, status = 200): Response {
 const EPOCH_RAISED = (): Response =>
   json(
     {
-      contract_version: '1.53.0',
+      contract_version: '1.54.0',
       correlation_id: 'reason-epoch',
       error_code: 'authentication_required',
       message: 'The credential is not accepted.',
