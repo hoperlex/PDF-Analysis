@@ -34,7 +34,8 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> FindingAdapter:
                 finding_observation_id text PRIMARY KEY, run_id text, finding_uid text,
                 category text, finding_text text, recommendation_text text, stage_id text,
                 analysis_profile_id text, prompt_bundle_id text, model_call_id text,
-                provider_mode text, proposed_severity text, grounded boolean, created_at text
+                provider_mode text, proposed_severity text, grounded boolean, created_at text,
+                grounding_kind text DEFAULT 'text_span', extended_observation_ref text, related_finding_uid text
             )
         """))
         conn.execute(text("""
@@ -43,12 +44,22 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> FindingAdapter:
                 quote text, char_start integer, char_end integer, block_id text
             )
         """))
+        # `CRIT-CAPTURE-01` part B: the finding readers also read the blocks a finding stands on; this stand has none.
+        conn.execute(text("""
+            CREATE TABLE finding_block_evidence (
+                finding_observation_id text, ordinal integer, page_number integer, portal_block_id text,
+                bbox_x0 real, bbox_y0 real, bbox_x1 real, bbox_y1 real, crop_sha256 text, recognised_quote text
+            )
+        """))
         conn.execute(text("""
             INSERT INTO finding VALUES ('fnd_one', 'prj_one', 'ver_one', 'run_one',
                                         'dimensions', 'fobs_a')
         """))
         conn.execute(text("""
-            INSERT INTO finding_observation VALUES
+            INSERT INTO finding_observation (
+                finding_observation_id, run_id, finding_uid, category, finding_text, recommendation_text, stage_id,
+                analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode, proposed_severity, grounded, created_at
+            ) VALUES
             ('fobs_a', 'run_one', 'fnd_one', 'dimensions', 'Канонический вывод',
              'Проверить размер', 'text_analysis', 'ap_v2', 'pb_v2', 'mc_one',
              'recorded', 'critical', 1, '2026-10-23'),
@@ -128,7 +139,10 @@ def test_exact_legacy_single_member_without_canonical_remains_readable(
                                         'layout', NULL)
         """))
         session.execute(text("""
-            INSERT INTO finding_observation VALUES
+            INSERT INTO finding_observation (
+                finding_observation_id, run_id, finding_uid, category, finding_text, recommendation_text, stage_id,
+                analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode, proposed_severity, grounded, created_at
+            ) VALUES
             ('fobs_legacy', 'run_one', 'fnd_legacy', 'layout', 'Проверить план',
              'Согласовать план', 'text_analysis', 'ap_v1', 'pb_v1', 'mc_one',
              'recorded', NULL, 1, '2026-10-23')

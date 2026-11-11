@@ -49,7 +49,7 @@ PLAN_ENV = "AUDITMANAGER_EXTENDED_ANALYSIS_PLAN"
 
 
 def test_all_sections_price_before_start_under_the_v2_plan_when_it_is_named(registry, monkeypatch):
-    """The v2 plan is an explicit choice since the shipped default became v3 (`S3-04`)."""
+    """The v2 plan named explicitly. It is also what nothing naming a plan gives since `V3-OPTIN-01` (R-154b); the tests below pin that."""
     monkeypatch.setenv(PLAN_ENV, "v2")
     policy = service(registry)
     assert len(registry.entries) == 15
@@ -61,7 +61,7 @@ def test_all_sections_price_before_start_under_the_v2_plan_when_it_is_named(regi
         # window) and 30 norm calls = 1 + 13 + 16 + 30. No section changes that sum.
         assert small.as_dict()["calls"] == 60
         assert json.loads(small.authority_json)["extended_review"] == {
-            "enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
+            "enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2", "original_review": "deterministic-v1"}
         assert large.as_dict()["calls"] > 12
         assert large.as_dict()["estimated_cost_micros"] > small.as_dict()["estimated_cost_micros"] > 0
         accepted = large.approve(consent(large), actor_user_uid="expert")
@@ -70,9 +70,10 @@ def test_all_sections_price_before_start_under_the_v2_plan_when_it_is_named(regi
         assert accepted["approved_by_user_uid"] == "expert"
 
 
-def test_all_sections_price_before_start_under_the_default_v3_plan(registry, monkeypatch):
-    """Nothing names a plan: the shipped default is v3, which bounds the visual scope by the page count."""
-    monkeypatch.delenv(PLAN_ENV, raising=False)
+def test_all_sections_price_before_start_under_the_v3_plan_when_it_is_named(registry, monkeypatch):
+    """`V3-OPTIN-01` (R-154b): v3 is opt-in by the server env, and named it is what it was as the default: it bounds the visual scope by the
+    page count."""
+    monkeypatch.setenv(PLAN_ENV, "v3")
     policy = service(registry)
     for section in registry.entries:
         small = estimate(policy, version(section, 500, 1))
@@ -103,6 +104,64 @@ def test_all_sections_price_before_start_under_the_default_v3_plan(registry, mon
         assert accepted["extended_review"]["plan_version"] == "extended-review-v3"
         assert accepted["max_windows"] == windows
         assert accepted["approved_by_user_uid"] == "expert"
+
+
+#: `V2-ORIGINAL-REVIEW-01` (R-154f): a fresh v2 estimate also freezes the marker of the original's deterministic critic and corrector.
+V2_AUTHORITY = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2", "original_review": "deterministic-v1"}
+
+
+@pytest.mark.parametrize("named", [None, "", "   ", "v2", "V2", " extended-review-v2 "])
+def test_with_no_plan_named_or_a_blank_one_every_section_prices_the_v2_plan(registry, monkeypatch, named):
+    """`V3-OPTIN-01` (R-154b): the plan of a fresh estimate is v2 unless the stand names v3; an unset or blank name is v2, and the named
+    spellings of v2 price exactly the same work and carry the same digest."""
+    monkeypatch.delenv(PLAN_ENV, raising=False)
+    reference = estimate(service(registry), version("AR", 500, 1))
+    if named is not None:
+        monkeypatch.setenv(PLAN_ENV, named)
+    policy = service(registry)
+    for section in registry.entries:
+        small = estimate(policy, version(section, 500, 1))
+        assert json.loads(small.authority_json)["extended_review"] == V2_AUTHORITY
+        assert small.as_dict()["calls"] == 60, "the v2 sum of the explicit-v2 test: 1 + 13 + 16 + 30"
+        accepted = small.approve(consent(small), actor_user_uid="expert")
+        assert accepted["extended_review"] == V2_AUTHORITY
+    assert estimate(policy, version("AR", 500, 1)).estimate_digest == reference.estimate_digest
+
+
+@pytest.mark.parametrize("named", ["v3", "V3", " extended-review-v3 "])
+def test_v3_and_its_full_name_opt_in_to_the_critic_the_correction_and_the_passport(registry, monkeypatch, named):
+    monkeypatch.delenv(PLAN_ENV, raising=False)
+    by_default = estimate(service(registry), version("AR", 500, 1))
+    monkeypatch.setenv(PLAN_ENV, named)
+    opted_in = estimate(service(registry), version("AR", 500, 1))
+    review = json.loads(opted_in.authority_json)["extended_review"]
+    assert review["plan_version"] == "extended-review-v3" and review["review"] is True
+    assert review["semantic_repair_attempts"] == 1 and "project_parameters_policy" in review
+    assert {"finding_review", "finding_correction"} <= set(review["phase_call_limits"])
+    assert opted_in.as_dict()["calls"] == 1 + 2 * (2 + 4 + 8 + 8 + 8 + 8) > by_default.as_dict()["calls"]
+    assert opted_in.estimate_digest != by_default.estimate_digest, "the plan is bound by the digest the person confirms"
+    assert opted_in.approve(consent(opted_in), actor_user_uid="expert")["extended_review"]["plan_version"] == "extended-review-v3"
+
+
+@pytest.mark.parametrize("named", ["v1", "v4", "extended-review-v1", "legacy", "0", "off", "v3 v2"])
+def test_a_plan_name_that_is_neither_v2_nor_v3_is_refused_and_never_replaced_by_the_default(registry, monkeypatch, named):
+    monkeypatch.setenv(PLAN_ENV, named)
+    with pytest.raises(DomainError) as failure:
+        estimate(service(registry), version("AR", 500, 1))
+    assert failure.value.code is ErrorCode.VALIDATION_FAILED
+    assert failure.value.detail_fields == {"field": "analysis_workflow", "constraint": "unsupported_plan"}
+
+
+@pytest.mark.parametrize("named", [None, "v2", "v3", "no-such-plan"])
+def test_the_text_only_switch_prices_no_extended_review_whatever_plan_is_named(registry, monkeypatch, named):
+    """`AUDITMANAGER_EXTENDED_ANALYSIS=0` still means the text analysis alone: the plan name is not even read, so not even a bad one refuses."""
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS", "0")
+    monkeypatch.delenv(PLAN_ENV, raising=False)
+    if named is not None:
+        monkeypatch.setenv(PLAN_ENV, named)
+    value = estimate(service(registry), version("AR", 500, 1))
+    assert "extended_review" not in json.loads(value.authority_json)
+    assert value.as_dict()["calls"] == value.as_dict()["windows"]
 
 
 def test_fresh_full_review_prices_images_without_rejecting_portal_stamps(registry, monkeypatch):
@@ -168,7 +227,7 @@ def test_raised_output_price_and_route_rate_preset_changes_are_bound(registry):
 
 
 def test_section_stats_consent_accepts_zero_ceiling_and_keeps_source_binding(registry, monkeypatch):
-    monkeypatch.delenv(PLAN_ENV, raising=False)
+    monkeypatch.setenv(PLAN_ENV, "v3")  # the section-stats bounds are plan v3's (`V3-OPTIN-01`: opt-in, no longer the default)
     value = estimate(service(registry), version("AR", 300_000, 30), relaxed_limits=True)
     approved = value.approve(consent(value, 0))
     assert approved["uncapped_stats"] is True
@@ -263,37 +322,6 @@ def test_comparison_zip_pdf_can_be_priced_from_its_native_text(registry):
     assert estimate(priced, source).as_dict()['estimated_cost_micros'] > 0
 
 
-def test_six_scope_group_prices_all_calls_and_pins_each_verified_set(monkeypatch, registry):
-    from auditmanager.runs import v3_group
-    scopes = tuple(NS(scope_id=scope, identity=scope, chunking_profile="chunk-v1",
-        set_id="set-"+scope, set_sha256=str(index)*64) for index, scope in enumerate(v3_group.SCOPES, 1))
-    pack = NS(scopes=scopes, sha256="e"*64)
-    profile = NS(snapshot_id="snapshot", content_sha256="p"*64,
-                 system_prompt="rules", response_schema_json="{}")
-    monkeypatch.setattr(v3_group, "_validate_pack", lambda _: profile)
-    monkeypatch.setattr(preflight, "current_snapshot", lambda _: NS(norms_snapshot_id="snapshot"))
-    monkeypatch.setattr(preflight, "qualification", lambda *_: NS(build_complete=True, sources_confirmed=True))
-    refs = {scope.scope_id: NS(set_id=scope.set_id, set_sha256=scope.set_sha256,
-                              set_size_bytes=10_000 + index) for index, scope in enumerate(scopes)}
-    monkeypatch.setattr(preflight, "select_verified_retrieval_set", lambda _s, *, identity, **_: refs[identity])
-    route = NS(revision_id="rev", model_id=MODEL, billing="metered", input_budget_characters=1)
-    policy = service(registry, pack_registry=NS(select_beta=lambda: pack), connection_route=lambda _: route)
-    value = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"))
-    view, authority = value.as_dict(), value.approve(consent(value))
-    assert view["calls"] == view["windows"] == 6
-    assert view["output_tokens"] == 6*16_000
-    assert view["estimated_cost_micros"] == sum(authority["scope_costs_micros"].values())
-    raised = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"), relaxed_limits=True)
-    assert raised.as_dict()["output_tokens"] == 6*64_000
-    assert raised.as_dict()["estimated_cost_micros"] > view["estimated_cost_micros"]
-    refs[scopes[0].scope_id].set_size_bytes += 1
-    changed = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"))
-    assert changed.estimate_digest != value.estimate_digest
-    route.billing = "unmetered"
-    free = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"))
-    assert free.as_dict()["estimated_cost_micros"] == 0 and free.approve(consent(free))["billing"] == "unmetered"
-
-
 def test_section_run_bounds_hold_unless_the_run_asks_for_relaxed_limits(registry, monkeypatch):
     monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS", "1")
     monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3")
@@ -319,3 +347,24 @@ def test_only_the_batched_coverage_can_lift_the_section_run_bounds(registry, mon
     with pytest.raises(DomainError) as failure:
         estimate(service(registry), version("AR", 300_000, 501), relaxed_limits=True)
     assert failure.value.detail_fields["reason"] == "cost_page_count_unavailable"
+
+
+def test_a_fresh_v2_estimate_freezes_the_original_review_marker_without_adding_a_call_or_a_cent(registry, monkeypatch):
+    """`V2-ORIGINAL-REVIEW-01`: the critic and corrector call no model, so the price is the price of the v2 plan; the digest carries the marker,
+    so a consent accepted before it never acquires the new procedures and one accepted after it always has them."""
+    from auditmanager.analysis.public import ORIGINAL_REVIEW_V2
+    from auditmanager.runs.stage_layout import rows_in_use
+    monkeypatch.setenv(PLAN_ENV, "v2")
+    value = estimate(service(registry), version("AR", 500, 1))
+    authority = json.loads(value.authority_json)
+    assert authority["extended_review"]["original_review"] == ORIGINAL_REVIEW_V2 == "deterministic-v1"
+    assert value.as_dict()["calls"] == 60 and "original_review" not in json.dumps(value.as_dict())
+    # the layout's rows are what they were: the critic and the corrector bind no cell
+    assert rows_in_use(authority["extended_review"]) == ("text", "blocks", "cross_check", "norms")
+    without = dict(authority)
+    without["extended_review"] = {k: v for k, v in authority["extended_review"].items() if k != "original_review"}
+    assert preflight._digest(authority) == value.estimate_digest != preflight._digest(without)
+    # the same estimate under v3 never carries it
+    monkeypatch.setenv(PLAN_ENV, "v3")
+    assert "original_review" not in json.loads(estimate(service(registry), version("AR", 500, 1)).authority_json)["extended_review"]
+

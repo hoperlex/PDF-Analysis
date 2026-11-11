@@ -75,6 +75,7 @@ export function StartRunWithReadiness({ projectUid, versionUid, onStarted, initi
         <PlanStagesDialog
           rows={readinessPlan(readiness.cells)}
           kit={readiness.kit === undefined ? null : STAGE_KIT_LABELS[readiness.kit]}
+          extendedPlan={readiness.extended_plan}
           onClose={() => setOpen(false)}
           editHref={admin ? MODELS_BY_STAGE_ADDRESS : undefined}
         />

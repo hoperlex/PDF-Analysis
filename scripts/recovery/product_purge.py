@@ -87,6 +87,9 @@ KEEP_RELEASE_TABLES = frozenset(("release", "release_revision"))
 #: the one to resume it).
 KEEP_LOOKUP_TABLES = frozenset(("alembic_version", "contract_state_transition", "execution_control"))
 #: The whole normative corpus -- the exemption list of ``stand-fingerprint-v1``, reused.
+#: `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`) adds the PNG render of a norm page, a derived row of a custody binding that names a Blob: it is the
+#: corpus's own, not the decision memory's (`KEEP_MEMORY_TABLES`, which a forget of a case empties), so it is KEEP here by the ``norm`` prefix rule and a
+#: purge keeps its Blob like it keeps the custody ledger's.
 KEEP_NORM_TABLES = EXEMPT_FROM_FINGERPRINT
 #: `EXEC-SEAL-01` (R-143). Executor connections, revisions, sealed secrets, probes and route
 #: events are configuration, like accounts: a purge of product data never touches them. They are
@@ -131,14 +134,25 @@ KEEP_SCHEDULE_TABLES = frozenset((
 #: copy of its context once the product tables are truncated.
 #: `0061_decision_memory_m2` adds the installation settings' journal (`data_class`, `training_use`): an installation fact like the
 #: schedule's settings, never reset by a purge of product data.
+#: `0064_precedents_seal` (`CRIT-SEAL-50`) adds four tables to the content side of a case: its comments, the memory's copy of the block evidence
+#: of a finding, the encoder's queue and the vectors. Each references the case or its content (a KEEP table), never a PRODUCT one, takes the forget
+#: guard (`DELETE` only beside a forget of the case) and is removed by the forget tool (`scripts/recovery/memory_forget.py`).
 KEEP_MEMORY_TABLES = frozenset((
-    "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
-    "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_setting_event",
-    "decision_memory_status_event",
+    "decision_memory_block_evidence", "decision_memory_case", "decision_memory_comment", "decision_memory_content", "decision_memory_crop",
+    "decision_memory_decision", "decision_memory_decision_text", "decision_memory_embedding", "decision_memory_embedding_intent",
+    "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_setting_event", "decision_memory_status_event",
+))
+#: `0064_precedents_seal` (`CRIT-SEAL-50`): the installation's switches and settings of the «Прецеденты» programme and their journal, the vectors'
+#: control (the pause and the state of the night window) with its journal, and the journal of reference data the stand handed to an agent. They
+#: are the stand's configuration and its own record, like the schedule's settings and the executor connections: they reference accounts, never a
+#: project, a document or a run (the delivery journal names its task, run and call by bare identities and holds no text, so it outlives an erase of
+#: the project it was handed for), and a purge of product data keeps them.
+KEEP_PRECEDENT_TABLES = frozenset((
+    "executor_task_context_delivery", "precedent_setting_event", "vector_control", "vector_control_event",
 ))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
-    | KEEP_EXECUTOR_TABLES | KEEP_SCHEDULE_TABLES | KEEP_MEMORY_TABLES
+    | KEEP_EXECUTOR_TABLES | KEEP_SCHEDULE_TABLES | KEEP_MEMORY_TABLES | KEEP_PRECEDENT_TABLES
 )
 
 #: The ledger events the decision memory keeps (`Q8`: a comment is not a decision) that have no memory decision yet. Selecting from it
@@ -189,14 +203,11 @@ MEMORY_LOSS_HINT = (
 MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 
 #: Truncated together, in one statement (they reference each other).
-#: `0032_ar_v3_run_group`: a group of six runs of one version, with their pins and members.
-#: ``ar_v3_run_group`` references the product ``project``, ``document_version`` and command
-#: receipt; ``ar_v3_run_group_member`` references the group and ``audit_run``. Both are
-#: immutable rows (``am_immutable_row``), so a row DELETE is refused by design: the one
-#: multi-table TRUNCATE below is the only way out, and PostgreSQL refuses it unless a table and
-#: every table that references it are named in the same statement.
+#: The immutable rows (``am_immutable_row``) refuse a row DELETE by design: the one multi-table TRUNCATE below is the only way out, and
+#: PostgreSQL refuses it unless a table and every table that references it are named in the same statement. (`0063_drop_ar_v3_beta` dropped
+#: the six-scope beta's two tables, which were the first of this kind.)
 PRODUCT_TABLES = frozenset((
-    "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
+    "analysis_artifact_publication", "attempt",
     "audit_run", "audit_run_cell_binding", "comparison_ai_job", "comparison_ai_link", "comparison_ai_pair_answer", "comparison_ai_pair_question",
     "comparison_ai_sheet_item", "comparison_launch_entry", "comparison_launch_queue", "comparison_matrix",
     "comparison_matrix_edit", "comparison_model_call", "comparison_report", "comparison_report_artifact",
@@ -223,6 +234,10 @@ PRODUCT_TABLES = frozenset((
     # finding's execution status and an assignment's planned dates belong to the project's document, finding and
     # assignment. The two journals are immutable rows, so they leave in the same multi-table TRUNCATE.
     "document_tag", "finding_execution_status", "work_assignment_schedule_event",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the query vector of a run's candidate text, the state of a run's «Прецеденты» pass with its advice per
+    # finding, and a finding's block evidence belong to a run and its findings: each references `audit_run`, `finding` or `finding_observation`, so
+    # the project erase's foreign-key closure reaches them. The advice and the block evidence are immutable rows, so they leave in the TRUNCATE.
+    "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "finding_block_evidence",
 ))
 
 #: ``audit_event.event_type`` families. ``norm_custody.`` is the custody ledger's, ``executor.``
@@ -234,7 +249,10 @@ PRODUCT_TABLES = frozenset((
 #: ``memory.`` is the decision memory's forget tool (`DECISION-MEMORY-01` section 4.5): ``memory.forget_requested`` and
 #: ``memory.forget_completed`` record who made the memory forget what, with identities, counts and digests only; they are kept for
 #: the same reason ``erasure.`` is.
-KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.", "memory.", "stage_layout.")
+#: ``precedent.`` and ``vector.`` (`0064_precedents_seal`, `CRIT-SEAL-50`): who changed a switch or a setting of the Precedents programme, and the
+#: pause and the night window of the vectors, journalled with identities, names and counts only (no finding or case text): the settings'
+#: and the control's own record, kept like ``stage_layout.``.
+KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.", "memory.", "stage_layout.", "precedent.", "vector.")
 PRODUCT_EVENT_PREFIXES = (
     "artifact.", "attempt.", "audit_run.", "comparison.", "execution.", "findings.", "job.",
     "provider.", "stage.",
@@ -273,6 +291,9 @@ KEEP_COMMAND_TYPES = frozenset((
     "archive_executor_host", "confirm_executor_host_agent_install_host_key", "create_executor_host_agent_install",
     "issue_executor_host_enrollment", "revise_stage_layout", "set_executor_host_enabled", "set_executor_host_slots",
     "set_stage_layout_enabled",
+    # `CRIT-SEAL-50` (contract 1.51.0): the keyed administrator writes of the Precedents programme -- a new revision of a switch or a setting, and
+    # the pause of the vectors. Their tables (`KEEP_PRECEDENT_TABLES`) and events (``precedent.``, ``vector.``) are kept with them.
+    "append_precedent_setting", "set_vector_paused",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
     # `UI-PARITY-P0G`..`P0L`, `P0P`: a document archived, renamed or tagged, an execution status, decisions imported from
@@ -299,8 +320,8 @@ PRODUCT_COMMAND_TYPES = frozenset((
     # pass's proposals, product commands like `decide_optimisation_proposal`; ``optimisation_proposal_decision.command_id``
     # references the second, so it is deleted only after the decision table is truncated.
     "carry_over_proposal_decisions", "carry_over_proposal_decision",
-    # `0032_ar_v3_run_group`: the receipt of a group start. ``ar_v3_run_group.command_id``
-    # references it, and it is deleted only after the group is truncated.
+    # The receipt of the removed six-scope beta's group start (`0032`, dropped by `0063_drop_ar_v3_beta`): a database that served the beta
+    # may still hold such a command record, so the command type stays classified.
     "start_ar_v3_beta_group",
     "start_audit_run", "start_optimisation_pass", "upload_price_list", "upload_source_document",
     # `0035_comparison_records`: the receipt of a withdrawal. ``comparison_sheet_link.command_id``

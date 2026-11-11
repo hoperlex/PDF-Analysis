@@ -1,6 +1,6 @@
 """Unserved, fail-closed read of 0023's certified citation partitions.
 
-The caller supplies the registered v3 profile identity and holds one consistent
+The caller supplies the registered profile identity and holds one consistent
 database read transaction. This module returns persisted facts for a later
 report assembler; it does not authorize a route or infer a certified zero.
 """
@@ -99,7 +99,7 @@ _OBSERVATIONS = text("""
            f.canonical_observation_id,
            o.finding_observation_id, o.run_id AS observation_run_id,
            o.finding_uid AS observation_finding_uid,
-           o.stage_id, o.grounded, o.category, o.analysis_profile_id,
+           o.stage_id, o.grounding_kind, o.grounded, o.category, o.analysis_profile_id,
            o.prompt_bundle_id, o.provider_mode, o.norm_citation_count,
            o.required_value, o.stated_value
       FROM finding f LEFT JOIN finding_observation o
@@ -137,9 +137,20 @@ _CITATIONS = text("""
      ORDER BY c.finding_observation_id COLLATE "C", c.citation_ordinal
 """)
 
-#: The two stages whose succeeded StageResult certifies a citation partition: the v1/v2
-#: ``norm_verification`` stage and, since migration ``0036``, the AR v3 beta CITE stage.
-CITE_STAGE_IDS = frozenset({"norm_verification", "ar_v3_citation_review"})
+#: The stage whose succeeded StageResult certifies a citation partition: ``norm_verification``.
+CITE_STAGE_IDS = frozenset({"norm_verification"})
+
+#: The stages an observation of each grounding kind may come from. A text span is the text path's (``text_analysis``); a portal block is
+#: what ``publish_candidate_groups`` writes (``block_analysis``, or ``finding_merge`` for a merged or mixed group). A pair not listed here
+#: is a forged or stale row and is refused, never read as a text observation.
+_STAGES_BY_GROUNDING = {
+    "text_span": frozenset({"text_analysis"}),
+    "portal_block": frozenset({"block_analysis", "finding_merge"}),
+}
+
+#: The categories ``publish_candidate_groups`` gives a block finding. None of them is a norm category (``0023``'s
+#: ``ck_finding_observation_norm_category_shape`` allows such a row no required/stated value and a citation count of NULL or 0).
+_BLOCK_CATEGORIES = frozenset({"drawing_discrepancy", "cross_source"})
 
 _NORMATIVE = frozenset({
     "evacuation", "fire_safety", "accessibility", "insulation", "sound",
@@ -203,7 +214,7 @@ def read_verified_citations(
 ) -> VerifiedCitationRead:
     """Read one terminal Run's exact certified finding partitions, without a commit.
 
-    ``profile_id`` must be the later registered v3 identity, not a caller chosen
+    ``profile_id`` must be the registered profile identity, not a caller chosen
     assertion. The caller also owns authorization and a repeatable-read snapshot.
     ``cite_stage_id`` names the succeeded StageResult that certifies the partitions;
     it is one of :data:`CITE_STAGE_IDS`, never free text.
@@ -250,7 +261,8 @@ def read_verified_citations(
                 or row["version_uid"] != version_uid
                 or row["observation_run_id"] != run_id
                 or row["observation_finding_uid"] != finding_uid
-                or row["stage_id"] != "text_analysis" or row["grounded"] is not True
+                or row["stage_id"] not in _STAGES_BY_GROUNDING.get(row["grounding_kind"], ())
+                or row["grounded"] is not True
                 or row["analysis_profile_id"] != profile_id
                 or row["prompt_bundle_id"] != header["prompt_bundle_id"]
                 or row["provider_mode"] != header["provider_mode"]):
@@ -271,6 +283,18 @@ def read_verified_citations(
             observation_id = row["finding_observation_id"]
             count = row["norm_citation_count"]
             items = tuple(citations.get(observation_id, ()))
+            if row["grounding_kind"] == "portal_block":
+                # A block finding stands on blocks, not on a norm: its partition is empty by construction (no citation row, no
+                # required/stated value, no count or a count of zero). Anything else on such a row is refused, not read.
+                if (items or (count is not None and (type(count) is not int or count != 0))
+                        or row["category"] not in _BLOCK_CATEGORIES
+                        or row["required_value"] is not None or row["stated_value"] is not None):
+                    raise CitationReadRefused("citation_partition_invalid")
+                partitions[observation_id] = VerifiedObservationPartition(
+                    finding_observation_id=observation_id, citation_count=0,
+                    citations=(), required_value=None, stated_value=None,
+                )
+                continue
             if (type(count) is not int or not 0 <= count <= 5
                     or count != len(items)
                     or tuple(item.citation_ordinal for item in items)

@@ -1,7 +1,7 @@
 """The model seam of the comparison summary, with a recorded implementation (`COMPARE-PERSISTED-SUMMARY-01`, B2).
 
 ``comparison`` takes other contexts only through their ports, so the seam is this context's own small
-protocol, in the shape of the text-profile and AR v3 adapters it mirrors:
+protocol, in the shape of the text-profile adapters it mirrors:
 
 * ``provider_mode`` is a **class constant** of the implementation, exposed read-only. It is not a
   constructor argument and not something derived from configuration, so a recording cannot present

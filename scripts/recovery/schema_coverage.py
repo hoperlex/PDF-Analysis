@@ -38,12 +38,12 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0062_hosts_stage_models"
+HEAD = "0065_norm_crop_render"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
     "account_release_mark", "alembic_version", "analysis_artifact_publication", "analysis_preset_revision", "app_user", "app_user_role",
-    "ar_v3_run_group", "ar_v3_run_group_member", "attempt", "audit_event", "audit_run", "blob", "command_record", "comparison_model_call", "comparison_page_profile", "comparison_sheet_link", "comparison_summary",
+    "attempt", "audit_event", "audit_run", "blob", "command_record", "comparison_model_call", "comparison_page_profile", "comparison_sheet_link", "comparison_summary",
     "comparison_upload", "comparison_upload_file", "comparison_upload_part", "comparison_upload_set", "comparison_version_order", "comparison_work", "comparison_work_attempt",
     "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_series", "comparison_sheet_pair",
     "comparison_sheet_pair_result", "comparison_transition",
@@ -96,6 +96,14 @@ TABLES = frozenset((
     # but for the cell binding, which belongs to a run (`PRODUCT` in the purge).
     "audit_run_cell_binding", "executor_host", "executor_host_report", "executor_host_slot_event", "executor_host_use_event",
     "executor_model_cooldown", "stage_layout", "stage_layout_revision", "stage_layout_switch_event",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the memory's comments, block evidence, encoder queue and vectors (KEEP, the content side of a case);
+    # the probe of a candidate text, the pass of a run with its advice, and the block evidence of a finding (PRODUCT); the settings journal and
+    # the vectors' control with its journal (configuration, KEEP); and the journal of reference data handed to an agent (KEEP, no foreign key).
+    "decision_memory_block_evidence", "decision_memory_comment", "decision_memory_embedding", "decision_memory_embedding_intent",
+    "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "executor_task_context_delivery",
+    "finding_block_evidence", "precedent_setting_event", "vector_control", "vector_control_event",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page, a derived row of a custody binding (the norm side, KEEP).
+    "norm_crop_render",
 ))
 
 #: Views at ``HEAD``. A view carries no rows; it is restored from the dump and checked by name.
@@ -112,6 +120,8 @@ EXEMPT_FROM_FINGERPRINT = frozenset((
     "norm_custody_admission", "norm_custody_binding", "norm_document", "norm_embedding",
     "norm_embedding_build", "norm_embedding_profile", "norm_paragraph", "norm_repair_call",
     "norm_retrieval_set", "norms_snapshot",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`): its name starts with ``norm``, so the frozen SQL does not count it; it is the norm side's.
+    "norm_crop_render",
 ))
 
 #: Tables whose rows ``stand-fingerprint-v1`` counts and digests: what a restore proves equal.
@@ -125,11 +135,6 @@ TRIGGERS = (
     ("account_release_mark", "trg_account_release_mark", "am_guard_account_release_mark", 31),
     ("analysis_artifact_publication", "trg_analysis_artifact_frozen_guard", "am_guard_frozen_columns", 19),
     ("analysis_artifact_publication", "trg_analysis_artifact_state_guard", "am_guard_durable_effect_transition", 23),
-    # `0032_ar_v3_run_group`: the group and its six members are immutable; the group's
-    # co-commit check is a deferred AFTER INSERT constraint trigger (5 = ROW | INSERT).
-    ("ar_v3_run_group", "trg_ar_v3_group_complete", "am_ar_v3_group_complete", 5),
-    ("ar_v3_run_group", "trg_ar_v3_run_group_frozen", "am_immutable_row", 27),
-    ("ar_v3_run_group_member", "trg_ar_v3_run_group_member_frozen", "am_immutable_row", 27),
     # `0037_analysis_presets`: the revisions of a preset are append-only (27 = ROW | BEFORE | DELETE |
     # UPDATE) and chained on INSERT (7 = ROW | BEFORE | INSERT); a run records its preset only with
     # the executor that preset names (an INSERT check on `audit_run`).
@@ -436,12 +441,42 @@ TRIGGERS = (
     # A cell is bound once, for a pending planned run, to a system member that pins the cell's model.
     ("audit_run_cell_binding", "trg_audit_run_cell_binding_immutable", "am_immutable_row", 27),
     ("audit_run_cell_binding", "trg_audit_run_cell_binding_member", "am_check_audit_run_cell_binding", 7),
+    # `0064_precedents_seal` (`CRIT-SEAL-50`). 19 = ROW | BEFORE | UPDATE; 11 = ROW | BEFORE | DELETE; 27 = ROW | BEFORE | DELETE | UPDATE;
+    # 7 = ROW | BEFORE | INSERT. The memory's comments, block evidence and vectors take the forget guard of `0061` and a guard on INSERT
+    # (`am_guard_decision_memory_forgotten_insert`: nothing is added to a forgotten case, `D-497` item 1); the encoder's queue changes state, so
+    # it has a frozen-column guard on UPDATE and the forget guard on DELETE alone.
+    ("decision_memory_block_evidence", "trg_decision_memory_block_evidence_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_block_evidence", "trg_decision_memory_block_evidence_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_comment", "trg_decision_memory_comment_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_comment", "trg_decision_memory_comment_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_embedding", "trg_decision_memory_embedding_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_embedding", "trg_decision_memory_embedding_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_embedding_intent", "trg_decision_memory_embedding_intent_forget_guard", "am_guard_decision_memory_forget", 11),
+    ("decision_memory_embedding_intent", "trg_decision_memory_embedding_intent_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_embedding_intent", "trg_decision_memory_embedding_intent_frozen_guard", "am_guard_frozen_columns", 19),
+    # The probe's key and input are frozen and its observation is write-once; the pass's run keeps its identity; the advice, a finding's block
+    # evidence, the settings journal, the control's journal and the delivery journal are append-only or immutable.
+    ("decision_memory_precedent_advice", "trg_decision_memory_precedent_advice_immutable", "am_immutable_row", 27),
+    ("decision_memory_precedent_run", "trg_decision_memory_precedent_run_frozen_guard", "am_guard_frozen_columns", 19),
+    ("decision_memory_probe", "trg_decision_memory_probe_frozen_guard", "am_guard_frozen_columns", 19),
+    ("decision_memory_probe", "trg_decision_memory_probe_write_once", "am_guard_write_once_columns", 19),
+    ("executor_task_context_delivery", "trg_executor_task_context_delivery_immutable", "am_immutable_row", 27),
+    ("finding_block_evidence", "trg_finding_block_evidence_immutable", "am_immutable_row", 27),
+    # The switches and settings are numbered per name without a gap; the control is one seeded row with a frozen key and no delete; its journal
+    # is append-only and numbered.
+    ("precedent_setting_event", "trg_precedent_setting_event_immutable", "am_immutable_row", 27),
+    ("precedent_setting_event", "trg_precedent_setting_event_number", "am_check_gapless_number", 7),
+    ("vector_control", "trg_vector_control_frozen_guard", "am_guard_frozen_columns", 19),
+    ("vector_control", "trg_vector_control_no_delete", "am_immutable_row", 11),
+    ("vector_control_event", "trg_vector_control_event_append_only", "am_append_only", 27),
+    ("vector_control_event", "trg_vector_control_event_number", "am_check_gapless_number", 7),
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`): a render is immutable (27 = ROW | BEFORE | DELETE | UPDATE).
+    ("norm_crop_render", "trg_norm_crop_render_immutable", "am_immutable_row", 27),
 )
 
 #: The constraint triggers that are ``DEFERRABLE INITIALLY DEFERRED``: a parent row must
 #: commit together with its children. They fire at commit, never during ``pg_restore``.
 DEFERRED_TRIGGERS = frozenset((
-    "trg_ar_v3_group_complete",
     "trg_executor_group_revision_has_members",
     "trg_finding_observation_partition",
     "trg_norm_citation_partition",
@@ -508,7 +543,17 @@ SEQUENCES = {
 #: 2026-11-09).
 #: `G-1` (the sealed key of a host's SSH install is a secret of the host): `executor_secret.host_id` adds its foreign key, its format check and the
 #: exactly-one-of check: c 1455, f 400.
-CONSTRAINT_COUNTS = {"c": 1455, "f": 400, "p": 153, "t": 10, "u": 138}
+#: `0063_drop_ar_v3_beta` (`AR-V3-BE-RM-01`) drops the six-scope beta's two tables: 18 checks, 7 foreign keys, two primary keys, one constraint
+#: trigger and three unique constraints: c 1437, f 393, p 151, t 9, u 135 (measured on a throwaway database at ``0063``, 2026-11-10).
+#: `0064_precedents_seal` (`CRIT-SEAL-50`) adds twelve tables (twelve primary keys, four unique constraints -- a comment's source, an intent's view,
+#: a control event's number, a delivery's (task, kind) --, twelve foreign keys: the comment's case, the three content keys of the block evidence,
+#: the intent and the vector, the probe's run, the pass's run, the advice's run and finding, a finding's block evidence, the control journal's
+#: control and its actor, the settings' actor, and the actor of the control event is counted once) and 102 checks (the identity, shape, state-pair
+#: and range checks of the new columns and the new CHECKs of the decision, the run, the finding and the observation): c 1539, f 405, p 163, t 9, u 139
+#: (measured on a throwaway database at ``0064``, 2026-11-11).
+#: `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one table: eight checks, two foreign keys (the custody binding and the Blob) and the primary key:
+#: c 1547, f 407, p 164, t 9, u 139 (measured on a throwaway database at ``0065``, 2026-11-11).
+CONSTRAINT_COUNTS = {"c": 1547, "f": 407, "p": 164, "t": 9, "u": 139}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -525,7 +570,11 @@ CONSTRAINT_COUNTS = {"c": 1455, "f": 400, "p": 153, "t": 10, "u": 138}
 #: `0062` adds 22 (nine primary keys, five unique constraints, and eight lookups and partial unique indexes): 506 (measured on a throwaway
 #: database at ``0062``, 2026-11-09).
 #: `G-1` adds the partial unique index of one current secret per host and purpose: 507.
-INDEX_COUNT = 507
+#: `0063_drop_ar_v3_beta` drops the beta's two tables with their five indexes: 502 (measured on a throwaway database at ``0063``, 2026-11-10).
+#: `0064_precedents_seal` adds 24 (twelve primary keys, four unique constraints and eight lookups and partial indexes): 526 (measured on a throwaway
+#: database at ``0064``, 2026-11-11).
+#: `0065_norm_crop_render` adds two (its primary key and the Blob lookup): 528 (measured on a throwaway database at ``0065``, 2026-11-11).
+INDEX_COUNT = 528
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

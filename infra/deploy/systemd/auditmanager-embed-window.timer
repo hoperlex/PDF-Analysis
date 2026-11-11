@@ -1,0 +1,14 @@
+# `EMBED-01` (ADR-0029 decision 8): the host's first timer. It fires a minute after the last look ended, so a long round (the encoder runs for
+# hours) is never overlapped, and every look writes the heartbeat the worker checks before it opens a window. The window's hours are the
+# worker's (the setting `vector_window`), not this timer's: the timer only looks. Disable it to stop the night encoder; the intents wait.
+[Unit]
+Description=AuditManager night encoder: look every minute (EMBED-01)
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

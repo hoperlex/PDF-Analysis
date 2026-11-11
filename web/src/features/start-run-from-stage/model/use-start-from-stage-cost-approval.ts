@@ -31,7 +31,7 @@ export function useStartFromStageCostApproval(sourceRunId: string | null, stageI
       }
       const body = { version_uid: run.version_uid, start_from_run_id: sourceRunId, start_stage_id: stageId };
       const estimate = (await estimateRunCost({ body }, { signal })).data;
-      if (!usableCostEstimate(estimate) || estimate.scope !== 'run' || estimate.version_uid !== run.version_uid
+      if (!usableCostEstimate(estimate) || estimate.version_uid !== run.version_uid
           || estimate.relaxed_limits !== false || estimate.start_from_run_id !== sourceRunId
           || estimate.start_stage_id !== stageId) {
         throw new Error('Оценка стоимости не соответствует запуску с выбранного этапа.');

@@ -26,22 +26,25 @@ export function MachineAdvice({ review, correction, reviewStatus, reviewReason }
       ? 'Кандидат находится за пределами окна критики.' : reviewReason === 'outside_processed_review_window'
         ? 'Кандидат находится за пределами обработанного окна проверки.' : 'Причина и исходная запись доступны в выгрузке.'}
   </p> : null;
-  return <section aria-label="Машинная рекомендация и исправленный кандидат" data-extended-machine-advice="">
+  // `V2-ORIGINAL-REVIEW-01`: a row of the original's deterministic critic or corrector is a rule's word, not a model's, and says so.
+  const rule = critic?.mode === 'deterministic' || fixed?.mode === 'deterministic';
+  return <section aria-label="Машинная рекомендация и исправленный кандидат" data-extended-machine-advice="" {...(rule ? { 'data-machine-mode': 'deterministic' } : {})}>
     <h4>Критика и уточнение кандидата</h4>
-    <p>Рекомендация модели не является принятием или отклонением экспертом. Исходная запись сохранена.</p>
+    <p>{rule ? 'Рекомендация правил оригинала (без модели) не является принятием или отклонением экспертом. Исходная запись сохранена.' : 'Рекомендация модели не является принятием или отклонением экспертом. Исходная запись сохранена.'}</p>
     {critic === null ? null : <aside data-machine-recommendation={text(critic.llm_decision)}>
       <strong>{ADVICE[text(critic.llm_decision)] ?? 'Рекомендация требует проверки'}</strong>
       {text(critic.explanation) ? <p>{text(critic.explanation)}</p> : null}
       {text(critic.human_taxonomy_reason) ? <p>Основание рекомендации: {REASON[text(critic.human_taxonomy_reason)] ?? 'Требуется экспертная сверка пояснения и источников'}</p> : null}
       {text(critic.suggested_fix) ? <p>Предложение: {text(critic.suggested_fix)}</p> : null}
-      {critic.source_dependency === 'needs_more_context' ? <p>Модель сообщает, что требуется дополнительный исходный контекст.</p> : critic.source_dependency === 'cross_section_required' ? <p>Для проверки требуются материалы смежного раздела.</p> : null}
+      {critic.source_dependency === 'needs_more_context' ? <p>{critic.mode === 'deterministic' ? 'Правило не нашло подтверждающий источник; требуется дополнительный исходный контекст.' : 'Модель сообщает, что требуется дополнительный исходный контекст.'}</p> : critic.source_dependency === 'cross_section_required' ? <p>Для проверки требуются материалы смежного раздела.</p> : null}
       {typeof critic.confidence === 'number' && Number.isFinite(critic.confidence) && critic.confidence >= 0 && critic.confidence <= 1 ? <p>Заявленная моделью уверенность: {Math.round(critic.confidence * 100)}%. Это не оценка эксперта.</p> : null}
-      {critic.evidence_checked === true ? <p>Источники просмотрены моделью; экспертная проверка не выполнена.</p> : <p>Проверка источников моделью не подтверждена.</p>}
+      {critic.mode === 'deterministic' ? <p>Проверено по правилам, без модели: наличие источника, его существование в записи и страница цитаты. Смысловая проверка не выполнялась.</p>
+        : critic.evidence_checked === true ? <p>Источники просмотрены моделью; экспертная проверка не выполнена.</p> : <p>Проверка источников моделью не подтверждена.</p>}
       <EvidenceQuotes value={critic.source_evidence} />
     </aside>}
     {fixed === null ? null : <section data-machine-correction={text(fixed.action)}>
       <p><strong>{ACTION[text(fixed.action)] ?? 'Исправление требует проверки'}</strong>{correctionReason(fixed.reason) ? ` · ${correctionReason(fixed.reason)}` : ''}</p>
-      {fixed.action === 'needs_context' ? <p>Модель сохранила исходное наблюдение и запросила дополнительные материалы. Завершение обработки ответа не означает разрешения этого вопроса.</p> : null}
+      {fixed.action === 'needs_context' ? <p>{fixed.mode === 'deterministic' ? 'Правило сохранило исходное наблюдение: без источника исправить нечего. Ничего не удалено и не изменено.' : 'Модель сохранила исходное наблюдение и запросила дополнительные материалы. Завершение обработки ответа не означает разрешения этого вопроса.'}</p> : null}
       <div className={styles.evidence}>
         <section aria-label="Исходное наблюдение"><h5>Исходное наблюдение</h5>
           {original === null ? <p>Отдельный снимок исходной записи не передан; исходная запись показана выше.</p> : <><strong>{text(original.title)}</strong><p>{text(original.description)}</p></>}

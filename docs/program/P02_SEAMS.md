@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-324 operations, sealed. `A5` generates the typed client from this document; `B6`
+325 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -860,7 +860,7 @@ registry's `listWorkers` and `setWorkerIntake` on 2026-10-12 (stubs answering
 operations on 2026-10-12 under `R-112` and `R-113` (stubs answering `dependency_unavailable`
 until `W55A-SEARCH-01`). `W55B-SEAL-01` added the two portal-block reads on 2026-10-13 under
 `R-116` and `R-119` (stubs answering `dependency_unavailable` until `W55B-GEOMETRY-01`).
-`W57A-SEAL-01B` added the refusing `getRunNormVerification`. `W59-SECTION-SEAL-01` added
+`W59-SECTION-SEAL-01` added
 `classifyDocumentVersion` and `getVersionSectionReview` on 2026-10-20: a version's
 expert-confirmed project stage and section, persisted by `0024_version_classification`, which
 `startRun` and `reauditRun` now route the analysis profile from. `CLASSIFICATION-CORRECTION-01`
@@ -909,7 +909,7 @@ connection is applied as if the caller had named it) and `RunStatus` the read-on
 `CMP-SEAL-C2` (contract `1.11.0`) sealed the version comparison AI, specifications, launch queue and reports as stubs on 2026-10-29 -- the AI check of the doubtful pairs of a document set (`estimateComparisonAiPairCheck`, `startComparisonAiPairCheck`, `getComparisonAiPairCheck`, `pauseComparisonAiPairCheck`, `resumeComparisonAiPairCheck`, `cancelComparisonAiPairCheck`, `listComparisonAiPairHints`), the AI description of changes (per series and per sheet pair, with the «Проверить» list and the MD of one sheet), specifications (the deterministic positions of a page and of a sheet pair, and the AI comparison of whole specifications per transition), the launch queue and the installation's AI queue, and the MD summary and the PDF reports -- fifty endpoints of the API in all. Reads are any one role; every write is an expert's act and keyed. Each answers `503 dependency_unavailable` until its lane (`CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01`, `CMP-VC-REPORT-01`) wires it, and `comparison_modules` first while the module «Сравнение версий» is off. Every AI start carries the estimate it consents to; migration `0040_comparison_ai_reports` adds twelve tables (`ADR-0025` decisions 17, 19 and 20).
 `CMP-SEAL-C3` (contract `1.12.0`) seals thirty-two stage comparison operations as typed stubs: separate resumable PDF/ZIP intake and candidate confirmation, expert-confirmed П/Р pairs and assemblies, sheet passports and append-only full map revisions, immutable raw text evidence and pinned seven-step chain runs. Reads are any one role; writes are expert acts with required idempotency keys. While `comparison_modules` excludes stages, each refuses with `comparison_modules`; otherwise it refuses its lane dependency until the C3 lanes wire it. Migration `0041_comparison_stage_core` adds fifteen project-reachable tables. D-262 still blocks first ZIP-set use until the caller enforces raw-upload, admission, disk and per-PDF validation bounds.
 `CMP-SEAL-C4` (contract `1.13.0`) sealed the stage comparison's AI review, link repair, full chain and expert journal on 2026-10-30 (`docs/program/CMP-SEAL-C4.md`): the assembly reload `getStageAssembly`; the chain's estimate, resume and batches (`estimateStageChainRun`, `resumeStageChainRun`, `startStageChainBatch`, `getStageChainBatch`, `pauseStageChainBatch`, `resumeStageChainBatch`, `cancelStageChainBatch`); the AI answers `listStageAiReviews`, `listStageClassifications` and `getStageSynthesis`, and the graphic evidence `listStageGraphicEvidence`; the sheet-link repairs `listStageLinkRepairs` and `undoStageLinkRepair`; the expert's cards and verdicts (`listStageChangeCards`, `getStageChangeCard`, `applyStageCardVerdicts`, `listStageCardVerdicts`); the change journal and its three exports (`getStageChangeJournal`, `streamStageChangeJournalXlsx`, `streamStageChangeJournalPdf`, `streamStageChangeJournalHtml`); and the page profile's stage text `getStageProfileText`. `createStageReviewCard` followed under the same version: an expert asks that evidence the cards hide be reviewed, which adds a `REVIEW` card and leaves the raw evidence unchanged. Reads are any one of `expert` and `admin`; every write is an expert's act and keyed. Migration `0042_comparison_stage_review` adds twelve project-reachable tables, and `0043_stage_ai_generations` preserves the immutable AI generations for explicit recovery. AI output never edits a raw difference.
-`BETA-COST-PREFLIGHT-1030` (contract `1.13.0`) added `estimateRunCost` and `estimateArV3GroupCost`: read-only cost preflights (`expert`) that write nothing and take no key. A changed source, profile, preset, route or model makes an earlier estimate digest stale; a start or a re-audit carries the consent (`cost_consent`) bound to one digest, and `startRun` gains `relaxed_limits`, the raised output limit chosen per Run.
+`BETA-COST-PREFLIGHT-1030` (contract `1.13.0`) added `estimateRunCost` (and a second estimate for the six-Run АР group, removed 2026-11-10, `R-154a`): read-only cost preflights (`expert`) that write nothing and take no key. A changed source, profile, preset, route or model makes an earlier estimate digest stale; a start or a re-audit carries the consent (`cost_consent`) bound to one digest, and `startRun` gains `relaxed_limits`, the raised output limit chosen per Run.
 `HOTFIX-PRESENTATION-INT-1030` (contract `1.14.0`) added `getExtendedRunReview` (the source-bound preliminary extended analysis of a Run and its explicit coverage, `expert` or `admin`), `importComparisonZip` (`expert`, keyed: a reviewed, bounded ZIP of PDFs becomes immutable upload members, and an unsafe or non-PDF member is refused before anything is created) and `streamComparisonTechnicalReport` (the saved evidence of a comparison series as a workbook or an HTML bundle, no model call).
 `W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
 the current norms snapshot's documents as a catalogue with display names derived from the
@@ -1056,23 +1056,12 @@ column is the proposal's identity and the decisions loaded back from it by that 
 keyed decision event authored by the caller (`revoke` for «не решено» over a decision in force), and the report names every
 row that carries an ID or a decision.
 
-`AR-V3-OPT-IN` (contract `1.38.0`, no migration, no new operation) makes AR v3 an **opt-in** analysis beside the standard one
-(`docs/program/AR-V3-OPT-IN-01.md`; owner answers Q1 to Q7 of 2026-11-07). The standard (imported) analysis stays the default
-and `startRun` / `reauditRun` gain no path to v3; v3 remains its own operation, `startArV3BetaGroup`. Two layers, both off by
-default: the pack (`AR_V3_BETA_PACK_MANIFEST`) is the capability to execute, read and review; `AR_V3_BETA_START_ALLOWED=1`,
-read by the `api` service only, is the permission to start. While a pack is installed and the permission is off,
-`startArV3BetaGroup` and `estimateArV3GroupCost` answer `409 conflict` / `ar_v3_start_not_enabled` and write nothing; with no
-pack they answer the `dependency_unavailable` they always did; a repeat of an accepted key replays whatever the permission now
-is, and runs already accepted finish because the worker does not read the variable. `ArV3BetaPackStatus.start_allowed` (present
-exactly when installed) tells a screen which. `RunStatus.analysis_kind` (`standard` | `ar_v3_beta`, derived from the pinned
-profile and bundle pair, `runs/analysis_kind.py`) is sent on every run, with `ar_v3_group_id` and `ar_v3_scope_id` on a member;
-a member also records the account that started it (`R-151v`). **The result of a version is its newest published or partial run
-of the standard analysis** (`Q3`): the counters and `listDocuments`' audit state (`STANDARD_RUN_SQL`), the schedule's facts,
-the default run of a comparison and the text the optimisation reads. A v3 run named in a comparison is the refusal
-`analysis_not_comparable` (the findings of the two analyses are not the same kind of object; carry-over recomputes the
-comparison and inherits it); `reauditRun` (and `estimateRunCost` with `reaudit_of_run_id`) of a member is `409 conflict` /
-`ar_v3_member_not_repeatable` before the key is claimed, because the repeat would route by the section and silently become the
-other analysis.
+`AR-V3-OPT-IN` (contract `1.38.0`, no migration, no new operation) made the six-scope АР beta (AR v3) an opt-in analysis beside the
+standard one, with a start permission, a pack status and the run fields `analysis_kind`, `ar_v3_group_id` and `ar_v3_scope_id`.
+**Withdrawn 2026-11-10 (`R-154a`, `R-154c`):** that analysis, its operations and those fields were removed from the contract, and no
+description of them is kept here. **The result of a version is its newest published or partial run** (`Q3`): the counters and
+`listDocuments`' audit state, the schedule's facts, the default run of a comparison and the text the optimisation reads. A run
+records the account that started it (`R-151v`).
 
 `UI-PARITY-OPT-CARRYOVER` (contract `1.37.0`, migration `0057_decision_carryover`) carries the decisions of an earlier version's
 optimisation pass over to the pass of a later version (`UI-B-14`, «Перенести решения из V#»). `carryOverProposalDecisions` is
@@ -1093,8 +1082,7 @@ and «Принято N».
 `UI-PARITY-AUDIT-STATE` (contract `1.40.0`, no migration, no new operation) gives three screens the server data they lacked.
 `DocumentAudit.active_run` (`UI-A-47`) is the version's run in flight -- its latest run of the standard analysis in state `queued`,
 `running` or `validating`, in the result run's order -- read by `DocumentAuditReadModel.audits` in the same statement as the
-audit and rendered by `listDocuments` only; it changes none of the four audit words and the counters never read it, and a run
-of an AR v3 group is never an active run (as it is never a result). `RunStatus.estimated_finish_at` (`UI-A-65` / `UI-B-45`) is
+audit and rendered by `listDocuments` only; it changes none of the four audit words and the counters never read it. `RunStatus.estimated_finish_at` (`UI-A-65` / `UI-B-45`) is
 the queue item's estimate, from the one function `execution.eta.job_estimated_finish` (the queue calls it too; `run_estimated_finish`
 reads the same four facts for one run), present only while the run's job is leased or running and has started.
 `OptimisationProposal.saving_percent` (`UI-B-07`) is `(current - proposed) / current * 100` over the two stored unit prices, exact
@@ -1235,10 +1223,6 @@ could.
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
-| `startArV3BetaGroup` | `POST /ar-v3-beta/groups` |
-| `getArV3BetaGroup` | `GET /ar-v3-beta/groups/{group_id}` |
-| `getArV3BetaGroupReview` | `GET /ar-v3-beta/groups/{group_id}/review` |
-| `getArV3BetaPackStatus` | `GET /ar-v3-beta/pack` |
 | `getRunStatus` | `GET /runs/{run_id}` |
 | `listRunFindings` | `GET /runs/{run_id}/findings` |
 | `getFinding` | `GET /findings/{finding_uid}` |
@@ -1292,7 +1276,6 @@ could.
 | `setCurrentNormSnapshot` | `PUT /norms/snapshots/current` |
 | `listVersionPortalBlocks` | `GET /versions/{version_uid}/portal-blocks` |
 | `streamVersionPortalBlockCrop` | `GET /versions/{version_uid}/portal-blocks/{portal_block_id}/crop` |
-| `getRunNormVerification` | `GET /runs/{run_id}/norm-verification` |
 | `classifyDocumentVersion` | `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` |
 | `correctVersionClassification` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections` |
 | `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
@@ -1494,6 +1477,13 @@ could.
 | `listModelCatalogue` | `GET /model-catalogue` |
 | `getRunStartReadiness` | `POST /runs/start-readiness` |
 | `getRunStages` | `GET /runs/{run_id}/stages` |
+| `getExecutorTaskContext` | `POST /runner/tasks/{task_id}/context` |
+| `getRunPrecedents` | `GET /runs/{run_id}/precedents` |
+| `getFindingPrecedents` | `GET /findings/{finding_uid}/precedents` |
+| `getVectorControl` | `GET /vector-control` |
+| `setVectorPaused` | `PUT /vector-control/paused` |
+| `listPrecedentSettings` | `GET /precedent-settings` |
+| `appendPrecedentSetting` | `POST /precedent-settings` |
 | `downloadAgentPackage` | `GET /runner/agent-package/{version}` |
 | `estimateStageChainRun` | `GET /stage-link-revisions/{stage_link_revision_id}/chain-estimate` |
 | `resumeStageChainRun` | `POST /stage-chain-runs/{stage_chain_run_id}/resume` |
@@ -1520,7 +1510,6 @@ could.
 | `getStageAssembly` | `GET /stage-assemblies/{stage_assembly_id}` |
 | `createStageReviewCard` | `POST /stage-chain-runs/{stage_chain_run_id}/review-cards` |
 | `estimateRunCost` | `POST /runs/cost-estimate` |
-| `estimateArV3GroupCost` | `POST /ar-v3-beta/groups/cost-estimate` |
 | `getExtendedRunReview` | `GET /runs/{run_id}/extended-review` |
 | `importComparisonZip` | `POST /projects/{project_uid}/comparison-zip-uploads` |
 | `streamComparisonTechnicalReport` | `GET /comparison-series/{comparison_series_id}/technical-report` |
@@ -1528,7 +1517,7 @@ could.
 Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
-  `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
+  `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `startRunFromStage`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
   `importRunDecisions`, `importOptimisationProposalDecisions`, `carryOverProposalDecisions`, `withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
@@ -1540,6 +1529,7 @@ Rules that hold across the whole surface:
   `issueRunnerToken`, `revokeRunnerToken`,
   `setExecutorHostEnabled`, `setExecutorHostSlots`, `archiveExecutorHost`, `issueExecutorHostEnrollment`, `createExecutorHostAgentInstall`,
   `confirmExecutorHostAgentInstallHostKey`, `reviseStageModelLayout`, `setStageModelLayoutEnabled`,
+  `setVectorPaused`, `appendPrecedentSetting`,
   `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `appendComparisonVersionOrder`, `prepareComparisonMatrix`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `startComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries`, `finishComparisonSeries`, `startComparisonAiPairCheck`, `pauseComparisonAiPairCheck`, `resumeComparisonAiPairCheck`, `cancelComparisonAiPairCheck`, `startComparisonAiSheetChanges`, `pauseComparisonAiSheetChanges`, `resumeComparisonAiSheetChanges`, `cancelComparisonAiSheetChanges`, `finishComparisonAiSheetChanges`, `dequeueComparisonAiSheetChanges`, `retryComparisonAiSheetChanges`, `startComparisonSheetDescription`, `startComparisonSpecification`, `cancelComparisonSpecification`, `enqueueComparisonLaunch`, `pauseComparisonLaunchQueue`, `resumeComparisonLaunchQueue`, `clearComparisonLaunchQueue`, `removeComparisonLaunchEntry`, `createComparisonReport`, `uploadComparisonReportSource`, `startComparisonReport`, `cancelComparisonReport`, `continueComparisonReport`, `rebuildComparisonReportPdf`, `deleteComparisonReport` and `prepareComparisonClientReport`, `confirmStagePair`, `createStageAssembly`, `reviseStageAssembly`, `setStagePairCompleteness`, `createStageUpload`, `uploadStageUploadPart`, `completeStageUploadFile`, `confirmStageUploadCandidate`, `rejectStageUploadCandidate`, `pauseStageUpload`, `resumeStageUpload`, `cancelStageUpload`, `applyStageSheetMap`, `recomputeStageTextEvidence`, `startStageChainRun`, `cancelStageChainRun`, `resumeStageChainRun`, `startStageChainBatch`, `pauseStageChainBatch`, `resumeStageChainBatch`, `cancelStageChainBatch`, `undoStageLinkRepair`, `applyStageCardVerdicts`, `createStageReviewCard`, `importComparisonZip`, `issueExecutorEnrollment`, `setExecutorIntegrationAuthorisation`, `createExecutorAgentInstall`, `confirmExecutorAgentInstallHostKey`, `createExecutorGroup`, `reviseExecutorGroup`, `archiveExecutorGroup`, `setExecutorRoutingRule`, `setExecutorRoutingMode`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
@@ -1548,6 +1538,8 @@ Rules that hold across the whole surface:
   is refused by `expected_vendor_list_id` (`conflict_reason: vendor_list_changed`).
   A new key over exactly the inputs of a stored optimisation pass answers that pass and
   writes nothing; every decision under a new key is a new appended event.
+  `getExecutorTaskContext` (`CRIT-SEAL-50`) takes no key: a runner token asks for the reference data of its task, and a repeat of the same kind
+  returns the same answer and spends no budget (idempotent by task and kind, journalled once).
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same
   key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does
@@ -1609,7 +1601,7 @@ Rules that hold across the whole surface:
     the exchange window is answered idempotently, so an agent that lost the response is not
     locked out; a repeat after the window is `conflict` with `conflict_reason:
     enrollment_redeemed`, and an unknown, expired or revoked secret is `authentication_required`;
-  * `estimateRunCost`, `estimateArV3GroupCost` (`BETA-COST-PREFLIGHT-1030`) and `getRunStartReadiness` (`HOSTS-SEAL-1`) are POSTs that
+  * `estimateRunCost` (`BETA-COST-PREFLIGHT-1030`) and `getRunStartReadiness` (`HOSTS-SEAL-1`) are POSTs that
     write nothing: a repeat computes the estimate again, and its digest differs only when the
     source, profile, preset, route, model or rates differ;
 * every response carries `X-Correlation-Id`;

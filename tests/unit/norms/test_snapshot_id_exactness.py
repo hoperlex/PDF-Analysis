@@ -1,6 +1,6 @@
 """A norms snapshot identity is the whole string, never one that ends in a newline.
 
-`AR-V3-BETA-REVIEW-FIXES-03` finding F4. `SNAPSHOT_ID_PATTERN` ends in `$`, which also matches
+A review finding (F4). `SNAPSHOT_ID_PATTERN` ends in `$`, which also matches
 just before one trailing newline, and `require_snapshot_id` matched with `re.match`, so
 `"ns_<ULID>\\n"` was returned as valid on the promote path (the set tool, the evidence bridge)
 while the `0012` CHECK and the API schema refuse it.

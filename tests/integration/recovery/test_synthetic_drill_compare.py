@@ -45,7 +45,7 @@ def _changed(engines: list[Engine], *statements: str) -> list[str]:
 def test_two_clones_of_one_migrated_schema_are_equal(two_clones: list[Engine]) -> None:
     first, second = database_profile(two_clones[0]), database_profile(two_clones[1])
     assert differences(first, second) == []
-    # `EXEC-SEAL-01`: +5 tables, +1 view; `EXEC-PULL-01` (0031): +2 tables; `0032_ar_v3_run_group`: +2 tables;
+    # `EXEC-SEAL-01`: +5 tables, +1 view; `EXEC-PULL-01` (0031): +2 tables; `0032`: +2 tables (dropped again by `0063`);
     # `0035_comparison_records`: +2 tables.
     # `0041_comparison_stage_core`: fifteen stage tables; no new view.
     # `0042_comparison_stage_review`: twelve more tables; no new view.
@@ -55,7 +55,8 @@ def test_two_clones_of_one_migrated_schema_are_equal(two_clones: list[Engine]) -
     # `0053`-`0055` (tags, finding execution status, «График работ»): seven more tables; no new view (136, lane C4's stand).
     # `0059_decision_memory`: the eight tables of the decision memory; no new view (144). `0061_decision_memory_m2`: the settings' journal
     # (145) and the read model `decision_memory_case_current` (6 views). `0062_hosts_stage_models`: nine more tables (154), no new view.
-    assert len(first["tables"]) == 154 and len(first["views"]) == 6
+    # `0063_drop_ar_v3_beta` drops the two tables `0032` added (152). `0064_precedents_seal` adds twelve (164), no new view. `0065_norm_crop_render` adds one (165), no new view.
+    assert len(first["tables"]) == 165 and len(first["views"]) == 6
     assert set(first["shape"]) == {
         "columns", "constraints", "indexes", "triggers", "functions", "views", "sequences", "extensions",
     }

@@ -12,7 +12,6 @@ from auditmanager.jobs.repository import (
     CompletedWindowCall,
     ExecutionNotClaimed,
     JobRepository,
-    V3CompletedCall,
     SettledProviderEffect,
     UnresolvedProviderEffect,
 )
@@ -51,7 +50,6 @@ __all__ = [
     "CompletedWindowCall",
     "ExecutionNotClaimed",
     "JobRepository",
-    "V3CompletedCall",
     "SettledProviderEffect",
     "SweepReport",
     "UnresolvedProviderEffect",

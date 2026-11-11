@@ -20,21 +20,6 @@
       ],
       [
         "GET",
-        "/ar-v3-beta/groups/{group_id}",
-        "getArV3BetaGroup"
-      ],
-      [
-        "GET",
-        "/ar-v3-beta/groups/{group_id}/review",
-        "getArV3BetaGroupReview"
-      ],
-      [
-        "GET",
-        "/ar-v3-beta/pack",
-        "getArV3BetaPackStatus"
-      ],
-      [
-        "GET",
         "/assignments",
         "listAssignments"
       ],
@@ -310,6 +295,11 @@
       ],
       [
         "GET",
+        "/findings/{finding_uid}/precedents",
+        "getFindingPrecedents"
+      ],
+      [
+        "GET",
         "/knowledge-base/entries",
         "listKnowledgeBaseEntries"
       ],
@@ -412,6 +402,11 @@
         "GET",
         "/page-profiles/{comparison_page_profile_id}/tile",
         "streamVersionPageTile"
+      ],
+      [
+        "GET",
+        "/precedent-settings",
+        "listPrecedentSettings"
       ],
       [
         "GET",
@@ -600,8 +595,8 @@
       ],
       [
         "GET",
-        "/runs/{run_id}/norm-verification",
-        "getRunNormVerification"
+        "/runs/{run_id}/precedents",
+        "getRunPrecedents"
       ],
       [
         "GET",
@@ -770,6 +765,11 @@
       ],
       [
         "GET",
+        "/vector-control",
+        "getVectorControl"
+      ],
+      [
+        "GET",
         "/versions/{version_uid}",
         "getDocumentVersion"
       ],
@@ -842,16 +842,6 @@
         "POST",
         "/analysis/presets/{preset_id}/revisions",
         "reviseAnalysisPreset"
-      ],
-      [
-        "POST",
-        "/ar-v3-beta/groups",
-        "startArV3BetaGroup"
-      ],
-      [
-        "POST",
-        "/ar-v3-beta/groups/cost-estimate",
-        "estimateArV3GroupCost"
       ],
       [
         "POST",
@@ -1175,6 +1165,11 @@
       ],
       [
         "POST",
+        "/precedent-settings",
+        "appendPrecedentSetting"
+      ],
+      [
+        "POST",
         "/projects",
         "createProject"
       ],
@@ -1342,6 +1337,11 @@
         "POST",
         "/runner/tasks/{task_id}/answer",
         "submitExecutorTaskAnswer"
+      ],
+      [
+        "POST",
+        "/runner/tasks/{task_id}/context",
+        "getExecutorTaskContext"
       ],
       [
         "POST",
@@ -1600,6 +1600,11 @@
       ],
       [
         "PUT",
+        "/vector-control/paused",
+        "setVectorPaused"
+      ],
+      [
+        "PUT",
         "/vendor-lists/{section_code}",
         "setGlobalVendorList"
       ],
@@ -1643,6 +1648,7 @@
       "AppendComparisonVersionOrderRequest",
       "AppendDecisionRequest",
       "AppendDecisionResponse",
+      "AppendPrecedentSettingRequest",
       "ApplyComparisonMatrixEditsRequest",
       "ApplyStageCardVerdictsRequest",
       "ApplyStageSheetMapRequest",
@@ -1652,20 +1658,6 @@
       "ApprovedSheetDiff",
       "ApprovedSheetPair",
       "ApprovedSheetPairs",
-      "ArV3BetaGroup",
-      "ArV3BetaGroupMember",
-      "ArV3BetaGroupReview",
-      "ArV3BetaGroupReviewMember",
-      "ArV3BetaPackReview",
-      "ArV3BetaPackStatus",
-      "ArV3BetaStageId",
-      "ArV3BetaVisibleCitation",
-      "ArV3BetaVisibleEvidence",
-      "ArV3BetaVisibleProposal",
-      "ArV3BetaVisibleReview",
-      "ArV3BetaVisibleTopic",
-      "ArV3GroupCostEstimateRequest",
-      "ArV3RunGroupId",
       "Assignment",
       "AssignmentDetail",
       "AssignmentEvent",
@@ -1907,6 +1899,7 @@
       "DecisionMemoryCaseId",
       "DecisionMemoryCasePage",
       "DecisionMemoryCaseSummary",
+      "DecisionMemoryComment",
       "DecisionMemoryContent",
       "DecisionMemoryCountRow",
       "DecisionMemoryCrop",
@@ -1955,6 +1948,7 @@
       "ExecutorConnectionDetail",
       "ExecutorConnectionId",
       "ExecutorConnectionList",
+      "ExecutorContextInput",
       "ExecutorEnrollmentId",
       "ExecutorEnrollmentMetadata",
       "ExecutorEnrollmentState",
@@ -2017,6 +2011,12 @@
       "ExecutorSshKey",
       "ExecutorSshProfile",
       "ExecutorTaskAck",
+      "ExecutorTaskContext",
+      "ExecutorTaskContextCase",
+      "ExecutorTaskContextItem",
+      "ExecutorTaskContextKind",
+      "ExecutorTaskContextRequest",
+      "ExecutorTaskContextStatus",
       "ExecutorTaskId",
       "ExecutorTaskState",
       "ExecutorTaskUsage",
@@ -2026,16 +2026,21 @@
       "ExtendedRunReview",
       "FailExecutorTaskRequest",
       "Finding",
+      "FindingBlockBox",
+      "FindingBlockEvidence",
       "FindingBlockLink",
       "FindingCategory",
       "FindingComparison",
       "FindingDetail",
       "FindingExecutionState",
       "FindingExecutionStatus",
+      "FindingGroundingKind",
       "FindingMatchProposal",
       "FindingObservation",
       "FindingObservationId",
+      "FindingOrigin",
       "FindingPage",
+      "FindingPrecedents",
       "FindingRef",
       "FindingUid",
       "GenerateComparisonSummaryRequest",
@@ -2068,11 +2073,9 @@
       "NormCurrentSnapshot",
       "NormDocument",
       "NormDocumentId",
-      "NormFindingVerification",
       "NormFragment",
       "NormHighlight",
       "NormKindCount",
-      "NormObservationCitationPartition",
       "NormParagraph",
       "NormParagraphId",
       "NormParagraphKind",
@@ -2090,7 +2093,6 @@
       "NormSnapshotPage",
       "NormSourceAttribution",
       "NormTextReliability",
-      "NormVerificationReport",
       "NormsSnapshotId",
       "ObservationProvenance",
       "OptimisationPass",
@@ -2111,6 +2113,17 @@
       "PortalCrop",
       "PortalGeometryState",
       "PortalRecognisedText",
+      "PossibleNorm",
+      "PrecedentCase",
+      "PrecedentFindingLabel",
+      "PrecedentHint",
+      "PrecedentHintCode",
+      "PrecedentLabelCode",
+      "PrecedentPassState",
+      "PrecedentSetting",
+      "PrecedentSettingList",
+      "PrecedentSettingName",
+      "PrecedentVotes",
       "PrepareComparisonClientReportRequest",
       "PresetId",
       "PresetRevisionId",
@@ -2189,6 +2202,7 @@
       "RunFindingBlockLinks",
       "RunId",
       "RunNormReferences",
+      "RunPrecedents",
       "RunPreset",
       "RunQueueReason",
       "RunStage",
@@ -2251,6 +2265,7 @@
       "SetProjectVendorListRequest",
       "SetStageModelLayoutEnabledRequest",
       "SetStagePairCompletenessRequest",
+      "SetVectorPausedRequest",
       "SetWorkCalendarDaysRequest",
       "SetWorkSchedulePlansRequest",
       "SetWorkerIntakeRequest",
@@ -2371,7 +2386,6 @@
       "StageUploadId",
       "StageUploadPage",
       "StageUploadPartReceipt",
-      "StartArV3BetaGroupRequest",
       "StartComparisonAiJobRequest",
       "StartComparisonAiSheetChangesRequest",
       "StartComparisonSeriesRequest",
@@ -2385,13 +2399,15 @@
       "TransitionAssignmentRequest",
       "UndoComparisonMatrixEditRequest",
       "UndoStageLinkRepairRequest",
-      "UngroundedReason",
       "UpdateMyProfileRequest",
       "UpdateUserRequest",
       "UploadDocumentRequest",
       "UploadDocumentVersionRequest",
       "UploadPriceListRequest",
       "UserUid",
+      "VectorControl",
+      "VectorWindow",
+      "VectorWindowState",
       "VendorListEntry",
       "VendorListId",
       "VendorListMode",
@@ -2429,6 +2445,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0062_hosts_stage_models",
-  "contract_version": "1.49.0"
+  "migration_head": "0065_norm_crop_render",
+  "contract_version": "1.52.0"
 }

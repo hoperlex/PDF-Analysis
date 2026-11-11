@@ -11,6 +11,14 @@ finding. Such a finding's single observation is its canonical one, exactly the r
 exports for it (``canonical_observation_id IS NULL OR ...``); a finding with no canonical
 identity and more than one observation is still refused. A v1 observation may have no
 recommendation; its cell is empty, as the CSV's is.
+
+**One list** (`F8-COUNT-XLSX`). A run's ``publication_mode`` is read with its header; a run without a marker is ``text_only`` and is
+read by exactly the statement above (:data:`_FINDINGS`), as before. A ``one_list`` run is read by :data:`_FINDINGS_ONE_LIST`, which
+returns the same rows with the observation's ``grounding_kind`` and takes its evidence from ``finding_block_evidence`` for a
+block-grounded observation (a candidate finding has no ``finding_evidence`` row: it stands on blocks, not on a span of the text) and
+from ``finding_evidence`` for a text-grounded one. Each branch is bound to its own ``grounding_kind``, so an observation that holds the
+other kind's evidence reads as having none and the read refuses it (``xlsx_read_incomplete_finding``), as it refuses any finding with
+no location. A block's page is a page of the run's version and is labelled by the same verified page labels.
 """
 
 from __future__ import annotations
@@ -20,6 +28,7 @@ from collections.abc import Mapping
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.exports.xlsx.labels import GROUNDING_TEXT_SPAN
 from auditmanager.exports.xlsx.projection import (
     CitationRead,
     EvidenceLocationRead,
@@ -29,11 +38,17 @@ from auditmanager.exports.xlsx.projection import (
     VerdictRead,
     project_workbook,
 )
+from auditmanager.exports.xlsx.writer import (
+    PUBLICATION_MODES,
+    PUBLICATION_ONE_LIST,
+    PUBLICATION_TEXT_ONLY,
+)
 
 
 _RUN = text("""
     SELECT r.run_id, r.project_uid, r.version_uid,
            r.analysis_profile_id, r.norms_snapshot_id,
+           r.publication_mode,
            s.content_key AS snapshot_key
       FROM audit_run r
       LEFT JOIN norms_snapshot s ON s.norms_snapshot_id = r.norms_snapshot_id
@@ -52,6 +67,39 @@ _FINDINGS = text("""
       FROM finding f
       LEFT JOIN finding_observation o ON o.finding_uid = f.finding_uid
       LEFT JOIN finding_evidence e ON e.finding_observation_id = o.finding_observation_id
+      LEFT JOIN finding_current_verdict cv ON cv.finding_uid = f.finding_uid
+     WHERE f.allocated_by_run_id = :run_id
+     ORDER BY f.finding_uid COLLATE "C", o.finding_observation_id COLLATE "C",
+              e.evidence_ordinal
+""")
+
+
+#: The same rows as :data:`_FINDINGS`, for a ``one_list`` run: the observation's ``grounding_kind`` is read, and the evidence of an
+#: observation comes from the table its kind names -- ``finding_evidence`` for ``text_span``, ``finding_block_evidence`` for
+#: ``portal_block`` -- in one ordered row shape (``evidence_ordinal``, ``page_number``).
+_FINDINGS_ONE_LIST = text("""
+    SELECT f.finding_uid, f.project_uid, f.version_uid,
+           f.allocated_by_run_id, f.category, f.canonical_observation_id,
+           o.finding_observation_id, o.run_id AS observation_run_id,
+           o.finding_uid AS observation_finding_uid, o.category AS observation_category,
+           o.finding_text, o.recommendation_text, o.proposed_severity,
+           o.grounding_kind,
+           e.evidence_ordinal, e.page_number,
+           cv.current_verdict, cv.decided_severity, cv.latest_comment,
+           cv.finding_uid AS verdict_finding_uid
+      FROM finding f
+      LEFT JOIN finding_observation o ON o.finding_uid = f.finding_uid
+      LEFT JOIN LATERAL (
+            SELECT t.evidence_ordinal, t.page_number
+              FROM finding_evidence t
+             WHERE t.finding_observation_id = o.finding_observation_id
+               AND o.grounding_kind = 'text_span'
+            UNION ALL
+            SELECT b.ordinal AS evidence_ordinal, b.page_number
+              FROM finding_block_evidence b
+             WHERE b.finding_observation_id = o.finding_observation_id
+               AND o.grounding_kind = 'portal_block'
+      ) e ON TRUE
       LEFT JOIN finding_current_verdict cv ON cv.finding_uid = f.finding_uid
      WHERE f.allocated_by_run_id = :run_id
      ORDER BY f.finding_uid COLLATE "C", o.finding_observation_id COLLATE "C",
@@ -87,6 +135,14 @@ def read_xlsx_projection(
         return None
     if header["norms_snapshot_id"] is not None and header["snapshot_key"] is None:
         raise ValueError("xlsx_read_snapshot_missing")
+    # A run without a marker is ``text_only`` (the default of the column, and every run older than the marker); a value of neither kind is
+    # refused, never read as ``text_only``.
+    publication_mode = header.get("publication_mode")
+    if publication_mode is None:
+        publication_mode = PUBLICATION_TEXT_ONLY
+    if publication_mode not in PUBLICATION_MODES:
+        raise ValueError("xlsx_read_publication_mode_invalid")
+    one_list = publication_mode == PUBLICATION_ONE_LIST
     run = RunRead(
         project_uid=header["project_uid"],
         version_uid=header["version_uid"],
@@ -94,11 +150,12 @@ def read_xlsx_projection(
         profile_id=header["analysis_profile_id"],
         snapshot_key=header["snapshot_key"] or "",  # a run may intentionally have no snapshot
         attribution=attribution,
+        publication_mode=publication_mode,
     )
     if run.run_id != run_id:
         raise ValueError("xlsx_read_run_mismatch")
 
-    rows = session.execute(_FINDINGS, {"run_id": run_id}).mappings().all()
+    rows = session.execute(_FINDINGS_ONE_LIST if one_list else _FINDINGS, {"run_id": run_id}).mappings().all()
     by_finding: dict[str, dict[str, object]] = {}
     for row in rows:
         finding_uid = row["finding_uid"]
@@ -143,15 +200,18 @@ def read_xlsx_projection(
         observations = entry["observations"]
         assert isinstance(observations, dict)
         observation_id = row["finding_observation_id"]
+        grounding = row["grounding_kind"] if one_list else GROUNDING_TEXT_SPAN
         item = observations.setdefault(observation_id, {
             "text": row["finding_text"],
             "recommendation": row["recommendation_text"],
             "severity": row["proposed_severity"],
+            "grounding": grounding,
             "evidence": [],
         })
         if (item["text"] != row["finding_text"]
                 or item["recommendation"] != row["recommendation_text"]
-                or item["severity"] != row["proposed_severity"]):
+                or item["severity"] != row["proposed_severity"]
+                or item["grounding"] != grounding):
             raise ValueError("xlsx_read_observation_changed")
         evidence = item["evidence"]
         assert isinstance(evidence, list)
@@ -186,6 +246,7 @@ def read_xlsx_projection(
                 ),
                 proposed_severity=item["severity"],
                 evidence=tuple(item["evidence"]),
+                grounding_kind=item["grounding"],
             )
             for observation_id, item in observations.items()
         )

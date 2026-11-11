@@ -276,6 +276,8 @@ UNAUTHENTICATED_OPERATIONS: Final[frozenset[str]] = frozenset(
 RUNNER_OPERATIONS: Final[frozenset[str]] = frozenset({
     "claimExecutorTask", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
     "failExecutorTask", "getExecutorTaskImage", "reportRunnerHealth",
+    # `CRIT-SEAL-50` (contract 1.51.0): the reference data of a `review:main` task, asked by the token that holds its claim.
+    "getExecutorTaskContext",
 })
 
 #: `EXEC2-SEAL-1` (ADR-0026 decision 4). The operations a universal agent calls with an **enrollment
@@ -593,10 +595,6 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "cancelStageChainRun": _EXPERT,
         "getRunStatus": _PRODUCT_READ,
         "getExtendedRunReview": _PRODUCT_READ,
-        "getArV3BetaGroup": _PRODUCT_READ,
-        "getArV3BetaGroupReview": _PRODUCT_READ,
-        "getArV3BetaPackStatus": _PRODUCT_READ,
-        "getRunNormVerification": _PRODUCT_READ,
         "listRunFindings": _PRODUCT_READ,
         "getFinding": _PRODUCT_READ,
         "listDecisionHistory": _PRODUCT_READ,
@@ -662,8 +660,6 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "uploadDocumentVersion": _EXPERT,
         "startRun": _EXPERT,
         "estimateRunCost": _EXPERT,
-        "startArV3BetaGroup": _EXPERT,
-        "estimateArV3GroupCost": _EXPERT,
         # `W59-SECTION-SEAL-01`. Only an expert confirms a section; admin alone does not
         # imply expert (the decision's authorization rule). The command re-reads the role
         # set in its own transaction.
@@ -793,6 +789,16 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # viewer reads them too, and the answer leaves out the server and the access of a cell for the viewer (`R-150w`). The omission
         # is the implementation's, which re-reads the role set; the register only says who may ask.
         "getRunStages": _PRODUCT_READ,
+        # `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2). The «Прецеденты» surface. An expert and an administrator read the labels, the
+        # card and the state of the vectors; the viewer («Наблюдатель», `R-150w`) reads none of them (`_ANY_ROLE` is deliberately not widened:
+        # the labels and the cases quote the experts' own words and other clients' documents). The pause of the vectors and the settings
+        # are the administrator's. `getExecutorTaskContext` is a runner operation (`RUNNER_OPERATIONS`) and has no role.
+        "getRunPrecedents": _ANY_ROLE,
+        "getFindingPrecedents": _ANY_ROLE,
+        "getVectorControl": _ANY_ROLE,
+        "setVectorPaused": _ADMIN,
+        "listPrecedentSettings": _ADMIN,
+        "appendPrecedentSetting": _ADMIN,
         # `W55A-SEAL-01` (R-113). Who designated which snapshot, and the designation itself.
         "listNormSnapshotEvents": _ADMIN,
         "setCurrentNormSnapshot": _ADMIN,

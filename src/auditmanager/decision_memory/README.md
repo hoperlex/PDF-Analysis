@@ -46,3 +46,43 @@ settings. There is still no web screen, no export and no embedding.
   answers its tombstone only. The memory is not a decision authority; nothing here feeds a verdict into a product behaviour.
 - Rules unchanged from M1: this package imports `auditmanager.shared` and `auditmanager.storage.public` only (the command claim is the
   composition root's), no foreign key leads into a project, a document, a finding or the ledger, and every table is `KEEP` in the purge.
+
+## Comments (`ADR-0029` decision 10, `MEM-COMMENTS-01`)
+
+The experts' `comment` ledger events are content of the memory, in a table of their own beside the decisions: `decision_memory_comment`
+(KEEP, content side; `0064`). A comment is **not a decision**: it never makes a case, never adds a decision row and never changes a vote.
+
+- **Capture** -- `MemoryRepository.capture_comment(session, observation_id=..., comment=CommentFact(...))`, for one `comment` event. One row per
+  ledger event (`source_decision_id` is unique, `ON CONFLICT DO NOTHING`), so it is idempotent. Its outcome (`CommentCaptureResult.outcome`):
+  `captured`, `already_captured`, `waits_for_case` (the observation has no case yet: nothing is written) or `case_forgotten` (a forgotten case
+  takes no words back: nothing is written, and no error -- the database would refuse the row with `AM003`, and the expert's decision must not
+  fail on it). Any other refusal of the database propagates: a capture that fails fails the decision (no silent fallback).
+- **Carry-over** -- the memory reads no ledger. The assembler (composition root) reads the observation's `comment` events recorded before the
+  ✓/✕ and puts them in `CaptureSnapshot.earlier_comments`; `MemoryRepository.capture` stores them in the case, each once, in the order the
+  expert wrote them, and reports how many were new (`CaptureResult.comments_carried`). The first ✓/✕ carries the notes written before it; a
+  replay, or a later decision handed the same comments, carries none; a forgotten case takes none.
+- **Locks** -- two transaction-scoped advisory locks, both taken by `capture_comment`: the observation's
+  (`decision_memory_comment_observation:<observation>`, also taken by `capture`) and the case's status lock (`decision_memory_status:<case>`,
+  the key a forget and the status guard take). A caller that reads the ledger for the earlier comments **must call
+  `MemoryRepository.lock_observation_comments` before that read**, so a comment and a first ✓/✕ that overlap in time cannot each miss the other.
+- **Repair** -- `MemoryRepository.captured_comment_sources(session, ids)` answers which ledger `comment` events already have a row; the sweep's
+  anti-join for comments of cases that exist, as `captured_sources` is for decisions.
+- **Read** -- `MemoryReader.comments_for_cases(session, case_ids)` (`{case_id: ({comment_id, author_user_uid, comment, decided_at}, ...)}`,
+  oldest first; hints read it through `decision_memory.public`) and `CaseDetail.comments`; a forgotten case answers none. The standing of a
+  case is the caller's to read: a withdrawn case's comments are still stored.
+- The 1.51.0 API contract has **no field** for a case's comments (`DecisionMemoryCase`), so the «Память решений» tab cannot show them until a
+  later seal adds one.
+
+
+## Block evidence: `dm-capture/2` (`F8-PUBLISH`, ADR-0029 decision 7)
+
+- A candidate finding of a `one_list` run stands on blocks, not on a text span, so its observation has no `finding_evidence` and the capture would
+  have stored a case without its evidence. A case whose `CaseContent.block_evidence` is not empty is written as `dm-capture/2`: one row per block in
+  `decision_memory_block_evidence` (`BlockEvidenceFact`: ordinal, page, `blk_…`, the normalised box, the digest of the crop, an optional quote).
+  A case without block evidence is `dm-capture/1` and keeps its digest byte for byte: `content_digest` adds the block evidence to the body only
+  when there is some, and never the box (geometry, like the text evidence's).
+- The crop is taken **by block**: `select_block_crops` (rule `block_crop/1`) takes the record of `geometry.page_crops` of the block the evidence
+  names, whose digest is the one the evidence recorded; `select_case_crops` picks that rule for a block case and `page_images/1` for every other.
+- The assembler (composition root) must hand the block evidence on **every** capture of the observation, as it hands the text evidence: the digest
+  is compared with the stored one, and a case captured with block evidence would otherwise read as a conflict. The rows come from the database
+  (`findings.public.published_finding_block_evidence`), so no artifact is read for them. The wiring is `CRIT-CAPTURE-01`.

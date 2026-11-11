@@ -238,6 +238,8 @@ const RUNNER_OPERATIONS: readonly string[] = [
   // so a refused secret or token is the 401 and there is nothing a 403 could deny.
   'reportRunnerHealth',
   'redeemExecutorEnrollment',
+  // `CRIT-SEAL-50` (contract 1.51.0): the reference data of a task, asked for with the runner token that holds its claim.
+  'getExecutorTaskContext',
 ];
 
 /**

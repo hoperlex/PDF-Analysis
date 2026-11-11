@@ -244,10 +244,14 @@ def start_readiness(preflight: Any, session: Session, draft: "StagePlanDraft | N
     false and carries the reasons, and then nothing is priced. Otherwise the estimate by model is made and its digest is the one to
     confirm: if the access of a model changes before the start, the start's own estimate has another digest and is refused
     (``cost_estimate_binding_changed``).
+
+    ``extended_plan`` (contract 1.50.0) names the extended plan the start would run under -- ``"v2"``, ``"v3"``, or ``None`` when the
+    extended analysis is off -- read through the same preflight call the estimate prices with, so it cannot disagree with it.
     """
+    extended_plan = preflight.extended_plan()
     if draft is None:
         value = estimate_for_request(preflight, session, stage_plan=None, **request).as_dict()
-        return {"route": "legacy", "ready": True, "cells": [], "estimate_digest": value["estimate_digest"],
+        return {"route": "legacy", "ready": True, "cells": [], "extended_plan": extended_plan, "estimate_digest": value["estimate_digest"],
                 "estimated_cost_micros": value["estimated_cost_micros"],
                 "recommended_ceiling_micros": value["recommended_ceiling_micros"]}
     from auditmanager.runs.commands import refuse_selectors_under_layout
@@ -270,10 +274,10 @@ def start_readiness(preflight: Any, session: Session, draft: "StagePlanDraft | N
         return result
 
     if draft.unavailable(rows):
-        return {"route": "stage_plan", "ready": False, "kit": draft.kit, "cells": cells_of(None)}
+        return {"route": "stage_plan", "ready": False, "kit": draft.kit, "extended_plan": extended_plan, "cells": cells_of(None)}
     value = estimate_for_request(preflight, session, stage_plan=draft, **request)
     plan, public = value.stage_plan, value.as_dict()
-    return {"route": "stage_plan", "ready": True, "kit": plan.kit, "access": plan.access,
+    return {"route": "stage_plan", "ready": True, "kit": plan.kit, "access": plan.access, "extended_plan": extended_plan,
             "estimate_digest": public["estimate_digest"], "stage_plan_digest": plan.digest,
             "estimated_cost_micros": public["estimated_cost_micros"],
             "recommended_ceiling_micros": public["recommended_ceiling_micros"], "cells": cells_of(plan)}

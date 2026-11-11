@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { RunStatus, StageId } from '@/shared/api';
 import {
-  AR_V3_BETA_PROFILE_ID, chipProgress, extendedLiveProgress, liveProgressText, procedureReadings, runChips, shortModelName,
+  chipProgress, extendedLiveProgress, liveProgressText, procedureReadings, runChips, shortModelName,
 } from '@/entities/audit-run';
 import type { ProcedureReading, ProcedureStatus } from '@/entities/audit-run';
 
@@ -43,12 +43,6 @@ describe('which chips a run has', () => {
     expect(chips({ stages: [stage('block_analysis', 'succeeded')] }).map((chip) => chip.definition.id)).toContain('blocks');
   });
 
-  it('the AR v3 profile has its own chip, once it reports its stage, and none of the eight', () => {
-    expect(chips({ analysis_profile_id: AR_V3_BETA_PROFILE_ID, stages: [] })).toEqual([]);
-    const v3 = chips({ analysis_profile_id: AR_V3_BETA_PROFILE_ID, stages: [{ stage_id: 'ar_v3_citation_review', status: 'succeeded', error_code: null }] });
-    expect(v3.map((chip) => chip.definition.id)).toEqual(['ar_v3']);
-    expect(v3[0]?.state).toBe('done');
-  });
 });
 
 describe('how a chip stands, from the stage states', () => {

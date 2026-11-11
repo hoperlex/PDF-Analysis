@@ -107,18 +107,15 @@ from auditmanager.decisions.public import register_decision_recorded
 from auditmanager.ingest.comparison_batch.public import BATCH_HANDLER_FACTORIES, ComparisonBatchService
 from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ComparisonVersionOrderService
 from auditmanager.jobs.public import JobRepository
+from auditmanager.precedents.public import (
+    Exchange, PrecedentPass, PrecedentService, PrecedentSettingService, VectorControlService, VectorWindowPass,
+)
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import (
-    PACK_MANIFEST_ENV,
-    START_ALLOWED_ENV,
     DurableCarrier,
-    PackManifestRefused,
-    ParsedPackManifest,
     ReclaimingCarrier,
-    TrustedPackRegistry,
-    load_manifest,
-    parse_start_allowed,
+    read_extended_review,
     run_to_terminal,
 )
 from auditmanager.sections.public import SECTION_CODES, section_names
@@ -155,6 +152,18 @@ def _passes(*runners: Callable[[], int]) -> Callable[[], int]:
     return one_pass
 
 
+def _extended_review_reader(sessions: Any, blob_store: Any) -> Callable[[str], Mapping[str, Any] | None]:
+    """The saved extended review of a run, read through its custody-checked reader over this process's stores (``runs.public.read_extended_review``).
+
+    The «Прецеденты» context reads no artifact store of its own: its pass (the worker's) and its two reads (the API's) are handed this one callable, so the
+    critic's part of a label and the card's «Возможные нормы» come from the very document the run's page shows (`PREC-PASS`, `CRIT-CAPTURE-01` part D)."""
+
+    def read(run_id: str) -> Mapping[str, Any] | None:
+        return read_extended_review(sessions, blob_store, run_id)
+
+    return read
+
+
 def summary_model_for(provider_mode: str) -> Any:
     """The summary model of a process: the recorded replay in recorded mode, **nothing** otherwise.
 
@@ -166,56 +175,6 @@ def summary_model_for(provider_mode: str) -> Any:
     from auditmanager.comparison.public import RecordedSummaryModel
 
     return RecordedSummaryModel() if provider_mode == "recorded" else None
-
-
-def _ar_v3_installed_pack(env: dict[str, str]) -> ParsedPackManifest | None:
-    """`AR-V3-BETA-PACK-INSTALL-01`: load the sealed reviewed pack named by the environment.
-
-    Without ``AR_V3_BETA_PACK_MANIFEST`` (or with a blank value, as ``load_trusted_pack_registry``
-    reads it) nothing is installed and group starts refuse. With it, a manifest that cannot be
-    loaded refuses the start: an empty registry is never the answer to a pack the operator meant
-    to install. The one load yields both the registry and, for `AR-V3-BETA-PACK-STATUS-API-01`,
-    the attestation that came with the pack.
-    """
-    path = env.get(PACK_MANIFEST_ENV)
-    if path is None or not path.strip():
-        return None
-    try:
-        return load_manifest(path.strip())
-    except PackManifestRefused as exc:
-        raise ConfigurationError(
-            f"{PACK_MANIFEST_ENV} names a reviewed-pack manifest the server refuses: {exc}"
-        ) from exc
-
-
-def _ar_v3_start_allowed(env: dict[str, str], installed: ParsedPackManifest | None) -> bool:
-    """`AR-V3-OPT-IN` (design 4.2): the deployment's allowance to start AR v3, read once, strictly, by the ``api`` build.
-
-    Absent, blank or ``0`` is off (the default); ``1`` is on; anything else refuses the start of the process, because a
-    value that silently read as «on» would be a permission nobody gave. The worker build does not call this: it executes
-    what was accepted whether or not the allowance is still on. The value and the pack state are logged once, here, so an
-    operator can see at start-up what the deployment will accept.
-    """
-    try:
-        allowed = parse_start_allowed(env.get(START_ALLOWED_ENV))
-    except ValueError as exc:
-        raise ConfigurationError(str(exc)) from exc
-    _log.info(
-        "AR v3 beta: pack %s, starts %s (%s)",
-        "installed" if installed is not None else "not installed",
-        "allowed" if allowed else "not allowed",
-        START_ALLOWED_ENV,
-    )
-    return allowed
-
-
-def _registry_of(installed: ParsedPackManifest | None) -> TrustedPackRegistry:
-    return TrustedPackRegistry.empty() if installed is None else installed.registry
-
-
-def _ar_v3_pack_registry(env: dict[str, str]) -> TrustedPackRegistry:
-    """The registry alone: what the worker needs, and what group start decides from."""
-    return _registry_of(_ar_v3_installed_pack(env))
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,7 +406,6 @@ def build_worker_runtime(
     # `W59-SECTION-SEAL-01`. The worker runs each claimed run with the profile it pinned,
     # resolved through the same registry the application routes with.
     text_profiles = load_text_profiles()
-    ar_v3_pack_registry = _ar_v3_pack_registry(env)
     dispatch_groups = _dispatches_groups(resolved)
 
     def execute(run_id: str, worker_id: str) -> None:
@@ -460,7 +418,6 @@ def build_worker_runtime(
             worker_id=worker_id,
             text_profiles=text_profiles.resolve,
             providers=providers.resolve,
-            ar_v3_pack_registry=ar_v3_pack_registry,
             # `EXEC2-GROUP-RUN-01`: the claim of a Run admitted on a group is refused here, before it writes anything, unless
             # this worker serves the source that can bind one.
             dispatch_groups=dispatch_groups,
@@ -478,6 +435,15 @@ def build_worker_runtime(
     # that scans a host, installs the agent over SSH and replaces the install key. It rides the probe loop's
     # pass (`_passes`); every install runs in a thread of its own, so a slow host never holds a probe.
     install_runner = install_runner_for(sessions, ring=resolved.secrets_private_ring, environ=env)
+    # `EMBED-01`, `CRIT-CAPTURE-01` part C (ADR-0029 decision 8): the night encoder's window rides the same pass, when this process is set up for it
+    # (`AUDITMANAGER_EMBED_DIR` names the directory it shares with the host's timer). Without it nothing is added, and the stand never opens a window.
+    exchange = Exchange.from_environment(env)
+    # `CRIT-CAPTURE-01` part D (`PREC-PASS`, ADR-0029 decisions 4 to 6): the «Прецеденты» pass. It is OUTSIDE the vector branch on purpose: it queues the
+    # probes (the text of each finding, for the encoder) and it is what makes a finished run wait for its vectors, so it must run in a process that has no
+    # exchange directory too -- the window that encodes them may live in another one. When the window has stored a round, it hands the pass its hook, and the
+    # pass computes what waited and, nightly, the fresh runs again.
+    precedent_pass = PrecedentPass(sessions, read_extended_review=_extended_review_reader(sessions, store))
+    vector_passes = () if exchange is None else (VectorWindowPass(sessions, exchange, after_import=precedent_pass.after_import),)
 
     return WorkerRuntime(
         settings=resolved,
@@ -495,6 +461,8 @@ def build_worker_runtime(
         probe_runner=_passes(
             probe_runner, install_runner,
             MemoryCaptureSweep(sessions, MemoryCaptureAssembler(geometry=BlockAdapter(sessions, blob_store=store))),
+            precedent_pass,
+            *vector_passes,
         ),
         comparison_work=build_comparison_work(
             sessions=sessions, engine=engine, blob_store=store, environ=env, ring=resolved.secrets_private_ring,
@@ -631,7 +599,6 @@ def build_application(
     # the process's own, so a layout can neither be switched on nor a plan frozen unless it is ``database``.
     stage_plans = StagePlanService(
         session_factory=sessions, availability=HostModelAvailability(), provider_source=resolved.provider_source)
-    ar_v3_installed_pack = _ar_v3_installed_pack(env)
     run_adapter = RunAdapter(
         sessions,
         # `EXEC2-INT-3` (ADR-0026 decision 12): the in-process claim takes pending group Runs only on `database`.
@@ -662,13 +629,6 @@ def build_application(
         # rules while the mode is `rules`: set for the `database` source only. The `environment` source has none, so it
         # refuses a start that names a group and never holds a `pending` Run.
         group_admitter=providers.admit_group,
-        # No expert-approved six-set pack is installed in the beta candidate.
-        # This keeps group start closed while allowing historical group reads.
-        ar_v3_pack_registry=_registry_of(ar_v3_installed_pack),
-        # `AR-V3-BETA-PACK-STATUS-API-01`: the same load, with the attestation that came with it.
-        ar_v3_installed_pack=ar_v3_installed_pack,
-        # `AR-V3-OPT-IN`: permission to start, separate from the capability above, off unless the environment says `1`.
-        ar_v3_start_allowed=_ar_v3_start_allowed(env, ar_v3_installed_pack),
         # `HOSTS-INT-WIRE-01`: the same object reaches ``start_audit_run``, ``reaudit_run``, ``start_run_from_stage`` and ``RunCostPreflight``.
         stage_plans=stage_plans.freezer,
     )
@@ -691,11 +651,13 @@ def build_application(
     # process-wide; a process that decides without it captures nothing, which the worker's sweep repairs and guard G1 makes visible.
     register_decision_recorded(MemoryCaptureAssembler(geometry=block_adapter))
 
+    # `EXEC-PULL-01` and `CTX-STAND`: ONE adapter answers the pull channel and the reference data of a task (`runner=` and `task_context=` below).
+    runner_adapter = RunnerAdapter(sessions, blob_store=store)
+
     router = build_router(
         projects=ProjectAdapter(ingest, sessions),
         documents=DocumentAdapter(ingest, sessions),
         runs=run_adapter,
-        ar_v3_groups=run_adapter,
         findings=FindingAdapter(sessions),
         decisions=DecisionAdapter(sessions),
         exports=CsvExportAdapter(sessions),
@@ -838,7 +800,7 @@ def build_application(
         executors=ExecutorAdapter(sessions, ring=resolved.secrets_public_ring),
         # `EXEC-PULL-01`. The pull channel: runner tokens, and the four operations a runner
         # calls with one. It also authenticates the token (the seam asks this port).
-        runner=RunnerAdapter(sessions, blob_store=store),
+        runner=runner_adapter,
         # `EXEC2-ENROLL-01`. The universal agent: the enrollment grant and its exchange, the agent's health,
         # the package route, the API side of an install over SSH and the integration-authorisation mark. It
         # seals an install session's key to the same public ring and takes the stand's configured public
@@ -859,6 +821,15 @@ def build_application(
         # `HOSTS-SEAL-2`, `RUN-STAGES-01`. The facts of a run's stages for the stage window, over the same sessions
         # and the same object store the extended review reads.
         run_stages=RunStageAdapter(sessions, blob_store=store),
+        # `EMBED-01` and `PREC-SETTINGS-01` (contract 1.51.0). The pause of the vectors and the journal of the programme's switches: both open their
+        # own session over the same factory and answer in the contract's shape; without them the two surfaces keep the sealed `503`.
+        vector_control=VectorControlService(sessions),
+        precedent_settings=PrecedentSettingService(sessions),
+        # `PREC-PASS` (`getRunPrecedents`, `getFindingPrecedents`): the labels and the card, over the same sessions and the saved extended review of the
+        # same store the pass reads (the card's «Возможные нормы» come from it).
+        precedents=PrecedentService(sessions, read_extended_review=_extended_review_reader(sessions, store)),
+        # `CTX-STAND` (`getExecutorTaskContext`): the same runner adapter that serves the pull channel answers the agent's ask for reference data.
+        task_context=runner_adapter,
     )
     return Application(
         router=router,
@@ -977,11 +948,4 @@ def _build_provider(
     else:
         adapter = RecordedAdapter()
         call = None
-        # `PROD-11C` (`D-225` piece 2): a replayed reply costs nothing and carries no amount, so the
-        # AR v3 worker's cost check (`a metered AR v3 call has no verifiable cost amount`) refused
-        # every recorded v3 Run after its provider call. The AR v3 beta Runs of a *recorded* process
-        # are told the replay is unmetered; the live and proxy branches above build no such binding,
-        # and `EnvironmentProviders` refuses one for a non-recorded adapter.
-        replay = CallBinding(unmetered=True)
-        return adapter, config, EnvironmentProviders(adapter, config, call, ar_v3_replay_call=replay)
     return adapter, config, EnvironmentProviders(adapter, config, call)

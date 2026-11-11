@@ -47,6 +47,7 @@ __all__ = [
     "DecisionMemoryCaseId",
     "DecisionMemoryCasePage",
     "DecisionMemoryCaseSummary",
+    "DecisionMemoryComment",
     "DecisionMemoryContent",
     "DecisionMemoryCountRow",
     "DecisionMemoryCrop",
@@ -139,19 +140,6 @@ __all__ = [
     "ReleaseList",
     "MarkReleaseNotesReadRequest",
     "RunId",
-    "ArV3RunGroupId",
-    "StartArV3BetaGroupRequest",
-    "ArV3BetaGroupMember",
-    "ArV3BetaGroup",
-    "ArV3BetaGroupReview",
-    "ArV3BetaGroupReviewMember",
-    "ArV3BetaPackReview",
-    "ArV3BetaPackStatus",
-    "ArV3BetaVisibleReview",
-    "ArV3BetaVisibleTopic",
-    "ArV3BetaVisibleProposal",
-    "ArV3BetaVisibleCitation",
-    "ArV3BetaVisibleEvidence",
     "JobId",
     "RunState",
     "RunExecutor",
@@ -178,10 +166,6 @@ __all__ = [
     "NormSourceAttribution",
     "NormCitationState",
     "NormCitation",
-    "UngroundedReason",
-    "NormObservationCitationPartition",
-    "NormFindingVerification",
-    "NormVerificationReport",
     "NormReferenceCounts",
     "NormReferenceAnchor",
     "NormReferenceItem",
@@ -217,14 +201,12 @@ __all__ = [
     "SectionReviewOption",
     "SectionSuggestion",
     "Sha256",
-    "ArV3BetaStageId",
     "StageId",
     "StageState",
     "StageStatus",
     "StartRunRequest",
     "RunCostConsent",
     "RunCostEstimateRequest",
-    "ArV3GroupCostEstimateRequest",
     "RunCostEstimate",
     "ReauditRunRequest",
     "StartRunFromStageRequest",
@@ -676,6 +658,35 @@ __all__ = [
     "RunStagePlanSource",
     "RunStageState",
     "RunStages",
+    "ExecutorContextInput",
+    "ExecutorTaskContext",
+    "ExecutorTaskContextCase",
+    "ExecutorTaskContextItem",
+    "ExecutorTaskContextKind",
+    "ExecutorTaskContextRequest",
+    "ExecutorTaskContextStatus",
+    "FindingBlockBox",
+    "FindingBlockEvidence",
+    "FindingGroundingKind",
+    "FindingOrigin",
+    "PossibleNorm",
+    "PrecedentCase",
+    "PrecedentFindingLabel",
+    "PrecedentHint",
+    "PrecedentHintCode",
+    "PrecedentLabelCode",
+    "PrecedentPassState",
+    "PrecedentSetting",
+    "PrecedentSettingList",
+    "PrecedentSettingName",
+    "PrecedentVotes",
+    "AppendPrecedentSettingRequest",
+    "FindingPrecedents",
+    "RunPrecedents",
+    "SetVectorPausedRequest",
+    "VectorControl",
+    "VectorWindow",
+    "VectorWindowState",
 ]
 
 
@@ -778,9 +789,6 @@ VersionUid = TypeAliasType(
     "VersionUid", Annotated[str, Field(pattern=rf"^ver_{_ULID}$")]
 )
 RunId = TypeAliasType("RunId", Annotated[str, Field(pattern=rf"^run_{_ULID}$")])
-ArV3RunGroupId = TypeAliasType(
-    "ArV3RunGroupId", Annotated[str, Field(pattern=rf"^arg_{_ULID}$")]
-)
 JobId = TypeAliasType("JobId", Annotated[str, Field(pattern=rf"^job_{_ULID}$")])
 #: `W54-SEAL-01`. One registered worker process (``worker_id``, ``wrk``), migration ``0019``.
 WorkerId = TypeAliasType("WorkerId", Annotated[str, Field(pattern=rf"^wrk_{_ULID}$")])
@@ -999,10 +1007,6 @@ class StageId(str, enum.Enum):
     NORM_VERIFICATION = "norm_verification"
 
 
-class ArV3BetaStageId(str, enum.Enum):
-    CITATION_REVIEW = "ar_v3_citation_review"
-
-
 class ProviderMode(str, enum.Enum):
     LIVE = "live"
     RECORDED = "recorded"
@@ -1037,6 +1041,10 @@ class FindingCategory(str, enum.Enum):
     ACCESSIBILITY = "accessibility"
     INSULATION = "insulation"
     SOUND = "sound"
+    #: `CRIT-SEAL-50` (contract 1.51.0): the categories of the groups of candidates of the extended review published as findings
+    #: (plan-v5 section 4): a group of drawing candidates, and a group that mixes the sources of the blocks and the cross-check.
+    DRAWING_DISCREPANCY = "drawing_discrepancy"
+    CROSS_SOURCE = "cross_source"
 
 
 class Severity(str, enum.Enum):
@@ -1129,7 +1137,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.49.0"]
+    contract_version: Literal["1.52.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1153,8 +1161,7 @@ class DocumentAuditCounts(_Object):
     Every figure counts documents by their **current version only** (`R-150p`) and reads that version's
     **result run**: its latest run in state `published` or `partial`, ordered by `(created_at, run_id)` as
     `listRuns` orders them. A newer run still in flight does not displace it, and a `failed` or `cancelled`
-    run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`); AR v3
-    six-run groups follow the same per-run rule for now (`R-150t`).
+    run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`).
 
     A document is in exactly one of four states, so `document_count` is `not_run + clean + awaiting_decision
     + checked`: `not_run` has no result run; `clean` has a result run with no published finding (a state of its
@@ -1348,8 +1355,7 @@ class DocumentActiveRun(_Object):
     """`UI-A-47` (contract 1.40.0): the run of a version that is in flight -- admitted and not yet terminal.
 
     `state` is `queued` (waiting for an executor), `running` or `validating`; a `created` run has not been admitted and
-    a terminal run is not active. Only the standard analysis is named here: a run of an AR v3 group is not (as it is
-    never the version's result). No progress figure is carried: the run reports its stages, and a figure of
+    a terminal run is not active. No progress figure is carried: the run reports its stages, and a figure of
     «пакет n/m» would need a plan of its own (`D-345`).
     """
 
@@ -1652,14 +1658,9 @@ class RunCostEstimateRequest(_Object):
     start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
-class ArV3GroupCostEstimateRequest(_Object):
-    version_uid: VersionUid
-    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
-
-
 class RunCostEstimate(_Object):
     estimate_digest: Sha256
-    scope: Literal["run", "ar_v3_group"]
+    scope: Literal["run"]
     version_uid: VersionUid
     provider_mode: ProviderMode
     #: `HOSTS-SEAL-1`: ``mixed`` is a run on the stage layout whose cells are paid in both ways; ``models`` then has a line per model.
@@ -1730,131 +1731,8 @@ class StartRunFromStageRequest(_Object):
     cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
-class StartArV3BetaGroupRequest(_Object):
-    version_uid: VersionUid
-    cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    # Optional temporary per-group override. Absent and false keep the existing limits.
-    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
-
-
-class ArV3BetaGroupMember(_Object):
-    scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"]
-    run_id: RunId
-    state: RunState
-    map_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-    norm_retrieval_set_id: NormRetrievalSetId
-
-
-class ArV3BetaGroup(_Object):
-    group_id: ArV3RunGroupId
-    project_uid: ProjectUid
-    version_uid: VersionUid
-    norms_snapshot_id: NormsSnapshotId
-    analysis_profile_id: AnalysisProfileId
-    prompt_bundle_id: PromptBundleId
-    pack_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-    provider_mode: ProviderMode
-    members: Annotated[list[ArV3BetaGroupMember], Field(min_length=6, max_length=6)]
-
-
-class ArV3BetaVisibleTopic(_Object):
-    item_id: str
-    mode: str
-    reason: str
-    source_ids: list[str]
-    review_status: str
-    provisional_citation_count: Annotated[int, Field(ge=0)]
-
-
-class ArV3BetaVisibleEvidence(_Object):
-    page_number: Annotated[int, Field(ge=1)]
-    quote: str
-
-
-class ArV3BetaVisibleCitation(_Object):
-    item_id: str
-    label: str
-    document_id: str
-    paragraph_id: str
-    raw_quote: str
-    state: str
-
-
-class ArV3BetaVisibleProposal(_Object):
-    proposal_ordinal: Annotated[int, Field(ge=0)]
-    evidence: list[ArV3BetaVisibleEvidence]
-    citations: list[ArV3BetaVisibleCitation]
-
-
-class ArV3BetaVisibleReview(_Object):
-    topics: list[ArV3BetaVisibleTopic]
-    provisional_citations: list[ArV3BetaVisibleProposal]
-    withheld_proposal_count: Annotated[int, Field(ge=0)]
-    rejected_proposal_count: Annotated[int, Field(ge=0)]
-
-
-class ArV3BetaGroupReviewMember(_Object):
-    scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"]
-    run_id: RunId
-    run_state: RunState
-    review_state: Literal["pending", "failed", "verification_refused", "available"]
-    terminal_reason: str | None
-    refusal_code: str | None
-    review: ArV3BetaVisibleReview | None
-
-
-class ArV3BetaGroupReview(_Object):
-    group_id: ArV3RunGroupId
-    version_uid: VersionUid
-    members: Annotated[list[ArV3BetaGroupReviewMember], Field(min_length=6, max_length=6)]
-
-
-class ArV3BetaPackReview(_Object):
-    """The human attestation that travelled with the installed pack's manifest.
-
-    A record, not a check: the server shows what the manifest says and nothing about
-    whether anyone really reviewed anything.
-    """
-
-    reviewer: str
-    capacity: str
-    reviewed_at: Annotated[str, Field(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
-    decision_ref: str
-    scope_statement: str
-
-
-class ArV3BetaPackStatus(_Object):
-    """Whether a reviewed AR v3 beta pack is installed on this server, and its attestation.
-
-    Everything but `state` is absent, never null, while no pack is installed. No map, set or
-    snapshot identity, digest of a scope, path or environment value is ever a property.
-    """
-
-    state: Literal["installed", "not_installed"]
-    analysis_profile_id: AnalysisProfileId = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    prompt_bundle_id: PromptBundleId = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    pack_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    scope_ids: Annotated[
-        list[Literal["F1", "F2", "A1", "A2", "S1", "S2"]],
-        Field(min_length=6, max_length=6),
-    ] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    review: ArV3BetaPackReview = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    #: `AR-V3-OPT-IN` (contract 1.38.0). Present exactly when `state` is `installed`: whether this deployment allows a
-    #: start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`). Installed is the capability, this is the permission;
-    #: a pack that is installed with `start_allowed` false still executes, shows and reviews what was accepted.
-    start_allowed: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-
-
 class StageState(_Object):
-    stage_id: StageId | ArV3BetaStageId
+    stage_id: StageId
     stage_version: Annotated[str, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
@@ -1911,6 +1789,9 @@ class RunWaitCause(str, enum.Enum):
     MODEL_COOLING_DOWN = "model_cooling_down"
     NOT_ON_ANY_SERVER = "not_on_any_server"
     AT_CAPACITY = "at_capacity"
+    #: `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2): the night window of the vectors is open and the stand issues no new run until it
+    #: closes (`vector_control.window_state` is `draining` or `encoding`). Every cell of the run waits for the same reason.
+    VECTOR_WINDOW = "vector_window"
 
 
 class RunWaitCell(_Object):
@@ -1950,7 +1831,7 @@ class RunStatus(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     stages: list[StageState]
-    degradation_set: list[StageId | ArV3BetaStageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    degradation_set: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     terminal_reason: ErrorCode | None = Field(default=None, json_schema_extra=optional_property)
     #: `D-46`. **The same shape as ``ErrorEnvelope.details``, and the same constant**: it
     #: is the same rule -- safe scalar classifiers, restricted to the ``safe_detail_keys``
@@ -2005,15 +1886,6 @@ class RunStatus(_Object):
     #: created before migration 0051.
     started_by_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     started_by_label: Annotated[str, Field(min_length=1, max_length=254)] = Field(  # type: ignore[assignment]
-        default=None, json_schema_extra=optional_property)
-    #: `AR-V3-OPT-IN` (contract 1.38.0). Which analysis produced the run: `standard` (the text profile the section table
-    #: routes to) or `ar_v3_beta` (one run of a six-run AR v3 group). Derived from the pinned profile and bundle pair,
-    #: nothing else. A run holds exactly one analysis; no field of a run mixes the results of the two.
-    analysis_kind: Literal["standard", "ar_v3_beta"] = Field(  # type: ignore[assignment]
-        default=None, json_schema_extra=optional_property)
-    #: Members of an AR v3 group only: the group and the scope (`F1` .. `S2`) the run is one of.
-    ar_v3_group_id: ArV3RunGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    ar_v3_scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
     #: `UI-A-65` / `UI-B-45` (contract 1.40.0): the run's estimated finish, by the rule of
     #: `ExecutionQueueItem.estimated_finish_at` (`R-151u`) and by the same function -- the job's first attempt plus the
@@ -2526,21 +2398,6 @@ class NormCitationState(str, enum.Enum):
     REBOUND = "rebound"
 
 
-class UngroundedReason(str, enum.Enum):
-    QUOTATION_ABSENT = "quotation_absent"
-    QUOTATION_ON_DIFFERENT_PAGE = "quotation_on_different_page"
-    SPAN_OUTSIDE_PAGE = "span_outside_page"
-    SPAN_OUTSIDE_BLOCK = "span_outside_block"
-    SPAN_LENGTH_MISMATCH = "span_length_mismatch"
-    QUOTE_IN_RECOGNISED_TEXT = "quote_in_recognised_text"
-    NORM_LABEL_UNKNOWN = "norm_label_unknown"
-    NORM_QUOTE_TOO_SHORT = "norm_quote_too_short"
-    NORM_QUOTE_AMBIGUOUS = "norm_quote_ambiguous"
-    NORM_QUOTE_ABSENT = "norm_quote_absent"
-    NORM_VALUE_NOT_IN_QUOTE = "norm_value_not_in_quote"
-    STATED_VALUE_NOT_IN_EVIDENCE = "stated_value_not_in_evidence"
-
-
 class NormCitation(_Object):
     norms_snapshot_id: NormsSnapshotId
     norm_document_id: NormDocumentId
@@ -2554,14 +2411,77 @@ class NormCitation(_Object):
     source_attribution: NormSourceAttribution
 
 
+class FindingGroundingKind(str, enum.Enum):
+    """`CRIT-SEAL-50` (contract 1.51.0, migration ``0064``): how an observation is anchored. `text_span`: a span of the text layer, as every
+    observation was until now. `portal_block`: a block of the portal's geometry, proved to be in the run's own geometry (plan-v5 section 4)."""
+
+    TEXT_SPAN = "text_span"
+    PORTAL_BLOCK = "portal_block"
+
+
+class FindingOrigin(str, enum.Enum):
+    """`CRIT-SEAL-50` (contract 1.51.0): where a finding of «Разбор» comes from, the «Источник» chip: `text` (the text analysis), `drawing`
+    (a drawing candidate of the extended review) or `cross_check` (the cross-check of sources)."""
+
+    TEXT = "text"
+    DRAWING = "drawing"
+    CROSS_CHECK = "cross_check"
+
+
+class FindingBlockBox(_Object):
+    """A box on a page, normalised to the page (0 to 1), the origin at the top left."""
+
+    x0: Annotated[float, Field(ge=0, le=1)]
+    y0: Annotated[float, Field(ge=0, le=1)]
+    x1: Annotated[float, Field(ge=0, le=1)]
+    y1: Annotated[float, Field(ge=0, le=1)]
+
+
+class FindingBlockEvidence(_Object):
+    """`CRIT-SEAL-50` (contract 1.51.0): one block of the portal that holds a finding's evidence -- the place, never the content: the
+    block is proved to be in the run's geometry and its crop to match, and the quote, when there is one, to be in the block's recognised
+    text. `Evidence` is untouched."""
+
+    ordinal: Annotated[int, Field(ge=0)]
+    page_number: Annotated[int, Field(ge=1)]
+    portal_block_id: PortalBlockId
+    bbox_norm: FindingBlockBox
+    crop_sha256: Sha256
+    recognised_quote: Annotated[str, Field(min_length=1, max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
 class FindingObservation(_Object):
+    """An observation. Its ``evidence`` is the text it quotes: at least one item, **unless** its ``grounding_kind`` is ``portal_block`` (`CRIT-SEAL-52`,
+    contract 1.52.0, ``D-683``): such an observation stands on blocks of the portal, which the finding lists in ``block_evidence``, and has no text span, so
+    its ``evidence`` may be empty. The rule is a JSON Schema ``if``/``else`` on ``grounding_kind`` (``minItems: 1`` unless it is present and is
+    ``portal_block``), and ``Evidence`` is not touched."""
+
+    # ``else`` carries the rule for every observation that is not block-grounded, an absent ``grounding_kind`` (``text_span``, the only kind before
+    # 1.51.0) included: the ``if`` needs the member to be present, so an absent one falls to ``else``. ``else`` constrains ``evidence``, which is
+    # declared in ``properties``, and declares no member, so ``additionalProperties: false`` is unaffected (unlike an ``allOf``/``oneOf`` of
+    # restated objects, which a closed object cannot take).
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "if": {"properties": {"grounding_kind": {"const": "portal_block"}}, "required": ["grounding_kind"]},
+            "else": {"properties": {"evidence": {"minItems": 1}}},
+        },
+    )
+
     finding_observation_id: FindingObservationId
     run_id: RunId
     category: FindingCategory
     finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
     recommendation_text: Annotated[str, Field(min_length=1, max_length=4000)]
     proposed_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    evidence: Annotated[list[Evidence], Field(min_length=1)]
+    evidence: list[Evidence] = Field(
+        description=(
+            "The text spans the observation quotes. At least one, unless grounding_kind is portal_block (since 1.52.0): a block-grounded "
+            "observation has no text span, and its blocks are listed in block_evidence of the finding."
+        ),
+    )
     provenance: ObservationProvenance
     norm_citations: Annotated[list[NormCitation], Field(max_length=5)] = Field(
         default=None, json_schema_extra=optional_property
@@ -2572,6 +2492,16 @@ class FindingObservation(_Object):
     stated_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `CRIT-SEAL-50` (contract 1.51.0): absent means `text_span`, the only kind before.
+    grounding_kind: FindingGroundingKind = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+    @model_validator(mode="after")
+    def _evidence_unless_block_grounded(self) -> FindingObservation:
+        """The contract's ``if``/``else`` on ``grounding_kind``, where the served document is also what validates: no text evidence is allowed
+        only for a block-grounded observation (`CRIT-SEAL-52`, ``D-683``). The refusal is a transport-shape check, not a business rule."""
+        if not self.evidence and self.grounding_kind is not FindingGroundingKind.PORTAL_BLOCK:
+            raise ValueError("evidence needs at least one item unless grounding_kind is portal_block")
+        return self
 
 
 class Finding(_Object):
@@ -2606,6 +2536,12 @@ class Finding(_Object):
     #: before the field existed).
     current_verdict_carried_from: DecisionCarriedFrom = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `CRIT-SEAL-50` (contract 1.51.0): the blocks of the portal that hold the evidence of a finding grounded on blocks; absent for a
+    #: finding grounded on text spans only. `origin` is the «Источник» chip; absent means `text`.
+    block_evidence: Annotated[list[FindingBlockEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class FindingDetail(_Object):
@@ -2646,45 +2582,15 @@ class FindingDetail(_Object):
     #: `UI-A-73` (contract 1.39.0): as on ``Finding``.
     current_verdict_carried_from: DecisionCarriedFrom = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `CRIT-SEAL-50` (contract 1.51.0): as on ``Finding``.
+    block_evidence: Annotated[list[FindingBlockEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     latest_comment: str | None = Field(default=None, json_schema_extra=optional_property)
     decision_event_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
-
-
-class NormObservationCitationPartition(_Object):
-    finding_observation_id: FindingObservationId
-    norm_citations: Annotated[list[NormCitation], Field(max_length=5)]
-    required_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-    stated_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
-        default=None, json_schema_extra=optional_property
-    )  # type: ignore[assignment]
-
-
-class NormFindingVerification(_Object):
-    finding_uid: FindingUid
-    canonical: NormObservationCitationPartition
-    merged_observations: list[NormObservationCitationPartition]
-
-
-class NormVerificationReport(_Object):
-    run_id: RunId
-    norms_snapshot_id: NormsSnapshotId
-    norm_retrieval_set_id: NormRetrievalSetId
-    status: Literal["complete", "partial"]
-    findings: list[NormFindingVerification]
-    withheld_by_reason: Annotated[
-        dict[UngroundedReason, Annotated[int, Field(ge=0)]],
-        WithJsonSchema({
-            "type": "object",
-            "propertyNames": {"$ref": "#/components/schemas/UngroundedReason"},
-            "additionalProperties": {"type": "integer", "minimum": 0},
-        }),
-    ]
-    textless_pages: list[Annotated[int, Field(ge=1)]]
-    error_code: ErrorCode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 # --- the norms a run's text cites (`NORM-REFS-RUN-01`) ----------------------------------------
@@ -3584,7 +3490,6 @@ class ComparisonRefusal(_Object):
         "analysis_missing",
         "run_not_of_version",
         "run_not_published",
-        "analysis_not_comparable",
         "text_unavailable",
         "text_too_large",
     ]
@@ -6024,6 +5929,16 @@ class RunnerImage(_Object):
     media_type: Literal["image/png"]
 
 
+class ExecutorContextInput(_Object):
+    """`CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2): one candidate text of a `review:main` task the agent may ask reference data for
+    (`getExecutorTaskContext`). `input_id` is the task's own name for the text, `text_sha256` the digest of it, `section` the section the
+    run's version belongs to."""
+
+    input_id: Annotated[str, Field(min_length=1, max_length=128)]
+    text_sha256: Sha256
+    section: Annotated[str, Field(min_length=1, max_length=64)]
+
+
 class ClaimedExecutorTask(_Object):
     """A task, now claimed by the calling token. ``system`` and ``user_text`` are untrusted,
     document-derived text. ``model`` is the pinned gateway model the answer must declare."""
@@ -6053,6 +5968,11 @@ class ClaimedExecutorTask(_Object):
         default=None, json_schema_extra=optional_property
     )
     cell_key: StageCellKey = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `CRIT-SEAL-50` (contract 1.51.0): present only on a `review:main` task of a run on the stage layout. The agent may ask
+    #: `getExecutorTaskContext` once per kind; a task without it is never offered reference data.
+    context_request: Annotated[list[ExecutorContextInput], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ExtendedExecutorTaskClaim(_Object):
@@ -6082,6 +6002,9 @@ class SubmitExecutorTaskAnswerRequest(_Object):
         default=None, json_schema_extra=optional_property
     )
     usage: ExecutorTaskUsage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `CRIT-SEAL-50` (contract 1.51.0): the `context_sha256` of the reference data the agent appended to the prompt, as the stand gave it;
+    #: absent when none was appended.
+    context_sha256: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class FailExecutorTaskRequest(_Object):
@@ -9320,6 +9243,15 @@ class DecisionMemoryCrop(_Object):
     portal_description: Annotated[str, Field(min_length=1, max_length=4000)] | None
 
 
+class DecisionMemoryComment(_Object):
+    """One comment an expert left on a case, as the memory keeps it (`CRIT-SEAL-52`, contract 1.52.0, ``D-682``). Like a decision it names no author:
+    the memory holds what was decided and said, not who said it."""
+
+    comment_id: Annotated[str, Field(pattern=rf"^dmk_{_ULID}$")]
+    decided_at: datetime
+    comment: Annotated[str, Field(min_length=1, max_length=4000)]
+
+
 class DecisionMemoryStatusEvent(_Object):
     """One change of standing, newest last. A ``forget`` carries the digest of the content that was forgotten, never the content."""
 
@@ -9340,6 +9272,15 @@ class DecisionMemoryCase(_Object):
     norm_refs: list[DecisionMemoryNormRef]
     crops: list[DecisionMemoryCrop]
     status_events: list[DecisionMemoryStatusEvent]
+    #: `CRIT-SEAL-52` (contract 1.52.0, ``D-682``): the experts' comments on the case, oldest first. Absent when the answer does not carry them (a server
+    #: that does not read them yet); present and empty when the case has none, and for a forgotten case.
+    comments: list[DecisionMemoryComment] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property,
+        description=(
+            "The experts' comments on the case, oldest first (since 1.52.0). Absent when the server does not report them; present and empty "
+            "when the case has none and for a forgotten case."
+        ),
+    )
 
 
 class DecisionMemoryCountRow(_Object):
@@ -9666,11 +9607,15 @@ class RunStartReadiness(_Object):
     """What the one button «Запустить» says (ADR-0028): the route, the kit, every cell with its access, whether the start is
     possible and, when it is, the digest of the estimate to confirm. `access` is the total: all cells on a subscription (the
     estimate is 0 and the press of the button is the consent), all on an API key, or mixed (one dialog with the estimate by
-    model). An unavailable cell makes `ready` false and names itself in `cells`."""
+    model). An unavailable cell makes `ready` false and names itself in `cells`.
+
+    `extended_plan` (contract 1.50.0): the extended plan a start would run under -- `v2`, `v3`, or `null` when the extended analysis is
+    off. Under `v2` the critic and the refinement rows are not called, and a client labels them from this field."""
 
     route: RunStartRoute
     ready: bool
     kit: StageModelKit = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    extended_plan: Literal["v2", "v3"] | None = Field(default=None, json_schema_extra=optional_property)
     access: Literal["subscription", "api", "mixed"] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     estimate_digest: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     stage_plan_digest: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -9695,7 +9640,7 @@ class RunStageChip(str, enum.Enum):
     """A chip of a run: a reader's name for the phase or phases of code that do one kind of work. The eight chips in the order the
     rail draws them -- `preparation` (the three PC-01 preparation stages), `text` (analysis of the text), `blocks` (analysis of the
     blocks), `cross_check` (the complex cross-check and the parameter passport), `merge` (the deterministic merge), `norms` (the
-    norms), `review` (the critic) and `correction` (the refinement) -- and `ar_v3`, the one stage of the separate AR v3 profile.
+    norms), `review` (the critic) and `correction` (the refinement).
     A chip order is a display order, not the order of the stage graph."""
 
     PREPARATION = "preparation"
@@ -9706,7 +9651,6 @@ class RunStageChip(str, enum.Enum):
     NORMS = "norms"
     REVIEW = "review"
     CORRECTION = "correction"
-    AR_V3 = "ar_v3"
 
 
 class RunStageState(str, enum.Enum):
@@ -9887,3 +9831,265 @@ class RunStages(_Object):
     state: RunState
     plan_source: RunStagePlanSource
     items: Annotated[list[RunStage], Field(max_length=9)]
+
+
+# --- the «Прецеденты» programme (`CRIT-SEAL-50`, contract 1.51.0, plan-v5 sections 3.1 and 3.2; migration ``0064``) ----------------
+#
+# Sealed with the storage and nothing that behaves: every operation below answers ``503 dependency_unavailable`` until the lane that owns it
+# (`CTX-STAND`, `EMBED-01`, `PREC-PASS`, `PREC-WEB`) fills its body in the router. A lane that needs another field stops to the integrator.
+
+
+class ExecutorTaskContextKind(str, enum.Enum):
+    """What an agent asks the stand for: the decisions of experts on similar findings (`similar_cases`) or the approved patterns of rejection
+    (`patterns`, wave 5)."""
+
+    SIMILAR_CASES = "similar_cases"
+    PATTERNS = "patterns"
+
+
+class ExecutorTaskContextStatus(str, enum.Enum):
+    """`available`: the answer holds the reference data. `unavailable`: the stand has none to give and says why in `reason` (while the
+    night encoder is the only one, `until_move`); the agent calls the model without it."""
+
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+
+
+class ExecutorTaskContextRequest(_Object):
+    """The body of `getExecutorTaskContext`: the kind of reference data. One call per kind and task is paid for; a repeat answers the same."""
+
+    kind: ExecutorTaskContextKind
+
+
+_PrecedentVerdict = Literal["accepted", "rejected"]
+
+
+class ExecutorTaskContextCase(_Object):
+    """One earlier decision, with the texts of its case. The cases are those of the same section and data class, of any project, never of
+    this run, never withdrawn or forgotten (the policy of the consent)."""
+
+    case_id: DecisionMemoryCaseId
+    verdict: _PrecedentVerdict
+    category: Annotated[str, Field(min_length=1, max_length=64)]
+    similarity: Annotated[float, Field(ge=0, le=1)]
+    finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    recommendation_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    comment: Annotated[str, Field(min_length=1, max_length=4000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorTaskContextItem(_Object):
+    """The cases found for one `input_id` of the task's `context_request`, at most three, the most similar first."""
+
+    input_id: Annotated[str, Field(min_length=1, max_length=128)]
+    cases: Annotated[list[ExecutorTaskContextCase], Field(max_length=3)]
+
+
+class ExecutorTaskContext(_Object):
+    """`getExecutorTaskContext` (contract 1.51.0): the reference data of a task, laid out by `input_id`. `reason` is present exactly when
+    `status` is `unavailable`, and `context_sha256` exactly when it is `available`: the digest of `items` as the stand delivered them, which
+    the agent echoes in `submitExecutorTaskAnswer`. `not_fitted` counts the cases that did not fit the budget of characters of the task."""
+
+    kind: ExecutorTaskContextKind
+    status: ExecutorTaskContextStatus
+    reason: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    items: Annotated[list[ExecutorTaskContextItem], Field(max_length=64)]
+    not_fitted: Annotated[int, Field(ge=0)]
+    context_sha256: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class PrecedentLabelCode(str, enum.Enum):
+    """The label of a finding (plan-v5 section 2.3). `none` and `few` show nothing in the row. `cancel_suggested` is a part of
+    `often_rejected`: it additionally needs the critic's review and no veto, and it is the one that fills the queue «Рекомендовано снять»."""
+
+    NONE = "none"
+    FEW = "few"
+    OFTEN_REJECTED = "often_rejected"
+    CANCEL_SUGGESTED = "cancel_suggested"
+    LIKELY_ACCEPTED = "likely_accepted"
+    MIXED = "mixed"
+
+
+class PrecedentHintCode(str, enum.Enum):
+    """A hint of the card (plan-v5 section 2.5; at most two per finding, never a model's text): `p1` the reason of the rejections, `p4` the
+    critic disagrees, `p5` the history of the document."""
+
+    P1 = "p1"
+    P4 = "p4"
+    P5 = "p5"
+
+
+class PrecedentPassState(str, enum.Enum):
+    """The state of the «Прецеденты» pass of a run."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class PrecedentVotes(_Object):
+    """The counts behind a label: the decisions counted (`total`), how many rejected and accepted, how many of them are independent (not
+    given under a label to reject, plan-v5 section 2.1) and from how many projects."""
+
+    total: Annotated[int, Field(ge=0)]
+    rejected: Annotated[int, Field(ge=0)]
+    accepted: Annotated[int, Field(ge=0)]
+    independent: Annotated[int, Field(ge=0)]
+    projects: Annotated[int, Field(ge=0)]
+
+
+class PrecedentFindingLabel(_Object):
+    """What the pass gave one finding of a run at `revision`. `critic_reviewed` is false for a finding the AI critic did not review: its
+    rejection labels are then shown neutrally and it is not in the queue."""
+
+    finding_uid: FindingUid
+    label: PrecedentLabelCode
+    critic_reviewed: bool
+    votes: PrecedentVotes
+    hint_codes: Annotated[list[PrecedentHintCode], Field(max_length=2)]
+    revision: Annotated[int, Field(ge=1)]
+
+
+class RunPrecedents(_Object):
+    """`getRunPrecedents` (contract 1.51.0): the labels of the findings of a run, and with them the queue (the items whose `label` is
+    `cancel_suggested`). `available` is false while the run has no result of the pass (the vectors are computed at night or are paused): the
+    screen then shows one line over the list and no label in a row. `pass_state` and `revision` are absent until a pass has started."""
+
+    run_id: RunId
+    available: bool
+    pass_state: PrecedentPassState = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    revision: Annotated[int, Field(ge=1)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    items: Annotated[list[PrecedentFindingLabel], Field(max_length=5000)]
+
+
+class PrecedentHint(_Object):
+    """A hint of the card. `text` is the words of an expert (the comment of a rejecting decision for `p1`), never a model's; `case_id` is the
+    case it comes from."""
+
+    code: PrecedentHintCode
+    text: Annotated[str, Field(min_length=1, max_length=4000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    case_id: DecisionMemoryCaseId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class PrecedentCase(_Object):
+    """One similar case on the card of a finding."""
+
+    case_id: DecisionMemoryCaseId
+    verdict: _PrecedentVerdict
+    category: Annotated[str, Field(min_length=1, max_length=64)]
+    similarity: Annotated[float, Field(ge=0, le=1)]
+    finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    comment: Annotated[str, Field(min_length=1, max_length=4000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class PossibleNorm(_Object):
+    """A paragraph of the norms the run already holds that the finding may rest on («Возможные нормы»): from the same paragraphs the
+    critic gets, never from the encoder."""
+
+    norm_document_id: NormDocumentId
+    norm_paragraph_id: NormParagraphId
+    designation: Annotated[str, Field(min_length=1, max_length=500)]
+    clause_number: Annotated[str, Field(min_length=1, max_length=100)] | None
+    page_label: Annotated[int, Field(ge=1)]
+
+
+class FindingPrecedents(_Object):
+    """`getFindingPrecedents` (contract 1.51.0): the card of a finding -- its label, its at most two hints, the similar cases and the possible
+    norms. `available` is false while the pass has not given this finding a result; `label` is then absent."""
+
+    finding_uid: FindingUid
+    run_id: RunId
+    available: bool
+    label: PrecedentFindingLabel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    hints: Annotated[list[PrecedentHint], Field(max_length=2)]
+    cases: Annotated[list[PrecedentCase], Field(max_length=10)]
+    possible_norms: Annotated[list[PossibleNorm], Field(max_length=5)]
+
+
+class VectorWindowState(str, enum.Enum):
+    """The night window of the vectors: `closed`; `draining` (no new run is issued, the running ones finish); `encoding` (the encoder runs);
+    `skipped` (the window did not take place, `window_reason` says why)."""
+
+    CLOSED = "closed"
+    DRAINING = "draining"
+    ENCODING = "encoding"
+    SKIPPED = "skipped"
+
+
+_CLOCK_TIME = r"^([01][0-9]|2[0-3]):[0-5][0-9]$"
+
+
+class VectorWindow(_Object):
+    """The configured window: local `start` and `end` (`HH:MM`) in the IANA zone `tz` (the setting `vector_window`)."""
+
+    start: Annotated[str, Field(pattern=_CLOCK_TIME)]
+    end: Annotated[str, Field(pattern=_CLOCK_TIME)]
+    tz: Annotated[str, Field(min_length=1, max_length=64)]
+
+
+class VectorControl(_Object):
+    """`getVectorControl` and the answer of `setVectorPaused` (contract 1.51.0): whether the vectors are paused and since when, the state of
+    the night window and the window itself. The counts of queued and poisoned jobs are for an administrator and absent for an expert."""
+
+    paused: bool
+    paused_since: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    window_state: VectorWindowState
+    window_reason: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    window_changed_at: datetime
+    window: VectorWindow
+    pending_intents: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    poisoned_intents: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class SetVectorPausedRequest(_Object):
+    """`setVectorPaused`: pause the vectors or resume them. The window does not start on a pause and the queue keeps filling."""
+
+    paused: bool
+
+
+class PrecedentSettingName(str, enum.Enum):
+    """The names of the journal of settings: the three switches (`one_list`, `critic_context`, `section_labels`; all off while nothing is
+    journalled), the stop words of the owner, the night window and the thresholds."""
+
+    ONE_LIST = "one_list"
+    CRITIC_CONTEXT = "critic_context"
+    SECTION_LABELS = "section_labels"
+    STOP_WORDS = "stop_words"
+    VECTOR_WINDOW = "vector_window"
+    THRESHOLDS = "thresholds"
+
+
+class PrecedentSetting(_Object):
+    """One revision of one setting. `value` is an object: `{"enabled": boolean}` for `one_list` and `critic_context`, `{"start", "end", "tz"}`
+    for `vector_window`, the lane's own shape for the others."""
+
+    setting_name: PrecedentSettingName
+    revision: Annotated[int, Field(ge=1)]
+    value: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
+    actor_user_uid: UserUid
+    created_at: datetime
+
+
+class PrecedentSettingList(_Object):
+    """`listPrecedentSettings`: the revision in force of each setting that was ever journalled (`current`, at most one per name) and the
+    journal, newest first (`events`)."""
+
+    current: Annotated[list[PrecedentSetting], Field(max_length=6)]
+    events: Annotated[list[PrecedentSetting], Field(max_length=200)]
+
+
+class AppendPrecedentSettingRequest(_Object):
+    """`appendPrecedentSetting`: a new revision of a setting. The revision number is the next one of the name; the actor is the caller."""
+
+    setting_name: PrecedentSettingName
+    value: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]

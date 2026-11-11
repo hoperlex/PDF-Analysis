@@ -2,14 +2,21 @@
 
 The caller owns one consistent database read, page-label resolution and the
 sealed export authorization. This module neither queries nor repairs data.
+
+`F8-COUNT-XLSX`: the run's publication mode travels with the read (``RunRead.publication_mode``). A ``one_list`` run's rows carry where
+each finding stands (``source``, from the category and the grounding of its canonical observation, :func:`.labels.source_of`) and the
+workbook has the column «Источник»; a ``text_only`` run's rows carry none and its workbook is unchanged.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from auditmanager.exports.xlsx.labels import VERDICT_LABELS
+from auditmanager.exports.xlsx.labels import GROUNDING_TEXT_SPAN, VERDICT_LABELS, source_of
 from auditmanager.exports.xlsx.writer import (
+    PUBLICATION_MODES,
+    PUBLICATION_ONE_LIST,
+    PUBLICATION_TEXT_ONLY,
     Citation,
     FindingMember,
     FindingRow,
@@ -30,6 +37,8 @@ class RunRead:
     profile_id: str
     snapshot_key: str
     attribution: str
+    #: ``audit_run.publication_mode``; a run without a marker is ``text_only``.
+    publication_mode: str = PUBLICATION_TEXT_ONLY
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +57,8 @@ class ObservationRead:
     recommendation: str
     proposed_severity: str | None
     evidence: tuple[EvidenceLocationRead, ...]
+    #: ``finding_observation.grounding_kind``: ``text_span`` (the default) or ``portal_block``.
+    grounding_kind: str = GROUNDING_TEXT_SPAN
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +110,7 @@ def _locations(observation: ObservationRead) -> str:
     return "\n".join(labels)
 
 
-def _finding_row(finding: FindingRead, run_id: str) -> FindingRow:
+def _finding_row(finding: FindingRead, run_id: str, publication_mode: str = PUBLICATION_TEXT_ONLY) -> FindingRow:
     if (
         not isinstance(finding, FindingRead)
         or not _text(finding.finding_uid)
@@ -167,6 +178,11 @@ def _finding_row(finding: FindingRead, run_id: str) -> FindingRow:
             raise ValueError("xlsx_projection_citation_invalid")
         citations.append(Citation(item.document, item.clause, item.quote))
 
+    # Where the finding stands, for the one-list workbook only; a text-only run has no such column and no value for it.
+    source = (
+        source_of(finding.category, canonical.grounding_kind)
+        if publication_mode == PUBLICATION_ONE_LIST else None
+    )
     return FindingRow(
         finding_uid=finding.finding_uid,
         sheet_page=_locations(canonical),
@@ -185,6 +201,7 @@ def _finding_row(finding: FindingRead, run_id: str) -> FindingRow:
             )
             for member_id in members
         ),
+        source=source,
     )
 
 
@@ -201,13 +218,14 @@ def project_workbook(run: RunRead, findings: tuple[FindingRead, ...]) -> Workboo
         ))
         or not isinstance(run.snapshot_key, str)
         or not isinstance(run.attribution, str)
+        or run.publication_mode not in PUBLICATION_MODES
         or not isinstance(findings, tuple)
     ):
         raise ValueError("xlsx_projection_run_invalid")
     seen: set[str] = set()
     rows: list[FindingRow] = []
     for finding in findings:
-        row = _finding_row(finding, run.run_id)
+        row = _finding_row(finding, run.run_id, run.publication_mode)
         if row.finding_uid in seen:
             raise ValueError("xlsx_projection_finding_duplicate")
         seen.add(row.finding_uid)
@@ -220,6 +238,7 @@ def project_workbook(run: RunRead, findings: tuple[FindingRead, ...]) -> Workboo
         snapshot_key=run.snapshot_key,
         attribution=run.attribution,
         findings=tuple(rows),
+        publication_mode=run.publication_mode,
     )
 
 

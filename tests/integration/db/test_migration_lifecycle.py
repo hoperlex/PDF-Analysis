@@ -75,9 +75,6 @@ EXPECTED_TABLES = {
     "executor_group_member",
     "executor_routing_rule_revision",
     "executor_routing_mode_event",
-    # `0032_ar_v3_run_group`: a group of six runs of one version, and its six members.
-    "ar_v3_run_group",
-    "ar_v3_run_group_member",
     # `0035_comparison_records`: the approved sheet pairings of two versions, as an append-only history.
     "comparison_sheet_link",
     "comparison_summary",
@@ -162,6 +159,23 @@ EXPECTED_TABLES = {
     "stage_layout_revision",
     "stage_layout_switch_event",
     "audit_run_cell_binding",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the memory's comments, block evidence, encoder queue and vectors; the probe of a run's candidate text, the
+    # pass of a run and its advice; a finding's block evidence; the settings journal; the vectors' control and its journal; the journal of reference
+    # data handed to an agent.
+    "decision_memory_comment",
+    "decision_memory_block_evidence",
+    "decision_memory_embedding_intent",
+    "decision_memory_embedding",
+    "decision_memory_probe",
+    "decision_memory_precedent_run",
+    "decision_memory_precedent_advice",
+    "finding_block_evidence",
+    "precedent_setting_event",
+    "vector_control",
+    "vector_control_event",
+    "executor_task_context_delivery",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page, a derived row of a custody binding.
+    "norm_crop_render",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
     "norm_current_snapshot",
     "norm_current_snapshot_event",

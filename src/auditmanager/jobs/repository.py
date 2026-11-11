@@ -263,6 +263,10 @@ _NEXT_JOB = text(
     "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
     "AND j.available_at <= statement_timestamp() "
     "AND NOT EXISTS (SELECT 1 FROM execution_control WHERE singleton AND paused) "
+    # `EMBED-01` (ADR-0029 decision 8): the night window of the vectors takes no new run, the way the analysis pause takes none. In the
+    # same statement, so a claim cannot pass one check and miss the other; `draining` and `encoding` are the two open states
+    # (`precedents/vectors/window.py`), and a run that is waiting then is told so by `precedents.public.window_wait`.
+    "AND NOT EXISTS (SELECT 1 FROM vector_control WHERE control_key = 'default' AND window_state IN ('draining', 'encoding')) "
     "AND j.run_id <> ALL (CAST(:submitted AS text[])) "
     "AND ("
     # frozen_at_start and bound: the connection test, exactly as it was (a NULL revision is the environment source).
@@ -769,35 +773,6 @@ class RecordedCompletedCall:
     model_id: str
     request_sha256: str
     response_sha256: str
-
-
-@dataclass(frozen=True, slots=True)
-class V3CompletedCall:
-    run_id: str
-    job_id: str
-    attempt_id: str
-    model_call_id: str
-    provider: str
-    model_id: str
-    provider_mode: str
-    request_sha256: str
-    response_sha256: str
-    candidate_sha256: str
-    scope_id: str
-    set_sha256: str
-    max_output_tokens: int
-    effort: str
-    reply_blob_id: str
-    reply_blob_sha256: str
-    reply_blob_size: int
-    input_tokens: int
-    output_tokens: int
-    latency_ms: int
-    cost_micros: int | None
-    cost_basis: str
-    status: str
-    connection_revision_id: str | None
-    identity_basis: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1944,136 +1919,6 @@ class JobRepository:
         return RecordedCompletedCall(
             str(row["model_call_id"]), str(row["model_identity"]),
             str(row["request_sha256"]), str(row["response_sha256"]),
-        )
-
-    def completed_v3_call(
-        self, session: Session, authority: AttemptAuthority,
-        *, lock_authority: bool = True,
-    ) -> V3CompletedCall:
-        """Read one completed v3 call/effect for this Run and Job.
-
-        A prior Attempt of the same Job may have completed the call before its
-        worker died. The current Attempt may consume that immutable evidence,
-        but a second provider call is never inferred or issued here.
-        The explicit unlocked read is provisional and must be compared again
-        under the final locked authority fence before a publication effect.
-        """
-        if type(lock_authority) is not bool:
-            raise ValueError("lock_authority must be bool")
-        check = self.require_current if lock_authority else self.check_current_unlocked
-        check(session, authority)
-        rows = session.execute(
-            _V3_COMPLETED_CALLS, {"run_id": authority.run_id}
-        ).mappings().all()
-        if len(rows) != 1:
-            raise DomainError(
-                ErrorCode.ANALYSIS_INPUT_INVALID,
-                message="AR v3 requires exactly one completed model call",
-                stage_id="text_analysis", reason="v3_call_missing_or_duplicate",
-            )
-        row = rows[0]
-        effect_params = row["effect_parameters"]
-        call_params = row["call_parameters"]
-        valid_pair = (
-            row["run_state"] == "running"
-            and row["job_id"] == authority.job_id
-            and isinstance(row["attempt_id"], str) and bool(row["attempt_id"])
-            and row["effect_stage"] == "text_analysis"
-            and row["effect_state"] == "completed"
-            and row["final_model_call_id"] == row["model_call_id"]
-            and row["call_error"] is None and row["effect_error"] is None
-            and row["status"] in {"succeeded", "truncated"}
-            and row["provider_mode"] in {"live", "recorded"}
-            and row["provider_mode"] == row["effect_mode"] == row["run_mode"]
-            and row["provider"] == row["effect_provider"]
-            and row["model_identity"] == row["effect_model"]
-            and row["request_sha256"] == row["effect_request"]
-            and row["response_sha256"] == row["effect_response"]
-            and row["input_tokens"] == row["effect_input_tokens"]
-            and row["output_tokens"] == row["effect_output_tokens"]
-            and row["latency_ms"] == row["effect_latency_ms"]
-            and row["call_revision"] == row["effect_revision"] == row["run_revision"]
-            and row["call_basis"] == row["effect_basis"]
-            and isinstance(effect_params, Mapping)
-            and isinstance(call_params, Mapping)
-        )
-        if valid_pair:
-            candidate = effect_params.get("ar_v3_candidate_sha256")
-            scope = effect_params.get("ar_v3_scope_id")
-            set_digest = effect_params.get("ar_v3_set_sha256")
-            max_tokens = effect_params.get("max_tokens")
-            thinking = effect_params.get("thinking")
-            output_config = effect_params.get("output_config")
-            effort = (output_config.get("effort")
-                      if isinstance(output_config, Mapping) else None)
-            output_format = (output_config.get("format")
-                             if isinstance(output_config, Mapping) else None)
-            blob_id = call_params.get("ar_v3_reply_blob_id")
-            blob_sha = call_params.get("ar_v3_reply_blob_sha256")
-            blob_size = call_params.get("ar_v3_reply_blob_size")
-            valid_pair = (
-                isinstance(candidate, str) and _V3_SHA256.fullmatch(candidate) is not None
-                and set(effect_params) == {
-                    "max_tokens", "thinking", "output_config",
-                    "ar_v3_candidate_sha256", "ar_v3_scope_id", "ar_v3_set_sha256",
-                }
-                and type(max_tokens) is int and 1 <= max_tokens <= 16_000
-                and isinstance(thinking, Mapping)
-                and dict(thinking) == {"type": "adaptive"}
-                and isinstance(output_config, Mapping)
-                and set(output_config) == {"effort", "format"}
-                and isinstance(effort, str)
-                and effort in {"low", "medium", "high", "max"}
-                and isinstance(output_format, Mapping)
-                and set(output_format) == {"type", "schema"}
-                and output_format["type"] == "json_schema"
-                and isinstance(output_format["schema"], Mapping)
-                and isinstance(scope, str) and bool(scope)
-                and isinstance(set_digest, str) and _V3_SHA256.fullmatch(set_digest) is not None
-                and isinstance(blob_id, str) and _V3_BLOB_ID.fullmatch(blob_id) is not None
-                and isinstance(blob_sha, str) and _V3_SHA256.fullmatch(blob_sha) is not None
-                and type(blob_size) is int and blob_size > 0
-                and dict(call_params) == {
-                    **dict(effect_params),
-                    "ar_v3_reply_blob_id": blob_id,
-                    "ar_v3_reply_blob_sha256": blob_sha,
-                    "ar_v3_reply_blob_size": blob_size,
-                    "call_status": row["status"],
-                }
-                and all(isinstance(row[key], str) and _V3_SHA256.fullmatch(row[key])
-                        for key in ("request_sha256", "response_sha256"))
-                and all(type(row[key]) is int and row[key] >= 0 for key in (
-                    "input_tokens", "output_tokens", "latency_ms",
-                ))
-                and row["cost_basis"] in {"measured", "estimated", "unmetered"}
-                and (row["cost_micros"] is None
-                     or type(row["cost_micros"]) is int and row["cost_micros"] >= 0)
-                and (row["cost_basis"] != "measured" or row["cost_micros"] is not None)
-                and (row["cost_basis"] != "unmetered" or row["cost_micros"] == 0)
-            )
-        if not valid_pair:
-            raise DomainError(
-                ErrorCode.ANALYSIS_INPUT_INVALID,
-                message="AR v3 model call and completed effect do not agree",
-                stage_id="text_analysis", reason="v3_call_pair_invalid",
-            )
-        check(session, authority)
-        return V3CompletedCall(
-            run_id=authority.run_id, job_id=authority.job_id,
-            attempt_id=row["attempt_id"], model_call_id=row["model_call_id"],
-            provider=row["provider"], model_id=row["model_identity"],
-            provider_mode=row["provider_mode"],
-            request_sha256=row["request_sha256"],
-            response_sha256=row["response_sha256"],
-            candidate_sha256=candidate, scope_id=scope,
-            set_sha256=set_digest, max_output_tokens=max_tokens,
-            effort=effort, reply_blob_id=blob_id,
-            reply_blob_sha256=blob_sha, reply_blob_size=blob_size,
-            input_tokens=row["input_tokens"], output_tokens=row["output_tokens"],
-            latency_ms=row["latency_ms"], cost_micros=row["cost_micros"],
-            cost_basis=row["cost_basis"], status=row["status"],
-            connection_revision_id=row["call_revision"],
-            identity_basis=row["call_basis"],
         )
 
     def completed_window_calls(

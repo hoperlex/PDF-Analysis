@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.49.0 (OpenAPI 3.1.0)
- *   sha256 0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19
+ *   AuditManager PC-01 API 1.52.0 (OpenAPI 3.1.0)
+ *   sha256 dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.49.0';
+export const CONTRACT_VERSION = '1.52.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19';
+export const CONTRACT_DIGEST = 'dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -39,6 +39,7 @@ export const SCHEMA_NAMES = [
   'AppendComparisonVersionOrderRequest',
   'AppendDecisionRequest',
   'AppendDecisionResponse',
+  'AppendPrecedentSettingRequest',
   'ApplyComparisonMatrixEditsRequest',
   'ApplyStageCardVerdictsRequest',
   'ApplyStageSheetMapRequest',
@@ -48,20 +49,6 @@ export const SCHEMA_NAMES = [
   'ApprovedSheetDiff',
   'ApprovedSheetPair',
   'ApprovedSheetPairs',
-  'ArV3BetaGroup',
-  'ArV3BetaGroupMember',
-  'ArV3BetaGroupReview',
-  'ArV3BetaGroupReviewMember',
-  'ArV3BetaPackReview',
-  'ArV3BetaPackStatus',
-  'ArV3BetaStageId',
-  'ArV3BetaVisibleCitation',
-  'ArV3BetaVisibleEvidence',
-  'ArV3BetaVisibleProposal',
-  'ArV3BetaVisibleReview',
-  'ArV3BetaVisibleTopic',
-  'ArV3GroupCostEstimateRequest',
-  'ArV3RunGroupId',
   'Assignment',
   'AssignmentDetail',
   'AssignmentEvent',
@@ -303,6 +290,7 @@ export const SCHEMA_NAMES = [
   'DecisionMemoryCaseId',
   'DecisionMemoryCasePage',
   'DecisionMemoryCaseSummary',
+  'DecisionMemoryComment',
   'DecisionMemoryContent',
   'DecisionMemoryCountRow',
   'DecisionMemoryCrop',
@@ -351,6 +339,7 @@ export const SCHEMA_NAMES = [
   'ExecutorConnectionDetail',
   'ExecutorConnectionId',
   'ExecutorConnectionList',
+  'ExecutorContextInput',
   'ExecutorEnrollmentId',
   'ExecutorEnrollmentMetadata',
   'ExecutorEnrollmentState',
@@ -413,6 +402,12 @@ export const SCHEMA_NAMES = [
   'ExecutorSshKey',
   'ExecutorSshProfile',
   'ExecutorTaskAck',
+  'ExecutorTaskContext',
+  'ExecutorTaskContextCase',
+  'ExecutorTaskContextItem',
+  'ExecutorTaskContextKind',
+  'ExecutorTaskContextRequest',
+  'ExecutorTaskContextStatus',
   'ExecutorTaskId',
   'ExecutorTaskState',
   'ExecutorTaskUsage',
@@ -422,16 +417,21 @@ export const SCHEMA_NAMES = [
   'ExtendedRunReview',
   'FailExecutorTaskRequest',
   'Finding',
+  'FindingBlockBox',
+  'FindingBlockEvidence',
   'FindingBlockLink',
   'FindingCategory',
   'FindingComparison',
   'FindingDetail',
   'FindingExecutionState',
   'FindingExecutionStatus',
+  'FindingGroundingKind',
   'FindingMatchProposal',
   'FindingObservation',
   'FindingObservationId',
+  'FindingOrigin',
   'FindingPage',
+  'FindingPrecedents',
   'FindingRef',
   'FindingUid',
   'GenerateComparisonSummaryRequest',
@@ -464,11 +464,9 @@ export const SCHEMA_NAMES = [
   'NormCurrentSnapshot',
   'NormDocument',
   'NormDocumentId',
-  'NormFindingVerification',
   'NormFragment',
   'NormHighlight',
   'NormKindCount',
-  'NormObservationCitationPartition',
   'NormParagraph',
   'NormParagraphId',
   'NormParagraphKind',
@@ -486,7 +484,6 @@ export const SCHEMA_NAMES = [
   'NormSnapshotPage',
   'NormSourceAttribution',
   'NormTextReliability',
-  'NormVerificationReport',
   'NormsSnapshotId',
   'ObservationProvenance',
   'OptimisationPass',
@@ -507,6 +504,17 @@ export const SCHEMA_NAMES = [
   'PortalCrop',
   'PortalGeometryState',
   'PortalRecognisedText',
+  'PossibleNorm',
+  'PrecedentCase',
+  'PrecedentFindingLabel',
+  'PrecedentHint',
+  'PrecedentHintCode',
+  'PrecedentLabelCode',
+  'PrecedentPassState',
+  'PrecedentSetting',
+  'PrecedentSettingList',
+  'PrecedentSettingName',
+  'PrecedentVotes',
   'PrepareComparisonClientReportRequest',
   'PresetId',
   'PresetRevisionId',
@@ -585,6 +593,7 @@ export const SCHEMA_NAMES = [
   'RunFindingBlockLinks',
   'RunId',
   'RunNormReferences',
+  'RunPrecedents',
   'RunPreset',
   'RunQueueReason',
   'RunStage',
@@ -647,6 +656,7 @@ export const SCHEMA_NAMES = [
   'SetProjectVendorListRequest',
   'SetStageModelLayoutEnabledRequest',
   'SetStagePairCompletenessRequest',
+  'SetVectorPausedRequest',
   'SetWorkCalendarDaysRequest',
   'SetWorkSchedulePlansRequest',
   'SetWorkerIntakeRequest',
@@ -767,7 +777,6 @@ export const SCHEMA_NAMES = [
   'StageUploadId',
   'StageUploadPage',
   'StageUploadPartReceipt',
-  'StartArV3BetaGroupRequest',
   'StartComparisonAiJobRequest',
   'StartComparisonAiSheetChangesRequest',
   'StartComparisonSeriesRequest',
@@ -781,13 +790,15 @@ export const SCHEMA_NAMES = [
   'TransitionAssignmentRequest',
   'UndoComparisonMatrixEditRequest',
   'UndoStageLinkRepairRequest',
-  'UngroundedReason',
   'UpdateMyProfileRequest',
   'UpdateUserRequest',
   'UploadDocumentRequest',
   'UploadDocumentVersionRequest',
   'UploadPriceListRequest',
   'UserUid',
+  'VectorControl',
+  'VectorWindow',
+  'VectorWindowState',
   'VendorListEntry',
   'VendorListId',
   'VendorListMode',
@@ -1010,6 +1021,12 @@ export type AppendDecisionResponse = {
   event: DecisionEvent;
 };
 
+/** `appendPrecedentSetting`: a new revision of a setting. The revision number is the next one of the name; the actor is the caller. */
+export type AppendPrecedentSettingRequest = {
+  setting_name: PrecedentSettingName;
+  value: Record<string, never>;
+};
+
 /**
  * «Применить сопоставления (N)»: the batch an expert drafted, with the revision the draft
  * started from. The edits are applied together or not at all.
@@ -1102,127 +1119,6 @@ export type ApprovedSheetPairs = {
   raw_evidence_seal_sha256: Sha256 | null;
   summary?: ComparisonSummary | null;
 };
-
-export type ArV3BetaGroup = {
-  analysis_profile_id: AnalysisProfileId;
-  group_id: ArV3RunGroupId;
-  members: Array<ArV3BetaGroupMember>;
-  norms_snapshot_id: NormsSnapshotId;
-  pack_sha256: string;
-  project_uid: ProjectUid;
-  prompt_bundle_id: PromptBundleId;
-  provider_mode: ProviderMode;
-  version_uid: VersionUid;
-};
-
-export type ArV3BetaGroupMember = {
-  map_sha256: string;
-  norm_retrieval_set_id: NormRetrievalSetId;
-  run_id: RunId;
-  scope_id: "F1" | "F2" | "A1" | "A2" | "S1" | "S2";
-  state: RunState;
-};
-
-export type ArV3BetaGroupReview = {
-  group_id: ArV3RunGroupId;
-  members: Array<ArV3BetaGroupReviewMember>;
-  version_uid: VersionUid;
-};
-
-export type ArV3BetaGroupReviewMember = {
-  refusal_code: string | null;
-  review: ArV3BetaVisibleReview | null;
-  review_state: "pending" | "failed" | "verification_refused" | "available";
-  run_id: RunId;
-  run_state: RunState;
-  scope_id: "F1" | "F2" | "A1" | "A2" | "S1" | "S2";
-  terminal_reason: string | null;
-};
-
-/**
- * The human attestation that travelled with the installed pack's manifest.
- *
- * A record, not a check: the server shows what the manifest says and nothing about
- * whether anyone really reviewed anything.
- */
-export type ArV3BetaPackReview = {
-  capacity: string;
-  decision_ref: string;
-  reviewed_at: string;
-  reviewer: string;
-  scope_statement: string;
-};
-
-/**
- * Whether a reviewed AR v3 beta pack is installed on this server, and its attestation.
- *
- * Everything but `state` is absent, never null, while no pack is installed. No map, set or
- * snapshot identity, digest of a scope, path or environment value is ever a property.
- */
-export type ArV3BetaPackStatus = {
-  analysis_profile_id?: AnalysisProfileId;
-  pack_sha256?: string;
-  prompt_bundle_id?: PromptBundleId;
-  review?: ArV3BetaPackReview;
-  scope_ids?: Array<("F1" | "F2" | "A1" | "A2" | "S1" | "S2")>;
-  /** `AR-V3-OPT-IN` (contract 1.38.0): present exactly when `state` is `installed`. Whether this deployment allows a start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`, off unless set to `1`). Installed is the capability to execute, read and review; this is the separate permission to start. While it is false startArV3BetaGroup and estimateArV3GroupCost answer `409 conflict` (`ar_v3_start_not_enabled`) and runs already accepted finish. A screen offers AR v3 only when the pack is installed and this is true, and never makes it the default. */
-  start_allowed?: boolean;
-  state: "installed" | "not_installed";
-};
-
-/** Profile-specific AR v3 beta review stage; the legacy nine-stage registry is unchanged. */
-export const AR_V3_BETA_STAGE_ID_VALUES = [
-  'ar_v3_citation_review',
-] as const;
-
-/** ArV3BetaStageId - the closed value set above. */
-export type ArV3BetaStageId = (typeof AR_V3_BETA_STAGE_ID_VALUES)[number];
-
-export type ArV3BetaVisibleCitation = {
-  document_id: string;
-  item_id: string;
-  label: string;
-  paragraph_id: string;
-  raw_quote: string;
-  state: string;
-};
-
-export type ArV3BetaVisibleEvidence = {
-  page_number: number;
-  quote: string;
-};
-
-export type ArV3BetaVisibleProposal = {
-  citations: Array<ArV3BetaVisibleCitation>;
-  evidence: Array<ArV3BetaVisibleEvidence>;
-  proposal_ordinal: number;
-};
-
-export type ArV3BetaVisibleReview = {
-  provisional_citations: Array<ArV3BetaVisibleProposal>;
-  rejected_proposal_count: number;
-  topics: Array<ArV3BetaVisibleTopic>;
-  withheld_proposal_count: number;
-};
-
-export type ArV3BetaVisibleTopic = {
-  item_id: string;
-  mode: string;
-  provisional_citation_count: number;
-  reason: string;
-  review_status: string;
-  source_ids: Array<string>;
-};
-
-export type ArV3GroupCostEstimateRequest = {
-  relaxed_limits?: boolean;
-  version_uid: VersionUid;
-};
-
-export type ArV3RunGroupId = string;
-
-/** The contract pattern for `ArV3RunGroupId`. Anchored; use with `new RegExp()`. */
-export const AR_V3_RUN_GROUP_ID_PATTERN = "^arg_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** `W61-DISPATCHER-01`. One assignment as it now stands. */
 export type Assignment = {
@@ -1485,6 +1381,7 @@ export type ClaimedExecutorTask = {
   access?: ExecutorModelAccess;
   cell_key?: StageCellKey;
   claim_expires_at: string;
+  context_request?: Array<ExecutorContextInput>;
   deadline_at: string;
   effort?: ModelEffort;
   images?: Array<RunnerImage>;
@@ -2835,7 +2732,7 @@ export type ComparisonRasterSize = {
 
 /** Why two versions are not compared; ``side`` when the reason is one side's. */
 export type ComparisonRefusal = {
-  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "analysis_not_comparable" | "text_unavailable" | "text_too_large";
+  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
   side: "source" | "target" | null;
 };
 
@@ -4026,6 +3923,8 @@ export type DecisionImportRow = {
 
 /** A case with everything it keeps. ``content`` is ``null`` and the lists are empty for a forgotten case (its tombstone only). */
 export type DecisionMemoryCase = {
+  /** The experts' comments on the case, oldest first (since 1.52.0). Absent when the server does not report them; present and empty when the case has none and for a forgotten case. */
+  comments?: Array<DecisionMemoryComment>;
   content: DecisionMemoryContent | null;
   crops: Array<DecisionMemoryCrop>;
   decisions: Array<DecisionMemoryDecision>;
@@ -4062,6 +3961,16 @@ export type DecisionMemoryCaseSummary = {
   status: "active" | "withdrawn" | "forgotten";
   status_changed_at: string | null;
   status_reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other" | null;
+};
+
+/**
+ * One comment an expert left on a case, as the memory keeps it (`CRIT-SEAL-52`, contract 1.52.0, ``D-682``). Like a decision it names no author:
+ * the memory holds what was decided and said, not who said it.
+ */
+export type DecisionMemoryComment = {
+  comment: string;
+  comment_id: string;
+  decided_at: string;
 };
 
 /** What the model proposed, as it stood when the decision was taken (immutable, a primary record from capture). */
@@ -4220,7 +4129,7 @@ export type DiffHunk = {
 /**
  * `UI-A-47` (contract 1.40.0): the run of a version that is in flight -- admitted and not yet terminal.
  *
- * `state` is `queued` (waiting for an executor), `running` or `validating`; a `created` run has not been admitted and a terminal run is not active. Only the standard analysis is named here: a run of an AR v3 group is not (as it is never the version's result). No progress figure is carried: the run reports its stages, and a figure of «пакет n/m» would need a plan of its own (`D-345`).
+ * `state` is `queued` (waiting for an executor), `running` or `validating`; a `created` run has not been admitted and a terminal run is not active. No progress figure is carried: the run reports its stages, and a figure of «пакет n/m» would need a plan of its own (`D-345`).
  */
 export type DocumentActiveRun = {
   run_id: RunId;
@@ -4262,7 +4171,7 @@ export type DocumentAudit = {
   undecided_finding_count: number;
 };
 
-/** The audit-state counters of a set of documents (`UI-PARITY-P0B`, `R-150n` ... `R-150u`). Every figure counts documents by their **current version only** (`R-150p`) and reads that version's **result run**: its latest run in state `published` or `partial`, ordered by `(created_at, run_id)` as `listRuns` orders them; a newer run still in flight does not displace it, and a `failed` or `cancelled` run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`); AR v3 six-run groups follow the same per-run rule for now (`R-150t`). A document is in exactly one of four states, so `document_count` is `not_run + clean + awaiting_decision + checked`. `partial` is not a fifth state: it counts the documents, in any of the four, whose result run is `partial` (`R-150s`). */
+/** The audit-state counters of a set of documents (`UI-PARITY-P0B`, `R-150n` ... `R-150u`). Every figure counts documents by their **current version only** (`R-150p`) and reads that version's **result run**: its latest run in state `published` or `partial`, ordered by `(created_at, run_id)` as `listRuns` orders them; a newer run still in flight does not displace it, and a `failed` or `cancelled` run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`). A document is in exactly one of four states, so `document_count` is `not_run + clean + awaiting_decision + checked`. `partial` is not a fifth state: it counts the documents, in any of the four, whose result run is `partial` (`R-150s`). */
 export type DocumentAuditCounts = {
   /** Documents with a result run and at least one finding whose current verdict is undecided (`pending` or `needs_manual_review`). The red badge «ждут решения» (`R-150o`). */
   awaiting_decision: number;
@@ -4381,7 +4290,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.49.0";
+  contract_version: "1.52.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4454,7 +4363,7 @@ export type ExecutionQueueItem = {
 
 export type ExecutionQueuePage = {
   items: Array<ExecutionQueueItem>;
-  /** `D-395` (contract 1.43.0): how many failed jobs (`failed` or `dead_letter`) nothing has answered yet -- those with no later job for a run of the same document version and the same analysis (the standard analysis, or the AR v3 beta one) -- over all history, whatever the period or state filter of this page. The original's «ошибки» figure: a failure drops out by being retried or superseded, not by ageing. Independent of the filters, so a one-row page carries it too. */
+  /** `D-395` (contract 1.43.0): how many failed jobs (`failed` or `dead_letter`) nothing has answered yet -- those with no later job for a run of the same document version -- over all history, whatever the period or state filter of this page. The original's «ошибки» figure: a failure drops out by being retried or superseded, not by ageing. Independent of the filters, so a one-row page carries it too. */
   live_failure_count?: number;
   overview?: Array<ExecutionQueueStateCount>;
   page: PageInfo;
@@ -4642,6 +4551,17 @@ export const EXECUTOR_CONNECTION_ID_PATTERN = "^exc_[0-9A-HJKMNP-TV-Z]{26}$";
 export type ExecutorConnectionList = {
   items: Array<ExecutorConnection>;
   pinned_models: Array<ExecutorPinnedModel>;
+};
+
+/**
+ * `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2): one candidate text of a `review:main` task the agent may ask reference data for
+ * (`getExecutorTaskContext`). `input_id` is the task's own name for the text, `text_sha256` the digest of it, `section` the section the
+ * run's version belongs to.
+ */
+export type ExecutorContextInput = {
+  input_id: string;
+  section: string;
+  text_sha256: Sha256;
 };
 
 export type ExecutorEnrollmentId = string;
@@ -5271,6 +5191,69 @@ export type ExecutorTaskAck = {
   task_id: ExecutorTaskId;
 };
 
+/**
+ * `getExecutorTaskContext` (contract 1.51.0): the reference data of a task, laid out by `input_id`. `reason` is present exactly when
+ * `status` is `unavailable`, and `context_sha256` exactly when it is `available`: the digest of `items` as the stand delivered them, which
+ * the agent echoes in `submitExecutorTaskAnswer`. `not_fitted` counts the cases that did not fit the budget of characters of the task.
+ */
+export type ExecutorTaskContext = {
+  context_sha256?: Sha256;
+  items: Array<ExecutorTaskContextItem>;
+  kind: ExecutorTaskContextKind;
+  not_fitted: number;
+  reason?: string;
+  status: ExecutorTaskContextStatus;
+};
+
+/**
+ * One earlier decision, with the texts of its case. The cases are those of the same section and data class, of any project, never of
+ * this run, never withdrawn or forgotten (the policy of the consent).
+ */
+export type ExecutorTaskContextCase = {
+  case_id: DecisionMemoryCaseId;
+  category: string;
+  comment?: string;
+  finding_text: string;
+  recommendation_text: string;
+  similarity: number;
+  verdict: "accepted" | "rejected";
+};
+
+/** The cases found for one `input_id` of the task's `context_request`, at most three, the most similar first. */
+export type ExecutorTaskContextItem = {
+  cases: Array<ExecutorTaskContextCase>;
+  input_id: string;
+};
+
+/**
+ * What an agent asks the stand for: the decisions of experts on similar findings (`similar_cases`) or the approved patterns of rejection
+ * (`patterns`, wave 5).
+ */
+export const EXECUTOR_TASK_CONTEXT_KIND_VALUES = [
+  'similar_cases',
+  'patterns',
+] as const;
+
+/** ExecutorTaskContextKind - the closed value set above. */
+export type ExecutorTaskContextKind = (typeof EXECUTOR_TASK_CONTEXT_KIND_VALUES)[number];
+
+/** The body of `getExecutorTaskContext`: the kind of reference data. One call per kind and task is paid for; a repeat answers the same. */
+export type ExecutorTaskContextRequest = {
+  kind: ExecutorTaskContextKind;
+};
+
+/**
+ * `available`: the answer holds the reference data. `unavailable`: the stand has none to give and says why in `reason` (while the
+ * night encoder is the only one, `until_move`); the agent calls the model without it.
+ */
+export const EXECUTOR_TASK_CONTEXT_STATUS_VALUES = [
+  'available',
+  'unavailable',
+] as const;
+
+/** ExecutorTaskContextStatus - the closed value set above. */
+export type ExecutorTaskContextStatus = (typeof EXECUTOR_TASK_CONTEXT_STATUS_VALUES)[number];
+
 export type ExecutorTaskId = string;
 
 /** The contract pattern for `ExecutorTaskId`. Anchored; use with `new RegExp()`. */
@@ -5344,6 +5327,7 @@ export type FailExecutorTaskRequest = {
 
 /** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. `current_verdict_carried_from` (`UI-A-73`, contract 1.39.0) names where the decision that carries `current_verdict` came from, when an expert carried it over from an earlier version's finding; it is absent when the verdict was decided directly, was withdrawn, or was carried before migration `0058`. A later verdict an expert gives the finding replaces it, and a comment leaves it standing. */
 export type Finding = {
+  block_evidence?: Array<FindingBlockEvidence>;
   category: FindingCategory;
   current_verdict: Verdict;
   current_verdict_carried_from?: DecisionCarriedFrom;
@@ -5358,6 +5342,7 @@ export type Finding = {
   /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation. */
   norm_citations?: Array<NormCitation>;
   observation: FindingObservation;
+  origin?: FindingOrigin;
   project_uid: ProjectUid;
   /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
   required_value?: string;
@@ -5367,13 +5352,35 @@ export type Finding = {
   version_uid: VersionUid;
 };
 
+/** A box on a page, normalised to the page (0 to 1), the origin at the top left. */
+export type FindingBlockBox = {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+};
+
+/**
+ * `CRIT-SEAL-50` (contract 1.51.0): one block of the portal that holds a finding's evidence -- the place, never the content: the
+ * block is proved to be in the run's geometry and its crop to match, and the quote, when there is one, to be in the block's recognised
+ * text. `Evidence` is untouched.
+ */
+export type FindingBlockEvidence = {
+  bbox_norm: FindingBlockBox;
+  crop_sha256: Sha256;
+  ordinal: number;
+  page_number: number;
+  portal_block_id: PortalBlockId;
+  recognised_quote?: string;
+};
+
 /** `UI-PARITY-C6` (contract 1.41.0): the portal blocks that hold one finding's evidence. */
 export type FindingBlockLink = {
   finding_uid: FindingUid;
   portal_block_ids: Array<PortalBlockId>;
 };
 
-/** Closed finding categories: seven prior categories and five v3 normative categories. */
+/** Closed finding categories: seven prior categories, five v3 normative categories and, since 1.51.0, two categories of the groups of candidates of the extended review published as findings (`drawing_discrepancy`, `cross_source`). */
 export const FINDING_CATEGORY_VALUES = [
   'internal_contradiction',
   'explicit_placeholder',
@@ -5387,6 +5394,8 @@ export const FINDING_CATEGORY_VALUES = [
   'accessibility',
   'insulation',
   'sound',
+  'drawing_discrepancy',
+  'cross_source',
 ] as const;
 
 /** FindingCategory - the closed value set above. */
@@ -5403,6 +5412,7 @@ export type FindingComparison = {
 
 /** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. `current_verdict_carried_from` (`UI-A-73`) is as on `Finding`. */
 export type FindingDetail = {
+  block_evidence?: Array<FindingBlockEvidence>;
   category: FindingCategory;
   current_verdict: Verdict;
   current_verdict_carried_from?: DecisionCarriedFrom;
@@ -5420,6 +5430,7 @@ export type FindingDetail = {
   /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation. */
   norm_citations?: Array<NormCitation>;
   observation: FindingObservation;
+  origin?: FindingOrigin;
   project_uid: ProjectUid;
   /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
   required_value?: string;
@@ -5447,6 +5458,18 @@ export const FINDING_EXECUTION_STATUS_VALUES = [
 /** FindingExecutionStatus - the closed value set above. */
 export type FindingExecutionStatus = (typeof FINDING_EXECUTION_STATUS_VALUES)[number];
 
+/**
+ * `CRIT-SEAL-50` (contract 1.51.0, migration ``0064``): how an observation is anchored. `text_span`: a span of the text layer, as every
+ * observation was until now. `portal_block`: a block of the portal's geometry, proved to be in the run's own geometry (plan-v5 section 4).
+ */
+export const FINDING_GROUNDING_KIND_VALUES = [
+  'text_span',
+  'portal_block',
+] as const;
+
+/** FindingGroundingKind - the closed value set above. */
+export type FindingGroundingKind = (typeof FINDING_GROUNDING_KIND_VALUES)[number];
+
 /** A proposed label for a finding of either run; never a decision or a carryover. */
 export type FindingMatchProposal = {
   basis: "exact_issue_and_quotes" | "quotes_absent_from_paired_sheets" | "quote_still_on_paired_sheet" | "evidence_sheet_unpaired" | "evidence_over_limit" | "no_exact_source_match";
@@ -5458,9 +5481,11 @@ export type FindingMatchProposal = {
 
 export type FindingObservation = {
   category: FindingCategory;
+  /** The text spans the observation quotes. At least one, unless grounding_kind is portal_block (since 1.52.0): a block-grounded observation has no text span, and its blocks are listed in block_evidence of the finding. */
   evidence: Array<Evidence>;
   finding_observation_id: FindingObservationId;
   finding_text: string;
+  grounding_kind?: FindingGroundingKind;
   /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. */
   norm_citations?: Array<NormCitation>;
   proposed_severity?: Severity;
@@ -5479,9 +5504,36 @@ export type FindingObservationId = string;
 /** The contract pattern for `FindingObservationId`. Anchored; use with `new RegExp()`. */
 export const FINDING_OBSERVATION_ID_PATTERN = "^fobs_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/**
+ * `CRIT-SEAL-50` (contract 1.51.0): where a finding of «Разбор» comes from, the «Источник» chip: `text` (the text analysis), `drawing`
+ * (a drawing candidate of the extended review) or `cross_check` (the cross-check of sources).
+ */
+export const FINDING_ORIGIN_VALUES = [
+  'text',
+  'drawing',
+  'cross_check',
+] as const;
+
+/** FindingOrigin - the closed value set above. */
+export type FindingOrigin = (typeof FINDING_ORIGIN_VALUES)[number];
+
 export type FindingPage = {
   items: Array<Finding>;
   page: PageInfo;
+};
+
+/**
+ * `getFindingPrecedents` (contract 1.51.0): the card of a finding -- its label, its at most two hints, the similar cases and the possible
+ * norms. `available` is false while the pass has not given this finding a result; `label` is then absent.
+ */
+export type FindingPrecedents = {
+  available: boolean;
+  cases: Array<PrecedentCase>;
+  finding_uid: FindingUid;
+  hints: Array<PrecedentHint>;
+  label?: PrecedentFindingLabel;
+  possible_norms: Array<PossibleNorm>;
+  run_id: RunId;
 };
 
 export type FindingRef = {
@@ -5787,13 +5839,6 @@ export type NormDocumentId = string;
 /** The contract pattern for `NormDocumentId`. Anchored; use with `new RegExp()`. */
 export const NORM_DOCUMENT_ID_PATTERN = "^ndoc_[0-9A-HJKMNP-TV-Z]{26}$";
 
-/** Citation partitions of one published finding; canonical and member observations are proved separately. */
-export type NormFindingVerification = {
-  canonical: NormObservationCitationPartition;
-  finding_uid: FindingUid;
-  merged_observations: Array<NormObservationCitationPartition>;
-};
-
 /**
  * `NORM-Q01`. A plain-text excerpt of the canonical paragraph text, with the matched
  * spans as offsets rather than markup.
@@ -5812,15 +5857,6 @@ export type NormHighlight = {
 export type NormKindCount = {
   document_count: number;
   kind: string;
-};
-
-/** One canonical or merged observation with its independently certified citation partition. A zero partition is explicit, never inferred from an empty SQL result. */
-export type NormObservationCitationPartition = {
-  finding_observation_id: FindingObservationId;
-  /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. */
-  norm_citations: Array<NormCitation>;
-  required_value?: string;
-  stated_value?: string;
 };
 
 export type NormParagraph = {
@@ -5977,20 +6013,6 @@ export const NORM_TEXT_RELIABILITY_VALUES = [
 
 /** NormTextReliability - the closed value set above. */
 export type NormTextReliability = (typeof NORM_TEXT_RELIABILITY_VALUES)[number];
-
-/** Read-time report for a v3 run only. A v1/v2 run is not found. A partial v3 run still reports its typed stage error; no unverified or uncertified partition is exposed. textless_pages is context only and never citation evidence. */
-export type NormVerificationReport = {
-  error_code?: ErrorCode;
-  findings: Array<NormFindingVerification>;
-  norm_retrieval_set_id: NormRetrievalSetId;
-  norms_snapshot_id: NormsSnapshotId;
-  run_id: RunId;
-  status: "complete" | "partial";
-  textless_pages: Array<number>;
-  withheld_by_reason: {
-    [key: string]: number;
-  };
-};
 
 export type NormsSnapshotId = string;
 
@@ -6225,6 +6247,140 @@ export type PortalRecognisedText = {
   flags: Array<string>;
   quote_source: "recognised";
   text: string;
+};
+
+/**
+ * A paragraph of the norms the run already holds that the finding may rest on («Возможные нормы»): from the same paragraphs the
+ * critic gets, never from the encoder.
+ */
+export type PossibleNorm = {
+  clause_number: string | null;
+  designation: string;
+  norm_document_id: NormDocumentId;
+  norm_paragraph_id: NormParagraphId;
+  page_label: number;
+};
+
+/** One similar case on the card of a finding. */
+export type PrecedentCase = {
+  case_id: DecisionMemoryCaseId;
+  category: string;
+  comment?: string;
+  finding_text: string;
+  similarity: number;
+  verdict: "accepted" | "rejected";
+};
+
+/**
+ * What the pass gave one finding of a run at `revision`. `critic_reviewed` is false for a finding the AI critic did not review: its
+ * rejection labels are then shown neutrally and it is not in the queue.
+ */
+export type PrecedentFindingLabel = {
+  critic_reviewed: boolean;
+  finding_uid: FindingUid;
+  hint_codes: Array<PrecedentHintCode>;
+  label: PrecedentLabelCode;
+  revision: number;
+  votes: PrecedentVotes;
+};
+
+/**
+ * A hint of the card. `text` is the words of an expert (the comment of a rejecting decision for `p1`), never a model's; `case_id` is the
+ * case it comes from.
+ */
+export type PrecedentHint = {
+  case_id?: DecisionMemoryCaseId;
+  code: PrecedentHintCode;
+  text?: string;
+};
+
+/**
+ * A hint of the card (plan-v5 section 2.5; at most two per finding, never a model's text): `p1` the reason of the rejections, `p4` the
+ * critic disagrees, `p5` the history of the document.
+ */
+export const PRECEDENT_HINT_CODE_VALUES = [
+  'p1',
+  'p4',
+  'p5',
+] as const;
+
+/** PrecedentHintCode - the closed value set above. */
+export type PrecedentHintCode = (typeof PRECEDENT_HINT_CODE_VALUES)[number];
+
+/**
+ * The label of a finding (plan-v5 section 2.3). `none` and `few` show nothing in the row. `cancel_suggested` is a part of
+ * `often_rejected`: it additionally needs the critic's review and no veto, and it is the one that fills the queue «Рекомендовано снять».
+ */
+export const PRECEDENT_LABEL_CODE_VALUES = [
+  'none',
+  'few',
+  'often_rejected',
+  'cancel_suggested',
+  'likely_accepted',
+  'mixed',
+] as const;
+
+/** PrecedentLabelCode - the closed value set above. */
+export type PrecedentLabelCode = (typeof PRECEDENT_LABEL_CODE_VALUES)[number];
+
+/** The state of the «Прецеденты» pass of a run. */
+export const PRECEDENT_PASS_STATE_VALUES = [
+  'pending',
+  'running',
+  'done',
+  'failed',
+] as const;
+
+/** PrecedentPassState - the closed value set above. */
+export type PrecedentPassState = (typeof PRECEDENT_PASS_STATE_VALUES)[number];
+
+/**
+ * One revision of one setting. `value` is an object: `{"enabled": boolean}` for `one_list` and `critic_context`, `{"start", "end", "tz"}`
+ * for `vector_window`, the lane's own shape for the others.
+ */
+export type PrecedentSetting = {
+  actor_user_uid: UserUid;
+  created_at: string;
+  revision: number;
+  setting_name: PrecedentSettingName;
+  value: Record<string, never>;
+};
+
+/**
+ * `listPrecedentSettings`: the revision in force of each setting that was ever journalled (`current`, at most one per name) and the
+ * journal, newest first (`events`).
+ */
+export type PrecedentSettingList = {
+  current: Array<PrecedentSetting>;
+  events: Array<PrecedentSetting>;
+};
+
+/**
+ * The names of the journal of settings: the three switches (`one_list`, `critic_context`, `section_labels`; all off while nothing is
+ * journalled), the stop words of the owner, the night window and the thresholds.
+ */
+export const PRECEDENT_SETTING_NAME_VALUES = [
+  'one_list',
+  'critic_context',
+  'section_labels',
+  'stop_words',
+  'vector_window',
+  'thresholds',
+] as const;
+
+/** PrecedentSettingName - the closed value set above. */
+export type PrecedentSettingName = (typeof PRECEDENT_SETTING_NAME_VALUES)[number];
+
+/**
+ * The counts behind a label: the decisions counted (`total`), how many rejected and accepted, how many of them are independent (not
+ * given under a label to reject, plan-v5 section 2.1) and from how many projects.
+ */
+export type PrecedentVotes = {
+  accepted: number;
+  independent: number;
+  projects: number;
+  rejected: number;
+  total: number;
 };
 
 /**
@@ -6980,7 +7136,7 @@ export type RunCostEstimate = {
   relaxed_limits: boolean;
   reused_stage_ids?: Array<StageId>;
   routing_rule_revision_id?: ExecutorRoutingRuleRevisionId;
-  scope: "run" | "ar_v3_group";
+  scope: "run";
   stage_plan_digest?: Sha256;
   start_from_run_id?: RunId;
   start_stage_id?: StageId;
@@ -7058,6 +7214,19 @@ export type RunNormReferences = {
   version_uid: VersionUid;
 };
 
+/**
+ * `getRunPrecedents` (contract 1.51.0): the labels of the findings of a run, and with them the queue (the items whose `label` is
+ * `cancel_suggested`). `available` is false while the run has no result of the pass (the vectors are computed at night or are paused): the
+ * screen then shows one line over the list and no label in a row. `pass_state` and `revision` are absent until a pass has started.
+ */
+export type RunPrecedents = {
+  available: boolean;
+  items: Array<PrecedentFindingLabel>;
+  pass_state?: PrecedentPassState;
+  revision?: number;
+  run_id: RunId;
+};
+
 /** ANALYSIS-PRESETS-01: the preset revision a run was started with: the preset, the number of the revision and the name it had then (a later rename does not change it). */
 export type RunPreset = {
   name: string;
@@ -7111,7 +7280,7 @@ export type RunStageCell = {
  * A chip of a run: a reader's name for the phase or phases of code that do one kind of work. The eight chips in the order the
  * rail draws them -- `preparation` (the three PC-01 preparation stages), `text` (analysis of the text), `blocks` (analysis of the
  * blocks), `cross_check` (the complex cross-check and the parameter passport), `merge` (the deterministic merge), `norms` (the
- * norms), `review` (the critic) and `correction` (the refinement) -- and `ar_v3`, the one stage of the separate AR v3 profile.
+ * norms), `review` (the critic) and `correction` (the refinement).
  * A chip order is a display order, not the order of the stage graph.
  */
 export const RUN_STAGE_CHIP_VALUES = [
@@ -7123,7 +7292,6 @@ export const RUN_STAGE_CHIP_VALUES = [
   'norms',
   'review',
   'correction',
-  'ar_v3',
 ] as const;
 
 /** RunStageChip - the closed value set above. */
@@ -7209,12 +7377,16 @@ export type RunStages = {
  * possible and, when it is, the digest of the estimate to confirm. `access` is the total: all cells on a subscription (the
  * estimate is 0 and the press of the button is the consent), all on an API key, or mixed (one dialog with the estimate by
  * model). An unavailable cell makes `ready` false and names itself in `cells`.
+ *
+ * `extended_plan` (contract 1.50.0): the extended plan a start would run under -- `v2`, `v3`, or `null` when the extended analysis is off. Under `v2` the critic and the refinement rows are not called, and a client labels them from this field.
  */
 export type RunStartReadiness = {
   access?: "subscription" | "api" | "mixed";
   cells: Array<RunStartReadinessCell>;
   estimate_digest?: Sha256;
   estimated_cost_micros?: number;
+  /** `AR-V3-BE-RM-01` (contract 1.50.0): the extended plan a start would run under -- `v2`, `v3`, or `null` when the extended analysis is off (text only). Read from the same server setting the estimate prices with, so it cannot disagree with it. Under `v2` the critic and the refinement rows are not called, and a client labels them from this field. Absent from an answer of a server older than 1.50.0. */
+  extended_plan?: "v2" | "v3" | null;
   kit?: StageModelKit;
   ready: boolean;
   recommended_ceiling_micros?: number;
@@ -7268,13 +7440,7 @@ export type RunStateCount = {
 };
 
 export type RunStatus = {
-  /** `AR-V3-OPT-IN` (contract 1.38.0): which analysis produced the run -- `standard` (the text profile the section table routes the version to) or `ar_v3_beta` (one run of a six-run AR v3 group). Derived from the run's pinned profile and bundle pair and from nothing else. A run holds exactly one analysis; no field of a run mixes the results of the two. */
-  analysis_kind?: "standard" | "ar_v3_beta";
   analysis_profile_id?: AnalysisProfileId;
-  /** `AR-V3-OPT-IN`: the AR v3 group the run is one of; present for a member of a group only. */
-  ar_v3_group_id?: ArV3RunGroupId;
-  /** `AR-V3-OPT-IN`: the scope (`F1` .. `S2`) the run covers in its AR v3 group; present for a member of a group only. */
-  ar_v3_scope_id?: "F1" | "F2" | "A1" | "A2" | "S1" | "S2";
   /** `EXEC2-SEAL-2`: the connection revision and model dispatch bound the run to; present exactly when `binding_state` is `bound`. `executor` then names the same connection. */
   binding?: ExecutorBinding;
   /** `EXEC2-SEAL-2` (ADR-0026 decision 12): whether the run's executor was frozen at start (`frozen_at_start`), is still to be chosen (`pending`) or was chosen at dispatch (`bound`). Absent is read as `frozen_at_start`. */
@@ -7284,7 +7450,7 @@ export type RunStatus = {
   cost_micros?: number;
   created_at: string;
   /** The explicitly recorded missing or degraded stage set. Non-empty exactly when the run is `partial`; a `published` run carries none. */
-  degradation_set?: Array<(StageId | ArV3BetaStageId)>;
+  degradation_set?: Array<StageId>;
   /** Ungrounded model items rejected by the grounding gate. They are not findings and appear in no finding list. */
   diagnostic_observation_count?: number;
   /** `UI-A-65` / `UI-B-45` (contract 1.40.0): the run's estimated finish, by the rule and the function of `ExecutionQueueItem.estimated_finish_at` (`R-151u`) -- its job's first attempt plus the median duration of at least three recent completed runs of the same analysis profile and a page count within a quarter of its own. Present only while the run's job is leased or running and has started; absent for a queued, waiting or finished run, and without enough similar history. Never invented; the estimate can already lie in the past for a run that is taking longer than the usual one. */
@@ -7354,6 +7520,7 @@ export const RUN_WAIT_CAUSE_VALUES = [
   'model_cooling_down',
   'not_on_any_server',
   'at_capacity',
+  'vector_window',
 ] as const;
 
 /** RunWaitCause - the closed value set above. */
@@ -7815,6 +7982,11 @@ export type SetStageModelLayoutEnabledRequest = {
 
 export type SetStagePairCompletenessRequest = {
   completeness: "full" | "partial";
+};
+
+/** `setVectorPaused`: pause the vectors or resume them. The window does not start on a pause and the queue keeps filling. */
+export type SetVectorPausedRequest = {
+  paused: boolean;
 };
 
 /** `R-152d`: days made days off or working days; ``default`` returns a day to the week's rule. */
@@ -8701,7 +8873,7 @@ export type StageState = {
   /** The typed reason a non-succeeded stage carries. Null exactly when the status is `succeeded`. */
   error_code?: string | null;
   finished_at?: string | null;
-  stage_id: StageId | ArV3BetaStageId;
+  stage_id: StageId;
   stage_version?: string;
   started_at?: string | null;
   status: StageStatus;
@@ -8904,14 +9076,6 @@ export type StageUploadPartReceipt = {
   upload_id: StageUploadId;
 };
 
-export type StartArV3BetaGroupRequest = {
-  /** The expert confirms a fresh estimate and a sufficient explicit ceiling before this start may spend. The approved cap applies independently of the raised output-limit choice. */
-  cost_consent?: RunCostConsent;
-  /** Default off. False requests up to16,000 output tokens per scope; true requests up to64,000. Fresh approved group cost is allocated among its six Runs and applies in either mode. Historical accepted commands retain their original policy; provider bounds still apply. */
-  relaxed_limits?: boolean;
-  version_uid: VersionUid;
-};
-
 /** Starts an AI job. Refused before anything is read or written when the versions module is off. */
 export type StartComparisonAiJobRequest = {
   consent: ComparisonAiConsent;
@@ -8982,6 +9146,7 @@ export type StartStageChainRunRequest = {
  */
 export type SubmitExecutorTaskAnswerRequest = {
   access?: ExecutorModelAccess;
+  context_sha256?: Sha256;
   input_tokens?: number;
   model: string;
   output_text: string;
@@ -9032,25 +9197,6 @@ export type UndoStageLinkRepairRequest = {
   base_revision_id: StageLinkRevisionId;
 };
 
-/** Closed deterministic observation-withholding reasons; a withheld item is never a published finding. */
-export const UNGROUNDED_REASON_VALUES = [
-  'quotation_absent',
-  'quotation_on_different_page',
-  'span_outside_page',
-  'span_outside_block',
-  'span_length_mismatch',
-  'quote_in_recognised_text',
-  'norm_label_unknown',
-  'norm_quote_too_short',
-  'norm_quote_ambiguous',
-  'norm_quote_absent',
-  'norm_value_not_in_quote',
-  'stated_value_not_in_evidence',
-] as const;
-
-/** UngroundedReason - the closed value set above. */
-export type UngroundedReason = (typeof UNGROUNDED_REASON_VALUES)[number];
-
 /** The signed-in account's own names, and -- while its profile is incomplete -- the e-mail address that becomes its login. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied. */
 export type UpdateMyProfileRequest = {
   /** Required to complete a profile whose login is not yet an e-mail address; it becomes the login in the same write that stores the names. A complete profile's login is fixed: an `email` other than the current login is `validation_failed` with `details.field: login`. */
@@ -9100,6 +9246,42 @@ export type UserUid = string;
 
 /** The contract pattern for `UserUid`. Anchored; use with `new RegExp()`. */
 export const USER_UID_PATTERN = "^usr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * `getVectorControl` and the answer of `setVectorPaused` (contract 1.51.0): whether the vectors are paused and since when, the state of
+ * the night window and the window itself. The counts of queued and poisoned jobs are for an administrator and absent for an expert.
+ */
+export type VectorControl = {
+  paused: boolean;
+  paused_since?: string;
+  pending_intents?: number;
+  poisoned_intents?: number;
+  window: VectorWindow;
+  window_changed_at: string;
+  window_reason?: string;
+  window_state: VectorWindowState;
+};
+
+/** The configured window: local `start` and `end` (`HH:MM`) in the IANA zone `tz` (the setting `vector_window`). */
+export type VectorWindow = {
+  end: string;
+  start: string;
+  tz: string;
+};
+
+/**
+ * The night window of the vectors: `closed`; `draining` (no new run is issued, the running ones finish); `encoding` (the encoder runs);
+ * `skipped` (the window did not take place, `window_reason` says why).
+ */
+export const VECTOR_WINDOW_STATE_VALUES = [
+  'closed',
+  'draining',
+  'encoding',
+  'skipped',
+] as const;
+
+/** VectorWindowState - the closed value set above. */
+export type VectorWindowState = (typeof VECTOR_WINDOW_STATE_VALUES)[number];
 
 /** One entry: the material or equipment group it covers, the allowed vendor, a note. */
 export type VendorListEntry = {

@@ -281,26 +281,23 @@ class ExecutionRepository:
     def live_failure_count(self, session: Session) -> int:
         """`D-395` (contract 1.43.0): the failed jobs that are still the last word on their document version.
 
-        A job in ``failed`` or ``dead_letter`` counts unless a **later job exists for a run of the same version and of the
-        same analysis** (the standard analysis, or the AR v3 beta one): someone re-audited it, started from a stage, or
-        simply ran it again, and the failure has been answered -- whatever became of that later job. If the later job failed
-        too, it is the one that counts. Every run has exactly one job (``uq_job_run_id``) and a re-audit makes a new run, so
-        "a later job for the same run" -- the original's "retried" -- is read as a later job of the same version, which is
-        what a retry is here. Over all history, with no window: a failure ages out only by being answered.
+        A job in ``failed`` or ``dead_letter`` counts unless a **later job exists for a run of the same version**:
+        someone re-audited it, started from a stage, or simply ran it again, and the failure has been answered --
+        whatever became of that later job. If the later job failed too, it is the one that counts. Every run has
+        exactly one job (``uq_job_run_id``) and a re-audit makes a new run, so "a later job for the same run" -- the
+        original's "retried" -- is read as a later job of the same version, which is what a retry is here. Over all
+        history, with no window: a failure ages out only by being answered.
         """
-        from auditmanager.runs.public import STANDARD_RUN_SQL
-
-        kinded = f"(SELECT r.run_id, r.version_uid, ({STANDARD_RUN_SQL}) AS standard FROM audit_run r)"
-        count = session.execute(text(f"""
+        count = session.execute(text("""
             SELECT count(*)
               FROM job j
-              JOIN {kinded} k ON k.run_id = j.run_id
+              JOIN audit_run r ON r.run_id = j.run_id
              WHERE j.state IN ('failed', 'dead_letter')
                AND NOT EXISTS (
                    SELECT 1
                      FROM job n
-                     JOIN {kinded} nk ON nk.run_id = n.run_id
-                    WHERE nk.version_uid = k.version_uid AND nk.standard = k.standard
+                     JOIN audit_run nr ON nr.run_id = n.run_id
+                    WHERE nr.version_uid = r.version_uid
                       AND (n.created_at, n.job_id) > (j.created_at, j.job_id)
                )
         """)).scalar_one()

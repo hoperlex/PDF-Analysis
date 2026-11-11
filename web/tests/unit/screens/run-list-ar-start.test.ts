@@ -1,4 +1,7 @@
-/** A confirmed АР version starts an ordinary Run with the original-source text profile. */
+/**
+ * A confirmed АР version starts an ordinary Run with the original-source text profile: its start form is the form of every
+ * other section, with no choice of analysis, and its run table names no analysis.
+ */
 
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -8,12 +11,10 @@ import { queryKeys } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { RunList } from '@/widgets/run-list';
 
-import { NOT_INSTALLED_PACK, installedPackFixture } from '../analysis-settings/ar-v3-beta-pack-fixtures';
 import { PROJECT_UID, VERSION_UID, runStatus } from '../review/fixtures';
 import { newClient, renderScreen } from './harness';
 
 type Client = ReturnType<typeof newClient>;
-const PACK = queryKeys.runs.arV3PackStatus();
 
 function listClient(withRuns: boolean): Client {
   const client = newClient();
@@ -32,27 +33,29 @@ function markupOf(client: Client, sectionCode: ProjectSection | null | undefined
 
 describe('the default АР start', () => {
   for (const withRuns of [false, true]) {
-    for (const pack of ['installed', 'not installed', 'loading'] as const) {
-      it(`offers an ordinary Run when ${withRuns ? 'runs exist' : 'no run exists'} and the old pack is ${pack}`, () => {
-        const client = listClient(withRuns);
-        if (pack === 'installed') client.setQueryData(PACK, installedPackFixture());
-        if (pack === 'not installed') client.setQueryData(PACK, NOT_INSTALLED_PACK);
-        const markup = markupOf(client, 'AR');
-        expect(markup).toContain('data-start-run-control="true"');
-        // `RUN-START-ONE-01a`: one «Запустить», enabled (it reads the estimate itself), and no estimate step before it.
-        expect(markup).toMatch(/<button type="button" class="am-button" data-start-run-button="">Запустить<\/button>/);
-        expect(markup).not.toContain('Оценить стоимость');
-        expect(markup).not.toContain('data-cost-approval'); // no estimate, so no agreement yet
-        // `af581631`: the temporary statistics mode of the ordinary start is a «▾» item, not a tick-box
-        // (the six-check control still says «Повышенные лимиты ИИ-анализа»).
-        expect(markup).toContain('>Без денежного потолка (сбор статистики)</button>');
-        expect(markup).not.toContain('Временный режим сбора статистики');
-        expect(markup).not.toContain('Повышенные лимиты ИИ-анализа');
-        expect(markup).not.toContain('data-ar-v3-group-start');
-        expect(markup).not.toContain('data-ar-start-note');
-      });
-    }
+    it(`offers an ordinary Run when ${withRuns ? 'runs exist' : 'no run exists'}`, () => {
+      const markup = markupOf(listClient(withRuns), 'AR');
+      expect(markup).toContain('data-start-run-control="true"');
+      // `RUN-START-ONE-01a`: one «Запустить», enabled (it reads the estimate itself), and no estimate step before it.
+      expect(markup).toMatch(/<button type="button" class="am-button" data-start-run-button="">Запустить<\/button>/);
+      expect(markup).not.toContain('Оценить стоимость');
+      expect(markup).not.toContain('data-cost-approval'); // no estimate, so no agreement yet
+      // `af581631`: the temporary statistics mode of the ordinary start is a «▾» item, not a tick-box.
+      expect(markup).toContain('>Без денежного потолка (сбор статистики)</button>');
+      expect(markup).not.toContain('Временный режим сбора статистики');
+      expect(markup).not.toContain('Повышенные лимиты ИИ-анализа');
+      expect(markup).not.toContain('data-ar-start-note');
+      // No choice of analysis: no radio group and no wrapper of one around the form.
+      expect(markup).not.toContain('data-analysis-start');
+      expect(markup).not.toContain('type="radio"');
+    });
   }
+
+  it('names no analysis in the run table of an АР version, and links no group review', () => {
+    const markup = markupOf(listClient(true), 'AR');
+    expect(markup).not.toContain('data-run-analysis');
+    expect(markup).not.toContain('data-run-group-review');
+  });
 
   it('labels АР and another section accurately', () => {
     expect(markupOf(listClient(true), 'AR')).toContain('Запустить анализ АР');
@@ -66,6 +69,5 @@ it('other sections also retain the ordinary start', () => {
     expect(markup).toContain('data-start-run-control="true"');
     expect(markup).toMatch(/<button type="button" class="am-button" data-start-run-button="">Запустить<\/button>/);
     expect(markup).not.toContain('Оценить стоимость');
-    expect(markup).not.toContain('data-ar-v3-group-start');
   }
 });

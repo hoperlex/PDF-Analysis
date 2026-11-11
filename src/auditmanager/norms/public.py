@@ -13,6 +13,14 @@ from auditmanager.norms.paragraph_context import (
     norm_paragraph_context_digest,
     read_norm_paragraph_context,
 )
+from auditmanager.norms.page_images import (  # M7-NORM-PNG
+    MAX_IMAGES_PER_TASK as MAX_NORM_PAGE_IMAGES_PER_TASK,
+    NormPageImage,
+    NormPageImages,
+    NormPageRender,
+    PageImageSelection,
+    PageRenderRefused,
+)
 
 if TYPE_CHECKING:
     from auditmanager.analysis.public import TextLayer
@@ -212,6 +220,12 @@ def reference_pages_from_text_layer(
 
 
 __all__ = [
+    "MAX_NORM_PAGE_IMAGES_PER_TASK",
+    "NormPageImage",
+    "NormPageImages",
+    "NormPageRender",
+    "PageImageSelection",
+    "PageRenderRefused",
     "norm_paragraph_context_digest",
     "read_norm_paragraph_context",
     "SET_BUILDER_VERSION",

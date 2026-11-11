@@ -48,6 +48,7 @@ def _view(monkeypatch: pytest.MonkeyPatch, outcome: Any, **over: Any) -> tuple[A
     import auditmanager.execution.eta as eta
     import auditmanager.executors.public as executors_public
     import auditmanager.findings as findings
+    import auditmanager.precedents.public as precedents_public
     import auditmanager.runs as runs_package
     from auditmanager.bootstrap.adapters import _run_status_view
 
@@ -85,6 +86,7 @@ def _view(monkeypatch: pytest.MonkeyPatch, outcome: Any, **over: Any) -> tuple[A
     monkeypatch.setattr(executors_public, "executor_of_revision", lambda session, revision_id: None)
     monkeypatch.setattr(executors_public, "run_queue_reason", lambda session, run_id: None)
     monkeypatch.setattr(executors_public, "evaluate_wait", evaluate_wait)
+    monkeypatch.setattr(precedents_public, "window_wait", lambda session, **_: None)  # PREC-SETTINGS-01: no vector window here
     return _run_status_view(None, RUN), asked  # type: ignore[arg-type]
 
 

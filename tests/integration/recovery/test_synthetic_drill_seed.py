@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from auditmanager.shared.db.config import DatabaseSettings
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.storage import S3StorageSettings, StorageError
+from scripts.recovery import synthetic_drill_compare as compare
 from scripts.recovery import synthetic_drill_seed as seed
 from scripts.recovery.blob_reference_audit import audit_blob_references
 from scripts.recovery.schema_coverage import audit_restored_schema
@@ -129,15 +130,16 @@ def test_the_seeded_lane_holds_the_realistic_dataset_and_both_audits_accept_it(
                                    "expert_decision_event")}
     finally:
         engine.dispose()
-    # `EXEC-SEAL-01`: +5 executor tables; `EXEC-PULL-01` (0031): +2; `0032_ar_v3_run_group`: +2;
+    # `EXEC-SEAL-01`: +5 executor tables; `EXEC-PULL-01` (0031): +2; `0032`: +2 (dropped again by `0063`);
     # `0035_comparison_records`: +2; `0037_analysis_presets`: +1.
     # `0041_comparison_stage_core`: fifteen project-reachable stage tables.
     # `0042_comparison_stage_review`: twelve more, nine of them immutable.
     # `0046_executor_capacity_enroll` (`EXEC2-SEAL-1`): `executor_enrollment`, `executor_agent_install`.
     # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): the group store (five tables, none seeded); `0048` adds none.
     # `0053_document_tags`, `0054_finding_execution_status`, `0055_work_schedule`: seven more (129 -> 136).
-    # `0059_decision_memory`: the eight append-only tables of the decision memory (136 -> 144); `0061_decision_memory_m2` adds the settings' journal (145); `0062_hosts_stage_models` nine more (154).
-    assert schema.tables == 154 and schema.guarded_tables >= 29
+    # `0059_decision_memory`: the eight append-only tables of the decision memory (136 -> 144); `0061_decision_memory_m2` adds the settings' journal (145); `0062_hosts_stage_models` nine more (154); `0063_drop_ar_v3_beta` drops the two of `0032` (152).
+    # `0064_precedents_seal` adds twelve tables (152 -> 164); `0065_norm_crop_render` one (165).
+    assert schema.tables == 165 and schema.guarded_tables >= 29
     assert len(references.available_blobs) >= 5
     assert dict(references.source_counts)["price_list_revision"] == 2
     assert {"geometry_crop_image", "prepared_text_layer"} <= roles
@@ -213,7 +215,9 @@ def test_the_guard_probe_is_refused_everywhere_and_notices_a_dead_or_narrowed_tr
         assert counts() == before, "the probe must leave no trace"
         probed = {item["table"] for item in report if item["result"] != "empty"}
         assert _ADDED_AFTER_0023 <= probed, sorted(_ADDED_AFTER_0023 - probed)
-        assert {item["result"] for item in report if item["result"] != "empty"} <= {"AM002", "AM003"}
+        assert {item["result"] for item in report if item["result"] not in ("empty", "by_design")} <= {"AM002", "AM003"}
+        # What is excused is exactly what the declaration names, never a table the probe merely could not refuse.
+        assert {item["table"] for item in report if item["result"] == "by_design"} <= set(compare._NOT_GUARDED_BY_DESIGN)
 
         with engine.begin() as connection:
             connection.exec_driver_sql(
@@ -237,5 +241,51 @@ def test_the_guard_probe_is_refused_everywhere_and_notices_a_dead_or_narrowed_tr
         outcome = {item["operation"]: item["result"] for item in narrowed
                    if item["table"] == "work_assignment_event"}
         assert outcome == {"update": "ACCEPTED", "delete": "AM003"}
+    finally:
+        engine.dispose()
+
+
+def test_a_delete_only_guard_is_not_asked_to_refuse_an_update_and_only_the_declaration_excuses_it(
+    migrated_database_factory: Callable[[], DatabaseSettings], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`D-690`: `vector_control` is `DELETE`-guarded and open to `UPDATE` by design; the probe must still be able to fail.
+
+    A migrated clone holds the one `vector_control` row the migration inserts, so no seeding is needed. Each mutation below
+    is a way the probe could stop biting; each is shown to be named.
+    """
+    engine = create_database_engine(migrated_database_factory())
+
+    def outcome(table: str) -> dict[str, str]:
+        return {item["operation"]: item["result"] for item in probe_guards(engine)
+                if item["table"] == table and "operation" in item}
+
+    try:
+        # The declaration is true: no guard trigger of a declared table fires on the operation it is excused from.
+        with engine.connect() as connection:
+            covered = {(row["name"], operation) for row in connection.execute(compare._GUARDS).mappings()
+                       for operation in ("update", "delete") if row[f"on_{operation}"]}
+        for table, operations in compare._NOT_GUARDED_BY_DESIGN.items():
+            assert not {(table, operation) for operation in operations} & covered, table
+        assert outcome("vector_control") == {"update": "by_design", "delete": "AM003"}
+
+        # Without the declaration the same table reads as a guard that fails to refuse: the probe was never blind to it.
+        with monkeypatch.context() as patched:
+            patched.setattr(compare, "_NOT_GUARDED_BY_DESIGN", {})
+            assert outcome("vector_control") == {"update": "ACCEPTED", "delete": "AM003"}
+
+        # A dead guard on a declared table is still caught on the operation it does guard.
+        with engine.begin() as connection:
+            connection.exec_driver_sql("ALTER TABLE vector_control DISABLE TRIGGER trg_vector_control_no_delete")
+        assert outcome("vector_control") == {"update": "by_design", "delete": "ACCEPTED"}
+        with engine.begin() as connection:
+            connection.exec_driver_sql("ALTER TABLE vector_control ENABLE TRIGGER trg_vector_control_no_delete")
+
+        # The catalog is read: a guard widened to `UPDATE` on a declared table is probed there and must refuse.
+        with engine.begin() as connection:
+            connection.exec_driver_sql("DROP TRIGGER trg_vector_control_no_delete ON vector_control")
+            connection.exec_driver_sql(
+                "CREATE TRIGGER trg_vector_control_no_delete BEFORE UPDATE OR DELETE ON vector_control "
+                "FOR EACH ROW EXECUTE FUNCTION am_immutable_row()")
+        assert outcome("vector_control") == {"update": "AM003", "delete": "AM003"}
     finally:
         engine.dispose()

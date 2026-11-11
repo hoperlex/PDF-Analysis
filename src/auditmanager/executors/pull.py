@@ -59,7 +59,13 @@ from auditmanager.executors.runner_repository import (
     RunnerRepository,
     TaskRecord,
 )
-from auditmanager.shared.errors import ErrorCode
+from auditmanager.executors.task_context import (
+    CELL_REVIEW,
+    context_eligible,
+    context_request_of,
+    read_run_context_facts,
+)
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "DEADLINE_MARGIN_SECONDS",
@@ -289,10 +295,13 @@ class PullAdapter:
                          "the output schema uses a keyword runners cannot be held to",
                          code=ErrorCode.ANALYSIS_INPUT_INVALID) from None
         # What is written, served to the runner and held against its answer is the wire form
-        # (`AR-V3-WIRE-SCHEMA-01`); the refusal above was judged on the sealed schema, unchanged.
+        # the refusal above was judged on the sealed schema, unchanged.
         payload = {**payload, "output_schema": to_wire_schema(payload["output_schema"])}
         if self._host_call is not None:
             payload["host"] = self._host_call.members(window)
+            descriptor = self._context_request(payload)
+            if descriptor is not None:
+                payload["context_request"] = descriptor
         started = self._monotonic()
         task = self._write_task(payload, window)
         _log.info("executor task=%s run=%s request_sha256=%s deadline_seconds=%.1f",
@@ -301,6 +310,30 @@ class PullAdapter:
         return self._await(task, started, window)
 
     # -- internals -------------------------------------------------------------------------
+
+    def _context_request(self, payload: Mapping[str, Any]) -> list[dict[str, str]] | None:
+        """`CTX-STAND` (RUNNER_API 11): the candidates of a critic task the agent may ask reference data for, or ``None``.
+
+        Only the call of the cell ``review:main`` of a run (never a comparison's) whose consent holds the same ``executor_context_policy`` --
+        which is there only while the «контекст критику» switch was on at the start, on the stage layout, under plan v3 -- is offered any. Every
+        other call is written exactly as it always was. Reference data is optional by contract, so a consent that cannot be read costs the
+        call nothing but the data: the reason is logged and the task is written without a descriptor."""
+        host = self._host_call
+        context = self._context
+        run_id = getattr(context, "run_id", None)
+        if host is None or host.cell_key != CELL_REVIEW or run_id is None or getattr(context, "comparison_attempt_id", None) is not None:
+            return None
+        try:
+            with self._sessions() as session:
+                facts = read_run_context_facts(session, run_id)
+        except (SQLAlchemyError, DomainError) as failure:
+            _log.warning("executor context: the consent of run=%s could not be read for a task (%s); no reference data is offered",
+                         run_id, type(failure).__name__)
+            return None
+        if not context_eligible(facts):
+            return None
+        assert facts.section is not None
+        return context_request_of(payload["user_text"], section=facts.section)
 
     def _write_task(self, payload: Mapping[str, Any], window: float) -> TaskRecord:
         """Write the task. A call made for a comparison work attempt (`CMP-SPEND-01`, ADR-0025

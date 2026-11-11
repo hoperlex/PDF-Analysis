@@ -106,13 +106,13 @@ def test_the_block_split_finds_the_services_this_stack_has() -> None:
     blocks = _service_blocks(COMPOSE.read_text(encoding="utf-8"))
     assert set(blocks) == {
         "postgres", "s3", "s3-init", "migrate", "release-notes", "api", "worker", "web",
-        "proxy",
+        "proxy", "embedder",
     }
     # `W54-WORKER-01` (R-105): the worker is not on the session volume -- nor on any named
-    # volume. Its one mount is the read-only, operator-sealed reviewed-pack directory
-    # (`AR-V3-BETA-PACK-INSTALL-01`), which holds no state and no secret.
-    assert _mounts(blocks["worker"]) == ["./ar-v3-pack"]
-    assert "- ./ar-v3-pack:/run/ar-v3:ro" in blocks["worker"]
+    # volume, nor on any bind mount.
+    # `EMBED-01`: its one mount is the exchange with the night encoder (no session register, no database volume, no bind mount).
+    assert _mounts(blocks["worker"]) == ["embed-exchange"]
+    assert _mounts(blocks["embedder"]) == ["embed-exchange", "../norms-worker/embed_intents.py"]
     # And the mount reader finds a mount this stack has had since wave 14, so "no mounts
     # anywhere" cannot pass for "only the web service mounts it".
     assert _mounts(blocks["postgres"]) == ["postgres-data"]

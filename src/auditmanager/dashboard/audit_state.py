@@ -14,11 +14,9 @@ The rules, as the owner ruled them:
   ``document`` whose ``current_version_uid`` points at a version -- the join ``listProjects`` counts
   ``document_count`` through -- and an older version never counts: uploading V2 moves a fully checked V1
   document to ``not_run`` until V2 is run.
-* **The result run of a version** is the latest of its runs **of the standard analysis** in state ``published`` or
-  ``partial``, ordered by ``(created_at, run_id)`` -- the order ``listRuns`` returns them in. A newer run still in
-  flight does not displace it; ``failed`` and ``cancelled`` runs are not results (`R-150r`); ``partial`` is a result
-  (`R-150s`). A run of the AR v3 beta analysis is never the result (`AR-V3-OPT-IN`, `Q3`): ``STANDARD_RUN_SQL`` is the
-  one condition, shared with the schedule, the comparison and the optimisation readers.
+* **The result run of a version** is the latest of its runs in state ``published`` or ``partial``, ordered by
+  ``(created_at, run_id)`` -- the order ``listRuns`` returns them in. A newer run still in flight does not displace
+  it; ``failed`` and ``cancelled`` runs are not results (`R-150r`); ``partial`` is a result (`R-150s`).
 * **The document audit state** is one of four words: ``not_run`` (no result run), ``clean`` (a result run with
   no published finding -- a state of its own, neither "checked" nor "awaiting", `R-150n`),
   ``awaiting_decision`` (a result run with at least one finding whose current verdict is undecided) and
@@ -26,17 +24,22 @@ The rules, as the owner ruled them:
   result run is ``partial``.
 * **Optimisation is not part of it** (`R-150u`): the state is computed on findings only.
 * **An active run is a fact beside the state, not a fifth state** (`UI-A-47`, contract 1.40.0). The version's *active
-  run* is its latest run of the standard analysis in state ``queued``, ``running`` or ``validating`` (``created`` has
+  run* is its latest run in state ``queued``, ``running`` or ``validating`` (``created`` has
   not been admitted yet; the terminal states are not active), ordered by ``(created_at, run_id)`` as the result run is.
   It is read by the per-document statement only, in the same statement as the audit, and changes none of the four
   words: a document whose first run is in flight is still ``not_run`` and a checked one with a re-run in flight is
-  still ``checked``. The counters do not read it. AR v3 group runs are not an active run for the same reason they are
-  never a result (`AR-V3-OPT-IN`, `Q3`).
-* **AR v3 six-run groups** (`R-150t`, `Q-MD-9`, `D-303`): each run of a group is a run of its version, listed with the
-  others, but none of them is the version's result while the standard analysis exists to be it. The owner's answer of
-  2026-11-07 (`AR-V3-OPT-IN`, `Q3`) is that these counters count the standard analysis only; a document whose only
-  published result is a v3 group therefore reads ``not_run`` here. A rule that counts a group as one unit is a design of
-  its own and is not guessed.
+  still ``checked``. The counters do not read it.
+
+* **One list is counted by the same statement** (`F8-COUNT-XLSX`, plan-v5 section 4 item 6). A run carries a publication marker,
+  ``audit_run.publication_mode``: ``text_only`` (the default, and every run older than the marker) or ``one_list``. A ``one_list`` run
+  publishes its extended-review candidates as findings of their own -- one ``finding`` per group, N observations of
+  ``grounding_kind = portal_block`` -- and they are rows of the very tables this statement reads, so a ``text_only`` run counts exactly as
+  before and a ``one_list`` run counts its candidates too, without a branch on the marker: a second rule for the same set would be a second
+  place to be wrong. What the words mean follows from that. For a ``text_only`` run ``clean`` is "the text path found nothing" and
+  ``awaiting_decision`` "a text finding awaits the expert"; for a ``one_list`` run ``clean`` is "neither the text nor the drawings found
+  anything" and ``awaiting_decision`` includes the candidates, which are about as many as the machine proposed. The release note says so.
+  ``tests/integration/dashboard/test_one_list_counters.py`` pins both modes; the marker is deliberately *not* a column of the read model, since
+  the wire cannot carry it and nothing here would read it.
 
 A finding is *undecided* when its current verdict, read from ``finding_current_verdict`` (the projection
 ``decisions.projection`` and the verdict panel already read), is ``pending`` -- no verdict was ever recorded --
@@ -56,8 +59,6 @@ from typing import Final
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
-
-from auditmanager.runs.public import STANDARD_RUN_SQL
 
 __all__ = [
     "AUDIT_STATES",
@@ -138,12 +139,11 @@ _CURRENT_DOCS_OF_VERSIONS = """
 #: run_id DESC)`` -- ``listRuns``' order, so the result run is the newest run ``listRuns`` would show among
 #: those. ``run_finding`` is the set of ``finding_uid`` the result run published; ``GROUP BY`` makes it a set,
 #: so a finding observed twice by one run counts once. ``version_findings`` counts them and the undecided ones.
-_RESULT_RUN_RULES = f""",
+_RESULT_RUN_RULES = """,
     result_run AS (
         SELECT DISTINCT ON (r.version_uid) r.version_uid, r.run_id, r.state
         FROM audit_run r
         WHERE r.state IN ('published', 'partial')
-          AND {STANDARD_RUN_SQL}
           AND r.version_uid IN (SELECT version_uid FROM current_docs)
         ORDER BY r.version_uid, r.created_at DESC, r.run_id DESC
     ),
@@ -165,15 +165,14 @@ _RESULT_RUN_RULES = f""",
         GROUP BY rf.version_uid
     )"""
 
-#: The active run of each version in scope (`UI-A-47`): the newest run of the standard analysis that is in flight, by the
+#: The active run of each version in scope (`UI-A-47`): the newest run that is in flight, by the
 #: same ``(created_at DESC, run_id DESC)`` order as the result run. ``IN_FLIGHT_RUN_STATES`` is what this statement
 #: names; ``tests/unit/dashboard/test_audit_state.py`` asserts the two agree.
-_ACTIVE_RUN_RULE = f""",
+_ACTIVE_RUN_RULE = """,
     active_run AS (
         SELECT DISTINCT ON (r.version_uid) r.version_uid, r.run_id, r.state
         FROM audit_run r
         WHERE r.state IN ('queued', 'running', 'validating')
-          AND {STANDARD_RUN_SQL}
           AND r.version_uid IN (SELECT version_uid FROM current_docs)
         ORDER BY r.version_uid, r.created_at DESC, r.run_id DESC
     )"""

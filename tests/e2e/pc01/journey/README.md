@@ -24,16 +24,13 @@ fail the step. Recorded mode is required unless `--allow-spend` explicitly permi
 because an unmetered click starts the run at once, a live origin (known from an earlier run) is refused BEFORE the button is pressed.
 No provider mode is selected or replaced by the harness.
 
-The closed `approve_run_cost` action supports `run`, `run_from_stage` and `ar_v3_group`; the last keeps its estimate button and tick-box
-(«Оценить стоимость шести проверок»). The current manifest has six ordinary starts, including two historical pending AR v1 steps. Their
-pending status is preserved; this compatibility update does not invent an executed six-check AR v3 journey or
-activate those older steps. Browser execution of these new approval actions remains **UNVERIFIED**.
+The closed `approve_run_cost` action supports `run` and `run_from_stage`. The current manifest has ordinary starts, including two
+historical pending AR v1 steps. Their pending status is preserved; this update does not activate those older steps. Browser
+execution of these approval actions remains **UNVERIFIED**.
 
 Owner dev `3821261a` restores the ordinary original-source АР profile and its default `StartRunControl`.
 The read-only profile-registry step now expects АР status `draft` («черновик, требует экспертной проверки»).
-Historical AR-bound fixtures remain explicitly pending until separately rebased and activated; the removed
-six-check default button is not a prerequisite for this walk. Its API, historical readers and the closed
-`ar_v3_group` cost-approval driver remain available independently of that default UI.
+Historical AR-bound fixtures remain explicitly pending until separately rebased and activated.
 
 The existing queue re-audit step uses that same `run` cost scope with an explicit captured source Run. Selecting
 «Повторный аудит» automatically reads the selected Run and estimates its version with `reaudit_of_run_id`; the

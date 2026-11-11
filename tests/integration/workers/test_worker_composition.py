@@ -37,6 +37,8 @@ from auditmanager.workers.service import HEARTBEAT_FILE, IDENTITY_FILE, JobWakeu
 AGENT_INSTALL_ALLOW_PRIVATE_ENV = "AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE"
 #: `ADR-0026` decision 15: the worker ends offline group work after this long; the `api` never reads it.
 GROUP_OFFLINE_WAIT_ENV = "AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS"
+#: `EMBED-01`: the exchange directory of the vectors' night window, which the worker writes requests to and reads vectors from; the api never reads it.
+EMBED_DIR_ENV = "AUDITMANAGER_EMBED_DIR"
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE = ROOT / "infra/deploy/compose.server.yml"
 
@@ -326,7 +328,8 @@ class TestTheComposeService:
         # picks the stage plan of every fresh stage run (`comparison/stage_v3/policy.py`); the worker
         # executes the consent and the policy frozen at the start and never reads them, as the
         # compose comment says. Each must stay off the worker, so a worker reading one is red too.
-        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV, AGENT_INSTALL_ALLOW_PRIVATE_ENV, GROUP_OFFLINE_WAIT_ENV} == api - {API_TOKEN_ENV} - ANALYSIS_PLAN_SWITCHES_ENV
+        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV, AGENT_INSTALL_ALLOW_PRIVATE_ENV, GROUP_OFFLINE_WAIT_ENV, EMBED_DIR_ENV} == api - {API_TOKEN_ENV} - ANALYSIS_PLAN_SWITCHES_ENV
+        assert EMBED_DIR_ENV in worker and EMBED_DIR_ENV not in api
         assert ANALYSIS_PLAN_SWITCHES_ENV <= api and not (ANALYSIS_PLAN_SWITCHES_ENV & worker)
         assert WORKER_SLOTS_ENV in worker and WORKER_SLOTS_ENV not in api
         assert AGENT_INSTALL_ALLOW_PRIVATE_ENV in worker and AGENT_INSTALL_ALLOW_PRIVATE_ENV not in api
@@ -340,10 +343,10 @@ class TestTheComposeService:
     def test_the_worker_publishes_nothing_and_reads_the_provider_file(self) -> None:
         worker = self.blocks["worker"]
         assert "ports:" not in worker
-        # No named volume (R-105). The one mount is the read-only, operator-sealed reviewed-pack
-        # directory (`AR-V3-BETA-PACK-INSTALL-01`): no state, no secret.
+        # No bind mount and one named volume only: `EMBED-01`'s exchange of the vectors' night window (R-105 otherwise).
         assert worker.count("volumes:") == 1
-        assert "- ./ar-v3-pack:/run/ar-v3:ro" in worker
+        assert "- embed-exchange:/embed" in worker
+        assert ":/" not in worker.split("volumes:", 1)[1].split("embed-exchange:/embed", 1)[0]
         assert "path: env/provider.env" in worker
 
     def test_the_identity_is_on_a_tmpfs_the_health_check_reads(self) -> None:

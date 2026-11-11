@@ -10,7 +10,7 @@
  *
  * A closed section mounts nothing, so it reads nothing from the API: opening is what reads. The page needs the administrator
  * role; for any other the content is not drawn (the screen registry sends them away before they get here). It is still needed
- * for the comparisons until `HOSTS-CMP-01`, for AR v3 and for the SSH connection «kzSonnet».
+ * for the comparisons until `HOSTS-CMP-01` and for the SSH connection «kzSonnet».
  *
  * The key form arrives as a prop: it is a server component rendered by the route, so the key never becomes a JavaScript
  * value (`features/set-executor-secret`).

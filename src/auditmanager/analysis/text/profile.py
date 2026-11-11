@@ -5,11 +5,11 @@ and resolved by identity at run time. :class:`AnalysisProfile` is that shape; th
 product registers are the data packages of the other 14 sections
 (:mod:`auditmanager.analysis.text.profile_registry`).
 
-**АР is not a profile.** The АР text profile of PC-01 (``AR_TEXT_PROFILE``) was registered from
-this module's constants until ``PROD-11-AR-V1-V2-REMOVAL-01`` (``ADR-0024`` section 2, ``AD-12``):
-the АР analysis path of production is the six-Run v3 group only. :data:`ANALYSIS_PROFILE_ID` stays
-as the **retired identity** of that profile: persisted runs pin it, and the AR v3 beta profile
-asserts that its own identity never equals it (``ar_v3.v3_profile``). Nothing resolves it.
+**The АР v1 profile is retired.** The АР text profile of PC-01 (``AR_TEXT_PROFILE``) was registered from
+this module's constants until ``PROD-11-AR-V1-V2-REMOVAL-01`` (``ADR-0024`` section 2, ``AD-12``); АР has
+since been registered again as a data package sourced from the original application's AR files
+(``HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030``). :data:`ANALYSIS_PROFILE_ID` stays as the **retired
+identity** of the v1 profile: persisted runs pin it. Nothing resolves it.
 """
 
 from __future__ import annotations

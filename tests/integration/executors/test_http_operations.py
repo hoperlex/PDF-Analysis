@@ -315,6 +315,12 @@ def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_
 
 def test_import_env_refuses_a_stub_model_and_does_not_route_a_refused_probe(session) -> None:  # type: ignore[no-untyped-def]
     rings = support.make_rings()
+    # The lane database is shared: `test_hosts_*` commit route events (append-only, so they cannot be cleaned up), and a
+    # route that exists before this test says nothing about it. The claim is that THIS import routes nothing, so the
+    # routes and the journal are read before and compared after, instead of expecting an empty database (`D-689`).
+    store = ExecutorRepository()
+    routes_before = store.current_routes(session)
+    route_events_before = session.execute(text("SELECT count(*) FROM executor_route_event")).scalar_one()
     html = FakeGateway(behaviour="html403").start()
     try:
         assert "gateway stub" in str(_refusal_op(lambda: import_env(
@@ -326,7 +332,8 @@ def test_import_env_refuses_a_stub_model_and_does_not_route_a_refused_probe(sess
     finally:
         html.stop()
     assert (report.created, report.probe_outcome, report.routed) == (True, "ip_refused", False)
-    assert resolve_route(session, "text_analysis") is None
+    assert store.current_routes(session) == routes_before, "a refused probe must not change any route"
+    assert session.execute(text("SELECT count(*) FROM executor_route_event")).scalar_one() == route_events_before
 
 
 def _refusal_op(call: Any) -> OperationRefused:

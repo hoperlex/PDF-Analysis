@@ -94,6 +94,16 @@ from auditmanager.executors.runner_repository import (
     RunnerTokenRecord,
     TaskRecord,
 )
+from auditmanager.executors.task_context import (
+    UNTIL_MOVE,
+    ContextSource,
+    RunContextFacts,
+    TaskContextAnswer,
+    read_descriptor,
+    read_run_context_facts,
+    serve_context,
+)
+from auditmanager.executors.task_context_repository import ContextDeliveryRepository
 from auditmanager.ingest.public import (
     CommandReplay,
     CommandRepository,
@@ -125,6 +135,7 @@ __all__ = [
     "extend_claim",
     "fail_task",
     "generate_token",
+    "get_task_context",
     "hash_token",
     "issue_runner_token",
     "claimed_image",
@@ -260,6 +271,9 @@ class ClaimedTask:
     effort: str | None = None
     timeout_seconds: int | None = None
     cell_key: str | None = None
+    #: `CTX-STAND` (contract 1.51.0, RUNNER_API 11): the candidates of a `review:main` task of a run on the stage layout the agent may ask
+    #: reference data for -- ``{input_id, text_sha256, section}`` each. Empty for every other task, which is never offered any.
+    context_request: tuple[Mapping[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -464,7 +478,10 @@ def _claimed(row: ClaimedRow) -> ClaimedTask:
         task_id=row.task_id, claim_expires_at=row.claim_expires_at, deadline_at=row.deadline_at,
         model=row.expected_model, system=str(payload["system"]),
         user_text=str(payload["user_text"]), output_schema=payload["output_schema"],
-        images=tuple(payload.get("images", ())), **extra,
+        images=tuple(payload.get("images", ())),
+        context_request=tuple({"input_id": entry.input_id, "text_sha256": entry.text_sha256, "section": entry.section}
+                              for entry in read_descriptor(payload)),
+        **extra,
     )
 
 
@@ -487,6 +504,27 @@ def claimed_image(
         if isinstance(image, Mapping) and image.get("blob_id") == blob_id:
             return image
     raise _not_found()
+
+
+def get_task_context(
+    session: Session, principal: RunnerPrincipal, task_id: str, *, kind: str, source: ContextSource = UNTIL_MOVE,
+    repository: RunnerRepository | None = None, deliveries: ContextDeliveryRepository | None = None,
+    facts: Callable[[Session, str], RunContextFacts] = read_run_context_facts,
+) -> TaskContextAnswer:
+    """`getExecutorTaskContext` (`CTX-STAND`): the reference data of a task this token holds the live claim of.
+
+    A task of another connection or host is ``not_found``; a task that is not this token's live claim (open, lapsed, expired, terminal, claimed
+    by another token, or of an Attempt that is gone) is the ``conflict`` of every claim operation -- the agent then calls the model without the
+    data. Whether the task may be offered any, and the answer, are the rules of :func:`~auditmanager.executors.task_context.serve_context`.
+    Runs in the caller's transaction and writes the journal row and the remembered block there; never commits."""
+    store = repository or RunnerRepository()
+    task = _own_task(session, principal, task_id, store)
+    _must_hold(task, principal)
+    if not store.live_claim_and_attempt(session, task_id, principal.token_id):
+        raise _conflict("claim_lost", "the claim on the task is lost")
+    return serve_context(
+        session, task=task, payload=store.payload_of(session, task_id), kind=kind, source=source, tasks=store,
+        deliveries=deliveries or ContextDeliveryRepository(), facts=facts)
 
 
 def claim_task(

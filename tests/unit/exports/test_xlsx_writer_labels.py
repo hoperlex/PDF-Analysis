@@ -57,7 +57,7 @@ def _source(*findings: FindingRow) -> WorkbookInput:
         project_uid="prj_01M5B0000000000000000000P1",
         version_uid="ver_01M5B0000000000000000000V1",
         run_id="run_01M5B0000000000000000000R1",
-        profile_id="ar_v3",
+        profile_id="profile_1",
         snapshot_key="ns_1",
         attribution="ответы модели воспроизведены из записи (recorded)",
         findings=tuple(findings),
@@ -152,7 +152,7 @@ def test_identifiers_and_free_text_are_written_verbatim_even_when_they_look_like
         "prj_01M5B0000000000000000000P1", "ver_01M5B0000000000000000000V1",
         "run_01M5B0000000000000000000R1",
     )
-    assert summary["B5"] == "ar_v3" and summary["B6"] == "ns_1"
+    assert summary["B5"] == "profile_1" and summary["B6"] == "ns_1"
     assert summary["B7"] == "ответы модели воспроизведены из записи (recorded)"
     assert [sheet[f"{column}2"] for column in "BDEHIK"] == [
         "fire_safety", "pending", word, "sound, layout", "check_adjacent", "accepted",
@@ -334,7 +334,9 @@ def _text_digest(archive: zipfile.ZipFile, sheet: str) -> str:
 #: page labels, citations, "также найдено"), captured from the base writer like the digests above; «Замечания»
 #: re-pinned with the layout for the «ID замечания» column (`R-151d`).
 TEXT_DIGESTS = {
-    "xl/worksheets/sheet1.xml": "e25dac707e13425f7849d89d23d2954eade3b7e99f0ec29651ae9e9652b6b5b6",
+    # Re-pinned when the profile id of the corpus changed from a profile name to ``profile_1`` (only «Сводка» echoes it): with the old
+    # literal the writer still produced ``e25dac70...6b5b6``, and «Замечания» below is unchanged.
+    "xl/worksheets/sheet1.xml": "7212170fa8478ac2e927e5339220fdacd14aa6537502b2a8852eb2416530169a",
     "xl/worksheets/sheet2.xml": "9553ccf6ed7a998918977f1ef9cdbaa36066b8bbdaefae9d96fa0e926c190adb",
 }
 

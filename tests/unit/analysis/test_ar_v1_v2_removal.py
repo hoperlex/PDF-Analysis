@@ -1,7 +1,6 @@
 """АР v1 and v2 stay removed (`PROD-11-AR-V1-V2-REMOVAL-01`, `ADR-0024` section 2, `AD-12`).
 
-`PROD-10` moved what АР v3 needs out of the recorded v2 package, and its guard
-(`test_ar_v3_independent_of_ar_v2.py`, deleted here) proved that nothing in v3 imported it. This task
+`PROD-10` moved what the recognised-text readers need out of the recorded v2 package. This task
 deleted the package, the recorded v2 path and the АР v1 registration, so the guard that matters now
 is the converse: **nothing comes back**. The test reads the repository with :mod:`ast` (it executes
 nothing) and holds that

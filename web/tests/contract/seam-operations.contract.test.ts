@@ -66,6 +66,8 @@ const RUNNER_OPERATIONS = [
   // refused secret or token is the 401 and no 403 is declared.
   'reportRunnerHealth',
   'redeemExecutorEnrollment',
+  // `CRIT-SEAL-50` (contract 1.51.0): the reference data of a `review:main` task, asked for with the runner token that holds its claim.
+  'getExecutorTaskContext',
 ] as const;
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {
@@ -115,6 +117,8 @@ describe('the seam operations', () => {
       // `CMP-SEAL-C0`: the ten keyed comparison writes (ADR-0025 decision 19) sit in this list in order.
       'appendComparisonVersionOrder',
       'appendDecision',
+      // `CRIT-SEAL-50` (contract 1.51.0): a new revision of a setting of the Precedents programme is a keyed administrator write.
+      'appendPrecedentSetting',
       // `CMP-SEAL-C1`: the eight keyed writes of the version comparison core (ADR-0025 decision 19) sit in this list in order.
       'applyComparisonMatrixEdits',
       // `CMP-SEAL-C4`: the stage review cards, their verdicts, the batch and the resumable chain controls
@@ -248,12 +252,13 @@ describe('the seam operations', () => {
       'setJobPriority',
       'setStageModelLayoutEnabled',
       'setStagePairCompleteness',
+      // `CRIT-SEAL-50` (contract 1.51.0): the pause of the vectors is a keyed administrator write.
+      'setVectorPaused',
       'setWorkCalendarDays',
       'setWorkSchedulePlans',
       'setWorkScheduleSettings',
       // `W54-SEAL-01`: the worker intake switch is keyed like the other execution controls.
       'setWorkerIntake',
-      'startArV3BetaGroup',
       'startComparisonAiPairCheck',
       'startComparisonAiSheetChanges',
       'startComparisonReport',

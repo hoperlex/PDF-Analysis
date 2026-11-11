@@ -18,9 +18,8 @@
  *    contract says it has stopped.
  */
 
-import type { ArV3BetaStageId, CostBasis, ProviderMode, RunState, RunStatus, StageId, StageStatus } from '@/shared/api';
+import type { CostBasis, ProviderMode, RunState, RunStatus, StageId, StageStatus } from '@/shared/api';
 import {
-  AR_V3_BETA_STAGE_ID_VALUES,
   PROVIDER_MODE_VALUES,
   RUN_STATE_VALUES,
   STAGE_ID_VALUES,
@@ -47,9 +46,6 @@ export type ProviderModeLabel =
 
 const PROVIDER_MODES: ReadonlySet<string> = new Set<string>(PROVIDER_MODE_VALUES);
 
-/** Pinned by `contracts/analysis/ar_v3_beta/v1/stage.json`; distinct from legacy AR. */
-export const AR_V3_BETA_PROFILE_ID = 'ap_01M5M28ZCDD8VPSP1BTAEW92YE';
-
 function isProviderMode(value: unknown): value is ProviderMode {
   return typeof value === 'string' && PROVIDER_MODES.has(value);
 }
@@ -74,14 +70,10 @@ export function hasKnownRunVocabulary(status: RunStatus): boolean {
     readonly stages: unknown;
   };
   const runStates: readonly unknown[] = RUN_STATE_VALUES;
-  const stageIds: readonly unknown[] = [...STAGE_ID_VALUES, ...AR_V3_BETA_STAGE_ID_VALUES];
+  const stageIds: readonly unknown[] = STAGE_ID_VALUES;
   const stageStatuses: readonly unknown[] = STAGE_STATUS_VALUES;
 
   if (!runStates.includes(candidate.state) || !Array.isArray(candidate.stages)) return false;
-  if (
-    candidate.stages.some((stage) => stage?.stage_id === 'ar_v3_citation_review') &&
-    status.analysis_profile_id !== AR_V3_BETA_PROFILE_ID
-  ) return false;
   if (
     candidate.degradation_set !== undefined &&
     (!Array.isArray(candidate.degradation_set) ||
@@ -157,20 +149,16 @@ export function isRunAnimating(
   return interruptedReason(status) === null;
 }
 
-/**
- * Whether this run can offer the canonical finding review. The legacy `OD-11` result
- * states are `published` and `partial`; the v3 beta profile publishes a separate
- * preliminary citation review and no canonical findings.
- */
-export function runHasPublishedResult(state: RunState, analysisProfileId?: string | null): boolean {
-  return analysisProfileId !== AR_V3_BETA_PROFILE_ID && isExportableRunState(state);
+/** Whether this run can offer the canonical finding review: the `OD-11` result states are `published` and `partial`. */
+export function runHasPublishedResult(state: RunState): boolean {
+  return isExportableRunState(state);
 }
 
 /** What the terminal of a run actually is, as an explicit closed set of outcomes. */
 export type RunOutcome =
   | { readonly kind: 'in_flight'; readonly state: RunState }
   | { readonly kind: 'published'; readonly findingCount: number | null }
-  | { readonly kind: 'partial'; readonly degradation: readonly (StageId | ArV3BetaStageId)[] }
+  | { readonly kind: 'partial'; readonly degradation: readonly StageId[] }
   | {
       readonly kind: 'failed';
       readonly terminalReason: string | null;
@@ -195,7 +183,8 @@ export function runOutcome(status: RunStatus): RunOutcome {
     case 'published':
       return { kind: 'published', findingCount: status.published_finding_count ?? null };
     case 'partial':
-      return { kind: 'partial', degradation: status.degradation_set ?? [] };
+      // Read as the contract's closed `StageId` set: a value outside it is refused upstream by `hasKnownRunVocabulary`.
+      return { kind: 'partial', degradation: (status.degradation_set ?? []) as readonly StageId[] };
     case 'failed':
       return {
         kind: 'failed',
@@ -264,13 +253,13 @@ export const STAGE_DEPENDS_ON: Readonly<Record<StageId, readonly StageId[]>> = {
 };
 
 export interface StageRow {
-  readonly stageId: StageId | ArV3BetaStageId;
+  readonly stageId: StageId;
   /** `null` when the run has not reported this stage yet, or never scheduled it. */
   readonly status: StageStatus | null;
   readonly errorCode: string | null;
   readonly startedAt: string | null;
   readonly finishedAt: string | null;
-  /** True when the stage belongs to the known PC-01 chain or the v3 beta profile. */
+  /** True when the stage belongs to the known PC-01 chain. */
   readonly expected: boolean;
   /**
    * Position in the sequence PC-01 schedules, from 1 — and `null` for a stage it does not
@@ -294,15 +283,11 @@ export interface StageRow {
  * missing row reads as "nothing to say"; an empty status reads as "not yet", which is
  * what it is.
  */
-export function stageRows(status: Pick<RunStatus, 'stages' | 'analysis_profile_id'>): readonly StageRow[] {
+export function stageRows(status: Pick<RunStatus, 'stages'>): readonly StageRow[] {
   const reported = new Map(status.stages.map((stage) => [stage.stage_id, stage]));
   const rows: StageRow[] = [];
 
-  // The pinned profile identifies a v3 Run before any stage has been reported. A
-  // reported profile-specific stage also suppresses legacy placeholders while the
-  // vocabulary guard refuses an inconsistent stage/profile pair.
-  const reportsV3 = status.stages.some((stage) => stage.stage_id === 'ar_v3_citation_review');
-  if (status.analysis_profile_id !== AR_V3_BETA_PROFILE_ID && !reportsV3) PC01_STAGE_IDS.forEach((stageId, index) => {
+  PC01_STAGE_IDS.forEach((stageId, index) => {
     const stage = reported.get(stageId);
     rows.push({
       stageId,
@@ -319,16 +304,17 @@ export function stageRows(status: Pick<RunStatus, 'stages' | 'analysis_profile_i
   const expected: ReadonlySet<string> = new Set<string>(PC01_STAGE_IDS);
   for (const stage of status.stages) {
     if (expected.has(stage.stage_id)) continue;
+    // Read as the contract's closed `StageId` set: a value outside it is refused upstream by `hasKnownRunVocabulary`.
+    const stageId = stage.stage_id as StageId;
     rows.push({
-      stageId: stage.stage_id,
+      stageId,
       status: stage.status,
       errorCode: stage.error_code ?? null,
       startedAt: stage.started_at ?? null,
       finishedAt: stage.finished_at ?? null,
-      expected: stage.stage_id === 'ar_v3_citation_review',
+      expected: false,
       ordinal: null,
-      // This stage belongs to the separate v3 profile, not the nine-stage legacy graph.
-      dependsOn: stage.stage_id === 'ar_v3_citation_review' ? [] : STAGE_DEPENDS_ON[stage.stage_id],
+      dependsOn: STAGE_DEPENDS_ON[stageId],
     });
   }
 

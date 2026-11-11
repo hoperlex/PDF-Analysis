@@ -1,4 +1,4 @@
-"""The 324 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 325 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the forty-three router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -24,7 +24,6 @@ from typing import Final
 from fastapi import APIRouter
 
 from auditmanager.api.routers.auth import build_auth_routes
-from auditmanager.api.routers.ar_v3_groups import build_ar_v3_group_routes
 from auditmanager.api.routers.blocks import build_block_routes
 from auditmanager.api.routers.comparison_uploads import build_comparison_upload_routes
 from auditmanager.api.routers.comparison_version_orders import (
@@ -55,7 +54,7 @@ from auditmanager.api.routers.executor_groups import build_executor_group_routes
 from auditmanager.api.routers.hosts import build_host_routes  # HOSTS-SEAL-1
 from auditmanager.api.routers.hosts_ports import ExecutorHostPort, RunStagePort, StageModelPort  # HOSTS-SEAL-1, HOSTS-SEAL-2
 from auditmanager.api.routers.executors import build_executor_routes
-from auditmanager.api.routers.runner import build_runner_routes
+from auditmanager.api.routers.runner import ExecutorTaskContextPort, build_runner_routes, build_task_context_route  # CTX-STAND
 from auditmanager.api.routers.findings import build_finding_routes
 from auditmanager.api.routers.handlers import (
     FailureEnvelopeMiddleware,
@@ -144,7 +143,6 @@ from auditmanager.api.routers.ports import (
     RegistrationPort,
     ReleasesPort,
     RunPort,
-    ArV3GroupPort,
     SectionPort,
     SectionSpecificationPort,
     SpecificationPricesPort,
@@ -155,6 +153,8 @@ from auditmanager.api.routers.registrations import build_registration_routes
 from auditmanager.api.routers.runs import build_run_routes
 from auditmanager.api.routers.sections import build_section_routes
 from auditmanager.api.routers.run_stages import build_run_stage_routes  # HOSTS-SEAL-2
+from auditmanager.api.routers.precedents import build_precedent_routes  # CRIT-SEAL-50
+from auditmanager.api.routers.precedents_ports import PrecedentSettingsPort, PrecedentsPort, VectorControlPort  # EMBED-01, PREC-SETTINGS-01, PREC-PASS
 from auditmanager.api.routers.stage_models import build_stage_model_routes  # HOSTS-SEAL-1
 from auditmanager.api.routers.users import build_user_routes
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
@@ -278,7 +278,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.49.0"
+CONTRACT_VERSION: Final[str] = "1.52.0"
 
 
 def build_router(
@@ -316,7 +316,6 @@ def build_router(
     executor_hosts: ExecutorHostPort | None = None,
     stage_models: StageModelPort | None = None,
     run_stages: RunStagePort | None = None,
-    ar_v3_groups: ArV3GroupPort | None = None,
     comparison_uploads: ComparisonUploadPort | None = None,
     comparison_version_orders: ComparisonVersionOrderPort | None = None,
     version_pages: VersionPagePort | None = None,
@@ -335,8 +334,12 @@ def build_router(
     comparison_stage_text: ComparisonStageTextPort | None = None,
     comparison_stage_runs: ComparisonStageRunPort | None = None,
     comparison_stage_c4: ComparisonStageC4Port | None = None,
+    vector_control: VectorControlPort | None = None,
+    precedent_settings: PrecedentSettingsPort | None = None,
+    precedents: PrecedentsPort | None = None,
+    task_context: ExecutorTaskContextPort | None = None,
 ) -> Router:
-    """Assemble the 324 operations, from the router modules -- ``me``,
+    """Assemble the 325 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -384,7 +387,6 @@ def build_router(
     build_document_routes(router, documents)
     build_block_routes(router, blocks)  # type: ignore[arg-type]
     build_run_routes(router, runs)
-    build_ar_v3_group_routes(router, ar_v3_groups)  # type: ignore[arg-type]
     # `D-67`. Two collections address a parent that another port owns: `listRunFindings`
     # hangs off a run and `listDecisionHistory` off a finding. Each builder is handed the
     # port that can answer whether that parent exists, so the operation can refuse an
@@ -440,6 +442,10 @@ def build_router(
     # `EXEC-PULL-01`. The pull channel: two administrator operations on runner tokens and the
     # four a runner calls with one. Optional with a default, for the reason `blocks` gives.
     build_runner_routes(router, runner)  # type: ignore[arg-type]
+    # `CTX-STAND` (contract 1.51.0): `getExecutorTaskContext`, the agent's ask for reference data, moved here from the seal's sleeping route in
+    # `api/routers/precedents.py` with its declaration word for word, so the served document is unchanged. Declared whatever the port; with none it
+    # answers `503 dependency_unavailable` (`executor_task_context`) as the seal did.
+    build_task_context_route(router, task_context)
     # `EXEC2-ENROLL-01`. The universal agent: the enrollment grant and its exchange, the agent's health, the
     # public package, the API side of an install over SSH and the integration-authorisation mark. Optional
     # with a default, for the reason `blocks` gives; declared whatever the port, answerable only with one.
@@ -460,6 +466,12 @@ def build_router(
     # reason `blocks` gives; declared whatever the port, answerable only with one. The implementation is `runs/stage_facts.py` behind
     # `bootstrap/run_stage_adapter.py`; the integrator wires it into the composition root as `run_stages=`.
     build_run_stage_routes(router, run_stages)  # type: ignore[arg-type]
+    # `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2). The «Прецеденты» surface: the labels and the card of
+    # a finding, the pause of the vectors and the settings (the reference data of a task is the runner's, declared above). Sealed and asleep: no port, every body answers `503 dependency_unavailable`
+    # until the lane that owns it fills it (`api/routers/precedents.py`). `EMBED-01` filled the vector control: `vector_control` is its port,
+    # optional with a default for the reason `blocks` gives above; None keeps the sleeping answer. `PREC-SETTINGS-01` filled the settings:
+    # `precedent_settings` is its port, with the same default. `PREC-PASS` filled the labels and the card: `precedents` is its port, with the same default.
+    build_precedent_routes(router, vector_control, precedent_settings, precedents)
     # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,
     # sealed as stubs answering `503 dependency_unavailable` until `CMP-INGEST-01`,
     # `CMP-INGEST-02` and `CMP-PROFILE-01` wire their ports. Optional with a default, for the

@@ -41,7 +41,7 @@ is marked "assumption".
   the official PostgreSQL image that bootstrap user is a superuser (assumption: the image's
   documented behaviour; the check is the query of row 7 below). Pool 5 plus 5 overflow
   (`src/auditmanager/shared/db/config.py`). Migrations run only through the one-shot `migrate`
-  service; the head is `0033_ar_v3_cite_stage_id` (it was `0032_ar_v3_run_group` when this ADR was written). The S3 bucket is private; `bucket-init.sh` and the
+  service; the head was `0033` when this ADR was accepted (it was `0032` when this ADR was written; the current head is in `db/migrations`). The S3 bucket is private; `bucket-init.sh` and the
   adapter configure no versioning, lifecycle or encryption at rest (a search found none).
 - **Copies.** No scheduled backup exists. A verified dump is taken by `reset.sh` and
   `purge-product-data.sh`, both of which then destroy data, and by the owner's forced-command key
@@ -139,7 +139,7 @@ cannot live in an Alembic revision), then derives every grant from the catalog (
 classification above, sequences, `ALTER DEFAULT PRIVILEGES` for later tables) and can be run any number of
 times. `deploy.sh` runs it after `migrate` and before `api` and `worker` start; `reset.sh --restore` and
 `copy-serve.sh restore-db` run it after the restore. **No Alembic revision is added**, so the migration
-head `0033_ar_v3_cite_stage_id` is not moved by this ADR's work (migration `0033` came from `D-225`, not from here) and none of the files that pin the head changes for it. The proof that the
+head `0033` is not moved by this ADR's work (migration `0033` came from `D-225`, not from here) and none of the files that pin the head changes for it. The proof that the
 grants are enough is the `tests/integration` directories of the contexts running as the application role,
 plus a test that a database restored from a `--no-privileges` dump is readable by the application role after
 the step. Connection: `DATABASE_URL` stays the application's; the migrator's URL is a second variable that
@@ -196,7 +196,7 @@ pre-migration copy keeps leaving the host for the restore test (section 9).
 The deployment path is unchanged: owner instruction naming the SHA, fast-forward to `main`, the
 workflow, `deploy.sh`, `verify-deployed.sh` (`AGENTS.md` section 6). **Rollback is a forward fix.**
 An older image is not guaranteed to run against a newer schema, and the migrations' downgrades refuse where data would be lost
-(`0006_app_user` and `0032_ar_v3_run_group` say so). A failed migrating release is recovered by a reviewed revert deployed
+(`0006_app_user` and revision `0032` say so). A failed migrating release is recovered by a reviewed revert deployed
 through the same path and, if the schema must go back, by the owner's way back of the copy key:
 `copy-serve.sh restore-db <STAMP> <dump-sha256>` consumes exactly the `db.dump` that the receipt names, and the runbook
 gives the order (restore, then a reviewed revert re-attested for its SHA, then `resume`; a revert alone would fail
@@ -351,7 +351,7 @@ into a program that prints names only, and its raw output is never shown or past
 3. **Nightly dump with an off-host mirror.** The recommended option of the poll; the owner chose
    manual copies (`R-146b`). Not built; `A-1`.
 4. **A managed PostgreSQL and managed object storage.** Not asked; would contradict `ADR-0020`'s single
-   failure domain and `R-146a`'s single host.
+   failure domain and `R-146a`'s single host. *(Asked on 2026-11-10: planned, not started; see the addendum at the end.)*
 5. **A new `dump-db.sh` beside the copy key's verb of the same name**, or a receipt that is a second file: rejected, the copy record is the receipt (section 5).
 
 ## Verification
@@ -371,3 +371,13 @@ afford to lose (`A-1`); a second host, a managed database or an off-host copy is
 recovery time or recovery point is promised to anyone; a second operator joins; the VPS size is
 measured and does not fit the 500-page envelope (`D-171`); a decision to add CI or scanning
 (`A-3`).
+
+## Addendum 2026-11-10 (a move to Yandex Cloud is planned, not started)
+
+Recorded by the lane `YC-MOVE-PLAN` after the owner's polls of 2026-11-10 (`R-153ab`, `R-153af`, `docs/program/OWNER_RULINGS_2026-09-17.md` section 3.55). Nothing above is rewritten.
+
+- **Alternative 4 is no longer «Not asked».** The owner answered: «запланировать полный перенос на Яндекс. Пока выбрать вариант ночное окно, пометить как временное решение на локальном хранилище» (`R-153ab`), and, asked whether to move the database to a Yandex cluster now, «Пока не трогаем» (`R-153af`). So a managed PostgreSQL and a managed object storage are decided **in principle and not started**.
+- **Nothing in this ADR's decisions changes today.** The topology is still one VPS with one `postgres` and one `s3` service, the manual copies and accepted risks `A-1` to `A-5` stand, and `R-146a` (one host) holds. The alternative stays rejected for the present topology.
+- **The revisit trigger is armed, not met.** «a managed database … is decided» is satisfied in principle by `R-153ab`; the ADR is replaced on the day the owner orders the move to start (step 0 of `docs/program/YC-MOVE-PLAN.md`), by an ADR that records the new topology, where the data may be held, and the new failure domains.
+- **What the plan adds:** the check that pgvector 0.8 or later is available at the provider (the search needs `hnsw.iterative_scan`), and that the exact `0.8.6` pin of migration `0013` is met or deliberately changed; the order of the steps; the list of what a move touches. It measures and orders nothing.
+- **The first consumer of the move** is the encoder: `ADR-0029` temporary decision 2 (the offline encoder in a night window on the 4 GB host) ends when the database, the storage and a separate encoder machine are in place.

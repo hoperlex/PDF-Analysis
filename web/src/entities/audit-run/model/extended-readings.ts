@@ -46,6 +46,11 @@ export interface ProcedureReading {
   /** The procedure the server names as the one this depended on when it did not run, or `null`. */
   readonly dependency: string | null;
   readonly errorCode: string | null;
+  /**
+   * The server says this procedure called no model (`model_called: false`): under plan v2 the original's critic and corrector
+   * (`V2-ORIGINAL-REVIEW-01`). Absent for every other procedure, so a reading made without it is what it was.
+   */
+  readonly deterministic?: true;
 }
 
 /** The planned procedures of an extended review's result, in the server's order; none for a result that carries none. */
@@ -60,6 +65,7 @@ export function procedureReadings(result: unknown): readonly ProcedureReading[] 
       reason: text(procedure.reason) || null,
       dependency: text(procedure.dependency) || null,
       errorCode: text(procedure.error_code) || null,
+      ...(procedure.model_called === false ? { deterministic: true as const } : {}),
     }];
   });
 }

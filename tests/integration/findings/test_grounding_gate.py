@@ -694,7 +694,7 @@ class TestTheUngroundedVocabularyIsClosed:
     can produce, and the values publication actually writes.
     """
 
-    def test_the_enum_is_exactly_the_twelve_declared_reasons(self) -> None:
+    def test_the_enum_is_exactly_the_fifteen_declared_reasons(self) -> None:
         assert UNGROUNDED_REASONS == {
             "quotation_absent",
             "quotation_on_different_page",
@@ -708,6 +708,10 @@ class TestTheUngroundedVocabularyIsClosed:
             "norm_quote_absent",
             "norm_value_not_in_quote",
             "stated_value_not_in_evidence",
+            # `F8-GATE` (0064): the three refusals of a block as evidence.
+            "block_not_in_run_geometry",
+            "block_crop_mismatch",
+            "block_quote_not_in_recognised",
         }
 
     def test_publication_writes_only_declared_reasons(

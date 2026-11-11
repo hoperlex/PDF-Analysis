@@ -18,7 +18,7 @@ import type { RunStatus } from '@/shared/api';
 import type { ProcedureReading } from './extended-readings';
 import { elapsedMs, isRunAnimating, stageRows } from './run-presentation';
 import type { StageRow } from './run-presentation';
-import { AR_V3_RUN_CHIP, RUN_CHIPS } from './stage-dictionary';
+import { RUN_CHIPS } from './stage-dictionary';
 import type { RunChipDefinition } from './stage-dictionary';
 
 export type ChipState = 'pending' | 'waiting' | 'running' | 'done' | 'partial' | 'failed' | 'skipped' | 'unavailable';
@@ -56,7 +56,7 @@ export interface RunChip {
 }
 
 export interface RunChipsInput {
-  readonly status: Pick<RunStatus, 'state' | 'stages' | 'analysis_profile_id' | 'interrupted_reason'>;
+  readonly status: Pick<RunStatus, 'state' | 'stages' | 'interrupted_reason'>;
   readonly procedures: readonly ProcedureReading[];
   /** The stage ids this run took from the run it was started from (`startedFrom(...).reusedStageIds`). */
   readonly reused?: ReadonlySet<string> | undefined;
@@ -91,15 +91,14 @@ const latest = (values: readonly string[]): string | null =>
   values.length === 0 ? null : values.reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
 
 /**
- * The chips of a run, in the rail's order. A chip appears when a stage row or a procedure mentions it; the AR v3 profile's
- * own chip follows the eight, and appears only for a run that reports that stage.
+ * The chips of a run, in the rail's order. A chip appears when a stage row or a procedure mentions it.
  */
 export function runChips({ status, procedures, reused }: RunChipsInput): readonly RunChip[] {
   const rows = stageRows(status);
   const open = isRunAnimating(status);
 
   const chips: RunChip[] = [];
-  for (const definition of [...RUN_CHIPS, AR_V3_RUN_CHIP]) {
+  for (const definition of RUN_CHIPS) {
     const chipRows = rows.filter((row) => definition.stageIds.includes(row.stageId));
     const chipProcedures = procedures.filter((procedure) => definition.stageIds.includes(procedure.id));
     if (chipRows.length === 0 && chipProcedures.length === 0) continue;
@@ -111,8 +110,11 @@ export function runChips({ status, procedures, reused }: RunChipsInput): readonl
     const finishedAt = computed.length > 0 && finished.length === computed.length ? latest(finished) : null;
     const failing = chipRows.find((row) => row.status === 'failed' || row.status === 'partial');
 
+    // A chip whose every procedure says it called no model (the original's critic and corrector under plan v2, `V2-ORIGINAL-REVIEW-01`)
+    // is drawn as a chip that does not: the rail and the dialog read `callsModel` from the chip's definition, and name no model for it.
+    const noModel = definition.callsModel && chipProcedures.length > 0 && chipProcedures.every((procedure) => procedure.deterministic === true);
     chips.push({
-      definition,
+      definition: noModel ? { ...definition, callsModel: false } : definition,
       state: stateOfRows(chipRows, open) ?? stateOfProcedures(chipProcedures) ?? 'pending',
       stages: chipRows,
       procedures: chipProcedures,

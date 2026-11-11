@@ -33,7 +33,7 @@ const NEW_RUN = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8N';
 let live: LiveRender | null = null;
 
 const refusal = (reason: string, stage = 'page_geometry_extraction') => new ApiError(422, {
-  contract_version: '1.49.0', error_code: 'analysis_input_invalid', message: 'x', correlation_id: 'refused', retryable: false,
+  contract_version: '1.52.0', error_code: 'analysis_input_invalid', message: 'x', correlation_id: 'refused', retryable: false,
   details: { stage_id: stage, reason },
 }, 'refused');
 
@@ -84,10 +84,8 @@ describe('who is offered it', () => {
     }
   });
 
-  it('not a viewer, and not a run of AR v3 (beta)', async () => {
+  it('not a viewer', async () => {
     expect((await mount({}, ['viewer'])).markup()).toBe('');
-    await live?.unmount();
-    expect((await mount({ analysis_kind: 'ar_v3_beta' })).markup()).toBe('');
   });
 });
 
@@ -157,7 +155,7 @@ describe('the dialog', () => {
   });
 
   it('a stale digest needs a fresh reading and a new agreement, under a new key', async () => {
-    vi.mocked(startRunFromStage).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.49.0',
+    vi.mocked(startRunFromStage).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.52.0',
       error_code: 'conflict', message: 'stale', correlation_id: 'stale', retryable: false,
       details: { conflict_reason: 'run_cost_estimate_stale' } }, 'stale'));
     const view = await mount();

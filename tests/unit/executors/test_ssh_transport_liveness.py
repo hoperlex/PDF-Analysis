@@ -1,4 +1,4 @@
-"""The SSH transport reads signs of life from the command's stderr (`AR-V3-LIVENESS-01`, lane B).
+"""The SSH transport reads signs of life from the command's stderr (lane B).
 
 A call used to be bounded by one wall-clock ``timeout_s``: a model that was thinking could not be
 told from one that hung. Now a command that writes a **heartbeat line** to stderr

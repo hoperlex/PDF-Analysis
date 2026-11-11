@@ -26,12 +26,15 @@ from auditmanager.runs.cost_policy import read_run_cost_policy
 from auditmanager.runs.stage_plan import ModelAvailability, StagePlanDraft, start_readiness
 from auditmanager.shared.errors import DomainError, ErrorCode
 
+from .critic_context_fakes import SettingsSession
 from .stage_layout_fakes import ADMIN, API_ONLY, NOWHERE, SUBSCRIPTION, FakeSessions, MemoryCommands, MemoryStore, everything, with_revision
 
 VERSION = "ver_01M2545JSD15ETSNNV904X991J"
 REVISION = "slr_01M2545JSD15ETSNNV904X991J"
 PLAN_ENV = "AUDITMANAGER_EXTENDED_ANALYSIS_PLAN"
 SONNET, OPUS = "claude-sonnet-5-5", "claude-opus-5-5"
+#: `V3-OPTIN-01` (R-154b): the rows a run calls when nothing names a plan. The critic and the correction are plan v3's, opt-in by the env.
+V2_ROWS = ("text", "blocks", "cross_check", "norms")
 
 
 @pytest.fixture
@@ -76,7 +79,7 @@ def single_blocks_draft(kit: str = "claude_only") -> StagePlanDraft:
 
 
 def estimate(policy, plan=None, **kwargs):
-    return policy.estimate_run(None, version_uid=VERSION, stage_plan=plan, **kwargs)
+    return policy.estimate_run(SettingsSession(), version_uid=VERSION, stage_plan=plan, **kwargs)
 
 
 def totals(value):
@@ -146,13 +149,52 @@ def test_an_ensemble_prices_every_block_batch_once_per_leg_and_once_for_the_judg
 
 def test_the_rows_a_run_calls_are_the_rows_of_its_plan(registry, monkeypatch):
     policy = service(registry)
+    assert estimate(policy, draft()).stage_plan.rows == V2_ROWS, "nothing names a plan: the default is v2 (`V3-OPTIN-01`)"
+    monkeypatch.setenv(PLAN_ENV, "v3")
     assert estimate(policy, draft()).stage_plan.rows == layout.STAGE_ROWS
     monkeypatch.setenv(PLAN_ENV, "v2")
-    assert estimate(policy, draft()).stage_plan.rows == ("text", "blocks", "cross_check", "norms")
+    assert estimate(policy, draft()).stage_plan.rows == V2_ROWS
     monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS", "0")
     only_text = estimate(policy, draft())
     assert only_text.stage_plan.rows == ("text",) and [l["model_id"] for l in only_text.as_dict()["models"]] == [SONNET]
     assert policy.stage_rows_in_use() == ("text",)
+
+
+@pytest.mark.parametrize(("named", "rows"), [
+    (None, V2_ROWS), ("", V2_ROWS), ("   ", V2_ROWS), ("v2", V2_ROWS), ("V2", V2_ROWS), (" extended-review-v2 ", V2_ROWS),
+    ("v3", layout.STAGE_ROWS), ("V3", layout.STAGE_ROWS), (" extended-review-v3 ", layout.STAGE_ROWS)])
+def test_the_plan_env_chooses_the_rows_and_only_v3_adds_the_critic_and_the_correction(registry, monkeypatch, named, rows):
+    """`V3-OPTIN-01` (R-154b): the readiness (`stage_rows_in_use`) and the estimate (`estimate_run`) read the same name in the same place and
+    agree on the rows; an absent or blank name is v2, and the six-row plan is a choice of the stand."""
+    if named is not None:
+        monkeypatch.setenv(PLAN_ENV, named)
+    policy = service(registry)
+    assert policy.stage_rows_in_use() == rows
+    assert estimate(policy, draft()).stage_plan.rows == rows
+
+
+@pytest.mark.parametrize("named", ["v1", "v4", "extended-review-v1", "legacy", "0", "off", "v3 v2"])
+def test_a_plan_name_that_is_neither_v2_nor_v3_is_refused_by_the_readiness_and_the_estimate(registry, monkeypatch, named):
+    """No fallback to a plan the stand did not name: the name is refused where the rows are asked and where the price is."""
+    monkeypatch.setenv(PLAN_ENV, named)
+    policy = service(registry)
+    with pytest.raises(DomainError) as asked:
+        policy.stage_rows_in_use()
+    with pytest.raises(DomainError) as priced:
+        estimate(policy, draft())
+    for caught in (asked, priced):
+        assert caught.value.code is ErrorCode.VALIDATION_FAILED
+        assert caught.value.detail_fields == {"field": "analysis_workflow", "constraint": "unsupported_plan"}
+
+
+@pytest.mark.parametrize("named", [None, "v2", "v3", "no-such-plan"])
+def test_the_text_only_switch_beats_whatever_plan_is_named(registry, monkeypatch, named):
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS", "0")
+    if named is not None:
+        monkeypatch.setenv(PLAN_ENV, named)
+    policy = service(registry)
+    assert policy.stage_rows_in_use() == ("text",)
+    assert estimate(policy, draft()).stage_plan.rows == ("text",)
 
 
 def test_a_model_is_priced_at_its_own_rates_and_a_subscription_costs_nothing(registry):
@@ -197,6 +239,7 @@ def test_a_plan_with_a_model_no_server_serves_is_refused_before_anything_is_pric
 
 
 def test_the_legacy_coverage_cannot_be_priced_by_model(registry, monkeypatch):
+    monkeypatch.setenv(PLAN_ENV, "v3")  # the coverage switch is plan v3's; v2 does not read it
     monkeypatch.setenv("AUDITMANAGER_EXTENDED_COVERAGE", "legacy")
     with pytest.raises(DomainError) as caught:
         estimate(service(registry), draft())
@@ -404,19 +447,46 @@ def test_the_mixed_billing_is_for_a_planned_consent_only(monkeypatch):
 # --- the readiness of a start ---------------------------------------------------------------------------------------------------
 
 
-def test_with_the_layout_off_the_readiness_is_the_legacy_estimate(registry):
+def test_with_the_layout_off_the_readiness_is_the_legacy_estimate(registry, monkeypatch):
+    monkeypatch.setenv(PLAN_ENV, "v3")  # named, so the expectation does not move with the default plan
     policy = service(registry)
-    answer = start_readiness(policy, None, None, version_uid=VERSION)
+    answer = start_readiness(policy, SettingsSession(), None, version_uid=VERSION)
     legacy = estimate(policy, None).as_dict()
-    assert answer == {"route": "legacy", "ready": True, "cells": [], "estimate_digest": legacy["estimate_digest"],
+    assert answer == {"route": "legacy", "ready": True, "cells": [], "extended_plan": "v3", "estimate_digest": legacy["estimate_digest"],
                       "estimated_cost_micros": legacy["estimated_cost_micros"],
                       "recommended_ceiling_micros": legacy["recommended_ceiling_micros"]}
     models.RunStartReadiness.model_validate(answer)
 
 
-def test_the_readiness_names_the_set_the_access_of_each_cell_and_the_digest_to_confirm(registry):
+@pytest.mark.parametrize(("environment", "expected"), [
+    ({PLAN_ENV: "v2"}, "v2"), ({PLAN_ENV: "extended-review-v2"}, "v2"),
+    ({PLAN_ENV: "v3"}, "v3"), ({PLAN_ENV: "extended-review-v3"}, "v3"),
+    ({"AUDITMANAGER_EXTENDED_ANALYSIS": "0", PLAN_ENV: "v3"}, None),
+])
+def test_the_readiness_names_the_extended_plan_a_start_would_run_under_on_both_routes(registry, monkeypatch, environment, expected):
+    """`extended_plan` (contract 1.50.0) is read through the preflight the estimate prices with: ``v2``, ``v3``, or ``None`` when the
+    extended analysis is off. The legacy route and the stage-plan route say the same thing, and the answer validates against the wire model."""
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
     policy = service(registry)
-    answer = start_readiness(policy, None, draft({SONNET: SUBSCRIPTION, OPUS: API_ONLY}), version_uid=VERSION)
+    legacy = start_readiness(policy, SettingsSession(), None, version_uid=VERSION)
+    planned = start_readiness(policy, SettingsSession(), draft(), version_uid=VERSION)
+    assert legacy["extended_plan"] == planned["extended_plan"] == policy.extended_plan() == expected
+    assert models.RunStartReadiness.model_validate(planned).extended_plan == expected
+    assert models.RunStartReadiness.model_validate(legacy).model_dump(mode="json", exclude_unset=True)["extended_plan"] == expected
+
+
+def test_an_unsupported_plan_name_is_refused_by_the_readiness_as_the_estimate_refuses_it(registry, monkeypatch):
+    monkeypatch.setenv(PLAN_ENV, "v9")
+    with pytest.raises(DomainError) as caught:
+        start_readiness(service(registry), SettingsSession(), None, version_uid=VERSION)
+    assert caught.value.code is ErrorCode.VALIDATION_FAILED and caught.value.detail_fields["constraint"] == "unsupported_plan"
+
+
+def test_the_readiness_names_the_set_the_access_of_each_cell_and_the_digest_to_confirm(registry, monkeypatch):
+    monkeypatch.setenv(PLAN_ENV, "v3")  # the six cells of the set are plan v3's
+    policy = service(registry)
+    answer = start_readiness(policy, SettingsSession(), draft({SONNET: SUBSCRIPTION, OPUS: API_ONLY}), version_uid=VERSION)
     parsed = models.RunStartReadiness.model_validate(answer)
     assert answer["route"] == "stage_plan" and answer["ready"] is True and answer["kit"] == "claude_only" and answer["access"] == "mixed"
     cells = {c["cell_key"]: c for c in answer["cells"]}
@@ -431,36 +501,47 @@ def test_the_readiness_names_the_set_the_access_of_each_cell_and_the_digest_to_c
 
 
 def test_all_subscription_is_a_zero_estimate_whose_confirmation_is_the_press(registry):
-    answer = start_readiness(service(registry), None, draft(), version_uid=VERSION)
+    answer = start_readiness(service(registry), SettingsSession(), draft(), version_uid=VERSION)
     assert answer["access"] == "subscription" and answer["estimated_cost_micros"] == 0 and answer["recommended_ceiling_micros"] == 0
 
 
 def test_a_cell_with_no_model_on_any_server_makes_the_start_not_ready_and_prices_nothing(registry):
     policy = service(registry)
-    answer = start_readiness(policy, None, draft({SONNET: SUBSCRIPTION, OPUS: NOWHERE}), version_uid=VERSION)
+    answer = start_readiness(policy, SettingsSession(), draft({SONNET: SUBSCRIPTION, OPUS: NOWHERE}), version_uid=VERSION)
     models.RunStartReadiness.model_validate(answer)
     assert answer["ready"] is False and answer["kit"] == "claude_only"
     for key in ("estimate_digest", "stage_plan_digest", "estimated_cost_micros", "access"):
         assert key not in answer
     blocked = [c for c in answer["cells"] if not c["available"]]
     assert [c["cell_key"] for c in blocked] == ["blocks:leg1"] and blocked[0]["reasons"] == ["host_offline"] and "access" not in blocked[0]
-    absent = start_readiness(policy, None, draft({SONNET: SUBSCRIPTION}), version_uid=VERSION)
+    absent = start_readiness(policy, SettingsSession(), draft({SONNET: SUBSCRIPTION}), version_uid=VERSION)
     assert [c["reasons"] for c in absent["cells"] if not c["available"]] == [["not_on_any_server"]]
 
 
 def test_a_row_the_run_will_not_call_does_not_block_it(registry, monkeypatch):
     monkeypatch.setenv(PLAN_ENV, "v2")
     served = {SONNET: SUBSCRIPTION, OPUS: SUBSCRIPTION}
-    answer = start_readiness(service(registry), None, replace(draft(served), cells=tuple(
+    answer = start_readiness(service(registry), SettingsSession(), replace(draft(served), cells=tuple(
         replace(c, model_id="gpt-6-sol", effort="medium") if c.row in {"review", "correction"} else c for c in draft().cells)),
         version_uid=VERSION)
     assert answer["ready"] is True and [c["cell_key"] for c in answer["cells"]] == [
         "text:main", "blocks:leg1", "blocks:judge", "cross_check:main", "norms:main"]
 
 
+def test_the_readiness_under_the_default_plan_lists_the_v2_cells_and_the_digest_the_estimate_has(registry):
+    """`V3-OPTIN-01`: nothing names a plan, so the button's readiness shows five cells: the critic and the correction are not asked about."""
+    policy = service(registry)
+    answer = start_readiness(policy, SettingsSession(), draft(), version_uid=VERSION)
+    assert answer["ready"] is True and [c["cell_key"] for c in answer["cells"]] == [
+        "text:main", "blocks:leg1", "blocks:judge", "cross_check:main", "norms:main"]
+    value = estimate(policy, draft())
+    assert answer["estimate_digest"] == value.estimate_digest and value.stage_plan.rows == V2_ROWS
+    models.RunStartReadiness.model_validate(answer)
+
+
 def test_the_readiness_refuses_an_explicit_selector_under_the_layout(registry):
     with pytest.raises(DomainError) as caught:
-        start_readiness(service(registry), None, draft(), version_uid=VERSION, preset_id="evt_01M2545JSD15ETSNNV904X991K")
+        start_readiness(service(registry), SettingsSession(), draft(), version_uid=VERSION, preset_id="evt_01M2545JSD15ETSNNV904X991K")
     assert caught.value.detail_fields == {"field": "preset_id", "constraint": "stage_layout_enabled"}
 
 

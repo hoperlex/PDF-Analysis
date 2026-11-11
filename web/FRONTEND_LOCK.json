@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19",
-    "content_commit": "b084039d",
-    "content_commit_subject": "feat(contract): 1.49.0 -- the layout, comparison and stage cells lose the answer limit and the timeout; the host task loses max_output_tokens (LIMITS-01, R-153n, R-153o)",
-    "dispatch_named_commit": "b084039d15d777604de26b8aa6d48ac6262c2d5f",
-    "commit_note": "Resealed by LIMITS-01: contract 1.49.0 (StageLayoutCell, StageComparisonCell and RunStageCell lose max_output_tokens and timeout_seconds; ClaimedExecutorTask loses max_output_tokens; no schema added or removed).",
+    "sha256": "dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a",
+    "content_commit": "f0bc496e",
+    "content_commit_subject": "feat(contract): contract 1.52.0 -- the version literals, the surface (296/325/809), the reseal paragraph, the catalogs at candidate revision 69, the head 0065 (CRIT-SEAL-52)",
+    "dispatch_named_commit": "f0bc496e5446dcbc8089ed54c528f975d3d9726a",
+    "commit_note": "Resealed by CRIT-SEAL-52: contract 1.52.0 (no operation; one schema, DecisionMemoryComment; the optional DecisionMemoryCase.comments; FindingObservation.evidence may be empty when grounding_kind is portal_block, as an if/else on grounding_kind instead of minItems 1), on top of 1.51.0.",
     "openapi_version": "3.1.0",
-    "info_version": "1.49.0",
+    "info_version": "1.52.0",
     "paths": 296,
-    "operations": 324,
-    "component_schemas": 798,
+    "operations": 325,
+    "component_schemas": 809,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "0948b7e4894d7fd07f399b73e93a41a58fa51d76192dc36227387304ead16c19",
+    "snapshot_sha256": "dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "0eb89e185c2a062544678ced697f1b64597c2a78613e8a34b087844a9457c322",
-      "index.ts": "04fbdba12860ac6495b9e636d4130372870451a7caee2adfae3b33221240bdc5",
-      "operations.gen.ts": "f00d9707c81753b65eb1a8379c22b4d0935c0ed24016d0a91559f7fff0acb242",
-      "types.gen.ts": "936be3b1386bbaeaed2480aff4ba328f30e6e19b2fe4e01ce1d46dbc491bcf1f"
+      "client.gen.ts": "8e892d73fd7300e4088a33087567075dc496ba46394a89c2743b38e2145ee0e5",
+      "index.ts": "ec4029382210b7d0d09af200e98dec50f1f0b1735213ce2cc6d46d9f0e7f5863",
+      "operations.gen.ts": "b8271ab8ba2da31ec9124e78b3e2f1e0e4387992e94f209b979e817ee09dc08e",
+      "types.gen.ts": "d92272ef70f607e491f26824283593f6b0e0738ad77a685bea891e278a4fa2e8"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

@@ -41,7 +41,6 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.security import API_TOKEN_VARIABLE
-from auditmanager.runs.public import PACK_MANIFEST_ENV
 
 #: This lane's deployment secret for this suite. A literal, as in every sibling suite.
 DEPLOYMENT_SECRET = "absent-parent-sweep-token"
@@ -78,8 +77,6 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # (``searchNorms``, ``listNormSnapshots``, ``listNormSnapshotEvents``).
 # `W55B-SEAL-01` added two addressed GETs on `version_uid` (``listVersionPortalBlocks`` and
 # ``streamVersionPortalBlockCrop``), sealed stubs until `W55B-GEOMETRY-01` served them.
-# `W57A-SEAL-01B` added ``getRunNormVerification`` on ``run_id``, a sealed stub (see
-# :data:`SEALED_STUB_ADDRESSED`; this register missed it until `W59-SECTION-SEAL-01`).
 # `W59-SECTION-SEAL-01` added ``getVersionSectionReview``, addressed through its version's
 # document and project, which answers ``404 not_found`` for any link that names nothing.
 # `W59-VERSION-COMPARE-01` added ``compareDocumentVersions`` the same way; its required
@@ -99,12 +96,10 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # on a pass or a proposal identity. With all of them, the addressed half is thirty.
 # `NORM-REFS-RUN-01` added ``getRunNormReferences`` on ``run_id``: an absent run is
 # ``404 not_found`` (``AuditRun``), as for ``getRunStatus``. Thirty-one.
-# Four more were never counted here: `EXEC-SEAL-01`'s ``getExecutorConnection`` on
-# ``connection_id`` (an absent connection is ``404 not_found``, administrators only);
-# `AR-V3-BETA-SIX-RUN-02`'s ``getArV3BetaGroup`` and `AR-V3-BETA-GROUP-API-SEAL-01`'s
-# ``getArV3BetaGroupReview``, both on ``group_id``; and `EXEC-IMAGE-DELIVERY-01`'s
-# ``getExecutorTaskImage`` on ``task_id`` and ``blob_id``, a runner-token read swept by
-# :data:`RUNNER_ADDRESSED`. With all four, the addressed half is thirty-five.
+# Two more were never counted here: `EXEC-SEAL-01`'s ``getExecutorConnection`` on
+# ``connection_id`` (an absent connection is ``404 not_found``, administrators only); and
+# `EXEC-IMAGE-DELIVERY-01`'s ``getExecutorTaskImage`` on ``task_id`` and ``blob_id``, a
+# runner-token read swept by :data:`RUNNER_ADDRESSED`. With both, the addressed half is thirty-three.
 # `CMP-SEAL-C0` adds nine: the two project-scoped listings, the batch and its proposal, the
 # version-order listing, the page-profile listing and the four page reads. Forty-four.
 # `CMP-SEAL-C1` adds nine: the matrix, its edit history and the accepted AI links, the series of a document set and
@@ -131,10 +126,11 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # `EXEC2-SEAL-1` (contract 1.15.0) adds two ``GET`` operations whose path holds ``{``: ``getExecutorAgentInstall`` (on
 # ``connection_id`` and ``install_id``), which is addressed, and ``downloadAgentPackage`` (on a package ``version``), which
 # names no parent and is excluded like the section filter (:data:`PUBLIC_PACKAGE_OPERATIONS`). One hundred and ten.
-# `EXEC2-SEAL-2` (contract 1.16.0) adds two more, both on ``group_id`` of an executor group (``exg_``, not the AR v3 group
-# ``arg_`` that the same parameter name carries elsewhere; see :func:`_fill_path`): ``getExecutorGroup`` and
-# ``getExecutorGroupCapacity``. An absent group is ``404 not_found``. One hundred and twelve.
-EXPECTED_ADDRESSED = 112
+# `EXEC2-SEAL-2` (contract 1.16.0) adds two more, both on ``group_id`` of an executor group (``exg_``; see
+# :func:`_fill_path`): ``getExecutorGroup`` and ``getExecutorGroupCapacity``. An absent group is ``404 not_found``. One
+# hundred and twelve. The removal of the six-scope АР beta (2026-11-10, `R-154a`) takes three addressed reads off (its two
+# group reads and the run's norm-verification read, which served that beta only): one hundred and nine.
+EXPECTED_ADDRESSED = 109
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -152,17 +148,16 @@ REQUIRED_QUERY: dict[str, str] = {
 # :data:`CURRENT_SNAPSHOT_COLLECTIONS`.
 # With ``listAssignments`` (`W61-DISPATCHER-01`) and ``listNormDocuments`` the unaddressed half is
 # seventeen.
-# Three more were never counted here: `EXEC-SEAL-01`'s ``listExecutorConnections`` and
-# ``listExecutorRoutes`` (collections) and `AR-V3-BETA-PACK-STATUS-API-01`'s
-# ``getArV3BetaPackStatus`` (a server singleton, see :data:`SERVER_STATUS_OPERATIONS`).
-# With all three, the unaddressed half is twenty.
+# Two more were never counted here: `EXEC-SEAL-01`'s ``listExecutorConnections`` and
+# ``listExecutorRoutes`` (collections). With both, the unaddressed half is nineteen.
 # `ANALYSIS-PRESETS-01`'s ``listAnalysisPresets`` is a collection like ``listExecutorConnections``
 # (every preset, no parent), so the unaddressed half is twenty-one. `CMP-SEAL-C1` adds the comparison queue read
 # (``getComparisonQueueSummary``, the installation's queue, no parent): twenty-two. `CMP-SEAL-C2` adds the installation's
 # AI queue (``getComparisonAiQueue``, no parent): twenty-three. `EXEC2-SEAL-2` adds three collections with no parent
 # identity, each answering a page (``items``): ``listExecutorGroups``, ``listExecutorRoutingRules`` (with the routing mode
-# beside the items) and ``previewExecutorRouting`` (the proposal's items beside its digest): twenty-six.
-EXPECTED_UNADDRESSED = 26
+# beside the items) and ``previewExecutorRouting`` (the proposal's items beside its digest): twenty-six. The removal of the
+# six-scope АР beta (2026-11-10, `R-154a`) takes its pack-status singleton off: twenty-five.
+EXPECTED_UNADDRESSED = 25
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -183,12 +178,6 @@ AGGREGATE_OPERATIONS = frozenset({"getDashboardSummary"})
 #: missing and nothing to page. Exempt from the page check, and checked for its own shape by
 #: :func:`test_the_callers_own_account_answers_its_own_shape`.
 SELF_OPERATIONS = frozenset({"getMe"})
-
-#: `AR-V3-BETA-PACK-STATUS-API-01`. ``getArV3BetaPackStatus`` reads **the server's** one
-#: reviewed-pack status: no parent identity and nothing to page, so it is a singleton and not a
-#: collection. Exempt from the page check, and checked for its own shape by
-#: :func:`test_the_server_pack_status_answers_its_own_shape`.
-SERVER_STATUS_OPERATIONS = frozenset({"getArV3BetaPackStatus"})
 
 #: `EXEC-IMAGE-DELIVERY-01`. Addressed ``GET`` operations a *runner token* calls: a user's
 #: credential, this sweep's included, is not a runner token, so the answer to it is the
@@ -239,10 +228,6 @@ COMPARISON_QUEUE_OPERATIONS = frozenset({"getComparisonQueueSummary"})
 #: the document, its paragraphs and its PDF alike.
 #: `W55B-SEAL-01` filled it again with the two portal-block reads; `W55B-GEOMETRY-01` serves
 #: them and empties it, and an absent `ver_` is now `404 not_found` for both.
-#: `W57A-SEAL-01B` sealed ``getRunNormVerification`` as a refusing stub (``503``,
-#: ``dependency: norm_verification_reader``) until the CITE reader. `AR-V3-DECISIONS-01`
-#: (`R-146at`) serves it and empties this set again: an absent ``run_`` is now ``404
-#: not_found``, swept with the other addressed reads.
 #: `CMP-SEAL-C0` (ADR-0025 decision 25) filled it with the nine comparison reads whose ports are
 #: sealed stubs; `CMP-INGEST-01`, `CMP-INGEST-02` and `CMP-PROFILE-01` remove the ones they wire,
 #: and each then joins the `404` sweep. Two of them list under a project, so they are addressed.
@@ -332,12 +317,10 @@ PUBLIC_PACKAGE_OPERATIONS = frozenset({"downloadAgentPackage"})
 
 
 #: Path parameters whose name is not the catalog's key for the identity they carry. Written out
-#: rather than guessed: ``group_id`` is ``ar_v3_run_group_id`` (``arg_``, `AR-V3-BETA-SIX-RUN-02`), and
-#: `EXEC-SEAL-01` / `EXEC-PULL-01` name an executor connection ``connection_id`` (``executor_connection_id``,
+#: rather than guessed: `EXEC-SEAL-01` / `EXEC-PULL-01` name an executor connection ``connection_id`` (``executor_connection_id``,
 #: ``exc_``) and a runner's task ``task_id`` (``executor_task_id``, ``ext_``). A parameter in
 #: neither the catalog nor this table is still an error.
 _CATALOG_KEY: dict[str, str] = {
-    "group_id": "ar_v3_run_group_id",
     "connection_id": "executor_connection_id",
     "task_id": "executor_task_id",
     # `ANALYSIS-PRESETS-01`: a preset is identified by the audit event written with its first
@@ -356,9 +339,9 @@ def _prefixes() -> dict[str, str]:
 def _fill_path(template: str) -> str:
     """The path of ``template`` with every ``{parameter}`` filled by the well-formed identity that names nothing.
 
-    `EXEC2-SEAL-2`: ``group_id`` is ``ar_v3_run_group_id`` (``arg_``) on the AR v3 beta paths and
-    ``executor_group_id`` (``exg_``) under ``/executor-groups/``; the parameter name alone cannot say which, so the path
-    does. A wrong prefix would be answered ``422`` for the identity's shape, not ``404`` for its absence.
+    `EXEC2-SEAL-2`: ``group_id`` is ``executor_group_id`` (``exg_``) under ``/executor-groups/``; a ``group_id`` anywhere
+    else has no catalogue key and is an error. A wrong prefix would be answered ``422`` for the identity's shape, not
+    ``404`` for its absence.
     """
     def fill(match: re.Match[str]) -> str:
         parameter = match.group(1)
@@ -396,10 +379,8 @@ class Composed:
 @pytest.fixture(scope="module")
 def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
-    # No reviewed pack is installed in this suite, whatever the process environment names:
-    # `test_the_server_pack_status_answers_its_own_shape` asserts that state.
     # `CMP-VC-AIPAIR-01`: the versions module is on (see `test_router_answers.py`): a wired C2 read is judged on its own `404`.
-    environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
+    environ = dict(os.environ) | {
         API_TOKEN_VARIABLE: DEPLOYMENT_SECRET,
         # A wired comparison read of wave C2 refuses first while the versions module is off (`CMP-SEAL-C2` section 8), so the sweep
         # serves the module: its rule is the answer to an identity that names nothing, which a gate that came first would hide.
@@ -531,7 +512,7 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
 def test_the_wired_c2_reads_are_404_for_an_absent_parent_once_the_module_is_on(app: Composed) -> None:
     """The sheet and report reads answer `404 not_found` for an absent identity with versions on;
     with the module off, they refuse first."""
-    off_environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
+    off_environ = dict(os.environ) | {
         API_TOKEN_VARIABLE: DEPLOYMENT_SECRET, "AUDITMANAGER_COMPARISON_MODULES": "none",
     }
     application = create_app(environ=off_environ)
@@ -593,7 +574,6 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
         if (
             operation_id in AGGREGATE_OPERATIONS
             or operation_id in SELF_OPERATIONS
-            or operation_id in SERVER_STATUS_OPERATIONS
             or operation_id in RELEASE_OPERATIONS
             or operation_id in SEALED_STUB_COLLECTIONS
             or operation_id in COMPARISON_QUEUE_OPERATIONS
@@ -755,25 +735,6 @@ def test_the_callers_own_account_answers_its_own_shape(app: Composed) -> None:
         assert isinstance(body, dict) and "items" not in body, body
         for key in ("user_uid", "login", "display_label", "roles", "profile_complete"):
             assert key in body, f"{operation_id} answered without {key!r}: {body}"
-
-
-def test_the_server_pack_status_answers_its_own_shape(app: Composed) -> None:
-    """``getArV3BetaPackStatus``, the operation :data:`SERVER_STATUS_OPERATIONS` excuses.
-
-    Not a page and not a read of a parent: what the server holds, which with no reviewed pack
-    installed is exactly ``{"state": "not_installed"}`` -- every other property is absent, never
-    null (the installed shape, with its attestation, is covered by the pack-status API tests).
-    Exempt from *paging*, not from *shape*.
-    """
-    unaddressed = _unaddressed(_get_routes(app))
-    status_reads = [(op, path) for op, path in unaddressed if op in SERVER_STATUS_OPERATIONS]
-    assert {op for op, _ in status_reads} == SERVER_STATUS_OPERATIONS
-    for operation_id, template in status_reads:
-        status, body = _get(app, template)
-        assert status == 200, f"{operation_id} answered {status}: {body}"
-        assert body == {"state": "not_installed"}, (
-            f"{operation_id} answered {body!r} with no reviewed pack installed"
-        )
 
 
 def test_a_runner_token_read_is_not_answered_to_a_users_credential(app: Composed) -> None:

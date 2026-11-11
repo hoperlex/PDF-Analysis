@@ -30,4 +30,6 @@ export const CATEGORY_LABELS: Readonly<Record<FindingCategory, string>> = {
   accessibility: 'Доступность',
   insulation: 'Теплоизоляция',
   sound: 'Звукоизоляция',
+  drawing_discrepancy: 'Расхождение на чертеже',
+  cross_source: 'Расхождение источников',
 };

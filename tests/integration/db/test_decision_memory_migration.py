@@ -32,10 +32,30 @@ from auditmanager.shared.identity import (
     DecisionMemoryStatusEventId,
 )
 
-HEAD = "0062_hosts_stage_models"  # the head the fixture migrates to; 0059 is the migration under test, three steps below it
+HEAD = "0065_norm_crop_render"  # the head the fixture migrates to; 0059 is the migration under test, six steps below it
 #: `0061` (phase M2) adds the settings' journal to the family and replaces the content tables' guard; its own test is `test_decision_memory_m2_migration.py`.
 M2_TABLES = {"decision_memory_setting_event"}
 CONTENT_TABLES = {"decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_crop"}
+#: `0064_precedents_seal` (`CRIT-SEAL-50`) adds seven more tables whose names start with the family's: four on the content side of a case (KEEP: comments,
+#: block evidence, the encoder's queue and the vectors) and three of a run's own (PRODUCT: the probe, the pass and its advice), which point into the
+#: product by design (its own test is `test_precedents_seal_migration.py`).
+SEAL_CONTENT_TABLES = {"decision_memory_comment", "decision_memory_block_evidence", "decision_memory_embedding_intent", "decision_memory_embedding"}
+SEAL_PRODUCT_TABLES = {"decision_memory_probe", "decision_memory_precedent_run", "decision_memory_precedent_advice"}
+SEAL_TRIGGERS = {
+    ("decision_memory_comment", "trg_decision_memory_comment_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_comment", "trg_decision_memory_comment_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_block_evidence", "trg_decision_memory_block_evidence_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_block_evidence", "trg_decision_memory_block_evidence_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_embedding", "trg_decision_memory_embedding_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_embedding", "trg_decision_memory_embedding_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_embedding_intent", "trg_decision_memory_embedding_intent_forget_guard", "am_guard_decision_memory_forget", 11),
+    ("decision_memory_embedding_intent", "trg_decision_memory_embedding_intent_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_embedding_intent", "trg_decision_memory_embedding_intent_frozen_guard", "am_guard_frozen_columns", 19),
+    ("decision_memory_precedent_advice", "trg_decision_memory_precedent_advice_immutable", "am_immutable_row", 27),
+    ("decision_memory_precedent_run", "trg_decision_memory_precedent_run_frozen_guard", "am_guard_frozen_columns", 19),
+    ("decision_memory_probe", "trg_decision_memory_probe_frozen_guard", "am_guard_frozen_columns", 19),
+    ("decision_memory_probe", "trg_decision_memory_probe_write_once", "am_guard_write_once_columns", 19),
+}
 PREVIOUS = "0058_finding_decision_origin"
 TABLES = (
     "decision_memory_case", "decision_memory_decision", "decision_memory_decision_text", "decision_memory_status_event",
@@ -147,7 +167,8 @@ def test_the_eight_tables_exist_at_head_and_are_append_only(at_head: tuple[Engin
         found = {
             name for (name,) in connection.execute(text("SELECT relname FROM pg_class WHERE starts_with(relname, 'decision_memory_') AND relkind = 'r'"))
         }
-        assert found - M2_TABLES == set(TABLES)
+        assert found - M2_TABLES - SEAL_CONTENT_TABLES - SEAL_PRODUCT_TABLES == set(TABLES)
+        assert found >= SEAL_CONTENT_TABLES | SEAL_PRODUCT_TABLES
         triggers = {
             (table, name, function, mask) for table, name, function, mask in connection.execute(text(
                 "SELECT c.relname, t.tgname, p.proname, t.tgtype::integer FROM pg_trigger t "
@@ -160,7 +181,7 @@ def test_the_eight_tables_exist_at_head_and_are_append_only(at_head: tuple[Engin
     content = {(table, f"trg_{table}_forget_guard", "am_guard_decision_memory_forget", 27) for table in CONTENT_TABLES}
     later = {("decision_memory_setting_event", "trg_decision_memory_setting_event_immutable", "am_immutable_row", 27),
              ("decision_memory_status_event", "trg_decision_memory_status_event_transition", "am_guard_decision_memory_status", 7)}
-    assert triggers == identity | content | later
+    assert triggers == identity | content | later | SEAL_TRIGGERS
 
 
 def test_a_case_and_its_decision_are_refused_an_update_and_a_delete(at_head: tuple[Engine, str]) -> None:
@@ -192,6 +213,14 @@ def test_no_table_has_a_foreign_key_into_the_product(at_head: tuple[Engine, str]
                 "SELECT conrelid::regclass::text, confrelid::regclass::text FROM pg_constraint "
                 "WHERE contype = 'f' AND starts_with(conrelid::regclass::text, 'decision_memory_')"))
         }
+    # `0064_precedents_seal`: the four KEEP tables it adds to the content side point at the case, its content or nothing else; the three of a run's own
+    # (PRODUCT) are the ones that point into the product -- an `audit_run`, a `finding` -- and only those.
+    seal_keys = {(child, parent) for child, parent in references if child in SEAL_CONTENT_TABLES | SEAL_PRODUCT_TABLES}
+    assert {parent for child, parent in seal_keys if child in SEAL_CONTENT_TABLES} <= {"decision_memory_case", "decision_memory_content"}
+    assert seal_keys - {(c, p) for c, p in seal_keys if c in SEAL_CONTENT_TABLES} == {
+        ("decision_memory_probe", "audit_run"), ("decision_memory_precedent_run", "audit_run"),
+        ("decision_memory_precedent_advice", "audit_run"), ("decision_memory_precedent_advice", "finding")}
+    references = {(child, parent) for child, parent in references if child not in SEAL_CONTENT_TABLES | SEAL_PRODUCT_TABLES}
     allowed_outside = {"blob", "command_record", "app_user"}
     outside = {(child, parent) for child, parent in references if parent not in TABLES}
     # `0061` gives the actor of a status event (and of a setting) its RESTRICT key to the account; still no key into a project, document,

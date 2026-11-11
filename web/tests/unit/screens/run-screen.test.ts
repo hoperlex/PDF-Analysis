@@ -481,9 +481,8 @@ describe('«Этапы анализа раздела»', () => {
     expect(runDialog(status(), { selected: 'text', roles: ['expert'] })).toContain('Запустить с этого этапа');
   });
 
-  it('offers it to nobody for a run that is still going, for the read-only role and for a run of AR v3', () => {
+  it('offers it to nobody for a run that is still going and for the read-only role', () => {
     expect(runDialog(status({ state: 'running', terminal_at: null }), { selected: 'text', roles: ['expert'] })).not.toContain('data-run-start-from-stage');
     expect(runDialog(status(), { selected: 'text', roles: ['viewer'] })).not.toContain('data-run-start-from-stage');
-    expect(runDialog(status({ analysis_kind: 'ar_v3_beta' }), { selected: 'text', roles: ['expert'] })).not.toContain('data-run-start-from-stage');
   });
 });

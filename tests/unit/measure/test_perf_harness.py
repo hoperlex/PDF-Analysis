@@ -158,8 +158,8 @@ def test_every_product_name_the_harness_reaches_for_exists() -> None:
     assert ("auditmanager.dashboard.audit_state", "_AUDIT_GROUPS") in reached
     assert ("auditmanager.decision_memory.reads", "MemoryReader") in reached
     assert ("auditmanager.optimisation.proposals.repository", "_LIST_PASSES") in reached
-    assert ("auditmanager.analysis.public", "AR_V3_BETA_BUNDLE_ID") in reached
-    assert len(reached) >= 25, sorted(reached, key=str)
+    # 25 until the two names of the removed six-scope beta profile left the seed; 23 now.
+    assert len(reached) >= 23, sorted(reached, key=str)
 
 
 def test_the_name_check_can_fail() -> None:

@@ -81,7 +81,7 @@ import type {
   VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
-import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, classifyRunFailure } from '@/entities/audit-run';
+import { RUN_PAGE_LIMIT, classifyRunFailure } from '@/entities/audit-run';
 import { AUTH_EVENT_PAGE_LIMIT } from '@/entities/auth-event';
 import { USER_PAGE_LIMIT } from '@/entities/user';
 import { ASSIGNMENT_PAGE_LIMIT } from '@/entities/assignment';
@@ -140,12 +140,6 @@ import { DecisionHistory } from '@/widgets/decision-history';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList, FindingRowActions } from '@/widgets/finding-list';
 import { groupByCategory } from '@/entities/finding';
-import { ArV3BetaReview, RunFindings } from '@/widgets/ar-v3-beta-review';
-import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
-import {
-  MALFORMED_GROUP_ANSWER, StartArV3GroupView, classifyArV3GroupStartFailure,
-} from '@/features/start-ar-v3-group';
-import type { StartArV3GroupViewProps } from '@/features/start-ar-v3-group';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
@@ -248,12 +242,6 @@ import { sectionAudit } from '../unit/dashboard/audit-counts';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import { COMPARISON_SHAPES } from '../unit/version-compare/shapes';
 import { MEMORY_SHAPES } from '../unit/decision-memory/shapes';
-import {
-  NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
-} from '../unit/analysis-settings/ar-v3-beta-pack-fixtures';
-import {
-  AVAILABLE_RUN_ID, accountFixture, runFindingsPage, v3FindingFixture,
-} from '../unit/analysis-settings/ar-v3-beta-review-fixtures';
 import { optimisationShapes } from '../unit/optimisation/fixtures';
 import { carryOverShapes, proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
@@ -354,37 +342,9 @@ export function manifestRoles(): ReadonlySet<string> {
   return roles;
 }
 
-interface BetaSourcePolicy {
-  readonly items: readonly { readonly id: string; readonly sources: readonly string[] }[];
-  readonly sources: Readonly<Record<string, unknown>>;
-}
-
-interface BetaScopeGroup {
-  readonly id: string;
-  readonly items: readonly string[];
-}
-
-/** The machine labels printed by the frozen AR beta preview, read from its policy. */
-export function betaPolicyIdentifiers(): ReadonlySet<string> {
-  const canonical = join(REPO_ROOT, 'src/auditmanager/analysis/profiles/ar_v3/norm_map/beta_sources.json');
-  const mirror = join(REPO_ROOT, 'web/src/widgets/ar-v3-beta-status/ui/beta_sources.json');
-  expect(readText(mirror), 'the rendered beta source policy mirrors the canonical policy').toBe(readText(canonical));
-  const policy = readJson<BetaSourcePolicy>(canonical);
-  const groups = readJson<readonly BetaScopeGroup[]>(
-    join(REPO_ROOT, 'web/src/widgets/ar-v3-beta-status/ui/scope_groups.json'),
-  );
-  const topics = new Set(policy.items.map((item) => item.id));
-  const sources = new Set(Object.keys(policy.sources));
-  expect(groups.flatMap((group) => group.items).sort(), 'the preview groups cover the policy once')
-    .toEqual([...topics].sort());
-  expect(policy.items.flatMap((item) => item.sources).every((source) => sources.has(source)),
-    'every displayed source is in the canonical policy').toBe(true);
-  return new Set([...topics, ...sources, ...groups.map((group) => group.id)]);
-}
-
 /** Everything a contract or a frozen seam document puts on a screen. */
 export function contractVocabulary(): ReadonlySet<string> {
-  return new Set([...contractEnums(), ...csvColumnNames(), ...manifestRoles(), ...betaPolicyIdentifiers()]);
+  return new Set([...contractEnums(), ...csvColumnNames(), ...manifestRoles()]);
 }
 
 /** The members of the contract's `ProjectSection`, which the section badges print. */
@@ -1114,6 +1074,9 @@ const FINDINGS: readonly Finding[] = [
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}P`, category: 'accessibility' }),
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}Q`, category: 'insulation' }),
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}R`, category: 'sound' }),
+  // `CRIT-SEAL-50` (contract 1.51.0): the two categories of the groups of candidates of the extended review published as findings.
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}S`, category: 'drawing_discrepancy' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}T`, category: 'cross_source' }),
 ];
 
 /*
@@ -1173,7 +1136,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.49.0',
+    contract_version: '1.52.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1185,7 +1148,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.49.0',
+    contract_version: '1.52.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1329,10 +1292,6 @@ const KEYS = {
   executorRoutingRules: executorRoutingRulesKey(),
   // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа», the registry's fifteen rows.
   analysisProfiles: queryKeys.analysis.profiles(),
-  // `AR-V3-BETA-PACK-STATUS-WEB-01`: whether the reviewed AR v3 pack is installed. A key of
-  // `KEYS` is seeded in the loaded state and ERRORED in `failedClient`, so the settings panel and
-  // the version's run list are rendered installed, loading (cold) and failed without a case of their own.
-  arV3PackStatus: queryKeys.runs.arV3PackStatus(),
   dashboardSummary: queryKeys.dashboard.summary(),
   // The home page's own two reads (`W50-HOME-01`), seeded by `W50-SHELL-FRAME` so the recent
   // list and the administrator's tile render loaded rather than pending in every state.
@@ -1492,7 +1451,6 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   }
   client.setQueryData(KEYS.executorRoutingRules, ruleList('legacy'));
   client.setQueryData(KEYS.analysisProfiles, { items: ANALYSIS_PROFILES });
-  client.setQueryData(KEYS.arV3PackStatus, installedPackFixture());
   // A current snapshot and the three ways another one can stand; two designations; two hits;
   // a document with a heading, a body paragraph and an unreliable table row.
   client.setQueryData(KEYS.normSnapshots, { items: NORM_SNAPSHOTS, page });
@@ -2042,77 +2000,6 @@ const QUEUE_REQUEST: RegistrationRequest = {
   submitted_at: '2026-10-08T00:00:00Z',
 };
 
-/**
- * A refusal of `startArV3BetaGroup` with the classifiers the server attaches, for the control's
- * failure branches. Cyrillic message: only the sentences this application wrote are judged.
- */
-function startRefusal(
-  status: number,
-  code: ErrorCode,
-  details?: Record<string, string | number | boolean | null>,
-): ApiError {
-  const envelope: ErrorEnvelope = {
-    contract_version: '1.49.0',
-    error_code: code,
-    message: 'Сообщение об отказе.',
-    correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
-    retryable: code === 'dependency_unavailable' || code === 'idempotency_key_in_progress',
-    ...(details === undefined ? {} : { details }),
-  };
-  return new ApiError(status, envelope, '0f0e9d8c-7b6a-4948-b726-150413021100');
-}
-
-/**
- * Every state of «Запустить шесть проверок АР v3» that a settled mutation produces: pending, each
- * refusal the start raises, the generic reading of a failure outside that set, and a 202 without a
- * usable group address. The control keeps these in a `useMutation` observer one static pass cannot
- * settle, so the presentational view is rendered once per failure (`D-82`).
- */
-function startGroupViews(): ReactElement {
-  const failures = [
-    startRefusal(503, 'dependency_unavailable', { dependency: 'ar_v3_trusted_pack' }),
-    startRefusal(503, 'dependency_unavailable', { dependency: 'metadata_store' }),
-    startRefusal(422, 'required_norm_unavailable', { reference_kind: 'norms_snapshot' }),
-    startRefusal(422, 'version_classification_required'),
-    startRefusal(422, 'section_profile_unavailable'),
-    startRefusal(422, 'analysis_input_invalid', { reason: 'missing_required_input' }),
-    startRefusal(422, 'analysis_input_budget_exceeded', { character_count: 300000, budget_characters: 152000 }),
-    startRefusal(409, 'idempotency_key_reuse'),
-    startRefusal(409, 'idempotency_key_in_progress'),
-    startRefusal(409, 'idempotency_key_stale'),
-    startRefusal(404, 'not_found'),
-    startRefusal(401, 'authentication_required'),
-    startRefusal(403, 'permission_denied'),
-    startRefusal(409, 'conflict', { conflict_reason: 'ar_v3_start_not_enabled' }),
-    startRefusal(500, 'internal_error'),
-    new TransportError('Запрос не дошёл.', { retryable: true }),
-  ].map(classifyArV3GroupStartFailure);
-  // The cost reading is held by the caller's intent (a `useMutation` observer), so the estimate's own two branches -- its
-  // request in flight and its refusal -- are given to the view as the reading that produces them.
-  const cost = (over: Partial<NonNullable<StartArV3GroupViewProps['cost']>>) => ({
-    estimate: null, ceiling: '', approved: false, consent: undefined, draftConsent: undefined, pending: false, error: null,
-    reset: () => undefined, request: () => undefined, setCeiling: () => undefined, setApproved: () => undefined, ...over,
-  }) as unknown as NonNullable<StartArV3GroupViewProps['cost']>;
-  const view = (
-    key: string, pending: boolean, failure: ReturnType<typeof classifyArV3GroupStartFailure> | null,
-    withCost?: NonNullable<StartArV3GroupViewProps['cost']>,
-  ) =>
-    createElement(StartArV3GroupView, {
-      key, projectUid: PROJECT_UID, versionUid: VERSION_UID, pending, failure, onSend: () => undefined,
-      ...(withCost === undefined ? {} : { cost: withCost }),
-    });
-  return createElement(
-    'div',
-    null,
-    view('idle', false, null),
-    view('pending', true, null),
-    view('estimating', false, null, cost({ pending: true })),
-    view('estimate-refused', false, null, cost({ error: startRefusal(503, 'dependency_unavailable', { dependency: 'metadata_store' }) })),
-    ...failures.map((failure, index) => view(`failure-${index}`, false, failure)),
-    view('malformed', false, MALFORMED_GROUP_ANSWER),
-  );
-}
-
 type ScreenCase = {
   readonly name: string;
   readonly make: () => ReactElement;
@@ -2245,7 +2132,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.49.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.52.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2454,102 +2341,6 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'start-run-cost-dialog',
     make: startRunCostDialogShapes,
-  },
-  // `AR-V3-BETA-SCREEN-GATE-REPAIR-01`: these four branches are conditional on the
-  // group ID and its separate read, so the default settings route cannot reach them.
-  {
-    name: 'ar-v3-group-pending',
-    make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
-  },
-  // `AR-V3-DECISIONS-01`: the findings under an available scope, in the states a default cache does
-  // not select: the findings read cold (loading), refused, and loaded for an expert. The list is the
-  // widget's own export, so these states carry Cyrillic data only (the whole group's fixture holds
-  // Latin item labels that the panel has always shown as the server sent them).
-  {
-    name: 'ar-v3-run-findings-loading',
-    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
-  },
-  {
-    name: 'ar-v3-run-findings-read-refused',
-    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
-    seedClient: (client) => seedError(
-      client, queryKeys.runs.findings(AVAILABLE_RUN_ID), apiError(503, 'dependency_unavailable'),
-    ),
-  },
-  {
-    name: 'ar-v3-run-findings-loaded-for-an-expert',
-    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
-    seedClient: (client) => {
-      client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([v3FindingFixture()]) });
-      client.setQueryData(queryKeys.account.me(), accountFixture(['expert']));
-    },
-  },
-  {
-    name: 'ar-v3-run-findings-loaded-for-an-administrator',
-    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
-    seedClient: (client) => {
-      client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([v3FindingFixture()]) });
-      client.setQueryData(queryKeys.account.me(), accountFixture(['admin']));
-    },
-  },
-  {
-    name: 'ar-v3-run-findings-none',
-    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
-    seedClient: (client) => client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([]) }),
-  },
-  {
-    name: 'ar-v3-group-invalid-id',
-    make: () => createElement(ArV3BetaReview, { groupId: 'arg_bad' }),
-  },
-  {
-    name: 'ar-v3-group-read-refused',
-    make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
-    seedClient: (client) => seedError(
-      client, queryKeys.runs.arV3GroupReview('arg_01M2545JSD15ETSNNV904X991K'),
-      apiError(503, 'dependency_unavailable'),
-    ),
-  },
-  {
-    name: 'ar-v3-group-inconsistent-answer',
-    make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
-    seedClient: (client) => client.setQueryData(
-      queryKeys.runs.arV3GroupReview('arg_01M2545JSD15ETSNNV904X991K'),
-      { group_id: 'arg_01M2545JSD15ETSNNV904X991K', version_uid: VERSION_UID, members: [] },
-    ),
-  },
-  // `AR-V3-BETA-PACK-STATUS-WEB-01`: the pack panel in the states a default cache does not
-  // select. Loading (cold) and failed (`failedClient`) come from `KEYS`; installed is seeded by
-  // `loadedClient`, but these cases seed their own so they do not depend on that.
-  {
-    name: 'ar-v3-pack-installed',
-    make: () => createElement(ArV3BetaPack),
-    seedClient: (client) => client.setQueryData(KEYS.arV3PackStatus, installedPackFixture()),
-  },
-  {
-    name: 'ar-v3-pack-not-installed',
-    make: () => createElement(ArV3BetaPack),
-    seedClient: (client) => client.setQueryData(KEYS.arV3PackStatus, NOT_INSTALLED_PACK),
-  },
-  {
-    name: 'ar-v3-pack-fault-without-review',
-    make: () => createElement(ArV3BetaPack),
-    seedClient: (client) =>
-      client.setQueryData(KEYS.arV3PackStatus, withoutMember(installedPackFixture(), 'review')),
-  },
-  {
-    name: 'ar-v3-pack-fault-unknown-state',
-    make: () => createElement(ArV3BetaPack),
-    seedClient: (client) => client.setQueryData(KEYS.arV3PackStatus, { state: 'withdrawn' }),
-  },
-  {
-    name: 'ar-v3-pack-fault-wrong-scopes',
-    make: () => createElement(ArV3BetaPack),
-    seedClient: (client) =>
-      client.setQueryData(KEYS.arV3PackStatus, { ...installedPackFixture(), scope_ids: ['F1', 'F2'] }),
-  },
-  {
-    name: 'ar-v3-group-start-states',
-    make: startGroupViews,
   },
   // `W60-PRICE-LIST-01`: the project's «Оптимизация» tab in every branch its widgets have.
   ...optimisationShapes(),
@@ -4306,14 +4097,6 @@ export const CACHE_STATES: readonly {
   { state: 'failed-run-unclassified', run: { state: 'failed', terminal_reason: 'version_classification_required', published_finding_count: 0 } },
   { state: 'failed-run-no-profile', run: { state: 'failed', terminal_reason: 'section_profile_unavailable', published_finding_count: 0 } },
   { state: 'partial-run', run: { state: 'partial', degradation_set: ['text_analysis'] } },
-  {
-    state: 'ar-v3-beta-published',
-    run: {
-      state: 'published', analysis_profile_id: AR_V3_BETA_PROFILE_ID,
-      published_finding_count: 0,
-      stages: [{ stage_id: 'ar_v3_citation_review', status: 'succeeded' }],
-    },
-  },
   { state: 'running', run: { state: 'running', terminal_at: null, published_finding_count: 0 } },
   { state: 'refused', run: null },
   { state: 'empty', run: null },
@@ -4357,7 +4140,7 @@ export const CACHE_STATES: readonly {
   { state: 'queued-run', run: { state: 'queued', terminal_at: null, published_finding_count: 0 } },
   /*
    * `HOSTS-L1` (`D-660`, contract 1.48.0): a run on the stage layout that waits names the model it waits for and the cause. A line names two
-   * models at most, so four states put all seven members of `RunWaitCause` on the screen, the last with «и ещё N».
+   * models at most, so five states put all eight members of `RunWaitCause` on the screen, one with «и ещё N».
    */
   ...(
     [
@@ -4369,6 +4152,8 @@ export const CACHE_STATES: readonly {
         'executor_at_capacity',
         [['text:main', 'gpt-6-sol', 'at_capacity'], ['blocks:judge', 'gpt-6.1-sol', 'at_capacity'], ['norms:main', 'gpt-6-astra', 'at_capacity']],
       ],
+      // `CRIT-SEAL-50` (contract 1.51.0): the night window of the vectors is open, so the stand issues no new run until it closes.
+      ['queued-run-waits-vector-window', 'model_unavailable', [['text:main', 'gpt-6-sol', 'vector_window']]],
     ] as const
   ).map(([state, reason, cells]) => ({
     state,
@@ -4773,10 +4558,6 @@ describe('the guard reads a contract rather than a list of words', () => {
     expect(csvColumnNames().size, 'OD-11 and W56a declare nineteen CSV columns').toBe(19);
     expect(csvColumnNames().has('finding_uid')).toBe(true);
     expect(manifestRoles().has('source.document'), 'the stage registry declares it').toBe(true);
-    expect(betaPolicyIdentifiers().has('C01')).toBe(true);
-    expect(betaPolicyIdentifiers().has('D1_LOCAL')).toBe(true);
-    expect(betaPolicyIdentifiers().has('F1')).toBe(true);
-    expect(betaPolicyIdentifiers().has('C23')).toBe(false);
 
     // `proxy` must NOT be derivable, or `NOT_DERIVABLE`'s first entry is stale.
     expect(VOCABULARY.has('proxy'), 'proxy is now in the contract; delete it from NOT_DERIVABLE').toBe(false);
@@ -4823,8 +4604,6 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('application/pdf', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('Не более 25 MiB.', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('PC-01', VOCABULARY)).toEqual([]);
-    expect(unexplainedLatin('АР v3, F1, C01, D1_LOCAL', VOCABULARY)).toEqual([]);
-    expect(unexplainedLatin('АР v3, F3, C23, D7_LOCAL', VOCABULARY)).toEqual(['F', 'C', 'D', 'LOCAL']);
     expect(unexplainedLatin('2026-09-10T08:00:00.000Z', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('Один PDF за загрузку.', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('Один ZIP-архив за загрузку.', VOCABULARY)).toEqual([]);
@@ -4858,7 +4637,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.49.0',
+            contract_version: '1.52.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4880,7 +4659,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.49.0',
+            contract_version: '1.52.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -5003,7 +4782,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('3 sections', VOCABULARY)).toEqual(['sections']);
     expect(unexplainedLatin('Заняло s', VOCABULARY)).toEqual(['s']);
     // A digit that continues a word or a version is not read from its middle.
-    expect(unexplainedLatin('АР v3 s', VOCABULARY)).toEqual(['s']);
+    expect(unexplainedLatin('План v3 s', VOCABULARY)).toEqual(['s']);
   });
 });
 
@@ -6069,10 +5848,6 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   {
     label: 'Загрузка: архивирование пресета…',
     why: 'The archive control shows the pending state only while its mutation is in flight; one static render cannot start a mutation (the live test presses «Убрать в архив»).',
-  },
-  {
-    label: 'Решение не записано',
-    why: 'The findings list under an AR v3 scope shows this only after the appendDecision mutation settles with a failure. One static render cannot press «Принять» or «Отклонить» or seed the mutation observer through a query cache (the live test in tests/unit/analysis-settings presses them).',
   },
   {
     label: 'Действие не выполнено.',

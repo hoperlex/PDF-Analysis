@@ -130,6 +130,17 @@ active refs, worktrees, running jobs, pending decisions and deployment state in
 concurrent or isolating work and removed after integration when their clean, contained
 state has been verified. `scripts/worktree_cleanup.py` is the cautious cleanup tool.
 
+### 7.2 Questions to the owner
+
+Owner rule of 2026-11-10. Every question to the owner is a poll (`AskUserQuestion` or the
+client's structured choice) whenever the answer can reasonably be offered as options.
+
+- Frame the poll in the current case: the facts it rests on, concrete options, the
+  recommended option first.
+- Ask in prose only for a free value that options cannot carry: a name, a URL, a secret.
+- A message never ends with an open question in prose.
+- When a tool call is declined, stop and ask by poll what to do instead of retrying it.
+
 ## 8. Checks proportional to the change
 
 Choose checks from the changed behavior and the failure it could cause. Record each command,

@@ -60,9 +60,9 @@ from auditmanager.api.schemas.documents import (
 )
 from auditmanager.api.schemas.findings import (
     EvidenceView,
+    FindingBlockEvidenceView,
     FindingDetailView,
     FindingView,
-    NormCitationView,
     ObservationView,
     ProvenanceView,
 )
@@ -1257,14 +1257,11 @@ class RunAdapter(_SessionHolder):
         text_profiles: Any = None,
         providers: Any = None,
         route_freezer: Any = None,
-        ar_v3_pack_registry: Any = None,
         dispatch_groups: bool = True,
-        ar_v3_installed_pack: Any = None,
         preset_resolver: Any = None,
         cost_preflight: Any = None,
         require_cost_consent: bool = False,
         group_admitter: Any = None,
-        ar_v3_start_allowed: bool = False,
         stage_plans: Any = None,
     ) -> None:
         super().__init__(session_factory)
@@ -1273,13 +1270,6 @@ class RunAdapter(_SessionHolder):
         # same object is handed to the three start commands and to the cost preflight, so the estimate, the consent and the plan a run
         # freezes are one reading. ``None`` is a bare adapter (and the many tests that build one): the legacy route, exactly as before.
         self._stage_plans = stage_plans
-        # `AR-V3-OPT-IN` (design 4.2). The deployment's allowance to **start** an AR v3 group or to ask what one costs
-        # (``AR_V3_BETA_START_ALLOWED``, read once by the composition root, ``False`` by default and for every bare
-        # adapter a test builds). The pack alone no longer allows a start; execution, reading and review need only the
-        # pack. ``test_composition_pins_the_v3_start_allowance`` pins what the root passes.
-        if type(ar_v3_start_allowed) is not bool:
-            raise ValueError("ar_v3_start_allowed must be a boolean")
-        self._ar_v3_start_allowed = ar_v3_start_allowed
         # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 13). Admits a start on an executor group, or by the routing rules
         # while the mode is `rules`, in the start's own transaction; ``None`` is the `environment` source (and the many
         # tests that build a bare adapter): a start that names a group is then refused, and one that names nothing is
@@ -1296,13 +1286,8 @@ class RunAdapter(_SessionHolder):
         # start. Both ``None`` keeps the many tests that build a bare adapter as they are.
         self._providers = providers
         self._route_freezer = route_freezer
-        self._ar_v3_pack_registry = ar_v3_pack_registry
         # `EXEC2-INT-3`: the in-process claim refuses pending group Runs unless the source is `database`.
         self._dispatch_groups = dispatch_groups
-        # `AR-V3-BETA-PACK-STATUS-API-01`. The parsed manifest the registry above was built from
-        # (``ParsedPackManifest``), or ``None`` while none is installed. Only the status read uses
-        # it; group start and the executor still decide from the registry.
-        self._ar_v3_installed_pack = ar_v3_installed_pack
         # `W59-SECTION-SEAL-01`. The sealed section -> (profile, bundle) table run start and
         # re-audit route through, and the registry resolver the executor runs a run's pinned
         # profile with. The composition root always passes both
@@ -1337,7 +1322,7 @@ class RunAdapter(_SessionHolder):
             from auditmanager.runs.preflight import RunCostPreflight
             self._cost_preflight = RunCostPreflight(section_profiles=section_profiles, text_profiles=text_profiles,
                 provider_config=provider_config, provider_mode=provider_mode, connection_route=route_freezer,
-                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry, blob_store=blob_store,
+                preset_resolver=preset_resolver, blob_store=blob_store,
                 group_admitter=group_admitter, stage_plans=stage_plans)
         if require_cost_consent and self._cost_preflight is None:
             raise ValueError("served analysis starts require a cost preflight policy")
@@ -1377,122 +1362,6 @@ class RunAdapter(_SessionHolder):
                 **({"executor_group_id": executor_group_id} if executor_group_id is not None else {}))
         value = self._read(estimate)
         return models.RunCostEstimate.model_validate(value.as_dict())
-
-    def _ar_v3_installed_pack_state(self) -> bool:
-        """Whether a reviewed pack is installed, as group start decides it (the registry, not the manifest record)."""
-        registry = self._ar_v3_pack_registry
-        return registry is not None and registry.select_beta() is not None
-
-    def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate:
-        if self._cost_preflight is None:
-            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
-        # `AR-V3-OPT-IN`: asked for a price the start would refuse, the answer is the start's refusal, not a figure. With no
-        # pack installed this passes and the estimate gives the answer it always gave (`dependency_unavailable`).
-        from auditmanager.runs.public import require_start_allowed
-
-        require_start_allowed(
-            pack_installed=self._ar_v3_installed_pack_state(),
-            start_allowed=self._ar_v3_start_allowed,
-        )
-        value = self._read(lambda session: self._cost_preflight.estimate_group(session,
-            version_uid=version_uid, relaxed_limits=relaxed_limits))
-        return models.RunCostEstimate.model_validate(value.as_dict())
-
-    def start_ar_v3_group(
-        self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
-        cost_consent: Mapping[str, Any] | None = None,
-        cost_actor_uid: str | None = None,
-        started_by_user_uid: str | None = None,
-    ) -> models.ArV3BetaGroup:
-        """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
-
-        The ordinary ``start_run`` does three things after its command and this method did
-        none: it advanced the Run ``created -> queued`` and enqueued its Job in the
-        accepting transaction, and after the commit it submitted the work to the carrier. A
-        group left six ``created`` Runs and no Job, which a served carrier's poller
-        (``JobRepository.next_queued_run``: a queued Job of a queued or running Run) never
-        finds. The same three steps are taken here for each member, with the same ordering and
-        the same replay rule, and the domain command stays free of both Job and carrier.
-        """
-        from dataclasses import replace
-
-        from auditmanager.jobs.public import JobRepository
-        from auditmanager.runs import RunRepository
-        from auditmanager.runs.public import get_ar_v3_group, start_ar_v3_group
-
-        def work(session: Session) -> Any:
-            started = start_ar_v3_group(
-                session,
-                version_uid=version_uid,
-                idempotency_key=idempotency_key,
-                relaxed_limits=relaxed_limits,
-                provider_mode=self._provider_mode,
-                pack=(None if self._ar_v3_pack_registry is None
-                      else self._ar_v3_pack_registry.select_beta()),
-                input_budget_characters=self._input_budget_characters,
-                connection_route=self._route_freezer,
-                cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
-                cost_consent=cost_consent,
-                cost_actor_uid=cost_actor_uid,
-                # `AR-V3-OPT-IN`: the allowance is checked inside the command, after the replay branches; the starter is
-                # recorded on each member as the ordinary start records it (`R-151v`).
-                start_allowed=self._ar_v3_start_allowed,
-                started_by_user_uid=started_by_user_uid,
-            )
-            if started.replayed:
-                return started
-            # `D-20`, as in `start_run`: `created -> queued` is taken in the transaction that
-            # accepts the Runs, which has just resolved the pack, the profile, the snapshot and
-            # the six verified sets, and the Job shares it, so a process dying after the 202
-            # leaves claimable rows. Member order is scope order, so the Jobs queue F1 .. S2.
-            for member in started.group.members:
-                RunRepository().advance(
-                    session, run_id=member.run_id, from_state="created", to_state="queued",
-                )
-                JobRepository().enqueue(session, run_id=member.run_id)
-            # The answer says what was accepted (`queued`), not the state read before the edge.
-            return replace(started, group=get_ar_v3_group(session, started.group.group_id))
-
-        started = self._write(work)
-        if not started.replayed:
-            # A replay submits nothing: the key's first request already did.
-            for member in started.group.members:
-                self._carrier.submit(self._job(member.run_id))
-        return models.ArV3BetaGroup.model_validate(asdict(started.group))
-
-    def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
-        from auditmanager.runs.public import get_ar_v3_group
-
-        view = self._read(lambda session: get_ar_v3_group(session, group_id))
-        return models.ArV3BetaGroup.model_validate(asdict(view))
-
-    def get_ar_v3_group_review(self, *, group_id: str) -> models.ArV3BetaGroupReview:
-        from auditmanager.runs.v3_group_review import read_v3_group_review
-
-        view = self._read(lambda session: read_v3_group_review(
-            session, group_id, blob_store=self._blob_store,
-        ))
-        return models.ArV3BetaGroupReview.model_validate(asdict(view))
-
-    def get_ar_v3_pack_status(self) -> models.ArV3BetaPackStatus:
-        """What the server holds, as the manifest said it: no database, no provider.
-
-        The review is the human attestation the manifest carried; nothing here says it is true.
-        """
-        installed = self._ar_v3_installed_pack
-        if installed is None:
-            return models.ArV3BetaPackStatus(state="not_installed")
-        pack = installed.pack
-        return models.ArV3BetaPackStatus(
-            state="installed",
-            # `AR-V3-OPT-IN`: whether this deployment allows a start now (installed is capability; this is permission).
-            start_allowed=self._ar_v3_start_allowed,
-            analysis_profile_id=pack.analysis_profile_id,
-            prompt_bundle_id=pack.prompt_bundle_id,
-            pack_sha256=pack.sha256,
-            scope_ids=[scope.scope_id for scope in pack.scopes],
-            review=models.ArV3BetaPackReview.model_validate(asdict(installed.review)),
-        )
 
     def start_run(
         self,
@@ -1653,7 +1522,6 @@ class RunAdapter(_SessionHolder):
                 provider_config=self._provider_config,
                 text_profiles=self._text_profiles,
                 providers=self._providers,
-                ar_v3_pack_registry=self._ar_v3_pack_registry,
                 dispatch_groups=self._dispatch_groups,
             )
 
@@ -1720,51 +1588,6 @@ class RunAdapter(_SessionHolder):
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._read(lambda session: _run_status_view(session, run_id))
 
-    def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
-        """`R-146at`. The canonical report of an AR v3 beta Run, from its saved CITE stage.
-
-        The runs context owns the rule (``runs.v3_norm_report``: the sealed review, the
-        certified citation partitions and their one-to-one comparison); this adapter owns the
-        read snapshot, the refusals the operation declares and the mapping into the frozen
-        ``NormVerificationReport``. A Run of any other profile is ``not_found``. A v3 Run that
-        has no verified saved review (not terminal, failed, cancelled, or a saved review that
-        fails verification) answers the declared ``503 dependency_unavailable`` and returns
-        nothing unverified; the reason goes to the log, not to the wire.
-        """
-        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
-        from auditmanager.runs import RunRepository
-        from auditmanager.runs.v3_norm_report import read_v3_norm_verification
-
-        def unavailable() -> DomainError:
-            return DomainError(
-                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader",
-            )
-
-        def work(session: Session) -> models.NormVerificationReport:
-            session.connection(execution_options={
-                "isolation_level": "REPEATABLE READ", "postgresql_readonly": True,
-            })
-            run = RunRepository().get(session, run_id)
-            if run.analysis_profile_id != str(AR_V3_BETA_PROFILE_ID):
-                raise _not_found("NormVerificationReport")
-            if run.state not in {"published", "partial"}:
-                raise unavailable()
-            try:
-                view = read_v3_norm_verification(session, run_id, blob_store=self._blob_store)
-            except DomainError as error:
-                if error.code not in {
-                    ErrorCode.ANALYSIS_INPUT_INVALID, ErrorCode.STORAGE_INTEGRITY_ERROR,
-                }:
-                    raise
-                logging.getLogger(__name__).warning(
-                    "norm verification refused for %s: %s", run_id,
-                    dict(error.detail_fields).get("reason"),
-                )
-                raise unavailable() from error
-            return models.NormVerificationReport.model_validate(_norm_verification_body(view))
-
-        return self._read(work)
-
     def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
         """`NORM-REFS-RUN-01`. The norms the run's saved text cites, against its snapshot.
 
@@ -1816,51 +1639,6 @@ class RunAdapter(_SessionHolder):
             )
 
         return self._read(work)
-
-
-def _norm_verification_body(view: Any) -> dict[str, Any]:
-    """The frozen ``NormVerificationReport`` of one AR v3 beta Run.
-
-    ``required_value`` and ``stated_value`` are never put on the wire for this profile: they are
-    stored (the database requires them for a normative finding) but the beta policy
-    ``numeric_output_policy`` is ``expert_review_required`` and no edition check exists, so a
-    number is not served. Both properties are optional in the contract.
-    """
-
-    def citation(item: Any) -> dict[str, Any]:
-        return {
-            "norms_snapshot_id": item.norms_snapshot_id,
-            "norm_document_id": item.norm_document_id,
-            "norm_paragraph_id": item.norm_paragraph_id,
-            "designation": item.designation, "title": item.title,
-            "clause_number": item.clause_number, "page_label": item.page_label,
-            "quote": item.quote, "state": item.state,
-            "source_attribution": item.source_attribution,
-        }
-
-    def partition(item: Any) -> dict[str, Any]:
-        return {
-            "finding_observation_id": item.finding_observation_id,
-            "norm_citations": [citation(entry) for entry in item.citations],
-        }
-
-    body: dict[str, Any] = {
-        "run_id": view.run_id, "norms_snapshot_id": view.norms_snapshot_id,
-        "norm_retrieval_set_id": view.norm_retrieval_set_id, "status": view.status,
-        "findings": [
-            {
-                "finding_uid": finding.finding_uid,
-                "canonical": partition(finding.canonical),
-                "merged_observations": [partition(m) for m in finding.merged_observations],
-            }
-            for finding in view.findings
-        ],
-        "withheld_by_reason": dict(view.withheld_by_reason),
-        "textless_pages": list(view.textless_pages),
-    }
-    if view.error_code is not None:
-        body["error_code"] = view.error_code
-    return body
 
 
 def resolve_analysis_preset(session: Session, preset_id: str) -> Any:
@@ -1926,16 +1704,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     # `stage_result.metrics` -- `D-15` measures that pair as a sum over attempts wearing
     # one attempt's provenance, and that ambiguity is not being inherited into a contract.
     cost = repository.cost(session, run_id)
-    # `AR-V3-OPT-IN` (design 4.4): which analysis produced the run, derived from its pinned pair (one definition,
-    # ``runs.analysis_kind``); a member of an AR v3 group also names its group and scope, read from the membership row.
-    from auditmanager.runs.public import ANALYSIS_AR_V3_BETA, analysis_kind, ar_v3_membership
-
-    kind = analysis_kind(run.analysis_profile_id, run.prompt_bundle_id)
-    membership = ar_v3_membership(session, run_id) if kind == ANALYSIS_AR_V3_BETA else None
     return RunStatusView(
-        analysis_kind=kind,
-        ar_v3_group_id=None if membership is None else membership[0],
-        ar_v3_scope_id=None if membership is None else membership[1],
         started_by_user_uid=started_by,
         started_by_label=started_by_label,
         reaudit_of_run_id=run.reaudit_of_run_id,
@@ -2082,7 +1851,10 @@ def _planned_run_status_fields(session: Session, run: Any, state: str, plan: Any
     ``wait_reason`` is reported as for any group Run, and ``wait_cells`` names the cells that have no server to take them *now*: one read of
     ``executors.public.evaluate_wait`` over the plan's cells, the evaluation the sweep keeps ``wait_reason`` true with. It writes nothing,
     takes no lock and adds no table. A cell that can be bound is not named, and a run that could be bound now names none (the stored
-    reason is then one sweep behind, which is the sweep's own latency and not a second answer)."""
+    reason is then one sweep behind, which is the sweep's own latency and not a second answer).
+
+    A queued run with **no** stored reason is read once more, for the night window of the vectors (`EMBED-01`): while the window is open it is told
+    ``model_unavailable`` with every cell of its plan caused by ``vector_window`` (``precedents.public.window_wait``; derived, never stored)."""
     import json
 
     from auditmanager.api.schemas.runs import RunWaitCellView
@@ -2100,6 +1872,21 @@ def _planned_run_status_fields(session: Session, run: Any, state: str, plan: Any
         )
         if cells:
             fields["wait_cells"] = cells
+    elif state == "pending" and run.state == "queued":
+        # `EMBED-01` (ADR-0029 decision 8, `precedents/vectors/wait.py`), `CRIT-CAPTURE-01` part C. A queued run with no stored reason is held back by the
+        # night window of the vectors when it is open: the claim takes no run then. The wait is derived here and never stored (the sweep ends a stored
+        # `model_unavailable` after 30 minutes, and a window lasts hours), so the run is told `model_unavailable` with every cell of its plan caused
+        # by `vector_window`, and no `waiting_since`. The sentence (`window.text`) has no member of `RunStatus` to travel in; the cause is the word.
+        from auditmanager.precedents.public import window_wait
+
+        window = window_wait(session)
+        if window is not None:
+            document = json.loads(plan) if isinstance(plan, str) else plan
+            fields["wait_reason"] = "model_unavailable"
+            fields["wait_cells"] = tuple(
+                RunWaitCellView(cell_key=cell.cell_key, model_id=cell.model_id, access=cell.access, cause=window.cause)
+                for cell in cell_requests(document)
+            )
     return fields
 
 
@@ -2116,10 +1903,7 @@ def _queue_binding_facts(session: Session, run_ids: Sequence[str]) -> dict[str, 
     return found
 
 
-def _observation_view(
-    row: Any, evidence: Sequence[Any],
-    citations: Mapping[str, tuple[NormCitationView, ...]] | None = None,
-) -> ObservationView:
+def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
     return ObservationView(
         finding_observation_id=row.finding_observation_id,
         run_id=row.run_id,
@@ -2146,61 +1930,49 @@ def _observation_view(
             model_call_id=row.model_call_id,
         ),
         proposed_severity=getattr(row, "proposed_severity", None),
-        # `R-146as`: the certified citations of an AR v3 beta finding; ``None`` (as before) for
-        # every other observation. ``required_value`` / ``stated_value`` are never served for
-        # this profile (see ``_norm_verification_body``).
-        norm_citations=None if citations is None else citations.get(row.finding_observation_id),
+        # `CRIT-SEAL-50`: only a block-anchored observation says so; `text_span` is the absent default, so a text body is unchanged.
+        grounding_kind=_grounding_kind_view(row),
     )
 
 
-def _v3_beta_citations(
-    session: Session, rows: Sequence[Any],
-) -> Mapping[str, tuple[NormCitationView, ...]]:
-    """The certified citations of the AR v3 beta findings among ``rows``, by observation.
+#: `CRIT-SEAL-50`: the grounding kind of a block-anchored observation, as the contract's `FindingGroundingKind` names it.
+_GROUNDING_PORTAL_BLOCK = "portal_block"
+#: The category of a finding made of a drawing and another source (`findings.publication.CATEGORY_CROSS_SOURCE`).
+_CATEGORY_CROSS_SOURCE = "cross_source"
 
-    Read through the same certified-partition reader the report uses, so a finding is never
-    shown with a citation the database has not certified. It fails closed: an inconsistent
-    partition is a ``storage_integrity_error``, never a finding listed without its citations.
+
+def _grounding_kind_view(row: Any) -> str | None:
+    kind = getattr(row, "grounding_kind", None)
+    return _GROUNDING_PORTAL_BLOCK if kind == _GROUNDING_PORTAL_BLOCK else None
+
+
+def _origin_view(row: Any) -> str | None:
+    """`CRIT-SEAL-50`: the «Источник» of a finding -- ``cross_check`` for a finding of drawing and another source, ``drawing`` for any other
+    block-anchored one; ``None`` (absent, meaning ``text``) for a finding of text spans, so a text finding's body is unchanged.
+
+    Decided by the canonical observation's category and grounding, not by its stage: ``finding_merge`` is also the stage of a drawing group
+    merged across windows (`findings.publication`), which is still a drawing finding.
     """
-    from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
-    from auditmanager.findings.public import CitationReadRefused, read_verified_citations
-
-    beta = str(AR_V3_BETA_PROFILE_ID)
-    mine = [row for row in rows if row.analysis_profile_id == beta]
-    if not mine:
-        return {}
-    try:
-        read = read_verified_citations(
-            session, run_id=mine[0].run_id, version_uid=mine[0].version_uid,
-            profile_id=beta, cite_stage_id="ar_v3_citation_review",
-        )
-    except CitationReadRefused as error:
-        logging.getLogger(__name__).warning(
-            "certified citations refused for %s: %s", mine[0].run_id, error,
-        )
-        raise DomainError(
-            ErrorCode.STORAGE_INTEGRITY_ERROR,
-            message="the certified citation partitions of the run are inconsistent",
-        ) from error
-    return {
-        partition.finding_observation_id: tuple(
-            NormCitationView(
-                norms_snapshot_id=item.norms_snapshot_id, norm_document_id=item.norm_document_id,
-                norm_paragraph_id=item.norm_paragraph_id, designation=item.designation,
-                title=item.title, clause_number=item.clause_number, page_label=item.page_label,
-                quote=item.quote, state=item.state, source_attribution=item.source_attribution,
-            ) for item in partition.citations
-        )
-        for finding in read.findings
-        for partition in (finding.canonical, *finding.merged_observations)
-    }
+    if getattr(row, "category", None) == _CATEGORY_CROSS_SOURCE:
+        return "cross_check"
+    return "drawing" if getattr(row, "grounding_kind", None) == _GROUNDING_PORTAL_BLOCK else None
 
 
 def _finding_view(
     row: Any, evidence: Sequence[Any], verdict: Any,
     merged_rows: Sequence[Any] = (),
-    citations: Mapping[str, tuple[NormCitationView, ...]] | None = None,
+    block_evidence: Sequence[Any] = (),
 ) -> FindingView:
+    # The blocks of the canonical observation (`Finding.block_evidence` mirrors it, as the citations do). None -- no block -- is absent from
+    # the body, as for every finding before the field existed.
+    blocks = tuple(
+        FindingBlockEvidenceView(
+            ordinal=item.ordinal, page_number=item.page_number, portal_block_id=item.portal_block_id,
+            bbox_norm=item.bbox_norm, crop_sha256=item.crop_sha256, recognised_quote=item.recognised_quote,
+        )
+        for item in sorted(block_evidence, key=lambda item: item.ordinal)
+        if item.finding_observation_id == row.finding_observation_id
+    )
     return FindingView(
         finding_uid=row.finding_uid,
         project_uid=row.project_uid,
@@ -2211,11 +1983,13 @@ def _finding_view(
         decided_severity=getattr(verdict, "decided_severity", None),
         latest_decision_id=getattr(verdict, "latest_decision_id", None),
         decision_recorded_at=getattr(verdict, "decision_recorded_at", None),
-        observation=_observation_view(row, evidence, citations),
+        observation=_observation_view(row, evidence),
         merged_observations=(
-            tuple(_observation_view(member, evidence, citations) for member in merged_rows)
+            tuple(_observation_view(member, evidence) for member in merged_rows)
             if merged_rows else None
         ),
+        block_evidence=blocks or None,
+        origin=_origin_view(row),
     )
 
 
@@ -2959,17 +2733,17 @@ class FindingAdapter(_SessionHolder):
         """
         from auditmanager.decisions import current_verdict
         from auditmanager.findings import (
-            group_published_findings, published_finding_evidence, published_findings,
+            group_published_findings, published_finding_block_evidence, published_finding_evidence, published_findings,
         )
 
         def work(session: Session) -> Sequence[FindingView]:
             rows = published_findings(session, run_id)
             evidence = published_finding_evidence(session, run_id)
-            citations = _v3_beta_citations(session, rows)
+            blocks = published_finding_block_evidence(session, run_id)
             views = [
                 _finding_view(group.canonical, evidence,
                               current_verdict(session, group.canonical.finding_uid),
-                              group.merged, citations)
+                              group.merged, blocks)
                 for group in group_published_findings(rows)
             ]
             if category is not None:
@@ -2983,8 +2757,8 @@ class FindingAdapter(_SessionHolder):
     def get_finding(self, *, finding_uid: str) -> FindingDetailView:
         from auditmanager.decisions import current_verdict, decision_history
         from auditmanager.findings import (
-            finding_by_uid, group_published_findings, published_finding_evidence,
-            published_findings,
+            finding_by_uid, group_published_findings, published_finding_block_evidence,
+            published_finding_evidence, published_findings,
         )
 
         def work(session: Session) -> FindingDetailView:
@@ -3002,13 +2776,13 @@ class FindingAdapter(_SessionHolder):
                     message="finding canonical observation changed during read",
                 )
             evidence = published_finding_evidence(session, row.run_id)
+            blocks = published_finding_block_evidence(session, row.run_id)
             verdict = current_verdict(session, finding_uid)
             history = decision_history(session, finding_uid)
             comments = [e.comment for e in history if e.comment]
             return FindingDetailView(
                 finding=_with_carried_origin(session, _with_execution_status(session, [_finding_view(
-                    row, evidence, verdict, matches[0].merged,
-                    _v3_beta_citations(session, members),
+                    row, evidence, verdict, matches[0].merged, blocks,
                 )]))[0],
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),
@@ -3239,6 +3013,17 @@ class MemoryCaptureAssembler:
     decision on a known observation reads nothing outside the database.
 
     A failure propagates (the decision fails loudly): nothing here falls back to a case without its crops or its citations.
+
+    **The mark shown at the decision** (`CRIT-CAPTURE-01` part D, plan-v5 2.1): the decision row carries the mark the server was giving the finding, the
+    revision of the pass it comes from and the verdict of the document's history that was shown (``precedents.public.shown_at_decision``). It is read in the
+    transaction of the decision, so it is the mark of THAT moment. Two captures do not ask for it, and the columns stay NULL, which says «none was known»:
+    a ``carried`` decision (the system wrote it, no expert was shown anything) and the sweep's repair of an earlier decision (``record_shown=False``: the
+    mark in force now is not the mark in force then, and a vote must never be made independent, or not, by a claim about a moment already past).
+    The values are decision metadata: :func:`~auditmanager.decision_memory.public.content_digest` is over the case's content only and never sees them.
+
+    The experts' ``comment`` events are kept too (`ADR-0029` decision 10, `CRIT-CAPTURE-01`): :meth:`capture_comment` hands one to the
+    memory in the same transaction (a comment is not a decision and never makes a case), and the first ✓/✕ of a case carries over the
+    comments written before it (:meth:`assemble` takes the observation's comment lock, then reads the ledger).
     """
 
     def __init__(self, *, geometry: Any, data_class: str | None = None) -> None:
@@ -3252,24 +3037,87 @@ class MemoryCaptureAssembler:
         self._reader = MemoryReader()
 
     def __call__(self, session: Session, event: Any, origin_kind: str) -> None:
-        self.capture(session, event, origin_kind)
+        from auditmanager.decision_memory.public import COMMENT_EVENT_TYPE
 
-    def capture(self, session: Session, event: Any, origin_kind: str) -> Any:
-        """Capture one ledger event; ``None`` for an event the memory does not keep (a ``comment``, `Q8`)."""
+        if event.event_type == COMMENT_EVENT_TYPE:
+            self.capture_comment(session, event)
+        else:
+            self.capture(session, event, origin_kind)
+
+    def capture(self, session: Session, event: Any, origin_kind: str, *, record_shown: bool = True) -> Any:
+        """Capture one ledger decision (a ✓ or a ✕); ``None`` for any other event. A ``comment`` goes through :meth:`capture_comment`.
+
+        ``record_shown`` is true for the capture in the decision's own transaction and false for the sweep's repair of an earlier one (see the class)."""
         from auditmanager.decision_memory.public import CAPTURED_EVENT_TYPES
 
         if event.event_type not in CAPTURED_EVENT_TYPES:
             return None
-        return self._repository.capture(session, self.assemble(session, event, origin_kind))
+        return self._repository.capture(session, self.assemble(session, event, origin_kind, record_shown=record_shown))
 
-    def assemble(self, session: Session, event: Any, origin_kind: str) -> Any:
-        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+    def capture_comment(self, session: Session, event: Any) -> Any:
+        """Keep one ledger ``comment`` event in the case of its observation, in the caller's transaction (`ADR-0029` decision 10).
+
+        ``waits_for_case`` (no ✓/✕ yet: the first one carries the comment over) and ``case_forgotten`` (a forgotten case takes no words
+        back) write nothing and are not errors. Any other refusal propagates, so the decision fails (`ADR-0027` decision 4).
+        """
+        return self._repository.capture_comment(
+            session, observation_id=event.finding_observation_id, comment=self._comment_fact(event)
+        )
+
+    def captured_comment_sources(self, session: Session, decision_ids: Sequence[str]) -> frozenset[str]:
+        """Which of these ledger ``comment`` events the memory already keeps (the sweep's question)."""
+        return self._repository.captured_comment_sources(session, decision_ids)
+
+    @staticmethod
+    def _comment_fact(event: Any) -> Any:
+        from auditmanager.decision_memory.public import CommentFact
+
+        # `or ""`: the memory's own check answers a comment without words (the ledger refuses one, so this is not reached today).
+        return CommentFact(
+            source_decision_id=event.decision_id, comment=event.comment or "", author_user_uid=event.author_user_uid,
+            decided_at=event.recorded_at,
+        )
+
+    def _earlier_comments(self, session: Session, event: Any) -> tuple[Any, ...]:
+        """The ``comment`` events of this observation that the ledger holds before ``event``, in the order they were written.
+
+        The caller holds the observation's comment lock (:meth:`assemble` takes it first), so a comment of a concurrent transaction is
+        either committed and seen here, or waits for this transaction and finds the case made.
+        """
+        from auditmanager.decision_memory.public import COMMENT_EVENT_TYPE
+        from auditmanager.decisions.public import decision_history
+
+        earlier = []
+        for entry in decision_history(session, event.finding_uid):
+            if entry.decision_id == event.decision_id:
+                break
+            if entry.event_type == COMMENT_EVENT_TYPE and entry.finding_observation_id == event.finding_observation_id:
+                earlier.append(self._comment_fact(entry))
+        return tuple(earlier)
+
+    @staticmethod
+    def _shown_at_decision(session: Session, event: Any, origin_kind: str, *, record_shown: bool) -> dict[str, Any]:
+        """The three members of ``DecisionFact`` that say what the server was showing: the keywords to give it, or none when none was known."""
+        if not record_shown or origin_kind == "carried":
+            return {}
+        from auditmanager.precedents.public import shown_at_decision
+
+        shown = shown_at_decision(session, event.finding_uid)
+        if shown is None:
+            return {}
+        return {
+            "precedent_label_at_decision": shown.label, "precedent_revision": shown.revision,
+            "precedent_history_verdict_shown": shown.history_verdict_shown,
+        }
+
+    def assemble(self, session: Session, event: Any, origin_kind: str, *, record_shown: bool = True) -> Any:
         from auditmanager.decision_memory.public import (
-            CaptureSnapshot, CaseContent, CaseOrigin, DecisionFact, EvidenceItem, NormRef, select_page_image_crops,
+            BlockEvidenceFact, CaptureSnapshot, CaseContent, CaseOrigin, DecisionFact, EvidenceItem, select_case_crops,
         )
         from auditmanager.documents.public import DocumentRepository
-        from auditmanager.findings import finding_by_uid, published_finding_evidence, published_findings
-        from auditmanager.findings.public import CitationReadRefused, read_verified_citations
+        from auditmanager.findings import (
+            finding_by_uid, published_finding_block_evidence, published_finding_evidence, published_findings,
+        )
         from auditmanager.shared.identity import VersionUid
 
         head = finding_by_uid(session, event.finding_uid)
@@ -3293,38 +3141,26 @@ class MemoryCaptureAssembler:
              if item.finding_observation_id == row.finding_observation_id),
             key=lambda item: item.evidence_ordinal,
         )
-
-        required_value = stated_value = None
-        references: list[Any] = []
-        if row.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID):
-            # The same certified-partition reader the finding views use; it fails closed on an inconsistent partition.
-            try:
-                certified = read_verified_citations(
-                    session, run_id=head.run_id, version_uid=head.version_uid,
-                    profile_id=str(AR_V3_BETA_PROFILE_ID), cite_stage_id="ar_v3_citation_review",
-                )
-            except CitationReadRefused as error:
-                raise DomainError(
-                    ErrorCode.STORAGE_INTEGRITY_ERROR,
-                    message="the certified citation partitions of the run are inconsistent",
-                ) from error
-            partition = next(
-                (
-                    candidate
-                    for finding in certified.findings
-                    for candidate in (finding.canonical, *finding.merged_observations)
-                    if candidate.finding_observation_id == row.finding_observation_id
-                ),
-                None,
+        # `dm-capture/2` (`F8-PUBLISH`, `CRIT-CAPTURE-01`): the blocks a candidate finding stands on come from the database, so they are
+        # read on EVERY capture, as the text evidence is. The digest is compared with the stored one, so a later decision handed none
+        # would compute another digest than the case captured with them and read as a conflict. Empty for a text finding, which stays
+        # `dm-capture/1` with its digest byte for byte.
+        block_evidence = tuple(
+            BlockEvidenceFact(
+                ordinal=item.ordinal, page_number=item.page_number, portal_block_id=item.portal_block_id, bbox=item.bbox_norm,
+                crop_sha256=item.crop_sha256, recognised_quote=item.recognised_quote,
             )
-            if partition is not None:
-                required_value, stated_value = partition.required_value, partition.stated_value
-                references = list(partition.citations)
+            for item in published_finding_block_evidence(session, head.run_id)
+            if item.finding_observation_id == row.finding_observation_id
+        )
 
         # The version carries its current classification (the section as of now, which is the section as of capture).
         version = DocumentRepository().get_version(session, VersionUid.parse(head.version_uid))
         classification = version.classification
 
+        # The observation's comment lock comes BEFORE the question "has it a case?" and before the ledger is read for its earlier
+        # comments (`MemoryRepository.lock_observation_comments`): a comment that overlaps this first ✓/✕ then cannot be missed by both.
+        self._repository.lock_observation_comments(session, row.finding_observation_id)
         # What lives in published artifacts is read only for an observation that has no case yet.
         known = self._repository.case_content_digest(session, row.finding_observation_id) is not None
         boxes: Mapping[str, Any] = {}
@@ -3342,21 +3178,14 @@ class MemoryCaptureAssembler:
             )
 
         evidence = tuple(_item(item) for item in stored)
-        crops = () if known else select_page_image_crops(evidence, self._geometry.portal_crops_in(session, head.run_id))
+        crops = () if known else select_case_crops(evidence, block_evidence, self._geometry.portal_crops_in(session, head.run_id))
 
         content = CaseContent(
             category=row.category, finding_text=row.finding_text, recommendation_text=row.recommendation_text,
-            proposed_severity=row.proposed_severity, required_value=required_value, stated_value=stated_value,
+            proposed_severity=row.proposed_severity, required_value=None, stated_value=None,
             stage_id=row.stage_id, analysis_profile_id=row.analysis_profile_id, prompt_bundle_id=row.prompt_bundle_id,
             provider_mode=row.provider_mode, evidence=evidence,
-            norm_refs=tuple(
-                NormRef(
-                    ordinal=number, norms_snapshot_id=ref.norms_snapshot_id, norm_document_id=ref.norm_document_id,
-                    norm_paragraph_id=ref.norm_paragraph_id, designation=ref.designation, clause_number=ref.clause_number,
-                    page_label=ref.page_label, quote=ref.quote, citation_state=ref.state,
-                )
-                for number, ref in enumerate(references, start=1)
-            ),
+            norm_refs=(), block_evidence=block_evidence,
         )
         return CaptureSnapshot(
             origin=CaseOrigin(
@@ -3367,6 +3196,9 @@ class MemoryCaptureAssembler:
             section_code=None if classification is None else classification.section_code,
             data_class=self._pinned_data_class or self._reader.settings(session).data_class,
             crops=crops,
+            # The first ✓/✕ of a case carries the notes written before it; a known case has them already (each comment was kept when
+            # it was written, or is the sweep's to repair).
+            earlier_comments=() if known else self._earlier_comments(session, event),
             decision=DecisionFact(
                 source_decision_id=event.decision_id, event_type=event.event_type, severity=event.severity,
                 # The memory keeps the expert's own words. A carried event's comment is the system sentence of
@@ -3374,6 +3206,7 @@ class MemoryCaptureAssembler:
                 # and `origin_kind = carried` already says it came from an earlier version.
                 comment=None if origin_kind == "carried" else event.comment,
                 author_user_uid=event.author_user_uid, origin_kind=origin_kind, decided_at=event.recorded_at,
+                **self._shown_at_decision(session, event, origin_kind, record_shown=record_shown),
             ),
         )
 
@@ -3391,16 +3224,51 @@ _UNCAPTURED_EVENTS = sql_text(
 )
 
 
+#: The ledger's ``comment`` events of observations that already have a case (`ADR-0029` decision 10). A comment of an observation with no
+#: case yet is not a candidate: the first ✓/✕ carries it over. A comment the memory already keeps is not a candidate either (the anti-join,
+#: as for decisions: once everything is repaired, a pass lists nothing). ``MemoryRepository.captured_comment_sources`` is asked again
+#: below, on the rows read, to guard the gap between this read and the capture; the cursor is the sequence number, as for decisions.
+_COMMENT_EVENTS_OF_CASES = sql_text(
+    """
+    SELECT e.sequence_no, e.decision_id, e.finding_uid, e.finding_observation_id, e.event_type, e.verdict, e.severity,
+           e.comment, e.author_label, e.author_user_uid, e.command_id, e.recorded_at, e.carried_from_decision_id
+      FROM expert_decision_event e
+     WHERE e.event_type = 'comment' AND e.sequence_no > :after
+       AND EXISTS (SELECT 1 FROM decision_memory_case k WHERE k.origin_observation_id = e.finding_observation_id)
+       AND NOT EXISTS (SELECT 1 FROM decision_memory_comment c WHERE c.source_decision_id = e.decision_id)
+     ORDER BY e.sequence_no
+     LIMIT :batch
+    """
+)
+
+
 class MemorySweepReport:
-    """What one sweep pass did: events captured, events that failed (they stay uncaptured and are retried)."""
+    """What one sweep pass did: decisions captured, decisions that failed (they stay uncaptured and are retried), and the same two
+    counts for the experts' comments (``comments_captured`` counts rows newly written; a comment of a forgotten case writes none)."""
 
-    __slots__ = ("captured", "failed")
+    __slots__ = ("captured", "failed", "comments_captured", "comments_failed")
 
-    def __init__(self, captured: int, failed: int) -> None:
+    def __init__(self, captured: int, failed: int, comments_captured: int = 0, comments_failed: int = 0) -> None:
         self.captured, self.failed = captured, failed
+        self.comments_captured, self.comments_failed = comments_captured, comments_failed
 
     def __repr__(self) -> str:
-        return f"MemorySweepReport(captured={self.captured}, failed={self.failed})"
+        return (
+            f"MemorySweepReport(captured={self.captured}, failed={self.failed}, "
+            f"comments_captured={self.comments_captured}, comments_failed={self.comments_failed})"
+        )
+
+
+def _ledger_event(row: Mapping[str, Any]) -> Any:
+    from auditmanager.decisions.public import DecisionEvent
+
+    return DecisionEvent(
+        decision_id=row["decision_id"], finding_uid=row["finding_uid"],
+        finding_observation_id=row["finding_observation_id"], event_type=row["event_type"], verdict=row["verdict"],
+        comment=row["comment"], author_label=row["author_label"], author_user_uid=row["author_user_uid"],
+        command_id=row["command_id"], recorded_at=row["recorded_at"], severity=row["severity"],
+        carried_from_decision_id=row["carried_from_decision_id"],
+    )
 
 
 class MemoryCaptureSweep:
@@ -3414,6 +3282,10 @@ class MemoryCaptureSweep:
     identity and the error's type, the event stays uncaptured -- and guard G1 keeps an erase or a purge from deleting its source -- and
     the next pass tries it again. Called as one pass of the worker's housekeeping loop (``__call__`` returns what it captured), at
     most once per ``interval_seconds``.
+
+    The same pass repairs the experts' comments of cases that exist (`CRIT-CAPTURE-01`): a ``comment`` event whose observation has a
+    case and which the memory does not keep yet is handed to :meth:`MemoryCaptureAssembler.capture_comment`, one transaction each, with a
+    cursor of its own. It runs after the decisions, so a case made in this pass has its later comments repaired in this pass.
     """
 
     def __init__(
@@ -3436,17 +3308,17 @@ class MemoryCaptureSweep:
         self._clock = clock or time.monotonic
         self._next_at: float | None = None
         self._after = 0
+        self._comments_after = 0
 
     def __call__(self) -> int:
         now = self._clock()
         if self._next_at is not None and now < self._next_at:
             return 0
         self._next_at = now + self._interval
-        return self.run_once().captured
+        report = self.run_once()
+        return report.captured + report.comments_captured
 
     def run_once(self) -> MemorySweepReport:
-        from auditmanager.decisions.public import DecisionEvent
-
         with self._sessions() as session:
             rows = session.execute(_UNCAPTURED_EVENTS, {"after": self._after, "batch": self._batch}).mappings().all()
         # A full batch means there may be more beyond the last one seen; a short one means the end was reached, so the next pass
@@ -3454,17 +3326,12 @@ class MemoryCaptureSweep:
         self._after = int(rows[-1]["sequence_no"]) if len(rows) == self._batch else 0
         captured = failed = 0
         for row in rows:
-            event = DecisionEvent(
-                decision_id=row["decision_id"], finding_uid=row["finding_uid"],
-                finding_observation_id=row["finding_observation_id"], event_type=row["event_type"], verdict=row["verdict"],
-                comment=row["comment"], author_label=row["author_label"], author_user_uid=row["author_user_uid"],
-                command_id=row["command_id"], recorded_at=row["recorded_at"], severity=row["severity"],
-                carried_from_decision_id=row["carried_from_decision_id"],
-            )
+            event = _ledger_event(row)
             origin_kind = "carried" if event.carried_from_decision_id else "direct"
             try:
                 with self._sessions() as session:
-                    result = self._assembler.capture(session, event, origin_kind)
+                    # An earlier decision is repaired, not shown anything: the mark in force now is not the one that was in force then.
+                    result = self._assembler.capture(session, event, origin_kind, record_shown=False)
                     session.commit()
             except Exception as error:  # noqa: BLE001 - one event's failure is reported and retried, never hidden
                 failed += 1
@@ -3477,7 +3344,39 @@ class MemoryCaptureSweep:
                 captured += 1
         if captured:
             logging.getLogger(__name__).info("decision memory: captured %d earlier decision(s)", captured)
-        return MemorySweepReport(captured, failed)
+        comments_captured, comments_failed = self._repair_comments()
+        return MemorySweepReport(captured, failed, comments_captured, comments_failed)
+
+    def _repair_comments(self) -> tuple[int, int]:
+        """Hand the memory the ``comment`` events of existing cases that it does not keep yet: (written, failed)."""
+        with self._sessions() as session:
+            rows = session.execute(
+                _COMMENT_EVENTS_OF_CASES, {"after": self._comments_after, "batch": self._batch}
+            ).mappings().all()
+            kept = self._assembler.captured_comment_sources(session, [row["decision_id"] for row in rows])
+        # As for decisions: a full batch means there may be more, a short one sends the next pass back to the beginning.
+        self._comments_after = int(rows[-1]["sequence_no"]) if len(rows) == self._batch else 0
+        written = failed = 0
+        for row in rows:
+            if row["decision_id"] in kept:
+                continue
+            event = _ledger_event(row)
+            try:
+                with self._sessions() as session:
+                    result = self._assembler.capture_comment(session, event)
+                    session.commit()
+            except Exception as error:  # noqa: BLE001 - one comment's failure is reported and retried, never hidden
+                failed += 1
+                logging.getLogger(__name__).error(
+                    "decision memory: could not capture comment %s (%s); it stays uncaptured and is retried",
+                    event.decision_id, type(error).__name__,
+                )
+                continue
+            if result.comment_created:
+                written += 1
+        if written:
+            logging.getLogger(__name__).info("decision memory: captured %d earlier comment(s)", written)
+        return written, failed
 
 
 #: The command types of the keyed status operations. The product purge keeps both (`KEEP_COMMAND_TYPES`): a status event, a KEEP row,
@@ -3626,6 +3525,12 @@ class DecisionMemoryAdapter(_SessionHolder):
                 )
                 for e in detail.status_events
             ],
+            # `D-682` (contract 1.52.0): the experts' comments, oldest first, with no author (like a decision, the memory shows what was said and
+            # not who said it). A forgotten case has none. ``comments=[]`` is a set member, so the wire says «none» rather than «not reported».
+            comments=[
+                models.DecisionMemoryComment(comment_id=k["comment_id"], decided_at=k["decided_at"], comment=k["comment"])
+                for k in detail.comments
+            ],
         )
 
     def status(self) -> models.DecisionMemoryStatus:
@@ -3666,25 +3571,14 @@ class CsvExportAdapter(_SessionHolder):
 def _read_citations_for_export(
     session: Session, *, run_id: str, version_uid: str, profile_id: str,
 ) -> Any:
-    """W57a's verified citation reader, told which stage certifies this profile's partitions.
+    """W57a's verified citation reader, with the stage that certifies a run's partitions (``norm_verification``, the reader's default).
 
-    An AR v3 beta Run's partitions are certified by the succeeded ``ar_v3_citation_review`` stage
-    (migration ``0036``); every other profile's by ``norm_verification``, the reader's default. The
-    export context calls the injected reader with the Run's identity and profile only, so the choice
-    is made here, from the profile, and nowhere else. Without it the reader's header query (an inner
-    join on the stage) finds no row for a v3 Run and ``exportRunXlsx`` answers
-    ``required_norm_unavailable`` for every AR v3 beta Run
-    (``AR-V3-JUDGE-FIXES-01``).
+    The export context calls the injected reader with the Run's identity and profile only.
     """
-    from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
     from auditmanager.findings.citation_reader import read_verified_citations
 
     return read_verified_citations(
         session, run_id=run_id, version_uid=version_uid, profile_id=profile_id,
-        cite_stage_id=(
-            "ar_v3_citation_review" if profile_id == str(AR_V3_BETA_PROFILE_ID)
-            else "norm_verification"
-        ),
     )
 
 
@@ -5258,16 +5152,8 @@ class _AnalysisReader:
         from auditmanager.comparison.public import RunCandidate
         from auditmanager.runs import RunRepository
 
-        from auditmanager.runs.public import ANALYSIS_STANDARD, analysis_kind
-
-        # `AR-V3-OPT-IN` (design 4.4): every run is listed, each saying whether it is of the standard analysis. The
-        # consumers choose «the result of a version» among the standard ones; a run the caller names that is not one is
-        # refused by the comparison, not silently replaced.
         return tuple(
-            RunCandidate(
-                str(run.run_id), run.state,
-                analysis_kind(run.analysis_profile_id, run.prompt_bundle_id) == ANALYSIS_STANDARD,
-            )
+            RunCandidate(str(run.run_id), run.state)
             for run in RunRepository().list_for_version(session, version_uid)
         )
 
@@ -5442,7 +5328,7 @@ class _SpecificationTextReader:
         from auditmanager.optimisation.public import RunCandidate
 
         return tuple(
-            RunCandidate(run.run_id, run.state, run.standard_analysis)
+            RunCandidate(run.run_id, run.state)
             for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
         )
 
@@ -6804,7 +6690,7 @@ class _ProposalTextReader:
         from auditmanager.optimisation.public import RunCandidate
 
         return tuple(
-            RunCandidate(run.run_id, run.state, run.standard_analysis)
+            RunCandidate(run.run_id, run.state)
             for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
         )
 

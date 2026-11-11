@@ -338,12 +338,10 @@ def test_one_window_as_the_limit_restores_the_one_call_refusal(
     assert _start(session, seeded, at, _key(), BUDGET).replayed is False
 
 
-def test_the_ar_v3_group_keeps_the_one_call_refusal() -> None:
-    """The group start shares ``_checked_budget`` and ``_refuse_over_budget``; only the section runs window."""
-    import auditmanager.runs.v3_group as v3_group
+def test_the_one_call_refusal_names_the_character_count_and_the_budget() -> None:
+    """``_refuse_over_budget`` is the refusal of a count above the budget; only the section runs window."""
     from auditmanager.runs.commands import _refuse_over_budget
 
-    assert v3_group._refuse_over_budget is _refuse_over_budget
     with pytest.raises(DomainError) as refused:
         _refuse_over_budget(BUDGET + 1, BUDGET)
     assert refused.value.code is ErrorCode.ANALYSIS_INPUT_BUDGET_EXCEEDED

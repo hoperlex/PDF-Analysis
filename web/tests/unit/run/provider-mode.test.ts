@@ -11,7 +11,6 @@ import { describe, expect, it } from 'vitest';
 import type { RunState, RunStatus } from '@/shared/api';
 import { PROVIDER_MODE_VALUES } from '@/shared/api';
 import {
-  AR_V3_BETA_PROFILE_ID,
   PROVIDER_MODE_UNKNOWN,
   PROVIDER_MODE_UNRECOGNIZED,
   badgeProviderMode,
@@ -119,12 +118,6 @@ describe('the review entry point is offered exactly when a result was published'
   it('offers it for published and partial, per OD-11', () => {
     expect(runHasPublishedResult('published')).toBe(true);
     expect(runHasPublishedResult('partial')).toBe(true);
-  });
-
-  it('withholds the canonical review for the exact v3 beta profile', () => {
-    expect(runHasPublishedResult('published', AR_V3_BETA_PROFILE_ID)).toBe(false);
-    expect(runHasPublishedResult('partial', AR_V3_BETA_PROFILE_ID)).toBe(false);
-    expect(runHasPublishedResult('published', 'ap_other')).toBe(true);
   });
 
   it('withholds it for failed, cancelled and every non-terminal state', () => {

@@ -499,6 +499,16 @@ class RunnerRepository:
         ), {"id": task_id}).first()
         return None if row is None or row[0] is None else _payload(row[0])
 
+    def remember_context_answer(self, session: Session, *, task_id: str, kind: str, answer: Mapping[str, Any]) -> None:
+        """`CTX-STAND`: keep the block the stand gave for ``kind`` in the task's own payload, under ``context_answers``, so a repeat of the request
+        returns it as it was. The payload is a PRODUCT row (cleared with the task, erased with the project); the journal of deliveries holds no
+        text, so it could not. The caller holds the task row and has seen that the journal has no row of this kind yet."""
+        session.execute(text(
+            "UPDATE executor_task SET payload = jsonb_set(payload, '{context_answers}', "
+            "COALESCE(payload -> 'context_answers', '{}'::jsonb) || jsonb_build_object(CAST(:kind AS text), CAST(:answer AS jsonb)), true) "
+            "WHERE task_id = :id AND payload IS NOT NULL"
+        ), {"id": task_id, "kind": kind, "answer": json.dumps(answer, ensure_ascii=False, separators=(",", ":"))})
+
     def live_claim_and_attempt(self, session: Session, task_id: str, token_id: str) -> bool:
         """Check the lease and current Attempt by the database clock before image egress."""
         return bool(session.execute(text(

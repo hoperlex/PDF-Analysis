@@ -23,7 +23,7 @@ connection while it sleeps (``executors.runner.claim_task``).
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Path
 
@@ -33,10 +33,10 @@ from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import RunnerPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
-from auditmanager.api.security import CurrentRunner, CurrentSubject
+from auditmanager.api.security import CurrentRunner, CurrentSubject, RunnerIdentity
 from auditmanager.shared.errors import DomainError, ErrorCode
 
-__all__ = ["ModelNotTheTasks", "build_runner_routes"]
+__all__ = ["ExecutorTaskContextPort", "ModelNotTheTasks", "build_runner_routes", "build_task_context_route"]
 
 _TAGS = ["execution"]
 _DEFAULT_WAIT_SECONDS = 25
@@ -54,9 +54,54 @@ _RUNNER_422 = (
 )
 
 
+class ExecutorTaskContextPort(Protocol):
+    """`CTX-STAND` (contract 1.51.0): what answers ``getExecutorTaskContext``. The shipped implementation is the runner adapter's method over
+    ``executors.public.get_task_context``; the composition root hands it to :func:`build_task_context_route`. With none the route sleeps as sealed."""
+
+    def get_task_context(self, *, runner: RunnerIdentity, task_id: str, kind: str) -> models.ExecutorTaskContext: ...
+
+
 class ModelNotTheTasks(Exception):
     """The declared model is not the task's. Raised by the port's ``submit_answer`` through the
     ``on_mismatch`` it is given; the router turns it into the 422 below."""
+
+
+def build_task_context_route(router: APIRouter, task_context: ExecutorTaskContextPort | None = None) -> None:
+    """``getExecutorTaskContext`` -- `CRIT-SEAL-50` sealed it asleep in ``api/routers/precedents.py``; `CTX-STAND` serves it from here, beside the
+    runner's other operations. The declaration is the seal's, word for word, so the contract's document does not move.
+
+    **Dormant until wired.** Nothing in this tree calls the builder: the seal's sleeping route in ``precedents.py`` still declares the operation. The
+    integrator's move is one step: delete that route, call this builder (as ``build_runner_routes`` is called) with the runner adapter as the port.
+    With no port the route is declared and answers what the seal answered, ``503 dependency_unavailable`` with ``dependency: executor_task_context``,
+    so the served document is the same whether or not a port stands behind it."""
+
+    @router.post(
+        "/runner/tasks/{task_id}/context", operation_id="getExecutorTaskContext", tags=_TAGS,
+        response_model=models.ExecutorTaskContext,
+        responses={**success(200, "The reference data of the task by `input_id`, or `status: unavailable` with a `reason`. A repeat of the "
+                                  "same kind answers the same and spends no budget."),
+                   **envelope_responses(401, 404, 409, 422, 500, 503, descriptions={
+                       404: "The task is not one that may be given reference data: it is not a model call of a run, the run has no stage "
+                            "plan, its cell is not `review:main`, or the consent does not carry the same `executor_context_policy`. A "
+                            "task is not told apart from one that does not exist.",
+                       409: "The task is no longer this runner's to ask for: `conflict` with `details.conflict_reason` `claim_lost`, "
+                            "`task_expired` or `task_terminal`. The agent calls the model without reference data."})},
+        description=(
+            "`CRIT-SEAL-50` (plan-v5 section 3.2): the agent behind the claim of a `review:main` task asks once per kind for the decisions "
+            "of experts on findings like the task's own. The stand answers by the `input_id` of the task's `context_request` and journals "
+            "what it gave (no text). **Idempotent by (task, kind)**: a repeat returns the same answer and spends no budget. While the "
+            "night encoder is the only one the answer is `status: unavailable, reason: until_move`. The agent appends the data to the prompt "
+            "as reference, never as ground, and echoes `context_sha256` in `submitExecutorTaskAnswer`; an error here never fails the task. "
+            "Runner token only; no role."
+        ),
+    )
+    def get_executor_task_context(
+        identity: CurrentRunner, task_id: Annotated[models.ExecutorTaskId, Path()], body: models.ExecutorTaskContextRequest,
+    ) -> WireResponse:
+        if task_context is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="executor_task_context")
+        view = task_context.get_task_context(runner=identity, task_id=task_id, kind=body.kind.value)
+        return json_response(200, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
 
 def build_runner_routes(router: APIRouter, runner: RunnerPort) -> None:

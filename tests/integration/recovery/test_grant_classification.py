@@ -84,8 +84,11 @@ def test_the_four_classes_partition_the_tables_schema_coverage_declares() -> Non
     # `executor_routing_mode_event` (124 -> 129); `0048_dispatch_time_binding` adds none. `0053_document_tags` and
     # `0054_finding_execution_status` add `document_tag` and `finding_execution_status`, and `0055_work_schedule` the five
     # journals of «График работ» (129 -> 136). `0059_decision_memory` adds the eight tables of the decision memory (136 -> 144); `0061_decision_memory_m2` its settings' journal (144 -> 145). `0062_hosts_stage_models` adds nine: the host with its two journals, its report and the cooldown of a model on it,
-    # the stage layout with its revisions and switch, and the cell binding (145 -> 154).
-    assert len(coverage.TABLES) == 154
+    # the stage layout with its revisions and switch, and the cell binding (145 -> 154). `0063_drop_ar_v3_beta` drops the two tables of `0032` (154 -> 152).
+    # `0064_precedents_seal` (`CRIT-SEAL-50`) adds twelve (152 -> 164): the memory's comments, block evidence, encoder queue and vectors, the probe, the
+    # pass and its advice, a finding's block evidence, the settings journal, the vectors' control and its journal, and the delivery journal.
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one (165): the PNG render of a norm page.
+    assert len(coverage.TABLES) == 165
 
 
 def test_every_table_has_its_privileges_from_its_class() -> None:

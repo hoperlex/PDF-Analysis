@@ -48,9 +48,9 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 #: `W55B-SEAL-01` named the two portal-block reads its port served as sealed stubs, each
 #: answering exactly `503 dependency_unavailable`. `W55B-GEOMETRY-01` serves them and empties
 #: this set, so they meet the sweep's ordinary rule: an absent `ver_` is `404`, never a `5xx`.
-#: `W57A-SEAL-01B` sealed the normative report as a refusing stub until the CITE reader; it
-#: answered exactly `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`).
-#: `AR-V3-DECISIONS-01` (`R-146at`) serves it and empties this set: an absent `run_` is `404`.
+#: `W57A-SEAL-01B` sealed the normative report as a refusing stub; it answered exactly
+#: `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`). The report was served for a
+#: beta that was removed on 2026-11-10 (`R-154a`), and the operation went with it.
 #: `CMP-SEAL-C0` (ADR-0025 decision 25) names the nine comparison reads its ports serve as sealed
 #: stubs, each answering exactly `503 dependency_unavailable` until its lane wires the port
 #: (`CMP-INGEST-01`, `CMP-INGEST-02`, `CMP-PROFILE-01`); the lane that wires one removes its path
@@ -147,7 +147,8 @@ SEALED_STUB_QUERY: dict[str, str] = {f"{_STUB_PROFILE}/tile": "?level=0&column=0
 #: query that names nothing, like the page tile above. `CMP-VIEWER-01` serves it (an absent `ctp_` is `404`) and it
 #: leaves `SEALED_STUB_GETS`; the query stays, because the sweep still needs it to read the path and not the query.
 SEALED_STUB_QUERY[f"{_STUB_PAIR}/tile"] = "?mode=overlay&level=0&column=0&row=0"
-NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
+#: `AR-V3-BE-RM-01` (contract 1.50.0, `R-154a`) removed `getRunNormVerification`: the sweep must no longer find `/runs/{run_id}/norm-verification`.
+REMOVED_NORM_VERIFICATION = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
 WORKER_GETS = frozenset({"/execution/workers", "/execution/comparison-ai-queue"})
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -313,7 +314,7 @@ class TestNoOperationAnswersWithAServerFault:
         assert RELEASE_GETS <= {path for _method, path in probes}
         assert SEALED_STUB_GETS <= {path for _method, path in probes}
         assert MODULE_GATED_GETS <= {path for _method, path in probes}
-        assert NORM_VERIFICATION_OF_AN_ABSENT_RUN in {path for _method, path in probes}
+        assert REMOVED_NORM_VERIFICATION not in {path for _method, path in probes}
         assert WORKER_GETS <= {path for _method, path in probes}
         faults = []
         for method, path in probes:
@@ -339,8 +340,6 @@ class TestNoOperationAnswersWithAServerFault:
             elif status >= 500:
                 faults.append((path, status, body))
         assert faults == [], f"operations answered with a server fault: {faults}"
-        status, body = call(app, "GET", NORM_VERIFICATION_OF_AN_ABSENT_RUN)
-        assert status == 404 and body["error_code"] == "not_found", (status, body)
 
 
 def _absent_identity(parameter: str) -> str:
@@ -543,8 +542,7 @@ def test_the_composed_product_version_reports_the_sealed_contract_version(app: C
     seal), not the catalog the adapter reads it from: the adapter takes ``contract_version`` from
     the domain error catalog at start-up, so a seal that moved the document and left the catalog
     behind would answer a different version from the one the served OpenAPI declares. It said
-    ``1.0.0`` until the reseals to ``1.5.0`` (the last one `AR-V3-BETA-PACK-STATUS-API-01`) moved
-    the family without moving this literal.
+    ``1.0.0`` until the reseals to ``1.5.0`` moved the family without moving this literal.
     """
     status, body = call(app, "GET", "/system/version")
     assert status == 200, body

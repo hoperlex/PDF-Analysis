@@ -64,10 +64,9 @@ describe('the arithmetic of one agreement', () => {
     expect(batchConsent(free(A).estimate)).toEqual({ estimate_digest: free(A).estimate.estimate_digest, ceiling_micros: 0, confirmed: true });
   });
 
-  it('agrees only to an estimate of this version, of one run, under the standard limits', () => {
+  it('agrees only to an estimate of this version under the standard limits', () => {
     expect(estimateFits(estimateFor(A), A)).toBe(true);
     expect(estimateFits(estimateFor(A), B)).toBe(false);
-    expect(estimateFits(estimateFor(A, { scope: 'ar_v3_group' }), A)).toBe(false);
     expect(estimateFits(estimateFor(A, { relaxed_limits: true }), A)).toBe(false);
   });
 });
@@ -80,7 +79,7 @@ describe('the batch panel, mounted', () => {
     vi.mocked(startRun).mockReset();
     vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => {
       if (body.version_uid === C) {
-        throw new ApiError(503, { contract_version: '1.49.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'cid-1', retryable: true }, 'cid-1');
+        throw new ApiError(503, { contract_version: '1.52.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'cid-1', retryable: true }, 'cid-1');
       }
       return { data: estimateFor(body.version_uid as VersionUid) } as never;
     });

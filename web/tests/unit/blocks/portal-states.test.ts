@@ -39,7 +39,7 @@ function widget(client: ReturnType<typeof newClient>, bundle = true): string {
 function apiError(status: number, code: ErrorEnvelope['error_code'], retryable: boolean): ApiError {
   return new ApiError(
     status,
-    { contract_version: '1.49.0', error_code: code, message: 'm', correlation_id: 'cid-blocks', retryable },
+    { contract_version: '1.52.0', error_code: code, message: 'm', correlation_id: 'cid-blocks', retryable },
     'cid-blocks',
   );
 }

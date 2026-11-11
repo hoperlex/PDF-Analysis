@@ -1,0 +1,103 @@
+"""Cross-context surface of the precedent core. Other contexts import this module and nothing deeper."""
+
+from __future__ import annotations
+
+from auditmanager.precedents.advice import (
+    STATUS_OK,
+    STATUS_UNAVAILABLE,
+    UNAVAILABLE_NO_VECTOR,
+    PrecedentAdvice,
+    evaluate,
+)
+from auditmanager.precedents.budget import (
+    MAX_CASES_PER_ENTRY,
+    MAX_CHARACTERS,
+    BudgetCase,
+    BudgetEntry,
+    BudgetSelection,
+    SelectedEntry,
+    not_fitted_line,
+    select_within_budget,
+)
+from auditmanager.precedents.critic import CriticReview, critic_reviewed, link_candidates, review_of
+from auditmanager.precedents.hints import MAX_HINTS_PER_FINDING, Hint, build_hints
+from auditmanager.precedents.labels import LabelPolicy, PrecedentLabel, compute_label
+from auditmanager.precedents.models import (
+    HINT_CRITIC_DIVERGES,
+    HINT_DOCUMENT_HISTORY,
+    HINT_REJECTION_REASON,
+    LABEL_CANCEL_SUGGESTED,
+    LABEL_CODES,
+    LABEL_FEW,
+    LABEL_LIKELY_ACCEPTED,
+    LABEL_MIXED,
+    LABEL_NONE,
+    LABEL_OFTEN_REJECTED,
+    REJECTION_LABELS,
+    SHOWN_NEUTRAL,
+    VERDICT_ACCEPTED,
+    VERDICT_REJECTED,
+    CaseComment,
+    CriticCandidate,
+    DecisionEvent,
+    FindingContext,
+    PrecedentCase,
+    ScoredCase,
+)
+from auditmanager.precedents.replay import (
+    REPORT_SCHEMA,
+    ReplayCase,
+    ReplayReport,
+    SectionReport,
+    SectionRule,
+    ShownLabelCounts,
+    SliceMetrics,
+    replay_history,
+    rule_failures,
+)
+from auditmanager.precedents.settings import (
+    ONE_LIST_READY,
+    SETTING_NAMES,
+    SETTING_ONE_LIST,
+    SectionLabelSwitch,
+    latest_setting_value,
+    one_list_enabled,
+    read_section_labels,
+    read_stop_words,
+    read_thresholds,
+    section_labels_value,
+    section_switch_from_report,
+)
+# `PREC-PASS` (`ADR-0029` decisions 4 to 6): the pass over a run's findings and the two reads behind `getRunPrecedents` and `getFindingPrecedents`. The composition
+# root builds `PrecedentPass(sessions, read_extended_review=...)` into the worker's housekeeping and hands its `after_import` to `VectorWindowPass`; it builds
+# `PrecedentService(sessions, read_extended_review=...)` into `build_router(precedents=...)`; the decision's capture calls `shown_at_decision`.
+from auditmanager.precedents.run_pass.runner import FRESH_DAYS, PassOutcome, PrecedentPass
+from auditmanager.precedents.run_pass.service import PrecedentService, ShownAtDecision, shown_at_decision
+# `PREC-SETTINGS-01`: the journal of the switches and settings behind `listPrecedentSettings` and `appendPrecedentSetting`. The composition root
+# wires `PrecedentSettingService` into `build_router(precedent_settings=...)`.
+from auditmanager.precedents.setting_journal.service import (
+    APPEND_PRECEDENT_SETTING_COMMAND_TYPE,
+    PrecedentSettingService,
+    checked_value,
+)
+from auditmanager.precedents.similarity import VECTOR_PROFILE, Thresholds, band
+from auditmanager.precedents.stemming import StopWordMatcher, compile_stop_words, stem
+# `EMBED-01` (`ADR-0029` decision 8): the night encoder -- the window, the queue of intents, the exchange with the host's timer, the pause of the
+# vectors and the wait a queued run is told. `window_open` is the state alone, for a gate that must hold new work while the window is open (the
+# comparison loop's claim, `D-684`). The composition root wires `VectorWindowPass` into the worker's housekeeping pass,
+# `VectorControlService` into `build_router(vector_control=...)` and asks `window_wait` for the status of a queued run.
+from auditmanager.precedents.vectors.control import SET_VECTOR_PAUSED_COMMAND_TYPE, VectorControlService
+from auditmanager.precedents.vectors.exchange import EXCHANGE_DIR_ENV, Exchange
+from auditmanager.precedents.vectors.wait import CAUSE as VECTOR_WINDOW_CAUSE
+from auditmanager.precedents.vectors.wait import WindowWait, window_open, window_wait
+from auditmanager.precedents.vectors.window import DEFAULT_WINDOW, WindowSetting, wait_text
+from auditmanager.precedents.vectors.window_pass import VectorWindowPass
+from auditmanager.precedents.votes import (
+    MAX_VOTES_PER_VERSION,
+    WINDOW_MONTHS,
+    Vote,
+    VoteSet,
+    case_vote,
+    is_independent,
+    select_votes,
+)

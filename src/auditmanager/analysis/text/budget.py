@@ -107,7 +107,7 @@ def _fixed_prompt_characters(bundle: PromptBundle = AR_TEXT_PROMPT_BUNDLE) -> in
     """What every request carries whatever the document: the system prompt and the schema of ``bundle``.
 
     ``bundle`` is the bundle the call is made with (`SECTION-JUDGE-FIXES-01`). The default is the АР v1
-    bundle the figures of this module were calibrated on (3 639 characters, the AR v3 path and
+    bundle the figures of this module were calibrated on (3 639 characters and
     ``bootstrap/settings``); a section run passes its own, whose system prompt and schema run from 7 163 (ПБ) to
     12 086 (СС) characters when this was written (`tests/integration/analysis_text/test_section_input_budget.py`
     measures them).
@@ -131,7 +131,7 @@ def input_budget_characters(
     ``bundle`` (`SECTION-JUDGE-FIXES-01`) is the prompt bundle of the run being planned. Every call carries
     its system prompt and its response schema, so the figure subtracts **that** bundle's length and prices its
     output cap. ``None`` (the default) is the АР v1 bundle the calibration was made on, which is what the
-    start-up check of ``bootstrap/settings`` and the AR v3 path use and what this function always did. A
+    start-up check of ``bootstrap/settings`` uses and what this function always did. A
     section run passes its profile's bundle where the run is planned (:func:`~auditmanager.analysis.text.
     windows.text_window_policy`): the section prompts are longer than v1's by 3.5 to 8.4 thousand characters, and a
     volume the АР figure admitted in one call could otherwise come out over the ceiling.

@@ -198,7 +198,6 @@ describe('an expert facing an unconfirmed version gets the form', () => {
   it('offers a chosen АР as an executable text profile', () => {
     const markup = form({ stage: 'P', section: 'AR', review: review() });
     expect(markup).not.toContain('data-chosen-profile="unavailable"');
-    expect(markup).not.toContain('группой из шести проверок АР v3');
     const other = form({ stage: 'R', section: 'GP', review: reviewWithoutProfile('GP') });
     expect(other).toContain('пока профиль не появится');
   });

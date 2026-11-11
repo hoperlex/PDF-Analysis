@@ -5,8 +5,8 @@ composition root loaded at start-up -- the same table ``startRun`` and ``reaudit
 classified version through -- as fifteen rows in the project-structure order. A section with
 a registered profile carries its identities, version, status (``draft`` or ``reviewed``),
 prompt-bundle and profile hashes and, for a ported package, the legacy source; a section without
-one carries ``profile: null``, which is also what run start refuses it for. АР is that section
-since `PROD-11-AR-V1-V2-REMOVAL-01`: its analysis is the six-Run AR v3 group, not a text profile.
+one carries ``profile: null``, which is also what run start refuses it for. АР has a registered
+profile again (`HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`), sourced from the original application's AR files.
 
 Read-only, for any one role (``role:admin|expert``): there is no operation that edits a
 profile, uploads one or changes its status. No path parameter, no query and no body, so the
@@ -42,8 +42,7 @@ def build_analysis_profile_routes(router: APIRouter, profiles: AnalysisProfilePo
             "the project-structure order, each with its registered text profile -- "
             "identities, version, status (`draft` or `reviewed`), prompt-bundle "
             "and profile hashes and the legacy source of a ported package -- or `null` when "
-            "no profile is registered, which run start refuses (АР is such a section: it is "
-            "analysed by the six-Run group, not by a text profile). Read-only: no operation "
+            "no profile is registered, which run start refuses. Read-only: no operation "
             "edits a profile or its status. Any one role, `role:admin|expert|viewer`."
         ),
     )

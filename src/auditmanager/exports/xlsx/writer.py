@@ -11,6 +11,12 @@ written verbatim (`XLSX-RU-LABELS-01`).
 The last column, «ID замечания», is the finding's ``finding_uid`` (`R-151d`): the key by which
 :mod:`.decision_import` reads an edited «Решение эксперта» back. A «также найдено» row leaves it
 empty; the display number «№» is never a key.
+
+**One list** (`F8-COUNT-XLSX`). The workbook of a run whose ``publication_mode`` is ``one_list`` has one more column, «Источник»
+(«Текст», «Чертёж» or «Сверка»), right after «Категория»; the other columns keep their order and ``ID замечания`` stays last. The
+workbook of a ``text_only`` run (the default, and every run older than the marker) is written exactly as before: ``FINDING_COLUMNS``,
+its widths and its cells are untouched, and a source given for such a run is refused, never dropped. The import reads columns by their
+header, so neither shape changes it.
 """
 
 from __future__ import annotations
@@ -25,6 +31,7 @@ from xml.sax.saxutils import escape
 from auditmanager.exports.xlsx.labels import (
     CATEGORY_LABELS,
     SEVERITY_LABELS,
+    SOURCE_LABELS,
     VERDICT_LABELS,
     label,
 )
@@ -50,6 +57,20 @@ FINDING_COLUMNS: Final[tuple[str, ...]] = (
     "Комментарий",
     "ID замечания",
 )
+
+#: The two values of ``audit_run.publication_mode`` (``ck_audit_run_publication_mode``). Restated here: this context does not import the
+#: run's repository. ``text_only`` is the default and the only mode of a run older than the marker.
+PUBLICATION_TEXT_ONLY: Final[str] = "text_only"
+PUBLICATION_ONE_LIST: Final[str] = "one_list"
+PUBLICATION_MODES: Final[tuple[str, ...]] = (PUBLICATION_TEXT_ONLY, PUBLICATION_ONE_LIST)
+#: The column only a ``one_list`` workbook has, and the shape of its sheet: ``FINDING_COLUMNS`` with the column after «Категория».
+SOURCE_COLUMN: Final[str] = "Источник"
+_SOURCE_AT: Final[int] = FINDING_COLUMNS.index("Категория") + 1
+ONE_LIST_FINDING_COLUMNS: Final[tuple[str, ...]] = (
+    *FINDING_COLUMNS[:_SOURCE_AT], SOURCE_COLUMN, *FINDING_COLUMNS[_SOURCE_AT:],
+)
+_FINDING_WIDTHS: Final[tuple[int, ...]] = (7, 21, 23, 54, 54, 28, 28, 45, 68, 27, 48, 32)
+_ONE_LIST_FINDING_WIDTHS: Final[tuple[int, ...]] = (*_FINDING_WIDTHS[:_SOURCE_AT], 12, *_FINDING_WIDTHS[_SOURCE_AT:])
 
 _PARTS: Final[tuple[str, ...]] = (
     "[Content_Types].xml",
@@ -89,6 +110,9 @@ class FindingRow:
     expert_decision: str = ""
     comment: str = ""
     members: tuple[FindingMember, ...] = ()
+    #: A key of ``SOURCE_LABELS``: where the finding stands. Given for every finding of a ``one_list`` workbook and for none of a
+    #: ``text_only`` one.
+    source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +124,8 @@ class WorkbookInput:
     snapshot_key: str
     attribution: str
     findings: tuple[FindingRow, ...]
+    #: How the run published (``audit_run.publication_mode``); a ``one_list`` workbook has the column «Источник».
+    publication_mode: str = PUBLICATION_TEXT_ONLY
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +214,9 @@ def _validate(source: WorkbookInput) -> None:
             raise ValueError("xlsx_identity_invalid")
     if not isinstance(source.snapshot_key, str) or not isinstance(source.attribution, str):
         raise ValueError("xlsx_identity_invalid")
+    if source.publication_mode not in PUBLICATION_MODES:
+        raise ValueError("xlsx_publication_mode_invalid")
+    one_list = source.publication_mode == PUBLICATION_ONE_LIST
     seen: set[str] = set()
     for finding in source.findings:
         if not isinstance(finding, FindingRow):
@@ -200,6 +229,12 @@ def _validate(source: WorkbookInput) -> None:
                 raise ValueError("xlsx_finding_invalid")
         if finding.category not in CATEGORY_LABELS:
             raise ValueError("xlsx_category_invalid")
+        # The column exists for a one-list workbook and for it only: a source on a text-only finding would be dropped quietly, and
+        # a one-list finding with none would print an empty cell where the column says where it stands.
+        if one_list and (not isinstance(finding.source, str) or finding.source not in SOURCE_LABELS):
+            raise ValueError("xlsx_source_invalid")
+        if not one_list and finding.source is not None:
+            raise ValueError("xlsx_source_unexpected")
         for severity in (finding.decided_severity, finding.proposed_severity):
             if severity is not None and severity not in SEVERITIES:
                 raise ValueError("xlsx_severity_invalid")
@@ -266,7 +301,8 @@ def _verdict_label(verdict: str) -> str:
 
 
 def _findings(source: WorkbookInput, cells: _Cells) -> bytes:
-    rows = [_row(1, FINDING_COLUMNS, 1, cells)]
+    one_list = source.publication_mode == PUBLICATION_ONE_LIST
+    rows = [_row(1, ONE_LIST_FINDING_COLUMNS if one_list else FINDING_COLUMNS, 1, cells)]
     for ordinal, finding in enumerate(source.findings, start=1):
         severity = finding.decided_severity or finding.proposed_severity
         style = SEVERITIES.index(severity) + 2 if severity is not None else 0
@@ -275,37 +311,31 @@ def _findings(source: WorkbookInput, cells: _Cells) -> bytes:
             for citation in finding.citations
         )
         norm_quotes = "\n".join(citation.quote for citation in finding.citations)
-        rows.append(
-            _row(
-                len(rows) + 1,
-                (
-                    ordinal,
-                    finding.sheet_page,
-                    label(CATEGORY_LABELS, finding.category, refusal="xlsx_category_invalid"),
-                    finding.finding_text,
-                    finding.recommendation,
-                    _severity_label(finding.decided_severity),
-                    _severity_label(finding.proposed_severity),
-                    norm_labels,
-                    norm_quotes,
-                    _verdict_label(finding.expert_decision),
-                    finding.comment,
-                    finding.finding_uid,
-                ),
-                style,
-                cells,
-            )
+        values: tuple[str | int, ...] = (
+            ordinal,
+            finding.sheet_page,
+            label(CATEGORY_LABELS, finding.category, refusal="xlsx_category_invalid"),
+            finding.finding_text,
+            finding.recommendation,
+            _severity_label(finding.decided_severity),
+            _severity_label(finding.proposed_severity),
+            norm_labels,
+            norm_quotes,
+            _verdict_label(finding.expert_decision),
+            finding.comment,
+            finding.finding_uid,
         )
+        if one_list:
+            assert finding.source is not None  # `_validate` refused a one-list finding with none
+            source_cell = label(SOURCE_LABELS, finding.source, refusal="xlsx_source_invalid")
+            values = (*values[:_SOURCE_AT], source_cell, *values[_SOURCE_AT:])
+        rows.append(_row(len(rows) + 1, values, style, cells))
         for member in finding.members:
-            rows.append(
-                _row(
-                    len(rows) + 1,
-                    ("", member.sheet_page, "", "также найдено", "", "", "", "", "", "", member.note, ""),
-                    style,
-                    cells,
-                )
-            )
-    return _sheet(rows, (7, 21, 23, 54, 54, 28, 28, 45, 68, 27, 48, 32))
+            also: tuple[str | int, ...] = ("", member.sheet_page, "", "также найдено", "", "", "", "", "", "", member.note, "")
+            if one_list:
+                also = (*also[:_SOURCE_AT], "", *also[_SOURCE_AT:])
+            rows.append(_row(len(rows) + 1, also, style, cells))
+    return _sheet(rows, _ONE_LIST_FINDING_WIDTHS if one_list else _FINDING_WIDTHS)
 
 
 def _static_parts() -> dict[str, bytes]:
@@ -390,7 +420,12 @@ def render_xlsx(source: WorkbookInput) -> RenderedWorkbook:
 __all__ = [
     "CONTENT_TYPE",
     "FINDING_COLUMNS",
+    "ONE_LIST_FINDING_COLUMNS",
+    "PUBLICATION_MODES",
+    "PUBLICATION_ONE_LIST",
+    "PUBLICATION_TEXT_ONLY",
     "SEVERITIES",
+    "SOURCE_COLUMN",
     "Citation",
     "FindingMember",
     "FindingRow",

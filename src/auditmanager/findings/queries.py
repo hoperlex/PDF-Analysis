@@ -19,7 +19,6 @@ from typing import Sequence
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 _PUBLISHED_FINDINGS = text(
@@ -40,6 +39,9 @@ _PUBLISHED_FINDINGS = text(
         o.model_call_id,
         o.provider_mode,
         o.proposed_severity,
+        o.grounding_kind,
+        o.extended_observation_ref,
+        o.related_finding_uid,
         o.created_at
     FROM finding_observation o
     JOIN finding f ON f.finding_uid = o.finding_uid
@@ -63,6 +65,27 @@ _FINDING_EVIDENCE = text(
     JOIN finding f ON f.finding_uid = o.finding_uid
     WHERE o.run_id = :run_id
     ORDER BY f.finding_uid COLLATE "C", e.finding_observation_id COLLATE "C", e.evidence_ordinal
+    """
+)
+
+_BLOCK_EVIDENCE = text(
+    """
+    SELECT
+        b.finding_observation_id,
+        b.ordinal,
+        b.page_number,
+        b.portal_block_id,
+        b.bbox_x0,
+        b.bbox_y0,
+        b.bbox_x1,
+        b.bbox_y1,
+        b.crop_sha256,
+        b.recognised_quote
+    FROM finding_block_evidence b
+    JOIN finding_observation o ON o.finding_observation_id = b.finding_observation_id
+    JOIN finding f ON f.finding_uid = o.finding_uid
+    WHERE o.run_id = :run_id
+    ORDER BY f.finding_uid COLLATE "C", b.finding_observation_id COLLATE "C", b.ordinal
     """
 )
 
@@ -119,6 +142,11 @@ class FindingRow:
     provider_mode: str
     canonical_observation_id: str | None = None
     proposed_severity: str | None = None
+    #: `F8-PUBLISH` (migration 0064): how the observation is grounded (``text_span`` for the text path, ``portal_block`` for a candidate
+    #: of a ``one_list`` run), the extended-review candidate it was published from, and the finding it is related to (a bare identity).
+    grounding_kind: str = "text_span"
+    extended_observation_ref: str | None = None
+    related_finding_uid: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +164,19 @@ class EvidenceRow:
     char_start: int
     char_end: int
     block_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class BlockEvidenceRow:
+    """One block a candidate finding stands on (`F8-PUBLISH`): the portal block, its normalised box in the run's geometry and the crop on record."""
+
+    finding_observation_id: str
+    ordinal: int
+    page_number: int
+    portal_block_id: str
+    bbox_norm: tuple[float, float, float, float]
+    crop_sha256: str
+    recognised_quote: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +207,9 @@ def published_findings(session: Session, run_id: str) -> tuple[FindingRow, ...]:
             provider_mode=row["provider_mode"],
             canonical_observation_id=row["canonical_observation_id"],
             proposed_severity=row["proposed_severity"],
+            grounding_kind=row["grounding_kind"],
+            extended_observation_ref=row["extended_observation_ref"],
+            related_finding_uid=row["related_finding_uid"],
         )
         for row in rows
     )
@@ -184,12 +228,11 @@ def group_published_findings(rows: Sequence[FindingRow]) -> tuple[FindingGroupRo
         canonical_id = stored_canonical_id
         # The old v1 publisher still inserts one observation and leaves the
         # post-0022 canonical column null. That exact legacy shape is identifiable
-        # by its single member, absent severity and a profile that is not AR v3's
-        # (the recorded v2 publisher is removed, `PROD-11-AR-V1-V2-REMOVAL-01`; its
-        # rows always carried a severity and a canonical member).
+        # by its single member and absent severity (the recorded v2 publisher is
+        # removed, `PROD-11-AR-V1-V2-REMOVAL-01`; its rows always carried a severity
+        # and a canonical member).
         if (canonical_id is None and len(members) == 1
-                and head.proposed_severity is None
-                and head.analysis_profile_id != str(AR_V3_BETA_PROFILE_ID)):
+                and head.proposed_severity is None):
             canonical_id = head.finding_observation_id
         if (canonical_id is None or ids.count(canonical_id) != 1
                 or len(set(ids)) != len(ids)
@@ -225,6 +268,26 @@ def published_finding_evidence(session: Session, run_id: str) -> tuple[EvidenceR
             char_start=row["char_start"],
             char_end=row["char_end"],
             block_id=row["block_id"],
+        )
+        for row in rows
+    )
+
+
+def published_finding_block_evidence(session: Session, run_id: str) -> tuple[BlockEvidenceRow, ...]:
+    """The block evidence of the published findings of one run, in a stable order. Empty for a ``text_only`` run.
+
+    Reached through the same inner join on ``finding`` as every read here, so a diagnostic (ungrounded) observation can have none to show.
+    """
+    rows = session.execute(_BLOCK_EVIDENCE, {"run_id": run_id}).mappings().all()
+    return tuple(
+        BlockEvidenceRow(
+            finding_observation_id=row["finding_observation_id"],
+            ordinal=row["ordinal"],
+            page_number=row["page_number"],
+            portal_block_id=row["portal_block_id"],
+            bbox_norm=(float(row["bbox_x0"]), float(row["bbox_y0"]), float(row["bbox_x1"]), float(row["bbox_y1"])),
+            crop_sha256=row["crop_sha256"],
+            recognised_quote=row["recognised_quote"],
         )
         for row in rows
     )
@@ -313,6 +376,9 @@ _FINDING_BY_UID = text(
         o.model_call_id,
         o.provider_mode,
         o.proposed_severity,
+        o.grounding_kind,
+        o.extended_observation_ref,
+        o.related_finding_uid,
         o.created_at
     FROM finding_observation o
     JOIN finding f ON f.finding_uid = o.finding_uid
@@ -320,7 +386,6 @@ _FINDING_BY_UID = text(
       AND (o.finding_observation_id = f.canonical_observation_id
            OR (f.canonical_observation_id IS NULL
                AND o.proposed_severity IS NULL
-               AND o.analysis_profile_id <> :v3_profile
                AND NOT EXISTS (
                    SELECT 1 FROM finding_observation sibling
                    WHERE sibling.finding_uid = f.finding_uid
@@ -343,10 +408,7 @@ def finding_by_uid(session: Session, finding_uid: str) -> FindingRow | None:
     V2 may link several observations to one finding. Select only the persisted
     canonical member; recency or lexical ordering cannot decide that identity.
     """
-    row = session.execute(_FINDING_BY_UID, {
-        "finding_uid": finding_uid,
-        "v3_profile": str(AR_V3_BETA_PROFILE_ID),
-    }).mappings().first()
+    row = session.execute(_FINDING_BY_UID, {"finding_uid": finding_uid}).mappings().first()
     if row is None:
         return None
     return FindingRow(
@@ -365,4 +427,7 @@ def finding_by_uid(session: Session, finding_uid: str) -> FindingRow | None:
         provider_mode=row["provider_mode"],
         canonical_observation_id=row["canonical_observation_id"],
         proposed_severity=row["proposed_severity"],
+        grounding_kind=row["grounding_kind"],
+        extended_observation_ref=row["extended_observation_ref"],
+        related_finding_uid=row["related_finding_uid"],
     )

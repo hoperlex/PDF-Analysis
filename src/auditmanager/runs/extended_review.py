@@ -4,6 +4,7 @@ from dataclasses import asdict, replace
 import hashlib
 import json
 import math
+import re
 import time
 from copy import deepcopy
 from typing import Any
@@ -12,11 +13,14 @@ from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelRe
     build_extended_request, extended_canonical, extended_digest, finalize_extended_items,
     parse_extended_reply, plan_extended_inputs, EXTENDED_REVIEW_ROLE, EXTENDED_REPLY_ROLE,
     pinned_models, request_cost_upper_usd, require_approved_model, extended_block_payload,
-    block_leg_refs, build_block_judge_request, parse_block_judge_reply, reconcile_block_batch)
+    block_leg_refs, build_block_judge_request, parse_block_judge_reply, reconcile_block_batch,
+    ORIGINAL_REVIEW_V2, original_review_critic, original_review_corrector, original_review_plan,
+    original_review_procedures, original_review_summary)
 from auditmanager.documents.public import DocumentRepository
-from auditmanager.executors.public import CropImage, attach_images
+from auditmanager.executors.public import CropImage, HostRepository, attach_images, cell_binding_of, token_health_of
+from auditmanager.findings.public import BlockEvidenceItem, CandidateGroup, CandidateMember
 from auditmanager.jobs.public import extended_unit
-from auditmanager.norms.public import SEARCH_WINDOW, search_norms
+from auditmanager.norms.public import SEARCH_WINDOW, NormPageImages, search_norms
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.stage_plan import call_journal_columns, cell_binding, settings_of
 from auditmanager.runs.stage_layout import ENSEMBLE_ROLES, parse_plan, role_of_phase, row_of_phase
@@ -32,6 +36,144 @@ def _refuse(reason: str):
     return DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason=reason)
 
 
+def _original_review_enabled(policy, *, strict=False) -> bool:
+    """`V2-ORIGINAL-REVIEW-01`: whether the frozen plan-v2 policy carries the marker of the original's deterministic critic and corrector.
+
+    A v2 consent without it runs exactly as it ran before. ``strict`` refuses a marker this code does not know, as a failed review.
+    """
+    if not isinstance(policy, dict) or policy.get("plan_version") != "extended-review-v2" or "original_review" not in policy:
+        return False
+    if policy["original_review"] != ORIGINAL_REVIEW_V2:
+        if strict:
+            raise _refuse("original_review_policy_invalid")
+        return False
+    return True
+
+
+#: `F8-PUBLISH` (plan-v5 section 2.4): the reference kinds a critic saw, stored on every candidate it reviewed (``context_kinds``), so that a
+#: veto is never an echo of the same neighbours. Today the AI critic of plan v3 sees the paragraph text of the norms its candidate carried
+#: (``norm_text``). The deterministic critic of plan v2 sees no reference at all and stores no key: its row says ``mode: deterministic`` and
+#: ``model_called: false``, and a reader takes a reviewed candidate without ``context_kinds`` as one that saw none (writing ``[]`` there changed
+#: the saved shape that ``tests/unit/analysis_extended/test_original_review_runtime.py`` compares). ``norm_images`` and ``precedents`` are
+#: added by the lanes that hand them to the critic; the literals are those of ``precedents.models`` (``CONTEXT_NORM_TEXT``).
+CONTEXT_NORM_TEXT = "norm_text"
+
+
+#: `M7-NORM-PNG`: the page image of a norm paragraph the candidate carried was in the critic's task (``precedents.models.CONTEXT_NORM_IMAGES``).
+CONTEXT_NORM_IMAGES = "norm_images"
+
+
+def _critic_context_kinds(item, payload, imaged=frozenset()) -> list:
+    """What the critic's request carried for this candidate: ``norm_text`` when a paragraph of the candidate's own norm candidates is in
+    ``norm_context``, and ``norm_images`` when the page of one of them was declared in the task (``imaged``: the paragraph ids of the pages)."""
+    supplied = {row.get("paragraph_id") for row in payload.get("norm_context", []) if isinstance(row, dict)}
+    wanted = {row.get("paragraph_id") for row in item.get("norm_candidates", []) if isinstance(row, dict)}
+    return ([CONTEXT_NORM_TEXT] if supplied & wanted else []) + ([CONTEXT_NORM_IMAGES] if imaged & wanted else [])
+
+
+#: The cell of the critic's call, as ``binding_for(cell)`` and the stand name it (``f"{row}:{role}"``).
+_CRITIC_CELL = "review:main"
+#: The providers of a host agent whose command takes no image (``tools/executor-runner/host_mode.py``: ``image_input_unsupported``).
+_PROVIDERS_WITHOUT_IMAGES = frozenset({"claude_code"})
+
+
+class _CriticNormImages:
+    """`M7-NORM-PNG` (plan-v5 section 3.4, ``ADR-0029`` decision 9): the page images of norm paragraphs that a critic task of this run declares.
+
+    One per run (and per global review), made only for a run the critic's reference section is offered to (:func:`_reference_section`): a legacy
+    run, a v2 run and a planned run without the «контекст критику» switch get ``None`` and are never asked. :meth:`attach` is called with the
+    critic's request **when it is built**, so the task is created with its ``images``; it declares the pages (``crop_id: norm.<nbd_...>``) of
+    the paragraphs of this request's own ``norm_context`` -- at most two, none unless the ``review:main`` member of the run serves images and is
+    not a Claude Code host. What happened is written to ``state["norm_page_images"]`` (the pages declared, the paragraphs whose page could not be
+    produced with the reason, or why none were offered): a page that is missing costs the image, never the text or the call. The render itself is
+    made lazily by :class:`~auditmanager.norms.public.NormPageImages` and kept in ``norm_crop_render``, so the next task reuses it.
+    """
+
+    def __init__(self, session, run, store, *, pages=None):
+        self._session, self._run, self._store = session, run, store
+        self._pages = pages
+        self._withheld: str | None | bool = False  # False: not asked yet
+
+    def _factory(self):
+        from sqlalchemy.orm import sessionmaker
+        return sessionmaker(bind=self._session.get_bind())
+
+    def _service(self):
+        if self._pages is None:
+            self._pages = NormPageImages(store=self._store, session_factory=self._factory())
+        return self._pages
+
+    def withheld(self):
+        """Why the member does not take images (a fixed word), or ``None`` when it does. Asked once; the answer is read from the database, with a
+        short transaction of its own, never from the run's."""
+        if self._withheld is False:
+            from auditmanager.shared.db import session_scope
+            with session_scope(self._factory()) as session:
+                member = cell_binding_of(session, self._run.run_id, _CRITIC_CELL)
+                if member is None:
+                    self._withheld = "member_not_bound"
+                elif member.provider in _PROVIDERS_WITHOUT_IMAGES:
+                    self._withheld = "provider_takes_no_images"
+                else:
+                    health = token_health_of(session, HostRepository().usable_tokens(session, member.host_id))
+                    self._withheld = (None if any("images" in row.features for row in health.values())
+                        else "member_declared_no_images")
+        return self._withheld
+
+    def attach(self, request, *, state, identity):
+        """``(request, imaged)``: the request with the pages declared, and the ids of the paragraphs that sit on them. The request comes back as it
+        was when there is no norm paragraph in it, no page to show or the member takes no image."""
+        payload = json.loads(request.body["messages"][0]["content"])
+        paragraphs = payload.get("norm_context")
+        if not isinstance(paragraphs, list) or not paragraphs:
+            return request, frozenset()
+        receipts = state.setdefault("norm_page_images", [])
+        reason = self.withheld()
+        if reason is not None:
+            receipts.append({"identity": identity, "status": "not_offered", "reason": reason})
+            return request, frozenset()
+        selection = self._service().select(paragraphs)
+        receipts.append({"identity": identity, "status": "declared" if selection.images else "none",
+            "images": [{"crop_id": image.crop_id, "paragraph_ids": list(image.paragraph_ids), "sha256": image.render.sha256,
+                "size_bytes": image.render.size_bytes} for image in selection.images],
+            "unavailable": [{"paragraph_id": paragraph, "reason": why} for paragraph, why in selection.unavailable]})
+        if not selection.images:
+            return request, frozenset()
+        return attach_images(request, [CropImage(image.crop_id, image.data) for image in selection.images]), selection.paragraph_ids
+
+
+def _critic_norm_images(session, run, store, binding, policy):
+    """The helper above for a run whose critic task may carry the reference section, else ``None`` (that run's critic is built as it always was)."""
+    return _CriticNormImages(session, run, store) if _reference_section(binding, policy) else None
+
+
+def _review_original_v2(*, state, phase, pages) -> None:
+    """The two procedures after the norm verification, over the saved observations. No model, no executor, no call.
+
+    A defect here is a visible failed procedure (and a warning); it does not discard the results the paid calls above have saved.
+    """
+    phase("finding_review", "running")
+    try:
+        done = original_review_critic(state["observations"], state["sources"], pages)
+    except (ValueError, TypeError, KeyError, AttributeError):
+        state["warnings"].append("original_review_failed")
+        phase("finding_review", "failed", "original_review_failed")
+        phase("finding_correction", "skipped", "dependency_failed")
+        return
+    phase("finding_review", "completed", None if done else "no_observations")
+    phase("finding_correction", "running")
+    try:
+        corrections = original_review_corrector(done)
+    except (ValueError, TypeError, KeyError, AttributeError):
+        for item, _, _ in done:
+            item.pop("correction", None)
+        state["warnings"].append("original_review_failed")
+        phase("finding_correction", "failed", "original_review_failed")
+        return
+    state["original_review"] = {**state.get("original_review", original_review_plan()), **original_review_summary(done, corrections)}
+    phase("finding_correction", "completed", None if corrections else "no_corrections_requested")
+
+
 def _cell(binding, row, role="main"):
     """`binding_for(cell)` (ADR-0028 decision 6): the binding of the ``row`` cell -- the adapter of the member it was bound to, the cell's
     model and settings, the call binding that holds the reply to the cell's model. A run that is not frozen with a stage plan has one
@@ -44,6 +186,17 @@ def _kw(binding, row, role="main"):
     builder keeps the constants it always had)."""
     cell = _cell(binding, row, role)
     return {"model_id": cell.config.model_id, "settings": settings_of(cell)}
+
+
+def _reference_section(binding, policy):
+    """Whether the critic's task of this run may carry the reference section after its JSON (`CTX-CRITIC`, ``ADR-0029`` decision 3).
+
+    Exactly the runs the stand serves: a run on the stage layout (its binding has cells, as `_phase_binding` reads it) whose frozen consent
+    holds the ``executor_context_policy`` (``runs.preflight`` writes it only under plan v3 with the «контекст критику» switch on). The
+    consent is the source, not the code now in force: a prompt must not change between an attempt and its resume, and the paragraph it
+    gets says «if the section stands after the JSON», so a stand that serves nothing leaves it harmless. A legacy run, a v2 run and a
+    planned run without the switch keep the prompt they always had."""
+    return getattr(binding, "cells", None) is not None and isinstance(policy.get("executor_context_policy"), dict)
 
 
 def _phase_binding(binding, identity):
@@ -558,7 +711,7 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
         return _run_workflow_v2(session,run=run,authority=authority,jobs=jobs,journal=journal,binding=binding,
             outputs=outputs,store=store,meter=meter,publish=publish,progress=progress,checkpoint=checkpoint,
             observations_document=observations_document,snapshot_id=snapshot_id,profile_sha256=profile_sha256,
-            bind_native=bind_native,full_document=policy.get("max_blocks") == "all")
+            bind_native=bind_native,full_document=policy.get("max_blocks") == "all",policy=policy)
     from auditmanager.analysis.public import read_artifact
     state: dict[str, Any] = {"format": FORMAT, "preliminary": True, "section": "unknown",
         "observations": [], "sources": [], "warnings": [], "coverage": {
@@ -784,11 +937,16 @@ def _planned_global_cross_window(policy, *, reason=None, terminal=False):
 def planned_workflow_result(*, reason=None, terminal=False, policy=None):
     from auditmanager.analysis.public import extended_workflow_procedures
     v3=isinstance(policy,dict) and policy.get("plan_version")=="extended-review-v3"
+    original=False
     if v3:
         from auditmanager.analysis.public import extended_workflow_procedures_v3
         procedures=extended_workflow_procedures_v3()
     else:
         procedures = extended_workflow_procedures()
+        # `V2-ORIGINAL-REVIEW-01`: a v2 consent that carries the marker plans the original's critic and corrector after the norms.
+        original=_original_review_enabled(policy)
+        if original:
+            procedures = [*procedures, *original_review_procedures()]
     if reason:
         for procedure in procedures:
             procedure.update(status="skipped" if terminal else "queued", reason=reason)
@@ -798,6 +956,7 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         from .project_parameters import planned_parameters
         parameter_result = {"project_parameters": planned_parameters(policy["project_parameters_policy"], reason=reason, terminal=terminal)}
     return {"format":version,"workflow_version":version,"preliminary":True,
+        **({"original_review": original_review_plan()} if original else {}),
         **parameter_result,
         **({"project_parameter_context_policy": deepcopy(policy["project_parameter_context_policy"])}
            if v3 and "project_parameter_context_policy" in policy else {}),
@@ -1011,13 +1170,13 @@ def _received_reply(*, state, request, response, parse, call, identity, policy):
 
 def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
         publish, progress, checkpoint, observations_document, snapshot_id, profile_sha256, bind_native=None,
-        window_context=None, full_document=False):
+        window_context=None, full_document=False, policy=None):
     from auditmanager.analysis.public import (read_artifact, prepare_native_page_sources,
         build_comprehensive_request, deterministic_extended_merge,
         build_norm_review_request, parse_norm_review)
     v3=window_context is not None
     batched=v3 and window_context["policy"].get("coverage_version")=="batched-v1"
-    state = planned_workflow_result(policy=None if not v3 else window_context["policy"])
+    state = planned_workflow_result(policy=policy if not v3 else window_context["policy"])
     if v3 and _source_sized(window_context["policy"]):
         state.update(source_sized_calls=True, completion_policy=window_context["policy"].get("completion_policy"))
     # The separately accepted global budget belongs only to the parent Run;
@@ -1164,6 +1323,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         return response
     save("running")
     try:
+        # A marker this code does not know is a failed review, never a v2 run without the original's critic.
+        original_review=not v3 and _original_review_enabled(policy,strict=True)
         if v3:
             section=window_context["policy"]["section_code"]
         else:
@@ -1445,10 +1606,15 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(not item.get("norm_candidates") for item in window) else "completed")
         if batched:
             _review_batched_v3(run=run,binding=binding,state=state,phase=phase,call=call,
-                window_context=window_context,contexts=contexts)
+                window_context=window_context,contexts=contexts,
+                norm_images=_critic_norm_images(session,run,store,binding,window_context["policy"]))
         elif v3:
             _review_window_v3(session=session,run=run,binding=binding,state=state,phase=phase,call=call,
-                window_id=window_context["window_id"],section=section,contexts=contexts)
+                window_id=window_context["window_id"],section=section,contexts=contexts,
+                reference_section=_reference_section(binding,window_context["policy"]),
+                norm_images=_critic_norm_images(session,run,store,binding,window_context["policy"]))
+        elif original_review:
+            _review_original_v2(state=state,phase=phase,pages=by_page)
         degraded=any(p["status"] in {"failed","partial","unavailable","skipped"}
             and p.get("reason") not in {"no_corrections_requested","no_observations"} for p in state["procedures"])
         save("partial" if degraded else "completed")
@@ -1470,8 +1636,13 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         return state
 
 
-def _review_window_v3(*, session, run, binding, state, phase, call, window_id, section, contexts):
-    """Real critic/corrector calls annotate immutable candidates; neither decides for the expert."""
+def _review_window_v3(*, session, run, binding, state, phase, call, window_id, section, contexts, reference_section=False, norm_images=None):
+    """Real critic/corrector calls annotate immutable candidates; neither decides for the expert.
+
+    The critic's reply is read the way the batched path reads it (`CTX-CRITIC`): a record that does not satisfy the parser (a quote the sources
+    do not hold, such as one taken from the reference section, included) costs that record, not the paid reply. The records that parsed are
+    kept; the others are ``not_reviewed`` with ``finding_review_reply_refused`` and a receipt in ``state["reply_refusals"]``. There is no
+    semantic repair here: this path is the legacy coverage's, whose consent never grants one (`call` refuses it)."""
     from auditmanager.analysis.public import (build_critic_request,parse_critic_reply,
         build_corrector_request,parse_corrector_reply)
     selected=[];remaining=16_000
@@ -1498,21 +1669,39 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
             "native_context":[row for row in contexts if row["source_id"] in references]}
         phase("finding_review","running")
         request=build_critic_request(**_kw(binding,"review"),run_id=run.run_id,section=section,
-            observations=indexed,sources=sources,window_id=window_id,context=context)
+            observations=indexed,sources=sources,window_id=window_id,context=context,reference_section=reference_section)
+        imaged=frozenset()
+        if norm_images is not None:  # `M7-NORM-PNG`: the task is created with the pages of its own norm paragraphs
+            request,imaged=norm_images.attach(request,state=state,identity="critic")
         critic_payload=json.loads(request.body["messages"][0]["content"])
         critic_cut=any(critic_payload.get(key,{}).get("truncated",False)
             for key in ("context_coverage","norm_context_coverage"))
-        reviews=parse_critic_reply(call(request,"critic").output_text,observations=indexed,sources=sources,
-            allowed_sources=references,context=context)
+        response=call(request,"critic")
+        reviews,refused=_received_reply(state=state,request=request,response=response,
+            parse=lambda text,**kwargs:parse_critic_reply(text,observations=indexed,sources=sources,
+                allowed_sources=references,context=context,**kwargs),
+            call=call,identity="critic",policy={})
         state["reviews"]=reviews
         state["critiques"]=reviews
         for review in reviews:
-            indexed[review["input_id"]].update(critic=review,review_status="reviewed")
-        phase("finding_review","partial" if len(selected)<len(state["observations"]) or critic_cut else "completed",
-            "context_window_truncated" if critic_cut else None)
+            indexed[review["input_id"]].update(critic=review,review_status="reviewed",
+                context_kinds=_critic_context_kinds(indexed[review["input_id"]],critic_payload,imaged))
+        if refused:
+            # `_received_reply` keeps the records that parsed and returns the refusal: an item the reply did not carry was not left out of
+            # the window, its answer was refused. The receipt in `state["reply_refusals"]` holds the parser's code for each record.
+            for item in indexed.values():
+                if item.get("review_status")!="reviewed":
+                    item.update(review_status="not_reviewed",review_reason="finding_review_reply_refused")
+        phase("finding_review","partial" if len(selected)<len(state["observations"]) or critic_cut or refused else "completed",
+            "finding_review_reply_refused" if refused else "context_window_truncated" if critic_cut else None)
+        # Only the records the critic answered go to the corrector: its partition has to cover exactly the inputs it is given.
+        reviewed={key:item for key,item in indexed.items() if item.get("review_status")=="reviewed"}
         request=build_corrector_request(**_kw(binding,"correction"),run_id=run.run_id,section=section,
-            observations=indexed,critiques=reviews,sources=sources,window_id=window_id,context=context)
-        if request is None:
+            observations=reviewed,critiques=reviews,sources=sources,window_id=window_id,context=context) if reviews else None
+        if not reviews:
+            phase("finding_correction","unavailable","critic_inputs_unavailable")
+            state["corrections"]=[]
+        elif request is None:
             phase("finding_correction","completed","no_corrections_requested")
             state["corrections"]=[]
         else:
@@ -1520,7 +1709,7 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
             correction_payload=json.loads(request.body["messages"][0]["content"])
             correction_cut=any(correction_payload.get(key,{}).get("truncated",False)
                 for key in ("context_coverage","norm_context_coverage"))
-            corrections=parse_corrector_reply(call(request,"corrector").output_text,observations=indexed,
+            corrections=parse_corrector_reply(call(request,"corrector").output_text,observations=reviewed,
                 critiques=reviews,sources=sources,allowed_sources=references,context=context)
             state["corrections"]=corrections
             for correction in corrections:
@@ -1695,6 +1884,13 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                     for receipt in global_review.get("norm_lookup_receipts", []))
                 state["reply_refusals"].extend({"window_id": "global-cross-window", **receipt}
                     for receipt in global_review.get("reply_refusals", []))
+        else:
+            # The window path's critic reads its reply tolerantly too (`CTX-CRITIC`): the receipts of a refused record are kept, and the
+            # key stays absent from a run that has none, as before.
+            refusals = [{"window_id": record["window_id"], **receipt}
+                for record in records for receipt in record.get("reply_refusals", [])]
+            if refusals:
+                state["reply_refusals"] = refusals
         if "norm_paragraph_context_policy" in policy:
             state["norm_paragraph_context_policy"] = deepcopy(policy["norm_paragraph_context_policy"])
             state["normative_context_receipts"] = [{"window_id": record["window_id"], "batch_index": identity, **receipt}
@@ -2214,7 +2410,7 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
             if item.get('norm_status') == 'unavailable'), 'normative_query_required') if unprocessed else None)
 
 
-def _review_batched_v3(*, run, binding, state, phase, call, window_context, contexts):
+def _review_batched_v3(*, run, binding, state, phase, call, window_context, contexts, norm_images=None):
     from auditmanager.analysis.public import (plan_extended_coverage, build_critic_request,
         parse_critic_reply, build_corrector_request, parse_corrector_reply)
     window_id = window_context['window_id']
@@ -2243,7 +2439,11 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         request = build_critic_request(**_kw(binding, "review"), run_id=run.run_id,
             section=state['section'], observations=indexed, sources=sources,
             window_id=window_id + f':critic:b{batch["index"]:03d}', context=context,
-            full_context=_source_sized(window_context['policy']))
+            full_context=_source_sized(window_context['policy']),
+            reference_section=_reference_section(binding, window_context['policy']))
+        imaged = frozenset()
+        if norm_images is not None:  # `M7-NORM-PNG`: the task is created with the pages of its own norm paragraphs
+            request, imaged = norm_images.attach(request, state=state, identity=f'{kind}:b{batch["index"]:03d}')
         payload = json.loads(request.body['messages'][0]['content'])
         cut = any(payload.get(key, {}).get('truncated', False) for key in
             ('context_coverage', 'norm_context_coverage'))
@@ -2266,7 +2466,8 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         refused_replies += int(refused)
         for review in reviews:
             item = indexed[review['input_id']]
-            item.update(critic=review, review_status='reviewed', review_reason=None)
+            item.update(critic=review, review_status='reviewed', review_reason=None,
+                context_kinds=_critic_context_kinds(item, payload, imaged))
             if review['needs_correction']:
                 correction_targets.append(item)
         if refused:
@@ -2379,6 +2580,20 @@ def _coverage_text_stats(records):
     return {'complete_pages': complete_pages, 'characters_total': total,
         'characters_processed': processed, 'characters_remaining': max(0, total - processed),
         'known_page_contexts': len(pages)}
+
+
+def _virtual_window_policy(accepted, policy):
+    """The part of the consent the global cross-window review's virtual window carries: its own call limits, and of the run's consent only what
+    the shared batched procedures read. The critic of the global review is a `review:main` task too, so the stand offers it the reference
+    section when the consent holds the ``executor_context_policy`` (`CTX-CRITIC`); its prompt (`_reference_section`) has to say what that is."""
+    return {"phase_call_limits": accepted["call_limits"],
+        **({"completion_policy": policy["completion_policy"],
+            "semantic_repair_attempts": policy["semantic_repair_attempts"]}
+            if _source_sized(policy) else {}),
+        **({"norm_paragraph_context_policy": policy["norm_paragraph_context_policy"]}
+            if "norm_paragraph_context_policy" in policy else {}),
+        **({"executor_context_policy": policy["executor_context_policy"]}
+            if "executor_context_policy" in policy else {})}
 
 
 def _run_global_cross_window(session, *, run, authority, jobs, journal, binding, outputs, store,
@@ -2564,12 +2779,7 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
             or any(row.get("status") == "partial" for row in global_state["batches"]))
         phase("comprehensive_analysis", "partial" if deferred else "completed",
               "approved_global_phase_call_limit_or_source_selection" if deferred else None)
-        virtual_context = {"window_id": "global-cross-window", "policy": {"phase_call_limits": accepted["call_limits"],
-            **({"completion_policy": policy["completion_policy"],
-                "semantic_repair_attempts": policy["semantic_repair_attempts"]}
-                if _source_sized(policy) else {}),
-            **({"norm_paragraph_context_policy": policy["norm_paragraph_context_policy"]}
-                if "norm_paragraph_context_policy" in policy else {})}}
+        virtual_context = {"window_id": "global-cross-window", "policy": _virtual_window_policy(accepted, policy)}
         contexts = [{"source_id": source["source_id"], "page_number": source["page_number"],
             "text": source["quote"] if source["character_field"] == "text" else "",
             "recognised_context": source["quote"] if source["character_field"] == "recognised_context" else ""}
@@ -2577,7 +2787,8 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
         _norm_batched_v3(session=session, run=run, binding=binding, state=global_state, snapshot_id=snapshot_id,
             phase=phase, call=call, checkpoint=checkpoint, window_context=virtual_context)
         _review_batched_v3(run=run, binding=binding, state=global_state, phase=phase, call=call,
-            window_context=virtual_context, contexts=contexts)
+            window_context=virtual_context, contexts=contexts,
+            norm_images=_critic_norm_images(session, run, store, binding, virtual_context["policy"]))
         next(row for row in global_state["procedures"] if row["id"] == "report_generation").update(status="completed")
         incomplete = deferred or any(row["status"] in {"partial", "unavailable", "failed", "skipped"}
                                     for row in global_state["procedures"])
@@ -2605,3 +2816,161 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
                 if receipt.get("status") == "running": receipt.update(status="failed", reason=reason)
                 elif receipt.get("status") == "queued": receipt.update(status="skipped", reason="dependency_failed")
         persist()
+
+
+# ---------------------------------------------------------------------------------------------
+# One list (`F8-PUBLISH`, ADR-0029 decision 7, plan-v5 section 4): the saved candidates, read as groups for the publisher
+# ---------------------------------------------------------------------------------------------
+
+_BLOCK_SOURCE_ID = re.compile(r"blk_[0-9a-f]{32}")
+#: A candidate's source that is a restatement of a text finding: plan v3 names it ``primary_text_<key>``, plan v2 ``text:<index>``.
+_PRIMARY_TEXT_SOURCE_ID = re.compile(r"primary_text_[0-9a-f]+|text:[0-9]+")
+_COMPLETE_STATUSES = frozenset({"completed", "partial"})
+_CONSOLIDATION_VERSION = "strict-cross-window-v1"
+_MAX_TEXT = 4000
+_REFINING_ACTION = "propose_revision"
+
+
+def _source_registry(result: dict) -> tuple[dict, set]:
+    """Every source row of the saved result by ``source_id`` (the result's own, then each window's), and the ids saved under two shapes."""
+    rows = list(result.get("sources") or [])
+    for window in result.get("windows") or []:
+        if isinstance(window, dict):
+            rows.extend(window.get("sources") or [])
+    registry: dict = {}
+    conflicts: set = set()
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("source_id"), str):
+            continue
+        known = registry.setdefault(row["source_id"], row)
+        if known != row:
+            conflicts.add(row["source_id"])
+    return registry, conflicts
+
+
+def _primary_ordinals(result: dict, text_observations) -> dict:
+    """``source_id -> observation_ordinal`` of the text observation each primary-text source restates.
+
+    Plan v2 numbers its sources ``text:<index>`` by the position in the saved text observations; plan v3 names them ``primary_text_<key>``
+    and keeps the original observation on the candidate that carries the key. A source that cannot be named is absent, and the candidate
+    then counts it as a primary source without a link (it is still never published twice).
+    """
+    ordinals: dict = {}
+    for item in result.get("observations") or []:
+        if not isinstance(item, dict):
+            continue
+        key, original = item.get("primary_observation_key"), item.get("original_primary_observation")
+        if isinstance(key, str) and isinstance(original, dict) and type(original.get("observation_ordinal")) is int:
+            ordinals["primary_text_" + key] = original["observation_ordinal"]
+    entries = text_observations.get("observations") if isinstance(text_observations, dict) else None
+    for index, entry in enumerate(entries if isinstance(entries, list) else []):
+        if isinstance(entry, dict) and type(entry.get("observation_ordinal")) is int:
+            ordinals[f"text:{index}"] = entry["observation_ordinal"]
+    return ordinals
+
+
+def _candidate_words(item: dict) -> str | None:
+    """The finding text of a candidate: its title over its description, within the column's 4000 characters; ``None`` when it has none."""
+    title = item.get("title") if isinstance(item.get("title"), str) else ""
+    description = item.get("description") if isinstance(item.get("description"), str) else ""
+    title, description = title.strip(), description.strip()
+    words = description if not title or description.startswith(title) else (f"{title}\n\n{description}" if description else title)
+    return words if 1 <= len(words) <= _MAX_TEXT else None
+
+
+def _candidate_refinement(item: dict) -> str | None:
+    """The corrector's refinement of the candidate's description, when it proposed a revision with words of its own."""
+    correction = item.get("correction")
+    if not isinstance(correction, dict) or correction.get("action") != _REFINING_ACTION:
+        return None
+    proposed = correction.get("candidate")
+    words = proposed.get("description") if isinstance(proposed, dict) else None
+    words = words.strip() if isinstance(words, str) else ""
+    return words if 1 <= len(words) <= _MAX_TEXT else None
+
+
+def _candidate_member(item, *, registry: dict, conflicts: set, ordinals: dict) -> CandidateMember | None:
+    """One saved candidate as the publisher's member, or ``None`` when it cannot be one (no identity of 1 to 128 characters, no words)."""
+    ref = item.get("observation_id") if isinstance(item, dict) else None
+    if not isinstance(ref, str) or not 1 <= len(ref) <= 128:
+        return None
+    words = _candidate_words(item)
+    if words is None:
+        return None
+    blocks: list = []
+    primary: list = []
+    unlinked = other = 0
+    seen: set = set()
+    for source_id in item.get("source_ids") if isinstance(item.get("source_ids"), list) else []:
+        if not isinstance(source_id, str) or source_id in seen:
+            continue
+        seen.add(source_id)
+        row = registry.get(source_id)
+        if (_BLOCK_SOURCE_ID.fullmatch(source_id) and row is not None and row.get("kind") == "image"
+                and source_id not in conflicts and type(row.get("page_number")) is int and row["page_number"] >= 1):
+            digest = row.get("crop_sha256")
+            blocks.append(BlockEvidenceItem(evidence_ordinal=len(blocks), page_number=row["page_number"],
+                portal_block_id=source_id, crop_sha256=digest if isinstance(digest, str) else ""))
+        elif _PRIMARY_TEXT_SOURCE_ID.fullmatch(source_id):
+            if source_id in ordinals:
+                primary.append(ordinals[source_id])
+            else:
+                unlinked += 1
+        else:
+            other += 1
+    window_id = item.get("window_id")
+    return CandidateMember(
+        extended_observation_ref=ref, finding_text=words, block_evidence=tuple(blocks),
+        refined_recommendation=_candidate_refinement(item), primary_text_ordinals=tuple(dict.fromkeys(primary)),
+        primary_text_unlinked=unlinked, other_source_count=other,
+        window_id=window_id if isinstance(window_id, str) else None,
+        cross_window=item.get("origin_scope") == "global_cross_window" or window_id == "global-cross-window")
+
+
+def read_candidate_groups(document: dict, *, run_id: str, version_uid: str,
+        text_observations=None) -> tuple[tuple[CandidateGroup, ...], tuple[str, ...]]:
+    """The groups of the strict consolidation of a saved ``analysis.extended_review`` document, as the publisher of groups takes them.
+
+    Returns ``(groups, unread)``: ``unread`` says why nothing could be read (the review did not complete, or the saved candidates cannot be
+    consolidated), never an empty answer without a reason. A document of another run or version is corruption, refused like
+    :func:`read_extended_review` refuses it. A candidate that cannot be a member (no identity, no words) is left out of its group and counted
+    in ``unread`` as ``candidate_invalid``; nothing is repaired, and no source is guessed: a source that is not a block of the run's geometry
+    stays a source the candidate is counted as standing on, never evidence.
+
+    The groups are those the saved result carries (plan v3) or that the consolidation computes over its observations and sources now (plan
+    v2); the first member of a group is the first one in the saved order.
+    """
+    try:
+        if (document.get("artifact_role") != EXTENDED_REVIEW_ROLE or document.get("run_id") != run_id
+                or document.get("version_uid") != version_uid or not isinstance(document.get("result"), dict)):
+            raise ValueError()
+        status, result = document["status"], document["result"]
+    except (ValueError, KeyError, AttributeError):
+        raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=EXTENDED_REVIEW_ROLE) from None
+    if status not in _COMPLETE_STATUSES:
+        return (), ("extended_review_not_complete",)
+    consolidation = result.get("consolidation")
+    if not (isinstance(consolidation, dict) and consolidation.get("version") == _CONSOLIDATION_VERSION
+            and isinstance(result.get("consolidated_observations"), list)):
+        result = _attach_consolidation(dict(result), version_uid=version_uid)
+        consolidation = result["consolidation"]
+    if not isinstance(consolidation, dict) or consolidation.get("complete") is not True:
+        return (), ("consolidation_unavailable",)
+    observations = result.get("observations") if isinstance(result.get("observations"), list) else []
+    registry, conflicts = _source_registry(result)
+    ordinals = _primary_ordinals(result, text_observations)
+    groups: list = []
+    unread: list = []
+    for group in result["consolidated_observations"]:
+        members: list = []
+        for origin in group.get("origin_records", []) if isinstance(group, dict) else []:
+            index = origin.get("raw_index") if isinstance(origin, dict) else None
+            member = (_candidate_member(observations[index], registry=registry, conflicts=conflicts, ordinals=ordinals)
+                if type(index) is int and 0 <= index < len(observations) else None)
+            if member is None:
+                unread.append("candidate_invalid")
+            else:
+                members.append(member)
+        if members and isinstance(group.get("group_id"), str) and group["group_id"]:
+            groups.append(CandidateGroup(group_id=group["group_id"], members=tuple(members)))
+    return tuple(groups), tuple(unread)

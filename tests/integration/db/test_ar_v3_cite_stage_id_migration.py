@@ -23,7 +23,6 @@ PostgreSQL server:
 from __future__ import annotations
 
 import importlib.util
-import json
 import re
 from pathlib import Path
 from types import ModuleType
@@ -33,7 +32,7 @@ import pytest
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import IntegrityError
 
-from auditmanager.api.schemas.models import ArV3BetaStageId, StageId
+from auditmanager.api.schemas.models import StageId
 from auditmanager.shared.db.config import DatabaseSettings
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import (
@@ -70,7 +69,6 @@ OBSERVATION_CHECK = "ck_finding_observation_stage_id"
 
 ROOT = Path(__file__).resolve().parents[3]
 VERSIONS = ROOT / "db" / "migrations" / "versions"
-CITE_CONTRACT = ROOT / "contracts" / "analysis" / "ar_v3_beta" / "v1" / "stage.json"
 
 
 def _load_migration(file_name: str, module_name: str) -> ModuleType:
@@ -174,19 +172,18 @@ def _upgrade(foundation_command: Any, database: DatabaseSettings, revision: str)
     assert result.returncode == 0, result.describe()
 
 
-def test_the_migrations_vocabulary_is_0002s_nine_ids_plus_the_profile_stage_of_the_api_and_the_contract() -> None:
+def test_the_migrations_vocabulary_is_0002s_nine_ids_plus_the_one() -> None:
     """The migration restates its ids (history must not move), so something else must tie them.
 
-    No database: the nine are ``0002``'s ``STAGE_IDS`` and the API's legacy ``StageId``; the one is
-    the API's ``ArV3BetaStageId`` and the stage id of the AR v3 stage extension contract. An eleventh
-    id added to either side, or a typo in the migration, fails here before any server is asked.
+    No database: the nine are ``0002``'s ``STAGE_IDS`` and the API's ``StageId``; the one is written out here (the contract of the
+    stage that carried it was deleted with the beta by ``0063``). An eleventh id, or a typo in the migration, fails here before any
+    server is asked.
     """
     this = _load_migration("20261026_0033_ar_v3_cite_stage_id.py", "ar_v3_cite_stage_id_under_test")
     first = _load_migration("20260910_0002_pc01_schema.py", "pc01_schema_under_test")
-    contract = json.loads(CITE_CONTRACT.read_text(encoding="utf-8"))["stage"]["stage_id"]
     assert this._REGISTRY_STAGE_IDS == NINE == first.STAGE_IDS == tuple(item.value for item in StageId)
-    assert (this._ADDED_STAGE_ID,) == (CITE,) == (contract,) == tuple(item.value for item in ArV3BetaStageId)
-    assert this._NEW_STAGE_IDS == (*first.STAGE_IDS, contract)
+    assert (this._ADDED_STAGE_ID,) == (CITE,)
+    assert this._NEW_STAGE_IDS == (*first.STAGE_IDS, CITE)
     assert this.revision == THIS and this.down_revision == PREVIOUS
 
 
@@ -230,12 +227,13 @@ def test_the_cite_row_is_refused_at_0032_and_accepted_after_the_step(empty_datab
         engine.dispose()
 
 
-def test_the_cite_row_is_accepted_at_the_head(migrated_engine: Engine) -> None:
+def test_the_cite_row_is_refused_again_at_the_head(migrated_engine: Engine) -> None:
+    """``0063_drop_ar_v3_beta`` restores the nine ids: the beta's CITE row is refused by the database once more."""
     assert _version(migrated_engine) == HEAD
-    assert CITE in _vocabulary(migrated_engine)
-    with migrated_engine.begin() as connection:
+    assert _vocabulary(migrated_engine) == list(NINE)
+    with pytest.raises(IntegrityError, match=STAGE_CHECK), migrated_engine.begin() as connection:
         _stage(connection, _seed_run(connection), CITE)
-    assert _count(migrated_engine) == 1
+    assert _count(migrated_engine) == 0
 
 
 def test_a_populated_0032_database_upgrades_without_a_row_changing(empty_database, foundation_command) -> None:

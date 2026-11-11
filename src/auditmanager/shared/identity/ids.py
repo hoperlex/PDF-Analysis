@@ -194,10 +194,6 @@ class RunId(OpaqueId, prefix="run", entity="AuditRun"):
     """Identity of one audit execution request and its result history."""
 
 
-class ArV3RunGroupId(OpaqueId, prefix="arg", entity="ArV3RunGroup"):
-    """Identity of one immutable six-scope AR beta request."""
-
-
 class JobId(OpaqueId, prefix="job", entity="Job"):
     """Identity of the durable schedulable work item for one local run."""
 
@@ -412,8 +408,7 @@ class ExecutorAgentInstallId(OpaqueId, prefix="exai", entity="ExecutorAgentInsta
 class ExecutorGroupId(OpaqueId, prefix="exg", entity="ExecutorGroup"):
     """Identity of one executor group (`EXEC2-SEAL-2`, migration ``0047``, ADR-0026 decision 10).
 
-    Minted by ``auditmanager.executors``. The display name is an attribute and never an identity; the
-    name of the table avoids ``ar_v3_run_group``, whose identity is ``arg``.
+    Minted by ``auditmanager.executors``. The display name is an attribute and never an identity.
     """
 
 
@@ -699,6 +694,22 @@ class DecisionMemoryStatusEventId(OpaqueId, prefix="dmw", entity="DecisionMemory
 
 class DecisionMemoryCropId(OpaqueId, prefix="dmx", entity="DecisionMemoryCrop"):
     """Opaque decision-memory crop identity: a reference to one crop image a case keeps."""
+
+
+class DecisionMemoryCommentId(OpaqueId, prefix="dmk", entity="DecisionMemoryComment"):
+    """Identity of one expert comment kept with a decision-memory case (`CRIT-SEAL-50`, migration ``0063``, plan-v5 section 3.1)."""
+
+
+class DecisionMemoryEmbeddingIntentId(OpaqueId, prefix="dmi", entity="DecisionMemoryEmbeddingIntent"):
+    """Identity of one queued encoder job for a case view (`CRIT-SEAL-50`, migration ``0063``). The vector itself is keyed by case, revision, view and profile."""
+
+
+class VectorControlEventId(OpaqueId, prefix="vce", entity="VectorControlEvent"):
+    """Identity of one change of the vectors' pause or of the night window's state (`CRIT-SEAL-50`, migration ``0063``)."""
+
+
+class ExecutorTaskContextDeliveryId(OpaqueId, prefix="etd", entity="ExecutorTaskContextDelivery"):
+    """Identity of one record of reference data handed to an agent with a task (`CRIT-SEAL-50`, migration ``0063``); the task, run and call it names are bare identities."""
 
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {

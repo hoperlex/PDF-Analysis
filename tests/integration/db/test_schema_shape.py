@@ -47,6 +47,9 @@ APPEND_ONLY_TABLES = {
     "expert_decision_event", "audit_event", "executor_route_event",
     "executor_routing_rule_revision", "executor_routing_mode_event",
     "executor_host_use_event", "executor_host_slot_event", "stage_layout_revision", "stage_layout_switch_event",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the journal of the vectors' pause and of the night window's states is appended, never edited; the
+    # state in force is the one row of `vector_control`.
+    "vector_control_event",
 }
 
 IMMUTABLE_TABLES = {
@@ -68,8 +71,6 @@ IMMUTABLE_TABLES = {
     # current row itself moves, so its own guard refuses DELETE and an unrecorded change.
     "norm_current_snapshot_event",
     "norm_retrieval_set",
-    "ar_v3_run_group",
-    "ar_v3_run_group_member",
     "finding_observation_norm_citation",
     # `0024_version_classification`: the first expert classification stands (``AM003``).
     "document_version_classification",
@@ -140,6 +141,13 @@ IMMUTABLE_TABLES = {
     # `0062_hosts_stage_models` (`HOSTS-SEAL-1`): the one seeded stage layout row and a cell binding are written once and never changed or removed;
     # a host row is never deleted (``am_immutable_row`` guards its DELETE only: its name is frozen and its archive write-once).
     "stage_layout", "audit_run_cell_binding", "executor_host",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the advice a pass gave a finding, a finding's block evidence, the settings journal and the journal of
+    # reference data handed to an agent are written once; the vectors' control is one seeded row that is never deleted (``am_immutable_row`` guards
+    # its DELETE only: its key is frozen and its state moves).
+    "decision_memory_precedent_advice", "finding_block_evidence", "precedent_setting_event", "executor_task_context_delivery",
+    "vector_control",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page is a derived fact of a custody binding, written once.
+    "norm_crop_render",
 }
 
 
@@ -244,9 +252,11 @@ def test_exactly_the_declared_tables_are_append_only(migrated_engine: Engine) ->
 
 
 #: `0061_decision_memory_m2` (`D-394`): the content side of the decision memory, deletable only by a forget of its case.
+#: `0064_precedents_seal` (`CRIT-SEAL-50`) adds the memory's comments, block evidence, encoder queue and vectors to it.
 FORGET_GUARDED_TABLES = {
     "decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref",
     "decision_memory_crop",
+    "decision_memory_comment", "decision_memory_block_evidence", "decision_memory_embedding_intent", "decision_memory_embedding",
 }
 
 
@@ -334,13 +344,19 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     "claimed_by_instance_id",
     # `0062_hosts_stage_models`: ``model_id`` of a cooldown names a model of the catalogue (``claude-opus-5-5``), as ``pin_id`` does.
     "model_id",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): ``portal_block_id`` is the portal's own identifier (``blk_`` and 32 hexadecimal digits), registered in the
+    # catalogue as an external identifier and not an identity (``external_identifiers.portal_block_id``); its shape is a CHECK of both block-evidence
+    # tables, asserted in ``test_precedents_seal_migration.py``. ``input_id`` of a probe is the task's own name for a candidate text (a string of 1 to
+    # 128 characters the agent is handed in ``context_request``), not an entity this product mints.
+    "portal_block_id",
+    "input_id",
 }
 
 #: A column name that two tables use for two different identities (or for a label) cannot carry one prefix in the
 #: name-keyed map inside the test below, so the table-qualified exceptions live here and the sweep consults them first.
 #:
-#: ``group_id`` is the Run group of an AR v3 run (``arg``) in ``ar_v3_run_group*``, the executor group (``exg``,
-#: ``0047_executor_groups_rules``, ADR-0026 decision 10) in ``executor_group`` and ``executor_group_revision``, and --
+#: ``group_id`` is the executor group (``exg``, ``0047_executor_groups_rules``, ADR-0026 decision 10) in ``executor_group`` and
+#: ``executor_group_revision``, and --
 #: in the four ``stage_ai_*`` tables of ``0042_comparison_stage_review`` -- a grouping label, see below.
 #: ``stage_link_repair_event.revision_id`` names a stage link revision (``slk``); everywhere else ``revision_id`` is an
 #: executor connection revision (``excr``).
@@ -352,6 +368,15 @@ PREFIX_BY_TABLE_COLUMN = {
     # proposal decision (`opd`) in the first, an expert decision event (`dec`) in the second (this map lacked both).
     ("optimisation_proposal_decision", "carried_from_decision_id"): "opd",
     ("expert_decision_event", "carried_from_decision_id"): "dec",
+    # `0064_precedents_seal` (`CRIT-SEAL-50`): the identities of the Precedents storage that no other table names by the same column, and the
+    # ledger event a memory comment was captured from.
+    ("decision_memory_comment", "comment_id"): "dmk",
+    ("decision_memory_embedding_intent", "intent_id"): "dmi",
+    ("vector_control_event", "control_event_id"): "vce",
+    ("executor_task_context_delivery", "delivery_id"): "etd",
+    ("executor_task_context_delivery", "task_id"): "ext",
+    # the finding an observation is related to (a bare identity, no foreign key)
+    ("finding_observation", "related_finding_uid"): "fnd",
 }
 
 #: ``stage_ai_*.group_id`` is not an entity identity: it is the stage AI's own grouping label -- ``grp:`` plus the first 24 hex
@@ -382,7 +407,6 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "version_uid": "ver",
         "blob_id": "blob",
         "run_id": "run",
-        "group_id": "arg",
         "allocated_by_run_id": "run",
         "reaudit_of_run_id": "run",
         # `0060_run_from_stage` (`R-151i`): the run whose stage outputs a run reuses.

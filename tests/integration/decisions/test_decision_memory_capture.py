@@ -7,7 +7,7 @@ in the object store; the box and crop mapping is proved in ``tests/unit/decision
 ``BlockAdapter``.
 
 Shown: decide -> the case, its content, its evidence and its decision exist; a replay captures nothing new; a second decision on the
-same observation adds a decision to the same case and reads no artifact; a comment is not captured; a carried and an imported
+same observation adds a decision to the same case and reads no artifact; a comment is not a decision; a carried and an imported
 decision keep their ``origin_kind``; a capture that fails fails the decision; and the sweep captures what was decided before there
 was a memory, once, and leaves a comment alone.
 """
@@ -180,10 +180,13 @@ def test_a_replay_under_the_same_key_captures_nothing_new(session: Session, publ
     assert (_count(session, "decision_memory_case"), _count(session, "decision_memory_decision")) == (1, 1)
 
 
-def test_a_comment_is_not_a_decision_and_is_not_captured(session: Session, published: Any, memory: SimpleNamespace) -> None:
+def test_a_comment_is_not_a_decision_and_makes_no_case(session: Session, published: Any, memory: SimpleNamespace) -> None:
+    """`CRIT-CAPTURE-01`: a comment is kept in the memory's comment table once its observation has a case (see
+    `test_decision_memory_capture_comments.py`); what holds here, as before, is that it is NOT a decision and makes no case."""
     _decide(session, published, "comment")
     assert _count(session, "expert_decision_event") == 1
     assert (_count(session, "decision_memory_case"), _count(session, "decision_memory_decision")) == (0, 0)
+    assert _count(session, "decision_memory_comment") == 0                       # no case yet: the comment waits for the first ✓/✕
     assert memory.geometry.crop_reads == 0                                       # nothing was even assembled
 
 

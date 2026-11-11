@@ -104,7 +104,7 @@ class _Session:
         if self.queries == 1:
             return _Rows({
                 "run_id": "run_1", "project_uid": "prj_1", "version_uid": "ver_1",
-                "analysis_profile_id": "ar_v3", "norms_snapshot_id": "ns_1",
+                "analysis_profile_id": "profile_1", "norms_snapshot_id": "ns_1",
                 "snapshot_key": "pinned-key",
             })
         return _Rows([

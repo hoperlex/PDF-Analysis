@@ -30,7 +30,12 @@ from auditmanager.shared.identity import DecisionMemoryStatusEventId
 from tests.support.memory_seed import ensure_blob
 from tests.support.memory_seed import seed_case as _seed_case
 
-HEAD = "0062_hosts_stage_models"  # the head the fixture migrates to; 0061 is the migration under test, one step below it
+HEAD = "0065_norm_crop_render"  # the head the fixture migrates to; 0061 is the migration under test, four steps below it
+#: The tables `0064_precedents_seal` (`CRIT-SEAL-50`) adds to the family by name; their guards are `test_precedents_seal_migration.py`'s.
+SEAL_TABLES = frozenset({
+    "decision_memory_comment", "decision_memory_block_evidence", "decision_memory_embedding_intent", "decision_memory_embedding",
+    "decision_memory_probe", "decision_memory_precedent_run", "decision_memory_precedent_advice",
+})
 PREVIOUS = "0060_run_from_stage"
 CONTENT_TABLES = (
     "decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref",
@@ -108,6 +113,7 @@ def test_the_head_and_the_triggers_are_what_the_migration_declares(at_head: tupl
         triggers = {tuple(row) for row in connection.execute(text(
             "SELECT c.relname, t.tgname, p.proname, t.tgtype::integer FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
             "JOIN pg_proc p ON p.oid = t.tgfoid WHERE NOT t.tgisinternal AND starts_with(c.relname, 'decision_memory_')"))}
+    triggers = {row for row in triggers if row[0] not in SEAL_TABLES}
     expected = {(t, f"trg_{t}_forget_guard", "am_guard_decision_memory_forget", 27) for t in CONTENT_TABLES}
     expected |= {(t, f"trg_{t}_immutable", "am_immutable_row", 27) for t in (*IDENTITY_TABLES, "decision_memory_setting_event")}
     expected.add(("decision_memory_status_event", "trg_decision_memory_status_event_transition", "am_guard_decision_memory_status", 7))

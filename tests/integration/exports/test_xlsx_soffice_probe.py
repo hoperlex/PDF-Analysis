@@ -24,7 +24,7 @@ def _render(*, finding_text: str = "=1+1") -> bytes:
             project_uid="prj_1",
             version_uid="ver_1",
             run_id="run_1",
-            profile_id="ar_v3",
+            profile_id="profile_1",
             snapshot_key="ns_1",
             attribution="recorded",
             findings=(
@@ -155,7 +155,7 @@ def test_real_soffice_csv_shows_every_label_cell_by_cell(tmp_path: Path) -> None
         for index, category in enumerate(_CATEGORIES)
     )
     content = render_xlsx(
-        WorkbookInput("prj_1", "ver_1", "run_1", "ar_v3", "ns_1", "recorded", findings)
+        WorkbookInput("prj_1", "ver_1", "run_1", "profile_1", "ns_1", "recorded", findings)
     ).content
     source = tmp_path / "in" / "labels.xlsx"
     source.parent.mkdir()

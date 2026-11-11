@@ -24,6 +24,7 @@ from auditmanager.api.schemas.decisions import DecisionCarriedFromView, decision
 
 __all__ = [
     "EvidenceView",
+    "FindingBlockEvidenceView",
     "FindingDetailView",
     "FindingView",
     "ObservationView",
@@ -43,6 +44,21 @@ class EvidenceView:
     char_start: int
     char_end: int
     block_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FindingBlockEvidenceView:
+    """Exactly the frozen ``FindingBlockEvidence`` (`CRIT-SEAL-50`, contract 1.51.0): the place of a block, never its content.
+
+    ``bbox_norm`` is ``(x0, y0, x1, y1)`` normalised to the page, the origin at the top left.
+    """
+
+    ordinal: int
+    page_number: int
+    portal_block_id: str
+    bbox_norm: tuple[float, float, float, float]
+    crop_sha256: str
+    recognised_quote: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,11 +102,14 @@ class ObservationView:
     evidence: tuple[EvidenceView, ...]
     provenance: ProvenanceView
     proposed_severity: str | None = None
-    # None means a legacy observation without a certified partition. An empty tuple is
-    # the explicit v3 proof that CITE completed with zero citations.
+    # None means an observation without a certified partition. An empty tuple is
+    # the explicit proof that the certifying stage completed with zero citations.
     norm_citations: tuple[NormCitationView, ...] | None = None
     required_value: str | None = None
     stated_value: str | None = None
+    #: `CRIT-SEAL-50` (contract 1.51.0): ``portal_block`` for an observation anchored on blocks. ``None`` is ``text_span`` -- the only kind
+    #: before -- and is omitted from the wire body, so a text observation's body is what it always was.
+    grounding_kind: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +133,11 @@ class FindingView:
     #: `UI-A-73` (contract 1.39.0): where the decision that carries the current verdict came from, when an expert carried
     #: it over from an earlier version. Omitted from the wire body when the verdict was decided directly.
     current_verdict_carried_from: DecisionCarriedFromView | None = None
+    #: `CRIT-SEAL-50` (contract 1.51.0): the blocks of the portal that hold the evidence of a finding anchored on blocks (its canonical
+    #: observation's), and the «Источник» of the finding. ``None`` -- a finding of text spans only -- is omitted from the wire body; absent
+    #: ``origin`` means ``text``.
+    block_evidence: tuple[FindingBlockEvidenceView, ...] | None = None
+    origin: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +159,20 @@ def evidence_body(view: EvidenceView) -> dict[str, Any]:
     }
     if view.block_id is not None:
         body["block_id"] = view.block_id
+    return body
+
+
+def block_evidence_body(view: FindingBlockEvidenceView) -> dict[str, Any]:
+    x0, y0, x1, y1 = view.bbox_norm
+    body: dict[str, Any] = {
+        "ordinal": view.ordinal,
+        "page_number": view.page_number,
+        "portal_block_id": view.portal_block_id,
+        "bbox_norm": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
+        "crop_sha256": view.crop_sha256,
+    }
+    if view.recognised_quote is not None:
+        body["recognised_quote"] = view.recognised_quote
     return body
 
 
@@ -186,6 +224,8 @@ def observation_body(view: ObservationView) -> dict[str, Any]:
         body["required_value"] = view.required_value
     if view.stated_value is not None:
         body["stated_value"] = view.stated_value
+    if view.grounding_kind is not None:
+        body["grounding_kind"] = view.grounding_kind
     return body
 
 
@@ -215,6 +255,10 @@ def finding_body(view: FindingView) -> dict[str, Any]:
             body["execution_status_at"] = timestamp(view.execution_status_at)
     if view.current_verdict_carried_from is not None:
         body["current_verdict_carried_from"] = decision_carried_from_body(view.current_verdict_carried_from)
+    if view.block_evidence is not None:
+        body["block_evidence"] = [block_evidence_body(item) for item in view.block_evidence]
+    if view.origin is not None:
+        body["origin"] = view.origin
     for name in ("norm_citations", "required_value", "stated_value"):
         if name in body["observation"]:
             body[name] = body["observation"][name]

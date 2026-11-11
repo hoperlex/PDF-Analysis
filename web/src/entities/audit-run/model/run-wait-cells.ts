@@ -29,6 +29,7 @@ export const WAIT_CAUSE_LABELS: Readonly<Record<RunWaitCause, string>> = {
   model_cooling_down: 'сервер временно снял модель',
   not_on_any_server: 'нет сервера с этой моделью',
   at_capacity: 'все места сервера заняты',
+  vector_window: 'идёт ночное окно векторов',
 };
 
 /** How many models the line names before it counts the rest. */

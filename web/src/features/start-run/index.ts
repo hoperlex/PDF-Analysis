@@ -4,10 +4,6 @@ export type { StartRunCommand, StartRunIntent } from './model/start-run-intent';
 export { startRunBody, startRunIntent } from './model/start-run-intent';
 export { useStartRun } from './model/use-start-run';
 
-// `AR-V3-OPT-IN`: the radio that chooses the analysis of one start; the rules around it are the run list's.
-export type { AnalysisChoiceProps, AnalysisChoiceValue } from './ui/analysis-choice';
-export { ANALYSIS_CHOICE_LABEL, ANALYSIS_CHOICE_OPTIONS, AnalysisChoice } from './ui/analysis-choice';
-
 // `READINESS-WEB-01`: the line under «Запустить» and the reason the button is inactive, read from `getRunStartReadiness`.
 export {
   ACCESS_WORDS, CLIENT_DOCUMENTS_MARK, CONNECT_SERVER, CONTACT_ADMIN, LEGACY_ROUTE_NOTE, MODELS_BY_STAGE_LABEL, NOT_READY,

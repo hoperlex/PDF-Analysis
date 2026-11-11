@@ -1,0 +1,16 @@
+# `EMBED-01` (ADR-0029 decision 8): one look of the host at the night encoder's exchange. Written to /etc/systemd/system by
+# `infra/deploy/embed-window.sh install`, which fills in @REPO@ and @ENV_FILE@. The timer starts it; it runs the encoder container
+# when the worker has left a batch, and returns when the container ends (up to the window's length).
+[Unit]
+Description=AuditManager night encoder: look at the exchange and run the encoder container (EMBED-01)
+Documentation=file:@REPO@/docs/architecture/adr/ADR-0029-precedents.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=@REPO@/infra/deploy/embed-window.sh tick --env-file @ENV_FILE@
+# A round lasts as long as the window (hours): no start timeout. The script stops the container itself at the deadline the worker wrote.
+TimeoutStartSec=infinity
+Nice=10
+IOSchedulingClass=idle

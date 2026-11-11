@@ -61,14 +61,14 @@ class _Session:
             set_id = "nrs_changed" if self.change_pin_after_render and self.pin_reads == 2 else "nrs_1"
             return _Rows({
                 "run_id": "run_1", "project_uid": "prj_1", "version_uid": "ver_1",
-                "state": "published", "analysis_profile_id": "ar_v3",
+                "state": "published", "analysis_profile_id": "profile_1",
                 "norms_snapshot_id": "ns_1", "norm_retrieval_set_id": set_id,
             })
         if "FROM audit_run r" in sql:
             self.package_reads += 1
             return _Rows({
                 "run_id": "run_1", "project_uid": "prj_1", "version_uid": "ver_1",
-                "analysis_profile_id": "ar_v3", "norms_snapshot_id": "ns_1",
+                "analysis_profile_id": "profile_1", "norms_snapshot_id": "ns_1",
                 "snapshot_key": "pinned-key",
             })
         if "FROM finding f" in sql:
@@ -131,7 +131,7 @@ def _prepare(monkeypatch, session: _Session, *, citation_read=None, run_source=N
 
     def read_citations(own_session, *, run_id, version_uid, profile_id):
         assert own_session is session
-        assert (run_id, version_uid, profile_id) == ("run_1", "ver_1", "ar_v3")
+        assert (run_id, version_uid, profile_id) == ("run_1", "ver_1", "profile_1")
         observed.append("citations")
         return citation_read or _citations()
 
@@ -139,7 +139,7 @@ def _prepare(monkeypatch, session: _Session, *, citation_read=None, run_source=N
     package = prepare_certified_xlsx_package(
         session, run_id="run_1", authorization=_authorization(),
         read_blob=lambda _id: b"unused-after-monkeypatch",
-        read_citations=read_citations, profile_id="ar_v3",
+        read_citations=read_citations, profile_id="profile_1",
         attribution="recorded",
     )
     return package, observed
@@ -196,5 +196,5 @@ def test_denied_decision_refuses_before_any_source_read(monkeypatch):
         prepare_certified_xlsx_package(
             _Session(), run_id="run_1", authorization=_authorization(decision="deny"),
             read_blob=lambda _id: b"", read_citations=lambda *args, **kwargs: _citations(),
-            profile_id="ar_v3", attribution="recorded",
+            profile_id="profile_1", attribution="recorded",
         )

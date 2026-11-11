@@ -1,7 +1,6 @@
-"""``to_wire_schema``: the provider-safe wire form of a response schema (`AR-V3-WIRE-SCHEMA-01`).
+"""``to_wire_schema``: the provider-safe wire form of a response schema.
 
-One case per rule of the function, then the real AR v3 schema, then the safety net: the local v3
-parser still rejects what the wire form no longer forbids.
+One case per rule of the function, then a schema that uses ``oneOf`` and every refused constraint.
 """
 
 from __future__ import annotations
@@ -12,10 +11,9 @@ from typing import Any
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v3.response import ParsedResponse, parse_response
-from auditmanager.analysis.profiles.ar_v3.response_schema import response_schema
 from auditmanager.analysis.text.prompt import CATEGORIES, RESPONSE_SCHEMA, response_schema_for
 from auditmanager.analysis.text.wire_schema import to_wire_schema, with_wire_schema
+from tests.support.one_of_response_schema import one_of_response_schema as response_schema
 
 SIX = ("minLength", "maxLength", "minimum", "maxItems", "pattern")
 DROPPED = (*SIX, "maximum")
@@ -97,7 +95,7 @@ def test_the_result_is_a_new_object_and_the_argument_is_not_changed() -> None:
     wire = to_wire_schema(schema)
     assert schema == before, "the argument is never mutated"
     assert wire is not schema
-    assert wire != schema, "the real v3 schema does change"
+    assert wire != schema, "a schema with oneOf and constraints does change"
 
 
 def test_nothing_in_the_result_is_shared_with_the_argument() -> None:
@@ -309,12 +307,12 @@ def test_the_widened_three_category_v1_schema_also_comes_out_equal() -> None:
     assert to_wire_schema(widened) == widened
 
 
-# -- the real AR v3 schema ------------------------------------------------------------------------
+# -- a schema that uses oneOf and every refused constraint ----------------------------------------
 
 
-def test_the_real_v3_schema_has_no_one_of_and_none_of_the_refused_constraints() -> None:
+def test_a_one_of_schema_has_no_one_of_and_none_of_the_refused_constraints() -> None:
     sealed = response_schema()
-    # the premise (P-01): the sealed schema does use all of them
+    # the premise: the sealed schema does use all of them
     sealed_keywords = set(keywords(sealed))
     assert {"oneOf", *DROPPED} - {"maximum"} <= sealed_keywords
 
@@ -322,12 +320,12 @@ def test_the_real_v3_schema_has_no_one_of_and_none_of_the_refused_constraints() 
     left = set(keywords(wire))
     assert not left & {"oneOf", *DROPPED}
     assert "anyOf" in left
-    # in no position at all, names or not: the v3 schema declares no property with such a name
+    # in no position at all, names or not: the schema declares no property with such a name
     for refused in ("oneOf", *DROPPED):
         assert f'"{refused}"' not in json.dumps(wire)
 
 
-def test_the_real_v3_schema_keeps_every_required_and_enum_entry_and_every_property() -> None:
+def test_a_one_of_schema_keeps_every_required_and_enum_entry_and_every_property() -> None:
     sealed = response_schema()
     wire = to_wire_schema(sealed)
     assert collect(wire, "required") == collect(sealed, "required")
@@ -343,13 +341,13 @@ def test_the_real_v3_schema_keeps_every_required_and_enum_entry_and_every_proper
     ]
 
 
-def test_the_real_v3_schema_keeps_min_items_of_one_and_drops_max_items() -> None:
+def test_a_one_of_schema_keeps_min_items_of_one_and_drops_max_items() -> None:
     wire = to_wire_schema(response_schema())
     assert collect(wire, "minItems") == collect(response_schema(), "minItems") == [1, 1, 1]
     assert collect(wire, "maxItems") == []
 
 
-def test_the_sealed_v3_schema_is_untouched_by_the_conversion() -> None:
+def test_the_sealed_schema_is_untouched_by_the_conversion() -> None:
     first = response_schema()
     to_wire_schema(first)
     assert first == response_schema(), "response_schema() hands out a fresh sealed tree every time"
@@ -387,50 +385,3 @@ def test_the_body_helper_replaces_only_the_schema_and_leaves_its_argument_alone(
 def test_a_body_without_a_schema_is_copied_as_it_is(body: dict[str, Any]) -> None:
     sent = with_wire_schema(body)
     assert sent == body and sent is not body
-
-
-# -- the safety net: the local parser is still the authority --------------------------------------
-
-
-def _proposal(**change: Any) -> dict[str, Any]:
-    base = {
-        "category": "dimensions", "finding_text": "Указанное значение требует проверки.",
-        "recommendation_text": "Сверить с исходными данными.", "proposed_severity": "operational",
-        "evidence": [{"page_number": 2, "quote": "Ширина прохода 1,2 м"}],
-    }
-    return {**base, **change}
-
-
-def _norm(**change: Any) -> dict[str, Any]:
-    return {
-        **_proposal(category="evacuation"),
-        "norm_citations": [{"label": "N1", "quote": "Минимальная ширина прохода составляет 1,4 м"}],
-        "required_value": "1,4 м", "stated_value": "1,2 м", **change,
-    }
-
-
-def _one_dropped(raw: dict[str, Any]) -> None:
-    parsed = parse_response(json.dumps({"observations": [raw]}, ensure_ascii=False), truncated=False)
-    assert isinstance(parsed, ParsedResponse)
-    assert parsed.observations == () and parsed.malformed_count == 1
-
-
-@pytest.mark.parametrize(("raw", "constraint"), [
-    (_proposal(finding_text="x" * 4001), "maxLength"),
-    (_proposal(recommendation_text=""), "minLength"),
-    (_proposal(evidence=[{"page_number": 0, "quote": "есть"}]), "minimum"),
-    (_proposal(evidence=[{"page_number": 1, "quote": "x" * 2001}]), "maxLength"),
-    (_norm(norm_citations=[{"label": "N1", "quote": "Минимальная ширина прохода составляет 1,4 м"}] * 6),
-     "maxItems"),
-    (_norm(norm_citations=[{"label": "X1", "quote": "Минимальная ширина прохода составляет 1,4 м"}]),
-     "pattern"),
-    (_norm(norm_citations=[{"label": "N1", "quote": "коротко"}]), "minLength"),
-    (_norm(required_value="x" * 201), "maxLength"),
-])
-def test_the_v3_parser_still_rejects_what_the_wire_schema_no_longer_forbids(
-    raw: dict[str, Any], constraint: str,
-) -> None:
-    wire = to_wire_schema(response_schema())
-    members = wire["properties"]["observations"]["items"]["anyOf"]
-    assert constraint not in json.dumps(members), "the provider is no longer told this constraint"
-    _one_dropped(raw)
