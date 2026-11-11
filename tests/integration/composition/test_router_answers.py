@@ -147,7 +147,8 @@ SEALED_STUB_QUERY: dict[str, str] = {f"{_STUB_PROFILE}/tile": "?level=0&column=0
 #: query that names nothing, like the page tile above. `CMP-VIEWER-01` serves it (an absent `ctp_` is `404`) and it
 #: leaves `SEALED_STUB_GETS`; the query stays, because the sweep still needs it to read the path and not the query.
 SEALED_STUB_QUERY[f"{_STUB_PAIR}/tile"] = "?mode=overlay&level=0&column=0&row=0"
-NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
+#: `AR-V3-BE-RM-01` (contract 1.50.0, `R-154a`) removed `getRunNormVerification`: the sweep must no longer find `/runs/{run_id}/norm-verification`.
+REMOVED_NORM_VERIFICATION = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
 WORKER_GETS = frozenset({"/execution/workers", "/execution/comparison-ai-queue"})
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -313,7 +314,7 @@ class TestNoOperationAnswersWithAServerFault:
         assert RELEASE_GETS <= {path for _method, path in probes}
         assert SEALED_STUB_GETS <= {path for _method, path in probes}
         assert MODULE_GATED_GETS <= {path for _method, path in probes}
-        assert NORM_VERIFICATION_OF_AN_ABSENT_RUN in {path for _method, path in probes}
+        assert REMOVED_NORM_VERIFICATION not in {path for _method, path in probes}
         assert WORKER_GETS <= {path for _method, path in probes}
         faults = []
         for method, path in probes:
@@ -339,8 +340,6 @@ class TestNoOperationAnswersWithAServerFault:
             elif status >= 500:
                 faults.append((path, status, body))
         assert faults == [], f"operations answered with a server fault: {faults}"
-        status, body = call(app, "GET", NORM_VERIFICATION_OF_AN_ABSENT_RUN)
-        assert status == 404 and body["error_code"] == "not_found", (status, body)
 
 
 def _absent_identity(parameter: str) -> str:
