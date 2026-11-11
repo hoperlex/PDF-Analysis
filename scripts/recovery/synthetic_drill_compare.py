@@ -21,6 +21,14 @@ one transaction that is always rolled back, it tries to UPDATE and to DELETE one
 every populated table that carries an immutable or append-only guard, and requires the guard's
 own SQLSTATE each time. A restore that kept a trigger's name but lost its event set, or left it
 disabled, is caught by the shape digests; one whose trigger does not fire is caught here.
+
+Which operation a guard refuses is a property of its trigger, and the probe reads it from the
+catalog (``pg_trigger.tgtype``) instead of assuming both. A table that is guarded on one event by
+design (``_NOT_GUARDED_BY_DESIGN``: a settings row that changes state but is never deleted, an
+intent that changes state and is deleted only beside a forget) is not asked to refuse the other one.
+That list is the only thing that excuses an operation. The catalog never does: a trigger narrowed
+from ``UPDATE OR DELETE`` to ``DELETE`` looks exactly like a guard that was always ``DELETE``-only, so
+the operation stays expected, and probed, on every table the list does not name.
 """
 
 from __future__ import annotations
@@ -123,13 +131,27 @@ def database_profile(engine: Engine) -> dict[str, Any]:
 
 #: The SQLSTATEs of ``am_append_only`` (``AM002``) and ``am_immutable_row`` (``AM003``).
 _GUARD_SQLSTATES = ("AM002", "AM003")
+#: The report's result for an operation the table is, by design, not guarded against. It is not a finding.
+_BY_DESIGN = "by_design"
+#: ``pg_trigger.tgtype`` bits of the events a trigger fires on (``TRIGGER_TYPE_DELETE`` and ``TRIGGER_TYPE_UPDATE``).
+_TG_DELETE, _TG_UPDATE = 8, 16
+#: The operations a guarded table is NOT asked to refuse, because its schema declares it open to them: ``vector_control`` (a
+#: switch row, frozen on its key and never deleted: ``am_immutable_row`` on ``DELETE`` only) and ``decision_memory_embedding_intent``
+#: (an intent that changes state: its forget guard is on ``DELETE`` only). Every other guarded table refuses both operations.
+_NOT_GUARDED_BY_DESIGN: dict[str, frozenset[str]] = {
+    "vector_control": frozenset({"update"}),
+    "decision_memory_embedding_intent": frozenset({"update"}),
+}
 _GUARDS = text("""
-    SELECT DISTINCT c.relname AS name, p.proname AS guard, c.relname COLLATE "C" AS sort_key
+    SELECT c.relname AS name, p.proname AS guard,
+           bool_or((t.tgtype & 16) <> 0) AS on_update, bool_or((t.tgtype & 8) <> 0) AS on_delete,
+           c.relname COLLATE "C" AS sort_key
       FROM pg_catalog.pg_trigger t
       JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
       JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid
      WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
        AND p.proname IN ('am_immutable_row', 'am_append_only', 'am_guard_release_append_only', 'am_guard_decision_memory_forget')
+     GROUP BY c.relname, p.proname
      ORDER BY sort_key, guard
 """)
 
@@ -139,6 +161,10 @@ def probe_guards(engine: Engine) -> list[dict[str, Any]]:
 
     Always rolled back. Run it on the restored TARGET, never on a source anyone still needs.
     A table with no row proves nothing and is reported as ``empty``, not as refused.
+
+    An operation is probed when the guard's trigger covers it in the catalog, or when the table is not declared open to it
+    (``_NOT_GUARDED_BY_DESIGN``); a declared operation the trigger does not cover is reported as ``by_design`` and not tried.
+    A disabled trigger keeps its events in the catalog, so it is probed, and the write it fails to refuse is ``ACCEPTED``.
     """
     from sqlalchemy.exc import DBAPIError
 
@@ -157,10 +183,14 @@ def probe_guards(engine: Engine) -> list[dict[str, Any]]:
                 if not connection.execute(text(f'SELECT EXISTS (SELECT 1 FROM public."{name}")')).scalar_one():
                     report.append({"table": name, "guard": row["guard"], "result": "empty"})
                     continue
-                for operation, statement in (
-                    ("update", f'UPDATE public."{name}" SET "{first}" = "{first}" WHERE {one}'),
-                    ("delete", f'DELETE FROM public."{name}" WHERE {one}'),
+                for operation, covered, statement in (
+                    ("update", row["on_update"], f'UPDATE public."{name}" SET "{first}" = "{first}" WHERE {one}'),
+                    ("delete", row["on_delete"], f'DELETE FROM public."{name}" WHERE {one}'),
                 ):
+                    if not covered and operation in _NOT_GUARDED_BY_DESIGN.get(name, frozenset()):
+                        report.append({"table": name, "guard": row["guard"], "operation": operation,
+                                       "result": _BY_DESIGN})
+                        continue
                     nested = connection.begin_nested()
                     try:
                         connection.execute(text(statement))
@@ -276,14 +306,16 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             engine.dispose()
         found += [f"/guard_probe/{item['table']}/{item.get('operation', '-')}: {item['result']}"
-                  for item in probe if item["result"] not in (*_GUARD_SQLSTATES, "empty")]
+                  for item in probe if item["result"] not in (*_GUARD_SQLSTATES, "empty", _BY_DESIGN)]
     summary = {
         "guard_probe": {
             "tables": len({item["table"] for item in probe}),
             "refused": sum(item["result"] in _GUARD_SQLSTATES for item in probe),
             "empty_tables": sorted(item["table"] for item in probe if item["result"] == "empty"),
+            "by_design": sorted(f"{item['table']}/{item['operation']}" for item in probe
+                                if item["result"] == _BY_DESIGN),
             "accepted_or_other": [item for item in probe
-                                  if item["result"] not in (*_GUARD_SQLSTATES, "empty")],
+                                  if item["result"] not in (*_GUARD_SQLSTATES, "empty", _BY_DESIGN)],
         } if args.probe_target_guards else None,
         "informational": informational,
         "tables": len(profiles[0]["database"]["tables"]),
