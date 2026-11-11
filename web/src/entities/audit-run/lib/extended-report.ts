@@ -57,7 +57,7 @@ function observationMarkdown(item: RecordValue, index: number, sourceIndex: Read
   const candidate = object(correction?.candidate);
   if (item.origin_scope === 'global_cross_window') lines.push(`Происхождение: межоконная сверка; пакет ${md(item.cross_window_batch_key)}; исходные окна ${md(item.window_ids)}.`);
   if (item.source_evidence !== undefined) lines.push('Дословные цитаты исходного наблюдения:', evidenceMarkdown(item.source_evidence));
-  // The original's deterministic critic (`V2-ORIGINAL-REVIEW-01`) is a rule's word, not a model's, and has no taxonomy reason or fix of its own for a pass.
+  // Deterministic critic of the original (`V2-ORIGINAL-REVIEW-01`): the word of a rule, not of a model; for a pass it has no taxonomy reason or fix of its own.
   const rule = critic?.mode === 'deterministic';
   if (critic !== null) lines.push(rule ? '#### Рекомендация критика по правилам оригинала, без модели — не решение эксперта' : '#### Рекомендация машинного критика — не решение эксперта',
     md(EXTENDED_ADVICE[plain(critic.llm_decision)] ?? 'Требуется проверка'),
