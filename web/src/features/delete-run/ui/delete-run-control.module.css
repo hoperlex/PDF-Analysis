@@ -9,7 +9,8 @@
   flex-direction: column;
   align-items: flex-start;
   gap: var(--am-gap-xs);
-  min-width: 0;
+  /* A floor, so the cell of a table does not shrink the group to its longest word and set it as a tall, narrow column. */
+  min-width: 16rem;
   max-width: 24rem;
 }
 
