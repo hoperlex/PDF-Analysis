@@ -18,7 +18,8 @@ from auditmanager.precedents.vectors.window import OPEN_STATES, STATES
 
 
 class ControlSession:
-    """The one thing ``read_control`` asks of a session: ``execute(statement).first()`` is the control row."""
+    """What the two reads ask of a session: ``execute(statement).first()`` is the control row for the control's SELECT and no row for the window
+    setting's (nothing journalled: the default window)."""
 
     def __init__(self, state: str) -> None:
         reason = "encoder_failed" if state == "skipped" else None
@@ -26,8 +27,9 @@ class ControlSession:
         self.statements: list[str] = []
 
     def execute(self, statement: Any, *_args: Any, **_kwargs: Any) -> Any:
-        self.statements.append(str(statement))
-        return SimpleNamespace(first=lambda: self._row)
+        sql = str(statement)
+        self.statements.append(sql)
+        return SimpleNamespace(first=lambda: self._row if "vector_control" in sql else None)
 
 
 @pytest.mark.parametrize("state", STATES)
@@ -39,7 +41,7 @@ def test_the_window_is_open_in_exactly_the_two_states_that_hold_new_runs(state: 
 def test_the_read_is_one_select_of_the_control_row_and_writes_nothing() -> None:
     session = ControlSession("encoding")
     assert window_open(session) is True  # type: ignore[arg-type]
-    assert len(session.statements) == 1
+    assert len(session.statements) == 1, "the control row only: the clock and the window's setting are not asked"
     statement = session.statements[0].upper()
     assert "FROM VECTOR_CONTROL" in statement and "UPDATE" not in statement, "a read of the control row, not a lock on it"
 
