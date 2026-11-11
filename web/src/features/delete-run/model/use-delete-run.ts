@@ -16,8 +16,8 @@ import { ApiError, deleteRun, queryKeys } from '@/shared/api';
 export function useDeleteRun() {
   const client = useQueryClient();
   const refreshLists = (runId: string): void => {
-    const own = hashKey(queryKeys.runs.detail(runId as RunId));
-    void client.invalidateQueries({ queryKey: queryKeys.runs.all(), predicate: (query) => query.queryHash !== own });
+    const ownHash = hashKey(queryKeys.runs.detail(runId as RunId));
+    void client.invalidateQueries({ queryKey: queryKeys.runs.all(), predicate: (query) => query.queryHash !== ownHash });
     void client.invalidateQueries({ queryKey: queryKeys.execution.all() });
     void client.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });
   };
@@ -26,7 +26,9 @@ export function useDeleteRun() {
       (await deleteRun({ path: { run_id: runId }, idempotencyKey })).data,
     retry: false,
     onSuccess: (run) => {
-      void client.invalidateQueries({ queryKey: queryKeys.runs.detail(run.run_id), refetchType: 'none' });
+      // An invalidation filter, not a `useQuery` filling the key, which is what `query-key-shape.guard` keeps to the entity's one factory.
+      const own = queryKeys.runs.detail(run.run_id);
+      void client.invalidateQueries({ queryKey: own, refetchType: 'none' });
       refreshLists(run.run_id);
     },
     onError: (error, { runId }) => {

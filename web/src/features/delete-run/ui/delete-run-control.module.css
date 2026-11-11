@@ -1,5 +1,5 @@
 /*
- * «Удалить прогон» (`RUN-DELETE-01`): the open confirmation and the word that replaces it. Tokens only: spacing from `--am-gap-*`,
+ * «Удалить прогон» (`RUN-DELETE-01`): the open confirmation. Tokens only: spacing from `--am-gap-*`,
  * type from `--am-text-*`, ink from `--am-ink-*`. The buttons are the global `am-button` classes.
  */
 
@@ -30,10 +30,4 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-xs);
-}
-
-/* «Прогон удалён.» while the list is read again: quiet, not an alert. */
-.done {
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
 }

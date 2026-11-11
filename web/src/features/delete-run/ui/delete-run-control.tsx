@@ -88,7 +88,7 @@ export function DeleteRunControl({ runId, state, compact = false, onDeleted, ini
   if (!mayDelete(me.data?.roles) || !deletable(state ?? status.data?.state)) return null;
 
   if (remove.isSuccess) {
-    return <span className={styles.done} role="status" data-run-delete="done">{DELETE_RUN_DONE}</span>;
+    return <span className="am-note" role="status" data-run-delete="done">{DELETE_RUN_DONE}</span>;
   }
 
   if (!confirming) {
