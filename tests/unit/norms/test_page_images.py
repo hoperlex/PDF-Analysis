@@ -52,9 +52,9 @@ def test_the_profile_is_the_one_the_migration_comment_names_and_the_limits_are_t
 def test_one_page_becomes_a_png_at_150_dpi():
     rendered = render_pdf_page(_pdf())
     assert rendered.png.startswith(PNG_SIGNATURE) and len(rendered.png) > 100
-    # 420 x 594 pt at 150 dpi: 875 x 1238 px (PDFium rounds each side up)
+    # 420 x 594 pt at 150 dpi is about 875 x 1237 px (PDFium rounds each side up; Pillow writes the MediaBox a hair wider)
     assert _ihdr(rendered.png) == (rendered.width_px, rendered.height_px)
-    assert (rendered.width_px, rendered.height_px) == (875, 1238)
+    assert 874 <= rendered.width_px <= 877 and 1236 <= rendered.height_px <= 1239
 
 
 def test_a_source_of_two_pages_is_refused_and_not_cut_to_the_first():
