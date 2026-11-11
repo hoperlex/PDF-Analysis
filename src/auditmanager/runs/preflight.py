@@ -512,6 +512,19 @@ class RunCostPreflight:
                         # schemas and logical request caps are unchanged.
                         input_tokens += norm_calls * norm_context["input_tokens_per_call"]
                         led("norms", 0, norm_calls * norm_context["input_tokens_per_call"])
+                    if planned:
+                        # `CTX-STAND` (ADR-0029 decision 3): the critic's reference data. The policy joins the consent only while the
+                        # «контекст критику» switch is on and only on the stage layout (a legacy run is offered none): a run without the
+                        # switch freezes a consent of exactly the shape it had. The block rides on the critic's existing calls, so the
+                        # estimate reserves its input tokens on the review row and the call counts do not grow.
+                        from auditmanager.executors.public import critic_context_enabled, executor_context_policy
+                        if critic_context_enabled(session):
+                            context_policy = executor_context_policy()
+                            extended["executor_context_policy"] = context_policy
+                            context_calls = visual["max_windows"] * limits["finding_review"]
+                            context_calls += extended.get("global_cross_window_policy", {}).get("call_limits", {}).get("finding_review", 0)
+                            input_tokens += context_calls * context_policy["input_tokens_reserved_per_call"]
+                            led(PHASE_ROWS["finding_review"], 0, context_calls * context_policy["input_tokens_reserved_per_call"])
                 elif coverage_mode in {"legacy", "0", "off", "false"}:
                     if planned:
                         # The legacy coverage has no per-phase accounting to price by model.

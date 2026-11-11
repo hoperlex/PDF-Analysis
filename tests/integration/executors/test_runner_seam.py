@@ -107,13 +107,16 @@ IMAGE_PATH = f"/runner/tasks/{TASK}/images/{BLOB}"
 #: answered by the enrollment port rather than this file's ``RunnerPort`` stand-in. Its seam and its answers are
 #: ``test_enrollment.py``; it is named here so that the register stays whole.
 HEALTH_OPERATION = "reportRunnerHealth"
+#: The seventh (`CRIT-SEAL-50`) is the reference data of a `review:main` task. The seal added it to ``RUNNER_OPERATIONS`` and left this register short of
+#: it; `CTX-STAND` writes it down here. Its seam, its body and its answers are ``test_runner_context_route.py``.
+CONTEXT_OPERATION = "getExecutorTaskContext"
 BODIES = {"submitExecutorTaskAnswer": {"output_text": "{}", "model": "m"},
           "failExecutorTask": {"reason": "model_mismatch: x"}}
 
 
-def test_the_runner_operations_are_the_four_posts_the_image_read_and_the_health_report() -> None:
-    assert set(PATHS) | {IMAGE_OPERATION, HEALTH_OPERATION} == RUNNER_OPERATIONS
-    assert IMAGE_OPERATION not in PATHS and HEALTH_OPERATION not in PATHS
+def test_the_runner_operations_are_the_four_posts_the_image_read_the_health_report_and_the_reference_data() -> None:
+    assert set(PATHS) | {IMAGE_OPERATION, HEALTH_OPERATION, CONTEXT_OPERATION} == RUNNER_OPERATIONS
+    assert IMAGE_OPERATION not in PATHS and HEALTH_OPERATION not in PATHS and CONTEXT_OPERATION not in PATHS
 
 
 def test_a_runner_token_reaches_the_image_read_and_the_port_sees_its_identity(surface, stub) -> None:
