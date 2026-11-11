@@ -17,7 +17,6 @@ from types import SimpleNamespace as NS
 import pytest
 from sqlalchemy import create_engine
 
-from auditmanager.analysis.public import ModelRequest
 from auditmanager.executors.pull import _task_payload
 from auditmanager.norms.public import NormPageImage, NormPageRender, PageImageSelection
 from auditmanager.runs import extended_review as runtime
