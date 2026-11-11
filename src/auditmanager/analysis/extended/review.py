@@ -300,8 +300,34 @@ def _normative_view(observations, *, full_context=False):
         "truncated": bool(omitted), "omitted_paragraph_ids": omitted}
 
 
+#: The sentence of the adaptation that says the page images are not attached again. Every request keeps it exactly as it was, except the
+#: critic's of a run that offers the reference section (:data:`_CRITIC_REFERENCE_NOTE`).
+_IMAGES_NOT_RESENT = ("Изображения здесь повторно не приложены: оценивай только реально переданные текстовые контексты, "
+    "нормативную сверку и результат предыдущего визуального прохода. ")
+#: `CTX-CRITIC` (`ADR-0029` decision 3, plan-v5 section 3.5): what the critic of a run on the stage layout, whose consent carries the
+#: ``executor_context_policy``, is told about the section the executor's agent may put after the JSON. It takes the place of
+#: :data:`_IMAGES_NOT_RESENT` and carries its rule on. The section is a hint; a quote from it is not a quote from a source of the
+#: project (`_quote_refs` refuses it), and a norm page image, when one is attached, illustrates the text of ``norm_context`` and never replaces it.
+_CRITIC_REFERENCE_NOTE = (
+    "Страницы проекта здесь повторно не прикладываются: оценивай только реально переданные текстовые контексты, "
+    "нормативную сверку и результат предыдущего визуального прохода. "
+    "Если после JSON запроса идёт отдельный раздел «=== СПРАВОЧНО (не основание) ===», в нём лежат решения экспертов "
+    "по похожим замечаниям из других случаев (по input_id: verdict — accepted принято, rejected отклонено; category, finding_text, "
+    "recommendation_text) либо одна строка "
+    "«Справочные данные недоступны: <причина>»; «Похожих решений нет.» и «Не уместилось: N» — служебные строки того же раздела. "
+    "Это только справка, а не основание: на ней нельзя строить вывод, повышать confidence, принимать или отклонять замечание. "
+    "Раздел не является источником проекта и не доказательством: не цитируй его в source_evidence "
+    "(принимаются только дословные цитаты указанного source_id, цитата из справки отклонит запись), "
+    "не переноси из него числа, марки, нормы и формулировки как факты проекта. "
+    "Решай по каждому input_id только по источникам проекта и norm_context, как если бы раздела не было; "
+    "прошлое решение не отменяет проверки именно этого замечания. "
+    "Отсутствие раздела или строка о недоступности справки — обычный случай, а не причина для needs_human. "
+    "Если к запросу приложены изображения страниц норм, они лишь иллюстрируют текст нормы из norm_context и не заменяют его: "
+    "нормативной цитатой остаётся текст norm_context, а текст, прочитанный с картинки, цитатой не является. ")
+
+
 def _request(*, model_id, run_id, section, observations, sources, window_id, context,
-             phase, schema, instruction, critiques=None, full_context=False, settings=None):
+             phase, schema, instruction, critiques=None, full_context=False, settings=None, reference_section=False):
     from .section_rules import section_instructions
     selected = _input_items(observations)
     indexed, texts = _source_index(sources, context)
@@ -311,6 +337,8 @@ def _request(*, model_id, run_id, section, observations, sources, window_id, con
         raise ValueError("review_window_identity_invalid")
     if type(full_context) is not bool:
         raise ValueError("review_context_policy_invalid")
+    if type(reference_section) is not bool:
+        raise ValueError("review_reference_section_invalid")
     payload = _source_view(indexed, texts, full_context=full_context)
     norm_references, norm_context, norm_coverage = _normative_view(selected, full_context=full_context)
     payload.update(workflow_version=WORKFLOW_V3, window_id=window_id,
@@ -330,8 +358,7 @@ def _request(*, model_id, run_id, section, observations, sources, window_id, con
         "Это машинное предварительное мнение, НЕ решение эксперта. Нельзя удалять или скрывать исходные наблюдения, "
         "менять экспертные решения либо утверждать доказанное нарушение/актуальность нормы. "
         "Исходные файлы, инструменты и внешние каталоги недоступны. Структурная оценка исходного Python-критика "
-        "не подтверждает инженерный факт. Изображения здесь повторно не приложены: оценивай только реально "
-        "переданные текстовые контексты, нормативную сверку и результат предыдущего визуального прохода. "
+        "не подтверждает инженерный факт. " + (_CRITIC_REFERENCE_NOTE if reference_section else _IMAGES_NOT_RESENT) +
         "Полные нормативные кандидаты переданы один раз в norm_context; ссылки наблюдений сами по себе "
         "не являются текстом нормы. Учитывай norm_context_coverage и пропущенные параграфы. "
         "Не выдумывай прочитанные пиксели или цитаты. При недостатке данных отметь потребность в контексте. " + instruction)
@@ -363,12 +390,15 @@ def _request(*, model_id, run_id, section, observations, sources, window_id, con
 
 
 def build_critic_request(*, model_id, run_id, section, observations, sources, window_id, context=None,
-                         full_context=False, settings=None):
+                         full_context=False, settings=None, reference_section=False):
+    """The critic's request. ``reference_section`` is ``True`` only for a run whose critic task may carry the reference section after
+    its JSON (a run on the stage layout, under plan v3, whose consent holds the ``executor_context_policy``); the prompt then says what
+    the section is. Every other request keeps the text it always had."""
     if not _input_items(observations):
         return None
     return _request(model_id=model_id, run_id=run_id, section=section, observations=observations,
         sources=sources, window_id=window_id, context=context, phase="finding_review", schema=critic_schema(),
-        full_context=full_context, settings=settings,
+        full_context=full_context, settings=settings, reference_section=reference_section,
         instruction=("Верни объект reviews: ровно одна запись для КАЖДОГО input_id, без добавлений и пропусков. "
             "source_ids повторяют полный исходный набор. llm_decision — только совет модели. Для reject нужны "
             "confidence>=0.75, enough_source, evidence_checked=true и конкретные source_evidence с ДОСЛОВНЫМИ "

@@ -18,11 +18,13 @@ from auditmanager.analysis import public
 
 EXTENDED = Path(od.__file__).parent
 
-#: `review_bundle_digest("AR")` of the tree this lane started from (`37b46fcac`). The lane adds `original_deterministic.py` and touches none of the
-#: files the digest hashes, so v3's frozen `rules_sha256` is what it was. A deliberate change to the v3 bundle updates this line and says why.
+#: `review_bundle_digest(section)` of the v3 bundle. The lane that added `original_deterministic.py` (`V2-ORIGINAL-REVIEW-01`) touched none of the
+#: files the digest hashes, so v3's frozen `rules_sha256` was what it had been (AR `6696fb2e...`, KJ `d988f6cc...`, the tree of `ac76c1ce5`). A
+#: deliberate change to the v3 bundle updates this line and says why. `CTX-CRITIC` did, on purpose: its paragraph is in `analysis/extended/review.py`,
+#: which the digest hashes, so every v3 consent frozen before it refuses with `extended_rules_changed_requires_consent` (plan-v5 section 3.5).
 V3_BUNDLE_DIGEST_AT_BASE = {
-    "AR": "6696fb2e0bf748d44a0e935baee23ac14dd19f13f683aa40adf50a78e540f630",
-    "KJ": "d988f6cc81873102f2cf3355cd70564c11753ebd7391790d96fc76ef689f05d1",
+    "AR": "d6be61b5ed8387ecfb0da7e69ef9f78aaf16f5a6464945657c9f86f40a086143",
+    "KJ": "f22ce6ccf241d39d9afd659492734eee378e7e076a5c710563111e9880ba2674",
 }
 
 
