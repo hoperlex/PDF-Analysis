@@ -107,10 +107,16 @@ def test_v2_runtime_true_phases_four_call_cap_and_originals_survive_bad_norm(mon
     procedures={p['id']:p['status'] for p in result['procedures']}
     assert procedures['block_analysis']==('unavailable' if native_mode=='mismatch' else 'completed')
     assert procedures['comprehensive_analysis']=='completed' and procedures['finding_merge']=='completed'
-    assert procedures['norm_verification']==('unavailable' if not corpus else 'failed' if bad_norm else 'completed')
+    # NORM-REPLY-PER-RECORD-01: a refused norm record costs only itself; the stage is partial, not failed.
+    assert procedures['norm_verification']==('unavailable' if not corpus else 'partial' if bad_norm else 'completed')
     assert len(result['observations'])==(1 if native_mode=='mismatch' else 2)
+    if bad_norm:
+        norm=next(p for p in result['procedures'] if p['id']=='norm_verification')
+        assert norm['reason']=='norm_verification_reply_refused'
+        assert {o.get('norm_review_status') for o in result['observations']}=={'not_reviewed'}
+        assert result['reply_refusals'] and all(r['phase_key'].startswith('norm_verification') for r in result['reply_refusals'])
     assert sum(len(o.get('merged_observations',[o])) for o in result['observations'])==(1 if native_mode=='mismatch' else 3)
-    assert saved[-1][0]==('partial' if not corpus or native_mode=='mismatch' else 'failed' if bad_norm else 'completed')
+    assert saved[-1][0]==('partial' if not corpus or native_mode=='mismatch' or bad_norm else 'completed')
     assert all(p['status']=='queued' for p in saved[0][1]['procedures'])
 
 
@@ -190,7 +196,7 @@ def test_full_norm_review_processes_all_observations_in_multiple_calls(monkeypat
                 {'norm_queries': [], 'input_ids': [original['input_id']], 'norm_assessment': {
                     'relation': 'insufficient', 'explanation': 'Требует проверки',
                     'citations': [{'paragraph_id': 'paragraph', 'quote': 'Реальная цитата'}]}})
-        return NS(output_text=json.dumps({'observations': values}))
+        return NS(output_text=json.dumps({'observations': values}), truncated=False)
     runtime._full_norm_verification(session=Session(), run=NS(run_id='run'),
         model_id='claude-opus-5', section='AR', state=state, snapshot_id='snapshot',
         call=answer, phase=lambda *args: phases.append(args), checkpoint=lambda _: None)

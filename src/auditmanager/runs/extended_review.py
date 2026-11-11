@@ -1139,9 +1139,13 @@ def _full_comprehensive_review(*, run, model_id, section, state, pages, block_it
     return observations
 
 
+#: The reason of a norm stage in which a reply record was refused or an input got no accepted record.
+NORM_REPLY_REFUSED = "norm_verification_reply_refused"
+
+
 def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings=None):
     """Search and review every candidate-bearing observation in bounded model calls."""
-    from auditmanager.analysis.public import build_norm_review_request, parse_norm_review
+    from auditmanager.analysis.public import build_norm_review_request
     items = state["observations"]
     state["warnings"].extend(_norms(session, items, snapshot_id,
         full_document=True, checkpoint=checkpoint))
@@ -1170,24 +1174,56 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
         characters += size
     if batch:
         batches.append(batch)
+    refused = False
     for batch_number, batch in enumerate(batches):
         indexed = {"xni_" + extended_digest({"ordinal": i, "item": item})[:24]: item
             for i, item in enumerate(batch, start=batch_number * 40)}
         norm_context = {candidate["paragraph_id"]: candidate
             for item in batch for candidate in item["norm_candidates"]}
         request = build_norm_review_request(model_id=model_id, run_id=run.run_id, section=section, settings=settings,
+            quote_echo=False,
             payload={"observations": [{"title": item["title"], "description": item["description"],
                 "source_ids": item["source_ids"], "input_id": key,
                 "norm_candidate_ids": [candidate["paragraph_id"] for candidate in item["norm_candidates"]]}
                 for key, item in indexed.items()], "norm_context": list(norm_context.values()),
                 "source_sha256": state["source_sha256"]})
-        reviewed = parse_norm_review(call(request, f"norm_verification:{batch_number}").output_text,
-            observations=indexed, allowed_sources={source["source_id"] for source in state["sources"]})
-        for result in reviewed:
-            indexed[result["input_ids"][0]]["norm_assessment"] = result["norm_assessment"]
+        refused |= _review_norms_per_record(state=state, request=request, call=call,
+            identity=f"norm_verification:{batch_number}", indexed=indexed)
+    if refused:
+        phase("norm_verification", "partial", NORM_REPLY_REFUSED)
+        return
     # NORM-COVERAGE-01: complete when every observation that asked a norm question has its candidates; one that asked none (a primary
     # text finding, a cross-check point without a normative question) is not a gap of this procedure.
     phase("norm_verification", "partial" if any(not item.get("norm_candidates") for item in asked) else "completed")
+
+
+def _review_norms_per_record(*, state, request, call, identity, indexed):
+    """Ask one norm review question and read its reply per record (`NORM-REPLY-PER-RECORD-01`).
+
+    One refused record costs only its own input: the others keep their assessment, the refused
+    one is ``not_reviewed`` with ``norm_verification_reply_refused``, and the stage goes on
+    (``partial``) so the critic and the corrector still run. The receipt of a refusal is in
+    ``state["reply_refusals"]``; ``policy={}`` means no repair call is ever made here. A reply
+    that is not valid as a whole refuses every input of the question the same way. A transport
+    failure (``DomainError``) is not a reply and propagates. Returns whether the question has a
+    gap: a refusal receipt (a refused record, a truncated reply) or an input with no accepted
+    record, one the reply did not carry included.
+    """
+    from auditmanager.analysis.public import parse_norm_review
+    response = call(request, identity)
+    allowed = {source["source_id"] for source in state["sources"]}
+    reviewed, gap = _received_reply(state=state, request=request, response=response, call=call, identity=identity,
+        parse=lambda text, **kwargs: parse_norm_review(text, observations=indexed, allowed_sources=allowed,
+            quote_echo=False, **kwargs), policy={})
+    accepted = {result["input_ids"][0]: result for result in reviewed}
+    for key, item in indexed.items():
+        if key in accepted:
+            item.update(norm_assessment=accepted[key]["norm_assessment"], norm_review_status="reviewed",
+                norm_review_reason=None)
+        else:
+            item.update(norm_review_status="not_reviewed", norm_review_reason=NORM_REPLY_REFUSED)
+            gap = True
+    return gap
 
 
 def _bounds_lifted(policy):
@@ -1702,7 +1738,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             else:
                 indexed={"xni_"+extended_digest({"ordinal":i,"item":item})[:24]:item for i,item in enumerate(window)}
                 builder=build_norm_review_request
-                extra={}
+                extra={"quote_echo":False}  # NORM-REPLY-PER-RECORD-01: v2 reads the reply per record; v3 below is unchanged
                 if v3:
                     from auditmanager.analysis.public import build_norm_review_request_v3
                     builder=build_norm_review_request_v3;extra={"window_id":window_context["window_id"]}
@@ -1711,14 +1747,20 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                         "source_ids":item["source_ids"],"input_id":key,
                         "norm_candidate_ids":[c["paragraph_id"] for c in item.get("norm_candidates",[])]} for key,item in indexed.items()],
                         "norm_context":list(registry.values()),"source_sha256":state["source_sha256"]})
-                reviewed=parse_norm_review(call(request,"norm_verification").output_text,observations=indexed,
-                    allowed_sources={s["source_id"] for s in state["sources"]})
-                # Parser requires exactly one assessment per original input; only annotations transfer.
-                for reviewed_item in reviewed:
-                    target=indexed[reviewed_item["input_ids"][0]]
-                    target["norm_assessment"]=reviewed_item["norm_assessment"]
-                phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(
-                    _asked_norm_question(item) and not item.get("norm_candidates") for item in window) else "completed")  # NORM-COVERAGE-01
+                if v3:
+                    reviewed=parse_norm_review(call(request,"norm_verification").output_text,observations=indexed,
+                        allowed_sources={s["source_id"] for s in state["sources"]})
+                    # Parser requires exactly one assessment per original input; only annotations transfer.
+                    for reviewed_item in reviewed:
+                        target=indexed[reviewed_item["input_ids"][0]]
+                        target["norm_assessment"]=reviewed_item["norm_assessment"]
+                    phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(
+                        _asked_norm_question(item) and not item.get("norm_candidates") for item in window) else "completed")  # NORM-COVERAGE-01
+                elif _review_norms_per_record(state=state,request=request,call=call,identity="norm_verification",indexed=indexed):
+                    phase("norm_verification","partial",NORM_REPLY_REFUSED)
+                else:
+                    phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(
+                        _asked_norm_question(item) and not item.get("norm_candidates") for item in window) else "completed")  # NORM-COVERAGE-01
         if batched:
             _review_batched_v3(run=run,binding=binding,state=state,phase=phase,call=call,
                 window_context=window_context,contexts=contexts,
