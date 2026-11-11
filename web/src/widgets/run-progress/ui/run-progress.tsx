@@ -64,7 +64,7 @@ import type { RunStatus } from '@/shared/api';
 import { isTerminalRunState } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
-import { RunWorkerLine, runHoldsLease, runWorker, useWorkerLookup } from '@/entities/execution';
+import { RunWorkerLine, runHoldsLease, runWorker, useExecutionJournal, useWorkerLookup } from '@/entities/execution';
 import { pluralRu } from '@/entities/document-version';
 import { GroupWaitDetail } from '@/entities/executor-group';
 import { groupByCategory, runFindingsQueryOptions, SEVERITY_LABELS } from '@/entities/finding';
@@ -105,6 +105,7 @@ import {
   runQueueReasonLabel,
   runWaitingSentence,
   shortModelName,
+  stageActivity,
   terminalReasonNote,
   useRunStages,
   useRunStatus,
@@ -396,6 +397,9 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
   const { status, failure, polling, retry } = useRunStatus(runId);
   // The stages (models and facts by chip) are read once the run is, and again at each reading of the run's own loop (`recordRunReading`).
   const stages = useRunStages(runId, status !== null);
+  // `RUN-STAGE-PROGRESS-01`: the journal says which code stage is at work and the pages it has read; read while the run is open.
+  // The same query as the PDF check's progress, so it is one request.
+  const stageJournal = useExecutionJournal(runId, undefined, status !== null && !isTerminalRunState(status.state));
   const me = useMe();
   const reading = useExtendedReviewReading(runId);
   const [tab, setTab] = useState<RunTab>('overview');
@@ -624,6 +628,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
           reusedStageIds={from === null ? undefined : from.reusedStageIds}
           showServer={showServer}
           stages={stages}
+          activity={isTerminalRunState(status.state) ? undefined : stageActivity(stageJournal.data?.items ?? [], status.run_id)}
         />
       )}
     </div>

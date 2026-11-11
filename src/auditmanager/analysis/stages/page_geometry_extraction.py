@@ -80,7 +80,7 @@ from auditmanager.analysis.ports.artifacts import (
     read_artifact,
 )
 from auditmanager.analysis.ports.stage import StageContext, StageProduction
-from auditmanager.analysis.stages.extraction import ExtractedDocument, extract_document
+from auditmanager.analysis.stages.extraction import ExtractedDocument, PageProgress, extract_document
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage.public import BlobStore
 
@@ -102,9 +102,14 @@ BBOX_UNIT: Final[str] = "pt"
 BBOX_ORIGIN: Final[str] = "top_left"
 
 
-def run(context: StageContext) -> StageProduction:
+def run(context: StageContext, *, progress: PageProgress | None = None) -> StageProduction:
     """Derive the block index and publish it with the crop manifest, and for a portal
-    bundle the normalised block list and the crops."""
+    bundle the normalised block list and the crops.
+
+    ``progress`` is told the pages read as the document is extracted (`RUN-STAGE-PROGRESS-01`):
+    the stage re-reads the whole document, which on a large drawing set takes as long as the
+    preparation did, and the run's screen shows it page by page.
+    """
     text_layer, text_layer_sha256 = read_artifact(
         context.blob_store,
         context.blob(ROLE_TEXT_LAYER),
@@ -126,7 +131,7 @@ def run(context: StageContext) -> StageProduction:
     companion = _companion(context)
 
     with source_file(context.blob_store, source_blob, stage_id=STAGE_ID) as path:
-        document = extract_document(path)
+        document = extract_document(path, progress=progress)
         _refuse_text_layer_mismatch(document, text_layer)
         blocks = _build_blocks(document, text_layer)
         portal = (
@@ -183,6 +188,11 @@ class _PortalGeometry:
     crop_images: tuple[ArtifactRef, ...]
     metrics: dict[str, MetricValue]
 
+
+
+def run_page_geometry_with_progress(context: StageContext, *, progress: PageProgress) -> StageProduction:
+    """Public worker handler seam (`RUN-STAGE-PROGRESS-01`); the caller owns durable authority and progress."""
+    return run(context, progress=progress)
 
 def _companion(context: StageContext) -> bytes | None:
     """The stored ``_blocks.json`` of a portal bundle, or ``None`` for a version without one.

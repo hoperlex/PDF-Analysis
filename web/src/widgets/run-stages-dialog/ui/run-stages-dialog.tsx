@@ -39,6 +39,7 @@ import { formatInstant } from '@/shared/lib';
 import {
   CHIP_STATE_LABELS,
   StageTable,
+  chipPagesText,
   elapsedMs,
   formatElapsed,
   groupDigits,
@@ -48,7 +49,14 @@ import {
   shortModelName,
   stageOfChip,
 } from '@/entities/audit-run';
-import type { ProcedureReading, ProcedureStatus, RunChip, RunChipDefinition, RunStagesView } from '@/entities/audit-run';
+import type {
+  ProcedureReading,
+  ProcedureStatus,
+  RunChip,
+  RunChipDefinition,
+  RunStagesView,
+  StageActivity,
+} from '@/entities/audit-run';
 import { procedureReasonSentence } from '@/widgets/extended-review';
 import { StartRunFromStageControl } from '@/features/start-run-from-stage';
 
@@ -73,6 +81,11 @@ export interface RunStagesDialogProps {
   readonly stages?: RunStagesView | undefined;
   /** The census and the unit suite: drawn open without `showModal`. */
   readonly staticOpen?: boolean | undefined;
+  /**
+   * `RUN-STAGE-PROGRESS-01`: the code stages under way, from the execution journal (`stageActivity`). A chip at work names
+   * the pages its stage has read, and its stage table says «идёт» for a stage that has no result yet.
+   */
+  readonly activity?: ReadonlyMap<string, StageActivity> | undefined;
 }
 
 const PROCEDURE_STATUS_LABELS: Readonly<Record<ProcedureStatus, string>> = {
@@ -241,7 +254,9 @@ function Procedures({ procedures }: { readonly procedures: readonly ProcedureRea
   );
 }
 
-export function RunStagesDialog({ status, chips, selected, onSelect, onClose, reusedStageIds, showServer, stages, staticOpen = false }: RunStagesDialogProps) {
+export function RunStagesDialog({
+  status, chips, selected, onSelect, onClose, reusedStageIds, showServer, stages, staticOpen = false, activity,
+}: RunStagesDialogProps) {
   const dialog = useModalDialog(staticOpen, onClose);
   const titleId = useId();
   const chipTitleId = useId();
@@ -275,6 +290,9 @@ export function RunStagesDialog({ status, chips, selected, onSelect, onClose, re
             {chips.map((candidate) => {
               const id = candidate.definition.id;
               const took = candidate.reused ? 'из прогона' : candidate.elapsedMs === null ? null : formatElapsed(candidate.elapsedMs);
+              const pages = candidate.state === 'running' && activity !== undefined
+                ? chipPagesText(activity, candidate.definition.stageIds)
+                : null;
               return (
                 <li key={id}>
                   <button
@@ -287,7 +305,7 @@ export function RunStagesDialog({ status, chips, selected, onSelect, onClose, re
                   >
                     <span className={styles.itemName}>{candidate.definition.short}</span>
                     <span className={styles.itemState}>
-                      {CHIP_STATE_LABELS[candidate.state]}{took === null ? '' : ` · ${took}`}
+                      {CHIP_STATE_LABELS[candidate.state]}{pages === null ? '' : ` · ${pages}`}{took === null ? '' : ` · ${took}`}
                     </span>
                   </button>
                 </li>
@@ -326,7 +344,11 @@ export function RunStagesDialog({ status, chips, selected, onSelect, onClose, re
 
             {chip.stages.length < 2 ? null : (
               <section aria-label="Подробности этапов">
-                <StageTable rows={chip.stages} {...(reusedStageIds === undefined ? {} : { reused: reusedStageIds })} />
+                <StageTable
+                  rows={chip.stages}
+                  {...(reusedStageIds === undefined ? {} : { reused: reusedStageIds })}
+                  {...(activity === undefined ? {} : { activity })}
+                />
               </section>
             )}
             {stage !== null && chip.procedures.length === 1 ? null : <Procedures procedures={chip.procedures} />}

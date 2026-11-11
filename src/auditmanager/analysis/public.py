@@ -59,6 +59,7 @@ from auditmanager.analysis.stages.source_preparation import (
     count_native_text_characters, document_text, run_source_preparation_with_progress,
 )
 from auditmanager.analysis.stages.pdf_precheck import PdfPrecheckProgress
+from auditmanager.analysis.stages.page_geometry_extraction import run_page_geometry_with_progress
 from auditmanager.analysis.text import (
     ARTIFACT_ROLE,
     CostMeter,
@@ -294,6 +295,7 @@ __all__ = [
     "read_artifact",
     "run_stage",
     "run_source_preparation_with_progress",
+    "run_page_geometry_with_progress",
     "PdfPrecheckProgress",
     "recognised_total_characters",
     "run_text_analysis",
