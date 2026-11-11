@@ -82,7 +82,11 @@ def checked_value(setting_name: object, value: object) -> dict[str, Any]:
     * ``vector_window``: ``{"start": "HH:MM", "end": "HH:MM", "tz": "<zone>"}`` read by the very parser the night window reads its setting with
       (``vectors.window.parse_setting``), so a value the worker would refuse is never journalled -- a window nobody chose would stop the stand's
       runs at the wrong hour (``constraint: vector_window_shape``);
-    * the others (``section_labels``, ``stop_words``, ``thresholds``): any object, the shape being their reader's own (`PREC-PASS`).
+    * ``section_labels``: ``{"<section>": {"enabled": bool, "report_sha256": hex64, "analogous": number?}}``, the whole state in one object; a switch on
+      names the replay report it was made from (``settings.section_labels_value``; ``constraint: section_labels_shape``);
+    * ``stop_words``: ``{"words": [word or phrase, ...]}`` (``constraint: stop_words_shape``);
+    * ``thresholds``: ``{"analogous", "similar", "history"}`` with ``similar <= analogous <= history`` (``constraint: thresholds_shape``).
+    The three shapes are the ones ``PREC-PASS`` reads: a value the pass could not read would be a switch that does nothing, so it is refused here.
 
     Every value is a JSON object of at most ``settings.VALUE_MAX_OCTETS`` octets with no ``NaN`` or infinity (``jsonb`` has neither)."""
     if setting_name not in journal.SETTING_NAMES:
@@ -110,6 +114,24 @@ def checked_value(setting_name: object, value: object) -> dict[str, Any]:
         except ValueError:
             raise _refuse("value", "vector_window_shape",
                           "the night window is {start: HH:MM, end: HH:MM, tz: a zone this stand knows}, start and end apart") from None
+    try:
+        if setting_name == journal.SETTING_SECTION_LABELS:
+            return journal.section_labels_value(value)
+        if setting_name == journal.SETTING_STOP_WORDS:
+            return journal.stop_words_value(value)
+        if setting_name == journal.SETTING_THRESHOLDS:
+            return journal.thresholds_value(value)
+    except ValueError:
+        constraint = {
+            journal.SETTING_SECTION_LABELS: journal.CONSTRAINT_SECTION_LABELS_SHAPE,
+            journal.SETTING_STOP_WORDS: journal.CONSTRAINT_STOP_WORDS_SHAPE,
+            journal.SETTING_THRESHOLDS: journal.CONSTRAINT_THRESHOLDS_SHAPE,
+        }[setting_name]
+        raise _refuse("value", constraint, {
+            journal.SETTING_SECTION_LABELS: "section_labels is {section: {enabled, report_sha256 (required when enabled), analogous?}}",
+            journal.SETTING_STOP_WORDS: "stop_words is {words: [...]}, each a word or phrase with a letter or digit",
+            journal.SETTING_THRESHOLDS: "thresholds is {analogous, similar, history} with similar <= analogous <= history",
+        }[setting_name]) from None
     return dict(value)
 
 

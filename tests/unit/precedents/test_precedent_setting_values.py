@@ -60,11 +60,14 @@ def test_the_window_is_read_by_the_parser_the_night_window_reads_it_with() -> No
             window.parse_setting(bad)       # the worker would refuse the very same value, so it must never be journalled
 
 
-def test_the_other_settings_are_any_object() -> None:
+def test_the_other_settings_are_the_shapes_the_pass_reads() -> None:
+    """`PREC-PASS` gave the three their shapes (``tests/unit/precedents/test_section_switch.py`` shows each refusal): a value the pass could not read would be
+    a switch that does nothing."""
     assert checked_value("stop_words", {"words": ["срочно"]}) == {"words": ["срочно"]}
-    assert checked_value("thresholds", {}) == {}
+    assert checked_value("thresholds", {"analogous": 0.85, "similar": 0.75, "history": 0.92}) == {"analogous": 0.85, "similar": 0.75, "history": 0.92}
     assert checked_value("section_labels", {"AR": {"enabled": True, "report_sha256": "a" * 64}}) == {
         "AR": {"enabled": True, "report_sha256": "a" * 64}}
+    assert refused("thresholds", {}) == {"field": "value", "constraint": "thresholds_shape"}
 
 
 def test_a_value_that_is_not_an_object_or_not_json_or_too_large_is_refused() -> None:
@@ -77,7 +80,8 @@ def test_a_value_that_is_not_an_object_or_not_json_or_too_large_is_refused() -> 
     # the limit counts octets of the UTF-8 text, as ``octet_length(value::text)`` does: two-octet letters reach it at half the characters
     assert refused("stop_words", {"w": "я" * (journal.VALUE_MAX_OCTETS // 2)})["constraint"] == "value_too_large"
     # the text of ``{"w": "..."}`` is nine octets longer than what is between the quotes: the limit is met exactly, and not one octet over
-    assert checked_value("stop_words", {"w": "x" * (journal.VALUE_MAX_OCTETS - 9)}) is not None
+    # (no valid value of a shaped setting is that large, so the exact limit is shown by what is refused next: the shape, not the size)
+    assert refused("stop_words", {"w": "x" * (journal.VALUE_MAX_OCTETS - 9)})["constraint"] == "stop_words_shape"
     assert refused("stop_words", {"w": "x" * (journal.VALUE_MAX_OCTETS - 8)})["constraint"] == "value_too_large"
 
 
