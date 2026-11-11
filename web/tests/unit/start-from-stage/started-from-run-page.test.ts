@@ -60,6 +60,9 @@ describe('the run page', () => {
     expect(markup).toMatch(/data-run-chip="preparation"[^>]*data-chip-reused/);
     expect(markup).not.toMatch(/data-run-chip="text"[^>]*data-chip-reused/);
     expect(markup).toMatch(/data-chip-took="из прогона"/);
+    // The time sits on the state's row, opposite it (owner hotfix 2026-11-11), not on a line of its own: one wrapper holds the state and
+    // the time and closes right after the time. On the old markup the state followed the name directly and the time ended the button.
+    expect(markup).toMatch(/<span[^>]*><span[^>]*>[^<]+<\/span><span[^>]*data-chip-took="из прогона"[^>]*>из прогона<\/span><\/span>/);
     // Started from the third stage: two of the three preparation stages are taken, so the chip is not.
     const partly = page({ ...FROM, start_stage_id: 'document_context_build' });
     expect(partly).not.toContain('data-chip-reused');

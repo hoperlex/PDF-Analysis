@@ -62,8 +62,10 @@ export function RunRail({ chips, model, stages, onOpen }: RunRailProps) {
               onClick={() => onOpen(id)}
             >
               <span className={styles.chipName}>{chip.definition.short}</span>
-              <span className={styles.chipState}>{CHIP_STATE_LABELS[chip.state]}</span>
-              {took === null ? null : <span className={styles.chipTook} data-chip-took={took}>{took}</span>}
+              <span className={styles.chipStatusRow}>
+                <span className={styles.chipState}>{CHIP_STATE_LABELS[chip.state]}</span>
+                {took === null ? null : <span className={styles.chipTook} data-chip-took={took}>{took}</span>}
+              </span>
               {line === null ? null : <span className={styles.chipModel} title={line.title} data-chip-model="">{line.text}</span>}
             </button>
           </li>
