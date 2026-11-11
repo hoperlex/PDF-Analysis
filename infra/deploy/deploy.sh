@@ -373,6 +373,23 @@ case "${EMBEDDER:-no}" in
               "Nothing was built. It is read as data; a value this script does not recognise is refused, not read as the default." ;;
 esac
 
+# `ALPHA_NORM_EMBED` (`NORM-VECTOR-TEMP-01`, TEMPORARY, docs/program/NORM-VECTOR-TEMP-01.md; yes or no, default `no`: the stack is what it
+# was, and nothing is downloaded). `yes` puts the profile `norm-embed` into every compose command below, so the run-time embedder is built
+# with the other images, started by `up -d` and judged by `services-healthy` like them; it needs its memory limit. The worker uses it only
+# when AUDITMANAGER_NORM_EMBED_URL points at it, which waits for the plan's quality and memory gates. Read HERE, before anything is built.
+NORM_EMBED="$(configured ALPHA_NORM_EMBED)"
+case "${NORM_EMBED:-no}" in
+    no) ;;
+    yes)
+        [ -n "$(configured ALPHA_MEM_LIMIT_NORM_EMBED)" ] \
+            || refuse "ALPHA_NORM_EMBED=yes and ALPHA_MEM_LIMIT_NORM_EMBED is unset or empty in $ENV_FILE." \
+                      "The run-time embedder needs its memory limit (the plan's value is 1200m) or set ALPHA_NORM_EMBED=no." \
+                      "Nothing was built and nothing was started."
+        export COMPOSE_PROFILES="${COMPOSE_PROFILES:+$COMPOSE_PROFILES,}norm-embed" ;;
+    *) refuse "ALPHA_NORM_EMBED is '$NORM_EMBED', which is neither yes nor no." \
+              "Nothing was built. It is read as data; a value this script does not recognise is refused, not read as the default." ;;
+esac
+
 # >>> guard: trusted-proxies-well-formed
 # `REAL-IP-EDGE-01`. `ALPHA_TRUSTED_PROXY_CIDRS` is pasted, entry by entry, into the proxy's
 # configuration by `proxy/trusted-proxies.sh` when the container starts, and that script
@@ -1456,6 +1473,8 @@ LONG_RUNNING="postgres s3 api web proxy"
 # The ACME client is a long-running service when a name is configured. It is healthy once a pair has been
 # exported, so a deploy whose certificate has not been issued is refused here by name, with its log to read.
 [ -z "$CERT_NAME" ] || LONG_RUNNING="$LONG_RUNNING acme"
+# `NORM-VECTOR-TEMP-01`: with ALPHA_NORM_EMBED=yes the run-time embedder is a long-running service and must be healthy like the others.
+[ "${NORM_EMBED:-no}" != yes ] || LONG_RUNNING="$LONG_RUNNING norm-embed"
 for service in $LONG_RUNNING; do
     cid="$(compose ps --quiet "$service" 2>/dev/null | head -1 || true)"
     if [ -z "$cid" ]; then

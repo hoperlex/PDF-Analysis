@@ -656,4 +656,24 @@ case "${EMBEDDER:-no}" in
     *) fail "$UNANSWERABLE" "ALPHA_EMBEDDER is '$EMBEDDER', which is neither yes nor no." ;;
 esac
 
+# --- 7. the run-time embedder (`NORM-VECTOR-TEMP-01`, TEMPORARY) -----------------------------------------------------
+# Asked only when the environment says it is on (`ALPHA_NORM_EMBED=yes`; default no): its container is there and healthy.
+NORM_EMBED="$(configured ALPHA_NORM_EMBED)"
+case "${NORM_EMBED:-no}" in
+    no) ;;
+    yes)
+        echo "-- the run-time embedder --"
+        NORM_EMBED_CONTAINER="$(COMPOSE_PROFILES=norm-embed compose ps --quiet norm-embed 2>/dev/null | head -1)"
+        [ -n "$NORM_EMBED_CONTAINER" ] \
+            || fail "$DRIFT" "the run-time embedder is on (ALPHA_NORM_EMBED=yes) and has no container." "docker compose --profile norm-embed ps"
+        NORM_EMBED_STATE="$(docker inspect --format '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+            "$NORM_EMBED_CONTAINER" 2>/dev/null || true)"
+        [ "$NORM_EMBED_STATE" = running/healthy ] \
+            || fail "$DRIFT" "the run-time embedder is on (ALPHA_NORM_EMBED=yes) and is '$NORM_EMBED_STATE', not running/healthy." \
+                    "docker compose logs norm-embed"
+        printf '  norm-embed %s\n' "$NORM_EMBED_STATE"
+        echo ;;
+    *) fail "$UNANSWERABLE" "ALPHA_NORM_EMBED is '$NORM_EMBED', which is neither yes nor no." ;;
+esac
+
 echo "verify-deployed.sh: the deployed stack IS this tree ($HEAD_SHA$DIRTY)."

@@ -1,6 +1,6 @@
 # NORM-VECTOR-TEMP-01 — semantic norm candidates on the stand (TEMPORARY)
 
-Status: **plan for the deployment; the run-side code is merged and off.** Owner decisions of 2026-11-11: variant C (a quantized
+Status: **the service is built and deployable behind `ALPHA_NORM_EMBED`; the run-side code is merged and off.** Owner decisions of 2026-11-11: variant C (a quantized
 BGE-M3 on the stand), marked temporary until the database side gets its own embedder decision; deployment of the embedder is planned
 first, the run-side code ships as a hotfix.
 
@@ -34,27 +34,38 @@ own text, so it cannot use them.
   `unavailable / semantic_lookup_failed` (a gap, so «Нормы» is partial and says why), the run warns `norm_semantic_lookup_failed`,
   and the worker logs the traceback. More than 60 lookups in a run: `semantic_lookup_window_exhausted`, the same way.
 
-## The embedder service — the plan
+## The embedder service
 
-1. **Image `infra/norm-embed/`** (its own `requirements.lock`; the root lock is not touched):
-   - base: the `python:3.12-slim-bookworm` digest `infra/deploy/Dockerfile.api` already pins;
-   - wheels: `onnxruntime`, `tokenizers`, `numpy`, hash-pinned, `--only-binary=:all:`;
-   - model: `Xenova/bge-m3` at a pinned revision, `onnx/model_int8.onnx` (568 456 694 bytes) and `tokenizer.json`, fetched by
-     literal URL with `ADD --checksum`; the self-check runs under `RUN --network=none`; the image runs offline;
-   - server: standard-library HTTP; `POST /v1/embed {"texts": [...]}` → `{"vectors": [[1024 floats]]}`; `GET /healthz`; CLS pooling,
-     L2-normalised, 512 tokens, 2 threads; batch of at most 16 texts.
-2. **Compose** (`infra/deploy/compose.server.yml`): service `norm-embed`, no published port, the stack's internal network,
-   `mem_limit` 1400m, `restart: unless-stopped`, a health check on `/healthz`; the worker gets
-   `AUDITMANAGER_NORM_EMBED_URL=http://norm-embed:8080`. Turning it off is removing that variable.
-3. **Quality gate before the variable is set** (the int8 model is compared against fp32 corpus vectors): a one-off job on the stand
-   embeds 500 corpus windows' own texts with the service and measures (a) the inner product with each stored vector -- mean ≥ 0.97 --
-   and (b) self-recall@10 through the HNSW index -- ≥ 0.90. Below either: do not enable; fall back to variant A (more memory and the
-   full-precision norms-worker model).
-4. **Memory gate:** `free -m` and the worker's RSS before and after the service starts and during one run; the service is expected at
-   0.9–1.1 GB. If available memory drops under 600 MB or swap grows during a run: stop the service and take variant A.
-5. **Rollout:** deploy the image and service with the variable unset → quality gate → memory gate → set the variable → one prod run →
-   read `norm_status / norm_lookup_method` counts with the operator → release note.
-6. **Rollback:** unset the variable (the run side goes back to the word search alone); remove the service.
+Owner decisions of 2026-11-11 (poll): deploy by this plan; quality thresholds 0.97 and 0.90; the stand's free disk is checked first.
+
+1. **Image `infra/norm-embed/`** (its own `requirements.lock`; the root lock is not touched): the `python:3.12-slim-bookworm`
+   digest `infra/deploy/Dockerfile.api` pins; `numpy` 2.2.1, `onnxruntime` 1.20.1 and `tokenizers` 0.21.0, hash-pinned,
+   `--no-deps --only-binary=:all:`; `Xenova/bge-m3` at revision `4de13258303883538bd53b696b452bf8099f0858`,
+   `onnx/model_int8.onnx` (568 456 694 bytes, sha256 `a206e10e…`) and `tokenizer.json` (sha256 `6710678b…`) by `ADD --checksum`;
+   a self-check under `RUN --network=none`; `USER nobody`; standard-library HTTP: `POST /v1/embed {"texts": [text]}` (one text),
+   `GET /healthz`; CLS pooling, L2-normalised, 512 tokens, 2 threads, the onnxruntime arena off.
+2. **Measured on adm1, 2026-11-11** (the same wheels and model, outside docker): 841 MB resident after load, 917 MB after long
+   texts, 0.45 s per 512-token text; a batch of sixteen long texts peaked at 2.3 GB -- hence one text per request. The self-check
+   ranks «катет углового сварного шва» nearer to «минимальный катет сварного шва» (0.728) than to «лестница жилого дома» (0.316).
+3. **Compose** (`infra/deploy/compose.server.yml`): service `norm-embed` IN THE PROFILE `norm-embed`, no published port, the stack's
+   network, `mem_limit: ${ALPHA_MEM_LIMIT_NORM_EMBED:-0}` (the stack's rule; the plan's value 1200m), a health check on `/healthz`.
+   `ALPHA_NORM_EMBED=yes` (default `no`) makes `deploy.sh` demand the limit, put the profile into every compose command (so the
+   image is built with the others and `up -d` starts it) and judge its health in `services-healthy`; `verify-deployed.sh` checks it
+   is running/healthy. With `no` nothing is downloaded and the stack is what it was. The worker gets
+   `AUDITMANAGER_NORM_EMBED_URL` (empty by default: the lookup is off).
+4. **Rollout** on the stand, in `/srv/auditmanager`:
+   1. `df -h /` and `docker system df`: the build needs ~0.8 GB (the model and wheels; the base layers are the API image's);
+   2. in `infra/deploy/env/alpha.env`: `ALPHA_NORM_EMBED=yes`, `ALPHA_MEM_LIMIT_NORM_EMBED=1200m`, `AUDITMANAGER_NORM_EMBED_URL` left
+      empty; deploy (`infra/deploy/deploy.sh`, or the next main deploy);
+   3. **memory gate**: `free -m` and `docker stats --no-stream` -- available memory stays above 600 MB and swap does not grow;
+   4. **quality gate**: `docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml exec -T worker
+      python -m auditmanager.norms.semantic_check --url http://norm-embed:8080 --windows 500` -- PASS needs a mean inner product
+      ≥ 0.97 against the stored full-precision vectors and self-recall@10 ≥ 0.90; FAIL means variant A (more memory and the
+      full-precision model), not a lower bar;
+   5. both pass: `AUDITMANAGER_NORM_EMBED_URL=http://norm-embed:8080`, restart the worker (`docker compose ... up -d worker`);
+   6. one prod run; read `norm_status / norm_lookup_method` counts with the operator; then the release note.
+5. **Rollback**: empty `AUDITMANAGER_NORM_EMBED_URL` and restart the worker (the word search alone, as before); `ALPHA_NORM_EMBED=no`
+   and `docker compose --profile norm-embed rm -sf norm-embed` removes the service.
 
 ## Removal
 
@@ -64,5 +75,4 @@ encoder (`ADR-0029` decision 8) is the stand's sanctioned embedder today and can
 
 ## Open for the owner
 
-- Build on the stand: the image downloads ~570 MB at build time; the host's free disk must be checked first.
-- Whether the quality gate's thresholds (0.97 / 0.90) are the right bar.
+- The stand's free disk (`df -h /`) before `ALPHA_NORM_EMBED=yes`.
