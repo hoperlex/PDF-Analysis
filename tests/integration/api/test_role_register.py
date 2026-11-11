@@ -63,6 +63,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "listExecutionQueue": ("GET", "/execution/queue"),
     "listExecutionJournal": ("GET", "/execution/journal"),
     "cancelRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
+    # `RUN-DELETE-01` (1.53.0): the same hands as `cancelRun`.
+    "deleteRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/deletion"),
     "reauditRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
     "startRunFromStage": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/start-from-stage"),
     "setJobPriority": ("PUT", "/execution/queue/job_01M2545JSD15ETSNNV904X991T/priority"),
@@ -771,6 +773,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     # `CLASSIFICATION-CORRECTION-01`: only an expert corrects a classification; admin alone does not.
     "correctVersionClassification": _EXPERT,
     "cancelRun": frozenset({"expert", "admin"}),
+    "deleteRun": frozenset({"expert", "admin"}),
     "reauditRun": frozenset({"expert", "admin"}),
     "startRunFromStage": frozenset({"expert", "admin"}),
     "appendDecision": _EXPERT,

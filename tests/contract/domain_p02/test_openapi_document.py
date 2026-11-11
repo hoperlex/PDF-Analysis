@@ -104,6 +104,8 @@ REQUIRED_OPERATIONS = {
     "listExecutionQueue",
     "listExecutionJournal",
     "cancelRun",
+    # `RUN-DELETE-01` (1.53.0): a partial, failed or cancelled run leaves the run lists (a tombstone), keyed like `cancelRun`.
+    "deleteRun",
     "reauditRun",
     "setJobPriority",
     "setExecutionPaused",
@@ -466,6 +468,8 @@ WRITE_OPERATIONS = {
     "appendDecision",
     "approveRegistration",
     "cancelRun",
+    # `RUN-DELETE-01` (1.53.0): keyed like `cancelRun`; a replay answers the first outcome and writes no second tombstone.
+    "deleteRun",
     "reauditRun",
     "startRunFromStage",
     "setJobPriority",

@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 296,
+    "path_count": 297,
     "operations": [
       [
         "DELETE",
@@ -1380,6 +1380,11 @@
       ],
       [
         "POST",
+        "/runs/{run_id}/deletion",
+        "deleteRun"
+      ],
+      [
+        "POST",
         "/runs/{run_id}/reaudit",
         "reauditRun"
       ],
@@ -2445,6 +2450,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0065_norm_crop_render",
-  "contract_version": "1.52.0"
+  "migration_head": "0066_run_deletion",
+  "contract_version": "1.53.0"
 }
