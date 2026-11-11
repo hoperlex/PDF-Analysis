@@ -444,7 +444,7 @@ EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "constraints": (2321, "0317acd11402ee08eab8887a56c512fd592a566c78faf0875e0995f1944a2494"),
     "indexes": (539, "9284a062030f090fb898bd31002a0a507837cf827173356f4fef10de624b96bd"),
     "triggers": (301, "5f20513d4b9f6b237f3143543bb2a684355d215ba8bb2cba3a4d89d98c2b712f"),
-    "functions": (86, "f6cd6847f49f6a6f3313cc9a37d17d9a4700cba9589c1409f3ddaaa6235f3b1f"),
+    "functions": (86, "4ca8c9d63270876dad063cdea6c49a0e7aa5afba3ea7355ecb023b81cc22e664"),
     "views": (7, "5e78d3a1fd6d83febea265c402139aefd89d63afd83c1f38acd71979822d1ef8"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

@@ -222,9 +222,9 @@ def test_who_and_why_are_tied_to_the_status(at_head: Engine) -> None:
     _refused(at_head, lambda c: _event(c, pattern, case, 2, "approved", "proposed"), "23514")
     _refused(at_head, lambda c: _event(c, pattern, case, 2, "approved", "expert_review", actor=admin, command=_command(c), counts=(3, 4)), "23514")
     _refused(at_head, lambda c: c.execute(text(
-        "INSERT INTO decision_memory_pattern_status_event (pattern_event_id, pattern_id, case_id, event_no, status, cause, member_count) "
-        "VALUES (:id, :p, :c, 2, 'suspended', 'group_dissolved', 2)"),
-        {"id": DecisionMemoryPatternStatusEventId.new().value, "p": pattern, "c": case}), "23514")                          # counts are a pair
+        "INSERT INTO decision_memory_pattern_status_event (pattern_event_id, pattern_id, case_id, event_no, status, cause, actor_user_uid, command_id, "
+        "member_count) VALUES (:id, :p, :c, 2, 'approved', 'expert_review', :a, :cmd, 2)"),
+        {"id": DecisionMemoryPatternStatusEventId.new().value, "p": pattern, "c": case, "a": admin, "cmd": _command(c)}), "23514")  # counts are a pair
     # the event of another case's pattern is refused: (pattern, case) is a composite key
     with at_head.begin() as connection:
         other = seed_case(connection)["case_id"]
