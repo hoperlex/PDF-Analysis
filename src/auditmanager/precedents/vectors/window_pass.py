@@ -212,8 +212,7 @@ class VectorWindowPass:
             return Step(control.window_state, False, "outside the window")
         if control.window_changed_at >= span.opens_at:
             return Step(control.window_state, False, "the window of this night was used")
-        pending, _poisoned = store.count_intents(session)
-        if pending == 0:
+        if store.count_pending_work(session) == 0:
             return Step(control.window_state, False, "nothing queued")
         age = self._exchange.heartbeat_age_seconds(now)
         if age is None or age > HEARTBEAT_FRESH_SECONDS:
@@ -269,21 +268,31 @@ class VectorWindowPass:
         return self._skip(session, reason, f"the container ended with status {result.exit_code}: {tail.strip()[-500:]}"), False
 
     def _export(self, session: Session, span: WindowSpan) -> Step:
-        """Write the batch for the host: the pending intents, one entry per distinct text. Whatever an earlier round left is cleared first."""
-        pending = store.pending_intent_texts(session, limit=self._round_limit)
+        """Write the batch for the host: the pending probes of findings first (a few, and what an expert waits for), then the pending intents of cases, one
+        entry per distinct text. Whatever an earlier round left is cleared first."""
+        probes = store.pending_probe_texts(session, limit=self._round_limit)
+        lost = [item for item in probes if item.text is None]
+        if lost:
+            store.mark_probes_poisoned(session, probes=lost, reason=store.POISON_FINDING_MISSING)
+        changed_probes = [item for item in probes if item.text is not None and not item.matches]
+        if changed_probes:
+            store.mark_probes_poisoned(session, probes=changed_probes, reason=POISON_DIGEST_MISMATCH)
+        usable_probes = [item for item in probes if item.matches]
+        pending = store.pending_intent_texts(session, limit=max(self._round_limit - len(probes), 0)) if len(probes) < self._round_limit else []
         changed = [item for item in pending if not item.matches]
         if changed:
             store.mark_poisoned(session, intent_ids=[item.intent_id for item in changed], reason=POISON_DIGEST_MISMATCH)
         usable = [item for item in pending if item.matches]
-        if not usable:
+        texts = [*(item.text for item in usable_probes if item.text is not None), *(item.text for item in usable)]
+        if not texts:
             self._set(session, STATE_CLOSED)
             return Step(STATE_CLOSED, True, "nothing left to encode")
         try:
             self._exchange.clear()
-            self._exchange.write_request(build_request(item.text for item in usable), deadline_epoch=int(span.closes_at.timestamp()))
+            self._exchange.write_request(build_request(texts), deadline_epoch=int(span.closes_at.timestamp()))
         except OSError as exc:
             return self._skip(session, "export_failed", f"the exchange directory refused the batch: {exc}")
-        return Step(STATE_ENCODING, False, f"{len(usable)} intents exported")
+        return Step(STATE_ENCODING, False, f"{len(usable)} intents and {len(usable_probes)} probes exported")
 
     def _import(self, session: Session, span: WindowSpan | None) -> tuple[Step, bool]:
         request = self._exchange.read_request()
@@ -299,12 +308,13 @@ class VectorWindowPass:
             session, vectors=list(parsed.vectors.values()), over_limit=parsed.over_limit, rejected=parsed.rejected, missing=parsed.missing)
         self._exchange.clear()
         _log.info(
-            "a round of vectors was imported: %d stored, %d over the token limit (poisoned), %d refused (retried), %d unanswered, %d for forgotten cases",
-            outcome.done, outcome.poisoned, outcome.retried, outcome.missing, outcome.skipped_forgotten)
-        stored = outcome.done > 0
+            "a round of vectors was imported: %d stored, %d over the token limit (poisoned), %d refused (retried), %d unanswered, %d for forgotten cases; "
+            "probes of findings: %d stored, %d poisoned",
+            outcome.done, outcome.poisoned, outcome.retried, outcome.missing, outcome.skipped_forgotten, outcome.probes_done, outcome.probes_poisoned)
+        stored = outcome.done + outcome.probes_done + outcome.probes_poisoned > 0    # what the «Прецеденты» pass waits for moved
         # Another round only after a clean one that made progress: a round that stored nothing, or had a vector refused or a text unanswered, ends the
         # window, so an encoder that is wrong is tried once a night (the attempts of an intent count nights) and not until it is poisoned by morning.
-        clean = outcome.retried == 0 and outcome.missing == 0 and (outcome.done + outcome.poisoned) > 0
+        clean = outcome.retried == 0 and outcome.missing == 0 and (outcome.done + outcome.poisoned + outcome.probes_done + outcome.probes_poisoned) > 0
         if clean and span is not None and (span.closes_at - self._moment).total_seconds() >= MIN_ROUND_SECONDS:
             following = self._export(session, span)
             if following.state == STATE_ENCODING:

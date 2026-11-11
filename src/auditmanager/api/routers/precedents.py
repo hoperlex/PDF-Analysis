@@ -14,7 +14,9 @@ The viewer («Наблюдатель», `R-150w`) is denied the six user routes:
 runs, and a router decides nothing about roles. The runner route is reached with a runner token only (``RUNNER_OPERATIONS``).
 
 **Sealed, and asleep.** Nothing here reads or writes anything: every body refuses with ``503 dependency_unavailable`` (``details.dependency`` the
-stable class name of the lane that owns it) until that lane replaces it -- `CTX-STAND` the context, `PREC-PASS` the precedents. **`EMBED-01` filled
+stable class name of the lane that owns it) until that lane replaces it -- `CTX-STAND` the context. **`PREC-PASS` filled the precedents**:
+``getRunPrecedents`` and ``getFindingPrecedents`` answer through ``PrecedentsPort`` when the composition root hands ``build_router`` one, and keep the
+sleeping answer when it does not. **`EMBED-01` filled
 the vector control**: ``getVectorControl`` and ``setVectorPaused`` answer through ``VectorControlPort`` when the composition root hands
 ``build_router`` one, and keep the sleeping answer when it does not (`api/routers/precedents_ports.py`). **`PREC-SETTINGS-01` filled the settings**
 the same way: ``listPrecedentSettings`` and ``appendPrecedentSetting`` answer through ``PrecedentSettingsPort``. The contract's error catalogue is
@@ -31,7 +33,7 @@ from fastapi import APIRouter, Path
 
 from auditmanager.api.routers.declarations import STATE_CONFLICT_DESCRIPTION, envelope_responses, success
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
-from auditmanager.api.routers.precedents_ports import PrecedentSettingsPort, VectorControlPort
+from auditmanager.api.routers.precedents_ports import PrecedentsPort, PrecedentSettingsPort, VectorControlPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 from auditmanager.api.security import CurrentRunner, CurrentSubject
@@ -72,6 +74,12 @@ def _vector_control_body(view: Mapping[str, Any]) -> bytes:
     return encode_json(models.VectorControl.model_validate(dict(view)).model_dump(mode="json", exclude_unset=True))
 
 
+def _precedents_body(view: Mapping[str, Any], model: type[models.RunPrecedents] | type[models.FindingPrecedents]) -> bytes:
+    """The contract's ``RunPrecedents`` or ``FindingPrecedents``: a member that is optional and has no value (``pass_state`` and ``revision`` before a pass
+    has started, ``label`` while the finding has no answer) is absent on the wire, never null."""
+    return encode_json(model.model_validate(dict(view)).model_dump(mode="json", exclude_unset=True))
+
+
 def _settings_body(view: Mapping[str, Any], model: type[models.PrecedentSetting] | type[models.PrecedentSettingList]) -> bytes:
     """The contract's ``PrecedentSetting`` or ``PrecedentSettingList``: every member is required, so nothing is left out and nothing is null."""
     return encode_json(model.model_validate(dict(view)).model_dump(mode="json"))
@@ -79,6 +87,7 @@ def _settings_body(view: Mapping[str, Any], model: type[models.PrecedentSetting]
 
 def build_precedent_routes(
     router: APIRouter, vector_control: VectorControlPort | None = None, precedent_settings: PrecedentSettingsPort | None = None,
+    precedents: PrecedentsPort | None = None,
 ) -> None:
     @router.post(
         "/runner/tasks/{task_id}/context", operation_id="getExecutorTaskContext", tags=_TAGS,
@@ -116,8 +125,10 @@ def build_precedent_routes(
             "`role:admin|expert`; the viewer («Наблюдатель») is denied."
         ),
     )
-    def get_run_precedents(run_id: RunIdPath) -> models.RunPrecedents:
-        _asleep(DEPENDENCIES["precedents"])
+    def get_run_precedents(subject: CurrentSubject, run_id: RunIdPath) -> WireResponse:
+        if precedents is None:
+            _asleep(DEPENDENCIES["precedents"])
+        return json_response(200, _precedents_body(precedents.get_run_precedents(run_id=run_id, user_uid=subject.user_uid), models.RunPrecedents))
 
     @router.get(
         "/findings/{finding_uid}/precedents", operation_id="getFindingPrecedents", tags=_FINDING_TAGS,
@@ -129,8 +140,11 @@ def build_precedent_routes(
             "denied."
         ),
     )
-    def get_finding_precedents(finding_uid: FindingUidPath) -> models.FindingPrecedents:
-        _asleep(DEPENDENCIES["precedents"])
+    def get_finding_precedents(subject: CurrentSubject, finding_uid: FindingUidPath) -> WireResponse:
+        if precedents is None:
+            _asleep(DEPENDENCIES["precedents"])
+        return json_response(
+            200, _precedents_body(precedents.get_finding_precedents(finding_uid=finding_uid, user_uid=subject.user_uid), models.FindingPrecedents))
 
     @router.get(
         "/vector-control", operation_id="getVectorControl", tags=_TAGS,
