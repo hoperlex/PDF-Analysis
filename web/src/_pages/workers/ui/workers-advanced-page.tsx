@@ -6,7 +6,7 @@
  * What «Исполнители» had before it became two tabs, kept whole and folded, one disclosure each, **reused and not rewritten**:
  * «Подключения» (with the key form the address may name), «Группы», «Правила» (with the legacy routes), «Назначения»,
  * «Процессы» with the working switch of intake, the analysis presets (moved here from «Настройки анализа»' place), and
- * «Модели по этапам» with the switch «Модели по этапам: включены», its journal and the revisions.
+ * «Модели по этапам» with the switch «Модели по этапам: включены», its journal and the revisions, and «Прецеденты и векторы» (`PREC-WEB`: the refusal labels by section).
  *
  * A closed section mounts nothing, so it reads nothing from the API: opening is what reads. The page needs the administrator
  * role; for any other the content is not drawn (the screen registry sends them away before they get here). It is still needed
@@ -34,6 +34,7 @@ import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/
 
 import { ADVANCED_SECTIONS, ADVANCED_SECTION_LABELS, BACK_LINK_LABEL } from '../model/advanced';
 import type { AdvancedSection } from '../model/advanced';
+import { PrecedentSections } from './precedent-sections';
 import { ProcessesSection } from './processes-section';
 
 import styles from './workers-page.module.css';
@@ -94,6 +95,8 @@ export function WorkersAdvancedPage({ initialTab, secretConnectionId = null, sec
     processes: <ProcessesSection roles={roles} />,
     presets: <AnalysisPresets roles={roles} />,
     layout: <StageLayoutAdvanced roles={roles} />,
+    // `PREC-WEB`: the refusal labels by section; the page is the administrator's, and the server decides again.
+    precedents: <PrecedentSections />,
   };
 
   return (

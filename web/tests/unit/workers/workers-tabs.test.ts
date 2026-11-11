@@ -58,9 +58,9 @@ describe('the tabs', () => {
 
 describe('the advanced page keeps the former tabs, folded', () => {
   it('has a section for each of the five former tabs, the presets and the layout switch', () => {
-    expect([...ADVANCED_SECTIONS]).toEqual(['connections', 'groups', 'rules', 'routes', 'processes', 'presets', 'layout']);
+    expect([...ADVANCED_SECTIONS]).toEqual(['connections', 'groups', 'rules', 'routes', 'processes', 'presets', 'layout', 'precedents']);
     expect(ADVANCED_SECTIONS.map((section) => ADVANCED_SECTION_LABELS[section])).toEqual([
-      'Подключения', 'Группы', 'Правила', 'Назначения', 'Процессы', 'Пресеты анализа', 'Модели по этапам',
+      'Подключения', 'Группы', 'Правила', 'Назначения', 'Процессы', 'Пресеты анализа', 'Модели по этапам', 'Прецеденты и векторы',
     ]);
     expect(WORKERS_ADVANCED_ADDRESS).toBe('/workers/advanced');
   });
@@ -72,6 +72,6 @@ describe('the advanced page keeps the former tabs, folded', () => {
 
   it('sends an old tab of «Исполнители» to the section that took it over, and «Обзор» to none', () => {
     for (const tab of ['connections', 'processes', 'groups', 'rules', 'routes']) expect(legacyAdvancedTab(tab)).toBe(tab);
-    for (const other of ['overview', 'servers', 'models', 'presets', 'layout', '', undefined]) expect(legacyAdvancedTab(other)).toBeNull();
+    for (const other of ['overview', 'servers', 'models', 'presets', 'layout', 'precedents', '', undefined]) expect(legacyAdvancedTab(other)).toBeNull();
   });
 });

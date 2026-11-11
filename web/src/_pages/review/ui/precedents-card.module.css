@@ -1,0 +1,64 @@
+/*
+ * `PREC-WEB`: the «Прецеденты» block of an open finding (the box is the global `.am-note`; layout only here, no colour of its own).
+ * Collapsed to one line; opened, hints, cases and norms stand as three short lists.
+ */
+.card {
+  min-width: 0;
+}
+
+.summary {
+  color: var(--am-ink);
+}
+
+.caption {
+  font-weight: 600;
+}
+
+.counts {
+  font-size: var(--am-text-xs);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  margin: var(--am-gap-xs) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.heading {
+  margin: var(--am-gap-sm) 0 0;
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+}
+
+.case {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-2xs);
+  min-width: 0;
+}
+
+.meta {
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
+}
+
+.caseText {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.comment {
+  font-size: var(--am-text-xs);
+}
+
+.more {
+  margin: var(--am-gap-xs) 0 0;
+  font-size: var(--am-text-xs);
+}

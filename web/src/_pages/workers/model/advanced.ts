@@ -9,7 +9,7 @@
  * An old address keeps working: `/workers?tab=connections` and its kin are sent here by the route (`legacyAdvancedTab`).
  */
 
-export const ADVANCED_SECTIONS = ['connections', 'groups', 'rules', 'routes', 'processes', 'presets', 'layout'] as const;
+export const ADVANCED_SECTIONS = ['connections', 'groups', 'rules', 'routes', 'processes', 'presets', 'layout', 'precedents'] as const;
 
 export type AdvancedSection = (typeof ADVANCED_SECTIONS)[number];
 
@@ -21,6 +21,7 @@ export const ADVANCED_SECTION_LABELS: Readonly<Record<AdvancedSection, string>> 
   processes: 'Процессы',
   presets: 'Пресеты анализа',
   layout: 'Модели по этапам',
+  precedents: 'Прецеденты и векторы',
 };
 
 /** The address of the page, as the screen registry has it. */
@@ -39,5 +40,5 @@ export function isAdvancedSection(value: unknown): value is AdvancedSection {
  * became the summary line, has none.
  */
 export function legacyAdvancedTab(tab: string | undefined): AdvancedSection | null {
-  return tab !== undefined && isAdvancedSection(tab) && tab !== 'presets' && tab !== 'layout' ? tab : null;
+  return tab !== undefined && isAdvancedSection(tab) && tab !== 'presets' && tab !== 'layout' && tab !== 'precedents' ? tab : null;
 }

@@ -106,3 +106,25 @@
   margin-top: var(--am-gap-sm);
   min-width: 0;
 }
+
+/* `PREC-WEB`: the sections of «Прецеденты и векторы», one line each. Layout only; the ink is the page's. */
+.precedentSections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  margin: 0 0 var(--am-gap-sm);
+  padding: 0;
+  list-style: none;
+}
+
+.precedentSection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap-md);
+}
+
+.precedentDigest {
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
+}

@@ -66,6 +66,7 @@ import { BlockEvidence } from './block-evidence';
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
 import { ReviewFindingBlocks } from './finding-blocks';
 import { OpenedFinding } from './opened-finding';
+import { PrecedentsCard } from './precedents-card';
 import { ReviewPageBlocks } from './page-blocks';
 import { ReviewRowActions } from './review-row-actions';
 import { ReviewViewerAside, ReviewViewerDialog } from './review-viewer-dialog';
@@ -359,6 +360,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             <p>Точная привязка одного или нескольких исходных наблюдений не подтверждена. Замечание передано эксперту; решение можно принять, отклонить или дополнить комментарием.</p>
             <details><summary>Ограничение проверки источника</summary><p>{verificationReasonLabel(verificationReason)}</p><code>{verificationReason}</code></details>
           </aside>}
+
+          {/* `PREC-WEB`: the precedents of the finding, one collapsed line; nothing for a session that may not read them. */}
+          <PrecedentsCard findingUid={detail.finding_uid} enabled={precedentsAccess.read} />
 
           {!hasEvidencePage ? <p className="am-note" data-no-evidence-page="">Подтверждённая страница для просмотра не указана. Исходные материалы и происхождение доступны в отчёте прогона.</p> : expanded ? (
             // One page drawn once: while the full-screen view is open it is the only viewer.
