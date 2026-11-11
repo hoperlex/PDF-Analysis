@@ -101,8 +101,10 @@ def test_every_sleeping_body_refuses_with_dependency_unavailable_and_names_its_l
 
 
 def test_the_three_lane_names_are_the_ones_the_routes_use() -> None:
-    assert {route[4] for route in ROUTES.values()} == set(DEPENDENCIES)
-    assert DEPENDENCIES == {"precedents": "precedents", "vector_control": "vector_control", "precedent_settings": "precedent_settings"}
+    assert {route[4] for route in ROUTES.values()} == {"precedents", "vector_control", "precedent_settings"} <= set(DEPENDENCIES)
+    # `CRIT-SEAL-53` added the failure patterns and the quality table (``test_wave5_sleeping_routes.py``)
+    assert DEPENDENCIES == {"precedents": "precedents", "vector_control": "vector_control", "precedent_settings": "precedent_settings",
+                            "decision_patterns": "decision_patterns", "stage_quality": "stage_quality"}
 
 
 def test_the_context_route_is_no_longer_declared_here() -> None:
@@ -110,7 +112,8 @@ def test_the_context_route_is_no_longer_declared_here() -> None:
     router = APIRouter()
     build_precedent_routes(router)
     declared = sorted(route.operation_id for route in router.routes if getattr(route, "operation_id", None))
-    assert declared == sorted(ROUTES) and "getExecutorTaskContext" not in declared
+    assert declared == sorted([*ROUTES, "listDecisionPatterns", "reviewDecisionPattern", "getStageQuality"])  # the last three: `CRIT-SEAL-53`
+    assert "getExecutorTaskContext" not in declared
 
 
 def test_a_sleeping_route_is_still_a_closed_one(client: TestClient) -> None:

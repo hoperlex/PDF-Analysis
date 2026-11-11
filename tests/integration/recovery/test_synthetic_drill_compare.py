@@ -55,8 +55,8 @@ def test_two_clones_of_one_migrated_schema_are_equal(two_clones: list[Engine]) -
     # `0053`-`0055` (tags, finding execution status, «График работ»): seven more tables; no new view (136, lane C4's stand).
     # `0059_decision_memory`: the eight tables of the decision memory; no new view (144). `0061_decision_memory_m2`: the settings' journal
     # (145) and the read model `decision_memory_case_current` (6 views). `0062_hosts_stage_models`: nine more tables (154), no new view.
-    # `0063_drop_ar_v3_beta` drops the two tables `0032` added (152). `0064_precedents_seal` adds twelve (164), no new view. `0065_norm_crop_render` adds one (165), no new view.
-    assert len(first["tables"]) == 165 and len(first["views"]) == 6
+    # `0063_drop_ar_v3_beta` drops the two tables `0032` added (152). `0064_precedents_seal` adds twelve (164), no new view. `0065_norm_crop_render` adds one (165), no new view. `0066_precedents_wave5` adds four tables (169) and the view `decision_memory_pattern_current` (7).
+    assert len(first["tables"]) == 169 and len(first["views"]) == 7
     assert set(first["shape"]) == {
         "columns", "constraints", "indexes", "triggers", "functions", "views", "sequences", "extensions",
     }

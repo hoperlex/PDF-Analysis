@@ -88,7 +88,8 @@ def test_the_four_classes_partition_the_tables_schema_coverage_declares() -> Non
     # `0064_precedents_seal` (`CRIT-SEAL-50`) adds twelve (152 -> 164): the memory's comments, block evidence, encoder queue and vectors, the probe, the
     # pass and its advice, a finding's block evidence, the settings journal, the vectors' control and its journal, and the delivery journal.
     # `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one (165): the PNG render of a norm page.
-    assert len(coverage.TABLES) == 165
+    # `0066_precedents_wave5` (`CRIT-SEAL-53`) adds four (169): a pattern with its journal, the parameter facts and the cross evidence.
+    assert len(coverage.TABLES) == 169
 
 
 def test_every_table_has_its_privileges_from_its_class() -> None:
