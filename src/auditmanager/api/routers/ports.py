@@ -118,6 +118,14 @@ class ExecutionPort(Protocol):
     def cancel_run(
         self, *, run_id: str, user_uid: str, idempotency_key: str
     ) -> RunStatusView: ...
+    def delete_run(
+        self, *, run_id: str, user_uid: str, idempotency_key: str
+    ) -> RunStatusView:
+        """«Удалить» (owner hotfix 2026-11-11): a ``partial``, ``failed`` or ``cancelled`` run leaves every run list.
+        A tombstone row, never a deletion: the run's stage results, findings and expert decisions stay stored and
+        ``getRunStatus`` still answers it. Any other state is ``state_transition_not_allowed``; a run already deleted
+        is ``not_found``."""
+        ...
     def reaudit_run(
         self, *, run_id: str, user_uid: str, idempotency_key: str,
         cost_consent: dict[str, Any] | None = None,

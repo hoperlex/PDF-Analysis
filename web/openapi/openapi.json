@@ -3798,6 +3798,73 @@
         }
       }
     },
+    "/runs/{run_id}/deletion": {
+      "post": {
+        "tags": [
+          "execution"
+        ],
+        "summary": "Delete Run",
+        "operationId": "deleteRun",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RunId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The run, removed from the run lists. A partial, failed or cancelled run only; its results, findings and expert decisions stay stored. Or a replayed result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStatus"
+                }
+              }
+            },
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
     "/runs/{run_id}/reaudit": {
       "post": {
         "tags": [
