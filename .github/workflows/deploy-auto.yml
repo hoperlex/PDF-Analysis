@@ -88,6 +88,14 @@ jobs:
 
           echo "=== host before deployment ==="
           git rev-parse HEAD
+          # The AR v3 removal (PR #55) deleted infra/deploy/ar-v3-pack/.gitignore, so the
+          # operator-installed pack files left on the host became untracked and refused run 95.
+          # They stay on the host and stay ignored, host-locally; nothing is deleted here.
+          if [ -d .git ]; then
+            mkdir -p .git/info
+            grep -qxF '/infra/deploy/ar-v3-pack/' .git/info/exclude 2>/dev/null \
+              || printf '%s\n' '/infra/deploy/ar-v3-pack/' >> .git/info/exclude
+          fi
           if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
             echo "REFUSED: $REPOSITORY has tracked or untracked changes." >&2
             git status --short >&2
@@ -104,7 +112,11 @@ jobs:
           echo "=== select exact revision ==="
           git checkout --detach "$DEPLOY_SHA"
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
-          test -z "$(git status --porcelain --untracked-files=all)"
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "REFUSED: $DEPLOY_SHA leaves tracked or untracked changes in $REPOSITORY." >&2
+            git status --short --untracked-files=all >&2
+            exit 3
+          fi
 
           echo "=== deploy ==="
           # bash -s reads this script from stdin. Neither child may consume the
