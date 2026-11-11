@@ -46,8 +46,9 @@ def test_closed_vocabularies_match_0023() -> None:
     source = (ROOT / 'db/migrations/versions/20261016_0023_norm_citations.py').read_text()
     for value in CATEGORIES_0023[7:] + REASONS_0023[6:]:
         assert f'"{value}"' in source
-    # the two vocabularies 0064 adds are in the migration that adds them
-    later = (ROOT / 'db/migrations/versions/20261110_0064_precedents_seal.py').read_text()
+    # the vocabularies 0064 adds (two categories, three reasons) and 0066 adds (one category) are in the migrations that add them
+    later = (ROOT / 'db/migrations/versions/20261110_0064_precedents_seal.py').read_text() + (
+        ROOT / 'db/migrations/versions/20261111_0066_precedents_wave5.py').read_text()
     for value in CATEGORIES[12:] + REASONS[12:]:
         assert f'"{value}"' in later
 
