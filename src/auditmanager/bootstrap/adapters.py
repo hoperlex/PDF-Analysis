@@ -1670,7 +1670,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     from auditmanager.execution.eta import run_estimated_finish
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
-    from auditmanager.runs.stage_facts import is_primary_text_placeholder
+    from dataclasses import replace as _replace
+
+    from auditmanager.api.schemas.models import StageId as _StageId
+    from auditmanager.runs.stage_facts import is_extended_rollup, is_primary_text_placeholder, rollup_degradation
 
     repository = RunRepository()
     run = repository.get(session, run_id)
@@ -1680,6 +1683,13 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         stage for stage in repository.stage_results(session, run_id)
         if not is_primary_text_placeholder(stage.stage_id, stage.metrics)
     )
+    # `STAGE-ROLLUP-TEXT-01`: a text row marked partial only by the extended review reads as the text stage's success, and the run's
+    # degradation set names the incomplete procedures instead of `text_analysis`. The run itself stays `partial`.
+    rollup = next((stage for stage in stages if is_extended_rollup(stage.stage_id, stage.status, stage.error)), None)
+    degradation = tuple(run.degradation_set or ())
+    if rollup is not None:
+        degradation = rollup_degradation(degradation, rollup.metrics, {value.value for value in _StageId})
+        stages = tuple(_replace(stage, status="succeeded", error=None) if stage is rollup else stage for stage in stages)
     # `R-151v`: who started the run, by the account's own display label; none before 0051.
     started_by = getattr(run, "started_by_user_uid", None)
     started_by_label = None
@@ -1724,7 +1734,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         created_at=run.created_at,
         analysis_profile_id=run.analysis_profile_id,
         prompt_bundle_id=run.prompt_bundle_id,
-        degradation_set=tuple(run.degradation_set or ()),
+        degradation_set=degradation,  # STAGE-ROLLUP-TEXT-01
         terminal_reason=run.terminal_reason,
         # `D-46`. Carried straight through: it was screened when the terminal was chosen
         # and again when the row was written, and `run_status_body` screens it once more
