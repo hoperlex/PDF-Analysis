@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 import hashlib
 import json
+import logging
 import math
 import re
 import time
@@ -21,7 +22,8 @@ from auditmanager.executors.public import CropImage, HostRepository, attach_imag
 from auditmanager.findings.public import BlockEvidenceItem, CandidateGroup, CandidateMember
 from auditmanager.jobs.public import extended_unit
 from auditmanager.norms.public import (
-    MAX_NORM_QUERY_CHARACTERS, SEARCH_WINDOW, NormPageImages, parse_norm_query, search_norms,
+    MAX_NORM_QUERY_CHARACTERS, SEARCH_WINDOW, SEMANTIC_LOOKUP, NormPageImages, SemanticUnavailable, norm_embed_url,
+    norm_observation_text, parse_norm_query, search_norms, semantic_norm_candidates,
 )
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.stage_plan import call_journal_columns, cell_binding, settings_of
@@ -29,6 +31,9 @@ from auditmanager.runs.stage_layout import ENSEMBLE_ROLES, parse_plan, role_of_p
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId
 from auditmanager.storage.public import parse_blob_id
+from sqlalchemy.exc import SQLAlchemyError
+
+_log = logging.getLogger(__name__)
 
 
 FORMAT = "extended-review-v1"
@@ -745,7 +750,49 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
             if active_query is not None:
                 active_query.update(status="failed", error_code=error.code.value, reason="lookup_unavailable")
         finish_receipt()
+    _semantic_candidates(session, observations, snapshot_id, checkpoint=checkpoint, warnings=warnings,
+                         full_document=full_document)
     return sorted(set(warnings))
+
+
+#: `NORM-VECTOR-TEMP-01` (temporary embedder, see ``norms/semantic.py``). The observations a word search left without a paragraph -- it
+#: found nothing, or the model proposed no query (a primary text finding) -- get candidates near their meaning. Off unless
+#: ``AUDITMANAGER_NORM_EMBED_URL`` is set. **Nothing here is hidden**: a lookup that fails, or one past the run's window, leaves its
+#: observation ``unavailable`` with its own reason -- a gap of the norm verification, so the procedure is ``partial`` and says why --
+#: and the run's warnings and the worker's log name the failure.
+_SEMANTIC_LOOKUPS_PER_RUN = 60
+_SEMANTIC_TARGETS = frozenset({("not_found", None), ("unavailable", "query_not_proposed")})
+_SEMANTIC_FAILED = "semantic_lookup_failed"
+_SEMANTIC_WINDOW_EXHAUSTED = "semantic_lookup_window_exhausted"
+
+
+def _semantic_candidates(session, observations, snapshot_id, *, checkpoint, warnings, full_document, url=None):
+    url = norm_embed_url() if url is None else url
+    if url is None or snapshot_id is None:
+        return
+    targets = [item for item in observations
+               if (item.get("norm_status"), item.get("norm_reason")) in _SEMANTIC_TARGETS and not item.get("norm_candidates")
+               and norm_observation_text(item)]
+    for looked, item in enumerate(targets):
+        if looked >= _SEMANTIC_LOOKUPS_PER_RUN:
+            for rest in targets[looked:]:
+                rest.update(norm_status="unavailable", norm_reason=_SEMANTIC_WINDOW_EXHAUSTED)
+            warnings.append("norm_semantic_lookup_window_exhausted")
+            return
+        if checkpoint is not None:
+            checkpoint("extended_norm_semantic_lookup")
+        try:
+            found = semantic_norm_candidates(session, snapshot_id=snapshot_id, value=norm_observation_text(item), url=url,
+                                             limit=6 if full_document else 3)
+        except (SemanticUnavailable, SQLAlchemyError) as error:
+            session.rollback()
+            _log.error("norm semantic lookup failed for run observations (%s): %s", type(error).__name__, error, exc_info=True)
+            for rest in targets[looked:]:
+                rest.update(norm_status="unavailable", norm_reason=_SEMANTIC_FAILED)
+            warnings.append("norm_semantic_lookup_failed")
+            return
+        if found:
+            item.update(norm_status="candidates", norm_candidates=found, norm_lookup_method=SEMANTIC_LOOKUP)
 
 
 def run_extended_review(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
