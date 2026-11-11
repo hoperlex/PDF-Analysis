@@ -233,8 +233,8 @@ def test_a_declared_model_that_is_not_the_tasks_is_422_with_the_mismatch_code(su
 def test_an_answer_body_is_closed_and_bounded(surface, stub) -> None:
     for body in ({"output_text": "{}"}, {"model": "m"}, {"output_text": "", "model": "m"},
                  {"output_text": "{}", "model": "m", "input_tokens": -1},
-                 {"output_text": "{}", "model": "m", "surprise": 1},
-                 {"output_text": "x" * 1_000_001, "model": "m"}):
+                 {"output_text": "{}", "model": "m", "surprise": 1}):
+        # No length cap on `output_text`: the owner removed answer caps on 2026-11-06 (`0976d3a63`), so a long answer is not refused here (D-688).
         refused = post(surface, PATHS["submitExecutorTaskAnswer"], body)
         assert refused.status == 422, str(body)[:60]
     assert stub.calls == []
