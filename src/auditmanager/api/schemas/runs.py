@@ -178,6 +178,9 @@ class RunStatusView:
     #: `UI-A-65` / `UI-B-45` (contract 1.40.0): the estimated finish of a run being worked on, by the queue item's own
     #: rule (``execution.eta.job_estimated_finish``); ``None`` when the run has none, rendered only when present.
     estimated_finish_at: datetime | None = None
+    #: `CRIT-SEAL-53` (contract 1.53.0, asked by `F8-WEB`): ``text_only`` or ``one_list``, as the run froze it at its start; ``None`` (no marker read)
+    #: is omitted, which the contract reads as ``text_only``.
+    publication_mode: str | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -281,6 +284,8 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         body["started_by_user_uid"] = view.started_by_user_uid
         if view.started_by_label is not None:
             body["started_by_label"] = view.started_by_label
+    if view.publication_mode is not None:
+        body["publication_mode"] = view.publication_mode
     if view.binding_state is not None:
         body["binding_state"] = view.binding_state
     if view.planned is not None:

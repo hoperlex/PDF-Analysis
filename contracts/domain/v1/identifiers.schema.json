@@ -218,7 +218,9 @@
         "decision_memory_comment_id",
         "decision_memory_embedding_intent_id",
         "vector_control_event_id",
-        "executor_task_context_delivery_id"
+        "executor_task_context_delivery_id",
+        "decision_memory_pattern_id",
+        "decision_memory_pattern_status_event_id"
       ],
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]*(_uid|_id)$"
@@ -518,7 +520,9 @@
           "decision_memory_comment_id",
           "decision_memory_embedding_intent_id",
           "vector_control_event_id",
-          "executor_task_context_delivery_id"
+          "executor_task_context_delivery_id",
+          "decision_memory_pattern_id",
+          "decision_memory_pattern_status_event_id"
         ]
       }
     },
@@ -664,7 +668,9 @@
                 "decision_memory_comment_id",
                 "decision_memory_embedding_intent_id",
                 "vector_control_event_id",
-                "executor_task_context_delivery_id"
+                "executor_task_context_delivery_id",
+                "decision_memory_pattern_id",
+                "decision_memory_pattern_status_event_id"
               ]
             }
           },

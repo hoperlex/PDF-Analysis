@@ -146,7 +146,9 @@
     "decision_memory_comment_id": "dmk",
     "decision_memory_embedding_intent_id": "dmi",
     "vector_control_event_id": "vce",
-    "executor_task_context_delivery_id": "etd"
+    "executor_task_context_delivery_id": "etd",
+    "decision_memory_pattern_id": "dmp",
+    "decision_memory_pattern_status_event_id": "dps"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -280,7 +282,9 @@
     "DecisionMemoryComment": "decision_memory_comment_id",
     "DecisionMemoryEmbeddingIntent": "decision_memory_embedding_intent_id",
     "VectorControlEvent": "vector_control_event_id",
-    "ExecutorTaskContextDelivery": "executor_task_context_delivery_id"
+    "ExecutorTaskContextDelivery": "executor_task_context_delivery_id",
+    "DecisionMemoryPattern": "decision_memory_pattern_id",
+    "DecisionMemoryPatternStatusEvent": "decision_memory_pattern_status_event_id"
   },
   "distinct_identities": [
     {
@@ -648,6 +652,19 @@
       "evidence": [
         "CRIT-SEAL-50",
         "0064_precedents_seal"
+      ]
+    },
+    {
+      "name": "decision_memory_pattern_identity",
+      "identifiers": [
+        "decision_memory_pattern_id",
+        "decision_memory_pattern_status_event_id"
+      ],
+      "rule": "DecisionMemoryPattern identifies one failure pattern: the refusing comment of the representative case of a group of refusals in one section, proposed by an algorithm and approved by an expert; DecisionMemoryPatternStatusEvent one event of its status journal (proposed, approved, rejected, suspended). Each is allocated independently. The representative case and the account that reviewed are bare references to their own identities; a pattern's status is the latest event, never an attribute of the pattern. Neither identity is a case identity, and a pattern is not a finding.",
+      "authority": "plan-v5 section 3.7; ADR-0029 decision 11",
+      "evidence": [
+        "CRIT-SEAL-53",
+        "0066_precedents_wave5"
       ]
     }
   ],
