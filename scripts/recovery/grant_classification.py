@@ -268,11 +268,9 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # and its advice, `F8-PUBLISH` the block evidence, `PREC-WEB` the settings and `CTX-STAND` the delivery journal. `vector_control` is seeded
     # by the migration. Seven of the twelve left the set when their lanes merged (found red on `823c1a738` by `CRIT-SEAL-52`: the scan sees a
     # statement for each): the memory's comments, block evidence and vectors, the encoder's queue, a finding's block evidence and the control of
-    # the vectors with its journal. Five remain: the probe, the pass with its advice, the settings journal and the delivery journal.
-    "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "executor_task_context_delivery",
-    "precedent_setting_event",
-    # `0065_norm_crop_render` (`CRIT-SEAL-52`): until `M7-NORM-PNG` renders and records the first page.
-    "norm_crop_render",
+    # the vectors with its journal. The five that remained (the probe, the pass with its advice, the settings journal and the delivery journal) and
+    # `norm_crop_render` (`0065`, until `M7-NORM-PNG`) left it on the base of `CRIT-SEAL-53` (`00d3ac6a5`), when `PREC-PASS`, `PREC-SETTINGS-01`,
+    # `CTX-STAND` and `M7-NORM-PNG` merged: the scan sees a statement for each (found red by the recovery group of this seal).
     # `0066_precedents_wave5` (`CRIT-SEAL-53`): until `PAT-01` writes the patterns and their journal and `XDOC-01` the parameter facts and the cross evidence.
     "decision_memory_pattern", "decision_memory_pattern_status_event", "finding_cross_evidence", "project_parameter_fact",
 ))
