@@ -35,6 +35,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import type { RunTableProps } from '@/entities/audit-run';
 import { RunTable, useRunList } from '@/entities/audit-run';
+import { DeleteRunControl } from '@/features/delete-run';
 
 import { StartRunWithReadiness } from './start-run-with-readiness';
 
@@ -117,6 +118,8 @@ function VersionRunList({
     runs: page.items,
     runHref: (run) => routes.run(projectUid, run.run_id),
     reviewHref: (run) => routes.review(projectUid, run.run_id),
+    // `RUN-DELETE-01`: «Удалить» on a partial, failed or cancelled run, for an expert or an administrator; the row passes its own state.
+    rowAction: (run) => <DeleteRunControl runId={run.run_id} state={run.state} compact />,
   };
 
   return (

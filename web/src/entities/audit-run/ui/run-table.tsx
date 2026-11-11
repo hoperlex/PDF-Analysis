@@ -35,6 +35,7 @@
  */
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 import type { RunStatus } from '@/shared/api';
 import { isExportableRunState } from '@/shared/api';
@@ -54,6 +55,11 @@ export interface RunTableProps {
   readonly runHref: (run: RunStatus) => string;
   /** Where a run's findings open. Built by the screen, never by the table. */
   readonly reviewHref: (run: RunStatus) => string;
+  /**
+   * An action the screen adds after the two links of a row (`RUN-DELETE-01`: «Удалить», for a run that may be deleted). The table
+   * decides nothing about it: the screen passes the control, which draws nothing for a run it does not apply to.
+   */
+  readonly rowAction?: ((run: RunStatus) => ReactNode) | undefined;
 }
 
 /** Said in the «Запустил» column when the reading carries no label (a run created before migration 0051). */
@@ -82,7 +88,7 @@ function StartedBy({ run }: { readonly run: RunStatus }) {
     : <>{label}</>;
 }
 
-export function RunTable({ runs, runHref, reviewHref }: RunTableProps) {
+export function RunTable({ runs, runHref, reviewHref, rowAction }: RunTableProps) {
   const columns: readonly TableColumn<RunStatus>[] = [
     { key: 'state', header: 'Состояние', cell: (run) => <StateCell run={run} /> },
     { key: 'started', header: 'Начат', cell: (run) => <span className={styles.figure}>{formatInstant(run.created_at)}</span> },
@@ -114,6 +120,7 @@ export function RunTable({ runs, runHref, reviewHref }: RunTableProps) {
               Разобрать
             </Link>
           ) : null}
+          {rowAction === undefined ? null : rowAction(run)}
         </div>
       ),
     },
