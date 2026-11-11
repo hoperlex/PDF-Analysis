@@ -314,10 +314,15 @@ def embedder_problems(compose: str) -> list[str]:
     return out
 
 
+NORM_EMBED = "norm-embed"
+
+
 def test_the_embedder_is_in_the_file_and_the_enumerator_counts_it_once() -> None:
     names = service_names(COMPOSE.read_text(encoding="utf-8"))
-    assert len(names) == 10 and names.count(EMBEDDER) == 1, names
-    assert sorted(set(names) - {EMBEDDER}) == ["api", "migrate", "postgres", "proxy", "release-notes", "s3", "s3-init", "web", "worker"]
+    # `NORM-VECTOR-TEMP-01` (temporary): the run-time embedder `norm-embed` is the eleventh service, in a profile of its own.
+    assert len(names) == 11 and names.count(EMBEDDER) == 1 and names.count(NORM_EMBED) == 1, names
+    assert sorted(set(names) - {EMBEDDER, NORM_EMBED}) == [
+        "api", "migrate", "postgres", "proxy", "release-notes", "s3", "s3-init", "web", "worker"]
 
 
 def test_the_embedder_is_offline_hard_limited_and_not_started_by_up() -> None:
@@ -327,7 +332,7 @@ def test_the_embedder_is_offline_hard_limited_and_not_started_by_up() -> None:
 def test_only_the_embedder_is_in_a_profile_so_up_starts_every_other_service() -> None:
     compose = COMPOSE.read_text(encoding="utf-8")
     gated = [name for name in service_names(compose) if "profiles" in scalars(service_block(compose, name))]
-    assert gated == [EMBEDDER]
+    assert gated == [NORM_EMBED, EMBEDDER], "the two embedders start only when their flag asks (ALPHA_NORM_EMBED, ALPHA_EMBEDDER)"
 
 
 def test_the_embedder_runs_the_entry_the_checkout_mounts_and_that_file_exists() -> None:

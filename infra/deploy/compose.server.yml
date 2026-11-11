@@ -363,6 +363,10 @@ services:
       # Presentation comparison exposure is explicit in both API and worker.
       AUDITMANAGER_COMPARISON_MODULES: ${AUDITMANAGER_COMPARISON_MODULES:-versions,stages}
       AUDITMANAGER_EXTENDED_ANALYSIS: ${AUDITMANAGER_EXTENDED_ANALYSIS:-1}
+      # `NORM-VECTOR-TEMP-01` (TEMPORARY). Where the norm verification asks for the vector of an observation's text:
+      # `http://norm-embed:8080` once the quality and memory gates of docs/program/NORM-VECTOR-TEMP-01.md have passed. Empty, the
+      # default, keeps the semantic lookup OFF -- the word search alone, as before.
+      AUDITMANAGER_NORM_EMBED_URL: ${AUDITMANAGER_NORM_EMBED_URL:-}
       # `REVIEW-FIX-BOUNDS-1102`. Relaxed intake limits; the same value the API reads. `0`, the
       # default, keeps the strict limits.
       AUDITMANAGER_INTAKE_RELAXED: ${AUDITMANAGER_INTAKE_RELAXED:-0}
@@ -539,6 +543,34 @@ services:
     # listener is refused once a name is set.
     ports:
       - "${ALPHA_BIND_ADDRESS:-127.0.0.1}:${ALPHA_HTTP_PORT:?ALPHA_HTTP_PORT is unset.}:8080"
+
+  # `NORM-VECTOR-TEMP-01` (TEMPORARY, owner 2026-11-11, variant C; docs/program/NORM-VECTOR-TEMP-01.md). The run-time embedder of the
+  # norm verification's semantic candidates: the int8 export of BGE-M3, one text per request, on the stack's network only (no published
+  # port). It serves nobody until the worker's AUDITMANAGER_NORM_EMBED_URL points here, which waits for the plan's quality and memory
+  # gates. Measured 2026-11-11: 841 MB resident after load, 917 MB after long texts. `ALPHA_MEM_LIMIT_NORM_EMBED` follows the stack's
+  # rule (unset is no limit); the plan's value is 1200m. It goes when the permanent run-time embedder is decided.
+  # IN THE PROFILE `norm-embed`: a deploy builds and starts it only with ALPHA_NORM_EMBED=yes (`deploy.sh` then puts the profile in
+  # every compose command and judges its health); otherwise nothing is downloaded and the stack is what it was.
+  norm-embed:
+    profiles: [norm-embed]
+    build:
+      context: ../..
+      dockerfile: infra/norm-embed/Dockerfile
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-norm-embed:bge-m3-int8-4de1325
+    networks: [alpha]
+    restart: unless-stopped
+    mem_limit: ${ALPHA_MEM_LIMIT_NORM_EMBED:-0}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # `EMBED-01` (ADR-0029 decision 8, plan-v5 section 5). The offline encoder of the precedents' vectors: `bge-m3-dense-v1` in the norms-worker image,
   # run by the host's timer (`infra/deploy/embed-window.sh`) inside the night window and by nothing else.

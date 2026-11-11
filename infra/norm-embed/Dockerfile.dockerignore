@@ -1,0 +1,4 @@
+# NORM-VECTOR-TEMP-01: the context is the repository root; only these two files reach the daemon.
+*
+!infra/norm-embed/requirements.lock
+!infra/norm-embed/server.py

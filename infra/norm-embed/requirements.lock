@@ -1,0 +1,8 @@
+# NORM-VECTOR-TEMP-01 (temporary). The norm-embed image's whole runtime, installed with
+# --require-hashes --no-deps --only-binary=:all: (cp312, manylinux x86_64). Hashes taken from the wheels on 2026-11-11.
+numpy==2.2.1 \
+    --hash=sha256:5062dc1a4e32a10dc2b8b13cedd58988261416e811c1dc4dbdea4f57eea61b0d
+onnxruntime==1.20.1 \
+    --hash=sha256:bb71a814f66517a65628c9e4a2bb530a6edd2cd5d87ffa0af0f6f773a027d99e
+tokenizers==0.21.0 \
+    --hash=sha256:e84ca973b3a96894d1707e189c14a774b701596d579ffc7e69debfc036a61a04
