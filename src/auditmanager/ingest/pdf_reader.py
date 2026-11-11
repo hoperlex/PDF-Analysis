@@ -37,7 +37,10 @@ its drawing elements (path segments and other objects, counted into form XObject
 page ceiling and the document's;
 its characters within the page ceiling, read only after the count says so; the document's
 characters within their ceiling; and, for a bare PDF, a text layer. ``refused`` names the
-rule; the envelope owns every message.
+rule; the envelope owns every message. A ``page_content`` or ``document_content`` answer also
+carries ``page``, ``measure`` (``drawing_elements`` or ``characters``), ``count``,
+``count_is_minimum`` and ``limit`` (:func:`_content`, `PDF-PAGE-CONTENT-01`): numbers this
+program read, never bytes of the document.
 """
 
 from __future__ import annotations
@@ -163,6 +166,22 @@ def _displayed(page: Any) -> list[Any]:
     return [width, height, rotation]
 
 
+def _content(rule: str, index: int, measure: str, count: int, *, minimum: bool, limit: int) -> dict[str, Any]:
+    """A content refusal with the page and the numbers behind it (`PDF-PAGE-CONTENT-01`).
+
+    ``count`` is what was read; ``minimum`` says it is a lower bound -- a page counted no further
+    than twice its ceiling, or a document's total through page ``index`` + 1.
+    """
+    return {
+        "refused": rule,
+        "page": index + 1,
+        "measure": measure,
+        "count": count,
+        "count_is_minimum": minimum,
+        "limit": limit,
+    }
+
+
 def _pages(document: Any, raw: Any, page_count: int, settings: dict[str, Any]) -> dict[str, Any]:
     """Every page's characters and layer, or the first rule a page breaks."""
     require_text = bool(settings["require_text"])
@@ -170,6 +189,9 @@ def _pages(document: Any, raw: Any, page_count: int, settings: dict[str, Any]) -
     page_characters = int(settings["page_characters"])
     document_elements = int(settings["document_elements"])
     document_characters = int(settings["document_characters"])
+    # A page over its ceiling is counted on to twice the ceiling, so the refusal can say by
+    # how much, and no further: a page of shared form XObjects can hold far more.
+    counted = 2 * page_elements
     pages: list[list[Any]] = []
     elements_in_all = 0
     characters_in_all = 0
@@ -177,16 +199,26 @@ def _pages(document: Any, raw: Any, page_count: int, settings: dict[str, Any]) -
         for index in range(page_count):
             page = document[index]
             try:
-                elements = _elements(raw, page.raw, page_elements)
+                elements = _elements(raw, page.raw, counted)
                 if elements > page_elements:
-                    return {"refused": "page_content"}
+                    return _content(
+                        "page_content", index, "drawing_elements", elements,
+                        minimum=elements > counted, limit=page_elements,
+                    )
                 elements_in_all += elements
                 if elements_in_all > document_elements:
-                    return {"refused": "document_content"}
+                    return _content(
+                        "document_content", index, "drawing_elements", elements_in_all,
+                        minimum=True, limit=document_elements,
+                    )
                 text_page = page.get_textpage()
                 try:
-                    if text_page.count_chars() > page_characters:
-                        return {"refused": "page_content"}
+                    characters = text_page.count_chars()
+                    if characters > page_characters:
+                        return _content(
+                            "page_content", index, "characters", characters,
+                            minimum=False, limit=page_characters,
+                        )
                     text = text_page.get_text_range()
                 finally:
                     text_page.close()
@@ -195,7 +227,10 @@ def _pages(document: Any, raw: Any, page_count: int, settings: dict[str, Any]) -
                 page.close()
             characters_in_all += len(text)
             if characters_in_all > document_characters:
-                return {"refused": "document_content"}
+                return _content(
+                    "document_content", index, "characters", characters_in_all,
+                    minimum=True, limit=document_characters,
+                )
             has_layer = bool(text.strip())
             if require_text and not has_layer:
                 return {"refused": "page_text"}

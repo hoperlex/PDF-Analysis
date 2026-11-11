@@ -14,6 +14,7 @@ import {
   PC01_UPLOAD_ENVELOPE,
   UPLOAD_CONSTRAINTS_STATED,
   classifyUploadFailure,
+  contentNumbersSentence,
   uploadConstraintSentence,
 } from '@/entities/document-version';
 
@@ -286,6 +287,90 @@ describe('every constraint the panel can be shown has a sentence (W55B-FIX, Y-4)
       expect(failure.detail).toContain(sentence ?? '');
     },
   );
+});
+
+describe('a content refusal names the page and the numbers (PDF-PAGE-CONTENT-01)', () => {
+  const nbsp = (text: string) => text.replace(/(?<=\d) (?=\d{3}\b)/gu, '\u00a0');
+  const content = (constraint: string, extra: Record<string, string | number | boolean | null>) =>
+    classifyUploadFailure(apiError(422, 'validation_failed', false, { constraint, field: 'content', ...extra }));
+
+  it('says which page holds too many drawing elements, and the ceiling', () => {
+    const failure = content('pdf_page_content', {
+      page_number: 7,
+      content_measure: 'drawing_elements',
+      content_count: 2_345_678,
+      content_count_is_minimum: false,
+      content_limit: 2_000_000,
+    });
+    expect(failure.detail).toContain(
+      nbsp('На странице 7 графических элементов: 2 345 678, а принимается не больше 2 000 000.'),
+    );
+    expect(failure.detail).toContain(uploadConstraintSentence('pdf_page_content') ?? '');
+  });
+
+  it('says «не меньше» when the page was counted only so far', () => {
+    const failure = content('pdf_page_content', {
+      page_number: 3,
+      content_measure: 'drawing_elements',
+      content_count: 4_000_001,
+      content_count_is_minimum: true,
+      content_limit: 2_000_000,
+    });
+    expect(failure.detail).toContain(nbsp('На странице 3 графических элементов: не меньше 4 000 001'));
+  });
+
+  it('names characters on a page and the document total through a page', () => {
+    expect(
+      content('pdf_page_content', {
+        page_number: 12,
+        content_measure: 'characters',
+        content_count: 240_000,
+        content_count_is_minimum: false,
+        content_limit: 200_000,
+      }).detail,
+    ).toContain(nbsp('На странице 12 символов текста: 240 000, а принимается не больше 200 000.'));
+    expect(
+      content('pdf_document_content', {
+        page_number: 123,
+        content_measure: 'drawing_elements',
+        content_count: 40_000_500,
+        content_count_is_minimum: true,
+        content_limit: 40_000_000,
+      }).detail,
+    ).toContain(
+      nbsp(
+        'До страницы 123 включительно в документе графических элементов: 40 000 500, ' +
+          'а на весь документ принимается не больше 40 000 000.',
+      ),
+    );
+  });
+
+  it('guesses nothing when the numbers are absent, partial or of another rule', () => {
+    expect(contentNumbersSentence({ constraint: 'pdf_page_content', field: 'content' })).toBeNull();
+    expect(
+      contentNumbersSentence({ constraint: 'pdf_page_content', page_number: 7, content_measure: 'drawing_elements' }),
+    ).toBeNull();
+    expect(
+      contentNumbersSentence({
+        constraint: 'pdf_page_content',
+        page_number: 7,
+        content_measure: 'toString',
+        content_count: 1,
+        content_count_is_minimum: false,
+        content_limit: 1,
+      }),
+    ).toBeNull();
+    expect(
+      contentNumbersSentence({
+        constraint: 'pdf_reader_limits',
+        page_number: 7,
+        content_measure: 'characters',
+        content_count: 1,
+        content_count_is_minimum: false,
+        content_limit: 1,
+      }),
+    ).toBeNull();
+  });
 });
 
 /**

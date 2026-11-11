@@ -5,8 +5,9 @@ No database and no object store: the two programs run over real PDFs. The synthe
 output of this reader: the designation, the highest «Изм.» of each version, its date, its page count and the scan page.
 
 The comparison envelope differs from the portal envelope in figures only (ADR-0025 decision 11, addendum item 3): a page
-of 450 000 drawing elements -- under the 536 426 of the real set, over the portal's 400 000 -- is admitted here and refused
-there, and the portal envelope's own figures are asserted unchanged. A page with no text layer is admitted and said so
+of 450 000 drawing elements -- under the 536 426 of the real set -- is admitted here (the portal refused it until
+`PDF-PAGE-CONTENT-01` raised its own ceiling to 2 000 000 on 2026-11-11), a page of 1 100 000 is refused here and
+admitted there, and the portal envelope's own figures are asserted as they now stand. A page with no text layer is admitted and said so
 (a scan is compared as an image). Every refusal keeps the field, constraint and message of the portal's own.
 """
 
@@ -70,8 +71,10 @@ def _pdf(pages: int, content: bytes, *, rotate: int = 0, media: str = "0 0 595 8
 
 _TEXT = b"BT /F1 9 Tf 10 10 Td (a line of text for the layer, well over fifty characters) Tj ET\n"
 #: 225 000 paths of two segments: 450 000 drawing elements on one page, in 6.7 KB. Above the portal envelope's
-#: 400 000, below the 536 426 of the real set's heaviest page (`MEASURE-RENDER-01` section 3, finding 9).
+#: former 400 000, below the 536 426 of the real set's heaviest page (`MEASURE-RENDER-01` section 3, finding 9).
 PATHS_450K = b"0 0 m 1 1 l S " * 225_000
+#: 550 000 paths: 1 100 000 drawing elements, above this envelope's 1 000 000 and under the portal's 2 000 000.
+PATHS_1100K = b"0 0 m 1 1 l S " * 550_000
 PATHS = _TEXT + b"0 0 m 1 1 l S " * 40_000
 TEXT_BOMB = b"BT /F1 1 Tf 0 0 Td " + b"(AAAAAAAAAAAAAAAA) Tj " * 500_000 + b"ET"
 
@@ -115,10 +118,10 @@ class TestTheCorpusAgainstItsAnswerKey:
 
 
 class TestThePolicy:
-    def test_the_portal_envelope_is_unchanged(self) -> None:
-        assert portal.PAGE_ELEMENTS_MAX == 400_000
+    def test_the_portal_envelope_is_as_recorded(self) -> None:
+        assert portal.PAGE_ELEMENTS_MAX == 2_000_000  # PDF-PAGE-CONTENT-01, owner 2026-11-11
         assert portal.PAGE_CHARACTERS_MAX == 200_000
-        assert portal.DOCUMENT_ELEMENTS_MAX == 8_000_000
+        assert portal.DOCUMENT_ELEMENTS_MAX == 40_000_000  # PDF-PAGE-CONTENT-01, owner 2026-11-11
         assert portal.DOCUMENT_CHARACTERS_MAX == 20_000_000
         assert portal.READER_ADDRESS_SPACE == 512 * MiB and portal.READER_SECONDS == 60
         assert portal.MAX_BYTES == 250 * MiB and (portal.MIN_PAGES, portal.MAX_PAGES) == (1, 500)
@@ -126,18 +129,26 @@ class TestThePolicy:
     def test_the_comparison_figures_are_the_recorded_ones(self) -> None:
         policy = COMPARISON_POLICY
         assert policy.page_elements == 1_000_000  # 1.86 x the real set's 536 426
-        assert policy.page_elements > 536_426 > portal.PAGE_ELEMENTS_MAX
+        assert portal.PAGE_ELEMENTS_MAX > policy.page_elements > 536_426
         assert policy.address_space == 768 * MiB  # decision 8's default ceiling
         assert (policy.max_bytes, policy.min_pages, policy.max_pages) == (250 * MiB, 1, 500)
         assert policy.page_characters == portal.PAGE_CHARACTERS_MAX
-        assert policy.document_elements == portal.DOCUMENT_ELEMENTS_MAX
+        assert policy.document_elements == 8_000_000  # its own; the portal's moved to 40 000 000 without it
         assert policy.document_characters == portal.DOCUMENT_CHARACTERS_MAX
 
-    def test_a_page_of_450000_elements_is_admitted_here_and_refused_by_the_portal(self) -> None:
+    def test_a_page_of_450000_elements_is_admitted_here_and_by_the_portal(self) -> None:
         data = _pdf(1, PATHS_450K)
-        assert _refusal(lambda: portal.inspect_pdf(data, require_text=False))["constraint"] == "pdf_page_content"
         facts = inspect_comparison_pdf(data)
         assert facts.page_count == 1 and facts.page_has_layer == (False,)
+        assert portal.inspect_pdf(data, require_text=False).page_count == 1
+
+    def test_a_page_of_1100000_elements_is_refused_here_and_admitted_by_the_portal(self) -> None:
+        data = _pdf(1, PATHS_1100K)
+        found = _refusal(lambda: inspect_comparison_pdf(data))
+        assert found["constraint"] == "pdf_page_content"
+        # PDF-PAGE-CONTENT-01: the numbers are this envelope's own, not the portal's.
+        assert (found["page_number"], found["content_count"], found["content_limit"]) == (1, 1_100_000, 1_000_000)
+        assert portal.inspect_pdf(data, require_text=False).page_count == 1
 
     def test_the_element_limit_is_the_policys_not_a_constant_of_the_reader(self) -> None:
         tight = ComparisonEnvelopePolicy(**{**_fields(COMPARISON_POLICY), "page_elements": 1_000})
@@ -205,7 +216,7 @@ class TestTheChildren:
         assert portal.PAGE_CHARACTERS_MAX == COMPARISON_POLICY.page_characters == 200_000
 
     def test_a_text_bomb_under_the_element_limit_is_stopped_by_the_ceiling_not_by_the_api(self) -> None:
-        """500 000 strings pass the element rule (1 000 000 here, 400 000 for the portal), and the 8 M characters
+        """500 000 strings pass the element rule (1 000 000 here, 2 000 000 for the portal), and the 8 M characters
         on the page are more than 768 MiB can hold: the child is ended by the kernel and the document is refused
         ``pdf_reader_limits``. The API process's own memory is untouched either way."""
         import resource

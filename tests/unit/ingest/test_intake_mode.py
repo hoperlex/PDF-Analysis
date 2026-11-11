@@ -46,6 +46,7 @@ print(json.dumps({
         "bundle.MAX_BLOCKS_PER_PAGE": bundle.MAX_BLOCKS_PER_PAGE, "bundle.MAX_BLOCKS": bundle.MAX_BLOCKS,
         "bundle.MAX_IMAGE_BLOCKS": bundle.MAX_IMAGE_BLOCKS,
         "comparison.page_elements": comparison.COMPARISON_POLICY.page_elements,
+        "comparison.document_elements": comparison.COMPARISON_POLICY.document_elements,
         "comparison.max_bytes": comparison.COMPARISON_POLICY.max_bytes,
         "comparison.max_pages": comparison.COMPARISON_POLICY.max_pages,
         "batch.MAX_FILES": batch.MAX_FILES, "batch.MAX_SETS": batch.MAX_SETS,
@@ -85,11 +86,12 @@ print(json.dumps({
 
 #: ADR-0025 and the portal envelope (R-116): what applies unless the deployment is relaxed.
 ADR_QUOTAS = {
-    "envelope.MAX_BYTES": 250 * MiB, "envelope.MAX_PAGES": 500, "envelope.PAGE_ELEMENTS_MAX": 400_000,
-    "envelope.PAGE_CHARACTERS_MAX": 200_000, "envelope.DOCUMENT_ELEMENTS_MAX": 8_000_000,
+    "envelope.MAX_BYTES": 250 * MiB, "envelope.MAX_PAGES": 500, "envelope.PAGE_ELEMENTS_MAX": 2_000_000,
+    "envelope.PAGE_CHARACTERS_MAX": 200_000, "envelope.DOCUMENT_ELEMENTS_MAX": 40_000_000,
     "envelope.DOCUMENT_CHARACTERS_MAX": 20_000_000,
     "bundle.MAX_BLOCKS_PER_PAGE": 100, "bundle.MAX_BLOCKS": 3_000, "bundle.MAX_IMAGE_BLOCKS": 1_000,
-    "comparison.page_elements": 1_000_000, "comparison.max_bytes": 250 * MiB, "comparison.max_pages": 500,
+    "comparison.page_elements": 1_000_000, "comparison.document_elements": 8_000_000,
+    "comparison.max_bytes": 250 * MiB, "comparison.max_pages": 500,
     "batch.MAX_FILES": 10_000, "batch.MAX_SETS": 100, "batch.MAX_BATCH_BYTES": 8 * GiB,
     "batch.MAX_BATCH_PAGES": 10_000, "batch.MAX_PROJECT_BYTES": 8 * GiB, "batch.MAX_FILE_BYTES": 250 * MiB,
     "set.entries": 1_000,
@@ -105,7 +107,8 @@ LIFTED_QUOTAS = {
     "envelope.PAGE_CHARACTERS_MAX": INT, "envelope.DOCUMENT_ELEMENTS_MAX": LONG,
     "envelope.DOCUMENT_CHARACTERS_MAX": INT,
     "bundle.MAX_BLOCKS_PER_PAGE": INT, "bundle.MAX_BLOCKS": INT, "bundle.MAX_IMAGE_BLOCKS": INT,
-    "comparison.page_elements": LONG, "comparison.max_bytes": LONG, "comparison.max_pages": INT,
+    "comparison.page_elements": LONG, "comparison.document_elements": LONG,
+    "comparison.max_bytes": LONG, "comparison.max_pages": INT,
     "batch.MAX_FILES": INT, "batch.MAX_SETS": INT, "batch.MAX_BATCH_BYTES": LONG,
     "batch.MAX_BATCH_PAGES": INT, "batch.MAX_PROJECT_BYTES": LONG, "batch.MAX_FILE_BYTES": LONG,
     "set.entries": INT,

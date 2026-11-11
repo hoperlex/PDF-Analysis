@@ -86,6 +86,51 @@ function classifiers(
   return parts.length === 0 ? '' : ` (${parts.join(', ')})`;
 }
 
+/** `content_measure` of a content refusal, as the sentence names it. */
+const CONTENT_MEASURES: Readonly<Record<string, string>> = {
+  drawing_elements: 'графических элементов',
+  characters: 'символов текста',
+};
+
+const RU_NUMBER = new Intl.NumberFormat('ru-RU');
+
+/**
+ * `PDF-PAGE-CONTENT-01`: which page broke a content rule and by how much, from the numbers
+ * the server counted (`page_number`, `content_measure`, `content_count`,
+ * `content_count_is_minimum`, `content_limit`). `null` when the refusal is not a content
+ * one or does not carry them all, and then nothing is guessed.
+ */
+export function contentNumbersSentence(
+  details: Readonly<Record<string, string | number | boolean | null>>,
+): string | null {
+  const constraint = details['constraint'];
+  const page = details['page_number'];
+  const measure = details['content_measure'];
+  const count = details['content_count'];
+  const minimum = details['content_count_is_minimum'];
+  const limit = details['content_limit'];
+  if (
+    (constraint !== 'pdf_page_content' && constraint !== 'pdf_document_content') ||
+    typeof page !== 'number' ||
+    typeof measure !== 'string' ||
+    !Object.hasOwn(CONTENT_MEASURES, measure) ||
+    typeof count !== 'number' ||
+    typeof minimum !== 'boolean' ||
+    typeof limit !== 'number'
+  ) {
+    return null;
+  }
+  const what = CONTENT_MEASURES[measure];
+  if (constraint === 'pdf_page_content') {
+    const counted = `${minimum ? 'не меньше ' : ''}${RU_NUMBER.format(count)}`;
+    return `На странице ${page} ${what}: ${counted}, а принимается не больше ${RU_NUMBER.format(limit)}.`;
+  }
+  return (
+    `До страницы ${page} включительно в документе ${what}: ${RU_NUMBER.format(count)}, ` +
+    `а на весь документ принимается не больше ${RU_NUMBER.format(limit)}.`
+  );
+}
+
 function fromApiError(error: ApiError): UploadFailure {
   const base = {
     correlationId: error.correlationId,
@@ -98,6 +143,7 @@ function fromApiError(error: ApiError): UploadFailure {
       // The rule the server named, in a sentence a reviewer reads. A constraint this
       // client has no sentence for is shown by name only, never by a guessed cause.
       const rule = uploadConstraintSentence(error.details['constraint']);
+      const numbers = contentNumbersSentence(error.details);
       return {
         ...base,
         kind: 'unsupported_input',
@@ -106,6 +152,7 @@ function fromApiError(error: ApiError): UploadFailure {
         detail:
           catalogMessage(error.errorCode) +
           (rule === null ? '' : ` ${rule}`) +
+          (numbers === null ? '' : ` ${numbers}`) +
           classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
       };
     }

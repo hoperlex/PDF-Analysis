@@ -121,7 +121,7 @@ import subprocess
 import sys
 import tempfile
 import threading
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO, Final
@@ -195,20 +195,28 @@ PDFIUM_LOCK: Final[threading.Lock] = threading.Lock()
 # characters on a page (the export) and 1 892 768 in a document (the corpus), at most 0.05 s
 # for a page and 2.9 s for a document; every one of those documents is read inside 64 MiB of
 # address space. Each ceiling below keeps a margin of at least five over the largest of those
-# figures.
+# figures, except the two element ceilings, which the owner raised (below).
+#
+# `PDF-PAGE-CONTENT-01` (owner poll, 2026-11-11). Real CAD sheets have pages far above the
+# sample: an automation drawing set (13АВ-РД-АК2-ПА) was refused at 400 000, and the
+# comparison measurement (`ingest.comparison_pdf.envelope`) has a page of 536 426. The owner
+# chose to raise both element ceilings five times without measuring that set. What a run's
+# pdfplumber pays for such a page is not re-measured here: at the figures above, a page of
+# 2 000 000 elements is about 4 GiB, more than the run's PDF precheck child admits
+# (``analysis.stages.pdf_precheck``, 1.5 GiB), and two pdfplumber passes over a document of
+# 40 000 000 take about 2 500 to 3 300 s, past that child's 1 800 s.
 
-#: A page's drawing elements: five times the real maximum (75 486). pdfplumber holds one page
-#: at a time (``analysis.stages.extraction``), so this bounds a run's page at about 800 MiB.
-PAGE_ELEMENTS_MAX: Final[int] = quota(400_000, 2**63 - 1)
+#: A page's drawing elements: five times the W55B-FIX figure (400 000), owner 2026-11-11.
+PAGE_ELEMENTS_MAX: Final[int] = quota(2_000_000, 2**63 - 1)
 #: A page's characters: ten times the real maximum (19 132). PDFium's text page holds about
 #: 220 bytes a character (`W55B-JUDGE-X` p5).
 PAGE_CHARACTERS_MAX: Final[int] = quota(200_000, 2**31 - 1)
-#: A document's drawing elements: six times the real maximum (1 300 705), above the owner's
-#: export carried to 500 pages (about 6.2 M) and `W55B-REHEARSAL-01`'s 500-sheet vector set
-#: (7.5 M), so a page of the most complex drawing a ceiling admits cannot be repeated on
-#: every one of five hundred pages (one shared content stream did exactly that in
-#: `W55B-JUDGE-X` p9). Two pdfplumber passes over it take about 500 to 660 s.
-DOCUMENT_ELEMENTS_MAX: Final[int] = quota(8_000_000, 2**63 - 1)
+#: A document's drawing elements: five times the W55B-FIX figure (8 000 000), owner
+#: 2026-11-11. That figure was six times the real maximum (1 300 705), so a page of the most
+#: complex drawing a ceiling admits could not be repeated on every one of five hundred pages
+#: (one shared content stream did exactly that in `W55B-JUDGE-X` p9); this one still keeps
+#: the page ceiling from being repeated more than twenty times.
+DOCUMENT_ELEMENTS_MAX: Final[int] = quota(40_000_000, 2**63 - 1)
 #: A document's characters: ten times the real maximum (1 892 768), and a hundred times under
 #: the ``integer`` ``text_character_count`` is stored in (2**31 - 1).
 DOCUMENT_CHARACTERS_MAX: Final[int] = quota(20_000_000, 2**31 - 1)
@@ -233,16 +241,21 @@ _COPY_PIECE: Final[int] = 1024 * 1024
 _READY: Final[str] = "ready"
 
 
-def _refuse(field: str, constraint: str, message: str) -> DomainError:
+def _refuse(field: str, constraint: str, message: str, **numbers: Any) -> DomainError:
     """Build the one refusal shape this module raises.
 
     ``message`` is a fixed sentence chosen at the call site below; no caller-supplied
     value is ever interpolated into one, so nothing a client sent can travel back out.
     The envelope screens it anyway -- that screen is the guard, and its passing is
-    asserted by this slice's tests rather than assumed.
+    asserted by this slice's tests rather than assumed. ``numbers`` are further details,
+    counts the reader made (:func:`_content_details`), never text of the document.
     """
     return DomainError(
-        ErrorCode.VALIDATION_FAILED, message=message, field=field, constraint=constraint
+        ErrorCode.VALIDATION_FAILED,
+        message=message,
+        field=field,
+        constraint=constraint,
+        **numbers,
     )
 
 
@@ -392,7 +405,7 @@ def _inspect_pages(
     if answer.get("unreadable_handle"):
         # The handle itself failed -- the server's fault and not the caller's document.
         raise OSError("the upload handle could not be read")
-    raise _refusal_for(str(answer.get("refused")))
+    raise _refusal_for(str(answer.get("refused")), answer)
 
 
 @contextlib.contextmanager
@@ -517,8 +530,43 @@ def _run_reader(program: Path, descriptor: int, settings: dict[str, Any]) -> dic
     return answer
 
 
-def _refusal_for(rule: str) -> DomainError:
-    """The envelope's refusal for a rule the reader named. Unknown names are a server fault."""
+#: What a content refusal measured (``pdf_reader._content``).
+_CONTENT_MEASURES: Final[frozenset[str]] = frozenset({"drawing_elements", "characters"})
+
+
+def _content_details(answer: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The page and the numbers the reader gave with a content rule (`PDF-PAGE-CONTENT-01`).
+
+    They become the refusal's details, so the person uploading learns which page and by how
+    much. The reader is this product's own program: a content rule without them, or with
+    anything but the numbers it writes, is a server fault, not a refusal without a page.
+    """
+    if answer is not None:
+        page, measure, count, minimum, limit = (
+            answer.get(key) for key in ("page", "measure", "count", "count_is_minimum", "limit")
+        )
+        if (
+            type(page) is int and page >= 1
+            and measure in _CONTENT_MEASURES
+            and type(count) is int and count >= 0
+            and type(minimum) is bool
+            and type(limit) is int and limit >= 0
+        ):
+            return {
+                "page_number": page,
+                "content_measure": measure,
+                "content_count": count,
+                "content_count_is_minimum": minimum,
+                "content_limit": limit,
+            }
+    raise RuntimeError("the PDF reader process named a content rule without its numbers")
+
+
+def _refusal_for(rule: str, answer: Mapping[str, Any] | None = None) -> DomainError:
+    """The envelope's refusal for a rule the reader named. Unknown names are a server fault.
+
+    ``answer`` is the reader's whole answer; a content rule takes its page and numbers from it.
+    """
     if rule == "encrypted":
         return _encrypted()
     if rule == "unparseable":
@@ -545,6 +593,7 @@ def _refusal_for(rule: str) -> DomainError:
             "pdf_page_content",
             "A page of the document holds more drawing objects or text characters than the "
             "accepted envelope reads.",
+            **_content_details(answer),
         )
     if rule == "document_content":
         return _refuse(
@@ -552,6 +601,7 @@ def _refusal_for(rule: str) -> DomainError:
             "pdf_document_content",
             "The document holds more drawing objects or text characters in all than the "
             "accepted envelope reads.",
+            **_content_details(answer),
         )
     raise RuntimeError("the PDF reader process named no rule this envelope knows")
 
