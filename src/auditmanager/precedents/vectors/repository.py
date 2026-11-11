@@ -32,9 +32,9 @@ from auditmanager.precedents.vectors.window import DEFAULT_WINDOW, SETTING_NAME,
 from auditmanager.shared.identity import DecisionMemoryEmbeddingIntentId, VectorControlEventId
 
 __all__ = [
-    "ControlRow", "IntentText", "ImportOutcome", "add_intents_for_new_cases", "bump_attempts", "count_intents", "import_vectors",
-    "lock_control", "mark_poisoned", "pending_intent_texts", "read_control", "read_window_setting", "running_work", "set_paused",
-    "set_window_state",
+    "ControlRow", "IntentText", "ImportOutcome", "ProbeText", "add_intents_for_new_cases", "bump_attempts", "count_intents", "count_pending_work",
+    "import_vectors", "lock_control", "mark_poisoned", "mark_probes_poisoned", "pending_intent_texts", "pending_probe_texts", "read_control",
+    "read_window_setting", "running_work", "set_paused", "set_window_state",
 ]
 
 #: One tick adds at most this many intents; a backfill of many cases takes as many ticks as it needs.
@@ -121,12 +121,44 @@ _INSERT_EMBEDDING = text(
 _DONE = text(
     "UPDATE decision_memory_embedding_intent SET state = 'done', state_changed_at = clock_timestamp() WHERE intent_id = :intent_id"
 )
+#: The probes of the «Прецеденты» pass (`PREC-PASS`): the text of a published finding, queued beside the intents of the cases and encoded in the same
+#: rounds. A probe's text is rebuilt from its finding's canonical observation (``finding_observation_id``), never kept: a vector is a projection.
+#: ``LEFT JOIN`` so that a probe whose observation cannot be found is seen and poisoned, not left to wait for ever.
+_PROBES_PENDING = text(
+    "SELECT p.run_id, p.input_id, p.text_sha256, p.input_sha256, o.category, o.finding_text, o.recommendation_text "
+    "FROM decision_memory_probe p LEFT JOIN finding_observation o ON o.finding_observation_id = p.finding_observation_id "
+    "WHERE p.state = 'pending' AND p.view_kind = :view AND p.embedding_profile = :profile "
+    "ORDER BY p.created_at, p.run_id, p.input_id LIMIT :limit"
+)
+_PROBES_COUNT = text("SELECT count(*) FROM decision_memory_probe WHERE state = 'pending' AND embedding_profile = :profile")
+_POISON_PROBE = text(
+    "UPDATE decision_memory_probe SET state = 'poisoned', poison_reason = :reason, state_changed_at = clock_timestamp() "
+    "WHERE run_id = :run_id AND input_id = :input_id AND text_sha256 = :text_sha AND state = 'pending'"
+)
+_POISON_PROBES_BY_DIGEST = text(
+    "UPDATE decision_memory_probe SET state = 'poisoned', poison_reason = :reason, state_changed_at = clock_timestamp() "
+    "WHERE embedding_profile = :profile AND input_sha256 = :digest AND state = 'pending'"
+)
+_BUMP_PROBES = text(
+    "UPDATE decision_memory_probe SET attempts = attempts + 1, "
+    "state = CASE WHEN attempts + 1 >= :limit THEN 'poisoned' ELSE state END, "
+    "poison_reason = CASE WHEN attempts + 1 >= :limit THEN :reason ELSE poison_reason END, state_changed_at = clock_timestamp() "
+    "WHERE embedding_profile = :profile AND input_sha256 = :digest AND state = 'pending'"
+)
+_PROBES_DONE = text(
+    "UPDATE decision_memory_probe SET state = 'done', embedding = CAST(:vector AS vector), embedding_sha256 = :vector_digest, "
+    "model_revision = :model, state_changed_at = clock_timestamp() "
+    "WHERE embedding_profile = :profile AND input_sha256 = :digest AND state = 'pending'"
+)
 #: Work that holds the memory the encoder needs: a run's Job that is leased or running, and a comparison attempt that is. A Job in
 #: ``retry_wait`` or ``queued`` holds none (and while the window is open it is not issued either).
 _RUNNING_WORK = text(
     "SELECT (SELECT count(*) FROM job WHERE state IN ('leased', 'running')) "
     "+ (SELECT count(*) FROM comparison_work_attempt WHERE state IN ('created', 'leased', 'running'))"
 )
+
+
+POISON_FINDING_MISSING: Final[str] = "finding_missing"
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +240,13 @@ def count_intents(session: Session) -> tuple[int, int]:
     return int(row[0]), int(row[1])
 
 
+def count_pending_work(session: Session) -> int:
+    """Everything the encoder is waiting to be given: the pending intents of the cases and the pending probes of the findings. The window opens for
+    this, not for the intents alone (`PREC-PASS`): a finding whose vector is the only thing missing is work too."""
+    probes = int(session.execute(_PROBES_COUNT, {"profile": EMBEDDING_PROFILE}).scalar_one())
+    return count_intents(session)[0] + probes
+
+
 def add_intents_for_new_cases(session: Session, *, batch: int = BACKFILL_BATCH) -> int:
     """Queue ``finding_v1`` for the cases that have none (the backfill, and every case captured since): idempotent, at most ``batch`` a call.
 
@@ -256,6 +295,45 @@ def pending_intent_texts(session: Session, *, limit: int = EXPORT_LIMIT) -> list
     return found
 
 
+@dataclass(frozen=True, slots=True)
+class ProbeText:
+    """A pending probe with the text its view builds now (``None`` when its finding's observation cannot be found)."""
+
+    run_id: str
+    input_id: str
+    text_sha256: str
+    input_sha256: str
+    text: str | None
+
+    @property
+    def matches(self) -> bool:
+        return self.text is not None and input_sha256(self.text) == self.input_sha256
+
+
+def pending_probe_texts(session: Session, *, limit: int = EXPORT_LIMIT) -> list[ProbeText]:
+    """The oldest pending probes with the text of each, rebuilt from the finding's canonical observation."""
+    rows = session.execute(_PROBES_PENDING, {"view": VIEW_FINDING, "profile": EMBEDDING_PROFILE, "limit": limit}).all()
+    found: list[ProbeText] = []
+    for run_id, input_id, text_sha, digest, category, finding_text, recommendation_text in rows:
+        view: str | None = None
+        if category is not None:
+            try:
+                view = build_finding_view(category=str(category), finding_text=str(finding_text), recommendation_text=str(recommendation_text))
+            except ValueError:
+                view = None
+        found.append(ProbeText(str(run_id), str(input_id), str(text_sha), str(digest), view))
+    return found
+
+
+def mark_probes_poisoned(session: Session, *, probes: Iterable[ProbeText], reason: str) -> int:
+    """``poisoned`` with a reason: the finding stays without an answer, and says why. Only a pending probe moves."""
+    moved = 0
+    for probe in probes:
+        moved += int(session.execute(_POISON_PROBE, {
+            "reason": reason, "run_id": probe.run_id, "input_id": probe.input_id, "text_sha": probe.text_sha256}).rowcount or 0)
+    return moved
+
+
 def mark_poisoned(session: Session, *, intent_ids: Iterable[str], reason: str) -> int:
     """``poisoned`` with a reason: visible to the administrator, never retried. Only a pending intent moves."""
     ids = list(intent_ids)
@@ -267,6 +345,7 @@ def mark_poisoned(session: Session, *, intent_ids: Iterable[str], reason: str) -
 def bump_attempts(session: Session, *, digest: str, reason: str = POISON_ATTEMPTS) -> None:
     """A failed attempt for every pending intent of a digest; the fifth poisons it (the CHECK of the column ends at 5)."""
     session.execute(_BUMP, {"profile": EMBEDDING_PROFILE, "digest": digest, "limit": MAX_ATTEMPTS, "reason": reason})
+    session.execute(_BUMP_PROBES, {"profile": EMBEDDING_PROFILE, "digest": digest, "limit": MAX_ATTEMPTS, "reason": reason})
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,6 +357,9 @@ class ImportOutcome:
     retried: int = 0
     missing: int = 0
     skipped_forgotten: int = 0
+    #: The probes of findings (`PREC-PASS`) given a vector, and poisoned for their length, in this round.
+    probes_done: int = 0
+    probes_poisoned: int = 0
 
 
 def import_vectors(
@@ -289,10 +371,19 @@ def import_vectors(
     the same text: the same input has the same vector). A row is written under a savepoint: a vector the database refuses (the unit-norm CHECK
     is the database's own, and a case forgotten between the export and now is refused by the forget guard) counts against that intent and
     never voids the others."""
-    done = poisoned = retried = missing_count = forgotten = 0
+    done = poisoned = retried = missing_count = forgotten = probes_done = probes_poisoned = 0
     for vector in vectors:
-        targets = session.execute(_INTENTS_OF_DIGEST, {"profile": EMBEDDING_PROFILE, "digest": vector.input_sha256}).all()
         literal = pgvector_literal(vector.values)
+        # The probes of findings with this text: the same input has the same vector, whoever asked for it. A row the database refuses is a retry, as below.
+        try:
+            with session.begin_nested():
+                probes_done += int(session.execute(_PROBES_DONE, {
+                    "vector": literal, "vector_digest": vector.embedding_sha256, "model": MODEL_REVISION, "profile": EMBEDDING_PROFILE,
+                    "digest": vector.input_sha256}).rowcount or 0)
+        except Exception:  # noqa: BLE001 - a vector the database refuses counts against its probes and never voids the others
+            retried += 1
+            session.execute(_BUMP_PROBES, {"profile": EMBEDDING_PROFILE, "digest": vector.input_sha256, "limit": MAX_ATTEMPTS, "reason": POISON_ATTEMPTS})
+        targets = session.execute(_INTENTS_OF_DIGEST, {"profile": EMBEDDING_PROFILE, "digest": vector.input_sha256}).all()
         for intent_id, case_id, revision, view_kind in targets:
             try:
                 with session.begin_nested():
@@ -312,10 +403,13 @@ def import_vectors(
         poisoned += int(session.execute(_POISON_BY_DIGEST, {
             "profile": EMBEDDING_PROFILE, "digest": digest, "reason": POISON_TOKEN_LIMIT,
         }).rowcount or 0)
+        probes_poisoned += int(session.execute(_POISON_PROBES_BY_DIGEST, {
+            "profile": EMBEDDING_PROFILE, "digest": digest, "reason": POISON_TOKEN_LIMIT,
+        }).rowcount or 0)
     for digest in rejected:
         retried += 1
         bump_attempts(session, digest=digest)
     for digest in missing:
         missing_count += 1
         bump_attempts(session, digest=digest)
-    return ImportOutcome(done, poisoned, retried, missing_count, forgotten)
+    return ImportOutcome(done, poisoned, retried, missing_count, forgotten, probes_done, probes_poisoned)
