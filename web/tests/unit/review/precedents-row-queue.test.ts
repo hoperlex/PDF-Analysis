@@ -76,7 +76,7 @@ describe('the label in the row', () => {
 
   it('keeps a row’s two controls and adds no third', () => {
     const markup = reviewPage({ findings: [A], roles: EXPERT, precedents });
-    const row = markup.slice(markup.indexOf('<li'), markup.indexOf('</li>'));
+    const row = markup.match(/<li[^>]*data-verdict-bucket[\s\S]*?<\/li>/)?.[0] ?? '';
     expect((row.match(/<button/g) ?? []).length).toBe(3); // the row itself, ✓ and ✕: the label is not a control
     expect(row).not.toMatch(/<button[^>]*>[^<]*(<[^>]+>[^<]*)*Обычно отклоняют/);
   });

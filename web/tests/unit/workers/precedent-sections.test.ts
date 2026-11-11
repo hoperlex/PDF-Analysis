@@ -76,7 +76,8 @@ describe('on the advanced page', () => {
 
   it('opens the section the address named and draws the sections for an administrator', () => {
     const markup = page(['admin'], true);
-    expect(markup).toMatch(/<details[^>]*data-advanced-section="precedents"[^>]*\sopen=""/);
+    const opened = [...markup.matchAll(/<details[^>]*data-advanced-section="([a-z]+)"[^>]*>/g)].filter((entry) => (entry[0] ?? '').includes(' open=""')).map((entry) => entry[1]);
+    expect(opened).toEqual(['precedents']);
     expect(markup).toContain('Прецеденты и векторы');
     expect(markup).toContain('data-precedent-section="AR"');
   });

@@ -40,7 +40,7 @@ export function PrecedentsCardView({ data }: { readonly data: FindingPrecedents 
   ].filter((part) => part !== null);
   return (
     <details className={`am-note ${styles.card}`} data-precedents-card={data.finding_uid} data-precedent-label={data.label?.label}>
-      <summary className={styles.summary}>
+      <summary>
         <strong>Прецеденты</strong>
         {caption === null ? null : <span className={styles.caption}> · {caption}</span>}
         {counts.length === 0 ? null : <span className={styles.counts}> · {counts.join(' · ')}</span>}
@@ -94,5 +94,6 @@ export function PrecedentsCardView({ data }: { readonly data: FindingPrecedents 
 /** The card of the open finding. `enabled` is the session's right to read the precedents; without it nothing is asked. */
 export function PrecedentsCard({ findingUid, enabled }: { readonly findingUid: string; readonly enabled: boolean }) {
   const read = useFindingPrecedents(findingUid, enabled);
-  return read.data === undefined ? null : <PrecedentsCardView key={findingUid} data={read.data} />;
+  // A disabled read may still hold an answer in the cache; a session that may not read the precedents is shown none of it.
+  return !enabled || read.data === undefined ? null : <PrecedentsCardView key={findingUid} data={read.data} />;
 }

@@ -6,10 +6,6 @@
   min-width: 0;
 }
 
-.summary {
-  color: var(--am-ink);
-}
-
 .caption {
   font-weight: 600;
 }

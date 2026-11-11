@@ -216,11 +216,6 @@
   min-width: 0;
 }
 
-.queueSummary {
-  color: var(--am-ink);
-  font-weight: 600;
-}
-
 .queueHint {
   margin: var(--am-gap-xs) 0;
   font-size: var(--am-text-xs);

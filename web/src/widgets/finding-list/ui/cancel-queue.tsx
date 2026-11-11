@@ -30,7 +30,7 @@ export function CancelQueue({ items, onOpen }: CancelQueueProps) {
   if (items.length === 0) return null;
   return (
     <details className={`am-note ${styles.queue}`} data-cancel-queue={items.length}>
-      <summary className={styles.queueSummary}>Рекомендовано снять · {items.length}</summary>
+      <summary><strong>Рекомендовано снять · {items.length}</strong></summary>
       <p className={styles.queueHint}>Эксперты почти всегда отклоняли такие находки, и критик их разобрал. Это справка, решаете вы.</p>
       <ul className={styles.queueList}>
         {items.map(({ finding, label }) => (
