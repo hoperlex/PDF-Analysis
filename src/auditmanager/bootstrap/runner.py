@@ -128,7 +128,23 @@ class RunnerAdapter(_SessionHolder):
             "user_text": task.user_text, "output_schema": dict(task.output_schema),
             **({"images": list(task.images)} if task.images else {}),
             **self._host_members(task),
+            # `CTX-STAND`: a critic task carries the descriptor of the reference data it may ask for, one entry per candidate text
+            # (`{input_id, text_sha256, section}`); the member is absent for any other task, never an empty list.
+            **({"context_request": [dict(entry) for entry in task.context_request]} if task.context_request else {}),
         })
+
+    def get_task_context(self, *, runner: RunnerIdentity, task_id: str, kind: str) -> models.ExecutorTaskContext:
+        """`getExecutorTaskContext` (`CTX-STAND`, ``ExecutorTaskContextPort``): the reference data of a task this token holds the live claim of.
+
+        The stand's source is the one ``executors.public.get_task_context`` defaults to, which answers ``status: unavailable, reason: until_move``
+        while the night encoder is the only one (`ADR-0029` temporary decision 2). When the encoder moves, a source that searches is handed here as
+        ``source=``; the policy and the consent stay as they are. The journal row and the remembered block are written in this transaction."""
+        from auditmanager.executors.public import get_task_context
+
+        def work(session: Session) -> models.ExecutorTaskContext:
+            answer = get_task_context(session, self._principal(runner), task_id, kind=kind)
+            return models.ExecutorTaskContext.model_validate(answer.wire())
+        return self._write(work)
 
     @staticmethod
     def _host_members(task: Any) -> dict[str, Any]:

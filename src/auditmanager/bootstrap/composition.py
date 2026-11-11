@@ -107,12 +107,15 @@ from auditmanager.decisions.public import register_decision_recorded
 from auditmanager.ingest.comparison_batch.public import BATCH_HANDLER_FACTORIES, ComparisonBatchService
 from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ComparisonVersionOrderService
 from auditmanager.jobs.public import JobRepository
-from auditmanager.precedents.public import Exchange, PrecedentSettingService, VectorControlService, VectorWindowPass
+from auditmanager.precedents.public import (
+    Exchange, PrecedentPass, PrecedentService, PrecedentSettingService, VectorControlService, VectorWindowPass,
+)
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import (
     DurableCarrier,
     ReclaimingCarrier,
+    read_extended_review,
     run_to_terminal,
 )
 from auditmanager.sections.public import SECTION_CODES, section_names
@@ -147,6 +150,18 @@ def _passes(*runners: Callable[[], int]) -> Callable[[], int]:
         return handled
 
     return one_pass
+
+
+def _extended_review_reader(sessions: Any, blob_store: Any) -> Callable[[str], Mapping[str, Any] | None]:
+    """The saved extended review of a run, read through its custody-checked reader over this process's stores (``runs.public.read_extended_review``).
+
+    The «Прецеденты» context reads no artifact store of its own: its pass (the worker's) and its two reads (the API's) are handed this one callable, so the
+    critic's part of a label and the card's «Возможные нормы» come from the very document the run's page shows (`PREC-PASS`, `CRIT-CAPTURE-01` part D)."""
+
+    def read(run_id: str) -> Mapping[str, Any] | None:
+        return read_extended_review(sessions, blob_store, run_id)
+
+    return read
 
 
 def summary_model_for(provider_mode: str) -> Any:
@@ -423,7 +438,12 @@ def build_worker_runtime(
     # `EMBED-01`, `CRIT-CAPTURE-01` part C (ADR-0029 decision 8): the night encoder's window rides the same pass, when this process is set up for it
     # (`AUDITMANAGER_EMBED_DIR` names the directory it shares with the host's timer). Without it nothing is added, and the stand never opens a window.
     exchange = Exchange.from_environment(env)
-    vector_passes = () if exchange is None else (VectorWindowPass(sessions, exchange, after_import=None),)
+    # `CRIT-CAPTURE-01` part D (`PREC-PASS`, ADR-0029 decisions 4 to 6): the «Прецеденты» pass. It is OUTSIDE the vector branch on purpose: it queues the
+    # probes (the text of each finding, for the encoder) and it is what makes a finished run wait for its vectors, so it must run in a process that has no
+    # exchange directory too -- the window that encodes them may live in another one. When the window has stored a round, it hands the pass its hook, and the
+    # pass computes what waited and, nightly, the fresh runs again.
+    precedent_pass = PrecedentPass(sessions, read_extended_review=_extended_review_reader(sessions, store))
+    vector_passes = () if exchange is None else (VectorWindowPass(sessions, exchange, after_import=precedent_pass.after_import),)
 
     return WorkerRuntime(
         settings=resolved,
@@ -441,6 +461,7 @@ def build_worker_runtime(
         probe_runner=_passes(
             probe_runner, install_runner,
             MemoryCaptureSweep(sessions, MemoryCaptureAssembler(geometry=BlockAdapter(sessions, blob_store=store))),
+            precedent_pass,
             *vector_passes,
         ),
         comparison_work=build_comparison_work(
@@ -630,6 +651,9 @@ def build_application(
     # process-wide; a process that decides without it captures nothing, which the worker's sweep repairs and guard G1 makes visible.
     register_decision_recorded(MemoryCaptureAssembler(geometry=block_adapter))
 
+    # `EXEC-PULL-01` and `CTX-STAND`: ONE adapter answers the pull channel and the reference data of a task (`runner=` and `task_context=` below).
+    runner_adapter = RunnerAdapter(sessions, blob_store=store)
+
     router = build_router(
         projects=ProjectAdapter(ingest, sessions),
         documents=DocumentAdapter(ingest, sessions),
@@ -776,7 +800,7 @@ def build_application(
         executors=ExecutorAdapter(sessions, ring=resolved.secrets_public_ring),
         # `EXEC-PULL-01`. The pull channel: runner tokens, and the four operations a runner
         # calls with one. It also authenticates the token (the seam asks this port).
-        runner=RunnerAdapter(sessions, blob_store=store),
+        runner=runner_adapter,
         # `EXEC2-ENROLL-01`. The universal agent: the enrollment grant and its exchange, the agent's health,
         # the package route, the API side of an install over SSH and the integration-authorisation mark. It
         # seals an install session's key to the same public ring and takes the stand's configured public
@@ -801,6 +825,11 @@ def build_application(
         # own session over the same factory and answer in the contract's shape; without them the two surfaces keep the sealed `503`.
         vector_control=VectorControlService(sessions),
         precedent_settings=PrecedentSettingService(sessions),
+        # `PREC-PASS` (`getRunPrecedents`, `getFindingPrecedents`): the labels and the card, over the same sessions and the saved extended review of the
+        # same store the pass reads (the card's «Возможные нормы» come from it).
+        precedents=PrecedentService(sessions, read_extended_review=_extended_review_reader(sessions, store)),
+        # `CTX-STAND` (`getExecutorTaskContext`): the same runner adapter that serves the pull channel answers the agent's ask for reference data.
+        task_context=runner_adapter,
     )
     return Application(
         router=router,
