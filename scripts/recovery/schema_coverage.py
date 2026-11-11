@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0065_norm_crop_render"
+HEAD = "0066_run_deletion"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -104,6 +104,8 @@ TABLES = frozenset((
     "finding_block_evidence", "precedent_setting_event", "vector_control", "vector_control_event",
     # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page, a derived row of a custody binding (the norm side, KEEP).
     "norm_crop_render",
+    # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a run an expert deleted from the run lists (PRODUCT: it references `audit_run`).
+    "audit_run_deletion",
 ))
 
 #: Views at ``HEAD``. A view carries no rows; it is restored from the dump and checked by name.
@@ -472,6 +474,8 @@ TRIGGERS = (
     ("vector_control_event", "trg_vector_control_event_number", "am_check_gapless_number", 7),
     # `0065_norm_crop_render` (`CRIT-SEAL-52`): a render is immutable (27 = ROW | BEFORE | DELETE | UPDATE).
     ("norm_crop_render", "trg_norm_crop_render_immutable", "am_immutable_row", 27),
+    # `0066_run_deletion` (`RUN-DELETE-01`): a tombstone is immutable (27 = ROW | BEFORE | DELETE | UPDATE); there is no restore.
+    ("audit_run_deletion", "trg_audit_run_deletion_immutable", "am_immutable_row", 27),
 )
 
 #: The constraint triggers that are ``DEFERRABLE INITIALLY DEFERRED``: a parent row must

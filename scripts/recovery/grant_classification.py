@@ -224,6 +224,9 @@ APPEND_ONLY = frozenset((
     "executor_task_context_delivery", "finding_block_evidence", "precedent_setting_event", "vector_control_event",
     # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): a norm page's render is `am_immutable_row` and only inserted into (once, by `M7-NORM-PNG`).
     "norm_crop_render",
+    # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a deleted run is `am_immutable_row` and only inserted into, by `delete_audit_run`
+    # (`runs/repository.py`); there is no restore.
+    "audit_run_deletion",
 ))
 
 #: The ``append-only`` tables that no trigger protects, and the evidence that the code only inserts.

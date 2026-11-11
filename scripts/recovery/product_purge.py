@@ -238,6 +238,9 @@ PRODUCT_TABLES = frozenset((
     # finding, and a finding's block evidence belong to a run and its findings: each references `audit_run`, `finding` or `finding_observation`, so
     # the project erase's foreign-key closure reaches them. The advice and the block evidence are immutable rows, so they leave in the TRUNCATE.
     "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "finding_block_evidence",
+    # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a run deleted from the run lists references `audit_run` (PRODUCT) and is an immutable row,
+    # so it leaves in the same TRUNCATE; the project erase's foreign-key closure reaches it through `audit_run`.
+    "audit_run_deletion",
 ))
 
 #: ``audit_event.event_type`` families. ``norm_custody.`` is the custody ledger's, ``executor.``
@@ -306,6 +309,9 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "apply_stage_card_verdicts",
     "create_stage_review_card",
     "append_decision", "approve_sheet_pairing", "cancel_audit_run", "carry_over_decision",
+    # `RUN-DELETE-01` (contract 1.53.0): the receipt of a run deleted from the run lists is about a project's runs, a product command like
+    # `cancel_audit_run`; ``audit_run_deletion.command_id`` references it, so it is deleted only after that table is truncated.
+    "delete_audit_run",
     "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
     "set_worker_intake",
