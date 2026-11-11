@@ -433,12 +433,17 @@ from sqlalchemy import Engine, text
 #: (to 1875), constraints +11 (eight checks, two foreign keys -- the binding and the Blob -- and the primary key, to 2266), indexes +2 (the primary key
 #: and the Blob lookup, to 528), triggers +1 (``am_immutable_row``, to 292); functions, views, extensions, sequences, policies and the state topology
 #: are byte-identical to the ``0064`` seal (their digests are unchanged).
+#: Resealed 2026-11-11 for ``0066_run_deletion`` (`RUN-DELETE-01`), chained after ``0065``, from this test's own observed output on a throwaway PostgreSQL
+#: (the project image, container ``rd01-pg``) migrated fresh to ``0066``: relations +1 (``audit_run_deletion``, to 179), columns +4 (to 1879), constraints +8
+#: (three checks, three foreign keys -- the run, the account and the command receipt --, the primary key and the unique constraint of the receipt, to 2274),
+#: indexes +2 (the primary key and the unique constraint, to 530), triggers +1 (``am_immutable_row``, to 293); functions, views, extensions, sequences,
+#: policies and the state topology are byte-identical to the ``0065`` seal (their digests are unchanged).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1875, "84ab79b8d5a58f329273e8db3953b13fc0af856d72c0cd78673749137bbfca3e"),
-    "relations": (178, "5a0c9da910039ce0904f0e4134e13a8ccb7d6f44090723735826e51b8282045e"),
-    "constraints": (2266, "6a26fbc16ff739ada26560f35a20657601ad47ead6e564fc068169e73fed4bd4"),
-    "indexes": (528, "bb7fd7298a058cf3fa758693ec660249febe1468a6008ac4502b04311b8c9aa0"),
-    "triggers": (292, "1019aaddb6c029f41393c11fd0938b958d1cde95a2b21c2f5226e40a5b8740d0"),
+    "columns": (1879, "5cf2c6b3403865b103eebf4d97c20801aba8012388b7c30150ae597d0488447d"),
+    "relations": (179, "28bb620407d33ce9caece6036f9d583776f61abb4d36e5510814f289b21a2eb1"),
+    "constraints": (2274, "6eafea39228aa0790a23d2368eab6f84e03699c3ca98fabf35f531841de02949"),
+    "indexes": (530, "99986131949d6877398d9a0e49b7a5b3c3b3bd4f77c8758d04876ac2513c0dde"),
+    "triggers": (293, "10ea2fd8762dec9ac76db8bccca89f447ba930c9cd838586e037fca1212cbf92"),
     "functions": (84, "ff83db6e92e6dcfbee71e81d6c1b7af0c3c50b88fdcdfd25d5905d648bf62f14"),
     "views": (6, "0bd9b7927321000af88e44410f7f431c918230428ac258d472d294d62d08043e"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

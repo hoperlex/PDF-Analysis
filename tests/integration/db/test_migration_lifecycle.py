@@ -176,6 +176,8 @@ EXPECTED_TABLES = {
     "executor_task_context_delivery",
     # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page, a derived row of a custody binding.
     "norm_crop_render",
+    # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a run an expert deleted from the run lists.
+    "audit_run_deletion",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
     "norm_current_snapshot",
     "norm_current_snapshot_event",

@@ -557,7 +557,9 @@ SEQUENCES = {
 #: (measured on a throwaway database at ``0064``, 2026-11-11).
 #: `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one table: eight checks, two foreign keys (the custody binding and the Blob) and the primary key:
 #: c 1547, f 407, p 164, t 9, u 139 (measured on a throwaway database at ``0065``, 2026-11-11).
-CONSTRAINT_COUNTS = {"c": 1547, "f": 407, "p": 164, "t": 9, "u": 139}
+#: `0066_run_deletion` (`RUN-DELETE-01`) adds one table: three checks (the run, the account and the command identity), three foreign keys (the run, the account and
+#: the command receipt), the primary key and the unique constraint of the receipt: c 1550, f 410, p 165, t 9, u 140 (measured on a throwaway database at ``0066``, 2026-11-11).
+CONSTRAINT_COUNTS = {"c": 1550, "f": 410, "p": 165, "t": 9, "u": 140}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -578,7 +580,8 @@ CONSTRAINT_COUNTS = {"c": 1547, "f": 407, "p": 164, "t": 9, "u": 139}
 #: `0064_precedents_seal` adds 24 (twelve primary keys, four unique constraints and eight lookups and partial indexes): 526 (measured on a throwaway
 #: database at ``0064``, 2026-11-11).
 #: `0065_norm_crop_render` adds two (its primary key and the Blob lookup): 528 (measured on a throwaway database at ``0065``, 2026-11-11).
-INDEX_COUNT = 528
+#: `0066_run_deletion` adds two (its primary key and the unique receipt): 530 (measured on a throwaway database at ``0066``, 2026-11-11).
+INDEX_COUNT = 530
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

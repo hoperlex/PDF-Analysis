@@ -148,6 +148,8 @@ IMMUTABLE_TABLES = {
     "vector_control",
     # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page is a derived fact of a custody binding, written once.
     "norm_crop_render",
+    # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a deleted run is written once; there is no restore.
+    "audit_run_deletion",
 }
 
 
@@ -461,6 +463,8 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         # `CLASSIFICATION-CORRECTION-01`, migration 0028: the expert who corrected a version's
         # classification.
         "corrected_by_user_uid": "usr",
+        # `RUN-DELETE-01`, migration 0066: the account that deleted a run from the run lists.
+        "deleted_by_user_uid": "usr",
         # `W60-OPT-PROPOSALS-01` phase B contracted the three proposal identities; the two
         # position columns of a proposal hold ``prp``.
         "optimisation_pass_id": "opp",

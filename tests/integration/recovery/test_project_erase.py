@@ -129,6 +129,8 @@ SLICES: dict[str, str] = {
     "audit_run_cell_binding": f"run_id IN ({_RUNS})",
     "finding_block_evidence": f"finding_observation_id IN ({_OBSERVATIONS})",
     "decision_memory_probe": f"run_id IN ({_RUNS})",
+    # `0066`: the tombstone of a run deleted from the run lists (`RUN-DELETE-01`).
+    "audit_run_deletion": f"run_id IN ({_RUNS})",
     "decision_memory_precedent_run": f"run_id IN ({_RUNS})",
     "decision_memory_precedent_advice": f"run_id IN ({_RUNS})",
     "expert_decision_event": f"finding_uid IN ({_FINDINGS})",
@@ -458,7 +460,8 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # `0042_comparison_stage_review`: the twelve tables of the stage AI review, repairs, expert cards and batches join
     # it (76 -> 88); only the batch references the project directly. `0053`..`0055` add the document's tags, the
     # finding's execution status and the assignment's planned dates (88 -> 91); none references the project directly.
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 94
+    # `0066_run_deletion` adds the tombstone of a deleted run (94 -> 95); it references `audit_run`, not the project.
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 95
     assert set(closure.direct) == {
         "audit_run", "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question",
         "comparison_ai_sheet_item", "comparison_launch_queue", "comparison_matrix", "comparison_matrix_edit",
@@ -480,6 +483,8 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
         "stage_link_revision", "stage_chain_run",
         # `0042_comparison_stage_review`: a batch, a repair event and a card verdict carry the receipt of their write.
         "stage_chain_batch", "stage_link_repair_event", "stage_card_verdict",
+        # `0066_run_deletion` (`RUN-DELETE-01`): a tombstone carries the receipt of the `deleteRun` call that wrote it.
+        "audit_run_deletion",
     }
 
 
