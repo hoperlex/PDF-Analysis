@@ -174,6 +174,8 @@ EXPECTED_TABLES = {
     "vector_control",
     "vector_control_event",
     "executor_task_context_delivery",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page, a derived row of a custody binding.
+    "norm_crop_render",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
     "norm_current_snapshot",
     "norm_current_snapshot_event",

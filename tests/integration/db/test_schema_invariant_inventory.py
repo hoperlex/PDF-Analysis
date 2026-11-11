@@ -428,12 +428,17 @@ from sqlalchemy import Engine, text
 #: ``finding_observation`` are redefined in place, which moves the digest), indexes +24 (twelve primary keys, four unique constraints and eight
 #: lookups, to 526), triggers +21 (to 291), functions +1 (``am_guard_decision_memory_forgotten_insert``, to 84); views, extensions, sequences,
 #: policies and the state topology are byte-identical to the ``0063`` seal.
+#: Resealed 2026-11-11 for ``0065_norm_crop_render`` (`CRIT-SEAL-52`, `D-681`), chained after ``0064``, from this test's own observed output on a
+#: throwaway PostgreSQL (the project image, container ``am-prec-s52-pg``) migrated fresh to ``0065``: relations +1 (``norm_crop_render``, to 178), columns +9
+#: (to 1875), constraints +11 (eight checks, two foreign keys -- the binding and the Blob -- and the primary key, to 2266), indexes +2 (the primary key
+#: and the Blob lookup, to 528), triggers +1 (``am_immutable_row``, to 292); functions, views, extensions, sequences, policies and the state topology
+#: are byte-identical to the ``0064`` seal (their digests are unchanged).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1866, "752546944ae225b9e49f95fb3de794bd348383a105b4101b2f9ec858639744aa"),
-    "relations": (177, "911e57847b623bc2b50d459ca7fe51e51f71277d467390c0c56c10983f0e1237"),
-    "constraints": (2255, "74e23c7f0069094fc07a1cba5055554c5e4e70af270e0542cbc0d38060b882be"),
-    "indexes": (526, "ab10cb3dd780ae965b4f399ffb02ac88d065a293862a6f6eaed05315d5260b2d"),
-    "triggers": (291, "687080cd904457c08c8780b58a5563ae94c9173248d2af1fdb324fa6bfb5dab8"),
+    "columns": (1875, "84ab79b8d5a58f329273e8db3953b13fc0af856d72c0cd78673749137bbfca3e"),
+    "relations": (178, "5a0c9da910039ce0904f0e4134e13a8ccb7d6f44090723735826e51b8282045e"),
+    "constraints": (2266, "6a26fbc16ff739ada26560f35a20657601ad47ead6e564fc068169e73fed4bd4"),
+    "indexes": (528, "bb7fd7298a058cf3fa758693ec660249febe1468a6008ac4502b04311b8c9aa0"),
+    "triggers": (292, "1019aaddb6c029f41393c11fd0938b958d1cde95a2b21c2f5226e40a5b8740d0"),
     "functions": (84, "ff83db6e92e6dcfbee71e81d6c1b7af0c3c50b88fdcdfd25d5905d648bf62f14"),
     "views": (6, "0bd9b7927321000af88e44410f7f431c918230428ac258d472d294d62d08043e"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

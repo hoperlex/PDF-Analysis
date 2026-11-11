@@ -72,7 +72,7 @@ describe('the step of a repeated Run', () => {
 
 describe('what sends the person back to a fresh estimate', () => {
   const refusal = (status: number, code: 'conflict' | 'analysis_input_invalid', details: Record<string, string>) =>
-    new ApiError(status, { contract_version: '1.51.0', error_code: code, message: 'refused', correlation_id: 'cid-reaudit', retryable: false, details }, 'cid-reaudit');
+    new ApiError(status, { contract_version: '1.52.0', error_code: code, message: 'refused', correlation_id: 'cid-reaudit', retryable: false, details }, 'cid-reaudit');
 
   it('is a stale digest or a changed binding, and nothing else', () => {
     expect(reauditEstimateChanged(refusal(409, 'conflict', { conflict_reason: ESTIMATE_STALE_REASON }))).toBe(true);

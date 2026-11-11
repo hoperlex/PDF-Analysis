@@ -222,6 +222,8 @@ APPEND_ONLY = frozenset((
     # control journal and the context-delivery journal are `am_immutable_row` or `am_append_only`. Only inserted into.
     "decision_memory_block_evidence", "decision_memory_comment", "decision_memory_embedding", "decision_memory_precedent_advice",
     "executor_task_context_delivery", "finding_block_evidence", "precedent_setting_event", "vector_control_event",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): a norm page's render is `am_immutable_row` and only inserted into (once, by `M7-NORM-PNG`).
+    "norm_crop_render",
 ))
 
 #: The ``append-only`` tables that no trigger protects, and the evidence that the code only inserts.
@@ -261,10 +263,13 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # `0064_precedents_seal` (`CRIT-SEAL-50`): every table of the Precedents storage, until the lane that writes it does: `MEM-COMMENTS-01` the
     # comments, `CRIT-CAPTURE-01` the label columns, `EMBED-01` the encoder's queue, the vectors and the control, `PREC-PASS` the probe, the pass
     # and its advice, `F8-PUBLISH` the block evidence, `PREC-WEB` the settings and `CTX-STAND` the delivery journal. `vector_control` is seeded
-    # by the migration.
-    "decision_memory_block_evidence", "decision_memory_comment", "decision_memory_embedding", "decision_memory_embedding_intent",
+    # by the migration. Seven of the twelve left the set when their lanes merged (found red on `823c1a738` by `CRIT-SEAL-52`: the scan sees a
+    # statement for each): the memory's comments, block evidence and vectors, the encoder's queue, a finding's block evidence and the control of
+    # the vectors with its journal. Five remain: the probe, the pass with its advice, the settings journal and the delivery journal.
     "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "executor_task_context_delivery",
-    "finding_block_evidence", "precedent_setting_event", "vector_control", "vector_control_event",
+    "precedent_setting_event",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`): until `M7-NORM-PNG` renders and records the first page.
+    "norm_crop_render",
 ))
 
 #: Writes whose table name is not a literal in the SQL text, so :func:`observed_statements` cannot read it from the string: an f-string

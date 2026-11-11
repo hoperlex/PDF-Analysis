@@ -112,7 +112,10 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
         <= tool.PRODUCT_TABLES
     assert not {"decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "finding_block_evidence"} \
         & tool.KEEP_TABLES
-    assert len(tool.PRODUCT_TABLES) == 95 and len(tool.KEEP_TABLES) == 66 and len(tool.MIXED_TABLES) == 3
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`): a norm page's render is the corpus's own (its name starts with ``norm``, so it is in
+    # `EXEMPT_FROM_FINGERPRINT`, and so KEEP here): KEEP 66 -> 67, PRODUCT unchanged.
+    assert "norm_crop_render" in tool.KEEP_NORM_TABLES and "norm_crop_render" not in tool.KEEP_MEMORY_TABLES | tool.PRODUCT_TABLES
+    assert len(tool.PRODUCT_TABLES) == 95 and len(tool.KEEP_TABLES) == 67 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT

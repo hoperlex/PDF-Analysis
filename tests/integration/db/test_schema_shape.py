@@ -146,6 +146,8 @@ IMMUTABLE_TABLES = {
     # its DELETE only: its key is frozen and its state moves).
     "decision_memory_precedent_advice", "finding_block_evidence", "precedent_setting_event", "executor_task_context_delivery",
     "vector_control",
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page is a derived fact of a custody binding, written once.
+    "norm_crop_render",
 }
 
 

@@ -18,7 +18,7 @@ additive review read, with the same effect on the catalogues. `AR-V3-BETA-RUN-ST
 additive API stage identity; the domain catalogues themselves add no code,
 identity or machine. `AR-V3-BETA-SIX-RUN-02` added `ar_v3_run_group_id` (`arg`)
 as a distinct opaque identity at revision 20 and removed it, with the conflict reasons of the beta, at revision 67
-(`AR-V3-BE-RM-01`, `R-154a`, contract 1.50.0); `CRIT-SEAL-50` added `dmk`, `dmi`, `vce` and `etd` at revision 68 (contract 1.51.0). Revision 19 was the
+(`AR-V3-BE-RM-01`, `R-154a`, contract 1.50.0); `CRIT-SEAL-50` added `dmk`, `dmi`, `vce` and `etd` at revision 68 (contract 1.51.0). `CRIT-SEAL-52` moved the catalogs to revision 69 (contract 1.52.0) and added no identity, code or machine. Revision 19 was the
 `1.1.0` seal after `EXEC-IMAGE-DELIVERY-01`. Revision 13 added the fail-closed `model_identity_mismatch` code for the recorded-only
 W56a seal; revisions 14 to 17 moved the identity register with the later waves; revision 18
 (`BETA-CONTRACT-SEAL-01` phase A, `D-179`) added the two codes

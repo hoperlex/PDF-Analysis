@@ -44,6 +44,8 @@ _CATALOG.extend([
 ])
 # `0059_decision_memory` (`ADR-0027`): a crop image the decision memory references.
 _CATALOG.append({"schema_name": "public", "table_name": "decision_memory_crop", "column_name": "blob_id"})
+# `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page.
+_CATALOG.append({"schema_name": "public", "table_name": "norm_crop_render", "column_name": "blob_id"})
 
 
 class _Rows:
@@ -95,6 +97,8 @@ class _Session:
             key = "stage_candidates"
         elif "FROM public.decision_memory_crop" in sql:
             key = "memory_crops"
+        elif "FROM public.norm_crop_render" in sql:
+            key = "norm_renders"
         else:
             raise AssertionError(f"unexpected SQL: {sql}")
         return _Rows(self.data[key])
@@ -145,6 +149,10 @@ def _data() -> dict[str, list[dict[str, object]]]:
         "memory_crops": [{
             "owner_id": "dmx_one", "blob_id": blob_id, "sha256": sha, "size_bytes": 13, "media_type": "application/pdf",
         }],
+        # `0065_norm_crop_render`: the render of a norm page, a derived row of a custody binding (the fixture's one Blob stands in for the PNG).
+        "norm_renders": [{
+            "owner_id": "nbd_one", "blob_id": blob_id, "sha256": sha, "size_bytes": 13, "media_type": "application/pdf",
+        }],
     }
 
 
@@ -182,17 +190,17 @@ def test_healthy_database_returns_all_available_blob_facts_and_reads_only() -> N
         ("norm_retrieval_set", 0), ("price_list_revision", 1),
         ("comparison_upload_file", 1), ("comparison_page_profile", 1), ("comparison_sheet_pair_result", 1),
         ("comparison_report_artifact", 1),
-        ("stage_upload_file", 1), ("stage_upload_candidate", 1), ("decision_memory_crop", 1),
+        ("stage_upload_file", 1), ("stage_upload_candidate", 1), ("decision_memory_crop", 1), ("norm_crop_render", 1),
     )
     assert audit_blob_references(session) == result  # type: ignore[arg-type]
     assert data == session.data
-    assert len(session.statements) == 32  # two audits x sixteen SELECTs
+    assert len(session.statements) == 34  # two audits x seventeen SELECTs
 
 
 def test_verified_retrieval_set_reads_both_0023_blob_columns() -> None:
     data = _data_with_verified_set()
     result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
-    assert result.source_counts[-9] == ("norm_retrieval_set", 1)
+    assert result.source_counts[-10] == ("norm_retrieval_set", 1)
     assert {fact.blob_id for fact in result.available_blobs} == {
         row["blob_id"] for row in data["blob"]
     }
@@ -230,7 +238,7 @@ def test_rejected_set_has_no_blob_references() -> None:
     row = data["retrieval_sets"][0]
     row.update(state="rejected", set_blob_id=None, set_size_bytes=None,
                catalogue_blob_id=None, catalogue_size_bytes=None)
-    assert audit_blob_references(_Session(data)).source_counts[-9] == (  # type: ignore[arg-type]
+    assert audit_blob_references(_Session(data)).source_counts[-10] == (  # type: ignore[arg-type]
         "norm_retrieval_set", 1,
     )
     row["catalogue_blob_id"] = data["blob"][2]["blob_id"]
@@ -249,7 +257,7 @@ def test_price_list_revision_is_a_declared_blob_reference_source() -> None:
 @pytest.mark.parametrize(
     "table",
     ("comparison_upload_file", "comparison_page_profile", "comparison_sheet_pair_result",
-     "comparison_report_artifact", "stage_upload_file", "stage_upload_candidate", "decision_memory_crop"),
+     "comparison_report_artifact", "stage_upload_file", "stage_upload_candidate", "decision_memory_crop", "norm_crop_render"),
 )
 def test_the_comparison_tables_are_declared_blob_reference_sources(table: str) -> None:
     """`0038_comparison_foundation` added four Blob references, `0039_comparison_core` a fifth and
@@ -269,6 +277,8 @@ def test_the_comparison_tables_are_declared_blob_reference_sources(table: str) -
     ("report_file_unknown", "comparison_report_artifact names an unavailable"),
     ("memory_crop_unknown", "decision_memory_crop names an unavailable"),
     ("memory_crop_facts", "decision_memory_crop facts differ"),
+    ("norm_render_unknown", "norm_crop_render names an unavailable"),
+    ("norm_render_facts", "norm_crop_render facts differ"),
 ))
 def test_a_comparison_blob_reference_must_name_an_available_blob(change: str, reason: str) -> None:
     data = _data()
@@ -286,6 +296,10 @@ def test_a_comparison_blob_reference_must_name_an_available_blob(change: str, re
         data["memory_crops"][0]["blob_id"] = "blob_" + "0" * 26
     elif change == "memory_crop_facts":
         data["memory_crops"][0]["media_type"] = "image/png"  # the Blob row says application/pdf
+    elif change == "norm_render_unknown":
+        data["norm_renders"][0]["blob_id"] = "blob_" + "0" * 26
+    elif change == "norm_render_facts":
+        data["norm_renders"][0]["media_type"] = "image/png"  # the Blob row says application/pdf
     else:
         data["blob"][0]["state"] = "verifying"
         data["blob"][0].update(sha256=None, size_bytes=None, media_type=None)
@@ -300,6 +314,7 @@ def test_a_comparison_blob_reference_must_name_an_available_blob(change: str, re
         data["stage_files"] = []
         data["stage_candidates"] = []
         data["memory_crops"] = []
+        data["norm_renders"] = []
     with pytest.raises(BlobReferenceAuditRefused, match=reason):
         audit_blob_references(_Session(data))  # type: ignore[arg-type]
 
@@ -402,6 +417,7 @@ def test_pending_and_rejected_admissions_need_no_published_object() -> None:
     data["stage_files"].clear()
     data["stage_candidates"].clear()
     data["memory_crops"].clear()
+    data["norm_renders"].clear()
     data["blob"].clear()
     result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
     assert result.available_blobs == ()
@@ -424,6 +440,7 @@ def test_unsettled_artifact_can_hold_incomplete_temporary_blob() -> None:
     data["stage_files"].clear()
     data["stage_candidates"].clear()
     data["memory_crops"].clear()
+    data["norm_renders"].clear()
     data["artifacts"][0]["state"] = "abandoned"
     data["blob"][0].update(state="temporary", sha256=None, size_bytes=None, media_type=None)
     assert audit_blob_references(_Session(data)).available_blobs == ()  # type: ignore[arg-type]

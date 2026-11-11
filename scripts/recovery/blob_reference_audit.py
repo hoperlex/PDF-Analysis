@@ -45,6 +45,9 @@ _SOURCES = frozenset({
     # `0059_decision_memory` (`ADR-0027`): a crop the decision memory references. The Blob is the portal's crop image, shared by
     # content with the analysis artifact that first published it; the memory's reference is what keeps it when a project is erased.
     ("public", "decision_memory_crop", "blob_id"),
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page, a derived row of a custody binding. It is the norm
+    # side (KEEP, never a memory case's content); a Blob it names stays by the rule that a Blob any KEEP table references stays.
+    ("public", "norm_crop_render", "blob_id"),
 })
 _CATALOG_EXPECTED = _SOURCES | {("public", "blob", "blob_id")}
 
@@ -138,6 +141,11 @@ _STAGE_UPLOAD_FILES = text("""
 _MEMORY_CROPS = text("""
     SELECT crop_id AS owner_id, blob_id, sha256, size_bytes, media_type
       FROM public.decision_memory_crop ORDER BY crop_id COLLATE "C"
+""")
+_NORM_RENDERS = text("""
+    SELECT norm_custody_binding_id AS owner_id, blob_id, sha256, size_bytes, media_type
+      FROM public.norm_crop_render
+     ORDER BY norm_custody_binding_id COLLATE "C", render_profile COLLATE "C"
 """)
 _STAGE_UPLOAD_CANDIDATES = text("""
     SELECT stage_upload_candidate_id AS owner_id, state, pdf_blob_id
@@ -359,6 +367,14 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
         if _declared_fact(row, source=source) != actual:
             raise BlobReferenceAuditRefused(f"{source} facts differ for {row['blob_id']}")
     counts.append(("decision_memory_crop", len(memory_crops)))
+
+    norm_renders = _rows(session, _NORM_RENDERS)
+    for row in norm_renders:
+        source = "norm_crop_render"
+        actual = _require_available(blobs, row["blob_id"], source)
+        if _declared_fact(row, source=source) != actual:
+            raise BlobReferenceAuditRefused(f"{source} facts differ for {row['blob_id']}")
+    counts.append(("norm_crop_render", len(norm_renders)))
 
     return BlobReferenceAudit(tuple(counts), tuple(sorted(available, key=lambda fact: fact.blob_id)))
 
