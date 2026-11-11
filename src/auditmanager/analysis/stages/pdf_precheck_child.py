@@ -36,7 +36,7 @@ def main() -> int:
     import pdfplumber
 
     from auditmanager.analysis.stages.extraction import (
-        _document_heap, _extract_page, _release, probe_envelope,
+        _document_heap, _extract_page, _release, lay_out_text_only, probe_envelope,
     )
     from auditmanager.shared.errors import DomainError
 
@@ -61,6 +61,9 @@ def main() -> int:
                 try:
                     # This property runs PDFPageInterpreter over every page operator,
                     # fonts and Form XObjects, even for a page without embedded text.
+                    # Paths are interpreted but build no layout object, as in the stage
+                    # that reads this page after it (`PDF-TEXT-LAYOUT-01`).
+                    lay_out_text_only(page)
                     _ = page.objects
                     extracted = _extract_page(page, ordinal)
                     characters += extracted.char_count

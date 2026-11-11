@@ -63,7 +63,7 @@ class TestTheReaderClock:
         assert time.monotonic() - started < 15
 
     def test_the_figures_are_the_measured_ones_and_far_from_the_integer_ceiling(self) -> None:
-        assert (envelope.READER_ADDRESS_SPACE, envelope.READER_SECONDS) == (512 * 1024 * 1024, 60)
+        assert (envelope.READER_ADDRESS_SPACE, envelope.READER_SECONDS) == (2 * 1024 * 1024 * 1024, 120)  # PDF-READER-ROOM-01
         assert envelope.READER_SECONDS < 3600 and envelope.READER_ADDRESS_SPACE < 2**40
 
 

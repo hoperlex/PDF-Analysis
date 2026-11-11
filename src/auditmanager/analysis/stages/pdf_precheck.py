@@ -43,8 +43,10 @@ class PdfPrecheckLimits:
     startup_seconds: float = 45
     page_seconds: float = 180
     max_pages: int = quota(500, 2**31 - 1)
-    max_page_characters: int = quota(200_000, 2**31 - 1)
-    max_document_characters: int = quota(20_000_000, 2**31 - 1)
+    # `PDF-READER-ROOM-01`: the upload counts no characters, so neither does this child; the
+    # ``integer`` they are stored in is the only bound left, and the sandbox above stops the rest.
+    max_page_characters: int = 2**31 - 1
+    max_document_characters: int = 2**31 - 1
     max_line_bytes: int = 32 * 1024 * 1024
     max_output_bytes: int = 256 * 1024 * 1024
 

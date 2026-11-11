@@ -33,6 +33,7 @@ index whose spans quietly point at the wrong characters.
 
 from __future__ import annotations
 
+import functools
 import gc
 import io
 import os
@@ -237,6 +238,7 @@ def extract_document(source: PdfSource) -> ExtractedDocument:
                 )
             for ordinal, page in enumerate(pdf.pages, start=1):
                 try:
+                    lay_out_text_only(page)
                     pages.append(_extract_page(page, ordinal))
                 finally:
                     _release(page)
@@ -349,6 +351,52 @@ def _release(page: Any) -> None:
     page.close()
     page.page_obj.contents = []
     gc.collect()
+
+
+@functools.cache
+def _text_only_device() -> type:
+    """pdfplumber's own page device, painting every path to nothing (:func:`lay_out_text_only`)."""
+    from pdfplumber.page import PDFPageAggregatorWithMarkedContent
+
+    class TextOnlyAggregator(PDFPageAggregatorWithMarkedContent):  # type: ignore[misc]
+        def paint_path(self, *args: Any, **kwargs: Any) -> None:
+            """The path was interpreted; no layout object is built for it."""
+
+    return TextOnlyAggregator
+
+
+def lay_out_text_only(page: Any) -> None:
+    """Lay ``page`` out as pdfplumber does, without its paths (`PDF-TEXT-LAYOUT-01`).
+
+    The run reads a page's characters only: the text layer, the lines and their geometry come
+    from ``extract_text_lines`` and ``extract_text``, and nothing in it asks pdfplumber for a
+    line, a rectangle or a curve. pdfminer still interprets every operator of the page and of
+    each Form XObject -- a path is parsed and its graphics state applied -- but the device paints
+    it to nothing, so no layout object is built for it. That object was what a drawing cost: about
+    1.5 KiB a path segment, so a CAD sheet of 2 000 000 segments (the portal envelope's page
+    ceiling since `PDF-PAGE-CONTENT-01`) was about 3 GiB here and more than the PDF precheck
+    child's 1.5 GiB. Without it the same page is read in about 21 s at no measurable growth.
+
+    The layout is the one ``pdfplumber.Page.layout`` builds -- the same device class but for
+    this method, the same interpreter, pdfminer's errors wrapped the same way -- stored where
+    that property looks first. ``_layout`` is one of the page's cached properties, so
+    ``page.close()`` (:func:`_release`) flushes it as before. A page already laid out is left
+    as it is.
+    """
+    from pdfminer.pdfinterp import PDFPageInterpreter
+    from pdfplumber.utils.exceptions import PdfminerException
+
+    if hasattr(page, "_layout"):
+        return
+    device = _text_only_device()(
+        page.pdf.rsrcmgr, pageno=page.page_number, laparams=page.pdf.laparams
+    )
+    interpreter = PDFPageInterpreter(page.pdf.rsrcmgr, device)
+    try:
+        interpreter.process_page(page.page_obj)
+    except Exception as exc:  # noqa: BLE001 - pdfplumber's own wrapping, kept as it is
+        raise PdfminerException(exc) from exc
+    page._layout = device.get_result()  # noqa: SLF001
 
 
 def _extract_page(page: Any, page_number: int) -> ExtractedPage:

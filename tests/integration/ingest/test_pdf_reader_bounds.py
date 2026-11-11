@@ -6,7 +6,7 @@ lock, spend 1.8 GB and 4.7 s on every page; with 500 pages that was about 40 min
 lock and an upload slot, and a stream ten times larger would have OOM-killed the API.
 
 Now the PDF is read by a child process (``auditmanager.ingest.pdf_reader``) under an
-address-space and a CPU-time ceiling, with a wall clock in the API, and four ceilings give a
+address-space and a CPU-time ceiling, with a wall clock in the API. Count ceilings can give a
 typed refusal before the work grows:
 
 * a page's drawing elements (path segments and other objects, into form XObjects) or
@@ -14,8 +14,11 @@ typed refusal before the work grows:
 * the document's drawing elements or characters -- ``pdf_document_content``;
 * the reader's memory or time -- ``pdf_reader_limits``.
 
-Each bomb below is refused **by the rule named, within seconds, and without the API
-process's own memory growing** -- measured as this process's peak resident set, which the
+`PDF-READER-ROOM-01` (owner, 2026-11-11) removed the served count ceilings and gave the reader
+2 GiB and 120 s: a bomb is now stopped by that sandbox. The bombs below run under a narrower
+sandbox set by the test, so that each is stopped in seconds; the rules a deployment may still
+set lower are shown with lowered ceilings. Each bomb is refused **by the rule named, within
+seconds, and without the API process's own memory growing** -- measured as this process's peak resident set, which the
 in-process envelope this replaced grew by hundreds of MiB for the smallest of them. A reader
 that never starts is the server's fault (a ``RuntimeError``, answered ``500``), never a
 refusal of the caller's document. Every expected figure is a literal.
@@ -127,48 +130,51 @@ def _refused(pdf: bytes, *, within: float) -> tuple[str, float]:
 
 
 @pytest.mark.parametrize(
-    ("label", "build", "constraint", "within"),
+    ("label", "build", "sandbox"),
     [
-        # `PDF-PAGE-CONTENT-01`: 500 000 strings are under the page ceiling of 2 000 000 elements
-        # now, so the bomb reaches its characters and the reader's address space stops it.
-        ("30 pages of the judge's text bomb", lambda: _pdf(30, TEXT_BOMB), "pdf_reader_limits", 20),
-        ("the text bomb inside a form XObject", lambda: _pdf(30, TEXT_BOMB, form=True), "pdf_reader_limits", 20),
-        ("a page of 240 000 characters", lambda: _pdf(30, DENSE_TEXT), "pdf_page_content", 20),
-        # 80 001 elements a page on 500 pages is 40 000 500: the reader counts all 500 pages
-        # before the document ceiling (40 000 000) refuses it, about 30 s on the development
-        # host. The reader's own clock (60 s) is the bound.
-        ("500 pages of the judge's low-text page", lambda: _pdf(500, PATHS), "pdf_document_content", 60),
-        ("a page no address space can hold", lambda: _pdf(1, LONG_STRINGS), "pdf_reader_limits", 20),
+        # Under W55B-FIX's 512 MiB: 8 M characters on a page are more than the text page holds.
+        ("30 pages of the judge's text bomb", lambda: _pdf(30, TEXT_BOMB), (512 * MiB, 20)),
+        ("the text bomb inside a form XObject", lambda: _pdf(30, TEXT_BOMB, form=True), (512 * MiB, 20)),
+        # 40 000 500 elements, counted at about a million a second: five seconds stop it.
+        ("500 pages of the judge's low-text page", lambda: _pdf(500, PATHS), (512 * MiB, 5)),
+        # 65 M characters on one page: no address space the served reader has can hold them.
+        ("a page no address space can hold", lambda: _pdf(1, LONG_STRINGS), None),
     ],
-    ids=["text-bomb", "text-bomb-in-a-form", "dense-text", "paths-on-500-pages", "long-strings"],
+    ids=["text-bomb", "text-bomb-in-a-form", "paths-on-500-pages", "long-strings"],
 )
-def test_a_small_pdf_that_would_cost_gigabytes_is_refused_by_its_rule_in_seconds(
-    label: str, build: Any, constraint: str, within: float
+def test_a_small_pdf_that_would_cost_gigabytes_is_stopped_by_the_readers_sandbox(
+    label: str, build: Any, sandbox: tuple[int, int] | None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    if sandbox is not None:
+        monkeypatch.setattr(envelope, "READER_ADDRESS_SPACE", sandbox[0])
+        monkeypatch.setattr(envelope, "READER_SECONDS", sandbox[1])
     pdf = build()
     assert len(pdf) < 128 * 1024, f"{label}: {len(pdf)} bytes is not the small PDF it should be"
-    found, _took = _refused(pdf, within=within)
-    assert found == constraint, label
+    found, _took = _refused(pdf, within=4 * envelope.READER_SECONDS if sandbox else 60)
+    assert found == "pdf_reader_limits", label
 
 
-@pytest.mark.parametrize(
-    ("paths", "admitted"),
-    [(975_000, True), (1_025_000, False)],
-    ids=["1950001-elements-admitted", "2050001-elements-refused"],
-)
-def test_a_drawing_page_is_read_up_to_the_page_ceiling(paths: int, admitted: bool) -> None:
-    """`PDF-PAGE-CONTENT-01` (owner, 2026-11-11): the page ceiling is 2 000 000 drawing elements,
-    and a page just under it is read inside the reader's 512 MiB and 60 s -- a CAD sheet of
-    short lines, each path two segments, plus one text line. Just over it, ``pdf_page_content``.
-    Measured on this host when written: 2.0 s and about 300 MiB in the readers for the page
-    under the ceiling."""
-    pdf = _pdf(1, _TEXT + b"0 0 m 1 1 l S " * paths)
-    if admitted:
+def test_a_page_of_many_characters_is_admitted() -> None:
+    """`PDF-READER-ROOM-01`: 240 000 characters on each of 30 pages, refused ``pdf_page_content``
+    while a page was held to 200 000, is read."""
+    facts = inspect_pdf(_pdf(30, DENSE_TEXT), require_text=False)
+    assert facts.page_count == 30 and min(facts.page_characters) >= 240_000
+
+
+@pytest.mark.parametrize("ceiling", [None, 2_000_000], ids=["served", "a-ceiling-of-2000000"])
+def test_a_drawing_page_of_two_million_elements(ceiling: int | None, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A CAD sheet of short lines, each path two segments, plus one text line: 2 050 001
+    elements. Served (`PDF-READER-ROOM-01`), it is read -- about 2 s and 300 MiB in the readers
+    on the development host. Under `PDF-PAGE-CONTENT-01`'s ceiling of 2 000 000 it was refused
+    ``pdf_page_content``, with the page and the numbers."""
+    pdf = _pdf(1, _TEXT + b"0 0 m 1 1 l S " * 1_025_000)
+    if ceiling is None:
         before = _peak_mib()
         facts = inspect_pdf(pdf, require_text=False)
         assert facts.page_count == 1
         assert _peak_mib() - before < 64, "the API process read the page itself"
     else:
+        monkeypatch.setattr(envelope, "PAGE_ELEMENTS_MAX", ceiling)
         found, _took = _refused(pdf, within=20)
         assert found == "pdf_page_content"
         assert _details(pdf) == {
@@ -202,7 +208,8 @@ class TestAContentRefusalNamesThePageAndTheNumbers:
             1, "drawing_elements", 1_000,
         )
 
-    def test_a_page_of_too_many_characters(self) -> None:
+    def test_a_page_of_too_many_characters(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(envelope, "PAGE_CHARACTERS_MAX", 200_000)
         found = _details(_pdf(30, DENSE_TEXT))
         assert (found["constraint"], found["page_number"], found["content_measure"]) == (
             "pdf_page_content", 1, "characters",
@@ -268,8 +275,8 @@ def test_the_reader_is_stopped_by_its_wall_clock(monkeypatch: pytest.MonkeyPatch
 
 
 def test_a_short_clock_stops_a_slow_document(monkeypatch: pytest.MonkeyPatch) -> None:
-    """With one second of CPU time and of wall clock, the low-text page on 500 pages -- refused
-    by the document ceiling after about two seconds otherwise -- is stopped by the limits."""
+    """With one second of CPU time and of wall clock, the low-text page on 500 pages -- read in
+    about thirty seconds otherwise -- is stopped by the limits."""
     monkeypatch.setattr(envelope, "READER_SECONDS", 1)
     constraint, _took = _refused(_pdf(500, PATHS), within=10)
     assert constraint == "pdf_reader_limits"
@@ -322,12 +329,13 @@ def test_a_real_page_is_read_as_before() -> None:
 
 
 def test_the_ceilings_are_the_recorded_figures() -> None:
-    """Written out: the real maxima they were sized from are in the report, not in the code."""
-    assert envelope.PAGE_ELEMENTS_MAX == 2_000_000        # 5 x the W55B-FIX 400 000 (owner, 2026-11-11)
-    assert envelope.PAGE_CHARACTERS_MAX == 200_000        # 10 x 19 132, the export's page
-    assert envelope.DOCUMENT_ELEMENTS_MAX == 40_000_000   # 5 x the W55B-FIX 8 000 000 (owner, 2026-11-11)
-    assert envelope.DOCUMENT_CHARACTERS_MAX == 20_000_000  # 10 x 1 892 768, a corpus document
-    assert envelope.DOCUMENT_CHARACTERS_MAX * 100 < 2**31  # text_character_count is an integer
-    assert envelope.READER_ADDRESS_SPACE == 512 * MiB     # 8 x the 64 MiB every real PDF needs
-    assert envelope.READER_SECONDS == 60                  # 20 x the slowest real document
+    """Written out. `PDF-READER-ROOM-01` (owner, 2026-11-11): no count ceiling below the
+    representation limits; the reader's sandbox is what bounds an upload."""
+    assert envelope.PAGE_ELEMENTS_MAX == 2**63 - 1
+    assert envelope.PAGE_CHARACTERS_MAX == 2**31 - 1
+    assert envelope.DOCUMENT_ELEMENTS_MAX == 2**63 - 1
+    assert envelope.DOCUMENT_CHARACTERS_MAX == 2**31 - 1   # text_character_count is an integer
+    assert envelope.READER_ADDRESS_SPACE == 2048 * MiB
+    assert envelope.READER_SECONDS == 120
+    assert 2 * envelope.READER_SECONDS < 300               # nginx's proxy_read_timeout
     assert sys.executable, "the reader is started with this interpreter"

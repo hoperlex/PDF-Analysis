@@ -185,49 +185,61 @@ PDFIUM_LOCK: Final[threading.Lock] = threading.Lock()
 # -- the reader's bounds (`W55B-FIX`, X-1) -----------------------------------------------
 #
 # A drawing element is a segment of a path or any other page object, counted into form
-# XObjects (``pdf_reader._elements``): what pdfplumber pays for when a run reads the page --
+# XObjects (``pdf_reader._elements``): what pdfplumber paid for when a run read the page --
 # about 1.6 to 2 KiB and 31 to 41 us an element, measured on the owner's export (24 MiB and
 # 0.51 s a page) and on `W55B-REHEARSAL-01`'s vector drawing set (23 MiB and 0.46 s a page).
+# Since `PDF-TEXT-LAYOUT-01` a path costs the run its interpretation only (below).
 #
 # Measured with PDFium, counted as the reader counts, on the 674 PDFs of the norms corpus
 # (28 251 pages) and on the owner's portal export (30 pages): at most 75 486 drawing
 # elements on a page (the export) and 1 300 705 in a document (the corpus), at most 19 132
 # characters on a page (the export) and 1 892 768 in a document (the corpus), at most 0.05 s
 # for a page and 2.9 s for a document; every one of those documents is read inside 64 MiB of
-# address space. Each ceiling below keeps a margin of at least five over the largest of those
-# figures, except the two element ceilings, which the owner raised (below).
+# address space. Each ceiling kept a margin of at least five over the largest of those
+# figures until the owner raised the element ceilings and then removed every count ceiling
+# (below).
 #
 # `PDF-PAGE-CONTENT-01` (owner poll, 2026-11-11). Real CAD sheets have pages far above the
 # sample: an automation drawing set (13АВ-РД-АК2-ПА) was refused at 400 000, and the
 # comparison measurement (`ingest.comparison_pdf.envelope`) has a page of 536 426. The owner
-# chose to raise both element ceilings five times without measuring that set. What a run's
-# pdfplumber pays for such a page is not re-measured here: at the figures above, a page of
-# 2 000 000 elements is about 4 GiB, more than the run's PDF precheck child admits
-# (``analysis.stages.pdf_precheck``, 1.5 GiB), and two pdfplumber passes over a document of
-# 40 000 000 take about 2 500 to 3 300 s, past that child's 1 800 s.
+# chose to raise both element ceilings five times without measuring that set. At the figures
+# above a page of 2 000 000 elements was about 3 GiB of pdfplumber layout, more than the run's
+# PDF precheck child admits (``analysis.stages.pdf_precheck``, 1.5 GiB); since
+# `PDF-TEXT-LAYOUT-01` the run lays pages out without their paths
+# (``analysis.stages.extraction.lay_out_text_only``), and such a page is read in about 21 s
+# with no measurable growth.
+#
+# `PDF-READER-ROOM-01` (owner poll, the same day). An electrical set (ПД-00580716-ЭОМ_2-1,
+# a PDF of 91 MB) was refused ``pdf_reader_limits`` by the 512 MiB and 60 s below. The owner
+# chose to keep only the bundle's composition and the document's readability: the element and
+# character ceilings are now the storage representation limits, the figures a relaxed
+# deployment always had, so no served upload is refused for a count; and the reader -- the
+# readability check itself, which cannot be unbounded -- has 2 GiB and 120 s for each of its
+# two reads (``pdf_reader`` and ``stage_reader``). What stays bounded is that sandbox: a PDF
+# of a few KiB built to cost memory is still stopped, by the sandbox instead of by a count,
+# after at most 2 GiB and 2 x 120 s of one of the two upload slots. The rules and their
+# details stay as they were (a deployment or a test that sets a lower ceiling gets them).
 
-#: A page's drawing elements: five times the W55B-FIX figure (400 000), owner 2026-11-11.
-PAGE_ELEMENTS_MAX: Final[int] = quota(2_000_000, 2**63 - 1)
-#: A page's characters: ten times the real maximum (19 132). PDFium's text page holds about
-#: 220 bytes a character (`W55B-JUDGE-X` p5).
-PAGE_CHARACTERS_MAX: Final[int] = quota(200_000, 2**31 - 1)
-#: A document's drawing elements: five times the W55B-FIX figure (8 000 000), owner
-#: 2026-11-11. That figure was six times the real maximum (1 300 705), so a page of the most
-#: complex drawing a ceiling admits could not be repeated on every one of five hundred pages
-#: (one shared content stream did exactly that in `W55B-JUDGE-X` p9); this one still keeps
-#: the page ceiling from being repeated more than twenty times.
-DOCUMENT_ELEMENTS_MAX: Final[int] = quota(40_000_000, 2**63 - 1)
-#: A document's characters: ten times the real maximum (1 892 768), and a hundred times under
-#: the ``integer`` ``text_character_count`` is stored in (2**31 - 1).
-DOCUMENT_CHARACTERS_MAX: Final[int] = quota(20_000_000, 2**31 - 1)
-#: The reader's address space: eight times what every real document needs (each of them is
-#: read inside 64 MiB, and none inside 48 MiB). Two uploads at once can make the API's host
-#: hold at most twice this for their readers, whatever their PDFs do. A sandbox figure: the
-#: relaxed intake mode does not move it.
-READER_ADDRESS_SPACE: Final[int] = 512 * 1024 * 1024
-#: The reader's CPU time and the envelope's wall clock for it, in seconds: twenty times the
-#: slowest real document (2.9 s). Inside the BFF's 290 s and nginx's 300 s. A sandbox figure.
-READER_SECONDS: Final[int] = 60
+#: A page's drawing elements: no ceiling below the representation limit (`PDF-READER-ROOM-01`).
+PAGE_ELEMENTS_MAX: Final[int] = 2**63 - 1
+#: A page's characters: no ceiling below the ``integer`` they are counted in (`PDF-READER-ROOM-01`).
+#: PDFium's text page holds about 220 bytes a character (`W55B-JUDGE-X` p5), so the reader's
+#: address space stops a page of about nine million.
+PAGE_CHARACTERS_MAX: Final[int] = 2**31 - 1
+#: A document's drawing elements: no ceiling below the representation limit (`PDF-READER-ROOM-01`).
+DOCUMENT_ELEMENTS_MAX: Final[int] = 2**63 - 1
+#: A document's characters: the ``integer`` ``text_character_count`` is stored in (2**31 - 1),
+#: and nothing below it (`PDF-READER-ROOM-01`).
+DOCUMENT_CHARACTERS_MAX: Final[int] = 2**31 - 1
+#: The reader's address space, 2 GiB (`PDF-READER-ROOM-01`; 512 MiB before, eight times what
+#: every measured real document needed). Two uploads at once can make the API's host hold at
+#: most twice this for their readers, whatever their PDFs do. A sandbox figure: the relaxed
+#: intake mode does not move it.
+READER_ADDRESS_SPACE: Final[int] = 2 * 1024 * 1024 * 1024
+#: The reader's CPU time and the envelope's wall clock for each read, in seconds
+#: (`PDF-READER-ROOM-01`; 60 before). The two reads together, 240 s at most, stay inside
+#: nginx's 300 s for the API's answer (the BFF's upload route waits a day). A sandbox figure.
+READER_SECONDS: Final[int] = 120
 
 #: The program :func:`inspect_pdf` starts, beside this module.
 _READER: Final[Path] = Path(__file__).with_name("pdf_reader.py")
