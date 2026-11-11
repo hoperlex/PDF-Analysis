@@ -477,6 +477,127 @@ class ModelBook:
         return payload
 
 
+# ------------------------------------------------------------------- reference data (`CTX-RUNNER`)
+# `RUNNER_API.md` section 11, `ADR-0029` decision 3.  Pure functions: the claim loop of `agent.py` asks the stand
+# (`RunnerClient.context`) and hands the answer to these; nothing here reads a network, a file or a clock.
+
+#: The kind of reference data this agent asks for.  `patterns` (the approved patterns of rejection) is wave 5 of the stand; the answer
+#: carries one `context_sha256`, so a second kind needs its own contract step.
+CONTEXT_KIND = "similar_cases"
+#: The heading of the section that goes after the task's JSON.  The reference is a hint, never the ground of a finding.
+REFERENCE_HEADING = "=== СПРАВОЧНО (не основание) ==="
+#: The line the model reads when there is no reference data, and why.  The reason is a code of `FAILURE_CODE_RE`'s alphabet.
+REFERENCE_UNAVAILABLE = "Справочные данные недоступны: "
+#: A runaway-answer guard, not a policy: the stand keeps a task to 12 000 characters of case text (`executor_context_policy`), and a block
+#: of more than this many characters, JSON keys and identities included, is refused as `too_large` rather than paid for.
+MAX_REFERENCE_CHARS = 48_000
+CONTEXT_MAX_INPUTS = 64
+CONTEXT_MAX_CASES_PER_INPUT = 3
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_CONTEXT_REQUEST_KEYS = ("input_id", "text_sha256", "section")
+
+
+class ReferenceRefused(ValueError):
+    """An answer of the stand this agent will not put in a prompt.  ``code`` is the reason the model is told: ``malformed_answer`` for an
+    answer that is not the contract's, ``too_large`` for one over :data:`MAX_REFERENCE_CHARS`."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class Reference:
+    """What goes after the task's JSON: ``section`` is the whole text (heading included); ``context_sha256`` is the stand's digest of the data
+    as it delivered it, echoed in the answer, and ``None`` exactly when the section says the data is unavailable (nothing was attached)."""
+
+    section: str
+    context_sha256: Optional[str] = None
+
+
+def context_inputs(task: Mapping) -> "Optional[tuple[str, ...]]":
+    """The ``input_id`` of every candidate in the claim's ``context_request``, or ``None`` when the task is not to be offered reference data:
+    no member, or one that is not the contract's non-empty list (at most 64) of ``{input_id, text_sha256, section}`` (a member of an
+    entry that a later contract adds is not a reason to refuse it).  A malformed member is
+    read as absent, never as a failure: the task never fails because of reference data."""
+    request = task.get("context_request")
+    if not isinstance(request, list) or not 1 <= len(request) <= CONTEXT_MAX_INPUTS:
+        return None
+    ids: list = []
+    for entry in request:
+        if not isinstance(entry, dict) or not all(key in entry for key in _CONTEXT_REQUEST_KEYS):
+            return None
+        input_id, digest, section = (entry[key] for key in _CONTEXT_REQUEST_KEYS)
+        if (not isinstance(input_id, str) or not 1 <= len(input_id) <= 128 or not isinstance(digest, str)
+                or _SHA256_RE.fullmatch(digest) is None or not isinstance(section, str) or not 1 <= len(section) <= 64):
+            return None
+        ids.append(input_id)
+    return tuple(ids) if len(set(ids)) == len(ids) else None
+
+
+def unavailable_reference(reason: object) -> Reference:
+    """The section for a task that is called without reference data: the heading, one line with the reason, and no digest."""
+    code = reason if isinstance(reason, str) and FAILURE_CODE_RE.fullmatch(reason) else "unavailable"
+    return Reference(REFERENCE_HEADING + "\n" + REFERENCE_UNAVAILABLE + code)
+
+
+def _case_line(case: object) -> dict:
+    similarity = case.get("similarity") if isinstance(case, dict) else None
+    if (not isinstance(case, dict) or not all(isinstance(case.get(key), str) for key in
+                                                ("case_id", "verdict", "category", "finding_text", "recommendation_text"))
+            or isinstance(similarity, bool) or not isinstance(similarity, (int, float)) or not 0 <= similarity <= 1
+            or not isinstance(case.get("comment", ""), str)):
+        raise ReferenceRefused("malformed_answer")
+    kept = {key: case[key] for key in ("case_id", "verdict", "category", "similarity", "finding_text", "recommendation_text")}
+    if "comment" in case:
+        kept["comment"] = case["comment"]
+    return kept
+
+
+def reference_from_answer(answer: object, input_ids: "tuple[str, ...]") -> Reference:
+    """The section for a ``getExecutorTaskContext`` answer of the kind this agent asked for.
+
+    ``status: unavailable`` gives the notice with the stand's ``reason``.  ``available`` gives one JSON line per ``input_id`` that has cases
+    (only the members of the contract are kept, texts JSON-escaped so that no case can open a line of its own), then ``Не уместилось: N``
+    when the stand left cases out, and carries the stand's ``context_sha256``.  An answer that is not the contract's, names an ``input_id`` the
+    task did not offer, repeats one, or is too large raises :class:`ReferenceRefused`; the caller calls the model with the notice instead."""
+    if not isinstance(answer, dict) or answer.get("kind") != CONTEXT_KIND:
+        raise ReferenceRefused("malformed_answer")
+    status = answer.get("status")
+    if status == "unavailable":
+        return unavailable_reference(answer.get("reason"))
+    digest, items, not_fitted = answer.get("context_sha256"), answer.get("items"), answer.get("not_fitted")
+    if (status != "available" or not isinstance(digest, str) or _SHA256_RE.fullmatch(digest) is None
+            or not isinstance(items, list) or len(items) > CONTEXT_MAX_INPUTS
+            or isinstance(not_fitted, bool) or not isinstance(not_fitted, int) or not_fitted < 0):
+        raise ReferenceRefused("malformed_answer")
+    lines, seen, cases = [], set(), 0
+    for item in items:
+        if not isinstance(item, dict) or item.get("input_id") not in input_ids or item["input_id"] in seen:
+            raise ReferenceRefused("malformed_answer")
+        seen.add(item["input_id"])
+        raw_cases = item.get("cases")
+        if not isinstance(raw_cases, list) or len(raw_cases) > CONTEXT_MAX_CASES_PER_INPUT:
+            raise ReferenceRefused("malformed_answer")
+        kept = [_case_line(case) for case in raw_cases]
+        cases += len(kept)
+        if kept:
+            lines.append(json.dumps({"input_id": item["input_id"], "cases": kept}, ensure_ascii=False, separators=(",", ":")))
+    if not lines:
+        lines.append("Похожих решений нет.")
+    if not_fitted:
+        lines.append(f"Не уместилось: {not_fitted}")
+    section = "\n".join([REFERENCE_HEADING, *lines])
+    if len(section) > MAX_REFERENCE_CHARS:
+        raise ReferenceRefused("too_large")
+    return Reference(section, digest)
+
+
+def attach_reference(user_text: str, reference: Reference) -> str:
+    """``user_text`` exactly as the stand sent it, then a blank line and the section.  Nothing is put before the task's text."""
+    return user_text + "\n\n" + reference.section
+
+
 # ------------------------------------------------------------------------------ the runtime
 
 
@@ -643,14 +764,18 @@ class HostRuntime:
         return model, facts
 
     def execute(self, task: Mapping, model: CatalogueModel, facts: detect.ProviderFacts, *, budget: float,
-                activity: Activity, should_stop: Callable[[], str], local_images: tuple = ()) -> dict:
+                activity: Activity, should_stop: Callable[[], str], local_images: tuple = (),
+                reference: Optional[Reference] = None) -> dict:
         """Answer one claimed task.  ``budget`` is the seconds left before the task's deadline.  Returns the answer
         document of the answerer (``output_text``, ``reported_model``, token counts) or raises :class:`HostFailure`
-        / :class:`Stopped`.  A failure about the host's access also takes the model out of service."""
+        / :class:`Stopped`.  A failure about the host's access also takes the model out of service.
+
+        ``reference`` (`CTX-RUNNER`) is the section that goes after the task's ``user_text``; without it the call is what it always was."""
         timeout = min(float(task["timeout_seconds"]), budget)
         if timeout <= 0:
             raise HostFailure("timeout", "no time remains before the task deadline")
-        call = {"system": task["system"], "user_text": task["user_text"], "output_schema": task["output_schema"]}
+        user_text = task["user_text"] if reference is None else attach_reference(task["user_text"], reference)
+        call = {"system": task["system"], "user_text": user_text, "output_schema": task["output_schema"]}
         try:
             # No answer cap (`R-153n`): the task carries none and `dispatch` is given none; an API provider that requires one gets the model's maximum.
             return self.dispatch(facts, model, task["effort"], call,

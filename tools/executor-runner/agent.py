@@ -300,6 +300,7 @@ class Answer:
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     reported_model: Optional[str] = None  # host mode: the exact string the CLI or API reported
+    context_sha256: Optional[str] = None  # host mode (`CTX-RUNNER`): the stand's digest of the reference data the prompt carried
 
 
 class Interrupted(Exception):
@@ -825,7 +826,34 @@ class HostAgent(Agent):
     def _deliver(self, task: dict, answer: Answer) -> dict:
         return self.client.answer(task["task_id"], answer.output_text, task["model_id"], answer.input_tokens,
                                   answer.output_tokens, provider=task["provider"], access=task["access"],
-                                  reported_model=answer.reported_model)
+                                  reported_model=answer.reported_model, context_sha256=answer.context_sha256)
+
+    def _reference_for(self, task: dict, should_stop: Any) -> "Optional[host_mode.Reference]":
+        """The section to put after the task's JSON (`CTX-RUNNER`, RUNNER_API.md section 11), or ``None`` when the task is not offered reference data.
+
+        Only a task whose claim carries a well-formed ``context_request`` is asked, once, for ``host_mode.CONTEXT_KIND``, with the 8 s of
+        ``runner_client.CONTEXT_TIMEOUT_SECONDS`` and no retry.  Whatever goes wrong (a refusal, a 429 whatever its ``Retry-After``, a 5xx, a
+        timeout, an answer that is not the contract's, a bug here) gives the notice «Справочные данные недоступны: <причина>» instead: nothing
+        is waited for and the task is never failed, never dropped and never stopped because of reference data.  A claim already lost or an agent
+        stopping asks nothing: the call that follows is stopped by its own check, as it always was."""
+        input_ids = host_mode.context_inputs(task)
+        if input_ids is None or should_stop():
+            return None
+        task_id = task["task_id"]
+        try:
+            reference = host_mode.reference_from_answer(self.client.context(task_id, host_mode.CONTEXT_KIND), input_ids)
+        except host_mode.ReferenceRefused as refused:
+            reference = host_mode.unavailable_reference(refused.code)
+        except RunnerError as error:
+            reference = host_mode.unavailable_reference(context_refusal(error))
+        except Exception as error:  # noqa: BLE001 - reference data must not take the task down
+            self.log(f"{task_id}: reference data failed inside the agent ({type(error).__name__})")
+            reference = host_mode.unavailable_reference("agent_error")
+        if reference.context_sha256 is None:
+            self.log(f"{task_id}: called without reference data ({reference.section.rsplit(': ', 1)[-1]})")
+        else:
+            self.log(f"{task_id}: reference data attached ({len(reference.section)} chars)")
+        return reference
 
     def _worker(self, task: dict, slots: Any) -> None:  # noqa: C901 - one task, start to end
         task_id = task["task_id"]
@@ -876,9 +904,11 @@ class HostAgent(Agent):
                         path.write_bytes(raw)
                         path.chmod(0o600)
                         local_images.append({**image, "path": str(path)})
+                    reference = self._reference_for(task, should_stop)
                     remaining = self.client.seconds_until(task["deadline_at"]) - DEADLINE_MARGIN_SECONDS
                     reply = self.runtime.execute(task, model, facts, budget=remaining, activity=activity,
-                                                 should_stop=should_stop, local_images=tuple(local_images))
+                                                 should_stop=should_stop, local_images=tuple(local_images),
+                                                 reference=reference)
             except host_mode.Stopped as stop:
                 self._interrupted(task_id, str(stop))
                 return
@@ -909,13 +939,24 @@ class HostAgent(Agent):
             self.log(f"{task_id}: answer ready in {time.monotonic() - started:.1f}s ({len(reply['output_text'])} chars, "
                      f"reported {reply['reported_model']})")
             self._submit(task, Answer(reply["output_text"], reply.get("input_tokens"), reply.get("output_tokens"),
-                                      reply["reported_model"]), should_stop)
+                                      reply["reported_model"], reference.context_sha256 if reference else None), should_stop)
         except Exception as error:  # noqa: BLE001 - one task must not take the agent down
             self.log(f"{task_id}: internal error {type(error).__name__}")
             self._fail(task_id, f"agent_error: {type(error).__name__}")
         finally:
             done.set()
             self._leave_work(task_id)
+
+
+def context_refusal(error: RunnerError) -> str:
+    """The reason the model is told when a context request ended in an error: ``http_<status>`` for a refusal of the stand (``http_401``,
+    ``http_404``, ``http_409``, ``http_429``, ``http_503`` ...), ``malformed_answer`` for a 2xx that was not JSON, ``timeout`` or ``network``
+    when the stand did not answer at all."""
+    if error.status is not None and 200 <= error.status < 300:
+        return "malformed_answer"
+    if error.status is not None:
+        return f"http_{error.status}"
+    return "timeout" if re.search(r"timed out|timeout", error.message, re.IGNORECASE) else "network"
 
 
 # ------------------------------------------------------------- health report and enrollment
