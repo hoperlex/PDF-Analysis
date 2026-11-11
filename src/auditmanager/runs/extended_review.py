@@ -2493,6 +2493,20 @@ def _coverage_text_stats(records):
         'known_page_contexts': len(pages)}
 
 
+def _virtual_window_policy(accepted, policy):
+    """The part of the consent the global cross-window review's virtual window carries: its own call limits, and of the run's consent only what
+    the shared batched procedures read. The critic of the global review is a `review:main` task too, so the stand offers it the reference
+    section when the consent holds the ``executor_context_policy`` (`CTX-CRITIC`); its prompt (`_reference_section`) has to say what that is."""
+    return {"phase_call_limits": accepted["call_limits"],
+        **({"completion_policy": policy["completion_policy"],
+            "semantic_repair_attempts": policy["semantic_repair_attempts"]}
+            if _source_sized(policy) else {}),
+        **({"norm_paragraph_context_policy": policy["norm_paragraph_context_policy"]}
+            if "norm_paragraph_context_policy" in policy else {}),
+        **({"executor_context_policy": policy["executor_context_policy"]}
+            if "executor_context_policy" in policy else {})}
+
+
 def _run_global_cross_window(session, *, run, authority, jobs, journal, binding, outputs, store,
         meter, publish, checkpoint, snapshot_id, state, policy, aggregate, save):
     """A separate consent-bound virtual window; local originals are never replaced."""
@@ -2676,16 +2690,7 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
             or any(row.get("status") == "partial" for row in global_state["batches"]))
         phase("comprehensive_analysis", "partial" if deferred else "completed",
               "approved_global_phase_call_limit_or_source_selection" if deferred else None)
-        virtual_context = {"window_id": "global-cross-window", "policy": {"phase_call_limits": accepted["call_limits"],
-            **({"completion_policy": policy["completion_policy"],
-                "semantic_repair_attempts": policy["semantic_repair_attempts"]}
-                if _source_sized(policy) else {}),
-            **({"norm_paragraph_context_policy": policy["norm_paragraph_context_policy"]}
-                if "norm_paragraph_context_policy" in policy else {}),
-            # The critic of the global review is a `review:main` task too, so the stand offers it the reference section when the consent
-            # holds the policy; the critic's prompt (`_reference_section`) has to say what that section is.
-            **({"executor_context_policy": policy["executor_context_policy"]}
-                if "executor_context_policy" in policy else {})}}
+        virtual_context = {"window_id": "global-cross-window", "policy": _virtual_window_policy(accepted, policy)}
         contexts = [{"source_id": source["source_id"], "page_number": source["page_number"],
             "text": source["quote"] if source["character_field"] == "text" else "",
             "recognised_context": source["quote"] if source["character_field"] == "recognised_context" else ""}

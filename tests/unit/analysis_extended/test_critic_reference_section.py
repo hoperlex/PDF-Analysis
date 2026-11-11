@@ -298,6 +298,16 @@ def test_only_a_planned_run_whose_consent_holds_the_policy_is_told_about_the_sec
     assert runtime._reference_section(binding, policy) is expected
 
 
+def test_the_global_cross_window_critic_is_told_too_and_its_virtual_window_carries_nothing_else_new():
+    accepted = {"call_limits": {"finding_review": 2}}
+    consent = {"norm_paragraph_context_policy": {"version": "n"}, "completion_policy": "source-complete-v1", "semantic_repair_attempts": 1}
+    without = runtime._virtual_window_policy(accepted, consent)
+    with_policy = runtime._virtual_window_policy(accepted, {**consent, "executor_context_policy": POLICY})
+    assert "executor_context_policy" not in without and runtime._reference_section(PLANNED, without) is False
+    assert with_policy == {**without, "executor_context_policy": POLICY} and runtime._reference_section(PLANNED, with_policy) is True
+    assert without["phase_call_limits"] == {"finding_review": 2} and without["semantic_repair_attempts"] == 1
+
+
 @pytest.mark.parametrize("binding,policy,told", [
     (PLANNED, {"executor_context_policy": POLICY}, True),
     (NS(), {"executor_context_policy": POLICY}, False),
