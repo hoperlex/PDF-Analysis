@@ -545,6 +545,11 @@
       ],
       [
         "GET",
+        "/quality-table",
+        "getQualityTable"
+      ],
+      [
+        "GET",
         "/registrations",
         "listRegistrations"
       ],
@@ -747,11 +752,6 @@
         "GET",
         "/stage-pairs/{stage_pair_id}/text-fragments",
         "listStageTextFragments"
-      ],
-      [
-        "GET",
-        "/stage-quality",
-        "getStageQuality"
       ],
       [
         "GET",

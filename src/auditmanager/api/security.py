@@ -803,7 +803,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # labels: a pattern quotes the experts' own words); the quality table is the administrator's.
         "listDecisionPatterns": _ANY_ROLE,
         "reviewDecisionPattern": _ANY_ROLE,
-        "getStageQuality": _ADMIN,
+        "getQualityTable": _ADMIN,
         # `W55A-SEAL-01` (R-113). Who designated which snapshot, and the designation itself.
         "listNormSnapshotEvents": _ADMIN,
         "setCurrentNormSnapshot": _ADMIN,

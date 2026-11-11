@@ -10176,7 +10176,7 @@ class DecisionPattern(_Object):
 class DecisionPatternList(_Object):
     """`listDecisionPatterns`: the patterns that match, newest proposal first, and the number that match (`items` is cut at `limit`)."""
 
-    items: Annotated[list[DecisionPattern], Field(max_length=500)]
+    items: Annotated[list[DecisionPattern], Field(max_length=200)]
     total: Annotated[int, Field(ge=0)]
 
 
@@ -10212,7 +10212,7 @@ class StageQualityRow(_Object):
 
 
 class StageQualityTable(_Object):
-    """`getStageQuality`: one row per (cell or ensemble, section) that has at least one decision; empty when nothing was decided. Counts, not a score;
+    """`getQualityTable`: one row per (cell or ensemble, section) that has at least one decision; empty when nothing was decided. Counts, not a score;
     it changes no routing."""
 
     rows: Annotated[list[StageQualityRow], Field(max_length=2000)]

@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
- *   sha256 ba58ccca1b61b169012a6fc1096b971a679d1a448e662a66c7f37439cec8599a
+ *   sha256 5bc2c4a8d1bd6fcad19c0ce3cc2fadd755e646e6280ad1f310d0fbe8cec15569
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -242,6 +242,8 @@ import type {
   GetProductVersionResult,
   GetProjectInput,
   GetProjectResult,
+  GetQualityTableInput,
+  GetQualityTableResult,
   GetRunNormReferencesInput,
   GetRunNormReferencesResult,
   GetRunPrecedentsInput,
@@ -272,8 +274,6 @@ import type {
   GetStagePairResult,
   GetStageProfileTextInput,
   GetStageProfileTextResult,
-  GetStageQualityInput,
-  GetStageQualityResult,
   GetStageSheetMapInput,
   GetStageSheetMapResult,
   GetStageSheetMapRevisionInput,
@@ -2022,6 +2022,18 @@ export function getProject(
 }
 
 /**
+ * Get Quality Table
+ *
+ * `GET /quality-table`.
+ */
+export function getQualityTable(
+  input: GetQualityTableInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetQualityTableResult>> {
+  return request<GetQualityTableResult>(OPERATIONS.getQualityTable, input, options);
+}
+
+/**
  * Get Run Norm References
  *
  * `GET /runs/{run_id}/norm-references`.
@@ -2199,18 +2211,6 @@ export function getStageProfileText(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetStageProfileTextResult>> {
   return request<GetStageProfileTextResult>(OPERATIONS.getStageProfileText, input, options);
-}
-
-/**
- * Get Stage Quality
- *
- * `GET /stage-quality`.
- */
-export function getStageQuality(
-  input: GetStageQualityInput,
-  options?: RequestOptions,
-): Promise<ApiResponse<GetStageQualityResult>> {
-  return request<GetStageQualityResult>(OPERATIONS.getStageQuality, input, options);
 }
 
 /**
@@ -4730,6 +4730,7 @@ export const apiClient = {
   getNormDocument,
   getProductVersion,
   getProject,
+  getQualityTable,
   getRunNormReferences,
   getRunPrecedents,
   getRunStages,
@@ -4745,7 +4746,6 @@ export const apiClient = {
   getStageModelLayout,
   getStagePair,
   getStageProfileText,
-  getStageQuality,
   getStageSheetMap,
   getStageSheetMapRevision,
   getStageSynthesis,

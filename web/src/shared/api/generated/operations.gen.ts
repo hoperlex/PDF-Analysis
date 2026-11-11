@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
- *   sha256 ba58ccca1b61b169012a6fc1096b971a679d1a448e662a66c7f37439cec8599a
+ *   sha256 5bc2c4a8d1bd6fcad19c0ce3cc2fadd755e646e6280ad1f310d0fbe8cec15569
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -481,6 +481,7 @@ export const OPERATION_IDS = [
   'getNormDocument',
   'getProductVersion',
   'getProject',
+  'getQualityTable',
   'getRunNormReferences',
   'getRunPrecedents',
   'getRunStages',
@@ -496,7 +497,6 @@ export const OPERATION_IDS = [
   'getStageModelLayout',
   'getStagePair',
   'getStageProfileText',
-  'getStageQuality',
   'getStageSheetMap',
   'getStageSheetMapRevision',
   'getStageSynthesis',
@@ -3546,6 +3546,25 @@ export type GetProjectInput = {
 export type GetProjectResult = Project;
 
 // ------------------------------------------------------------------------------------
+// getQualityTable - GET /quality-table
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Quality Table
+ *
+ * `CRIT-SEAL-53` (plan-v5 section 6, owner ruling Н7): the quality table of the stage plan -- for each cell of the plan and section, how many findings experts decided and how many they accepted; the blocks ensemble is one row of its own, and the model is the cell's. Counts, not a score; no cell with no decision appears, and the table changes no routing. `role:admin`.
+ */
+export type GetQualityTableInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getQualityTable` (`application/json`, HTTP 200). */
+export type GetQualityTableResult = StageQualityTable;
+
+// ------------------------------------------------------------------------------------
 // getRunNormReferences - GET /runs/{run_id}/norm-references
 // ------------------------------------------------------------------------------------
 
@@ -3881,25 +3900,6 @@ export type GetStageProfileTextInput = {
 
 /** Success body of `getStageProfileText` (`application/json`, HTTP 200). */
 export type GetStageProfileTextResult = StageProfileText;
-
-// ------------------------------------------------------------------------------------
-// getStageQuality - GET /stage-quality
-// ------------------------------------------------------------------------------------
-
-/**
- * Get Stage Quality
- *
- * `CRIT-SEAL-53` (plan-v5 section 6, owner ruling Н7): the quality table of the stage plan -- for each cell of the plan and section, how many findings experts decided and how many they accepted; the blocks ensemble is one row of its own, and the model is the cell's. Counts, not a score; no cell with no decision appears, and the table changes no routing. `role:admin`.
- */
-export type GetStageQualityInput = {
-  /**
-   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
-   */
-  correlationId?: CorrelationId;
-};
-
-/** Success body of `getStageQuality` (`application/json`, HTTP 200). */
-export type GetStageQualityResult = StageQualityTable;
 
 // ------------------------------------------------------------------------------------
 // getStageSheetMap - GET /stage-pairs/{stage_pair_id}/sheet-map
@@ -4923,7 +4923,7 @@ export type ListDecisionMemoryCasesResult = DecisionMemoryCasePage;
 /**
  * List Decision Patterns
  *
- * `CRIT-SEAL-53` (plan-v5 section 3.7, owner ruling Н4): the failure patterns -- a refusing comment of the representative case of a group of refusals in one section, proposed by an algorithm and approved by an expert. Newest proposal first; `status` and `section_code` are optional filters, `limit` cuts `items` (`total` counts every match). Only an `approved` pattern reaches hint P1. `role:admin|expert`; the viewer is denied.
+ * `CRIT-SEAL-53` (plan-v5 section 3.7, owner ruling Н4): the failure patterns -- a refusing comment of the representative case of a group of refusals in one section, proposed by an algorithm and approved by an expert. Newest proposal first; `status` and `section_code` are optional filters, `limit` (1 to 200, default 50) cuts `items` (`total` counts every match). Only an `approved` pattern reaches hint P1. `role:admin|expert`; the viewer is denied.
  */
 export type ListDecisionPatternsInput = {
   /** Query string parameters. */
@@ -10790,6 +10790,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['projects'],
   },
+  getQualityTable: {
+    operationId: 'getQualityTable',
+    method: 'GET',
+    path: '/quality-table',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
   getRunNormReferences: {
     operationId: 'getRunNormReferences',
     method: 'GET',
@@ -10999,20 +11013,6 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
-  },
-  getStageQuality: {
-    operationId: 'getStageQuality',
-    method: 'GET',
-    path: '/stage-quality',
-    pathParams: [],
-    queryParams: [],
-    headerParams: [],
-    requiresIdempotencyKey: false,
-    requestMediaType: null,
-    responseMediaType: 'application/json',
-    successStatuses: [200],
-    errorStatuses: [401, 403, 500, 503],
-    tags: ['execution'],
   },
   getStageSheetMap: {
     operationId: 'getStageSheetMap',

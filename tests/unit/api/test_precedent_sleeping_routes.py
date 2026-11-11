@@ -112,7 +112,7 @@ def test_the_context_route_is_no_longer_declared_here() -> None:
     router = APIRouter()
     build_precedent_routes(router)
     declared = sorted(route.operation_id for route in router.routes if getattr(route, "operation_id", None))
-    assert declared == sorted([*ROUTES, "listDecisionPatterns", "reviewDecisionPattern", "getStageQuality"])  # the last three: `CRIT-SEAL-53`
+    assert declared == sorted([*ROUTES, "listDecisionPatterns", "reviewDecisionPattern", "getQualityTable"])  # the last three: `CRIT-SEAL-53`
     assert "getExecutorTaskContext" not in declared
 
 

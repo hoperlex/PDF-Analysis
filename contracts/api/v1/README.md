@@ -17,12 +17,12 @@ The wave-5 seal of the «Прецеденты» programme (plan-v5 section 3.7, 
 changes; nothing is removed**; migration `0066_precedents_wave5` (head `0066`); two identity prefixes, no error code, no state machine. Every new operation is asleep (`503 dependency_unavailable`) until
 the lane that owns it wires a port into `build_router`.
 
-- **Failure patterns (`PAT-01`, owner ruling Н4).** `listDecisionPatterns` (`GET /decision-memory/patterns`; filters `status`, `section_code`; `limit` 1 to 500, default 200; answers `items` and `total`) and
+- **Failure patterns (`PAT-01`, owner ruling Н4).** `listDecisionPatterns` (`GET /decision-memory/patterns`; filters `status`, `section_code`; `limit` 1 to 200, default 50, the shared parameter; answers `items` and `total`) and
   `reviewDecisionPattern` (`POST /decision-memory/patterns/{pattern_id}/review`, `Idempotency-Key` required; the body is `{decision: approve | reject | suspend}`), both for `expert` or `admin`; the viewer is denied.
   A pattern (`DecisionPattern`: `pattern_id` (`dmp`), `section_code`, `pattern_text`, `member_count`, `refusal_count`, `status`, `status_cause`, `status_changed_at`, `proposed_at`) is a refusing comment, verbatim and never
   written by a model, of the representative case of a group of refusals in one section. Statuses: `proposed` by the algorithm; `approved`, `rejected`, `suspended` by an expert; the algorithm suspends a pattern
   whose group dissolves (`status_cause: group_dissolved`). The transitions are the database's: `approve` from `proposed` or `suspended`, `reject` from `proposed`, `suspend` from `approved`. Only an `approved` pattern reaches hint P1.
-- **The quality table (`QUAL-01`, owner ruling Н7).** `getStageQuality` (`GET /stage-quality`, `admin`): `rows` of `StageQualityRow` -- per section, a cell of the stage plan (`cell_key`, the cell's own `model_id`) or
+- **The quality table (`QUAL-01`, owner ruling Н7).** `getQualityTable` (`GET /quality-table`, `admin`): `rows` of `StageQualityRow` -- per section, a cell of the stage plan (`cell_key`, the cell's own `model_id`) or
   the blocks ensemble as one row (`ensemble: true`, neither `cell_key` nor `model_id`) -- with `decided_count`, `accepted_count` and `rejected_count`. Counts, not a score and not a share; a cell with no decision has no row.
 - **Cross-document evidence (`XDOC-01`, owner ruling Н6).** `FindingCategory` gains `parameter_mismatch`. `Finding` and `FindingDetail` gain the optional `cross_evidence` (`FindingCrossEvidence`: `evidence_ordinal`,
   `version_uid` of the other document, `page_number`, `quote`, `char_start`, `char_end`); absent for a finding with none. `Evidence` is untouched.

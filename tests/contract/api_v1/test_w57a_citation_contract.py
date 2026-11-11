@@ -24,7 +24,8 @@ CATEGORIES_0023 = (
     'roof', 'documentation', 'evacuation', 'fire_safety', 'accessibility', 'insulation', 'sound',
 )
 #: `CRIT-SEAL-50` (contract 1.51.0, migration 0064): the two categories of the groups of candidates.
-CATEGORIES = (*CATEGORIES_0023, 'drawing_discrepancy', 'cross_source')
+#: `CRIT-SEAL-53` (contract 1.53.0, migration 0066) adds the category of a parameter stated differently in two documents.
+CATEGORIES = (*CATEGORIES_0023, 'drawing_discrepancy', 'cross_source', 'parameter_mismatch')
 REASONS_0023 = (
     'quotation_absent', 'quotation_on_different_page', 'span_outside_page',
     'span_outside_block', 'span_length_mismatch', 'quote_in_recognised_text',

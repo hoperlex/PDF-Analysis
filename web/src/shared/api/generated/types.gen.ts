@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
- *   sha256 ba58ccca1b61b169012a6fc1096b971a679d1a448e662a66c7f37439cec8599a
+ *   sha256 5bc2c4a8d1bd6fcad19c0ce3cc2fadd755e646e6280ad1f310d0fbe8cec15569
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.53.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'ba58ccca1b61b169012a6fc1096b971a679d1a448e662a66c7f37439cec8599a';
+export const CONTRACT_DIGEST = '5bc2c4a8d1bd6fcad19c0ce3cc2fadd755e646e6280ad1f310d0fbe8cec15569';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -8931,7 +8931,7 @@ export type StageQualityRow = {
 };
 
 /**
- * `getStageQuality`: one row per (cell or ensemble, section) that has at least one decision; empty when nothing was decided. Counts, not a score;
+ * `getQualityTable`: one row per (cell or ensemble, section) that has at least one decision; empty when nothing was decided. Counts, not a score;
  * it changes no routing.
  */
 export type StageQualityTable = {

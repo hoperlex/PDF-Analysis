@@ -394,6 +394,8 @@ REQUIRED_OPERATIONS = {
     # `setVectorPaused` and `appendPrecedentSetting` are, and are in the writes above.
     "getExecutorTaskContext", "getRunPrecedents", "getFindingPrecedents", "getVectorControl", "setVectorPaused", "listPrecedentSettings",
     "appendPrecedentSetting",
+    # `CRIT-SEAL-53` (contract 1.53.0): the failure patterns (a read, and a keyed review) and the quality table (a read with no input).
+    "listDecisionPatterns", "reviewDecisionPattern", "getQualityTable",
     # `CMP-SEAL-C3`: stage intake, pairs, sheet map, raw text and chain runs.
     "listStagePairs", "confirmStagePair", "getStagePair", "listStagePairSuggestions",
     "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",
@@ -473,6 +475,8 @@ WRITE_OPERATIONS = {
     "setWorkerIntake",
     # `CRIT-SEAL-50` (1.51.0): the pause of the vectors and a new revision of a setting of the Precedents programme are keyed administrator writes.
     "setVectorPaused", "appendPrecedentSetting",
+    # `CRIT-SEAL-53` (1.53.0): an expert's review of a failure pattern is keyed, so an exact repeat records nothing more.
+    "reviewDecisionPattern",
     # `UI-A-93` (1.36.0): ending an account's sessions is keyed, so an exact repeat ends nothing more.
     "endUserSessions",
     # `UI-PARITY-P0G`. Keyed like `setExecutionPaused`: a replay answers the same state and writes no second event.
@@ -1027,7 +1031,9 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
      "getExecutionDispatch", "getDecisionMemoryStatus",
      "listExecutorHosts", "getStageModelLayout", "listModelCatalogue",
      # `CRIT-SEAL-50` (1.51.0): the state of the vectors and the settings of the Precedents programme are the installation's own, with no input.
-     "getVectorControl", "listPrecedentSettings"}
+     "getVectorControl", "listPrecedentSettings",
+     # `CRIT-SEAL-53` (1.53.0): the quality table is the installation's own, with no input.
+     "getQualityTable"}
 )
 
 

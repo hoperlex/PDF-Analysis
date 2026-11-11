@@ -28,17 +28,17 @@ from auditmanager.api.security import OPERATION_ROLES, ROLE_ADMIN, ROLE_EXPERT, 
 USER = "usr_01M2545JSD15ETSNNV904X991K"
 PATTERN = "dmp_01M2545JSD15ETSNNV904X991K"
 KEY = {"Idempotency-Key": "wave5-seal-key"}
-CELL = "blocks:3:leg1"
+CELL = "review:main"
 
 ROUTES: dict[str, tuple[str, str, Any, dict[str, str], str]] = {
     "listDecisionPatterns": ("GET", "/decision-memory/patterns", None, {}, "decision_patterns"),
     "reviewDecisionPattern": ("POST", f"/decision-memory/patterns/{PATTERN}/review", {"decision": "approve"}, KEY, "decision_patterns"),
-    "getStageQuality": ("GET", "/stage-quality", None, {}, "stage_quality"),
+    "getQualityTable": ("GET", "/quality-table", None, {}, "stage_quality"),
 }
 EXPECTED_ROLES = {
     "listDecisionPatterns": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
     "reviewDecisionPattern": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
-    "getStageQuality": frozenset({ROLE_ADMIN}),
+    "getQualityTable": frozenset({ROLE_ADMIN}),
 }
 
 
@@ -99,7 +99,7 @@ def test_a_port_answers_and_the_route_passes_what_it_parsed() -> None:
     assert listed.status_code == 200 and listed.json() == {"items": [_pattern()], "total": 1}, listed.text
     assert patterns.calls[0] == ("list", {"status": "approved", "section_code": "AR", "limit": 20, "user_uid": USER})
     client.get("/decision-memory/patterns")
-    assert patterns.calls[1][1] == {"status": None, "section_code": None, "limit": 200, "user_uid": USER}
+    assert patterns.calls[1][1] == {"status": None, "section_code": None, "limit": 50, "user_uid": USER}
     reviewed = _call(client, "reviewDecisionPattern", body={"decision": "suspend"})
     assert reviewed.status_code == 200 and reviewed.json()["status"] == "approved"
     assert patterns.calls[2] == ("review", {"pattern_id": PATTERN, "decision": "suspend", "user_uid": USER, "idempotency_key": "wave5-seal-key"})
@@ -112,7 +112,7 @@ def test_a_route_is_a_closed_one() -> None:
     assert _call(client, "reviewDecisionPattern", headers={}).status_code == 422
     for body in ({"decision": "delete"}, {"decision": "approve", "surprise": 1}, {}):
         assert _call(client, "reviewDecisionPattern", body=body).status_code == 422, body
-    for query in ({"status": "approved-ish"}, {"limit": 0}, {"limit": 501}, {"section_code": "x" * 65}):
+    for query in ({"status": "approved-ish"}, {"limit": 0}, {"limit": 201}, {"section_code": "x" * 65}):
         assert client.get("/decision-memory/patterns", params=query).status_code == 422, query
     # an empty filter is the absent one
     assert client.get("/decision-memory/patterns", params={"status": ""}).status_code == 200
@@ -127,18 +127,18 @@ def test_an_answer_that_is_not_the_contracts_shape_is_refused_not_passed_on() ->
 
 def test_the_quality_table_is_counts_and_leaves_an_unset_member_out() -> None:
     rows = {"rows": [
-        {"section_code": "AR", "ensemble": False, "cell_key": CELL.replace("leg1", "main"), "model_id": "claude-opus-5-5", "decided_count": 9,
+        {"section_code": "AR", "ensemble": False, "cell_key": CELL, "model_id": "claude-opus-5-5", "decided_count": 9,
          "accepted_count": 7, "rejected_count": 2},
         {"section_code": "AR", "ensemble": True, "decided_count": 4, "accepted_count": 1, "rejected_count": 3},
     ]}
-    answer = _client(stage_quality=_Quality(rows)).get("/stage-quality")
+    answer = _client(stage_quality=_Quality(rows)).get("/quality-table")
     assert answer.status_code == 200 and answer.json() == rows, answer.text
     assert "cell_key" not in answer.json()["rows"][1] and "model_id" not in answer.json()["rows"][1]
-    assert _client(stage_quality=_Quality({"rows": []})).get("/stage-quality").json() == {"rows": []}       # nothing decided: an empty table
+    assert _client(stage_quality=_Quality({"rows": []})).get("/quality-table").json() == {"rows": []}       # nothing decided: an empty table
     for bad in ({"section_code": "AR", "ensemble": False, "decided_count": 0, "accepted_count": 0, "rejected_count": 0},   # no row without a decision
                 {"section_code": "AR", "ensemble": False, "cell_key": "blocks:leg9", "decided_count": 1, "accepted_count": 1, "rejected_count": 0},
                 {"section_code": "AR", "ensemble": False, "decided_count": 1, "accepted_count": 1, "rejected_count": 0, "share": 1.0}):
-        assert _client(stage_quality=_Quality({"rows": [bad]})).get("/stage-quality").status_code >= 500, bad
+        assert _client(stage_quality=_Quality({"rows": [bad]})).get("/quality-table").status_code >= 500, bad
 
 
 def test_the_register_holds_exactly_these_roles_and_never_the_viewer() -> None:
@@ -163,7 +163,7 @@ def test_the_document_declares_the_three_operations_and_the_new_members(document
                   if isinstance(op, dict) and "operationId" in op}
     assert operations["listDecisionPatterns"][:2] == ("GET", "/decision-memory/patterns")
     assert operations["reviewDecisionPattern"][:2] == ("POST", "/decision-memory/patterns/{pattern_id}/review")
-    assert operations["getStageQuality"][:2] == ("GET", "/stage-quality")
+    assert operations["getQualityTable"][:2] == ("GET", "/quality-table")
     for name in EXPECTED_ROLES:
         assert "403" in operations[name][2]["responses"], name
     keyed = [p for p in operations["reviewDecisionPattern"][2]["parameters"] if p["name"] == "Idempotency-Key"]

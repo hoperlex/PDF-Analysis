@@ -33,7 +33,7 @@ from typing import Annotated, Any, Final, Literal, NoReturn
 from fastapi import APIRouter, Path, Query
 from pydantic import BeforeValidator, Field, WithJsonSchema
 
-from auditmanager.api.routers.declarations import STATE_CONFLICT_DESCRIPTION, envelope_responses, success
+from auditmanager.api.routers.declarations import STATE_CONFLICT_DESCRIPTION, LimitParam, envelope_responses, success
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.precedents_ports import (
     DecisionPatternsPort, PrecedentsPort, PrecedentSettingsPort, StageQualityPort, VectorControlPort,
@@ -87,7 +87,6 @@ PatternSectionFilter = Annotated[
     WithJsonSchema({"type": "string", "minLength": 1, "maxLength": 64}),
     Query(json_schema_extra=optional_property),
 ]
-PatternLimit = Annotated[int, Field(ge=1, le=500), Query()]
 
 RunIdPath = Annotated[models.RunId, Path()]
 PatternIdPath = Annotated[models.DecisionPatternId, Path()]
@@ -228,12 +227,12 @@ def build_precedent_routes(
         description=(
             "`CRIT-SEAL-53` (plan-v5 section 3.7, owner ruling Н4): the failure patterns -- a refusing comment of the representative case of a group of "
             "refusals in one section, proposed by an algorithm and approved by an expert. Newest proposal first; `status` and `section_code` are "
-            "optional filters, `limit` cuts `items` (`total` counts every match). Only an `approved` pattern reaches hint P1. `role:admin|expert`; the "
+            "optional filters, `limit` (1 to 200, default 50) cuts `items` (`total` counts every match). Only an `approved` pattern reaches hint P1. `role:admin|expert`; the "
             "viewer is denied."
         ),
     )
     def list_decision_patterns(
-        subject: CurrentSubject, status: PatternStatusFilter = None, section_code: PatternSectionFilter = None, limit: PatternLimit = 200,
+        subject: CurrentSubject, status: PatternStatusFilter = None, section_code: PatternSectionFilter = None, limit: LimitParam = 50,
     ) -> WireResponse:
         if decision_patterns is None:
             _asleep(DEPENDENCIES["decision_patterns"])
@@ -261,7 +260,7 @@ def build_precedent_routes(
         return json_response(200, encode_json(models.DecisionPattern.model_validate(dict(view)).model_dump(mode="json")))
 
     @router.get(
-        "/stage-quality", operation_id="getStageQuality", tags=_TAGS,
+        "/quality-table", operation_id="getQualityTable", tags=_TAGS,
         response_model=models.StageQualityTable,
         responses={**success(200, "One row per cell (or ensemble) and section that has a decision."), **envelope_responses(401, 403, 500, 503)},
         description=(
@@ -270,7 +269,7 @@ def build_precedent_routes(
             "score; no cell with no decision appears, and the table changes no routing. `role:admin`."
         ),
     )
-    def get_stage_quality(subject: CurrentSubject) -> WireResponse:
+    def get_quality_table(subject: CurrentSubject) -> WireResponse:
         if stage_quality is None:
             _asleep(DEPENDENCIES["stage_quality"])
         view = stage_quality.get_stage_quality(user_uid=subject.user_uid)

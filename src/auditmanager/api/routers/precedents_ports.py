@@ -70,7 +70,7 @@ class DecisionPatternsPort(Protocol):
 
 
 class StageQualityPort(Protocol):
-    """The quality table (`QUAL-01`, contract 1.53.0): the read, for ``admin``. With no port ``getStageQuality`` keeps the answer the seal gave it
+    """The quality table (`QUAL-01`, contract 1.53.0): the read, for ``admin``. With no port ``getQualityTable`` keeps the answer the seal gave it
     (``503 dependency_unavailable``, ``details.dependency`` ``stage_quality``); the composition root wires the lane's service into
     ``build_router(stage_quality=...)``. It answers in the contract's shape as a mapping the route validates against ``StageQualityTable``."""
 
