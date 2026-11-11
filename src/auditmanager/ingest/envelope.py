@@ -185,9 +185,10 @@ PDFIUM_LOCK: Final[threading.Lock] = threading.Lock()
 # -- the reader's bounds (`W55B-FIX`, X-1) -----------------------------------------------
 #
 # A drawing element is a segment of a path or any other page object, counted into form
-# XObjects (``pdf_reader._elements``): what pdfplumber pays for when a run reads the page --
+# XObjects (``pdf_reader._elements``): what pdfplumber paid for when a run read the page --
 # about 1.6 to 2 KiB and 31 to 41 us an element, measured on the owner's export (24 MiB and
 # 0.51 s a page) and on `W55B-REHEARSAL-01`'s vector drawing set (23 MiB and 0.46 s a page).
+# Since `PDF-TEXT-LAYOUT-01` a path costs the run its interpretation only (below).
 #
 # Measured with PDFium, counted as the reader counts, on the 674 PDFs of the norms corpus
 # (28 251 pages) and on the owner's portal export (30 pages): at most 75 486 drawing
@@ -200,11 +201,13 @@ PDFIUM_LOCK: Final[threading.Lock] = threading.Lock()
 # `PDF-PAGE-CONTENT-01` (owner poll, 2026-11-11). Real CAD sheets have pages far above the
 # sample: an automation drawing set (13АВ-РД-АК2-ПА) was refused at 400 000, and the
 # comparison measurement (`ingest.comparison_pdf.envelope`) has a page of 536 426. The owner
-# chose to raise both element ceilings five times without measuring that set. What a run's
-# pdfplumber pays for such a page is not re-measured here: at the figures above, a page of
-# 2 000 000 elements is about 4 GiB, more than the run's PDF precheck child admits
-# (``analysis.stages.pdf_precheck``, 1.5 GiB), and two pdfplumber passes over a document of
-# 40 000 000 take about 2 500 to 3 300 s, past that child's 1 800 s.
+# chose to raise both element ceilings five times without measuring that set. At the figures
+# above a page of 2 000 000 elements was about 3 GiB of pdfplumber layout, more than the run's
+# PDF precheck child admits (``analysis.stages.pdf_precheck``, 1.5 GiB); since
+# `PDF-TEXT-LAYOUT-01` the run lays pages out without their paths
+# (``analysis.stages.extraction.lay_out_text_only``), and such a page is read in about 21 s
+# with no measurable growth. Time still grows with the elements: two passes over a document of
+# 40 000 000 are about 2 x 420 s at that rate, inside that child's 1 800 s.
 
 #: A page's drawing elements: five times the W55B-FIX figure (400 000), owner 2026-11-11.
 PAGE_ELEMENTS_MAX: Final[int] = quota(2_000_000, 2**63 - 1)
