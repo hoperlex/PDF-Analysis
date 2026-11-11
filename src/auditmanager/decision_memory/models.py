@@ -198,9 +198,23 @@ class CaseContent:
     block_evidence: tuple[BlockEvidenceFact, ...] = ()
 
 
+#: The shape of a precedent mark as ``decision_memory_decision.precedent_label_at_decision`` holds it (``ck_decision_memory_decision_precedent_label``): a
+#: code, so a new mark of the programme needs no change here. The memory does not import the precedent core to name them.
+_PRECEDENT_LABEL = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+#: The only verdicts the document's history can have shown (``ck_decision_memory_decision_precedent_history_verdict_shown``).
+_HISTORY_VERDICTS: Final[frozenset[str]] = frozenset({"accepted", "rejected"})
+
+
 @dataclass(frozen=True, slots=True)
 class DecisionFact:
-    """One ledger event, as the memory keeps it."""
+    """One ledger event, as the memory keeps it.
+
+    The last three members are **decision metadata, not case content** (`CRIT-CAPTURE-01`, plan-v5 2.1): what the server was showing for the finding when the
+    expert decided -- the mark in force, the revision of the pass it comes from and the verdict of the document's history (hint P5) that was shown. They
+    are written beside the decision and read by the vote's independence rule; :func:`content_digest` is over :class:`CaseContent` and never sees them, so a
+    second decision on a known observation, taken under another mark, is no conflict. ``None`` means none was known: the label and the revision are both
+    given or both absent, as the table holds them.
+    """
 
     source_decision_id: str
     event_type: str
@@ -209,8 +223,19 @@ class DecisionFact:
     author_user_uid: str | None
     origin_kind: str
     decided_at: datetime
+    precedent_label_at_decision: str | None = None
+    precedent_revision: int | None = None
+    precedent_history_verdict_shown: str | None = None
 
     def __post_init__(self) -> None:
+        if (self.precedent_label_at_decision is None) != (self.precedent_revision is None):
+            raise _invalid("the mark at the decision and the revision it comes from are both given or both absent")
+        if self.precedent_label_at_decision is not None and not _PRECEDENT_LABEL.match(self.precedent_label_at_decision):
+            raise _invalid(f"{self.precedent_label_at_decision!r} is not a precedent mark")
+        if self.precedent_revision is not None and (isinstance(self.precedent_revision, bool) or self.precedent_revision < 1):
+            raise _invalid("a pass revision is a whole number from 1")
+        if self.precedent_history_verdict_shown is not None and self.precedent_history_verdict_shown not in _HISTORY_VERDICTS:
+            raise _invalid(f"{self.precedent_history_verdict_shown!r} is not a verdict the history can show")
         if self.event_type not in CAPTURED_EVENT_TYPES:
             raise _invalid(f"{self.event_type!r} is not a captured decision event")
         if self.origin_kind not in ORIGIN_KINDS:

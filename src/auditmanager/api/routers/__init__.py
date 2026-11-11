@@ -54,7 +54,7 @@ from auditmanager.api.routers.executor_groups import build_executor_group_routes
 from auditmanager.api.routers.hosts import build_host_routes  # HOSTS-SEAL-1
 from auditmanager.api.routers.hosts_ports import ExecutorHostPort, RunStagePort, StageModelPort  # HOSTS-SEAL-1, HOSTS-SEAL-2
 from auditmanager.api.routers.executors import build_executor_routes
-from auditmanager.api.routers.runner import build_runner_routes
+from auditmanager.api.routers.runner import ExecutorTaskContextPort, build_runner_routes, build_task_context_route  # CTX-STAND
 from auditmanager.api.routers.findings import build_finding_routes
 from auditmanager.api.routers.handlers import (
     FailureEnvelopeMiddleware,
@@ -337,6 +337,7 @@ def build_router(
     vector_control: VectorControlPort | None = None,
     precedent_settings: PrecedentSettingsPort | None = None,
     precedents: PrecedentsPort | None = None,
+    task_context: ExecutorTaskContextPort | None = None,
 ) -> Router:
     """Assemble the 325 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
@@ -441,6 +442,10 @@ def build_router(
     # `EXEC-PULL-01`. The pull channel: two administrator operations on runner tokens and the
     # four a runner calls with one. Optional with a default, for the reason `blocks` gives.
     build_runner_routes(router, runner)  # type: ignore[arg-type]
+    # `CTX-STAND` (contract 1.51.0): `getExecutorTaskContext`, the agent's ask for reference data, moved here from the seal's sleeping route in
+    # `api/routers/precedents.py` with its declaration word for word, so the served document is unchanged. Declared whatever the port; with none it
+    # answers `503 dependency_unavailable` (`executor_task_context`) as the seal did.
+    build_task_context_route(router, task_context)
     # `EXEC2-ENROLL-01`. The universal agent: the enrollment grant and its exchange, the agent's health, the
     # public package, the API side of an install over SSH and the integration-authorisation mark. Optional
     # with a default, for the reason `blocks` gives; declared whatever the port, answerable only with one.
@@ -461,8 +466,8 @@ def build_router(
     # reason `blocks` gives; declared whatever the port, answerable only with one. The implementation is `runs/stage_facts.py` behind
     # `bootstrap/run_stage_adapter.py`; the integrator wires it into the composition root as `run_stages=`.
     build_run_stage_routes(router, run_stages)  # type: ignore[arg-type]
-    # `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2). The «Прецеденты» surface: the reference data of a task, the labels and the card of
-    # a finding, the pause of the vectors and the settings. Sealed and asleep: no port, every body answers `503 dependency_unavailable`
+    # `CRIT-SEAL-50` (contract 1.51.0, plan-v5 section 3.2). The «Прецеденты» surface: the labels and the card of
+    # a finding, the pause of the vectors and the settings (the reference data of a task is the runner's, declared above). Sealed and asleep: no port, every body answers `503 dependency_unavailable`
     # until the lane that owns it fills it (`api/routers/precedents.py`). `EMBED-01` filled the vector control: `vector_control` is its port,
     # optional with a default for the reason `blocks` gives above; None keeps the sleeping answer. `PREC-SETTINGS-01` filled the settings:
     # `precedent_settings` is its port, with the same default. `PREC-PASS` filled the labels and the card: `precedents` is its port, with the same default.

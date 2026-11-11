@@ -128,10 +128,12 @@ _INSERT_DECISION = text(
     """
     INSERT INTO decision_memory_decision (
         memory_decision_id, case_id, source_decision_id, event_type, verdict, severity,
-        author_user_uid, origin_kind, decided_at
+        author_user_uid, origin_kind, decided_at,
+        precedent_label_at_decision, precedent_revision, precedent_history_verdict_shown
     ) VALUES (
         :memory_decision_id, :case_id, :source_decision_id, :event_type, :verdict, :severity,
-        :author_user_uid, :origin_kind, :decided_at
+        :author_user_uid, :origin_kind, :decided_at,
+        :precedent_label_at_decision, :precedent_revision, :precedent_history_verdict_shown
     )
     ON CONFLICT (source_decision_id) DO NOTHING
     RETURNING memory_decision_id
@@ -311,6 +313,9 @@ class MemoryRepository:
                 "author_user_uid": decision.author_user_uid,
                 "origin_kind": decision.origin_kind,
                 "decided_at": decision.decided_at,
+                "precedent_label_at_decision": decision.precedent_label_at_decision,
+                "precedent_revision": decision.precedent_revision,
+                "precedent_history_verdict_shown": decision.precedent_history_verdict_shown,
             },
         ).scalar_one_or_none()
         if created is None:

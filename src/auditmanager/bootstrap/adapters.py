@@ -3014,6 +3014,13 @@ class MemoryCaptureAssembler:
 
     A failure propagates (the decision fails loudly): nothing here falls back to a case without its crops or its citations.
 
+    **The mark shown at the decision** (`CRIT-CAPTURE-01` part D, plan-v5 2.1): the decision row carries the mark the server was giving the finding, the
+    revision of the pass it comes from and the verdict of the document's history that was shown (``precedents.public.shown_at_decision``). It is read in the
+    transaction of the decision, so it is the mark of THAT moment. Two captures do not ask for it, and the columns stay NULL, which says «none was known»:
+    a ``carried`` decision (the system wrote it, no expert was shown anything) and the sweep's repair of an earlier decision (``record_shown=False``: the
+    mark in force now is not the mark in force then, and a vote must never be made independent, or not, by a claim about a moment already past).
+    The values are decision metadata: :func:`~auditmanager.decision_memory.public.content_digest` is over the case's content only and never sees them.
+
     The experts' ``comment`` events are kept too (`ADR-0029` decision 10, `CRIT-CAPTURE-01`): :meth:`capture_comment` hands one to the
     memory in the same transaction (a comment is not a decision and never makes a case), and the first ✓/✕ of a case carries over the
     comments written before it (:meth:`assemble` takes the observation's comment lock, then reads the ledger).
@@ -3037,13 +3044,15 @@ class MemoryCaptureAssembler:
         else:
             self.capture(session, event, origin_kind)
 
-    def capture(self, session: Session, event: Any, origin_kind: str) -> Any:
-        """Capture one ledger decision (a ✓ or a ✕); ``None`` for any other event. A ``comment`` goes through :meth:`capture_comment`."""
+    def capture(self, session: Session, event: Any, origin_kind: str, *, record_shown: bool = True) -> Any:
+        """Capture one ledger decision (a ✓ or a ✕); ``None`` for any other event. A ``comment`` goes through :meth:`capture_comment`.
+
+        ``record_shown`` is true for the capture in the decision's own transaction and false for the sweep's repair of an earlier one (see the class)."""
         from auditmanager.decision_memory.public import CAPTURED_EVENT_TYPES
 
         if event.event_type not in CAPTURED_EVENT_TYPES:
             return None
-        return self._repository.capture(session, self.assemble(session, event, origin_kind))
+        return self._repository.capture(session, self.assemble(session, event, origin_kind, record_shown=record_shown))
 
     def capture_comment(self, session: Session, event: Any) -> Any:
         """Keep one ledger ``comment`` event in the case of its observation, in the caller's transaction (`ADR-0029` decision 10).
@@ -3086,7 +3095,22 @@ class MemoryCaptureAssembler:
                 earlier.append(self._comment_fact(entry))
         return tuple(earlier)
 
-    def assemble(self, session: Session, event: Any, origin_kind: str) -> Any:
+    @staticmethod
+    def _shown_at_decision(session: Session, event: Any, origin_kind: str, *, record_shown: bool) -> dict[str, Any]:
+        """The three members of ``DecisionFact`` that say what the server was showing: the keywords to give it, or none when none was known."""
+        if not record_shown or origin_kind == "carried":
+            return {}
+        from auditmanager.precedents.public import shown_at_decision
+
+        shown = shown_at_decision(session, event.finding_uid)
+        if shown is None:
+            return {}
+        return {
+            "precedent_label_at_decision": shown.label, "precedent_revision": shown.revision,
+            "precedent_history_verdict_shown": shown.history_verdict_shown,
+        }
+
+    def assemble(self, session: Session, event: Any, origin_kind: str, *, record_shown: bool = True) -> Any:
         from auditmanager.decision_memory.public import (
             BlockEvidenceFact, CaptureSnapshot, CaseContent, CaseOrigin, DecisionFact, EvidenceItem, select_case_crops,
         )
@@ -3182,6 +3206,7 @@ class MemoryCaptureAssembler:
                 # and `origin_kind = carried` already says it came from an earlier version.
                 comment=None if origin_kind == "carried" else event.comment,
                 author_user_uid=event.author_user_uid, origin_kind=origin_kind, decided_at=event.recorded_at,
+                **self._shown_at_decision(session, event, origin_kind, record_shown=record_shown),
             ),
         )
 
@@ -3305,7 +3330,8 @@ class MemoryCaptureSweep:
             origin_kind = "carried" if event.carried_from_decision_id else "direct"
             try:
                 with self._sessions() as session:
-                    result = self._assembler.capture(session, event, origin_kind)
+                    # An earlier decision is repaired, not shown anything: the mark in force now is not the one that was in force then.
+                    result = self._assembler.capture(session, event, origin_kind, record_shown=False)
                     session.commit()
             except Exception as error:  # noqa: BLE001 - one event's failure is reported and retried, never hidden
                 failed += 1
@@ -3498,6 +3524,12 @@ class DecisionMemoryAdapter(_SessionHolder):
                     forgotten_content_sha256=e["forgotten_content_sha256"],
                 )
                 for e in detail.status_events
+            ],
+            # `D-682` (contract 1.52.0): the experts' comments, oldest first, with no author (like a decision, the memory shows what was said and
+            # not who said it). A forgotten case has none. ``comments=[]`` is a set member, so the wire says «none» rather than «not reported».
+            comments=[
+                models.DecisionMemoryComment(comment_id=k["comment_id"], decided_at=k["decided_at"], comment=k["comment"])
+                for k in detail.comments
             ],
         )
 

@@ -37,6 +37,8 @@ import pytest
 
 from auditmanager.api.routers import hosts_ports as hosts_port_module
 from auditmanager.api.routers import ports as port_module
+from auditmanager.api.routers import precedents_ports as precedents_port_module
+from auditmanager.api.routers import runner as runner_port_module
 from auditmanager.bootstrap.adapters import DecisionAdapter
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -201,6 +203,14 @@ PORT_FOR_ARGUMENT = {
     "comparison_stage_runs": "ComparisonStageRunPort",
     # `CMP-SEAL-C4`: the chain-run, review and repair operations of the stage.
     "comparison_stage_c4": "ComparisonStageC4Port",
+    # `EMBED-01`, `PREC-SETTINGS-01`, `PREC-PASS` (contract 1.51.0): the pause of the vectors, the journal of the programme's settings and the precedents'
+    # two reads. Their Protocols live in `api/routers/precedents_ports.py`; the implementations are the services of the `precedents` context.
+    "vector_control": "VectorControlPort",
+    "precedent_settings": "PrecedentSettingsPort",
+    "precedents": "PrecedentsPort",
+    # `CTX-STAND` (contract 1.51.0): the reference data of a task. The Protocol lives in `api/routers/runner.py`, beside the route; the implementation is
+    # the runner adapter's `get_task_context`, the same object that is passed as `runner=`.
+    "task_context": "ExecutorTaskContextPort",
 }
 
 
@@ -326,7 +336,11 @@ def _class_index() -> dict[str, list[tuple[str, ast.ClassDef]]]:
 
 
 def _declared(port_name: str) -> frozenset[str]:
-    port = getattr(port_module, port_name, None) or getattr(hosts_port_module, port_name)
+    port = next(
+        found
+        for module in (port_module, hosts_port_module, precedents_port_module, runner_port_module)
+        if (found := getattr(module, port_name, None)) is not None
+    )
     return frozenset(
         name
         for name in dir(port)

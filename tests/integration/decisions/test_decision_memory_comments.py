@@ -278,6 +278,38 @@ def test_the_read_answers_a_cases_comments_oldest_first_and_a_forgotten_case_non
     assert other_detail is not None and len(other_detail.comments) == 1        # another case's comment is not touched
 
 
+def test_the_adapters_view_of_a_case_carries_its_comments_without_an_author_and_a_forgotten_case_has_none(
+    session: Session, published: Any, memory: SimpleNamespace
+) -> None:
+    """`D-682` (contract 1.52.0): ``DecisionMemoryAdapter.get_case`` maps ``CaseDetail.comments`` into ``DecisionMemoryCase.comments[]`` --
+    ``{comment_id, decided_at, comment}``, oldest first, and no author even though the memory keeps one. ``[]`` (a member that is SET) for a case with no
+    comments and for a forgotten one, so the wire says «none», not «not reported»."""
+    from contextlib import nullcontext
+
+    from auditmanager.bootstrap.adapters import DecisionMemoryAdapter
+
+    adapter = DecisionMemoryAdapter(lambda: nullcontext(session))                    # type: ignore[arg-type,return-value]
+    _decide(session, memory, published, "accept")
+    _decide(session, memory, published, "reject", second=True)
+    first_case, second_case = _case_id(session, _observation(published)), _case_id(session, _observation(published, True))
+    for index in range(2):
+        note = _event(session, published, "comment", f"Заметка {index}.")
+        memory.repository.capture_comment(session, observation_id=_observation(published), comment=_fact(note, author="usr_" + "0" * 26))
+
+    wire = adapter.get_case(case_id=first_case).model_dump(mode="json")               # the router renders it exactly so
+    assert [c["comment"] for c in wire["comments"]] == ["Заметка 0.", "Заметка 1."], "oldest first"
+    assert all(set(c) == {"comment_id", "decided_at", "comment"} for c in wire["comments"]), "no author, whoever wrote it"
+    assert all(c["comment_id"].startswith("dmk_") for c in wire["comments"])
+    assert wire["comments"][0]["decided_at"] <= wire["comments"][1]["decided_at"]
+
+    silent = adapter.get_case(case_id=second_case)
+    assert silent is not None and silent.comments == [] and silent.model_dump(mode="json")["comments"] == [], "present and empty, never absent or null"
+
+    _forget(session, first_case)
+    forgotten = adapter.get_case(case_id=first_case)
+    assert forgotten is not None and forgotten.summary.status == "forgotten" and forgotten.comments == []
+
+
 def test_a_comment_and_a_first_decision_contend_on_the_locks_the_repository_documents(
     session: Session, published: Any, memory: SimpleNamespace
 ) -> None:

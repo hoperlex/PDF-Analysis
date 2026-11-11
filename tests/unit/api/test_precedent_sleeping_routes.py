@@ -1,4 +1,7 @@
-"""`CRIT-SEAL-50` (contract 1.51.0): the seven sleeping routes of the «Прецеденты» surface, the role register and the schemas, with no database.
+"""`CRIT-SEAL-50` (contract 1.51.0): the six sleeping routes of the «Прецеденты» surface, the role register and the schemas, with no database.
+
+The seventh operation of the seal, ``getExecutorTaskContext``, is the runner's: `CTX-STAND` moved it to ``api/routers/runner.py`` and `CRIT-CAPTURE-01`
+part D wired it (its edge is proved in ``tests/integration/executors/test_runner_context_route.py``); here it stays in the document and in the register.
 
 The routes are mounted alone on a bare ``FastAPI`` application with the principal the authorization seam would publish. What is shown:
 
@@ -35,21 +38,18 @@ from auditmanager.api.security import (
     ROLE_EXPERT,
     ROLE_VIEWER,
     RUNNER_OPERATIONS,
-    RunnerIdentity,
     Subject,
-    current_runner,
     current_subject,
 )
 
-TASK = "ext_01M2545JSD15ETSNNV904X991K"
 RUN = "run_01M2545JSD15ETSNNV904X991K"
 FINDING = "fnd_01M2545JSD15ETSNNV904X991K"
 USER = "usr_01M2545JSD15ETSNNV904X991K"
 KEY = {"Idempotency-Key": "precedents-seal-key"}
 
 #: operationId -> (method, path, json body, headers, the class name the sleeping body refuses with). Written here, not read from the contract.
+#: Six routes: ``getExecutorTaskContext`` left this module with `CTX-STAND` (it is the runner's, in ``api/routers/runner.py``).
 ROUTES: dict[str, tuple[str, str, Any, dict[str, str], str]] = {
-    "getExecutorTaskContext": ("POST", f"/runner/tasks/{TASK}/context", {"kind": "similar_cases"}, {}, "executor_task_context"),
     "getRunPrecedents": ("GET", f"/runs/{RUN}/precedents", None, {}, "precedents"),
     "getFindingPrecedents": ("GET", f"/findings/{FINDING}/precedents", None, {}, "precedents"),
     "getVectorControl": ("GET", "/vector-control", None, {}, "vector_control"),
@@ -79,8 +79,6 @@ def client() -> TestClient:
     build_precedent_routes(router)
     app.include_router(router)
     app.dependency_overrides[current_subject] = lambda: Subject(user_uid=USER, login="a@suite.invalid", token_epoch=1, display_label="A")
-    app.dependency_overrides[current_runner] = lambda: RunnerIdentity(token_id="ert_01M2545JSD15ETSNNV904X991K", connection_id=None,
-                                                                      host_id="exh_01M2545JSD15ETSNNV904X991K")
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -102,25 +100,29 @@ def test_every_sleeping_body_refuses_with_dependency_unavailable_and_names_its_l
     assert ROUTES[operation][4] in DEPENDENCIES
 
 
-def test_the_four_lane_names_are_the_ones_the_routes_use() -> None:
+def test_the_three_lane_names_are_the_ones_the_routes_use() -> None:
     assert {route[4] for route in ROUTES.values()} == set(DEPENDENCIES)
-    assert DEPENDENCIES == {"executor_task_context": "executor_task_context", "precedents": "precedents",
-                            "vector_control": "vector_control", "precedent_settings": "precedent_settings"}
+    assert DEPENDENCIES == {"precedents": "precedents", "vector_control": "vector_control", "precedent_settings": "precedent_settings"}
+
+
+def test_the_context_route_is_no_longer_declared_here() -> None:
+    """`CTX-STAND` moved it: this module's builder declares six operations, and the context's sleeping answer is ``build_task_context_route``'s."""
+    router = APIRouter()
+    build_precedent_routes(router)
+    declared = sorted(route.operation_id for route in router.routes if getattr(route, "operation_id", None))
+    assert declared == sorted(ROUTES) and "getExecutorTaskContext" not in declared
 
 
 def test_a_sleeping_route_is_still_a_closed_one(client: TestClient) -> None:
     # a malformed identity in the path is not a resource (404, by design: the API is no oracle for which identities exist)
-    for operation, path in (("getExecutorTaskContext", "/runner/tasks/task-1/context"), ("getRunPrecedents", "/runs/run-1/precedents"),
-                            ("getFindingPrecedents", "/findings/F-014/precedents")):
+    for operation, path in (("getRunPrecedents", "/runs/run-1/precedents"), ("getFindingPrecedents", "/findings/F-014/precedents")):
         assert _call(client, operation, path=path).status_code == 404, operation
     # a keyed write without its key is refused before anything else
     for operation in ("setVectorPaused", "appendPrecedentSetting"):
         answer = _call(client, operation, headers={})
         assert answer.status_code == 422 and answer.json()["error_code"] == "validation_failed", (operation, answer.text)
-    # a body that is not the declared one: an unknown kind, an unknown setting, a member nobody declared, a pause that is not a boolean (pydantic reads «yes» as true, as it does everywhere)
-    for operation, body in (("getExecutorTaskContext", {"kind": "norm_excerpts"}), ("getExecutorTaskContext", {"kind": "patterns", "x": 1}),
-                            ("getExecutorTaskContext", {}),
-                            ("appendPrecedentSetting", {"setting_name": "ar_v3", "value": {}}),
+    # a body that is not the declared one: an unknown setting, a value that is not an object, a pause that is not a boolean (pydantic reads «yes» as true, as it does everywhere)
+    for operation, body in (("appendPrecedentSetting", {"setting_name": "ar_v3", "value": {}}),
                             ("appendPrecedentSetting", {"setting_name": "one_list", "value": [1]}),
                             ("setVectorPaused", {"paused": "maybe"}), ("setVectorPaused", {})):
         answer = _call(client, operation, body=body)
@@ -166,7 +168,8 @@ def test_the_document_declares_the_seven_operations_where_the_plan_says(document
         declared = operations[name]
         # the declared path is the template of the one called
         assert declared[0] == method, name
-    assert operations["getExecutorTaskContext"][1] == "/runner/tasks/{task_id}/context"
+    # the seventh is the runner's now, and the document says the same as it did when it was asleep here
+    assert operations["getExecutorTaskContext"][:2] == ("POST", "/runner/tasks/{task_id}/context")
     assert operations["getRunPrecedents"][1] == "/runs/{run_id}/precedents"
     assert operations["getFindingPrecedents"][1] == "/findings/{finding_uid}/precedents"
     assert operations["getVectorControl"][1] == "/vector-control"

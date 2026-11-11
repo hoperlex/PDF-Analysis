@@ -99,7 +99,8 @@ class CaseDetail:
     """A case with everything it keeps. ``content`` is ``None`` for a forgotten case: it answers its tombstone and nothing else.
 
     ``comments`` are the experts' ``comment`` events kept beside the decisions (``decision_memory_comment``), oldest first, each
-    ``{comment_id, author_user_uid, comment, decided_at}``; empty for a forgotten case. The 1.51.0 API contract has no field for them.
+    ``{comment_id, author_user_uid, comment, decided_at}``; empty for a forgotten case. The API contract (1.52.0, ``D-682``) carries them without the
+    author: ``DecisionMemoryCase.comments[]`` is ``{comment_id, decided_at, comment}``, mapped by the composition root's adapter.
     """
 
     summary: CaseSummary

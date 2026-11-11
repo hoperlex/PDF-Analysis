@@ -1,7 +1,7 @@
-"""The «Прецеденты» surface (`CRIT-SEAL-50`, contract 1.51.0, plan-v5 section 3.2): seven sleeping routes.
+"""The «Прецеденты» surface (`CRIT-SEAL-50`, contract 1.51.0, plan-v5 section 3.2): six routes of the user's; the seventh, ``getExecutorTaskContext``, is the
+runner's and lives in ``api/routers/runner.py`` (`CTX-STAND`).
 
 ====================================  =================================================================================================
-``getExecutorTaskContext``            a runner token with the claim of the task; the reference data of a `review:main` task, by kind
 ``getRunPrecedents``                  ``expert`` or ``admin``; the labels of the findings of a run and the queue «Рекомендовано снять»
 ``getFindingPrecedents``              ``expert`` or ``admin``; the card of a finding: label, hints, similar cases, possible norms
 ``getVectorControl``                  ``expert`` or ``admin``; whether the vectors are paused and the state of the night window
@@ -11,17 +11,18 @@
 ====================================  =================================================================================================
 
 The viewer («Наблюдатель», `R-150w`) is denied the six user routes: the authorization seam (``api/security.py``) decides it before any handler
-runs, and a router decides nothing about roles. The runner route is reached with a runner token only (``RUNNER_OPERATIONS``).
+runs, and a router decides nothing about roles. The context route is reached with a runner token only (``RUNNER_OPERATIONS``).
 
-**Sealed, and asleep.** Nothing here reads or writes anything: every body refuses with ``503 dependency_unavailable`` (``details.dependency`` the
-stable class name of the lane that owns it) until that lane replaces it -- `CTX-STAND` the context. **`PREC-PASS` filled the precedents**:
+**Sealed, and asleep until a port stands behind it.** With no port a body reads and writes nothing: it refuses with ``503 dependency_unavailable``
+(``details.dependency`` the stable class name of the lane that owns it) until that lane's adapter is wired. **`PREC-PASS` filled the precedents**:
 ``getRunPrecedents`` and ``getFindingPrecedents`` answer through ``PrecedentsPort`` when the composition root hands ``build_router`` one, and keep the
 sleeping answer when it does not. **`EMBED-01` filled
 the vector control**: ``getVectorControl`` and ``setVectorPaused`` answer through ``VectorControlPort`` when the composition root hands
 ``build_router`` one, and keep the sleeping answer when it does not (`api/routers/precedents_ports.py`). **`PREC-SETTINGS-01` filled the settings**
-the same way: ``listPrecedentSettings`` and ``appendPrecedentSetting`` answer through ``PrecedentSettingsPort``. The contract's error catalogue is
-closed and has no ``501``; ``503`` is what every earlier seal's stubs
-answer (``CMP-SEAL-C0`` onwards), and there is no fallback: a caller is told that the surface is not served, never given an empty answer.
+the same way: ``listPrecedentSettings`` and ``appendPrecedentSetting`` answer through ``PrecedentSettingsPort``. **`CTX-STAND` moved the context** to the
+runner's module and the composition root wired it (`CRIT-CAPTURE-01` part D). The contract's error catalogue is closed and has no ``501``; ``503`` is what
+every earlier seal's stubs answer (``CMP-SEAL-C0`` onwards), and there is no fallback: a caller is told that the surface is not served, never given an
+empty answer.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.precedents_ports import PrecedentsPort, PrecedentSettingsPort, VectorControlPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
-from auditmanager.api.security import CurrentRunner, CurrentSubject
+from auditmanager.api.security import CurrentSubject
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -51,7 +52,6 @@ SET_VECTOR_PAUSED_COMMAND_TYPE: Final[str] = "set_vector_paused"
 
 #: The stable class names a sleeping route refuses with, one per owning lane.
 DEPENDENCIES = {
-    "executor_task_context": "executor_task_context",
     "precedents": "precedents",
     "vector_control": "vector_control",
     "precedent_settings": "precedent_settings",
@@ -60,7 +60,6 @@ DEPENDENCIES = {
 _TAGS = ["execution"]
 _FINDING_TAGS = ["findings"]
 
-TaskIdPath = Annotated[models.ExecutorTaskId, Path()]
 RunIdPath = Annotated[models.RunId, Path()]
 FindingUidPath = Annotated[models.FindingUid, Path()]
 
@@ -89,31 +88,6 @@ def build_precedent_routes(
     router: APIRouter, vector_control: VectorControlPort | None = None, precedent_settings: PrecedentSettingsPort | None = None,
     precedents: PrecedentsPort | None = None,
 ) -> None:
-    @router.post(
-        "/runner/tasks/{task_id}/context", operation_id="getExecutorTaskContext", tags=_TAGS,
-        response_model=models.ExecutorTaskContext,
-        responses={**success(200, "The reference data of the task by `input_id`, or `status: unavailable` with a `reason`. A repeat of the "
-                                  "same kind answers the same and spends no budget."),
-                   **envelope_responses(401, 404, 409, 422, 500, 503, descriptions={
-                       404: "The task is not one that may be given reference data: it is not a model call of a run, the run has no stage "
-                            "plan, its cell is not `review:main`, or the consent does not carry the same `executor_context_policy`. A "
-                            "task is not told apart from one that does not exist.",
-                       409: "The task is no longer this runner's to ask for: `conflict` with `details.conflict_reason` `claim_lost`, "
-                            "`task_expired` or `task_terminal`. The agent calls the model without reference data."})},
-        description=(
-            "`CRIT-SEAL-50` (plan-v5 section 3.2): the agent behind the claim of a `review:main` task asks once per kind for the decisions "
-            "of experts on findings like the task's own. The stand answers by the `input_id` of the task's `context_request` and journals "
-            "what it gave (no text). **Idempotent by (task, kind)**: a repeat returns the same answer and spends no budget. While the "
-            "night encoder is the only one the answer is `status: unavailable, reason: until_move`. The agent appends the data to the prompt "
-            "as reference, never as ground, and echoes `context_sha256` in `submitExecutorTaskAnswer`; an error here never fails the task. "
-            "Runner token only; no role."
-        ),
-    )
-    def get_executor_task_context(
-        identity: CurrentRunner, task_id: TaskIdPath, body: models.ExecutorTaskContextRequest,
-    ) -> models.ExecutorTaskContext:
-        _asleep(DEPENDENCIES["executor_task_context"])
-
     @router.get(
         "/runs/{run_id}/precedents", operation_id="getRunPrecedents", tags=_FINDING_TAGS,
         response_model=models.RunPrecedents,

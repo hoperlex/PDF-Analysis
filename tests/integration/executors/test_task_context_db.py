@@ -3,8 +3,9 @@
 The run is started for real (``start_audit_run`` with a stage plan, plan v3 by the environment), so its consent is the one the estimate writes and
 ``read_run_cost_policy`` reads back: with the «контекст критику» switch journalled on it holds ``executor_context_policy``, without it it does not. The
 task is a row of the pull channel with the payload the adapter writes; the runner is the real application (the seam, the envelope, the runner
-adapter), wired the way the composition root will wire it: ``WiredRunner`` below is the adapter's two additions (the claim's ``context_request`` and the
-operation's method) and the route is built by ``build_task_context_route``, with the seal's sleeping route of ``precedents.py`` taken out.
+adapter), wired the way the composition root wires it (`CRIT-CAPTURE-01` part D): the adapter's claim carries ``context_request`` and its method answers the
+operation, and ``build_router(task_context=...)`` declares the route. ``WiredRunner`` below only adds what the stand does not have yet, a source that finds
+cases (the encoder's move), and the first test after the fixtures drives the unmodified ``RunnerAdapter`` through an unmodified ``build_router``.
 
 What each case shows, and what it would let through if its rule were missing:
 
@@ -28,7 +29,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.api.routers import build_router
-from auditmanager.api.routers.runner import build_task_context_route
 from auditmanager.api.schemas import models
 from auditmanager.bootstrap.adapters import ExecutorAdapter
 from auditmanager.bootstrap.runner import RunnerAdapter
@@ -48,8 +48,9 @@ SCHEMA = {"type": "object", "properties": {"observations": {"type": "array"}}, "
 
 
 class WiredRunner(RunnerAdapter):
-    """``RunnerAdapter`` with the two additions the composition root makes for `CTX-STAND`: the claim carries ``context_request``, and the adapter
-    answers ``getExecutorTaskContext`` over ``executors.public.get_task_context`` (a source may be handed in; none means the one of today)."""
+    """``RunnerAdapter`` with a source handed in: the adapter now carries ``context_request`` and answers ``getExecutorTaskContext`` over
+    ``executors.public.get_task_context`` itself (`CRIT-CAPTURE-01` part D), with the source of today; this subclass stands for the day the encoder moves
+    and a source that finds cases is passed (none means the one of today)."""
 
     source: Any = None
 
@@ -80,21 +81,28 @@ def plan_v3(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def runner(session: Session) -> WiredRunner:
-    return WiredRunner(lambda: nullcontext(session))  # type: ignore[arg-type,return-value]
-
-
-@pytest.fixture
-def surface(session: Session, admin_account: str, rings, runner: WiredRunner):  # type: ignore[no-untyped-def]
+def surface(session: Session, admin_account: str, rings):  # type: ignore[no-untyped-def]
+    wired = WiredRunner(lambda: nullcontext(session))  # type: ignore[arg-type,return-value]
     router = build_router(
         projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
         credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
         registrations=driver.SuiteRegistrationAdapter(), executors=ExecutorAdapter(lambda: nullcontext(session), ring=rings.public),  # type: ignore[arg-type]
-        runner=runner)
-    # what the composition root does: the seal's sleeping route goes, the served one is built beside the runner's
-    router.routes[:] = [route for route in router.routes if getattr(route, "operation_id", None) != "getExecutorTaskContext"]
-    build_task_context_route(router, runner)
+        runner=wired, task_context=wired)
+    return driver.Surface(router)
+
+
+@pytest.fixture
+def wired_surface(session: Session, admin_account: str, rings):  # type: ignore[no-untyped-def]
+    """The composition root's own wiring of the route: ONE unmodified ``RunnerAdapter`` is both ``runner=`` and ``task_context=``, no route is moved by hand
+    and no method is added by the test."""
+    adapter = RunnerAdapter(lambda: nullcontext(session))  # type: ignore[arg-type,return-value]
+    router = build_router(
+        projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
+        exports=None,  # type: ignore[arg-type]
+        credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
+        registrations=driver.SuiteRegistrationAdapter(), executors=ExecutorAdapter(lambda: nullcontext(session), ring=rings.public),  # type: ignore[arg-type]
+        runner=adapter, task_context=adapter)
     return driver.Surface(router)
 
 
@@ -193,6 +201,29 @@ def test_the_claim_carries_the_descriptor_and_the_first_request_is_unavailable_u
     assert stand.context(task, "norm_excerpts").status == 422 and stand.journal_count(task) == 2
 
 
+def test_the_wired_route_answers_through_the_real_adapter_unavailable_until_move(session, wired_surface, world) -> None:  # type: ignore[no-untyped-def]
+    """`CRIT-CAPTURE-01` part D. The route as the composition root builds it: the claim carries the descriptor (the adapter maps ``context_request``), the ask
+    is answered by the adapter's own method and its answer is ``unavailable / until_move`` (no source that searches is handed in), journalled once.
+    Were the adapter's ``context_request`` mapping missing the claim would carry none; were ``task_context=`` not passed the route would answer ``503``."""
+    run = planned_run(session, world, switch=True)
+    stand = Stand(session, wired_surface)
+    task = stand.task(run, critic_payload())
+    claimed = stand.claim()
+    assert [entry["input_id"] for entry in claimed["context_request"]] == ["xri_1", "xri_2"]
+    answer = stand.context(task)
+    assert answer.status == 200, answer.body
+    assert answer.json() == {"kind": "similar_cases", "status": "unavailable", "reason": "until_move", "items": [], "not_fitted": 0}
+    assert stand.journal_count(task) == 1
+    assert stand.context(task).body == answer.body and stand.journal_count(task) == 1
+
+
+def test_a_task_without_a_descriptor_claims_without_the_member_through_the_real_adapter(session, wired_surface, world) -> None:  # type: ignore[no-untyped-def]
+    run = planned_run(session, world, switch=True)
+    stand = Stand(session, wired_surface)
+    stand.task(run, critic_payload(ids=()))
+    assert "context_request" not in stand.claim(), "absent for any other task, never an empty list"
+
+
 # -- the refusals ---------------------------------------------------------------------------------------------------
 
 
@@ -279,10 +310,11 @@ class Finds:
                                  for n in (1, 2)] for entry in inputs}
 
 
-def test_a_delivered_block_is_remembered_in_the_task_journalled_without_a_word_of_it_and_returned_again_without_asking(session, surface, world, runner) -> None:  # type: ignore[no-untyped-def]
+def test_a_delivered_block_is_remembered_in_the_task_journalled_without_a_word_of_it_and_returned_again_without_asking(session, surface, world, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     run = planned_run(session, world, switch=True)
     stand = Stand(session, surface)
-    source = runner.source = Finds()
+    source = Finds()
+    monkeypatch.setattr(WiredRunner, "source", source)      # the encoder's move: from here the adapter hands the function a source that finds cases
     task = stand.task(run, critic_payload())
     stand.claim()
     first = stand.context(task)

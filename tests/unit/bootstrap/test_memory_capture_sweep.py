@@ -87,6 +87,7 @@ class _World:
         self.queries: list[dict[str, Any]] = []
         self.closed = 0
         self.seen: list[tuple[str, str]] = []
+        self.record_shown: list[bool] = []         # what each decision capture was told about the mark shown at the decision
 
     def factory(self) -> _Session:
         return _Session(self)
@@ -96,9 +97,10 @@ class _Assembler:
     def __init__(self, world: _World) -> None:
         self._world = world
 
-    def capture(self, session: _Session, event: Any, origin_kind: str) -> Any:
+    def capture(self, session: _Session, event: Any, origin_kind: str, *, record_shown: bool = True) -> Any:
         self._world.order.append("decision")
         self._world.seen.append((event.decision_id, origin_kind))
+        self._world.record_shown.append(record_shown)
         if event.decision_id in self._world.failing:
             raise RuntimeError("the crop manifest cannot be read")
         self._world.captured.add(event.decision_id)
@@ -128,6 +130,14 @@ def test_a_pass_captures_what_has_no_memory_decision_and_reports_it() -> None:
     assert (report.captured, report.failed) == (2, 0)
     assert world.seen == [(f"dec_{1:026d}", "direct"), (f"dec_{2:026d}", "carried")]
     assert _sweep(world).run_once().captured == 0  # nothing is left: the anti-join is the whole state
+
+
+def test_the_sweep_never_asks_for_the_mark_shown_at_a_decision_it_repairs() -> None:
+    """`CRIT-CAPTURE-01` part D: the mark in force now is not the mark in force when the expert decided, so a repair stamps none (the columns stay NULL).
+    A sweep that left the default would write today's mark on yesterday's decision and decide, by it, whether the vote is independent."""
+    world = _World([_row(1), _row(2, carried="dec_" + "9" * 26)])
+    _sweep(world).run_once()
+    assert world.record_shown == [False, False]
 
 
 def test_one_failure_is_logged_and_does_not_stop_or_undo_the_others(caplog: pytest.LogCaptureFixture) -> None:

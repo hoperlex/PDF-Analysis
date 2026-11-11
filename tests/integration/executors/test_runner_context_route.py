@@ -5,7 +5,8 @@ operation and nothing else does; the body is the contract's (``kind`` is one of 
 task and the kind; an answer is written with its optional members absent, never null; and the refusals of the port (404, 409) are the envelope's.
 
 The route is **moved**, not added: the seal declared it asleep in ``api/routers/precedents.py`` and ``build_task_context_route`` declares it again beside
-the runner's other operations. ``test_the_declaration_is_the_seals_word_for_word`` is what says the contract's document did not move with it.
+the runner's other operations (`CRIT-CAPTURE-01` part D deleted the sleeping copy and gave ``build_router`` its ``task_context=`` port).
+``test_the_declaration_is_the_seals_word_for_word`` is what says the contract's document did not move with it.
 """
 
 from __future__ import annotations
@@ -46,16 +47,22 @@ class StubContext:
 
 
 def surface_of(port: StubContext | None, *, moved: bool = True) -> Any:
-    """The tree's router; with ``moved`` the seal's sleeping route is taken out and ``build_task_context_route`` declares the operation in its place (what
-    the composition root does when it wires the lane), with ``port`` behind it or, for ``None``, nothing."""
-    router = build_router(
-        projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
-        exports=None,  # type: ignore[arg-type]
-        credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
-        registrations=driver.SuiteRegistrationAdapter(), runner=StubRunner())  # type: ignore[arg-type]
+    """The tree's router. With ``moved`` (the default) the operation is taken out and ``build_task_context_route`` declares it again by hand, with ``port``
+    behind it or, for ``None``, nothing; without it the router is exactly what ``build_router(task_context=port)`` made (the composition root's call)."""
     if moved:
+        router = build_router(
+            projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
+            exports=None,  # type: ignore[arg-type]
+            credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
+            registrations=driver.SuiteRegistrationAdapter(), runner=StubRunner(), task_context=None)  # type: ignore[arg-type]
         router.routes[:] = [route for route in router.routes if getattr(route, "operation_id", None) != OPERATION]
         build_task_context_route(router, port)
+    else:
+        router = build_router(
+            projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
+            exports=None,  # type: ignore[arg-type]
+            credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})), accounts=driver.SuiteAccountAdapter(),
+            registrations=driver.SuiteRegistrationAdapter(), runner=StubRunner(), task_context=port)  # type: ignore[arg-type]
     return driver.Surface(router)
 
 
@@ -126,13 +133,22 @@ def test_the_moved_route_without_a_port_sleeps_exactly_as_the_seal_did() -> None
     assert [route.operation_id for route in surface.routes].count(OPERATION) == 1
 
 
-def test_this_tree_is_dormant_the_seals_route_is_all_it_declares_and_it_still_sleeps() -> None:
-    """Nothing calls ``build_task_context_route`` here: the runner's own builder does not declare the operation, and the router as built is the seal's."""
+def test_build_router_declares_the_operation_once_and_hands_the_port_its_ask() -> None:
+    """`CRIT-CAPTURE-01` part D: nothing is moved by hand. ``build_router(task_context=port)`` declares ``getExecutorTaskContext`` exactly once (the seal's
+    sleeping copy in ``precedents.py`` is gone, so a second declaration would be a duplicate operation id) and the port answers it."""
     from fastapi import APIRouter
 
     runners = APIRouter()
     build_runner_routes(runners, StubRunner())  # type: ignore[arg-type]
-    assert OPERATION not in [route.operation_id for route in runners.routes]
+    assert OPERATION not in [route.operation_id for route in runners.routes], "the runner's own builder does not declare the operation"
+    port = StubContext()
+    served = surface_of(port, moved=False)
+    assert [route.operation_id for route in served.routes].count(OPERATION) == 1
+    answer = post(served, {"kind": "patterns"})
+    assert answer.status == 200 and port.calls == [(RunnerIdentity("ern_T", "exc_C"), TASK, "patterns")]
+
+
+def test_build_router_without_a_port_declares_the_operation_and_it_sleeps_as_the_seal_did() -> None:
     sealed = surface_of(None, moved=False)
     answer = post(sealed)
     assert answer.status == 503 and answer.json()["details"]["dependency"] == "executor_task_context"
