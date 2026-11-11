@@ -46,9 +46,9 @@ function free(body: RunCostEstimateRequest, digest = FREE_DIGEST): RunCostEstima
   return { ...costEstimate(body), billing: 'unmetered', estimated_cost_micros: 0, recommended_ceiling_micros: 0, estimate_digest: digest };
 }
 
-const stale = () => new ApiError(409, { contract_version: '1.52.0', error_code: 'conflict', message: 'stale',
+const stale = () => new ApiError(409, { contract_version: '1.53.0', error_code: 'conflict', message: 'stale',
   correlation_id: 'reaudit-stale', retryable: false, details: { conflict_reason: 'run_cost_estimate_stale' } }, 'reaudit-stale');
-const bindingChanged = () => new ApiError(422, { contract_version: '1.52.0', error_code: 'analysis_input_invalid', message: 'binding',
+const bindingChanged = () => new ApiError(422, { contract_version: '1.53.0', error_code: 'analysis_input_invalid', message: 'binding',
   correlation_id: 'reaudit-binding', retryable: false, details: { reason: 'cost_estimate_binding_changed' } }, 'reaudit-binding');
 
 beforeEach(() => {
