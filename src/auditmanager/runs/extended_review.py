@@ -1527,6 +1527,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             block_roles=_block_roles(run)
             ensemble="judge" in block_roles
             partial_reason=None
+            any_refused=False
             for start in range(0,len(images),8):
                 batch=images[start:start+8];crops=[]
                 for source in batch:
@@ -1537,7 +1538,9 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 payload,cut=extended_block_payload(section=section,batch=batch,sections=state["context_sections"],coverage=state["coverage"])
                 if cut: state["warnings"].append("page_context_truncated")
                 builder=build_extended_request
-                extra={}
+                # `BLOCK-SOURCES-V2-01`: a v2 block request names its batch's sources (v3 always did); `extra` reaches the single call
+                # and every leg of the ensemble. The judge request carries its own closed list of sources.
+                extra={"bind_sources":True}
                 if v3:
                     from auditmanager.analysis.public import build_extended_request_v3
                     builder=build_extended_request_v3;extra={"window_id":window_context["window_id"]}
@@ -1557,22 +1560,27 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                             allowed_sources={s["source_id"] for s in batch}, **kwargs),
                         call=call, identity="blocks:"+str(start//8), policy=window_context["policy"] if v3 else {})
                     batch_reason="block_analysis_reply_refused" if refused else None
-                partial_reason=partial_reason or (batch_reason if ensemble else None)
+                partial_reason=partial_reason or (batch_reason if ensemble or not v3 else None)
+                any_refused|=refused
                 block_items.extend(parsed)
                 if batched:
                     _coverage_complete(state,kind="block_analysis",index=start//8,
                         partial=refused, reason=batch_reason)
-                if not refused:
+                # A batch the model read counts as read even when the parser refused some of its records (`BLOCK-SOURCES-V2-01`): v2 only,
+                # the refusal itself stays in the receipts and in the stage's status below. A reply refused whole counts for nothing.
+                if not refused or (parsed and not v3):
                     state["coverage"]["blocks_processed"]+=len(batch)
                 state["coverage"]["blocks_remaining"]=state["coverage"]["blocks_total"]-state["coverage"]["blocks_processed"]
                 state["observations"]=finalize_extended_items([*state["text_items"],*block_items],state["sources"])
                 save("running")
             partial_rows=[row for row in state.get("batches", [])
                 if row["procedure"] == "block_analysis" and row.get("status") == "partial"]
-            phase("block_analysis","partial" if state["coverage"]["blocks_remaining"] else "completed",
+            # v2: a refusal in any batch keeps the stage partial even when every batch counted as read.
+            degraded=bool(state["coverage"]["blocks_remaining"] or (any_refused and not v3))
+            phase("block_analysis","partial" if degraded else "completed",
                 (next((row["reason"] for row in partial_rows if row.get("reason")), None)
                     or ("block_analysis_reply_refused" if partial_rows else partial_reason))
-                if state["coverage"]["blocks_remaining"] else None)
+                if degraded else None)
         else:
             legitimate_text_window=(v3 and not window_context.get("known_visual_refusals")
                 and not (native or {}).get("coverage",{}).get("skipped"))
