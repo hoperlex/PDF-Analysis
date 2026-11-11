@@ -3525,6 +3525,12 @@ class DecisionMemoryAdapter(_SessionHolder):
                 )
                 for e in detail.status_events
             ],
+            # `D-682` (contract 1.52.0): the experts' comments, oldest first, with no author (like a decision, the memory shows what was said and
+            # not who said it). A forgotten case has none. ``comments=[]`` is a set member, so the wire says «none» rather than «not reported».
+            comments=[
+                models.DecisionMemoryComment(comment_id=k["comment_id"], decided_at=k["decided_at"], comment=k["comment"])
+                for k in detail.comments
+            ],
         )
 
     def status(self) -> models.DecisionMemoryStatus:
