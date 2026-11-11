@@ -59,9 +59,19 @@ from auditmanager.precedents.settings import (
     ONE_LIST_READY,
     SETTING_NAMES,
     SETTING_ONE_LIST,
+    SectionLabelSwitch,
     latest_setting_value,
     one_list_enabled,
+    read_section_labels,
+    read_stop_words,
+    read_thresholds,
+    section_labels_value,
 )
+# `PREC-PASS` (`ADR-0029` decisions 4 to 6): the pass over a run's findings and the two reads behind `getRunPrecedents` and `getFindingPrecedents`. The composition
+# root builds `PrecedentPass(sessions, read_extended_review=...)` into the worker's housekeeping and hands its `after_import` to `VectorWindowPass`; it builds
+# `PrecedentService(sessions, read_extended_review=...)` into `build_router(precedents=...)`; the decision's capture calls `shown_at_decision`.
+from auditmanager.precedents.run_pass.runner import FRESH_DAYS, PassOutcome, PrecedentPass
+from auditmanager.precedents.run_pass.service import PrecedentService, ShownAtDecision, shown_at_decision
 # `PREC-SETTINGS-01`: the journal of the switches and settings behind `listPrecedentSettings` and `appendPrecedentSetting`. The composition root
 # wires `PrecedentSettingService` into `build_router(precedent_settings=...)`.
 from auditmanager.precedents.setting_journal.service import (
