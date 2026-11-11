@@ -66,13 +66,11 @@ def test_the_ceilings_the_note_states_are_the_codes() -> None:
         f"more than {bundle_envelope.MAX_BLOCKS_PER_PAGE} blocks on one page",
         "more than 3 000 in all",
         "more than 1 000 IMAGE blocks",
-        "more than 2 000 000 drawing elements",
-        "more than 200 000 characters",
-        "more than 40 000 000 drawing elements or 20 000 000 characters in all",
-        "512 MiB of address space or 60 s",
+        "removed the element and character ceilings of an upload",
+        "2 GiB of address space or 120 s",
     ):
         assert figure in notes, figure
     assert (bundle_envelope.MAX_BLOCKS, bundle_envelope.MAX_IMAGE_BLOCKS) == (3_000, 1_000)
-    assert (envelope.PAGE_ELEMENTS_MAX, envelope.PAGE_CHARACTERS_MAX) == (2_000_000, 200_000)
-    assert (envelope.DOCUMENT_ELEMENTS_MAX, envelope.DOCUMENT_CHARACTERS_MAX) == (40_000_000, 20_000_000)
-    assert (envelope.READER_ADDRESS_SPACE, envelope.READER_SECONDS) == (512 * 1024 * 1024, 60)
+    assert (envelope.PAGE_ELEMENTS_MAX, envelope.PAGE_CHARACTERS_MAX) == (2**63 - 1, 2**31 - 1)
+    assert (envelope.DOCUMENT_ELEMENTS_MAX, envelope.DOCUMENT_CHARACTERS_MAX) == (2**63 - 1, 2**31 - 1)
+    assert (envelope.READER_ADDRESS_SPACE, envelope.READER_SECONDS) == (2 * 1024 * 1024 * 1024, 120)

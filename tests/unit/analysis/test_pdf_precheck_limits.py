@@ -22,10 +22,20 @@ def test_the_child_sandbox_is_the_reported_one() -> None:
 
 
 def test_the_counts_are_the_envelope_quotas_of_a_strict_deployment() -> None:
+    # PDF-READER-ROOM-01: the upload counts no characters, so neither does the precheck.
     limits = PdfPrecheckLimits()
-    assert (limits.max_pages, limits.max_page_characters, limits.max_document_characters) == (500, 200_000, 20_000_000)
+    assert (limits.max_pages, limits.max_page_characters, limits.max_document_characters) == (500, 2**31 - 1, 2**31 - 1)
+
+
+#: `PDF-READER-ROOM-01`: the two counts that mirror the upload, which no longer counts characters.
+#: The ``integer`` they are stored in is their bound; the child's memory and clocks bound the work.
+MIRRORS_OF_THE_UPLOAD = {"max_page_characters", "max_document_characters"}
 
 
 def test_no_limit_is_the_integer_ceiling() -> None:
     for field in dataclasses.fields(PdfPrecheckLimits):
-        assert getattr(PdfPrecheckLimits(), field.name) < 2**31 - 1, field.name
+        value = getattr(PdfPrecheckLimits(), field.name)
+        if field.name in MIRRORS_OF_THE_UPLOAD:
+            assert value == 2**31 - 1, field.name
+        else:
+            assert value < 2**31 - 1, field.name
