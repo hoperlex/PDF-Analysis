@@ -224,6 +224,9 @@ APPEND_ONLY = frozenset((
     "executor_task_context_delivery", "finding_block_evidence", "precedent_setting_event", "vector_control_event",
     # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): a norm page's render is `am_immutable_row` and only inserted into (once, by `M7-NORM-PNG`).
     "norm_crop_render",
+    # `0066_precedents_wave5` (`CRIT-SEAL-53`): a pattern and its journal take the forget guard (`UPDATE` refused, `DELETE` only beside a forget); the
+    # parameter facts and the cross evidence are `am_immutable_row`. Only inserted into.
+    "decision_memory_pattern", "decision_memory_pattern_status_event", "finding_cross_evidence", "project_parameter_fact",
 ))
 
 #: The ``append-only`` tables that no trigger protects, and the evidence that the code only inserts.
@@ -270,6 +273,8 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     "precedent_setting_event",
     # `0065_norm_crop_render` (`CRIT-SEAL-52`): until `M7-NORM-PNG` renders and records the first page.
     "norm_crop_render",
+    # `0066_precedents_wave5` (`CRIT-SEAL-53`): until `PAT-01` writes the patterns and their journal and `XDOC-01` the parameter facts and the cross evidence.
+    "decision_memory_pattern", "decision_memory_pattern_status_event", "finding_cross_evidence", "project_parameter_fact",
 ))
 
 #: Writes whose table name is not a literal in the SQL text, so :func:`observed_statements` cannot read it from the string: an f-string

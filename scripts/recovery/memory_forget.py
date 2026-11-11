@@ -111,6 +111,10 @@ CONTENT_TABLES: dict[str, str] = {
     "decision_memory_evidence": _BY_CASE,
     "decision_memory_block_evidence": _BY_CASE,
     "decision_memory_norm_ref": _BY_CASE,
+    # `0066_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern's text is a copy of a refusing comment of its representative case, so a forget of that
+    # case removes the pattern and its journal (the journal first: it references the pattern).
+    "decision_memory_pattern_status_event": _BY_CASE,
+    "decision_memory_pattern": _BY_CASE,
     "decision_memory_embedding": _BY_CASE,
     "decision_memory_embedding_intent": _BY_CASE,
     "decision_memory_comment": _BY_CASE,
