@@ -76,7 +76,8 @@ mine = running / str(os.getpid())
 mine.write_text("1")
 peak = max(len(list(running.iterdir())), int((d / "peak.txt").read_text()) if (d / "peak.txt").exists() else 0)
 (d / "peak.txt").write_text(str(peak))
-sys.stdin.read()
+(d / "last_stdin.txt").write_text(sys.stdin.read())
+(d / "last_args.json").write_text(json.dumps(args))
 def emit(event):
     print(json.dumps(event), flush=True)
 try:
@@ -140,7 +141,8 @@ efforts = [args[i + 1] for i, a in enumerate(args) if a == "-c" and args[i + 1].
 (d / "last_effort.txt").write_text(efforts[0] if efforts else "")
 answer_path = pathlib.Path(args[args.index("--output-last-message") + 1])
 schema = json.loads(pathlib.Path(args[args.index("--output-schema") + 1]).read_text())
-sys.stdin.read()
+(d / "last_stdin.txt").write_text(sys.stdin.read())
+(d / "last_args.json").write_text(json.dumps(args))
 running = d / "running"
 running.mkdir(exist_ok=True)
 mine = running / str(os.getpid())

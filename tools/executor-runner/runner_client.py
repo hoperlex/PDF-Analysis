@@ -42,6 +42,9 @@ MAX_IMAGE_BYTES = 16 << 20
 MAX_IMAGES = 8
 MAX_TOTAL_IMAGE_BYTES = 32 << 20
 MAX_WAIT_SECONDS = 25
+#: `CTX-RUNNER` (RUNNER_API.md section 11): one request for reference data, this long, never repeated.
+CONTEXT_TIMEOUT_SECONDS = 8.0
+CONTEXT_KINDS = ("similar_cases", "patterns")
 DEFAULT_RETRY_AFTER = 30.0
 MAX_RETRY_AFTER = 300.0
 TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -474,6 +477,18 @@ class RunnerClient:
             raise RunnerUnavailable("image bytes failed media type, size or digest verification")
         return raw
 
+    def context(self, task_id: str, kind: str, *, timeout: float = CONTEXT_TIMEOUT_SECONDS) -> dict:
+        """getExecutorTaskContext (RUNNER_API.md section 11): one POST, ``timeout`` seconds, no retry.
+
+        Every refusal is raised as the error of its status (a 429 carries its ``retry_after``, which this operation does not wait for: the
+        caller calls the model without reference data).  Returns the stand's document as it came; reading it is ``host_mode``'s work."""
+        if kind not in CONTEXT_KINDS:
+            raise RunnerRejected("kind must be similar_cases or patterns", status=422, error_code="validation_failed")
+        _, document = self._call(self._task_path(task_id, "context"), {"kind": kind}, timeout)
+        if not isinstance(document, dict):
+            raise RunnerUnavailable("the stand answered a context request with a malformed document", status=200)
+        return document
+
     def extend(self, task_id: str) -> dict:
         """extendExecutorTaskClaim. Returns ``{"claim_expires_at": ...}``."""
         _, document = self._call(self._task_path(task_id, "extend"), {}, self.timeout)
@@ -492,13 +507,19 @@ class RunnerClient:
         provider: Optional[str] = None,
         access: Optional[str] = None,
         reported_model: Optional[str] = None,
+        context_sha256: Optional[str] = None,
     ) -> dict:
         """submitExecutorTaskAnswer.
 
         A host agent (`HOSTS-AGENT-01`, RUNNER_API.md section 10) names the ``provider`` and ``access`` the task ran
         on and the ``reported_model`` (the exact string the CLI or API reported; the stand checks it against the
         catalogue's ``accepted_reported``), and sends the token counts as ``usage`` instead of as two members of the
-        body.  A single-model agent sends none of these and speaks the wire it always spoke."""
+        body.  A single-model agent sends none of these and speaks the wire it always spoke.
+
+        ``context_sha256`` (`CTX-RUNNER`, section 11) is the stand's digest of the reference data the prompt carried; it is sent when, and only
+        when, it is given, so an answer to a task that had none is the same bytes it always was."""
+        if context_sha256 is not None and (not isinstance(context_sha256, str) or SHA256_RE.fullmatch(context_sha256) is None):
+            raise RunnerRejected("context_sha256 must be a lower-case sha256", status=422, error_code="validation_failed")
         body: dict[str, Any] = {"output_text": output_text, "model": model}
         if provider is None:
             if input_tokens is not None:
@@ -515,6 +536,8 @@ class RunnerClient:
                      if value is not None}
             if usage:
                 body["usage"] = usage
+        if context_sha256 is not None:
+            body["context_sha256"] = context_sha256
         _, document = self._call(self._task_path(task_id, "answer"), body, self.timeout)
         return document if isinstance(document, dict) else {}
 

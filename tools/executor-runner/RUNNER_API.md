@@ -654,3 +654,40 @@ Runner token only (the same principal as the operations of section 4). Body: `{"
   (`submitExecutorTaskAnswer`, optional member `context_sha256`) when, and only when, it appended the data.
 - **What the stand keeps.** A journal row (`executor_task_context_delivery`) with the task, the run, the kind, the status, the cases by
   identity, the number of characters and the digest: no text. It outlives the erase of the project.
+
+### 11.2 `CTX-RUNNER`: what the host agent does with it
+
+Host mode only (`agent.py`, `host_mode.py`, `runner_client.py`); a single-model agent and the stdio bridge read no `context_request` and send
+no `context_sha256`. The old agent keeps working against a stand that serves this operation, and this agent against a stand that does not.
+
+- **Who is asked, and for what.** A task is asked when its claim carries a well-formed `context_request` (a non-empty list of at most 64
+  entries with a string `input_id` of 1..128 characters, a lower-case sha256 `text_sha256` and a `section` of 1..64, no `input_id` twice).
+  A member that is not that is read as absent: the task is answered as if it had none. The agent asks for `similar_cases` only; `patterns`
+  is not asked (the answer carries one `context_sha256`, so a second kind needs a step of the contract of its own).
+- **Once, 8 seconds, no wait.** One `POST .../context` before the model call, with a socket timeout of 8 seconds, never repeated; the
+  `Retry-After` of a 429 is read and not waited for. A claim already lost, or an agent that is stopping, asks nothing.
+- **What the model reads.** The section is built from the answer by `host_mode.reference_from_answer` and put after the `user_text` of the
+  task, which goes first and unchanged, behind one blank line:
+
+  ```
+  <user_text, byte for byte>
+
+  === СПРАВОЧНО (не основание) ===
+  {"input_id":"…","cases":[{"case_id":"…","verdict":"rejected","category":"…","similarity":0.91,"finding_text":"…","recommendation_text":"…"}]}
+  Не уместилось: 2
+  ```
+
+  One JSON line per `input_id` that has cases (the members of the contract only; every text JSON-escaped, so a case cannot open a line or a
+  heading of its own); `Похожих решений нет.` when there is none; `Не уместилось: N` when `not_fitted` is not 0. An answer that is not the
+  contract's (another kind, an `input_id` the task did not offer or twice, more than three cases for one, a similarity outside 0..1, a block
+  over 48 000 characters) is not put in the prompt.
+- **When there is no reference data**, the same heading stands with one line, `Справочные данные недоступны: <причина>`, and the answer carries
+  no digest. The reason is a code: the `reason` of an `unavailable` answer (`until_move` while the night encoder is the only one), or
+  `http_401`, `http_404`, `http_409`, `http_429`, `http_5xx` (the status itself), `timeout`, `network`, `malformed_answer`, `too_large`,
+  `agent_error`. None of them fails, drops or stops the task; a 401 here does not stop the agent either (the next call that needs the token
+  will say so).
+- **The digest.** `context_sha256` in the answer is the one the stand gave in its `available` answer, as it gave it (the agent does not
+  recompute it: the digest is of `items` as delivered, and its canonical form is the stand's). It is sent when, and only when, the section
+  with data was attached; an answer to any other task is the same bytes it always was.
+- **The CLI stays closed.** The command lines of `claude_answer.py` and `codex_answer.py` are not touched: no tool, no MCP server, no
+  directory is added for reference data, which reaches the model as text in the prompt and nowhere else.

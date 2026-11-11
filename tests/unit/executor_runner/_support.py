@@ -73,6 +73,7 @@ class Reply:
     status: int = 200
     body: Optional[Any] = None
     headers: dict = field(default_factory=dict)
+    delay: float = 0.0  # seconds the stand sits on the request before it answers (a slow stand)
 
 
 def envelope(code: str, message: str, retryable: bool = False) -> dict:
@@ -119,6 +120,8 @@ class FakeRunner:
                 reply = runner._decide(kind, record)
                 payload = (b"" if reply.body is None else reply.body if isinstance(reply.body, bytes)
                            else json.dumps(reply.body).encode("utf-8"))
+                if reply.delay:
+                    time.sleep(reply.delay)
                 self.send_response(reply.status)
                 for name, value in reply.headers.items():
                     self.send_header(name, value)
@@ -185,7 +188,7 @@ class FakeRunner:
         task_id, _, action = rest.partition("/")
         if action.startswith("images/"):
             return "image", task_id
-        return (action if action in ("extend", "answer", "fail") else "other"), task_id
+        return (action if action in ("extend", "answer", "fail", "context") else "other"), task_id
 
     def _decide(self, kind: str, record: dict) -> Reply:
         if self.revoked or record["authorization"] != "Bearer " + self.token:
