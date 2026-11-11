@@ -196,6 +196,10 @@ from auditmanager.norms.search import (
 from auditmanager.norms.search import list_snapshots as list_norm_snapshots  # W55A-SEARCH-01
 from auditmanager.norms.search import pdf_binding as norm_pdf_binding  # W55A-SEARCH-01
 from auditmanager.norms.search import search as search_norms  # W55A-SEARCH-01
+from auditmanager.norms.search.query import (  # NORM-ANY-WORDS-01
+    MAX_QUERY_CHARACTERS as MAX_NORM_QUERY_CHARACTERS,
+    parse_query as parse_norm_query,
+)
 from auditmanager.norms.snapshot import (  # W54-SNAPSHOT-01
     ROW_DIGEST_VERSION,
     DocumentRow,
@@ -364,6 +368,8 @@ __all__ = [
     "row_digest",
     "run_reference_pipeline",
     "search_norms",
+    "parse_norm_query",
+    "MAX_NORM_QUERY_CHARACTERS",
     "select_verified_retrieval_set",
     "set_current_snapshot",
     "verify_bundle",
