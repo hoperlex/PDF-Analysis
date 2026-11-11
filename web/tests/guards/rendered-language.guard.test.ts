@@ -1077,6 +1077,8 @@ const FINDINGS: readonly Finding[] = [
   // `CRIT-SEAL-50` (contract 1.51.0): the two categories of the groups of candidates of the extended review published as findings.
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}S`, category: 'drawing_discrepancy' }),
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}T`, category: 'cross_source' }),
+  // `CRIT-SEAL-53` (contract 1.53.0): a parameter stated differently in two documents of the project.
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}V`, category: 'parameter_mismatch' }),
 ];
 
 /*
