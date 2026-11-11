@@ -46,14 +46,18 @@
   gap: var(--am-gap-xs);
 }
 
-/* «Что нового»: a native disclosure, closed to one line. */
+/*
+ * «Что нового»: a native disclosure, closed to one line. Its basis is fixed like `.text`'s: with `auto` the basis was the
+ * whole first change on one line, so the disclosure took the strip's line and «Закрыть» wrapped under it.
+ */
 .details {
-  flex: 1 1 auto;
+  flex: 1 1 14rem;
   min-width: 0;
 }
 
 .summary {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-sm);
   min-width: 0;
@@ -71,13 +75,24 @@
   outline-offset: 1px;
 }
 
+/*
+ * The name never shrinks: the strip's `overflow-wrap: anywhere` lets a flex item shrink to one letter, and the long first
+ * change squeezed «Что нового» into a column of syllables, three lines high.
+ */
+.title {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .version {
   flex: 0 0 auto;
+  white-space: nowrap;
   color: var(--am-ink-muted);
 }
 
+/* A small basis keeps the first change on the name's line at a desktop width and moves it to its own line at a phone's. */
 .first {
-  flex: 1 1 auto;
+  flex: 1 1 8rem;
   min-width: 0;
   overflow: hidden;
   color: var(--am-ink-muted);

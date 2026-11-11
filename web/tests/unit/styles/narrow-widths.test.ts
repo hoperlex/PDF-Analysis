@@ -138,6 +138,16 @@ describe('the shared stylesheets keep a screen inside 390 px', () => {
     expect(declares(notices, '.text', 'min-width', /^0$/)).toBe(true);
   });
 
+  it('keeps «Что нового» on one line at a desktop width: the name never shrinks, the disclosure has a fixed basis', () => {
+    const notices = readFileSync(NOTICES, 'utf8');
+    expect(declares(notices, '.title', 'flex', /^0 0 auto$/)).toBe(true);
+    expect(declares(notices, '.title', 'white-space', /^nowrap$/)).toBe(true);
+    expect(declares(notices, '.details', 'flex', /^1 1 auto$/)).toBe(false);
+    expect(declares(notices, '.details', 'flex', /^1 1 \d+(\.\d+)?rem$/)).toBe(true);
+    expect(declares(notices, '.first', 'flex', /^1 1 \d+(\.\d+)?rem$/)).toBe(true);
+    expect(declares(notices, '.summary', 'flex-wrap', /^wrap$/)).toBe(true);
+  });
+
   it('clears the pinned furniture when focus or a fragment scrolls a control into view', () => {
     expect(declares(globals, 'html', 'scroll-padding-top', /var\(--am-strip-height\)/)).toBe(true);
   });
