@@ -1899,6 +1899,7 @@
       "DecisionMemoryCaseId",
       "DecisionMemoryCasePage",
       "DecisionMemoryCaseSummary",
+      "DecisionMemoryComment",
       "DecisionMemoryContent",
       "DecisionMemoryCountRow",
       "DecisionMemoryCrop",
@@ -2444,6 +2445,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0064_precedents_seal",
-  "contract_version": "1.51.0"
+  "migration_head": "0065_norm_crop_render",
+  "contract_version": "1.52.0"
 }

@@ -87,7 +87,8 @@ def test_the_four_classes_partition_the_tables_schema_coverage_declares() -> Non
     # the stage layout with its revisions and switch, and the cell binding (145 -> 154). `0063_drop_ar_v3_beta` drops the two tables of `0032` (154 -> 152).
     # `0064_precedents_seal` (`CRIT-SEAL-50`) adds twelve (152 -> 164): the memory's comments, block evidence, encoder queue and vectors, the probe, the
     # pass and its advice, a finding's block evidence, the settings journal, the vectors' control and its journal, and the delivery journal.
-    assert len(coverage.TABLES) == 164
+    # `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one (165): the PNG render of a norm page.
+    assert len(coverage.TABLES) == 165
 
 
 def test_every_table_has_its_privileges_from_its_class() -> None:
