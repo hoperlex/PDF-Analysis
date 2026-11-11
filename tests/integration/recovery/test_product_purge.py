@@ -104,7 +104,12 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0064_precedents_seal` (`CRIT-SEAL-50`): the memory's comments, block evidence, encoder queue and vectors join its KEEP set (KEEP_MEMORY 9 -> 13);
     # the settings journal, the vectors' control with its journal and the delivery journal are kept configuration and records (KEEP 58 -> 66 with
     # the four above); the probe, the pass of a run with its advice and a finding's block evidence are product data (PRODUCT 91 -> 95).
-    assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 13
+    # `0066_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern and its status journal join it (13 -> 15); the parameter facts and the cross evidence are product
+    # data (PRODUCT 95 -> 97); KEEP 67 -> 69.
+    assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 15
+    assert {"decision_memory_pattern", "decision_memory_pattern_status_event"} <= tool.KEEP_MEMORY_TABLES
+    assert {"project_parameter_fact", "finding_cross_evidence"} <= tool.PRODUCT_TABLES
+    assert not {"project_parameter_fact", "finding_cross_evidence"} & tool.KEEP_TABLES
     assert not tool.KEEP_MEMORY_TABLES & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
     assert tool.KEEP_PRECEDENT_TABLES == {"executor_task_context_delivery", "precedent_setting_event", "vector_control", "vector_control_event"}
     assert tool.KEEP_PRECEDENT_TABLES <= tool.KEEP_TABLES and not tool.KEEP_PRECEDENT_TABLES & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
@@ -115,7 +120,7 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0065_norm_crop_render` (`CRIT-SEAL-52`): a norm page's render is the corpus's own (its name starts with ``norm``, so it is in
     # `EXEMPT_FROM_FINGERPRINT`, and so KEEP here): KEEP 66 -> 67, PRODUCT unchanged.
     assert "norm_crop_render" in tool.KEEP_NORM_TABLES and "norm_crop_render" not in tool.KEEP_MEMORY_TABLES | tool.PRODUCT_TABLES
-    assert len(tool.PRODUCT_TABLES) == 95 and len(tool.KEEP_TABLES) == 67 and len(tool.MIXED_TABLES) == 3
+    assert len(tool.PRODUCT_TABLES) == 97 and len(tool.KEEP_TABLES) == 69 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT

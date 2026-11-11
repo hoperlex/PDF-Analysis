@@ -216,8 +216,9 @@ def test_portal_block_id_is_an_external_identifier_and_not_one_of_the_identities
     # decision, `dmw_` a status event, `dmx_` a crop reference), so 110; `HOSTS-SEAL-1` adds five (`exh_` a server, `exhu_` and `exhs_` the journals of its
     # use switch and its slots, `slr_` a stage layout revision, `sls_` a change of the layout's switch), so 115.
     # `0063_drop_ar_v3_beta` drops `arg_` (an AR v3 run group), so 114; `CRIT-SEAL-50` (`0064_precedents_seal`) adds `dmk` (a memory comment), `dmi` (an
-    # encoder job), `vce` (a change of the vectors' control) and `etd` (a record of reference data handed to an agent), so 118.
-    assert len(IDENTIFIERS["identifiers"]) == 118
+    # encoder job), `vce` (a change of the vectors' control) and `etd` (a record of reference data handed to an agent), so 118; `CRIT-SEAL-53` (`0066_precedents_wave5`) adds
+    # `dmp` (a failure pattern) and `dps` (an event of its status journal), so 120.
+    assert len(IDENTIFIERS["identifiers"]) == 120
     assert {
         "executor_enrollment_id", "executor_agent_install_id", "executor_group_id", "executor_group_revision_id",
         "executor_routing_rule_revision_id", "executor_routing_mode_event_id",

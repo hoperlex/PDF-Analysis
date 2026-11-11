@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.52.0 (OpenAPI 3.1.0)
- *   sha256 dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a
+ *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
+ *   sha256 cd154845d56ee9b0408035323b0a0d8a504898f20e8716291c3ce5631e5e03de
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.52.0';
+export const CONTRACT_VERSION = '1.53.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a';
+export const CONTRACT_DIGEST = 'cd154845d56ee9b0408035323b0a0d8a504898f20e8716291c3ce5631e5e03de';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -301,6 +301,12 @@ export const SCHEMA_NAMES = [
   'DecisionMemoryStatusChange',
   'DecisionMemoryStatusChangeRequest',
   'DecisionMemoryStatusEvent',
+  'DecisionPattern',
+  'DecisionPatternId',
+  'DecisionPatternList',
+  'DecisionPatternReview',
+  'DecisionPatternStatus',
+  'DecisionPatternStatusCause',
   'DecisionRecord',
   'DecisionRecordPage',
   'DiffHunk',
@@ -422,6 +428,7 @@ export const SCHEMA_NAMES = [
   'FindingBlockLink',
   'FindingCategory',
   'FindingComparison',
+  'FindingCrossEvidence',
   'FindingDetail',
   'FindingExecutionState',
   'FindingExecutionStatus',
@@ -578,6 +585,7 @@ export const SCHEMA_NAMES = [
   'ResetUserPasswordRequest',
   'ResumeComparisonAiJobRequest',
   'ResumeStageChainRunRequest',
+  'ReviewDecisionPatternRequest',
   'ReviseExecutorConnectionRequest',
   'ReviseExecutorGroupRequest',
   'ReviseStageAssemblyRequest',
@@ -595,6 +603,7 @@ export const SCHEMA_NAMES = [
   'RunNormReferences',
   'RunPrecedents',
   'RunPreset',
+  'RunPublicationMode',
   'RunQueueReason',
   'RunStage',
   'RunStageCell',
@@ -745,6 +754,8 @@ export const SCHEMA_NAMES = [
   'StagePairSuggestionPage',
   'StageProfileText',
   'StageProfileWord',
+  'StageQualityRow',
+  'StageQualityTable',
   'StageReviewDecision',
   'StageRowKey',
   'StageSheetPassport',
@@ -4076,6 +4087,67 @@ export type DecisionMemoryStatusEvent = {
   status_event_id: string;
 };
 
+/**
+ * `CRIT-SEAL-53`: one failure pattern -- the refusing comment (verbatim, never written by a model) of the representative case of a group of refusals in
+ * one section, the counts the group had when it was proposed, and the status in force with its cause and time.
+ */
+export type DecisionPattern = {
+  member_count: number;
+  pattern_id: DecisionPatternId;
+  pattern_text: string;
+  proposed_at: string;
+  refusal_count: number;
+  section_code: string;
+  status: DecisionPatternStatus;
+  status_cause: DecisionPatternStatusCause;
+  status_changed_at: string;
+};
+
+export type DecisionPatternId = string;
+
+/** The contract pattern for `DecisionPatternId`. Anchored; use with `new RegExp()`. */
+export const DECISION_PATTERN_ID_PATTERN = "^dmp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** `listDecisionPatterns`: the patterns that match, newest proposal first, and the number that match (`items` is cut at `limit`). */
+export type DecisionPatternList = {
+  items: Array<DecisionPattern>;
+  total: number;
+};
+
+/** `approve` (from `proposed` or `suspended`), `reject` (from `proposed`), `suspend` (from `approved`). */
+export const DECISION_PATTERN_REVIEW_VALUES = [
+  'approve',
+  'reject',
+  'suspend',
+] as const;
+
+/** DecisionPatternReview - the closed value set above. */
+export type DecisionPatternReview = (typeof DECISION_PATTERN_REVIEW_VALUES)[number];
+
+/**
+ * The status of a failure pattern (`ADR-0029` decision 11, owner ruling Н4): `proposed` by the algorithm, then `approved`, `rejected` or `suspended`
+ * by an expert; the algorithm itself suspends a pattern whose group dissolves. Only an `approved` pattern reaches hint P1.
+ */
+export const DECISION_PATTERN_STATUS_VALUES = [
+  'proposed',
+  'approved',
+  'rejected',
+  'suspended',
+] as const;
+
+/** DecisionPatternStatus - the closed value set above. */
+export type DecisionPatternStatus = (typeof DECISION_PATTERN_STATUS_VALUES)[number];
+
+/** What moved a pattern to its status: the algorithm's proposal, an expert's review, or the dissolving of the group (suspended by the algorithm). */
+export const DECISION_PATTERN_STATUS_CAUSE_VALUES = [
+  'proposed',
+  'expert_review',
+  'group_dissolved',
+] as const;
+
+/** DecisionPatternStatusCause - the closed value set above. */
+export type DecisionPatternStatusCause = (typeof DECISION_PATTERN_STATUS_CAUSE_VALUES)[number];
+
 /** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
@@ -4290,7 +4362,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.52.0";
+  contract_version: "1.53.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -5329,6 +5401,7 @@ export type FailExecutorTaskRequest = {
 export type Finding = {
   block_evidence?: Array<FindingBlockEvidence>;
   category: FindingCategory;
+  cross_evidence?: Array<FindingCrossEvidence>;
   current_verdict: Verdict;
   current_verdict_carried_from?: DecisionCarriedFrom;
   decided_severity?: Severity;
@@ -5380,7 +5453,7 @@ export type FindingBlockLink = {
   portal_block_ids: Array<PortalBlockId>;
 };
 
-/** Closed finding categories: seven prior categories, five v3 normative categories and, since 1.51.0, two categories of the groups of candidates of the extended review published as findings (`drawing_discrepancy`, `cross_source`). */
+/** Closed finding categories: seven prior categories, five v3 normative categories, since 1.51.0 two categories of the groups of candidates of the extended review published as findings (`drawing_discrepancy`, `cross_source`) and, since 1.53.0, the category of a parameter stated differently in two documents of the project (`parameter_mismatch`). */
 export const FINDING_CATEGORY_VALUES = [
   'internal_contradiction',
   'explicit_placeholder',
@@ -5396,6 +5469,7 @@ export const FINDING_CATEGORY_VALUES = [
   'sound',
   'drawing_discrepancy',
   'cross_source',
+  'parameter_mismatch',
 ] as const;
 
 /** FindingCategory - the closed value set above. */
@@ -5410,10 +5484,24 @@ export type FindingComparison = {
   unavailable_reason: "findings_over_limit" | null;
 };
 
+/**
+ * `CRIT-SEAL-53` (contract 1.53.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
+ * version, the page, the quote and its span in that version's text layer. `Evidence` is untouched; this is the other document's, with its `version_uid`.
+ */
+export type FindingCrossEvidence = {
+  char_end: number;
+  char_start: number;
+  evidence_ordinal: number;
+  page_number: number;
+  quote: string;
+  version_uid: VersionUid;
+};
+
 /** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. `current_verdict_carried_from` (`UI-A-73`) is as on `Finding`. */
 export type FindingDetail = {
   block_evidence?: Array<FindingBlockEvidence>;
   category: FindingCategory;
+  cross_evidence?: Array<FindingCrossEvidence>;
   current_verdict: Verdict;
   current_verdict_carried_from?: DecisionCarriedFrom;
   decided_severity?: Severity;
@@ -5483,6 +5571,7 @@ export type FindingObservation = {
   category: FindingCategory;
   /** The text spans the observation quotes. At least one, unless grounding_kind is portal_block (since 1.52.0): a block-grounded observation has no text span, and its blocks are listed in block_evidence of the finding. */
   evidence: Array<Evidence>;
+  extended_observation_ref?: string;
   finding_observation_id: FindingObservationId;
   finding_text: string;
   grounding_kind?: FindingGroundingKind;
@@ -7026,6 +7115,11 @@ export type ResumeStageChainRunRequest = {
   retry_failed?: boolean;
 };
 
+/** `reviewDecisionPattern`: an expert's decision on a pattern. The actor is the caller; the answer is the pattern as it now stands. */
+export type ReviewDecisionPatternRequest = {
+  decision: DecisionPatternReview;
+};
+
 /**
  * A new immutable revision of a connection: the full settings, never a patch.
  *
@@ -7233,6 +7327,15 @@ export type RunPreset = {
   preset_id: PresetId;
   revision_no: number;
 };
+
+/** `CRIT-SEAL-53` (contract 1.53.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan. */
+export const RUN_PUBLICATION_MODE_VALUES = [
+  'text_only',
+  'one_list',
+] as const;
+
+/** RunPublicationMode - the closed value set above. */
+export type RunPublicationMode = (typeof RUN_PUBLICATION_MODE_VALUES)[number];
 
 /**
  * `EXEC2-SEAL-1` (ADR-0026 decisions 1 and 5), widened by `EXEC2-SEAL-2` (decisions 14 and 15): why work
@@ -7472,6 +7575,7 @@ export type RunStatus = {
   project_uid: ProjectUid;
   prompt_bundle_id?: PromptBundleId;
   provider_mode: ProviderMode;
+  publication_mode?: RunPublicationMode;
   published_finding_count?: number;
   /** `EXEC2-SEAL-1`: why a `queued` Run is waiting for its executor, derived from the database at read time. Null (and omitted) for a Run that is not waiting for one. A Run admitted by a rule or a group (`binding_state` `pending`) reports its stored `wait_reason` instead and carries no `queue_reason`. */
   queue_reason?: RunQueueReason | null;
@@ -8808,6 +8912,30 @@ export type StageProfileWord = {
   top: number;
   x0: number;
   x1: number;
+};
+
+/**
+ * `CRIT-SEAL-53` (`QUAL-01`, `ADR-0029` decision 11): the decisions of experts on the findings of one cell of the stage plan in one section, as counts.
+ * A row of a cell has its `cell_key` and the cell's own `model_id`; the **ensemble** of the blocks row is one row of its own (`ensemble: true`, no
+ * `cell_key`, no `model_id`: its legs and its judge are one answer). There is no share and no score: the reader divides `accepted_count` by
+ * `decided_count`, and shows nothing for a cell with no decisions.
+ */
+export type StageQualityRow = {
+  accepted_count: number;
+  cell_key?: StageCellKey;
+  decided_count: number;
+  ensemble: boolean;
+  model_id?: string;
+  rejected_count: number;
+  section_code: string;
+};
+
+/**
+ * `getQualityTable`: one row per (cell or ensemble, section) that has at least one decision; empty when nothing was decided. Counts, not a score;
+ * it changes no routing.
+ */
+export type StageQualityTable = {
+  rows: Array<StageQualityRow>;
 };
 
 export type StageReviewDecision = {

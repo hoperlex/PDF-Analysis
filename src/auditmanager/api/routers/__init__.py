@@ -1,4 +1,4 @@
-"""The 325 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 328 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the forty-three router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -154,7 +154,9 @@ from auditmanager.api.routers.runs import build_run_routes
 from auditmanager.api.routers.sections import build_section_routes
 from auditmanager.api.routers.run_stages import build_run_stage_routes  # HOSTS-SEAL-2
 from auditmanager.api.routers.precedents import build_precedent_routes  # CRIT-SEAL-50
-from auditmanager.api.routers.precedents_ports import PrecedentSettingsPort, PrecedentsPort, VectorControlPort  # EMBED-01, PREC-SETTINGS-01, PREC-PASS
+from auditmanager.api.routers.precedents_ports import (  # EMBED-01, PREC-SETTINGS-01, PREC-PASS, CRIT-SEAL-53
+    DecisionPatternsPort, PrecedentSettingsPort, PrecedentsPort, StageQualityPort, VectorControlPort,
+)
 from auditmanager.api.routers.stage_models import build_stage_model_routes  # HOSTS-SEAL-1
 from auditmanager.api.routers.users import build_user_routes
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
@@ -278,7 +280,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.52.0"
+CONTRACT_VERSION: Final[str] = "1.53.0"
 
 
 def build_router(
@@ -338,8 +340,10 @@ def build_router(
     precedent_settings: PrecedentSettingsPort | None = None,
     precedents: PrecedentsPort | None = None,
     task_context: ExecutorTaskContextPort | None = None,
+    decision_patterns: DecisionPatternsPort | None = None,
+    stage_quality: StageQualityPort | None = None,
 ) -> Router:
-    """Assemble the 325 operations, from the router modules -- ``me``,
+    """Assemble the 328 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -471,7 +475,9 @@ def build_router(
     # until the lane that owns it fills it (`api/routers/precedents.py`). `EMBED-01` filled the vector control: `vector_control` is its port,
     # optional with a default for the reason `blocks` gives above; None keeps the sleeping answer. `PREC-SETTINGS-01` filled the settings:
     # `precedent_settings` is its port, with the same default. `PREC-PASS` filled the labels and the card: `precedents` is its port, with the same default.
-    build_precedent_routes(router, vector_control, precedent_settings, precedents)
+    # `CRIT-SEAL-53` (contract 1.53.0) added the failure patterns (`PAT-01`: `decision_patterns` is its port) and the quality table (`QUAL-01`:
+    # `stage_quality`), both optional with the same default: None keeps the sleeping answer.
+    build_precedent_routes(router, vector_control, precedent_settings, precedents, decision_patterns, stage_quality)
     # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,
     # sealed as stubs answering `503 dependency_unavailable` until `CMP-INGEST-01`,
     # `CMP-INGEST-02` and `CMP-PROFILE-01` wire their ports. Optional with a default, for the

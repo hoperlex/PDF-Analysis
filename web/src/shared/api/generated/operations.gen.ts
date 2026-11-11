@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.52.0 (OpenAPI 3.1.0)
- *   sha256 dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a
+ *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
+ *   sha256 cd154845d56ee9b0408035323b0a0d8a504898f20e8716291c3ce5631e5e03de
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -121,6 +121,9 @@ import type {
   DecisionMemoryStatus,
   DecisionMemoryStatusChange,
   DecisionMemoryStatusChangeRequest,
+  DecisionPattern,
+  DecisionPatternId,
+  DecisionPatternList,
   DecisionRecordPage,
   DocumentTagList,
   DocumentUid,
@@ -238,6 +241,7 @@ import type {
   ResetUserPasswordRequest,
   ResumeComparisonAiJobRequest,
   ResumeStageChainRunRequest,
+  ReviewDecisionPatternRequest,
   ReviseExecutorConnectionRequest,
   ReviseExecutorGroupRequest,
   ReviseStageAssemblyRequest,
@@ -313,6 +317,7 @@ import type {
   StagePairPage,
   StagePairSuggestionPage,
   StageProfileText,
+  StageQualityTable,
   StageSheetPassportPage,
   StageSheetSuggestionPage,
   StageTextDifferencePage,
@@ -476,6 +481,7 @@ export const OPERATION_IDS = [
   'getNormDocument',
   'getProductVersion',
   'getProject',
+  'getQualityTable',
   'getRunNormReferences',
   'getRunPrecedents',
   'getRunStages',
@@ -529,6 +535,7 @@ export const OPERATION_IDS = [
   'listComparisonVersionOrders',
   'listDecisionHistory',
   'listDecisionMemoryCases',
+  'listDecisionPatterns',
   'listDecisions',
   'listDocumentTags',
   'listDocuments',
@@ -617,6 +624,7 @@ export const OPERATION_IDS = [
   'resumeStageUpload',
   'retryComparisonAiSheetChanges',
   'retryComparisonUploadSet',
+  'reviewDecisionPattern',
   'reviseAnalysisPreset',
   'reviseExecutorConnection',
   'reviseExecutorGroup',
@@ -3538,6 +3546,25 @@ export type GetProjectInput = {
 export type GetProjectResult = Project;
 
 // ------------------------------------------------------------------------------------
+// getQualityTable - GET /quality-table
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Quality Table
+ *
+ * `CRIT-SEAL-53` (plan-v5 section 6, owner ruling Н7): the quality table of the stage plan -- for each cell of the plan and section, how many findings experts decided and how many they accepted; the blocks ensemble is one row of its own, and the model is the cell's. Counts, not a score; no cell with no decision appears, and the table changes no routing. `role:admin`.
+ */
+export type GetQualityTableInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getQualityTable` (`application/json`, HTTP 200). */
+export type GetQualityTableResult = StageQualityTable;
+
+// ------------------------------------------------------------------------------------
 // getRunNormReferences - GET /runs/{run_id}/norm-references
 // ------------------------------------------------------------------------------------
 
@@ -4888,6 +4915,32 @@ export type ListDecisionMemoryCasesInput = {
 
 /** Success body of `listDecisionMemoryCases` (`application/json`, HTTP 200). */
 export type ListDecisionMemoryCasesResult = DecisionMemoryCasePage;
+
+// ------------------------------------------------------------------------------------
+// listDecisionPatterns - GET /decision-memory/patterns
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Decision Patterns
+ *
+ * `CRIT-SEAL-53` (plan-v5 section 3.7, owner ruling Н4): the failure patterns -- a refusing comment of the representative case of a group of refusals in one section, proposed by an algorithm and approved by an expert. Newest proposal first; `status` and `section_code` are optional filters, `limit` (1 to 200, default 50) cuts `items` (`total` counts every match). Only an `approved` pattern reaches hint P1. `role:admin|expert`; the viewer is denied.
+ */
+export type ListDecisionPatternsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Page size. */
+    limit?: number;
+    section_code?: string;
+    status?: "proposed" | "approved" | "rejected" | "suspended";
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listDecisionPatterns` (`application/json`, HTTP 200). */
+export type ListDecisionPatternsResult = DecisionPatternList;
 
 // ------------------------------------------------------------------------------------
 // listDecisions - GET /decisions
@@ -7159,6 +7212,36 @@ export type RetryComparisonUploadSetInput = {
 
 /** Success body of `retryComparisonUploadSet` (`application/json`, HTTP 200). */
 export type RetryComparisonUploadSetResult = ComparisonProposalSet;
+
+// ------------------------------------------------------------------------------------
+// reviewDecisionPattern - POST /decision-memory/patterns/{pattern_id}/review
+// ------------------------------------------------------------------------------------
+
+/**
+ * Review Decision Pattern
+ *
+ * `CRIT-SEAL-53` (plan-v5 section 3.7, owner ruling Н4): an expert's decision on a pattern -- `approve` (from `proposed` or `suspended`), `reject` (from `proposed`) or `suspend` (from `approved`); an append-only status event with its actor. `404 not_found` for an unknown pattern, `409 state_conflict` for a transition the status does not allow. `role:admin|expert`, `Idempotency-Key` required.
+ */
+export type ReviewDecisionPatternInput = {
+  /** Path parameters, substituted into `/decision-memory/patterns/{pattern_id}/review`. */
+  path: {
+    pattern_id: DecisionPatternId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ReviewDecisionPatternRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `reviewDecisionPattern` (`application/json`, HTTP 200). */
+export type ReviewDecisionPatternResult = DecisionPattern;
 
 // ------------------------------------------------------------------------------------
 // reviseAnalysisPreset - POST /analysis/presets/{preset_id}/revisions
@@ -10707,6 +10790,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['projects'],
   },
+  getQualityTable: {
+    operationId: 'getQualityTable',
+    method: 'GET',
+    path: '/quality-table',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
   getRunNormReferences: {
     operationId: 'getRunNormReferences',
     method: 'GET',
@@ -11441,6 +11538,20 @@ export const OPERATIONS = {
     path: '/decision-memory/cases',
     pathParams: [],
     queryParams: ['category', 'cursor', 'data_class', 'limit', 'origin_project_uid', 'section_code', 'status', 'verdict'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['decision-memory'],
+  },
+  listDecisionPatterns: {
+    operationId: 'listDecisionPatterns',
+    method: 'GET',
+    path: '/decision-memory/patterns',
+    pathParams: [],
+    queryParams: ['limit', 'section_code', 'status'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -12680,6 +12791,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
+  },
+  reviewDecisionPattern: {
+    operationId: 'reviewDecisionPattern',
+    method: 'POST',
+    path: '/decision-memory/patterns/{pattern_id}/review',
+    pathParams: ['pattern_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['decision-memory'],
   },
   reviseAnalysisPreset: {
     operationId: 'reviseAnalysisPreset',

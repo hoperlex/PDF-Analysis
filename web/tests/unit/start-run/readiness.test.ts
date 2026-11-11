@@ -60,7 +60,7 @@ const reasonOf = (markup: string): string | null => {
 
 function refusal(status: number, code: ErrorCode, details: Record<string, string> = {}): ApiError {
   return new ApiError(status, {
-    contract_version: '1.52.0', error_code: code, message: 'refused', correlation_id: 'cid-readiness', retryable: false, details,
+    contract_version: '1.53.0', error_code: code, message: 'refused', correlation_id: 'cid-readiness', retryable: false, details,
   }, 'cid-readiness');
 }
 

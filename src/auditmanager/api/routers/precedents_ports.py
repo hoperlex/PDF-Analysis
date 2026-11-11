@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-__all__ = ["PrecedentSettingsPort", "PrecedentsPort", "VectorControlPort"]
+__all__ = ["DecisionPatternsPort", "PrecedentSettingsPort", "PrecedentsPort", "StageQualityPort", "VectorControlPort"]
 
 
 class VectorControlPort(Protocol):
@@ -49,3 +49,29 @@ class PrecedentsPort(Protocol):
     def get_run_precedents(self, *, run_id: str, user_uid: str) -> Mapping[str, Any]: ...
 
     def get_finding_precedents(self, *, finding_uid: str, user_uid: str) -> Mapping[str, Any]: ...
+
+
+class DecisionPatternsPort(Protocol):
+    """The failure patterns (`PAT-01`, contract 1.53.0): the read and the keyed review, both for ``expert`` and ``admin``.
+
+    With no port ``listDecisionPatterns`` and ``reviewDecisionPattern`` keep the answer the seal gave them (``503 dependency_unavailable``,
+    ``details.dependency`` ``decision_patterns``); the composition root wires the lane's service into ``build_router(decision_patterns=...)``. Each method
+    answers in the contract's shape as a mapping the route validates against ``DecisionPatternList`` and ``DecisionPattern``; a rule -- a role, which
+    transition is allowed (``not_found``, ``state_conflict``), what a repeated key answers -- is the implementation's, never the route's. The review is
+    recorded under the command type ``review_decision_pattern``."""
+
+    def list_decision_patterns(
+        self, *, status: str | None, section_code: str | None, limit: int, user_uid: str,
+    ) -> Mapping[str, Any]: ...
+
+    def review_decision_pattern(
+        self, *, pattern_id: str, decision: str, user_uid: str, idempotency_key: str,
+    ) -> Mapping[str, Any]: ...
+
+
+class StageQualityPort(Protocol):
+    """The quality table (`QUAL-01`, contract 1.53.0): the read, for ``admin``. With no port ``getQualityTable`` keeps the answer the seal gave it
+    (``503 dependency_unavailable``, ``details.dependency`` ``stage_quality``); the composition root wires the lane's service into
+    ``build_router(stage_quality=...)``. It answers in the contract's shape as a mapping the route validates against ``StageQualityTable``."""
+
+    def get_stage_quality(self, *, user_uid: str) -> Mapping[str, Any]: ...

@@ -36,7 +36,7 @@ def _entries(provider: str | None = None) -> list[dict]:
 
 def test_the_catalogue_is_the_version_of_the_contract_it_was_sealed_with() -> None:
     assert CATALOGUE["contract"] == "auditmanager.analysis.model-catalogue"
-    assert CATALOGUE["contract_version"] == "1.52.0"
+    assert CATALOGUE["contract_version"] == "1.53.0"
     assert CATALOGUE["lock_file"] == "docs/program/P02_LOCK.json"
 
 

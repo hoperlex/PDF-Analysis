@@ -230,6 +230,7 @@ describe('the seam operations', () => {
       'resumeStageUpload',
       'retryComparisonAiSheetChanges',
       'retryComparisonUploadSet',
+      'reviewDecisionPattern', // `CRIT-SEAL-53` (contract 1.53.0): an expert's review of a failure pattern, keyed.
       'reviseAnalysisPreset',
       'reviseExecutorConnection',
       'reviseExecutorGroup',

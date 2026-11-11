@@ -704,6 +704,14 @@ class DecisionMemoryEmbeddingIntentId(OpaqueId, prefix="dmi", entity="DecisionMe
     """Identity of one queued encoder job for a case view (`CRIT-SEAL-50`, migration ``0063``). The vector itself is keyed by case, revision, view and profile."""
 
 
+class DecisionMemoryPatternId(OpaqueId, prefix="dmp", entity="DecisionMemoryPattern"):
+    """Identity of one failure pattern: the refusing comment of the representative case of a group of refusals (`CRIT-SEAL-53`, migration ``0066``, plan-v5 section 3.7)."""
+
+
+class DecisionMemoryPatternStatusEventId(OpaqueId, prefix="dps", entity="DecisionMemoryPatternStatusEvent"):
+    """Identity of one event of a failure pattern's status journal: proposed, approved, rejected or suspended (`CRIT-SEAL-53`, migration ``0066``)."""
+
+
 class VectorControlEventId(OpaqueId, prefix="vce", entity="VectorControlEvent"):
     """Identity of one change of the vectors' pause or of the night window's state (`CRIT-SEAL-50`, migration ``0063``)."""
 

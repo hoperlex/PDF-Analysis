@@ -32,14 +32,16 @@ from auditmanager.shared.identity import (
     DecisionMemoryStatusEventId,
 )
 
-HEAD = "0065_norm_crop_render"  # the head the fixture migrates to; 0059 is the migration under test, six steps below it
+HEAD = "0066_precedents_wave5"  # the head the fixture migrates to; 0059 is the migration under test, seven steps below it
 #: `0061` (phase M2) adds the settings' journal to the family and replaces the content tables' guard; its own test is `test_decision_memory_m2_migration.py`.
 M2_TABLES = {"decision_memory_setting_event"}
 CONTENT_TABLES = {"decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_crop"}
 #: `0064_precedents_seal` (`CRIT-SEAL-50`) adds seven more tables whose names start with the family's: four on the content side of a case (KEEP: comments,
 #: block evidence, the encoder's queue and the vectors) and three of a run's own (PRODUCT: the probe, the pass and its advice), which point into the
 #: product by design (its own test is `test_precedents_seal_migration.py`).
-SEAL_CONTENT_TABLES = {"decision_memory_comment", "decision_memory_block_evidence", "decision_memory_embedding_intent", "decision_memory_embedding"}
+#: `0066_precedents_wave5` (`CRIT-SEAL-53`) adds two more to the content side: a failure pattern and its status journal (their guards are `test_precedents_wave5_migration.py`'s).
+SEAL_CONTENT_TABLES = {"decision_memory_comment", "decision_memory_block_evidence", "decision_memory_embedding_intent", "decision_memory_embedding",
+                       "decision_memory_pattern", "decision_memory_pattern_status_event"}
 SEAL_PRODUCT_TABLES = {"decision_memory_probe", "decision_memory_precedent_run", "decision_memory_precedent_advice"}
 SEAL_TRIGGERS = {
     ("decision_memory_comment", "trg_decision_memory_comment_forget_guard", "am_guard_decision_memory_forget", 27),
@@ -55,6 +57,13 @@ SEAL_TRIGGERS = {
     ("decision_memory_precedent_run", "trg_decision_memory_precedent_run_frozen_guard", "am_guard_frozen_columns", 19),
     ("decision_memory_probe", "trg_decision_memory_probe_frozen_guard", "am_guard_frozen_columns", 19),
     ("decision_memory_probe", "trg_decision_memory_probe_write_once", "am_guard_write_once_columns", 19),
+    # `0066_precedents_wave5` (`CRIT-SEAL-53`): the pattern and its journal take the forget guard and the guard on INSERT; the journal is numbered and has the transition rule.
+    ("decision_memory_pattern", "trg_decision_memory_pattern_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_pattern", "trg_decision_memory_pattern_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_pattern_status_event", "trg_decision_memory_pattern_status_event_forget_guard", "am_guard_decision_memory_forget", 27),
+    ("decision_memory_pattern_status_event", "trg_decision_memory_pattern_status_event_forgotten_insert", "am_guard_decision_memory_forgotten_insert", 7),
+    ("decision_memory_pattern_status_event", "trg_decision_memory_pattern_status_event_number", "am_check_gapless_number", 7),
+    ("decision_memory_pattern_status_event", "trg_decision_memory_pattern_status_event_transition", "am_guard_decision_memory_pattern_status", 7),
 }
 PREVIOUS = "0058_finding_decision_origin"
 TABLES = (
@@ -216,7 +225,10 @@ def test_no_table_has_a_foreign_key_into_the_product(at_head: tuple[Engine, str]
     # `0064_precedents_seal`: the four KEEP tables it adds to the content side point at the case, its content or nothing else; the three of a run's own
     # (PRODUCT) are the ones that point into the product -- an `audit_run`, a `finding` -- and only those.
     seal_keys = {(child, parent) for child, parent in references if child in SEAL_CONTENT_TABLES | SEAL_PRODUCT_TABLES}
-    assert {parent for child, parent in seal_keys if child in SEAL_CONTENT_TABLES} <= {"decision_memory_case", "decision_memory_content"}
+    assert ("decision_memory_pattern_status_event", "app_user") in seal_keys and ("decision_memory_pattern_status_event", "command_record") in seal_keys
+    # `0066`: a pattern's journal also points at its pattern, the reviewing account and the command that carried the review (the keys `0061` gave the case's status event).
+    assert {parent for child, parent in seal_keys if child in SEAL_CONTENT_TABLES} <= {
+        "decision_memory_case", "decision_memory_content", "decision_memory_pattern", "app_user", "command_record"}
     assert seal_keys - {(c, p) for c, p in seal_keys if c in SEAL_CONTENT_TABLES} == {
         ("decision_memory_probe", "audit_run"), ("decision_memory_precedent_run", "audit_run"),
         ("decision_memory_precedent_advice", "audit_run"), ("decision_memory_precedent_advice", "finding")}

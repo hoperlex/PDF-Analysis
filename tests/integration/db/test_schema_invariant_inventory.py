@@ -428,19 +428,24 @@ from sqlalchemy import Engine, text
 #: ``finding_observation`` are redefined in place, which moves the digest), indexes +24 (twelve primary keys, four unique constraints and eight
 #: lookups, to 526), triggers +21 (to 291), functions +1 (``am_guard_decision_memory_forgotten_insert``, to 84); views, extensions, sequences,
 #: policies and the state topology are byte-identical to the ``0063`` seal.
+#: Resealed 2026-11-11 for ``0066_precedents_wave5`` (`CRIT-SEAL-53`), chained after ``0065``, from this test's own observed output on a throwaway PostgreSQL (the
+#: project image, container ``am-prec-s53-pg``) migrated fresh to ``0066``: relations +5 (four tables and the view ``decision_memory_pattern_current``, to 183),
+#: columns +55 (to 1930), constraints +55 (to 2321), indexes +11 (to 539), triggers +9 (to 301), functions +2 (``am_guard_decision_memory_pattern_status`` and
+#: ``am_check_finding_cross_evidence``, to 86), views +1 (to 7); the two category checks are redefined in place; extensions, sequences, policies and the state
+#: topology are byte-identical to the ``0065`` seal.
 #: Resealed 2026-11-11 for ``0065_norm_crop_render`` (`CRIT-SEAL-52`, `D-681`), chained after ``0064``, from this test's own observed output on a
 #: throwaway PostgreSQL (the project image, container ``am-prec-s52-pg``) migrated fresh to ``0065``: relations +1 (``norm_crop_render``, to 178), columns +9
 #: (to 1875), constraints +11 (eight checks, two foreign keys -- the binding and the Blob -- and the primary key, to 2266), indexes +2 (the primary key
 #: and the Blob lookup, to 528), triggers +1 (``am_immutable_row``, to 292); functions, views, extensions, sequences, policies and the state topology
 #: are byte-identical to the ``0064`` seal (their digests are unchanged).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1875, "84ab79b8d5a58f329273e8db3953b13fc0af856d72c0cd78673749137bbfca3e"),
-    "relations": (178, "5a0c9da910039ce0904f0e4134e13a8ccb7d6f44090723735826e51b8282045e"),
-    "constraints": (2266, "6a26fbc16ff739ada26560f35a20657601ad47ead6e564fc068169e73fed4bd4"),
-    "indexes": (528, "bb7fd7298a058cf3fa758693ec660249febe1468a6008ac4502b04311b8c9aa0"),
-    "triggers": (292, "1019aaddb6c029f41393c11fd0938b958d1cde95a2b21c2f5226e40a5b8740d0"),
-    "functions": (84, "ff83db6e92e6dcfbee71e81d6c1b7af0c3c50b88fdcdfd25d5905d648bf62f14"),
-    "views": (6, "0bd9b7927321000af88e44410f7f431c918230428ac258d472d294d62d08043e"),
+    "columns": (1930, "c4cdc68a84f6794af9ff8d5042c2bb541e1e143f2cf4314c35afc08de983640b"),
+    "relations": (183, "04c8a22d37aa4e8dc598dbb1e1dfe2d389e6658157fade92760299a6f45ab2c1"),
+    "constraints": (2321, "0317acd11402ee08eab8887a56c512fd592a566c78faf0875e0995f1944a2494"),
+    "indexes": (539, "9284a062030f090fb898bd31002a0a507837cf827173356f4fef10de624b96bd"),
+    "triggers": (301, "5f20513d4b9f6b237f3143543bb2a684355d215ba8bb2cba3a4d89d98c2b712f"),
+    "functions": (86, "4ca8c9d63270876dad063cdea6c49a0e7aa5afba3ea7355ecb023b81cc22e664"),
+    "views": (7, "5e78d3a1fd6d83febea265c402139aefd89d63afd83c1f38acd71979822d1ef8"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
     "policies": (0, "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"),

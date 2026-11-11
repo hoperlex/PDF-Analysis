@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a",
-    "content_commit": "f0bc496e",
-    "content_commit_subject": "feat(contract): contract 1.52.0 -- the version literals, the surface (296/325/809), the reseal paragraph, the catalogs at candidate revision 69, the head 0065 (CRIT-SEAL-52)",
-    "dispatch_named_commit": "f0bc496e5446dcbc8089ed54c528f975d3d9726a",
-    "commit_note": "Resealed by CRIT-SEAL-52: contract 1.52.0 (no operation; one schema, DecisionMemoryComment; the optional DecisionMemoryCase.comments; FindingObservation.evidence may be empty when grounding_kind is portal_block, as an if/else on grounding_kind instead of minItems 1), on top of 1.51.0.",
+    "sha256": "cd154845d56ee9b0408035323b0a0d8a504898f20e8716291c3ce5631e5e03de",
+    "content_commit": "20838e18",
+    "content_commit_subject": "fix(contract): the 404 count of the conformance test, the wave-5 vocabulary source, the reseal paragraph states no count (CRIT-SEAL-53)",
+    "dispatch_named_commit": "20838e18c724198c0afe34cc54c37c5c6ee1a74d",
+    "commit_note": "Resealed by CRIT-SEAL-53: contract 1.53.0 (three operations: listDecisionPatterns, reviewDecisionPattern, getQualityTable; eleven schemas; FindingCategory parameter_mismatch; Finding.cross_evidence; FindingObservation.extended_observation_ref; RunStatus.publication_mode), on top of 1.52.0.",
     "openapi_version": "3.1.0",
-    "info_version": "1.52.0",
-    "paths": 296,
-    "operations": 325,
-    "component_schemas": 809,
+    "info_version": "1.53.0",
+    "paths": 299,
+    "operations": 328,
+    "component_schemas": 820,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a",
+    "snapshot_sha256": "cd154845d56ee9b0408035323b0a0d8a504898f20e8716291c3ce5631e5e03de",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "8e892d73fd7300e4088a33087567075dc496ba46394a89c2743b38e2145ee0e5",
-      "index.ts": "ec4029382210b7d0d09af200e98dec50f1f0b1735213ce2cc6d46d9f0e7f5863",
-      "operations.gen.ts": "b8271ab8ba2da31ec9124e78b3e2f1e0e4387992e94f209b979e817ee09dc08e",
-      "types.gen.ts": "d92272ef70f607e491f26824283593f6b0e0738ad77a685bea891e278a4fa2e8"
+      "client.gen.ts": "9c5e91666cc37ad261c815d2d1798fe802ff2bbfa3ca2e91e8c1e8312e7a1798",
+      "index.ts": "7410f06d107d3b86cbe140aad7ee3209f29c45f494035868bfbde9983fa24dfb",
+      "operations.gen.ts": "5416062af081220b294e4a9306fb22366e74e755d08d2d040acfbe619d7a2fb2",
+      "types.gen.ts": "372fc13a449f3cadff05dd9fb723de90fa32693d929309fdcbc2a019a3f25bfc"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

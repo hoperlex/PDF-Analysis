@@ -32,4 +32,5 @@ export const CATEGORY_LABELS: Readonly<Record<FindingCategory, string>> = {
   sound: 'Звукоизоляция',
   drawing_discrepancy: 'Расхождение на чертеже',
   cross_source: 'Расхождение источников',
+  parameter_mismatch: 'Расхождение параметров',
 };

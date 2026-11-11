@@ -1707,6 +1707,8 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     return RunStatusView(
         started_by_user_uid=started_by,
         started_by_label=started_by_label,
+        # `CRIT-SEAL-53` (contract 1.53.0, asked by `F8-WEB`): how the run publishes, frozen at its start; ``getattr`` as for the starter above.
+        publication_mode=getattr(run, "publication_mode", None),
         reaudit_of_run_id=run.reaudit_of_run_id,
         # `R-151i`: both or neither (the database holds the pair). ``getattr`` as for the starter above: a stand-in older
         # suites hand this reader has neither.
@@ -1932,6 +1934,8 @@ def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
         proposed_severity=getattr(row, "proposed_severity", None),
         # `CRIT-SEAL-50`: only a block-anchored observation says so; `text_span` is the absent default, so a text body is unchanged.
         grounding_kind=_grounding_kind_view(row),
+        # `CRIT-SEAL-53` (contract 1.53.0, asked by `F8-WEB`): the candidate the observation was published from, when it was.
+        extended_observation_ref=getattr(row, "extended_observation_ref", None),
     )
 
 

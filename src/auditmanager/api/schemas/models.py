@@ -1045,6 +1045,9 @@ class FindingCategory(str, enum.Enum):
     #: (plan-v5 section 4): a group of drawing candidates, and a group that mixes the sources of the blocks and the cross-check.
     DRAWING_DISCREPANCY = "drawing_discrepancy"
     CROSS_SOURCE = "cross_source"
+    #: `CRIT-SEAL-53` (contract 1.53.0): a parameter of the project (an area, a number of storeys, a load) stated differently in two documents of the
+    #: project: a finding of the newer document's run, with the other document's evidence in `cross_evidence` (owner ruling Н6).
+    PARAMETER_MISMATCH = "parameter_mismatch"
 
 
 class Severity(str, enum.Enum):
@@ -1137,7 +1140,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.52.0"]
+    contract_version: Literal["1.53.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1805,6 +1808,13 @@ class RunWaitCell(_Object):
     cause: RunWaitCause
 
 
+class RunPublicationMode(str, enum.Enum):
+    """`CRIT-SEAL-53` (contract 1.53.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan."""
+
+    TEXT_ONLY = "text_only"
+    ONE_LIST = "one_list"
+
+
 class RunStatus(_Object):
     run_id: RunId
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1892,6 +1902,10 @@ class RunStatus(_Object):
     #: median duration of similar recent runs. Absent while the run's job is not leased or running, before its first
     #: attempt, and without enough similar history; never invented.
     estimated_finish_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `CRIT-SEAL-53` (contract 1.53.0, asked by `F8-WEB`): how the run published its findings, frozen at its start: `text_only` (the findings of the text
+    #: analysis, and the candidates of the extended review beside them) or `one_list` (the candidates are findings of the same list). Absent is read as
+    #: `text_only`.
+    publication_mode: RunPublicationMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class RunStatusPage(_Object):
@@ -2452,6 +2466,18 @@ class FindingBlockEvidence(_Object):
     )
 
 
+class FindingCrossEvidence(_Object):
+    """`CRIT-SEAL-53` (contract 1.53.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
+    version, the page, the quote and its span in that version's text layer. `Evidence` is untouched; this is the other document's, with its `version_uid`."""
+
+    evidence_ordinal: Annotated[int, Field(ge=0)]
+    version_uid: VersionUid
+    page_number: Annotated[int, Field(ge=1)]
+    quote: Annotated[str, Field(min_length=1, max_length=2000)]
+    char_start: Annotated[int, Field(ge=0)]
+    char_end: Annotated[int, Field(ge=1)]
+
+
 class FindingObservation(_Object):
     """An observation. Its ``evidence`` is the text it quotes: at least one item, **unless** its ``grounding_kind`` is ``portal_block`` (`CRIT-SEAL-52`,
     contract 1.52.0, ``D-683``): such an observation stands on blocks of the portal, which the finding lists in ``block_evidence``, and has no text span, so
@@ -2494,6 +2520,12 @@ class FindingObservation(_Object):
     )  # type: ignore[assignment]
     #: `CRIT-SEAL-50` (contract 1.51.0): absent means `text_span`, the only kind before.
     grounding_kind: FindingGroundingKind = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `CRIT-SEAL-53` (contract 1.53.0, asked by `F8-WEB`): the candidate of the extended review the observation was published from (`xobs_` and its
+    #: key); absent for an observation that was not published from a candidate. The card of a finding reads the critic's advice and the corrector's
+    #: refinement through it.
+    extended_observation_ref: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
     @model_validator(mode="after")
     def _evidence_unless_block_grounded(self) -> FindingObservation:
@@ -2542,6 +2574,11 @@ class Finding(_Object):
         default=None, json_schema_extra=optional_property
     )
     origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `CRIT-SEAL-53` (contract 1.53.0): the evidence of the finding in another document of the project (a finding of category `parameter_mismatch`);
+    #: absent for a finding with no such evidence.
+    cross_evidence: Annotated[list[FindingCrossEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class FindingDetail(_Object):
@@ -2587,6 +2624,10 @@ class FindingDetail(_Object):
         default=None, json_schema_extra=optional_property
     )
     origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `CRIT-SEAL-53` (contract 1.53.0): as on ``Finding``.
+    cross_evidence: Annotated[list[FindingCrossEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
     latest_comment: str | None = Field(default=None, json_schema_extra=optional_property)
     decision_event_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
@@ -10093,3 +10134,85 @@ class AppendPrecedentSettingRequest(_Object):
 
     setting_name: PrecedentSettingName
     value: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
+
+
+# --- `CRIT-SEAL-53` (contract 1.53.0): failure patterns and the quality table -------------------------------------------
+DecisionPatternId = TypeAliasType("DecisionPatternId", Annotated[str, Field(pattern=rf"^dmp_{_ULID}$")])
+
+
+class DecisionPatternStatus(str, enum.Enum):
+    """The status of a failure pattern (`ADR-0029` decision 11, owner ruling Н4): `proposed` by the algorithm, then `approved`, `rejected` or `suspended`
+    by an expert; the algorithm itself suspends a pattern whose group dissolves. Only an `approved` pattern reaches hint P1."""
+
+    PROPOSED = "proposed"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    SUSPENDED = "suspended"
+
+
+class DecisionPatternStatusCause(str, enum.Enum):
+    """What moved a pattern to its status: the algorithm's proposal, an expert's review, or the dissolving of the group (suspended by the algorithm)."""
+
+    PROPOSED = "proposed"
+    EXPERT_REVIEW = "expert_review"
+    GROUP_DISSOLVED = "group_dissolved"
+
+
+class DecisionPattern(_Object):
+    """`CRIT-SEAL-53`: one failure pattern -- the refusing comment (verbatim, never written by a model) of the representative case of a group of refusals in
+    one section, the counts the group had when it was proposed, and the status in force with its cause and time."""
+
+    pattern_id: DecisionPatternId
+    section_code: Annotated[str, Field(min_length=1, max_length=64)]
+    pattern_text: Annotated[str, Field(min_length=1, max_length=2000)]
+    member_count: Annotated[int, Field(ge=1)]
+    refusal_count: Annotated[int, Field(ge=1)]
+    status: DecisionPatternStatus
+    status_cause: DecisionPatternStatusCause
+    status_changed_at: datetime
+    proposed_at: datetime
+
+
+class DecisionPatternList(_Object):
+    """`listDecisionPatterns`: the patterns that match, newest proposal first, and the number that match (`items` is cut at `limit`)."""
+
+    items: Annotated[list[DecisionPattern], Field(max_length=200)]
+    total: Annotated[int, Field(ge=0)]
+
+
+class DecisionPatternReview(str, enum.Enum):
+    """`approve` (from `proposed` or `suspended`), `reject` (from `proposed`), `suspend` (from `approved`)."""
+
+    APPROVE = "approve"
+    REJECT = "reject"
+    SUSPEND = "suspend"
+
+
+class ReviewDecisionPatternRequest(_Object):
+    """`reviewDecisionPattern`: an expert's decision on a pattern. The actor is the caller; the answer is the pattern as it now stands."""
+
+    decision: DecisionPatternReview
+
+
+class StageQualityRow(_Object):
+    """`CRIT-SEAL-53` (`QUAL-01`, `ADR-0029` decision 11): the decisions of experts on the findings of one cell of the stage plan in one section, as counts.
+    A row of a cell has its `cell_key` and the cell's own `model_id`; the **ensemble** of the blocks row is one row of its own (`ensemble: true`, no
+    `cell_key`, no `model_id`: its legs and its judge are one answer). There is no share and no score: the reader divides `accepted_count` by
+    `decided_count`, and shows nothing for a cell with no decisions."""
+
+    section_code: Annotated[str, Field(min_length=1, max_length=64)]
+    ensemble: bool
+    cell_key: StageCellKey = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    model_id: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    decided_count: Annotated[int, Field(ge=1)]
+    accepted_count: Annotated[int, Field(ge=0)]
+    rejected_count: Annotated[int, Field(ge=0)]
+
+
+class StageQualityTable(_Object):
+    """`getQualityTable`: one row per (cell or ensemble, section) that has at least one decision; empty when nothing was decided. Counts, not a score;
+    it changes no routing."""
+
+    rows: Annotated[list[StageQualityRow], Field(max_length=2000)]
