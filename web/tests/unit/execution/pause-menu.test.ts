@@ -172,11 +172,12 @@ describe('who sees the button', () => {
   });
 
   it('a viewer does not read the vectors: the read waits for a role it is open to', async () => {
-    await strip(seeded(['viewer']));
+    // Nothing is seeded, so a read that is enabled would be sent on mount: the call list tells enabled from disabled.
+    await strip(seeded(['viewer'], RUNNING, null));
     expect(getVectorControl).not.toHaveBeenCalled();
     await live?.unmount();
     live = null;
-    // Negative control: the same mount for an administrator is allowed to ask (the seed is fresh, so it may not need to).
+    // Negative control: the same unseeded mount for an administrator does ask.
     const admin = seeded(['admin'], RUNNING, null);
     await strip(admin);
     expect(getVectorControl).toHaveBeenCalled();
