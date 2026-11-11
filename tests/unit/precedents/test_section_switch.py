@@ -22,6 +22,7 @@ from auditmanager.precedents.similarity import Thresholds
 from auditmanager.precedents.stemming import compile_stop_words
 from auditmanager.shared.errors import DomainError, ErrorCode
 from tests.unit.precedents.builders import ACCEPTED, NOW, REJECTED, advise, ago, case, corpus, critic, finding, scored
+from tests.unit.precedents.test_replay import Spec, _build, _replay
 
 DIGEST = "a" * 64
 
@@ -177,3 +178,31 @@ def test_a_label_that_was_hidden_is_recorded_as_what_was_shown_so_it_never_costs
     shown = view_from_advice(cancel_advice(), section_on=True)
     assert is_independent(DecisionEvent(ACCEPTED, NOW, "direct", hidden.shown_code, None)) is True
     assert is_independent(DecisionEvent(ACCEPTED, NOW, "direct", shown.shown_code, None)) is False
+
+
+# -- from the replay report ---------------------------------------------------------------------------------------------------------------------
+
+
+def _passing_specs() -> list[Any]:
+    return [[Spec(REJECTED, True), Spec(REJECTED, False), Spec(ACCEPTED, False)][index % 3] for index in range(300)]
+
+
+def test_the_entry_of_a_section_is_made_from_the_report_that_admits_it() -> None:
+    cases, scores = _build(_passing_specs())
+    report = _replay(cases, scores)
+    entry = journal.section_switch_from_report(report, "S1")
+    assert entry == {"enabled": True, "report_sha256": report.digest, "analogous": report.section("S1").analogous_threshold}
+    assert len(entry["report_sha256"]) == 64
+    assert checked_value("section_labels", {"S1": entry}) == {"S1": entry}, "and the settings service takes exactly what the tool makes"
+    assert set(journal.parse_section_labels({"S1": entry})) == {"S1"}
+
+
+def test_a_section_the_report_does_not_admit_gets_no_entry_and_neither_does_one_it_does_not_hold() -> None:
+    worse = _passing_specs()
+    worse[210] = Spec(ACCEPTED, True)                 # one accepted finding got a «снять»: the harm of the slice is over 2 %
+    cases, scores = _build(worse)
+    report = _replay(cases, scores)
+    with pytest.raises(ValueError, match="harm_above_maximum"):
+        journal.section_switch_from_report(report, "S1")
+    with pytest.raises(ValueError, match="holds no section"):
+        journal.section_switch_from_report(report, "KM")

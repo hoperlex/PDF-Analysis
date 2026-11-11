@@ -20,6 +20,7 @@ from typing import Any, Final
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.precedents.replay import ReplayReport
 from auditmanager.precedents.similarity import Thresholds
 from auditmanager.precedents.stemming import StopWordMatcher, compile_stop_words
 
@@ -210,3 +211,20 @@ def section_is_on(base: Thresholds, switch: SectionLabelSwitch | None) -> bool:
     except ValueError:
         return False
     return True
+
+
+def section_switch_from_report(report: ReplayReport, section: str) -> dict[str, Any]:
+    """The entry of ``section_labels`` that turns ``section``'s refusal labels on from ``report`` (`ADR-0029` decision 6): ``{"enabled": True, "report_sha256":
+    the report's digest, "analogous": the threshold the report chose for the section}``. The administrator's tool puts it into the value of the next revision
+    (``section_labels_value``) and appends it through the settings service.
+
+    **A section that does not meet the section rule is refused** (``ValueError`` naming its failures), and so is one the report does not hold: the report is
+    the proof the switch points at, and a switch made from a report that says «not yet» would be a switch the rule never admitted. The service cannot check
+    this (it has the digest and no report to read), so the one place that makes the entry is the place that checks."""
+    try:
+        found = report.section(section)
+    except KeyError:
+        raise ValueError(f"the report holds no section {section!r}") from None
+    if not found.meets_rule:
+        raise ValueError(f"section {section!r} does not meet the rule of the replay: {', '.join(found.failures)}")
+    return {"enabled": True, "report_sha256": report.digest, "analogous": found.analogous_threshold}

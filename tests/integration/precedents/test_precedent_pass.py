@@ -38,7 +38,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.decision_memory.public import withdraw_case
-from auditmanager.precedents import settings as journal
 from auditmanager.precedents.public import (
     Exchange,
     PrecedentPass,

@@ -66,6 +66,7 @@ from auditmanager.precedents.settings import (
     read_stop_words,
     read_thresholds,
     section_labels_value,
+    section_switch_from_report,
 )
 # `PREC-PASS` (`ADR-0029` decisions 4 to 6): the pass over a run's findings and the two reads behind `getRunPrecedents` and `getFindingPrecedents`. The composition
 # root builds `PrecedentPass(sessions, read_extended_review=...)` into the worker's housekeeping and hands its `after_import` to `VectorWindowPass`; it builds
