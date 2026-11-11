@@ -107,6 +107,17 @@ def _kw(binding, row, role="main"):
     return {"model_id": cell.config.model_id, "settings": settings_of(cell)}
 
 
+def _reference_section(binding, policy):
+    """Whether the critic's task of this run may carry the reference section after its JSON (`CTX-CRITIC`, ``ADR-0029`` decision 3).
+
+    Exactly the runs the stand serves: a run on the stage layout (its binding has cells, as `_phase_binding` reads it) whose frozen consent
+    holds the ``executor_context_policy`` (``runs.preflight`` writes it only under plan v3 with the «контекст критику» switch on). The
+    consent is the source, not the code now in force: a prompt must not change between an attempt and its resume, and the paragraph it
+    gets says «if the section stands after the JSON», so a stand that serves nothing leaves it harmless. A legacy run, a v2 run and a
+    planned run without the switch keep the prompt they always had."""
+    return getattr(binding, "cells", None) is not None and isinstance(policy.get("executor_context_policy"), dict)
+
+
 def _phase_binding(binding, identity):
     """The binding a call of ``identity`` runs with: the run's own for a run without a stage plan, else the cell of the row the phase
     belongs to. A semantic repair (``:repair:1``) is the phase it repairs, so it runs on that phase's cell. A phase that has no row has no
@@ -1517,7 +1528,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 window_context=window_context,contexts=contexts)
         elif v3:
             _review_window_v3(session=session,run=run,binding=binding,state=state,phase=phase,call=call,
-                window_id=window_context["window_id"],section=section,contexts=contexts)
+                window_id=window_context["window_id"],section=section,contexts=contexts,
+                reference_section=_reference_section(binding,window_context["policy"]))
         elif original_review:
             _review_original_v2(state=state,phase=phase,pages=by_page)
         degraded=any(p["status"] in {"failed","partial","unavailable","skipped"}
@@ -1541,8 +1553,13 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         return state
 
 
-def _review_window_v3(*, session, run, binding, state, phase, call, window_id, section, contexts):
-    """Real critic/corrector calls annotate immutable candidates; neither decides for the expert."""
+def _review_window_v3(*, session, run, binding, state, phase, call, window_id, section, contexts, reference_section=False):
+    """Real critic/corrector calls annotate immutable candidates; neither decides for the expert.
+
+    The critic's reply is read the way the batched path reads it (`CTX-CRITIC`): a record that does not satisfy the parser (a quote the sources
+    do not hold, such as one taken from the reference section, included) costs that record, not the paid reply. The records that parsed are
+    kept; the others are ``not_reviewed`` with ``finding_review_reply_refused`` and a receipt in ``state["reply_refusals"]``. There is no
+    semantic repair here: this path is the legacy coverage's, whose consent never grants one (`call` refuses it)."""
     from auditmanager.analysis.public import (build_critic_request,parse_critic_reply,
         build_corrector_request,parse_corrector_reply)
     selected=[];remaining=16_000
@@ -1569,22 +1586,36 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
             "native_context":[row for row in contexts if row["source_id"] in references]}
         phase("finding_review","running")
         request=build_critic_request(**_kw(binding,"review"),run_id=run.run_id,section=section,
-            observations=indexed,sources=sources,window_id=window_id,context=context)
+            observations=indexed,sources=sources,window_id=window_id,context=context,reference_section=reference_section)
         critic_payload=json.loads(request.body["messages"][0]["content"])
         critic_cut=any(critic_payload.get(key,{}).get("truncated",False)
             for key in ("context_coverage","norm_context_coverage"))
-        reviews=parse_critic_reply(call(request,"critic").output_text,observations=indexed,sources=sources,
-            allowed_sources=references,context=context)
+        response=call(request,"critic")
+        reviews,refused=_received_reply(state=state,request=request,response=response,
+            parse=lambda text,**kwargs:parse_critic_reply(text,observations=indexed,sources=sources,
+                allowed_sources=references,context=context,**kwargs),
+            call=call,identity="critic",policy={})
         state["reviews"]=reviews
         state["critiques"]=reviews
         for review in reviews:
             indexed[review["input_id"]].update(critic=review,review_status="reviewed",
                 context_kinds=_critic_context_kinds(indexed[review["input_id"]],critic_payload))
-        phase("finding_review","partial" if len(selected)<len(state["observations"]) or critic_cut else "completed",
-            "context_window_truncated" if critic_cut else None)
+        if refused:
+            # `_received_reply` keeps the records that parsed and returns the refusal: an item the reply did not carry was not left out of
+            # the window, its answer was refused. The receipt in `state["reply_refusals"]` holds the parser's code for each record.
+            for item in indexed.values():
+                if item.get("review_status")!="reviewed":
+                    item.update(review_status="not_reviewed",review_reason="finding_review_reply_refused")
+        phase("finding_review","partial" if len(selected)<len(state["observations"]) or critic_cut or refused else "completed",
+            "finding_review_reply_refused" if refused else "context_window_truncated" if critic_cut else None)
+        # Only the records the critic answered go to the corrector: its partition has to cover exactly the inputs it is given.
+        reviewed={key:item for key,item in indexed.items() if item.get("review_status")=="reviewed"}
         request=build_corrector_request(**_kw(binding,"correction"),run_id=run.run_id,section=section,
-            observations=indexed,critiques=reviews,sources=sources,window_id=window_id,context=context)
-        if request is None:
+            observations=reviewed,critiques=reviews,sources=sources,window_id=window_id,context=context) if reviews else None
+        if not reviews:
+            phase("finding_correction","unavailable","critic_inputs_unavailable")
+            state["corrections"]=[]
+        elif request is None:
             phase("finding_correction","completed","no_corrections_requested")
             state["corrections"]=[]
         else:
@@ -1592,7 +1623,7 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
             correction_payload=json.loads(request.body["messages"][0]["content"])
             correction_cut=any(correction_payload.get(key,{}).get("truncated",False)
                 for key in ("context_coverage","norm_context_coverage"))
-            corrections=parse_corrector_reply(call(request,"corrector").output_text,observations=indexed,
+            corrections=parse_corrector_reply(call(request,"corrector").output_text,observations=reviewed,
                 critiques=reviews,sources=sources,allowed_sources=references,context=context)
             state["corrections"]=corrections
             for correction in corrections:
@@ -1767,6 +1798,13 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                     for receipt in global_review.get("norm_lookup_receipts", []))
                 state["reply_refusals"].extend({"window_id": "global-cross-window", **receipt}
                     for receipt in global_review.get("reply_refusals", []))
+        else:
+            # The window path's critic reads its reply tolerantly too (`CTX-CRITIC`): the receipts of a refused record are kept, and the
+            # key stays absent from a run that has none, as before.
+            refusals = [{"window_id": record["window_id"], **receipt}
+                for record in records for receipt in record.get("reply_refusals", [])]
+            if refusals:
+                state["reply_refusals"] = refusals
         if "norm_paragraph_context_policy" in policy:
             state["norm_paragraph_context_policy"] = deepcopy(policy["norm_paragraph_context_policy"])
             state["normative_context_receipts"] = [{"window_id": record["window_id"], "batch_index": identity, **receipt}
@@ -2315,7 +2353,8 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         request = build_critic_request(**_kw(binding, "review"), run_id=run.run_id,
             section=state['section'], observations=indexed, sources=sources,
             window_id=window_id + f':critic:b{batch["index"]:03d}', context=context,
-            full_context=_source_sized(window_context['policy']))
+            full_context=_source_sized(window_context['policy']),
+            reference_section=_reference_section(binding, window_context['policy']))
         payload = json.loads(request.body['messages'][0]['content'])
         cut = any(payload.get(key, {}).get('truncated', False) for key in
             ('context_coverage', 'norm_context_coverage'))
@@ -2642,7 +2681,11 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
                 "semantic_repair_attempts": policy["semantic_repair_attempts"]}
                 if _source_sized(policy) else {}),
             **({"norm_paragraph_context_policy": policy["norm_paragraph_context_policy"]}
-                if "norm_paragraph_context_policy" in policy else {})}}
+                if "norm_paragraph_context_policy" in policy else {}),
+            # The critic of the global review is a `review:main` task too, so the stand offers it the reference section when the consent
+            # holds the policy; the critic's prompt (`_reference_section`) has to say what that section is.
+            **({"executor_context_policy": policy["executor_context_policy"]}
+                if "executor_context_policy" in policy else {})}}
         contexts = [{"source_id": source["source_id"], "page_number": source["page_number"],
             "text": source["quote"] if source["character_field"] == "text" else "",
             "recognised_context": source["quote"] if source["character_field"] == "recognised_context" else ""}
