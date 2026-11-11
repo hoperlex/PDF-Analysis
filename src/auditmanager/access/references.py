@@ -35,7 +35,9 @@ the id then becomes an orphan the memory never resolves. The account that *acts 
 is different: ``decision_memory_status_event.actor_user_uid`` (who withdrew, restored or forgot a case; a
 tombstone must keep a resolvable actor) and ``decision_memory_setting_event.actor_user_uid`` (who changed an
 installation setting) have a ``RESTRICT`` key since ``0061_decision_memory_m2`` (``D-393``), and are register
-entries below. Such a
+entries below. The «Прецеденты» seals add two more memory columns without a key: ``decision_memory_comment.author_user_uid``
+(an expert's comment copied from the ledger, ``0064``) and the view column ``decision_memory_pattern_current.status_actor_user_uid``
+(``0066``, read from the keyed ``decision_memory_pattern_status_event.actor_user_uid``). Such a
 column is not a register entry (it is not a foreign key, so ``purge_account`` cannot see it and
 the register-equals-schema test above does not list it); it is named in this header instead, and
 ``test_every_memory_column_that_names_an_account_without_a_foreign_key_is_named_in_this_header``
@@ -190,6 +192,24 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "actor_user_uid",
         "RESTRICT",
         "this account changed an installation setting of the decision memory (DECISION-MEMORY-01 phase M2, migration 0061)",
+    ),
+    AccountReference(
+        "precedent_setting_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account changed a switch or a setting of the «Прецеденты» programme (ADR-0029, migration 0064)",
+    ),
+    AccountReference(
+        "vector_control_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account paused or resumed the vectors' night window (ADR-0029, migration 0064)",
+    ),
+    AccountReference(
+        "decision_memory_pattern_status_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account approved, rejected or suspended a refusal pattern (ADR-0029, migration 0066)",
     ),
     AccountReference(
         "finding_execution_status",
