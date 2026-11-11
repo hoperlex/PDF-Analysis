@@ -179,7 +179,7 @@ describe('the tab as a screen', () => {
     const client = newClient();
     const correlation = '0f0e9d8c-7b6a-4948-b726-150413021100';
     seedError(client, acceptedKey({ sectionCode: 'AR' }), new ApiError(503, {
-      contract_version: '1.51.0', error_code: 'dependency_unavailable',
+      contract_version: '1.52.0', error_code: 'dependency_unavailable',
       message: 'Сообщение об отказе.', correlation_id: correlation, retryable: false,
     }, correlation));
     const markup = renderScreen(
