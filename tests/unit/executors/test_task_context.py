@@ -207,6 +207,8 @@ def test_a_run_is_eligible_only_on_the_stage_layout_under_v3_with_a_section_and_
 REFUSED = {
     "a comparison task": dict(record=task(origin="comparison_call", run_id=None)),
     "a probe": dict(record=task(origin="probe", run_id=None)),
+    "a comparison task, even one that named a run": dict(record=task(origin="comparison_call", run_id=RUN)),
+    "a probe, even one that named a run": dict(record=task(origin="probe", run_id=RUN)),
     "a legacy run (no stage plan)": dict(facts=replace(ELIGIBLE, stage_plan=False)),
     "a run that asks for plan v2": dict(facts=replace(ELIGIBLE, plan_version="extended-review-v2")),
     "a consent without the policy": dict(facts=replace(ELIGIBLE, policy=None)),
