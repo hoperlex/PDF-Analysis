@@ -17,10 +17,10 @@ from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelRe
     ORIGINAL_REVIEW_V2, original_review_critic, original_review_corrector, original_review_plan,
     original_review_procedures, original_review_summary)
 from auditmanager.documents.public import DocumentRepository
-from auditmanager.executors.public import CropImage, attach_images
+from auditmanager.executors.public import CropImage, HostRepository, attach_images, cell_binding_of, token_health_of
 from auditmanager.findings.public import BlockEvidenceItem, CandidateGroup, CandidateMember
 from auditmanager.jobs.public import extended_unit
-from auditmanager.norms.public import SEARCH_WINDOW, search_norms
+from auditmanager.norms.public import SEARCH_WINDOW, NormPageImages, search_norms
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.stage_plan import call_journal_columns, cell_binding, settings_of
 from auditmanager.runs.stage_layout import ENSEMBLE_ROLES, parse_plan, role_of_phase, row_of_phase
@@ -59,11 +59,92 @@ def _original_review_enabled(policy, *, strict=False) -> bool:
 CONTEXT_NORM_TEXT = "norm_text"
 
 
-def _critic_context_kinds(item, payload) -> list:
-    """What the critic's request carried for this candidate: ``norm_text`` when a paragraph of the candidate's own norm candidates is in ``norm_context``."""
+#: `M7-NORM-PNG`: the page image of a norm paragraph the candidate carried was in the critic's task (``precedents.models.CONTEXT_NORM_IMAGES``).
+CONTEXT_NORM_IMAGES = "norm_images"
+
+
+def _critic_context_kinds(item, payload, imaged=frozenset()) -> list:
+    """What the critic's request carried for this candidate: ``norm_text`` when a paragraph of the candidate's own norm candidates is in
+    ``norm_context``, and ``norm_images`` when the page of one of them was declared in the task (``imaged``: the paragraph ids of the pages)."""
     supplied = {row.get("paragraph_id") for row in payload.get("norm_context", []) if isinstance(row, dict)}
     wanted = {row.get("paragraph_id") for row in item.get("norm_candidates", []) if isinstance(row, dict)}
-    return [CONTEXT_NORM_TEXT] if supplied & wanted else []
+    return ([CONTEXT_NORM_TEXT] if supplied & wanted else []) + ([CONTEXT_NORM_IMAGES] if imaged & wanted else [])
+
+
+#: The cell of the critic's call, as ``binding_for(cell)`` and the stand name it (``f"{row}:{role}"``).
+_CRITIC_CELL = "review:main"
+#: The providers of a host agent whose command takes no image (``tools/executor-runner/host_mode.py``: ``image_input_unsupported``).
+_PROVIDERS_WITHOUT_IMAGES = frozenset({"claude_code"})
+
+
+class _CriticNormImages:
+    """`M7-NORM-PNG` (plan-v5 section 3.4, ``ADR-0029`` decision 9): the page images of norm paragraphs that a critic task of this run declares.
+
+    One per run (and per global review), made only for a run the critic's reference section is offered to (:func:`_reference_section`): a legacy
+    run, a v2 run and a planned run without the «контекст критику» switch get ``None`` and are never asked. :meth:`attach` is called with the
+    critic's request **when it is built**, so the task is created with its ``images``; it declares the pages (``crop_id: norm.<nbd_...>``) of
+    the paragraphs of this request's own ``norm_context`` -- at most two, none unless the ``review:main`` member of the run serves images and is
+    not a Claude Code host. What happened is written to ``state["norm_page_images"]`` (the pages declared, the paragraphs whose page could not be
+    produced with the reason, or why none were offered): a page that is missing costs the image, never the text or the call. The render itself is
+    made lazily by :class:`~auditmanager.norms.public.NormPageImages` and kept in ``norm_crop_render``, so the next task reuses it.
+    """
+
+    def __init__(self, session, run, store, *, pages=None):
+        self._session, self._run, self._store = session, run, store
+        self._pages = pages
+        self._withheld: str | None | bool = False  # False: not asked yet
+
+    def _factory(self):
+        from sqlalchemy.orm import sessionmaker
+        return sessionmaker(bind=self._session.get_bind())
+
+    def _service(self):
+        if self._pages is None:
+            self._pages = NormPageImages(store=self._store, session_factory=self._factory())
+        return self._pages
+
+    def withheld(self):
+        """Why the member does not take images (a fixed word), or ``None`` when it does. Asked once; the answer is read from the database, with a
+        short transaction of its own, never from the run's."""
+        if self._withheld is False:
+            from auditmanager.shared.db import session_scope
+            with session_scope(self._factory()) as session:
+                member = cell_binding_of(session, self._run.run_id, _CRITIC_CELL)
+                if member is None:
+                    self._withheld = "member_not_bound"
+                elif member.provider in _PROVIDERS_WITHOUT_IMAGES:
+                    self._withheld = "provider_takes_no_images"
+                else:
+                    health = token_health_of(session, HostRepository().usable_tokens(session, member.host_id))
+                    self._withheld = (None if any("images" in row.features for row in health.values())
+                        else "member_declared_no_images")
+        return self._withheld
+
+    def attach(self, request, *, state, identity):
+        """``(request, imaged)``: the request with the pages declared, and the ids of the paragraphs that sit on them. The request comes back as it
+        was when there is no norm paragraph in it, no page to show or the member takes no image."""
+        payload = json.loads(request.body["messages"][0]["content"])
+        paragraphs = payload.get("norm_context")
+        if not isinstance(paragraphs, list) or not paragraphs:
+            return request, frozenset()
+        receipts = state.setdefault("norm_page_images", [])
+        reason = self.withheld()
+        if reason is not None:
+            receipts.append({"identity": identity, "status": "not_offered", "reason": reason})
+            return request, frozenset()
+        selection = self._service().select(paragraphs)
+        receipts.append({"identity": identity, "status": "declared" if selection.images else "none",
+            "images": [{"crop_id": image.crop_id, "paragraph_ids": list(image.paragraph_ids), "sha256": image.render.sha256,
+                "size_bytes": image.render.size_bytes} for image in selection.images],
+            "unavailable": [{"paragraph_id": paragraph, "reason": why} for paragraph, why in selection.unavailable]})
+        if not selection.images:
+            return request, frozenset()
+        return attach_images(request, [CropImage(image.crop_id, image.data) for image in selection.images]), selection.paragraph_ids
+
+
+def _critic_norm_images(session, run, store, binding, policy):
+    """The helper above for a run whose critic task may carry the reference section, else ``None`` (that run's critic is built as it always was)."""
+    return _CriticNormImages(session, run, store) if _reference_section(binding, policy) else None
 
 
 def _review_original_v2(*, state, phase, pages) -> None:
@@ -1525,11 +1606,13 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(not item.get("norm_candidates") for item in window) else "completed")
         if batched:
             _review_batched_v3(run=run,binding=binding,state=state,phase=phase,call=call,
-                window_context=window_context,contexts=contexts)
+                window_context=window_context,contexts=contexts,
+                norm_images=_critic_norm_images(session,run,store,binding,window_context["policy"]))
         elif v3:
             _review_window_v3(session=session,run=run,binding=binding,state=state,phase=phase,call=call,
                 window_id=window_context["window_id"],section=section,contexts=contexts,
-                reference_section=_reference_section(binding,window_context["policy"]))
+                reference_section=_reference_section(binding,window_context["policy"]),
+                norm_images=_critic_norm_images(session,run,store,binding,window_context["policy"]))
         elif original_review:
             _review_original_v2(state=state,phase=phase,pages=by_page)
         degraded=any(p["status"] in {"failed","partial","unavailable","skipped"}
@@ -1553,7 +1636,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         return state
 
 
-def _review_window_v3(*, session, run, binding, state, phase, call, window_id, section, contexts, reference_section=False):
+def _review_window_v3(*, session, run, binding, state, phase, call, window_id, section, contexts, reference_section=False, norm_images=None):
     """Real critic/corrector calls annotate immutable candidates; neither decides for the expert.
 
     The critic's reply is read the way the batched path reads it (`CTX-CRITIC`): a record that does not satisfy the parser (a quote the sources
@@ -1587,6 +1670,9 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
         phase("finding_review","running")
         request=build_critic_request(**_kw(binding,"review"),run_id=run.run_id,section=section,
             observations=indexed,sources=sources,window_id=window_id,context=context,reference_section=reference_section)
+        imaged=frozenset()
+        if norm_images is not None:  # `M7-NORM-PNG`: the task is created with the pages of its own norm paragraphs
+            request,imaged=norm_images.attach(request,state=state,identity="critic")
         critic_payload=json.loads(request.body["messages"][0]["content"])
         critic_cut=any(critic_payload.get(key,{}).get("truncated",False)
             for key in ("context_coverage","norm_context_coverage"))
@@ -1599,7 +1685,7 @@ def _review_window_v3(*, session, run, binding, state, phase, call, window_id, s
         state["critiques"]=reviews
         for review in reviews:
             indexed[review["input_id"]].update(critic=review,review_status="reviewed",
-                context_kinds=_critic_context_kinds(indexed[review["input_id"]],critic_payload))
+                context_kinds=_critic_context_kinds(indexed[review["input_id"]],critic_payload,imaged))
         if refused:
             # `_received_reply` keeps the records that parsed and returns the refusal: an item the reply did not carry was not left out of
             # the window, its answer was refused. The receipt in `state["reply_refusals"]` holds the parser's code for each record.
@@ -2324,7 +2410,7 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
             if item.get('norm_status') == 'unavailable'), 'normative_query_required') if unprocessed else None)
 
 
-def _review_batched_v3(*, run, binding, state, phase, call, window_context, contexts):
+def _review_batched_v3(*, run, binding, state, phase, call, window_context, contexts, norm_images=None):
     from auditmanager.analysis.public import (plan_extended_coverage, build_critic_request,
         parse_critic_reply, build_corrector_request, parse_corrector_reply)
     window_id = window_context['window_id']
@@ -2355,6 +2441,9 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
             window_id=window_id + f':critic:b{batch["index"]:03d}', context=context,
             full_context=_source_sized(window_context['policy']),
             reference_section=_reference_section(binding, window_context['policy']))
+        imaged = frozenset()
+        if norm_images is not None:  # `M7-NORM-PNG`: the task is created with the pages of its own norm paragraphs
+            request, imaged = norm_images.attach(request, state=state, identity=f'{kind}:b{batch["index"]:03d}')
         payload = json.loads(request.body['messages'][0]['content'])
         cut = any(payload.get(key, {}).get('truncated', False) for key in
             ('context_coverage', 'norm_context_coverage'))
@@ -2378,7 +2467,7 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         for review in reviews:
             item = indexed[review['input_id']]
             item.update(critic=review, review_status='reviewed', review_reason=None,
-                context_kinds=_critic_context_kinds(item, payload))
+                context_kinds=_critic_context_kinds(item, payload, imaged))
             if review['needs_correction']:
                 correction_targets.append(item)
         if refused:
@@ -2698,7 +2787,8 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
         _norm_batched_v3(session=session, run=run, binding=binding, state=global_state, snapshot_id=snapshot_id,
             phase=phase, call=call, checkpoint=checkpoint, window_context=virtual_context)
         _review_batched_v3(run=run, binding=binding, state=global_state, phase=phase, call=call,
-            window_context=virtual_context, contexts=contexts)
+            window_context=virtual_context, contexts=contexts,
+            norm_images=_critic_norm_images(session, run, store, binding, virtual_context["policy"]))
         next(row for row in global_state["procedures"] if row["id"] == "report_generation").update(status="completed")
         incomplete = deferred or any(row["status"] in {"partial", "unavailable", "failed", "skipped"}
                                     for row in global_state["procedures"])
