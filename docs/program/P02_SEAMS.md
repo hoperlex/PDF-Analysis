@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-328 operations, sealed. `A5` generates the typed client from this document; `B6`
+329 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1260,6 +1260,7 @@ could.
 | `listExecutionQueue` | `GET /execution/queue` |
 | `listExecutionJournal` | `GET /execution/journal` |
 | `cancelRun` | `POST /runs/{run_id}/cancel` |
+| `deleteRun` | `POST /runs/{run_id}/deletion` |
 | `reauditRun` | `POST /runs/{run_id}/reaudit` |
 | `setJobPriority` | `PUT /execution/queue/{job_id}/priority` |
 | `setExecutionPaused` | `PUT /execution/dispatch` |
@@ -1521,7 +1522,7 @@ Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
-  `approveRegistration`, `cancelRun`, `reauditRun`, `startRunFromStage`, `setJobPriority`,
+  `approveRegistration`, `cancelRun`, `deleteRun`, `reauditRun`, `startRunFromStage`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
   `importRunDecisions`, `importOptimisationProposalDecisions`, `carryOverProposalDecisions`, `withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
   `scheduleAssignments`,

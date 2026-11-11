@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 299,
+    "path_count": 300,
     "operations": [
       [
         "DELETE",
@@ -1395,6 +1395,11 @@
       ],
       [
         "POST",
+        "/runs/{run_id}/deletion",
+        "deleteRun"
+      ],
+      [
+        "POST",
         "/runs/{run_id}/reaudit",
         "reauditRun"
       ],
@@ -2471,6 +2476,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0066_precedents_wave5",
-  "contract_version": "1.53.0"
+  "migration_head": "0067_precedents_wave5",
+  "contract_version": "1.54.0"
 }

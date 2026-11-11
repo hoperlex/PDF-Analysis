@@ -224,7 +224,10 @@ APPEND_ONLY = frozenset((
     "executor_task_context_delivery", "finding_block_evidence", "precedent_setting_event", "vector_control_event",
     # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): a norm page's render is `am_immutable_row` and only inserted into (once, by `M7-NORM-PNG`).
     "norm_crop_render",
-    # `0066_precedents_wave5` (`CRIT-SEAL-53`): a pattern and its journal take the forget guard (`UPDATE` refused, `DELETE` only beside a forget); the
+    # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a deleted run is `am_immutable_row` and only inserted into, by `delete_audit_run`
+    # (`runs/repository.py`); there is no restore.
+    "audit_run_deletion",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): a pattern and its journal take the forget guard (`UPDATE` refused, `DELETE` only beside a forget); the
     # parameter facts and the cross evidence are `am_immutable_row`. Only inserted into.
     "decision_memory_pattern", "decision_memory_pattern_status_event", "finding_cross_evidence", "project_parameter_fact",
 ))
@@ -271,7 +274,7 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # the vectors with its journal. The five that remained (the probe, the pass with its advice, the settings journal and the delivery journal) and
     # `norm_crop_render` (`0065`, until `M7-NORM-PNG`) left it on the base of `CRIT-SEAL-53` (`00d3ac6a5`), when `PREC-PASS`, `PREC-SETTINGS-01`,
     # `CTX-STAND` and `M7-NORM-PNG` merged: the scan sees a statement for each (found red by the recovery group of this seal).
-    # `0066_precedents_wave5` (`CRIT-SEAL-53`): until `PAT-01` writes the patterns and their journal and `XDOC-01` the parameter facts and the cross evidence.
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): until `PAT-01` writes the patterns and their journal and `XDOC-01` the parameter facts and the cross evidence.
     "decision_memory_pattern", "decision_memory_pattern_status_event", "finding_cross_evidence", "project_parameter_fact",
 ))
 

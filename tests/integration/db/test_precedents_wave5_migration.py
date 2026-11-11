@@ -1,4 +1,4 @@
-"""`CRIT-SEAL-53`: ``0066_precedents_wave5`` -- failure patterns, parameter facts and cross-document evidence (plan-v5 section 3.7), against real PostgreSQL.
+"""`CRIT-SEAL-53`: ``0067_precedents_wave5`` -- failure patterns, parameter facts and cross-document evidence (plan-v5 section 3.7), against real PostgreSQL.
 
 Each rule shown by a row that obeys next to a row that does not, with every trigger on:
 
@@ -35,7 +35,7 @@ from auditmanager.shared.identity import (
 from tests.integration.db.test_precedents_seal_migration import _admin, _finding, _run
 from tests.support.memory_seed import seed_case
 
-THIS = "0066_precedents_wave5"
+THIS = "0067_precedents_wave5"
 PREVIOUS = "0065_norm_crop_render"
 REF = "owner message 2026-11-11, forget test"
 SHA = "a" * 64
@@ -337,7 +337,7 @@ def test_the_downgrade_is_refused_while_any_of_it_exists_and_only_then(at_previo
     def refused(*needles: str) -> None:
         answer = foundation_command(_alembic("downgrade", PREVIOUS), url)
         output = answer.stdout + answer.stderr
-        assert answer.returncode != 0 and "refusing to downgrade 0066_precedents_wave5" in output, answer.describe()
+        assert answer.returncode != 0 and "refusing to downgrade 0067_precedents_wave5" in output, answer.describe()
         for needle in needles:
             assert needle in output, (needle, output)
 

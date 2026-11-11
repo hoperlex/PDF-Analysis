@@ -137,7 +137,7 @@ KEEP_SCHEDULE_TABLES = frozenset((
 #: `0064_precedents_seal` (`CRIT-SEAL-50`) adds four tables to the content side of a case: its comments, the memory's copy of the block evidence
 #: of a finding, the encoder's queue and the vectors. Each references the case or its content (a KEEP table), never a PRODUCT one, takes the forget
 #: guard (`DELETE` only beside a forget of the case) and is removed by the forget tool (`scripts/recovery/memory_forget.py`).
-#: `0066_precedents_wave5` (`CRIT-SEAL-53`) adds two: a failure pattern (its text is a copy of a refusing comment of its representative case) and its
+#: `0067_precedents_wave5` (`CRIT-SEAL-53`) adds two: a failure pattern (its text is a copy of a refusing comment of its representative case) and its
 #: status journal. Both reference the case (a KEEP table) and ``app_user`` / ``command_record``, never a PRODUCT table, take the forget guard (`DELETE` only
 #: beside a forget of the case) and are removed by the forget tool before the case's content.
 KEEP_MEMORY_TABLES = frozenset((
@@ -242,7 +242,10 @@ PRODUCT_TABLES = frozenset((
     # finding, and a finding's block evidence belong to a run and its findings: each references `audit_run`, `finding` or `finding_observation`, so
     # the project erase's foreign-key closure reaches them. The advice and the block evidence are immutable rows, so they leave in the TRUNCATE.
     "decision_memory_precedent_advice", "decision_memory_precedent_run", "decision_memory_probe", "finding_block_evidence",
-    # `0066_precedents_wave5` (`CRIT-SEAL-53`): the parameters a run's extraction found, and the evidence of a finding that stands in another version
+    # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a run deleted from the run lists references `audit_run` (PRODUCT) and is an immutable row,
+    # so it leaves in the same TRUNCATE; the project erase's foreign-key closure reaches it through `audit_run`.
+    "audit_run_deletion",
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): the parameters a run's extraction found, and the evidence of a finding that stands in another version
     # of the project. The first references `audit_run`, the second `finding_observation` and `document_version`, so the project erase's
     # foreign-key closure reaches both; both are immutable rows and leave in the TRUNCATE.
     "finding_cross_evidence", "project_parameter_fact",
@@ -302,7 +305,7 @@ KEEP_COMMAND_TYPES = frozenset((
     # `CRIT-SEAL-50` (contract 1.51.0): the keyed administrator writes of the Precedents programme -- a new revision of a switch or a setting, and
     # the pause of the vectors. Their tables (`KEEP_PRECEDENT_TABLES`) and events (``precedent.``, ``vector.``) are kept with them.
     "append_precedent_setting", "set_vector_paused",
-    # `CRIT-SEAL-53` (contract 1.53.0): an expert's (or an administrator's) review of a failure pattern. Its tables (`KEEP_MEMORY_TABLES`) and its
+    # `CRIT-SEAL-53` (contract 1.54.0): an expert's (or an administrator's) review of a failure pattern. Its tables (`KEEP_MEMORY_TABLES`) and its
     # events (``precedent.``, already kept) are kept with it.
     "review_decision_pattern",
 ))
@@ -317,6 +320,9 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "apply_stage_card_verdicts",
     "create_stage_review_card",
     "append_decision", "approve_sheet_pairing", "cancel_audit_run", "carry_over_decision",
+    # `RUN-DELETE-01` (contract 1.53.0): the receipt of a run deleted from the run lists is about a project's runs, a product command like
+    # `cancel_audit_run`; ``audit_run_deletion.command_id`` references it, so it is deleted only after that table is truncated.
+    "delete_audit_run",
     "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
     "set_worker_intake",

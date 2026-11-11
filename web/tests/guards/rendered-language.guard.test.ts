@@ -100,6 +100,7 @@ import type { AnalysisProfileListItem, CarryoverCandidate, VersionClassification
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
 import { CarryOverDecisionView } from '@/features/carry-over-decision';
+import { DeleteRunConfirm, DeleteRunControl, deleteFailureText } from '@/features/delete-run';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
 import { SpecificationPricesAnswer, SpecificationPricesSection } from '@/widgets/specification-prices';
@@ -1077,7 +1078,7 @@ const FINDINGS: readonly Finding[] = [
   // `CRIT-SEAL-50` (contract 1.51.0): the two categories of the groups of candidates of the extended review published as findings.
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}S`, category: 'drawing_discrepancy' }),
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}T`, category: 'cross_source' }),
-  // `CRIT-SEAL-53` (contract 1.53.0): a parameter stated differently in two documents of the project.
+  // `CRIT-SEAL-53` (contract 1.54.0): a parameter stated differently in two documents of the project.
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}V`, category: 'parameter_mismatch' }),
 ];
 
@@ -1138,7 +1139,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.53.0',
+    contract_version: '1.54.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1150,7 +1151,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.53.0',
+    contract_version: '1.54.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2134,7 +2135,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.53.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.54.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2343,6 +2344,19 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'start-run-cost-dialog',
     make: startRunCostDialogShapes,
+  },
+  // `RUN-DELETE-01`: «Удалить прогон» as it is drawn -- the offer on the page and in a row, the open confirmation, and each sentence a
+  // refusal puts under it (a run that cannot be deleted, a run already gone, any other refusal).
+  {
+    name: 'delete-run-control',
+    make: () => createElement('div', null,
+      createElement(DeleteRunControl, { runId: RUN_ID, state: 'failed' }),
+      createElement(DeleteRunControl, { runId: RUN_ID, state: 'failed', compact: true }),
+      createElement(DeleteRunControl, { runId: RUN_ID, state: 'partial', initiallyConfirming: true }),
+      ...[apiError(409, 'state_transition_not_allowed'), apiError(404, 'not_found'), apiError(403, 'permission_denied')].map((error, index) =>
+        createElement(DeleteRunConfirm, {
+          key: `refusal-${index}`, pending: false, failure: deleteFailureText(error), onConfirm: () => undefined, onCancel: () => undefined,
+        }))),
   },
   // `W60-PRICE-LIST-01`: the project's «Оптимизация» tab in every branch its widgets have.
   ...optimisationShapes(),
@@ -4639,7 +4653,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.53.0',
+            contract_version: '1.54.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4661,7 +4675,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.53.0',
+            contract_version: '1.54.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

@@ -428,7 +428,7 @@ from sqlalchemy import Engine, text
 #: ``finding_observation`` are redefined in place, which moves the digest), indexes +24 (twelve primary keys, four unique constraints and eight
 #: lookups, to 526), triggers +21 (to 291), functions +1 (``am_guard_decision_memory_forgotten_insert``, to 84); views, extensions, sequences,
 #: policies and the state topology are byte-identical to the ``0063`` seal.
-#: Resealed 2026-11-11 for ``0066_precedents_wave5`` (`CRIT-SEAL-53`), chained after ``0065``, from this test's own observed output on a throwaway PostgreSQL (the
+#: Resealed 2026-11-11 for ``0067_precedents_wave5`` (`CRIT-SEAL-53`), chained after ``0065``, from this test's own observed output on a throwaway PostgreSQL (the
 #: project image, container ``am-prec-s53-pg``) migrated fresh to ``0066``: relations +5 (four tables and the view ``decision_memory_pattern_current``, to 183),
 #: columns +55 (to 1930), constraints +55 (to 2321), indexes +11 (to 539), triggers +9 (to 301), functions +2 (``am_guard_decision_memory_pattern_status`` and
 #: ``am_check_finding_cross_evidence``, to 86), views +1 (to 7); the two category checks are redefined in place; extensions, sequences, policies and the state
@@ -438,12 +438,17 @@ from sqlalchemy import Engine, text
 #: (to 1875), constraints +11 (eight checks, two foreign keys -- the binding and the Blob -- and the primary key, to 2266), indexes +2 (the primary key
 #: and the Blob lookup, to 528), triggers +1 (``am_immutable_row``, to 292); functions, views, extensions, sequences, policies and the state topology
 #: are byte-identical to the ``0064`` seal (their digests are unchanged).
+#: Resealed 2026-11-11 for ``0066_run_deletion`` (`RUN-DELETE-01`), chained after ``0065``, from this test's own observed output on a throwaway PostgreSQL
+#: (the project image, container ``rd01-pg``) migrated fresh to ``0066``: relations +1 (``audit_run_deletion``, to 179), columns +4 (to 1879), constraints +8
+#: (three checks, three foreign keys -- the run, the account and the command receipt --, the primary key and the unique constraint of the receipt, to 2274),
+#: indexes +2 (the primary key and the unique constraint, to 530), triggers +1 (``am_immutable_row``, to 293); functions, views, extensions, sequences,
+#: policies and the state topology are byte-identical to the ``0065`` seal (their digests are unchanged).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1930, "c4cdc68a84f6794af9ff8d5042c2bb541e1e143f2cf4314c35afc08de983640b"),
-    "relations": (183, "04c8a22d37aa4e8dc598dbb1e1dfe2d389e6658157fade92760299a6f45ab2c1"),
-    "constraints": (2321, "0317acd11402ee08eab8887a56c512fd592a566c78faf0875e0995f1944a2494"),
-    "indexes": (539, "9284a062030f090fb898bd31002a0a507837cf827173356f4fef10de624b96bd"),
-    "triggers": (301, "5f20513d4b9f6b237f3143543bb2a684355d215ba8bb2cba3a4d89d98c2b712f"),
+    "columns": (1934, "c4cdc68a84f6794af9ff8d5042c2bb541e1e143f2cf4314c35afc08de983640b"),
+    "relations": (184, "04c8a22d37aa4e8dc598dbb1e1dfe2d389e6658157fade92760299a6f45ab2c1"),
+    "constraints": (2325, "0317acd11402ee08eab8887a56c512fd592a566c78faf0875e0995f1944a2494"),
+    "indexes": (541, "9284a062030f090fb898bd31002a0a507837cf827173356f4fef10de624b96bd"),
+    "triggers": (302, "5f20513d4b9f6b237f3143543bb2a684355d215ba8bb2cba3a4d89d98c2b712f"),
     "functions": (86, "4ca8c9d63270876dad063cdea6c49a0e7aa5afba3ea7355ecb023b81cc22e664"),
     "views": (7, "5e78d3a1fd6d83febea265c402139aefd89d63afd83c1f38acd71979822d1ef8"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

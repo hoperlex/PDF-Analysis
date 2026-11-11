@@ -227,7 +227,7 @@ describe('the report in words', () => {
       new ApiError(
         409,
         {
-          contract_version: '1.53.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-1', retryable: false,
+          contract_version: '1.54.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-1', retryable: false,
           details: { aggregate_type: 'OptimisationPass', conflict_reason: reason },
         },
         'cid-1',

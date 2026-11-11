@@ -144,6 +144,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "createStageReviewCard",
             "createStageUpload",
             "decideOptimisationProposal",
+            "deleteRun",
             "downloadAgentPackage",
             "endUserSessions",
             "enqueueComparisonLaunch",

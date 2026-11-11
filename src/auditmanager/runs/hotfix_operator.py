@@ -147,7 +147,7 @@ def status(run_id):
         run = repository.get(session, run_id)
         stages = repository.stage_results(session, run_id)
         cost = repository.cost(session, run_id)
-        children = [row for row in repository.list_for_version(session, run.version_uid)
+        children = [row for row in repository.list_for_version(session, run.version_uid, include_deleted=True)
             if row.reaudit_of_run_id == run_id]
         calls = session.execute(text("""
             SELECT status, count(*) AS count FROM model_call WHERE run_id=:run GROUP BY status

@@ -1,4 +1,4 @@
-"""The 328 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 329 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the forty-three router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -280,7 +280,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.53.0"
+CONTRACT_VERSION: Final[str] = "1.54.0"
 
 
 def build_router(
@@ -343,7 +343,7 @@ def build_router(
     decision_patterns: DecisionPatternsPort | None = None,
     stage_quality: StageQualityPort | None = None,
 ) -> Router:
-    """Assemble the 328 operations, from the router modules -- ``me``,
+    """Assemble the 329 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -475,7 +475,7 @@ def build_router(
     # until the lane that owns it fills it (`api/routers/precedents.py`). `EMBED-01` filled the vector control: `vector_control` is its port,
     # optional with a default for the reason `blocks` gives above; None keeps the sleeping answer. `PREC-SETTINGS-01` filled the settings:
     # `precedent_settings` is its port, with the same default. `PREC-PASS` filled the labels and the card: `precedents` is its port, with the same default.
-    # `CRIT-SEAL-53` (contract 1.53.0) added the failure patterns (`PAT-01`: `decision_patterns` is its port) and the quality table (`QUAL-01`:
+    # `CRIT-SEAL-53` (contract 1.54.0) added the failure patterns (`PAT-01`: `decision_patterns` is its port) and the quality table (`QUAL-01`:
     # `stage_quality`), both optional with the same default: None keeps the sleeping answer.
     build_precedent_routes(router, vector_control, precedent_settings, precedents, decision_patterns, stage_quality)
     # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,

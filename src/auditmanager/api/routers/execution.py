@@ -86,6 +86,22 @@ def build_execution_routes(router: APIRouter, execution: ExecutionPort) -> None:
         return json_response(200, encode_json(run_status_body(view)))
 
     @router.post(
+        "/runs/{run_id}/deletion", operation_id="deleteRun", tags=["execution"],
+        response_model=models.RunStatus,
+        responses={**success(200, "The run, removed from the run lists. A partial, failed or cancelled run only; its "
+                                  "results, findings and expert decisions stay stored. Or a replayed result."),
+                   **envelope_responses(401, 403, 404, 409, 422, 500, 503)},
+    )
+    def delete_run(
+        subject: CurrentSubject, run_id: Annotated[models.RunId, Path()],
+        idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        view = execution.delete_run(
+            run_id=run_id, user_uid=subject.user_uid, idempotency_key=idempotency_key
+        )
+        return json_response(200, encode_json(run_status_body(view)))
+
+    @router.post(
         "/runs/{run_id}/reaudit", operation_id="reauditRun", tags=["execution"],
         status_code=202, response_model=models.RunStatus,
         responses={**success(202, "The newly accepted re-audit run or a replayed result."),

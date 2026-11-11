@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
- *   sha256 cd154845d56ee9b0408035323b0a0d8a504898f20e8716291c3ce5631e5e03de
+ *   AuditManager PC-01 API 1.54.0 (OpenAPI 3.1.0)
+ *   sha256 f9d64dbb8572c1f9068362e7703fc0a54b4529ea890abaea0eb2d06267373aae
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -422,6 +422,7 @@ export const OPERATION_IDS = [
   'createStageUpload',
   'decideOptimisationProposal',
   'deleteComparisonReport',
+  'deleteRun',
   'dequeueComparisonAiSheetChanges',
   'downloadAgentPackage',
   'endUserSessions',
@@ -2164,6 +2165,30 @@ export type DeleteComparisonReportInput = {
 
 /** Success body of `deleteComparisonReport` (`application/json`, HTTP 200). */
 export type DeleteComparisonReportResult = ComparisonReport;
+
+// ------------------------------------------------------------------------------------
+// deleteRun - POST /runs/{run_id}/deletion
+// ------------------------------------------------------------------------------------
+
+/** Delete Run */
+export type DeleteRunInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/deletion`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `deleteRun` (`application/json`, HTTP 200). */
+export type DeleteRunResult = RunStatus;
 
 // ------------------------------------------------------------------------------------
 // dequeueComparisonAiSheetChanges - POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/dequeue
@@ -9963,6 +9988,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
+  },
+  deleteRun: {
+    operationId: 'deleteRun',
+    method: 'POST',
+    path: '/runs/{run_id}/deletion',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   dequeueComparisonAiSheetChanges: {
     operationId: 'dequeueComparisonAiSheetChanges',

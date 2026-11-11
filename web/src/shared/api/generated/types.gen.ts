@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
- *   sha256 cd154845d56ee9b0408035323b0a0d8a504898f20e8716291c3ce5631e5e03de
+ *   AuditManager PC-01 API 1.54.0 (OpenAPI 3.1.0)
+ *   sha256 f9d64dbb8572c1f9068362e7703fc0a54b4529ea890abaea0eb2d06267373aae
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.53.0';
+export const CONTRACT_VERSION = '1.54.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'cd154845d56ee9b0408035323b0a0d8a504898f20e8716291c3ce5631e5e03de';
+export const CONTRACT_DIGEST = 'f9d64dbb8572c1f9068362e7703fc0a54b4529ea890abaea0eb2d06267373aae';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -4362,7 +4362,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.53.0";
+  contract_version: "1.54.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -5453,7 +5453,7 @@ export type FindingBlockLink = {
   portal_block_ids: Array<PortalBlockId>;
 };
 
-/** Closed finding categories: seven prior categories, five v3 normative categories, since 1.51.0 two categories of the groups of candidates of the extended review published as findings (`drawing_discrepancy`, `cross_source`) and, since 1.53.0, the category of a parameter stated differently in two documents of the project (`parameter_mismatch`). */
+/** Closed finding categories: seven prior categories, five v3 normative categories, since 1.51.0 two categories of the groups of candidates of the extended review published as findings (`drawing_discrepancy`, `cross_source`) and, since 1.54.0, the category of a parameter stated differently in two documents of the project (`parameter_mismatch`). */
 export const FINDING_CATEGORY_VALUES = [
   'internal_contradiction',
   'explicit_placeholder',
@@ -5485,7 +5485,7 @@ export type FindingComparison = {
 };
 
 /**
- * `CRIT-SEAL-53` (contract 1.53.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
+ * `CRIT-SEAL-53` (contract 1.54.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
  * version, the page, the quote and its span in that version's text layer. `Evidence` is untouched; this is the other document's, with its `version_uid`.
  */
 export type FindingCrossEvidence = {
@@ -7328,7 +7328,7 @@ export type RunPreset = {
   revision_no: number;
 };
 
-/** `CRIT-SEAL-53` (contract 1.53.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan. */
+/** `CRIT-SEAL-53` (contract 1.54.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan. */
 export const RUN_PUBLICATION_MODE_VALUES = [
   'text_only',
   'one_list',

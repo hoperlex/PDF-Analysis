@@ -1,0 +1,34 @@
+/*
+ * «Удалить прогон» (`RUN-DELETE-01`): the open confirmation. Tokens only: spacing from `--am-gap-*`,
+ * type from `--am-text-*`, ink from `--am-ink-*`. The buttons are the global `am-button` classes.
+ */
+
+/* The question, what deleting does, then the two buttons: a short column that fits the run page's head and a cell of the list. */
+.confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--am-gap-xs);
+  /* A floor, so the cell of a table does not shrink the group to its longest word and set it as a tall, narrow column. */
+  min-width: 16rem;
+  max-width: 24rem;
+}
+
+.question {
+  margin: 0;
+  font-size: var(--am-text-sm);
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}

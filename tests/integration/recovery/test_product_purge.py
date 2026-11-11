@@ -104,7 +104,7 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0064_precedents_seal` (`CRIT-SEAL-50`): the memory's comments, block evidence, encoder queue and vectors join its KEEP set (KEEP_MEMORY 9 -> 13);
     # the settings journal, the vectors' control with its journal and the delivery journal are kept configuration and records (KEEP 58 -> 66 with
     # the four above); the probe, the pass of a run with its advice and a finding's block evidence are product data (PRODUCT 91 -> 95).
-    # `0066_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern and its status journal join it (13 -> 15); the parameter facts and the cross evidence are product
+    # `0067_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern and its status journal join it (13 -> 15); the parameter facts and the cross evidence are product
     # data (PRODUCT 95 -> 97); KEEP 67 -> 69.
     assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 15
     assert {"decision_memory_pattern", "decision_memory_pattern_status_event"} <= tool.KEEP_MEMORY_TABLES
@@ -120,7 +120,10 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0065_norm_crop_render` (`CRIT-SEAL-52`): a norm page's render is the corpus's own (its name starts with ``norm``, so it is in
     # `EXEMPT_FROM_FINGERPRINT`, and so KEEP here): KEEP 66 -> 67, PRODUCT unchanged.
     assert "norm_crop_render" in tool.KEEP_NORM_TABLES and "norm_crop_render" not in tool.KEEP_MEMORY_TABLES | tool.PRODUCT_TABLES
-    assert len(tool.PRODUCT_TABLES) == 97 and len(tool.KEEP_TABLES) == 69 and len(tool.MIXED_TABLES) == 3
+    # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a deleted run references `audit_run`, so it is PRODUCT: +1 PRODUCT, KEEP unchanged; `0067_precedents_wave5` adds two PRODUCT and two KEEP.
+    assert "audit_run_deletion" in tool.PRODUCT_TABLES and "audit_run_deletion" not in tool.KEEP_TABLES
+    assert "delete_audit_run" in tool.PRODUCT_COMMAND_TYPES and "delete_audit_run" not in tool.KEEP_COMMAND_TYPES
+    assert len(tool.PRODUCT_TABLES) == 98 and len(tool.KEEP_TABLES) == 69 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT

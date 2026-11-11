@@ -386,8 +386,9 @@ def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
     # 129 + 7 = 136 (measured 2026-11-08; lane C4 saw this pin red at 136 on its stand); `0059_decision_memory` adds the eight
     # tables of the decision memory: 136 + 8 = 144; `0061_decision_memory_m2` adds the settings' journal: 145; `0062_hosts_stage_models` adds nine (the host with its journals,
     # report and cooldown, the stage layout with its revisions and switch, and the cell binding): 154; `0063_drop_ar_v3_beta` drops the two tables of `0032`: 152, which is `len(coverage.TABLES)`.
-    # `0064_precedents_seal` (`CRIT-SEAL-50`) adds twelve (152 -> 164); `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one (165); `0066_precedents_wave5` (`CRIT-SEAL-53`) adds four (169).
-    assert refused == sorted(coverage.TABLES) and len(refused) == 169
+    # `0064_precedents_seal` (`CRIT-SEAL-50`) adds twelve (152 -> 164); `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one (165);
+    # `0066_run_deletion` (`RUN-DELETE-01`) adds one (166); `0067_precedents_wave5` (`CRIT-SEAL-53`) adds four (170).
+    assert refused == sorted(coverage.TABLES) and len(refused) == 170
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------
@@ -427,8 +428,9 @@ def test_append_only_tables_refuse_update_and_delete_by_privilege(applied: Stand
     # 2026-11-08): 68 + 5 = 73; `0059_decision_memory` adds eight (all immutable): 73 + 8 = 81; `0062_hosts_stage_models` adds five (the host's use
     # and slot journals, the stage layout's revisions and switch, and the cell binding): 81 + 5 = 86; `0063_drop_ar_v3_beta` drops the two append-only tables of `0032`: 84.
     # `0064_precedents_seal` adds eight append-only tables (84 -> 92): the memory's comments, block evidence and vectors, the pass's advice, a finding's
-    # block evidence, the settings journal, the control's journal and the delivery journal; `0065_norm_crop_render` adds one (93): a norm page's render; `0066_precedents_wave5` adds four (97): a pattern with its journal, the parameter facts and the cross evidence.
-    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 97
+    # block evidence, the settings journal, the control's journal and the delivery journal; `0065_norm_crop_render` adds one (93): a norm page's render; `0067_precedents_wave5` adds four (97): a pattern with its journal, the parameter facts and the cross evidence.
+    # `0066_run_deletion` (`RUN-DELETE-01`) adds one more: the tombstone of a deleted run (98 with wave 5's four).
+    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 98
 
 
 def test_read_only_tables_refuse_every_write(applied: Stand) -> None:

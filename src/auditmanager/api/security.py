@@ -668,6 +668,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # does not imply expert. The command re-reads the role set in its own transaction.
         "correctVersionClassification": _EXPERT,
         "cancelRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
+        "deleteRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         # `R-151i`: a new run that continues an earlier one; the same hands as a re-audit.
         "startRunFromStage": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
@@ -799,7 +800,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "setVectorPaused": _ADMIN,
         "listPrecedentSettings": _ADMIN,
         "appendPrecedentSetting": _ADMIN,
-        # `CRIT-SEAL-53` (contract 1.53.0). The failure patterns are read and reviewed by an expert or an administrator (the viewer is denied, as for the
+        # `CRIT-SEAL-53` (contract 1.54.0). The failure patterns are read and reviewed by an expert or an administrator (the viewer is denied, as for the
         # labels: a pattern quotes the experts' own words); the quality table is the administrator's.
         "listDecisionPatterns": _ANY_ROLE,
         "reviewDecisionPattern": _ANY_ROLE,

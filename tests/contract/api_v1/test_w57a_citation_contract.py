@@ -24,7 +24,7 @@ CATEGORIES_0023 = (
     'roof', 'documentation', 'evacuation', 'fire_safety', 'accessibility', 'insulation', 'sound',
 )
 #: `CRIT-SEAL-50` (contract 1.51.0, migration 0064): the two categories of the groups of candidates.
-#: `CRIT-SEAL-53` (contract 1.53.0, migration 0066) adds the category of a parameter stated differently in two documents.
+#: `CRIT-SEAL-53` (contract 1.54.0, migration 0066) adds the category of a parameter stated differently in two documents.
 CATEGORIES = (*CATEGORIES_0023, 'drawing_discrepancy', 'cross_source', 'parameter_mismatch')
 REASONS_0023 = (
     'quotation_absent', 'quotation_on_different_page', 'span_outside_page',
@@ -48,7 +48,7 @@ def test_closed_vocabularies_match_0023() -> None:
         assert f'"{value}"' in source
     # the vocabularies 0064 adds (two categories, three reasons) and 0066 adds (one category) are in the migrations that add them
     later = (ROOT / 'db/migrations/versions/20261110_0064_precedents_seal.py').read_text() + (
-        ROOT / 'db/migrations/versions/20261111_0066_precedents_wave5.py').read_text()
+        ROOT / 'db/migrations/versions/20261111_0067_precedents_wave5.py').read_text()
     for value in CATEGORIES[12:] + REASONS[12:]:
         assert f'"{value}"' in later
 

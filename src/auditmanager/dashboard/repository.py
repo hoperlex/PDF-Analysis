@@ -111,10 +111,12 @@ _FINDINGS_BY_VERDICT = text(
     "GROUP BY v.current_verdict"
 )
 
-#: Runs by their current state, across every project.
+#: Runs by their current state, across every project. A run an expert deleted from the run lists (`RUN-DELETE-01`, a row of
+#: ``audit_run_deletion``) is not counted: the panel counts what the lists show.
 _RUNS_BY_STATE = text(
     "SELECT state, count(*) FROM audit_run "
     "WHERE (CAST(:project_uid AS text) IS NULL OR project_uid = CAST(:project_uid AS text)) "
+    "AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = audit_run.run_id) "
     "GROUP BY state"
 )
 

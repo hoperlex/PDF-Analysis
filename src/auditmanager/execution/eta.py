@@ -30,6 +30,8 @@ SIMILAR_PAGES = 0.25
 #: ``retry_wait`` one is between attempts; neither is estimated.
 RUNNING_JOB_STATES = ("leased", "running")
 
+#: `RUN-DELETE-01`: the durations of the runs the estimate is made from leave out a run an expert deleted from the run lists (it was
+#: deleted as not objective); `_RUN_FACTS` below reads one run by identity and keeps no such condition.
 _HISTORY = text(
     """
     SELECT r.analysis_profile_id, dv.page_count,
@@ -42,6 +44,7 @@ _HISTORY = text(
          WHERE j.run_id = r.run_id
       ) first_attempt ON first_attempt.started_at IS NOT NULL
      WHERE r.state IN ('published', 'partial') AND r.terminal_at IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = r.run_id)
      ORDER BY r.terminal_at DESC
      LIMIT :limit
     """

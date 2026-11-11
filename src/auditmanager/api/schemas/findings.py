@@ -110,7 +110,7 @@ class ObservationView:
     #: `CRIT-SEAL-50` (contract 1.51.0): ``portal_block`` for an observation anchored on blocks. ``None`` is ``text_span`` -- the only kind
     #: before -- and is omitted from the wire body, so a text observation's body is what it always was.
     grounding_kind: str | None = None
-    #: `CRIT-SEAL-53` (contract 1.53.0, asked by `F8-WEB`): the extended-review candidate the observation was published from; ``None`` -- an observation
+    #: `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): the extended-review candidate the observation was published from; ``None`` -- an observation
     #: that was not -- is omitted from the wire body.
     extended_observation_ref: str | None = None
 

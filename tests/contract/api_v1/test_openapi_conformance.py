@@ -603,8 +603,9 @@ class TestN1ComponentReferenceResolution:
         # The removal of the six-scope АР beta (2026-11-10, `R-154a`) takes five off: its start, its cost estimate, its two
         # group reads and the run's norm-verification read.
         # `CRIT-SEAL-50` adds three: `getExecutorTaskContext`, `getRunPrecedents` and `getFindingPrecedents` address a task, a run and a finding.
+        # `RUN-DELETE-01` adds one: `deleteRun` refuses an unknown run.
         # `CRIT-SEAL-53` adds one: `reviewDecisionPattern` addresses a pattern by identity. (`listDecisionPatterns` and `getQualityTable` name no parent.)
-        assert len(report) == 235, report
+        assert len(report) == 236, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

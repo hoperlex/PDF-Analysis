@@ -1,4 +1,4 @@
-"""`CRIT-SEAL-53` (contract 1.53.0): the three operations of the wave-5 seal -- the failure patterns and the quality table -- asleep, with no database.
+"""`CRIT-SEAL-53` (contract 1.54.0): the three operations of the wave-5 seal -- the failure patterns and the quality table -- asleep, with no database.
 
 Mounted alone on a bare ``FastAPI`` application with the principal the authorization seam would publish. What is shown:
 

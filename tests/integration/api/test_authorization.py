@@ -155,6 +155,8 @@ GUARDED = (
     ("listExecutionQueue", "GET", "/execution/queue"),
     ("listExecutionJournal", "GET", "/execution/journal"),
     ("cancelRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
+    # `RUN-DELETE-01` (1.53.0): a partial, failed or cancelled run leaves the run lists; the same seam as `cancelRun`.
+    ("deleteRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/deletion"),
     ("reauditRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
     ("startRunFromStage", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/start-from-stage"),
     (

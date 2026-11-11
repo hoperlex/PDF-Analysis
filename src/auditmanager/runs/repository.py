@@ -173,10 +173,29 @@ _TERMINATE = text(
 #: total and stable across pages. A run belongs to a version: `start_audit_run` takes a
 #: `version_uid` and derives the project from it, so the version is the parent in the
 #: create direction and this listing is its inverse.
+#:
+#: `RUN-DELETE-01` (owner hotfix 2026-11-11): a **deleted** run (a row of ``audit_run_deletion``, a tombstone) is not in this
+#: list. It is still stored and ``getRunStatus`` still answers it by its identity (:data:`_SELECT_RUN` has no such condition);
+#: only the lists of runs leave it out. Each context that lists runs spells the same condition in its own SQL.
 _LIST_RUNS_FOR_VERSION = text(
     f"SELECT {_RUN_COLUMNS} FROM audit_run WHERE version_uid = :version_uid "
+    "AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = audit_run.run_id) "
     "ORDER BY created_at DESC, run_id DESC"
 )
+
+#: The same list with the deleted runs kept in, for the operator's own reading of a run's re-audits (``hotfix_operator.status``): an
+#: operator tool shows what is stored, and a tombstone hides a run from the product's lists, not from the operator.
+_LIST_RUNS_FOR_VERSION_WITH_DELETED = text(
+    f"SELECT {_RUN_COLUMNS} FROM audit_run WHERE version_uid = :version_uid ORDER BY created_at DESC, run_id DESC"
+)
+
+#: `RUN-DELETE-01`. The tombstone (migration ``0066_run_deletion``): written once by ``delete_audit_run``, in the transaction that
+#: also finishes its command record. The table is immutable, so the statement is the whole write path.
+_INSERT_DELETION = text(
+    "INSERT INTO audit_run_deletion (run_id, deleted_by_user_uid, command_id) "
+    "VALUES (:run_id, :user_uid, :command_id)"
+)
+_IS_DELETED = text("SELECT EXISTS (SELECT 1 FROM audit_run_deletion WHERE run_id = :run_id)")
 
 #: `D-21`. What one run cost, from the `model_call` rows themselves.
 #:
@@ -624,9 +643,13 @@ class RunRepository:
         return None if found is None else str(found)
 
     def list_for_version(
-        self, session: Session, version_uid: str
+        self, session: Session, version_uid: str, *, include_deleted: bool = False
     ) -> tuple[RunRow, ...]:
-        """Every run of one version, newest first.
+        """Every run of one version, newest first, without the runs an expert deleted (`RUN-DELETE-01`).
+
+        ``include_deleted`` is for an operator's reading of what is stored; a product list never passes it. Every caller that
+        walks "the newest run that ..." (the block index, the portal source, the comparison's run selection) takes the
+        default and so never lands on a deleted run.
 
         No existence check on the version: this repository owns ``audit_run`` and knows
         nothing about ``document_version``. The caller proves the parent exists -- see
@@ -634,10 +657,21 @@ class RunRepository:
         unknown version would tell a caller "that document has never been analysed" about
         a document that does not exist.
         """
-        rows = session.execute(
-            _LIST_RUNS_FOR_VERSION, {"version_uid": version_uid}
-        ).all()
+        statement = _LIST_RUNS_FOR_VERSION_WITH_DELETED if include_deleted else _LIST_RUNS_FOR_VERSION
+        rows = session.execute(statement, {"version_uid": version_uid}).all()
         return tuple(_run_row(row) for row in rows)
+
+    def is_deleted(self, session: Session, run_id: str) -> bool:
+        """``True`` when the run has a tombstone (`RUN-DELETE-01`). An unknown run has none."""
+        return bool(session.execute(_IS_DELETED, {"run_id": run_id}).scalar_one())
+
+    def record_deletion(self, session: Session, *, run_id: str, user_uid: str, command_id: str) -> None:
+        """Write the tombstone of a run: it leaves every list of runs, nothing else changes.
+
+        The caller has locked the run row, checked its state and that it has no tombstone yet; the primary key is the
+        last word if two callers race, and the database refuses a second row (a ``unique_violation`` the caller never
+        sees, because the run row lock serialises them)."""
+        session.execute(_INSERT_DELETION, {"run_id": run_id, "user_uid": user_uid, "command_id": command_id})
 
     def cost(self, session: Session, run_id: str) -> RunCost | None:
         """What this run cost, or ``None`` when it made no provider call at all.

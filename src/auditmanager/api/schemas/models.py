@@ -1045,7 +1045,7 @@ class FindingCategory(str, enum.Enum):
     #: (plan-v5 section 4): a group of drawing candidates, and a group that mixes the sources of the blocks and the cross-check.
     DRAWING_DISCREPANCY = "drawing_discrepancy"
     CROSS_SOURCE = "cross_source"
-    #: `CRIT-SEAL-53` (contract 1.53.0): a parameter of the project (an area, a number of storeys, a load) stated differently in two documents of the
+    #: `CRIT-SEAL-53` (contract 1.54.0): a parameter of the project (an area, a number of storeys, a load) stated differently in two documents of the
     #: project: a finding of the newer document's run, with the other document's evidence in `cross_evidence` (owner ruling Н6).
     PARAMETER_MISMATCH = "parameter_mismatch"
 
@@ -1140,7 +1140,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.53.0"]
+    contract_version: Literal["1.54.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1809,7 +1809,7 @@ class RunWaitCell(_Object):
 
 
 class RunPublicationMode(str, enum.Enum):
-    """`CRIT-SEAL-53` (contract 1.53.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan."""
+    """`CRIT-SEAL-53` (contract 1.54.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan."""
 
     TEXT_ONLY = "text_only"
     ONE_LIST = "one_list"
@@ -1902,7 +1902,7 @@ class RunStatus(_Object):
     #: median duration of similar recent runs. Absent while the run's job is not leased or running, before its first
     #: attempt, and without enough similar history; never invented.
     estimated_finish_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.53.0, asked by `F8-WEB`): how the run published its findings, frozen at its start: `text_only` (the findings of the text
+    #: `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): how the run published its findings, frozen at its start: `text_only` (the findings of the text
     #: analysis, and the candidates of the extended review beside them) or `one_list` (the candidates are findings of the same list). Absent is read as
     #: `text_only`.
     publication_mode: RunPublicationMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -2467,7 +2467,7 @@ class FindingBlockEvidence(_Object):
 
 
 class FindingCrossEvidence(_Object):
-    """`CRIT-SEAL-53` (contract 1.53.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
+    """`CRIT-SEAL-53` (contract 1.54.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
     version, the page, the quote and its span in that version's text layer. `Evidence` is untouched; this is the other document's, with its `version_uid`."""
 
     evidence_ordinal: Annotated[int, Field(ge=0)]
@@ -2520,7 +2520,7 @@ class FindingObservation(_Object):
     )  # type: ignore[assignment]
     #: `CRIT-SEAL-50` (contract 1.51.0): absent means `text_span`, the only kind before.
     grounding_kind: FindingGroundingKind = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.53.0, asked by `F8-WEB`): the candidate of the extended review the observation was published from (`xobs_` and its
+    #: `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): the candidate of the extended review the observation was published from (`xobs_` and its
     #: key); absent for an observation that was not published from a candidate. The card of a finding reads the critic's advice and the corrector's
     #: refinement through it.
     extended_observation_ref: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
@@ -2574,7 +2574,7 @@ class Finding(_Object):
         default=None, json_schema_extra=optional_property
     )
     origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.53.0): the evidence of the finding in another document of the project (a finding of category `parameter_mismatch`);
+    #: `CRIT-SEAL-53` (contract 1.54.0): the evidence of the finding in another document of the project (a finding of category `parameter_mismatch`);
     #: absent for a finding with no such evidence.
     cross_evidence: Annotated[list[FindingCrossEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
@@ -2624,7 +2624,7 @@ class FindingDetail(_Object):
         default=None, json_schema_extra=optional_property
     )
     origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.53.0): as on ``Finding``.
+    #: `CRIT-SEAL-53` (contract 1.54.0): as on ``Finding``.
     cross_evidence: Annotated[list[FindingCrossEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
@@ -10136,7 +10136,7 @@ class AppendPrecedentSettingRequest(_Object):
     value: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
 
 
-# --- `CRIT-SEAL-53` (contract 1.53.0): failure patterns and the quality table -------------------------------------------
+# --- `CRIT-SEAL-53` (contract 1.54.0): failure patterns and the quality table -------------------------------------------
 DecisionPatternId = TypeAliasType("DecisionPatternId", Annotated[str, Field(pattern=rf"^dmp_{_ULID}$")])
 
 

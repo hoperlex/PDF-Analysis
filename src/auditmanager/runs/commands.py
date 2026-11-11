@@ -1081,6 +1081,55 @@ def cancel_audit_run(
     return run_id
 
 
+#: `RUN-DELETE-01`: the runs an expert may delete from the run lists -- the ones that ended without a published result. A
+#: ``published`` run is the result of the audit and is never deleted; a run that has not ended is cancelled first.
+_DELETABLE_RUN_STATES = frozenset({"partial", "failed", "cancelled"})
+
+
+def delete_audit_run(
+    session: Session, *, run_id: str, roles: frozenset[str], user_uid: str, idempotency_key: str,
+    runs: RunRepository | None = None, commands: CommandRepository | None = None,
+) -> str:
+    """Idempotently remove a ``partial``, ``failed`` or ``cancelled`` run from every list of runs (owner hotfix 2026-11-11).
+
+    A **tombstone**, never a deletion of data: one immutable ``audit_run_deletion`` row. The run, its stage results, findings,
+    expert decisions and Blobs stay stored and ``getRunStatus`` still answers it by its identity. There is no restore.
+
+    An unknown run, and a run that already has a tombstone, are ``not_found`` -- the run is no longer there for a list or for a
+    second delete; a repeat of the *same* keyed call replays the first answer, whatever has become of the run since. A run in
+    any other state is ``state_transition_not_allowed``: a ``published`` run is the result of the audit, and one that has not
+    ended must be cancelled first (``cancelRun``). Nothing is written when the call is refused, and a refused call leaves no
+    command record (the transaction ends with the refusal), exactly as ``cancel_audit_run``.
+    """
+    _require_run_control_role(roles)
+    repository = runs or RunRepository()
+    ledger = commands or CommandRepository()
+    # One run row is locked before anything else the command changes: two deletes of one run, and a delete beside a re-audit
+    # that names the run as its source, take turns.
+    session.execute(text(
+        "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
+    ), {"run_id": run_id}).scalar_one_or_none()
+    source = repository.get(session, run_id)
+    claimed = ledger.begin(
+        session, command_type="delete_audit_run",
+        idempotency_key=IdempotencyKey(idempotency_key),
+        fingerprint=payload_fingerprint({"run_id": run_id}),
+    )
+    if isinstance(claimed, CommandReplay):
+        return run_id
+    assert isinstance(claimed, CommandStarted)
+    if repository.is_deleted(session, run_id):
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
+    if source.state not in _DELETABLE_RUN_STATES:
+        raise DomainError(
+            ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+            machine="audit_run", current_state=source.state, requested_state="delete",
+        )
+    repository.record_deletion(session, run_id=run_id, user_uid=user_uid, command_id=str(claimed.command_id))
+    ledger.succeed(session, claimed.command_id, {"run_id": run_id})
+    return run_id
+
+
 def _named_group_of(
     session: Session, source: RunRow, chosen_connection_id: str | None, group_admitter: GroupAdmitter | None,
 ) -> str | None:
@@ -1508,6 +1557,7 @@ __all__ = [
     "input_basis_digest",
     "run_of_command",
     "cancel_audit_run",
+    "delete_audit_run",
     "reaudit_run",
     "admit_group_for_start",
     "refuse_comparison_only_version",

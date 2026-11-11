@@ -54,7 +54,7 @@ __all__ = [
 #: for command constants (`test_every_event_type_and_command_type_the_source_writes_is_classified`) sees them here.
 APPEND_PRECEDENT_SETTING_COMMAND_TYPE: Final[str] = "append_precedent_setting"
 SET_VECTOR_PAUSED_COMMAND_TYPE: Final[str] = "set_vector_paused"
-#: `CRIT-SEAL-53` (contract 1.53.0): the keyed review of a failure pattern, as ``command_record.command_type`` will hold it. Classified in
+#: `CRIT-SEAL-53` (contract 1.54.0): the keyed review of a failure pattern, as ``command_record.command_type`` will hold it. Classified in
 #: ``scripts/recovery/product_purge.py`` (kept, with the pattern tables).
 REVIEW_DECISION_PATTERN_COMMAND_TYPE: Final[str] = "review_decision_pattern"
 

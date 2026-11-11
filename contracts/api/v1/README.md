@@ -11,10 +11,10 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.53.0` (`CRIT-SEAL-53`)
+## Current contract `1.54.0` (`CRIT-SEAL-53`)
 
 The wave-5 seal of the «Прецеденты» programme (plan-v5 section 3.7, ADR-0029 decisions 11 and 12; `CRIT-SEAL-51` in the task files). Additive: **three operations, eleven schemas and four member
-changes; nothing is removed**; migration `0066_precedents_wave5` (head `0066`); two identity prefixes, no error code, no state machine. Every new operation is asleep (`503 dependency_unavailable`) until
+changes; nothing is removed**; migration `0067_precedents_wave5` (head `0067`); two identity prefixes, no error code, no state machine. Every new operation is asleep (`503 dependency_unavailable`) until
 the lane that owns it wires a port into `build_router`.
 
 - **Failure patterns (`PAT-01`, owner ruling Н4).** `listDecisionPatterns` (`GET /decision-memory/patterns`; filters `status`, `section_code`; `limit` 1 to 200, default 50, the shared parameter; answers `items` and `total`) and
@@ -28,16 +28,40 @@ the lane that owns it wires a port into `build_router`.
   `version_uid` of the other document, `page_number`, `quote`, `char_start`, `char_end`); absent for a finding with none. `Evidence` is untouched.
 - **Asked by `F8-WEB`.** `FindingObservation.extended_observation_ref` (optional, 1 to 128 characters: the candidate the observation was published from) and `RunStatus.publication_mode` (optional,
   `RunPublicationMode`: `text_only` or `one_list`, frozen at the run's start; absent reads as `text_only`). The server fills both.
-- **Storage (migration `0066`).** `decision_memory_pattern` and its status journal `decision_memory_pattern_status_event` (KEEP, the content side of a case: the text is a copy of a comment, so the forget guard applies and
+- **Storage (migration `0067`).** `decision_memory_pattern` and its status journal `decision_memory_pattern_status_event` (KEEP, the content side of a case: the text is a copy of a comment, so the forget guard applies and
   a forget of the representative case removes both), the view `decision_memory_pattern_current`; `project_parameter_fact` and `finding_cross_evidence` (PRODUCT); the category check of `finding` and
   `finding_observation`. The command type `review_decision_pattern` is kept with its tables.
-- **Compatibility.** Additive for a reader: a client of 1.52.0 reads every answer of 1.53.0 unchanged.
+- **Compatibility.** Additive for a reader: a client of 1.53.0 reads every answer of 1.54.0 unchanged.
 
-The API has 299 paths, 328 operations and 820 schemas; migration head `0066`. The domain catalogs are at candidate revision 70.
+The API has 300 paths, 329 operations and 820 schemas; migration head `0067`. The domain catalogs are at candidate revision 71.
+
+Planned and first sealed on `dev` as 1.53.0 / `0066_precedents_wave5`; resealed to 1.54.0 / `0067_precedents_wave5` (down revision `0066_run_deletion`) in the main→dev merge of 2026-11-11, because `RUN-DELETE-01` (below) reached `main` first with 1.53.0 / `0066`. The surface counts here include `deleteRun`.
+
+## Contract `1.53.0` (`RUN-DELETE-01`, historical)
+
+An owner hotfix to `main` (2026-11-11): «Добавь возможность удалять частичные и непрошедшие прогоны в UI — они необъективны и их нужно удалять, чтобы уменьшить шум.»
+**One operation, no schema; nothing is removed**; migration `0066_run_deletion` (head `0066`); no identity prefix, no error code, no state machine.
+This hotfix takes the slot that the wave-5 tables of the «Прецеденты» programme were planned for (1.53.0 / `0066`, named in the `CRIT-SEAL-52` section below); those tables move to
+**1.54.0 / `0067`**.
+
+- **`deleteRun` (`POST /runs/{run_id}/deletion`).** Keyed (`Idempotency-Key`), no request body, the answer is `RunStatus` (200) of the run that was deleted. An expert and an administrator
+  may call it (the roles of `cancelRun`); a viewer is `403 permission_denied`. A run in `partial`, `failed` or `cancelled` is deleted; any other state is `409 state_transition_not_allowed`
+  with `details` `machine: audit_run`, `current_state` and `requested_state: delete` (a `published` run is the result of the audit; a run that has not ended is cancelled first). A run that
+  is already deleted, like an unknown one, is `404 not_found`. A repeat of the same keyed call replays the first answer; the same key on another run is `409 idempotency_key_reuse`.
+- **A tombstone, not a deletion of data.** Migration `0066_run_deletion` creates `audit_run_deletion`, one immutable row per deleted run (who, when, the command record). The run, its stage
+  results, findings, expert decisions, cost rows and Blobs stay stored, `getRunStatus` still answers the run by its identity, a re-audit may still name it as its source, and an export of it by
+  identity still works. There is **no restore** operation and no physical deletion.
+- **What leaves.** A deleted run leaves every **list**, **selection** and **display aggregate** of runs: `listRuns`; the result run and the counts of the audit state (`listDocuments`,
+  `getDashboardSummary`'s runs by state) and of «График работ»; the version's block index and portal source and the comparison's choice of "the newest run that ..." (they walk `listRuns`' order);
+  the execution queue (`listExecutionQueue`, its counts and its `live_failure_count`) and the estimate's history. What stays: a read by the run's identity, the journal, the cost and spend
+  accounting, the workers, the executors' capacity and the reconciliation (a run that is executing can never be deleted, so none of them meets a deleted run).
+- **Compatibility.** Additive for a reader: a client of 1.52.0 reads every answer of 1.53.0 unchanged; a run list shorter by the deleted runs is the whole effect.
+
+The API has 297 paths, 326 operations and 809 schemas; migration head `0066`. The domain catalogs are at candidate revision 70.
 
 ## Contract `1.52.0` (`CRIT-SEAL-52`, historical)
 
-The second seal of the «Прецеденты» programme (plan-v5, ADR-0029). It closes three debts of the first seal ahead of the wave-5 tables, which move to 1.53.0 / `0066`:
+The second seal of the «Прецеденты» programme (plan-v5, ADR-0029). It closes three debts of the first seal ahead of the wave-5 tables, which were planned as 1.53.0 / `0066` and are now 1.54.0 / `0067` (`RUN-DELETE-01` took 1.53.0 / `0066`):
 `D-681` (the table of norm page renders), `D-682` (a memory case's comments) and `D-683` (a block finding has no text evidence). **No operation, one schema and two member changes;
 nothing is removed**; migration `0065_norm_crop_render` (head `0065`); no identity prefix, no error code, no state machine.
 

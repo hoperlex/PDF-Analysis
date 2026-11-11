@@ -178,7 +178,7 @@ class RunStatusView:
     #: `UI-A-65` / `UI-B-45` (contract 1.40.0): the estimated finish of a run being worked on, by the queue item's own
     #: rule (``execution.eta.job_estimated_finish``); ``None`` when the run has none, rendered only when present.
     estimated_finish_at: datetime | None = None
-    #: `CRIT-SEAL-53` (contract 1.53.0, asked by `F8-WEB`): ``text_only`` or ``one_list``, as the run froze it at its start; ``None`` (no marker read)
+    #: `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): ``text_only`` or ``one_list``, as the run froze it at its start; ``None`` (no marker read)
     #: is omitted, which the contract reads as ``text_only``.
     publication_mode: str | None = None
 

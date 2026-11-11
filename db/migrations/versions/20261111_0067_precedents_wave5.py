@@ -1,11 +1,13 @@
-"""0066 -- the storage of wave 5 of the «Прецеденты» programme (`CRIT-SEAL-53`, plan-v5 section 3.7; contract 1.53.0).
+"""0067 -- the storage of wave 5 of the «Прецеденты» programme (`CRIT-SEAL-53`, plan-v5 section 3.7; contract 1.54.0).
 
-Revision ID: 0066_precedents_wave5
-Revises: 0065_norm_crop_render
+Planned as 0066 / 1.53.0; resealed to 0067 / 1.54.0 when `RUN-DELETE-01` (`0066_run_deletion`, contract 1.53.0) reached `main` first.
+
+Revision ID: 0067_precedents_wave5
+Revises: 0066_run_deletion
 
 The wave-5 seal (called ``CRIT-SEAL-51`` in the task files; the numbers moved under `R-154h` and the debt seal 1.52.0). Storage and surface only: no
 statement writes any of it until ``PAT-01``, ``XDOC-01`` and ``QUAL-01`` do. Every addition to an existing table is a vocabulary; a database at
-``0065`` upgrades with no row touched.
+``0066`` upgrades with no row touched.
 
 What this revision adds
 -----------------------
@@ -38,7 +40,7 @@ The vocabulary
 Downgrade
 ---------
 Refused while any row of the four tables, or any finding or observation of the new category, exists: dropping them would turn a fact into silence
-(AGENTS section 4, no silent fallback). Otherwise it restores ``0065``'s checks.
+(AGENTS section 4, no silent fallback). Otherwise it restores ``0066``'s checks (the same as ``0065``'s).
 """
 
 from __future__ import annotations
@@ -48,8 +50,8 @@ from collections.abc import Sequence
 from alembic import op
 from sqlalchemy import text
 
-revision: str = "0066_precedents_wave5"
-down_revision: str | None = "0065_norm_crop_render"
+revision: str = "0067_precedents_wave5"
+down_revision: str | None = "0066_run_deletion"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -387,7 +389,7 @@ def downgrade() -> None:
         retained.append("a finding or an observation of the category parameter_mismatch")
     if retained:
         raise RuntimeError(
-            "refusing to downgrade 0066_precedents_wave5 with retained pattern, parameter or cross-evidence data "
+            "refusing to downgrade 0067_precedents_wave5 with retained pattern, parameter or cross-evidence data "
             f"({', '.join(retained)}); restore a database backup instead"
         )
 

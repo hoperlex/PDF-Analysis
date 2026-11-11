@@ -182,6 +182,8 @@ describe('the seam operations', () => {
       // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
       'decideOptimisationProposal',
       'deleteComparisonReport',
+      // `RUN-DELETE-01` (contract 1.53.0): deleting a partial, failed or cancelled run from the run lists is keyed like `cancelRun`.
+      'deleteRun',
       'dequeueComparisonAiSheetChanges',
       // `UI-A-93` (contract 1.36.0): ending an account's sessions is keyed, so an exact repeat ends nothing more.
       'endUserSessions',
@@ -230,7 +232,7 @@ describe('the seam operations', () => {
       'resumeStageUpload',
       'retryComparisonAiSheetChanges',
       'retryComparisonUploadSet',
-      'reviewDecisionPattern', // `CRIT-SEAL-53` (contract 1.53.0): an expert's review of a failure pattern, keyed.
+      'reviewDecisionPattern', // `CRIT-SEAL-53` (contract 1.54.0): an expert's review of a failure pattern, keyed.
       'reviseAnalysisPreset',
       'reviseExecutorConnection',
       'reviseExecutorGroup',

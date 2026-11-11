@@ -87,10 +87,13 @@ _CHANGED = text(
     "SELECT EXISTS (SELECT 1 FROM decision_memory_status_event WHERE created_at > :moment) "
     "OR EXISTS (SELECT 1 FROM precedent_setting_event WHERE setting_name = ANY(CAST(:names AS text[])) AND created_at > :moment)"
 )
+#: `RUN-DELETE-01`: the two selections of runs below (to start a pass for, to refresh) leave out a run an expert deleted from the run lists --
+#: no one will be shown its labels, so the pass is not paid for. `_RUN` reads one run by identity and keeps no such condition.
 _TO_SCHEDULE = text(
     """
     SELECT r.run_id FROM audit_run r
      WHERE r.state = ANY(CAST(:states AS text[])) AND r.terminal_at >= :since
+       AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = r.run_id)
        AND NOT EXISTS (SELECT 1 FROM decision_memory_precedent_run p WHERE p.run_id = r.run_id)
        AND EXISTS (SELECT 1 FROM finding_observation o WHERE o.run_id = r.run_id AND o.finding_uid IS NOT NULL)
      ORDER BY r.terminal_at, r.run_id LIMIT :limit
@@ -102,7 +105,9 @@ _UNFINISHED = text(
 _REFRESHABLE = text(
     """
     SELECT p.run_id FROM decision_memory_precedent_run p JOIN audit_run r ON r.run_id = p.run_id
-     WHERE p.state IN ('done', 'failed') AND r.terminal_at >= :since ORDER BY p.state_changed_at, p.run_id LIMIT :limit
+     WHERE p.state IN ('done', 'failed') AND r.terminal_at >= :since
+       AND NOT EXISTS (SELECT 1 FROM audit_run_deletion deleted WHERE deleted.run_id = r.run_id)
+     ORDER BY p.state_changed_at, p.run_id LIMIT :limit
     """
 )
 
