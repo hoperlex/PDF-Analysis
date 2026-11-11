@@ -46,7 +46,8 @@ def recorded(monkeypatch: pytest.MonkeyPatch) -> Phases:
     def review_request(**kwargs: Any) -> Any:
         return SimpleNamespace(payload=kwargs["payload"])
 
-    def parse(text: str, *, observations: dict[str, Any], allowed_sources: Any) -> list[dict[str, Any]]:
+    def parse(text: str, *, observations: dict[str, Any], allowed_sources: Any, quote_echo: bool = True,
+              rejected: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
         return [{"input_ids": [key], "norm_assessment": {"relation": "supports"}} for key in json.loads(text)]
 
     import auditmanager.analysis.public as analysis_public
@@ -59,7 +60,8 @@ def recorded(monkeypatch: pytest.MonkeyPatch) -> Phases:
 
 def verify(items: list[dict[str, Any]], phases: Phases) -> None:
     def call(request: Any, identity: str) -> Any:
-        return SimpleNamespace(output_text=json.dumps([row["input_id"] for row in request.payload["observations"]]))
+        return SimpleNamespace(output_text=json.dumps([row["input_id"] for row in request.payload["observations"]]),
+                               truncated=False)
 
     state = {"observations": items, "warnings": [], "sources": [{"source_id": "src_1"}], "source_sha256": "0" * 64}
     er._full_norm_verification(session=SimpleNamespace(rollback=lambda: None), run=SimpleNamespace(run_id="run_1"),
