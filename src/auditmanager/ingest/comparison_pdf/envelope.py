@@ -1,23 +1,26 @@
 """The comparison envelope: the admission rules for a plain PDF that is read for comparison only.
 
-`CMP-INGEST-01`, ADR-0025 decision 11 and the addendum of 2026-10-27 item 3. The portal-bundle envelope
-(:mod:`auditmanager.ingest.envelope`) refuses a page of more than 400 000 drawing elements, which is five times
-the largest page it was measured on (75 486, the owner's portal export). The real set that `CMP-MEASURE-01A`
-measured has a page of **536 426** (``v1.pdf`` p. 7, 2102 x 594 mm; 13 of its 59 pages are above 75 486), so the
-portal rule would refuse the very sets this module is for. A comparison upload is read, rendered and extracted
-only in ceilinged child processes (decisions 8 and 9), where an overrun is a typed ``RENDER_FAILED`` on that page
-and never a crash of the API; so the per-page element limit is the comparison path's own, **set from the
-measurement**, and the portal envelope is not touched (it is a different module and a different caller).
+`CMP-INGEST-01`, ADR-0025 decision 11 and the addendum of 2026-10-27 item 3. When this module was written the
+portal-bundle envelope (:mod:`auditmanager.ingest.envelope`) refused a page of more than 400 000 drawing elements,
+five times the largest page it was measured on (75 486, the owner's portal export). The real set that
+`CMP-MEASURE-01A` measured has a page of **536 426** (``v1.pdf`` p. 7, 2102 x 594 mm; 13 of its 59 pages are above
+75 486), so the portal rule would have refused the very sets this module is for. A comparison upload is read,
+rendered and extracted only in ceilinged child processes (decisions 8 and 9), where an overrun is a typed
+``RENDER_FAILED`` on that page and never a crash of the API; so the element limits are the comparison path's own,
+**set from the measurement**, and the portal envelope does not move them (it is a different module and a different
+caller). `PDF-PAGE-CONTENT-01` (owner, 2026-11-11) raised the portal's two element ceilings without a measurement;
+the comparison figures below did not move with them.
 
 ========================== ============ ============ ==========================================================
 limit                      portal       comparison   basis
 ========================== ============ ============ ==========================================================
 file bytes                 250 MiB      250 MiB      one bound for every PDF the product stores (R-116)
 pages                      1 to 500     1 to 500     ``ck_document_version_page_count``
-page elements              400 000      **1 000 000** 1.86 times the measured maximum (536 426); the portal figure
-                                                      is 5.3 times *its* maximum
+page elements              2 000 000    **1 000 000** 1.86 times the measured maximum (536 426); the portal figure
+                                                      is the owner's of 2026-11-11, not a measurement
 page characters            200 000      200 000      unchanged: the real set's text pages are far below it
-document elements          8 000 000    8 000 000    unchanged: the real set's heaviest file is about 2.4 M
+document elements          40 000 000   8 000 000    the real set's heaviest file is about 2.4 M; the portal's
+                                                      former figure, kept here when the portal's moved
 document characters        20 000 000   20 000 000   unchanged
 reader address space       512 MiB      **768 MiB**  decision 8: the scan child of the measurement ran at 768 MiB
 reader CPU and wall clock  60 s         **120 s**    a 26-page real file is read in seconds; 500 heavy pages are not
@@ -82,7 +85,7 @@ COMPARISON_POLICY: Final[ComparisonEnvelopePolicy] = ComparisonEnvelopePolicy(
     max_pages=_portal.MAX_PAGES,
     page_elements=quota(1_000_000, 2**63 - 1),
     page_characters=_portal.PAGE_CHARACTERS_MAX,
-    document_elements=_portal.DOCUMENT_ELEMENTS_MAX,
+    document_elements=quota(8_000_000, 2**63 - 1),
     document_characters=_portal.DOCUMENT_CHARACTERS_MAX,
     address_space=768 * 1024 * 1024,
     seconds=120,
@@ -152,8 +155,8 @@ def _facts_of(answer: dict[str, Any], size: int) -> PdfFacts:
     if answer.get("unreadable_handle"):
         # The handle itself failed -- the server's fault and not the caller's document.
         raise OSError("the upload handle could not be read")
-    raise _refusal(str(answer.get("refused")))
+    raise _refusal(str(answer.get("refused")), answer)
 
 
-def _refusal(rule: str) -> DomainError:
-    return _portal._refusal_for(rule)  # noqa: SLF001
+def _refusal(rule: str, answer: dict[str, Any] | None = None) -> DomainError:
+    return _portal._refusal_for(rule, answer)  # noqa: SLF001

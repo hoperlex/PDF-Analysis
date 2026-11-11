@@ -19,7 +19,7 @@ export {
 } from './model/upload-envelope';
 
 export type { UploadFailure, UploadFailureKind } from './model/upload-failure';
-export { classifyUploadFailure } from './model/upload-failure';
+export { classifyUploadFailure, contentNumbersSentence } from './model/upload-failure';
 
 export { looksLikeDocumentUid, looksLikeVersionUid } from './model/address';
 

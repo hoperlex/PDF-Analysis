@@ -14,7 +14,7 @@ typed refusal before the work grows:
 * the document's drawing elements or characters -- ``pdf_document_content``;
 * the reader's memory or time -- ``pdf_reader_limits``.
 
-Each bomb below is refused **by the rule named, within a few seconds, and without the API
+Each bomb below is refused **by the rule named, within seconds, and without the API
 process's own memory growing** -- measured as this process's peak resident set, which the
 in-process envelope this replaced grew by hundreds of MiB for the smallest of them. A reader
 that never starts is the server's fault (a ``RuntimeError``, answered ``500``), never a
@@ -127,23 +127,129 @@ def _refused(pdf: bytes, *, within: float) -> tuple[str, float]:
 
 
 @pytest.mark.parametrize(
-    ("label", "build", "constraint"),
+    ("label", "build", "constraint", "within"),
     [
-        ("30 pages of the judge's text bomb", lambda: _pdf(30, TEXT_BOMB), "pdf_page_content"),
-        ("the text bomb inside a form XObject", lambda: _pdf(30, TEXT_BOMB, form=True), "pdf_page_content"),
-        ("a page of 240 000 characters", lambda: _pdf(30, DENSE_TEXT), "pdf_page_content"),
-        ("500 pages of the judge's low-text page", lambda: _pdf(500, PATHS), "pdf_document_content"),
-        ("a page no address space can hold", lambda: _pdf(1, LONG_STRINGS), "pdf_reader_limits"),
+        # `PDF-PAGE-CONTENT-01`: 500 000 strings are under the page ceiling of 2 000 000 elements
+        # now, so the bomb reaches its characters and the reader's address space stops it.
+        ("30 pages of the judge's text bomb", lambda: _pdf(30, TEXT_BOMB), "pdf_reader_limits", 20),
+        ("the text bomb inside a form XObject", lambda: _pdf(30, TEXT_BOMB, form=True), "pdf_reader_limits", 20),
+        ("a page of 240 000 characters", lambda: _pdf(30, DENSE_TEXT), "pdf_page_content", 20),
+        # 80 001 elements a page on 500 pages is 40 000 500: the reader counts all 500 pages
+        # before the document ceiling (40 000 000) refuses it, about 30 s on the development
+        # host. The reader's own clock (60 s) is the bound.
+        ("500 pages of the judge's low-text page", lambda: _pdf(500, PATHS), "pdf_document_content", 60),
+        ("a page no address space can hold", lambda: _pdf(1, LONG_STRINGS), "pdf_reader_limits", 20),
     ],
     ids=["text-bomb", "text-bomb-in-a-form", "dense-text", "paths-on-500-pages", "long-strings"],
 )
 def test_a_small_pdf_that_would_cost_gigabytes_is_refused_by_its_rule_in_seconds(
-    label: str, build: Any, constraint: str
+    label: str, build: Any, constraint: str, within: float
 ) -> None:
     pdf = build()
     assert len(pdf) < 128 * 1024, f"{label}: {len(pdf)} bytes is not the small PDF it should be"
-    found, _took = _refused(pdf, within=20)
+    found, _took = _refused(pdf, within=within)
     assert found == constraint, label
+
+
+@pytest.mark.parametrize(
+    ("paths", "admitted"),
+    [(975_000, True), (1_025_000, False)],
+    ids=["1950001-elements-admitted", "2050001-elements-refused"],
+)
+def test_a_drawing_page_is_read_up_to_the_page_ceiling(paths: int, admitted: bool) -> None:
+    """`PDF-PAGE-CONTENT-01` (owner, 2026-11-11): the page ceiling is 2 000 000 drawing elements,
+    and a page just under it is read inside the reader's 512 MiB and 60 s -- a CAD sheet of
+    short lines, each path two segments, plus one text line. Just over it, ``pdf_page_content``.
+    Measured on this host when written: 2.0 s and about 300 MiB in the readers for the page
+    under the ceiling."""
+    pdf = _pdf(1, _TEXT + b"0 0 m 1 1 l S " * paths)
+    if admitted:
+        before = _peak_mib()
+        facts = inspect_pdf(pdf, require_text=False)
+        assert facts.page_count == 1
+        assert _peak_mib() - before < 64, "the API process read the page itself"
+    else:
+        found, _took = _refused(pdf, within=20)
+        assert found == "pdf_page_content"
+        assert _details(pdf) == {
+            "field": "content",
+            "constraint": "pdf_page_content",
+            "page_number": 1,
+            "content_measure": "drawing_elements",
+            "content_count": 2_050_001,
+            "content_count_is_minimum": False,
+            "content_limit": 2_000_000,
+        }
+
+
+def _details(pdf: bytes) -> dict[str, Any]:
+    with pytest.raises(DomainError) as refused:
+        inspect_pdf(pdf, require_text=False)
+    return dict(refused.value.detail_fields)
+
+
+class TestAContentRefusalNamesThePageAndTheNumbers:
+    """`PDF-PAGE-CONTENT-01`: the person uploading learns which page broke the rule and by how
+    much. Ceilings are lowered here so that small PDFs reach them; the served figures are
+    asserted in :func:`test_the_ceilings_are_the_recorded_figures`."""
+
+    def test_a_page_over_twice_its_ceiling_is_counted_no_further(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(envelope, "PAGE_ELEMENTS_MAX", 1_000)
+        found = _details(_pdf(1, PATHS))  # 40 001 elements
+        assert found["content_count_is_minimum"] is True
+        assert 2_000 < found["content_count"] <= 2_002  # stopped by the path that passed 2 000
+        assert (found["page_number"], found["content_measure"], found["content_limit"]) == (
+            1, "drawing_elements", 1_000,
+        )
+
+    def test_a_page_of_too_many_characters(self) -> None:
+        found = _details(_pdf(30, DENSE_TEXT))
+        assert (found["constraint"], found["page_number"], found["content_measure"]) == (
+            "pdf_page_content", 1, "characters",
+        )
+        assert found["content_count"] >= 240_000 and found["content_count_is_minimum"] is False
+        assert found["content_limit"] == 200_000
+
+    def test_the_document_names_the_page_its_total_passed_the_ceiling(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(envelope, "DOCUMENT_ELEMENTS_MAX", 200_000)
+        assert _details(_pdf(5, PATHS)) == {  # 80 001 elements a page
+            "field": "content",
+            "constraint": "pdf_document_content",
+            "page_number": 3,
+            "content_measure": "drawing_elements",
+            "content_count": 240_003,
+            "content_count_is_minimum": True,
+            "content_limit": 200_000,
+        }
+
+    def test_the_document_characters_name_their_page_too(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(envelope, "DOCUMENT_CHARACTERS_MAX", 100)
+        found = _details(_pdf(3, _TEXT))
+        assert (found["constraint"], found["page_number"], found["content_measure"]) == (
+            "pdf_document_content", 2, "characters",
+        )
+        assert found["content_count"] > 100 and found["content_limit"] == 100
+
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            None,
+            {"refused": "page_content"},
+            {"refused": "page_content", "page": True, "measure": "characters", "count": 1,
+             "count_is_minimum": False, "limit": 1},
+            {"refused": "page_content", "page": 1, "measure": "bytes", "count": 1,
+             "count_is_minimum": False, "limit": 1},
+            {"refused": "document_content", "page": 1, "measure": "characters", "count": "1",
+             "count_is_minimum": False, "limit": 1},
+        ],
+        ids=["no-answer", "no-numbers", "bool-page", "unknown-measure", "string-count"],
+    )
+    def test_a_content_rule_without_its_numbers_is_the_servers_fault(self, answer: Any) -> None:
+        rule = "page_content" if answer is None else answer["refused"]
+        with pytest.raises(RuntimeError, match="without its numbers"):
+            envelope._refusal_for(rule, answer)  # noqa: SLF001
 
 
 def test_the_reader_is_stopped_by_its_wall_clock(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -217,9 +323,9 @@ def test_a_real_page_is_read_as_before() -> None:
 
 def test_the_ceilings_are_the_recorded_figures() -> None:
     """Written out: the real maxima they were sized from are in the report, not in the code."""
-    assert envelope.PAGE_ELEMENTS_MAX == 400_000          # 5 x 75 486, the export's page
+    assert envelope.PAGE_ELEMENTS_MAX == 2_000_000        # 5 x the W55B-FIX 400 000 (owner, 2026-11-11)
     assert envelope.PAGE_CHARACTERS_MAX == 200_000        # 10 x 19 132, the export's page
-    assert envelope.DOCUMENT_ELEMENTS_MAX == 8_000_000    # 6 x 1 300 705, a corpus document
+    assert envelope.DOCUMENT_ELEMENTS_MAX == 40_000_000   # 5 x the W55B-FIX 8 000 000 (owner, 2026-11-11)
     assert envelope.DOCUMENT_CHARACTERS_MAX == 20_000_000  # 10 x 1 892 768, a corpus document
     assert envelope.DOCUMENT_CHARACTERS_MAX * 100 < 2**31  # text_character_count is an integer
     assert envelope.READER_ADDRESS_SPACE == 512 * MiB     # 8 x the 64 MiB every real PDF needs
