@@ -115,6 +115,8 @@ def test_the_migration_creates_the_canonical_and_rebuildable_topology(
     assert tables == {
         "norm_chunk",
         "norm_chunk_build",
+        # `0065_norm_crop_render` (`CRIT-SEAL-52`, `D-681`): the PNG render of a norm page (found red on the 1.53.0 stand; it was not run by the 1.52.0 seal).
+        "norm_crop_render",
         # `0020_norms_search` (W55a): the current snapshot and its history.
         "norm_current_snapshot",
         "norm_current_snapshot_event",

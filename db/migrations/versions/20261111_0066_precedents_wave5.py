@@ -119,7 +119,8 @@ _CROSS_EVIDENCE_FUNCTION = """
             SELECT r.version_uid, r.project_uid INTO own_version, own_project
               FROM finding_observation o JOIN audit_run r ON r.run_id = o.run_id
              WHERE o.finding_observation_id = NEW.finding_observation_id;
-            SELECT v.project_uid INTO other_project FROM document_version v WHERE v.version_uid = NEW.version_uid;
+            SELECT d.project_uid INTO other_project
+              FROM document_version v JOIN document d ON d.document_uid = v.document_uid WHERE v.version_uid = NEW.version_uid;
             IF other_project IS DISTINCT FROM own_project THEN
                 RAISE EXCEPTION
                     'state_transition_not_allowed: the cross evidence of observation % names version %, which is not in the observation''s project',

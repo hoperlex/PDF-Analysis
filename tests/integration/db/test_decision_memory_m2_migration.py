@@ -35,6 +35,8 @@ HEAD = "0066_precedents_wave5"  # the head the fixture migrates to; 0061 is the 
 SEAL_TABLES = frozenset({
     "decision_memory_comment", "decision_memory_block_evidence", "decision_memory_embedding_intent", "decision_memory_embedding",
     "decision_memory_probe", "decision_memory_precedent_run", "decision_memory_precedent_advice",
+    # `0066_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern and its journal.
+    "decision_memory_pattern", "decision_memory_pattern_status_event",
 })
 PREVIOUS = "0060_run_from_stage"
 CONTENT_TABLES = (

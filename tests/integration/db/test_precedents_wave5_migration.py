@@ -178,10 +178,10 @@ def test_the_journal_has_the_databases_own_transition_rule(at_head: Engine) -> N
     # the first event is the proposal, and only the first
     for status, cause, kw in (("approved", "expert_review", {"actor": admin}), ("suspended", "group_dissolved", {"counts": (1, 1)})):
         _refused(at_head, lambda c, status=status, cause=cause, kw=kw: _event(
-            c, pattern, case, 1, status, cause, command=_command(c) if cause == "expert_review" else None, **kw), "23514")
+            c, pattern, case, 1, status, cause, command=_command(c) if cause == "expert_review" else None, **kw), "AM003")
     with at_head.begin() as connection:
         _event(connection, pattern, case, 1, "proposed", "proposed")
-    _refused(at_head, lambda c: _event(c, pattern, case, 2, "proposed", "proposed"), "23514")                  # a proposal is event 1 only
+    _refused(at_head, lambda c: _event(c, pattern, case, 2, "proposed", "proposed"), "AM003")                  # a proposal is event 1 only
     _refused(at_head, lambda c: _review(c, pattern, case, 2, "suspended", admin), "AM003")                     # proposed -> suspended
     _refused(at_head, lambda c: _review(c, pattern, case, 3, "approved", admin), "AM001")                      # a gap in the numbers
     with at_head.begin() as connection:
@@ -217,8 +217,8 @@ def test_who_and_why_are_tied_to_the_status(at_head: Engine) -> None:
     _refused(at_head, lambda c: _event(c, pattern, case, 2, "approved", "expert_review", actor=admin), "23514")           # no command
     _refused(at_head, lambda c: _event(c, pattern, case, 2, "approved", "expert_review", command=_command(c)), "23514")   # no actor
     _refused(at_head, lambda c: _event(c, pattern, case, 2, "approved", "group_dissolved", counts=(1, 1)), "23514")        # not the algorithm's status
-    _refused(at_head, lambda c: _event(c, pattern, case, 2, "proposed", "expert_review", actor=admin, command=_command(c)), "23514")
-    _refused(at_head, lambda c: _review(c, pattern, case, 2, "proposed", admin), "23514")
+    _refused(at_head, lambda c: _event(c, pattern, case, 2, "proposed", "expert_review", actor=admin, command=_command(c)), "AM003")
+    _refused(at_head, lambda c: _review(c, pattern, case, 2, "proposed", admin), "AM003")
     _refused(at_head, lambda c: _event(c, pattern, case, 2, "approved", "proposed"), "23514")
     _refused(at_head, lambda c: _event(c, pattern, case, 2, "approved", "expert_review", actor=admin, command=_command(c), counts=(3, 4)), "23514")
     _refused(at_head, lambda c: c.execute(text(
