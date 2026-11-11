@@ -20,7 +20,9 @@ from auditmanager.documents.public import DocumentRepository
 from auditmanager.executors.public import CropImage, HostRepository, attach_images, cell_binding_of, token_health_of
 from auditmanager.findings.public import BlockEvidenceItem, CandidateGroup, CandidateMember
 from auditmanager.jobs.public import extended_unit
-from auditmanager.norms.public import SEARCH_WINDOW, NormPageImages, search_norms
+from auditmanager.norms.public import (
+    MAX_NORM_QUERY_CHARACTERS, SEARCH_WINDOW, NormPageImages, parse_norm_query, search_norms,
+)
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.stage_plan import call_journal_columns, cell_binding, settings_of
 from auditmanager.runs.stage_layout import ENSEMBLE_ROLES, parse_plan, role_of_phase, row_of_phase
@@ -591,6 +593,32 @@ def _ensemble_block_batch(*, run, binding, state, call, roles, section, index, b
     return items, reason
 
 
+#: `NORM-ANY-WORDS-01`. A model writes a norm query as a phrase ("СП 16.13330 расчет сварных соединений опорных узлов стальных балок"),
+#: and the norms search wants every word of it in one paragraph, so a phrase finds nothing: on the prod run of 2026-11-11 all 19
+#: distinct queries of the blocks found 0 paragraphs in a 674-document snapshot. When the query as written has no hit, the lookup asks
+#: once more with the same designation and clause and its words joined by ``or``; ``ts_rank_cd`` puts the paragraphs that hold most of
+#: them first. The candidates stay ``candidate_not_verified`` -- the norm review judges each one -- and the receipt names the query.
+_ANY_WORD_TOKEN = re.compile(r"\w[\w.-]*", re.UNICODE)
+_ANY_WORD_MIN_LENGTH = 3
+_QUERY_OPERATORS = frozenset({"or", "and", "not"})
+
+
+def _any_words_query(query: str) -> str | None:
+    """The query with its designation and clause kept and its words joined by ``or``; ``None`` when it has fewer than two words."""
+    parsed = parse_norm_query(query)
+    words = [word for word in _ANY_WORD_TOKEN.findall(parsed.words or "")
+             if len(word) >= _ANY_WORD_MIN_LENGTH and word.casefold() not in _QUERY_OPERATORS]
+    if len(words) < 2:
+        return None
+    head = " ".join(part for part in (parsed.designation, None if parsed.clause is None else f"п. {parsed.clause}") if part)
+    while len(words) >= 2:
+        relaxed = (head + " " if head else "") + " or ".join(words)
+        if len(relaxed) <= MAX_NORM_QUERY_CHARACTERS:
+            return relaxed
+        words.pop()
+    return None
+
+
 def _norms(session, observations: list[dict], snapshot_id: str | None,
            *, full_document: bool = False, checkpoint=None, lookup_receipts=None,
            query_planning=False) -> list[str]:
@@ -666,12 +694,24 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
                         active_query["search_started"] = True
                     page = search_norms(session, q=query, norms_snapshot_id=snapshot_id,
                         cursor=None, limit=3, timeout_ms=1200)
+                    any_words = None
+                    if not page.items:
+                        any_words = _any_words_query(query)  # NORM-ANY-WORDS-01
+                        if any_words is not None:
+                            try:
+                                page = search_norms(session, q=any_words, norms_snapshot_id=snapshot_id,
+                                    cursor=None, limit=3, timeout_ms=1200)
+                            except DomainError:
+                                # The second pass is broader than the first. One the search refuses (too broad, at capacity) leaves
+                                # the query where the first pass left it -- no hit -- and the receipt says the second was tried.
+                                session.rollback()
                     cache[key] = [{"snapshot_id": hit.norms_snapshot_id, "document_id": hit.norm_document_id,
                         "paragraph_id": hit.norm_paragraph_id, "designation": hit.designation,
                         "clause_number": hit.clause_number, "quote": hit.fragment.text[:2000],
                         "page_label": hit.page_label, "status": "candidate_not_verified"} for hit in page.items]
                     if receipt is not None:
                         cache_receipts[key] = {"has_more": page.next_cursor is not None, "received_hits": len(page.items),
+                            **({} if any_words is None else {"any_words_query": any_words}),
                             "hits": [{"snapshot_id": hit.norms_snapshot_id, "document_id": hit.norm_document_id,
                                 "paragraph_id": hit.norm_paragraph_id, "designation": hit.designation,
                                 "clause_number": hit.clause_number, "page_label": hit.page_label,
