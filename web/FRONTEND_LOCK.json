@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a",
-    "content_commit": "f0bc496e",
-    "content_commit_subject": "feat(contract): contract 1.52.0 -- the version literals, the surface (296/325/809), the reseal paragraph, the catalogs at candidate revision 69, the head 0065 (CRIT-SEAL-52)",
-    "dispatch_named_commit": "f0bc496e5446dcbc8089ed54c528f975d3d9726a",
-    "commit_note": "Resealed by CRIT-SEAL-52: contract 1.52.0 (no operation; one schema, DecisionMemoryComment; the optional DecisionMemoryCase.comments; FindingObservation.evidence may be empty when grounding_kind is portal_block, as an if/else on grounding_kind instead of minItems 1), on top of 1.51.0.",
+    "sha256": "6c1189b17ef9162e5222ac57a379e906d34b9c7919d4b0b32c745d242a261924",
+    "content_commit": "d7713370",
+    "content_commit_subject": "feat(contract): contract 1.53.0 -- the version literals, the surface (299/328/820), the reseal paragraph, the catalogs at candidate revision 70, the head 0066 (CRIT-SEAL-53)",
+    "dispatch_named_commit": "d7713370558d1993bc622b30c4985ef276b4439e",
+    "commit_note": "Resealed by CRIT-SEAL-53: contract 1.53.0 (three operations: listDecisionPatterns, reviewDecisionPattern, getStageQuality; eleven schemas; FindingCategory parameter_mismatch; Finding.cross_evidence; FindingObservation.extended_observation_ref; RunStatus.publication_mode; SubmitExecutorTaskAnswerRequest.output_text maxLength 1000000), on top of 1.52.0.",
     "openapi_version": "3.1.0",
     "info_version": "1.53.0",
-    "paths": 296,
-    "operations": 325,
-    "component_schemas": 809,
+    "paths": 299,
+    "operations": 328,
+    "component_schemas": 820,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a",
+    "snapshot_sha256": "6c1189b17ef9162e5222ac57a379e906d34b9c7919d4b0b32c745d242a261924",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "8e892d73fd7300e4088a33087567075dc496ba46394a89c2743b38e2145ee0e5",
-      "index.ts": "ec4029382210b7d0d09af200e98dec50f1f0b1735213ce2cc6d46d9f0e7f5863",
-      "operations.gen.ts": "b8271ab8ba2da31ec9124e78b3e2f1e0e4387992e94f209b979e817ee09dc08e",
-      "types.gen.ts": "d92272ef70f607e491f26824283593f6b0e0738ad77a685bea891e278a4fa2e8"
+      "client.gen.ts": "fbeffcae66a988412cadca0e8cbbf3bf8a0a083cc23753934258e8fca2fa7c67",
+      "index.ts": "a8b2c7c68b13ae1ffa7bf4cf462b28707002daa8715716d7002fe64bbd66d30f",
+      "operations.gen.ts": "3c8d57c7a479a810698283f4870e39c70d56e6ad271d36227f07cbfa9ae40665",
+      "types.gen.ts": "f567a9a2f1de5014ae4bfeabd2d1ca7db81b3ca05186657ee4a3ef8d3266ea17"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

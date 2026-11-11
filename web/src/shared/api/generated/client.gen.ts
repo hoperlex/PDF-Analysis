@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.52.0 (OpenAPI 3.1.0)
- *   sha256 dd8efdca0f4165813e9da8543d903bfe54fafb57243b8d5eae6e718f4325f11a
+ *   AuditManager PC-01 API 1.53.0 (OpenAPI 3.1.0)
+ *   sha256 6c1189b17ef9162e5222ac57a379e906d34b9c7919d4b0b32c745d242a261924
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -272,6 +272,8 @@ import type {
   GetStagePairResult,
   GetStageProfileTextInput,
   GetStageProfileTextResult,
+  GetStageQualityInput,
+  GetStageQualityResult,
   GetStageSheetMapInput,
   GetStageSheetMapResult,
   GetStageSheetMapRevisionInput,
@@ -348,6 +350,8 @@ import type {
   ListDecisionHistoryResult,
   ListDecisionMemoryCasesInput,
   ListDecisionMemoryCasesResult,
+  ListDecisionPatternsInput,
+  ListDecisionPatternsResult,
   ListDecisionsInput,
   ListDecisionsResult,
   ListDocumentTagsInput,
@@ -524,6 +528,8 @@ import type {
   RetryComparisonAiSheetChangesResult,
   RetryComparisonUploadSetInput,
   RetryComparisonUploadSetResult,
+  ReviewDecisionPatternInput,
+  ReviewDecisionPatternResult,
   ReviseAnalysisPresetInput,
   ReviseAnalysisPresetResult,
   ReviseExecutorConnectionInput,
@@ -2196,6 +2202,18 @@ export function getStageProfileText(
 }
 
 /**
+ * Get Stage Quality
+ *
+ * `GET /stage-quality`.
+ */
+export function getStageQuality(
+  input: GetStageQualityInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageQualityResult>> {
+  return request<GetStageQualityResult>(OPERATIONS.getStageQuality, input, options);
+}
+
+/**
  * Get Stage Sheet Map
  *
  * `GET /stage-pairs/{stage_pair_id}/sheet-map`.
@@ -2649,6 +2667,18 @@ export function listDecisionMemoryCases(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListDecisionMemoryCasesResult>> {
   return request<ListDecisionMemoryCasesResult>(OPERATIONS.listDecisionMemoryCases, input, options);
+}
+
+/**
+ * List Decision Patterns
+ *
+ * `GET /decision-memory/patterns`.
+ */
+export function listDecisionPatterns(
+  input: ListDecisionPatternsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListDecisionPatternsResult>> {
+  return request<ListDecisionPatternsResult>(OPERATIONS.listDecisionPatterns, input, options);
 }
 
 /**
@@ -3708,6 +3738,18 @@ export function retryComparisonUploadSet(
 }
 
 /**
+ * Review Decision Pattern
+ *
+ * `POST /decision-memory/patterns/{pattern_id}/review` - a write; carries a required Idempotency-Key.
+ */
+export function reviewDecisionPattern(
+  input: ReviewDecisionPatternInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ReviewDecisionPatternResult>> {
+  return request<ReviewDecisionPatternResult>(OPERATIONS.reviewDecisionPattern, input, options);
+}
+
+/**
  * Revise an analysis preset.
  *
  * `POST /analysis/presets/{preset_id}/revisions` - a write; carries a required Idempotency-Key.
@@ -4703,6 +4745,7 @@ export const apiClient = {
   getStageModelLayout,
   getStagePair,
   getStageProfileText,
+  getStageQuality,
   getStageSheetMap,
   getStageSheetMapRevision,
   getStageSynthesis,
@@ -4741,6 +4784,7 @@ export const apiClient = {
   listComparisonVersionOrders,
   listDecisionHistory,
   listDecisionMemoryCases,
+  listDecisionPatterns,
   listDecisions,
   listDocumentTags,
   listDocuments,
@@ -4829,6 +4873,7 @@ export const apiClient = {
   resumeStageUpload,
   retryComparisonAiSheetChanges,
   retryComparisonUploadSet,
+  reviewDecisionPattern,
   reviseAnalysisPreset,
   reviseExecutorConnection,
   reviseExecutorGroup,
