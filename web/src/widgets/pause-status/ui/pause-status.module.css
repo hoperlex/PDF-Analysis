@@ -78,3 +78,21 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
 }
+
+/*
+ * On a phone the strip wraps and the button can land anywhere in it, so a popup anchored to the button can leave the screen (it
+ * did, at 390 px, when both badges pushed the button to a second row: the menu began 141 px left of the page). There the menu is
+ * anchored to the strip instead: the shared `.am-menu` is made static, so the strip (a positioned box) is the popup's containing
+ * block, and the popup drops from the strip's bottom edge at the page gutter.
+ */
+@media (max-width: 590px) {
+  .menu :global(.am-menu) {
+    position: static;
+  }
+
+  .menu :global(.am-menu__popup) {
+    right: auto;
+    left: var(--am-gap-md);
+    max-width: calc(100vw - 2 * var(--am-gap-md));
+  }
+}
