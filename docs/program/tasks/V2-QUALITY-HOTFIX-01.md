@@ -90,7 +90,10 @@ policies remain frozen and cannot silently switch to another workflow. Reverting
 requires pausing incompatible new work; saved reports remain immutable.
 
 ## Handoff
-Implementation complete; independent significant-defect review and dev publication pending.
+Implementation complete; independent significant-defect review **ACCEPT** on runtime
+`c665efca6c3db014928a49d32be98c73ce2ea274`. The publication candidate adds only this
+handoff and `reviews/V2-QUALITY-HOTFIX-01-JUDGE.md` to that runtime; dev publication is
+authorized by the owner. The prior integration hold is superseded by this task.
 No code or benchmark work for proposal item 5.
 
 - Changed runtime: `analysis/extended/{input_passport,related_context,substantive_review,
@@ -115,6 +118,12 @@ No code or benchmark work for proposal item 5.
   the input JSON remains byte-equivalent after canonical serialization.
 - `git diff --check` clean. No contract, migration, composition root or global-style
   change; no paid model calls, full run, full gate, main update or deployment.
+- Judge independently passed 29 focused checks on the exact runtime SHA, confirmed the
+  attachment projection and found no significant defects. Source and test files were not
+  changed after acceptance. The earlier limit-removal candidate remains accepted as well.
+- Rechecked remote development base on 2026-11-12: `origin/dev` was
+  `ec1c7931eafe46f44f742a3d1ee561b199ae4152`; `origin/main` was
+  `ff284d31346ead718c00c5d6a7eefb3b1f5b60cb`. The candidate descends from that dev SHA.
 - Known limits: sheet labels that cannot be resolved from prepared text stay unresolved;
   coverage does not certify engineering completeness. Model advice still requires expert
   judgment. New quality calls require a fresh priced consent; old stored reports are not
