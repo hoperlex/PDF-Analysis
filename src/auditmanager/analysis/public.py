@@ -742,3 +742,27 @@ def original_review_summary(done, corrections):
 
 __all__.extend(["ORIGINAL_REVIEW_V2", "original_review_procedures", "original_review_plan", "original_review_critic",
     "original_review_corrector", "original_review_summary"])
+
+
+def finding_proposal_policy():
+    from .extended.finding_proposals import proposal_policy
+    return proposal_policy()
+
+
+def validate_finding_proposal_policy(value, *, compare_bundle=True):
+    from .extended.finding_proposals import validate_proposal_policy
+    return validate_proposal_policy(value, compare_bundle=compare_bundle)
+
+
+def build_finding_proposal_review_request(**kwargs):
+    from .extended.finding_proposals import build_proposal_review_request
+    return build_proposal_review_request(**kwargs)
+
+
+def parse_finding_proposal_review_reply(*args, **kwargs):
+    from .extended.finding_proposals import parse_proposal_review_reply
+    return parse_proposal_review_reply(*args, **kwargs)
+
+
+__all__.extend(["finding_proposal_policy", "validate_finding_proposal_policy",
+    "build_finding_proposal_review_request", "parse_finding_proposal_review_reply"])

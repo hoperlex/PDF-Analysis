@@ -1,0 +1,36 @@
+.root { min-width: 0; margin-block: var(--am-gap-xl); padding-top: var(--am-gap-lg); border-top: 1px solid var(--am-line); }
+.heading, .chips, .filters, .sources { display: flex; flex-wrap: wrap; align-items: center; gap: var(--am-gap); }
+.heading { justify-content: space-between; }
+.heading h2 { margin: 0; }
+.heading h2 span { font-weight: 400; color: var(--am-ink-muted); }
+.note, .readonly { color: var(--am-ink-muted); font-size: var(--am-text-sm); }
+.readonly { white-space: nowrap; }
+.chips, .filters { margin-block: var(--am-gap); }
+.filters label { display: grid; gap: 4px; min-width: 0; }
+.filters input, .filters select { max-width: 100%; }
+.filters input { width: 26rem; }
+.scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--am-line); border-radius: var(--am-radius); }
+.table { border-collapse: collapse; width: 100%; min-width: 980px; font-size: var(--am-text-sm); table-layout: fixed; }
+.table th, .table td { padding: 10px; vertical-align: top; text-align: left; border-bottom: 1px solid var(--am-line); overflow-wrap: anywhere; }
+.table th { font-weight: 600; background: var(--am-paper); }
+.table th:nth-child(1) { width: 8%; }
+.table th:nth-child(2) { width: 12%; }
+.table th:nth-child(3) { width: 8%; }
+.table th:nth-child(4) { width: 27%; }
+.table th:nth-child(5) { width: 20%; }
+.table th:nth-child(6) { width: 17%; }
+.table th:nth-child(7) { width: 8%; }
+.table td p { margin: 5px 0; white-space: pre-wrap; }
+.table small { display: block; color: var(--am-ink-muted); }
+.table td:first-child button { white-space: nowrap; }
+.table .readonly { white-space: normal; }
+.origin { display: block; margin-bottom: 5px; color: var(--am-ink-muted); }
+.norm { display: grid; gap: 3px; margin-bottom: 12px; }
+.norm blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--am-line); max-height: 9rem; overflow: auto; }
+.detail { padding: var(--am-gap); }
+.member { margin-top: var(--am-gap); }
+.chips [aria-pressed='true'] { border-color: var(--am-accent); background: var(--am-accent-light); }
+.chips [data-candidate-filter='critical'] { border-left: 3px solid var(--am-failed); }
+.chips [data-candidate-filter='economic'] { border-left: 3px solid var(--am-degraded); }
+.chips [data-candidate-filter='operational'] { border-left: 3px solid var(--am-accent); }
+@media (max-width: 600px) { .filters { align-items: stretch; flex-direction: column; } .filters input { width: 100%; } }

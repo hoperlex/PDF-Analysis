@@ -35,3 +35,8 @@ export { FindingBlocksStrip, ReviewFindingBlocks } from './ui/finding-blocks';
 export type { FindingBlocksShown, FindingBlocksStripProps, ReviewFindingBlocksProps } from './ui/finding-blocks';
 export { readFindingBlocks } from './model/finding-blocks';
 export type { FindingBlocksReading, FindingBlocksSource } from './model/finding-blocks';
+/** The card of a block finding (`F8-WEB`, `D-683`): the page with a frame at each block, exported so the census and the preview render its view. */
+export { BlockEvidence, BlockEvidenceView } from './ui/block-evidence';
+export type { BlockEvidenceProps, BlockEvidenceViewProps } from './ui/block-evidence';
+export { BLOCK_FRAME_SENTENCES, blockCardsOnPage, blockFrameOf, blockPages } from './model/block-targets';
+export type { BlockCard, BlockFrame } from './model/block-targets';

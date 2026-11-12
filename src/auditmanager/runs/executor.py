@@ -69,7 +69,7 @@ import time
 from functools import partial, wraps
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from sqlalchemy.orm import Session
 
@@ -260,6 +260,15 @@ def _persist(
 ) -> None:
     """Write the stage result the moment the stage finishes."""
     runs.record_stage_result(session, run_id=run_id, document=result.to_document())
+
+
+def _candidate_publication_gap(result: StageResult, reasons: Sequence[str]) -> StageResult:
+    """Keep unread publication durable, within the scalar StageResult metrics contract."""
+    return replace(result,
+        status=StageStatus.PARTIAL if result.status is StageStatus.SUCCEEDED else result.status,
+        metrics={**result.metrics, "candidate_publication_unread": ",".join(reasons)},
+        error=result.error or StageError.from_domain_error(DomainError(ErrorCode.ANALYSIS_FAILED,
+            stage_id="text_analysis", message="the extended candidates could not be read for publication")))
 
 
 class _ResponseEvidence(Protocol):
@@ -860,6 +869,14 @@ def _run_evidence_gate(
     if inputs is None:
         return False, None
     gate_result = run_grounding_gate(inputs.observation_set, inputs.text_layer, inputs.block_index)
+    primary_proposals, primary_refs = {}, {}
+    for group in inputs.candidate_groups:
+        for member in group.members:
+            if not member.block_evidence and not member.other_source_count and not member.primary_text_unlinked and len(member.primary_text_ordinals) == 1:
+                primary_refs.setdefault(member.primary_text_ordinals[0], member.extended_observation_ref)
+            if member.proposed_severity is not None and not member.block_evidence and not member.other_source_count:
+                for ordinal in member.primary_text_ordinals:
+                    primary_proposals.setdefault(ordinal, member.proposed_severity)
     publication = publish_gate_result(
         session,
         gate_result=gate_result,
@@ -867,6 +884,8 @@ def _run_evidence_gate(
         run_id=run.run_id,
         project_uid=run.project_uid,
         version_uid=run.version_uid,
+        **({"proposed_severities": primary_proposals} if primary_proposals else {}),
+        **({"extended_observation_refs": primary_refs} if primary_refs else {}),
     )
     if inputs.block_inputs is not None:
         # `F8-PUBLISH`: a ``one_list`` run (only it has block inputs) publishes its candidates after its text findings, so that a group
@@ -1656,6 +1675,12 @@ def _execute_run_body(
 
     # -- validating: the evidence gate, then the terminal it implies ----------
     gate_ran, publication = _run_evidence_gate(session, run=run, inputs=gate_inputs)
+
+    # An unread extended result is a persisted coverage gap, never an empty successful
+    # one-list publication. Keep the already published, grounded text findings.
+    if publication is not None and publication.candidates is not None and publication.candidates.unread:
+        text_result = _candidate_publication_gap(text_result, publication.candidates.unread)
+        _persist(session, run_repo, run_id, text_result)
 
     statuses = run_repo.stage_statuses(session, run_id)
     missing = [stage for stage in PC01_STAGES if stage not in statuses]

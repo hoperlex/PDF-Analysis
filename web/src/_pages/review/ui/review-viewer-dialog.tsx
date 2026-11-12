@@ -44,6 +44,8 @@ export interface ReviewViewerAsideProps {
   readonly meta: string;
   readonly text: string;
   readonly recommendation: string;
+  /** `F8-WEB`: the critic's advice for a block finding, one line under the recommendation. */
+  readonly advice?: ReactNode;
   /** ✓/✕ for a session that may decide. */
   readonly actions?: ReactNode;
   /** «Блоки страницы N» (`UI-A-74`): the strip of the cited page's portal blocks, under the finding. */
@@ -51,12 +53,13 @@ export interface ReviewViewerAsideProps {
 }
 
 /** The finding at the head of the side column: where it is, what it says, what it recommends, and ✓/✕. */
-export function ReviewViewerAside({ findingUid, meta, text, recommendation, actions, blocks }: ReviewViewerAsideProps) {
+export function ReviewViewerAside({ findingUid, meta, text, recommendation, advice, actions, blocks }: ReviewViewerAsideProps) {
   return (
     <div className={styles.aside} data-finding-uid={findingUid}>
       {meta === '' ? null : <p className={styles.meta}>{meta}</p>}
       <p className={styles.text}>{text}</p>
       {recommendation === '' ? null : <p className={styles.recommendation}>{recommendation}</p>}
+      {advice}
       {actions}
       {blocks}
     </div>

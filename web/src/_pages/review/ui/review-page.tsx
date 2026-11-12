@@ -35,6 +35,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { FindingObservationId, FindingUid, ProjectUid, RunId, VersionUid } from '@/shared/api';
 import { getFinding, listDecisionHistory, queryKeys } from '@/shared/api';
@@ -47,7 +48,7 @@ import { ExportPanel } from '@/widgets/export-panel';
 import { blocksOfFinding, findingBlockIndex, sheetOfPage, useRunFindingBlocks, useSheetLabels } from '@/entities/block';
 import { FindingList, FindingToolbar, filterBySeverity, filterGroups, findingViewOf, findingsAsShown, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
 import type { FindingView, SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
-import { ExtendedReviewSummary } from '@/widgets/extended-review';
+import { CandidateNormAdvice, CriticAdviceLine, ExtendedReviewSummary, ReviewCandidates } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
 import { useEvidenceDocument, useVersionBlockIndex } from '@/features/open-evidence';
 import { useExportRun } from '@/features/export-run';
@@ -56,14 +57,15 @@ import { DocumentContext } from '@/widgets/document-context';
 import { useRecordVerdict } from '@/features/record-verdict';
 import { ExecutionStatusControl } from '@/features/set-execution-status';
 import { runStatusQueryOptions } from '@/entities/audit-run';
-import { SEVERITY_LABELS, admitFindings, groupByCategory, runFindingsQueryOptions } from '@/entities/finding';
-import { declaredPages, firstDeclaredPage } from '@/entities/finding-observation';
+import { SEVERITY_LABELS, admitFindings, blockEvidenceOf, groupByCategory, runFindingsQueryOptions, runHasNonTextFindings, standsOnBlocksOnly } from '@/entities/finding';
+import { findingPages, firstFindingPage } from '@/entities/finding-observation';
 
 import { presentFailureOrNull, presentFindingsFailure } from '../model/present-failure';
 import { stripPageOf } from '../model/page-blocks';
 import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
+import { BlockEvidence } from './block-evidence';
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
 import { ReviewFindingBlocks } from './finding-blocks';
 import { OpenedFinding } from './opened-finding';
@@ -92,7 +94,6 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   // `R-151j`: the severity filter lives in the address too (`?severity=`).
   const severityFilter = severityFilterOf(searchParams.get('severity'));
   // `UI-A-68`: the findings as the list beside the open finding, or as the original's full-width table (`?view=table`).
-  const view = findingViewOf(searchParams.get('view'));
   const [selection, setSelectionState] = useState<ReviewSelection | null>(
     linkedFinding === null ? null : selectFinding(linkedFinding),
   );
@@ -120,7 +121,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     setSelectionState(next);
   };
   const setView = (next: FindingView) => {
-    writeAddress('view', next === 'list' ? null : next);
+    writeAddress('view', next === defaultView ? null : next);
   };
   const setVerdictFilter = (filter: VerdictFilter) => {
     writeAddress('verdict', filter === 'all' ? null : filter);
@@ -134,6 +135,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   // key is now decided in one place -- `runStatusQueryOptions` -- and this screen reads
   // whatever that place writes.
   const runQuery = useQuery(runStatusQueryOptions(runId));
+  const defaultView = runQuery.data?.publication_mode === 'one_list' ? 'table' : 'list';
+  const view = findingViewOf(searchParams.get('view') ?? defaultView);
 
   // The COMPLETE list: every page of the run's findings, or the error of the page that
   // failed. The query resolves only once the last page has arrived, so the list below is
@@ -226,7 +229,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     verdict.pendingIntent ?? (comment.isPending ? 'comment' : null);
 
   const activePage =
-    resolved?.page ?? (detail === null ? null : firstDeclaredPage(detail.observation));
+    resolved?.page ?? (detail === null ? null : firstFindingPage(detail));
 
   // One failure for the open finding, inline and in the full-screen view.
   const detailFailure = detailQuery.error === null ? null : (
@@ -240,6 +243,17 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     />
   );
 
+  // `F8-WEB`, `D-683`: a finding that stands on portal blocks alone has no quotation to show; its card is the page with a frame at
+  // each block (`BlockEvidence`), drawn from `block_evidence`. A text finding keeps the quotation viewer exactly as it was.
+  const onBlocks = detail !== null && standsOnBlocksOnly(detail);
+  // `F8-WEB`: what the critic of the extended review advised about the candidate a block finding came from, in one line.
+  const criticAdvice = detail !== null && (onBlocks || detail.observation.extended_observation_ref !== undefined) ? (
+    <><CriticAdviceLine
+      runId={runId}
+      subject={{ findingText: detail.observation.finding_text, blockIds: blockEvidenceOf(detail).map((block) => block.portal_block_id), observationRef: detail.observation.extended_observation_ref }}
+    /><CandidateNormAdvice runId={runId} subject={{ findingText: detail.observation.finding_text,
+      blockIds: blockEvidenceOf(detail).map((block) => block.portal_block_id), observationRef: detail.observation.extended_observation_ref }} /></>
+  ) : null;
   // The same viewer inline and in the full-screen view; only the presentation differs.
   const evidenceProps = detail === null ? null : {
     observation: detail.observation,
@@ -258,7 +272,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   };
   // `UI-A-74`: the strip of the page the viewer is on, which is one of the pages the finding cites. The key is
   // the finding and the page, so a block view left open does not outlive either.
-  const citedPages = detail === null ? [] : declaredPages(detail.observation);
+  const citedPages = detail === null ? [] : findingPages(detail);
   const stripPage = stripPageOf(citedPages, activePage);
   const pageBlocks = detail === null || stripPage === null ? null : (
     <ReviewPageBlocks
@@ -278,6 +292,22 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       findingUid={detail.finding_uid}
     />
   );
+  // The block card inline and in the full-screen view, over the same page state as the quotation viewer.
+  const blockView = (extra: { readonly presentation?: 'full'; readonly aside?: ReactNode; readonly onExpand?: () => void }) =>
+    detail === null || evidenceProps === null ? null : (
+      <BlockEvidence
+        scope={detail.finding_uid}
+        blocks={blockEvidenceOf(detail)}
+        activePage={evidenceProps.activePage}
+        onPageChange={evidenceProps.onPageChange}
+        documentUrl={evidenceProps.documentUrl}
+        isLoading={evidenceProps.isLoading}
+        error={evidenceProps.error}
+        providerMode={detail.observation.provenance.provider_mode}
+        unlinkedPages={blockLinks === null ? undefined : blockLinks.unlinkedPages}
+        {...extra}
+      />
+    );
   const blocksUnderThePage = (
     <>
       {findingBlocks}
@@ -309,12 +339,18 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             </article>
           )}
 
+          {/* `F8-WEB`: what the critic of the extended review advised about the candidate a block finding came from, in one line;
+              in the table too, whose row already says the finding and its recommendation. */}
+          {criticAdvice}
+
           {expanded ? (
             // One page drawn once: while the full-screen view is open it is the only viewer.
             <p className="am-note" data-evidence-expanded="">
               Страница открыта во весь экран.
             </p>
-          ) : evidenceProps === null ? null : (
+          ) : evidenceProps === null ? null : onBlocks ? (
+            blockView({ onExpand: () => { setExpanded(true); } })
+          ) : (
             <LazyEvidenceViewer {...evidenceProps} onExpand={() => { setExpanded(true); }} />
           )}
 
@@ -378,6 +414,31 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     </>
   );
 
+  // The finding at the head of the full-screen view's side column, over the quotation viewer's or the block card's cards.
+  const viewerAside = detail === null ? null : (
+    <ReviewViewerAside
+      findingUid={detail.finding_uid}
+      meta={[decidedOrProposed, pagesLabel(findingPages(detail), (page) => sheetOfPage(sheetLabels.data, page))]
+        .filter((part) => part !== null && part !== '')
+        .join(' · ')}
+      text={detail.observation.finding_text}
+      recommendation={detail.observation.recommendation_text}
+      advice={criticAdvice}
+      actions={mayAct && selectedSummary !== null ? (
+        <ReviewRowActions
+          finding={selectedSummary}
+          runId={runId}
+          onOpen={(findingUid) => {
+            // The severity is chosen in the panel: close the view on it.
+            setExpanded(false);
+            setSelection(selectFinding(findingUid));
+          }}
+        />
+      ) : null}
+      blocks={blocksUnderThePage}
+    />
+  );
+
   const exportPanel = run === null ? (
     <LoadingState what="прогон" />
   ) : (
@@ -438,7 +499,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       }
     >
       <DocumentContext projectUid={projectUid} runId={runId} current="review" />
-      <ExtendedReviewSummary projectUid={projectUid} runId={runId} />
+      {/* `F8-WEB`: the caption that the candidates are separate machine observations is not true of a run that published them as findings. */}
+      <ExtendedReviewSummary projectUid={projectUid} runId={runId} oneList={run?.publication_mode === 'one_list' || runHasNonTextFindings(admitted.findings)} published={admitted.findings} />
       {/*
         The filters, the tally and the file actions across the whole width over the list and the open finding, as the
         original's top row: the total and the severity chips at the left, the file actions at the right. A run with no
@@ -486,6 +548,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
               />
             ) : undefined}
             isLoading={findingsQuery.isPending}
+            emptyDetail={run?.state === 'partial' ? <p>Прогон завершился частично. Отсутствие опубликованных находок не подтверждает отсутствие замечаний.
+              {' '}<Link href={routes.run(projectUid, runId)}>Проверить этапы и ограничения прогона</Link>.</p> : undefined}
             error={presentFindingsFailure(findingsQuery.error, {
               title: 'Не удалось загрузить находки',
               onRetry: () => {
@@ -502,6 +566,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         {view === 'table' ? null : <div className={`am-review__detail ${styles.detail}`}>{detailContent}</div>}
       </div>
 
+      <ReviewCandidates projectUid={projectUid} runId={runId} published={admitted.findings} sheetOf={(page) => sheetOfPage(sheetLabels.data, page)} />
+
       {expanded ? (
         <ReviewViewerDialog
           position={shownAt < 0 ? null : shownAt + 1}
@@ -517,33 +583,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             <LoadingState what="выбранная находка" />
           ) : evidenceProps === null || detail === null ? (
             detailFailure
+          ) : onBlocks ? (
+            blockView({ presentation: 'full', aside: viewerAside })
           ) : (
-            <LazyEvidenceViewer
-              {...evidenceProps}
-              presentation="full"
-              aside={
-                <ReviewViewerAside
-                  findingUid={detail.finding_uid}
-                  meta={[decidedOrProposed, pagesLabel(declaredPages(detail.observation), (page) => sheetOfPage(sheetLabels.data, page))]
-                    .filter((part) => part !== null && part !== '')
-                    .join(' · ')}
-                  text={detail.observation.finding_text}
-                  recommendation={detail.observation.recommendation_text}
-                  actions={mayAct && selectedSummary !== null ? (
-                    <ReviewRowActions
-                      finding={selectedSummary}
-                      runId={runId}
-                      onOpen={(findingUid) => {
-                        // The severity is chosen in the panel: close the view on it.
-                        setExpanded(false);
-                        setSelection(selectFinding(findingUid));
-                      }}
-                    />
-                  ) : null}
-                  blocks={blocksUnderThePage}
-                />
-              }
-            />
+            <LazyEvidenceViewer {...evidenceProps} presentation="full" aside={viewerAside} />
           )}
         </ReviewViewerDialog>
       ) : null}

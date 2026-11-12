@@ -697,7 +697,7 @@ this role; `W56A-MERGE-01` implements it later.
 
 ### 5.1 The grounding rule
 
-`B4` publishes an observation as a finding only when **every** evidence item resolves:
+For `grounding_kind = text_span`, `B4` publishes an observation as a finding only when **every** evidence item resolves:
 
 1. the declared `(char_start, char_end)` interval lies inside the declared page's
    interval in `prepared.text_layer`;
@@ -717,6 +717,24 @@ enforces the pairing, so this is not something a query has to remember.
 `quote_in_recognised_text`. The last means the candidate quote exists only
 in marked recognised context, never in the PDF text layer; it cannot ground
 a published finding.
+
+For `publication_mode = one_list`, the block gate also publishes extended candidates
+whose `portal_block` evidence resolves against the run's own verified geometry and crop
+manifest (ADR-0029 decision 7; API 1.54.0). One linked group is one finding with a canonical
+observation; its text evidence may be empty, but its block evidence may not. The location
+proves where the candidate came from, never engineering truth or normative applicability.
+The review admits these rows, opens their framed pages and records ordinary expert
+decisions. Proposed severity/action and unverified norm candidates stay machine advice.
+
+Historical candidates are a read-only projection with all original records retained;
+they acquire no finding identity or decision. New consents bind `finding-proposals-v1`
+inside the existing substantive critic call; old quality policies and model requests
+stay unchanged. `ONE_LIST_READY` permits administrator activation of the journalled
+switch, which is off without an explicit setting and affects only newly created planned
+runs. Unread candidate publication is persisted as a partial coverage gap, retaining
+grounded findings and the run link with the existing document-audit partial flag.
+The four-state counters retain their frozen meaning (published findings and decisions);
+the document chip makes incomplete coverage explicit.
 
 ### 5.2 Identity allocation
 

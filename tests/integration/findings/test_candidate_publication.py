@@ -18,6 +18,7 @@ Isolation is by rollback (the suite's ``session`` fixture), as the rows cannot b
 from __future__ import annotations
 
 from types import SimpleNamespace
+import json
 from typing import Any
 
 import pytest
@@ -147,6 +148,23 @@ def _rows(session: Session, sql: str, **parameters: Any) -> list[Any]:
 
 
 class TestAGroupOfNIsOneFinding:
+    def test_proposals_are_saved_per_observation_and_do_not_become_expert_decisions(self, session: Session, seeded: Any) -> None:
+        group = CandidateGroup("proposals", (
+            _member("proposal-a", BLK_A, proposed_severity="critical", proposed_recommendation="Согласовать размер проёма."),
+            _member("proposal-b", BLK_B, proposed_severity="economic", proposed_recommendation="Уточнить спецификацию."),
+        ))
+        (published,) = _publish(session, seeded, [group]).published
+        rows = {row["extended_observation_ref"]: row for row in _rows(session,
+            "SELECT extended_observation_ref, proposed_severity, recommendation_text FROM finding_observation WHERE finding_uid = :f",
+            f=published.finding_uid)}
+        assert rows["proposal-a"]["proposed_severity"] == "critical"
+        assert rows["proposal-a"]["recommendation_text"] == "Согласовать размер проёма."
+        assert rows["proposal-b"]["proposed_severity"] == "economic"
+        assert rows["proposal-b"]["recommendation_text"] == "Уточнить спецификацию."
+        verdict = session.execute(text("SELECT current_verdict, decided_severity FROM finding_current_verdict WHERE finding_uid = :f"),
+            {"f": published.finding_uid}).one()
+        assert tuple(verdict) == ("pending", None)
+
     def test_three_candidates_are_one_finding_with_the_first_as_canonical_and_every_reader_takes_it(self, session: Session, seeded: Any) -> None:
         group = CandidateGroup("xgrp_1", (_member("xobs_1", BLK_A), _member("xobs_2", BLK_A, BLK_B), _member("xobs_3", BLK_B)))
         result = _publish(session, seeded, [group])
@@ -515,6 +533,21 @@ def _run_row(seeded: Any) -> Any:
 
 
 class TestTheExecutorPublishesCandidatesOnlyForAOneListRun:
+    def test_primary_text_gets_its_saved_proposal_without_a_second_finding_or_machine_verdict(self, session: Session, seeded: Any, corpus: Any) -> None:
+        store, outputs, blobs = _executor_world(corpus, seeded)
+        document = json.loads(store.objects[blobs["analysis.extended_review"]])
+        document["result"]["observations"][3].update(proposed_severity="operational", recommendation_text="Сверить исходный текст.")
+        outputs.refs["analysis.extended_review"], _ = publish_artifact(store, "analysis.extended_review", document)
+        inputs = _read_gate_inputs(observations_document=_text_observations(corpus, seeded), outputs=outputs, blob_store=store,
+            publication_mode="one_list", run_id=seeded.run_id, version_uid=seeded.version_uid)
+        _, publication = _run_evidence_gate(session, run=_run_row(seeded), inputs=inputs)
+        assert publication is not None and len(publication.published) == 1 and publication.published_count == 3
+        rows = _rows(session, "SELECT proposed_severity, extended_observation_ref FROM finding_observation WHERE run_id = :r AND stage_id = 'text_analysis'", r=seeded.run_id)
+        assert rows == [{"proposed_severity": "operational", "extended_observation_ref": "xobs_4"}]
+        verdict = _rows(session, "SELECT current_verdict, decided_severity FROM finding_current_verdict WHERE finding_uid = :f",
+            f=publication.published[0].finding_uid)
+        assert verdict == [{"current_verdict": "pending", "decided_severity": None}]
+
     def test_a_one_list_run_publishes_its_text_finding_and_then_its_candidates(self, session: Session, seeded: Any, corpus: Any) -> None:
         store, outputs, _ = _executor_world(corpus, seeded)
         observations = _text_observations(corpus, seeded)

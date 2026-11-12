@@ -50,6 +50,10 @@ def test_one_list_cannot_be_switched_on_while_it_is_not_ready_and_can_be_switche
     assert checked_value("one_list", {"enabled": True}) == {"enabled": True}, "the guard can be lifted with one line"
 
 
+def test_the_completed_one_list_reader_allows_explicit_administrator_activation() -> None:
+    assert checked_value("one_list", {"enabled": True}) == {"enabled": True}
+
+
 def test_the_window_is_read_by_the_parser_the_night_window_reads_it_with() -> None:
     assert checked_value("vector_window", WINDOW) == WINDOW
     assert checked_value("vector_window", {"start": "22:00", "end": "03:00", "tz": "UTC"}) == {"start": "22:00", "end": "03:00", "tz": "UTC"}

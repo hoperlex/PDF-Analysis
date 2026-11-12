@@ -3,7 +3,7 @@
  *
  * The canonical severity is the expert's decision: the strip counts `decided_severity`, a finding without one is
  * «Не определена», and the filter selects by it. The model's proposal is counted on its own labelled row and never
- * filters or decides (AGENTS §4). The counts cover the whole run, as the list does; a legacy run with no severity
+ * becomes an expert decision (AGENTS §4). Explicit proposed filters use their own URL values. The counts cover the whole run, as the list does; a legacy run with no severity
  * draws no strip.
  */
 
@@ -43,6 +43,14 @@ describe('the severity strip', () => {
     expect(severityFilterOf('undetermined')).toBe('undetermined');
     expect(severityFilterOf('proposed')).toBe('all');
     expect(severityFilterOf(null)).toBe('all');
+    expect(severityFilterOf('proposed:critical')).toBe('proposed:critical');
+    expect(severityFilterOf('proposed:unknown')).toBe('all');
+  });
+
+  it('offers an explicit proposal filter while keeping the decided filter independent', () => {
+    const proposals = filterBySeverity(GROUPS, 'proposed:critical').flatMap((group) => group.findings);
+    expect(proposals.map((finding) => finding.finding_uid)).toEqual(FINDINGS.slice(0, 2).map((finding) => finding.finding_uid));
+    expect(proposals.map((finding) => finding.decided_severity)).toEqual(['economic', undefined]);
   });
 
   it('draws the decided row as a filter and labels the model’s row as not a decision', () => {

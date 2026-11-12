@@ -76,6 +76,8 @@ export function auditChip(audit: DocumentAudit | undefined): AuditChip | null {
     case 'not_run':
       return { ...base, text: 'Не запускался', tone: 'inert', detail: null };
     case 'clean':
+      if (audit.partial) return { ...base, text: 'Находок не опубликовано', tone: 'pending',
+        detail: 'Проверка выполнена частично. Отсутствие опубликованных находок не означает отсутствие замечаний.' };
       return { ...base, text: 'Замечаний нет', tone: 'ok', detail: 'Анализ завершён, замечаний не опубликовано.' };
     case 'awaiting_decision':
       return {
@@ -85,6 +87,8 @@ export function auditChip(audit: DocumentAudit | undefined): AuditChip | null {
         detail: findingsDetail(audit),
       };
     case 'checked':
+      if (audit.partial) return { ...base, text: 'Решения по находкам приняты', tone: 'pending',
+        detail: `${findingsDetail(audit)} Проверка выполнена частично; не все материалы исследованы.` };
       return { ...base, text: 'Проверен экспертом', tone: 'ok', detail: findingsDetail(audit) };
   }
 }

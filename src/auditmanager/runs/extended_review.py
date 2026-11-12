@@ -945,7 +945,7 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
         return state
 
 
-def _attach_consolidation(result, *, version_uid):
+def _attach_consolidation(result, *, version_uid, include_saved_relationships=False):
     """Add a derived view; raw candidates, windows and expert state are unchanged."""
     from auditmanager.analysis.public import consolidate_extended_observations
     try:
@@ -960,7 +960,8 @@ def _attach_consolidation(result, *, version_uid):
             sources.extend(window.get("sources", []))
         derived = consolidate_extended_observations(result.get("observations", []),
             sources=sources, version_uid=version_uid,
-            ensemble_batches=result.get("block_ensemble", {}).get("batches", []) if "quality_policy" in result else None)
+            ensemble_batches=result.get("block_ensemble", {}).get("batches", [])
+                if "quality_policy" in result or include_saved_relationships else None)
     except ValueError:
         derived = {"consolidation": {"version": "strict-cross-window-v1",
             "method": "identical_text_shared_source", "complete": False,
@@ -1016,6 +1017,13 @@ def read_extended_review(sessions, blob_store, run_id: str) -> dict:
                 and (not isinstance(consolidation, dict)
                     or consolidation.get("version") != "strict-cross-window-v1")):
             projected = _attach_consolidation(projected, version_uid=version_uid)
+        if (status in {"completed", "partial", "failed", "unavailable"}
+                and result.get("workflow_version") == "extended-review-v2"
+                and isinstance(result.get("block_ensemble"), dict)
+                and isinstance(result["block_ensemble"].get("batches"), list)):
+            # Read-only presentation of retained legacy ensemble links; no saved
+            # artifact, consent, observation or expert decision is rewritten.
+            projected = _attach_consolidation(projected, version_uid=version_uid, include_saved_relationships=True)
         return {"run_id": run_id, "status": status, "result": projected}
     except (ValueError, KeyError, TypeError):
         raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=EXTENDED_REVIEW_ROLE) from None
@@ -1067,6 +1075,8 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         from .project_parameters import planned_parameters
         parameter_result = {"project_parameters": planned_parameters(policy["project_parameters_policy"], reason=reason, terminal=terminal)}
     return {"format":version,"workflow_version":version,"preliminary":True,
+        **({"finding_proposals": deepcopy(policy["finding_proposals"])}
+           if isinstance(policy, dict) and "finding_proposals" in policy else {}),
         **({"quality_policy": deepcopy(policy["quality_policy"])} if isinstance(policy, dict) and "quality_policy" in policy else {}),
         **({"original_review": {**original_review_plan(), **({"mode": "substantive"}
             if isinstance(policy, dict) and "quality_policy" in policy else {})}} if original else {}),
@@ -1496,6 +1506,12 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         # A marker this code does not know is a failed review, never a v2 run without the original's critic.
         original_review=not v3 and _original_review_enabled(policy,strict=True)
         quality = not v3 and isinstance(policy, dict) and "quality_policy" in policy
+        proposals = policy.get("finding_proposals") if not v3 and isinstance(policy, dict) else None
+        if proposals is not None:
+            from auditmanager.analysis.public import validate_finding_proposal_policy
+            validate_finding_proposal_policy(proposals)
+            if not quality:
+                raise _refuse("finding_proposals_quality_policy_missing")
         related_index = None
         if quality:
             from auditmanager.analysis.public import validate_v2_quality_policy
@@ -1578,6 +1594,15 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             "profile_sha256":profile_sha256,"norms_snapshot_id":snapshot_id,"run_input_digest":getattr(run,"frozen_input_digest",None)})
         if quality:
             state["source_sha256"] = extended_digest({"source": state["source_sha256"], "quality_policy": policy["quality_policy"]})
+        if proposals is not None:
+            state["source_sha256"] = extended_digest({"source": state["source_sha256"], "finding_proposals": proposals})
+            primary = observations_document.get("observations", []) if isinstance(observations_document, dict) else []
+            for item in state["text_items"]:
+                refs = item["source_ids"]
+                if len(refs) == 1 and re.fullmatch(r"text:[0-9]+", refs[0]):
+                    index = int(refs[0].split(":")[1])
+                    if index < len(primary) and isinstance(primary[index].get("recommendation_text"), str):
+                        item["recommendation_text"] = primary[index]["recommendation_text"]
         if v3: state["source_sha256"]=window_context["global_sha256"]
         if batched:
             state["observations"]=finalize_extended_items(state["text_items"],state["sources"])
@@ -1834,7 +1859,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             if quality:
                 from .v2_quality import run_substantive_critic
                 substantive = lambda: run_substantive_critic(state=state, run=run, **_kw(binding, "review"),
-                    store=store, pages=by_page, related_index=related_index, call=call, phase=phase)
+                    store=store, pages=by_page, related_index=related_index, call=call, phase=phase,
+                    **({"proposal_policy": proposals} if proposals is not None else {}))
             _review_original_v2(state=state,phase=phase,pages=by_page,substantive=substantive)
         if quality:
             state.update(_attach_consolidation(state, version_uid=run.version_uid))
@@ -3145,6 +3171,8 @@ def _candidate_member(item, *, registry: dict, conflicts: set, ordinals: dict) -
     return CandidateMember(
         extended_observation_ref=ref, finding_text=words, block_evidence=tuple(blocks),
         refined_recommendation=_candidate_refinement(item), primary_text_ordinals=tuple(dict.fromkeys(primary)),
+        proposed_severity=item.get("proposed_severity"),
+        proposed_recommendation=item.get("recommendation_text"),
         primary_text_unlinked=unlinked, other_source_count=other,
         window_id=window_id if isinstance(window_id, str) else None,
         cross_window=item.get("origin_scope") == "global_cross_window" or window_id == "global-cross-window")

@@ -23,12 +23,14 @@ import type { Finding } from '@/shared/api';
 import {
   EXECUTION_STATUS_LABELS,
   SEVERITY_LABELS,
+  OriginChip,
   SeverityBadge,
+  findingOriginOf,
   normCitationStateLabel,
   normCitationStateMeaning,
 } from '@/entities/finding';
 import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
-import { declaredPages } from '@/entities/finding-observation';
+import { declaredPages, findingPages } from '@/entities/finding-observation';
 import { clauseLabel } from '@/entities/norms';
 
 import { pagesParts, verdictBucket } from '../model/presentation';
@@ -65,8 +67,8 @@ export interface FindingTableProps {
  */
 function unlinkedPagesOf(finding: Finding, unlinkedPages: ReadonlySet<number> | undefined): readonly number[] {
   if (unlinkedPages === undefined || unlinkedPages.size === 0) return [];
-  const cited = new Set<number>();
-  for (const observation of [finding.observation, ...(finding.merged_observations ?? [])]) {
+  const cited = new Set<number>(findingPages(finding));
+  for (const observation of finding.merged_observations ?? []) {
     for (const page of declaredPages(observation)) cited.add(page);
   }
   return [...cited].filter((page) => unlinkedPages.has(page)).sort((left, right) => left - right);
@@ -171,7 +173,7 @@ export function FindingTable({
         <tbody>
           {findings.map((finding) => {
             const selected = finding.finding_uid === selectedFindingUid;
-            const pages = pagesParts(declaredPages(finding.observation), sheetOf);
+            const pages = pagesParts(findingPages(finding), sheetOf);
             const merged = finding.merged_observations?.length ?? 0;
             const expansion = selected && renderExpansion !== undefined ? renderExpansion(finding) : null;
             const blocks = blockCountOf?.(finding.finding_uid);
@@ -214,6 +216,12 @@ export function FindingTable({
                   <td className={styles.text}>
                     {finding.observation.finding_text}
                     <span className={styles.category}>{CATEGORY_LABELS[finding.observation.category]}</span>
+                    {/* `F8-WEB`: the «Источник» of a finding that is not text. */}
+                    {findingOriginOf(finding) === 'text' ? null : (
+                      <span className={styles.origin}>
+                        <OriginChip origin={findingOriginOf(finding)} />
+                      </span>
+                    )}
                     {finding.execution_status === undefined ? null : (
                       <span className={styles.execution} data-execution-status={finding.execution_status}>
                         {EXECUTION_STATUS_LABELS[finding.execution_status]}

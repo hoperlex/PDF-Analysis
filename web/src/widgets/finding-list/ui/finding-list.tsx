@@ -27,9 +27,9 @@ import type { Finding, FindingCategory, Severity } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
-import { EXECUTION_STATUS_LABELS, SEVERITY_LABELS, SeverityBadge, countGrouped } from '@/entities/finding';
+import { EXECUTION_STATUS_LABELS, OriginChip, SEVERITY_LABELS, SeverityBadge, countGrouped, findingOriginOf } from '@/entities/finding';
 import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
-import { declaredPages } from '@/entities/finding-observation';
+import { findingPages } from '@/entities/finding-observation';
 
 import { findingNumbers, findingsAsShown, groupsInVerdictOrder, pagesLabel, verdictBucket } from '../model/presentation';
 import type { VerdictFilter } from '../model/presentation';
@@ -53,6 +53,8 @@ export interface FindingListProps {
   /** Already presented as `ErrorState` props by the page, so `retryable` is decided once. */
   readonly error?: ErrorStateProps | null | undefined;
   readonly integrityFaults?: readonly FindingIntegrityFault[] | undefined;
+  /** Coverage-aware wording supplied by the page for an empty partial result. */
+  readonly emptyDetail?: ReactNode | undefined;
   /** The verdict filter, when the page keeps it (in the address). Absent, the list keeps its own. */
   readonly verdictFilter?: VerdictFilter | undefined;
   readonly onVerdictFilterChange?: ((filter: VerdictFilter) => void) | undefined;
@@ -96,10 +98,10 @@ export function findingViewOf(value: string | null): FindingView {
 /**
  * `R-151j`: the severity strip. The canonical severity is the expert's decision (`decided_severity`); a finding
  * without one is «Не определена». The model's proposal (`observation.proposed_severity`) is counted on its own,
- * labelled row and never filters or decides (AGENTS §4). Counts and filter share one scope: the whole run, which
+ * labelled row with its own explicit filter; it never decides (AGENTS §4). Counts and filter share one scope: the whole run, which
  * the page loads entirely (`R-150i`).
  */
-export type SeverityFilter = 'all' | Severity | 'undetermined';
+export type SeverityFilter = 'all' | Severity | 'undetermined' | `proposed:${Severity}`;
 
 const SEVERITY_ORDER: readonly Severity[] = ['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'];
 
@@ -125,7 +127,8 @@ export function tallySeverity(groups: readonly FindingGroup<Finding>[]): Severit
 
 /** A severity filter read from the address: an absent or unknown value is «Все». */
 export function severityFilterOf(value: string | null): SeverityFilter {
-  return value === 'undetermined' || SEVERITY_ORDER.includes(value as Severity) ? (value as SeverityFilter) : 'all';
+  return value === 'undetermined' || SEVERITY_ORDER.includes(value as Severity)
+    || (value?.startsWith('proposed:') === true && SEVERITY_ORDER.includes(value.slice(9) as Severity)) ? (value as SeverityFilter) : 'all';
 }
 
 export function filterBySeverity(
@@ -134,7 +137,8 @@ export function filterBySeverity(
 ): readonly FindingGroup<Finding>[] {
   if (filter === 'all') return groups;
   return groups
-    .map((group) => ({ ...group, findings: group.findings.filter((f) => (f.decided_severity ?? 'undetermined') === filter) }))
+    .map((group) => ({ ...group, findings: group.findings.filter((f) => filter.startsWith('proposed:')
+      ? f.observation.proposed_severity === filter.slice(9) : (f.decided_severity ?? 'undetermined') === filter) }))
     .filter((group) => group.findings.length > 0);
 }
 
@@ -196,12 +200,6 @@ export interface FindingToolbarProps {
   readonly actions?: ReactNode | undefined;
 }
 
-/** What the model proposed, by severity, naming only the severities it proposed anything for. */
-function proposedSummary(tally: SeverityTally): string | null {
-  const parts = SEVERITY_ORDER.filter((value) => tally.proposed[value] > 0).map((value) => `${SEVERITY_LABELS[value]} ${tally.proposed[value]}`);
-  return parts.length === 0 ? null : parts.join(' · ');
-}
-
 /**
  * The strip over the findings, as the original's top row: the run's total and the verdicts' tally, the filter by
  * verdict, the way to read the findings, and the severity chips. The page may stand it across the whole width
@@ -222,7 +220,7 @@ export function FindingToolbar({
   if (total === 0) return null;
   const tally = tallyVerdicts(groups);
   const severities = tallySeverity(groups);
-  const proposedText = proposedSummary(severities);
+  const hasProposals = SEVERITY_ORDER.some((value) => severities.proposed[value] > 0);
   return (
     <div className={styles.toolbar}>
       {/* The original's top row: the total and the severity chips on the left, the file actions on the right. */}
@@ -254,11 +252,15 @@ export function FindingToolbar({
                 </button>
               ))}
             </div>
-            {proposedText === null ? null : (
-              <p className={styles.proposed} data-proposed-severity="">
-                Предложено моделью (не решение эксперта):{' '}
-                {proposedText}
-              </p>
+            {!hasProposals ? null : (
+              <div className={styles.filter} role="group" aria-label="Отбор по важности, предложенной моделью" data-proposed-severity="">
+                <span className={styles.stripLabel}>Предложено моделью (не решение эксперта):</span>
+                {SEVERITY_ORDER.map((value) => <button key={value} type="button"
+                  className="am-button am-button--quiet am-button--small" aria-pressed={severity === `proposed:${value}`}
+                  data-severity-filter={`proposed:${value}`} onClick={() => setSeverity(`proposed:${value}`)}>
+                  {SEVERITY_LABELS[value]} {severities.proposed[value]}
+                </button>)}
+              </div>
             )}
           </div>
         ) : null}
@@ -310,6 +312,7 @@ export function FindingList({
   isLoading,
   error,
   integrityFaults,
+  emptyDetail,
   verdictFilter,
   onVerdictFilterChange,
   renderRowActions,
@@ -351,13 +354,13 @@ export function FindingList({
     return (
       <EmptyState
         title="Находок нет"
-        detail={
+        detail={emptyDetail ?? (
           <p>
             Прогон не опубликовал ни одной находки. Элементы модели, чьи цитаты не
             разрешились по заявленным якорям, находками не являются и сохраняются только
             как диагностика прогона.
           </p>
-        }
+        )}
       />
     );
   }
@@ -424,7 +427,8 @@ export function FindingList({
           </h3>
           <ul className="am-finding-group__items">
             {group.findings.map((finding) => {
-              const pages = declaredPages(finding.observation);
+              const pages = findingPages(finding);
+              const origin = findingOriginOf(finding);
               const selected = finding.finding_uid === selectedFindingUid;
               return (
                 <li
@@ -467,6 +471,12 @@ export function FindingList({
                       </span>
                     )}
                     <span className="am-finding-row__pages" data-pages={pages.join(',')}>
+                      {/* `F8-WEB`: the «Источник» of a finding that is not text; a text finding says nothing more than it did. */}
+                      {origin === 'text' ? null : (
+                        <>
+                          <OriginChip origin={origin} />{' '}
+                        </>
+                      )}
                       {pagesLabel(pages, sheetOf)}
                       {(finding.merged_observations?.length ?? 0) > 1 ? (
                         // The original's «×N» on a finding that stands for several observations.

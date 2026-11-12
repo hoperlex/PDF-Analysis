@@ -26,7 +26,7 @@
 }
 
 .colSeverity {
-  width: 9%;
+  width: 12%;
 }
 
 .colPages {
@@ -34,7 +34,7 @@
 }
 
 .colText {
-  width: 26%;
+  width: 25%;
 }
 
 .colNorms {
@@ -46,7 +46,7 @@
 }
 
 .colDecision {
-  width: 14%;
+  width: 12%;
 }
 
 .head {
@@ -151,6 +151,13 @@
   margin-top: var(--am-gap-xs);
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
+}
+
+/* `F8-WEB`: the «Источник» chip of a finding that is not text, on its own line under the category; no colour of its own. */
+.origin {
+  display: inline-block;
+  margin-top: var(--am-gap-xs);
+  margin-right: var(--am-gap-xs);
 }
 
 .execution {
