@@ -1,4 +1,8 @@
-"""Source-bound monetary consent, all ordinary sections and provider pre-call caps."""
+"""Source-bound monetary consent, including the historical v2/rollback price authority.
+
+Fresh quality-v2 estimates are covered in test_v2_quality_runtime; this suite pins the
+pre-hotfix consent and the feature-flag rollback without changing their expected prices.
+"""
 from dataclasses import replace
 from hashlib import sha256
 from types import SimpleNamespace as NS
@@ -46,6 +50,11 @@ def consent(value, cap=None):
 
 
 PLAN_ENV = "AUDITMANAGER_EXTENDED_ANALYSIS_PLAN"
+
+
+@pytest.fixture(autouse=True)
+def historical_v2_authority(monkeypatch):
+    monkeypatch.setenv("AUDITMANAGER_V2_QUALITY", "0")
 
 
 def test_all_sections_price_before_start_under_the_v2_plan_when_it_is_named(registry, monkeypatch):

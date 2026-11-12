@@ -562,12 +562,62 @@ def parse_norm_review_batched_v3(*args, **kwargs):
 __all__.extend(["build_norm_review_request_batched_v3", "parse_norm_review_batched_v3"])
 
 
-def consolidate_extended_observations(observations, *, sources, version_uid):
+def consolidate_extended_observations(observations, *, sources, version_uid, ensemble_batches=None):
     from auditmanager.analysis.extended.consolidation import consolidate_observations
-    return consolidate_observations(observations, sources=sources, version_uid=version_uid)
+    return consolidate_observations(observations, sources=sources, version_uid=version_uid, ensemble_batches=ensemble_batches)
 
 
 __all__.append("consolidate_extended_observations")
+
+
+def v2_quality_policy():
+    from .extended.v2_quality import quality_policy
+    return quality_policy()
+
+
+def validate_v2_quality_policy(value, *, compare_bundle=True):
+    from .extended.v2_quality import validate_quality_policy
+    return validate_quality_policy(value, compare_bundle=compare_bundle)
+
+
+def build_review_input_passport(**kwargs):
+    from .extended.input_passport import build_input_passport
+    return build_input_passport(**kwargs)
+
+
+def verify_review_passport_crop(passport, source, raw):
+    from .extended.input_passport import verify_passport_crop
+    return verify_passport_crop(passport, source, raw)
+
+
+def build_related_review_index(pages, *, version_uid):
+    from .extended.related_context import build_related_index
+    return build_related_index(pages, version_uid=version_uid)
+
+
+def select_related_review_context(index, **kwargs):
+    from .extended.related_context import select_related_context
+    return select_related_context(index, **kwargs)
+
+
+def plan_substantive_review_batches(observations, **kwargs):
+    from .extended.substantive_review import plan_review_batches
+    return plan_review_batches(observations, **kwargs)
+
+
+def build_substantive_review_request(**kwargs):
+    from .extended.substantive_review import build_substantive_request
+    return build_substantive_request(**kwargs)
+
+
+def parse_substantive_review_reply(text, **kwargs):
+    from .extended.substantive_review import parse_substantive_reply
+    return parse_substantive_reply(text, **kwargs)
+
+
+__all__.extend(["v2_quality_policy", "validate_v2_quality_policy", "build_review_input_passport",
+    "verify_review_passport_crop", "build_related_review_index", "select_related_review_context",
+    "plan_substantive_review_batches", "build_substantive_review_request", "parse_substantive_review_reply"])
 
 
 def extended_cross_window_policy(**kwargs):

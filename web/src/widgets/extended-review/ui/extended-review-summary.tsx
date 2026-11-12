@@ -14,8 +14,11 @@ function object(value: unknown): RecordValue | null { return typeof value === 'o
 export function extendedCandidateCounts(value: unknown) {
   const result = object(value);
   const rows = Array.isArray(result?.observations) ? result.observations.flatMap((item) => { const row = object(item); return row === null ? [] : [row]; }) : [];
+  const consolidation = object(result?.consolidation);
+  const groups = Array.isArray(result?.consolidated_observations) ? result.consolidated_observations : null;
+  const grouped = consolidation?.version === 'ensemble-linked-v1' && consolidation.complete === true && groups !== null;
   return {
-    candidates: rows.length,
+    candidates: grouped ? groups.length : rows.length,
     criticRecommendations: rows.filter((row) => {
       const advice = object(row.review ?? row.critic);
       return typeof advice?.llm_decision === 'string' && advice.llm_decision.trim() !== '';

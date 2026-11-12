@@ -27,7 +27,7 @@ export function MachineAdvice({ review, correction, reviewStatus, reviewReason }
         ? 'Кандидат находится за пределами обработанного окна проверки.' : 'Причина и исходная запись доступны в выгрузке.'}
   </p> : null;
   // `V2-ORIGINAL-REVIEW-01`: a row of the original's deterministic critic or corrector is a rule's word, not a model's, and says so.
-  const rule = critic?.mode === 'deterministic' || fixed?.mode === 'deterministic';
+  const rule = critic === null ? fixed?.mode === 'deterministic' : critic.mode === 'deterministic';
   return <section aria-label="Машинная рекомендация и исправленный кандидат" data-extended-machine-advice="" {...(rule ? { 'data-machine-mode': 'deterministic' } : {})}>
     <h4>Критика и уточнение кандидата</h4>
     <p>{rule ? 'Рекомендация правил оригинала (без модели) не является принятием или отклонением экспертом. Исходная запись сохранена.' : 'Рекомендация модели не является принятием или отклонением экспертом. Исходная запись сохранена.'}</p>
@@ -41,6 +41,15 @@ export function MachineAdvice({ review, correction, reviewStatus, reviewReason }
       {critic.mode === 'deterministic' ? <p>Проверено по правилам, без модели: наличие источника, его существование в записи и страница цитаты. Смысловая проверка не выполнялась.</p>
         : critic.evidence_checked === true ? <p>Источники просмотрены моделью; экспертная проверка не выполнена.</p> : <p>Проверка источников моделью не подтверждена.</p>}
       <EvidenceQuotes value={critic.source_evidence} />
+      {critic.mode === 'substantive' ? <section aria-label="Содержательная проверка">
+        {(['evidence', 'alternatives', 'materiality'] as const).map((key) => {
+          const check = object(object(critic.substantive_checks)?.[key]);
+          const label = { evidence: 'Доказательства', alternatives: 'Альтернативные трактовки', materiality: 'Существенность' }[key];
+          return <p key={key}><strong>{label}: {check?.checked === true ? 'рассмотрены' : 'проверка не подтверждена'}.</strong> {text(check?.explanation)}</p>;
+        })}
+        {Array.isArray(critic.visual_evidence) ? <ul>{critic.visual_evidence.map((value, index) => { const row = object(value); return <li key={index}>Изображение <code>{text(row?.source_id)}</code>: {text(row?.explanation)}</li>; })}</ul> : null}
+        {critic.validator_downgrade_reason ? <p>Для уверенного вывода не хватило подтверждённой проверки или источников; требуется экспертная сверка.</p> : null}
+      </section> : null}
     </aside>}
     {fixed === null ? null : <section data-machine-correction={text(fixed.action)}>
       <p><strong>{ACTION[text(fixed.action)] ?? 'Исправление требует проверки'}</strong>{correctionReason(fixed.reason) ? ` · ${correctionReason(fixed.reason)}` : ''}</p>
