@@ -83,6 +83,10 @@ def _requested_extended_plan() -> str:
     return os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", EXTENDED_PLAN_DEFAULT).strip().lower() or EXTENDED_PLAN_DEFAULT
 
 
+def _v2_quality_enabled():
+    return os.environ.get("AUDITMANAGER_V2_QUALITY", "1").strip().lower() not in {"0", "false", "off"}
+
+
 def estimated_micros(pin, input_tokens: int, output_tokens: int) -> int:
     # USD per million tokens × micro-USD per USD cancels the million exactly.
     return math.ceil(input_tokens * Fraction(str(pin.input_per_mtok_usd))
@@ -362,7 +366,7 @@ class RunCostPreflight:
         if requested in {"v3", "extended-review-v3"}:
             return STAGE_ROWS
         if requested in {"v2", "extended-review-v2"}:
-            return ("text", "blocks", "cross_check", "norms")
+            return ("text", "blocks", "cross_check", "norms", "review") if _v2_quality_enabled() else ("text", "blocks", "cross_check", "norms")
         raise _invalid("analysis_workflow", "unsupported_plan")
 
     def estimate_run(self, session, *, version_uid, executor_connection_id=None, preset_id=None, relaxed_limits=False, version_record=None,
@@ -582,6 +586,9 @@ class RunCostPreflight:
                 # call no model: the cost is the same, the digest differs. A consent accepted without the marker keeps running without it.
                 extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2",
                     "original_review": ORIGINAL_REVIEW_V2}
+                if _v2_quality_enabled():
+                    from auditmanager.analysis.public import v2_quality_policy
+                    extended["quality_policy"] = v2_quality_policy()
                 possible_images = source["image_block_count"]
                 if possible_images is None:
                     possible_images = min(1_000, version.page_count * 100)
@@ -598,6 +605,14 @@ class RunCostPreflight:
                 led("blocks", image_calls, image_calls * 40_000)
                 led("cross_check", comprehensive_calls, comprehensive_calls * 80_000)
                 led("norms", norm_calls, norm_calls * 100_000)
+                if "quality_policy" in extended:
+                    block_cells = len(plan.cells_of_row("blocks")) if planned else 3
+                    review_calls = 2 * (image_calls * block_cells + comprehensive_calls + windows)
+                    extra_calls += review_calls
+                    input_tokens += comprehensive_calls * 20_000 + review_calls * 100_000
+                    output_tokens += review_calls * 12_000
+                    led("cross_check", 0, comprehensive_calls * 20_000)
+                    led("review", review_calls, review_calls * 100_000, floor=12_000)
             else:
                 raise _invalid("analysis_workflow", "unsupported_plan")
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,

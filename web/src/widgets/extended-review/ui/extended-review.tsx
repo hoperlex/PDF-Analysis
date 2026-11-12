@@ -13,6 +13,7 @@ import { ObservationList } from './observation-list';
 import { ReadableReport } from './readable-report';
 import { ReportPackage } from './report-package';
 import { ConsolidatedObservations } from './consolidated-observations';
+import { InputPassport } from './input-passport';
 import { CoverageBudget } from './coverage-budget';
 import { CrossWindowReview } from './cross-window-review';
 import { ProjectParameters } from './project-parameters';
@@ -208,12 +209,13 @@ export function ExtendedReviewView({ reading, projectUid, planElsewhere = false 
   const sources = objects(result?.sources);
   const observations = objects(result?.observations);
   const consolidation = object(result?.consolidation);
-  const showGroups = consolidation?.version === 'strict-cross-window-v1' && consolidation.complete === true && Array.isArray(result?.consolidated_observations);
+  const showGroups = ['strict-cross-window-v1', 'ensemble-linked-v1'].includes(text(consolidation?.version)) && consolidation?.complete === true && Array.isArray(result?.consolidated_observations);
   const counts = extendedCandidateCounts(result);
   // `V2-ORIGINAL-REVIEW-01`: a v2 record that carries the original's deterministic critic and corrector says so; an older v2 record does not.
   const originalReview = v2 && object(result?.original_review)?.mode === 'deterministic' ? object(result?.original_review) : null;
   return <section id="extended-analysis" className={styles.panel} aria-label={full ? 'Полная цепочка анализа' : 'Предварительный обзор блоков'} data-extended-review={reading.status} data-workflow-version={text(result?.workflow_version)}>
     <h2>{v3 ? 'Анализ раздела · полный расширенный план' : v2 && fullWindow ? 'Полная цепочка анализа · расширенные процедуры' : v2 ? 'Расширенный анализ · предыдущий план' : 'Предварительный обзор блоков'}</h2>
+    <InputPassport value={result?.input_passport} />
     <p><strong>{labels[reading.status] ?? 'Состояние неизвестно'}</strong>. {fullWindow ? 'План включает все доступные блоки; текст страниц обрабатывается по частям.' : 'Изображения и текст проверяются в ограниченном одобренном окне.'} Это наблюдения для экспертной сверки, а не подтверждённые нарушения или решения эксперта.</p>
     {Array.isArray(result?.observations) ? <dl className={styles.digest} data-extended-analysis-counts=""><div><dt>Предварительные кандидаты</dt><dd>{counts.candidates}</dd></div><div><dt>Рекомендации машинного критика</dt><dd>{counts.criticRecommendations}</dd></div><div><dt>Предложенные исправленные кандидаты</dt><dd>{counts.correctionProposals}</dd></div><div><dt>Источники в текущем своде</dt><dd>{sources.length}</dd></div></dl> : <p>Записи кандидатов и рекомендаций ещё не переданы. Их отсутствие в ответе не подтверждает пустой результат анализа.</p>}
     <p>Эти счётчики относятся к расширенному машинному анализу. Канонические находки и сохранённые решения эксперта рассматриваются отдельно в «Разборе».</p>

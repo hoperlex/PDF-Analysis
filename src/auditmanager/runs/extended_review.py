@@ -1,5 +1,6 @@
 """Bounded multimodal preliminary review under an ordinary Run's durable authority."""
 from __future__ import annotations
+from collections import Counter
 from dataclasses import asdict, replace
 import hashlib
 import json
@@ -154,7 +155,7 @@ def _critic_norm_images(session, run, store, binding, policy):
     return _CriticNormImages(session, run, store) if _reference_section(binding, policy) else None
 
 
-def _review_original_v2(*, state, phase, pages) -> None:
+def _review_original_v2(*, state, phase, pages, substantive=None) -> None:
     """The two procedures after the norm verification, over the saved observations. No model, no executor, no call.
 
     A defect here is a visible failed procedure (and a warning); it does not discard the results the paid calls above have saved.
@@ -167,7 +168,9 @@ def _review_original_v2(*, state, phase, pages) -> None:
         phase("finding_review", "failed", "original_review_failed")
         phase("finding_correction", "skipped", "dependency_failed")
         return
-    phase("finding_review", "completed", None if done else "no_observations")
+    gap = substantive() if substantive is not None else False
+    phase("finding_review", "partial" if gap else "completed",
+        "substantive_review_reply_refused" if gap else None if done else "no_observations")
     phase("finding_correction", "running")
     try:
         corrections = original_review_corrector(done)
@@ -178,6 +181,12 @@ def _review_original_v2(*, state, phase, pages) -> None:
         phase("finding_correction", "failed", "original_review_failed")
         return
     state["original_review"] = {**state.get("original_review", original_review_plan()), **original_review_summary(done, corrections)}
+    if substantive is not None:
+        summary = state["original_review"]
+        summary["structural_verdicts"] = dict(summary["verdicts"])
+        summary.update(mode="substantive", model_called=state["substantive_review"]["model_called"],
+            checks=["evidence", "alternatives", "materiality"], checks_not_built=[])
+        summary["verdicts"] = dict(Counter(item["critic"]["original_verdict"] for item in state["observations"]))
     phase("finding_correction", "completed", None if corrections else "no_corrections_requested")
 
 
@@ -689,7 +698,7 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
         candidates = []
         active_query = None
         try:
-            for query in (queries if full_document else queries[:2]):
+            for query in queries:
                 key = " ".join(query.casefold().split())
                 if receipt is not None:
                     active_query = {"query": query, "normalized_query": key, "status": "not_searched",
@@ -950,7 +959,8 @@ def _attach_consolidation(result, *, version_uid):
                 raise ValueError("consolidation_window_source_invalid")
             sources.extend(window.get("sources", []))
         derived = consolidate_extended_observations(result.get("observations", []),
-            sources=sources, version_uid=version_uid)
+            sources=sources, version_uid=version_uid,
+            ensemble_batches=result.get("block_ensemble", {}).get("batches", []) if "quality_policy" in result else None)
     except ValueError:
         derived = {"consolidation": {"version": "strict-cross-window-v1",
             "method": "identical_text_shared_source", "complete": False,
@@ -1002,7 +1012,7 @@ def read_extended_review(sessions, blob_store, run_id: str) -> dict:
         projected = dict(result, version_uid=version_uid)
         consolidation = result.get("consolidation")
         if (status in {"completed", "partial", "failed", "unavailable"}
-                and result.get("workflow_version") == "extended-review-v3"
+                and (result.get("workflow_version") == "extended-review-v3" or "quality_policy" in result)
                 and (not isinstance(consolidation, dict)
                     or consolidation.get("version") != "strict-cross-window-v1")):
             projected = _attach_consolidation(projected, version_uid=version_uid)
@@ -1044,6 +1054,10 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         original=_original_review_enabled(policy)
         if original:
             procedures = [*procedures, *original_review_procedures()]
+        if isinstance(policy, dict) and "quality_policy" in policy:
+            for procedure in procedures:
+                if procedure["id"] == "finding_review":
+                    procedure.update(title="Критик наблюдений", model_called=False)
     if reason:
         for procedure in procedures:
             procedure.update(status="skipped" if terminal else "queued", reason=reason)
@@ -1053,7 +1067,9 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         from .project_parameters import planned_parameters
         parameter_result = {"project_parameters": planned_parameters(policy["project_parameters_policy"], reason=reason, terminal=terminal)}
     return {"format":version,"workflow_version":version,"preliminary":True,
-        **({"original_review": original_review_plan()} if original else {}),
+        **({"quality_policy": deepcopy(policy["quality_policy"])} if isinstance(policy, dict) and "quality_policy" in policy else {}),
+        **({"original_review": {**original_review_plan(), **({"mode": "substantive"}
+            if isinstance(policy, dict) and "quality_policy" in policy else {})}} if original else {}),
         **parameter_result,
         **({"project_parameter_context_policy": deepcopy(policy["project_parameter_context_policy"])}
            if v3 and "project_parameter_context_policy" in policy else {}),
@@ -1074,7 +1090,7 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
             "blocks_remaining":0,"skipped":[]}}
 
 
-def _full_comprehensive_review(*, run, model_id, section, state, pages, block_items, call, settings=None):
+def _full_comprehensive_review(*, run, model_id, section, state, pages, block_items, call, settings=None, related_index=None):
     """Cover every page character and source in repeatable provider-sized batches."""
     from auditmanager.analysis.public import build_comprehensive_request
     units = []
@@ -1116,12 +1132,27 @@ def _full_comprehensive_review(*, run, model_id, section, state, pages, block_it
             return
         sources = [{k: v for k, v in source.items() if k != "context"}
             for source in state["sources"] if source["source_id"] in batch_allowed]
-        request = build_comprehensive_request(model_id=model_id, run_id=run.run_id, section=section, settings=settings,
-            payload={"native_context": batch_contexts, "visual_observations": batch_visual,
+        payload={"native_context": batch_contexts, "visual_observations": batch_visual,
                 "text_observations": batch_text, "sources": sources,
-                "source_sha256": state["source_sha256"], "coverage": state["coverage"]})
+                "source_sha256": state["source_sha256"], "coverage": state["coverage"]}
+        allowed = set(batch_allowed)
+        if related_index is not None:
+            from auditmanager.analysis.public import select_related_review_context
+            related = select_related_review_context(related_index,
+                texts=[row["text"] for row in batch_contexts] + [row["title"] + " " + row["description"] for row in batch_visual],
+                page_numbers={row["page_number"] for row in batch_contexts})
+            payload["related_context"] = related
+            for source in related["sources"]:
+                if source["source_id"] not in allowed:
+                    sources.append(source); allowed.add(source["source_id"])
+                if source["source_id"] not in {row["source_id"] for row in state["sources"]}:
+                    state["sources"].append(source)
+            state.setdefault("related_context_receipts", []).append({"identity": f"comprehensive:{batch_number}", **related})
+            if not related["complete"]:
+                state["warnings"].append("related_context_incomplete")
+        request = build_comprehensive_request(model_id=model_id, run_id=run.run_id, section=section, settings=settings, payload=payload)
         response = call(request, f"comprehensive:{batch_number}")
-        observations.extend(parse_extended_reply(response.output_text, allowed_sources=batch_allowed))
+        observations.extend(parse_extended_reply(response.output_text, allowed_sources=allowed))
 
     batch_number = 0
     for context, visual, textual, allowed in units:
@@ -1464,6 +1495,13 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
     try:
         # A marker this code does not know is a failed review, never a v2 run without the original's critic.
         original_review=not v3 and _original_review_enabled(policy,strict=True)
+        quality = not v3 and isinstance(policy, dict) and "quality_policy" in policy
+        related_index = None
+        if quality:
+            from auditmanager.analysis.public import validate_v2_quality_policy
+            validate_v2_quality_policy(policy["quality_policy"])
+            if not original_review:
+                raise _refuse("v2_quality_review_policy_missing")
         if v3:
             section=window_context["policy"]["section_code"]
         else:
@@ -1538,11 +1576,24 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             ocr_status="not_performed",model_id=binding.config.model_id,provider_mode=binding.adapter.provider_mode.value)
         state["source_sha256"] = extended_digest({"source":state["source_sha256"],"workflow_version":"extended-review-v2",
             "profile_sha256":profile_sha256,"norms_snapshot_id":snapshot_id,"run_input_digest":getattr(run,"frozen_input_digest",None)})
+        if quality:
+            state["source_sha256"] = extended_digest({"source": state["source_sha256"], "quality_policy": policy["quality_policy"]})
         if v3: state["source_sha256"]=window_context["global_sha256"]
         if batched:
             state["observations"]=finalize_extended_items(state["text_items"],state["sources"])
         pages = data["prepared.text_layer"].get("pages",[])
         by_page = {p["page_number"]:str(p.get("text","")) for p in pages}
+        if quality:
+            from auditmanager.analysis.public import build_review_input_passport, build_related_review_index
+            pdf_sha = getattr(version, "sha256", None)
+            source_ref = outputs.refs.get("source.document")
+            bound_sha = getattr(source_ref, "sha256", None)
+            if pdf_sha is not None and bound_sha is not None and pdf_sha != bound_sha:
+                raise _refuse("input_passport_pdf_binding_invalid")
+            state["input_passport"] = build_review_input_passport(version_uid=run.version_uid,
+                pdf_sha256=pdf_sha or bound_sha, page_count=version.page_count, pages=pages,
+                sources=state["sources"], skipped=state["coverage"]["skipped"])
+            related_index = build_related_review_index(pages, version_uid=run.version_uid)
         recognised_by_page={}
         recognised_artifact_sha=None
         if v3 and data.get("prepared.recognised_text") is not None:
@@ -1570,6 +1621,9 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                     raw=store.read(parse_blob_id(source["blob_id"]),verify=True)
                     if len(raw)!=source["size_bytes"] or hashlib.sha256(raw).hexdigest()!=source["crop_sha256"]:
                         raise _refuse("extended_crop_digest_invalid")
+                    if quality:
+                        from auditmanager.analysis.public import verify_review_passport_crop
+                        verify_review_passport_crop(state["input_passport"], source, raw)
                     crops.append(CropImage(source["source_id"],raw))
                 payload,cut=extended_block_payload(section=section,batch=batch,sections=state["context_sections"],coverage=state["coverage"])
                 if cut: state["warnings"].append("page_context_truncated")
@@ -1632,7 +1686,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         if full_document:
             phase("comprehensive_analysis","running")
             comprehensive = _full_comprehensive_review(run=run, **_kw(binding,"cross_check"),
-                section=section, state=state, pages=pages, block_items=block_items, call=call)
+                section=section, state=state, pages=pages, block_items=block_items, call=call,
+                **({"related_index": related_index} if quality else {}))
             if "page_context_truncated" in state["warnings"]:
                 state["warnings"] = [warning for warning in state["warnings"] if warning != "page_context_truncated"]
                 state["warnings"].append("visual_context_bounded_full_text_reviewed")
@@ -1695,9 +1750,13 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                         allowed_sources={s["source_id"] for s in state["sources"]})
                     phase("comprehensive_analysis","partial" if (not v3 and len(pages)>16) or context_cut else "completed")
         phase("finding_merge","running")
-        items=deterministic_extended_merge([*state["text_items"],*block_items,*comprehensive],
-            full_document=full_document or batched)
+        inputs = [*state["text_items"],*block_items,*comprehensive]
+        items=inputs if quality else deterministic_extended_merge(inputs, full_document=full_document or batched)
+        if quality:
+            items = [dict(item, raw_occurrence=index) for index, item in enumerate(items)]
         state["observations"]=finalize_extended_items(items,state["sources"])
+        if quality:
+            state.update(_attach_consolidation(state, version_uid=run.version_uid))
         phase("finding_merge","completed")
         phase("norm_verification","running")
         if batched:
@@ -1771,7 +1830,14 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 reference_section=_reference_section(binding,window_context["policy"]),
                 norm_images=_critic_norm_images(session,run,store,binding,window_context["policy"]))
         elif original_review:
-            _review_original_v2(state=state,phase=phase,pages=by_page)
+            substantive = None
+            if quality:
+                from .v2_quality import run_substantive_critic
+                substantive = lambda: run_substantive_critic(state=state, run=run, **_kw(binding, "review"),
+                    store=store, pages=by_page, related_index=related_index, call=call, phase=phase)
+            _review_original_v2(state=state,phase=phase,pages=by_page,substantive=substantive)
+        if quality:
+            state.update(_attach_consolidation(state, version_uid=run.version_uid))
         degraded=any(p["status"] in {"failed","partial","unavailable","skipped"}
             and p.get("reason") not in {"no_corrections_requested","no_observations"} for p in state["procedures"])
         save("partial" if degraded else "completed")

@@ -38,7 +38,6 @@ RELATIONS = ("match", "extension", "disputed")
 EXTENDS = ("left", "right", "both", "none")
 GAP_STATUSES = ("gaps_found", "no_new_findings", "uncertain")
 LEG_ROLES = ("leg1", "leg2")
-_MAX_REASON = 300
 _MAX_CATEGORIES = 12
 _MAX_CATEGORY = 80
 _MAX_SUMMARY = 400
@@ -94,7 +93,7 @@ def _judge_schema(refs: Mapping[str, Sequence[str]], allowed_sources: Sequence[s
                 "required": ["left_ref", "right_ref", "relation", "extends", "confidence", "reason"],
                 "properties": {"left_ref": {"type": "string", "enum": list(left)}, "right_ref": {"type": "string", "enum": list(right)},
                     "relation": {"type": "string", "enum": list(RELATIONS)}, "extends": {"type": "string", "enum": list(EXTENDS)},
-                    "confidence": {"type": "number"}, "reason": {"type": "string", "maxLength": _MAX_REASON}}}},
+                    "confidence": {"type": "number"}, "reason": {"type": "string"}}}},
             "gap_observations": {"type": "array", "maxItems": limit, "items": observation},
             "gap_search": {"type": "object", "additionalProperties": False,
                 "required": ["performed", "status", "searched_categories", "summary"], "properties": {
@@ -179,7 +178,7 @@ def parse_block_judge_reply(text: str, *, allowed_sources: set[str], refs: Mappi
         if (not isinstance(row, dict) or set(row) != keys or row["left_ref"] not in left or row["right_ref"] not in right
                 or row["left_ref"] in used or row["right_ref"] in used or row["relation"] not in RELATIONS
                 or row["extends"] not in EXTENDS or type(confidence) not in (int, float) or not math.isfinite(confidence)
-                or not isinstance(row["reason"], str) or len(row["reason"]) > _MAX_REASON):
+                or not isinstance(row["reason"], str)):
             _invalid(rejected, ordinal, "judge_relationship_invalid", row, "relationships")
             continue
         used.update((row["left_ref"], row["right_ref"]))

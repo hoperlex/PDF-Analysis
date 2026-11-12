@@ -87,6 +87,11 @@ def build_comprehensive_request(*, model_id, run_id, section, payload, settings=
         "Не объявляй отсутствие элементов по неполному входу, не выдумывай цитаты, координаты, нормы "
         "или сведения каталогов. Нормативные вопросы предложи только как поисковые norm_queries. "
         "Ответ observations по схеме, по-русски; результат предварительный, решение принимает эксперт.")
+    if "related_context" in body:
+        instruction += (" Связанный контекст related_context содержит дословные фрагменты других листов по тем же объектам. "
+            "Сопоставь схемы, спецификации, ведомости и расчёты по одному объекту, сохраняя режим, единицы и участок цепи. "
+            "Различай установленную и расчётную мощность, нормальный и послеаварийный режимы. "
+            "Ссылайся на source_id реально переданного фрагмента; пропущенный контекст не доказывает отсутствие решения.")
     encoded = canonical(body)
     if len(encoded) > 480_000:
         raise ValueError("comprehensive_payload_too_large")
@@ -114,8 +119,7 @@ def deterministic_lossless_merge(items, *, full_document=False):
             by_key[key] = item
             continue
         target = by_key[key]
-        if full_document and (len(set(target.get("source_ids", [])) | set(original.get("source_ids", []))) > 16
-                or len(set(target.get("norm_queries", [])) | set(original.get("norm_queries", []))) > 2):
+        if full_document and len(set(target.get("source_ids", [])) | set(original.get("source_ids", []))) > 16:
             item = deepcopy(original)
             output.append(item)
             by_key[key] = item

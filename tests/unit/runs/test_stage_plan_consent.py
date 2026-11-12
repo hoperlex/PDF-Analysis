@@ -95,6 +95,9 @@ def confirm(value, cap=0):
 def default_environment(monkeypatch):
     for name in ("AUDITMANAGER_EXTENDED_ANALYSIS", PLAN_ENV, "AUDITMANAGER_EXTENDED_COVERAGE"):
         monkeypatch.delenv(name, raising=False)
+    # Keep the historical four-row consent and rollback contract pinned here.
+    # Fresh five-row quality consent is exercised by test_v2_quality_runtime.
+    monkeypatch.setenv("AUDITMANAGER_V2_QUALITY", "0")
     Preflight.version = source_version()
 
 

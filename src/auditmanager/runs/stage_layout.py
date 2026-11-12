@@ -486,12 +486,15 @@ class FrozenStagePlan:
 def rows_in_use(extended_review: Mapping[str, Any] | None) -> tuple[str, ...]:
     """The rows a run will call, from the extended-review plan its consent holds (``None``: the text analysis alone).
 
-    The ``extended-review-v2`` plan has no critic and no refinement (ADR-0028 decision 10, column « План »); v3 has all six.
+    Historical v2 has four paid rows. Fresh quality-v2 adds the existing critic row;
+    the corrector stays deterministic. V3 uses all six rows.
     """
     if not isinstance(extended_review, Mapping) or extended_review.get("enabled") is not True:
         return ("text",)
     if extended_review.get("plan_version") == "extended-review-v3":
         return STAGE_ROWS
+    if extended_review.get("plan_version") == "extended-review-v2" and "quality_policy" in extended_review:
+        return ("text", "blocks", "cross_check", "norms", "review")
     return ("text", "blocks", "cross_check", "norms")
 
 

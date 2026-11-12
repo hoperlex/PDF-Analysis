@@ -27,7 +27,7 @@ def response_schema(*, source_ids=None):
         "required": ["title", "description", "source_ids", "norm_queries", "source_evidence"],
         "properties": {"title": _text(200), "description": _text(3000),
             "source_ids": {"type": "array", "minItems": 2, "maxItems": 16, "items": identity},
-            "norm_queries": {"type": "array", "maxItems": 2, "items": _text(160)},
+            "norm_queries": {"type": "array", "items": _text(160)},
             "source_evidence": {"type": "array", "minItems": 2, "maxItems": 8, "items": evidence}}}
     return {"type": "object", "additionalProperties": False, "required": ["observations"],
         "properties": {"observations": {"type": "array", "maxItems": 20, "items": observation}}}

@@ -218,7 +218,7 @@ def response_schema(*, merge: bool = False) -> dict:
                 "properties": {"title": {"type": "string", "maxLength": 200},
                     "description": {"type": "string", "maxLength": 3000},
                     "source_ids": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"type": "string"}},
-                    "norm_queries": {"type": "array", "maxItems": 2, "items": {"type": "string", "maxLength": 160}}}}}}}
+                    "norm_queries": {"type": "array", "items": {"type": "string", "maxLength": 160}}}}}}}
     if merge:
         item = schema["properties"]["observations"]["items"]
         item["required"].extend(["input_ids", "norm_assessment"])
@@ -463,7 +463,7 @@ def _parse_observations(observations, *, allowed_sources, expected_inputs):
                 or not isinstance(item["source_ids"], list) or not 1 <= len(item["source_ids"]) <= 16
                 or any(not isinstance(x, str) or x not in allowed_sources for x in item["source_ids"])
                 or len(set(item["source_ids"])) != len(item["source_ids"])
-                or not isinstance(item["norm_queries"], list) or len(item["norm_queries"]) > 2
+                or not isinstance(item["norm_queries"], list)
                 or any(not isinstance(x, str) or not 1 <= len(x.strip()) <= 160 for x in item["norm_queries"])):
             raise ValueError("observation_sources_or_limits_invalid")
         if expected_inputs is not None:

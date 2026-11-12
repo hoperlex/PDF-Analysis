@@ -122,7 +122,7 @@ def plan_norm_queries(observation: Mapping[str, Any]) -> dict[str, Any]:
         return {"queries": queries, "status": "derived", "reason": "literal_standard_reference",
                 "normative_question": True, "provenance": provenance}
     if excerpts:
-        selected = excerpts[:2]
+        selected = excerpts
         return {"queries": [row["query"] for row in selected], "status": "derived",
                 "reason": "literal_normative_claim", "normative_question": True, "provenance": selected}
     if explicit_statement:

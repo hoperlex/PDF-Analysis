@@ -22,7 +22,9 @@ function GroupOrigins({ group, observations, rawRecords, sources, fallbackVersio
     if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0) return [];
     const item = object((Array.isArray(rawRecords) ? rawRecords : observations)[index]);
     if (item === null || (origin.observation_id ?? null) !== (item.observation_id ?? null) || (origin.window_id ?? null) !== (item.window_id ?? null)
-      || group.title !== item.title || group.description !== item.description) return [];
+      || (group.grouping_status === 'ensemble_relationship'
+        ? origin.title !== item.title || origin.description !== item.description
+        : group.title !== item.title || group.description !== item.description)) return [];
     return [{ origin, item, index }];
   });
   const pages = Math.max(1, Math.ceil(resolved.length / 25));
@@ -50,13 +52,16 @@ export function ConsolidatedObservations({ groups: value, consolidation: reading
   const consolidation = object(reading);
   const needle = search.trim().toLocaleLowerCase('ru');
   const matches = groups.filter((group) => !needle || [group.title, group.description, group.group_id,
+    ...objects(group.origin_records).flatMap((origin) => [origin.title, origin.description]),
     ...(Array.isArray(group.source_ids) ? group.source_ids : []), ...(Array.isArray(group.window_ids) ? group.window_ids : [])].map(text).join('\n').toLocaleLowerCase('ru').includes(needle));
   const pages = Math.max(1, Math.ceil(matches.length / pageSize));
   const current = Math.min(page, pages - 1);
   const shown = matches.slice(current * pageSize, (current + 1) * pageSize);
   return <section id="extended-observations" className={styles.candidatePanel} aria-label="Группы повторяющихся наблюдений">
-    <h3>Наблюдения между окнами</h3>
-    <p>Группировка объединяет только записи с совпадающими текстом и категорией и общим фактическим источником. Похожие формулировки с разными источниками остаются отдельными. Все исходные записи сохранены.</p>
+    <h3>{consolidation?.version === 'ensemble-linked-v1' ? 'Свод вопросов' : 'Наблюдения между окнами'}</h3>
+    <p>{consolidation?.version === 'ensemble-linked-v1'
+      ? 'Один вопрос объединяет совпадения и дополнения, явно связанные при сопоставлении проходов. Объекты, листы, доказательства и все исходные формулировки доступны внутри карточки. Противоречащие кандидаты остаются раздельными.'
+      : 'Группировка объединяет только записи с совпадающими текстом и категорией и общим фактическим источником. Похожие формулировки с разными источниками остаются отдельными. Все исходные записи сохранены.'}</p>
     <p>Исходных записей: {count(consolidation?.raw_count)} · групп: {count(consolidation?.group_count)} · объединённых групп: {count(consolidation?.merged_group_count)} · снято повторных представлений: {count(consolidation?.coalesced_count)}.</p>
     <p>Это представление повторов. Оно не создаёт канонических находок, общего решения критика или решений эксперта. Полные выгрузки содержат все исходные данные, независимо от выбранного вида.</p>
     <div className={styles.toolbar} role="group" aria-label="Вид наблюдений"><button type="button" className="am-button am-button--quiet" aria-pressed={view === 'groups'} onClick={() => setView('groups')}>Группы повторов</button><button type="button" className="am-button am-button--quiet" aria-pressed={view === 'raw'} onClick={() => setView('raw')}>Все исходные · {observations.length}</button></div>
