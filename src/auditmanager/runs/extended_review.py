@@ -689,7 +689,7 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
         candidates = []
         active_query = None
         try:
-            for query in (queries if full_document else queries[:2]):
+            for query in queries:
                 key = " ".join(query.casefold().split())
                 if receipt is not None:
                     active_query = {"query": query, "normalized_query": key, "status": "not_searched",

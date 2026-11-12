@@ -25,17 +25,17 @@ from tests.unit.analysis_extended.test_workflow_runtime import WorkflowAdapter
 
 SNAPSHOT = "ns_01M59N8QNBVN91ACA2HCE6VE74"
 
-#: The request a fixed input made before this change, measured on 82aeca640 with the bundle digest held at "r" * 64 (the bundle digest
-#: hashes workflow.py itself, so the v3 figure can only be pinned with it held). The default must stay these bytes: v3 inherits them.
+#: Requests after the owner removed the norm-query count limit (`BLOCK-ANALYSIS-LIMITS-01`), with the bundle digest held at "r" * 64.
+#: The default quote-echo shape remains shared with v3; ids-only mode still changes just its citation schema and instruction.
 PAYLOAD = {"observations": [
     {"title": "T1", "description": "D1", "source_ids": ["s1"], "input_id": "xni_a", "norm_candidate_ids": ["p1", "p2"]},
     {"title": "T2", "description": "D2", "source_ids": ["s2"], "input_id": "xni_b", "norm_candidate_ids": ["p3"]}],
     "norm_context": [{"paragraph_id": "p1", "quote": "Q1"}, {"paragraph_id": "p2", "quote": "Q2"},
                      {"paragraph_id": "p3", "quote": "Q3"}], "source_sha256": "0" * 64}
-V2_SHA = "5fafadd703b410de1765ad9f8a22261ba470e04708baca45b601cb3cb521800b"
+V2_SHA = "b6be6cf5796be07104306e77caf2a3ed3759245cac65319990b54c5b6ad04cd9"
 V2_SCOPE = "run_x:norm-review:90a09b0f63d77f71cb598cb17462fb0b4eecf4b51b0386c2f93397f68110e53d"
-V3_SHA = "2aa660746a076be262515f5a6e6c2d693412501c5a7d90c6f929a75dd446f879"
-V3_SCOPE = "run_x:v3:window-1:norm_verification:2aa660746a076be262515f5a6e6c2d693412501c5a7d90c6f929a75dd446f879"
+V3_SHA = "a6aca7e1ae7d072a6f527a9def7c4eec7cef5774815d1439ba59cdb6953b36bd"
+V3_SCOPE = "run_x:v3:window-1:norm_verification:a6aca7e1ae7d072a6f527a9def7c4eec7cef5774815d1439ba59cdb6953b36bd"
 
 OLD_RULE = ("Объясни связь и приведи реальные paragraph_id и ДОСЛОВНО ПОЛНУЮ переданную quote в citations; "
             "новые нормы и цитаты запрещены. ")

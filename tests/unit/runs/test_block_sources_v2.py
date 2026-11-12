@@ -4,9 +4,9 @@ Container-free. The first half holds the request builders (the default bytes, th
 the second half runs the real workflow of ``extended_review._run_workflow_v2`` on the harness of ``test_blocks_ensemble`` -- the legs of the
 ensemble and the single call -- and reads the coverage counter and the stage's status the run leaves.
 
-The pinned digests below were measured on the tree BEFORE the change (``git archive 82aeca640``): the default v2 request and the v3 request
-of the same payload must stay byte-identical. The v3 request carries ``rules_sha256``, the digest of the review bundle, which hashes
-``core.py`` itself; it is held constant here, so that the pin checks the request and not the file that builds it.
+The pinned digests include the owner-requested removal of the norm-query count limit (`BLOCK-ANALYSIS-LIMITS-01`). The v3 request
+carries ``rules_sha256``, the digest of the review bundle, which hashes ``core.py`` itself; it is held constant here, so that the pin
+checks the request and not the file that builds it. Adding the source guard still leaves all other request members unchanged.
 
 Every guard has been shown able to fail: the break-it-once runs are recorded in the commit that added this file (the counter back to
 ``if not refused:``, the stage status back to ``blocks_remaining`` alone, ``bind_sources`` not passed by the loop, the guard left out of
@@ -35,19 +35,19 @@ PAYLOAD = {"section": "EOM",
            "context_sections": [], "coverage": {"blocks_total": 2}}
 EMPTY = {"section": "EOM", "sources": []}
 
-# (request_sha256, idempotency_scope) measured before the change.
+# (request_sha256, idempotency_scope) after BLOCK-ANALYSIS-LIMITS-01.
 PINNED = {
-    ("v2", "blocks", "fixed"): ("6b5ddeda12e5a805928af1259d52dfab77ef24b27f4dc5d8d472c25ada5aa4a4",
+    ("v2", "blocks", "fixed"): ("b171f49e1d18a57e8b78aa0e4f3c79cecf29f57ed2926424a328515b43e21d86",
                                 "run:blocks:d4aaf30274a6215f3739ebc4c94705c2c8410ec65bad8c73f79b0f56636f30e4"),
-    ("v2", "merge", "fixed"): ("47a494dd2281b30888345d36a8cf685722e80c0854a63ae7df1bd1c12e0cdf55",
+    ("v2", "merge", "fixed"): ("f177ba59afadf30353f7d34fe70bdf49b5c68f9bd7a84133e1f4b87e9e32f213",
                                "run:merge:d4aaf30274a6215f3739ebc4c94705c2c8410ec65bad8c73f79b0f56636f30e4"),
-    ("v2", "blocks", "empty"): ("916ab1a7454d0e7bf490f8915a9c6db95a6a5920033a4cfc31e625aadebe072e",
+    ("v2", "blocks", "empty"): ("2e2f76becbe035da7aebcfcec854f42607499deb1107d9d4827c3f2a15606501",
                                 "run:blocks:d52ff0e098f924eccac6aeafd8e7472d7bce88e80ce71d3f99243de67683757b"),
-    ("v2", "merge", "empty"): ("68326ee6fe049e30d7b5e85ffa9f485308d2c49622b5f9c2f3c10cc1f9190bf4",
+    ("v2", "merge", "empty"): ("ac7a06bf55b63323458bc2639c5b6d5ba69e1e1a2f1fa1bae144f76db0ce71fc",
                                "run:merge:d52ff0e098f924eccac6aeafd8e7472d7bce88e80ce71d3f99243de67683757b"),
-    ("v3", "blocks", "fixed"): ("dbd206a4a4ff54ae29b465a51a57a63c7cb78ffe12850d9891f8d0572de7e079",
+    ("v3", "blocks", "fixed"): ("138a0ef186a791798d9cf948ec3833134b6029ac0a416da075f8ae9b61a3b51f",
                                 "run:v3:w001:blocks:9f0ba1b6f4e8c594e296180a0d760918db33733ce7fb6bde63d24ad51b67d7be"),
-    ("v3", "blocks", "empty"): ("ba72d5b7286c2e500e2b379eaef8a8ad164d6a4dddd1179aacbf9c1b5fff088d",
+    ("v3", "blocks", "empty"): ("176a1e02b1483dd8ac39b8c41924fdd0af691dfb2d6537888201f1b79aefbc4a",
                                 "run:v3:w001:blocks:1532ec29c42a7a6a802dd1ced97f05b17cac08e43f25ae47dc567bca01a33a9e"),
 }
 INSTRUCTION = ("\nsource_ids каждой записи копируй только из sources этого пакета. "

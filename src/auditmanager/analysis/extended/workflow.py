@@ -114,8 +114,7 @@ def deterministic_lossless_merge(items, *, full_document=False):
             by_key[key] = item
             continue
         target = by_key[key]
-        if full_document and (len(set(target.get("source_ids", [])) | set(original.get("source_ids", []))) > 16
-                or len(set(target.get("norm_queries", [])) | set(original.get("norm_queries", []))) > 2):
+        if full_document and len(set(target.get("source_ids", [])) | set(original.get("source_ids", []))) > 16:
             item = deepcopy(original)
             output.append(item)
             by_key[key] = item
