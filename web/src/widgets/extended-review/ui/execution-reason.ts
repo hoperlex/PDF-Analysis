@@ -1,6 +1,7 @@
 /** Saved workflow failures, distinct from a machine critic's recommendation. */
 const EXECUTION_REASONS: Readonly<Record<string, string>> = {
   v2_quality_changed_requires_consent: 'Правила анализа изменились после оценки. Для новых обращений нужен новый прогон со свежей оценкой.',
+  finding_proposals_changed_requires_consent: 'Правила предложений важности и рекомендаций изменились после оценки. Для новых обращений нужен новый прогон со свежей оценкой.',
   input_passport_pdf_binding_invalid: 'Исходный PDF не соответствует файлу, закреплённому за версией. Новые обращения остановлены.',
   related_context_incomplete: 'Не весь найденный связанный контекст вошёл в запрос. Ограничения сохранены в записи анализа.',
   substantive_review_reply_refused: 'Часть ответов содержательного критика не прошла проверку. Исходные наблюдения сохранены; непроверенные не получили одобрения.',

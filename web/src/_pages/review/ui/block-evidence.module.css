@@ -1,0 +1,58 @@
+/*
+ * The card of a block finding (`F8-WEB`): layout only. Every colour, border and shadow is the global rule of the classes the markup
+ * carries (`am-evidence`, `am-quotation`, `am-button`), the same ones the quotation viewer draws, so this file adds no colour pair.
+ */
+
+.card {
+  cursor: pointer;
+}
+
+.cardBody {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--am-gap-sm);
+  align-items: start;
+}
+
+.cardContent {
+  min-width: 0;
+  /* A recognised reading may be one long «word»: it breaks at the card's width instead of running past it. */
+  overflow-wrap: anywhere;
+}
+
+/* ---- the full-screen presentation: the page takes the height, the side column scrolls ----- */
+
+.full {
+  height: 100%;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.full .fullPanes {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: stretch;
+}
+
+.fullPage {
+  min-height: 0;
+}
+
+.fullSide {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--am-gap-xs);
+}
+
+@media (max-width: 900px) {
+  .full .fullPanes {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .fullSide {
+    max-height: 38vh;
+  }
+}

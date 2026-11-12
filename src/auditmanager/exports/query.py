@@ -1,5 +1,9 @@
 """The one read the CSV is built from: one row per canonical evidence item.
 
+For one-list block findings, the page and optional recognised quotation come from
+``finding_block_evidence``. An image without recognised text has an empty quotation;
+the query never invents one. The frozen CSV columns and text-only rows stay unchanged.
+
 The grounding rule, preserved exactly
 -------------------------------------
 ``finding_observation`` is reached through an **inner join on ``finding``**. That is the
@@ -90,8 +94,19 @@ _EXPORT_ROWS = text(
     FROM finding_observation o
     JOIN finding f
       ON f.finding_uid = o.finding_uid
-    JOIN finding_evidence e
-      ON e.finding_observation_id = o.finding_observation_id
+    JOIN LATERAL (
+        SELECT t.evidence_ordinal, t.page_number, t.quote
+          FROM finding_evidence t
+         WHERE t.finding_observation_id = o.finding_observation_id
+           AND o.grounding_kind = 'text_span'
+        UNION ALL
+        SELECT b.ordinal AS evidence_ordinal, b.page_number,
+               COALESCE(b.recognised_quote, '') AS quote
+          FROM finding_block_evidence b
+          JOIN audit_run br ON br.run_id = o.run_id AND br.publication_mode = 'one_list'
+         WHERE b.finding_observation_id = o.finding_observation_id
+           AND o.grounding_kind = 'portal_block'
+    ) e ON TRUE
     JOIN document_version dv
       ON dv.version_uid = f.version_uid
     JOIN audit_run r

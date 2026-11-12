@@ -19,7 +19,8 @@ run's text.
 :func:`publish_candidate_groups`, the publisher of the extended-review candidates. N observations of one group become **one** finding: the
 first member that passes gate v2 is the canonical observation, a group has one category (a mixed group is ``cross_source``), and the
 evidence of a member is its blocks (``finding_block_evidence``, boxes taken from the run's verified geometry, never from the candidate).
-:func:`publish_gate_result` and the text path are not touched: a ``text_only`` run publishes exactly as before.
+The text gate's admission stays unchanged. In one-list runs its observations can carry a linked candidate reference and a severity
+proposal; a ``text_only`` run publishes exactly as before.
 
 The pairing ``grounded = (finding_uid IS NOT NULL)`` and
 ``grounded = (ungrounded_reason IS NULL)`` is a CHECK constraint in the migration. This
@@ -62,11 +63,11 @@ _INSERT_OBSERVATION = text(
     INSERT INTO finding_observation (
         finding_observation_id, run_id, finding_uid, stage_id, category,
         finding_text, recommendation_text, grounded, ungrounded_reason,
-        analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode
+        analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode, proposed_severity, extended_observation_ref
     ) VALUES (
         :finding_observation_id, :run_id, :finding_uid, :stage_id, :category,
         :finding_text, :recommendation_text, :grounded, :ungrounded_reason,
-        :analysis_profile_id, :prompt_bundle_id, :model_call_id, :provider_mode
+        :analysis_profile_id, :prompt_bundle_id, :model_call_id, :provider_mode, :proposed_severity, :extended_observation_ref
     )
     """
 )
@@ -157,6 +158,8 @@ def publish_gate_result(
     project_uid: str,
     version_uid: str,
     model_call_ids: Mapping[int, str] | None = None,
+    proposed_severities: Mapping[int, str] | None = None,
+    extended_observation_refs: Mapping[int, str] | None = None,
 ) -> PublicationResult:
     """Write the gate's decision, in one savepoint inside the caller's unit of work.
 
@@ -168,8 +171,15 @@ def publish_gate_result(
     ``model_call_ids`` maps ``observation_ordinal`` to the ``model_call_id`` that
     produced it, for the provenance §5 requires. An observation with no entry is written
     with a NULL ``model_call_id`` rather than a fabricated one.
+    Optional proposal/reference maps annotate new one-list text observations, never expert decisions.
     """
     calls = dict(model_call_ids or {})
+    proposals = dict(proposed_severities or {})
+    extended_refs = dict(extended_observation_refs or {})
+    if any(not isinstance(value, str) or value not in _PROPOSED_SEVERITIES for value in proposals.values()):
+        raise _invalid_candidate("unknown proposed severity")
+    if any(not isinstance(value, str) or not 1 <= len(value) <= 128 for value in extended_refs.values()):
+        raise _invalid_candidate("unknown extended observation reference")
     published: list[PublishedFinding] = []
     diagnostics: list[Diagnostic] = []
 
@@ -218,6 +228,8 @@ def publish_gate_result(
                         "prompt_bundle_id": observation_set.prompt_bundle_id,
                         "model_call_id": model_call_id,
                         "provider_mode": observation_set.provider_mode,
+                        "proposed_severity": proposals.get(observation.observation_ordinal),
+                        "extended_observation_ref": extended_refs.get(observation.observation_ordinal),
                     },
                 )
 
@@ -288,6 +300,7 @@ SKIP_NO_BLOCK_EVIDENCE: Final[str] = "no_block_evidence"
 #: ``ck_finding_observation_text_length`` and the width of the contract's ``block_evidence`` (``Field(max_length=64)``).
 MAX_TEXT_CHARS: Final[int] = 4000
 MAX_BLOCK_EVIDENCE_ITEMS: Final[int] = 64
+_PROPOSED_SEVERITIES = frozenset({"critical", "economic", "operational", "recommendation", "check_adjacent"})
 
 
 def _invalid_candidate(detail: str) -> DomainError:
@@ -314,6 +327,8 @@ class CandidateMember:
     other_source_count: int = 0
     window_id: str | None = None
     cross_window: bool = False
+    proposed_severity: str | None = None
+    proposed_recommendation: str | None = None
 
     def __post_init__(self) -> None:
         ref = self.extended_observation_ref
@@ -324,6 +339,11 @@ class CandidateMember:
         refined = self.refined_recommendation
         if refined is not None and (not isinstance(refined, str) or not refined.strip() or len(refined) > MAX_TEXT_CHARS):
             raise _invalid_candidate("a candidate's refinement is neither absent nor 1 to 4000 characters")
+        if self.proposed_severity is not None and (not isinstance(self.proposed_severity, str) or self.proposed_severity not in _PROPOSED_SEVERITIES):
+            raise _invalid_candidate("unknown proposed severity")
+        proposed = self.proposed_recommendation
+        if proposed is not None and (not isinstance(proposed, str) or not proposed.strip() or len(proposed) > MAX_TEXT_CHARS):
+            raise _invalid_candidate("a candidate's recommendation is neither absent nor 1 to 4000 characters")
         if len(self.block_evidence) > MAX_BLOCK_EVIDENCE_ITEMS:
             raise _invalid_candidate(f"a candidate stands on at most {MAX_BLOCK_EVIDENCE_ITEMS} blocks")
         if (
@@ -335,6 +355,8 @@ class CandidateMember:
 
     @property
     def recommendation_text(self) -> str:
+        if self.proposed_recommendation is not None:
+            return self.proposed_recommendation
         return self.refined_recommendation if self.refined_recommendation is not None else RECOMMENDATION_CHECK_THE_SOURCE
 
 
@@ -448,12 +470,12 @@ _INSERT_CANDIDATE_OBSERVATION = text(
         finding_observation_id, run_id, finding_uid, stage_id, category,
         finding_text, recommendation_text, grounded, ungrounded_reason,
         analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode,
-        grounding_kind, extended_observation_ref, related_finding_uid
+        grounding_kind, extended_observation_ref, related_finding_uid, proposed_severity
     ) VALUES (
         :finding_observation_id, :run_id, :finding_uid, :stage_id, :category,
         :finding_text, :recommendation_text, :grounded, :ungrounded_reason,
         :analysis_profile_id, :prompt_bundle_id, NULL, :provider_mode,
-        :grounding_kind, :extended_observation_ref, :related_finding_uid
+        :grounding_kind, :extended_observation_ref, :related_finding_uid, :proposed_severity
     )
     """
 )
@@ -591,6 +613,7 @@ def publish_candidate_groups(
                             "grounding_kind": verdict.grounding_kind,
                             "extended_observation_ref": _candidate_ref(verdict),
                             "related_finding_uid": related,
+                            "proposed_severity": member.proposed_severity,
                         },
                     )
                     for item in member.block_evidence:
@@ -635,6 +658,7 @@ def publish_candidate_groups(
                             "grounding_kind": verdict.grounding_kind,
                             "extended_observation_ref": _candidate_ref(verdict),
                             "related_finding_uid": None,
+                            "proposed_severity": member.proposed_severity,
                         },
                     )
                     diagnostics.append(

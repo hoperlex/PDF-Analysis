@@ -21,13 +21,18 @@
 
 import type { Finding, FindingDetail } from '@/shared/api';
 
+import { groundedOnBlocks } from './block-grounding';
+
 /** Why a payload was refused admission as a renderable finding. */
 export type AdmissionRefusal =
   /** No `finding_uid`. Under §5.1 that is the signature of an ungrounded diagnostic. */
   | 'not_a_finding'
   /** The payload carried grounding-diagnostic fields. A diagnostic is never a finding. */
   | 'ungrounded_diagnostic'
-  /** Admitted as a finding but structurally impossible: the P02 evidence gate forbids it. */
+  /**
+   * Admitted as a finding but structurally impossible: it has neither a text span nor a portal block to stand on
+   * (the P02 evidence gate forbids it).
+   */
   | 'no_evidence';
 
 export type FindingAdmission<T extends Finding | FindingDetail> =
@@ -60,6 +65,11 @@ function carriesDiagnosticFields(candidate: Finding | FindingDetail): boolean {
  * `finding_uid` is simply not a finding and belongs in no list; a finding with an empty
  * evidence array passed the grounding gate and then arrived impossible, which is a
  * data-integrity fault worth showing an operator rather than hiding.
+ *
+ * `D-683` (contract 1.52.0): a finding of a `one_list` run grounded on a portal block has no text span, so its
+ * observation's `evidence` is `[]` and its places are the finding's `block_evidence`. That finding is evidenced,
+ * and is admitted: `grounding_kind = portal_block` with at least one block. Nothing else relaxes the rule -- a text
+ * finding with no text span, and a block-grounded observation with no block, are still refused.
  */
 export function admitFinding<T extends Finding | FindingDetail>(candidate: T): FindingAdmission<T> {
   if (carriesDiagnosticFields(candidate)) {
@@ -71,7 +81,7 @@ export function admitFinding<T extends Finding | FindingDetail>(candidate: T): F
     return { kind: 'refused', refusal: 'not_a_finding' };
   }
 
-  if (candidate.observation.evidence.length === 0) {
+  if (candidate.observation.evidence.length === 0 && !groundedOnBlocks(candidate)) {
     return { kind: 'refused', refusal: 'no_evidence' };
   }
 

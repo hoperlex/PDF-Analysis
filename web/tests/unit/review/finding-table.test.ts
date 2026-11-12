@@ -199,10 +199,11 @@ describe('the toolbar over the findings', () => {
     expect(toolbar([])).toBe('');
   });
 
-  it('names only the severities the model proposed anything for, and says nothing when it proposed none', () => {
+  it('offers the five explicitly labelled proposal filters, and hides them when nothing was proposed', () => {
     const markup = toolbar();
-    expect(markup).toContain('Предложено моделью (не решение эксперта): Экономическое 1');
-    expect(markup).not.toContain('Эксплуатационное 0 ·');
+    expect(markup).toContain('Предложено моделью (не решение эксперта):');
+    expect(markup).toContain('data-severity-filter="proposed:economic"');
+    expect(markup).toContain('Экономическое 1');
     const decidedOnly = groupByCategory([
       findingDetail({ finding_uid: A, decided_severity: 'critical', observation: observation({}) }),
     ]);

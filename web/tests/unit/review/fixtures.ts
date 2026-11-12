@@ -32,6 +32,7 @@ import type {
   DecisionEventType,
   Evidence,
   Finding,
+  FindingBlockEvidence,
   FindingCategory,
   FindingDetail,
   FindingObservation,
@@ -124,6 +125,44 @@ export function observation(overrides: Partial<FindingObservation> = {}): Findin
     provenance: provenance(),
     ...overrides,
   };
+}
+
+/**
+ * One block of a block finding (`CRIT-SEAL-50`, contract 1.51.0): the place on a page, never a text span. The id is the portal's own
+ * (`blk_` and 32 hexadecimal digits), the box is normalised to the page, the crop's digest is 64 hexadecimal digits.
+ */
+export function blockEvidence(overrides: Partial<FindingBlockEvidence> = {}): FindingBlockEvidence {
+  return {
+    ordinal: 0,
+    page_number: 3,
+    portal_block_id: `blk_${'a'.repeat(32)}`,
+    bbox_norm: { x0: 0.18, y0: 0.32, x1: 0.62, y1: 0.58 },
+    crop_sha256: 'a1'.repeat(32),
+    ...overrides,
+  };
+}
+
+/**
+ * A finding of a `one_list` run grounded on a portal block (contract 1.52.0, `D-683`): no text span, so `evidence` is `[]`; its places are the
+ * finding's `block_evidence`; `grounding_kind` is `portal_block` and `origin` is `drawing` unless said otherwise.
+ */
+export function blockFinding(overrides: Partial<Finding> = {}): Finding {
+  const { observation: observationOverrides, ...rest } = overrides;
+  return finding({
+    category: 'drawing_discrepancy' as FindingCategory,
+    origin: 'drawing',
+    block_evidence: [blockEvidence()],
+    observation: observation({
+      category: 'drawing_discrepancy' as FindingCategory,
+      finding_text: 'Размер оконного проёма на чертеже не совпадает с размером в спецификации.',
+      recommendation_text: 'Требуется проверка эксперта по источнику',
+      evidence: [],
+      grounding_kind: 'portal_block',
+      provenance: provenance({ stage_id: 'block_analysis' }),
+      ...observationOverrides,
+    }),
+    ...rest,
+  });
 }
 
 export function finding(overrides: Partial<Finding> = {}): Finding {

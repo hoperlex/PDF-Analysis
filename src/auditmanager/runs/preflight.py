@@ -587,8 +587,9 @@ class RunCostPreflight:
                 extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2",
                     "original_review": ORIGINAL_REVIEW_V2}
                 if _v2_quality_enabled():
-                    from auditmanager.analysis.public import v2_quality_policy
+                    from auditmanager.analysis.public import v2_quality_policy, finding_proposal_policy
                     extended["quality_policy"] = v2_quality_policy()
+                    extended["finding_proposals"] = finding_proposal_policy()
                 possible_images = source["image_block_count"]
                 if possible_images is None:
                     possible_images = min(1_000, version.page_count * 100)

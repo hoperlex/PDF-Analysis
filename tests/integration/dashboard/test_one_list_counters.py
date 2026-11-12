@@ -32,6 +32,9 @@ from auditmanager.dashboard import (
     tally,
 )
 from auditmanager.dashboard.repository import DashboardRepository
+from auditmanager.analysis.public import StageResult, StageStatus
+from auditmanager.runs.executor import _candidate_publication_gap
+from auditmanager.runs.repository import RunRepository
 from tests.integration.dashboard.one_list_seed import (
     BLK_A,
     BLK_B,
@@ -95,6 +98,24 @@ def _one(state: str, *, partial: bool = False) -> AuditCountsRecord:
 
 def _audit(session: Session, doc: Doc):  # type: ignore[no-untyped-def]
     return model.audits(session, version_uids=[doc.version])[doc.version]
+
+
+@pytest.mark.parametrize("mode", ["one_list", "text_only"])
+def test_an_unread_candidate_publication_survives_reread_with_the_partial_flag(session: Session, seed: Seeder, mode: str) -> None:
+    doc = _doc(seed, "непрочитанная публикация")
+    run = insert_run(session, doc.project, doc.version, mode=mode, state="partial")
+    result = _candidate_publication_gap(StageResult(stage_id="text_analysis", stage_version="1.0.0", status=StageStatus.SUCCEEDED),
+        ("extended_review_absent",))
+    assert result.status is StageStatus.PARTIAL
+    RunRepository().record_stage_result(session, run_id=run, document=result.to_document())
+    session.commit()
+    session.expire_all()
+    metrics = session.execute(text("SELECT metrics FROM stage_result WHERE run_id = :r AND stage_id = 'text_analysis'"), {"r": run}).scalar_one()
+    assert metrics["candidate_publication_unread"] == "extended_review_absent"
+    expected = "clean"  # the frozen state counts published findings; partial carries the coverage gap
+    assert _counts(session, doc) == _one(expected, partial=True)
+    audit = _audit(session, doc)
+    assert audit.state == expected and audit.partial and audit.result_run_id == run
 
 
 # --- a text_only run counts as it always did --------------------------------------------------------------------------------

@@ -187,15 +187,18 @@
  * operational blue, the rest grey), so the strip reads at a glance without the colour being the only statement:
  * the name and the count stand in every chip.
  */
-.severities [data-severity-filter='critical'] {
+.severities [data-severity-filter='critical'],
+.severities [data-severity-filter='proposed:critical'] {
   border-left: 3px solid var(--am-failed);
 }
 
-.severities [data-severity-filter='economic'] {
+.severities [data-severity-filter='economic'],
+.severities [data-severity-filter='proposed:economic'] {
   border-left: 3px solid var(--am-degraded);
 }
 
-.severities [data-severity-filter='operational'] {
+.severities [data-severity-filter='operational'],
+.severities [data-severity-filter='proposed:operational'] {
   border-left: 3px solid var(--am-accent);
 }
 

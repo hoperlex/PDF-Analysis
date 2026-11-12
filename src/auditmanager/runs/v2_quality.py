@@ -10,7 +10,14 @@ from auditmanager.storage.public import parse_blob_id
 from auditmanager.executors.public import CropImage, attach_images
 
 
-def run_substantive_critic(*, state, run, model_id, settings, store, pages, related_index, call, phase):
+def run_substantive_critic(*, state, run, model_id, settings, store, pages, related_index, call, phase,
+        proposal_policy=None):
+    builder, parser = build_substantive_review_request, parse_substantive_review_reply
+    if proposal_policy is not None:
+        from auditmanager.analysis.public import (validate_finding_proposal_policy,
+            build_finding_proposal_review_request, parse_finding_proposal_review_reply)
+        validate_finding_proposal_policy(proposal_policy)
+        builder, parser = build_finding_proposal_review_request, parse_finding_proposal_review_reply
     observations = state["observations"]
     for item in observations:
         item["structural_critic"] = deepcopy(item.get("critic", {}))
@@ -55,7 +62,7 @@ def run_substantive_critic(*, state, run, model_id, settings, store, pages, rela
         response = None
         rejected = []
         try:
-            request = build_substantive_review_request(model_id=model_id, settings=settings, run_id=run.run_id,
+            request = builder(model_id=model_id, settings=settings, run_id=run.run_id,
                 section=state["section"], items=items, sources=selected, context=related,
                 image_ids={image.crop_id for image in images})
             request = attach_images(request, images)
@@ -63,7 +70,7 @@ def run_substantive_critic(*, state, run, model_id, settings, store, pages, rela
             receipts["model_called"] = True
             next(p for p in state["procedures"] if p["id"] == "finding_review")["model_called"] = True
             indexed = {item["input_id"]: item for item in items}
-            parsed = parse_substantive_review_reply(response.output_text, inputs=indexed, sources=selected,
+            parsed = parser(response.output_text, inputs=indexed, sources=selected,
                 attached_image_ids={image.crop_id for image in images}, rejected=rejected)
             if response.truncated:
                 rejected.append({"reason": "extended_response_truncated"})
@@ -75,6 +82,9 @@ def run_substantive_critic(*, state, run, model_id, settings, store, pages, rela
             key = item["observation_id"]
             if key in accepted:
                 item.update(critic=accepted[key], review_status="reviewed")
+                if proposal_policy is not None:
+                    item["proposed_severity"] = accepted[key]["proposed_severity"]
+                    item["recommendation_text"] = accepted[key]["recommendation_text"]
                 item.pop("review_reason", None)
             elif key in {row["input_id"] for row in items}:
                 item["review_reason"] = "substantive_review_reply_refused"

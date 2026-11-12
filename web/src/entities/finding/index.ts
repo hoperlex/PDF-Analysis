@@ -9,6 +9,15 @@
 export type { AdmissionRefusal, AdmittedFindings, FindingAdmission } from './model/admission';
 export { admitFinding, admitFindings, isRenderableFinding } from './model/admission';
 
+/**
+ * `D-683`, `CRIT-SEAL-50`: a finding that stands on portal blocks rather than text spans, and where a finding comes from
+ * (the «Источник» chip). A finding with none of the new members is a text finding.
+ */
+export { blockEvidenceOf, groundedOnBlocks, standsOnBlocksOnly } from './model/block-grounding';
+export { FINDING_ORIGIN_LABELS, findingOriginOf, runHasNonTextFindings } from './model/origin';
+export type { OriginChipProps } from './ui/origin-chip';
+export { OriginChip } from './ui/origin-chip';
+
 export type { FindingGroup } from './model/grouping';
 export { countGrouped, groupByCategory } from './model/grouping';
 

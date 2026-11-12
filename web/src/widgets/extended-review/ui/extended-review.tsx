@@ -21,6 +21,7 @@ import { NormativeContext } from './normative-context';
 import { NormativeSearches } from './normative-searches';
 import { extendedCandidateCounts } from './extended-review-summary';
 import { extendedExecutionReason } from './execution-reason';
+import { ReviewWarnings } from './review-warnings';
 import styles from './extended-review.module.css';
 
 type RecordValue = Record<string, unknown>;
@@ -81,21 +82,7 @@ export function extendedReviewDefinitive(reading: ExtendedRunReview | undefined)
 export function extendedReviewPollInterval(active: boolean, terminalReads: number, reading: ExtendedRunReview | undefined): number | false {
   return !extendedReviewDefinitive(reading) && (active || terminalReads < MAX_TERMINAL_REVIEW_READS) ? 2500 : false;
 }
-const warningLabels: Record<string, string> = {
-  native_pdf_page_render_no_ocr: 'Для визуального анализа созданы изображения страниц исходного PDF. Отдельное распознавание текста сканов не выполнялось.',
-  portal_text_only_native_page_visuals: 'Portal-набор содержит только текстовые блоки. Для визуального анализа использованы настоящие изображения страниц PDF; это не сегментация портала.',
-  remaining_blocks_not_reviewed: 'Часть блоков находится за пределами одобренного окна и не исследована.',
-  geometry_blocks_not_available: 'Для части блоков нет подтверждённого изображения.',
-  no_image_blocks_available: 'Нет доступных изображений блоков для визуального обзора.',
-  merge_omitted_sources_retained: 'Не включённые в модельный свод исходные наблюдения сохранены отдельно.',
-  text_observations_outside_merge_window: 'Часть текстовых наблюдений находится за пределами окна свода.',
-  page_context_truncated: 'Текстовый контекст страниц ограничен по размеру; обзор не охватывает весь текст страницы.',
-  visual_context_bounded_full_text_reviewed: 'Контекст отдельных изображений сокращён; полный текст страниц передан в комплексную сверку по частям.',
-  norm_lookup_window_exhausted: 'Исчерпано окно поиска по корпусу; часть нормативных оснований не проверялась.',
-  norm_semantic_lookup_failed: 'Поиск норм по смыслу завершился ошибкой; для части замечаний нормативные основания не проверены.',
-  norm_semantic_lookup_window_exhausted: 'Исчерпан лимит поиска норм по смыслу; часть замечаний осталась без проверки по нормам.',
-  merge_context_truncated: 'Для свода использованы сокращённые описания; подробные источники требуют экспертной сверки.',
-};
+
 
 function ParameterActivity({ value }: { readonly value: unknown }) {
   const parameters = object(value);
@@ -253,7 +240,7 @@ export function ExtendedReviewView({ reading, projectUid, planElsewhere = false 
     {v3 && result?.primary_text_status === 'pending' ? <p>Базовый текстовый анализ ещё не завершён. {result.visual_phase_complete === true ? 'Визуальный проход сохранён; свод и последующие проверки ожидают текстовый результат.' : 'Сохранённые визуальные результаты ещё не означают завершения анализа раздела.'}</p> : null}
     {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. {fullWindow ? 'В плане' : 'В одобренном окне'}: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
     {textCoverage === null ? null : <section data-extended-text-coverage=""><p>Комплексная сверка текста: успешно обработано страниц <strong>{count(textCoverage.pages_processed)}</strong> из {count(textCoverage.pages_total)}. В плане: {count(textCoverage.pages_selected)}. Ещё не обработано или недоступно: <strong>{count(textCoverage.pages_remaining)}</strong>.</p>{typeof textCoverage.characters_total === 'number' ? <p>Известный текстовый объём: {count(textCoverage.characters_processed)} из {count(textCoverage.characters_total)} символов обработано; осталось {count(textCoverage.characters_remaining)}. План может уточняться после подготовки следующих окон.</p> : null}<p>Эти счётчики не подтверждают отсутствие ошибок или экспертную проверку.</p></section>}
-    {Array.isArray(result?.warnings) && result.warnings.length > 0 && <ul>{result.warnings.map((warning, i) => <li key={i}>{warningLabels[text(warning)] ?? 'Обзор имеет ограничение или ошибку; проверьте источники и состояние прогона.'}</li>)}</ul>}
+    <ReviewWarnings warnings={result?.warnings} />
     {consolidation !== null && !showGroups ? <p role="status">Группировка повторов в этой записи не подтверждена или не завершена. Ниже показаны исходные наблюдения; все данные сохранены в полных выгрузках.</p> : null}
     <details data-extended-observations-details="">
       <summary>Наблюдения и источники · {observations.length}</summary>

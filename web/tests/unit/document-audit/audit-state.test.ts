@@ -62,8 +62,16 @@ describe('the chip of a document’s audit state', () => {
   it('names the result run only when there is one, and marks a partial result beside the state', () => {
     expect(auditChip(audit({ state: 'not_run' }))?.resultRunId).toBeNull();
     const partial = auditChip(audit({ state: 'checked', partial: true, result_run_id: RUN, finding_count: 1 }));
-    expect([partial?.resultRunId, partial?.partial, partial?.text]).toEqual([RUN, true, 'Проверен экспертом']);
+    expect([partial?.resultRunId, partial?.partial, partial?.text]).toEqual([RUN, true, 'Решения по находкам приняты']);
     expect(AUDIT_PARTIAL_MARK).toBe('частично');
+  });
+
+  it('does not present a partial empty publication as a complete clean audit', () => {
+    const partial = auditChip(audit({ state: 'clean', partial: true, result_run_id: RUN }));
+    expect(partial?.text).toBe('Находок не опубликовано');
+    expect(partial?.tone).toBe('pending');
+    expect(partial?.detail).toContain('не означает отсутствие замечаний');
+    expect(partial?.resultRunId).toBe(RUN);
   });
 
   it('shows the figures of the result run as the chip’s detail, with the right plural', () => {

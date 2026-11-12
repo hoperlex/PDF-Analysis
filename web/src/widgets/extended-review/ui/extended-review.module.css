@@ -57,3 +57,25 @@
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
+
+/*
+ * `F8-WEB`: the critic's advice in the card of a block finding is one line, cut with an ellipsis where the column ends (its title carries
+ * all of it); on a narrow screen it may take two. Its colours are the global note's.
+ */
+.adviceLine {
+  margin-block: var(--am-gap-xs) var(--am-gap-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .adviceLine {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

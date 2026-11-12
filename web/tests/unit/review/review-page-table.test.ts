@@ -28,11 +28,11 @@ afterEach(() => {
 const FIRST = 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4QB1';
 const SECOND = 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4QB2';
 
-function page(search: string): string {
+function page(search: string, oneList = false): string {
   navigation.search = search;
   const client = newClient();
   const envelope = { next_cursor: null } as { next_cursor: null };
-  client.setQueryData(queryKeys.runs.detail(RUN_ID), runStatus({ run_id: RUN_ID }));
+  client.setQueryData(queryKeys.runs.detail(RUN_ID), runStatus({ run_id: RUN_ID, publication_mode: oneList ? 'one_list' : 'text_only' }));
   client.setQueryData(queryKeys.runs.findings(RUN_ID), {
     data: { items: [finding({ finding_uid: FIRST }), finding({ finding_uid: SECOND })], page: envelope },
   });
@@ -44,6 +44,12 @@ function page(search: string): string {
 }
 
 describe('the review page by its address', () => {
+  it('opens a new one-list run as a full-width table, with an explicit list choice still available', () => {
+    expect(page('', true)).toContain('data-finding-table');
+    expect(page('', true)).not.toContain('data-finding-expansion');
+    expect(page('view=list', true)).toContain('am-review__detail');
+    expect(page('view=list', true)).not.toContain('data-finding-table');
+  });
   it('keeps the list and the open finding beside it without a view', () => {
     const markup = page('');
     expect(markup).not.toContain('data-finding-table');

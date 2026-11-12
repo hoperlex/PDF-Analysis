@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 
 import { getExtendedRunReview } from '@/shared/api';
+import type { Finding } from '@/shared/api';
 import { routes } from '@/shared/lib';
+import { reviewCandidates } from '../model/review-candidates';
 import styles from './extended-review.module.css';
 
 type RecordValue = Record<string, unknown>;
@@ -27,7 +29,10 @@ export function extendedCandidateCounts(value: unknown) {
   };
 }
 
-export function ExtendedReviewSummary({ projectUid, runId }: { readonly projectUid: string; readonly runId: string }) {
+export function ExtendedReviewSummary({ projectUid, runId, oneList = false, published = [] }: {
+  readonly projectUid: string; readonly runId: string; readonly oneList?: boolean;
+  readonly published?: readonly Finding[];
+}) {
   const query = useQuery({
     queryKey: ['extended-run-review', runId],
     queryFn: async () => (await getExtendedRunReview({ path: { run_id: runId } })).data,
@@ -35,9 +40,13 @@ export function ExtendedReviewSummary({ projectUid, runId }: { readonly projectU
   });
   const counts = extendedCandidateCounts(query.data?.result);
   if (counts.candidates === 0) return null;
+  const retained = reviewCandidates(query.data?.result, published).rows.length;
+  if (oneList && retained === 0) return null;
   return <aside className={styles.summary} aria-label="Предварительные кандидаты расширенного анализа" data-extended-candidate-count={counts.candidates}>
-    <p><strong>В расширенном анализе сохранено предварительных кандидатов: {counts.candidates}.</strong></p>
-    <p>Это отдельные машинные наблюдения. Они не включены в счётчик канонических находок и не являются экспертными решениями. Нулевой список находок ниже не означает, что расширенный анализ пуст.</p>
+    <p><strong>{oneList ? 'Прогон использует общий список привязанных находок.' : `В расширенном анализе сохранено предварительных кандидатов: ${counts.candidates}.`}</strong></p>
+    {oneList ? <p>В расширенном анализе сохранено предварительных кандидатов: {counts.candidates}.</p> : null}
+    <p>{oneList ? 'Решение по каждой находке принимает эксперт. Оставшиеся машинные кандидаты доступны только для чтения.' : 'Это отдельные машинные наблюдения, доступные ниже для чтения. Они не включены в счётчик находок и не являются экспертными решениями.'}</p>
+    {retained > 0 ? <p><a href="#review-machine-candidates">Кандидаты для чтения: {retained}</a></p> : null}
     <Link href={`${routes.run(projectUid, runId)}#extended-analysis`}>Открыть расширенный анализ, рекомендации и отчёт</Link>
   </aside>;
 }

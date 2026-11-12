@@ -12,7 +12,7 @@
  * layer; the page number is server-supplied and is used as given.
  */
 
-import type { Evidence, FindingObservation, ProviderMode } from '@/shared/api';
+import type { Evidence, Finding, FindingDetail, FindingObservation, ProviderMode } from '@/shared/api';
 
 /**
  * The distinct pages this observation cites, ascending.
@@ -24,6 +24,23 @@ export function declaredPages(observation: FindingObservation): readonly number[
   const seen = new Set<number>();
   for (const item of observation.evidence) seen.add(item.page_number);
   return [...seen].sort((left, right) => left - right);
+}
+
+/**
+ * The distinct pages a FINDING cites, ascending: the pages of its observation's text spans and, for a finding that stands
+ * on portal blocks (`D-683`, contract 1.52.0), the pages of its `block_evidence`. A block finding has no text span, so
+ * `declaredPages(finding.observation)` is empty for it and says nothing; this is what a row, a table and the card read.
+ */
+export function findingPages(finding: Pick<Finding | FindingDetail, 'observation' | 'block_evidence'>): readonly number[] {
+  const seen = new Set<number>(declaredPages(finding.observation));
+  for (const block of finding.block_evidence ?? []) seen.add(block.page_number);
+  return [...seen].sort((left, right) => left - right);
+}
+
+/** The page the card opens on: the first page the finding cites, or null when it cites none. */
+export function firstFindingPage(finding: Pick<Finding | FindingDetail, 'observation' | 'block_evidence'>): number | null {
+  const pages = findingPages(finding);
+  return pages.length === 0 ? null : (pages[0] as number);
 }
 
 /** The page the viewer opens on: the first page this observation cites. */

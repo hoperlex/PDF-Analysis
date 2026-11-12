@@ -8,7 +8,9 @@
 export {
   declaredPages,
   evidenceOnPage,
+  findingPages,
   firstDeclaredPage,
+  firstFindingPage,
   isDeclaredPage,
   observationProviderMode,
   orderedEvidence,

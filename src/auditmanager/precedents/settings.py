@@ -43,11 +43,10 @@ SWITCH_NAMES: Final[tuple[str, ...]] = (SETTING_ONE_LIST, SETTING_CRITIC_CONTEXT
 #: ``ck_precedent_setting_event_value``: an object of at most this many octets in its ``jsonb`` text.
 VALUE_MAX_OCTETS: Final[int] = 16384
 
-#: **«Один список» may not be switched on yet** (`D-683`). While the block findings of a one-list run break the 1.51.0 evidence contract, a
-#: switch that sends runs down that path would publish findings the contract cannot carry; ``appendPrecedentSetting`` therefore refuses
-#: ``one_list`` with ``{"enabled": true}`` (``validation_failed``, ``constraint: one_list_not_ready``). Switching it off is always allowed. The lane
-#: that closes `D-683` flips this one line.
-ONE_LIST_READY: bool = False
+#: D-683 is closed: the sealed contract admits block evidence, and review, decisions,
+#: CSV/XLSX and incomplete-publication counters consume it. This only permits an
+#: administrator to enable the journalled switch; absent a journal entry it stays off.
+ONE_LIST_READY: bool = True
 
 #: The ``constraint`` of the refusal of ``one_list`` with ``{"enabled": true}`` while :data:`ONE_LIST_READY` is false.
 CONSTRAINT_ONE_LIST_NOT_READY: Final[str] = "one_list_not_ready"
