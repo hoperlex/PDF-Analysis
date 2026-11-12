@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 import json
 
 import pytest
 
 from auditmanager.analysis.extended import block_ensemble, core, cross_window_review, workflow
+from auditmanager.analysis.extended.review import _validate
 
 
 def observation(*queries: str) -> dict:
@@ -70,3 +72,63 @@ def test_removing_the_count_limit_keeps_source_and_query_content_validation(chan
     row = observation("Норма А", "Норма Б", "Норма В") | change
     with pytest.raises(ValueError, match="observation_sources_or_limits_invalid"):
         core.parse_reply(json.dumps({"observations": [row]}), allowed_sources={"s1"})
+
+
+def cross_window_example(count):
+    sources = []
+    for index, quote in enumerate(["Щит Щ-1: ток 10 А.", "Щит Щ-1: ток 20 А."], start=1):
+        sources.append({"source_id": f"s{index}", "kind": "text", "window_id": f"w{index}",
+            "page_number": index, "quote": quote, "text_sha256": hashlib.sha256(quote.encode()).hexdigest(),
+            "character_start": 0, "character_end": len(quote), "character_field": "text"})
+    batch = {"sources": sources, "batch_key": "gcwb_test", "batch_sha256": "a" * 64}
+    queries = [f"Запрос {i}" for i in range(count)]
+    row = observation(*queries) | {"source_ids": ["s1", "s2"], "source_evidence": [
+        {"source_id": source["source_id"], "quote": source["quote"]} for source in sources]}
+    return batch, row
+
+
+@pytest.mark.parametrize("count", [0, 3, 20])
+@pytest.mark.parametrize("collect_refusals", [False, True])
+def test_real_cross_window_reply_retains_all_queries(count, collect_refusals):
+    batch, row = cross_window_example(count)
+    rejected = [] if collect_refusals else None
+    parsed = cross_window_review.parse_global_cross_window_reply(
+        json.dumps({"observations": [row]}), batch=batch, rejected=rejected)
+    assert len(parsed) == 1
+    assert parsed[0]["norm_queries"] == row["norm_queries"]
+    assert parsed[0]["window_ids"] == ["w1", "w2"]
+    assert [evidence["quote"] for evidence in parsed[0]["source_evidence"]] == [source["quote"] for source in batch["sources"]]
+    assert rejected in (None, [])
+
+
+@pytest.mark.parametrize("fault,reason", [("source", "global_cross_window_reply_sources_invalid"),
+                                         ("quote", "global_cross_window_quote_not_in_source")])
+@pytest.mark.parametrize("collect_refusals", [False, True])
+def test_cross_window_source_and_quote_binding_still_refuse_invalid_records(fault, reason, collect_refusals):
+    batch, row = cross_window_example(3)
+    if fault == "source":
+        row["source_ids"][1] = "foreign"
+    else:
+        row["source_evidence"][1]["quote"] = "Цитата отсутствует в источнике."
+    reply = json.dumps({"observations": [row]})
+    if collect_refusals:
+        rejected = []
+        assert cross_window_review.parse_global_cross_window_reply(reply, batch=batch, rejected=rejected) == []
+        assert [record["reason"] for record in rejected] == [reason]
+    else:
+        with pytest.raises(ValueError, match=reason):
+            cross_window_review.parse_global_cross_window_reply(reply, batch=batch)
+
+
+@pytest.mark.parametrize("value", [[], "not an array", [1], [""]])
+def test_unbounded_arrays_keep_their_type_minimum_and_item_checks(value):
+    schema = {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+    with pytest.raises(ValueError):
+        _validate(value, schema)
+
+
+def test_array_limits_still_apply_when_explicitly_declared():
+    schema = {"type": "array", "maxItems": 1, "items": {"type": "string"}}
+    _validate(["a"], schema)
+    with pytest.raises(ValueError, match="review_array_schema_invalid"):
+        _validate(["a", "b"], schema)

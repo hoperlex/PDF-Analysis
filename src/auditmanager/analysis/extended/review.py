@@ -104,7 +104,8 @@ def _validate(value, schema):
         for key, specification in schema["properties"].items():
             _validate(value[key], specification)
     elif kind == "array":
-        if not isinstance(value, list) or not schema.get("minItems", 0) <= len(value) <= schema["maxItems"]:
+        if (not isinstance(value, list) or len(value) < schema.get("minItems", 0)
+                or "maxItems" in schema and len(value) > schema["maxItems"]):
             raise ValueError("review_array_schema_invalid")
         for item in value:
             _validate(item, schema["items"])
