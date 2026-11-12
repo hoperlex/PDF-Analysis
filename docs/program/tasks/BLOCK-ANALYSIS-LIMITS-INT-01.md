@@ -36,18 +36,18 @@ the accepted, checked candidate into `origin/dev`. The owner's 2026-11-12 instru
 - addendum_path: not_applicable
 
 ## Publication authority
-- development_target: origin/dev
+- development_target: none
 - origin_main_authority: none
+
+The owner subsequently instructed: finish the judge, do not begin integration, investigate
+repeated summary observations. Publication is therefore withheld; the original dev integration
+plan above records the earlier instruction and grants no current permission to push.
 
 ## Allowed paths
 - `docs/program/tasks/BLOCK-ANALYSIS-LIMITS-INT-01.md`
 - `docs/program/reviews/BLOCK-ANALYSIS-LIMITS-01-JUDGE.md`
 - `src/auditmanager/analysis/extended/review.py`
 - `tests/unit/analysis_extended/test_response_limits.py`
-
-The validator and regression-test paths above cover the judge's P1 finding: an unbounded
-array must retain type, minimum and item validation. Return the corrected runtime candidate
-to the independent judge before publication.
 
 ## Forbidden hotspots
 - `contracts/**`, migrations, root dependencies/locks, composition roots and global styles.
@@ -58,6 +58,10 @@ to the independent judge before publication.
 
 ## Deliverables
 - Independent SHA-bound ACCEPT/REJECT report, focused verification, one fast-forward to dev.
+
+The validator and regression-test paths cover the judge's P1 finding: an unbounded array
+must retain type, minimum and item validation. The corrected runtime candidate is reviewed
+before any future publication authorised by the owner.
 
 ## Required tests
 - The judge's discriminating checks and the affected core/workflow/block-ensemble/norm tests.
@@ -81,4 +85,11 @@ No flag, migration, tag or update of main.
   an absent upper bound as unbounded while retaining type/minimum/item checks and declared
   upper bounds. Strict and per-record cross-window source/quote negative controls are covered.
 - Repair checks: 69 passed (response-limit regressions and affected critic/review parsing).
-- Follow-up independent review and final integration checks remain required before publication.
+- Follow-up verdict: ACCEPT at `c7c9d5273e1e0d2021905022dafc616a7b9732f8`, no blockers;
+  report `docs/program/reviews/BLOCK-ANALYSIS-LIMITS-01-JUDGE.md` preserves the original REJECT.
+- The judge independently passed 235 tests and the exact-source parser/negative probes.
+- The author's final affected suite passed 250 tests in 13.66s at the same runtime candidate;
+  log `/tmp/BLOCK-ANALYSIS-LIMITS-INT-01-tests.log`. `git diff --check` is clean.
+- The owner then withheld integration. No merge, push or deployment has been performed.
+  Runtime source and tests remain the independently accepted candidate; follow-up changes
+  here and in the judge report are review/hold records only.
