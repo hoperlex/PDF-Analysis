@@ -75,7 +75,7 @@ export function RunEta({ finish }: { readonly finish: RunFinishEstimate | null }
 function segmentOf(chip: RunChip): string {
   if (chip.state === 'failed') return 'failed';
   if (chip.state === 'running' || chip.state === 'waiting') return 'live';
-  return chip.state === 'pending' ? 'pending' : 'done';
+  return chip.state === 'done' ? 'done' : chip.state === 'pending' ? 'pending' : 'limited';
 }
 
 export function RunHeader({
@@ -90,7 +90,7 @@ export function RunHeader({
     ? null
     : animating && progress.liveIndex !== null
       ? `этап ${progress.liveIndex} из ${progress.total}`
-      : `этапов завершено ${progress.completed} из ${progress.total}`;
+      : `этапов выполнено успешно ${progress.completed} из ${progress.total}; завершено ${progress.terminal}`;
 
   const elapsed = liveElapsed(status, progress.live, now);
   const server = showServer && executor !== null && executor.name !== '' ? executor.name : null;
@@ -110,7 +110,7 @@ export function RunHeader({
               aria-valuemin={0}
               aria-valuemax={progress.total}
               aria-valuenow={progress.completed}
-              aria-valuetext={`завершено ${progress.completed} из ${progress.total}`}
+              aria-valuetext={`выполнено успешно ${progress.completed} из ${progress.total}; завершено ${progress.terminal}`}
               data-run-bar=""
             >
               {chips.map((chip) => (

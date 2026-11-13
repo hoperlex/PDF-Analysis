@@ -42,7 +42,7 @@ function apiError(
   status: number, code: ErrorCode, details: Record<string, string | number | boolean | null> = {},
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.54.0', error_code: code, message: 'A caller-safe sentence.',
+    contract_version: '1.55.0', error_code: code, message: 'A caller-safe sentence.',
     correlation_id: 'cid-cut', retryable: false, details,
   };
   return new ApiError(status, envelope, 'cid-cut');

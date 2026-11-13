@@ -30,6 +30,7 @@ _PUBLISHED_FINDINGS = text(
         f.version_uid,
         f.allocated_by_run_id,
         f.canonical_observation_id,
+        f.publication_policy,
         o.category,
         o.finding_text,
         o.recommendation_text,
@@ -40,6 +41,7 @@ _PUBLISHED_FINDINGS = text(
         o.provider_mode,
         o.proposed_severity,
         o.grounding_kind,
+        o.ungrounded_reason AS unverified_reason,
         o.extended_observation_ref,
         o.related_finding_uid,
         o.created_at
@@ -147,6 +149,8 @@ class FindingRow:
     grounding_kind: str = "text_span"
     extended_observation_ref: str | None = None
     related_finding_uid: str | None = None
+    unverified_reason: str | None = None
+    publication_policy: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +212,8 @@ def published_findings(session: Session, run_id: str) -> tuple[FindingRow, ...]:
             canonical_observation_id=row["canonical_observation_id"],
             proposed_severity=row["proposed_severity"],
             grounding_kind=row["grounding_kind"],
+            unverified_reason=row["unverified_reason"],
+            publication_policy=row["publication_policy"],
             extended_observation_ref=row["extended_observation_ref"],
             related_finding_uid=row["related_finding_uid"],
         )
@@ -367,6 +373,7 @@ _FINDING_BY_UID = text(
         f.version_uid,
         f.allocated_by_run_id,
         f.canonical_observation_id,
+        f.publication_policy,
         o.category,
         o.finding_text,
         o.recommendation_text,
@@ -377,6 +384,7 @@ _FINDING_BY_UID = text(
         o.provider_mode,
         o.proposed_severity,
         o.grounding_kind,
+        o.ungrounded_reason AS unverified_reason,
         o.extended_observation_ref,
         o.related_finding_uid,
         o.created_at
@@ -391,7 +399,6 @@ _FINDING_BY_UID = text(
                    WHERE sibling.finding_uid = f.finding_uid
                      AND sibling.finding_observation_id <> o.finding_observation_id
                )))
-      AND o.grounded
     """
 )
 
@@ -428,6 +435,8 @@ def finding_by_uid(session: Session, finding_uid: str) -> FindingRow | None:
         canonical_observation_id=row["canonical_observation_id"],
         proposed_severity=row["proposed_severity"],
         grounding_kind=row["grounding_kind"],
+        unverified_reason=row["unverified_reason"],
+        publication_policy=row["publication_policy"],
         extended_observation_ref=row["extended_observation_ref"],
         related_finding_uid=row["related_finding_uid"],
     )

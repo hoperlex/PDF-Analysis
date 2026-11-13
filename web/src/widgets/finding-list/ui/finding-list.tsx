@@ -27,7 +27,7 @@ import type { Finding, FindingCategory, Severity } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
-import { EXECUTION_STATUS_LABELS, OriginChip, SEVERITY_LABELS, SeverityBadge, countGrouped, findingOriginOf } from '@/entities/finding';
+import { EXECUTION_STATUS_LABELS, EvidenceLimitation, OriginChip, SEVERITY_LABELS, SeverityBadge, countGrouped, findingOriginOf } from '@/entities/finding';
 import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
 import { findingPages } from '@/entities/finding-observation';
 
@@ -147,9 +147,9 @@ function hasSeverity(tally: SeverityTally): boolean {
   return SEVERITY_ORDER.some((severity) => tally.decided[severity] > 0 || tally.proposed[severity] > 0);
 }
 
-/** A verdict filter read from the address: an absent or unknown value is «Все». */
+/** A missing or unknown filter opens the active review queue; all history remains available. */
 export function verdictFilterOf(value: string | null): VerdictFilter {
-  return value === 'waiting' || value === 'accepted' || value === 'rejected' ? value : 'all';
+  return value === 'all' || value === 'waiting' || value === 'accepted' || value === 'rejected' ? value : 'active';
 }
 
 export interface VerdictTally {
@@ -170,12 +170,14 @@ export function filterGroups(
 ): readonly FindingGroup<Finding>[] {
   if (filter === 'all') return groups;
   return groups
-    .map((group) => ({ ...group, findings: group.findings.filter((f) => verdictBucket(f.current_verdict) === filter) }))
+    .map((group) => ({ ...group, findings: group.findings.filter((f) => filter === 'active'
+      ? f.current_verdict !== 'rejected' : verdictBucket(f.current_verdict) === filter) }))
     .filter((group) => group.findings.length > 0);
 }
 
 const FILTERS: readonly { readonly value: VerdictFilter; readonly label: string }[] = [
-  { value: 'all', label: 'Все' },
+  { value: 'active', label: 'Активные' },
+  { value: 'all', label: 'Все, включая историю' },
   { value: 'waiting', label: 'Ожидают решения' },
   { value: 'accepted', label: 'Приняты' },
   { value: 'rejected', label: 'Отклонены' },
@@ -226,6 +228,9 @@ export function FindingToolbar({
       {/* The original's top row: the total and the severity chips on the left, the file actions on the right. */}
       <div className={styles.top}>
         <strong className={styles.total} data-finding-total={total}>Всего: {total}</strong>
+        <span data-finding-visible-count={countGrouped(filterBySeverity(filterGroups(groups, filter), severity))}>
+          Показано: {countGrouped(filterBySeverity(filterGroups(groups, filter), severity))}
+        </span>
         {hasSeverity(severities) ? (
           <div className={styles.severities} data-severity-strip="">
             <div className={styles.filter} role="group" aria-label="Отбор по важности, решённой экспертом">
@@ -326,7 +331,7 @@ export function FindingList({
   blockCountOf,
   unlinkedPages,
 }: FindingListProps) {
-  const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
+  const [ownFilter, setOwnFilter] = useState<VerdictFilter>('active');
   const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
   const severity = severityFilter ?? ownSeverity;
   const setSeverity = (next: SeverityFilter) => {
@@ -449,6 +454,7 @@ export function FindingList({
                     <span className="am-finding-row__text">
                       {finding.observation.finding_text}
                     </span>
+                    <EvidenceLimitation finding={finding} />
                     {finding.decided_severity === undefined && finding.current_verdict_carried_from === undefined ? (
                       <VerdictBadge verdict={finding.current_verdict} />
                     ) : (

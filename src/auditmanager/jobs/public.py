@@ -63,8 +63,10 @@ __all__ = [
 
 # HOTFIX-ANALYSIS-1030: durable unit reply/effect inspection.
 from auditmanager.jobs.extended_review import extended_unit
+from auditmanager.jobs.extended_review import extended_context_unit
 
 __all__.append("extended_unit")
+__all__.append("extended_context_unit")
 
 from auditmanager.jobs.extended_review import has_ambiguous_provider_effect
 

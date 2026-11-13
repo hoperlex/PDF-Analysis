@@ -96,6 +96,10 @@
   background: var(--am-failed);
 }
 
+.segment[data-segment='limited'] {
+  background: var(--am-ink-muted);
+}
+
 .headActions {
   display: flex;
   flex-wrap: wrap;

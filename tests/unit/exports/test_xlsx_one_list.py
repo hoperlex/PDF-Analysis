@@ -193,7 +193,7 @@ def test_the_source_comes_from_the_category_and_the_grounding(category: str, gro
 def test_a_grounding_nobody_named_is_refused_and_not_read_as_text() -> None:
     with pytest.raises(ValueError, match="xlsx_grounding_kind_invalid"):
         source_of("layout", "image")
-    assert tuple(SOURCE_LABELS.values()) == ("Текст", "Чертёж", "Сверка")
+    assert tuple(SOURCE_LABELS.values()) == ("Текст", "Чертёж", "Сверка", "Источник требует проверки")
 
 
 # --- the refusals: a column that exists for one shape is never half-present in the other ---------------------------------------

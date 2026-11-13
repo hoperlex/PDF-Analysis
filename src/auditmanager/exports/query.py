@@ -90,11 +90,14 @@ _EXPORT_ROWS = text(
         cv.decision_recorded_at      AS decision_recorded_at,
         cv.decided_severity          AS severity,
         o.proposed_severity          AS severity_proposed,
-        e.evidence_ordinal           AS evidence_ordinal
+        COALESCE(e.evidence_ordinal, 0) AS evidence_ordinal,
+        o.grounding_kind, o.ungrounded_reason AS unverified_reason,
+        (SELECT count(*) FROM finding_observation member WHERE member.finding_uid = f.finding_uid
+          AND member.grounding_kind = 'unverified') AS unverified_member_count
     FROM finding_observation o
     JOIN finding f
       ON f.finding_uid = o.finding_uid
-    JOIN LATERAL (
+    LEFT JOIN LATERAL (
         SELECT t.evidence_ordinal, t.page_number, t.quote
           FROM finding_evidence t
          WHERE t.finding_observation_id = o.finding_observation_id
@@ -114,6 +117,7 @@ _EXPORT_ROWS = text(
     LEFT JOIN finding_current_verdict cv
       ON cv.finding_uid = f.finding_uid
     WHERE o.run_id = :run_id
+      AND (e.evidence_ordinal IS NOT NULL OR o.grounding_kind = 'unverified')
       AND (f.canonical_observation_id IS NULL
            OR o.finding_observation_id = f.canonical_observation_id)
     ORDER BY
@@ -151,8 +155,8 @@ class ExportRow:
     category: str
     finding_text: str
     recommendation_text: str | None
-    evidence_page: int
-    evidence_quote: str
+    evidence_page: int | None
+    evidence_quote: str | None
     current_verdict: str | None
     latest_comment: str | None
     latest_decision_id: str | None
@@ -160,6 +164,9 @@ class ExportRow:
     evidence_ordinal: int
     severity: str | None = None
     severity_proposed: str | None = None
+    grounding_kind: str = "text_span"
+    unverified_reason: str | None = None
+    unverified_member_count: int = 0
 
 
 def run_header(session: Session, run_id: str) -> RunHeader | None:
@@ -186,7 +193,7 @@ def export_rows(session: Session, run_id: str) -> tuple[ExportRow, ...]:
             category=row["category"],
             finding_text=row["finding_text"],
             recommendation_text=row["recommendation_text"],
-            evidence_page=int(row["evidence_page"]),
+            evidence_page=None if row["evidence_page"] is None else int(row["evidence_page"]),
             evidence_quote=row["evidence_quote"],
             current_verdict=row["current_verdict"],
             latest_comment=row["latest_comment"],
@@ -195,6 +202,9 @@ def export_rows(session: Session, run_id: str) -> tuple[ExportRow, ...]:
             evidence_ordinal=int(row["evidence_ordinal"]),
             severity=row["severity"],
             severity_proposed=row["severity_proposed"],
+            grounding_kind=row["grounding_kind"],
+            unverified_reason=row["unverified_reason"],
+            unverified_member_count=row["unverified_member_count"],
         )
         for row in rows
     )

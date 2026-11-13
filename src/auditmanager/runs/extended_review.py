@@ -173,7 +173,11 @@ def _review_original_v2(*, state, phase, pages, substantive=None) -> None:
         "substantive_review_reply_refused" if gap else None if done else "no_observations")
     phase("finding_correction", "running")
     try:
-        corrections = original_review_corrector(done)
+        if "flow_repair_policy" in state and substantive is not None:
+            from auditmanager.analysis.public import flow_repair_helper
+            corrections = flow_repair_helper("current_corrections", state["observations"])
+        else:
+            corrections = original_review_corrector(done)
     except (ValueError, TypeError, KeyError, AttributeError):
         for item, _, _ in done:
             item.pop("correction", None)
@@ -239,19 +243,20 @@ def _response_payload(response: ModelResponse) -> dict:
     return value
 
 
-def _saved_response(store, row: dict, request: ModelRequest, binding) -> ModelResponse:
+def _saved_response(store, row: dict, request: ModelRequest, binding, *, dispatched_sha256=None) -> ModelResponse:
     p = row["parameters"]
+    expected_sha256 = request.request_sha256 if dispatched_sha256 is None else dispatched_sha256
     try:
         raw = store.read(parse_blob_id(p["extended_reply_blob_id"]), verify=True)
         if (len(raw) != p["extended_reply_size"] or hashlib.sha256(raw).hexdigest() != p["extended_reply_sha256"]
-                or row["request_sha256"] != request.request_sha256
+                or row["request_sha256"] != expected_sha256
                 or row["model_identity"] != request.model_id
                 or row["provider_mode"] != binding.adapter.provider_mode.value):
             raise ValueError()
         doc = json.loads(raw)
         response = ModelResponse(**doc["response"])
         _response_payload(response)
-        if response.response_sha256 != row["response_sha256"] or doc["request_sha256"] != request.request_sha256:
+        if response.response_sha256 != row["response_sha256"] or doc["request_sha256"] != expected_sha256:
             raise ValueError()
         return response
     except (KeyError, TypeError, ValueError):
@@ -259,21 +264,42 @@ def _saved_response(store, row: dict, request: ModelRequest, binding) -> ModelRe
 
 
 def _call(session, *, run_id, authority, jobs, journal, binding, request, phase, source_sha256,
-          meter, store, publish, checkpoint, global_unknown_fence=False):
+          meter, store, publish, checkpoint, global_unknown_fence=False, dispatch_receipt=None):
     checkpoint("extended_before_call")
     if getattr(binding, "cells", None) is not None:
         # `HOSTS-LAYOUT-01` (`R-133`): a planned run's calls go through the binding of their cell (``runs.stage_plan.cell_binding``). The
         # run-level binding is the text cell's, and a block or a norm call made on it would run on the wrong model: refused, not skipped.
         raise _refuse("extended_call_without_cell")
     planned = binding.call is not None and getattr(binding.call, "cell_key", None) is not None
+    flow_context = ":v2-flow-repair-v1:critic:" in (request.idempotency_scope or "")
+    base_request_sha256 = request.request_sha256
+    if flow_context:
+        from auditmanager.jobs.public import extended_context_unit
+        previous = extended_context_unit(session, run_id=run_id, phase=phase,
+            source_sha256=source_sha256, base_request_sha256=base_request_sha256)
+        session.commit()
+        if previous is not None:
+            if dispatch_receipt is not None:
+                dispatch_receipt.update(request_sha256=previous["request_sha256"], replayed=True,
+                    human_reference_receipt=previous["parameters"].get("human_reference_receipt", {}))
+            return _saved_response(store, previous, request, binding,
+                                   dispatched_sha256=previous["request_sha256"]), True
+        from auditmanager.precedents.public import candidate_context_request
+        # Current status locks live through provider-effect registration, then are
+        # released before network I/O. No runner-side late context is appended.
+        request = candidate_context_request(session, run_id=run_id, request=request)
+    if dispatch_receipt is not None:
+        dispatch_receipt.update(request_sha256=request.request_sha256, replayed=False)
     # The key of a saved reply. A planned call is identified by (source, phase, request, model) alone: neither the host nor the connection
     # revision is in it, so a retry served by another host after a move finds the reply already paid for. Every other call keeps the key
     # it has always had, so the replies of runs started before the layout are still found.
     key = extended_digest({"format": FORMAT, "source": source_sha256, "phase": phase,
         "request": request.request_sha256, "model": request.model_id,
         **({} if planned else {"connection": None if binding.call is None else binding.call.connection_revision_id})})
-    saved = extended_unit(session, run_id=run_id, unit_key=key, source_sha256=source_sha256, phase=phase)
-    session.commit()  # no read/authority lock survives external Blob I/O
+    saved = extended_unit(session, run_id=run_id, unit_key=key, source_sha256=source_sha256, phase=phase,
+                          **({"replay_received_only": True} if flow_context else {}))
+    if not flow_context or saved is not None:
+        session.commit()  # no read/authority lock survives external Blob I/O
     if saved is not None:
         return _saved_response(store, saved, request, binding), True
     if global_unknown_fence:
@@ -281,7 +307,8 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
         if has_ambiguous_provider_effect(session,run_id=run_id):
             session.commit()
             raise _refuse("extended_provider_outcome_unknown")
-        session.commit()
+        if not flow_context:
+            session.commit()
     pin = next((p for p in pinned_models() if p.model_id == request.model_id), None)
     if pin is None:
         raise _refuse("extended_model_price_unavailable")
@@ -289,6 +316,12 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
     meter.check_before_call(pending_cost_usd=request_cost_upper_usd(pin, request))
     params = {**request.parameters, "extended_unit_key": key, "extended_source_sha256": source_sha256,
               "extended_phase": phase}
+    if flow_context:
+        params["flow_base_request_sha256"] = base_request_sha256
+        from auditmanager.precedents.public import candidate_context_receipt
+        params["human_reference_receipt"] = candidate_context_receipt(request)
+        if dispatch_receipt is not None:
+            dispatch_receipt["human_reference_receipt"] = params["human_reference_receipt"]
     from auditmanager.analysis.public import semantic_repair_metadata
     params.update(semantic_repair_metadata(request))
     # Re-use the standard journal callbacks, preserving the extra immutable unit
@@ -645,7 +678,7 @@ def _asked_norm_question(item: dict) -> bool:
 
 def _norms(session, observations: list[dict], snapshot_id: str | None,
            *, full_document: bool = False, checkpoint=None, lookup_receipts=None,
-           query_planning=False) -> list[str]:
+           query_planning=False, strict_scope=False) -> list[str]:
     # Candidate retrieval is deterministic corpus lookup, never edition validation.
     available = snapshot_id is not None
     cache: dict[str, list[dict]] = {}
@@ -656,8 +689,26 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
     for ordinal, item in enumerate(observations):
         query_plan = None
         if query_planning:
-            from .norm_queries import plan_norm_queries
-            query_plan = plan_norm_queries(item)
+            from .norm_queries import plan_flow_norm_queries, plan_norm_queries
+            query_plan = plan_flow_norm_queries(item) if strict_scope else plan_norm_queries(item)
+            if strict_scope:
+                literal = plan_norm_queries({**item, "norm_queries": []})
+                if literal["reason"] == "literal_standard_reference":
+                    bounds = literal["queries"]
+                    claimed = parse_norm_query(item.get("title", "") + " " + item.get("description", ""))
+                    clause = claimed.clause if len(bounds) == 1 else None
+                    scoped = []
+                    for proposed in query_plan["queries"] or bounds:
+                        words = parse_norm_query(proposed).words or ""
+                        for bound in bounds:
+                            head = bound + (f" п. {clause}" if clause else "")
+                            value = head + (" " + words if words else "")
+                            if len(value) > MAX_NORM_QUERY_CHARACTERS:
+                                value = head  # never cut a designation, edition or clause
+                            if value not in scoped:
+                                scoped.append(value)
+                    query_plan.update(queries=scoped, original_proposed_queries=deepcopy(item.get("norm_queries", [])),
+                        scope_policy="literal_document_and_clause", literal_scope=deepcopy(literal["provenance"]))
         queries = item.pop("norm_queries", []) if query_plan is None else query_plan["queries"]
         if query_plan is not None:
             item.pop("norm_queries", None)
@@ -686,7 +737,7 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
                 reused_query_answers=sum(query.get("cache_reused") is True for query in answered),
                 search_tail_not_read=any(query.get("has_more") is True for query in answered))
         if query_plan is not None and query_plan["status"] == "not_applicable":
-            item.update(norm_status="not_applicable", norm_reason="no_normative_question",
+            item.update(norm_status="not_applicable", norm_reason=query_plan["reason"],
                 norm_candidates=[], norm_review_status="not_required")
             finish_receipt()
             continue
@@ -722,10 +773,18 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
                     if not page.items:
                         any_words = _any_words_query(query)  # NORM-ANY-WORDS-01
                         if any_words is not None:
+                            if strict_scope and receipt is not None:
+                                receipt["additional_search_performed"] = True
+                                active_query["any_words_query"] = any_words
                             try:
                                 page = search_norms(session, q=any_words, norms_snapshot_id=snapshot_id,
                                     cursor=None, limit=3, timeout_ms=1200)
                             except DomainError:
+                                if strict_scope:
+                                    # The fresh policy's negative outcome requires
+                                    # the whole bounded strategy to have completed.
+                                    # A failed broader lookup remains pending.
+                                    raise
                                 # The second pass is broader than the first. One the search refuses (too broad, at capacity) leaves
                                 # the query where the first pass left it -- no hit -- and the receipt says the second was tried.
                                 session.rollback()
@@ -747,7 +806,8 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
                 if active_query is not None:
                     active_query.update(deepcopy(cache_receipts[key]), status="completed")
                 for candidate in cache[key]:
-                    if any(c["paragraph_id"] == candidate["paragraph_id"] for c in candidates):
+                    if any(c["paragraph_id"] == candidate["paragraph_id"]
+                            and (not query_planning or c["quote"] == candidate["quote"]) for c in candidates):
                         continue
                     candidates.append(candidate)
             item["norm_status"] = "candidates" if candidates else "unavailable" if item.get("norm_reason") == "lookup_window_exhausted" else "not_found"
@@ -759,7 +819,22 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
             if active_query is not None:
                 active_query.update(status="failed", error_code=error.code.value, reason="lookup_unavailable")
         finish_receipt()
-    _semantic_candidates(session, observations, snapshot_id, checkpoint=checkpoint, warnings=warnings,
+    semantic_inputs = observations
+    if strict_scope:
+        semantic_inputs = []
+        for item in observations:
+            plan = item.get("norm_query_plan", {})
+            bounded = bool(plan.get("literal_scope")) or any(
+                parse_norm_query(query).designation is not None or parse_norm_query(query).clause is not None
+                for query in plan.get("queries", []))
+            if bounded:
+                # The existing semantic endpoint is snapshot-scoped, not
+                # document/edition/clause-scoped. It cannot replace a valid
+                # negative bounded answer with another standard's neighbour.
+                plan["semantic_lookup"] = "not_requested_bound_scope"
+            else:
+                semantic_inputs.append(item)
+    _semantic_candidates(session, semantic_inputs, snapshot_id, checkpoint=checkpoint, warnings=warnings,
                          full_document=full_document)
     return sorted(set(warnings))
 
@@ -958,7 +1033,14 @@ def _attach_consolidation(result, *, version_uid, include_saved_relationships=Fa
             if not isinstance(window, dict) or not isinstance(window.get("sources", []), list):
                 raise ValueError("consolidation_window_source_invalid")
             sources.extend(window.get("sources", []))
-        derived = consolidate_extended_observations(result.get("observations", []),
+        if "flow_repair_policy" in result:
+            from auditmanager.analysis.public import flow_repair_helper
+            derived = flow_repair_helper("consolidate_flow", result.get("observations", []),
+                sources=sources, version_uid=version_uid,
+                relationships=result.get("semantic_relationships", []),
+                ensemble_batches=result.get("block_ensemble", {}).get("batches", []))
+        else:
+            derived = consolidate_extended_observations(result.get("observations", []),
             sources=sources, version_uid=version_uid,
             ensemble_batches=result.get("block_ensemble", {}).get("batches", [])
                 if "quality_policy" in result or include_saved_relationships else None)
@@ -1078,6 +1160,8 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         **({"finding_proposals": deepcopy(policy["finding_proposals"])}
            if isinstance(policy, dict) and "finding_proposals" in policy else {}),
         **({"quality_policy": deepcopy(policy["quality_policy"])} if isinstance(policy, dict) and "quality_policy" in policy else {}),
+        **({"flow_repair_policy": deepcopy(policy["flow_repair_policy"])}
+           if isinstance(policy, dict) and "flow_repair_policy" in policy else {}),
         **({"original_review": {**original_review_plan(), **({"mode": "substantive"}
             if isinstance(policy, dict) and "quality_policy" in policy else {})}} if original else {}),
         **parameter_result,
@@ -1100,8 +1184,13 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
             "blocks_remaining":0,"skipped":[]}}
 
 
-def _full_comprehensive_review(*, run, model_id, section, state, pages, block_items, call, settings=None, related_index=None):
+def _full_comprehensive_review(*, run, model_id, section, state, pages, block_items, call, settings=None, related_index=None,
+        flow_policy=None, phase=None, pair_call_limit=0):
     """Cover every page character and source in repeatable provider-sized batches."""
+    if flow_policy is not None:
+        return _flow_comprehensive_review(run=run, model_id=model_id, section=section, state=state, pages=pages,
+            block_items=block_items, call=call, settings=settings, related_index=related_index,
+            phase=phase, pair_call_limit=pair_call_limit)
     from auditmanager.analysis.public import build_comprehensive_request
     units = []
     sources_by_page = {}
@@ -1180,12 +1269,181 @@ def _full_comprehensive_review(*, run, model_id, section, state, pages, block_it
     return observations
 
 
+def _flow_comprehensive_review(*, run, model_id, section, state, pages, block_items, call, settings,
+        related_index, phase, pair_call_limit):
+    """Checkpoint independent findings and original-style T/G relationships per packet."""
+    from auditmanager.analysis.public import (flow_repair_helper, select_related_review_context,
+        build_semantic_repair_request)
+    text_items = state["text_items"]
+    for kind, rows in (("text", text_items), ("visual", block_items)):
+        for ordinal, item in enumerate(rows):
+            item.setdefault("origin_id", flow_repair_helper("origin_id", {**item, "occurrence": ordinal}, kind))
+    registry = {source["source_id"]: source for source in state["sources"]}
+    page_texts = {page["page_number"]: str(page.get("text", "")) for page in pages}
+    native_by_page = {}
+    for number, value in page_texts.items():
+        for start in range(0, max(1, len(value)), 40_000):
+            text = value[start:start+40_000]
+            ref = "native_text_" + extended_digest({"version_uid": run.version_uid,
+                "page": number, "text": value, "character_start": start})[:24]
+            source = {"source_id": ref, "kind": "text", "source_type": "native_text",
+                "page_number": number, "version_uid": run.version_uid, "quote": text,
+                "character_start": start, "character_end": start+len(text),
+                "text_sha256": hashlib.sha256(value.encode()).hexdigest()}
+            registry[ref] = source; state["sources"].append(source)
+            native_by_page.setdefault(number, []).append({"source_id": ref, "page_number": number,
+                "text": text, "character_start": start})
+    empty_index = {"by_object": {}, "excerpts": []}
+    origins = {item["origin_id"]: item for item in [*text_items, *block_items]}
+    def item_pages(item):
+        return {registry[ref].get("page_number") for ref in item["source_ids"] if ref in registry}
+    def object_keys(item):
+        return set(select_related_review_context(empty_index,
+            texts=[item["title"] + " " + item["description"]], page_numbers=set())["object_keys"])
+    page_map = {key: item_pages(item) for key, item in origins.items()}
+    keys = {key: object_keys(item) for key, item in origins.items()}
+    required = sorted({tuple(sorted((left["origin_id"], right["origin_id"])))
+        for left in text_items for right in block_items
+        if page_map[left["origin_id"]] & page_map[right["origin_id"]]
+            or keys[left["origin_id"]] & keys[right["origin_id"]]})
+    packets = []
+    for number in sorted(native_by_page):
+        visual = [item for item in block_items if number in page_map[item["origin_id"]]]
+        textual = [item for item in text_items if number in page_map[item["origin_id"]]]
+        count = max(1, math.ceil(len(visual)/10), math.ceil(len(textual)/10))
+        for context in native_by_page[number]:
+            for index in range(count if context["character_start"] == 0 else 1):
+                packets.append({"native_context": [context], "visual_observations": visual[index*10:(index+1)*10],
+                    "text_observations": textual[index*10:(index+1)*10], "pair_packet": False})
+    co_located = set()
+    for packet in packets:
+        refs = {item["origin_id"] for item in [*packet["text_observations"], *packet["visual_observations"]]}
+        packet["required_pairs"] = [list(pair) for pair in required if set(pair) <= refs]
+        co_located.update(tuple(pair) for pair in packet["required_pairs"])
+    pending_pairs = [pair for pair in required if pair not in co_located]
+    # Additional pair work is explicitly capped and priced in the fresh consent.
+    pair_packets = 0
+    while pending_pairs and pair_packets < pair_call_limit:
+        chosen, refs = [], set()
+        for pair in pending_pairs:
+            if len(chosen) < 100 and len(refs | set(pair)) <= 40:
+                chosen.append(pair); refs.update(pair)
+        pending_pairs = [pair for pair in pending_pairs if pair not in chosen]
+        numbers = sorted(set().union(*(page_map[ref] for ref in refs)))
+        contexts = []
+        budget = 40_000
+        for number in numbers:
+            # The pair's actual observation quotes are always present below;
+            # relevant native excerpts supplement them without unbounded pages.
+            for context in native_by_page.get(number, []):
+                if not budget:
+                    break
+                copied = dict(context, text=context["text"][:budget])
+                contexts.append(copied); budget -= len(copied["text"])
+        packets.append({"native_context": contexts,
+            "visual_observations": [item for item in block_items if item["origin_id"] in refs],
+            "text_observations": [item for item in text_items if item["origin_id"] in refs],
+            "required_pairs": [list(pair) for pair in chosen], "pair_packet": True})
+        pair_packets += 1
+    observations, relationships, receipts = [], [], []
+    state["comprehensive_batches"] = receipts
+    state["semantic_relationships"] = relationships
+    state["semantic_pair_coverage"] = {"expected": len(required), "valid": 0,
+        "pending": len(required), "refused": 0, "excluded": 0,
+        "unpackaged_pairs": [list(pair) for pair in pending_pairs], "pair_call_limit": pair_call_limit}
+    covered = set()
+    for ordinal, packet in enumerate(packets):
+        own = {ref for item in [*packet["text_observations"], *packet["visual_observations"]]
+            for ref in item["source_ids"]}
+        own.update(context["source_id"] for context in packet["native_context"])
+        selected = [{key: deepcopy(value) for key, value in registry[ref].items() if key != "context"}
+            for ref in sorted(own) if ref in registry]
+        payload = {**packet, "sources": selected, "source_sha256": state["source_sha256"], "coverage": state["coverage"]}
+        if related_index is not None:
+            related = select_related_review_context(related_index,
+                texts=[item["title"] + " " + item["description"] for item in
+                    [*packet["text_observations"], *packet["visual_observations"]]],
+                page_numbers={row["page_number"] for row in packet["native_context"]})
+            payload["related_context"] = related
+            for source in related["sources"]:
+                if source["source_id"] not in own:
+                    selected.append(source); own.add(source["source_id"])
+                if source["source_id"] not in registry:
+                    registry[source["source_id"]] = source; state["sources"].append(source)
+        refs = {item["origin_id"] for item in [*packet["text_observations"], *packet["visual_observations"]]}
+        identity = f"comprehensive:{ordinal}"
+        request = flow_repair_helper("build_flow_comprehensive_request", model_id=model_id,
+            run_id=run.run_id, section=section, settings=settings, payload=payload)
+        response = call(request, identity)
+        rejected = []
+        def parse(text, refused, expected_pairs=None):
+            expected_pairs = packet["required_pairs"] if expected_pairs is None else expected_pairs
+            try:
+                return flow_repair_helper("parse_flow_comprehensive_reply", text, allowed_sources=own,
+                    origins=refs, required_pairs=expected_pairs, rejected=refused)
+            except (ValueError, TypeError, KeyError) as error:
+                refused.append({"reason": str(error) if str(error).isidentifier() else "reply_unreadable"})
+                return [], [], expected_pairs
+        found, links, missing = parse(response.output_text, rejected)
+        if response.truncated:
+            rejected.append({"reason": "extended_response_truncated"})
+        original_refusals = deepcopy(rejected)
+        if rejected:
+            if found or links:
+                state["observations"] = finalize_extended_items([*text_items, *block_items, *observations, *found], state["sources"])
+                state["semantic_relationships"] = [*relationships, *(dict(link, packet=identity) for link in links)]
+                if phase is not None:
+                    phase("comprehensive_analysis", "running")
+            repaired_request = flow_repair_helper("build_flow_repair_request", request, rejected=rejected[:128],
+                accepted_records=found, reply_sha256=response.response_sha256, procedure="comprehensive",
+                required_pairs=missing, accepted_relationships=links)
+            repaired_response = call(repaired_request, identity + ":repair:1")
+            rejected = []
+            repaired, repaired_links, _ = parse(repaired_response.output_text, rejected, expected_pairs=missing)
+            by_hash = {extended_digest(item): item for item in [*found, *repaired]}
+            found = list(by_hash.values())
+            by_pair = {tuple(sorted((link["left_origin_id"], link["right_origin_id"]))): link for link in links}
+            for link in repaired_links:
+                by_pair.setdefault(tuple(sorted((link["left_origin_id"], link["right_origin_id"]))), link)
+            links = list(by_pair.values())
+            # Completion belongs to the union of both validated responses, not
+            # to the addressed repair's intentionally smaller answer alone.
+            missing = [list(pair) for pair in packet["required_pairs"] if tuple(sorted(pair)) not in by_pair]
+            rejected = [row for row in rejected if row.get("reason") != "flow_required_pairs_missing"]
+            if missing:
+                rejected.append({"reason": "flow_required_pairs_missing", "missing_pairs": missing})
+            if repaired_response.truncated:
+                rejected.append({"reason": "extended_response_truncated"})
+        observations.extend(found); relationships.extend(dict(link, packet=identity) for link in links)
+        state["semantic_relationships"] = relationships
+        covered.update(tuple(sorted((link["left_origin_id"], link["right_origin_id"]))) for link in links)
+        receipts.append({"identity": identity, "pair_packet": packet["pair_packet"],
+            "origin_ids": sorted(refs), "required_pairs": packet["required_pairs"],
+            "missing_pairs": missing, "accepted_observations": len(found),
+            "rejected_records": original_refusals, "unresolved_records": deepcopy(rejected),
+            "request_sha256": request.request_sha256, "response_sha256": response.response_sha256})
+        valid = len(set(required) & covered)
+        state["semantic_pair_coverage"].update(valid=valid, pending=len(required)-valid)
+        # Durable progress precedes the next provider call; the ordinary exact
+        # provider journal supplies paid-response replay after a process restart.
+        state["observations"] = finalize_extended_items([*text_items, *block_items, *observations], state["sources"])
+        if phase is not None:
+            phase("comprehensive_analysis", "running")
+    state["comprehensive_execution_complete"] = not pending_pairs and not any(
+        receipt["unresolved_records"] or receipt["missing_pairs"] for receipt in receipts)
+    return observations
+
+
 #: The reason of a norm stage in which a reply record was refused or an input got no accepted record.
 NORM_REPLY_REFUSED = "norm_verification_reply_refused"
 
 
-def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings=None):
+def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings=None,
+        flow_policy=None):
     """Search and review every candidate-bearing observation in bounded model calls."""
+    if flow_policy is not None:
+        return _flow_norm_verification(session=session, run=run, model_id=model_id, section=section,
+            state=state, snapshot_id=snapshot_id, call=call, phase=phase, checkpoint=checkpoint, settings=settings)
     from auditmanager.analysis.public import build_norm_review_request
     items = state["observations"]
     state["warnings"].extend(_norms(session, items, snapshot_id,
@@ -1238,7 +1496,7 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
     phase("norm_verification", "partial" if any(not item.get("norm_candidates") for item in asked) else "completed")
 
 
-def _review_norms_per_record(*, state, request, call, identity, indexed):
+def _review_norms_per_record(*, state, request, call, identity, indexed, flow=False, on_accepted=None):
     """Ask one norm review question and read its reply per record (`NORM-REPLY-PER-RECORD-01`).
 
     One refused record costs only its own input: the others keep their assessment, the refused
@@ -1255,7 +1513,8 @@ def _review_norms_per_record(*, state, request, call, identity, indexed):
     allowed = {source["source_id"] for source in state["sources"]}
     reviewed, gap = _received_reply(state=state, request=request, response=response, call=call, identity=identity,
         parse=lambda text, **kwargs: parse_norm_review(text, observations=indexed, allowed_sources=allowed,
-            quote_echo=False, **kwargs), policy={})
+            quote_echo=False, **kwargs), policy={"semantic_repair_attempts": 1} if flow else {},
+        expected_inputs=set(indexed) if flow else None, on_accepted=on_accepted)
     accepted = {result["input_ids"][0]: result for result in reviewed}
     for key, item in indexed.items():
         if key in accepted:
@@ -1265,6 +1524,96 @@ def _review_norms_per_record(*, state, request, call, identity, indexed):
             item.update(norm_review_status="not_reviewed", norm_review_reason=NORM_REPLY_REFUSED)
             gap = True
     return gap
+
+
+def _flow_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings):
+    """Resolver parity: a valid negative lookup is completed work, not a failed job."""
+    from auditmanager.analysis.public import build_norm_review_request
+    items = state["observations"]
+    state["warnings"].extend(_norms(session, items, snapshot_id, full_document=True,
+        checkpoint=checkpoint, query_planning=True, strict_scope=True,
+        lookup_receipts=state.setdefault("norm_lookup_receipts", [])))
+    candidates = [item for item in items if item.get("norm_candidates")]
+    for item in items:
+        if item.get("norm_status") == "not_found":
+            item.update(norm_review_status="not_required", finding_norm_status="not_verified",
+                norm_review_reason="search_completed_without_match")
+        elif item.get("norm_status") == "not_applicable":
+            item.update(norm_review_status="not_required", finding_norm_status="not_applicable")
+        elif item.get("norm_status") == "unavailable":
+            item.update(norm_review_status="not_reviewed", finding_norm_status="not_verified")
+    # Deduplicate transmission by exact fragment, never replace all occurrences
+    # of a paragraph with its first returned quote. Each variant has a temporary
+    # request-local alias; persisted citations return the real paragraph identity.
+    batches, batch, characters = [], [], 0
+    for item in candidates:
+        size = len(item["title"]) + len(item["description"]) + sum(len(c["quote"]) for c in item["norm_candidates"])
+        if batch and (len(batch) >= 40 or characters + size > 80_000):
+            batches.append(batch); batch, characters = [], 0
+        batch.append(item); characters += size
+    if batch:
+        batches.append(batch)
+    for number, batch in enumerate(batches):
+        originals, indexed, context = {}, {}, {}
+        alias_to_paragraph = {}
+        for ordinal, item in enumerate(batch):
+            key = "xni_" + extended_digest({"observation_id": item["observation_id"]})[:24]
+            originals[key] = item
+            copied = deepcopy(item)
+            for candidate in copied["norm_candidates"]:
+                real = candidate["paragraph_id"]
+                alias = "xnv_" + extended_digest({"paragraph_id": real, "snapshot_id": candidate.get("snapshot_id"),
+                    "document_id": candidate.get("document_id"), "quote": candidate["quote"]})[:24]
+                candidate.update(paragraph_id=alias, actual_paragraph_id=real)
+                alias_to_paragraph[alias] = real; context[alias] = candidate
+            indexed[key] = copied
+        request = build_norm_review_request(model_id=model_id, run_id=run.run_id, section=section,
+            settings=settings, quote_echo=False, payload={
+                "observations": [{"title": item["title"], "description": item["description"],
+                    "source_ids": item["source_ids"], "input_id": key,
+                    "norm_candidate_ids": [c["paragraph_id"] for c in item["norm_candidates"]]}
+                    for key, item in indexed.items()], "norm_context": list(context.values()),
+                "source_sha256": state["source_sha256"], "candidate_identity_policy": "exact-fragment-alias-v1"})
+        from .flow_norm_context import attach_flow_norm_context
+        request, context_receipt = attach_flow_norm_context(session, request, originals=originals,
+            indexed=indexed, snapshot_id=snapshot_id, checkpoint=checkpoint)
+        state.setdefault("normative_context_receipts", {})[str(number)] = context_receipt
+        def save_accepted(accepted):
+            for result in accepted:
+                assessment = deepcopy(result.get("norm_assessment"))
+                if assessment:
+                    for citation in assessment.get("citations", []):
+                        citation["paragraph_id"] = alias_to_paragraph[citation["paragraph_id"]]
+                target = originals[result["input_ids"][0]]
+                target.update(norm_assessment=assessment, norm_review_status="reviewed", norm_review_reason=None)
+            if accepted:
+                phase("norm_verification", "running")
+        _review_norms_per_record(state=state, request=request, call=call,
+            identity=f"norm_verification:{number}", indexed=indexed, flow=True, on_accepted=save_accepted)
+        for key, copied in indexed.items():
+            target = originals[key]
+            for field in ("norm_review_status", "norm_review_reason"):
+                target[field] = copied.get(field)
+            assessment = deepcopy(copied.get("norm_assessment"))
+            if assessment:
+                for citation in assessment.get("citations", []):
+                    citation["paragraph_id"] = alias_to_paragraph[citation["paragraph_id"]]
+                target["norm_assessment"] = assessment
+            complete_context = target["normative_context"]["complete"]
+            if not complete_context:
+                target["norm_review_reason"] = "norm_paragraph_context_incomplete"
+            target["finding_norm_status"] = ("partially_verified" if complete_context and assessment
+                and assessment.get("relation") == "supports" else "not_verified")
+        phase("norm_verification", "running")
+    excluded = sum(item.get("norm_status") == "not_applicable" for item in items)
+    valid = sum(item.get("norm_status") == "not_found" or (item.get("norm_review_status") == "reviewed"
+        and item.get("normative_context", {}).get("complete") is True) for item in items)
+    pending = len(items)-excluded-valid
+    procedure = next(p for p in state["procedures"] if p["id"] == "norm_verification")
+    procedure["input_accounting"] = {"expected": len(items), "valid": valid, "pending": pending,
+        "refused": 0, "excluded": excluded, "exclusion_reason": "no_normative_question"}
+    phase("norm_verification", "partial" if pending else "completed",
+        "norm_inputs_unresolved" if pending else "no_normative_question" if excluded == len(items) else None)
 
 
 def _bounds_lifted(policy):
@@ -1298,7 +1647,7 @@ def _source_sized(policy):
     return policy.get("completion_policy") == "source-complete-v1" or policy.get("source_sized_calls") is True
 
 
-def _received_reply(*, state, request, response, parse, call, identity, policy):
+def _received_reply(*, state, request, response, parse, call, identity, policy, expected_inputs=None, on_accepted=None):
     """Keep valid records and repair a received semantic refusal under fresh consent.
 
     The second call has its own durable identity. Transport failures and ambiguous
@@ -1313,18 +1662,36 @@ def _received_reply(*, state, request, response, parse, call, identity, policy):
         rejected = [{"reason": _reply_refusal_code(error), "reply_ordinal": None}]
     if response.truncated:
         rejected.append({"reason": "extended_response_truncated", "reply_ordinal": None})
+    def input_key(item):
+        ids = item.get("input_ids", [])
+        return item.get("input_id") or (ids[0] if len(ids) == 1 else extended_digest(item))
+    if expected_inputs is not None:
+        valid = {input_key(item) for item in accepted}
+        rejected.extend({"reason": "review_input_missing", "input_id": key}
+            for key in sorted(expected_inputs - valid))
+    if on_accepted is not None:
+        on_accepted(accepted)
     if not rejected:
         return accepted, False
     receipt = {"phase_key": identity, "request_sha256": request.request_sha256,
         "response_sha256": response.response_sha256, "rejected_records": deepcopy(rejected),
         "accepted_record_count": len(accepted), "status": "unresolved"}
     state.setdefault("reply_refusals", []).append(receipt)
+    if expected_inputs is not None and expected_inputs <= {input_key(item) for item in accepted}:
+        receipt["status"] = "all_inputs_answered_extra_records_refused"
+        return accepted, False
     if policy.get("semantic_repair_attempts") != 1:
         return accepted, True
     from auditmanager.analysis.public import build_semantic_repair_request
-    repaired_request = build_semantic_repair_request(request, rejected=rejected,
-        accepted_records=accepted, reply_sha256=response.response_sha256,
-        procedure=identity.split(":", 1)[0])
+    if expected_inputs is not None:
+        from auditmanager.analysis.public import flow_repair_helper
+        repaired_request = flow_repair_helper("build_flow_repair_request", request, rejected=rejected,
+            accepted_records=accepted, reply_sha256=response.response_sha256,
+            procedure=identity.split(":", 1)[0], missing_input_ids=expected_inputs-{input_key(item) for item in accepted})
+    else:
+        repaired_request = build_semantic_repair_request(request, rejected=rejected,
+            accepted_records=accepted, reply_sha256=response.response_sha256,
+            procedure=identity.split(":", 1)[0])
     receipt.update(status="repairing", repair_request_sha256=repaired_request.request_sha256)
     repaired_response = call(repaired_request, identity + ":repair:1")
     repair_rejected = []
@@ -1339,8 +1706,14 @@ def _received_reply(*, state, request, response, parse, call, identity, policy):
     # are keyed by their immutable input; an updated valid review supersedes it.
     merged = {}
     for item in [*accepted, *repaired]:
-        key = item.get("input_id") or extended_digest(item)
-        merged[key] = item
+        key = input_key(item) if expected_inputs is not None else item.get("input_id") or extended_digest(item)
+        if expected_inputs is None:
+            merged[key] = item
+        else:
+            merged.setdefault(key, item)
+    if expected_inputs is not None:
+        repair_rejected.extend({"reason": "review_input_missing", "input_id": key}
+            for key in sorted(expected_inputs - set(merged)))
     receipt.update(status="unresolved" if repair_rejected else "resolved",
         repair_response_sha256=repaired_response.response_sha256,
         repair_rejected_records=deepcopy(repair_rejected),
@@ -1393,8 +1766,9 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
     def call(request, identity):
         base_identity, repair_separator, repair_attempt = identity.partition(":repair:")
         repairing = bool(repair_separator)
-        if repairing and (not v3 or window_context["policy"].get("semantic_repair_attempts") != 1
-                or repair_attempt != "1"):
+        flow_approved = not v3 and isinstance(policy, dict) and "flow_repair_policy" in policy
+        if repairing and (repair_attempt != "1" or not (flow_approved
+                or v3 and window_context["policy"].get("semantic_repair_attempts") == 1)):
             raise _refuse("semantic_repair_not_approved")
         receipt=None
         parameter_context_receipt=None
@@ -1471,11 +1845,17 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             receipt.pop("error_code",None)  # a retried call has not failed yet; an earlier failure of the same unit is not its state
             receipt.update(status="running",request_sha256=request.request_sha256)
             save("running")
+        dispatch_receipt = None
+        if flow_approved:
+            if not hasattr(call, "dispatch_receipts"):
+                call.dispatch_receipts = {}
+            dispatch_receipt = call.dispatch_receipts.setdefault(identity, {})
         try:
             response, replayed = _call(session,run_id=run.run_id,authority=authority,jobs=jobs,journal=journal,
                 binding=_phase_binding(binding, identity),request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
                 source_sha256=state["source_sha256"],meter=meter,store=store,publish=publish,checkpoint=checkpoint,
-                global_unknown_fence=v3)
+                global_unknown_fence=v3 or flow_approved,
+                **({"dispatch_receipt": dispatch_receipt} if flow_approved else {}))
         except DomainError as error:
             for failed_receipt in (receipt, cell_receipt, parameter_context_receipt, parameter_review_receipt):
                 if failed_receipt is not None:
@@ -1498,7 +1878,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 receipt["status"] = "received"
             counts=state.setdefault("phase_call_counts",{}).setdefault(kind,{"completed_calls":0,"replayed":0})
             counts["replayed" if replayed else "completed_calls"]+=1
-        if response.truncated and (not v3 or window_context["policy"].get("semantic_repair_attempts") != 1):
+        if response.truncated and not (flow_approved
+                or v3 and window_context["policy"].get("semantic_repair_attempts") == 1):
             raise _refuse("extended_response_truncated")
         return response
     save("running")
@@ -1506,6 +1887,12 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         # A marker this code does not know is a failed review, never a v2 run without the original's critic.
         original_review=not v3 and _original_review_enabled(policy,strict=True)
         quality = not v3 and isinstance(policy, dict) and "quality_policy" in policy
+        flow_policy = policy.get("flow_repair_policy") if not v3 and isinstance(policy, dict) else None
+        if flow_policy is not None:
+            from auditmanager.analysis.public import validate_flow_repair_policy
+            validate_flow_repair_policy(flow_policy)
+            if not quality or policy.get("semantic_repair_attempts") != 1:
+                raise _refuse("flow_repair_quality_policy_missing")
         proposals = policy.get("finding_proposals") if not v3 and isinstance(policy, dict) else None
         if proposals is not None:
             from auditmanager.analysis.public import validate_finding_proposal_policy
@@ -1603,6 +1990,10 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                     index = int(refs[0].split(":")[1])
                     if index < len(primary) and isinstance(primary[index].get("recommendation_text"), str):
                         item["recommendation_text"] = primary[index]["recommendation_text"]
+                    if flow_policy is not None and index < len(primary):
+                        item["original_primary_observation"] = deepcopy(primary[index])
+        if flow_policy is not None:
+            state["source_sha256"] = extended_digest({"source": state["source_sha256"], "flow_repair_policy": flow_policy})
         if v3: state["source_sha256"]=window_context["global_sha256"]
         if batched:
             state["observations"]=finalize_extended_items(state["text_items"],state["sources"])
@@ -1618,6 +2009,16 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             state["input_passport"] = build_review_input_passport(version_uid=run.version_uid,
                 pdf_sha256=pdf_sha or bound_sha, page_count=version.page_count, pages=pages,
                 sources=state["sources"], skipped=state["coverage"]["skipped"])
+            if flow_policy is not None:
+                passport = state["input_passport"]
+                for page in passport["pages"]:
+                    number = page["page_number"]
+                    has_text = bool(by_page.get(number, "").strip())
+                    page.update(text_available=has_text, text_state="present" if has_text
+                        else "visual_required" if page["crop_ids"] else "empty")
+                passport["unrepresented_pages"] = [page["page_number"] for page in passport["pages"]
+                    if not page["text_available"] and not page["crop_ids"]]
+                passport["source_coverage_complete"] = not passport["unrepresented_pages"]
             related_index = build_related_review_index(pages, version_uid=run.version_uid)
         recognised_by_page={}
         recognised_artifact_sha=None
@@ -1673,11 +2074,14 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                     parsed, refused = _received_reply(state=state, request=request, response=response,
                         parse=lambda text, **kwargs: parse_extended_reply(text,
                             allowed_sources={s["source_id"] for s in batch}, **kwargs),
-                        call=call, identity="blocks:"+str(start//8), policy=window_context["policy"] if v3 else {})
+                        call=call, identity="blocks:"+str(start//8),
+                        policy=window_context["policy"] if v3 else policy if flow_policy is not None else {})
                     batch_reason="block_analysis_reply_refused" if refused else None
                 partial_reason=partial_reason or (batch_reason if ensemble or not v3 else None)
                 any_refused|=refused
                 block_items.extend(parsed)
+                if flow_policy is not None:
+                    state["block_candidates"] = deepcopy(block_items)
                 if batched:
                     _coverage_complete(state,kind="block_analysis",index=start//8,
                         partial=refused, reason=batch_reason)
@@ -1712,11 +2116,15 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             phase("comprehensive_analysis","running")
             comprehensive = _full_comprehensive_review(run=run, **_kw(binding,"cross_check"),
                 section=section, state=state, pages=pages, block_items=block_items, call=call,
+                **({"flow_policy": flow_policy, "phase": phase,
+                    "pair_call_limit": policy["semantic_pair_call_limit"]} if flow_policy is not None else {}),
                 **({"related_index": related_index} if quality else {}))
             if "page_context_truncated" in state["warnings"]:
                 state["warnings"] = [warning for warning in state["warnings"] if warning != "page_context_truncated"]
                 state["warnings"].append("visual_context_bounded_full_text_reviewed")
-            phase("comprehensive_analysis", "completed")
+            complete = state.get("comprehensive_execution_complete", True)
+            phase("comprehensive_analysis", "completed" if complete else "partial",
+                None if complete else "comprehensive_inputs_unresolved")
         else:
             # Legacy v2 keeps its original request; v3 uses the current source/page window.
             contexts=[]
@@ -1790,7 +2198,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         elif full_document:
             _full_norm_verification(session=session, run=run, **_kw(binding,"norms"),
                 section=section, state=state, snapshot_id=snapshot_id, call=call,
-                phase=phase, checkpoint=checkpoint)
+                phase=phase, checkpoint=checkpoint,
+                **({"flow_policy": flow_policy} if flow_policy is not None else {}))
         else:
             window=state["observations"][:40]
             if v3:
@@ -1860,6 +2269,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 from .v2_quality import run_substantive_critic
                 substantive = lambda: run_substantive_critic(state=state, run=run, **_kw(binding, "review"),
                     store=store, pages=by_page, related_index=related_index, call=call, phase=phase,
+                    **({"flow_policy": flow_policy} if flow_policy is not None else {}),
                     **({"proposal_policy": proposals} if proposals is not None else {}))
             _review_original_v2(state=state,phase=phase,pages=by_page,substantive=substantive)
         if quality:
@@ -1881,7 +2291,15 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             if batch["status"]=="running":batch.update(status="failed",reason=reason)
             elif batch["status"]=="queued" and not batch.get("reason"):
                 batch.update(status="unavailable",reason="dependency_failed")
-        save("failed")
+        if not v3 and "flow_repair_policy" in state and state.get("observations"):
+            # A failed later call does not revoke already parsed questions. The
+            # failed procedure and provider uncertainty remain visible, while
+            # the ordinary partial-result reader can publish the valid subset.
+            state["execution_failure_reason"] = reason
+            state.update(_attach_consolidation(state, version_uid=run.version_uid, include_saved_relationships=True))
+            save("partial")
+        else:
+            save("failed")
         return state
 
 
@@ -3138,7 +3556,7 @@ def _candidate_refinement(item: dict) -> str | None:
     return words if 1 <= len(words) <= _MAX_TEXT else None
 
 
-def _candidate_member(item, *, registry: dict, conflicts: set, ordinals: dict) -> CandidateMember | None:
+def _candidate_member(item, *, registry: dict, conflicts: set, ordinals: dict, reviewable=False) -> CandidateMember | None:
     """One saved candidate as the publisher's member, or ``None`` when it cannot be one (no identity of 1 to 128 characters, no words)."""
     ref = item.get("observation_id") if isinstance(item, dict) else None
     if not isinstance(ref, str) or not 1 <= len(ref) <= 128:
@@ -3148,6 +3566,7 @@ def _candidate_member(item, *, registry: dict, conflicts: set, ordinals: dict) -
         return None
     blocks: list = []
     primary: list = []
+    native: list = []
     unlinked = other = 0
     seen: set = set()
     for source_id in item.get("source_ids") if isinstance(item.get("source_ids"), list) else []:
@@ -3167,12 +3586,34 @@ def _candidate_member(item, *, registry: dict, conflicts: set, ordinals: dict) -
                 unlinked += 1
         else:
             other += 1
+            if row is not None and row.get("kind") == "text" and type(row.get("page_number")) is int:
+                # Prefer a literal quote actually reviewed by the critic. A
+                # long native source is not shortened to a guessed prefix.
+                quotes = [e.get("quote") for e in item.get("critic", {}).get("source_evidence", [])
+                    if isinstance(e, dict) and e.get("source_id") == source_id]
+                quotes.extend([row.get("quote")])
+                for quote in quotes:
+                    if isinstance(quote, str) and 1 <= len(quote) <= 2000 and quote.strip():
+                        native.append((row["page_number"], quote)); break
     window_id = item.get("window_id")
+    original = item.get("original_primary_observation")
+    recommendation = item.get("recommendation_text")
+    if (reviewable and len(set(primary)) == 1 and not blocks and not other and not unlinked
+            and isinstance(original, dict)):
+        # The existing text publisher owns this exact observation. Its finding
+        # text excludes the category heading used by the preliminary UI row.
+        # Preserve the same immutable content for replay/tamper verification.
+        actual = original.get("finding_text")
+        if isinstance(actual, str) and actual.strip() and len(actual) <= _MAX_TEXT:
+            words = actual
+        if recommendation is None and isinstance(original.get("recommendation_text"), str):
+            recommendation = original["recommendation_text"]
     return CandidateMember(
         extended_observation_ref=ref, finding_text=words, block_evidence=tuple(blocks),
         refined_recommendation=_candidate_refinement(item), primary_text_ordinals=tuple(dict.fromkeys(primary)),
+        native_sources=tuple(dict.fromkeys(native)),
         proposed_severity=item.get("proposed_severity"),
-        proposed_recommendation=item.get("recommendation_text"),
+        proposed_recommendation=recommendation,
         primary_text_unlinked=unlinked, other_source_count=other,
         window_id=window_id if isinstance(window_id, str) else None,
         cross_window=item.get("origin_scope") == "global_cross_window" or window_id == "global-cross-window")
@@ -3201,7 +3642,7 @@ def read_candidate_groups(document: dict, *, run_id: str, version_uid: str,
     if status not in _COMPLETE_STATUSES:
         return (), ("extended_review_not_complete",)
     consolidation = result.get("consolidation")
-    if not (isinstance(consolidation, dict) and consolidation.get("version") == _CONSOLIDATION_VERSION
+    if not (isinstance(consolidation, dict) and consolidation.get("version") in {_CONSOLIDATION_VERSION, "v2-flow-repair-v1"}
             and isinstance(result.get("consolidated_observations"), list)):
         result = _attach_consolidation(dict(result), version_uid=version_uid)
         consolidation = result["consolidation"]
@@ -3216,7 +3657,8 @@ def read_candidate_groups(document: dict, *, run_id: str, version_uid: str,
         members: list = []
         for origin in group.get("origin_records", []) if isinstance(group, dict) else []:
             index = origin.get("raw_index") if isinstance(origin, dict) else None
-            member = (_candidate_member(observations[index], registry=registry, conflicts=conflicts, ordinals=ordinals)
+            member = (_candidate_member(observations[index], registry=registry, conflicts=conflicts, ordinals=ordinals,
+                reviewable="flow_repair_policy" in result)
                 if type(index) is int and 0 <= index < len(observations) else None)
             if member is None:
                 unread.append("candidate_invalid")

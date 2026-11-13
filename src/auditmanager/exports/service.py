@@ -59,7 +59,7 @@ class CsvExport:
         return len(self.content)
 
 
-def export_run_csv(session: Session, run_id: RunId | str) -> CsvExport:
+def export_run_csv(session: Session, run_id: RunId | str, *, verdict: str = "all") -> CsvExport:
     """Render one run's findings as the OD-11 CSV with W56a severity columns.
 
     Refuses with ``state_transition_not_allowed`` when the run's terminal does not
@@ -80,7 +80,8 @@ def export_run_csv(session: Session, run_id: RunId | str) -> CsvExport:
     # partially built file.
     assert_exportable(header.state, run_id=identity)
 
-    rows = export_rows(session, identity)
+    from auditmanager.exports.policy import includes_verdict
+    rows = tuple(row for row in export_rows(session, identity) if includes_verdict(row.current_verdict, verdict))
     return CsvExport(
         run_id=identity, run_state=header.state, content=render_csv(rows)
     )

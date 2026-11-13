@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from typing import Any, BinaryIO, get_args
 
@@ -1954,6 +1954,7 @@ def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
         proposed_severity=getattr(row, "proposed_severity", None),
         # `CRIT-SEAL-50`: only a block-anchored observation says so; `text_span` is the absent default, so a text body is unchanged.
         grounding_kind=_grounding_kind_view(row),
+        unverified_reason=getattr(row, "unverified_reason", None),
         # `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): the candidate the observation was published from, when it was.
         extended_observation_ref=getattr(row, "extended_observation_ref", None),
     )
@@ -1967,7 +1968,7 @@ _CATEGORY_CROSS_SOURCE = "cross_source"
 
 def _grounding_kind_view(row: Any) -> str | None:
     kind = getattr(row, "grounding_kind", None)
-    return _GROUNDING_PORTAL_BLOCK if kind == _GROUNDING_PORTAL_BLOCK else None
+    return kind if kind in {_GROUNDING_PORTAL_BLOCK, "unverified"} else None
 
 
 def _origin_view(row: Any) -> str | None:
@@ -1989,13 +1990,17 @@ def _finding_view(
 ) -> FindingView:
     # The blocks of the canonical observation (`Finding.block_evidence` mirrors it, as the citations do). None -- no block -- is absent from
     # the body, as for every finding before the field existed.
+    source_ids = {row.finding_observation_id}
+    if getattr(row, "publication_policy", None) == "reviewable-v1":
+        source_ids.update(member.finding_observation_id for member in merged_rows)
+    selected_blocks = [item for item in sorted(block_evidence,
+        key=lambda item: (item.finding_observation_id, item.ordinal)) if item.finding_observation_id in source_ids]
     blocks = tuple(
         FindingBlockEvidenceView(
-            ordinal=item.ordinal, page_number=item.page_number, portal_block_id=item.portal_block_id,
+            ordinal=ordinal if len(source_ids) > 1 else item.ordinal, page_number=item.page_number, portal_block_id=item.portal_block_id,
             bbox_norm=item.bbox_norm, crop_sha256=item.crop_sha256, recognised_quote=item.recognised_quote,
         )
-        for item in sorted(block_evidence, key=lambda item: item.ordinal)
-        if item.finding_observation_id == row.finding_observation_id
+        for ordinal, item in enumerate(selected_blocks)
     )
     return FindingView(
         finding_uid=row.finding_uid,
@@ -2013,7 +2018,7 @@ def _finding_view(
             if merged_rows else None
         ),
         block_evidence=blocks or None,
-        origin=_origin_view(row),
+        origin="cross_check" if blocks and len(source_ids) > 1 and row.grounding_kind != "portal_block" else _origin_view(row),
     )
 
 
@@ -3147,9 +3152,11 @@ class MemoryCaptureAssembler:
         head = finding_by_uid(session, event.finding_uid)
         if head is None:
             raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, message="the decided finding is not published")
+        finding_rows = [candidate for candidate in published_findings(session, head.run_id)
+                        if candidate.finding_uid == event.finding_uid]
         row = next(
             (
-                candidate for candidate in published_findings(session, head.run_id)
+                candidate for candidate in finding_rows
                 if candidate.finding_uid == event.finding_uid
                 and candidate.finding_observation_id == event.finding_observation_id
             ),
@@ -3160,22 +3167,31 @@ class MemoryCaptureAssembler:
                 ErrorCode.STORAGE_INTEGRITY_ERROR,
                 message="the decided observation is not a published observation of its finding's run",
             )
+        source_rows = ([row, *sorted((member for member in finding_rows if member.finding_observation_id != row.finding_observation_id),
+                                    key=lambda member: member.finding_observation_id)]
+                       if getattr(head, "publication_policy", None) == "reviewable-v1" else [row])
+        source_order = {member.finding_observation_id: index for index, member in enumerate(source_rows)}
+        grouped = len(source_rows) > 1
         stored = sorted(
             (item for item in published_finding_evidence(session, head.run_id)
-             if item.finding_observation_id == row.finding_observation_id),
-            key=lambda item: item.evidence_ordinal,
+             if item.finding_observation_id in source_order),
+            key=lambda item: (source_order[item.finding_observation_id], item.evidence_ordinal),
         )
+        if grouped:
+            stored = [replace(item, evidence_ordinal=index) for index, item in enumerate(stored)]
         # `dm-capture/2` (`F8-PUBLISH`, `CRIT-CAPTURE-01`): the blocks a candidate finding stands on come from the database, so they are
         # read on EVERY capture, as the text evidence is. The digest is compared with the stored one, so a later decision handed none
         # would compute another digest than the case captured with them and read as a conflict. Empty for a text finding, which stays
         # `dm-capture/1` with its digest byte for byte.
+        source_blocks = sorted((item for item in published_finding_block_evidence(session, head.run_id)
+                                if item.finding_observation_id in source_order),
+                               key=lambda item: (source_order[item.finding_observation_id], item.ordinal))
         block_evidence = tuple(
             BlockEvidenceFact(
-                ordinal=item.ordinal, page_number=item.page_number, portal_block_id=item.portal_block_id, bbox=item.bbox_norm,
+                ordinal=index if grouped else item.ordinal, page_number=item.page_number, portal_block_id=item.portal_block_id, bbox=item.bbox_norm,
                 crop_sha256=item.crop_sha256, recognised_quote=item.recognised_quote,
             )
-            for item in published_finding_block_evidence(session, head.run_id)
-            if item.finding_observation_id == row.finding_observation_id
+            for index, item in enumerate(source_blocks)
         )
 
         # The version carries its current classification (the section as of now, which is the section as of capture).
@@ -3202,7 +3218,7 @@ class MemoryCaptureAssembler:
             )
 
         evidence = tuple(_item(item) for item in stored)
-        crops = () if known else select_case_crops(evidence, block_evidence, self._geometry.portal_crops_in(session, head.run_id))
+        crops = () if known or (not evidence and not block_evidence) else select_case_crops(evidence, block_evidence, self._geometry.portal_crops_in(session, head.run_id))
 
         content = CaseContent(
             category=row.category, finding_text=row.finding_text, recommendation_text=row.recommendation_text,
@@ -3210,6 +3226,9 @@ class MemoryCaptureAssembler:
             stage_id=row.stage_id, analysis_profile_id=row.analysis_profile_id, prompt_bundle_id=row.prompt_bundle_id,
             provider_mode=row.provider_mode, evidence=evidence,
             norm_refs=(), block_evidence=block_evidence,
+            unverified_reason=getattr(row, "unverified_reason", None),
+            source_observations=tuple((member.finding_observation_id, member.finding_text, member.recommendation_text,
+                                       member.grounding_kind, member.unverified_reason) for member in source_rows) if grouped else (),
         )
         return CaptureSnapshot(
             origin=CaseOrigin(
@@ -3507,6 +3526,7 @@ class DecisionMemoryAdapter(_SessionHolder):
                 proposed_severity=content["proposed_severity"], required_value=content["required_value"],
                 stated_value=content["stated_value"], stage_id=content["stage_id"],
                 analysis_profile_id=content["analysis_profile_id"], provider_mode=content["provider_mode"],
+                unverified_reason=content.get("unverified_reason"),
             ),
             decisions=[
                 models.DecisionMemoryDecision(
@@ -3586,10 +3606,10 @@ def _memory_summary(item: Any) -> models.DecisionMemoryCaseSummary:
 
 
 class CsvExportAdapter(_SessionHolder):
-    def export_run_csv(self, *, run_id: str) -> bytes:
+    def export_run_csv(self, *, run_id: str, verdict: str = "all") -> bytes:
         from auditmanager.exports import export_run_csv
 
-        return self._read(lambda s: export_run_csv(s, run_id).content)
+        return self._read(lambda s: export_run_csv(s, run_id, verdict=verdict).content)
 
 
 def _read_citations_for_export(
@@ -3639,7 +3659,7 @@ class XlsxExportAdapter(_SessionHolder):
                 exc, blob_id=blob_id, role=MANIFEST_ROLE_STRUCTURED_COMPANION
             ) from None
 
-    def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
+    def export_run_xlsx(self, *, run_id: str, principal_id: str, verdict: str = "all") -> bytes:
         from auditmanager.exports import ExportAuthorization, export_run_xlsx
 
         authorization = ExportAuthorization(
@@ -3656,6 +3676,7 @@ class XlsxExportAdapter(_SessionHolder):
                 authorization=authorization,
                 read_blob=self._read_blob,
                 read_citations=_read_citations_for_export,
+                verdict=verdict,
             ).content
         )
 

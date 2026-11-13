@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from auditmanager.precedents.candidate_context import candidate_context_receipt, candidate_context_request
+
 from auditmanager.precedents.advice import (
     STATUS_OK,
     STATUS_UNAVAILABLE,

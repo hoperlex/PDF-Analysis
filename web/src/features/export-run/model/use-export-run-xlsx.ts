@@ -32,7 +32,7 @@ interface Outcome {
 
 const IDLE: Outcome = { isPending: false, error: null, correlationId: null, lastFileName: null };
 
-export function useExportRunXlsx({ runId, sink }: ExportRunArgs): ExportRunApi {
+export function useExportRunXlsx({ runId, sink, verdict }: ExportRunArgs): ExportRunApi {
   const [outcome, setOutcome] = useState<Outcome>(IDLE);
   // One download at a time; an answer to a superseded request is dropped.
   const sequence = useRef(0);
@@ -43,7 +43,7 @@ export function useExportRunXlsx({ runId, sink }: ExportRunArgs): ExportRunApi {
     setOutcome((current) => ({ ...current, isPending: true, error: null }));
     void (async () => {
       try {
-        const response = await exportRunXlsx({ path: { run_id: runId } });
+        const response = await exportRunXlsx({ path: { run_id: runId }, ...(verdict === undefined ? {} : { query: { verdict } }) });
         const fileName = xlsxFileName(runId);
         deliverDownload(sink ?? browserDownloadSink(), response.data, fileName);
         if (mine === sequence.current) {
@@ -55,7 +55,7 @@ export function useExportRunXlsx({ runId, sink }: ExportRunArgs): ExportRunApi {
         }
       }
     })();
-  }, [runId, sink]);
+  }, [runId, sink, verdict]);
 
   const reset = useCallback(() => {
     sequence.current += 1;

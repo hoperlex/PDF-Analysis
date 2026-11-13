@@ -25,6 +25,14 @@ words.
 
 from __future__ import annotations
 
+
+def includes_verdict(current: str | None, selection: str = "all") -> bool:
+    """Shared CSV/XLSX selection; machine advice never supplies a human verdict."""
+    if selection not in {"active", "all", "unreviewed", "accepted", "rejected"}:
+        raise ValueError("export_verdict_invalid")
+    current = "unreviewed" if current in (None, "pending") else current
+    return selection == "all" or (current != "rejected" if selection == "active" else current == selection)
+
 import json
 from functools import lru_cache
 from pathlib import Path

@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "HOTFIX-RUN-PARTIAL-1106 integrator",
+  "owner": "ANALYSIS-REPAIR-INT-01",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "6f53dce1aecdcd4a7545f68e09e6369bea1282747575d640b34d4ef121cef8e7",
-    "content_commit": "ccf8d47b",
-    "content_commit_subject": "fix(contract): the two wave-5 schema descriptions name contract 1.54.0 (main→dev merge)",
+    "sha256": "800b870f2e490bdd3ef9356fdce0c74bd6a1f5bc03f17ae04511ab479949b469",
+    "content_commit": "31839344",
+    "content_commit_subject": "ANALYSIS-REPAIR-INT-01 on release 0.26.0 base",
     "dispatch_named_commit": "ccf8d47bd4dedb4ffc2eb613fba28267f4557202",
-    "commit_note": "Resealed by CRIT-SEAL-53: contract 1.53.0 (three operations: listDecisionPatterns, reviewDecisionPattern, getQualityTable; eleven schemas; FindingCategory parameter_mismatch; Finding.cross_evidence; FindingObservation.extended_observation_ref; RunStatus.publication_mode), on top of 1.52.0.",
+    "commit_note": "Add unverified human-reviewable observations and retained memory limitation; export human-verdict selection. Surface counts unchanged.",
     "openapi_version": "3.1.0",
-    "info_version": "1.54.0",
+    "info_version": "1.55.0",
     "paths": 300,
     "operations": 329,
     "component_schemas": 820,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "6f53dce1aecdcd4a7545f68e09e6369bea1282747575d640b34d4ef121cef8e7",
+    "snapshot_sha256": "800b870f2e490bdd3ef9356fdce0c74bd6a1f5bc03f17ae04511ab479949b469",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "b61559da5dae5b9b6697cdf449c5d90a59ec4e53c4864c5245cbe16cf431ed74",
-      "index.ts": "6fdcbd1bf04d2f0a1e152eb6aa54c3b19ddaa0db52afae38ff4b0267578dea09",
-      "operations.gen.ts": "a18c8754135bd4f2eb575dca50f6e99b8c903eac4c55a9ecb615109294025390",
-      "types.gen.ts": "fcd922a1fbdbe69b755094736372af424fca83f4c137ab83bc08e5277a578584"
+      "client.gen.ts": "60bb08ba84f2385515226ab534838b7265aab7a1985ed92b11ff72afa3cf1d6b",
+      "index.ts": "7c6232cd628f8100026304ad431f84c50c4ef3ac0c0db6d9d100c782b3c6a3a4",
+      "operations.gen.ts": "286a887d7ecd0b060b16da044780f85e5c9b8e1ef39576036f0b80e5794374bf",
+      "types.gen.ts": "327a2fc5fa5a6040e155e9f2a9a37823087fc1204cb2f8e818a01b410176ad08"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

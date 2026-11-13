@@ -292,7 +292,7 @@ describe('the switch «Использовать»', () => {
     expect(requests[0]?.line).toBe(`PUT /bff/v1/executor-hosts/${SERVER_ONLINE.host_id}/enabled {"enabled":false}`);
     expect(requests[0]?.key).toMatch(/\S+/);
     const refusal = new ApiError(409, {
-      contract_version: '1.54.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-host-1', retryable: false, details: { conflict_reason: 'host_archived' },
+      contract_version: '1.55.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-host-1', retryable: false, details: { conflict_reason: 'host_archived' },
     }, null);
     const failure = hostFailure(refusal, true);
     expect(failure.detail).toBe('Сервер удалён: изменить его уже нельзя.');

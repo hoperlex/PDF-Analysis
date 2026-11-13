@@ -22,7 +22,7 @@ function GroupOrigins({ group, observations, rawRecords, sources, fallbackVersio
     if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0) return [];
     const item = object((Array.isArray(rawRecords) ? rawRecords : observations)[index]);
     if (item === null || (origin.observation_id ?? null) !== (item.observation_id ?? null) || (origin.window_id ?? null) !== (item.window_id ?? null)
-      || (group.grouping_status === 'ensemble_relationship'
+      || (['ensemble_relationship', 'semantic_origin_relationship'].includes(text(group.grouping_status))
         ? origin.title !== item.title || origin.description !== item.description
         : group.title !== item.title || group.description !== item.description)) return [];
     return [{ origin, item, index }];
@@ -58,8 +58,8 @@ export function ConsolidatedObservations({ groups: value, consolidation: reading
   const current = Math.min(page, pages - 1);
   const shown = matches.slice(current * pageSize, (current + 1) * pageSize);
   return <section id="extended-observations" className={styles.candidatePanel} aria-label="Группы повторяющихся наблюдений">
-    <h3>{consolidation?.version === 'ensemble-linked-v1' ? 'Свод вопросов' : 'Наблюдения между окнами'}</h3>
-    <p>{consolidation?.version === 'ensemble-linked-v1'
+    <h3>{['ensemble-linked-v1', 'v2-flow-repair-v1'].includes(text(consolidation?.version)) ? 'Свод вопросов' : 'Наблюдения между окнами'}</h3>
+    <p>{['ensemble-linked-v1', 'v2-flow-repair-v1'].includes(text(consolidation?.version))
       ? 'Один вопрос объединяет совпадения и дополнения, явно связанные при сопоставлении проходов. Объекты, листы, доказательства и все исходные формулировки доступны внутри карточки. Противоречащие кандидаты остаются раздельными.'
       : 'Группировка объединяет только записи с совпадающими текстом и категорией и общим фактическим источником. Похожие формулировки с разными источниками остаются отдельными. Все исходные записи сохранены.'}</p>
     <p>Исходных записей: {count(consolidation?.raw_count)} · групп: {count(consolidation?.group_count)} · объединённых групп: {count(consolidation?.merged_group_count)} · снято повторных представлений: {count(consolidation?.coalesced_count)}.</p>

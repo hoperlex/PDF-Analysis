@@ -12,16 +12,16 @@ import type { FindingGroup } from '@/entities/finding';
  * the run (`R-150i`), so the counts and the filter are over the whole run, never over one page.
  * `needs_manual_review` waits for the expert like `pending` (`UI-PARITY-METRICS`).
  */
-export type VerdictFilter = 'all' | 'waiting' | 'accepted' | 'rejected';
+export type VerdictFilter = 'active' | 'all' | 'waiting' | 'accepted' | 'rejected';
 
 const WAITING: ReadonlySet<Verdict> = new Set<Verdict>(['pending', 'needs_manual_review']);
 
-export function verdictBucket(verdict: Verdict): Exclude<VerdictFilter, 'all'> {
+export function verdictBucket(verdict: Verdict): Exclude<VerdictFilter, 'all' | 'active'> {
   if (WAITING.has(verdict)) return 'waiting';
   return verdict === 'accepted' ? 'accepted' : 'rejected';
 }
 
-const BUCKET_RANK: Readonly<Record<Exclude<VerdictFilter, 'all'>, number>> = { waiting: 0, accepted: 1, rejected: 2 };
+const BUCKET_RANK: Readonly<Record<Exclude<VerdictFilter, 'all' | 'active'>, number>> = { waiting: 0, accepted: 1, rejected: 2 };
 
 /**
  * `UI-A-71`: the original's order, pending → accepted → rejected, with the run's own order kept inside each of the three
@@ -61,6 +61,7 @@ export function pagesParts(
   pages: readonly number[],
   sheetOf?: (page: number) => number | undefined,
 ): { readonly sheet: string | null; readonly pages: string } {
+  if (pages.length === 0) return { sheet: null, pages: 'Страница не подтверждена' };
   const sheets = sheetOf === undefined ? [] : pages.map((page) => sheetOf(page));
   const known = pages.length > 0 && sheets.length === pages.length && sheets.every((sheet) => sheet !== undefined);
   const pageText = `стр. ${pages.join(', ')}`;

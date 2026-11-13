@@ -590,6 +590,9 @@ class RunCostPreflight:
                     from auditmanager.analysis.public import v2_quality_policy, finding_proposal_policy
                     extended["quality_policy"] = v2_quality_policy()
                     extended["finding_proposals"] = finding_proposal_policy()
+                    if os.environ.get("AUDITMANAGER_V2_FLOW_REPAIR", "1").strip().lower() not in {"0", "false", "off"}:
+                        from auditmanager.analysis.public import flow_repair_policy
+                        extended["flow_repair_policy"] = flow_repair_policy()
                 possible_images = source["image_block_count"]
                 if possible_images is None:
                     possible_images = min(1_000, version.page_count * 100)
@@ -613,6 +616,22 @@ class RunCostPreflight:
                     input_tokens += comprehensive_calls * 20_000 + review_calls * 100_000
                     output_tokens += review_calls * 12_000
                     led("cross_check", 0, comprehensive_calls * 20_000)
+                    led("review", review_calls, review_calls * 100_000, floor=12_000)
+                if "flow_repair_policy" in extended:
+                    # Bounded semantic pair packets share cross_check, never a
+                    # hidden global pass. One received-reply repair per call is
+                    # explicitly priced; unknown outcomes are never retried.
+                    pair_calls = comprehensive_calls
+                    extended["semantic_pair_call_limit"] = pair_calls
+                    extended["semantic_repair_attempts"] = 1
+                    repair_calls = image_calls + comprehensive_calls + norm_calls + review_calls + pair_calls
+                    extra_calls += pair_calls + repair_calls
+                    input_tokens += pair_calls * 100_000 + repair_calls * 100_000
+                    output_tokens += (pair_calls + repair_calls) * 12_000
+                    led("cross_check", pair_calls + comprehensive_calls + pair_calls,
+                        (pair_calls + comprehensive_calls + pair_calls) * 100_000, floor=12_000)
+                    led("blocks", image_calls, image_calls * 100_000, floor=12_000)
+                    led("norms", norm_calls, norm_calls * 100_000, floor=12_000)
                     led("review", review_calls, review_calls * 100_000, floor=12_000)
             else:
                 raise _invalid("analysis_workflow", "unsupported_plan")

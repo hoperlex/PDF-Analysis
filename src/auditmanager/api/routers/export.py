@@ -22,9 +22,9 @@ and the per-row report are ``auditmanager.exports.import_run_decisions``'s.
 
 from __future__ import annotations
 
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 
-from fastapi import APIRouter, Depends, Form, Path, Response
+from fastapi import APIRouter, Depends, Form, Path, Response, Query
 
 from auditmanager.api.routers.declarations import envelope_responses, success
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
@@ -84,13 +84,14 @@ def build_export_routes(
             **envelope_responses(401, 403, 404, 409, 500, 503),
         },
     )
-    def export_run_csv(run_id: Annotated[models.RunId, Path()]) -> WireResponse:
+    def export_run_csv(run_id: Annotated[models.RunId, Path()],
+                       verdict: Annotated[Literal["active", "all", "unreviewed", "accepted", "rejected"], Query()] = "all") -> WireResponse:
         # A run whose terminal does not publish a result raises
         # `state_transition_not_allowed` from the port; the handlers render it. This
         # handler does not read the run's state to decide, because the discriminator is
         # the frozen `terminal_semantics.publishes_result` flag and a hand-written state
         # list here would be a second, drifting copy of it.
-        content = exports.export_run_csv(run_id=run_id)
+        content = exports.export_run_csv(run_id=run_id, **({"verdict": verdict} if verdict != "all" else {}))
         return WireResponse(
             200,
             (
@@ -118,12 +119,13 @@ def build_export_routes(
         },
     )
     def export_run_xlsx(
-        subject: CurrentSubject, run_id: Annotated[models.RunId, Path()]
+        subject: CurrentSubject, run_id: Annotated[models.RunId, Path()],
+        verdict: Annotated[Literal["active", "all", "unreviewed", "accepted", "rejected"], Query()] = "all",
     ) -> WireResponse:
         # Every refusal is the port's -- the run's state, its sheet labels, its citations;
         # this handler reads nothing and decides nothing.
         content = xlsx.export_run_xlsx(  # type: ignore[union-attr]
-            run_id=run_id, principal_id=subject.user_uid
+            run_id=run_id, principal_id=subject.user_uid, **({"verdict": verdict} if verdict != "all" else {})
         )
         return WireResponse(
             200,

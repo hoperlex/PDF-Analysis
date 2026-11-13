@@ -239,6 +239,7 @@ def export_run_xlsx(
     authorization: ExportAuthorization,
     read_blob: Callable[[str], bytes],
     read_citations: Callable[..., object] | None,
+    verdict: str = "all",
 ) -> XlsxExport:
     """Render one run's findings as the W57b workbook; see the module docstring."""
     resolved = run_id if isinstance(run_id, RunId) else RunId.parse(run_id)
@@ -272,6 +273,7 @@ def export_run_xlsx(
                 read_citations=_guarded(read_citations),
                 profile_id=facts.analysis_profile_id,
                 attribution=attribution,
+                **({"verdict": verdict} if verdict != "all" else {}),
             )
         else:
             run_source = read_xlsx_run_source_preflight(session, identity, read_blob=read_blob)
@@ -283,7 +285,8 @@ def export_run_xlsx(
                 citation_source_ref=f"{identity}:no-citation-partitions",
                 attribution=attribution,
             )
-            package = prepare_xlsx_package(session, authorization=authorization, sources=sources)
+            package = prepare_xlsx_package(session, authorization=authorization, sources=sources,
+                                           **({"verdict": verdict} if verdict != "all" else {}))
             if package is None:  # pragma: no cover - the run row was read above
                 raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
     except ValueError as exc:

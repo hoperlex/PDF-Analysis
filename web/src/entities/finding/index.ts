@@ -8,6 +8,8 @@
 
 export type { AdmissionRefusal, AdmittedFindings, FindingAdmission } from './model/admission';
 export { admitFinding, admitFindings, isRenderableFinding } from './model/admission';
+export { unverifiedReason, verificationReasonLabel } from './model/verification';
+export { EvidenceLimitation } from './ui/evidence-limitation';
 
 /**
  * `D-683`, `CRIT-SEAL-50`: a finding that stands on portal blocks rather than text spans, and where a finding comes from

@@ -196,6 +196,10 @@ class CaseContent:
     norm_refs: tuple[NormRef, ...]
     #: `F8-PUBLISH`: the blocks of a candidate finding of a ``one_list`` run. Empty for a text finding, whose case is ``dm-capture/1``.
     block_evidence: tuple[BlockEvidenceFact, ...] = ()
+    unverified_reason: str | None = None
+    # Fresh semantic groups retain every raw claim and its actual source limitation.
+    # (observation_id, finding_text, recommendation_text, grounding_kind, reason)
+    source_observations: tuple[tuple[str, str, str, str, str | None], ...] = ()
 
 
 #: The shape of a precedent mark as ``decision_memory_decision.precedent_label_at_decision`` holds it (``ck_decision_memory_decision_precedent_label``): a
@@ -331,6 +335,10 @@ class CommentCaptureResult:
 
 def capture_version_of(content: CaseContent) -> str:
     """``dm-capture/2`` for a case whose evidence is blocks, ``dm-capture/1`` for every other case."""
+    if content.source_observations:
+        return "dm-capture/4"
+    if content.unverified_reason is not None:
+        return "dm-capture/3"
     return CAPTURE_VERSION_BLOCK_EVIDENCE if content.block_evidence else CAPTURE_VERSION
 
 
@@ -372,5 +380,9 @@ def content_digest(content: CaseContent) -> str:
         body["block_evidence"] = [
             [b.ordinal, b.page_number, b.portal_block_id, b.crop_sha256, b.recognised_quote] for b in content.block_evidence
         ]
+    if content.unverified_reason is not None:
+        body["unverified_reason"] = content.unverified_reason
+    if content.source_observations:
+        body["source_observations"] = content.source_observations
     encoded = json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

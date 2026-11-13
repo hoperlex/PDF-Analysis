@@ -56,7 +56,7 @@ const GROUPS = groupByCategory(FINDINGS);
 
 function table(props: Record<string, unknown> = {}): string {
   return renderToStaticMarkup(
-    createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, view: 'table', ...props }),
+    createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, view: 'table', verdictFilter: 'all', ...props }),
   );
 }
 

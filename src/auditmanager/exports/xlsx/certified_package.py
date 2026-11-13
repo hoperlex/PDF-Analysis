@@ -54,6 +54,7 @@ def prepare_certified_xlsx_package(
     read_citations: Callable[..., object],
     profile_id: str,
     attribution: str,
+    verdict: str = "all",
 ) -> PreparedXlsx:
     """Compose verified page/citation sources and render bytes in one read.
 
@@ -112,7 +113,7 @@ def prepare_certified_xlsx_package(
         run_source, citation_read, attribution=attribution,
     )
     package = prepare_xlsx_package(
-        session, authorization=authorization, sources=sources,
+        session, authorization=authorization, sources=sources, verdict=verdict,
     )
     if package is None or _pin(session, identity) != pin:
         raise CertifiedXlsxPackageRefused("xlsx_run_pin_changed")

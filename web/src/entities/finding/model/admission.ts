@@ -1,27 +1,17 @@
 /**
  * The admission gate: what this UI is willing to render as a finding.
  *
- * `P02_SEAMS.md` §5.1 is the rule this enforces on the client side. `B4` publishes an
- * observation as a finding only when every evidence item resolves at its declared anchor.
- * An item that fails is **not a finding**: it is retained as a diagnostic row carrying
- * `grounded = false`, a non-null `ungrounded_reason` and **no** `finding_uid`, and it
- * appears in no finding query and in no CSV row.
- *
- * So the API never hands this UI an ungrounded item, and the point of this module is that
- * the UI has no display path for one anyway. A screen that renders whatever the array
- * contained would resurrect a rejected item the moment a server, a fixture or a future
- * endpoint leaked one. The gate is cheap and it is the difference between "the server
- * currently does not send it" and "this UI cannot show it".
- *
- * The gate is deliberately not a filter that silently drops things. A payload that fails
- * admission is classified, and the caller renders the classification — an ungrounded item
- * is dropped from the list because it is not a finding, while a structurally impossible
- * finding is surfaced as a data-integrity error rather than as an empty pane.
+ * A Finding identity admits a meaningful issue for a human decision. Exact text/block
+ * grounding and the explicit unverified variant are separate evidence states. Only the
+ * latter may omit all evidence, with a nonempty limitation reason. Diagnostics without a
+ * Finding identity remain outside the review ledger; malformed variants are reported as
+ * integrity faults, rather than hidden as an empty result.
  */
 
 import type { Finding, FindingDetail } from '@/shared/api';
 
 import { groundedOnBlocks } from './block-grounding';
+import { unverifiedReason } from './verification';
 
 /** Why a payload was refused admission as a renderable finding. */
 export type AdmissionRefusal =
@@ -79,6 +69,14 @@ export function admitFinding<T extends Finding | FindingDetail>(candidate: T): F
   const uid = candidate.finding_uid;
   if (typeof uid !== 'string' || uid.length === 0) {
     return { kind: 'refused', refusal: 'not_a_finding' };
+  }
+
+  // The explicit unverified variant is a reviewable Finding, never a claim of exact grounding.
+  // A reason is required; merely dropping evidence cannot admit a legacy diagnostic.
+  if (candidate.observation.grounding_kind === 'unverified') {
+    return unverifiedReason({ observation: candidate.observation }) === null
+      ? { kind: 'refused', refusal: 'no_evidence' }
+      : { kind: 'admitted', finding: candidate };
   }
 
   if (candidate.observation.evidence.length === 0 && !groundedOnBlocks(candidate)) {

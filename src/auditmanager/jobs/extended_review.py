@@ -5,8 +5,42 @@ from sqlalchemy.orm import Session
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
+def extended_context_unit(session: Session, *, run_id: str, phase: str,
+                          source_sha256: str, base_request_sha256: str) -> dict | None:
+    """Replay a paid context-bearing unit before reading today's memory.
+
+    The base is the exact frozen model request before reference data. A changed
+    memory block never causes another payment for the same logical unit.
+    Unknown/abandoned outcomes require the existing reconciliation path first.
+    """
+    params = {"run": run_id, "phase": phase, "source": source_sha256, "base": base_request_sha256}
+    rows = session.execute(text("""
+        SELECT model_call_id, provider, model_identity, provider_mode, parameters, request_sha256,
+               response_sha256, input_tokens, output_tokens, latency_ms, cost_micros, cost_basis, status
+          FROM model_call
+         WHERE run_id = :run AND parameters ->> 'extended_phase' = :phase
+           AND parameters ->> 'flow_base_request_sha256' = :base
+           AND parameters ->> 'extended_source_sha256' = :source
+           AND (parameters ? 'extended_reply_blob_id' OR status IN ('succeeded', 'truncated'))
+         ORDER BY created_at, model_call_id
+    """), params).mappings().all()
+    if len(rows) > 1:
+        raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role="analysis.extended_reply")
+    if rows:
+        return dict(rows[0])
+    ambiguous = session.execute(text("""
+        SELECT 1 FROM provider_call_effect WHERE run_id = :run
+          AND parameters ->> 'extended_phase' = :phase
+          AND parameters ->> 'flow_base_request_sha256' = :base
+          AND state <> 'not_processed' LIMIT 1
+    """), params).first()
+    if ambiguous is not None:
+        raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="extended_provider_outcome_unknown")
+    return None
+
+
 def extended_unit(session: Session, *, run_id: str, unit_key: str, source_sha256: str,
-                  phase: str | None = None) -> dict | None:
+                  phase: str | None = None, replay_received_only: bool = False) -> dict | None:
     if phase is not None:
         changed = session.execute(text("""
             SELECT 1 FROM provider_call_effect WHERE run_id=:run
@@ -27,8 +61,9 @@ def extended_unit(session: Session, *, run_id: str, unit_key: str, source_sha256
         SELECT model_call_id,provider,model_identity,provider_mode,parameters,request_sha256,
                response_sha256,input_tokens,output_tokens,latency_ms,cost_micros,cost_basis,status
         FROM model_call WHERE run_id=:run AND parameters ->> 'extended_unit_key'=:unit
+        AND (NOT :received_only OR parameters ? 'extended_reply_blob_id' OR status IN ('succeeded', 'truncated'))
         ORDER BY created_at,model_call_id
-    """), {"run": run_id, "unit": unit_key}).mappings().all()
+    """), {"run": run_id, "unit": unit_key, "received_only": replay_received_only}).mappings().all()
     if len(rows) > 1:
         raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role="analysis.extended_reply")
     if rows:

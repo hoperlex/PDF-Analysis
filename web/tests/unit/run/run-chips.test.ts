@@ -137,7 +137,14 @@ describe('the two states that are the screen\'s own reading', () => {
     expect(chipProgress(list).live?.definition.id).toBe('text');
     const over = chips({ state: 'published', stages: [...PREP, 'text_analysis' as const].map((id) => stage(id, 'succeeded')) });
     expect(chipProgress(over)).toMatchObject({ total: 2, completed: 2, live: null, liveIndex: null });
-    expect(chipProgress([])).toEqual({ total: 0, completed: 0, live: null, liveIndex: null });
+    expect(chipProgress([])).toEqual({ total: 0, completed: 0, terminal: 0, live: null, liveIndex: null });
+  });
+
+  it('counts partial, skipped, unavailable and failed as terminal outcomes, without calling them successful', () => {
+    const list = chips({ state: 'partial', stages: [...PREP, 'text_analysis' as const].map((id) => stage(id, 'succeeded')) }, [
+      proc('block_analysis', 'partial'), proc('comprehensive_analysis', 'unavailable'), proc('finding_merge', 'skipped'), proc('norm_verification', 'failed'),
+    ]);
+    expect(chipProgress(list)).toMatchObject({ total: 6, completed: 2, terminal: 6 });
   });
 });
 

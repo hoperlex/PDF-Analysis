@@ -2476,6 +2476,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0067_precedents_wave5",
-  "contract_version": "1.54.0"
+  "migration_head": "0068_reviewable_findings",
+  "contract_version": "1.55.0"
 }

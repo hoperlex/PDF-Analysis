@@ -22,6 +22,8 @@ import { NormativeSearches } from './normative-searches';
 import { extendedCandidateCounts } from './extended-review-summary';
 import { extendedExecutionReason } from './execution-reason';
 import { ReviewWarnings } from './review-warnings';
+import { CONSOLIDATION_VERSIONS } from '../model/review-candidates';
+import { InputAccounting } from './input-accounting';
 import styles from './extended-review.module.css';
 
 type RecordValue = Record<string, unknown>;
@@ -108,14 +110,16 @@ function ParameterActivity({ value }: { readonly value: unknown }) {
  * Plan v2 as the original's legacy flow (`V2-ORIGINAL-REVIEW-01`, R-154e..g): after the norms the critic and the corrector run by the
  * original's rules, with no model and no executor. They are advice beside the saved observations, never a change of them.
  */
-function OriginalReviewNote({ value, fullWindow }: { readonly value: RecordValue; readonly fullWindow: boolean }) {
+function OriginalReviewNote({ value, fullWindow, substantive }: { readonly value: RecordValue; readonly fullWindow: boolean; readonly substantive: boolean }) {
   const verdicts = object(value.verdicts);
   const proposals = object(value.proposals);
   const reviewed = typeof value.reviewed === 'number' && Number.isSafeInteger(value.reviewed) ? value.reviewed : null;
   const of = (record: RecordValue | null, key: string) => (typeof record?.[key] === 'number' ? record[key] as number : 0);
   const flagged = of(verdicts, 'no_evidence') + of(verdicts, 'phantom_block') + of(verdicts, 'page_mismatch');
   return <div data-original-review={text(value.version)}>
-    <p>{fullWindow ? 'Этот прогон принят по плану V2 с обработкой полного документа по частям.' : 'Этот прогон принят по прежнему плану расширенного анализа.'} Критик и уточнение в нём выполнены по правилам оригинала, без модели и без исполнителя: проверены наличие источника, его существование в записи и страница цитаты. Смысловая проверка не выполнялась. Подготовка отчёта V3 ему не приписывается.</p>
+    <p>{fullWindow ? 'Этот прогон принят по плану V2 с обработкой полного документа по частям.' : 'Этот прогон принят по прежнему плану расширенного анализа.'} {substantive
+      ? 'Структурная проверка выполнена по правилам оригинала. Отдельно выполнены обращения к смысловому критику; их результаты и технические ограничения показаны у наблюдений и в квитанциях пакетов.'
+      : 'Критик и уточнение в нём выполнены по правилам оригинала, без модели и без исполнителя: проверены наличие источника, его существование в записи и страница цитаты. Смысловая проверка не выполнялась.'} Подготовка отчёта V3 ему не приписывается.</p>
     <p>Это рекомендации и предложения: наблюдения не менялись и не удалялись, решение принимает эксперт.{reviewed === null ? '' : ` Проверено наблюдений: ${reviewed}; без замечаний: ${of(verdicts, 'pass')}; с замечаниями: ${flagged}; предложено уточнений текста: ${of(proposals, 'propose_revision')}.`}</p>
   </div>;
 }
@@ -196,7 +200,7 @@ export function ExtendedReviewView({ reading, projectUid, planElsewhere = false 
   const sources = objects(result?.sources);
   const observations = objects(result?.observations);
   const consolidation = object(result?.consolidation);
-  const showGroups = ['strict-cross-window-v1', 'ensemble-linked-v1'].includes(text(consolidation?.version)) && consolidation?.complete === true && Array.isArray(result?.consolidated_observations);
+  const showGroups = CONSOLIDATION_VERSIONS.includes(text(consolidation?.version)) && consolidation?.complete === true && Array.isArray(result?.consolidated_observations);
   const counts = extendedCandidateCounts(result);
   // `V2-ORIGINAL-REVIEW-01`: a v2 record that carries the original's deterministic critic and corrector says so; an older v2 record does not.
   const originalReview = v2 && object(result?.original_review)?.mode === 'deterministic' ? object(result?.original_review) : null;
@@ -209,7 +213,7 @@ export function ExtendedReviewView({ reading, projectUid, planElsewhere = false 
     <nav className={styles.toolbar} aria-label="Разделы предварительного отчёта"><a href="#extended-observations">Наблюдения и источники</a>{v3 ? <a href="#extended-window-progress">Прогресс обработки</a> : null}{object(result?.global_cross_window) === null ? null : <a href="#extended-global-cross-window">Сверка между окнами</a>}{object(result?.project_parameters) === null ? null : <a href="#extended-project-parameters">Параметры проекта</a>}{report === null ? null : <a href="#extended-saved-report">Сохранённый отчёт</a>}<a href="#extended-downloads">Полные выгрузки</a></nav>
     {text(result?.section) ? <p>Раздел: <strong>{text(result?.section)}</strong>.</p> : null}
     {v2 && originalReview === null ? <p>{fullWindow ? 'Этот прогон принят по плану V2 с обработкой полного документа по частям.' : 'Этот прогон принят по прежнему плану расширенного анализа.'} Новые критика, исправление и подготовка отчёта V3 ему не приписываются; для нового плана нужна свежая оценка и согласие в новом прогоне.</p> : null}
-    {originalReview === null ? null : <OriginalReviewNote value={originalReview} fullWindow={fullWindow} />}
+    {originalReview === null ? null : <OriginalReviewNote value={originalReview} fullWindow={fullWindow} substantive={object(result?.substantive_review)?.model_called === true} />}
     {v3 ? <p>Рубрики учитывают специфику раздела. Числовые пороги и ссылки из исторических материалов — контекст, а не подтверждённые действующие нормы. Критика и исправление — рекомендации модели, решение остаётся за экспертом.</p> : null}
     {text(result?.rules_sha256) ? <details><summary>Происхождение рубрик раздела</summary><p>Отпечаток набора: <code>{text(result?.rules_sha256)}</code>.</p>{object(result?.source_provenance) ? <pre>{JSON.stringify(result?.source_provenance, null, 2)}</pre> : null}</details> : null}
     {typeof result?.reason === 'string' && reading.status !== 'completed' ? <p role="status">{reasonLabels[result.reason] ?? extendedExecutionReason(result.reason, result.dependency, reading.status)}</p> : null}
@@ -221,6 +225,7 @@ export function ExtendedReviewView({ reading, projectUid, planElsewhere = false 
         {procedures.map((procedure, index) => <li key={text(procedure.id) || index} data-extended-procedure={text(procedure.id)} data-procedure-status={text(procedure.status)}>
           <strong>{text(procedure.title) || 'Название процедуры не передано'}</strong> · {procedureLabels[text(procedure.status)] ?? 'Состояние не передано'}
           {text(procedure.reason) && procedure.status !== 'completed' ? <p>{procedureReasonSentence(procedure.reason, procedure.dependency, procedure.status, procedure.error_code)}</p> : null}
+          <InputAccounting value={procedure.input_accounting} reason={procedure.reason} />
         </li>)}
       </ol>}
     </> : procedures.length === 0 && result?.reason === undefined ? <p>Полная цепочка для этого прогона не подтверждена сервером. Историческим прогонам новые процедуры не приписываются.</p> : null}
@@ -243,7 +248,7 @@ export function ExtendedReviewView({ reading, projectUid, planElsewhere = false 
     <ReviewWarnings warnings={result?.warnings} />
     {consolidation !== null && !showGroups ? <p role="status">Группировка повторов в этой записи не подтверждена или не завершена. Ниже показаны исходные наблюдения; все данные сохранены в полных выгрузках.</p> : null}
     <details data-extended-observations-details="">
-      <summary>Наблюдения и источники · {observations.length}</summary>
+      <summary>Наблюдения и источники · вопросов {counts.candidates}, исходных записей {observations.length}</summary>
       {showGroups ? <ConsolidatedObservations key={`observations:${reading.run_id}`} groups={result?.consolidated_observations} consolidation={consolidation} observations={observations} rawRecords={result?.observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
         : <ObservationList key={`observations:${reading.run_id}`} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />}
     </details>

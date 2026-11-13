@@ -121,7 +121,8 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
     phase_coverage: result?.phase_coverage, phase_call_limits: result?.phase_call_limits,
     norm_paragraph_context_policy: result?.norm_paragraph_context_policy,
     window_progress: result?.window_progress, primary_text_status: result?.primary_text_status,
-    visual_phase_complete: result?.visual_phase_complete, report: result?.report, original_review: result?.original_review };
+    visual_phase_complete: result?.visual_phase_complete, report: result?.report, original_review: result?.original_review,
+    substantive_review: result?.substantive_review, input_accounting: result?.input_accounting };
   const pendingPrimary = result?.primary_text_status === 'pending'
     ? 'Базовый текстовый анализ ещё выполняется. Сохранённый визуальный проход не является завершением всей проверки окна.' : '';
   if (format === 'md') {

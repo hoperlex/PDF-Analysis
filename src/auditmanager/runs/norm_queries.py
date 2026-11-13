@@ -130,3 +130,23 @@ def plan_norm_queries(observation: Mapping[str, Any]) -> dict[str, Any]:
                 "normative_question": True, "provenance": []}
     return {"queries": [], "status": "not_applicable", "reason": "no_normative_question",
             "normative_question": False, "provenance": []}
+
+
+def plan_flow_norm_queries(observation: Mapping[str, Any]) -> dict[str, Any]:
+    """Fresh-policy classification; missing vocabulary is not a not-required proof.
+
+    Keep the legacy literal planner unchanged. Its positive queries remain usable,
+    but an unclassified claim may require a norm even without the word "standard"
+    (for example, an insufficient evacuation clearance). Only the existing explicit
+    internal-consistency category justifies skipping this check without a query.
+    No speculative query or extra model call is introduced for uncertain claims.
+    """
+    planned = plan_norm_queries(observation)
+    if planned["status"] != "not_applicable":
+        return planned
+    original = observation.get("original_primary_observation")
+    category = original.get("category") if isinstance(original, Mapping) else observation.get("category")
+    if category == "internal_contradiction":
+        return {**planned, "reason": "internal_project_consistency"}
+    return {**planned, "status": "requires_query", "reason": "normative_question_undetermined",
+            "normative_question": None}

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import styles from './extended-review.module.css';
 import { RUN_CHIP } from '@/entities/audit-run';
 import { extendedExecutionReason } from './execution-reason';
+import { InputAccounting } from './input-accounting';
 
 type RecordValue = Record<string, unknown>;
 function object(value: unknown): RecordValue | null { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as RecordValue : null; }
@@ -51,6 +52,7 @@ export function BatchProgress({ batches: value, coverage: reading, title = 'Па
       {shown.length === 0 ? <p>Квитанций с выбранным состоянием нет.</p> : <ol className={styles.batchList} start={current * 25 + 1}>{shown.map((batch, index) => <li key={text(batch.batch_key) || index} data-batch-key={text(batch.batch_key)}>
         <strong>{PHASE[text(batch.procedure)] ?? 'Процедура обработки'}</strong> · {batch.reason === 'approved_phase_call_limit' ? 'Не обработано: лимит принятого плана' : STATUS[text(batch.status)] ?? 'Состояние не передано'}
         <p>{text(batch.window_id) ? <>Окно <code>{text(batch.window_id)}</code>. </> : null}Пакет {typeof batch.index === 'number' ? batch.index + 1 : '—'}. Входных элементов: {count(batch.input_count)}. Символов на входе: {count(batch.input_characters)}.</p>
+        <InputAccounting value={batch.input_accounting ?? batch.accounting} reason={batch.reason} />
         {batch.reason === 'approved_phase_call_limit' ? <p>Этот остаток не обработан: достигнут лимит вызовов процедуры в принятом плане. Дополнительное обращение к модели не подтверждено.</p> : null}
         {(text(batch.reason) || text(batch.error_code)) && batch.reason !== 'approved_phase_call_limit' && batch.status !== 'completed' ? <p>{extendedExecutionReason(batch.reason, batch.dependency, batch.status, batch.error_code)}</p> : null}
         {objects(batch.repair_attempts).length > 0 ? <p>Отдельных обращений для исправления ответа: {objects(batch.repair_attempts).length}. Результат повторной проверки учтён в состоянии пакета.</p> : null}

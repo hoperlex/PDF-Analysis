@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.54.0 (OpenAPI 3.1.0)
- *   sha256 6f53dce1aecdcd4a7545f68e09e6369bea1282747575d640b34d4ef121cef8e7
+ *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
+ *   sha256 800b870f2e490bdd3ef9356fdce0c74bd6a1f5bc03f17ae04511ab479949b469
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.54.0';
+export const CONTRACT_VERSION = '1.55.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '6f53dce1aecdcd4a7545f68e09e6369bea1282747575d640b34d4ef121cef8e7';
+export const CONTRACT_DIGEST = '800b870f2e490bdd3ef9356fdce0c74bd6a1f5bc03f17ae04511ab479949b469';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -3994,6 +3994,8 @@ export type DecisionMemoryContent = {
   required_value: string | null;
   stage_id: string;
   stated_value: string | null;
+  /** The original source limitation of an unverified issue, retained with the actual human decision. */
+  unverified_reason?: string | null;
 };
 
 export type DecisionMemoryCountRow = {
@@ -4362,7 +4364,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.54.0";
+  contract_version: "1.55.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -5399,6 +5401,7 @@ export type FailExecutorTaskRequest = {
 
 /** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. `current_verdict_carried_from` (`UI-A-73`, contract 1.39.0) names where the decision that carries `current_verdict` came from, when an expert carried it over from an earlier version's finding; it is absent when the verdict was decided directly, was withdrawn, or was carried before migration `0058`. A later verdict an expert gives the finding replaces it, and a comment leaves it standing. */
 export type Finding = {
+  /** Verified blocks of the review group, including graphical members of a canonical text finding. Raw member observations remain separately available. */
   block_evidence?: Array<FindingBlockEvidence>;
   category: FindingCategory;
   cross_evidence?: Array<FindingCrossEvidence>;
@@ -5499,6 +5502,7 @@ export type FindingCrossEvidence = {
 
 /** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. `current_verdict_carried_from` (`UI-A-73`) is as on `Finding`. */
 export type FindingDetail = {
+  /** Verified blocks of the review group, including graphical members of a canonical text finding. Raw member observations remain separately available. */
   block_evidence?: Array<FindingBlockEvidence>;
   category: FindingCategory;
   cross_evidence?: Array<FindingCrossEvidence>;
@@ -5553,6 +5557,7 @@ export type FindingExecutionStatus = (typeof FINDING_EXECUTION_STATUS_VALUES)[nu
 export const FINDING_GROUNDING_KIND_VALUES = [
   'text_span',
   'portal_block',
+  'unverified',
 ] as const;
 
 /** FindingGroundingKind - the closed value set above. */
@@ -5569,7 +5574,7 @@ export type FindingMatchProposal = {
 
 export type FindingObservation = {
   category: FindingCategory;
-  /** The text spans the observation quotes. At least one, unless grounding_kind is portal_block (since 1.52.0): a block-grounded observation has no text span, and its blocks are listed in block_evidence of the finding. */
+  /** Verified literal spans. May be empty for portal_block or unverified; unverified findings remain human-reviewable with an explicit limitation. */
   evidence: Array<Evidence>;
   extended_observation_ref?: string;
   finding_observation_id: FindingObservationId;
@@ -5585,6 +5590,8 @@ export type FindingObservation = {
   run_id: RunId;
   /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. */
   stated_value?: string;
+  /** Exact source binding is not verified. This limitation does not prevent a human decision. */
+  unverified_reason?: string;
 };
 
 /** Immutable evidence emitted by exactly one run. */

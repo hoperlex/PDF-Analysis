@@ -88,6 +88,7 @@ def prepare_xlsx_package(
     *,
     authorization: ExportAuthorization,
     sources: ExportSources,
+    verdict: str = "all",
 ) -> PreparedXlsx | None:
     """Return XLSX bytes for an explicitly permitted run, or ``None`` if absent.
 
@@ -103,6 +104,7 @@ def prepare_xlsx_package(
         page_labels=sources.page_labels,
         citations_by_finding=sources.citations_by_finding,
         attribution=sources.attribution,
+        verdict=verdict,
     )
     if read is None:
         return None

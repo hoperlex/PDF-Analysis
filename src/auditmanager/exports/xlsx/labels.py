@@ -86,6 +86,7 @@ SOURCE_LABELS: Final[Mapping[str, str]] = MappingProxyType({
     "text": "Текст",
     "drawing": "Чертёж",
     "cross_check": "Сверка",
+    "unverified": "Источник требует проверки",
 })
 
 #: ``finding_observation.grounding_kind`` (``ck_finding_observation_grounding_kind``): how an observation is grounded.
@@ -103,6 +104,8 @@ def source_of(category: str, grounding_kind: str) -> str:
     A ``grounding_kind`` outside the two the database allows is refused, never read as text: a source nobody named would be a quiet
     claim that the finding stands on the document's text.
     """
+    if grounding_kind == "unverified":
+        return "unverified"
     if grounding_kind not in (GROUNDING_TEXT_SPAN, GROUNDING_PORTAL_BLOCK):
         raise ValueError("xlsx_grounding_kind_invalid")
     if category == "cross_source":

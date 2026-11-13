@@ -50,6 +50,7 @@ import {
 } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { useExportRunXlsx } from '@/features/export-run';
+import type { ExportVerdictFilter } from '@/features/export-run';
 import { ImportDecisions } from '@/features/import-decisions';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
@@ -74,6 +75,8 @@ export interface ExportPanelProps {
    * the three file actions in one row over the findings, the file description beside them.
    */
   readonly layout?: 'card' | 'bar' | undefined;
+  readonly verdict?: ExportVerdictFilter | undefined;
+  readonly scopeCaption?: string | undefined;
 }
 
 const UNKNOWN_RUN_STATE_TITLE = 'Прогон содержит неизвестное состояние.';
@@ -100,8 +103,8 @@ export function xlsxFailure(error: unknown): ErrorStateProps {
 }
 
 /** «Скачать Excel» and its own outcome. */
-function XlsxDownload({ runId }: { readonly runId: RunId }) {
-  const exporter = useExportRunXlsx({ runId });
+function XlsxDownload({ runId, verdict }: { readonly runId: RunId; readonly verdict?: ExportVerdictFilter | undefined }) {
+  const exporter = useExportRunXlsx({ runId, verdict });
   return (
     <div data-export-format="xlsx">
       <button
@@ -134,6 +137,8 @@ export function ExportPanel({
   mayImportDecisions,
   auditPackage,
   layout,
+  verdict,
+  scopeCaption,
 }: ExportPanelProps) {
   const bar = layout === 'bar';
   if (!(RUN_STATE_VALUES as readonly unknown[]).includes(runState)) {
@@ -173,10 +178,11 @@ export function ExportPanel({
             >
               {isPending === true ? 'Готовлю…' : `Скачать ${csvFileName(runId)}`}
             </button>
-            <XlsxDownload runId={runId} />
+            <XlsxDownload runId={runId} verdict={verdict} />
             {mayImportDecisions === true ? <ImportDecisions runId={runId} /> : null}
             {auditPackage === undefined ? null : <AuditPackageDownload runId={runId} versionUid={auditPackage.versionUid} />}
           </div>
+          {scopeCaption === undefined ? null : <p className="am-note" data-export-scope={verdict ?? 'all'}>{scopeCaption}</p>}
           {/*
             `R-18` names the column names printed as a list — "documentation
             standing where an interface should be". They are still here, still taken from

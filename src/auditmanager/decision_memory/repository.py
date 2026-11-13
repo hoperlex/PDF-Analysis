@@ -11,6 +11,7 @@ adds a decision row and nothing else; a digest that differs from the stored one 
 from __future__ import annotations
 
 from collections.abc import Sequence
+import json
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
@@ -66,10 +67,10 @@ _INSERT_CONTENT = text(
     """
     INSERT INTO decision_memory_content (
         case_id, revision, finding_text, recommendation_text, proposed_severity, required_value, stated_value,
-        stage_id, analysis_profile_id, prompt_bundle_id, provider_mode
+        stage_id, analysis_profile_id, prompt_bundle_id, provider_mode, unverified_reason, source_observations
     ) VALUES (
         :case_id, 1, :finding_text, :recommendation_text, :proposed_severity, :required_value, :stated_value,
-        :stage_id, :analysis_profile_id, :prompt_bundle_id, :provider_mode
+        :stage_id, :analysis_profile_id, :prompt_bundle_id, :provider_mode, :unverified_reason, CAST(:source_observations AS jsonb)
     )
     """
 )
@@ -353,6 +354,10 @@ class MemoryRepository:
                 "analysis_profile_id": content.analysis_profile_id,
                 "prompt_bundle_id": content.prompt_bundle_id,
                 "provider_mode": content.provider_mode,
+                "unverified_reason": content.unverified_reason,
+                "source_observations": json.dumps([dict(zip(
+                    ("observation_id", "finding_text", "recommendation_text", "grounding_kind", "unverified_reason"), item))
+                    for item in content.source_observations], ensure_ascii=False),
             },
         )
         if content.evidence:

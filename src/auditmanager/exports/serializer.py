@@ -136,9 +136,11 @@ def render_csv(rows: Sequence[ExportRow]) -> bytes:
         quoting=csv.QUOTE_MINIMAL,
         lineterminator=_LINE_TERMINATOR,
     )
-    writer.writerow(COLUMNS)
+    extra = (("grounding_kind", "unverified_reason", "unverified_member_count")
+             if any(row.unverified_reason is not None or row.unverified_member_count for row in rows) else ())
+    writer.writerow(COLUMNS + extra)
     for row in rows:
-        writer.writerow(row_values(row))
+        writer.writerow(row_values(row) + tuple(_cell(getattr(row, name)) for name in extra))
     return BOM + buffer.getvalue().encode("utf-8")
 
 

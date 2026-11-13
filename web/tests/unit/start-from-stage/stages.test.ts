@@ -14,7 +14,7 @@ import {
 } from '@/features/start-run-from-stage';
 
 const envelope = (code: string, details: Record<string, string>) => new ApiError(422, {
-  contract_version: '1.54.0', error_code: code as never, message: 'x', correlation_id: 'c', retryable: false, details,
+  contract_version: '1.55.0', error_code: code as never, message: 'x', correlation_id: 'c', retryable: false, details,
 }, 'c');
 
 describe('the stages offered', () => {

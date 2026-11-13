@@ -766,3 +766,27 @@ def parse_finding_proposal_review_reply(*args, **kwargs):
 
 __all__.extend(["finding_proposal_policy", "validate_finding_proposal_policy",
     "build_finding_proposal_review_request", "parse_finding_proposal_review_reply"])
+
+
+def flow_repair_policy():
+    from .extended.flow_repair import flow_policy
+    return flow_policy()
+
+
+def validate_flow_repair_policy(value, *, compare_bundle=True):
+    from .extended.flow_repair import validate_flow_policy
+    return validate_flow_policy(value, compare_bundle=compare_bundle)
+
+
+def flow_repair_helper(name, *args, **kwargs):
+    """The bounded public adapter surface for the fresh-consent v2 policy."""
+    from .extended import flow_repair
+    allowed = {"origin_id", "build_flow_review_request", "parse_flow_review_reply", "review_accounting",
+        "build_flow_comprehensive_request", "parse_flow_comprehensive_reply", "consolidate_flow", "current_corrections",
+        "build_flow_repair_request", "relevant_quote"}
+    if name not in allowed:
+        raise ValueError("flow_repair_helper_unknown")
+    return getattr(flow_repair, name)(*args, **kwargs)
+
+
+__all__.extend(["flow_repair_policy", "validate_flow_repair_policy", "flow_repair_helper"])

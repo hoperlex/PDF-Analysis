@@ -22,6 +22,7 @@ import type { ReactNode } from 'react';
 import type { Finding } from '@/shared/api';
 import {
   EXECUTION_STATUS_LABELS,
+  EvidenceLimitation,
   SEVERITY_LABELS,
   OriginChip,
   SeverityBadge,
@@ -215,6 +216,7 @@ export function FindingTable({
                   </td>
                   <td className={styles.text}>
                     {finding.observation.finding_text}
+                    <EvidenceLimitation finding={finding} />
                     <span className={styles.category}>{CATEGORY_LABELS[finding.observation.category]}</span>
                     {/* `F8-WEB`: the «Источник» of a finding that is not text. */}
                     {findingOriginOf(finding) === 'text' ? null : (

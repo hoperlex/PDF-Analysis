@@ -59,6 +59,7 @@ class ObservationRead:
     evidence: tuple[EvidenceLocationRead, ...]
     #: ``finding_observation.grounding_kind``: ``text_span`` (the default) or ``portal_block``.
     grounding_kind: str = GROUNDING_TEXT_SPAN
+    unverified_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +94,8 @@ def _text(value: object) -> bool:
 
 
 def _locations(observation: ObservationRead) -> str:
+    if observation.grounding_kind == "unverified" and observation.unverified_reason:
+        return "Привязка не подтверждена: " + observation.unverified_reason
     if not isinstance(observation.evidence, tuple) or not observation.evidence:
         raise ValueError("xlsx_projection_evidence_missing")
     labels: list[str] = []
@@ -183,6 +186,9 @@ def _finding_row(finding: FindingRead, run_id: str, publication_mode: str = PUBL
         source_of(finding.category, canonical.grounding_kind)
         if publication_mode == PUBLICATION_ONE_LIST else None
     )
+    if (publication_mode == PUBLICATION_ONE_LIST and any(o.grounding_kind == "portal_block" for o in finding.observations)
+            and any(o.grounding_kind != "portal_block" for o in finding.observations)):
+        source = "cross_check"
     return FindingRow(
         finding_uid=finding.finding_uid,
         sheet_page=_locations(canonical),

@@ -36,7 +36,7 @@ export const CHIP_STATE_LABELS: Readonly<Record<ChipState, string>> = {
 };
 
 /** A state after which the chip does no more work. */
-const COMPLETED: ReadonlySet<ChipState> = new Set(['done', 'partial', 'skipped', 'unavailable']);
+const TERMINAL: ReadonlySet<ChipState> = new Set(['done', 'partial', 'failed', 'skipped', 'unavailable']);
 
 export interface RunChip {
   readonly definition: RunChipDefinition;
@@ -135,8 +135,10 @@ export function runChips({ status, procedures, reused }: RunChipsInput): readonl
 export interface ChipProgress {
   /** Chips in this run. */
   readonly total: number;
-  /** Chips that did their work: done, partial, skipped or unavailable. A failed chip is not counted. */
+  /** Successfully completed chips only. Partial, skipped and unavailable are separate terminal outcomes. */
   readonly completed: number;
+  /** Chips whose execution ended, including partial/failed/skipped/unavailable. */
+  readonly terminal: number;
   /** The chip the run is on (or waits to start), if the run is open and one is. */
   readonly live: RunChip | null;
   /** The live chip's place among the chips of this run, from 1; `null` without one. */
@@ -147,7 +149,8 @@ export function chipProgress(chips: readonly RunChip[]): ChipProgress {
   const at = chips.findIndex((chip) => chip.state === 'running' || chip.state === 'waiting');
   return {
     total: chips.length,
-    completed: chips.filter((chip) => COMPLETED.has(chip.state)).length,
+    completed: chips.filter((chip) => chip.state === 'done').length,
+    terminal: chips.filter((chip) => TERMINAL.has(chip.state)).length,
     live: at < 0 ? null : (chips[at] as RunChip),
     liveIndex: at < 0 ? null : at + 1,
   };

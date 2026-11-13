@@ -739,13 +739,14 @@ class _GateInputs:
     All three are empty for a ``text_only`` run, which publishes text findings only.
     """
 
-    observation_set: ObservationSet
-    text_layer: TextLayer
+    observation_set: ObservationSet | None
+    text_layer: TextLayer | None
     block_index: BlockIndex
     block_documents: Mapping[str, Mapping[str, Any]] | None = None
     block_inputs: BlockGateInputs | None = None
     candidate_groups: tuple[CandidateGroup, ...] = ()
     candidates_unread: tuple[str, ...] = ()
+    reviewable_candidates: bool = False
 
 
 def _publication_mode(run: RunRow) -> str:
@@ -793,16 +794,18 @@ def _read_gate_inputs(
     """
     if publication_mode == _PUBLICATION_ONE_LIST and (not run_id or not version_uid):
         raise ValueError("a one_list run is read with its run_id and version_uid")
-    if observations_document is None:
+    if observations_document is None and publication_mode != _PUBLICATION_ONE_LIST:
         return None
 
     text_layer_ref = outputs.refs.get(ROLE_TEXT_LAYER)
-    if text_layer_ref is None:
+    if text_layer_ref is None and publication_mode != _PUBLICATION_ONE_LIST:
         return None
 
-    text_layer_document, _ = read_artifact(
-        blob_store, parse_blob_id(text_layer_ref.blob_id), expected_role=ROLE_TEXT_LAYER
-    )
+    text_layer_document = None
+    if text_layer_ref is not None:
+        text_layer_document, _ = read_artifact(
+            blob_store, parse_blob_id(text_layer_ref.blob_id), expected_role=ROLE_TEXT_LAYER
+        )
     block_index = BlockIndex.empty()
     block_ref = outputs.refs.get(ROLE_BLOCK_INDEX)
     if block_ref is not None:
@@ -814,6 +817,7 @@ def _read_gate_inputs(
     block_inputs: BlockGateInputs | None = None
     candidate_groups: tuple[CandidateGroup, ...] = ()
     candidates_unread: tuple[str, ...] = ()
+    reviewable_candidates = False
     if publication_mode == _PUBLICATION_ONE_LIST:
         block_documents = {}
         for role in _BLOCK_GATE_ROLES:
@@ -838,17 +842,22 @@ def _read_gate_inputs(
             review_document, _ = read_artifact(
                 blob_store, parse_blob_id(review_ref.blob_id), expected_role=EXTENDED_REVIEW_ROLE
             )
+            marker = review_document.get("result", {}).get("flow_repair_policy") or review_document.get("flow_repair_policy")
+            reviewable_candidates = isinstance(marker, Mapping) and marker.get("version") == "v2-flow-repair-v1"
             candidate_groups, candidates_unread = read_candidate_groups(
                 review_document, run_id=run_id, version_uid=version_uid, text_observations=observations_document
             )
+    if not reviewable_candidates and (observations_document is None or text_layer_document is None):
+        return None
     return _GateInputs(
-        observation_set=ObservationSet.from_artifact(observations_document),
-        text_layer=TextLayer.from_artifact(text_layer_document),
+        observation_set=None if observations_document is None else ObservationSet.from_artifact(observations_document),
+        text_layer=None if text_layer_document is None else TextLayer.from_artifact(text_layer_document),
         block_index=block_index,
         block_documents=block_documents,
         block_inputs=block_inputs,
         candidate_groups=candidate_groups,
         candidates_unread=candidates_unread,
+        reviewable_candidates=reviewable_candidates,
     )
 
 
@@ -868,7 +877,8 @@ def _run_evidence_gate(
     """
     if inputs is None:
         return False, None
-    gate_result = run_grounding_gate(inputs.observation_set, inputs.text_layer, inputs.block_index)
+    gate_result = (run_grounding_gate(inputs.observation_set, inputs.text_layer, inputs.block_index)
+                   if inputs.observation_set is not None and inputs.text_layer is not None else None)
     primary_proposals, primary_refs = {}, {}
     for group in inputs.candidate_groups:
         for member in group.members:
@@ -877,13 +887,14 @@ def _run_evidence_gate(
             if member.proposed_severity is not None and not member.block_evidence and not member.other_source_count:
                 for ordinal in member.primary_text_ordinals:
                     primary_proposals.setdefault(ordinal, member.proposed_severity)
-    publication = publish_gate_result(
+    publication = PublicationResult(run.run_id) if gate_result is None else publish_gate_result(
         session,
         gate_result=gate_result,
         observation_set=inputs.observation_set,
         run_id=run.run_id,
         project_uid=run.project_uid,
         version_uid=run.version_uid,
+        **({"reviewable": True} if inputs.reviewable_candidates else {}),
         **({"proposed_severities": primary_proposals} if primary_proposals else {}),
         **({"extended_observation_refs": primary_refs} if primary_refs else {}),
     )
@@ -902,6 +913,7 @@ def _run_evidence_gate(
             provider_mode=run.provider_mode,
             primary_findings={entry.observation_ordinal: entry.finding_uid for entry in publication.published},
             unread=inputs.candidates_unread,
+            **({"reviewable": True, "text_layer": inputs.text_layer} if inputs.reviewable_candidates else {}),
         )
         publication = replace(publication, candidates=candidates)
     return True, publication
@@ -1623,11 +1635,20 @@ def _execute_run_body(
                     "extended_blocks_total": result["coverage"]["blocks_total"]}
                 for procedure in result.get("procedures", []):
                     metrics["extended_"+procedure["id"]] = procedure["status"]
+                incomplete = [str(p["id"]) + ":" + str(p.get("reason") or p["status"])
+                              for p in result.get("procedures", [])
+                              if p.get("status") in {"failed", "partial", "unavailable"}]
+                if incomplete:
+                    metrics["extended_incomplete_procedures"] = ",".join(incomplete)
                 degraded = status in {"failed","partial","unavailable"} and text_result.status is StageStatus.SUCCEEDED
+                surviving_extended = (text_result.status is StageStatus.FAILED
+                    and isinstance(result.get("flow_repair_policy"), dict)
+                    and result["flow_repair_policy"].get("version") == "v2-flow-repair-v1"
+                    and bool(result.get("observations")))
                 text_result = replace(text_result, artifacts=(*artifacts, ref), metrics=metrics,
-                    status=StageStatus.PARTIAL if degraded else text_result.status,
+                    status=StageStatus.PARTIAL if degraded or surviving_extended else text_result.status,
                     error=StageError.from_domain_error(DomainError(ErrorCode.ANALYSIS_FAILED,
-                        message="the accepted extended analysis workflow did not fully complete")) if degraded else text_result.error)
+                        message="extended procedures incomplete: " + ", ".join(incomplete or [status]))) if degraded else text_result.error)
 
                 _persist(session, run_repo, run_id, text_result)
                 outputs.absorb(text_result)

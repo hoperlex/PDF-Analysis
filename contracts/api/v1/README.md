@@ -11,7 +11,27 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.54.0` (`CRIT-SEAL-53`)
+## Current contract `1.55.0` (`ANALYSIS-REPAIR-INT-01`)
+
+Human-review admission and source grounding are separate. `FindingGroundingKind`
+adds `unverified`; its observation has a required `unverified_reason`, and may have
+empty evidence. It is a normal Finding for expert accept/reject/comments, with
+`grounded=false` persisted. Diagnostics still have no Finding identity. Memory
+retains the limitation in optional `DecisionMemoryContent.unverified_reason`
+(`dm-capture/3`); multi-member groups retain every raw claim/limitation and union their verified text/block evidence (`dm-capture/4`); older content digests and paid request builders stay unchanged.
+CSV/XLSX accept optional human `verdict` selection (`active`, `all`, `unreviewed`,
+`accepted`, `rejected`; omitted means `all`). CSV appends grounding/limitation
+columns, including the count of unverified group members, when the result includes unverified rows; no invented page or quotation.
+`Finding.block_evidence` carries the group’s verified graphical members even when its canonical observation is text; its former per-observation limit of 64 is lifted for this union.
+The API has 300 paths, 329 operations and 820 schemas; migration head `0068`.
+The domain catalogs remain at candidate revision 71; their shared version advances.
+
+Compatibility: the new enum requires readers delivered with this release. Only a
+fresh accepted `v2-flow-repair-v1` policy enables the new writer in one-list runs.
+Old runs, immutable artifacts and expert verdicts are retained. Downgrade refuses
+while unverified findings or retained memory limitations exist.
+
+## Contract `1.54.0` (`CRIT-SEAL-53`, historical)
 
 The wave-5 seal of the «Прецеденты» programme (plan-v5 section 3.7, ADR-0029 decisions 11 and 12; `CRIT-SEAL-51` in the task files). Additive: **three operations, eleven schemas and four member
 changes; nothing is removed**; migration `0067_precedents_wave5` (head `0067`); two identity prefixes, no error code, no state machine. Every new operation is asleep (`503 dependency_unavailable`) until

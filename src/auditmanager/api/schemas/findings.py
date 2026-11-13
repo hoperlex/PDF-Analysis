@@ -113,6 +113,8 @@ class ObservationView:
     #: `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): the extended-review candidate the observation was published from; ``None`` -- an observation
     #: that was not -- is omitted from the wire body.
     extended_observation_ref: str | None = None
+    # Human review is permitted even when the source gate could not prove an anchor.
+    unverified_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +233,8 @@ def observation_body(view: ObservationView) -> dict[str, Any]:
         body["grounding_kind"] = view.grounding_kind
     if view.extended_observation_ref is not None:
         body["extended_observation_ref"] = view.extended_observation_ref
+    if view.unverified_reason is not None:
+        body["unverified_reason"] = view.unverified_reason
     return body
 
 

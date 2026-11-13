@@ -44,7 +44,7 @@ _COMMENTS = text(
 ).bindparams(bindparam("case_ids", expanding=True))
 _CONTENT = text(
     "SELECT revision, finding_text, recommendation_text, proposed_severity, required_value, stated_value, stage_id, "
-    "analysis_profile_id, prompt_bundle_id, provider_mode FROM decision_memory_content WHERE case_id = :case_id "
+    "analysis_profile_id, prompt_bundle_id, provider_mode, unverified_reason, source_observations FROM decision_memory_content WHERE case_id = :case_id "
     "ORDER BY revision DESC LIMIT 1"
 )
 _EVIDENCE = text(

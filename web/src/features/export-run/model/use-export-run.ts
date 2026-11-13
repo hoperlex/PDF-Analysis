@@ -26,8 +26,11 @@ import { csvFileName, exportRunCsv } from '@/shared/api';
 import type { DownloadSink } from './download-sink';
 import { browserDownloadSink, deliverDownload } from './download-sink';
 
+export type ExportVerdictFilter = 'active' | 'all' | 'unreviewed' | 'accepted' | 'rejected';
+
 export interface ExportRunArgs {
   readonly runId: RunId;
+  readonly verdict?: ExportVerdictFilter | undefined;
   /** Injected by tests. Production uses the browser sink. */
   readonly sink?: DownloadSink;
 }
@@ -41,10 +44,10 @@ export interface ExportRunApi {
   readonly reset: () => void;
 }
 
-export function useExportRun({ runId, sink }: ExportRunArgs): ExportRunApi {
+export function useExportRun({ runId, sink, verdict }: ExportRunArgs): ExportRunApi {
   const mutation = useMutation({
     mutationFn: async () => {
-      const response = await exportRunCsv({ path: { run_id: runId } });
+      const response = await exportRunCsv({ path: { run_id: runId }, ...(verdict === undefined ? {} : { query: { verdict } }) });
       const fileName = csvFileName(runId);
       deliverDownload(sink ?? browserDownloadSink(), response.data, fileName);
       return { fileName, correlationId: response.correlationId };

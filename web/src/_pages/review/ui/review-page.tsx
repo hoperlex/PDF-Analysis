@@ -14,13 +14,9 @@
  *
  * Two properties this page is responsible for keeping true:
  *
- * 1. **Ungrounded observations never appear.** The API does not return them — an item
- *    whose quotation did not resolve at its declared anchor has no `finding_uid` and is in
- *    no finding query (`P02_SEAMS.md` §5.1). This page runs `admitFindings` over the page
- *    anyway, so the UI has no path to render one even if a fixture, a future endpoint or a
- *    mistake produced one. The run's `diagnostic_observation_count` is reported in the
- *    header **as a diagnostic count**, which is the honest place for it: the reviewer
- *    learns those items exist without one of them ever appearing as a finding.
+ * 1. **Reviewability is separate from grounding.** Explicit unverified Findings carry a
+ *    limitation and offer the same human decisions. Diagnostics without a Finding identity
+ *    remain outside the ledger. An unverified finding never opens a fabricated page or quote.
  *
  * 2. **`provider_mode` stays visible.** It is on the run badge in the header, on the export
  *    panel, and on the evidence viewer's own provenance line. A recorded run must never be
@@ -57,7 +53,7 @@ import { DocumentContext } from '@/widgets/document-context';
 import { useRecordVerdict } from '@/features/record-verdict';
 import { ExecutionStatusControl } from '@/features/set-execution-status';
 import { runStatusQueryOptions } from '@/entities/audit-run';
-import { SEVERITY_LABELS, admitFindings, blockEvidenceOf, groupByCategory, runFindingsQueryOptions, runHasNonTextFindings, standsOnBlocksOnly } from '@/entities/finding';
+import { SEVERITY_LABELS, EvidenceLimitation, admitFindings, blockEvidenceOf, groupByCategory, runFindingsQueryOptions, runHasNonTextFindings, standsOnBlocksOnly, unverifiedReason, verificationReasonLabel } from '@/entities/finding';
 import { findingPages, firstFindingPage } from '@/entities/finding-observation';
 
 import { presentFailureOrNull, presentFindingsFailure } from '../model/present-failure';
@@ -124,7 +120,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     writeAddress('view', next === defaultView ? null : next);
   };
   const setVerdictFilter = (filter: VerdictFilter) => {
-    writeAddress('verdict', filter === 'all' ? null : filter);
+    writeAddress('verdict', filter === 'active' ? null : filter);
   };
   const setSeverityFilter = (filter: SeverityFilter) => {
     writeAddress('severity', filter === 'all' ? null : filter);
@@ -219,7 +215,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const boundFindingUid = (selectedUid ?? '') as FindingUid;
   const verdict = useRecordVerdict({ findingUid: boundFindingUid, runId });
   const comment = useAppendComment({ findingUid: boundFindingUid, runId });
-  const exporter = useExportRun({ runId });
+  const exportVerdict = verdictFilter === 'waiting' ? 'unreviewed' : verdictFilter;
+  const exporter = useExportRun({ runId, verdict: exportVerdict });
 
   const run = runQuery.data ?? null;
 
@@ -246,6 +243,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   // `F8-WEB`, `D-683`: a finding that stands on portal blocks alone has no quotation to show; its card is the page with a frame at
   // each block (`BlockEvidence`), drawn from `block_evidence`. A text finding keeps the quotation viewer exactly as it was.
   const onBlocks = detail !== null && standsOnBlocksOnly(detail);
+  const verificationReason = detail === null ? null : unverifiedReason(detail);
+  const hasEvidencePage = detail !== null && (onBlocks || detail.observation.evidence.length > 0);
   // `F8-WEB`: what the critic of the extended review advised about the candidate a block finding came from, in one line.
   const criticAdvice = detail !== null && (onBlocks || detail.observation.extended_observation_ref !== undefined) ? (
     <><CriticAdviceLine
@@ -342,8 +341,13 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
           {/* `F8-WEB`: what the critic of the extended review advised about the candidate a block finding came from, in one line;
               in the table too, whose row already says the finding and its recommendation. */}
           {criticAdvice}
+          <EvidenceLimitation finding={detail} />
+          {verificationReason === null ? null : <aside data-unverified-review="">
+            <p>Точная привязка одного или нескольких исходных наблюдений не подтверждена. Замечание передано эксперту; решение можно принять, отклонить или дополнить комментарием.</p>
+            <details><summary>Ограничение проверки источника</summary><p>{verificationReasonLabel(verificationReason)}</p><code>{verificationReason}</code></details>
+          </aside>}
 
-          {expanded ? (
+          {!hasEvidencePage ? <p className="am-note" data-no-evidence-page="">Подтверждённая страница для просмотра не указана. Исходные материалы и происхождение доступны в отчёте прогона.</p> : expanded ? (
             // One page drawn once: while the full-screen view is open it is the only viewer.
             <p className="am-note" data-evidence-expanded="">
               Страница открыта во весь экран.
@@ -450,6 +454,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       onExport={exporter.download}
       isPending={exporter.isPending}
       lastFileName={exporter.lastFileName}
+      verdict={exportVerdict}
+      scopeCaption="CSV и Excel: выбранный отбор по вердикту; все категории и уровни важности. Пакет аудита содержит полную историю прогона."
       mayImportDecisions={mayAct}
       // `UI-A-76`: the run's ZIP, for the session that may export, of the version this run read.
       auditPackage={mayAct ? { versionUid: run.version_uid } : undefined}
@@ -583,6 +589,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             <LoadingState what="выбранная находка" />
           ) : evidenceProps === null || detail === null ? (
             detailFailure
+          ) : !hasEvidencePage ? (
+            <><EvidenceLimitation finding={detail} /><p>Подтверждённая страница для просмотра не указана.</p></>
           ) : onBlocks ? (
             blockView({ presentation: 'full', aside: viewerAside })
           ) : (

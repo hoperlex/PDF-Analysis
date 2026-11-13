@@ -53,8 +53,8 @@ from auditmanager.shared.identity import FindingObservationId, FindingUid
 
 _INSERT_FINDING = text(
     """
-    INSERT INTO finding (finding_uid, project_uid, version_uid, allocated_by_run_id, category)
-    VALUES (:finding_uid, :project_uid, :version_uid, :run_id, :category)
+    INSERT INTO finding (finding_uid, project_uid, version_uid, allocated_by_run_id, category, publication_policy)
+    VALUES (:finding_uid, :project_uid, :version_uid, :run_id, :category, :publication_policy)
     """
 )
 
@@ -63,11 +63,11 @@ _INSERT_OBSERVATION = text(
     INSERT INTO finding_observation (
         finding_observation_id, run_id, finding_uid, stage_id, category,
         finding_text, recommendation_text, grounded, ungrounded_reason,
-        analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode, proposed_severity, extended_observation_ref
+        analysis_profile_id, prompt_bundle_id, model_call_id, provider_mode, proposed_severity, extended_observation_ref, grounding_kind
     ) VALUES (
         :finding_observation_id, :run_id, :finding_uid, :stage_id, :category,
         :finding_text, :recommendation_text, :grounded, :ungrounded_reason,
-        :analysis_profile_id, :prompt_bundle_id, :model_call_id, :provider_mode, :proposed_severity, :extended_observation_ref
+        :analysis_profile_id, :prompt_bundle_id, :model_call_id, :provider_mode, :proposed_severity, :extended_observation_ref, :grounding_kind
     )
     """
 )
@@ -121,7 +121,7 @@ class PublicationResult:
 
     @property
     def published_count(self) -> int:
-        return len(self.published) + (0 if self.candidates is None else self.candidates.published_count)
+        return len(self.finding_uids)
 
     @property
     def diagnostic_count(self) -> int:
@@ -130,7 +130,7 @@ class PublicationResult:
     @property
     def finding_uids(self) -> tuple[str, ...]:
         text_uids = tuple(entry.finding_uid for entry in self.published)
-        return text_uids if self.candidates is None else text_uids + self.candidates.finding_uids
+        return tuple(dict.fromkeys(text_uids if self.candidates is None else text_uids + self.candidates.finding_uids))
 
 
 def _translate(exc: DBAPIError) -> DomainError:
@@ -160,6 +160,7 @@ def publish_gate_result(
     model_call_ids: Mapping[int, str] | None = None,
     proposed_severities: Mapping[int, str] | None = None,
     extended_observation_refs: Mapping[int, str] | None = None,
+    reviewable: bool = False,
 ) -> PublicationResult:
     """Write the gate's decision, in one savepoint inside the caller's unit of work.
 
@@ -185,14 +186,31 @@ def publish_gate_result(
 
     try:
         with nested_transaction(session):
+            if reviewable:
+                session.execute(text("SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"), {"run_id": run_id})
             for verdict in gate_result.verdicts:
                 observation = verdict.observation
+                candidate_ref = extended_refs.get(observation.observation_ordinal)
+                if reviewable:
+                    candidate_ref = candidate_ref or f"primary_text_{observation.observation_ordinal}"
+                    existing = session.execute(text(
+                        "SELECT o.finding_uid, o.finding_observation_id, o.finding_text, o.recommendation_text, "
+                        "(SELECT count(*) FROM finding_evidence e WHERE e.finding_observation_id = o.finding_observation_id) AS n "
+                        "FROM finding_observation o WHERE o.run_id = :run_id AND o.extended_observation_ref = :ref "
+                        "AND o.finding_uid IS NOT NULL"
+                    ), {"run_id": run_id, "ref": candidate_ref}).mappings().one_or_none()
+                    if existing is not None:
+                        if (existing["finding_text"], existing["recommendation_text"]) != (observation.finding_text, observation.recommendation_text):
+                            raise _invalid_candidate("a published source reference changed its content")
+                        published.append(PublishedFinding(existing["finding_uid"], existing["finding_observation_id"],
+                                                          observation.observation_ordinal, observation.category, existing["n"]))
+                        continue
                 observation_id = FindingObservationId.new().value
                 model_call_id = calls.get(observation.observation_ordinal) or (
                     observation.model_call_id
                 )
 
-                if verdict.grounded:
+                if verdict.grounded or reviewable:
                     # Fresh identity, this run only. §5.2.
                     finding_uid: str | None = FindingUid.new().value
                     session.execute(
@@ -203,9 +221,10 @@ def publish_gate_result(
                             "version_uid": version_uid,
                             "run_id": run_id,
                             "category": observation.category,
+                            "publication_policy": "reviewable-v1" if reviewable else None,
                         },
                     )
-                    reason: str | None = None
+                    reason: str | None = None if verdict.grounded else verdict.reason.value
                 else:
                     finding_uid = None
                     failing = verdict.reason
@@ -223,13 +242,14 @@ def publish_gate_result(
                         "finding_text": observation.finding_text,
                         "recommendation_text": observation.recommendation_text,
                         "grounded": verdict.grounded,
+                        "grounding_kind": "unverified" if reviewable and not verdict.grounded else "text_span",
                         "ungrounded_reason": reason,
                         "analysis_profile_id": observation_set.analysis_profile_id,
                         "prompt_bundle_id": observation_set.prompt_bundle_id,
                         "model_call_id": model_call_id,
                         "provider_mode": observation_set.provider_mode,
                         "proposed_severity": proposals.get(observation.observation_ordinal),
-                        "extended_observation_ref": extended_refs.get(observation.observation_ordinal),
+                        "extended_observation_ref": candidate_ref,
                     },
                 )
 
@@ -247,14 +267,16 @@ def publish_gate_result(
                                 "block_id": item.block_id,
                             },
                         )
-                    assert finding_uid is not None
+                if finding_uid is not None:
+                    if reviewable:
+                        session.execute(_SET_CANONICAL, {"canonical_observation_id": observation_id, "finding_uid": finding_uid})
                     published.append(
                         PublishedFinding(
                             finding_uid=finding_uid,
                             finding_observation_id=observation_id,
                             observation_ordinal=observation.observation_ordinal,
                             category=observation.category,
-                            evidence_count=len(observation.evidence),
+                            evidence_count=len(observation.evidence) if verdict.grounded else 0,
                         )
                     )
                 else:
@@ -329,6 +351,7 @@ class CandidateMember:
     cross_window: bool = False
     proposed_severity: str | None = None
     proposed_recommendation: str | None = None
+    native_sources: tuple[tuple[int, str], ...] = ()
 
     def __post_init__(self) -> None:
         ref = self.extended_observation_ref
@@ -352,6 +375,9 @@ class CandidateMember:
             or any(type(n) is not int for n in self.primary_text_ordinals)
         ):
             raise _invalid_candidate("a candidate's source counts are not counts")
+        if any(type(number) is not int or number < 1 or not isinstance(quote, str) or not quote
+               for number, quote in self.native_sources):
+            raise _invalid_candidate("a native source is a page and its literal quote")
 
     @property
     def recommendation_text(self) -> str:
@@ -518,6 +544,8 @@ def publish_candidate_groups(
     provider_mode: str,
     primary_findings: Mapping[int, str] | None = None,
     unread: Sequence[str] = (),
+    reviewable: bool = False,
+    text_layer=None,
 ) -> CandidatePublicationResult:
     """Publish the candidate groups of a ``one_list`` run, in one savepoint inside the caller's unit of work.
 
@@ -534,6 +562,15 @@ def publish_candidate_groups(
 
     A refusal of the database propagates as a ``DomainError`` and the savepoint discards everything this call wrote. Nothing is committed.
     """
+    if reviewable:
+        from auditmanager.findings.review_publication import publish_reviewable_groups
+        try:
+            return publish_reviewable_groups(session, groups=groups, gate_inputs=gate_inputs, run_id=run_id,
+                project_uid=project_uid, version_uid=version_uid, analysis_profile_id=analysis_profile_id,
+                prompt_bundle_id=prompt_bundle_id, provider_mode=provider_mode, primary_findings=primary_findings, unread=unread,
+                text_layer=text_layer)
+        except DBAPIError as exc:
+            raise _translate(exc) from exc
     linked = dict(primary_findings or {})
     published: list[PublishedCandidateFinding] = []
     diagnostics: list[Diagnostic] = []
@@ -585,6 +622,7 @@ def publish_candidate_groups(
                             "version_uid": version_uid,
                             "run_id": run_id,
                             "category": kind.category,
+                            "publication_policy": None,
                         },
                     )
 

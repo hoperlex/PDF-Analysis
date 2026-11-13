@@ -6,6 +6,9 @@ The composition root's capture assembler builds a :class:`CaptureSnapshot` from 
 
 from __future__ import annotations
 
+from auditmanager.decision_memory.service import STATUS_LOCK_PREFIX
+from auditmanager.decision_memory.repository import COMMENT_LOCK_PREFIX
+
 from auditmanager.decision_memory.models import (
     BLOCK_QUOTE_MAX_CHARS,
     CAPTURE_VERSION,

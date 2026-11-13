@@ -1045,7 +1045,7 @@ class FindingCategory(str, enum.Enum):
     #: (plan-v5 section 4): a group of drawing candidates, and a group that mixes the sources of the blocks and the cross-check.
     DRAWING_DISCREPANCY = "drawing_discrepancy"
     CROSS_SOURCE = "cross_source"
-    #: `CRIT-SEAL-53` (contract 1.54.0): a parameter of the project (an area, a number of storeys, a load) stated differently in two documents of the
+    #: `CRIT-SEAL-53` (contract 1.55.0): a parameter of the project (an area, a number of storeys, a load) stated differently in two documents of the
     #: project: a finding of the newer document's run, with the other document's evidence in `cross_evidence` (owner ruling Н6).
     PARAMETER_MISMATCH = "parameter_mismatch"
 
@@ -1140,7 +1140,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.54.0"]
+    contract_version: Literal["1.55.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1809,7 +1809,7 @@ class RunWaitCell(_Object):
 
 
 class RunPublicationMode(str, enum.Enum):
-    """`CRIT-SEAL-53` (contract 1.54.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan."""
+    """`CRIT-SEAL-53` (contract 1.55.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan."""
 
     TEXT_ONLY = "text_only"
     ONE_LIST = "one_list"
@@ -1902,7 +1902,7 @@ class RunStatus(_Object):
     #: median duration of similar recent runs. Absent while the run's job is not leased or running, before its first
     #: attempt, and without enough similar history; never invented.
     estimated_finish_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): how the run published its findings, frozen at its start: `text_only` (the findings of the text
+    #: `CRIT-SEAL-53` (contract 1.55.0, asked by `F8-WEB`): how the run published its findings, frozen at its start: `text_only` (the findings of the text
     #: analysis, and the candidates of the extended review beside them) or `one_list` (the candidates are findings of the same list). Absent is read as
     #: `text_only`.
     publication_mode: RunPublicationMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -2431,6 +2431,7 @@ class FindingGroundingKind(str, enum.Enum):
 
     TEXT_SPAN = "text_span"
     PORTAL_BLOCK = "portal_block"
+    UNVERIFIED = "unverified"
 
 
 class FindingOrigin(str, enum.Enum):
@@ -2467,7 +2468,7 @@ class FindingBlockEvidence(_Object):
 
 
 class FindingCrossEvidence(_Object):
-    """`CRIT-SEAL-53` (contract 1.54.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
+    """`CRIT-SEAL-53` (contract 1.55.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
     version, the page, the quote and its span in that version's text layer. `Evidence` is untouched; this is the other document's, with its `version_uid`."""
 
     evidence_ordinal: Annotated[int, Field(ge=0)]
@@ -2491,7 +2492,9 @@ class FindingObservation(_Object):
     model_config = ConfigDict(
         extra="forbid",
         json_schema_extra={
-            "if": {"properties": {"grounding_kind": {"const": "portal_block"}}, "required": ["grounding_kind"]},
+            "if": {"properties": {"grounding_kind": {"enum": ["portal_block", "unverified"]}}, "required": ["grounding_kind"]},
+            "then": {"if": {"properties": {"grounding_kind": {"const": "unverified"}}, "required": ["grounding_kind"]},
+                     "then": {"required": ["unverified_reason"]}},
             "else": {"properties": {"evidence": {"minItems": 1}}},
         },
     )
@@ -2520,10 +2523,13 @@ class FindingObservation(_Object):
     )  # type: ignore[assignment]
     #: `CRIT-SEAL-50` (contract 1.51.0): absent means `text_span`, the only kind before.
     grounding_kind: FindingGroundingKind = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): the candidate of the extended review the observation was published from (`xobs_` and its
+    #: `CRIT-SEAL-53` (contract 1.55.0, asked by `F8-WEB`): the candidate of the extended review the observation was published from (`xobs_` and its
     #: key); absent for an observation that was not published from a candidate. The card of a finding reads the critic's advice and the corrector's
     #: refinement through it.
     extended_observation_ref: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    unverified_reason: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -2531,8 +2537,10 @@ class FindingObservation(_Object):
     def _evidence_unless_block_grounded(self) -> FindingObservation:
         """The contract's ``if``/``else`` on ``grounding_kind``, where the served document is also what validates: no text evidence is allowed
         only for a block-grounded observation (`CRIT-SEAL-52`, ``D-683``). The refusal is a transport-shape check, not a business rule."""
-        if not self.evidence and self.grounding_kind is not FindingGroundingKind.PORTAL_BLOCK:
-            raise ValueError("evidence needs at least one item unless grounding_kind is portal_block")
+        if self.grounding_kind is FindingGroundingKind.UNVERIFIED and not self.unverified_reason:
+            raise ValueError("an unverified reviewable observation needs its source limitation")
+        if not self.evidence and self.grounding_kind not in {FindingGroundingKind.PORTAL_BLOCK, FindingGroundingKind.UNVERIFIED}:
+            raise ValueError("evidence needs at least one item unless grounding_kind is portal_block or unverified")
         return self
 
 
@@ -2570,11 +2578,11 @@ class Finding(_Object):
         default=None, json_schema_extra=optional_property)
     #: `CRIT-SEAL-50` (contract 1.51.0): the blocks of the portal that hold the evidence of a finding grounded on blocks; absent for a
     #: finding grounded on text spans only. `origin` is the «Источник» chip; absent means `text`.
-    block_evidence: Annotated[list[FindingBlockEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
+    block_evidence: list[FindingBlockEvidence] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
     origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.54.0): the evidence of the finding in another document of the project (a finding of category `parameter_mismatch`);
+    #: `CRIT-SEAL-53` (contract 1.55.0): the evidence of the finding in another document of the project (a finding of category `parameter_mismatch`);
     #: absent for a finding with no such evidence.
     cross_evidence: Annotated[list[FindingCrossEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
@@ -2620,11 +2628,11 @@ class FindingDetail(_Object):
     current_verdict_carried_from: DecisionCarriedFrom = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
     #: `CRIT-SEAL-50` (contract 1.51.0): as on ``Finding``.
-    block_evidence: Annotated[list[FindingBlockEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
+    block_evidence: list[FindingBlockEvidence] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
     origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.54.0): as on ``Finding``.
+    #: `CRIT-SEAL-53` (contract 1.55.0): as on ``Finding``.
     cross_evidence: Annotated[list[FindingCrossEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
@@ -9238,6 +9246,7 @@ class DecisionMemoryContent(_Object):
     stage_id: Annotated[str, Field(min_length=1, max_length=64)]
     analysis_profile_id: AnalysisProfileId
     provider_mode: Literal["live", "recorded"]
+    unverified_reason: Annotated[str, Field(min_length=1, max_length=200)] | None = None
 
 
 class DecisionMemoryEvidence(_Object):
@@ -10136,7 +10145,7 @@ class AppendPrecedentSettingRequest(_Object):
     value: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
 
 
-# --- `CRIT-SEAL-53` (contract 1.54.0): failure patterns and the quality table -------------------------------------------
+# --- `CRIT-SEAL-53` (contract 1.55.0): failure patterns and the quality table -------------------------------------------
 DecisionPatternId = TypeAliasType("DecisionPatternId", Annotated[str, Field(pattern=rf"^dmp_{_ULID}$")])
 
 

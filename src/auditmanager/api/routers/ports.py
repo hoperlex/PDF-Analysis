@@ -937,7 +937,7 @@ class CsvExportPort(Protocol):
     ``terminal_semantics.publishes_result`` flag rather than a hand-written state list.
     """
 
-    def export_run_csv(self, *, run_id: str) -> bytes:
+    def export_run_csv(self, *, run_id: str, verdict: str = "all") -> bytes:
         """The CSV bytes for one run.
 
         Raises ``state_transition_not_allowed`` when the run's terminal does not
@@ -961,7 +961,7 @@ class XlsxExportPort(Protocol):
     that do not verify. Nothing is created, so a repeat returns byte-identical bytes.
     """
 
-    def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
+    def export_run_xlsx(self, *, run_id: str, principal_id: str, verdict: str = "all") -> bytes:
         """The workbook bytes for one run, for the principal the seam admitted."""
 
     def import_run_decisions(

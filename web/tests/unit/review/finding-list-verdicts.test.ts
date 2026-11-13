@@ -46,13 +46,14 @@ describe('verdicts at a glance', () => {
 });
 
 describe('the verdict filter read from the address', () => {
-  it('reads a known value and falls to «Все» otherwise', async () => {
+  it('reads a known value and opens active review by default', async () => {
     const { verdictFilterOf } = await import('@/widgets/finding-list');
     expect(verdictFilterOf('waiting')).toBe('waiting');
     expect(verdictFilterOf('accepted')).toBe('accepted');
     expect(verdictFilterOf('rejected')).toBe('rejected');
-    expect(verdictFilterOf(null)).toBe('all');
+    expect(verdictFilterOf(null)).toBe('active');
     expect(verdictFilterOf('all')).toBe('all');
-    expect(verdictFilterOf('pending')).toBe('all');
+    expect(verdictFilterOf('active')).toBe('active');
+    expect(verdictFilterOf('pending')).toBe('active');
   });
 });

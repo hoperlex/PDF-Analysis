@@ -10,6 +10,7 @@ export const candidateObjects = (value: unknown): CandidateRecord[] =>
 export const candidateStrings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 export const PROPOSAL_SEVERITIES: readonly Severity[] = ['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'];
+export const CONSOLIDATION_VERSIONS: readonly string[] = ['ensemble-linked-v1', 'strict-cross-window-v1', 'v2-flow-repair-v1'];
 
 export interface ReviewCandidate {
   readonly key: string;
@@ -36,7 +37,7 @@ export function reviewCandidates(value: unknown, published: readonly Finding[] =
   const publishedRefs = new Set(published.flatMap((finding) => [finding.observation, ...(finding.merged_observations ?? [])])
     .map((item) => item.extended_observation_ref).filter((item): item is string => typeof item === 'string'));
   const consolidation = candidateObject(result?.consolidation);
-  const grouped = consolidation?.complete === true && ['ensemble-linked-v1', 'strict-cross-window-v1'].includes(candidateText(consolidation.version));
+  const grouped = consolidation?.complete === true && CONSOLIDATION_VERSIONS.includes(candidateText(consolidation.version));
   const groups = grouped ? candidateObjects(result?.consolidated_observations) : [];
   const indices = groups.flatMap((group) => candidateObjects(group.origin_records).map((origin) => origin.raw_index));
   const validGroups = groups.length > 0 && indices.length === raw.length && new Set(indices).size === raw.length

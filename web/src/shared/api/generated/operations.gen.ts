@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.54.0 (OpenAPI 3.1.0)
- *   sha256 6f53dce1aecdcd4a7545f68e09e6369bea1282747575d640b34d4ef121cef8e7
+ *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
+ *   sha256 800b870f2e490bdd3ef9356fdce0c74bd6a1f5bc03f17ae04511ab479949b469
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -2536,6 +2536,11 @@ export type ExportRunCsvInput = {
   path: {
     run_id: RunId;
   };
+  /** Query string parameters. */
+  query?: {
+    /** Use the same human-verdict selection as the review. Omitted means all, including history. */
+    verdict?: "active" | "all" | "unreviewed" | "accepted" | "rejected";
+  };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
    */
@@ -2562,6 +2567,11 @@ export type ExportRunXlsxInput = {
   /** Path parameters, substituted into `/runs/{run_id}/export.xlsx`. */
   path: {
     run_id: RunId;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Use the same human-verdict selection as the review. Omitted means all, including history. */
+    verdict?: "active" | "all" | "unreviewed" | "accepted" | "rejected";
   };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -10190,13 +10200,13 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/runs/{run_id}/export.csv',
     pathParams: ['run_id'],
-    queryParams: [],
+    queryParams: ['verdict'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
     responseMediaType: 'text/csv',
     successStatuses: [200],
-    errorStatuses: [401, 403, 404, 409, 500, 503],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['export'],
   },
   exportRunXlsx: {
@@ -10204,7 +10214,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/runs/{run_id}/export.xlsx',
     pathParams: ['run_id'],
-    queryParams: [],
+    queryParams: ['verdict'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,

@@ -113,6 +113,16 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
                     if (plan != "extended-review-v2" or "quality_policy" not in extended
                             or not validate_finding_proposal_policy(extended["finding_proposals"], compare_bundle=False)):
                         raise ValueError()
+                if "flow_repair_policy" in extended:
+                    from auditmanager.analysis.public import validate_flow_repair_policy
+                    if (plan != "extended-review-v2" or "quality_policy" not in extended
+                            or "finding_proposals" not in extended
+                            or not validate_flow_repair_policy(extended["flow_repair_policy"], compare_bundle=False)
+                            or type(extended.get("semantic_pair_call_limit")) is not int
+                            or extended["semantic_pair_call_limit"] < 0
+                            or type(extended.get("semantic_repair_attempts")) is not int
+                            or extended["semantic_repair_attempts"] != 1):
+                        raise ValueError()
             elif plan == "extended-review-v3":
                 rules = extended.get("rules_sha256")
                 text_limit = extended.get("text_page_limit")

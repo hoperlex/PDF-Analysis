@@ -16,11 +16,8 @@ function object(value: unknown): RecordValue | null { return typeof value === 'o
 export function extendedCandidateCounts(value: unknown) {
   const result = object(value);
   const rows = Array.isArray(result?.observations) ? result.observations.flatMap((item) => { const row = object(item); return row === null ? [] : [row]; }) : [];
-  const consolidation = object(result?.consolidation);
-  const groups = Array.isArray(result?.consolidated_observations) ? result.consolidated_observations : null;
-  const grouped = consolidation?.version === 'ensemble-linked-v1' && consolidation.complete === true && groups !== null;
   return {
-    candidates: grouped ? groups.length : rows.length,
+    candidates: reviewCandidates(value).groupCount,
     criticRecommendations: rows.filter((row) => {
       const advice = object(row.review ?? row.critic);
       return typeof advice?.llm_decision === 'string' && advice.llm_decision.trim() !== '';
@@ -43,7 +40,7 @@ export function ExtendedReviewSummary({ projectUid, runId, oneList = false, publ
   const retained = reviewCandidates(query.data?.result, published).rows.length;
   if (oneList && retained === 0) return null;
   return <aside className={styles.summary} aria-label="Предварительные кандидаты расширенного анализа" data-extended-candidate-count={counts.candidates}>
-    <p><strong>{oneList ? 'Прогон использует общий список привязанных находок.' : `В расширенном анализе сохранено предварительных кандидатов: ${counts.candidates}.`}</strong></p>
+    <p><strong>{oneList ? 'Прогон использует общий список замечаний для решения экспертом.' : `В расширенном анализе сохранено предварительных кандидатов: ${counts.candidates}.`}</strong></p>
     {oneList ? <p>В расширенном анализе сохранено предварительных кандидатов: {counts.candidates}.</p> : null}
     <p>{oneList ? 'Решение по каждой находке принимает эксперт. Оставшиеся машинные кандидаты доступны только для чтения.' : 'Это отдельные машинные наблюдения, доступные ниже для чтения. Они не включены в счётчик находок и не являются экспертными решениями.'}</p>
     {retained > 0 ? <p><a href="#review-machine-candidates">Кандидаты для чтения: {retained}</a></p> : null}

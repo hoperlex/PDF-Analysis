@@ -31,6 +31,7 @@ import Link from 'next/link';
 import type { FindingObservation, NormCitation } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import {
+  EvidenceLimitation,
   SeverityBadge,
   normCitationStateLabel,
   normCitationStateMeaning,
@@ -166,6 +167,7 @@ function Merged({
                   </span>
                 ) : null}
               </p>
+              <EvidenceLimitation finding={{ observation: item }} />
               {item.proposed_severity === undefined ? null : (
                 <p className={styles.meta} data-proposed-severity={item.proposed_severity}>
                   Предложение модели:{' '}

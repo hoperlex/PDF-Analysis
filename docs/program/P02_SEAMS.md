@@ -10,6 +10,10 @@
 > `contracts/events/v1/**`. Where this document and one of those disagree, the frozen
 > contract wins and the disagreement is a defect in this file.
 
+## Current admission amendment — 1.55.0 / 0068
+
+`ANALYSIS-REPAIR-INT-01`: a Finding identity means admission to human review. Exact source grounding remains a separate fact. A fresh accepted flow policy may publish `grounding_kind=unverified`, `grounded=false`, a real limitation and no invented evidence. Ordinary diagnostics still have no Finding identity. Existing older-policy gates and paid builders remain unchanged. New semantic groups reuse an exact primary origin, preserve all raw members, and retain their verified text/block context and limitations in human memory (`dm-capture/4` for groups; `/3` for a single unverified issue). Active/history and export selection use actual human verdicts; model advice never writes one.
+
 ## 0. What this document is for, and how to use it
 
 Gate B dispatches eight sessions at once against one commit. None of them waits on

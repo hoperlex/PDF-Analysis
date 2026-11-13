@@ -273,7 +273,7 @@ function seeded(...pages: ReturnType<typeof portalPage>[]) {
 
 function apiError(): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.54.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'cid-strip', retryable: true,
+    contract_version: '1.55.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'cid-strip', retryable: true,
   };
   return new ApiError(503, envelope, 'cid-strip');
 }

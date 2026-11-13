@@ -27,7 +27,7 @@
       "const": "auditmanager.domain.errors"
     },
     "contract_version": {
-      "const": "1.54.0"
+      "const": "1.55.0"
     },
     "supersedes": {
       "const": "1.52.0"

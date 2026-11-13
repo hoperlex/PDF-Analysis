@@ -83,7 +83,7 @@ _FINDINGS_ONE_LIST = text("""
            o.finding_observation_id, o.run_id AS observation_run_id,
            o.finding_uid AS observation_finding_uid, o.category AS observation_category,
            o.finding_text, o.recommendation_text, o.proposed_severity,
-           o.grounding_kind,
+           o.grounding_kind, o.ungrounded_reason,
            e.evidence_ordinal, e.page_number,
            cv.current_verdict, cv.decided_severity, cv.latest_comment,
            cv.finding_uid AS verdict_finding_uid
@@ -114,6 +114,7 @@ def read_xlsx_projection(
     page_labels: Mapping[int, str],
     citations_by_finding: Mapping[str, tuple[CitationRead, ...]],
     attribution: str,
+    verdict: str = "all",
 ) -> tuple[RunRead, tuple[FindingRead, ...]] | None:
     """Return complete typed reads, or ``None`` for an absent run.
 
@@ -168,15 +169,15 @@ def read_xlsx_projection(
             or row["observation_finding_uid"] != finding_uid
             or row["observation_category"] != row["category"]
             or row["verdict_finding_uid"] != finding_uid
-            or row["evidence_ordinal"] is None
-            or row["page_number"] is None
+            or (row.get("grounding_kind") != "unverified" and (row["evidence_ordinal"] is None or row["page_number"] is None))
         ):
             raise ValueError("xlsx_read_incomplete_finding")
         page = row["page_number"]
-        if type(page) is not int or page not in page_labels:
+        unverified = row.get("grounding_kind") == "unverified"
+        if not unverified and (type(page) is not int or page not in page_labels):
             raise ValueError("xlsx_read_page_label_missing")
-        label = page_labels[page]
-        if not isinstance(label, str) or not label.strip():
+        label = "" if unverified else page_labels[page]
+        if not unverified and (not isinstance(label, str) or not label.strip()):
             raise ValueError("xlsx_read_page_label_invalid")
 
         entry = by_finding.setdefault(finding_uid, {
@@ -191,8 +192,8 @@ def read_xlsx_projection(
         if (entry["category"] != row["category"]
                 or entry["canonical"] != row["canonical_observation_id"]):
             raise ValueError("xlsx_read_finding_changed")
-        verdict = entry["verdict"]
-        if verdict != VerdictRead(
+        standing_verdict = entry["verdict"]
+        if standing_verdict != VerdictRead(
             finding_uid, row["current_verdict"],
             row["decided_severity"], row["latest_comment"],
         ):
@@ -206,6 +207,7 @@ def read_xlsx_projection(
             "recommendation": row["recommendation_text"],
             "severity": row["proposed_severity"],
             "grounding": grounding,
+            "unverified_reason": row.get("ungrounded_reason"),
             "evidence": [],
         })
         if (item["text"] != row["finding_text"]
@@ -215,9 +217,10 @@ def read_xlsx_projection(
             raise ValueError("xlsx_read_observation_changed")
         evidence = item["evidence"]
         assert isinstance(evidence, list)
-        if row["evidence_ordinal"] != len(evidence):
+        if not unverified and row["evidence_ordinal"] != len(evidence):
             raise ValueError("xlsx_read_evidence_order_invalid")
-        evidence.append(EvidenceLocationRead(row["evidence_ordinal"], page, label))
+        if not unverified:
+            evidence.append(EvidenceLocationRead(row["evidence_ordinal"], page, label))
 
     if set(citations_by_finding) != set(by_finding):
         raise ValueError("xlsx_read_citation_partition_invalid")
@@ -247,6 +250,7 @@ def read_xlsx_projection(
                 proposed_severity=item["severity"],
                 evidence=tuple(item["evidence"]),
                 grounding_kind=item["grounding"],
+                unverified_reason=item["unverified_reason"],
             )
             for observation_id, item in observations.items()
         )
@@ -262,7 +266,8 @@ def read_xlsx_projection(
             verdict=entry["verdict"],
             citations=citations,
         ))
-    result = (run, tuple(findings))
+    from auditmanager.exports.policy import includes_verdict
+    result = (run, tuple(f for f in findings if includes_verdict(f.verdict.current_verdict, verdict)))
     project_workbook(*result)  # fail closed before handing a partial read to a caller
     return result
 

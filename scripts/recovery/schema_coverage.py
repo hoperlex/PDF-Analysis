@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0067_precedents_wave5"
+HEAD = "0068_reviewable_findings"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -579,7 +579,7 @@ SEQUENCES = {
 #: `0067_precedents_wave5` (`CRIT-SEAL-53`) adds four tables: 41 checks, seven foreign keys, four primary keys and three unique constraints. Over
 #: ``0065``'s c 1547, f 407, p 164, t 9, u 139 that is c 1591, f 417, p 169, t 9, u 143 (the sum of the two seals' measured deltas; re-measured by the
 #: inventory test on a throwaway database at ``0067``, 2026-11-11, main→dev merge).
-CONSTRAINT_COUNTS = {"c": 1591, "f": 417, "p": 169, "t": 9, "u": 143}
+CONSTRAINT_COUNTS = {"c": 1594, "f": 417, "p": 169, "t": 9, "u": 143}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
