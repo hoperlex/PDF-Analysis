@@ -15,6 +15,25 @@ after host verification.
 | `v0.6.0` | `37393a979a430e490843d7f410e9eca9491a4ea1` | `bf03d913bde596a77` (computed from tagged tree) | not measured (stand environment) | `1.0.0-draft.1` | `0021_portal_bundles` | `934705c04a71…` | `30053740f569…` | `W55B-INT-MAIN-PREP-03.md` (R-125 same-SHA gate completion); deploy run `38897018419`, owner-run host verification in `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md`; five live checks waived in `W55B-INT-TAG-01.md` | — (not promoted) |
 | `v0.7.0` — on `origin/main`, **host verification owed**, not tagged | `48c8e34ccd08a58ae61cbd09ecdba49066a5ad46` (the owner's pull request #3) | `bbbab3c0dfb856a39` computed from `git archive` of that SHA (`compute_build_id()`) | not measured (stand environment) | `1.0.0-draft.1` | `0028_classification_corrections` | `934705c04a71…` (builtin AR profile, unchanged since `v0.6.0`) | `30053740f569…` (builtin AR profile, unchanged since `v0.6.0`) | **none on this tree.** The owner merged pull requests #2 and #3 into `main` without a gate (`R-141e`); `NIGHT-1020-GATE-0-7-0-01.md` is an `R-125` completion of an earlier lineage and covers neither the classification correction, the normative references nor the hardening slices; light checks only (`RELEASE-0-7-0-RECORD-01.md`). Deploy workflow run `39571427597`, success, reported by the integrator and not re-read here; `infra/deploy/verify-deployed.sh` on the host: **pending** | none — the normative corpus is not imported on the stand |
 
+## `v0.27.0` — verified repaired analysis flow
+
+`W-ANALYSIS-INT-RELEASE-01` released and tagged exact SHA
+`275bde8643e1e89f5f9741be2e57b7367cde44ae`. [Workflow 43433384065](https://github.com/hoperlex/PDF-Analysis/actions/runs/43433384065)
+completed successfully; the job log confirms both the actual same-tree host verification
+and `DEPLOY OK` for that SHA. Product 0.27.0, contract 1.55.0, migration
+`0068_reviewable_findings`.
+
+Fresh-consent analysis preserves valid work, semantic text/drawing origins, normative
+uncertainty and additive corrections. Reviewable unverified findings use the existing
+human ledger and memory; active/history CSV/XLSX follow real verdicts. Existing compatible
+vectors can supply bounded human examples when the established switches permit it.
+The publication correction reconciles CSV/nullable API metadata without changing analysis,
+migration or value bounds. Fresh local checks: 10 Python and 8 frontend-lock tests passed,
+generated-client verification OK. The owner expressly waived the full gate for this SHA;
+no paid analysis or encoder was run. Production switches and extra manual host probes
+were not inspected or changed. [Release evidence and limits](tasks/W-ANALYSIS-INT-RELEASE-01.md).
+Closure records are dev-only; main remains the exact verified release SHA.
+
 ## `v0.12.5` — verified deployment and full machine run
 
 `HOTFIX-RUN-COMPLETE-1106` deployed exact SHA `46b52dd068232236038d7ec4cbb0b13c63b9aa25`:

@@ -36,7 +36,18 @@ Analysis behavior is unchanged from the accepted runtime; the subsequent publica
 Keep readers, uncertain/group memory and human decisions. Disable the writer for future estimates if necessary; refuse destructive downgrade with retained rows. A failed deploy remains an open release and needs a reviewed forward fix or revert; never force-push. No product tag before successful exact deployment.
 
 ## Handoff / status
-Preparing the exact local candidate and development publication. Main approval and workflow evidence are recorded in local release evidence; production activation is omitted by the owner's explicit scope instruction. After completion, add the measured release row and tag without silently changing runtime.
+Complete: the corrected exact candidate is deployed and tagged `v0.27.0`. Main approval, focused checks, workflow/job log and exact-tree evidence are recorded in `.local/evidence/release-0270/`. Closure records travel to dev only; production activation is omitted by the owner's explicit scope instruction.
 
 ## First publication and correction
 The owner explicitly approved `590bafb074b36667f34c633b39c608c21b0eb57e`, which was fast-forwarded to main. Workflow `43427506750` applied migration 0068 and started healthy services but stopped at served/frozen API conformance (five differences). No release tag was created. The correction is isolated in `ANALYSIS-REPAIR-CONFORMANCE-01`: explicit CSV ErrorEnvelope 422 and an equivalent nullable-string schema representation, with regenerated client/seal. Keep the applied migration and retained data; no analysis request/budget or setting change. A corrected exact SHA needs direct owner approval before another main publication.
+
+## Verified release — 2026-11-13
+
+- The owner explicitly approved `275bde8643e1e89f5f9741be2e57b7367cde44ae` with an express full-gate exception: “Опубликовать этот SHA в main без полного gate”. The exact question/answer and scoped release plan are in `takeover-release-plan.json`.
+- The takeover stopped the prior session's dedicated app-server after checking that it held only that task and its guardian and had no background children. Context and task ownership moved to session `01a1d507-74d1-7ef2-882e-e69ac5aa7b8b`; `session-takeover.json` records the exited PID.
+- Fresh local served/frozen/admission/nullable checks: **10 passed**; generated-client verification: **OK**; frontend-lock: **8 passed**, both commands exit 0. `git diff --check` passed. Full gate, general checks, paid analysis and encoder calls were not run.
+- A clean exact tree, main ancestry, fresh main/dev refs and absence of another deploy were checked before the fast-forward. Main and dev read back as the approved SHA. The initial automatic-review refusal was resolved after recording the later direct owner exception and these new checks; no policy or workflow was changed.
+- [Workflow 43433384065](https://github.com/hoperlex/PDF-Analysis/actions/runs/43433384065), job `131912221401`, completed successfully. Its actual host output at 13:30:09 UTC confirms `the deployed stack IS this tree (275bde864)` and `DEPLOY OK: 275bde8643e1e89f5f9741be2e57b7367cde44ae`. The full job log and extracted verification are retained locally.
+- Annotated tag `v0.27.0` was published and its remote peeled target equals the exact verified SHA; receipt: `tag-receipt.json`. The earlier failed workflow remains part of the history.
+
+This closeout changes only this task, `CURRENT_STATE.md` and `RELEASES.md`; no new contract, runtime, migration, dependency/lock, composition, global style or verification-policy change. The contract/migration remain the accepted 1.55.0 / 0068 implementation. Closure publication is dev-only. One-list/critic-context settings, manual host probes, cold-vector coverage and historical-run promotion remain outside this release's measured scope; no activation or data-class/training switch was changed.
