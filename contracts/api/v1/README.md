@@ -26,6 +26,10 @@ columns, including the count of unverified group members, when the result includ
 The API has 300 paths, 329 operations and 820 schemas; migration head `0068`.
 The domain catalogs remain at candidate revision 71; their shared version advances.
 
+Publication correction (`ANALYSIS-REPAIR-CONFORMANCE-01`): CSV declares the existing
+validation envelope; the optional memory limitation uses the same nullable-string
+schema form as its served model. Allowed values/bounds and the API version are unchanged.
+
 Compatibility: the new enum requires readers delivered with this release. Only a
 fresh accepted `v2-flow-repair-v1` policy enables the new writer in one-list runs.
 Old runs, immutable artifacts and expert verdicts are retained. Downgrade refuses

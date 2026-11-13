@@ -81,7 +81,7 @@ def build_export_routes(
                     }
                 },
             ),
-            **envelope_responses(401, 403, 404, 409, 500, 503),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
         },
     )
     def export_run_csv(run_id: Annotated[models.RunId, Path()],

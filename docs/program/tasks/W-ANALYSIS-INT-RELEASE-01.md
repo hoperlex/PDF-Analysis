@@ -5,6 +5,7 @@ Publish product 0.27.0 through the existing main deployment workflow, retain the
 
 ## Depends on
 - ANALYSIS-REPAIR-INT-01 — implementation completed at `bed5a549f6df8221f3551bd492c103017e827f45` with focused checks.
+- ANALYSIS-REPAIR-CONFORMANCE-01 — narrow API publication correction completed with local conformance/value/client checks.
 
 ## Frozen inputs
 - Base main/dev observed remotely: `31839344eac74840be88c218f97efaf16072d705`.
@@ -29,10 +30,13 @@ No product, contract, migration, dependency/lock, composition, global style, dep
 - Record skipped manual host/activation checks separately; they are not proved by local fixtures.
 
 ## Integration contract
-Implementation is unchanged from the accepted runtime. Only new consents select the flow policy, and existing one-list/critic-context switches remain authoritative. The release note states the warm-vector and switch limits. The existing CI deployment builds/migrates/verifies the exact triggering revision; no additional server workflow is introduced.
+Analysis behavior is unchanged from the accepted runtime; the subsequent publication correction only reconciles CSV response metadata and an equivalent nullable-string schema. Only new consents select the flow policy, and existing one-list/critic-context switches remain authoritative. The release note states the warm-vector and switch limits. The existing CI deployment builds/migrates/verifies the exact triggering revision; no additional server workflow is introduced.
 
 ## Rollback
 Keep readers, uncertain/group memory and human decisions. Disable the writer for future estimates if necessary; refuse destructive downgrade with retained rows. A failed deploy remains an open release and needs a reviewed forward fix or revert; never force-push. No product tag before successful exact deployment.
 
 ## Handoff / status
 Preparing the exact local candidate and development publication. Main approval and workflow evidence are recorded in local release evidence; production activation is omitted by the owner's explicit scope instruction. After completion, add the measured release row and tag without silently changing runtime.
+
+## First publication and correction
+The owner explicitly approved `590bafb074b36667f34c633b39c608c21b0eb57e`, which was fast-forwarded to main. Workflow `43427506750` applied migration 0068 and started healthy services but stopped at served/frozen API conformance (five differences). No release tag was created. The correction is isolated in `ANALYSIS-REPAIR-CONFORMANCE-01`: explicit CSV ErrorEnvelope 422 and an equivalent nullable-string schema representation, with regenerated client/seal. Keep the applied migration and retained data; no analysis request/budget or setting change. A corrected exact SHA needs direct owner approval before another main publication.

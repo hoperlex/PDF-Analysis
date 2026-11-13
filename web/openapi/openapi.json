@@ -50180,12 +50180,16 @@
             "title": "Provider Mode"
           },
           "unverified_reason": {
-            "type": [
-              "string",
-              "null"
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
             ],
-            "minLength": 1,
-            "maxLength": 200,
             "description": "The original source limitation of an unverified issue, retained with the actual human decision."
           }
         },

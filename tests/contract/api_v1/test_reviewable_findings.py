@@ -38,3 +38,20 @@ def test_uncertain_admission_does_not_erase_evidence_guards(change, validate, op
     assert not result["invalid"]["valid"]
     with pytest.raises(ValidationError):
         models.FindingObservation.model_validate(row)
+
+
+@pytest.mark.parametrize("value,valid", [(None, True), ("source_binding_unverified", True),
+    ("", False), ("x" * 201, False), (1, False)])
+def test_memory_limitation_has_the_same_nullable_bounds_in_contract_and_transport(
+        value, valid, validate, openapi_document):
+    row = {"finding_text": "Проверить исполнение узла.", "recommendation_text": "Сверить по схеме.",
+        "proposed_severity": None, "required_value": None, "stated_value": None,
+        "stage_id": "finding_merge", "analysis_profile_id": str(AnalysisProfileId.new()),
+        "provider_mode": "recorded", "unverified_reason": value}
+    result = validate(openapi_document, [{"name": "memory", "schema": "DecisionMemoryContent", "payload": row}])
+    assert result["memory"]["valid"] is valid
+    if valid:
+        models.DecisionMemoryContent.model_validate(row)
+    else:
+        with pytest.raises(ValidationError):
+            models.DecisionMemoryContent.model_validate(row)

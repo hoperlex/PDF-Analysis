@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "ANALYSIS-REPAIR-INT-01",
+  "owner": "ANALYSIS-REPAIR-CONFORMANCE-01",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "800b870f2e490bdd3ef9356fdce0c74bd6a1f5bc03f17ae04511ab479949b469",
-    "content_commit": "31839344",
-    "content_commit_subject": "ANALYSIS-REPAIR-INT-01 on release 0.26.0 base",
+    "sha256": "a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e",
+    "content_commit": "590bafb074b36667f34c633b39c608c21b0eb57e",
+    "content_commit_subject": "0.27.0 publication candidate before conformance correction",
     "dispatch_named_commit": "ccf8d47bd4dedb4ffc2eb613fba28267f4557202",
-    "commit_note": "Add unverified human-reviewable observations and retained memory limitation; export human-verdict selection. Surface counts unchanged.",
+    "commit_note": "Equivalent nullable limitation schema and the already-declared CSV validation response; no allowed value/bound or version change.",
     "openapi_version": "3.1.0",
     "info_version": "1.55.0",
     "paths": 300,
     "operations": 329,
     "component_schemas": 820,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "800b870f2e490bdd3ef9356fdce0c74bd6a1f5bc03f17ae04511ab479949b469",
+    "snapshot_sha256": "a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "60bb08ba84f2385515226ab534838b7265aab7a1985ed92b11ff72afa3cf1d6b",
-      "index.ts": "7c6232cd628f8100026304ad431f84c50c4ef3ac0c0db6d9d100c782b3c6a3a4",
-      "operations.gen.ts": "286a887d7ecd0b060b16da044780f85e5c9b8e1ef39576036f0b80e5794374bf",
-      "types.gen.ts": "327a2fc5fa5a6040e155e9f2a9a37823087fc1204cb2f8e818a01b410176ad08"
+      "client.gen.ts": "67d83b0a7c21d1a0ffda3d3d0d552b4c262ae15806ddfc3b3ea3f79108cda751",
+      "index.ts": "3b81fc9dc36c88a74da47a4dc94c8d5768cff090101966ae42a8070dccba3a79",
+      "operations.gen.ts": "825998071dc913c69a034b286989e9472082a6c28044d82fdcae79d622ee8d8b",
+      "types.gen.ts": "09574489fb03c5cc75e0d80f7475128ec1d47a24aa6dc59d58c2fb24d57cac04"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
