@@ -14,6 +14,8 @@
  * target mark is two borders in CSS, which needs no font that has a crosshair.
  */
 
+'use client';
+
 import { useState } from 'react';
 
 import styles from './page-viewer.module.css';
