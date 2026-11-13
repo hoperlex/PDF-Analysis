@@ -59,3 +59,6 @@ Disable `AUDITMANAGER_V2_FLOW_REPAIR` for future estimates to roll back the writ
 
 ## Handoff
 Use `integration/analysis-flow-continuation-1113` and the local commit reported by this continuation. Do not resume writing in the prior shared worktree or silently publish/promote historical runs. Review the candidate and the recorded activation limits before any separately authorized rollout.
+
+## Release continuation
+Implementation is complete at `bed5a549f6df8221f3551bd492c103017e827f45`. The independent final code review accepts the identical runtime tree `29c7f07e1946001841484a34cd123d52ed52c708`; only this task's prose differs. Release authority, the owner's latest local-check restriction and exact publication evidence belong to `W-ANALYSIS-INT-RELEASE-01`.
