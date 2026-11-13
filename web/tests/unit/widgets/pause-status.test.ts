@@ -48,9 +48,14 @@ describe('the pause state in the top strip', () => {
     expect(html({ status: RUNNING })).toBe('');
   });
 
-  it('offers «Пауза» on a running queue and «Возобновить» on a paused one to an administrator', () => {
-    expect(html({ status: RUNNING, mayToggle: true })).toContain('>Пауза</button>');
-    expect(html({ status: PAUSED, mayToggle: true })).toContain('>Возобновить</button>');
+  it('offers ONE «Пауза» button to an administrator on a running and on a paused queue; the way back is a menu item, not a second button', () => {
+    for (const status of [RUNNING, PAUSED]) {
+      const out = html({ status, mayToggle: true });
+      expect(out.match(/aria-haspopup="menu"/g)).toHaveLength(1);
+      expect(out).toContain('aria-label="Пауза"');
+      expect(out).not.toContain('>Возобновить</button>');
+    }
+    expect(html({ status: PAUSED, mayToggle: true })).toContain('Выдача анализа — возобновить');
   });
 
   it('asks in place before it sends, and the confirmation calls the command', () => {

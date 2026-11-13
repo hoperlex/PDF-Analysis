@@ -321,3 +321,34 @@ def test_a_comparison_row_of_a_finished_attempt_changes_nothing_for_a_run(
         helpers.finish(sessions, authority)
     finally:
         helpers.cancel(sessions, run_id)
+
+
+@pytest.mark.parametrize(("call_count", "run_count"), [(1, 0), (2, 0), (1, 1)])
+def test_dispatch_hint_counts_distinct_calls_and_runs_against_current_capacity(
+    call_count: int, run_count: int, queue: Any, journal: Any, sessions: Any,
+    helpers: Any, capacity_helpers: Any, connection: tuple[str, str],
+) -> None:
+    # Runs and calls freeze revision 1; the connection's CURRENT capacity is two.
+    capacity_helpers.new_revision_with_capacity(sessions, connection[0], 2, 2)
+    for _ in range(call_count):
+        item = queue.claimed()
+        journal.insert(item.work_id, item.attempt_id, state="sent", estimate_micros=1,
+                       connection_revision_id=connection[1])
+    active = None
+    running = None
+    if run_count:
+        running = helpers.queue_run(sessions, connection[1])
+        active = helpers.claim(sessions, running)
+    busy = helpers.queue_run(sessions, connection[1], priority=51)
+    _, free_revision = helpers.new_connection(sessions)
+    free = helpers.queue_run(sessions, free_revision, priority=50)
+    try:
+        with sessions() as session:
+            offered = JobRepository().next_queued_run(session)
+        assert offered == (busy if call_count + run_count < 2 else free)
+    finally:
+        if active is not None:
+            helpers.finish(sessions, active)
+        for run in (busy, free, running):
+            if run is not None:
+                helpers.cancel(sessions, run)

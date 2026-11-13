@@ -238,7 +238,7 @@ describe('each item calls its own operation', () => {
 
   it('a refused command shows the refusal and keeps its key for the retry; a new intent gets a new key', async () => {
     const refusal = new ApiError(403, {
-      contract_version: '1.51.0', error_code: 'permission_denied', message: 'no', correlation_id: 'vector-refused', retryable: false,
+      contract_version: '1.55.0', error_code: 'permission_denied', message: 'no', correlation_id: 'vector-refused', retryable: false,
     }, 'vector-refused');
     vi.mocked(setVectorPaused).mockRejectedValueOnce(refusal);
     const strip_ = await strip(seeded(['admin']));
@@ -258,7 +258,7 @@ describe('each item calls its own operation', () => {
 
   it('an unread state of the vectors offers no switch: nothing is sent from a state nobody read', async () => {
     vi.mocked(getVectorControl).mockRejectedValue(new ApiError(503, {
-      contract_version: '1.51.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'vector-down', retryable: true,
+      contract_version: '1.55.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'vector-down', retryable: true,
     }, 'vector-down'));
     const client = seeded(['admin'], RUNNING, null);
     const strip_ = await strip(client);

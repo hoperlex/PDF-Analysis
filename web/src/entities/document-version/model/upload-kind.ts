@@ -26,17 +26,17 @@ export const COMPARISON_ONLY_START_NOTE =
 
 /** A specification read needs analysis data that a comparison-only upload cannot supply. */
 export const COMPARISON_ONLY_SPECIFICATION_NOTE =
-  'Спецификация и цены для этого комплекта недоступны: текущая версия загружена только для ' +
+  'Спецификация и цены для этого комплекта недоступны: текущая версия загружена как PDF для ' +
   'сравнения без пакета портала и не содержит данных анализа для этой страницы.';
 
 /** An optimisation pass needs analysis data, rather than a comparison-only PDF. */
 export const COMPARISON_ONLY_OPTIMISATION_NOTE =
   'Предложения по оптимизации для этого комплекта не запускаются: текущая версия загружена ' +
-  'только для сравнения без пакета портала и не содержит данных анализа для прохода.';
+  'как PDF без пакета портала и не содержит данных анализа для прохода.';
 
 /** The blocks reader has no analysis text for a comparison-only PDF. */
 export const COMPARISON_ONLY_BLOCKS_NOTE =
-  'Блоки этого документа недоступны: версия загружена только для сравнения без пакета портала ' +
+  'Блоки этого документа недоступны: версия загружена как PDF без пакета портала ' +
   'и не содержит текста анализа для этой страницы.';
 
 /**

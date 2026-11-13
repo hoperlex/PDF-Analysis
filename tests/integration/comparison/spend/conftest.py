@@ -152,3 +152,10 @@ def repository() -> ComparisonSpendRepository:
 def connection(sessions: sessionmaker[Session]) -> tuple[str, str]:
     """A committed executor connection and its first revision: ``(connection_id, revision_id)``."""
     return support.new_connection(sessions)
+
+
+@pytest.fixture(scope="session")
+def capacity_helpers() -> ModuleType:
+    """Reuse the capacity-revision builder for the hint's mixed Run/call cases."""
+    return _load("exec2_cap_connection_capacity_support",
+                 Path(__file__).resolve().parents[2] / "jobs" / "connection_capacity_support.py")

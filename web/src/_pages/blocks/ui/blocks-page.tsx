@@ -141,7 +141,7 @@ function VersionBlocksLoaded({ projectUid, versionUid }: { readonly projectUid: 
       />
     );
   } else if (isComparisonOnly(version.data)) {
-    body = <UnsupportedState title="Блоков нет." detail={COMPARISON_ONLY_START_NOTE} />;
+    body = <UnsupportedState title="Блоков нет." detail={COMPARISON_ONLY_BLOCKS_NOTE} />;
   } else {
     body = <VersionBlockViews version={version.data} tab={tab} onTab={setTab} page={page} onPage={writePage} />;
   }
