@@ -149,7 +149,7 @@ await withColdBrowser(
         await keys.press('Tab');
         walked.push(await page.evaluate(FOCUSED));
       }
-      r.check('Tab walks its links in order', ['a:Проекты', 'a:Дашборд', 'a:Оптимизация разделов'], walked);
+      r.check('Tab walks its links in order', ['a:Объекты', 'a:Дашборд', 'a:Оптимизация разделов'], walked);
       r.check('… and it stays open while focus is inside', OPEN, await page.evaluate(disclosure(ROW, 'Работа')));
       await keys.press('ArrowDown');
       r.note('ArrowDown inside a group (the disclosure pattern leaves arrows to the browser)', {
@@ -222,7 +222,7 @@ await withColdBrowser(
       await keys.press('Enter');
       r.check('Enter opens «Работа» inside «Меню»', OPEN, await page.evaluate(disclosure(ST, 'Работа')));
       await keys.press('Tab');
-      r.check('Tab: «Проекты»', 'a:Проекты', await page.evaluate(FOCUSED));
+      r.check('Tab: «Объекты»', 'a:Объекты', await page.evaluate(FOCUSED));
       await keys.press('Escape');
       r.check('Escape closes the inner group only', [SHUT, OPEN],
         [await page.evaluate(disclosure(ST, 'Работа')), await page.evaluate(disclosure(ST, 'Меню'))]);

@@ -354,7 +354,7 @@ function pick(headers, names) {
  * `within` is `{ selector, text_contains }`: the control must lie inside the nearest ancestor
  * matching `selector` whose words contain `text_contains`. It exists for the lists this
  * application draws without a handle of their own on a row (`«Блоки»` offers one identical
- * «Выбрать проект» button per project, and the only thing that tells the rows apart is the
+ * «Выбрать объект» button per project, and the only thing that tells the rows apart is the
  * words in them): "the button of the row that says <this project>". Without it the journey
  * could only press the first row, which on a stand that other journeys have written to is
  * somebody else's. A row that is not there, or whose words do not contain the text, matches

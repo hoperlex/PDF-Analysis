@@ -13,7 +13,7 @@
  * **`BETA-LIVE-JOURNEY-01` repaired it, 2026-10-21, because running it showed 19 of its checks
  * red against a tree whose expectations had moved on without it** (`D-186`). Three things had
  * changed and each is now typed from `web/src/shared/config/screen-registry.ts`, the ruling's
- * source: «Диспетчер» joined «Работа»; an administrator also sees «Администрирование»; and since
+ * source: «Назначения» joined «Работа»; an administrator also sees «Администрирование»; and since
  * `R-80` an account with no role sees «Главная» and nothing else. `/optimisation` is a pointer
  * that replaces itself with the projects list (`W60-OPT-PROPOSALS-01`). And «Оптимизация
  * разделов», «Нормы», «Настройки анализа» and «Очередь» are no stubs any more: they open, say
@@ -33,16 +33,16 @@ const ANY_ROLE = [
   [
     'Работа',
     [
-      ['/projects', 'Проекты'],
+      ['/projects', 'Объекты'],
       ['/dashboard', 'Дашборд'],
       ['/section-optimisation', 'Оптимизация разделов'],
-      ['/dispatcher', 'Диспетчер'],
+      ['/dispatcher', 'Назначения'],
     ],
   ],
   ['Знания', [['/knowledge-base', 'База знаний'], ['/blocks', 'Блоки'], ['/norms', 'Нормы']]],
   [
     'Система',
-    [['/logs', 'Журнал выполнения'], ['/workers', 'Исполнители'], ['/analysis-settings', 'Настройки анализа'], ['/queue', 'Очередь']],
+    [['/logs', 'Журнал выполнения'], ['/workers', 'Диспетчер'], ['/analysis-settings', 'Настройки анализа'], ['/queue', 'Очередь']],
   ],
 ];
 const RULED = {
