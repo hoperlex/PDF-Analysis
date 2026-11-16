@@ -9,7 +9,8 @@ import { NavigationGlyph } from './navigation-glyph';
 import styles from './app-frame.module.css';
 
 const previewLabels = {
-  work: ['Объекты', 'Дашборд', 'Сравнение версий', 'Сравнение стадий'],
+  // `UIP-G-07`: «Главная» first, as in the menu itself; the rows follow the registry's order, not this list's.
+  work: ['Главная', 'Объекты', 'Дашборд', 'Сравнение версий', 'Сравнение стадий'],
   knowledge: ['База знаний', 'Нормы'],
   system: ['Настройки анализа'],
 } as const;

@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ScreenDecision, ScreenEntry } from '@/shared/config';
-import { SCREEN_REGISTRY, screenDecision } from '@/shared/config';
+import { HOME_SCREEN, SCREEN_REGISTRY, screenDecision } from '@/shared/config';
 
 import { ADMIN_AND_EXPERT, ADMIN_ONLY, DEFAULT_CREDENTIAL, EXPERT, INCOMPLETE_PROFILE, NO_ROLES, UNKNOWN_ROLE } from './subjects';
 
@@ -96,7 +96,8 @@ describe('the four decisions, in order', () => {
 describe('the live registry', () => {
   it('has exactly five administrator-only rows (the access journal, 1.36.0, is the fourth; the advanced page of the executors, `HOSTS-WEB-01`, the fifth) and four operator rows (R-150w)', () => {
     expect(SCREEN_REGISTRY.filter((screen) => Array.isArray(screen.roles)).map((screen) => screen.address)).toEqual([
-      '/dispatcher', '/schedule', '/logs', '/workers', '/workers/advanced', '/queue', '/admin/users', '/admin/users/[user_uid]', '/admin/registrations', '/admin/auth-events',
+      // `UIP-G-07`: «График работ» stands before «Назначения» in the registry, as it does in the menu.
+      '/schedule', '/dispatcher', '/logs', '/workers', '/workers/advanced', '/queue', '/admin/users', '/admin/users/[user_uid]', '/admin/registrations', '/admin/auth-events',
     ]);
   });
 
@@ -117,8 +118,10 @@ describe('the live registry', () => {
     for (const screen of menu) {
       expect(screenDecision(screen, ADMIN_ONLY), screen.address).toBe('open');
       expect(screenDecision(screen, EXPERT), screen.address).toBe(screen.group === 'admin' ? 'forbidden' : 'open');
-      // The home screen is reached through the brand, so every menu row requires a role.
-      expect(screenDecision(screen, NO_ROLES), screen.address).toBe('forbidden');
+      // `UIP-G-07`: «Главная» is a menu row now, and the one row an account with no role may open (`R-80`: it reaches its home page
+      // through the brand and through this row); every other menu row requires a role. `buildNavigation` offers «Главная» only
+      // beside another row, so that account still has no menu.
+      expect(screenDecision(screen, NO_ROLES), screen.address).toBe(screen.address === HOME_SCREEN ? 'open' : 'forbidden');
       expect(screenDecision(screen, null), screen.address).toBe('sign-in');
       expect(screenDecision(screen, DEFAULT_CREDENTIAL), screen.address).toBe('change-password');
     }

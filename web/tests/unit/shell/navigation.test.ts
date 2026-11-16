@@ -8,12 +8,21 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { MENU_GROUPS, MENU_GROUP_LABELS, MenuAddressError, buildNavigation, currentScreen } from '@/_app/navigation';
+import {
+  MENU_GROUPS,
+  MENU_GROUP_LABELS,
+  MenuAddressError,
+  PROJECT_ENTRY_PLACE,
+  buildNavigation,
+  currentScreen,
+  withProjectEntry,
+} from '@/_app/navigation';
 import type { Navigation } from '@/_app/navigation';
 import { FrameNavigationView } from '@/_app/frame-navigation';
 import { NAVIGATION_GLYPH_LABELS, NavigationGlyph } from '@/_app/navigation-glyph';
 import type { ScreenEntry } from '@/shared/config';
 import { SCREEN_REGISTRY } from '@/shared/config';
+import { ALL_PROJECTS_PARAM } from '@/shared/lib';
 import type { DisclosureProps } from '@/shared/ui';
 
 import {
@@ -36,13 +45,18 @@ function outline(navigation: Navigation): string[] {
 
 /**
  * `R-66` with the two comparison modules added in their menu order, written independently of the
- * registry — and without «Проекты», which `R-150b` moved out of the menu rows into the project selector
- * of the top strip. `R-153h` brings «Проект» / «Проекты» back as the first item of «Работа», but not as a
- * row: it is the navigation's `projectEntry`, tested in `project-entry.test.ts`, so `buildNavigation`'s groups stay as they were.
+ * registry — and without «Объекты», which `R-150b` moved out of the menu rows into the project selector
+ * of the top strip. `R-153h` brings «Объект» / «Объекты» back as an item of «Работа», but not as a
+ * row: it is the navigation's `projectEntry`, tested in `project-entry.test.ts`, so `buildNavigation`'s groups hold
+ * the rows only, and the entry stands third among them once drawn.
+ *
+ * `UIP-G-07` (owner rulings Г5-B, Г7-B, Г1-C, the second poll) sets the order of «Работа»: «Главная» first, «Дашборд» behind it,
+ * then the original's screens in the original's order — «График работ», «Сравнение стадий», «Сравнение версий»
+ * (`PDF-proverka` 0ae48ea1, `frontend/index.html`: «График работ» at line 56, «Сравнение стадий» at 129, «Сравнение версий» at
+ * 137) — with our «Назначения» and «Оптимизация разделов» after «График работ».
  */
 const R66 = [
-  // `R-152a`: «График работ» after «Назначения», as in the original's menu (expert and admin).
-  'Работа: Дашборд /dashboard, Оптимизация разделов /section-optimisation, Назначения /dispatcher, График работ /schedule, Сравнение версий /version-comparison, Сравнение стадий /stage-comparison',
+  'Работа: Главная /, Дашборд /dashboard, График работ /schedule, Назначения /dispatcher, Оптимизация разделов /section-optimisation, Сравнение стадий /stage-comparison, Сравнение версий /version-comparison',
   // `R-151m`: «Блоки» is a tab of the version, out of the menu.
   'Знания: База знаний /knowledge-base, Нормы /norms',
   'Система: Журнал выполнения /logs, Диспетчер /workers, Настройки анализа /analysis-settings, Очередь /queue',
@@ -79,6 +93,39 @@ describe('the live registry gives exactly R-66', () => {
       group: 'hidden',
       inMenu: false,
     });
+  });
+
+  it('UIP-G-07: «Главная» is the first row of «Работа», and the original\'s screens keep the original\'s order', () => {
+    const work = buildNavigation(EXPERT).groups[0];
+    expect(work?.group).toBe('work');
+    expect(work?.items[0]).toEqual({ address: '/', label: 'Главная' });
+    expect(work?.items[1]).toEqual({ address: '/dashboard', label: 'Дашборд' });
+    const labels = (work?.items ?? []).map((item) => item.label);
+    // The original's menu: График работ, then Сравнение стадий, then Сравнение версий.
+    const shared = ['График работ', 'Сравнение стадий', 'Сравнение версий'];
+    expect(labels.filter((label) => shared.includes(label))).toEqual(shared);
+    // Ours follow «График работ»: Назначения, Оптимизация разделов.
+    expect(labels.slice(2, 5)).toEqual(['График работ', 'Назначения', 'Оптимизация разделов']);
+  });
+
+  it('UIP-G-07: the project entry stands third, which is behind exactly the two rows the registry opens «Работа» with', () => {
+    expect(PROJECT_ENTRY_PLACE).toBe(2);
+    const rows = buildNavigation(EXPERT).groups[0]?.items.slice(0, PROJECT_ENTRY_PLACE).map((item) => item.label);
+    expect(rows).toEqual(['Главная', 'Дашборд']);
+    const labels = (project: string | null) => withProjectEntry(buildNavigation(EXPERT), project).groups[0]?.items.slice(0, 4).map((item) => item.label);
+    expect(labels(null)).toEqual(['Главная', 'Дашборд', 'Объекты', 'График работ']);
+    expect(labels('prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B')).toEqual(['Главная', 'Дашборд', 'Объект', 'График работ']);
+  });
+
+  it('R-80 and UIP-G-07: «Главная» is offered only beside another row, so an account with no role has no menu of one item', () => {
+    const rows = SCREEN_REGISTRY.filter((screen) => screen.address === '/');
+    expect(rows).toHaveLength(1);
+    // The row alone: its own group would exist if it were offered by itself.
+    expect(buildNavigation(EXPERT, rows).groups).toEqual([]);
+    expect(buildNavigation(NO_ROLES, SCREEN_REGISTRY)).toEqual({ groups: [] });
+    // Beside any other open row it is the first of its group.
+    const withDashboard = SCREEN_REGISTRY.filter((screen) => screen.address === '/' || screen.address === '/dashboard');
+    expect(outline(buildNavigation(EXPERT, withDashboard))).toEqual(['Работа: Главная /, Дашборд /dashboard']);
   });
 
   it('can fail: /optimisation back in the menu, or an R-66 stub gone from its group, is not R-66', () => {
@@ -124,7 +171,7 @@ describe('navigation disclosure behavior', () => {
 describe('navigation glyph coverage', () => {
   it('has a distinct drawn glyph for every currently offered menu label', () => {
     const navigation = buildNavigation(ADMIN_AND_EXPERT);
-    // `R-153h`: the first item of «Работа» is «Проект» or «Проекты», by the project the address names; both are drawn.
+    // `R-153h`: an item of «Работа» is «Объект» or «Объекты», by the project the address names; both are drawn.
     const entry = [navigation.projectEntry?.project, navigation.projectEntry?.list].filter((label): label is string => label !== null && label !== undefined);
     expect(entry).toEqual(['Объект', 'Объекты']);
     const labels = [...navigation.groups.flatMap((group) => group.items.map((item) => item.label)), ...entry];
@@ -139,6 +186,14 @@ describe('navigation glyph coverage', () => {
       expect(markup, label).toContain('aria-hidden="true"');
     }
     expect(renderToStaticMarkup(createElement(NavigationGlyph, { label: 'Новый раздел' }))).toContain('data-nav-glyph="fallback"');
+  });
+
+  it('UIP-G-07: «Главная» has a house of its own, drawn in the bar, the rail and the stacked menu', () => {
+    const drawing = renderToStaticMarkup(createElement(NavigationGlyph, { label: 'Главная' }));
+    expect(drawing).toContain('data-nav-glyph="home"');
+    expect(drawing).toContain('<svg');
+    const markup = renderToStaticMarkup(createElement(FrameNavigationView, { navigation: buildNavigation(EXPERT), pathname: '/dashboard' }));
+    expect(markup.match(/data-nav-glyph="home"/g)).toHaveLength(3);
   });
 
   it('R-153h: «Объект» and «Объекты» are told apart by their drawings', () => {
@@ -203,6 +258,25 @@ describe('the project is carried by the frame\'s own links (R-150c)', () => {
 
   it('can fail: a project that is not carried leaves the plain address', () => {
     expect(hrefsOf(draw(MIXED, PROJECT))).not.toEqual(hrefsOf(draw(MIXED, null)));
+  });
+
+  it('UIP-G-07: the explicit «Все объекты» rides as ?project=all on the same targets, so the next screen does not open on the last object', () => {
+    const markup = renderToStaticMarkup(
+      createElement(FrameNavigationView, { navigation: MIXED, pathname: '/dashboard', projectUid: null, carriedProject: ALL_PROJECTS_PARAM }),
+    );
+    const carried = ['/dashboard?project=all', '/queue?project=all', `/projects/${OTHER}`, '/dashboard?view=compact&project=all'];
+    expect(hrefsOf(markup)).toEqual([...carried, ...carried, ...carried]);
+  });
+
+  it('UIP-G-07: an object that is only the account\'s last one is the menu\'s object but is not written onto the links', () => {
+    const live = buildNavigation(EXPERT);
+    const markup = renderToStaticMarkup(
+      createElement(FrameNavigationView, { navigation: live, pathname: '/dashboard', projectUid: PROJECT, carriedProject: null }),
+    );
+    // The entry is that object's page (a path, no query); every other link stays as the registry spells it.
+    const hrefs = hrefsOf(markup);
+    expect(hrefs.filter((href) => href === `/projects/${PROJECT}`)).toHaveLength(3);
+    expect(hrefs.filter((href) => href.includes('?'))).toEqual([]);
   });
 });
 
@@ -322,10 +396,16 @@ describe('the current group and item', () => {
     expect(markup).toContain('aria-label="Работа" data-current-group="true"');
   });
 
-  it('offers no duplicate home link, and marks nothing current on home or an unknown address', () => {
-    expect(currentLinks(draw('/'))).toEqual([]);
-    expect(currentButtons(draw('/'))).toEqual([]);
-    expect(draw('/')).not.toContain('href="/"');
+  it('UIP-G-07: «Главная» is a menu item now, and it is the current one, with its group, on `/`', () => {
+    const markup = draw('/');
+    expect(currentLinks(markup)).toEqual(['/', '/', '/']);
+    expect(currentButtons(markup)).toEqual(['Работа', 'Меню', 'Работа']);
+    expect(markup).toContain('aria-label="Главная" aria-current="page"');
+    // Nothing else is current on it: not «Дашборд», and not the brand link (which is not in the navigation).
+    expect(draw('/dashboard')).not.toContain('aria-label="Главная" aria-current="page"');
+  });
+
+  it('marks nothing current on an unknown address or none', () => {
     for (const pathname of ['/no-such-screen', null]) {
       const markup = draw(pathname);
       expect(markup).not.toContain('aria-current');

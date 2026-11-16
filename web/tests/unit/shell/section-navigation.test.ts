@@ -3,6 +3,11 @@
  * leading to the section page (`R-151l`). `R-153g` (owner, 2026-11-09): all fifteen are listed, the ones holding no
  * document too, in structure order; an empty one shows a muted 0, no red badge, and still links to its page.
  *
+ * `UIP-G-07` (owner ruling Г5-B, «Разделы» always): the group is there for every session that may open the section page, on
+ * the current object — the address's or, on a screen that follows the object, the account's last (`UIP-G-06`). Each section
+ * carries the dot of its colour (`UIP-G-17`, `SectionDot`) before its code. With no object («Все объекты», chosen or not) the
+ * group has one row, «Выберите объект», no sections and no figures.
+ *
  * The model is pure and read as data (`sectionNavigationOf`); the markup is read off a static pass of the frame's
  * navigation, in all three of its states; and the wiring (a project in the address, the dashboard's summary of that
  * project, no read without one) is read off a mounted frame over a seeded cache, the way
@@ -19,6 +24,7 @@ import {
   SECTIONS_FAILED_NOTE,
   SECTIONS_GROUP_LABEL,
   SECTIONS_LOADING_NOTE,
+  SECTIONS_NO_OBJECT_NOTE,
   sectionEntryLabel,
   sectionNavigationOf,
   sectionsSummary,
@@ -26,9 +32,9 @@ import {
 } from '@/_app/section-navigation';
 import type { SectionNavigation } from '@/_app/section-navigation';
 import { RUN_STATE_VALUES, queryKeys } from '@/shared/api';
-import type { DashboardSummary, ProjectSection, ProjectUid, SectionDocumentCount } from '@/shared/api';
+import type { Account, DashboardSummary, ProjectSection, ProjectUid, SectionDocumentCount } from '@/shared/api';
 import { routes } from '@/shared/lib';
-import { PROJECT_SECTIONS } from '@/entities/project';
+import { PROJECT_SECTIONS, sectionColourVar } from '@/entities/project';
 
 import { sectionAudit } from '../dashboard/audit-counts';
 import { newClient, renderWith, seedError } from '../screens/harness';
@@ -44,6 +50,10 @@ vi.mock('next/navigation', async (importOriginal) => ({
 
 const PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const OTHER = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
+
+/** `getMe` as the account answers it, with the object the account chose last (`UIP-G-06`). */
+const account = (lastProject: string | null): Account =>
+  ({ user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', roles: ['expert'], last_project_uid: lastProject }) as unknown as Account;
 
 /** The fifteen rows of `section_breakdown`, with the given counts and zero elsewhere, and the «Без раздела» bucket. */
 function rows(counts: Partial<Record<ProjectSection, number>>, unclassified = 7): SectionDocumentCount[] {
@@ -267,6 +277,22 @@ describe('the «Разделы» group in the menu', () => {
     expect(draw(READY)).toContain('data-section-nav-item="AR"');
   });
 
+  it('UIP-G-07: each section has the dot of its own colour before its code, in the bar, the rail and the stacked menu, and no dot of the avatar\'s palette', () => {
+    const markup = draw(READY);
+    const dots = (html: string): [string, string][] =>
+      [...html.matchAll(/<span class="[^"]*" style="--am-section-colour:([^"]*)" data-section-dot="([A-Za-z]+)" aria-hidden="true"><\/span>/g)].map((m) => [m[2] as string, m[1] as string]);
+    const expected = STRUCTURE.map((code): [string, string] => [code, sectionColourVar(code)]);
+    // Fifteen in the bar, fifteen on the rail, fifteen in the stacked menu: one list of colours each time.
+    expect(dots(markup)).toEqual([...expected, ...expected, ...expected]);
+    // The dot comes before the code, inside the link.
+    const first = /<li class="am-disclosure__item" data-section-nav-item="AR">(.*?)<\/li>/.exec(markup)?.[1] ?? '';
+    expect(first.indexOf('data-section-dot="AR"')).toBeGreaterThan(-1);
+    expect(first.indexOf('data-section-dot="AR"')).toBeLessThan(first.indexOf('>АР<'));
+    expect(markup).not.toMatch(/am-avatar/);
+    // Sections of one object are told apart by colour: fifteen sections, fifteen colours.
+    expect(new Set(expected.map(([, colour]) => colour)).size).toBe(STRUCTURE.length);
+  });
+
   it('marks the section page shown aria-current="page", and its group; it opens the group, which is closed otherwise', () => {
     const on = draw(READY_ON_KJ, sectionPage('KJ'));
     // The bar, the compact rail and the stacked menu each draw the page shown as current.
@@ -296,7 +322,11 @@ describe('the «Разделы» group in the menu', () => {
       /<p class="[^"]*" data-section-nav-status="([a-z]+)">([^<]*)<\/p>/.exec(draw(sections))?.slice(1).join('|') ?? null;
     expect(note({ status: 'loading' })).toBe(`loading|${SECTIONS_LOADING_NOTE}`);
     expect(note({ status: 'failed' })).toBe(`failed|${SECTIONS_FAILED_NOTE}`);
+    // `UIP-G-07`: no object, no sections: one row, «Выберите объект».
+    expect(note({ status: 'none' })).toBe(`none|${SECTIONS_NO_OBJECT_NOTE}`);
+    expect(SECTIONS_NO_OBJECT_NOTE).toBe('Выберите объект');
     expect(draw({ status: 'failed' })).not.toContain('data-section-nav-item');
+    expect(draw({ status: 'none' })).not.toContain('data-section-nav-item');
     // `R-153g`: a project without a single document has no note either — its sections are listed, each at 0.
     const none = draw(sectionNavigationOf(rows({}), PROJECT, null));
     expect(none).not.toContain('data-section-nav-status');
@@ -565,33 +595,92 @@ describe('the frame reads the current project\'s sections only where it is offer
     expect(client.getQueryCache().find({ queryKey: summaryKey(PROJECT) })?.state.status).toBe('pending');
   });
 
-  it('draws nothing, and files no read, with no project in the address', () => {
+  it('UIP-G-07: with no project in the address and none remembered, the group is there with one row, «Выберите объект», and files no read', () => {
+    navigationState.pathname = '/dashboard';
+    navigationState.search = '';
+    const client = seeded();
+    // The account has answered: it has no last object.
+    client.setQueryData(queryKeys.account.me(), account(null));
+    const before = summaryReads(client);
+    const markup = frame(client, true);
+    expect(buttons(markup)).toContain('Разделы');
+    expect(markup).toContain(`data-section-nav-status="none">${SECTIONS_NO_OBJECT_NOTE}<`);
+    expect(markup).not.toContain('data-section-nav-item');
+    expect(markup).not.toContain('data-section-nav-total');
+    expect(summaryReads(client)).toBe(before);
+  });
+
+  it('UIP-G-07: the explicit «Все объекты» (?project=all) has the one row «Выберите объект», even when the account has a last object', () => {
+    navigationState.pathname = '/dashboard';
+    navigationState.search = 'project=all';
+    const client = seeded();
+    client.setQueryData(queryKeys.account.me(), account(PROJECT));
+    const before = summaryReads(client);
+    const markup = frame(client, true);
+    expect(markup).toContain(`data-section-nav-status="none">${SECTIONS_NO_OBJECT_NOTE}<`);
+    expect(markup).not.toContain('data-section-nav-item');
+    expect(summaryReads(client)).toBe(before);
+  });
+
+  it('UIP-G-07: on a screen that follows the object, with an address that names none, it lists the sections of the account\'s last object', () => {
+    navigationState.pathname = '/dashboard';
+    navigationState.search = '';
+    const client = seeded();
+    client.setQueryData(queryKeys.account.me(), account(PROJECT));
+    const markup = frame(client, true);
+    expect([...markup.matchAll(/data-section-nav-item="([A-Z]+)"/g)].map((m) => m[1])).toEqual([...STRUCTURE, ...STRUCTURE]);
+    expect(markup).toContain(`href="${sectionPage('AR')}"`);
+    expect(markup).not.toContain('data-section-nav-status');
+  });
+
+  it('UIP-G-07: while the account is still being read, the group says it is reading, and asks for no sections', () => {
     navigationState.pathname = '/dashboard';
     navigationState.search = '';
     const client = seeded();
     const before = summaryReads(client);
     const markup = frame(client, true);
-    expect(markup).not.toContain('data-section-nav');
-    expect(buttons(markup)).not.toContain('Разделы');
+    expect(markup).toContain('data-section-nav-status="loading"');
+    expect(markup).not.toContain('data-section-nav-item');
     expect(summaryReads(client)).toBe(before);
   });
 
-  it('draws nothing, and files no read, for a session that is not offered it', () => {
+  it('UIP-G-07: a screen that does not follow the object has no last object of its own: the one row, whatever the account remembers', () => {
+    navigationState.pathname = '/queue';
+    navigationState.search = '';
+    const client = seeded();
+    client.setQueryData(queryKeys.account.me(), account(PROJECT));
+    const markup = frame(client, true);
+    expect(markup).toContain(`data-section-nav-status="none">${SECTIONS_NO_OBJECT_NOTE}<`);
+    expect(markup).not.toContain('data-section-nav-item');
+  });
+
+  it('files no read for a session that is not offered the group, and draws nothing of it', () => {
     navigationState.pathname = routes.project(PROJECT);
     navigationState.search = '';
     const client = newClient();
     const markup = frame(client, false);
     expect(markup).not.toContain('data-section-nav');
+    expect(buttons(markup)).not.toContain('Разделы');
     expect(summaryReads(client)).toBe(0);
   });
 
-  it('draws nothing, and files no read, for a project the address does not spell as one', () => {
+  it('UIP-G-07: for a project the address does not spell as one, the group has the one row too, and files no read', () => {
     navigationState.pathname = routes.project('не-проект');
     navigationState.search = '';
     const client = newClient();
     const markup = frame(client, true);
-    expect(markup).not.toContain('data-section-nav');
+    expect(markup).toContain(`data-section-nav-status="none">${SECTIONS_NO_OBJECT_NOTE}<`);
+    expect(markup).not.toContain('data-section-nav-item');
     expect(summaryReads(client)).toBe(0);
+  });
+
+  it('without a query client nothing is read and the group stands only for the state that needs no read', () => {
+    navigationState.pathname = '/dashboard';
+    navigationState.search = '';
+    const bare = (): string => renderToStaticMarkup(createElement(FrameNavigation, { navigation: buildNavigation(EXPERT), offersSections: true }));
+    expect(bare()).toContain(`data-section-nav-status="none">${SECTIONS_NO_OBJECT_NOTE}<`);
+    navigationState.pathname = routes.project(PROJECT);
+    expect(bare()).not.toContain('data-section-nav');
   });
 
   it('says it could not read the sections when the summary failed and none is held', () => {

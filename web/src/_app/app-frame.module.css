@@ -404,6 +404,16 @@
   pointer-events: none;
 }
 
+/*
+ * `UIP-G-07`: in the compact rail a section's dot (`SectionDot`, the colour of `UIP-G-17`) stands above its code, so the colour and
+ * the letters do not share the 40 px the link has; in the bar and the stacked menu the dot is a flex item of the link, before the code.
+ */
+.railSection {
+  display: grid;
+  justify-items: center;
+  gap: var(--am-gap-2xs);
+}
+
 .sectionNote {
   margin: 0 0 0 var(--am-gap);
   padding: var(--am-gap-xs) var(--am-gap-sm);
@@ -536,15 +546,6 @@
   :global(:root[data-theme='light']) .end :global(.am-theme__icon--sun) {
     display: none;
   }
-}
-
-/*
- * The control carries no pressed state any more (its name says what the press does, not where it stands), so this rule matches
- * nothing. It stays only because `contrast-pending.ts` records it by name (`PENDING_UNREACHED`); delete both together.
- */
-.end :global(.am-theme__option[aria-pressed='true']) {
-  background: var(--am-accent-light);
-  color: var(--am-accent-strong);
 }
 
 /*
