@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import type { ExecutionQueueItem, Role, RunId } from '@/shared/api';
-import { formatInstant, routes } from '@/shared/lib';
+import { formatInstant, formatInstantUtc, routes } from '@/shared/lib';
 import {
   JobStateBadge, RunWorkerLine, canCancel, canExecute, canReaudit, jobHoldsLease, jobStateLabel, queueAgeLabel, queueItemError,
 } from '@/entities/execution';
@@ -48,8 +48,8 @@ export interface ExecutionQueueProps {
 }
 
 /**
- * The original's queue line «ЧЧ:ММ → ЧЧ:ММ · длительность» (UTC, like every instant here). A job that never started and
- * never finished prints nothing: its place and age say the rest. The exact instants are in the tooltips.
+ * The original's queue line «ЧЧ:ММ → ЧЧ:ММ · длительность» (the reader's local time). A job that never started and
+ * never finished prints nothing: its place and age say the rest. The exact instants, in UTC, are in the tooltips.
  */
 function QueueTimingLine({ item, asOf }: { readonly item: ExecutionQueueItem; readonly asOf: number | null }) {
   const timing = queueTiming(item, asOf);
@@ -58,12 +58,11 @@ function QueueTimingLine({ item, asOf }: { readonly item: ExecutionQueueItem; re
     <span className={styles.timing} data-queue-timing={timing.duration ?? ''}>
       {item.started_at === undefined
         ? '—'
-        : <time dateTime={item.started_at} title={`Начат: ${formatInstant(item.started_at)}`} data-queue-started>{timing.start}</time>}
+        : <time dateTime={item.started_at} title={`Начат: ${formatInstantUtc(item.started_at)}`} data-queue-started>{timing.start}</time>}
       {' → '}
       {item.finished_at === undefined
         ? <span data-queue-finished="">…</span>
-        : <time dateTime={item.finished_at} title={`Завершён: ${formatInstant(item.finished_at)}`} data-queue-finished>{timing.end}</time>}
-      {' UTC'}
+        : <time dateTime={item.finished_at} title={`Завершён: ${formatInstantUtc(item.finished_at)}`} data-queue-finished>{timing.end}</time>}
       {timing.duration === null ? null : ` · ${timing.duration}`}
     </span>
   );

@@ -6259,7 +6259,7 @@ describe('every branch the widgets have is rendered by some state in this matrix
  *
  * | declared | matched | what it really is |
  * |---|---|---|
- * | `Создан` | `Создан 2026-09-10 08:00:00 UTC · документов 2` | every project row's created date |
+ * | `Создан` | `Создан 10.09.2026 08:00 · документов 2` | every project row's created date |
  * | `Эта версия` | `Эта версия и её манифест неизменяемы.` | the version panel's standing prose |
  * | `Прогон` | `Прогон использует тот режим провайдера…` | the start-run control's own note |
  * | `25 MiB` | `Не более 25 MiB.` | the upload envelope, printed before any file is chosen |

@@ -75,7 +75,10 @@ describe('the words of a server row', () => {
   it('says when contact was lost, or that there never was one', () => {
     const at = new Date('2026-11-09T11:02:00Z');
     const two = (n: number) => String(n).padStart(2, '0');
+    // The reader's own clock: `vitest.config.ts` pins the zone to UTC, so the literal is the local reading too.
+    expect(noContactSentence('2026-11-09T11:02:00Z')).toBe('нет связи с 11:02');
     expect(noContactSentence('2026-11-09T11:02:00Z')).toBe(`нет связи с ${two(at.getHours())}:${two(at.getMinutes())}`);
+    expect(noContactSentence('not a time')).toBe('нет связи');
     expect(noContactSentence(undefined)).toContain('ещё не выходил на связь');
   });
 });

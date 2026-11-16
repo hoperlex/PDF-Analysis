@@ -20,6 +20,10 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Instants print in the machine's local time (`shared/lib/format-instant.ts`, UIP-G-13). A test that expects «12:00» must not
+    // depend on the zone of whoever runs it, so the zone is pinned to UTC for every test file; the one test that proves the
+    // conversion (`tests/unit/lib/format-instant.test.ts`) names its zones explicitly.
+    env: { TZ: 'UTC' },
     include: ['tests/**/*.test.ts'],
     // Guards shell out to ESLint; give them room without being generous.
     testTimeout: 120_000,

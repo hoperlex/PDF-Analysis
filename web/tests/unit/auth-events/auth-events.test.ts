@@ -88,7 +88,8 @@ describe('the list', () => {
   it('draws each line with its time, its kind, the account and the administrator who acted', () => {
     const markup = renderScreen(newClient(), createElement(AuthEventRows, { items: page.items }));
     expect(markup).toContain('data-auth-event="sessions_ended"');
-    expect(markup).toContain('2026-11-05 09:30:15 UTC');
+    // The cell is the reader's time, in the original's form; the exact UTC stamp is its tooltip.
+    expect(markup).toContain('<time dateTime="2026-11-05T09:30:15Z" title="2026-11-05 09:30:15 UTC">05.11.2026 09:30</time>');
     expect(markup).toContain('Сеансы завершены администратором');
     expect(markup).toContain('Вход');
     expect(markup).toContain(`/admin/users/${OTHER}`);

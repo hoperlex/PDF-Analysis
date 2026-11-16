@@ -83,7 +83,7 @@ const projects = (over: Partial<ProjectsAndStagesViewProps> = {}): string =>
 describe('«Проекты и этапы»', () => {
   it('draws the counters, the totals, the search, the filters, «Обновить» with the time, and the legend', () => {
     const t = text(projects());
-    for (const word of ['Все', 'Ждут действия', 'Идут', 'Ошибки', 'Готовы', 'версий · 90 переходов', 'Марка', 'Порядок', 'Обновить', 'обновлено 10:15:30 UTC']) {
+    for (const word of ['Все', 'Ждут действия', 'Идут', 'Ошибки', 'Готовы', 'версий · 90 переходов', 'Марка', 'Порядок', 'Обновить', 'обновлено 10:15:30']) {
       expect(t, word).toContain(word);
     }
     expect(projects()).toContain('placeholder="Поиск по шифру…"');
@@ -737,7 +737,7 @@ describe('the block «Сравнение» of «Очередь»', () => {
     expect(t).toContain('Включён модуль «Сравнение версий».');
     expect(t).toContain('Выдача задач приостановлена для всей установки');
     for (const count of ['ждут: 5', 'идут: 2', 'с ошибкой: 1', 'выполнены: 40', 'расход неизвестен: 1']) expect(t, count).toContain(count);
-    expect(t).toContain('Самая давняя из ждущих принята 2026-10-28 08:00:00 UTC');
+    expect(t).toContain('Самая давняя из ждущих принята 28.10.2026 08:00');
     expect(t).toContain('Разбор страниц версии');
     expect(t).toContain('Сборка сопоставления листов');
     expect(t).toContain('Другая работа сравнения');

@@ -276,7 +276,7 @@ describe('the findings a tile counts are those that cite its PAGE', () => {
   });
 
   it('says which run a count is from in the words «по прогону от <time>», or nothing when the start is unknown', () => {
-    expect(runSourcePhrase(RUN_AT)).toBe('по прогону от 2026-09-10 08:00:00 UTC');
+    expect(runSourcePhrase(RUN_AT)).toBe('по прогону от 10.09.2026 08:00');
     expect(runSourcePhrase(undefined)).toBeNull();
   });
 
@@ -488,7 +488,7 @@ describe('the number on a tile is the run’s findings on its page, and only whe
     for (const tile of badge(1)) {
       expect(tile).toContain('data-tile-badge="2"');
       expect(tile).toContain('am-badge--failed');
-      expect(tile).toContain('title="Замечаний на странице 1: 2 (по прогону от 2026-09-10 08:00:00 UTC)"');
+      expect(tile).toContain('title="Замечаний на странице 1: 2 (по прогону от 10.09.2026 08:00)"');
       expect(tile).toContain('data-has-findings="true"');
     }
     for (const tile of badge(2)) expect(tile).toContain('am-badge--degraded');
@@ -510,7 +510,7 @@ describe('the number on a tile is the run’s findings on its page, and only whe
     expect(visibleText(markup)).toContain('Замечание указывает страницу, а не блок');
     expect(markup).toContain(`<code>${BLOCKS_RUN_ID}</code>`);
     // And when that run started: the note and every badge's title say «по прогону от <time>».
-    expect(visibleText(markup)).toContain('(по прогону от 2026-09-10 08:00:00 UTC)');
+    expect(visibleText(markup)).toContain('(по прогону от 10.09.2026 08:00)');
     expect(markup).toContain(`data-page-findings-run-at="${RUN_AT}"`);
   });
 
@@ -636,7 +636,7 @@ describe('the block view', () => {
     expect(panel).toContain('data-page-findings-panel="2"');
     expect(visibleText(panel)).toContain('Замечания на странице 1 (2)');
     expect(visibleText(panel)).toContain('Замечание указывает страницу PDF, а не блок');
-    expect(visibleText(panel)).toContain('(по прогону от 2026-09-10 08:00:00 UTC)');
+    expect(visibleText(panel)).toContain('(по прогону от 10.09.2026 08:00)');
     expect(visibleText(panel)).toContain('Не указан класс огнестойкости перекрытия.');
     expect(visibleText(panel)).toContain('Объём бетона в ведомости и на плане различается.');
     expect(count(panel, 'data-finding-uid=')).toBe(2);
@@ -771,8 +771,8 @@ describe('the widget reads the run in scope and numbers the tiles from its findi
     expect(markup).toContain(`<code>${latest}</code>`);
     expect(markup).toContain('data-tile-badge="2"');
     // The tile’s title and the note say which run, and when it started.
-    expect(markup).toContain('title="Замечаний на странице 1: 2 (по прогону от 2026-09-11 08:00:00 UTC)"');
-    expect(visibleText(markup)).toContain('(по прогону от 2026-09-11 08:00:00 UTC)');
+    expect(markup).toContain('title="Замечаний на странице 1: 2 (по прогону от 11.09.2026 08:00)"');
+    expect(visibleText(markup)).toContain('(по прогону от 11.09.2026 08:00)');
     expect(markup).not.toContain('data-page-findings="no-result"');
   });
 

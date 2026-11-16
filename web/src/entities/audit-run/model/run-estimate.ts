@@ -7,11 +7,12 @@
  *
  * The clock time is the reader's own (the original's «≈ до ЧЧ:ММ»), so it is formatted after mount, from the same
  * browser reading that stamps «идёт …»: a server render and the first client render both show no estimate, and the
- * text appears with the clock (`RunLiveLine`). The instant itself stays on the `<time>` element, and the page's own
- * `formatInstant` stamp (UTC, the stamp a log carries) is its title.
+ * text appears with the clock (`RunLiveLine`). The instant itself stays on the `<time>` element, and the exact UTC stamp
+ * (`formatInstantUtc`, the stamp a log carries) is its title.
  */
 
 import type { RunStatus } from '@/shared/api';
+import { formatTime } from '@/shared/lib';
 
 export interface RunFinishEstimate {
   /** The server's instant, as sent. */
@@ -22,11 +23,10 @@ export interface RunFinishEstimate {
   readonly late: boolean;
 }
 
-/** «ЧЧ:ММ» of an instant on a 24-hour clock; the zone is the reader's unless one is named. `null` for an unreadable instant. */
+/** «ЧЧ:ММ» of an instant on a 24-hour clock (`formatTime`); the zone is the reader's unless one is named. `null` for an unreadable instant. */
 export function formatClockTime(iso: string, timeZone?: string): string | null {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(parsed);
+  if (Number.isNaN(new Date(iso).getTime())) return null;
+  return formatTime(iso, timeZone);
 }
 
 /**

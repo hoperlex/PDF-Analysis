@@ -7,10 +7,13 @@
  * every other field of the record stay out, so what a person pastes into a message is what they
  * could read on the screen. The original's copy button joined its sections the same way: plain
  * lines, one per record, no markup.
+ *
+ * The time is the exact UTC stamp (`formatInstantUtc`), not the reader's local time: the text leaves the screen, and an operator
+ * who checks a pasted line against a log wants the same string whatever zone each of them sits in.
  */
 
 import type { ExecutionJournalEntry } from '@/shared/api';
-import { formatInstant } from '@/shared/lib';
+import { formatInstantUtc } from '@/shared/lib';
 
 import { visibleJournal } from './presentation';
 
@@ -24,7 +27,7 @@ export interface JournalCopyScope {
 export function journalCopyLine(entry: ExecutionJournalEntry): string {
   const visible = visibleJournal(entry);
   return [
-    formatInstant(entry.occurred_at),
+    formatInstantUtc(entry.occurred_at),
     visible.event,
     `прогон ${entry.run_id}`,
     ...(visible.state === null ? [] : [`состояние: ${visible.state}`]),

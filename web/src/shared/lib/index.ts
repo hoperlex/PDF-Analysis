@@ -1,7 +1,9 @@
 /** Public API of `shared/lib`. Generic helpers only; nothing domain-specific. */
 
 export { assertNever } from './assert-never';
-export { formatInstant } from './format-instant';
+// `UIP-G-13`: every moment of time on a screen, local and in the original's form; UTC only for a tooltip and a copy.
+export type { InstantInput } from './format-instant';
+export { formatClock, formatDayMonth, formatInstant, formatInstantUtc, formatTime } from './format-instant';
 
 export type { IntentRecord } from './intent-key';
 export { resolveIntentKey } from './intent-key';

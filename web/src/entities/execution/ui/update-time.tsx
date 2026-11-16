@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 
 import { OPERATIONAL_LIST_STALE_MS, isOperationalListStale } from '@/shared/config';
+import { formatClock } from '@/shared/lib';
 
 import styles from './update-time.module.css';
 
@@ -24,17 +25,12 @@ export interface UpdateTimeProps {
   readonly now?: number | undefined;
 }
 
-function two(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
 /**
- * `ЧЧ:ММ:СС` in the viewer's local time. The line renders only once a read has succeeded, which
- * happens in the browser after hydration, so the local clock cannot mismatch a server render.
+ * `ЧЧ:ММ:СС` in the viewer's local time (`formatClock`, the one clock of the screens). The line renders only once a read
+ * has succeeded, which happens in the browser after hydration, so the local clock cannot mismatch a server render.
  */
 export function updateTimeLabel(epochMs: number): string {
-  const moment = new Date(epochMs);
-  return `${two(moment.getHours())}:${two(moment.getMinutes())}:${two(moment.getSeconds())}`;
+  return formatClock(epochMs);
 }
 
 export function UpdateTime({ dataUpdatedAt, failed, now }: UpdateTimeProps) {

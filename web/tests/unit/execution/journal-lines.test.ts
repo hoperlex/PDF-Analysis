@@ -28,6 +28,14 @@ describe('the journal lines', () => {
     expect(markup.match(/<tr>/g)).toHaveLength(3);
   });
 
+  it('prints the time of a line as «ЧЧ:ММ:СС» (the reader\'s time), with the full date and the UTC stamp in its tooltip', () => {
+    const markup = drawn([entry('F', 'audit_run.created', {})]);
+    expect(markup).toContain('<time dateTime="2026-10-09T10:00:00Z" title="09.10.2026 10:00 · 2026-10-09 10:00:00 UTC">10:00:00</time>');
+    // The cell carries no date and no zone word: the day is in the tooltip and in the log's own headings.
+    expect(markup).not.toContain('>2026-10-09 10:00:00 UTC<');
+    expect(markup).not.toContain('>09.10.2026 10:00<');
+  });
+
   it('links the run to the journal narrowed to it', () => {
     expect(drawn([entry('F', 'audit_run.created', {})])).toContain(`href="/logs?run_id=${RUN_ID}"`);
   });

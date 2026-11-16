@@ -91,7 +91,7 @@ describe('the plan of a chip with a blocks ensemble (a run that froze its stage 
     expect(markup).toContain('успешно 12 · с ошибкой 1 · повторов 2');
     expect(markup).toContain(`входных 102${G}400 · выходных 18${G}800 · по подписке: входных 90${G}000 · выходных 15${G}000`);
     expect(markup).toContain('$0.412');
-    expect(markup).toMatch(/data-fact-row="started"[\s\S]*?2026-11-10 09:06:41 UTC/);
+    expect(markup).toMatch(/data-fact-row="started"[\s\S]*?10.11.2026 09:06/);
     expect(markup).toMatch(/data-fact-row="finished"[\s\S]*?<td>—<\/td>/);
     // The note that the server does not say time and tokens is gone: it does.
     expect(markup).not.toContain('Время и токены по этому этапу сервер пока не передаёт.');

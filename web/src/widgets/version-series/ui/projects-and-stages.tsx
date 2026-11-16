@@ -33,6 +33,7 @@ import type {
   DocumentUid,
   ProjectUid,
 } from '@/shared/api';
+import { formatClock } from '@/shared/lib';
 import { EmptyState, LoadingState } from '@/shared/ui';
 import type { ComparisonFailure, EstimateScope, OverviewView, SelectionItem, SortKey, StepActionId } from '@/entities/version-series';
 import {
@@ -101,10 +102,9 @@ import { CommandRefusal, FailureState } from './module-state';
 import aiStyles from './ai-steps.module.css';
 import styles from './version-series.module.css';
 
-/** «обновлено HH:MM:SS», in UTC like every stamp of this application (`formatInstant`). */
+/** «обновлено ЧЧ:ММ:СС» in the reader's local time (`formatClock`); a stamp that cannot be read is a dash. */
 export function clockOf(value: string): string {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? '—' : `${parsed.toISOString().slice(11, 19)} UTC`;
+  return Number.isNaN(new Date(value).getTime()) ? '—' : formatClock(value);
 }
 
 const GROUP_BADGES = { waiting: 'pending', running: 'active', failed: 'failed', ready: 'ok' } as const;
