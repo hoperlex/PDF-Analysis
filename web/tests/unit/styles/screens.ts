@@ -139,7 +139,7 @@ import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
-import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
+import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, SectionDot } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { PauseStatusView } from '@/widgets/pause-status';
 import { UpdateTime } from '@/entities/execution';
@@ -3233,6 +3233,21 @@ export function screens(): Screen[] {
       ),
     );
   }
+
+  // `UIP-G-17`: the section dot, one per section and the neutral one. The rule of `section-dot.module.css` reads a custom
+  // property that the markup sets, so the census measures no pair in it; it is rendered here so that the rule is reached.
+  add(
+    'Section dots, one per section and the neutral one',
+    render(
+      createElement(
+        'ul',
+        null,
+        ...[...PROJECT_SECTIONS.map((section) => section.code), null].map((code) =>
+          createElement('li', { key: code ?? 'none' }, createElement(SectionDot, { code }), code ?? 'Без раздела'),
+        ),
+      ),
+    ),
+  );
 
   // `CMP-VIEWER-01`: the sheet viewer (plan §1.1). Every rule of `comparison-viewer.module.css` is reached below: the
   // overlay with a selected difference, its boxes, the sheet being dragged and the neighbouring-sheet controls; the swipe
