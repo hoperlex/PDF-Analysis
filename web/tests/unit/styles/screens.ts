@@ -3143,7 +3143,7 @@ export function screens(): Screen[] {
     const work: DisclosureProps = {
       label: 'Работа',
       links: [
-        { href: '/projects', label: 'Проекты', current: true },
+        { href: '/projects', label: 'Объекты', current: true },
         { href: '/dashboard', label: 'Дашборд' },
       ],
     };
