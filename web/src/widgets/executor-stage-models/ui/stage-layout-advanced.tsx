@@ -3,7 +3,7 @@
 /**
  * «Модели по этапам» on the advanced page (`HOSTS-WEB-01`, plan 2026-11-09 §4.5 and §7.5; **administrator only**): the switch
  * «Модели по этапам: включены» with its journal, and the revisions of the layout, newest first. The table and the form are on
- * the screen «Исполнители»; what lives here is what the plan keeps out of it: putting the layout in force, and its history.
+ * the screen «Диспетчер»; what lives here is what the plan keeps out of it: putting the layout in force, and its history.
  */
 
 import type { Role, StageModelLayout } from '@/shared/api';

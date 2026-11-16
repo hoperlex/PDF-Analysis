@@ -149,6 +149,15 @@ def test_the_summary_names_the_construction_object_as_the_screens_do() -> None:
     assert "Проект" not in summary.values()
 
 
+def test_the_severity_is_named_criticality_in_the_findings_header_and_in_the_summary_as_the_screens_do() -> None:
+    """`UIP-G-02`: the screens say «Критичность», so the two findings columns and the summary header of the severity counts do too (never «Серьёзность»)."""
+    summary, sheet, _ = _sheets(_source(_finding()))
+    assert (sheet["F1"], sheet["G1"]) == ("Критичность (решение эксперта)", "Критичность (предложение модели)")
+    assert (summary["A8"], summary["B8"]) == ("Критичность", "Количество")
+    headers = [sheet[f"{column}1"] for column in "ABCDEFGHIJKL"] + [summary["A8"]]
+    assert not [header for header in headers if "Серьёзность" in header]
+
+
 def test_identifiers_and_free_text_are_written_verbatim_even_when_they_look_like_a_value() -> None:
     word = "critical"
     finding = _finding(
@@ -348,8 +357,11 @@ TEXT_DIGESTS = {
     # literal the writer still produced ``e25dac70...6b5b6``, and «Замечания» below is unchanged.
     # Re-pinned for «Объект» (`UIP-G-01`): the first identity row of «Сводка» (cell A2) was «Проект». The new value was computed after
     # `test_the_summary_names_the_construction_object_as_the_screens_do` read the new word; reverting that one cell's text gives ``7212170f...169a`` again.
-    "xl/worksheets/sheet1.xml": "3d8f7b9a7aa72eef8609eb1397e48108e018dda5fa2e80853e075156807406d6",
-    "xl/worksheets/sheet2.xml": "9553ccf6ed7a998918977f1ef9cdbaa36066b8bbdaefae9d96fa0e926c190adb",
+    # Re-pinned for «Критичность» (`UIP-G-02`): the summary header of the severity counts (cell A8 of «Сводка») and the two severity headers
+    # of «Замечания» (F1, G1) were «Серьёзность…». The new values were computed after `test_the_severity_is_named_criticality_in_the_findings_header_and_in_the_summary_as_the_screens_do`
+    # read the new words; putting just those three texts back reproduces ``3d8f7b9a...06d6`` and ``9553ccf6...adb`` again.
+    "xl/worksheets/sheet1.xml": "52fb47bb67ee59013dd942492e5162b5c96a6dc1cdd1cfa0c3df1b827639d750",
+    "xl/worksheets/sheet2.xml": "d16af11611b7dfadd1415738b53ee47815713e2a4afd7171f78fcbe5ca0b9452",
 }
 
 

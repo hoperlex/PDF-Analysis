@@ -2,7 +2,7 @@
  * What «Очередь» keeps in its address: the state the list is narrowed to and the period (`?state=failed&period=week`).
  *
  * The original's counters and tiles open its task list already narrowed (`distributed-feature.js`), and a link has to be able to do the
- * same here: «Исполнители» sends «задачи с ошибкой» to `?state=failed`, a reload keeps the filter, and a pasted link opens the same
+ * same here: «Диспетчер» sends «задачи с ошибкой» to `?state=failed`, a reload keeps the filter, and a pasted link opens the same
  * list. The route reads the address on the server (`app/queue/page.tsx`), so the first read of the queue is already the filtered one
  * and no unfiltered request precedes it.
  *

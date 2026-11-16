@@ -1,7 +1,7 @@
 /**
  * The two tabs of «Сравнение версий» (plan §1.1), and how the keyboard moves between them.
  *
- * Pure, as the tabs of «Блоки» and «Исполнители» are: the static render cannot fire a key event, and the WAI-ARIA tabs
+ * Pure, as the tabs of «Блоки» and «Диспетчер» are: the static render cannot fire a key event, and the WAI-ARIA tabs
  * pattern (automatic activation) is small enough to state as a table. «Сравнение листов» is open to a reader only once a
  * document set has been chosen on «Проекты и этапы», as the original's second tab is (`version-comparison.js:85-88`).
  */

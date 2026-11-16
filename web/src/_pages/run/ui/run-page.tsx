@@ -53,7 +53,7 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
         {/* «Отменить прогон» sits in the head beside the stages, as the original's «Отменить» on its pipeline card; «Удалить прогон»
             (`RUN-DELETE-01`) takes its place once the run has ended without a clean result, and after it the page leaves for the run's
             version, where the run is no longer listed. «Запустить с этапа»
-            (`UI-A-60`) moved into «Этапы анализа раздела», which a chip of the rail opens; the events are the tab «Журнал»
+            (`UI-A-60`) moved into «Этапы анализа раздела», which a chip of the rail opens; the events are the tab «Лог»
             (`RUN-SCREEN-01a`). */}
         <LazyRunProgress
           projectUid={projectUid}

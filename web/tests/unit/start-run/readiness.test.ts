@@ -290,7 +290,7 @@ describe('«Модели по этапам ▸» opens the stage window in plan 
     expect(view.markup()).not.toContain('data-stages-plan');
   });
 
-  it('is drawn with «Изменить» for an administrator, leading to «Исполнители → Модели по этапам», and for nobody else', async () => {
+  it('is drawn with «Изменить» for an administrator, leading to «Диспетчер → Модели по этапам», and for nobody else', async () => {
     const admin = await mount({ roles: ['admin', 'expert'], initiallyOpen: true });
     expect(MODELS_BY_STAGE_ADDRESS).toBe('/workers?tab=models');
     expect(admin.view.markup()).toContain('data-plan-edit=""');

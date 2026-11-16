@@ -128,7 +128,7 @@ export function isOperationalListStale({ dataUpdatedAt, failed, now }: Operation
  * they poll.
  */
 
-// --- Executor connections and the agent wizard («Исполнители») ---
+// --- Executor connections and the agent wizard («Диспетчер») ---
 
 /** How often a connection is read again while one of its «Проверить» probes is still open. */
 export const PROBE_POLL_MS = 3000;

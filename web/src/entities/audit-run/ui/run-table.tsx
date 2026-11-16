@@ -100,7 +100,7 @@ export function RunTable({ runs, runHref, reviewHref, rowAction }: RunTableProps
     },
     {
       key: 'findings',
-      header: 'Находок',
+      header: 'Замечаний',
       cell: (run) => (
         <span className={styles.figure}>
           {isExportableRunState(run.state) && run.published_finding_count !== undefined ? run.published_finding_count : '—'}

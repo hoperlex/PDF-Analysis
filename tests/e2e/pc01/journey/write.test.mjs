@@ -80,8 +80,8 @@ function rowsOf(...rows) {
 
 test('a control is found in the row whose words name it, and never in the first row instead', () => {
   const document = rowsOf(
-    { words: 'Другой проект\nВыбрать проект', button: 'Выбрать проект' },
-    { words: 'W22-E2E write half 2026-10-22\nВыбрать проект', button: 'Выбрать проект' },
+    { words: 'Другой объект\nВыбрать объект', button: 'Выбрать объект' },
+    { words: 'W22-E2E write half 2026-10-22\nВыбрать объект', button: 'Выбрать объект' },
   );
   const find = (within) => runInNewContext(locatorExpression('li button', null, within), { document });
   const second = find({ selector: 'li', text_contains: 'write half 2026-10-22' });
@@ -89,7 +89,7 @@ test('a control is found in the row whose words name it, and never in the first 
   assert.equal(find({ selector: 'li', text_contains: 'a project nobody made' }), null, 'no such row matches nothing');
   assert.equal(find({ selector: 'ul', text_contains: 'write half' }), null, 'no such kind of row matches nothing');
   assert.equal(find(null).closest('li').innerText.startsWith('Другой'), true, 'without a row, the first control');
-  const labelled = runInNewContext(locatorExpression('li button', 'Выбрать проект', { selector: 'li', text_contains: 'write half' }), { document });
+  const labelled = runInNewContext(locatorExpression('li button', 'Выбрать объект', { selector: 'li', text_contains: 'write half' }), { document });
   assert.equal(labelled.closest('li').innerText.startsWith('W22-E2E'), true, 'text and row together');
 });
 

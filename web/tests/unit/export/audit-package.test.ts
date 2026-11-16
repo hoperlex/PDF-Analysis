@@ -1,5 +1,5 @@
 /**
- * «Скачать пакет аудита» on «Разбор находок» (`UI-A-76`): what the run's ZIP is made of, what is said when it cannot be
+ * «Скачать пакет аудита» on «Разбор замечаний» (`UI-A-76`): what the run's ZIP is made of, what is said when it cannot be
  * made, and that it is offered where the CSV is and only to the session that may export.
  *
  * The archive itself is the evidence-package builder's (`tests/unit/export/evidence-package-names.test.ts` and the
@@ -81,7 +81,7 @@ describe('what the package of a run is made of', () => {
       const built = await buildAuditPackage({ runId: RUN, versionUid: VERSION, signal: new AbortController().signal, deps: value });
       expect((asked[0] as EvidencePackageOptions).reports.map((report) => report.name)).toEqual([csvFileName(RUN)]);
       expect(built.summary.extended).toBe('absent');
-      expect(auditPackageDoneLine(built.summary)).toContain('только CSV находок');
+      expect(auditPackageDoneLine(built.summary)).toContain('только CSV замечаний');
     }
   });
 
@@ -122,7 +122,7 @@ describe('when the package cannot be made', () => {
     expect(asked).toHaveLength(0);
     const shown = auditPackageFailure(failure);
     expect(shown.title).toBe('Пакет аудита не собран');
-    expect(shown.detail).toContain('Не удалось получить CSV находок');
+    expect(shown.detail).toContain('Не удалось получить CSV замечаний');
     expect(shown.detail).toContain('Неполный ZIP не скачивается');
     expect(shown.correlationId).toBe('cid-pkg-1');
   });
@@ -160,7 +160,7 @@ describe('the button', () => {
     expect(markup).toContain('data-intent="export-audit-package"');
     expect(markup).toContain('Скачать пакет аудита');
     // It says what the archive holds before the first press.
-    expect(markup).toContain('title="ZIP одного прогона: CSV находок');
+    expect(markup).toContain('title="ZIP одного прогона: CSV замечаний');
     expect(AUDIT_PACKAGE_TITLE).toContain('manifest.json');
   });
 
@@ -200,7 +200,7 @@ describe('the button', () => {
       await live.press('Скачать пакет аудита');
       expect(saved).toEqual([]);
       expect(live.markup()).toContain('Пакет аудита не собран');
-      expect(live.markup()).toContain('Не удалось получить CSV находок');
+      expect(live.markup()).toContain('Не удалось получить CSV замечаний');
     } finally {
       await live.unmount();
     }

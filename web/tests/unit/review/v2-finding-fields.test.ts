@@ -200,15 +200,15 @@ describe('the five severities have Russian labels and render as them', () => {
   it('shows a value outside the closed set as a fault, not as a blank and not as itself', () => {
     const markup = render(createElement(SeverityBadge, { severity: 'urgent' as Severity }));
     expect(markup).toContain('data-closed-vocabulary-fault="severity"');
-    expect(markup).toContain('Неизвестная важность');
+    expect(markup).toContain('Неизвестная критичность');
     expect(markup).not.toContain('urgent');
   });
 
   it('puts a tooltip on a badge that is given one, in Russian', () => {
     const markup = render(
-      createElement(SeverityBadge, { severity: 'critical', title: 'Важность, предложенная моделью' }),
+      createElement(SeverityBadge, { severity: 'critical', title: 'Критичность, предложенная моделью' }),
     );
-    expect(markup).toContain('title="Важность, предложенная моделью"');
+    expect(markup).toContain('title="Критичность, предложенная моделью"');
   });
 });
 
@@ -232,7 +232,7 @@ describe('the severity choice is offered only when the finding has a proposal', 
       (m) => [m[1], m[2]],
     );
     expect(options).toEqual([
-      ['', 'Выберите важность'],
+      ['', 'Выберите критичность'],
       ...SEVERITY_VALUES.map((value) => [value, SEVERITY_LABELS[value]]),
     ]);
   });
@@ -266,7 +266,7 @@ describe('the decided severity is shown beside the verdict', () => {
       const markup = panel({ currentVerdict: 'accepted', decidedSeverity });
       expect(markup).toContain(`data-decided-severity="${decidedSeverity}"`);
       expect(markup).toContain(`>${SEVERITY_LABELS[decidedSeverity]}<`);
-      expect(markup).toContain('title="Важность, решённая экспертом"');
+      expect(markup).toContain('title="Критичность, решённая экспертом"');
       expect(rawSeverityWords(markup)).toEqual([]);
       expect(latinWords(markup)).toEqual([]);
     });
@@ -340,7 +340,7 @@ describe('a finding row shows the decided severity beside the verdict', () => {
     ]);
     expect(markup).toContain('data-decided-severity="operational"');
     expect(markup).toContain(`>${SEVERITY_LABELS.operational}<`);
-    expect(markup).toContain('title="Важность, решённая экспертом"');
+    expect(markup).toContain('title="Критичность, решённая экспертом"');
     expect(rawSeverityWords(markup)).toEqual([]);
     expect(latinWords(markup)).toEqual([]);
   });
@@ -532,7 +532,7 @@ describe('the merged observations are listed as served', () => {
     const markup = viewer(canonical, [plain]);
     expect(markup).not.toContain('data-proposed-severity');
     expect(markup).not.toContain('Предложение модели');
-    expect(markup).not.toContain('Неизвестная важность');
+    expect(markup).not.toContain('Неизвестная критичность');
   });
 
   it('shows no merged block at all when there is nothing merged, even beside other fields', () => {

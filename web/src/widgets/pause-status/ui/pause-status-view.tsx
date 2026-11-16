@@ -36,12 +36,12 @@ export const PAUSE_BUTTON_LABEL = 'Пауза';
 
 /** What each menu item names, and what a choice does to it. */
 export function dispatchItemLabel(paused: boolean): string {
-  return `Выдача анализа — ${paused ? 'возобновить' : 'приостановить'}`;
+  return `Выдача анализа — ${paused ? 'продолжить' : 'пауза'}`;
 }
 
 export function vectorsItemLabel(vectors: VectorsPause): string {
   if (vectors.kind === 'unread') return 'Векторы — состояние не прочитано';
-  return `Векторы — ${vectors.paused ? 'возобновить' : 'приостановить'}`;
+  return `Векторы — ${vectors.paused ? 'продолжить' : 'пауза'}`;
 }
 
 export interface PauseStatusViewProps {
@@ -116,7 +116,7 @@ export function PauseStatusView({
   const paused = status.paused;
   const pausedVectors = vectors?.kind === 'read' && vectors.paused ? vectors : null;
   if (!paused && pausedVectors === null && !mayToggle) return null;
-  const question = paused ? 'Возобновить выдачу задач?' : 'Приостановить выдачу задач?';
+  const question = paused ? 'Продолжить выдачу задач?' : 'Поставить выдачу задач на паузу?';
   const Drawn = menu;
   return (
     <span className={styles.status} data-pause-status={paused ? 'paused' : 'running'}>
@@ -144,7 +144,7 @@ export function PauseStatusView({
         <span className={styles.confirm} role="group" aria-label={question}>
           <span className={styles.question}>{question}</span>
           <button type="button" className="am-button" disabled={busy} onClick={onConfirm}>
-            {paused ? 'Возобновить' : 'Приостановить'}
+            {paused ? 'Продолжить' : 'Пауза'}
           </button>
           <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={onCancel}>
             Отмена

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `/workers` — «Исполнители» (`W54-WORKERS-WEB`; two tabs since `HOSTS-WEB-01`, ADR-0028, plan 2026-11-09 §7).
+ * `/workers` — «Диспетчер» (`W54-WORKERS-WEB`; two tabs since `HOSTS-WEB-01`, ADR-0028, plan 2026-11-09 §7).
  *
  * Two tabs. **«Серверы»**: the servers the stand sends model work to, one line each, under the summary «На связи 2 из 3 ·
  * свободно 3 из 5» — which replaces the «Обзор» of UI-B-63. **«Модели по этапам»**: a table of six rows, «строка — модель ·
@@ -55,7 +55,7 @@ export function WorkersPage({ initialTab }: WorkersPageProps = {}) {
 
   return (
     <PageShell
-      title="Исполнители"
+      title="Диспетчер"
       subtitle="Серверы, на которых работают модели, и модель каждого этапа анализа."
       actions={(
         <>

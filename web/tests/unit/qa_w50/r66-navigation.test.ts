@@ -5,7 +5,7 @@
  * `OWNER_RULINGS_2026-09-17.md` §3.22: **Работа** — Проекты `/projects`, Дашборд `/dashboard`,
  * «Оптимизация разделов» `/section-optimisation`; **Знания** — База знаний
  * `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub); **Система** — Журнал выполнения
- * `/logs`, Исполнители `/workers`, «Настройки анализа» `/analysis-settings` (stub), «Очередь»
+ * `/logs`, Диспетчер `/workers`, «Настройки анализа» `/analysis-settings` (stub), «Очередь»
  * `/queue`; `/optimisation` leaves the menu and stays a registered, reachable screen
  * (group `hidden`). W53 built `/logs` and `/queue`, `W55A-WEB-NORMS` built `/norms`,
  * `W59-ANALYSIS-SETTINGS-01` built `/analysis-settings` and `W63-SECTION-FORM7-01` built
@@ -70,9 +70,9 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
       // `R-150b`: ['/projects', 'Проекты'] is no longer here; the selector in the top strip took it.
       ['/dashboard', 'Дашборд'],
       ['/section-optimisation', 'Оптимизация разделов'],
-      // `W61-DISPATCHER-01` (roadmap Q-2) adds «Диспетчер» at the end of «Работа».
-      ['/dispatcher', 'Диспетчер'],
-      // `UI-PARITY-P0P` adds «График работ» after «Диспетчер», as the original's menu has it.
+      // `W61-DISPATCHER-01` (roadmap Q-2) adds «Назначения» at the end of «Работа».
+      ['/dispatcher', 'Назначения'],
+      // `UI-PARITY-P0P` adds «График работ» after «Назначения», as the original's menu has it.
       ['/schedule', 'График работ'],
       // `CMP-VC-UI-01` (plan §1.1) adds «Сравнение версий» after it.
       ['/version-comparison', 'Сравнение версий'],
@@ -92,7 +92,7 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
     group: 'Система',
     items: [
       ['/logs', 'Журнал выполнения'],
-      ['/workers', 'Исполнители'],
+      ['/workers', 'Диспетчер'],
       ['/analysis-settings', 'Настройки анализа'],
       ['/queue', 'Очередь'],
     ],
@@ -459,7 +459,8 @@ describe('R-150b: «Объекты» left the menu rows, and the selector in the
   it('stands in the top strip, after the screen\'s own name and before the stand, theme and account controls', () => {
     const markup = renderFrame(frameSession());
     const strip = markup.slice(markup.indexOf('class="am-app__utility"'), markup.indexOf('<main'));
-    const order = ['aria-label="Текущий раздел"', 'data-project-switcher', 'aria-label="Оформление"', 'data-account-menu'].map((marker) =>
+    // The theme is one button since `UIP-G-03` (no group «Оформление»); its wrapper `class="am-theme"` is the marker, as in `shell/frame.test.ts`.
+    const order = ['aria-label="Текущий раздел"', 'data-project-switcher', 'class="am-theme"', 'data-account-menu'].map((marker) =>
       strip.indexOf(marker),
     );
     expect(order.every((at) => at >= 0), JSON.stringify(order)).toBe(true);

@@ -165,7 +165,7 @@ const KIND_LABELS: Readonly<Record<KbKind, string>> = {
 };
 
 const SUBTITLE =
-  'Все решения проверяющего по находкам, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий.';
+  'Все решения проверяющего по замечаниям, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий.';
 
 /** `D-495`: the memory is not a projection. It is the record of what the expert saw and decided, kept apart from the project. */
 const MEMORY_SUBTITLE =

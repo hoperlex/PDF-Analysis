@@ -12,7 +12,7 @@
  *
  * The badge says WHICH severity and nothing about whose it is. The screens that use it put
  * the owner in words beside it: a proposal is the model's («предложение модели»), a decided
- * severity is the expert's («решённая важность»). Nothing here picks a colour that implies
+ * severity is the expert's («решённая критичность»). Nothing here picks a colour that implies
  * the model's proposal was approved.
  */
 
@@ -53,7 +53,7 @@ export function SeverityBadge({ severity, title }: SeverityBadgeProps) {
         role="alert"
         data-closed-vocabulary-fault="severity"
       >
-        <span className="am-badge__label">Неизвестная важность</span>
+        <span className="am-badge__label">Неизвестная критичность</span>
       </span>
     );
   }

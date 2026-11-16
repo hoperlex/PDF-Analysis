@@ -937,7 +937,7 @@
       "path": "/workers",
       "page_module": "web/src/app/workers/page.tsx",
       "$comment": [
-        "Исполнители (W54-WORKERS-WEB; two tabs since HOSTS-WEB-01, ADR-0028): «Серверы» and «Модели по этапам».",
+        "Диспетчер (W54-WORKERS-WEB; two tabs since HOSTS-WEB-01, ADR-0028): «Серверы» and «Модели по этапам».",
         "The cold route opens «Серверы». It reads the signed-in account's roles and, once they are known",
         "(the viewer reads nothing, R-150w), the list of servers (`listExecutorHosts`, polled every 10 s while",
         "the tab is visible). It no longer reads the worker registry or the queue: «Обзор» became the summary line",
@@ -989,7 +989,7 @@
         "Расширенные исполнители (HOSTS-WEB-01, plan 2026-11-09 section 7.5), ADMINISTRATOR ONLY: the screen registry's row",
         "lists `admin` alone, so an expert is sent to /403 (the write step `worker-intake-is-an-administrators-act`",
         "walks that refusal as `expert_only`; this read walk runs as the journey's own account, which holds both roles).",
-        "The page keeps what «Исполнители» had before it became two tabs, one folded section each: «Подключения»,",
+        "The page keeps what «Диспетчер» had before it became two tabs, one folded section each: «Подключения»,",
         "«Группы», «Правила», «Назначения», «Процессы», «Пресеты анализа» (moved from «Настройки анализа») and",
         "«Модели по этапам» with its switch and journal.",
         "",
@@ -1270,7 +1270,7 @@
       "path": "/dispatcher",
       "page_module": "web/src/app/dispatcher/page.tsx",
       "$comment": [
-        "«Диспетчер» (W61-DISPATCHER-01, roadmap Q-2) reads the assignments the session may see and the signed-in account,",
+        "«Назначения» (W61-DISPATCHER-01, roadmap Q-2) reads the assignments the session may see and the signed-in account,",
         "whose identity decides which rows carry the assignee's moves. An administrator also reads the active experts",
         "for the creation form and a reassignment, and the projects it may assign. Commands require explicit user intent",
         "and are not emitted by this read journey."
@@ -1605,7 +1605,7 @@
       "BETA-LIVE-JOURNEY-01. After the first four steps (project, upload, classify, run) come the",
       "steps for the screens the night window of 2026-10-20 added -- the next version of a set,",
       "the version and П→Р comparisons and the carried decision, «Нормы», «Настройки анализа»,",
-      "«Диспетчер» and «Мои задачи», the project's «Оптимизация» tab (price list, vendor lists,",
+      "«Назначения» and «Мои задачи», the project's «Оптимизация» tab (price list, vendor lists,",
       "«Спецификация и цены», «Предложения») and «Оптимизация разделов» -- each with the case",
       "that must be refused: a role the screen refuses, an input it refuses, or a second identical",
       "submit that must change nothing. `as` names the session that performs a step (`admin` is the",
@@ -4767,7 +4767,7 @@
           {
             "do": "select",
             "selector": "form[data-create-assignment]",
-            "label": "Проект",
+            "label": "Объект",
             "option_value": "{project_uid}"
           },
           {
@@ -5143,7 +5143,7 @@
           {
             "do": "select",
             "selector": "form[data-create-assignment]",
-            "label": "Проект",
+            "label": "Объект",
             "option_value": "{project_uid}"
           },
           {
@@ -6223,7 +6223,7 @@
         "expects_present": [
           {
             "selector": "[data-start-pass] .am-state",
-            "text_contains": "В проекте нет прайс-листа."
+            "text_contains": "В объекте нет прайс-листа."
           }
         ],
         "forbids_rendered": [
@@ -6492,7 +6492,7 @@
           },
           {
             "selector": "tr[data-vendor-section=\"AR\"] button",
-            "text_contains": "Изменить список проекта"
+            "text_contains": "Изменить список объекта"
           }
         ],
         "expects_absent": [
@@ -6657,7 +6657,7 @@
           {
             "do": "click",
             "selector": "tr[data-vendor-section=\"AR\"] button",
-            "text": "Изменить список проекта",
+            "text": "Изменить список объекта",
             "settle": true
           },
           {
@@ -7725,7 +7725,7 @@
           {
             "do": "click",
             "selector": "tr[data-vendor-section=\"AR\"] button",
-            "text": "Изменить список проекта",
+            "text": "Изменить список объекта",
             "settle": true
           },
           {

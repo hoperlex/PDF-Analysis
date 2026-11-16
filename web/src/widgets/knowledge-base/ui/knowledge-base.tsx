@@ -149,8 +149,8 @@ function FindingRecordItem({ record, kindLabel = false }: { readonly record: Dec
          */}
         {record.severity === undefined ? null : (
           <span data-decided-severity={record.severity}>
-            {'важность '}
-            <SeverityBadge severity={record.severity} title="Важность, решённая экспертом" />
+            {'критичность '}
+            <SeverityBadge severity={record.severity} title="Критичность, решённая экспертом" />
           </span>
         )}
         <span className="am-kb__event">{EVENT_TYPE_LABELS[record.event_type]}</span>
@@ -190,7 +190,7 @@ function FindingRecordItem({ record, kindLabel = false }: { readonly record: Dec
           className="am-kb__link"
           href={`${routes.review(record.project_uid, record.run_id)}?finding=${encodeURIComponent(record.finding_uid)}`}
         >
-          Открыть находку
+          Открыть замечание
         </Link>
       </p>
     </li>
@@ -242,7 +242,7 @@ function ProposalRecordItem({ record }: { readonly record: ProposalDecisionRecor
 function Legend() {
   return (
     <div className={styles.legend} aria-hidden="true">
-      <span>Находка и решение</span>
+      <span>Замечание и решение</span>
       <span>Суть и комментарий</span>
       <span>Кто и когда</span>
     </div>
@@ -333,7 +333,7 @@ export function KnowledgeBase({ records: findingRecords, entries, isLoading, err
           title="Решений пока нет"
           detail={
             <p>
-              В этой установке ещё не принято ни одного решения по находкам. Первый приём или
+              В этой установке ещё не принято ни одного решения по замечаниям. Первый приём или
               отклонение на экране проверки появится здесь.
             </p>
           }

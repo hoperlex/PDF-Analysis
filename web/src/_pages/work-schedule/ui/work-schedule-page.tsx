@@ -4,12 +4,12 @@
  * `/schedule` — «График работ» (`UI-PARITY-P0P`, rulings `R-150y`, `R-151x`, `R-152a`…`R-152h`).
  *
  * Two tabs, as in the original: «Выполнено», each engineer's documents checked per day of a month against a monthly
- * plan, and «Календарь запаса», the open assignments of «Диспетчер» placed on days. The API decides what each role reads
+ * plan, and «Календарь запаса», the open assignments of «Назначения» placed on days. The API decides what each role reads
  * and may change; the roles the route's guard read only decide which controls are drawn. Only the open tab is mounted,
  * so a closed tab reads nothing.
  *
  * `D-319`: an administrator can narrow both tabs to one engineer (`?engineer=`), and «Выполнено» also reads the reserve
- * — the open assignments of «Диспетчер» — for its «Просрочки» tile.
+ * — the open assignments of «Назначения» — for its «Просрочки» tile.
  */
 
 import { useId, useRef, useState } from 'react';
@@ -49,7 +49,7 @@ function MonthTab({ month, today, admin, engineer, onMonth, onEngineer }: TabPro
   readonly onMonth: (month: string) => void;
 }) {
   const schedule = useWorkSchedule(month);
-  // The reserve carries every open assignment of «Диспетчер» whatever its window, so one day from today is enough to count
+  // The reserve carries every open assignment of «Назначения» whatever its window, so one day from today is enough to count
   // the late ones; a failed read leaves the tile saying so and the month undisturbed.
   const assignments = useWorkScheduleReserve(today, 1);
   if (schedule.isPending) return <LoadingState what="график за месяц" />;
@@ -129,7 +129,7 @@ export function WorkSchedulePage({ roles, initial, today = todayIso() }: WorkSch
         <h1 className="am-page__title">График работ</h1>
         <p className="am-page__subtitle">
           {admin
-            ? 'Проверенные документы по инженерам и дням против месячного плана; работа «Диспетчера» по датам.'
+            ? 'Проверенные документы по инженерам и дням против месячного плана; назначенная работа по датам.'
             : 'Ваши проверенные документы по дням против плана месяца и ваша работа по датам.'}
         </p>
       </header>

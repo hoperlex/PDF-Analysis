@@ -62,7 +62,7 @@ function Body() {
       <dd data-summary-figure="projects">{figures.projects}</dd>
       <dt>Документы</dt>
       <dd data-summary-figure="documents">{figures.documents}</dd>
-      <dt>Находки, ожидающие решения</dt>
+      <dt>Замечания, ожидающие решения</dt>
       <dd data-summary-figure="awaiting-decision-findings">{figures.awaitingDecisionFindings}</dd>
       <dt>Прогоны</dt>
       <dd data-summary-figure="runs">{figures.runs}</dd>

@@ -1,6 +1,6 @@
 /**
  * The tabs of a version, as the original's strip «Инфо · Блоки · Замечания · Оптимизация» in our nouns
- * (`UI-A-22`, `R-151m`): «Версия», «Блоки», «Разбор» with the number of findings of the latest result, «Оптимизация».
+ * (`UI-A-22`, `R-151m`; «Инфо» by `UIP-G-02`): «Инфо», «Блоки», «Разбор» with the number of findings of the latest result, «Оптимизация».
  *
  * Pure, so the claim is a function a test calls. «Разбор» opens the version's **latest result run** (the newest run
  * that published a result, the rule the audit chip uses, `R-150s`); with no such run it is a label that says why it
@@ -45,7 +45,7 @@ export function versionTabs(facts: VersionTabFacts): readonly VersionTab[] {
   const tabs: VersionTab[] = [
     {
       key: 'version',
-      label: 'Версия',
+      label: 'Инфо',
       href: facts.current === 'version' ? null : routes.version(facts.projectUid, facts.versionUid),
       current: facts.current === 'version',
       count: null,

@@ -21,7 +21,7 @@ export const EXECUTION_PAGE_LIMIT = 25;
  * the screen an operator opens to see what the runner is doing now.
  *
  * They also refresh themselves on the `OPERATIONAL_LIST_POLLING` cadence (`operational-poll.ts`):
- * while the tab is visible, backing off after a failed read. The worker list of «Исполнители»
+ * while the tab is visible, backing off after a failed read. The worker list of «Диспетчер»
  * follows the same policy (below).
  */
 
@@ -144,7 +144,7 @@ export function useExecutionJournal(runId?: RunId, cursor?: string, enabled = tr
   return useQuery<ExecutionJournalPage>(journalQueryOptions(runId, cursor, enabled, autoRefresh));
 }
 
-/** One page of the «Исполнители» screen. */
+/** One page of the «Диспетчер» screen. */
 export const WORKER_PAGE_LIMIT = 50;
 
 /**

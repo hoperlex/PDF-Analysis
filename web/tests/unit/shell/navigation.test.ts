@@ -41,11 +41,11 @@ function outline(navigation: Navigation): string[] {
  * row: it is the navigation's `projectEntry`, tested in `project-entry.test.ts`, so `buildNavigation`'s groups stay as they were.
  */
 const R66 = [
-  // `R-152a`: «График работ» after «Диспетчер», as in the original's menu (expert and admin).
-  'Работа: Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher, График работ /schedule, Сравнение версий /version-comparison, Сравнение стадий /stage-comparison',
+  // `R-152a`: «График работ» after «Назначения», as in the original's menu (expert and admin).
+  'Работа: Дашборд /dashboard, Оптимизация разделов /section-optimisation, Назначения /dispatcher, График работ /schedule, Сравнение версий /version-comparison, Сравнение стадий /stage-comparison',
   // `R-151m`: «Блоки» is a tab of the version, out of the menu.
   'Знания: База знаний /knowledge-base, Нормы /norms',
-  'Система: Журнал выполнения /logs, Исполнители /workers, Настройки анализа /analysis-settings, Очередь /queue',
+  'Система: Журнал выполнения /logs, Диспетчер /workers, Настройки анализа /analysis-settings, Очередь /queue',
 ];
 const ADMIN_MENU =
   'Администрирование: Пользователи /admin/users, Заявки на регистрацию /admin/registrations, Журнал входов /admin/auth-events';

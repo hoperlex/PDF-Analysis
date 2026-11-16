@@ -12,7 +12,7 @@ export {
   SectionNeighboursView,
 } from './ui/section-neighbours';
 
-// `UI-A-22`, `R-151m`: the version's tabs, «Версия · Блоки · Разбор · Оптимизация».
+// `UI-A-22`, `R-151m`: the version's tabs, «Инфо · Блоки · Разбор · Оптимизация».
 export type { VersionTab, VersionTabFacts, VersionTabKey } from './model/version-tabs';
 export { latestResultRun, versionTabs } from './model/version-tabs';
 export type { VersionTabsViewProps } from './ui/version-tabs';

@@ -14,7 +14,7 @@
  *    (the type filter is 390 px of buttons; the page scrolled sideways by 30 px at 360).
  *  - «Сравнение версий», the table of sets: the «Версии» cell is the count over the date, on two lines (it read «12026-11-09»).
  *  - «Настройки анализа», «Сравнение этапов» (the stage names): the first columns keep the width of their words.
- *  - «Пользователи», «Журнал событий входа», «Диспетчер», «Журнал» and the run's journal on a phone: a table keeps the width of its
+ *  - «Пользователи», «Журнал событий входа», «Назначения», «Журнал» and the run's journal on a phone: a table keeps the width of its
  *    columns and its frame scrolls.
  *  - «Дашборд» and «Главная»: a section row is two lines up to 1100 px, not 600 (at 768 px the name had 87 px; `narrow-walk-v4`).
  */

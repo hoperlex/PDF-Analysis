@@ -6,7 +6,7 @@
  * A Run or a comparison AI job that waits with `runner_offline` carries one word for every case in which no member of its
  * group can take it. This hook reads the capacity of that group (`getExecutorGroupCapacity`, through
  * `useExecutorGroupCapacity`: the same key under the `execution` root, so a command on a group or the «Обновить» of the
- * «Исполнители» screen refreshes it) **only while the work waits for a runner**, and `groupWaitDetail` turns what each member
+ * «Диспетчер» screen refreshes it) **only while the work waits for a runner**, and `groupWaitDetail` turns what each member
  * reports into a sentence. For any other reason, for work that is not waiting, and for work with no group, nothing is read:
  * the read is `enabled` only for a `runner_offline` wait on a named group.
  *

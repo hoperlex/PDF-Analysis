@@ -47,7 +47,7 @@ export function DashboardPage() {
     <div data-dashboard-screen="true" data-dashboard-showcase="true">
       <PageShell
         title="Анализ по разделам"
-        subtitle="Разделы, документы, находки и прогоны по текущим данным системы."
+        subtitle="Разделы, документы, замечания и прогоны по текущим данным системы."
       >
         <LazyDashboard projectUid={projectUid} allProjectsHref={allProjectsHref} />
       </PageShell>

@@ -1,5 +1,5 @@
 /**
- * `EXEC-HTTP-01` — the «Подключения» and «Назначения» tabs of «Исполнители», as a person reads
+ * `EXEC-HTTP-01` — the «Подключения» and «Назначения» tabs of «Диспетчер», as a person reads
  * them: what an administrator is shown and an expert is not, the sentence for every probe
  * outcome, the key as a fact and never a value, the notice of recent changes, and which
  * connections a route may name.

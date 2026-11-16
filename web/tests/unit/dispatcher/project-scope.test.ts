@@ -1,5 +1,5 @@
 /**
- * «Диспетчер» follows the header's project (`R-151m`).
+ * «Назначения» follows the header's project (`R-151m`).
  *
  * The screen is of the class that follows the header: with `?project=` the assignment list is the server's list for
  * that project (`listAssignments` `project_uid`), without it the screen says «Все проекты» and filters nothing. The

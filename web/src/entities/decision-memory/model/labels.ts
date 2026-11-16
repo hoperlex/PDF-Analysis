@@ -69,7 +69,7 @@ export const MEMORY_VERDICT_LABELS: Readonly<Record<MemoryVerdict, string>> = {
 };
 
 export const MEMORY_ORIGIN_KIND_LABELS: Readonly<Record<MemoryOriginKind, string>> = {
-  direct: 'решено на находке',
+  direct: 'решено на замечании',
   carried: 'перенесено из прошлой версии',
   imported: 'загружено из книги решений',
 };

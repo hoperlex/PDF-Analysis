@@ -9,7 +9,7 @@
  * `force-dynamic` because the guard reads a cookie, and a screen served from a cache is a
  * screen showing somebody else's session.
  *
- * **The filter is in the address** (`?state=failed&period=week`, second UX pass): a link from «Исполнители», a
+ * **The filter is in the address** (`?state=failed&period=week`, second UX pass): a link from «Диспетчер», a
  * counter or a pasted address opens the queue already narrowed. The route reads it here, on the server, and hands the
  * page the parsed value, so the first read of the queue is the filtered one and no unfiltered request precedes it. A value
  * outside the closed sets is dropped by `readQueueAddress`, never echoed.

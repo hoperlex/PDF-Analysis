@@ -49,8 +49,8 @@ FINDING_COLUMNS: Final[tuple[str, ...]] = (
     "Категория",
     "Замечание",
     "Рекомендация",
-    "Серьёзность (решение эксперта)",
-    "Серьёзность (предложение модели)",
+    "Критичность (решение эксперта)",
+    "Критичность (предложение модели)",
     "Норма (документ, пункт)",
     "Цитата нормы",
     "Решение эксперта",
@@ -268,7 +268,7 @@ def _summary(source: WorkbookInput, cells: _Cells) -> bytes:
     )
     for label, value in identity:
         rows.append(_row(len(rows) + 1, (label, value), 0, cells))
-    rows.append(_row(len(rows) + 1, ("Серьёзность", "Количество"), 1, cells))
+    rows.append(_row(len(rows) + 1, ("Критичность", "Количество"), 1, cells))
     by_severity = Counter(
         finding.decided_severity or finding.proposed_severity
         for finding in source.findings

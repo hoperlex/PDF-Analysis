@@ -87,7 +87,7 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
       <section className="am-history" data-history-fault="closed-vocabulary">
         <ErrorState
           title={UNKNOWN_HISTORY_TITLE}
-          detail="Тип события, вердикт или важность нельзя показать достоверно — история скрыта целиком."
+          detail="Тип события, вердикт или критичность нельзя показать достоверно — история скрыта целиком."
         />
       </section>
     );
@@ -99,7 +99,7 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
     return (
       <NotApplicableState
         title="Решений пока нет"
-        detail={<p>Эту находку ещё никто не оценивал. Принятие или отклонение создаст первое событие.</p>}
+        detail={<p>Это замечание ещё никто не оценивал. Принятие или отклонение создаст первое событие.</p>}
       />
     );
   }
@@ -139,8 +139,8 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
                 */}
               {event.severity === undefined ? null : (
                 <span data-decided-severity={event.severity}>
-                  {' важность '}
-                  <SeverityBadge severity={event.severity} title="Важность, решённая экспертом" />
+                  {' критичность '}
+                  <SeverityBadge severity={event.severity} title="Критичность, решённая экспертом" />
                 </span>
               )}
               <span className="am-history__at"> {formatInstant(event.recorded_at)}</span>

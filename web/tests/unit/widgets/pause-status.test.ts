@@ -53,9 +53,9 @@ describe('the pause state in the top strip', () => {
       const out = html({ status, mayToggle: true });
       expect(out.match(/aria-haspopup="menu"/g)).toHaveLength(1);
       expect(out).toContain('aria-label="Пауза"');
-      expect(out).not.toContain('>Возобновить</button>');
+      expect(out).not.toContain('>Продолжить</button>');
     }
-    expect(html({ status: PAUSED, mayToggle: true })).toContain('Выдача анализа — возобновить');
+    expect(html({ status: PAUSED, mayToggle: true })).toContain('Выдача анализа — продолжить');
   });
 
   it('asks in place before it sends, and the confirmation calls the command', () => {
@@ -66,9 +66,9 @@ describe('the pause state in the top strip', () => {
       onConfirm: () => { confirmed += 1; }, onCancel: () => { cancelled += 1; },
     }));
     const out = renderToStaticMarkup(element as ReactElement);
-    expect(out).toContain('Приостановить выдачу задач?');
+    expect(out).toContain('Поставить выдачу задач на паузу?');
     const [confirm, cancel] = buttons(element);
-    expect(confirm?.props.children).toBe('Приостановить');
+    expect(confirm?.props.children).toBe('Пауза');
     confirm?.props.onClick?.();
     cancel?.props.onClick?.();
     expect([confirmed, cancelled]).toEqual([1, 1]);

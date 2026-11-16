@@ -1,5 +1,5 @@
 /**
- * `HOSTS-WEB-01` — the tabs of «Исполнители» (two since the six moved to `/workers/advanced`): their order, the one the screen
+ * `HOSTS-WEB-01` — the tabs of «Диспетчер» (two since the six moved to `/workers/advanced`): their order, the one the screen
  * opens on, and the keyboard contract of the WAI-ARIA tabs pattern, stated as a function because the static render this suite
  * has cannot fire a key. `EXEC-HTTP-01` wrote the first version of this file for the six.
  */
@@ -70,7 +70,7 @@ describe('the advanced page keeps the former tabs, folded', () => {
     for (const other of ['', 'Groups', 'overview', 'servers', null, undefined, 3]) expect(isAdvancedSection(other)).toBe(false);
   });
 
-  it('sends an old tab of «Исполнители» to the section that took it over, and «Обзор» to none', () => {
+  it('sends an old tab of «Диспетчер» to the section that took it over, and «Обзор» to none', () => {
     for (const tab of ['connections', 'processes', 'groups', 'rules', 'routes']) expect(legacyAdvancedTab(tab)).toBe(tab);
     for (const other of ['overview', 'servers', 'models', 'presets', 'layout', 'precedents', '', undefined]) expect(legacyAdvancedTab(other)).toBeNull();
   });

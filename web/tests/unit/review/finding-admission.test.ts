@@ -161,7 +161,7 @@ describe('the finding list', () => {
     );
     expect(markup).toContain('Нарушение целостности данных');
     expect(markup).toContain(FINDING_UID);
-    expect(markup).not.toContain('Находок нет');
+    expect(markup).not.toContain('Замечаний нет');
   });
 
   it('renders the empty state when the run genuinely published nothing', () => {
@@ -172,7 +172,7 @@ describe('the finding list', () => {
         onSelect: () => {},
       }),
     );
-    expect(markup).toContain('Находок нет');
+    expect(markup).toContain('Замечаний нет');
     expect(markup).not.toContain('Нарушение целостности данных');
   });
 });

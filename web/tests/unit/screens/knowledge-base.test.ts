@@ -88,8 +88,8 @@ describe('the knowledge base shows events, not findings', () => {
     const many = render(
       createElement(KnowledgeBase, { records: [record({ decision_event_count: 3 })] }),
     );
-    expect(one).toContain('одно решение по находке');
-    expect(many).toContain('решений по находке: 3');
+    expect(one).toContain('одно решение по замечанию');
+    expect(many).toContain('решений по замечанию: 3');
   });
 });
 
@@ -98,7 +98,7 @@ describe('a row addresses its finding by the identities the record carries', () 
     const markup = render(createElement(KnowledgeBase, { records: [record()] }));
     expect(markup).toContain(`href="/projects/${PROJECT_UID}/runs/${RUN_ID}/review?finding=${FINDING_UID}"`);
     expect(markup).toContain('class="am-kb__link"');
-    expect(markup).toContain('Открыть находку');
+    expect(markup).toContain('Открыть замечание');
     expect(markup).not.toContain('Открыть прогон');
     expect(markup).toContain(`data-finding-uid="${FINDING_UID}"`);
   });
