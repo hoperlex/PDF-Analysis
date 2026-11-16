@@ -23072,6 +23072,87 @@
         }
       }
     },
+    "/projects/{project_uid}/documents/{document_uid}/group": {
+      "put": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Set Document Group",
+        "operationId": "setDocumentGroup",
+        "description": "`UIP-G-10` (contract 1.55.0, owner ruling Г11): set, change or clear the one group a document carries. A group is a value of the document, not an entity: 1 to 40 characters after trimming (leading and trailing spaces are dropped and inner runs of spaces collapse); a longer text is `422 validation_failed`; `null` or a blank text takes the document out of its group («Без группы»). The free tags are separate and unchanged. `listDocuments` and `getDocumentVersion` answer the group as `group`, absent for none. The same group again changes nothing and records nothing; a change appends `document.group_set` (the group before and after, `null` for none) to the audit trail. `Idempotency-Key` is required: an identical repeat is replayed and a reused key with another group is `409 idempotency_key_reuse`. A document of another project, or an unknown one, is `404 not_found`. `expert` and `admin`, as for `setDocumentTags`; `viewer` is refused.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectUid"
+          },
+          {
+            "$ref": "#/components/parameters/DocumentUid"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDocumentGroupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The document's current version with its new group (none when it was cleared).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVersion"
+                }
+              }
+            },
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
     "/projects/{project_uid}/document-tags": {
       "get": {
         "tags": [
@@ -27579,6 +27660,13 @@
             },
             "title": "Tags",
             "description": "`R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them (`listDocuments`, `listVersions` and the document commands)."
+          },
+          "group": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "title": "Group",
+            "description": "`UIP-G-10` (contract 1.55.0, owner ruling Г11): the document's one optional group, on the reads that carry it (`listDocuments`, `getDocumentVersion` and `setDocumentGroup`). Absent is «Без группы». A value of the document, not an entity: it has no identity of its own, and the screen shows the groups in alphabetical order. The free `tags` are separate and unchanged."
           },
           "audit": {
             "$ref": "#/components/schemas/DocumentAudit"
@@ -48221,6 +48309,29 @@
         },
         "title": "SetDocumentTagsRequest",
         "description": "`R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all."
+      },
+      "SetDocumentGroupRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "group"
+        ],
+        "properties": {
+          "group": {
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          }
+        },
+        "title": "SetDocumentGroupRequest",
+        "description": "`UIP-G-10` (contract 1.55.0): the document's new group, or `null` (or a blank text) to take it out of its group. The text is trimmed and inner runs of spaces collapse; what remains is 1 to 40 characters. The bound is read on the text as sent and again on the trimmed text, so a longer one is `422 validation_failed`."
       },
       "DocumentTagCount": {
         "type": "object",

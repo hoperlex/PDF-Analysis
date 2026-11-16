@@ -404,6 +404,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "renameDocument": _ANY_ROLE,
         # `R-151e`: tagging is expert or administrator work; the catalogue is a product read.
         "setDocumentTags": _ANY_ROLE,
+        # `UIP-G-10` (owner ruling Г11): the group is set by the hands that set the tags; a viewer only reads it.
+        "setDocumentGroup": _ANY_ROLE,
         "listDocumentTags": _PRODUCT_READ,
         # `R-151g`: the execution status is set by an expert, as the expert's registry of the original is kept.
         "setFindingExecutionStatus": _EXPERT,

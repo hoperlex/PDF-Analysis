@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Archive, restore and rename one document (`R-151a`, contract 1.22.0).
+ * Archive, restore and rename one document (`R-151a`, contract 1.22.0); set its free tags (`R-151e`) and its group (`UIP-G-10`).
  *
  * The original deletes and renames folders; ours archives (a reversible flag that hides the document from lists and
  * keeps every version, run and decision) and renames (the display title changes, `document_uid` stays). Each command
@@ -13,7 +13,9 @@ import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { DocumentUid, DocumentVersion, ProjectUid } from '@/shared/api';
-import { newIdempotencyKey, queryKeys, renameDocument, setDocumentArchived, setDocumentTags } from '@/shared/api';
+import {
+  newIdempotencyKey, queryKeys, renameDocument, setDocumentArchived, setDocumentGroup, setDocumentTags,
+} from '@/shared/api';
 
 export interface DocumentAddress {
   readonly projectUid: ProjectUid;
@@ -87,6 +89,25 @@ export function useSetDocumentTags({ projectUid, documentUid }: DocumentAddress)
       path: { project_uid: projectUid, document_uid: documentUid },
       body: { tags: [...tags] },
       idempotencyKey: keyOf(`tags:${documentUid}:${tags.join('\u0000')}`),
+    })).data,
+    retry: false,
+    onSuccess: refresh,
+  });
+}
+
+/**
+ * `UIP-G-10` (owner ruling Г11): put a document into one group, move it to another, or take it out (`null`, or a blank text).
+ * The group is a value of the document, not an entity: the server trims it and holds it to 1 to 40 characters. The reads that show
+ * the group are re-read as for the tags.
+ */
+export function useSetDocumentGroup({ projectUid, documentUid }: DocumentAddress) {
+  const keyOf = useIntentKeys();
+  const refresh = useRefresh(documentUid);
+  return useMutation<DocumentVersion, unknown, { readonly group: string | null }>({
+    mutationFn: async ({ group }) => (await setDocumentGroup({
+      path: { project_uid: projectUid, document_uid: documentUid },
+      body: { group },
+      idempotencyKey: keyOf(`group:${documentUid}:${group ?? ''}`),
     })).data,
     retry: false,
     onSuccess: refresh,

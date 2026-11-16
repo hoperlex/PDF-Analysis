@@ -542,6 +542,9 @@ GUARDED = (
      "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/title"),
     ("setDocumentTags", "PUT",
      "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/tags"),
+    # `UIP-G-10` (1.55.0): the one optional group of a document is guarded like its tags.
+    ("setDocumentGroup", "PUT",
+     "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/group"),
     ("listDocumentTags", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/document-tags"),
     ("setFindingExecutionStatus", "PUT", "/findings/fnd_01M2545JSD15ETSNNV904X991K/execution-status"),
     ("listProposalDecisionJournal", "GET", "/proposal-decisions"),

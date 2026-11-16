@@ -130,6 +130,11 @@ _SELECT_TAG_CATALOGUE = text(
     "GROUP BY lower(t.tag) ORDER BY lower(min(t.tag))"
 )
 _SELECT_TAGS_OF = text("SELECT tag FROM document_tag WHERE document_uid = :document_uid ORDER BY lower(tag), tag")
+#: `UIP-G-10` (migration 0070): the group of one project's documents (only those that have one), and of one document.
+_SELECT_GROUPS_IN = text(
+    "SELECT document_uid, group_label FROM document WHERE project_uid = :project_uid AND group_label IS NOT NULL"
+)
+_SELECT_GROUP_OF = text("SELECT group_label FROM document WHERE document_uid = :document_uid")
 #: `R-151a`: one document's current version and archive state.
 _SELECT_DOCUMENT_STATE = text(
     "SELECT current_version_uid, archived_at FROM document WHERE document_uid = :document_uid"
@@ -661,6 +666,18 @@ class DocumentRepository:
 
     def tags_of(self, session: Session, document_uid: DocumentUid) -> list[str]:
         return [str(row[0]) for row in session.execute(_SELECT_TAGS_OF, {"document_uid": str(document_uid)}).all()]
+
+    def groups_in(self, session: Session, project_uid: ProjectUid) -> dict[str, str]:
+        """`UIP-G-10`: ``{document_uid: group}`` of the project's documents that have a group; the rest are «Без группы»."""
+        rows = session.execute(_SELECT_GROUPS_IN, {"project_uid": str(project_uid)}).all()
+        return {str(row[0]): str(row[1]) for row in rows}
+
+    def group_of(self, session: Session, document_uid: DocumentUid) -> str | None:
+        """`UIP-G-10`: one document's group, ``None`` for none. Unknown is ``not_found``."""
+        row = session.execute(_SELECT_GROUP_OF, {"document_uid": str(document_uid)}).first()
+        if row is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
+        return None if row[0] is None else str(row[0])
 
     def document_state(self, session: Session, document_uid: DocumentUid) -> tuple[VersionUid | None, Any]:
         """`R-151a`: a document's current version and when it was archived (``None`` in use). Unknown is refused."""

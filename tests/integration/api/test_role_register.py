@@ -73,6 +73,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "setDocumentArchived": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/archive"),
     "renameDocument": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/title"),
     "setDocumentTags": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/tags"),
+    # `UIP-G-10` (1.55.0): the one optional group of a document, guarded like its tags.
+    "setDocumentGroup": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/group"),
     "listDocumentTags": ("GET", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/document-tags"),
     "setFindingExecutionStatus": ("PUT", "/findings/fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/execution-status"),
     "listProposalDecisionJournal": ("GET", "/proposal-decisions"),
@@ -522,6 +524,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "setDocumentArchived": _ANY_ROLE,
     "renameDocument": _ANY_ROLE,
     "setDocumentTags": _ANY_ROLE,
+    "setDocumentGroup": _ANY_ROLE,
     "listDocumentTags": _READ,
     "setFindingExecutionStatus": _EXPERT,
     "listProposalDecisionJournal": _READ,

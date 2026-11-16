@@ -119,6 +119,8 @@ REQUIRED_OPERATIONS = {
     # `UI-PARITY-P0H`, `R-151e`. Free tags on a document and the project's catalogue.
     "setDocumentTags",
     "listDocumentTags",
+    # `UIP-G-10` (1.55.0, owner ruling Г11). The one optional group of a document, set, changed or cleared.
+    "setDocumentGroup",
     # `UI-PARITY-P0I`, `R-151g`. The designer's execution status of an accepted finding.
     "setFindingExecutionStatus",
     # `UI-PARITY-P0J`, `R-151h`. The knowledge base's proposal half.
@@ -491,6 +493,8 @@ WRITE_OPERATIONS = {
     "setDocumentArchived",
     "renameDocument",
     "setDocumentTags",
+    # `UIP-G-10` (1.55.0): setting a document's group is keyed like its tags.
+    "setDocumentGroup",
     "setFindingExecutionStatus",
     "setWorkScheduleSettings",
     "setWorkSchedulePlans",

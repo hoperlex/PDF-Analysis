@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 301,
+    "path_count": 302,
     "operations": [
       [
         "DELETE",
@@ -1600,6 +1600,11 @@
       ],
       [
         "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/group",
+        "setDocumentGroup"
+      ],
+      [
+        "PUT",
         "/projects/{project_uid}/documents/{document_uid}/tags",
         "setDocumentTags"
       ],
@@ -2283,6 +2288,7 @@
       "SectionVendorList",
       "SetCurrentNormSnapshotRequest",
       "SetDocumentArchivedRequest",
+      "SetDocumentGroupRequest",
       "SetDocumentTagsRequest",
       "SetEngineerAbsencesRequest",
       "SetExecutionPausedRequest",
@@ -2482,6 +2488,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0069_account_last_project",
+  "migration_head": "0070_document_group",
   "contract_version": "1.55.0"
 }

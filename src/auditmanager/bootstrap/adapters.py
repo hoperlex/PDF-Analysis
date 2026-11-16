@@ -1029,9 +1029,15 @@ class DocumentAdapter:
         )
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
-        from auditmanager.shared.identity import VersionUid
+        from dataclasses import replace
 
-        return _version_view(self._service.get_version(VersionUid.parse(version_uid)))
+        from auditmanager.shared.identity import DocumentUid, VersionUid
+
+        view = _version_view(self._service.get_version(VersionUid.parse(version_uid)))
+        # `UIP-G-10`: the document's group is read beside the version, so the frame of a document knows it without a listing.
+        if hasattr(self._service, "group_of_document"):
+            view = replace(view, group=self._service.group_of_document(DocumentUid.parse(view.document_uid)))
+        return view
 
     def read_content(self, *, version_uid: str) -> bytes:
         from auditmanager.shared.identity import VersionUid
@@ -1072,9 +1078,13 @@ class DocumentAdapter:
         parsed = ProjectUid.parse(project_uid)
         archived = self._service.archived_documents(parsed) if hasattr(self._service, "archived_documents") else {}
         tags = self._service.tags_in_project(parsed) if hasattr(self._service, "tags_in_project") else {}
+        groups = self._service.groups_in_project(parsed) if hasattr(self._service, "groups_in_project") else {}
         wanted = None if tag is None else " ".join(tag.split()).casefold()
         views = tuple(
-            replace(view, archived_at=archived.get(view.document_uid), tags=tuple(tags.get(view.document_uid, ())))
+            replace(
+                view, archived_at=archived.get(view.document_uid), tags=tuple(tags.get(view.document_uid, ())),
+                group=groups.get(view.document_uid),
+            )
             for view in (_version_view(record) for record in self._service.list_documents(parsed))
             # `R-151a`: an archived document is listed only on request.
             if (include_archived or view.document_uid not in archived)
@@ -1174,6 +1184,17 @@ class DocumentAdapter:
             actor_uid=user_uid, idempotency_key=idempotency_key,
         )
         return replace(_version_view(record), archived_at=archived_at, tags=tuple(current))
+
+    def set_document_group(
+        self, *, project_uid: str, document_uid: str, group: str | None, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        from dataclasses import replace
+
+        record, archived_at, current = self._service.set_document_group(
+            project_uid=project_uid, document_uid=document_uid, group=group,
+            actor_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return replace(_version_view(record), archived_at=archived_at, group=current)
 
     def list_document_tags(self, *, project_uid: str) -> models.DocumentTagList:
         from auditmanager.shared.identity import ProjectUid

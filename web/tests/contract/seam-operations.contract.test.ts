@@ -241,6 +241,8 @@ describe('the seam operations', () => {
       'revokeRunnerToken',
       'scheduleAssignments',
       'setDocumentArchived',
+      // `UIP-G-10` (contract 1.55.0): the group of a document is a keyed command, like its tags.
+      'setDocumentGroup',
       'setDocumentTags',
       'setEngineerAbsences',
       'setExecutionPaused',

@@ -320,6 +320,8 @@ PRODUCT_COMMAND_TYPES = frozenset((
     # `UI-PARITY-P0G`..`P0L`, `P0P`: a document archived, renamed or tagged, an execution status, decisions imported from
     # a run's workbook, and assignments placed on days are about the project's documents, findings and assignments.
     "import_run_decisions", "rename_document", "schedule_assignments", "set_document_archived", "set_document_tags",
+    # `UIP-G-10` (contract 1.55.0): a document's group is about the project's documents, a product command like `set_document_tags`.
+    "set_document_group",
     "set_finding_execution_status",
     "start_stage_review_ai", "resume_stage_review_ai", "cancel_stage_review_ai", "apply_stage_link_repair",
     "resume_stage_chain_run", "start_stage_chain_batch", "pause_stage_chain_batch",

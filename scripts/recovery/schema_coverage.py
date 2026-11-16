@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0069_account_last_project"
+HEAD = "0070_document_group"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -583,7 +583,8 @@ SEQUENCES = {
 #: inventory test on a throwaway database at ``0067``, 2026-11-11, main→dev merge).
 #: `0069_account_last_project` (`UIP-G-05`) adds one table: two checks (the shapes of the two identities), one foreign key (the account) and the
 #: primary key (one row per account): c 1596, f 418, p 170, t 9, u 143.
-CONSTRAINT_COUNTS = {"c": 1596, "f": 418, "p": 170, "t": 9, "u": 143}
+#: `0070_document_group` (`UIP-G-10`) adds one check to the existing ``document`` table (``ck_document_group_label_length``): c 1597.
+CONSTRAINT_COUNTS = {"c": 1597, "f": 418, "p": 170, "t": 9, "u": 143}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
