@@ -262,8 +262,38 @@
   /* The smallest size a pointer or touch target may have (WCAG 2.2 SC 2.5.8, 24 by 24 CSS px): `min-width` / `min-height` of a control, not spacing. */
   --am-target-min: 24px;
 
+  /*
+   * The sizes of the reference interface's frame and lists (`UIP-G-14`, `R-150`/`R-151`): SIZES only. Its radii, shadows, hairline
+   * borders, colours and typeface stay out (`R-33`, the owner's choice of 2026-11-16), so a screen gets the same density and keeps
+   * its own look. Every reader below is a token, never a literal, so a screen module takes a number from here.
+   */
+
   /* The frame's sticky top strip (`.am-app__utility`); a pinned panel below it starts at this plus a gap. */
-  --am-strip-height: 44px;
+  --am-strip-height: 55px;
+  /*
+   * The strip's height where it is NOT pinned (a viewport narrower than 1024 px stacks it in the flow, and the application bar
+   * is the pinned furniture there), and the width of a viewer's step and close buttons: the 44 px it has always been.
+   */
+  --am-strip-height-compact: 44px;
+
+  /* The page's own margin inside `.am-app__main`: top and bottom, then left and right (a narrow width keeps 12/16 and 8/12). */
+  --am-page-pad-y: 20px;
+  --am-page-pad-x: 24px;
+
+  /* One row of a table or a list: a row of one line is this high, a row of several lines grows with its content. */
+  --am-row-step: 40px;
+  /* The same row with two lines in it (a name and what it depends on): «База знаний», the sections list. */
+  --am-row-step-tall: 53px;
+
+  /* A document card of a section, seven to a row at 1440 px. */
+  --am-card-doc-width: 161px;
+  --am-card-doc-height: 67px;
+
+  /* The object picker: the panel's width and its ceiling, one row's step and the narrowest badge in a row. */
+  --am-picker-width: 480px;
+  --am-picker-width-max: 560px;
+  --am-picker-row-step: 42px;
+  --am-picker-badge-min: 38px;
 }
 
 /*
@@ -570,8 +600,9 @@ body {
 }
 
 /*
- * Focus and anchor jumps clear the pinned furniture: the top strip at a desktop width (44 px) and the bar at a narrow one
- * (about 48 px) are both sticky, and without this a control reached with Tab, or a `#fragment`, scrolled in under them.
+ * Focus and anchor jumps clear the pinned furniture: the top strip at a desktop width (`--am-strip-height`) and the bar at a
+ * narrow one (about 48 px) are both sticky, and without this a control reached with Tab, or a `#fragment`, scrolled in under
+ * them. At a narrow width the strip is not pinned, so the offset falls back to the compact height (see the 1024 px block).
  */
 html {
   scroll-padding-top: calc(var(--am-strip-height) + var(--am-gap-sm));
@@ -777,7 +808,15 @@ thead th {
 tbody td {
   padding: 5px 12px 5px 0;
   border-bottom: 1px solid var(--am-grid-line);
-  vertical-align: top;
+  /* A row is `--am-row-step` high, so a one-line cell is centred in it rather than left at the top of 11 px of nothing. */
+  vertical-align: middle;
+  /*
+   * A word is not cut in a narrow column: `overflow-wrap: anywhere` counts every letter as a break point, so the column's
+   * minimum width fell to one letter and the browser narrowed it until «Планировочные решения» broke mid-word. `break-word`
+   * only breaks a word that cannot fit its own line at all (a hash, a path), and the column keeps the width of its longest word.
+   */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 tbody tr:last-child td {
@@ -785,6 +824,8 @@ tbody tr:last-child td {
 }
 
 tbody tr {
+  /* A table row's `height` is its floor: one line of text stands exactly one step high, several lines grow the row. */
+  height: var(--am-row-step);
   transition: background var(--am-motion-fast) var(--am-ease);
 }
 
@@ -1024,7 +1065,7 @@ input[type='file']::file-selector-button:hover {
 .am-app__main {
   flex: 1;
   min-width: 0;
-  padding: var(--am-gap) var(--am-gap-lg) var(--am-gap-lg);
+  padding: var(--am-page-pad-y) var(--am-page-pad-x);
 }
 
 .am-app__utility {
@@ -1503,8 +1544,13 @@ input[type='file']::file-selector-button:hover {
 
   .am-app__utility {
     position: relative;
-    min-height: var(--am-strip-height);
+    min-height: var(--am-strip-height-compact);
     padding: var(--am-gap-xs) var(--am-gap);
+  }
+
+  /* The strip is in the flow here and the application bar is what is pinned: the offset keeps the height it always had. */
+  html {
+    scroll-padding-top: calc(var(--am-strip-height-compact) + var(--am-gap-sm));
   }
 
   .am-app__footer {
@@ -1963,6 +2009,14 @@ button.am-badge {
   max-height: calc(100vh - var(--am-strip-height) - var(--am-gap-md) - var(--am-gap-lg));
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Between 900 and 1024 px the list is still pinned but the strip is not, so it clears the bar's old height and not the strip's new one. */
+@media (max-width: 1023.98px) {
+  .am-review__list {
+    top: calc(var(--am-strip-height-compact) + var(--am-gap-md));
+    max-height: calc(100vh - var(--am-strip-height-compact) - var(--am-gap-md) - var(--am-gap-lg));
+  }
 }
 
 @media (max-width: 900px) {

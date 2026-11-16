@@ -134,7 +134,7 @@ import type { Account, AnalysisPreset, AnalysisProfileListItem } from '@/shared/
 import type { RegistrationRequest, RunStartReadiness, RunWaitCell } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import { routes } from '@/shared/lib';
-import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
+import { AVATAR_PALETTE_SIZE, Avatar, Dialog, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
@@ -1092,6 +1092,24 @@ export function screens(): Screen[] {
         rows: [{ id: '1', text: 'Первая находка' }, { id: '2', text: 'Вторая находка' }],
         rowKey: (row: { readonly id: string; readonly text: string }) => row.id,
         currentKey: '2',
+      }),
+    ),
+  );
+
+  // `UIP-G-04`, `UIP-FIX-01`: the shared window, drawn open (`staticOpen`) with a title, a body and two buttons, so the four
+  // colour-bearing rules of `dialog.module.css` (`.dialog`, `.close`, `.close:hover`, `.close:focus-visible`) are reached by a screen.
+  add(
+    'Dialog, open: title, body, two buttons',
+    render(
+      createElement(Dialog, {
+        title: 'Модели по этапам',
+        onClose: () => undefined,
+        staticOpen: true,
+        actions: [
+          createElement('button', { key: 'cancel', type: 'button', className: 'am-button am-button--quiet' }, 'Отмена'),
+          createElement('button', { key: 'run', type: 'button', className: 'am-button' }, 'Запустить'),
+        ],
+        children: createElement('p', null, 'Тело окна'),
       }),
     ),
   );
