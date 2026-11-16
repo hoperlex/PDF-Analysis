@@ -4,6 +4,12 @@ Prod run run_01M74QBEJZ42TEVSG43XPZDV59 (2026-11-11, section КМ): 37 observati
 and an assessment; 23 asked none (primary text findings, cross-check points with no query). The procedure was ``partial`` -- and
 the whole run with it -- because it counted the 23 as gaps. These tests drive :func:`_full_norm_verification` on a recorded search
 and a recorded model.
+
+`NORM-STATUS-ORIGINAL-01` (owner 2026-11-16) widens the rule to the original's: the procedure is complete when every observation reached a
+terminal outcome without a technical failure. A question that found no paragraph is an outcome of its observation, not a gap, so the two
+tests that held it a gap (``..._keeps_the_procedure_partial`` and ``..._leave_it_unavailable``) now hold the opposite; a lookup that
+failed, an unavailable corpus or a refused reply is still a gap (the last two tests). The flow path's own cases are in
+``tests/unit/analysis_extended/test_flow_repair.py``.
 """
 
 from __future__ import annotations
@@ -58,14 +64,14 @@ def recorded(monkeypatch: pytest.MonkeyPatch) -> Phases:
     return Phases()
 
 
-def verify(items: list[dict[str, Any]], phases: Phases) -> None:
+def verify(items: list[dict[str, Any]], phases: Phases, snapshot_id: str | None = SNAPSHOT) -> None:
     def call(request: Any, identity: str) -> Any:
         return SimpleNamespace(output_text=json.dumps([row["input_id"] for row in request.payload["observations"]]),
                                truncated=False)
 
     state = {"observations": items, "warnings": [], "sources": [{"source_id": "src_1"}], "source_sha256": "0" * 64}
     er._full_norm_verification(session=SimpleNamespace(rollback=lambda: None), run=SimpleNamespace(run_id="run_1"),
-                               model_id="gpt-6-astra", section="КМ", state=state, snapshot_id=SNAPSHOT, call=call,
+                               model_id="gpt-6-astra", section="КМ", state=state, snapshot_id=snapshot_id, call=call,
                                phase=phases, checkpoint=None)
 
 
@@ -78,10 +84,11 @@ def test_observations_without_a_norm_question_are_not_gaps(recorded: Phases) -> 
     assert {item["norm_reason"] for item in items[2:]} == {"query_not_proposed"}
 
 
-def test_a_norm_question_without_a_paragraph_keeps_the_procedure_partial(recorded: Phases) -> None:
+def test_a_norm_question_without_a_paragraph_is_an_outcome_not_a_gap(recorded: Phases) -> None:
     items = [observation(1, "СП 16.13330 катет шва"), observation(2, "нет такого пункта"), observation(3)]
     verify(items, recorded)
-    assert recorded.calls[-1] == ("norm_verification", "partial", None), "a question with no paragraph is a real gap"
+    assert recorded.calls[-1] == ("norm_verification", "completed", None), "searched, found nothing: a label of the observation"
+    assert items[1]["norm_status"] == "not_found"
 
 
 def test_a_run_whose_observations_asked_no_norm_question_is_complete_with_the_reason(recorded: Phases) -> None:
@@ -89,6 +96,22 @@ def test_a_run_whose_observations_asked_no_norm_question_is_complete_with_the_re
     assert recorded.calls == [("norm_verification", "completed", "no_normative_question")]
 
 
-def test_questions_that_found_nothing_leave_it_unavailable(recorded: Phases) -> None:
+def test_questions_that_found_nothing_complete_the_stage(recorded: Phases) -> None:
     verify([observation(1, "нет такого пункта"), observation(2)], recorded)
-    assert recorded.calls == [("norm_verification", "unavailable", "candidate_context_unavailable")]
+    assert recorded.calls == [("norm_verification", "completed", None)]
+
+
+def test_a_lookup_that_failed_is_still_a_gap(recorded: Phases, monkeypatch: pytest.MonkeyPatch) -> None:
+    from auditmanager.shared.errors import DomainError, ErrorCode
+
+    def down(*args: Any, **kwargs: Any) -> Any:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE)
+
+    monkeypatch.setattr(er, "search_norms", down)
+    verify([observation(1, "СП 16.13330 катет шва"), observation(2)], recorded)
+    assert recorded.calls == [("norm_verification", "partial", "norm_inputs_unresolved")]
+
+
+def test_an_unavailable_corpus_is_still_unavailable(recorded: Phases) -> None:
+    verify([observation(1, "СП 16.13330 катет шва")], recorded, snapshot_id=None)
+    assert recorded.calls == [("norm_verification", "unavailable", "corpus_unavailable")]

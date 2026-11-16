@@ -188,7 +188,9 @@ def test_negative_norm_search_and_insufficient_assessment_are_execution_complete
     assert item["norm_status"] == "not_found" and item["finding_norm_status"] == "not_verified"
     assert state["norm_lookup_receipts"][0]["queries_answered"] == 1
     assert state["procedures"][0]["input_accounting"] == {"expected": 1, "valid": 1, "pending": 0,
-        "refused": 0, "excluded": 0, "exclusion_reason": "no_normative_question"}
+        "refused": 0, "excluded": 0, "exclusion_reason": "no_normative_question",
+        "outcomes": {"reviewed": 0, "reviewed_context_incomplete": 0, "not_found": 1, "no_norm_named": 0, "not_applicable": 0},
+        "technical": {}}
 
 
 def test_missing_query_retains_an_implicit_norm_claim_as_undetermined(monkeypatch):
@@ -208,9 +210,14 @@ def test_missing_query_retains_an_implicit_norm_claim_as_undetermined(monkeypatc
     assert claim["norm_query_plan"]["normative_question"] is None
     assert internal["norm_status"] == "not_applicable"
     assert internal["norm_reason"] == "internal_project_consistency"
-    assert phases[-1] == ("norm_verification", "partial", "norm_inputs_unresolved")
-    assert state["procedures"][0]["input_accounting"]["pending"] == 1
-    assert state["procedures"][0]["input_accounting"]["excluded"] == 1
+    # NORM-STATUS-ORIGINAL-01 (owner 2026-11-16): a norm claim with no determined question is an outcome of the finding -- «норма не
+    # названа» -- not an unfinished lookup. It used to be pending, and with it the stage, the text row and the run were partial.
+    assert (claim["norm_review_status"], claim["norm_review_reason"], claim["finding_norm_status"]) == (
+        "not_required", "norm_not_named", "not_verified")
+    assert phases[-1] == ("norm_verification", "completed", "no_normative_question")
+    accounting = state["procedures"][0]["input_accounting"]
+    assert (accounting["pending"], accounting["refused"], accounting["excluded"]) == (0, 0, 2)
+    assert accounting["outcomes"]["no_norm_named"] == 1 and accounting["outcomes"]["not_applicable"] == 1
     legacy = {**observation(), "title": "Высота прохода",
         "description": claim["description"], "norm_queries": []}
     runtime._norms(NS(rollback=lambda: None), [legacy], "s", query_planning=True)
@@ -336,9 +343,156 @@ def test_missing_required_norm_context_does_not_lower_the_other_input(monkeypatc
     assert rows[0]["finding_norm_status"] == "not_verified"
     assert rows[1]["normative_context"]["complete"] is True
     assert rows[1]["finding_norm_status"] == "partially_verified"
-    assert state["procedures"][0]["input_accounting"]["valid"] == 1
-    assert state["procedures"][0]["input_accounting"]["pending"] == 1
+    # NORM-STATUS-ORIGINAL-01: both inputs were assessed; the context cut of the first is its label (``norm_review_reason``), not a gap.
+    assert rows[0]["norm_review_reason"] == "norm_paragraph_context_incomplete" and rows[1]["norm_review_reason"] is None
+    accounting = state["procedures"][0]["input_accounting"]
+    assert (accounting["valid"], accounting["pending"], accounting["refused"]) == (2, 0, 0)
+    assert accounting["outcomes"]["reviewed"] == 1 and accounting["outcomes"]["reviewed_context_incomplete"] == 1
+    assert phases[-1] == ("norm_verification", "completed", None)
+
+
+def _candidate_row(index, quote, snapshot="s"):
+    return {"snapshot_id": snapshot, "document_id": "d", "paragraph_id": f"p{index}", "quote": quote}
+
+
+def _supports_everything(request, _identity):
+    payload = json.loads(request.body["messages"][0]["content"])
+    outputs = [{"title": item["title"], "description": item["description"], "source_ids": item["source_ids"],
+        "input_ids": [item["input_id"]], "norm_queries": [], "norm_assessment": {"relation": "supports",
+            "explanation": "Модель предложила нормативную связь", "citations": [{"paragraph_id": item["norm_candidate_ids"][0]}]}}
+        for item in payload["observations"]]
+    return ModelResponse(json.dumps({"observations": outputs}), "end_turn", 100, 100, 1)
+
+
+def _verify_flow(monkeypatch, rows, call, *, lookups):
+    monkeypatch.setattr(runtime, "_norms", lookups)
+    state = {"observations": rows, "warnings": [], "sources": [source()], "source_sha256": "a"*64,
+        "procedures": [{"id": "norm_verification"}]}
+    phases = []
+    runtime._full_norm_verification(session=None, run=NS(run_id="r"), model_id="m", section="EOM", state=state,
+        snapshot_id="s", call=call, phase=lambda *args: phases.append(args), checkpoint=None, flow_policy=flow_policy())
+    return state, phases
+
+
+def test_undetermined_questions_and_incomplete_context_are_labels_not_gaps(monkeypatch, norm_context_reader):
+    """`NORM-STATUS-ORIGINAL-01`, the shape of prod run run_01M7HH1MPV5W1FEZMX5ZK29PTA (section KJ): no technical failure, stage completed.
+
+    15 inputs name no determined norm question, 14 are assessed on a paragraph context cut by the budget, 2 are assessed on a complete one.
+    Before the change only the last 2 counted as done, so the stage, the text row and the run were partial although no call failed."""
+    from auditmanager.runs import norm_context
+    undetermined = [observation(f"u{i}") for i in range(15)]
+    cut = [observation(f"c{i}") for i in range(14)]
+    whole = [observation(f"w{i}") for i in range(2)]
+    rows = [*undetermined, *whole, *cut]  # the context budget is 12 paragraphs per batch: the last ones lose theirs, as in the run
+
+    def lookups(_session, items, _snapshot, **_kwargs):
+        for index, item in enumerate(items):
+            if item["observation_id"].startswith("u"):
+                item.update(norm_status="unavailable", norm_reason="normative_query_required")
+            else:
+                kind = "Неполный" if item["observation_id"].startswith("c") else "Полный"
+                item.update(norm_status="candidates", norm_candidates=[_candidate_row(index, f"{kind} {index}")])
+        return []
+
+    def read(session, **kwargs):
+        context = norm_context_reader(session, **kwargs)
+        if kwargs["quote"].startswith("Неполный"):
+            context["primary"]["truncated"] = True
+        return context
+
+    monkeypatch.setattr(norm_context, "read_norm_paragraph_context", read)
+    state, phases = _verify_flow(monkeypatch, rows, _supports_everything, lookups=lookups)
+    assert phases[-1] == ("norm_verification", "completed", None)
+    accounting = state["procedures"][0]["input_accounting"]
+    assert accounting == {"expected": 31, "valid": 16, "pending": 0, "refused": 0, "excluded": 15,
+        "exclusion_reason": "no_normative_question",
+        "outcomes": {"reviewed": 2, "reviewed_context_incomplete": 14, "not_found": 0, "no_norm_named": 15, "not_applicable": 0},
+        "technical": {}}
+    assert sum(accounting[key] for key in ("valid", "pending", "refused", "excluded")) == accounting["expected"]
+    assert {(row["norm_review_status"], row["norm_review_reason"], row["finding_norm_status"]) for row in undetermined} == {
+        ("not_required", "norm_not_named", "not_verified")}
+    assert {(row["norm_review_status"], row["norm_review_reason"], row["finding_norm_status"]) for row in cut} == {
+        ("reviewed", "norm_paragraph_context_incomplete", "not_verified")}
+    assert {(row["norm_review_status"], row["finding_norm_status"]) for row in whole} == {("reviewed", "partially_verified")}
+
+
+def test_one_failed_lookup_keeps_the_stage_partial_with_its_reason(monkeypatch, norm_context_reader):
+    rows = [observation("ok"), observation("down")]
+
+    def lookups(_session, items, _snapshot, **_kwargs):
+        items[0].update(norm_status="candidates", norm_candidates=[_candidate_row(0, "Фрагмент")])
+        items[1].update(norm_status="unavailable", norm_reason="lookup_unavailable")
+        return []
+
+    state, phases = _verify_flow(monkeypatch, rows, _supports_everything, lookups=lookups)
     assert phases[-1] == ("norm_verification", "partial", "norm_inputs_unresolved")
+    accounting = state["procedures"][0]["input_accounting"]
+    assert (accounting["valid"], accounting["pending"], accounting["refused"]) == (1, 1, 0)
+    assert accounting["technical"] == {"lookup_unavailable": 1}
+
+
+@pytest.mark.parametrize("reason", ["corpus_unavailable", "semantic_lookup_failed", "semantic_lookup_window_exhausted",
+    "lookup_window_exhausted", "a_reason_nobody_knows"])
+def test_every_unavailable_lookup_but_the_unnamed_norm_is_technical(monkeypatch, norm_context_reader, reason):
+    rows = [observation("down")]
+    state, phases = _verify_flow(monkeypatch, rows, _supports_everything,
+        lookups=lambda _s, items, _n, **_k: items[0].update(norm_status="unavailable", norm_reason=reason) or [])
+    assert phases[-1] == ("norm_verification", "partial", "norm_inputs_unresolved")
+    assert state["procedures"][0]["input_accounting"]["technical"] == {reason: 1}
+
+
+def test_a_refused_norm_reply_keeps_the_stage_partial_even_when_the_context_is_incomplete(monkeypatch, norm_context_reader):
+    """The input was sent and has no accepted record after its one repair: a technical gap, and its own reason survives the context label."""
+    from auditmanager.runs import norm_context
+    rows = [observation("answered"), observation("missing")]
+
+    def lookups(_session, items, _snapshot, **_kwargs):
+        for index, item in enumerate(items):
+            item.update(norm_status="candidates", norm_candidates=[_candidate_row(index, f"Фрагмент {index}")])
+        return []
+
+    def read(session, **kwargs):
+        context = norm_context_reader(session, **kwargs)
+        context["primary"]["truncated"] = kwargs["quote"] == "Фрагмент 1"
+        return context
+
+    def answers_the_first_only(request, identity):
+        response = _supports_everything(request, identity)
+        document = json.loads(response.output_text)
+        document["observations"] = document["observations"][:1]
+        return ModelResponse(json.dumps(document), "end_turn", 100, 100, 1)
+
+    monkeypatch.setattr(norm_context, "read_norm_paragraph_context", read)
+    state, phases = _verify_flow(monkeypatch, rows, answers_the_first_only, lookups=lookups)
+    assert phases[-1] == ("norm_verification", "partial", "norm_verification_reply_refused")
+    assert (rows[0]["norm_review_status"], rows[1]["norm_review_status"]) == ("reviewed", "not_reviewed")
+    assert rows[1]["normative_context"]["complete"] is False
+    assert rows[1]["norm_review_reason"] == "norm_verification_reply_refused", "the refusal is not overwritten by the context label"
+    accounting = state["procedures"][0]["input_accounting"]
+    assert (accounting["valid"], accounting["pending"], accounting["refused"]) == (1, 0, 1)
+
+
+def test_an_input_sent_with_no_stored_outcome_is_pending(monkeypatch, norm_context_reader):
+    from auditmanager.runs.norm_stage_accounting import account_norm_inputs
+    outcome = account_norm_inputs([{"norm_status": "candidates"}, {}])
+    assert (outcome.status, outcome.reason) == ("partial", "norm_inputs_unresolved")
+    assert outcome.accounting["pending"] == 2 and outcome.accounting["technical"] == {"no_stored_outcome": 2}
+
+
+def test_a_consent_of_the_previous_release_still_validates_and_a_stranger_does_not():
+    """`NORM-STATUS-ORIGINAL-01`: ``runs/extended_review.py`` is hashed by the flow policy, so the status fix moved the digest.
+    Consents frozen by release 0.27.0 (and by the 0.28.0 candidate, byte-identical in every hashed file) keep their run; a fresh estimate
+    gets the new digest; any other digest is refused as before."""
+    from auditmanager.analysis.extended.flow_repair import ACCEPTED_LEGACY_BUNDLES, VERSION
+    fresh = flow_policy()
+    assert fresh["bundle_sha256"] not in ACCEPTED_LEGACY_BUNDLES, "a fresh estimate carries the digest of the code that will run"
+    assert validate_flow_policy(fresh)
+    for legacy in ACCEPTED_LEGACY_BUNDLES:
+        assert validate_flow_policy({"version": VERSION, "bundle_sha256": legacy})
+    with pytest.raises(ValueError, match="flow_repair_changed_requires_consent"):
+        validate_flow_policy({"version": VERSION, "bundle_sha256": "0" * 64})
+    with pytest.raises(ValueError, match="flow_repair_changed_requires_consent"):
+        validate_flow_policy({"version": "v2-flow-repair-v0", "bundle_sha256": next(iter(ACCEPTED_LEGACY_BUNDLES))})
 
 
 def test_cross_page_object_pair_is_actually_colocated_in_a_priced_packet():

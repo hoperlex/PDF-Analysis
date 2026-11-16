@@ -39,11 +39,24 @@ def flow_policy():
     return {"version": VERSION, "bundle_sha256": sha.hexdigest()}
 
 
+#: Bundle digests of released code whose consents keep running on the code that follows them (`NORM-STATUS-ORIGINAL-01`).
+#:
+#: ``flow_policy()`` hashes ``runs/extended_review.py``, which that task had to edit, so every consent accepted before it carries a digest
+#: the new code no longer computes and would be refused at the start of its run (``flow_repair_changed_requires_consent``). The change only
+#: moves the status of the norm stage (what counts as a technical gap): no model call, prompt, request, price or stored reply differs, so
+#: the consent's cost and scope stay exactly what the user accepted. A fresh estimate gets the new digest from ``flow_policy()``.
+#:
+#: ``410f1310...`` is the digest of release 0.27.0 (``origin/main`` 275bde864, the code that issued every consent now in flight) and of
+#: the 0.28.0 candidate 899550ffe, whose hashed files equal it byte for byte. **An entry is added only for a change that alters no call,
+#: prompt, request, price or stored reply** -- never to carry a consent across a behavioural change.
+ACCEPTED_LEGACY_BUNDLES = frozenset({"410f1310291f2d5746824a33e82e3d04ebc0b896397049fb1433a1b81455bbf0"})
+
+
 def validate_flow_policy(value, *, compare_bundle=True):
     if (not isinstance(value, dict) or set(value) != {"version", "bundle_sha256"}
             or value.get("version") != VERSION or not isinstance(value.get("bundle_sha256"), str)
             or not re.fullmatch("[0-9a-f]{64}", value["bundle_sha256"])
-            or compare_bundle and value != flow_policy()):
+            or compare_bundle and value != flow_policy() and value["bundle_sha256"] not in ACCEPTED_LEGACY_BUNDLES):
         raise ValueError("flow_repair_changed_requires_consent")
     return True
 

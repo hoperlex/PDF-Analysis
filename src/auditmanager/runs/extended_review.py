@@ -26,6 +26,7 @@ from auditmanager.norms.public import (
     MAX_NORM_QUERY_CHARACTERS, SEARCH_WINDOW, SEMANTIC_LOOKUP, NormPageImages, SemanticUnavailable, norm_embed_url,
     norm_observation_text, parse_norm_query, search_norms, semantic_norm_candidates,
 )
+from auditmanager.runs.norm_stage_accounting import NO_NORM_NAMED_REASONS, NORM_REPLY_REFUSED, account_norm_inputs
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.stage_plan import call_journal_columns, cell_binding, settings_of
 from auditmanager.runs.stage_layout import ENSEMBLE_ROLES, parse_plan, role_of_phase, row_of_phase
@@ -1434,8 +1435,8 @@ def _flow_comprehensive_review(*, run, model_id, section, state, pages, block_it
     return observations
 
 
-#: The reason of a norm stage in which a reply record was refused or an input got no accepted record.
-NORM_REPLY_REFUSED = "norm_verification_reply_refused"
+# ``NORM_REPLY_REFUSED`` (the reason of a norm stage in which a reply record was refused or an input got no accepted record) is
+# defined with the stage's accounting, ``runs/norm_stage_accounting.py``, and imported above.
 
 
 def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings=None,
@@ -1453,13 +1454,13 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
         item["norm_candidates"] = [registry.setdefault(candidate["paragraph_id"], candidate)
             for candidate in item.get("norm_candidates", [])]
     candidates = [item for item in items if item.get("norm_candidates")]
-    asked = [item for item in items if _asked_norm_question(item)]
     if not candidates:
-        if snapshot_id is not None and not asked:
-            phase("norm_verification", "completed", "no_normative_question")  # NORM-COVERAGE-01
+        if snapshot_id is None:
+            phase("norm_verification", "unavailable", "corpus_unavailable")
         else:
-            phase("norm_verification", "unavailable",
-                "corpus_unavailable" if snapshot_id is None else "candidate_context_unavailable")
+            # NORM-STATUS-ORIGINAL-01: a lookup that found nothing is an outcome of its observation, not a gap of the stage.
+            outcome = account_norm_inputs(items)
+            phase("norm_verification", outcome.status, outcome.reason)
         return
     batches = []
     batch, characters = [], 0
@@ -1491,9 +1492,10 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
     if refused:
         phase("norm_verification", "partial", NORM_REPLY_REFUSED)
         return
-    # NORM-COVERAGE-01: complete when every observation that asked a norm question has its candidates; one that asked none (a primary
-    # text finding, a cross-check point without a normative question) is not a gap of this procedure.
-    phase("norm_verification", "partial" if any(not item.get("norm_candidates") for item in asked) else "completed")
+    # NORM-STATUS-ORIGINAL-01 (before it NORM-COVERAGE-01): complete when every observation reached a terminal outcome without a technical
+    # failure -- found nothing, asked no norm question or was reviewed are labels of the observation, not gaps of this procedure.
+    outcome = account_norm_inputs(items)
+    phase("norm_verification", outcome.status, *(() if outcome.reason is None else (outcome.reason,)))
 
 
 def _review_norms_per_record(*, state, request, call, identity, indexed, flow=False, on_accepted=None):
@@ -1540,6 +1542,10 @@ def _flow_norm_verification(*, session, run, model_id, section, state, snapshot_
                 norm_review_reason="search_completed_without_match")
         elif item.get("norm_status") == "not_applicable":
             item.update(norm_review_status="not_required", finding_norm_status="not_applicable")
+        elif item.get("norm_status") == "unavailable" and item.get("norm_reason") in NO_NORM_NAMED_REASONS:
+            # NORM-STATUS-ORIGINAL-01: no determined norm question is an outcome of the finding (nothing was searched, nothing is
+            # claimed verified), not an unfinished lookup. ``norm_status`` and ``norm_reason`` stay as the lookup receipts name them.
+            item.update(norm_review_status="not_required", finding_norm_status="not_verified", norm_review_reason="norm_not_named")
         elif item.get("norm_status") == "unavailable":
             item.update(norm_review_status="not_reviewed", finding_norm_status="not_verified")
     # Deduplicate transmission by exact fragment, never replace all occurrences
@@ -1600,20 +1606,17 @@ def _flow_norm_verification(*, session, run, model_id, section, state, snapshot_
                     citation["paragraph_id"] = alias_to_paragraph[citation["paragraph_id"]]
                 target["norm_assessment"] = assessment
             complete_context = target["normative_context"]["complete"]
-            if not complete_context:
+            if not complete_context and target.get("norm_review_status") == "reviewed":
+                # A label of an assessed finding. A refused input keeps its own reason: that one is a technical gap of the stage.
                 target["norm_review_reason"] = "norm_paragraph_context_incomplete"
             target["finding_norm_status"] = ("partially_verified" if complete_context and assessment
                 and assessment.get("relation") == "supports" else "not_verified")
         phase("norm_verification", "running")
-    excluded = sum(item.get("norm_status") == "not_applicable" for item in items)
-    valid = sum(item.get("norm_status") == "not_found" or (item.get("norm_review_status") == "reviewed"
-        and item.get("normative_context", {}).get("complete") is True) for item in items)
-    pending = len(items)-excluded-valid
+    # NORM-STATUS-ORIGINAL-01: partial only for a technical failure; the per-finding outcomes are labels (runs/norm_stage_accounting.py).
+    outcome = account_norm_inputs(items)
     procedure = next(p for p in state["procedures"] if p["id"] == "norm_verification")
-    procedure["input_accounting"] = {"expected": len(items), "valid": valid, "pending": pending,
-        "refused": 0, "excluded": excluded, "exclusion_reason": "no_normative_question"}
-    phase("norm_verification", "partial" if pending else "completed",
-        "norm_inputs_unresolved" if pending else "no_normative_question" if excluded == len(items) else None)
+    procedure["input_accounting"] = outcome.accounting
+    phase("norm_verification", outcome.status, outcome.reason)
 
 
 def _bounds_lifted(policy):

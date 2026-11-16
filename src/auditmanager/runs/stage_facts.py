@@ -50,6 +50,9 @@ __all__ = [
     "RunBinding",
     "RunRow",
     "EXTENDED_ROLLUP_MESSAGES",
+    "EXTENDED_ROLLUP_PREFIX",
+    "SECTION_ROLLUP_MESSAGE",
+    "extended_rollup_message",
     "PRIMARY_TEXT_PENDING_METRIC",
     "StageRow",
     "assemble_run_stage_facts",
@@ -147,12 +150,26 @@ def is_primary_text_placeholder(stage_id: str, metrics: Mapping[str, Any] | None
 #: `STAGE-ROLLUP-TEXT-01`. The extended review keeps its result on the ``text_analysis`` row. When one of its procedures ends incomplete,
 #: the executor (``runs/executor.py``, ``extended_progress`` and ``v3_progress``) turns a **succeeded** text row into ``partial`` with
 #: ``analysis_failed`` and one of these messages. The run is rightly ``partial`` (its degradation set names ``text_analysis``), but the
-#: text stage itself succeeded: the readers show the row as succeeded and name the incomplete procedures instead (a unit test holds
-#: these messages to the executor's).
+#: text stage itself succeeded: the readers show the row as succeeded and name the incomplete procedures instead.
+#:
+#: **One definition for the writer and the reader** (`NORM-STATUS-ORIGINAL-01`): the executor builds the message of the v2 review with
+#: :func:`extended_rollup_message` and writes :data:`SECTION_ROLLUP_MESSAGE` for the v3 workflow; this module recognises both. Commit
+#: ``bed5a549f`` (0.27.0) had changed the v2 message in the executor alone, the reader no longer knew it and every partial extended review
+#: showed «Не выполнены: Анализ текста» again. :data:`EXTENDED_ROLLUP_MESSAGES` is the exact messages written **before** that commit, kept
+#: so historical rows still read as roll-ups; ``tests/unit/runs/test_stage_facts.py`` holds the executor to these definitions.
+EXTENDED_ROLLUP_PREFIX: Final[str] = "extended procedures incomplete: "
+SECTION_ROLLUP_MESSAGE: Final[str] = "the accepted section workflow did not fully complete"
 EXTENDED_ROLLUP_MESSAGES: Final[frozenset[str]] = frozenset({
     "the accepted extended analysis workflow did not fully complete",
-    "the accepted section workflow did not fully complete",
+    SECTION_ROLLUP_MESSAGE,
 })
+
+
+def extended_rollup_message(incomplete: Sequence[str]) -> str:
+    """The message of the text row the v2 extended review marks ``partial``: the prefix and the incomplete procedures (``id:reason``)."""
+    return EXTENDED_ROLLUP_PREFIX + ", ".join(incomplete)
+
+
 #: The prefix of the per-procedure statuses the executor copies onto the text row's metrics (``extended_<procedure id>``).
 EXTENDED_PROCEDURE_METRIC_PREFIX: Final[str] = "extended_"
 _INCOMPLETE_PROCEDURE: Final = frozenset({"partial", "failed", "unavailable"})
@@ -160,8 +177,10 @@ _INCOMPLETE_PROCEDURE: Final = frozenset({"partial", "failed", "unavailable"})
 
 def is_extended_rollup(stage_id: str, status: str, error: Mapping[str, Any] | None) -> bool:
     """Whether a ``stage_result`` row is a succeeded text stage marked ``partial`` only by the extended review (`STAGE-ROLLUP-TEXT-01`)."""
-    return (stage_id == TEXT_STAGE_ID and status == "partial" and isinstance(error, Mapping)
-            and error.get("code") == "analysis_failed" and error.get("message") in EXTENDED_ROLLUP_MESSAGES)
+    if not (stage_id == TEXT_STAGE_ID and status == "partial" and isinstance(error, Mapping) and error.get("code") == "analysis_failed"):
+        return False
+    message = error.get("message")
+    return isinstance(message, str) and (message in EXTENDED_ROLLUP_MESSAGES or message.startswith(EXTENDED_ROLLUP_PREFIX))
 
 
 def rollup_degradation(

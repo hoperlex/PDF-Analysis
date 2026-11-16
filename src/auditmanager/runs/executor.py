@@ -138,6 +138,7 @@ from auditmanager.jobs.public import (
 )
 from auditmanager.runs.crop_budget import MAX_CROP_BYTES, CropByteBudget
 from auditmanager.runs.provider import ProviderBinding, ProviderResolver
+from auditmanager.runs.stage_facts import SECTION_ROLLUP_MESSAGE, extended_rollup_message
 from auditmanager.runs.stage_plan import call_journal_columns
 from auditmanager.runs.stage_reuse import plan_stage_reuse, visual_only_pages_allowed
 from auditmanager.runs.repository import (
@@ -1480,7 +1481,7 @@ def _execute_run_body(
                     v3_stage_result=replace(v3_stage_result,artifacts=(*artifacts,ref),metrics=metrics,
                         status=StageStatus.PARTIAL if degraded else v3_stage_result.status,
                         error=StageError.from_domain_error(DomainError(ErrorCode.ANALYSIS_FAILED,
-                            message="the accepted section workflow did not fully complete")) if degraded else v3_stage_result.error)
+                            message=SECTION_ROLLUP_MESSAGE)) if degraded else v3_stage_result.error)
                     _persist(session,run_repo,run_id,v3_stage_result);outputs.absorb(v3_stage_result);session.commit()
                     actual_progress=(meter.call_count,result["coverage"]["blocks_processed"],
                         sum(p["status"] in {"completed","partial","failed","unavailable"} for w in result.get("windows",[]) for p in w.get("procedures",[])))
@@ -1648,7 +1649,7 @@ def _execute_run_body(
                 text_result = replace(text_result, artifacts=(*artifacts, ref), metrics=metrics,
                     status=StageStatus.PARTIAL if degraded or surviving_extended else text_result.status,
                     error=StageError.from_domain_error(DomainError(ErrorCode.ANALYSIS_FAILED,
-                        message="extended procedures incomplete: " + ", ".join(incomplete or [status]))) if degraded else text_result.error)
+                        message=extended_rollup_message(incomplete or [status]))) if degraded else text_result.error)
 
                 _persist(session, run_repo, run_id, text_result)
                 outputs.absorb(text_result)

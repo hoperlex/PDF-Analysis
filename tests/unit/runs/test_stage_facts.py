@@ -11,6 +11,7 @@ viewer, the chip map, the plan shape, the journal vocabularies) and record that 
 
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -505,10 +506,50 @@ def test_the_viewer_cell_reads_no_binding() -> None:
 ROLLUP_ERROR = {"code": "analysis_failed", "message": "the accepted extended analysis workflow did not fully complete"}
 
 
+EXECUTOR = Path(__file__).resolve().parents[3] / "src/auditmanager/runs/executor.py"
+
+
 def test_the_rollup_messages_are_the_ones_the_executor_writes() -> None:
-    source = (Path(__file__).resolve().parents[3] / "src/auditmanager/runs/executor.py").read_text(encoding="utf-8")
-    for message in sf.EXTENDED_ROLLUP_MESSAGES:
-        assert f'message="{message}"' in source, message
+    """`NORM-STATUS-ORIGINAL-01`: writer and reader share one definition; the executor holds no copy of a rollup message of its own.
+
+    Commit ``bed5a549f`` changed the message in the executor alone and this test, which looked for the *reader's* messages in the executor's
+    source, was kept green by the v3 message that had not moved; the v2 roll-up read as a failed text stage for three days. The executor is
+    now read as a syntax tree: every ``DomainError(..., message=...)`` of a roll-up takes its message from :mod:`stage_facts`, and no string
+    literal of the executor is, or starts like, a roll-up message."""
+    tree = ast.parse(EXECUTOR.read_text(encoding="utf-8"))
+    imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+                and node.module == "auditmanager.runs.stage_facts" for alias in node.names}
+    assert {"extended_rollup_message", "SECTION_ROLLUP_MESSAGE"} <= imported
+    written = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "DomainError":
+            for keyword in node.keywords:
+                value = keyword.value
+                if keyword.arg == "message" and isinstance(value, ast.Call) and getattr(value.func, "id", None) == "extended_rollup_message":
+                    written.add("extended_rollup_message")
+                if keyword.arg == "message" and isinstance(value, ast.Name) and value.id == "SECTION_ROLLUP_MESSAGE":
+                    written.add("SECTION_ROLLUP_MESSAGE")
+    assert written == {"extended_rollup_message", "SECTION_ROLLUP_MESSAGE"}, "the v2 and the v3 roll-ups each take the shared message"
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            assert node.value not in sf.EXTENDED_ROLLUP_MESSAGES, node.value
+            assert not node.value.startswith(sf.EXTENDED_ROLLUP_PREFIX), node.value
+            assert "did not fully complete" not in node.value and "procedures incomplete" not in node.value, node.value
+
+
+def test_what_the_executor_writes_the_reader_recognises() -> None:
+    written = sf.extended_rollup_message(["norm_verification:norm_inputs_unresolved", "finding_review:partial"])
+    assert written == "extended procedures incomplete: norm_verification:norm_inputs_unresolved, finding_review:partial"
+    for message in (written, sf.extended_rollup_message(["partial"]), sf.SECTION_ROLLUP_MESSAGE):
+        assert sf.is_extended_rollup("text_analysis", "partial", {"code": "analysis_failed", "message": message}), message
+    # rows written before 0.27.0 carry the old v2 message and still read as roll-ups
+    assert sf.is_extended_rollup("text_analysis", "partial", {"code": "analysis_failed",
+        "message": "the accepted extended analysis workflow did not fully complete"})
+    for message in ("provider reply: extended procedures incomplete: x", "extended procedures incomplete", None, 7):
+        assert not sf.is_extended_rollup("text_analysis", "partial", {"code": "analysis_failed", "message": message}), message
+    assert not sf.is_extended_rollup("text_analysis", "partial", {"code": "analysis_input_invalid", "message": written})
+    assert not sf.is_extended_rollup("text_analysis", "failed", {"code": "analysis_failed", "message": written})
+    assert not sf.is_extended_rollup("block_analysis", "partial", {"code": "analysis_failed", "message": written})
 
 
 def test_a_text_row_partial_only_by_the_extended_review_is_a_rollup() -> None:
