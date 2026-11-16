@@ -143,10 +143,10 @@ function displayName(project: Project): string {
   return project.name.replace(/\s+/g, ' ').trim();
 }
 
-/** `YYYY-MM-DD` of a creation instant, or the text `formatInstant` gives for one it cannot read. */
+/** `ДД.ММ.ГГГГ` of a creation instant, or the text `formatInstant` gives for one it cannot read. */
 function createdDay(project: Project): string {
   const text = formatInstant(project.created_at);
-  return /^\d{4}-\d\d-\d\d/.test(text) ? text.slice(0, 10) : text;
+  return /^\d\d\.\d\d\.\d{4}/.test(text) ? text.slice(0, 10) : text;
 }
 
 /** The two figures of a project, or `null` when its answer carries none. */

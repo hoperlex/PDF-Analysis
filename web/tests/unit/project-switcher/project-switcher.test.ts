@@ -211,9 +211,9 @@ describe('a project row: the name and the original\'s two figures, each next to 
     const twin = (uid: string, created: string) => ({ ...project(uid, 'Тест', { documents: 1 }), created_at: created });
     const labels = projectRowLabels([twin(A, '2026-11-01T10:00:00Z'), twin(B, '2026-11-02T10:00:00Z'), twin(C, '2026-11-02T11:00:00Z')]);
     expect(new Set(labels).size).toBe(3);
-    expect(labels[0]).toContain('создан 2026-11-01');
-    expect(labels[1]).toContain('создан 2026-11-02');
-    expect(labels[2]).toContain('создан 2026-11-02');
+    expect(labels[0]).toContain('создан 01.11.2026');
+    expect(labels[1]).toContain('создан 02.11.2026');
+    expect(labels[2]).toContain('создан 02.11.2026');
     expect(labels[2]).toContain('№2');
     // No figures: the label is the bare name, which a project can spell as a fixed entry.
     const named = projectRowLabels([project(A, NEW_PROJECT_LABEL), project(B, ALL_PROJECTS_LABEL)]);
