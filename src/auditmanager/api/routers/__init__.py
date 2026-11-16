@@ -388,7 +388,7 @@ def build_router(
     # ``tests/integration/api/test_operation_surface.py`` -- could not see an operation at
     # all. A table nobody can enumerate is a table nobody can check.
     build_project_routes(router, projects)
-    build_document_routes(router, documents)
+    build_document_routes(router, documents, blocks)
     build_block_routes(router, blocks)  # type: ignore[arg-type]
     build_run_routes(router, runs)
     # `D-67`. Two collections address a parent that another port owns: `listRunFindings`

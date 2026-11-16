@@ -104,9 +104,12 @@ class DocumentVersionView:
     #: `R-151e` (contract 1.23.0, migration 0053): the document's free tags; ``None`` where the read does not carry
     #: them, rendered as a list (possibly empty) otherwise.
     tags: tuple[str, ...] | None = None
-    #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version, attached by ``listDocuments`` only;
-    #: ``None`` on every other operation, and then omitted on the wire.
+    #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version, attached by ``listDocuments`` and, since
+    #: `UIP-S04-01`, by ``getDocumentVersion``; ``None`` on every other operation, and then omitted on the wire.
     audit: DocumentAuditView | None = None
+    #: `UIP-S04-01`: the version's portal block count, attached by ``getDocumentVersion`` only, and only while the block
+    #: index is built. ``None`` is "no index", never zero, and is then omitted on the wire.
+    block_count: int | None = None
 
 
 def document_audit_body(view: DocumentAuditView) -> dict[str, Any]:
@@ -169,4 +172,6 @@ def document_version_body(view: DocumentVersionView) -> dict[str, Any]:
         body["tags"] = list(view.tags)
     if view.audit is not None:
         body["audit"] = document_audit_body(view.audit)
+    if view.block_count is not None:
+        body["block_count"] = view.block_count
     return body

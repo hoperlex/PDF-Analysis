@@ -1643,8 +1643,12 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     with_archived = {item["document_uid"]: item for item in items_of("include_archived=true&audit_state=not_run&")}
     if archived not in with_archived or with_archived[archived]["audit"]["state"] != "not_run" or last["document_uid"] in with_archived:
         inert.setdefault("listDocuments", []).append("audit_state with include_archived")
-    # Only listDocuments carries it; a refused value is a 422.
-    assert "audit" not in ok(get(shipped_router, f"/versions/{last['version_uid']}")), "getDocumentVersion reads no runs"
+    # `UIP-S04-01`: `getDocumentVersion` carries the audit too, and it is the listing's own for that version (it read no runs
+    # before; the frame of a document now takes its tab figures from this read). The other operations that answer a
+    # `DocumentVersion` still carry none. A refused value is a 422.
+    assert ok(get(shipped_router, f"/versions/{last['version_uid']}"))["audit"] == last["audit"], (
+        "getDocumentVersion and listDocuments disagree about the audit of the same version"
+    )
     for refused in ("audit_state=failed&", "order=newest&"):
         refusal = get(shipped_router, f"/projects/{paged.project_uid}/documents?{refused}limit=1")
         assert refusal.status == 422, (refused, refusal.body)

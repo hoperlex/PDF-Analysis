@@ -2131,7 +2131,7 @@ class BlockAdapter(_SessionHolder):
     class _PortalSource:
         """The run a version's portal geometry is read from, and the references to join."""
 
-        __slots__ = ("run_id", "portal_blocks", "page_crops", "recognised_text")
+        __slots__ = ("run_id", "portal_blocks", "page_crops", "recognised_text", "block_count")
 
         def __init__(
             self,
@@ -2140,11 +2140,15 @@ class BlockAdapter(_SessionHolder):
             portal_blocks: Mapping[str, Any],
             page_crops: Mapping[str, Any] | None,
             recognised_text: Mapping[str, Any] | None,
+            block_count: int | None = None,
         ) -> None:
             self.run_id = run_id
             self.portal_blocks = portal_blocks
             self.page_crops = page_crops
             self.recognised_text = recognised_text
+            #: `UIP-S04-01`: what the geometry stage recorded as the number of blocks it published in ``portal_blocks``
+            #: (its ``portal_block_count`` metric), or ``None`` when the stage result holds no usable number.
+            self.block_count = block_count
 
     @staticmethod
     def _artifact_reference(
@@ -2208,7 +2212,20 @@ class BlockAdapter(_SessionHolder):
                 if preparation is None
                 else BlockAdapter._artifact_reference(preparation.artifacts, ROLE_RECOGNISED_TEXT)
             ),
+            block_count=BlockAdapter._recorded_block_count(geometry.metrics),
         )
+
+    @staticmethod
+    def _recorded_block_count(metrics: Mapping[str, Any]) -> int | None:
+        """The block count a geometry stage recorded for its portal blocks, or ``None`` when it recorded no count.
+
+        A non-negative integer and nothing else: a flag is an ``int`` in Python and is not a count, a float or a string is
+        not one the stage writes, and a missing key is a stage result that predates the metric. None of those becomes a
+        number here (`UIP-S04-01`: absent is never zero)."""
+        value = metrics.get("portal_block_count")
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return None
+        return value
 
     def evidence_boxes_in(
         self, session: Session, run_id: str
@@ -2285,6 +2302,15 @@ class BlockAdapter(_SessionHolder):
                 if entry.get("kind") == KIND_PORTAL_DESCRIPTION and entry.get("text")
             }
         return tuple({**record, "portal_description": descriptions.get(record["portal_block_id"])} for record in records)
+
+    def portal_block_count(self, *, version_uid: str) -> int | None:
+        """`UIP-S04-01`: the number of portal blocks of the version's built index, or ``None`` while there is none.
+
+        The run is the one :meth:`list_portal_blocks` reads (:meth:`_portal_source`), and the number is the one its geometry
+        stage recorded in its stage result: no artifact is opened, no object is read from storage and the version's file is
+        not parsed. An unknown version is ``not_found``."""
+        source = self._portal_source(version_uid)
+        return None if source is None else source.block_count
 
     def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
         """`UI-PARITY-P0O`: one read of the portal blocks document (not the crops, not the recognised text) folded into

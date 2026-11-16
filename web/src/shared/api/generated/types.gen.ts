@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
- *   sha256 4599c616e729aa4963cdf9828201ef10efc1f2b3e30fa19626a184a58ce64665
+ *   sha256 c8aecb7ac20087716f29589d95784a77af71fe3ede086348ffbf37e0f275ce79
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.55.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '4599c616e729aa4963cdf9828201ef10efc1f2b3e30fa19626a184a58ce64665';
+export const CONTRACT_DIGEST = 'c8aecb7ac20087716f29589d95784a77af71fe3ede086348ffbf37e0f275ce79';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -4236,6 +4236,8 @@ export type DocumentActiveRun = {
  * `active_run` (`UI-A-47`, contract 1.40.0) names the version's run in flight -- its latest run of the standard analysis in state `queued`, `running` or `validating`, by the order of the result run -- and is absent when none is. It is a fact beside the four words and changes none of them: a document whose first run is in flight is still `not_run`, and a `checked` one with a re-run in flight is still `checked`.
  *
  * `optimisation_proposal_count` and `optimisation_undecided_count` (`D-361`, contract 1.43.0) are the proposals of the version's latest optimisation pass and how many of them have no decision in force (none, or a withdrawn one) -- the original's «Оптимизация N» pill. Both are present when a pass was started over the version and both are absent when none was: absent is "no optimisation read", never zero. They are a fact beside the four words and change none of them (`R-150u`).
+ *
+ * `getDocumentVersion` carries the same audit for the version it reads (`UIP-S04-01`), from the same read model, so a version read and the same version listed never disagree.
  */
 export type DocumentAudit = {
   active_run?: DocumentActiveRun;
@@ -4286,6 +4288,8 @@ export type DocumentVersion = {
   /** `R-151a` (contract 1.22.0): when the document was archived; absent while it is in use. */
   archived_at?: string;
   audit?: DocumentAudit;
+  /** `UIP-S04-01` (contract 1.55.0): the number of portal blocks of the version, for the «Блоки N» tab. Present on `getDocumentVersion` only, and only while the block index is built: it is the count recorded by the latest run of the version whose `page_geometry_extraction` succeeded and published portal blocks, the same run and the same blocks `listVersionPortalBlocks` answers. **Absent is not zero**: a version no such run has reached, or one admitted for comparison only (no portal bundle), carries no number. The version's file is not read for it. */
+  block_count?: number;
   byte_size: number;
   classification?: VersionClassification;
   display_title?: string;
