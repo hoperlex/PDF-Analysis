@@ -1,4 +1,4 @@
-"""`UIP-G-10` (contract 1.55.0, owner ruling Г11) -- the one optional group of a document.
+"""`UIP-G-10` (contract 1.56.0, owner ruling Г11) -- the one optional group of a document.
 
 ``setDocumentGroup`` (``PUT /projects/{project_uid}/documents/{document_uid}/group``) sets, changes or clears the group a
 document carries; ``listDocuments`` and ``getDocumentVersion`` read it back as ``group`` (absent is «Без группы»). What is asserted

@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
- *   sha256 348a9c20359d5aea7a712c75bfa8f594fc127fbd1f52547cc288b3b15d540c87
+ *   AuditManager PC-01 API 1.56.0 (OpenAPI 3.1.0)
+ *   sha256 1479da367147422abdc9d787ce300d11d4900c670972ea1fb3df2c457e82c29a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -2563,7 +2563,7 @@ export type ExportRunCsvResult = Blob;
  *
  * Synchronous, like `exportRunCsv`, and with its states and role: nothing is created, there is no export resource or identity, and repeating the request returns byte-identical bytes. An unknown run is `404`; a run whose terminal does not declare `publishes_result: true` is `409 state_transition_not_allowed`, decided on the run before anything else is read. A `partial` run is exported.
  *
- * The workbook is the W57b layout (`docs/program/dispatch/W57-PLAN.md` section B3.5): «Сводка» with the run's identity and the counts by severity (decided, else proposed) and by category, and «Замечания» with one row per finding -- № | Лист/стр. | Категория | Замечание | Рекомендация | Серьёзность (решение эксперта) | Серьёзность (предложение модели) | Норма (документ, пункт) | Цитата нормы | Решение эксперта | Комментарий | ID замечания -- and a «также найдено» row per merged member. «ID замечания» is the finding's `finding_uid` (contract 1.27.0, `R-151d`), the key `importRunDecisions` reads an edited workbook back by; a «также найдено» row leaves it empty. Standard-library writer, stored ZIP parts in a fixed order with fixed timestamps, inline strings, no formula; XML-forbidden characters become U+FFFD.
+ * The workbook is the W57b layout (`docs/program/dispatch/W57-PLAN.md` section B3.5): «Сводка» with the run's identity and the counts by severity (decided, else proposed) and by category, and «Замечания» with one row per finding -- № | Лист/стр. | Категория | Замечание | Рекомендация | Критичность (решение эксперта) | Критичность (предложение модели) | Норма (документ, пункт) | Цитата нормы | Решение эксперта | Комментарий | ID замечания -- and a «также найдено» row per merged member. «ID замечания» is the finding's `finding_uid` (contract 1.27.0, `R-151d`), the key `importRunDecisions` reads an edited workbook back by; a «также найдено» row leaves it empty. Standard-library writer, stored ZIP parts in a fixed order with fixed timestamps, inline strings, no formula; XML-forbidden characters become U+FFFD.
  *
  * «Лист/стр.» comes only from the version's verified portal companion: a version without one, or whose companion does not verify, is `422 storage_integrity_error` with `role: source.structured_companion`; a page number is never shown as a sheet label. The norm columns carry a finding's verified citations when the run has certified citation partitions, read through its pinned retrieval set; when they do not verify the answer is `422 required_norm_unavailable` with `reference_kind: norm_retrieval_set`, never a workbook without them. A run without citation partitions exports with the norm columns empty. Roles: `expert` (`role:expert`), as `exportRunCsv`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
  */
@@ -4192,7 +4192,7 @@ export type GetWorkScheduleResult = WorkScheduleMonth;
 /**
  * Get Work Schedule Reserve
  *
- * `UI-PARITY-P0P` (rulings `R-150y`, `R-152e`, `R-152f`): «Календарь запаса» -- each active expert's open assignments of «Диспетчер» with their planned date (absent: «без даты»), over `days` days from `start`, and the calendar of those days. No daily limit. An administrator reads every expert; an expert their own. `role:admin|expert`.
+ * `UI-PARITY-P0P` (rulings `R-150y`, `R-152e`, `R-152f`): «Календарь запаса» -- each active expert's open assignments of «Назначения» with their planned date (absent: «без даты»), over `days` days from `start`, and the calendar of those days. No daily limit. An administrator reads every expert; an expert their own. `role:admin|expert`.
  */
 export type GetWorkScheduleReserveInput = {
   /** Query string parameters. */
@@ -7559,7 +7559,7 @@ export type SetDocumentArchivedResult = DocumentVersion;
 /**
  * Set Document Group
  *
- * `UIP-G-10` (contract 1.55.0, owner ruling Г11): set, change or clear the one group a document carries. A group is a value of the document, not an entity: 1 to 40 characters after trimming (leading and trailing spaces are dropped and inner runs of spaces collapse); a longer text is `422 validation_failed`; `null` or a blank text takes the document out of its group («Без группы»). The free tags are separate and unchanged. `listDocuments` and `getDocumentVersion` answer the group as `group`, absent for none. The same group again changes nothing and records nothing; a change appends `document.group_set` (the group before and after, `null` for none) to the audit trail. `Idempotency-Key` is required: an identical repeat is replayed and a reused key with another group is `409 idempotency_key_reuse`. A document of another project, or an unknown one, is `404 not_found`. `expert` and `admin`, as for `setDocumentTags`; `viewer` is refused.
+ * `UIP-G-10` (contract 1.56.0, owner ruling Г11): set, change or clear the one group a document carries. A group is a value of the document, not an entity: 1 to 40 characters after trimming (leading and trailing spaces are dropped and inner runs of spaces collapse); a longer text is `422 validation_failed`; `null` or a blank text takes the document out of its group («Без группы»). The free tags are separate and unchanged. `listDocuments` and `getDocumentVersion` answer the group as `group`, absent for none. The same group again changes nothing and records nothing; a change appends `document.group_set` (the group before and after, `null` for none) to the audit trail. `Idempotency-Key` is required: an identical repeat is replayed and a reused key with another group is `409 idempotency_key_reuse`. A document of another project, or an unknown one, is `404 not_found`. `expert` and `admin`, as for `setDocumentTags`; `viewer` is refused.
  */
 export type SetDocumentGroupInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/group`. */
@@ -7948,7 +7948,7 @@ export type SetJobPriorityResult = ExecutionQueueItem;
 /**
  * Remember the object the signed-in account chose.
  *
- * `UIP-G-05` (contract 1.55.0, owner ruling Г7-B): the signed-in account's own choice of an object, kept on the server so that the screens that show all objects or one open on the object it chose last. Any complete account, roles or none; the credential names the account and the body cannot name another. `getMe` answers the choice as `last_project_uid`. An unknown project is `404 not_found`. `Idempotency-Key` is required: an identical repeat changes nothing, and a reused key with another project is `409 idempotency_key_reuse`. Choosing the object already chosen is a no-op. The all-objects view is not stored: there is no body for it, and a client that shows all objects simply does not call this. A link with `?project=` overrides the stored choice on the client.
+ * `UIP-G-05` (contract 1.56.0, owner ruling Г7-B): the signed-in account's own choice of an object, kept on the server so that the screens that show all objects or one open on the object it chose last. Any complete account, roles or none; the credential names the account and the body cannot name another. `getMe` answers the choice as `last_project_uid`. An unknown project is `404 not_found`. `Idempotency-Key` is required: an identical repeat changes nothing, and a reused key with another project is `409 idempotency_key_reuse`. Choosing the object already chosen is a no-op. The all-objects view is not stored: there is no body for it, and a client that shows all objects simply does not call this. A link with `?project=` overrides the stored choice on the client.
  */
 export type SetMyLastProjectInput = {
   /** Request body, sent as `application/json`. */

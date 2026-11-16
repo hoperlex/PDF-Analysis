@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "ANALYSIS-REPAIR-CONFORMANCE-01",
+  "owner": "UIP-CONTRACT-02",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e",
-    "content_commit": "590bafb074b36667f34c633b39c608c21b0eb57e",
-    "content_commit_subject": "0.27.0 publication candidate before conformance correction",
+    "sha256": "1479da367147422abdc9d787ce300d11d4900c670972ea1fb3df2c457e82c29a",
+    "content_commit": "7530b3a4b4f7b3fac9b61cea33707af89866a26d",
+    "content_commit_subject": "feat(api): one optional group on a document, setDocumentGroup and group on listDocuments and getDocumentVersion (UIP-G-10)",
     "dispatch_named_commit": "ccf8d47bd4dedb4ffc2eb613fba28267f4557202",
-    "commit_note": "Equivalent nullable limitation schema and the already-declared CSV validation response; no allowed value/bound or version change.",
+    "commit_note": "Resealed by UIP-CONTRACT-02: contract 1.56.0 for UI-PARITY-R3 stage 2, on top of 1.55.0. Additive: setMyLastProject and setDocumentGroup with SetMyLastProjectRequest and SetDocumentGroupRequest, Account.last_project_uid, DocumentVersion.block_count and group, the audit on getDocumentVersion; the descriptions of exportRunXlsx and of the screens name Критичность, Назначения and Замечания. content_commit is the last commit that changed the contract before this reseal; the reseal commit carries the lock itself.",
     "openapi_version": "3.1.0",
-    "info_version": "1.55.0",
-    "paths": 300,
-    "operations": 329,
-    "component_schemas": 820,
+    "info_version": "1.56.0",
+    "paths": 302,
+    "operations": 331,
+    "component_schemas": 822,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e",
+    "snapshot_sha256": "1479da367147422abdc9d787ce300d11d4900c670972ea1fb3df2c457e82c29a",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "67d83b0a7c21d1a0ffda3d3d0d552b4c262ae15806ddfc3b3ea3f79108cda751",
-      "index.ts": "3b81fc9dc36c88a74da47a4dc94c8d5768cff090101966ae42a8070dccba3a79",
-      "operations.gen.ts": "825998071dc913c69a034b286989e9472082a6c28044d82fdcae79d622ee8d8b",
-      "types.gen.ts": "09574489fb03c5cc75e0d80f7475128ec1d47a24aa6dc59d58c2fb24d57cac04"
+      "client.gen.ts": "b8d9538668febfe1faeeac6e1df28603b47d8b2bf8713db8c13e82103d0c60a3",
+      "index.ts": "e0b9b76be48fc26813d60b7df0de2de8e1bf8e207b69244493821744a02fdc42",
+      "operations.gen.ts": "ab9e01e823758b4209b0c27643f523818d96e000c230100d5b0d269e8af63d72",
+      "types.gen.ts": "1ced9ce9ee175c6433cf6cc4c5e62a6e69342bf1be9675f50220396a5ac84cb3"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

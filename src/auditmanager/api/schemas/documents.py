@@ -104,7 +104,7 @@ class DocumentVersionView:
     #: `R-151e` (contract 1.23.0, migration 0053): the document's free tags; ``None`` where the read does not carry
     #: them, rendered as a list (possibly empty) otherwise.
     tags: tuple[str, ...] | None = None
-    #: `UIP-G-10` (contract 1.55.0, migration 0070): the document's one optional group, carried by ``listDocuments``,
+    #: `UIP-G-10` (contract 1.56.0, migration 0070): the document's one optional group, carried by ``listDocuments``,
     #: ``getDocumentVersion`` and ``setDocumentGroup``; ``None`` is «Без группы» (and on every other read, which does not carry
     #: it), and the property is then omitted on the wire.
     group: str | None = None

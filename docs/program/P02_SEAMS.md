@@ -10,7 +10,11 @@
 > `contracts/events/v1/**`. Where this document and one of those disagree, the frozen
 > contract wins and the disagreement is a defect in this file.
 
-## Current admission amendment — 1.55.0 / 0068
+## Current surface amendment — 1.56.0 / 0070
+
+`UIP-CONTRACT-02` (programme `UI-PARITY-R3`, stage 2): two keyed writes join the table of §7, `setMyLastProject` (`PUT /me/last-project`, the object an account chose last; any complete account, `204`) and `setDocumentGroup` (`PUT /projects/{project_uid}/documents/{document_uid}/group`, the one optional group of a document; `expert` or `admin`, answers the document's `DocumentVersion`); `Account` gains `last_project_uid` and `DocumentVersion` gains `group` and `block_count`, and `getDocumentVersion` answers the `audit`. The surface is 302 paths / 331 operations / 822 schemas; the storage is `0069_account_last_project` and `0070_document_group`. The record of the change is `contracts/api/v1/README.md`.
+
+## Admission amendment — 1.55.0 / 0068
 
 `ANALYSIS-REPAIR-INT-01`: a Finding identity means admission to human review. Exact source grounding remains a separate fact. A fresh accepted flow policy may publish `grounding_kind=unverified`, `grounded=false`, a real limitation and no invented evidence. Ordinary diagnostics still have no Finding identity. Existing older-policy gates and paid builders remain unchanged. New semantic groups reuse an exact primary origin, preserve all raw members, and retain their verified text/block context and limitations in human memory (`dm-capture/4` for groups; `/3` for a single unverified issue). Active/history and export selection use actual human verdicts; model advice never writes one.
 
@@ -863,7 +867,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-329 operations, sealed. `A5` generates the typed client from this document; `B6`
+331 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1217,6 +1221,7 @@ could.
 | `setDocumentArchived` | `PUT /projects/{project_uid}/documents/{document_uid}/archive` |
 | `renameDocument` | `PUT /projects/{project_uid}/documents/{document_uid}/title` |
 | `setDocumentTags` | `PUT /projects/{project_uid}/documents/{document_uid}/tags` |
+| `setDocumentGroup` | `PUT /projects/{project_uid}/documents/{document_uid}/group` |
 | `listDocumentTags` | `GET /projects/{project_uid}/document-tags` |
 | `setFindingExecutionStatus` | `PUT /findings/{finding_uid}/execution-status` |
 | `listProposalDecisionJournal` | `GET /proposal-decisions` |
@@ -1279,6 +1284,7 @@ could.
 | `getProductVersion` | `GET /system/version` |
 | `listReleases` | `GET /releases` |
 | `markReleaseNotesRead` | `PUT /me/release-notes` |
+| `setMyLastProject` | `PUT /me/last-project` |
 | `listExecutionQueue` | `GET /execution/queue` |
 | `listExecutionJournal` | `GET /execution/journal` |
 | `cancelRun` | `POST /runs/{run_id}/cancel` |
@@ -1545,7 +1551,7 @@ Rules that hold across the whole surface:
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `deleteRun`, `reauditRun`, `startRunFromStage`, `setJobPriority`,
-  `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
+  `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setDocumentGroup`, `setMyLastProject`, `setFindingExecutionStatus`,
   `importRunDecisions`, `importOptimisationProposalDecisions`, `carryOverProposalDecisions`, `withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
   `scheduleAssignments`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,

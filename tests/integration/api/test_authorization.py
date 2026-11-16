@@ -149,7 +149,7 @@ GUARDED = (
     ("getProductVersion", "GET", "/system/version"),
     ("listReleases", "GET", "/releases"),
     ("markReleaseNotesRead", "PUT", "/me/release-notes"),
-    # `UIP-G-05` (1.55.0): the account's own choice of an object is guarded like its read mark.
+    # `UIP-G-05` (1.56.0): the account's own choice of an object is guarded like its read mark.
     ("setMyLastProject", "PUT", "/me/last-project"),
     # `W53-SEAL-01`. The two execution reads and four commands share the same
     # authorization seam. Keep every operation in the sweep: a command whose body
@@ -542,7 +542,7 @@ GUARDED = (
      "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/title"),
     ("setDocumentTags", "PUT",
      "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/tags"),
-    # `UIP-G-10` (1.55.0): the one optional group of a document is guarded like its tags.
+    # `UIP-G-10` (1.56.0): the one optional group of a document is guarded like its tags.
     ("setDocumentGroup", "PUT",
      "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/group"),
     ("listDocumentTags", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/document-tags"),

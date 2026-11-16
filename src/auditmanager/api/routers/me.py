@@ -95,7 +95,7 @@ def build_me_routes(router: APIRouter, accounts: AccountPort) -> None:
         },
         summary="Remember the object the signed-in account chose.",
         description=(
-            "`UIP-G-05` (contract 1.55.0, owner ruling Г7-B): the signed-in account's own choice of an object, kept on "
+            "`UIP-G-05` (contract 1.56.0, owner ruling Г7-B): the signed-in account's own choice of an object, kept on "
             "the server so that the screens that show all objects or one open on the object it chose last. Any complete "
             "account, roles or none; the credential names the account and the body cannot name another. `getMe` answers "
             "the choice as `last_project_uid`. An unknown project is `404 not_found`. `Idempotency-Key` is required: an "

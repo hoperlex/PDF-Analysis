@@ -1,4 +1,4 @@
-> Current shared contract: **1.55.0**, migration **0070_document_group**, owned by ANALYSIS-REPAIR-INT-01 (the 1.55.0 amendment), `UIP-G-05` (the additive `setMyLastProject`, migration 0069) and `UIP-G-10` (the additive `setDocumentGroup`, migration 0070). Catalog revision71 and the error/identity/state vocabularies are unchanged. The amendment separates reviewable Finding identity from exact evidence grounding; see the API contract. The original freeze record below is historical.
+> Current shared contract: **1.56.0**, migration **0070_document_group**, owned by `UI-PARITY-R3` (`UIP-CONTRACT-02`: the additive `setMyLastProject`, migration 0069, `UIP-G-05`; the additive `setDocumentGroup`, migration 0070, `UIP-G-10`; and `getDocumentVersion`'s audit and block count, `UIP-S04-01`) and, before it, ANALYSIS-REPAIR-INT-01 (the 1.55.0 amendment, migration 0068). Catalog revision71 and the error/identity/state vocabularies are unchanged. The 1.55.0 amendment separates reviewable Finding identity from exact evidence grounding; see the API contract. The original freeze record below is historical.
 
 # Domain contract v1 — `1.8.0`, frozen (sealed revision 26)
 

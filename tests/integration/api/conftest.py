@@ -411,6 +411,9 @@ class IngestDocumentAdapter:
     def set_document_tags(self, **_: Any) -> DocumentVersionView:  # pragma: no cover - never called
         raise AssertionError("this stand-in does not drive setDocumentTags")
 
+    def set_document_group(self, **_: Any) -> DocumentVersionView:  # pragma: no cover - never called
+        raise AssertionError("this stand-in does not drive setDocumentGroup")
+
     def list_document_tags(self, **_: Any) -> Any:  # pragma: no cover - never called
         raise AssertionError("this stand-in does not drive listDocumentTags")
 

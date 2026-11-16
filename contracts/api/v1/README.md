@@ -11,23 +11,25 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.55.0` (`ANALYSIS-REPAIR-INT-01`)
+## Current contract `1.56.0` (`UI-PARITY-R3`)
 
-Human-review admission and source grounding are separate. `FindingGroundingKind`
-adds `unverified`; its observation has a required `unverified_reason`, and may have
-empty evidence. It is a normal Finding for expert accept/reject/comments, with
-`grounded=false` persisted. Diagnostics still have no Finding identity. Memory
-retains the limitation in optional `DecisionMemoryContent.unverified_reason`
-(`dm-capture/3`); multi-member groups retain every raw claim/limitation and union their verified text/block evidence (`dm-capture/4`); older content digests and paid request builders stay unchanged.
-CSV/XLSX accept optional human `verdict` selection (`active`, `all`, `unreviewed`,
-`accepted`, `rejected`; omitted means `all`). CSV appends grounding/limitation
-columns, including the count of unverified group members, when the result includes unverified rows; no invented page or quotation.
-`Finding.block_evidence` carries the group’s verified graphical members even when its canonical observation is text; its former per-observation limit of 64 is lifted for this union.
-The API has 302 paths, 331 operations and 822 schemas; migration head `0070`.
-The domain catalogs remain at candidate revision 71; their shared version advances.
+The stage-2 seal of the programme `UI-PARITY-R3` (screens that follow the original PDF-proverka; the task is
+`docs/program/tasks/UI-PARITY-R3.md`, the seal is `UIP-CONTRACT-02`), raised once for the stage after the contract lanes of the stage were merged.
+Additive: **two operations, two schemas and three optional properties; nothing is removed or made required**; two migrations,
+`0069_account_last_project` and `0070_document_group` (head `0070`); no error code, no identity prefix, no state machine. The four changes
+below were each made by their own lane while this file still read 1.55.0, and are one seal here:
 
-Additive change under this version (`UIP-G-05`, programme `UI-PARITY-R3`, owner ruling Г7-B; the version number is raised by the
-integrator once for the stage): **one operation, one schema and one optional property; nothing is removed or made required.**
+- **The object an account chose last (`UIP-G-05`).** `setMyLastProject` (`PUT /me/last-project`), `SetMyLastProjectRequest`, and the optional `Account.last_project_uid`.
+- **The audit and the block count of a version (`UIP-S04-01`).** `getDocumentVersion` answers `audit`; `DocumentVersion.block_count` is new. No path, operation or schema.
+- **The group of a document (`UIP-G-10`).** `setDocumentGroup` (`PUT /projects/{project_uid}/documents/{document_uid}/group`), `SetDocumentGroupRequest`, and the optional `DocumentVersion.group`.
+- **Words only (`UIP-G-02`).** The description of `exportRunXlsx` names the columns «Критичность (решение эксперта)» and «Критичность (предложение модели)» (it said «Серьёзность»), the tag, operation and schema descriptions name the screens «Назначения» (the assignments, formerly «Диспетчер») and «Замечания, ожидающие решения» (formerly «Находки…»). No shape, default or bound moves.
+
+The API has 302 paths, 331 operations and 822 schemas; migration head `0070`. The domain catalogs remain at candidate revision 71; their shared version advances.
+
+Compatibility: additive for a reader. A client of 1.55.0 reads every answer of 1.56.0 unchanged (the new properties are optional and absent where
+the operation does not carry them); `ErrorEnvelope.contract_version` and `info.version` are `1.56.0`.
+
+Additive change (`UIP-G-05`, programme `UI-PARITY-R3`, owner ruling Г7-B): **one operation, one schema and one optional property; nothing is removed or made required.**
 `setMyLastProject` (`PUT /me/last-project`, `Idempotency-Key` required, any complete account, roles or none) takes
 `SetMyLastProjectRequest` (`{project_uid}`) and answers `204`; an unknown project is `404 not_found`, a reused key with another
 project is `409 idempotency_key_reuse`, a malformed body or identity is `422 validation_failed`. `Account` gains the optional,
@@ -36,8 +38,7 @@ nullable `last_project_uid`: the object the account chose last, `null` when it c
 is migration `0069_account_last_project` (`account_last_project`, one row per account, `ON DELETE CASCADE` from the account; it holds
 the project as a bare identity with no foreign key, and `getMe` answers it only while the project exists). The client reads the choice from `getMe` and a link with `?project=` overrides it.
 
-Additive change under this version (`UIP-S04-01`, programme `UI-PARITY-R3`, owner rulings Г8-B and Г12-B; the version number is raised by
-the integrator once for the stage): **one optional property and one more place that carries an existing one; no path, operation or schema
+Additive change (`UIP-S04-01`, programme `UI-PARITY-R3`, owner rulings Г8-B and Г12-B): **one optional property and one more place that carries an existing one; no path, operation or schema
 is added and nothing is removed or made required, so the surface counts above do not move.** `getDocumentVersion` now answers the
 `audit` (`DocumentAudit`) that `listDocuments` attaches to each item, for the version it reads: the same read model, so the two never
 disagree (the other operations that answer a `DocumentVersion` still carry none). `DocumentVersion` gains the optional `block_count`
@@ -47,8 +48,7 @@ portal blocks recorded in its stage result, the same run and the same blocks `li
 the version's file is not parsed. **Absent is not zero**: a version no such run has reached, or one admitted for comparison only (no
 portal bundle), carries no `block_count`, while a built index that holds no block answers `0`.
 
-Additive change under this version (`UIP-G-10`, programme `UI-PARITY-R3`, owner ruling Г11; the version number is raised by the
-integrator once for the stage): **one operation, one schema and one optional property; nothing is removed or made required.**
+Additive change (`UIP-G-10`, programme `UI-PARITY-R3`, owner ruling Г11): **one operation, one schema and one optional property; nothing is removed or made required.**
 `setDocumentGroup` (`PUT /projects/{project_uid}/documents/{document_uid}/group`, `Idempotency-Key` required, `expert` and `admin` as for
 `setDocumentTags`, `viewer` refused) takes `SetDocumentGroupRequest` (`{group}`, a string of at most 40 characters or `null`) and answers `200`
 with the document's current `DocumentVersion` carrying the new `group`. The group is a value the document carries, not an entity: one optional
@@ -61,6 +61,21 @@ after, `null` for none) to the audit trail, like `document.tags_set`. `DocumentV
 no group list, no rename of a group and no empty group: the groups of a section are the distinct values of its documents, in alphabetical order on
 the screen. Storage is migration `0070_document_group` (`document.group_label`, nullable, `ck_document_group_label_length`; the wire name is
 `group` because `GROUP` is a reserved word of SQL). 302 paths / 331 operations / 822 schemas.
+
+## Contract `1.55.0` (`ANALYSIS-REPAIR-INT-01`, historical)
+
+Human-review admission and source grounding are separate. `FindingGroundingKind`
+adds `unverified`; its observation has a required `unverified_reason`, and may have
+empty evidence. It is a normal Finding for expert accept/reject/comments, with
+`grounded=false` persisted. Diagnostics still have no Finding identity. Memory
+retains the limitation in optional `DecisionMemoryContent.unverified_reason`
+(`dm-capture/3`); multi-member groups retain every raw claim/limitation and union their verified text/block evidence (`dm-capture/4`); older content digests and paid request builders stay unchanged.
+CSV/XLSX accept optional human `verdict` selection (`active`, `all`, `unreviewed`,
+`accepted`, `rejected`; omitted means `all`). CSV appends grounding/limitation
+columns, including the count of unverified group members, when the result includes unverified rows; no invented page or quotation.
+`Finding.block_evidence` carries the group’s verified graphical members even when its canonical observation is text; its former per-observation limit of 64 is lifted for this union.
+The API has 300 paths, 329 operations and 820 schemas; migration head `0068`.
+The domain catalogs remain at candidate revision 71; their shared version advances.
 
 Publication correction (`ANALYSIS-REPAIR-CONFORMANCE-01`): CSV declares the existing
 validation envelope; the optional memory limitation uses the same nullable-string

@@ -241,7 +241,7 @@ describe('the seam operations', () => {
       'revokeRunnerToken',
       'scheduleAssignments',
       'setDocumentArchived',
-      // `UIP-G-10` (contract 1.55.0): the group of a document is a keyed command, like its tags.
+      // `UIP-G-10` (contract 1.56.0): the group of a document is a keyed command, like its tags.
       'setDocumentGroup',
       'setDocumentTags',
       'setEngineerAbsences',
@@ -255,7 +255,7 @@ describe('the seam operations', () => {
       'setExecutorSecret',
       'setFindingExecutionStatus',
       'setJobPriority',
-      // `UIP-G-05` (contract 1.55.0): remembering the object an account chose is keyed, so an exact repeat changes nothing.
+      // `UIP-G-05` (contract 1.56.0): remembering the object an account chose is keyed, so an exact repeat changes nothing.
       'setMyLastProject',
       'setStageModelLayoutEnabled',
       'setStagePairCompleteness',
