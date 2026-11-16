@@ -1,5 +1,5 @@
 import type { ExecutionJournalEntry } from '@/shared/api';
-import { formatInstant, routes } from '@/shared/lib';
+import { formatClock, formatInstant, formatInstantUtc, routes } from '@/shared/lib';
 import { visibleJournal } from '@/entities/execution';
 import { EmptyState } from '@/shared/ui';
 
@@ -36,7 +36,7 @@ export function ExecutionJournal({ entries, onNext, onPrevious }: ExecutionJourn
                 const visible = visibleJournal(entry);
                 return (
                   <tr key={entry.event_id}>
-                    <td className={styles.time}><time dateTime={entry.occurred_at}>{formatInstant(entry.occurred_at)}</time></td>
+                    <td className={styles.time}><time dateTime={entry.occurred_at} title={`${formatInstant(entry.occurred_at)} · ${formatInstantUtc(entry.occurred_at)}`}>{formatClock(entry.occurred_at)}</time></td>
                     <td className={styles.event}><strong>{visible.event}</strong></td>
                     <td>{visible.state === null ? null : <strong>{visible.state}</strong>}</td>
                     <td>{visible.code === null ? null : <code>{visible.code}</code>}</td>

@@ -22,7 +22,7 @@ import type { ComponentType } from 'react';
 import type { VectorsPause } from '@/entities/execution';
 import { VECTORS_PAUSED_LABEL, vectorsPausedHint } from '@/entities/execution';
 import type { ExecutionDispatchStatus } from '@/shared/api';
-import { routes } from '@/shared/lib';
+import { formatTime, routes } from '@/shared/lib';
 import type { MenuItem, MenuProps } from '@/shared/ui';
 import { Menu } from '@/shared/ui';
 
@@ -73,10 +73,8 @@ export interface PauseStatusViewProps {
 }
 
 function sinceLabel(changedAt: string | undefined): string {
-  if (changedAt === undefined) return '';
-  const at = new Date(changedAt);
-  if (Number.isNaN(at.getTime())) return '';
-  return `с ${at.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+  if (changedAt === undefined || Number.isNaN(new Date(changedAt).getTime())) return '';
+  return `с ${formatTime(changedAt)}`;
 }
 
 /** The items of the one button's menu, in order: the queue, then the vectors (absent until their first read settles). */

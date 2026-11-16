@@ -365,7 +365,7 @@ describe('«Скопировать диагностику» copies the probe out
     expect(text).toContain(`Подключение: ${READY.connection.display_name} (${READY.connection.connection_id})`);
     expect(text).toContain('Настройки: версия 1');
     expect(text).toContain(`Проверка: ${probeOutcomeSentence('ok')}`);
-    expect(text).toMatch(/Проверено: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/);
+    expect(text).toMatch(/Проверено: \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/m);
   });
 
   it('says a sentence for every outcome, and the model, the detail and the hint when the card has them', () => {
@@ -394,7 +394,7 @@ describe('«Скопировать диагностику» copies the probe out
 
   it('says a probe still open as the card does, and a connection never probed as not probed', () => {
     const open = executorCase({ n: 40, name: 'Шлюз в проверке', secrets: [{}], probe: { state: 'running' } });
-    expect(diagnostic(open)).toMatch(/Проверка выполняется; запрошена \d{4}-\d{2}-\d{2}/);
+    expect(diagnostic(open)).toMatch(/Проверка выполняется; запрошена \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}\./);
     const never = executorCase({ n: 41, name: 'Шлюз без проверок', secrets: [{}], probe: null });
     expect(diagnostic(never)).toContain('Проверка: текущие настройки ещё не проверяли.');
   });

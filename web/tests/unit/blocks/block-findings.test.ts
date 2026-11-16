@@ -298,7 +298,7 @@ describe('the tiles with the block links', () => {
   });
 
   it('say «в блоке» in the title and name the run', () => {
-    expect(all[0]).toContain('title="Замечаний в блоке: 2 (по прогону от 2026-09-10 08:00:00 UTC)"');
+    expect(all[0]).toContain('title="Замечаний в блоке: 2 (по прогону от 10.09.2026 08:00)"');
     expect(all[0]).not.toContain('Замечаний на странице');
   });
 
@@ -319,7 +319,7 @@ describe('the tiles with the block links', () => {
   it('keep the page’s number, and say so, when the block links are not known', () => {
     const page = list({ pageFindings: BY_PAGE });
     expect(tiles(page)[2]).toContain('data-tile-badge="2"');
-    expect(page).toContain('title="Замечаний на странице 1: 2 (по прогону от 2026-09-10 08:00:00 UTC)"');
+    expect(page).toContain('title="Замечаний на странице 1: 2 (по прогону от 10.09.2026 08:00)"');
     expect(page).not.toContain('data-findings-scope="block"');
     expect(visibleText(page)).toContain('Привязки замечаний к блокам для этого прогона нет.');
   });
@@ -438,7 +438,7 @@ describe('the block view’s findings panel', () => {
     expect(shown).toContain('data-page-findings-panel="2"');
     expect(visibleText(shown)).toContain('Замечания в блоке (2)');
     expect(visibleText(shown)).toContain('Замечания прогона, цитата которых лежит в этом блоке');
-    expect(visibleText(shown)).toContain('(по прогону от 2026-09-10 08:00:00 UTC)');
+    expect(visibleText(shown)).toContain('(по прогону от 10.09.2026 08:00)');
     expect(count(shown, 'data-finding-uid=')).toBe(2);
     expect(shown).not.toContain('Замечание указывает страницу PDF');
   });

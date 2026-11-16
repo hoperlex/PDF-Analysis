@@ -40,7 +40,7 @@ describe('account profile', () => {
 
   it('shows the address, and the last sign-in or that there was none (`UI-A-92`), and offers the password change as a button', () => {
     expect(accountMarkup(ACCOUNT)).toContain('data-account-last-sign-in="never">Входов не было</dd>');
-    expect(accountMarkup({ ...ACCOUNT, last_sign_in_at: '2026-11-05T09:30:15Z' })).toContain('data-account-last-sign-in="at">2026-11-05 09:30:15 UTC</dd>');
+    expect(accountMarkup({ ...ACCOUNT, last_sign_in_at: '2026-11-05T09:30:15Z' })).toContain('data-account-last-sign-in="at">05.11.2026 09:30</dd>');
     const markup = accountMarkup(ACCOUNT);
     expect(markup).toContain('petrova@example.org</dd>');
     expect(markup).toMatch(/<a class="am-button am-button--quiet" href="\/account\/password">Сменить пароль<\/a>/);

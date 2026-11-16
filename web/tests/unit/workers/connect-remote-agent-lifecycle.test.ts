@@ -340,8 +340,8 @@ function readable(markup: string): string {
     .replace(/<code>[^<]*<\/code>/g, ' ')
     .replace(/<time[^>]*>[^<]*<\/time>/g, ' ')
     .replace(/<[^>]+>/g, ' ')
-    // A timestamp as the screens print it (`formatInstant`: `2026-10-27 08:00:00 UTC`). The `UTC` designator
-    // is taken out only where a timestamp precedes it -- the rule of `rendered-language.guard.test.ts` -- so a
+    // A timestamp as the screens print it (`formatInstant`: `27.10.2026 08:00`, local time; the ISO form with `UTC` is the
+    // tooltip's, `formatInstantUtc`). The `UTC` designator is taken out only where an ISO timestamp precedes it -- the rule of `rendered-language.guard.test.ts` -- so a
     // bare `UTC` in a sentence is still foreign Latin.
     .replace(/\b\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|\s*UTC)?\b/g, ' ');
 }

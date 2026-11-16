@@ -20,6 +20,7 @@ import type {
   ExecutorHostSlots,
   ExecutorProvider,
 } from '@/shared/api';
+import { formatTime } from '@/shared/lib';
 import type { ExecutionFailure } from '@/entities/execution';
 import { executionFailure } from '@/entities/execution';
 import {
@@ -161,7 +162,7 @@ export function HostDetailsView({ details, rechecking, onRecheck, slots }: HostD
               <li key={task.task_id} className={styles.item} data-host-task>
                 Прогон <code>{task.run_id}</code>
                 {task.stage_key === undefined ? null : <> · {stageText(task.stage_key)}</>}
-                {' · '}{modelLabel(task.model_id)} · с <time dateTime={task.since}>{new Date(task.since).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</time>
+                {' · '}{modelLabel(task.model_id)} · с <time dateTime={task.since}>{formatTime(task.since)}</time>
               </li>
             ))}
           </ul>

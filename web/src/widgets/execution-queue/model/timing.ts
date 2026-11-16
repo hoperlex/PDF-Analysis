@@ -4,10 +4,12 @@
  * (`started_at`, `finished_at`) and the duration is their difference; a job still running is measured to the moment of
  * the last successful read, so the line never claims a time the data does not describe.
  *
- * The clock is UTC like every instant on the screen (`formatInstant`), so a server render and a browser render agree.
+ * The clock and the day are the reader's own (`UIP-G-13`, the shared `shared/lib` functions): the browser's zone, read after
+ * the queue has been fetched. A job that ran across the reader's midnight therefore prints its day on the end as well.
  */
 
 import type { ExecutionQueueItem } from '@/shared/api';
+import { formatDayMonth, formatTime } from '@/shared/lib';
 
 export interface QueueTiming {
   /** The start as `ДД.ММ ЧЧ:ММ`, or `null` for a job that never started. */
@@ -16,18 +18,6 @@ export interface QueueTiming {
   readonly end: string | null;
   /** `8 мин 30 с`, `null` when no span is known. */
   readonly duration: string | null;
-}
-
-function two(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
-function dayOf(moment: Date): string {
-  return `${two(moment.getUTCDate())}.${two(moment.getUTCMonth() + 1)}`;
-}
-
-function clockOf(moment: Date): string {
-  return `${two(moment.getUTCHours())}:${two(moment.getUTCMinutes())}`;
 }
 
 /** `45 с`, `8 мин 30 с`, `2 ч 5 мин`: the two largest units that are not zero. */
@@ -42,17 +32,21 @@ export function durationLabel(milliseconds: number): string {
 
 /**
  * The parts of the timing line, or `null` for a job that has neither started nor finished (the row then says nothing
- * about time beyond «Принята»). `asOf` is the last successful read; without it a running job has no duration.
+ * about time beyond «Принята»). `asOf` is the last successful read; without it a running job has no duration. `timeZone`
+ * is for tests; the screen leaves it out and gets the browser's zone.
  */
 export function queueTiming(
   item: Pick<ExecutionQueueItem, 'started_at' | 'finished_at'>,
   asOf: number | null,
+  timeZone?: string,
 ): QueueTiming | null {
   const started = item.started_at === undefined ? null : new Date(item.started_at);
   const finished = item.finished_at === undefined ? null : new Date(item.finished_at);
   const startOk = started !== null && !Number.isNaN(started.getTime());
   const finishOk = finished !== null && !Number.isNaN(finished.getTime());
   if (!startOk && !finishOk) return null;
+  const dayOf = (moment: Date) => formatDayMonth(moment, timeZone);
+  const clockOf = (moment: Date) => formatTime(moment, timeZone);
   const start = startOk ? `${dayOf(started)} ${clockOf(started)}` : null;
   let end: string | null = null;
   if (finishOk) {

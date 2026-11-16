@@ -89,7 +89,7 @@ describe('the run’s place and the job that goes first', () => {
 describe('why the run waits', () => {
   it('uses the run’s own reason in words, and since when, never one it was not given', () => {
     const task = runNextTask({ ...RUN, queue_reason: 'executor_at_capacity', waiting_since: '2026-11-08T10:00:00Z' }, undefined);
-    expect(nextTaskWhy(task)).toEqual(['В очереди: исполнитель занят. Ждёт с 2026-11-08 10:00:00 UTC.']);
+    expect(nextTaskWhy(task)).toEqual(['В очереди: исполнитель занят. Ждёт с 08.11.2026 10:00.']);
   });
 
   it('adds the pause and the jobs in front when the queue says them', () => {
@@ -122,7 +122,7 @@ describe('what is in work', () => {
     expect(task.inWork).toBe(1);
     expect(task.queued).toBe(3);
     expect(task.finishing?.run_id).toBe('run_other_6');
-    expect(nextTaskWork(task)).toBe('В работе: 1 · ожидают: 3 · ближайшее завершение по оценке: 2026-11-08 11:15:00 UTC');
+    expect(nextTaskWork(task)).toBe('В работе: 1 · ожидают: 3 · ближайшее завершение по оценке: 08.11.2026 11:15');
   });
 
   it('gives no estimate of its own start and none for a queued job’s finish', () => {
