@@ -109,7 +109,7 @@ def test_summary_totals_use_decided_then_proposed_and_categories():
         ("Эксплуатационное", "1"),
         ("Рекомендация", "0"),
         ("Проверить смежный раздел", "0"),
-        ("Без серьёзности", "1"),
+        ("Без критичности", "1"),
     ]
     # Ordered by the contract value (accessibility < fire_safety), shown as its label.
     assert [(summary[f"A{row}"][0], summary[f"B{row}"][0]) for row in (16, 17)] == [

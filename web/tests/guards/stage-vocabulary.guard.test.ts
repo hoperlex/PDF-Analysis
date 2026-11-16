@@ -92,6 +92,28 @@ describe('every stage the contract publishes has a Russian name', () => {
       expect({ stageId, latin: /[A-Za-z]/.test(label) }).toEqual({ stageId, latin: false });
     }
   });
+
+  it('says «замечание», the original’s word, and never the retired «находка»', () => {
+    // UIP-G-02 renamed the unit a reviewer reads; three stage names (merge, review,
+    // correction) are the sentences that carry it, and they sit in `shared/ui` where the
+    // rename's own lane was not allowed to reach. Non-vacuous: those three are named, so
+    // an empty `STAGE_LABELS` cannot pass this by saying nothing.
+    expect(
+      (['finding_merge', 'finding_review', 'finding_correction'] as const).map(
+        (stageId) => STAGE_LABELS[stageId],
+      ),
+    ).toEqual([
+      'Слияние и дедупликация замечаний',
+      'Проверка и обоснование замечаний',
+      'Исправление замечаний',
+    ]);
+    for (const stageId of STAGE_ID_VALUES) {
+      expect({ stageId, retired: /находк/i.test(STAGE_LABELS[stageId]) }).toEqual({
+        stageId,
+        retired: false,
+      });
+    }
+  });
 });
 
 // ================================================== the dependencies, and what they imply

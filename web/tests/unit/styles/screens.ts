@@ -1084,12 +1084,12 @@ export function screens(): Screen[] {
     'Table, the findings table shape',
     render(
       createElement(Table<{ readonly id: string; readonly text: string }>, {
-        caption: 'Находки прогона',
+        caption: 'Замечания прогона',
         columns: [
           { key: 'id', header: '№', cell: (row: { readonly id: string; readonly text: string }) => row.id },
-          { key: 'text', header: 'Находка', cell: (row: { readonly id: string; readonly text: string }) => row.text },
+          { key: 'text', header: 'Замечание', cell: (row: { readonly id: string; readonly text: string }) => row.text },
         ],
-        rows: [{ id: '1', text: 'Первая находка' }, { id: '2', text: 'Вторая находка' }],
+        rows: [{ id: '1', text: 'Первое замечание' }, { id: '2', text: 'Второе замечание' }],
         rowKey: (row: { readonly id: string; readonly text: string }) => row.id,
         currentKey: '2',
       }),
@@ -1866,7 +1866,7 @@ export function screens(): Screen[] {
     onSelect: noop,
   })));
   add('ExecutionStatusControl with a refusal', render(createElement(ExecutionStatusControlView, {
-    status: 'taken_into_account', busy: false, error: 'Статус ставится только принятой находке.', onChange: noop,
+    status: 'taken_into_account', busy: false, error: 'Статус ставится только принятому замечанию.', onChange: noop,
   })));
   // `R-151d`: the decision import while sending, and its report with refused rows and a file refusal.
   add('ImportDecisions while sending', render(createElement(ImportDecisionsView, {
@@ -1915,7 +1915,7 @@ export function screens(): Screen[] {
           createElement(FindingRowActions, {
             verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop,
           }),
-        renderExpansion: () => createElement('p', null, 'Открытая находка: цитата на странице и решение эксперта.'),
+        renderExpansion: () => createElement('p', null, 'Открытое замечание: цитата на странице и решение эксперта.'),
       }),
     ),
   );
@@ -1932,7 +1932,7 @@ export function screens(): Screen[] {
             sending: finding.finding_uid === FINDING_UID ? 'accept' : null,
             note: finding.finding_uid === FINDING_UID
               ? { tone: 'ok', text: 'Записано' }
-              : { tone: 'fail', text: 'Перед принятием выберите важность. Ничего не отправлено.' },
+              : { tone: 'fail', text: 'Перед принятием выберите критичность. Ничего не отправлено.' },
             onAccept: noop,
             onReject: noop,
           }),
@@ -2114,7 +2114,7 @@ export function screens(): Screen[] {
         groups: [],
         selectedFindingUid: null,
         onSelect: noop,
-        error: { title: 'Не удалось получить находки', detail: 'Сервис недоступен.', correlationId: 'cid-contrast-1' },
+        error: { title: 'Не удалось получить замечания', detail: 'Сервис недоступен.', correlationId: 'cid-contrast-1' },
       }),
     ),
   );
@@ -3151,7 +3151,7 @@ export function screens(): Screen[] {
       label: 'Система',
       links: [
         { href: '/logs', label: 'Журнал выполнения' },
-        { href: '/workers', label: 'Исполнители' },
+        { href: '/workers', label: 'Диспетчер' },
       ],
     };
     add('Disclosure closed', inBar(createElement(Disclosure, work)));
@@ -3423,7 +3423,7 @@ export function screens(): Screen[] {
     onSelect: noop,
   })));
   /*
-   * Lane N2: the screens the density pass of «Исполнители» and «Настройки анализа» measures and that no other census screen
+   * Lane N2: the screens the density pass of «Диспетчер» (`/workers`) and «Настройки анализа» measures and that no other census screen
    * draws open. The forms stand as the views the pages open them as (a closed `<details>` hides its form from a browser's layout,
    * so the group form is rendered by itself); the wizard in its steps (the kind of connection, the agent's name and model with the
    * two ways to install, the SSH form, the one command shown once, OpenRouter, and the key step after it); the runner-token

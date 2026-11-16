@@ -4248,7 +4248,7 @@ def test_control_a_step_or_a_route_that_disappears_is_detected(manifest: dict) -
     assert any("'sign-out' is gone or renamed" in f for f in pinned_journey_findings(swapped))
 
 
-#: The tabs of «Исполнители» that `/workers` now redirects to `/workers/advanced` (`HOSTS-WEB-01`).
+#: The tabs of «Диспетчер» (formerly «Исполнители») that `/workers` now redirects to `/workers/advanced` (`HOSTS-WEB-01`).
 MOVED_WORKERS_TABS = ("connections", "groups", "rules", "routes", "processes")
 ADVANCED_WORKERS_ADDRESS = "/workers/advanced"
 ADVANCED_WORKERS_MODULE = "web/src/app/workers/advanced/page.tsx"

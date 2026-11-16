@@ -129,7 +129,7 @@ def test_the_summary_counts_are_labelled_and_no_raw_value_survives_anywhere() ->
     )
     summary, sheet, _ = _sheets(_source(*findings))
     assert [summary[f"A{row}"] for row in range(9, 15)] == [
-        *SEVERITY_WORDS.values(), "Без серьёзности",
+        *SEVERITY_WORDS.values(), "Без критичности",
     ]
     # Categories keep the order of the contract value, and show the label.
     counted = [summary[f"A{row}"] for row in range(16, 28)]
@@ -360,7 +360,11 @@ TEXT_DIGESTS = {
     # Re-pinned for «Критичность» (`UIP-G-02`): the summary header of the severity counts (cell A8 of «Сводка») and the two severity headers
     # of «Замечания» (F1, G1) were «Серьёзность…». The new values were computed after `test_the_severity_is_named_criticality_in_the_findings_header_and_in_the_summary_as_the_screens_do`
     # read the new words; putting just those three texts back reproduces ``3d8f7b9a...06d6`` and ``9553ccf6...adb`` again.
-    "xl/worksheets/sheet1.xml": "52fb47bb67ee59013dd942492e5162b5c96a6dc1cdd1cfa0c3df1b827639d750",
+    # Re-pinned for «Без критичности» (`UIP-FIX-07`): the summary row of the findings with no severity (cell A14 of «Сводка», not an enum cell) was
+    # «Без серьёзности». The new value was computed after the literal in `test_the_summary_counts_are_labelled_and_no_raw_value_survives_anywhere`
+    # was red against the old writer and the writer was changed; putting just that one text back reproduces ``52fb47bb...d750`` again.
+    # «Замечания» (sheet2) is unchanged.
+    "xl/worksheets/sheet1.xml": "d3e541285705502c76d5b72ff85f4b472ae0826f1f90af3b7570ecbe33265d36",
     "xl/worksheets/sheet2.xml": "d16af11611b7dfadd1415738b53ee47815713e2a4afd7171f78fcbe5ca0b9452",
 }
 

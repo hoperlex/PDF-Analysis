@@ -277,7 +277,7 @@ def _summary(source: WorkbookInput, cells: _Cells) -> bytes:
         rows.append(
             _row(len(rows) + 1, (SEVERITY_LABELS[severity], by_severity[severity]), 0, cells)
         )
-    rows.append(_row(len(rows) + 1, ("Без серьёзности", by_severity[None]), 0, cells))
+    rows.append(_row(len(rows) + 1, ("Без критичности", by_severity[None]), 0, cells))
     rows.append(_row(len(rows) + 1, ("Категория", "Количество"), 1, cells))
     by_category = Counter(finding.category for finding in source.findings)
     # Ordered by the contract value (the order before labels), shown as its label.

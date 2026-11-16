@@ -60,7 +60,9 @@ ONE_LIST_COLUMNS = (
 #: Re-pinned again for «Критичность» (`UIP-G-02`): «Сводка» cell A8 and «Замечания» cells F1 and G1 were «Серьёзность…» (the literal header lists above and
 #: ``test_xlsx_run_export`` read the new words, red against the old writer, before this value was computed); putting those three texts back
 #: reproduces ``c9dc7c59...9b81``.
-TEXT_ONLY_WORKBOOK_SHA256 = "1b61e9b5c82f6331467616e9b8e344b7168f17f8c28b764b7fd37939c57c6917"
+#: Re-pinned a third time for «Без критичности» (`UIP-FIX-07`): «Сводка» cell A14 was «Без серьёзности» (``test_xlsx_run_export`` and ``test_xlsx_writer_labels``
+#: read the new words, red against the old writer, before this value was computed); putting that one text back reproduces ``1b61e9b5...6917``.
+TEXT_ONLY_WORKBOOK_SHA256 = "6fd984da62aa8b333a81f72fd57cc00b8f15b636a8687eb35efc9949990f8a56"
 
 
 def _corpus(module: ModuleType) -> Any:
