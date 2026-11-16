@@ -240,6 +240,7 @@ BEGIN;
 SELECT set_config('statement_timeout', '120s', true);
 CREATE TEMP TABLE am_class (name text PRIMARY KEY, kind text NOT NULL, privs text NOT NULL, lock_only boolean NOT NULL) ON COMMIT DROP;
 INSERT INTO am_class (name, kind, privs, lock_only) VALUES
+  ('account_last_project', 'table', 'SELECT, INSERT, UPDATE, DELETE', false),
   ('account_release_mark', 'table', 'SELECT, INSERT, UPDATE, DELETE', false),
   ('alembic_version', 'table', 'SELECT', false),
   ('analysis_artifact_publication', 'table', 'SELECT, INSERT, UPDATE, DELETE', false),
@@ -486,6 +487,7 @@ CHECK_SQL="$(cat <<'AM_GRANTS_SQL'
 \set ON_ERROR_STOP on
 WITH
 cls (name, kind, privs, lock_only) AS (VALUES
+  ('account_last_project', 'table', 'SELECT, INSERT, UPDATE, DELETE', false),
   ('account_release_mark', 'table', 'SELECT, INSERT, UPDATE, DELETE', false),
   ('alembic_version', 'table', 'SELECT', false),
   ('analysis_artifact_publication', 'table', 'SELECT, INSERT, UPDATE, DELETE', false),

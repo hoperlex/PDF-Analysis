@@ -123,11 +123,16 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0066_run_deletion` (`RUN-DELETE-01`): the tombstone of a deleted run references `audit_run`, so it is PRODUCT: +1 PRODUCT, KEEP unchanged; `0067_precedents_wave5` adds two PRODUCT and two KEEP.
     assert "audit_run_deletion" in tool.PRODUCT_TABLES and "audit_run_deletion" not in tool.KEEP_TABLES
     assert "delete_audit_run" in tool.PRODUCT_COMMAND_TYPES and "delete_audit_run" not in tool.KEEP_COMMAND_TYPES
-    assert len(tool.PRODUCT_TABLES) == 98 and len(tool.KEEP_TABLES) == 69 and len(tool.MIXED_TABLES) == 3
+    # `0069_account_last_project` (`UIP-G-05`): the object an account chose last is the account's own preference, with no key to `project`: +1 KEEP (69 -> 70), PRODUCT unchanged.
+    assert "account_last_project" in tool.KEEP_ACCOUNT_TABLES and "account_last_project" not in tool.PRODUCT_TABLES
+    assert "set_last_project" in tool.PRODUCT_COMMAND_TYPES and "set_last_project" not in tool.KEEP_COMMAND_TYPES
+    assert len(tool.PRODUCT_TABLES) == 98 and len(tool.KEEP_TABLES) == 70 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
-    assert tool.KEEP_ACCOUNT_TABLES == {"app_user", "app_user_role", "registration_request", "account_release_mark"}
+    assert tool.KEEP_ACCOUNT_TABLES == {
+        "app_user", "app_user_role", "registration_request", "account_release_mark", "account_last_project",
+    }
 
 
 def test_every_event_type_and_command_type_the_source_writes_is_classified() -> None:

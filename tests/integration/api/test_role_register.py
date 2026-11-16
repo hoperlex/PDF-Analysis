@@ -471,6 +471,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "getProductVersion": ("GET", "/system/version"),
     "listReleases": ("GET", "/releases"),
     "markReleaseNotesRead": ("PUT", "/me/release-notes"),
+    # `UIP-G-05` (1.55.0): the account's own choice of an object (any complete account).
+    "setMyLastProject": ("PUT", "/me/last-project"),
     "changePassword": ("POST", "/auth/password"),
     "getMe": ("GET", "/me"),
     "updateMyProfile": ("PATCH", "/me"),
@@ -760,6 +762,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getProductVersion": _ANY,
     "listReleases": _ANY,
     "markReleaseNotesRead": _ANY,
+    "setMyLastProject": _ANY,
     "getMe": _ANY,
     "updateMyProfile": _ANY,
     "changePassword": _ANY,

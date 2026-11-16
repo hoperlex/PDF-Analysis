@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 300,
+    "path_count": 301,
     "operations": [
       [
         "DELETE",
@@ -1575,6 +1575,11 @@
       ],
       [
         "PUT",
+        "/me/last-project",
+        "setMyLastProject"
+      ],
+      [
+        "PUT",
         "/me/release-notes",
         "markReleaseNotesRead"
       ],
@@ -2291,6 +2296,7 @@
       "SetFindingExecutionStatusRequest",
       "SetGlobalVendorListRequest",
       "SetJobPriorityRequest",
+      "SetMyLastProjectRequest",
       "SetProjectVendorListRequest",
       "SetStageModelLayoutEnabledRequest",
       "SetStagePairCompletenessRequest",
@@ -2476,6 +2482,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0068_reviewable_findings",
+  "migration_head": "0069_account_last_project",
   "contract_version": "1.55.0"
 }

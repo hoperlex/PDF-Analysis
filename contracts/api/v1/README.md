@@ -23,8 +23,18 @@ CSV/XLSX accept optional human `verdict` selection (`active`, `all`, `unreviewed
 `accepted`, `rejected`; omitted means `all`). CSV appends grounding/limitation
 columns, including the count of unverified group members, when the result includes unverified rows; no invented page or quotation.
 `Finding.block_evidence` carries the group’s verified graphical members even when its canonical observation is text; its former per-observation limit of 64 is lifted for this union.
-The API has 300 paths, 329 operations and 820 schemas; migration head `0068`.
+The API has 301 paths, 330 operations and 821 schemas; migration head `0069`.
 The domain catalogs remain at candidate revision 71; their shared version advances.
+
+Additive change under this version (`UIP-G-05`, programme `UI-PARITY-R3`, owner ruling Г7-B; the version number is raised by the
+integrator once for the stage): **one operation, one schema and one optional property; nothing is removed or made required.**
+`setMyLastProject` (`PUT /me/last-project`, `Idempotency-Key` required, any complete account, roles or none) takes
+`SetMyLastProjectRequest` (`{project_uid}`) and answers `204`; an unknown project is `404 not_found`, a reused key with another
+project is `409 idempotency_key_reuse`, a malformed body or identity is `422 validation_failed`. `Account` gains the optional,
+nullable `last_project_uid`: the object the account chose last, `null` when it chose none or its object is gone. It is present on
+`getMe` and `updateMyProfile` and absent from an administrator's reads of an account. The all-objects view is not stored. Storage
+is migration `0069_account_last_project` (`account_last_project`, one row per account, `ON DELETE CASCADE` from the account; it holds
+the project as a bare identity with no foreign key, and `getMe` answers it only while the project exists). The client reads the choice from `getMe` and a link with `?project=` overrides it.
 
 Publication correction (`ANALYSIS-REPAIR-CONFORMANCE-01`): CSV declares the existing
 validation envelope; the optional memory limitation uses the same nullable-string

@@ -259,6 +259,12 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
     AccountReference(
         "account_release_mark", "user_uid", "CASCADE", "the account's own release read mark"
     ),
+    AccountReference(
+        "account_last_project",
+        "user_uid",
+        "CASCADE",
+        "the object the account chose last (UIP-G-05, migration 0069; its own row, no key to the project)",
+    ),
 )
 
 

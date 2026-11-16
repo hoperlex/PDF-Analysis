@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
- *   sha256 a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e
+ *   sha256 4599c616e729aa4963cdf9828201ef10efc1f2b3e30fa19626a184a58ce64665
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.55.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e';
+export const CONTRACT_DIGEST = '4599c616e729aa4963cdf9828201ef10efc1f2b3e30fa19626a184a58ce64665';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -662,6 +662,7 @@ export const SCHEMA_NAMES = [
   'SetFindingExecutionStatusRequest',
   'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
+  'SetMyLastProjectRequest',
   'SetProjectVendorListRequest',
   'SetStageModelLayoutEnabledRequest',
   'SetStagePairCompletenessRequest',
@@ -901,6 +902,8 @@ export type Account = {
   is_default_credential: boolean;
   /** Null until somebody gives the names. */
   last_name: string | null;
+  /** The object the account chose last through `setMyLastProject`, kept on the server; null when it has chosen none or its object is gone (the all-objects view is not stored). Optional: present on `getMe` and `updateMyProfile`, which read the signed-in account, and absent from an administrator's reads of an account. */
+  last_project_uid?: ProjectUid | null;
   /** The instant of the account's latest successful sign-in, read from the access journal; null when none is recorded (the account never signed in, or signed in before the journal began). Present on every Account answer, including `getMe`. */
   last_sign_in_at: string | null;
   /** The sign-in identifier: the normalised e-mail address (trimmed, lower-case, ASCII, an internationalised domain in its `xn--` form, at most 254 characters) once the profile is complete, or the legacy login an account created before the identity upgrade keeps until it completes its profile. Not an identity of this surface. */
@@ -8069,6 +8072,11 @@ export type SetGlobalVendorListRequest = {
 
 export type SetJobPriorityRequest = {
   priority: number;
+};
+
+/** The object the signed-in account chose (contract 1.55.0, `UIP-G-05`). The all-objects view is not sent: a client that shows all objects does not call `setMyLastProject`. */
+export type SetMyLastProjectRequest = {
+  project_uid: ProjectUid;
 };
 
 /**

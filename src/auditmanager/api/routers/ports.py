@@ -1121,6 +1121,11 @@ class AccountPort(Protocol):
         """The access journal, newest first, one page (contract 1.36.0, `UI-A-94`). The cursor is the last event's
         identity and nothing else; an administrator's read, decided by the seam."""
 
+    def set_last_project(self, *, user_uid: str, project_uid: str, idempotency_key: str) -> None:
+        """``setMyLastProject`` (contract 1.55.0, `UIP-G-05`): remember the object the account chose. ``user_uid`` is the
+        verified subject's, never a body's. Keyed: an exact repeat changes nothing, another project under the same key is
+        ``idempotency_key_reuse``; an unknown project is ``not_found`` (``Project``). ``getMe`` reads the choice back."""
+
 
 @runtime_checkable
 class RegistrationPort(Protocol):

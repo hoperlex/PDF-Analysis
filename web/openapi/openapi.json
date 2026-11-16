@@ -3585,6 +3585,65 @@
         }
       }
     },
+    "/me/last-project": {
+      "put": {
+        "operationId": "setMyLastProject",
+        "tags": [
+          "account"
+        ],
+        "summary": "Remember the object the signed-in account chose.",
+        "description": "`UIP-G-05` (contract 1.55.0, owner ruling Г7-B): the signed-in account's own choice of an object, kept on the server so that the screens that show all objects or one open on the object it chose last. Any complete account, roles or none; the credential names the account and the body cannot name another. `getMe` answers the choice as `last_project_uid`. An unknown project is `404 not_found`. `Idempotency-Key` is required: an identical repeat changes nothing, and a reused key with another project is `409 idempotency_key_reuse`. Choosing the object already chosen is a no-op. The all-objects view is not stored: there is no body for it, and a client that shows all objects simply does not call this. A link with `?project=` overrides the stored choice on the client.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMyLastProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "The object was remembered for this account, or the recorded outcome of an identical earlier request was replayed.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
     "/execution/queue": {
       "get": {
         "tags": [
@@ -31114,6 +31173,17 @@
                 "type": "null"
               }
             ]
+          },
+          "last_project_uid": {
+            "description": "The object the account chose last through `setMyLastProject`, kept on the server; null when it has chosen none or its object is gone (the all-objects view is not stored). Optional: present on `getMe` and `updateMyProfile`, which read the signed-in account, and absent from an administrator's reads of an account.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ProjectUid"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -31597,6 +31667,19 @@
         "properties": {
           "read_through": {
             "type": "string"
+          }
+        }
+      },
+      "SetMyLastProjectRequest": {
+        "type": "object",
+        "description": "The object the signed-in account chose (contract 1.55.0, `UIP-G-05`). The all-objects view is not sent: a client that shows all objects does not call `setMyLastProject`.",
+        "additionalProperties": false,
+        "required": [
+          "project_uid"
+        ],
+        "properties": {
+          "project_uid": {
+            "$ref": "#/components/schemas/ProjectUid"
           }
         }
       },
