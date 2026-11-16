@@ -1143,7 +1143,7 @@ class AccountPort(Protocol):
         identity and nothing else; an administrator's read, decided by the seam."""
 
     def set_last_project(self, *, user_uid: str, project_uid: str, idempotency_key: str) -> None:
-        """``setMyLastProject`` (contract 1.55.0, `UIP-G-05`): remember the object the account chose. ``user_uid`` is the
+        """``setMyLastProject`` (contract 1.56.0, `UIP-G-05`): remember the object the account chose. ``user_uid`` is the
         verified subject's, never a body's. Keyed: an exact repeat changes nothing, another project under the same key is
         ``idempotency_key_reuse``; an unknown project is ``not_found`` (``Project``). ``getMe`` reads the choice back."""
 

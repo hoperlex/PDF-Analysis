@@ -101,7 +101,7 @@ REQUIRED_OPERATIONS = {
     "getProductVersion",
     "listReleases",
     "markReleaseNotesRead",
-    # `UIP-G-05` (1.55.0, owner ruling Г7-B). The object the signed-in account chose last, remembered on the server; `getMe` reads it back.
+    # `UIP-G-05` (1.56.0, owner ruling Г7-B). The object the signed-in account chose last, remembered on the server; `getMe` reads it back.
     "setMyLastProject",
     "listExecutionQueue",
     "listExecutionJournal",
@@ -119,7 +119,7 @@ REQUIRED_OPERATIONS = {
     # `UI-PARITY-P0H`, `R-151e`. Free tags on a document and the project's catalogue.
     "setDocumentTags",
     "listDocumentTags",
-    # `UIP-G-10` (1.55.0, owner ruling Г11). The one optional group of a document, set, changed or cleared.
+    # `UIP-G-10` (1.56.0, owner ruling Г11). The one optional group of a document, set, changed or cleared.
     "setDocumentGroup",
     # `UI-PARITY-P0I`, `R-151g`. The designer's execution status of an accepted finding.
     "setFindingExecutionStatus",
@@ -487,13 +487,13 @@ WRITE_OPERATIONS = {
     "reviewDecisionPattern",
     # `UI-A-93` (1.36.0): ending an account's sessions is keyed, so an exact repeat ends nothing more.
     "endUserSessions",
-    # `UIP-G-05` (1.55.0): remembering the object an account chose is keyed, so an exact repeat changes nothing.
+    # `UIP-G-05` (1.56.0): remembering the object an account chose is keyed, so an exact repeat changes nothing.
     "setMyLastProject",
     # `UI-PARITY-P0G`. Keyed like `setExecutionPaused`: a replay answers the same state and writes no second event.
     "setDocumentArchived",
     "renameDocument",
     "setDocumentTags",
-    # `UIP-G-10` (1.55.0): setting a document's group is keyed like its tags.
+    # `UIP-G-10` (1.56.0): setting a document's group is keyed like its tags.
     "setDocumentGroup",
     "setFindingExecutionStatus",
     "setWorkScheduleSettings",

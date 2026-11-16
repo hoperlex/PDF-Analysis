@@ -38,7 +38,7 @@ class AccountView:
     archived_at: datetime | None
     #: Contract 1.36.0: the latest successful sign-in recorded in the access journal, ``None`` when there is none.
     last_sign_in_at: datetime | None
-    #: Contract 1.55.0 (`UIP-G-05`): the object the account chose last, ``None`` when it has chosen none. Read for the
+    #: Contract 1.56.0 (`UIP-G-05`): the object the account chose last, ``None`` when it has chosen none. Read for the
     #: account's own answers only (:func:`own_account_body`); an administrator's reads of another account never carry it.
     last_project_uid: str | None = None
 

@@ -4203,7 +4203,7 @@ class AccountAdapter(_SessionHolder):
         return self._write(work)
 
     def set_last_project(self, *, user_uid: str, project_uid: str, idempotency_key: str) -> None:
-        """``setMyLastProject`` (contract 1.55.0, `UIP-G-05`): the key is claimed in the transaction of the write.
+        """``setMyLastProject`` (contract 1.56.0, `UIP-G-05`): the key is claimed in the transaction of the write.
 
         An exact repeat of the key (same account, same project) changes nothing; the same key for another account or
         another project is ``idempotency_key_reuse``. An unknown project is ``not_found``, raised by ``auditmanager.access``
@@ -4314,7 +4314,7 @@ APPROVE_REGISTRATION_COMMAND = "approve_registration"
 #: ``scripts/recovery/product_purge.py`` keeps it with the access journal.
 END_USER_SESSIONS_COMMAND = "end_user_sessions"
 
-#: Contract 1.55.0 (`UIP-G-05`). The command type ``setMyLastProject`` claims its idempotency key under. Its outcome names the
+#: Contract 1.56.0 (`UIP-G-05`). The command type ``setMyLastProject`` claims its idempotency key under. Its outcome names the
 #: project, so ``scripts/recovery/product_purge.py`` classifies it as a product command (the choice goes with the project).
 SET_LAST_PROJECT_COMMAND = "set_last_project"
 

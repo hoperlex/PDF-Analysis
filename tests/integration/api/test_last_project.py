@@ -1,4 +1,4 @@
-"""`UIP-G-05` (contract 1.55.0, owner ruling Г7-B) -- the object an account chose last, kept on the server.
+"""`UIP-G-05` (contract 1.56.0, owner ruling Г7-B) -- the object an account chose last, kept on the server.
 
 ``setMyLastProject`` (``PUT /me/last-project``) writes the signed-in account's choice; ``getMe`` and
 ``updateMyProfile`` read it back as ``last_project_uid``. What is asserted here is what the **served**

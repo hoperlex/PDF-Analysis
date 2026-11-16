@@ -313,14 +313,14 @@ KEEP_COMMAND_TYPES = frozenset((
     "review_decision_pattern",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
-    # Contract 1.55.0 (`UIP-G-05`): the receipt of an account's choice of an object. Its outcome names the project, so the project erase counts it
+    # Contract 1.56.0 (`UIP-G-05`): the receipt of an account's choice of an object. Its outcome names the project, so the project erase counts it
     # as the project's receipt (and deletes it with the project) and a purge of product data deletes it; the choice itself is KEEP and the next
     # choice writes it again.
     "set_last_project",
     # `UI-PARITY-P0G`..`P0L`, `P0P`: a document archived, renamed or tagged, an execution status, decisions imported from
     # a run's workbook, and assignments placed on days are about the project's documents, findings and assignments.
     "import_run_decisions", "rename_document", "schedule_assignments", "set_document_archived", "set_document_tags",
-    # `UIP-G-10` (contract 1.55.0): a document's group is about the project's documents, a product command like `set_document_tags`.
+    # `UIP-G-10` (contract 1.56.0): a document's group is about the project's documents, a product command like `set_document_tags`.
     "set_document_group",
     "set_finding_execution_status",
     "start_stage_review_ai", "resume_stage_review_ai", "cancel_stage_review_ai", "apply_stage_link_repair",
