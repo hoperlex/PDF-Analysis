@@ -1561,10 +1561,17 @@ input[type='file']::file-selector-button:hover {
   margin-bottom: var(--am-gap-md);
 }
 
-/* The heading takes the line when the actions do not fit beside it, instead of being squeezed to a word a line. */
+/*
+ * The heading takes the line when the actions do not fit beside it, instead of being squeezed to a word a line.
+ * The floor is `min-width`, not `flex-basis`: a basis is a length along the MAIN axis, so `1 1 18rem` made the heading
+ * 288px TALL wherever a screen stacks its header in a column (the «Диспетчер» hero). `0%` is nothing in a row, where the
+ * floor decides where the line breaks, and sizes by content in a column of auto height. `min(18rem, 100%)` keeps the
+ * floor a length, never the content's width, so a long word still breaks (`.am-page__title`) and a header narrower than
+ * 18rem is not overrun.
+ */
 .am-page__header > :first-child {
-  flex: 1 1 18rem;
-  min-width: 0;
+  flex: 1 1 0%;
+  min-width: min(18rem, 100%);
 }
 
 .am-page__title {
