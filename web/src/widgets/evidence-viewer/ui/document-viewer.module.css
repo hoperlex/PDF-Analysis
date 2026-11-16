@@ -50,7 +50,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: var(--am-strip-height);
+  min-width: var(--am-strip-height-compact);
   height: var(--am-gap-xl);
   margin: 0;
   padding: 0 var(--am-gap-xs);
