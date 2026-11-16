@@ -549,15 +549,6 @@
 }
 
 /*
- * The control carries no pressed state any more (its name says what the press does, not where it stands), so this rule matches
- * nothing. It stays only because `contrast-pending.ts` records it by name (`PENDING_UNREACHED`); delete both together.
- */
-.end :global(.am-theme__option[aria-pressed='true']) {
-  background: var(--am-accent-light);
-  color: var(--am-accent-strong);
-}
-
-/*
  * The stand's label: a 28 px pill whose capitals sit on its middle. A `min-height` with the text at the top of the box left them
  * three pixels high; the box is now exactly that tall and its one line, trimmed to the capitals, is centred in it.
  */
