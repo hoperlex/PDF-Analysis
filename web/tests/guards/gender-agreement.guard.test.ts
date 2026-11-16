@@ -149,7 +149,7 @@ describe('the rule can tell agreement from disagreement, and says which it canno
 
   it('calls the repaired sentence agreement, and the other two nouns too', () => {
     expect(disagreements('Такой версии не существует.')).toEqual([]);
-    expect(disagreements('Такого проекта не существует.')).toEqual([]);
+    expect(disagreements('Такого объекта не существует.')).toEqual([]);
     expect(disagreements('Такого документа не существует.')).toEqual([]);
     expect(disagreements('На сервере нет этой версии, поэтому перечислять здесь нечего.'))
       .toEqual([]);
@@ -165,7 +165,7 @@ describe('the rule can tell agreement from disagreement, and says which it canno
     // And the known exception really is excluded rather than silently misread.
     expect(genderOf('времени')).toBe('unclassified');
     expect(genderOf('версии')).toBe('feminine');
-    expect(genderOf('проекта')).toBe('masculine-or-neuter');
+    expect(genderOf('объекта')).toBe('masculine-or-neuter');
   });
 });
 
@@ -281,7 +281,7 @@ function envelope(code: ErrorCode): ApiError {
 function listingSentences(): readonly { readonly where: string; readonly text: string }[] {
   const out: { where: string; text: string }[] = [];
   const collections: Record<string, string> = {
-    project: 'документы этого проекта',
+    project: 'документы этого объекта',
     document: 'версии этого документа',
     version: 'прогоны этой версии',
   };

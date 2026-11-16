@@ -83,8 +83,8 @@ const ORDER: readonly ContextLevel[] = ['document', 'version', 'run', 'review'];
 export function contextSteps(facts: ContextFacts, current: ContextLevel): readonly ContextStep[] {
   const depth = ORDER.indexOf(current);
   const steps: ContextStep[] = [
-    { key: 'projects', label: 'Проекты', href: routes.projects() },
-    { key: 'project', label: facts.projectName ?? 'Проект', href: routes.project(facts.projectUid) },
+    { key: 'projects', label: 'Объекты', href: routes.projects() },
+    { key: 'project', label: facts.projectName ?? 'Объект', href: routes.project(facts.projectUid) },
   ];
   if (current === 'section') {
     steps.push({ key: 'section', label: facts.sectionLabel ?? 'Раздел', href: null });

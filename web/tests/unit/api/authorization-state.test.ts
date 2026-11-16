@@ -124,14 +124,14 @@ describe('creating a project', () => {
   it('reports a 401 as not authenticated', () => {
     const failure = classifyCreateProjectFailure(unauthenticated());
     expect(failure.kind).toBe('not_authenticated');
-    expect(failure.title).toBe('Создание проекта не авторизовано.');
+    expect(failure.title).toBe('Создание объекта не авторизовано.');
     expect(failure.retryable).toBe(false);
   });
 
   it('reports a 403 as not permitted', () => {
     const failure = classifyCreateProjectFailure(forbidden());
     expect(failure.kind).toBe('not_permitted');
-    expect(failure.title).toBe('Вам не разрешено создавать проект.');
+    expect(failure.title).toBe('Вам не разрешено создавать объект.');
   });
 });
 
@@ -139,7 +139,7 @@ describe('reading the project list', () => {
   it('reports a 401 as not authenticated', () => {
     const failure = classifyProjectListFailure(unauthenticated());
     expect(failure.kind).toBe('not_authenticated');
-    expect(failure.title).toBe('Чтение списка проектов не авторизовано.');
+    expect(failure.title).toBe('Чтение списка объектов не авторизовано.');
     expect(failure.retryable).toBe(false);
   });
 
@@ -159,7 +159,7 @@ describe('uploading a document', () => {
   it('reports a 403 as not permitted', () => {
     const failure = classifyUploadFailure(forbidden());
     expect(failure.kind).toBe('not_permitted');
-    expect(failure.title).toBe('Вам не разрешено загружать в этот проект.');
+    expect(failure.title).toBe('Вам не разрешено загружать в этот объект.');
   });
 });
 

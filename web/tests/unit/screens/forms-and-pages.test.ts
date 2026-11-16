@@ -123,9 +123,9 @@ describe('the start-run control', () => {
 describe('/projects', () => {
   it('composes the create form and the list under one frame', () => {
     const markup = renderScreen(newClient(), createElement(ProjectsPage, {}));
-    expect(markup).toContain('>Проекты</h1>');
+    expect(markup).toContain('>Объекты</h1>');
     expect(markup).toContain('id="new-project-name"');
-    expect(markup).toContain('Все проекты');
+    expect(markup).toContain('Все объекты');
   });
 });
 
@@ -135,7 +135,7 @@ describe('/projects/{project_uid}', () => {
 
   it('refuses a malformed address without asking the server about it', () => {
     const markup = detail('not-a-project-address');
-    expect(markup).toContain('Это не адрес проекта.');
+    expect(markup).toContain('Это не адрес объекта.');
     expect(markup).toContain('Запроса не было.');
     // A malformed address must not reach the upload screen.
     expect(markup).not.toContain('Что принимается');
@@ -144,7 +144,7 @@ describe('/projects/{project_uid}', () => {
   it.each(['proj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', 'prj_lowercase', 'prj_', ''])(
     'refuses %s',
     (bad) => {
-      expect(detail(bad)).toContain('Это не адрес проекта.');
+      expect(detail(bad)).toContain('Это не адрес объекта.');
     },
   );
 
@@ -156,14 +156,14 @@ describe('/projects/{project_uid}', () => {
       project_uid: PROJECT_UID, name: 'Мост через Неву', created_at: '2026-09-10T08:00:00Z',
     });
     expect(renderScreen(client, createElement(ProjectDetailPage, { projectUid: PROJECT_UID }))).toContain('>Мост через Неву</h1>');
-    expect(detail(PROJECT_UID)).toContain('>Проект</h1>');
+    expect(detail(PROJECT_UID)).toContain('>Объект</h1>');
   });
 
   it('shows the upload screen for a well-shaped address', () => {
     const markup = detail(PROJECT_UID);
     expect(markup).toContain('Что принимается');
     expect(markup).toContain(PROJECT_UID);
-    expect(markup).not.toContain('Это не адрес проекта.');
+    expect(markup).not.toContain('Это не адрес объекта.');
   });
 });
 

@@ -52,7 +52,7 @@ export function acceptedSectionTitle(code: string | undefined): string | null {
 const COLUMNS: readonly TableColumn<AcceptedOptimisationProposal>[] = [
   {
     key: 'place',
-    header: 'Проект и комплект',
+    header: 'Объект и комплект',
     cell: (row) => (
       <>
         <Link href={routes.documentOptimisation(row.project_uid, row.document_uid, row.optimisation_pass_id)}>
@@ -178,8 +178,8 @@ export function SectionAcceptedOptimisations({ sectionCode, projectUid }: Sectio
   return (
     <section className={styles.section} aria-label="Принятые оптимизации раздела" data-section-accepted="">
       <p className={styles.rule}>
-        Предложения оптимизации, по которым действующее решение — «принято», по проектам выбранного раздела, сначала недавние.
-        Раздел и проект только отбирают записи; каждая строка остаётся предложением своего проекта и прохода, и по ссылке открывается
+        Предложения оптимизации, по которым действующее решение — «принято», по объектам выбранного раздела, сначала недавние.
+        Раздел и объект только отбирают записи; каждая строка остаётся предложением своего объекта и прохода, и по ссылке открывается
         вкладка «Оптимизация» его комплекта.
       </p>
       {accepted.isPending ? <LoadingState what="принятых оптимизаций" /> : null}

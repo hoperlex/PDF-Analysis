@@ -160,7 +160,7 @@ describe('the project screen', () => {
     const client = newClient();
     client.setQueryData(key, page(ITEMS));
     const screen = renderScreen(client, createElement(ProjectDetailPage, { projectUid: PROJECT_UID }));
-    expect(screen).toContain('<h2>Разделы проекта</h2>');
+    expect(screen).toContain('<h2>Разделы объекта</h2>');
     expect(screen).toContain('data-project-structure=""');
     expect(screen).toContain('id="upload-file"');
     expect(screen.indexOf('data-project-structure')).toBeLessThan(screen.indexOf('id="upload-file"'));
@@ -183,7 +183,7 @@ describe('the project screen', () => {
     const client = newClient();
     client.setQueryData(key, page([]));
     const markup = renderWith(client, createElement(ProjectSections, { projectUid: PROJECT_UID }));
-    expect(markup).toContain('В этом проекте пока нет документов.');
+    expect(markup).toContain('В этом объекте пока нет документов.');
     expect(markup).not.toContain('data-section-group=');
   });
 

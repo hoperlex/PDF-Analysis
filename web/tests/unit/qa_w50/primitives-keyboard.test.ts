@@ -278,7 +278,7 @@ describe('Disclosure, server-rendered: a real button, closed, controlling a hidd
     createElement(Disclosure, {
       label: 'Работа',
       links: [
-        { href: '/projects', label: 'Проекты' },
+        { href: '/projects', label: 'Объекты' },
         { href: '/dashboard', label: 'Дашборд' },
       ],
     }),

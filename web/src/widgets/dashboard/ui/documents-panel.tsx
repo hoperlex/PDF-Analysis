@@ -21,8 +21,8 @@ export function DocumentsPanel({ rows }: DocumentsPanelProps) {
   if (rows.length === 0) {
     return (
       <EmptyState
-        title="Проектов пока нет."
-        detail="Как только появится первый проект, здесь будут его документы."
+        title="Объектов пока нет."
+        detail="Как только появится первый объект, здесь будут его документы."
       />
     );
   }
@@ -33,7 +33,7 @@ export function DocumentsPanel({ rows }: DocumentsPanelProps) {
     <div data-panel="documents-per-project">
       <p>
         Документов: <strong>{total}</strong> на {rows.length}{' '}
-        {rows.length === 1 ? 'проекте' : 'проектах'}.
+        {rows.length === 1 ? 'объекте' : 'объектах'}.
       </p>
       <ul className="am-rows">
         {rows.map((row) => (

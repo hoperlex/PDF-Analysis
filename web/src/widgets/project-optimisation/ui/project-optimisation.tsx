@@ -27,7 +27,7 @@ export function ProjectOptimisation({ projectUid, roles }: ProjectOptimisationPr
   return (
     <div data-project-optimisation={projectUid}>
       <section className="am-section">
-        <h2>Прайс-листы проекта</h2>
+        <h2>Прайс-листы объекта</h2>
         <p className="am-note">
           Цены для оптимизации берутся только из загруженного прайс-листа: каждая загрузка —
           новая редакция, последняя действует, прежние остаются доступными.
@@ -40,7 +40,7 @@ export function ProjectOptimisation({ projectUid, roles }: ProjectOptimisationPr
       <section className="am-section">
         <h2>Вендор-листы по разделам</h2>
         <p className="am-note">
-          Для каждого раздела действует список проекта, если эксперт его задал, иначе общий
+          Для каждого раздела действует список объекта, если эксперт его задал, иначе общий
           список администратора.
         </p>
         <VendorListsPanel projectUid={projectUid} roles={roles} />

@@ -16,7 +16,7 @@ export const COMPARE_TAB_LABELS: Readonly<Record<CompareTab, string>> = {
 };
 
 export const COMPARE_TAB_HINTS: Readonly<Record<CompareTab, string>> = {
-  projects: 'Все комплекты проекта и этапы их проверки одной таблицей.',
+  projects: 'Все комплекты объекта и этапы их проверки одной таблицей.',
   sheets: 'Матрица листов открытого комплекта: какой лист какой версии соответствует какому.',
 };
 

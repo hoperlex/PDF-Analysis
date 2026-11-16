@@ -126,7 +126,7 @@ describe('navigation glyph coverage', () => {
     const navigation = buildNavigation(ADMIN_AND_EXPERT);
     // `R-153h`: the first item of «Работа» is «Проект» or «Проекты», by the project the address names; both are drawn.
     const entry = [navigation.projectEntry?.project, navigation.projectEntry?.list].filter((label): label is string => label !== null && label !== undefined);
-    expect(entry).toEqual(['Проект', 'Проекты']);
+    expect(entry).toEqual(['Объект', 'Объекты']);
     const labels = [...navigation.groups.flatMap((group) => group.items.map((item) => item.label)), ...entry];
     // `R-151m` took «Блоки» out of the menu; its glyph draws no menu row any more. It is named here so that it is the
     // only one: every other glyph is a menu row or the project entry, and every one of those has its glyph.
@@ -141,11 +141,11 @@ describe('navigation glyph coverage', () => {
     expect(renderToStaticMarkup(createElement(NavigationGlyph, { label: 'Новый раздел' }))).toContain('data-nav-glyph="fallback"');
   });
 
-  it('R-153h: «Проект» and «Проекты» are told apart by their drawings', () => {
+  it('R-153h: «Объект» and «Объекты» are told apart by their drawings', () => {
     const drawing = (label: string): string => renderToStaticMarkup(createElement(NavigationGlyph, { label }));
-    expect(drawing('Проект')).toContain('data-nav-glyph="project"');
-    expect(drawing('Проекты')).toContain('data-nav-glyph="projects"');
-    expect(drawing('Проект')).not.toEqual(drawing('Проекты'));
+    expect(drawing('Объект')).toContain('data-nav-glyph="project"');
+    expect(drawing('Объекты')).toContain('data-nav-glyph="projects"');
+    expect(drawing('Объект')).not.toEqual(drawing('Объекты'));
   });
 });
 
@@ -162,7 +162,7 @@ describe('the project is carried by the frame\'s own links (R-150c)', () => {
         items: [
           { address: '/dashboard', label: 'Дашборд' },
           { address: '/queue', label: 'Очередь' },
-          { address: `/projects/${OTHER}`, label: 'Другой проект' },
+          { address: `/projects/${OTHER}`, label: 'Другой объект' },
           { address: '/dashboard?view=compact', label: 'Компактный дашборд' },
         ],
       },
@@ -273,7 +273,7 @@ describe('a group with no row the session may open is absent', () => {
 
   it('refuses a menu row that is a template rather than an address', () => {
     const template: readonly ScreenEntry[] = [
-      { address: '/projects/[project_uid]', label: 'Проект', group: 'work', access: 'session', roles: 'any', inMenu: true },
+      { address: '/projects/[project_uid]', label: 'Объект', group: 'work', access: 'session', roles: 'any', inMenu: true },
     ];
     expect(() => buildNavigation(EXPERT, template)).toThrow(MenuAddressError);
   });

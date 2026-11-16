@@ -47,7 +47,7 @@ function DocumentChoice({
     <label className="am-form__field">
       Документ (необязательно)
       <select value={value} onChange={(event) => onChange(event.target.value)} disabled={!documents.isSuccess}>
-        <option value="">Весь проект</option>
+        <option value="">Весь объект</option>
         {items.map((document) => (
           <option key={document.document_uid} value={document.document_uid}>
             {document.display_title ?? document.document_uid}
@@ -90,7 +90,7 @@ export function CreateAssignmentForm({ experts, defaultProjectUid = null }: Crea
       }}
     >
       <label className="am-form__field">
-        Проект
+        Объект
         <select
           value={projectUid}
           required
@@ -99,7 +99,7 @@ export function CreateAssignmentForm({ experts, defaultProjectUid = null }: Crea
             setDocumentUid('');
           }}
         >
-          <option value="">Выберите проект</option>
+          <option value="">Выберите объект</option>
           {projectItems.map((project) => (
             <option key={project.project_uid} value={project.project_uid}>
               {project.name}
@@ -131,7 +131,7 @@ export function CreateAssignmentForm({ experts, defaultProjectUid = null }: Crea
         </button>
         {projectUid === '' || assignee === '' ? (
           <span className="am-form__hint" data-create-assignment-hint="">
-            {projectUid === '' ? 'Выберите проект' : 'Выберите эксперта'}, чтобы назначить работу.
+            {projectUid === '' ? 'Выберите объект' : 'Выберите эксперта'}, чтобы назначить работу.
           </span>
         ) : null}
       </div>

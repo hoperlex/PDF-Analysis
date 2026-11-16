@@ -50,8 +50,8 @@ export function RunActivityPanel({ activity, hasProjects }: RunActivityPanelProp
   if (!hasProjects) {
     return (
       <EmptyState
-        title="Проектов пока нет."
-        detail="Прогонов показывать нечего, пока не появится хотя бы один проект."
+        title="Объектов пока нет."
+        detail="Прогонов показывать нечего, пока не появится хотя бы один объект."
       />
     );
   }
@@ -71,7 +71,7 @@ export function RunActivityPanel({ activity, hasProjects }: RunActivityPanelProp
     return (
       <EmptyState
         title="Прогонов пока нет."
-        detail="Среди проектов системы ни один прогон ещё не запускался."
+        detail="Среди объектов системы ни один прогон ещё не запускался."
       />
     );
   }

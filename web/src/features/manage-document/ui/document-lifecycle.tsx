@@ -41,7 +41,7 @@ export function DocumentLifecycleView({
     <div className={styles.lifecycle} data-document-lifecycle={archived ? 'archived' : 'in-use'}>
       {archived ? (
         <p className={styles.archived} role="status">
-          Документ в архиве: его нет в списках проекта. Версии, прогоны и решения сохранены.
+          Документ в архиве: его нет в списках объекта. Версии, прогоны и решения сохранены.
         </p>
       ) : null}
       {draft === null ? (

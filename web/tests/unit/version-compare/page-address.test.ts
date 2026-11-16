@@ -43,7 +43,7 @@ describe('«Сравнение версий» and its address', () => {
   it('says so, and shows the table, when the set of the address is not in the project', () => {
     const markup = at(`set=${uid('doc', 77)}&tab=sheets`);
     expect(markup).toContain('data-compare-unknown-set');
-    expect(markup).toContain('Комплект из адреса не найден в этом проекте.');
+    expect(markup).toContain('Комплект из адреса не найден в этом объекте.');
     expect(markup).toContain('data-comparison-overview');
   });
 

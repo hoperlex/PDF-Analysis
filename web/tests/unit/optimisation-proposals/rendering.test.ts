@@ -39,7 +39,7 @@ describe('the sets', () => {
 
   it('says where a section is confirmed when there is none, and that the list is partial', () => {
     const markup = rendered('proposals-no-classified-sets');
-    expect(markup).toContain('В проекте нет комплектов с подтверждённым разделом');
+    expect(markup).toContain('В объекте нет комплектов с подтверждённым разделом');
     expect(markup).toContain('Подтвердите раздел на экране версии');
     expect(markup).not.toContain('раздела АР');
     expect(rendered('proposals-set-chooser')).toContain('Предложены комплекты первой страницы');
@@ -115,7 +115,7 @@ describe('the other states', () => {
 
   it('says every refused read in Russian with its correlation id', () => {
     for (const [name, sentence] of [
-      ['proposals-documents-refused', 'Документы проекта не прочитаны'],
+      ['proposals-documents-refused', 'Документы объекта не прочитаны'],
       ['proposals-passes-refused', 'Проходы не прочитаны'],
       ['proposals-pass-refused', 'Предложения не прочитаны'],
       ['proposals-history-refused', 'История решений не прочитана'],
@@ -204,7 +204,7 @@ describe('the retired /optimisation address', () => {
     expect(OPTIMISATION_MOVED_TO).toBe('/projects');
     const markup = renderScreen(newClient(), createElement(OptimisationPage));
     expect(markup).toContain('href="/projects"');
-    expect(markup).toContain('вкладке проекта');
+    expect(markup).toContain('вкладке объекта');
     expect(markup).not.toMatch(/пока недоступен|ещё не готов/);
   });
 });

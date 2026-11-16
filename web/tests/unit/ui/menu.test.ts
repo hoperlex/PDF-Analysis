@@ -321,8 +321,8 @@ describe('D-363: a link item can say it is the choice made', () => {
   const CHOICES: readonly [MenuItem, ...MenuItem[]] = [
     { kind: 'link', label: 'Мост через Неву', href: '/a', current: false },
     { kind: 'link', label: 'Школа №7', href: '/b', current: true },
-    { kind: 'link', label: 'Все проекты', href: '/c', current: false },
-    { kind: 'link', label: 'Новый проект', href: '/n' },
+    { kind: 'link', label: 'Все объекты', href: '/c', current: false },
+    { kind: 'link', label: 'Новый объект', href: '/n' },
     { kind: 'action', label: 'Повторить загрузку' },
   ];
   const draw = (items: readonly [MenuItem, ...MenuItem[]]): string =>

@@ -24,7 +24,7 @@ import { descendants, parseMarkup } from '../styles/contrast';
 import type { Element } from '../styles/contrast';
 
 const LINKS: readonly DisclosureLink[] = [
-  { href: '/projects', label: 'Проекты', current: true },
+  { href: '/projects', label: 'Объекты', current: true },
   { href: '/dashboard', label: 'Дашборд' },
   { href: '/section-optimisation', label: 'Оптимизация разделов' },
 ];

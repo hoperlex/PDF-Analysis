@@ -112,7 +112,7 @@ const AI_QUEUE_PHASES = {
 /** «идёт «шифр» · далее: «шифр» → «шифр»» (`aiQueueText`, `:949-957`); a set of another project is named «другой проект». */
 export function aiQueueName(item: ComparisonAiQueueItem, sets: readonly ComparisonOverviewSet[]): string {
   const set = sets.find((entry) => entry.document_uid === item.document_uid);
-  return set === undefined ? '«комплект другого проекта»' : `«${codeOf(set) === '' ? 'комплект без шифра' : codeOf(set)}»`;
+  return set === undefined ? '«комплект другого объекта»' : `«${codeOf(set) === '' ? 'комплект без шифра' : codeOf(set)}»`;
 }
 
 export function aiQueueText(queue: ComparisonAiQueue, sets: readonly ComparisonOverviewSet[]): string {

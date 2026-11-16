@@ -40,7 +40,7 @@ describe('stage review UI', () => {
     const cache = newClient();
     const html = renderScreen(cache, createElement(StageCardView, { card: card({ before: '', stale: true }),
       mayAct: true, draft: undefined, onDraft: () => {}, onOpenEvidence: () => {} }));
-    expect(html).toContain('Отсутствие объекта не доказано');
+    expect(html).toContain('Отсутствие элемента не доказано');
     expect(html).toContain('Открыть в PDF');
     expect(html).toContain('TEXT');
     expect(html).not.toContain('type="radio"');
@@ -59,7 +59,7 @@ describe('stage review UI', () => {
     const html = renderScreen(newClient(), createElement(StageCardView, { card: card({ before: '',
       evidence: [{ evidence_id: uid('std', 1), source_id: uid('std', 1), kind: 'TEXT', side: 'right', absence_proven: true }] }),
       mayAct: false, draft: undefined, onDraft: () => {}, onOpenEvidence: () => {} }));
-    expect(html).toContain('Отсутствие объекта не доказано');
+    expect(html).toContain('Отсутствие элемента не доказано');
   });
 
   it('uses server counts without making up missing high importance counts', () => {

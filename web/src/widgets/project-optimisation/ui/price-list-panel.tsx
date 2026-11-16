@@ -274,7 +274,7 @@ export function PriceListPanel({ projectUid, canUpload }: PriceListPanelProps) {
       {revisions.data !== undefined && revisions.data.items.length === 0 ? (
         <EmptyState
           title="Прайс-лист ещё не загружен."
-          detail="Цены в оптимизации берутся только из загруженного прайс-листа проекта."
+          detail="Цены в оптимизации берутся только из загруженного прайс-листа объекта."
         />
       ) : null}
       {revisions.data !== undefined && revisions.data.items.length > 0 ? (

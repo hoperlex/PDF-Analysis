@@ -40,7 +40,7 @@ describe('creating a project', () => {
     expect(inProgress.kind).toBe('in_progress');
     expect(inProgress.retryable).toBe(true);
     expect(inProgress.detail).toContain('тем же ключом');
-    expect(inProgress.detail).toContain('второй проект');
+    expect(inProgress.detail).toContain('второй объект');
 
     expect(reuse.kind).toBe('duplicate_intent');
     expect(reuse.retryable).toBe(false);

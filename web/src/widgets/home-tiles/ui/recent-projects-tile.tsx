@@ -26,7 +26,7 @@ import styles from './home-tiles.module.css';
 function Body() {
   const query = useRecentProjects();
 
-  if (query.isPending) return <LoadingState what="последние проекты" />;
+  if (query.isPending) return <LoadingState what="последние объекты" />;
 
   if (query.isError) {
     const failure = classifyProjectListFailure(query.error);
@@ -67,10 +67,10 @@ function Body() {
 export function RecentProjectsTile() {
   return (
     <section className={styles.tile} aria-labelledby="home-recent-projects" data-home-tile="recent-projects">
-      <h2 id="home-recent-projects">Последние проекты</h2>
+      <h2 id="home-recent-projects">Последние объекты</h2>
       <Body />
       <p className={styles.more}>
-        <Link href={routes.projects()}>Все проекты</Link>
+        <Link href={routes.projects()}>Все объекты</Link>
       </p>
     </section>
   );

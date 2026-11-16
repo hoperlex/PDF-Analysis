@@ -170,7 +170,7 @@ export function KnowledgeBaseTable({ entries, kindLabel = false }: KnowledgeBase
         <thead>
           <tr>
             <th scope="col" className={styles.colType}>Тип</th>
-            <th scope="col" className={styles.colPlace}>Проект</th>
+            <th scope="col" className={styles.colPlace}>Объект</th>
             <th scope="col" className={styles.colSection}>Раздел</th>
             <th scope="col" className={styles.colSeverity}>Важность</th>
             <th scope="col" className={styles.colVerdict}>Решение</th>

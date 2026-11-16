@@ -344,7 +344,7 @@ describe('the summary tile', () => {
   it('shows the original-style overview of all fifteen sections on the front door', () => {
     const markup = draw(home(EXPERT), loaded());
     expect(markup).toContain('data-home-sections=""');
-    expect(markup).toContain('Разделы проекта');
+    expect(markup).toContain('Разделы объекта');
     for (const section of PROJECT_SECTIONS) {
       expect(markup).toContain(`data-section="${section.code}"`);
     }
@@ -377,7 +377,7 @@ describe('the summary tile', () => {
 
   it('says when the deployment holds no project', () => {
     const markup = draw(home(EXPERT), loaded({ summary: summary({ documents_by_project: [] }) }));
-    expect(markup).toContain('Сводка появится вместе с первым проектом.');
+    expect(markup).toContain('Сводка появится вместе с первым объектом.');
     expect(markup).not.toContain('data-summary-figure');
   });
 

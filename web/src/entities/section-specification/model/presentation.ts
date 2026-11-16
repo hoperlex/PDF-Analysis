@@ -33,20 +33,20 @@ export const SECTION_SOURCE_STATE_MESSAGES: Readonly<Record<SourceState, string>
 
 /** What a project's price state means for its rows. */
 export const SECTION_PRICE_STATE_MESSAGES: Readonly<Record<PriceState, string>> = {
-  priced: 'строки сопоставлены с действующим прайс-листом проекта',
+  priced: 'строки сопоставлены с действующим прайс-листом объекта',
   price_list_missing:
-    'у проекта нет прайс-листа: строки показаны без цен и сумм, итогов нет — загрузите прайс-лист на вкладке «Оптимизация» проекта',
+    'у объекта нет прайс-листа: строки показаны без цен и сумм, итогов нет — загрузите прайс-лист на вкладке «Оптимизация» объекта',
   not_read: 'прайс-лист не читался: раздел превышает предел одного чтения',
 };
 
 /** Why a read stopped before the rows, and the way in: one project. */
 export const SECTION_LIMIT_MESSAGES: Readonly<Record<LimitReason, string>> = {
   projects:
-    'В системе больше проектов, чем раздел просматривает за один раз. Сводка по всем проектам не строится.',
+    'В системе больше объектов, чем раздел просматривает за один раз. Сводка по всем объектам не строится.',
   sources:
-    'В разделе слишком много комплектов для одного чтения. Состав раздела показан, строки и итоги — нет: выберите проект, и будут прочитаны только его комплекты.',
+    'В разделе слишком много комплектов для одного чтения. Состав раздела показан, строки и итоги — нет: выберите объект, и будут прочитаны только его комплекты.',
   rows:
-    'В разделе слишком много строк спецификации для одного чтения. Состав раздела показан, строки и итоги — нет: выберите проект, и будут прочитаны только его строки.',
+    'В разделе слишком много строк спецификации для одного чтения. Состав раздела показан, строки и итоги — нет: выберите объект, и будут прочитаны только его строки.',
 };
 
 /** Why a current version is listed beside the section instead of in it. */
@@ -59,7 +59,7 @@ export const SECTION_ROW_STATUS_LABELS: Readonly<Record<RowStatus, string>> = {
   matched: 'сопоставлено',
   ambiguous: 'неоднозначно',
   unmatched: 'не сопоставлено',
-  price_list_missing: 'нет прайс-листа проекта',
+  price_list_missing: 'нет прайс-листа объекта',
 };
 
 function labelOf<K extends string>(labels: Readonly<Record<K, string>>, value: string): string {

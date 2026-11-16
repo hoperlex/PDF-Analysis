@@ -148,7 +148,7 @@ describe('the picker, drawn', () => {
     expect(step(markup, 'project')).toContain('data-journal-step-status="ready"');
     expect(step(markup, 'project')).toContain('Корпус на Лесной');
     for (const [name, waiting] of [
-      ['document', 'Сначала выберите проект'], ['version', 'Сначала выберите документ'], ['run', 'Сначала выберите версию'],
+      ['document', 'Сначала выберите объект'], ['version', 'Сначала выберите документ'], ['run', 'Сначала выберите версию'],
     ] as const) {
       const text = step(markup, name);
       expect(text, name).toContain('data-journal-step-status="idle"');
@@ -195,7 +195,7 @@ describe('the picker, drawn', () => {
     client.setQueryData(DOCUMENTS_KEY, versionPage([]));
     client.setQueryData(PROJECTS_KEY, projectPage([PROJECT], MORE));
     const markup = picker(client, { selection: { projectUid: PROJECT_UID, documentUid: null, versionUid: null } });
-    expect(step(markup, 'document')).toContain('В проекте нет документов');
+    expect(step(markup, 'document')).toContain('В объекте нет документов');
     expect(step(markup, 'document')).toContain('disabled');
     expect(step(markup, 'project')).toContain('data-journal-step-truncated="project"');
     expect(step(markup, 'project')).toContain('Показана первая страница списка.');

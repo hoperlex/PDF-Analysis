@@ -93,16 +93,16 @@ describe('the vendor lists', () => {
         failure: null, onEdit: noop, onInherit: noop, onSave: noop, onCancel: noop,
       }));
     const expert = view(true, false);
-    expect(expert).toContain('Изменить список проекта');
+    expect(expert).toContain('Изменить список объекта');
     expect(expert).toContain('Вернуться к общему списку');
     expect(expert).not.toContain('Изменить общий список');
     const admin = view(false, true);
     expect(admin).toContain('Изменить общий список');
-    expect(admin).not.toContain('Изменить список проекта');
+    expect(admin).not.toContain('Изменить список объекта');
   });
 
   it('edits rows, and refuses a row with no vendor', () => {
-    expect(rendered('vendor-lists-editing-project')).toContain('Список проекта для раздела');
+    expect(rendered('vendor-lists-editing-project')).toContain('Список объекта для раздела');
     expect(rendered('vendor-lists-editing-global-empty')).toContain('«без ограничений»');
     expect(draftProblem([{ material: 'Кабель', vendor: ' ', note: '' }])).toBe('В каждой записи нужен поставщик.');
     expect(entriesOf([{ material: ' ', vendor: ' Завод ', note: '' }])).toEqual([

@@ -78,7 +78,7 @@ export function SpecificationPricesChooser({ sets, selected, onSelect, partial }
   if (sets.length === 0) {
     return (
       <EmptyState
-        title="В проекте нет комплектов с подтверждённым разделом"
+        title="В объекте нет комплектов с подтверждённым разделом"
         detail="Спецификация и цены строятся для комплекта, текущую версию которого эксперт отнёс к одному из разделов. Подтвердите раздел на экране версии."
       />
     );
@@ -116,7 +116,7 @@ export function SpecificationPricesChooser({ sets, selected, onSelect, partial }
         </div>
       ) : null}
       {partial ? (
-        <p className="am-note">Предложены комплекты первой страницы списка документов проекта.</p>
+        <p className="am-note">Предложены комплекты первой страницы списка документов объекта.</p>
       ) : null}
     </div>
   );
@@ -153,15 +153,15 @@ export function SpecificationPricesSection({ projectUid }: SpecificationPricesSe
         <p className={styles.rule}>
           Строки спецификации текущей версии комплекта (раздел подтверждён экспертом), прочитанные из
           сохранённого текста последнего опубликованного прогона, сопоставлены с действующим
-          прайс-листом проекта. Цена и
+          прайс-листом объекта. Цена и
           сумма показаны только для строки, однозначно сопоставленной с позицией в той же единице
           измерения и с числовым количеством; итоги считаются по валютам только по таким строкам.
         </p>
       </details>
-      {documents.isPending ? <LoadingState what="документов проекта" /> : null}
+      {documents.isPending ? <LoadingState what="документов объекта" /> : null}
       {documentsFailure !== null ? (
         <ErrorState
-          title="Документы проекта не прочитаны"
+          title="Документы объекта не прочитаны"
           detail={documentsFailure.detail}
           correlationId={documentsFailure.correlationId}
           onRetry={() => void documents.refetch()}

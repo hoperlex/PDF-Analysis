@@ -368,7 +368,7 @@ export function StageUploadPanel({ projectUid, mayAct, open = true, onOpenChange
       ) : null}
       {failure === null ? null : <ErrorState title="Набор не обработан" detail={failure.detail} correlationId={failure.correlationId} />}
       {problem === null ? null : <p role="alert">{problem}</p>}
-      {uploads.isPending ? <LoadingState what="наборы проекта" /> : null}
+      {uploads.isPending ? <LoadingState what="наборы объекта" /> : null}
       {readFailure === null ? null : <ErrorState title="Наборы не открылись" detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={readFailure.retryable ? () => void uploads.refetch() : undefined} />}
       {uploads.data?.items.length === 0 ? <EmptyState title="Наборов пока нет" detail="Загрузите PDF или ZIP, затем подтвердите кандидатов." /> : null}
       {uploads.data?.items.map((upload) => (

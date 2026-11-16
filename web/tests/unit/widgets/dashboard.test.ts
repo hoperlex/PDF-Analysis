@@ -283,9 +283,9 @@ describe('every number the dashboard renders is the fixture, and nothing else is
   it('opens with the section overview and its original-style code badges', () => {
     const markup = render(SUMMARY);
     expect(markup).toContain('data-dashboard-showcase="true"');
-    expect(markup).toContain('>Сводка по проектам</h2>');
+    expect(markup).toContain('>Сводка по объектам</h2>');
     expect(markup.indexOf('dashboard-sections-heading')).toBeLessThan(markup.indexOf('dashboard-documents-heading'));
-    expect(markup).toContain('>Разделы проекта</h2>');
+    expect(markup).toContain('>Разделы объекта</h2>');
     expect(markup).toContain('>AR</span>');
     expect(markup).toContain('>Документы</span>');
   });

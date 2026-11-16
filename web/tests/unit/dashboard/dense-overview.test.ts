@@ -68,7 +68,7 @@ describe('the dashboard opens on its table', () => {
   const markup = renderWith(client, createElement(Dashboard));
 
   it('keeps the title and the scope in one header line, with no poster', () => {
-    expect(markup).toContain('>Сводка по проектам</h2>');
+    expect(markup).toContain('>Сводка по объектам</h2>');
     expect(markup).toContain('data-dashboard-scope="all"');
     expect(markup).not.toContain('AuditManager / Аналитика');
     expect(markup).not.toMatch(/orbit/i);

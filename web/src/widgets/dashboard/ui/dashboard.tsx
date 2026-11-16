@@ -45,7 +45,7 @@ export interface DashboardProps {
 }
 
 /** The scope the screen states, when it covers every project. */
-const ALL_PROJECTS = 'Все проекты';
+const ALL_PROJECTS = 'Все объекты';
 
 // Heading ids for `aria-labelledby` only, deliberately not spelled like this stylesheet's
 // own class-naming convention: `styling-layer.test.ts` scans every `.tsx` for that pattern
@@ -109,7 +109,7 @@ export function Dashboard({ projectUid = null, allProjectsHref = '/dashboard' }:
         * eyebrow, a lead and an orbit drawing. One line now: the title and the scope the numbers are read over.
         */}
       <header className={styles.hero}>
-        <h2 className={styles.heroTitle}>Сводка по проектам</h2>
+        <h2 className={styles.heroTitle}>Сводка по объектам</h2>
         <p className={styles.scope} data-dashboard-scope={projectUid === null ? 'all' : 'project'}>
           <span className={styles.scopeKey}>Охват</span>
           <strong className={styles.scopeValue}>{scopeName}</strong>
@@ -117,11 +117,11 @@ export function Dashboard({ projectUid = null, allProjectsHref = '/dashboard' }:
       </header>
       <div className={styles.grid} data-widget="dashboard">
         <section className={`${styles.panel} ${styles.sections}`} aria-labelledby="dashboard-sections-heading">
-          <h2 id="dashboard-sections-heading">Разделы проекта</h2>
+          <h2 id="dashboard-sections-heading">Разделы объекта</h2>
           <SectionsPanel rows={data.section_breakdown} projectUid={projectUid} />
         </section>
         <section className={styles.panel} aria-labelledby="dashboard-documents-heading">
-          <h2 id="dashboard-documents-heading">Документы по проектам</h2>
+          <h2 id="dashboard-documents-heading">Документы по объектам</h2>
           <DocumentsPanel rows={data.documents_by_project} />
         </section>
         <section className={styles.panel} aria-labelledby="dashboard-verdicts-heading">

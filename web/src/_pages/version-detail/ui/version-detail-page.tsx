@@ -66,10 +66,10 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
 
   if (!wellFormed) {
     return (
-      <PageShell title="Версия" actions={<Link href={routes.projects()}>Все проекты</Link>}>
+      <PageShell title="Версия" actions={<Link href={routes.projects()}>Все объекты</Link>}>
         <UnsupportedState
           title="Это не адрес версии."
-          detail="Проект и версия адресуются непрозрачными идентификаторами. Запроса не было."
+          detail="Объект и версия адресуются непрозрачными идентификаторами. Запроса не было."
         />
       </PageShell>
     );
@@ -103,8 +103,8 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
               <Link href={routes.document(version.data.project_uid, version.data.document_uid)}>Все версии документа</Link>{' '}
             </>
           )}
-          <Link href={routes.project(ownerProjectUid)}>К проекту</Link>{' '}
-          <Link href={routes.projects()}>Все проекты</Link>
+          <Link href={routes.project(ownerProjectUid)}>К объекту</Link>{' '}
+          <Link href={routes.projects()}>Все объекты</Link>
         </>
       }
     >

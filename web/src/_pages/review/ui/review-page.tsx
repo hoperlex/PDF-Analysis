@@ -516,8 +516,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       actions={
         <>
           <Link href={routes.run(projectUid, runId)}>К прогону</Link>{' '}
-          <Link href={routes.project(projectUid)}>К проекту</Link>{' '}
-          <Link href={routes.projects()}>Все проекты</Link>
+          <Link href={routes.project(projectUid)}>К объекту</Link>{' '}
+          <Link href={routes.projects()}>Все объекты</Link>
         </>
       }
     >

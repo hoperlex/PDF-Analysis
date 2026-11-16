@@ -67,7 +67,7 @@ export const ANALOG_BASIS_LABELS: Readonly<Record<ProposalAnalogBasis, string>> 
 /** Whose vendor list the pass used. */
 export const VENDOR_LIST_SCOPE_LABELS: Readonly<Record<VendorListScope, string>> = {
   global: 'общий список администратора',
-  project: 'список проекта',
+  project: 'список объекта',
 };
 
 /** An exact decimal text with its digits regrouped and the decimal comma (`16000` → `16 000`). */

@@ -55,7 +55,7 @@ export interface SectionOptimisationPageProps {
 
 const IGNORED_TEXT = {
   section: 'раздел',
-  project: 'проект',
+  project: 'объект',
   tab: 'вкладка',
 } as const;
 
@@ -139,7 +139,7 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
   return (
     <PageShell
       title="Оптимизация разделов"
-      subtitle="Сводная спецификация раздела по текущим версиям комплектов всех проектов и принятые экспертами оптимизации. Экран только показывает данные: переносить решения между проектами здесь пока нельзя."
+      subtitle="Сводная спецификация раздела по текущим версиям комплектов всех объектов и принятые экспертами оптимизации. Экран только показывает данные: переносить решения между объектами здесь пока нельзя."
     >
       {initial.ignored.length === 0 ? null : (
         <p className={styles.notice} data-address-ignored={initial.ignored.join(' ')}>
@@ -154,7 +154,7 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
         {filter.projectUid === null ? (
           <Link href="/dashboard">← К дашборду</Link>
         ) : (
-          <Link href={routes.projectSection(filter.projectUid, filter.sectionCode)}>← К разделу проекта</Link>
+          <Link href={routes.projectSection(filter.projectUid, filter.sectionCode)}>← К разделу объекта</Link>
         )}
       </p>
       <div className={styles.tabs}>

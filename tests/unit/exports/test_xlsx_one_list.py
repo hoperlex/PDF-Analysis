@@ -54,8 +54,10 @@ ONE_LIST_COLUMNS = (
     "Серьёзность (предложение модели)", "Норма (документ, пункт)", "Цитата нормы", "Решение эксперта", "Комментарий",
     "ID замечания",
 )
-#: SHA-256 of the whole workbook ``_corpus(<base writer>)`` renders, captured from the writer of ``8dcf5a0aa``.
-TEXT_ONLY_WORKBOOK_SHA256 = "3d6c0027a4db9ec00b12d8e4553ea104523277a8328916074843137ee211a38e"
+#: SHA-256 of the whole workbook ``_corpus(<base writer>)`` renders. Captured from the writer of ``8dcf5a0aa`` (``3d6c0027...a38e``); re-pinned for «Объект»
+#: (`UIP-G-01`): the only byte change is the text of «Сводка» cell A2, «Проект» became «Объект» (read in ``test_xlsx_writer_labels`` and
+#: ``test_xlsx_run_export`` before this value was computed), and the old digest is the one the writer of ``135359a00`` still produced.
+TEXT_ONLY_WORKBOOK_SHA256 = "c9dc7c5990ee03e6a53b8369f3b04fe738991f167b8be6c0815bd35f2ee29b81"
 
 
 def _corpus(module: ModuleType) -> Any:

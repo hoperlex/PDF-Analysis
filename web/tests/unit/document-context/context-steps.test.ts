@@ -18,9 +18,9 @@ const FACTS = {
 };
 
 describe('contextSteps', () => {
-  it('goes Проекты › Проект › Документ › Версия › Прогон › Разбор on the review', () => {
+  it('goes Объекты › Объект › Документ › Версия › Прогон › Разбор on the review', () => {
     const steps = contextSteps(FACTS, 'review');
-    expect(steps.map((s) => s.label)).toEqual(['Проекты', 'Школа', 'АР-1', 'Версия 3', 'Прогон', 'Разбор']);
+    expect(steps.map((s) => s.label)).toEqual(['Объекты', 'Школа', 'АР-1', 'Версия 3', 'Прогон', 'Разбор']);
     expect(steps.at(-1)?.href).toBeNull();
     expect(steps.slice(0, -1).every((s) => s.href !== null)).toBe(true);
   });
@@ -34,7 +34,7 @@ describe('contextSteps', () => {
   // Second UX pass: the version's comparison screen kept a copy of the strip; it is a level of the shared one now.
   it('ends the version comparison at «Сравнение», with the version a link back to the version page', () => {
     const steps = contextSteps(FACTS, 'comparison');
-    expect(steps.map((s) => s.label)).toEqual(['Проекты', 'Школа', 'АР-1', 'Версия 3', 'Сравнение']);
+    expect(steps.map((s) => s.label)).toEqual(['Объекты', 'Школа', 'АР-1', 'Версия 3', 'Сравнение']);
     expect(steps.map((s) => s.key)).toEqual(['projects', 'project', 'document', 'version', 'comparison']);
     expect(steps.find((s) => s.key === 'version')?.href).toBe(routes.version('prj_A', 'ver_V'));
     expect(steps.at(-1)?.href).toBeNull();
@@ -54,13 +54,13 @@ describe('contextSteps', () => {
 
   it('uses the generic words while names are unknown', () => {
     const steps = contextSteps({ projectUid: 'prj_A', documentUid: 'doc_D', versionUid: 'ver_V' }, 'version');
-    expect(steps.map((s) => s.label)).toEqual(['Проекты', 'Проект', 'Документ', 'Версия']);
+    expect(steps.map((s) => s.label)).toEqual(['Объекты', 'Объект', 'Документ', 'Версия']);
   });
 
   // `UI-A-23`: the original's strip opens «<код раздела> / <имя проекта>» and the section is a link to its page.
   it('puts the confirmed section between the project and the document, a link to the section page', () => {
     const steps = contextSteps({ ...FACTS, sectionCode: 'AR' }, 'version');
-    expect(steps.map((s) => s.label)).toEqual(['Проекты', 'Школа', 'АР', 'АР-1', 'Версия 3']);
+    expect(steps.map((s) => s.label)).toEqual(['Объекты', 'Школа', 'АР', 'АР-1', 'Версия 3']);
     const section = steps.find((s) => s.key === 'section');
     expect(section?.href).toBe(routes.projectSection('prj_A', 'AR'));
     expect(section?.title).toBe('АР Архитектурные решения');

@@ -105,10 +105,10 @@ export function BlocksPage({ projectUid, versionUid }: BlocksPageProps) {
 function VersionBlocksScreen({ projectUid, versionUid }: { readonly projectUid: string; readonly versionUid: string }) {
   if (!looksLikeProjectUid(projectUid) || !looksLikeVersionUid(versionUid)) {
     return (
-      <PageShell title="Блоки" actions={<Link href={routes.projects()}>Все проекты</Link>}>
+      <PageShell title="Блоки" actions={<Link href={routes.projects()}>Все объекты</Link>}>
         <UnsupportedState
           title="Это не адрес версии."
-          detail="Версия адресуется идентификаторами проекта и версии. Запроса не было."
+          detail="Версия адресуется идентификаторами объекта и версии. Запроса не было."
         />
       </PageShell>
     );
@@ -136,8 +136,8 @@ function VersionBlocksLoaded({ projectUid, versionUid }: { readonly projectUid: 
   } else if (version.data.project_uid !== projectUid) {
     body = (
       <UnsupportedState
-        title="Эта версия из другого проекта."
-        detail={<Link href={routes.versionBlocks(version.data.project_uid, version.data.version_uid)}>Открыть блоки в её проекте</Link>}
+        title="Эта версия из другого объекта."
+        detail={<Link href={routes.versionBlocks(version.data.project_uid, version.data.version_uid)}>Открыть блоки в её объекте</Link>}
       />
     );
   } else if (isComparisonOnly(version.data)) {
@@ -231,17 +231,17 @@ interface VersionChooserProps {
 function VersionChooser({ projectUid, onChooseProject, onChooseVersion }: VersionChooserProps) {
   const projects = useProjectList();
 
-  if (projects.isPending) return <LoadingState what="проекты" />;
+  if (projects.isPending) return <LoadingState what="объекты" />;
   if (projects.isError) {
     return (
       <ErrorState
-        title="Список проектов не удалось прочитать."
+        title="Список объектов не удалось прочитать."
         onRetry={() => void projects.refetch()}
       />
     );
   }
   if (projects.data.items.length === 0) {
-    return <EmptyState title="Проектов пока нет." detail="Сначала опубликуйте документ." />;
+    return <EmptyState title="Объектов пока нет." detail="Сначала опубликуйте документ." />;
   }
 
   if (projectUid === null) {
@@ -256,7 +256,7 @@ function VersionChooser({ projectUid, onChooseProject, onChooseVersion }: Versio
                 className="am-button"
                 onClick={() => onChooseProject(project.project_uid)}
               >
-                Выбрать проект
+                Выбрать объект
               </button>
             </div>
           </li>
@@ -282,7 +282,7 @@ export function DocumentChooser({ projectUid, onChooseVersion }: DocumentChooser
   const noteId = useId();
   const documents = useDocumentList(projectUid);
 
-  if (documents.isPending) return <LoadingState what="документы проекта" />;
+  if (documents.isPending) return <LoadingState what="документы объекта" />;
   if (documents.isError) {
     return (
       <ErrorState
@@ -292,7 +292,7 @@ export function DocumentChooser({ projectUid, onChooseVersion }: DocumentChooser
     );
   }
   if (documents.data.items.length === 0) {
-    return <EmptyState title="В этом проекте нет опубликованных документов." />;
+    return <EmptyState title="В этом объекте нет опубликованных документов." />;
   }
 
   const anyComparisonOnly = documents.data.items.some((doc: DocumentVersion) => isComparisonOnly(doc));

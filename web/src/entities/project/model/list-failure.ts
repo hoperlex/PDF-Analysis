@@ -48,29 +48,29 @@ export function classifyProjectListFailure(error: unknown): ProjectListFailure {
     };
     switch (error.errorCode) {
       case 'validation_failed':
-        return { ...base, kind: 'request_invalid', title: 'Запрос списка проектов отклонён.' };
+        return { ...base, kind: 'request_invalid', title: 'Запрос списка объектов отклонён.' };
       case 'dependency_unavailable':
         return {
           ...base,
           kind: 'dependency_unavailable',
-          title: 'Зависимость, нужная списку проектов, недоступна.',
+          title: 'Зависимость, нужная списку объектов, недоступна.',
         };
       case 'authentication_required':
         return {
           ...base,
           kind: 'not_authenticated',
-          title: 'Чтение списка проектов не авторизовано.',
+          title: 'Чтение списка объектов не авторизовано.',
           detail: AUTHENTICATION_REQUIRED_DETAIL,
         };
       case 'permission_denied':
         return {
           ...base,
           kind: 'not_permitted',
-          title: 'Вам не разрешено читать список проектов.',
+          title: 'Вам не разрешено читать список объектов.',
           detail: PERMISSION_DENIED_DETAIL,
         };
       default:
-        return { ...base, kind: 'server_error', title: 'Список проектов прочитать не удалось.' };
+        return { ...base, kind: 'server_error', title: 'Список объектов прочитать не удалось.' };
     }
   }
 
@@ -90,7 +90,7 @@ export function classifyProjectListFailure(error: unknown): ProjectListFailure {
   if (error instanceof TransportError) {
     return {
       kind: 'transport',
-      title: 'Запрос списка проектов не дошёл до API.',
+      title: 'Запрос списка объектов не дошёл до API.',
       detail: error.message,
       correlationId: error.correlationId,
       retryable: error.retryable,
@@ -100,7 +100,7 @@ export function classifyProjectListFailure(error: unknown): ProjectListFailure {
 
   return {
     kind: 'unknown',
-    title: 'Список проектов прочитать не удалось.',
+    title: 'Список объектов прочитать не удалось.',
     detail:
       error instanceof ApiFailure
         ? error.message

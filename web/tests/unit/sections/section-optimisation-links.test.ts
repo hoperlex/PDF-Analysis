@@ -116,6 +116,6 @@ describe('the dashboard’s sections panel', () => {
     await view.press(buttonOf('AR'));
     expect(view.markup()).toContain('data-selected-section="AR"');
     expect(view.markup()).not.toContain('data-section-optimisation-link');
-    expect(view.markup()).toContain('Открыть проекты');
+    expect(view.markup()).toContain('Открыть объекты');
   });
 });

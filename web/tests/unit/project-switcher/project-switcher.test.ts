@@ -132,7 +132,7 @@ describe('choosing a project (R-150c): the address is rewritten, nothing else ke
     expect(chooseProject(at('/dashboard'), B)).toBe(`/dashboard?project=${B}`);
   });
 
-  it('«Все проекты» on an optional screen removes the parameter and the dependent ones, and keeps the rest', () => {
+  it('«Все объекты» on an optional screen removes the parameter and the dependent ones, and keeps the rest', () => {
     expect(chooseProject(at('/dashboard', `project=${A}&section=AR&view=compact`), null)).toBe('/dashboard?view=compact');
     expect(chooseProject(at('/section-optimisation', `project=${A}`), null)).toBe('/section-optimisation');
   });
@@ -147,11 +147,11 @@ describe('choosing a project (R-150c): the address is rewritten, nothing else ke
     expect(chooseProject(at(`/projects/${A}`), A)).toBe(`/projects/${A}`);
   });
 
-  it('«Все проекты» on a required screen opens the project list', () => {
+  it('«Все объекты» on a required screen opens the project list', () => {
     expect(chooseProject(at(`/projects/${A}`), null)).toBe('/projects');
   });
 
-  it('on a global screen the choice opens the chosen project\'s page; «Все проекты» opens the list', () => {
+  it('on a global screen the choice opens the chosen project\'s page; «Все объекты» opens the list', () => {
     for (const pathname of ['/queue', '/logs', '/workers', '/projects', '/', '/norms', '/admin/users']) {
       expect(chooseProject(at(pathname, `project=${A}`), B), pathname).toBe(`/projects/${B}`);
       expect(chooseProject(at(pathname, `project=${A}`), null), pathname).toBe('/projects');
@@ -225,13 +225,13 @@ describe('a project row: the name and the original\'s two figures, each next to 
 
 // ------------------------------------------------------------------------------------- the menu
 
-describe('the menu: the rows, then «Все проекты», then «Новый проект»', () => {
+describe('the menu: the rows, then «Все объекты», then «Новый объект»', () => {
   it('lists every project, then both fixed entries, in that order', () => {
     const items = itemsOf(markupOf(at('/dashboard'), ready()));
     expect(items.map(([, , text]) => text.split('\n')[0])).toEqual(['Мост через Неву', 'Школа №7', ALL_PROJECTS_LABEL, NEW_PROJECT_LABEL]);
   });
 
-  it('«Новый проект» leads to the project list, where the form is; «Все проекты» is the screen\'s own address without the project', () => {
+  it('«Новый объект» leads to the project list, where the form is; «Все объекты» is the screen\'s own address without the project', () => {
     const optional = itemsOf(markupOf(at('/dashboard', `project=${A}`), ready())).slice(-2);
     expect(optional).toEqual([
       ['a', '/dashboard', ALL_PROJECTS_LABEL],
@@ -247,13 +247,13 @@ describe('the menu: the rows, then «Все проекты», then «Новый 
   it('has the two fixed entries before any list arrives, so the button works while it loads', () => {
     const markup = markupOf(at('/dashboard'), { kind: 'loading' });
     expect(itemsOf(markup).map(([, , text]) => text)).toEqual([ALL_PROJECTS_LABEL, NEW_PROJECT_LABEL]);
-    expect(markup).toContain('Загрузка проектов…');
+    expect(markup).toContain('Загрузка объектов…');
     expect(markup).toContain('role="status"');
   });
 
-  it('says there are no projects when the list is empty, and still offers «Новый проект»', () => {
+  it('says there are no projects when the list is empty, and still offers «Новый объект»', () => {
     const markup = markupOf(at('/dashboard'), ready([]));
-    expect(markup).toContain('Проектов пока нет.');
+    expect(markup).toContain('Объектов пока нет.');
     expect(itemsOf(markup).map(([, , text]) => text)).toEqual([ALL_PROJECTS_LABEL, NEW_PROJECT_LABEL]);
   });
 
@@ -277,14 +277,14 @@ describe('the menu: the rows, then «Все проекты», then «Новый 
   });
 });
 
-describe('a failed read: «Проекты не загрузились», a retry inside the menu, and the button still works', () => {
+describe('a failed read: «Объекты не загрузились», a retry inside the menu, and the button still works', () => {
   const retryable = apiError(503, 'dependency_unavailable', true);
 
   it('shows the message as an alert with its correlation id, offers the retry first, and keeps both fixed entries', () => {
     const list = switcherListOf(undefined, retryable);
     expect(list.kind).toBe('error');
     const markup = markupOf(at('/dashboard'), list);
-    expect(markup).toContain('Проекты не загрузились');
+    expect(markup).toContain('Объекты не загрузились');
     expect(markup).toContain('role="alert"');
     expect(markup).toContain('Код обращения: cid-switcher-1');
     expect(itemsOf(markup)).toEqual([
@@ -297,7 +297,7 @@ describe('a failed read: «Проекты не загрузились», a retry
   it('does not offer a retry for a refusal retrying cannot change', () => {
     const list = switcherListOf(undefined, apiError(403, 'permission_denied', false));
     const markup = markupOf(at('/dashboard'), list);
-    expect(markup).toContain('Проекты не загрузились');
+    expect(markup).toContain('Объекты не загрузились');
     expect(itemsOf(markup).map(([, , text]) => text)).toEqual([ALL_PROJECTS_LABEL, NEW_PROJECT_LABEL]);
   });
 
@@ -327,8 +327,8 @@ describe('a failed read: «Проекты не загрузились», a retry
 
 // ------------------------------------------------------------------------------------ the button
 
-describe('the button: the project\'s name, or «Все проекты», muted on a global screen with its hint', () => {
-  it('shows «Все проекты» when the address names no project', () => {
+describe('the button: the project\'s name, or «Все объекты», muted on a global screen with its hint', () => {
+  it('shows «Все объекты» when the address names no project', () => {
     expect(buildSwitcherModel(at('/dashboard'), ready()).value).toBe(ALL_PROJECTS_LABEL);
     expect(buildSwitcherModel(at('/dashboard', 'project='), ready()).value).toBe(ALL_PROJECTS_LABEL);
   });
@@ -343,8 +343,8 @@ describe('the button: the project\'s name, or «Все проекты», muted o
     const named = at('/dashboard', `project=${C}`);
     expect(buildSwitcherModel(named, { kind: 'loading' }).value).toBe('Загрузка…');
     expect(buildSwitcherModel(named, switcherListOf(undefined, apiError(503, 'dependency_unavailable', true))).value).toBe('Название недоступно');
-    expect(buildSwitcherModel(named, ready(PROJECTS, { more: true })).value).toBe('Проект вне первых 2');
-    expect(buildSwitcherModel(named, ready()).value).toBe('Неизвестный проект');
+    expect(buildSwitcherModel(named, ready(PROJECTS, { more: true })).value).toBe('Объект вне первых 2');
+    expect(buildSwitcherModel(named, ready()).value).toBe('Неизвестный объект');
   });
 
   it('carries the hint «экран общий» only on a global screen, and mutes the button there', () => {
@@ -352,7 +352,7 @@ describe('the button: the project\'s name, or «Все проекты», muted o
     for (const pathname of ['/', '/projects', '/queue', '/logs', '/workers', '/norms', '/admin/users']) {
       const model = buildSwitcherModel(at(pathname), ready());
       expect(model.hint, pathname).toBe(GLOBAL_SCREEN_HINT);
-      expect(model.triggerLabel, pathname).toBe(`Проекты: Все проекты, ${GLOBAL_SCREEN_HINT}`);
+      expect(model.triggerLabel, pathname).toBe(`Объекты: Все объекты, ${GLOBAL_SCREEN_HINT}`);
       const markup = markupOf(at(pathname), ready());
       expect(markup, pathname).toContain('data-project-scope="global"');
       expect(markup, pathname).toMatch(/class="[^"]*muted[^"]*" data-project-switcher/);
@@ -361,19 +361,19 @@ describe('the button: the project\'s name, or «Все проекты», muted o
     for (const pathname of ['/dashboard', '/knowledge-base', '/section-optimisation']) {
       const model = buildSwitcherModel(at(pathname), ready());
       expect(model.hint, pathname).toBeNull();
-      expect(model.triggerLabel, pathname).toBe('Проекты: Все проекты');
+      expect(model.triggerLabel, pathname).toBe('Объекты: Все объекты');
       expect(markupOf(at(pathname), ready()), pathname).not.toMatch(/muted|экран общий/);
     }
     // A required screen is not muted and has no hint; its project is the path's.
     const required = buildSwitcherModel(at(`/projects/${A}`), ready());
     expect(required.hint).toBeNull();
-    expect(required.triggerLabel).toBe('Проекты: Мост через Неву');
+    expect(required.triggerLabel).toBe('Объекты: Мост через Неву');
     expect(markupOf(at(`/projects/${A}`), ready())).not.toMatch(/muted|экран общий/);
   });
 
   it('is a menu button named by what it shows: the trigger\'s accessible name is the model\'s', () => {
     const markup = markupOf(at('/dashboard', `project=${A}`), ready());
-    expect(markup).toMatch(/<button\b[^>]*aria-haspopup="menu"[^>]*aria-label="Проекты: Мост через Неву"/);
+    expect(markup).toMatch(/<button\b[^>]*aria-haspopup="menu"[^>]*aria-label="Объекты: Мост через Неву"/);
     expect(markup).toContain('data-project-scope="optional"');
   });
 });
@@ -426,7 +426,7 @@ describe('the island: a render with no query client makes no request; the list i
     const client = newClient();
     seedError(client, queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), apiError(503, 'dependency_unavailable', true));
     const markup = renderScreen(client, createElement(ProjectSwitcherLive, { address: at('/dashboard', `project=${A}`) }));
-    expect(markup).toContain('Проекты не загрузились');
+    expect(markup).toContain('Объекты не загрузились');
     expect(markup).toContain('Название недоступно');
     expect(itemsOf(markup)[0]).toEqual(['button', null, RETRY_LABEL]);
   });
@@ -445,7 +445,7 @@ describe('D-363: the list marks the project that is open, as the original\'s pic
     }
   });
 
-  it('flags «Все проекты» when the address names no project, and no project', () => {
+  it('flags «Все объекты» when the address names no project, and no project', () => {
     const { marks, current } = marksOf(markupOf(at('/dashboard'), ready()));
     expect(marks).toEqual([['Мост через Неву', ''], ['Школа №7', ''], [ALL_PROJECTS_LABEL, '\u2713']]);
     expect(current).toEqual([ALL_PROJECTS_LABEL]);
@@ -455,7 +455,7 @@ describe('D-363: the list marks the project that is open, as the original\'s pic
     const markup = markupOf(at('/dashboard', `project=${C}`), ready(PROJECTS, { more: true }));
     expect(marksOf(markup).current).toEqual([]);
     expect(marksOf(markup).marks.every(([, mark]) => mark === '')).toBe(true);
-    expect(markup).toContain('Проект вне первых 2');
+    expect(markup).toContain('Объект вне первых 2');
   });
 
   it('puts the flag on the project\'s uid and not on its name: two projects of one name are told apart', () => {
@@ -465,7 +465,7 @@ describe('D-363: the list marks the project that is open, as the original\'s pic
     expect(links.map((entry) => (entry.kind === 'link' ? entry.current : null))).toEqual([false, true, false, undefined]);
   });
 
-  it('leaves «Остальные проекты», «Новый проект» and the retry out of the choices', () => {
+  it('leaves «Остальные объекты», «Новый объект» and the retry out of the choices', () => {
     const { marks } = marksOf(markupOf(at('/dashboard', `project=${A}`), ready(PROJECTS, { more: true })));
     expect(marks.map(([label]) => label)).toEqual(['Мост через Неву', 'Школа №7', ALL_PROJECTS_LABEL]);
     const model = buildSwitcherModel(at('/dashboard', `project=${A}`), ready(PROJECTS, { more: true }));

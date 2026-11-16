@@ -242,6 +242,8 @@ def test_a_v1_run_renders_with_labels_and_empty_norm_columns(preflight) -> None:
     assert "A4" not in findings
 
     summary = _cells(export.content, "xl/worksheets/sheet1.xml")
+    # The first identity row is named «Объект» as the screens name it (`UIP-G-01`); its value is still the project uid.
+    assert (summary["A2"], summary["B2"]) == ("Объект", "prj_1")
     assert (summary["A4"], summary["B4"]) == ("Прогон", RUN)
     assert (summary["A6"], summary["B6"]) == ("Ключ снимка", "")
     assert (summary["A7"], summary["B7"]) == (

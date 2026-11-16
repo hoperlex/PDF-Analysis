@@ -18,7 +18,7 @@ describe('the head of the queue', () => {
     const markup = renderScreen(client, createElement(QueuePage));
     expect(markup).toContain('data-queue-add');
     expect(markup).toContain('href="/projects"');
-    expect(markup).toContain('+ Добавить проекты');
+    expect(markup).toContain('+ Добавить объекты');
     expect(markup).toContain('>Обновить</button>');
   });
 });

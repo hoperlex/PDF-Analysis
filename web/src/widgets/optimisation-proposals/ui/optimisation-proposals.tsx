@@ -121,7 +121,7 @@ export function ProposalSetChooser({ sets, selected, onSelect, partial }: Propos
   if (sets.length === 0) {
     return (
       <EmptyState
-        title="В проекте нет комплектов с подтверждённым разделом"
+        title="В объекте нет комплектов с подтверждённым разделом"
         detail="Предложения строятся для комплекта, текущую версию которого эксперт отнёс к одному из разделов. Подтвердите раздел на экране версии."
       />
     );
@@ -159,7 +159,7 @@ export function ProposalSetChooser({ sets, selected, onSelect, partial }: Propos
         </div>
       ) : null}
       {partial ? (
-        <p className="am-note">Предложены комплекты первой страницы списка документов проекта.</p>
+        <p className="am-note">Предложены комплекты первой страницы списка документов объекта.</p>
       ) : null}
     </div>
   );
@@ -408,10 +408,10 @@ export function OptimisationProposals({
           только из прайс-листа, экономия считается только при числовом количестве.
         </p>
       </details>
-      {!fixed && documents.isPending ? <LoadingState what="документов проекта" /> : null}
+      {!fixed && documents.isPending ? <LoadingState what="документов объекта" /> : null}
       {!fixed && documentsFailure !== null ? (
         <ErrorState
-          title="Документы проекта не прочитаны"
+          title="Документы объекта не прочитаны"
           detail={documentsFailure.detail}
           correlationId={documentsFailure.correlationId}
           onRetry={() => void documents.refetch()}
@@ -475,19 +475,19 @@ export function OptimisationByDocument({ projectUid }: { readonly projectUid: Pr
       <h2 id="optimisation-by-document-heading" className={styles.heading}>Предложения по документам</h2>
       <p className={styles.rule}>
         Проходы оптимизации и предложения ведутся у каждого документа на его вкладке «Оптимизация». Здесь —
-        документы проекта с подтверждённым разделом.
+        документы объекта с подтверждённым разделом.
       </p>
-      {documents.isPending ? <LoadingState what="документов проекта" /> : null}
+      {documents.isPending ? <LoadingState what="документов объекта" /> : null}
       {failure !== null ? (
         <ErrorState
-          title="Документы проекта не прочитаны"
+          title="Документы объекта не прочитаны"
           detail={failure.detail}
           correlationId={failure.correlationId}
           onRetry={() => void documents.refetch()}
         />
       ) : null}
       {documents.data !== undefined && sets.length === 0 ? (
-        <p className="am-note">В проекте нет документов с подтверждённым разделом.</p>
+        <p className="am-note">В объекте нет документов с подтверждённым разделом.</p>
       ) : null}
       {sets.length === 0 ? null : (
         <ul data-optimisation-documents={sets.length}>
@@ -502,7 +502,7 @@ export function OptimisationByDocument({ projectUid }: { readonly projectUid: Pr
         </ul>
       )}
       {documents.data !== undefined && documents.data.page.next_cursor !== null ? (
-        <p className="am-note">Показаны документы первой страницы проекта.</p>
+        <p className="am-note">Показаны документы первой страницы объекта.</p>
       ) : null}
     </section>
   );

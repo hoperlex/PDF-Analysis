@@ -13,7 +13,7 @@ describe('topbar screen context', () => {
     expect(draw('/blocks')).toContain('Блоки</strong>');
     const nested = draw('/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B');
     expect(nested).toContain('Работа</span>');
-    expect(nested).toContain('Проект</strong>');
+    expect(nested).toContain('Объект</strong>');
     expect(nested).not.toContain('prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B');
   });
 

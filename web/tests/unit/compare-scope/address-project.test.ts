@@ -16,7 +16,7 @@ describe('the comparison project in the address', () => {
     expect(next.get('foo')).toBe('bar');
   });
 
-  it('«Все проекты» removes the project', () => {
+  it('«Все объекты» removes the project', () => {
     expect(switchProject(new URLSearchParams('project=prj_A'), null).get('project')).toBeNull();
   });
 });

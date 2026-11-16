@@ -106,7 +106,7 @@ describe('readProjectContext: the project an address names, and where it came fr
     }
   });
 
-  it('optional: no parameter, or an empty one, is «Все проекты»', () => {
+  it('optional: no parameter, or an empty one, is «Все объекты»', () => {
     for (const path of OPTIONAL_PATHS) {
       expect(readProjectContext(path, q('')), path).toEqual({ projectUid: null, source: 'none' });
       expect(readProjectContext(path, q('project=')), path).toEqual({ projectUid: null, source: 'none' });
@@ -216,14 +216,14 @@ describe('withProjectParam: carrying the project onto a link', () => {
     expect(withProjectParam(`/dashboard?x=1&project=${A}`, A)).toBe(`/dashboard?x=1&project=${A}`);
   });
 
-  it('«Все проекты» (null) removes the parameter and keeps the rest', () => {
+  it('«Все объекты» (null) removes the parameter and keeps the rest', () => {
     expect(withProjectParam(`/dashboard?project=${A}&x=1`, null)).toBe('/dashboard?x=1');
     expect(withProjectParam(`/dashboard?project=${A}#top`, null)).toBe('/dashboard#top');
     expect(withProjectParam('/dashboard', null)).toBe('/dashboard');
     expect(withProjectParam('/dashboard?x=1', '')).toBe('/dashboard?x=1');
   });
 
-  it('a required target is not touched by «Все проекты» either', () => {
+  it('a required target is not touched by «Все объекты» either', () => {
     expect(withProjectParam(`/projects/${A}`, null)).toBe(`/projects/${A}`);
   });
 
@@ -260,11 +260,11 @@ describe('switchProject: choosing a project in the header', () => {
     );
   });
 
-  it('chooses a project from «Все проекты»: the dependent parameters go too', () => {
+  it('chooses a project from «Все объекты»: the dependent parameters go too', () => {
     expect(switchProject(q('section=s1&state=failed'), A).toString()).toBe(`state=failed&project=${A}`);
   });
 
-  it('«Все проекты» (null) removes project and the dependent parameters', () => {
+  it('«Все объекты» (null) removes project and the dependent parameters', () => {
     expect(switchProject(q(`project=${A}&section=s1&version=v1&state=failed`), null).toString()).toBe('state=failed');
     expect(switchProject(q(`project=${A}`), '').toString()).toBe('');
   });

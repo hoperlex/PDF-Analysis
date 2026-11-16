@@ -139,6 +139,16 @@ def test_the_summary_counts_are_labelled_and_no_raw_value_survives_anywhere() ->
         assert not leaked, leaked
 
 
+def test_the_summary_names_the_construction_object_as_the_screens_do() -> None:
+    """`UIP-G-01`: the first identity row of «Сводка» is «Объект» (the project's uid), never «Проект»."""
+    summary, _, _ = _sheets(_source(_finding()))
+    assert (summary["A2"], summary["B2"]) == ("Объект", "prj_01M5B0000000000000000000P1")
+    assert [summary[f"A{row}"] for row in range(2, 8)] == [
+        "Объект", "Версия", "Прогон", "Профиль", "Ключ снимка", "Атрибуция",
+    ]
+    assert "Проект" not in summary.values()
+
+
 def test_identifiers_and_free_text_are_written_verbatim_even_when_they_look_like_a_value() -> None:
     word = "critical"
     finding = _finding(
@@ -336,7 +346,9 @@ def _text_digest(archive: zipfile.ZipFile, sheet: str) -> str:
 TEXT_DIGESTS = {
     # Re-pinned when the profile id of the corpus changed from a profile name to ``profile_1`` (only «Сводка» echoes it): with the old
     # literal the writer still produced ``e25dac70...6b5b6``, and «Замечания» below is unchanged.
-    "xl/worksheets/sheet1.xml": "7212170fa8478ac2e927e5339220fdacd14aa6537502b2a8852eb2416530169a",
+    # Re-pinned for «Объект» (`UIP-G-01`): the first identity row of «Сводка» (cell A2) was «Проект». The new value was computed after
+    # `test_the_summary_names_the_construction_object_as_the_screens_do` read the new word; reverting that one cell's text gives ``7212170f...169a`` again.
+    "xl/worksheets/sheet1.xml": "3d8f7b9a7aa72eef8609eb1397e48108e018dda5fa2e80853e075156807406d6",
     "xl/worksheets/sheet2.xml": "9553ccf6ed7a998918977f1ef9cdbaa36066b8bbdaefae9d96fa0e926c190adb",
 }
 

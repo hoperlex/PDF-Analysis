@@ -34,7 +34,7 @@ export function precedentTitle(label: PrecedentFindingLabel): string {
   const { votes } = label;
   return (
     `Решения экспертов по похожим находкам: всего ${votes.total} (отклонено ${votes.rejected}, принято ${votes.accepted}), ` +
-    `независимых ${votes.independent}, проектов ${votes.projects}. Это справка, а не решение: решаете вы.`
+    `независимых ${votes.independent}, объектов ${votes.projects}. Это справка, а не решение: решаете вы.`
   );
 }
 

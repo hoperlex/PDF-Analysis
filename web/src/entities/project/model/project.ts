@@ -42,9 +42,9 @@ export function validateProjectName(raw: string): ProjectNameProblem | null {
 export function projectNameProblemMessage(problem: ProjectNameProblem): string {
   switch (problem) {
     case 'empty':
-      return 'Проекту нужно название.';
+      return 'Объекту нужно название.';
     case 'too_long':
-      return `Название проекта — не более ${PROJECT_NAME_MAX_LENGTH} символов.`;
+      return `Название объекта — не более ${PROJECT_NAME_MAX_LENGTH} символов.`;
   }
 }
 

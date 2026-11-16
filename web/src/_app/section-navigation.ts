@@ -76,8 +76,8 @@ export const SECTIONS_GROUP_LABEL = 'Разделы';
 export const SECTIONS_DOCUMENTS_LABEL = 'Документов в разделах';
 
 /** The words of a group that has no list to show. */
-export const SECTIONS_LOADING_NOTE = 'Разделы проекта загружаются…';
-export const SECTIONS_FAILED_NOTE = 'Разделы проекта не удалось прочитать.';
+export const SECTIONS_LOADING_NOTE = 'Разделы объекта загружаются…';
+export const SECTIONS_FAILED_NOTE = 'Разделы объекта не удалось прочитать.';
 
 /**
  * The accessible name of a sub-item: the mark, the name and the count, which the visible badge shortens to a number,

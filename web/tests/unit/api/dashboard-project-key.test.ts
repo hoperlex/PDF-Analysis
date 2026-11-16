@@ -18,19 +18,19 @@ const A = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const B = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
 
 describe('the dashboard summary key carries the project', () => {
-  it('files «Все проекты» under the bare prefix and a project under the prefix plus the project', () => {
+  it('files «Все объекты» under the bare prefix and a project under the prefix plus the project', () => {
     expect(queryKeys.dashboard.summary()).toEqual(['dashboard', 'summary']);
     expect(queryKeys.dashboard.summary(A)).toEqual(['dashboard', 'summary', { project: A }]);
   });
 
-  it('gives two projects two keys, and neither is the key of «Все проекты»', () => {
+  it('gives two projects two keys, and neither is the key of «Все объекты»', () => {
     const keys = [queryKeys.dashboard.summary(), queryKeys.dashboard.summary(A), queryKeys.dashboard.summary(B)].map((key) =>
       JSON.stringify(key),
     );
     expect(new Set(keys).size).toBe(3);
   });
 
-  it('spells «Все проекты» one way: null, undefined and an empty string name no project', () => {
+  it('spells «Все объекты» one way: null, undefined and an empty string name no project', () => {
     expect(queryKeys.dashboard.summary(null)).toEqual(queryKeys.dashboard.summary());
     expect(queryKeys.dashboard.summary(undefined)).toEqual(queryKeys.dashboard.summary());
     expect(queryKeys.dashboard.summary('')).toEqual(queryKeys.dashboard.summary());
@@ -51,7 +51,7 @@ describe('the invalidation every mutation makes reaches every project', () => {
     return client;
   }
 
-  it('marks «Все проекты» and both projects stale with the call the twelve hooks already make', async () => {
+  it('marks «Все объекты» and both projects stale with the call the twelve hooks already make', async () => {
     const client = filled();
     await client.invalidateQueries({ queryKey: queryKeys.dashboard.summary(), refetchType: 'none' });
     for (const key of [queryKeys.dashboard.summary(), queryKeys.dashboard.summary(A), queryKeys.dashboard.summary(B)]) {
@@ -60,7 +60,7 @@ describe('the invalidation every mutation makes reaches every project', () => {
     expect(client.getQueryState(queryKeys.projects.all())?.isInvalidated).toBe(false);
   });
 
-  it('can fail: invalidating ONE project does not touch the other or «Все проекты»', async () => {
+  it('can fail: invalidating ONE project does not touch the other or «Все объекты»', async () => {
     const client = filled();
     await client.invalidateQueries({ queryKey: queryKeys.dashboard.summary(A), refetchType: 'none' });
     expect(client.getQueryState(queryKeys.dashboard.summary(A))?.isInvalidated).toBe(true);

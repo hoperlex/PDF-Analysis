@@ -47,11 +47,11 @@ const NO_PARAMS = new URLSearchParams();
 /** «Все проекты» or the project's name, and the way back to all of them, as the dashboard says its scope. */
 function ProjectScope({ projectUid, allProjectsHref }: { readonly projectUid: string | null; readonly allProjectsHref: string }) {
   const projects = useProjectList(undefined, { enabled: projectUid !== null });
-  if (projectUid === null) return <p className="am-note" data-dispatcher-scope="all">Все проекты</p>;
-  const name = projects.data?.items.find((item) => item.project_uid === projectUid)?.name ?? 'Проект';
+  if (projectUid === null) return <p className="am-note" data-dispatcher-scope="all">Все объекты</p>;
+  const name = projects.data?.items.find((item) => item.project_uid === projectUid)?.name ?? 'Объект';
   return (
     <p className="am-note" data-dispatcher-scope="project">
-      Проект: {name} · <Link href={allProjectsHref}>Все проекты</Link>
+      Объект: {name} · <Link href={allProjectsHref}>Все объекты</Link>
     </p>
   );
 }
@@ -94,7 +94,7 @@ export function DispatcherPage({ roles }: DispatcherPageProps) {
         <h1 className="am-page__title">Диспетчер</h1>
         <p className="am-page__subtitle">
           {admin
-            ? 'Назначение проектов и документов экспертам, их состояние и история.'
+            ? 'Назначение объектов и документов экспертам, их состояние и история.'
             : 'Работа, назначенная вам: возьмите её в работу, отметьте выполненной или верните с причиной.'}
         </p>
       </header>

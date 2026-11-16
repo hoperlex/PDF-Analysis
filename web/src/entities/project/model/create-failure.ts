@@ -71,7 +71,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'invalid_name',
         presentation: 'unsupported',
-        title: 'Сервер отклонил это название проекта.',
+        title: 'Сервер отклонил это название объекта.',
         detail:
           catalogMessage(error.errorCode) + classifiers(error.details, ['field', 'constraint', 'aggregate_type']),
       };
@@ -91,7 +91,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'not_authenticated',
         presentation: 'error',
-        title: 'Создание проекта не авторизовано.',
+        title: 'Создание объекта не авторизовано.',
         detail: AUTHENTICATION_REQUIRED_DETAIL,
       };
     case 'permission_denied':
@@ -99,7 +99,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'not_permitted',
         presentation: 'error',
-        title: 'Вам не разрешено создавать проект.',
+        title: 'Вам не разрешено создавать объект.',
         detail:
           PERMISSION_DENIED_DETAIL +
           classifiers(error.details, ['aggregate_type', 'required_capability']),
@@ -109,7 +109,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'duplicate_intent',
         presentation: 'error',
-        title: 'Этот ключ уже использован для другого проекта.',
+        title: 'Этот ключ уже использован для другого объекта.',
         detail:
           catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
@@ -120,11 +120,11 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'in_progress',
         presentation: 'error',
-        title: 'Этот проект ещё создаётся.',
+        title: 'Этот объект ещё создаётся.',
         detail:
           catalogMessage(error.errorCode) +
           classifiers(error.details, ['command_type']) +
-          ' Повтор спрашивает снова под тем же ключом; новый ключ создал бы второй проект.',
+          ' Повтор спрашивает снова под тем же ключом; новый ключ создал бы второй объект.',
       };
     case 'idempotency_key_stale':
       return {
@@ -149,7 +149,7 @@ function fromApiError(error: ApiError): CreateProjectFailure {
         ...base,
         kind: 'server_error',
         presentation: 'error',
-        title: 'Создание проекта завершилось ошибкой на сервере.',
+        title: 'Создание объекта завершилось ошибкой на сервере.',
         detail: catalogMessage(error.errorCode),
       };
   }
@@ -189,7 +189,7 @@ export function classifyCreateProjectFailure(error: unknown): CreateProjectFailu
   return {
     kind: 'unknown',
     presentation: 'error',
-    title: 'Создать проект не удалось по неклассифицированной причине.',
+    title: 'Создать объект не удалось по неклассифицированной причине.',
     detail:
       error instanceof ApiFailure
         ? error.message

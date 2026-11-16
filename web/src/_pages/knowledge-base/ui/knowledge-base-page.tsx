@@ -105,7 +105,7 @@ const NO_PARAMS = new URLSearchParams();
 const KNOWLEDGE_BASE_ADDRESS = '/knowledge-base';
 
 /** The scope the screen states when no project is chosen. */
-const ALL_PROJECTS = 'Все проекты';
+const ALL_PROJECTS = 'Все объекты';
 
 /**
  * The project's name, for the scope line. From the records the server just sent when there are
@@ -169,7 +169,7 @@ const SUBTITLE =
 
 /** `D-495`: the memory is not a projection. It is the record of what the expert saw and decided, kept apart from the project. */
 const MEMORY_SUBTITLE =
-  'Память решений: то, что эксперт видел и решил в момент решения. Хранится отдельно и остаётся после удаления проекта и документа; это история, а не действующий вердикт.';
+  'Память решений: то, что эксперт видел и решил в момент решения. Хранится отдельно и остаётся после удаления объекта и документа; это история, а не действующий вердикт.';
 
 export function KnowledgeBasePage() {
   // `null` only where no router is mounted; the address is then no address and names no project.
