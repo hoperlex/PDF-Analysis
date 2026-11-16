@@ -8,6 +8,9 @@
  * registers (`enabled`), the way `qa_w50/r66-navigation.test.ts` reads the reads of a screen.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -16,11 +19,15 @@ import { ApiError } from '@/shared/api';
 import type { Account, ErrorEnvelope, Project, ProjectPage } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { MENU_CLOSED } from '@/shared/ui';
+import { MenuView } from '@/shared/ui/menu';
 import {
   ALL_PROJECTS_LABEL,
   GLOBAL_SCREEN_HINT,
   MORE_PROJECTS_LABEL,
   NEW_PROJECT_LABEL,
+  ObjectMenu,
+  ObjectMenuView,
   ProjectSwitcher,
   ProjectSwitcherLive,
   ProjectSwitcherView,
@@ -28,9 +35,11 @@ import {
   buildSwitcherModel,
   chooseProject,
   chosenProject,
+  projectBadges,
   projectFigures,
   projectRowLabels,
   switcherListOf,
+  switcherMenuProps,
 } from '@/widgets/project-switcher';
 import type { SwitcherAddress, SwitcherList } from '@/widgets/project-switcher';
 
@@ -96,28 +105,56 @@ function markupOf(address: SwitcherAddress, list: SwitcherList): string {
   return renderToStaticMarkup(createElement(ProjectSwitcherView, { model: buildSwitcherModel(address, list), onRetry: () => undefined }));
 }
 
-/** The menu items of a markup, in order: `[tag, href or null, text]`. */
+const CHECK_CELL = /<span class="am-menu__check"[^>]*>[^<]*<\/span>/;
+const FIGURES_CELL = /<span class="[^"]*" data-object-figures="">(?:<span\b[^>]*>[^<]*<\/span>)*<\/span>/;
+const decode = (text: string): string => text.replace(/&amp;/g, '&');
+
+/** A row's name: its text, with the ✓ cell and the badges (which are the row's marks, not its words) taken out. */
+function nameOf(inner: string): string {
+  return decode(inner.replace(CHECK_CELL, '').replace(FIGURES_CELL, '').replace(/<[^>]+>/g, ''));
+}
+
+/** The menu items of a markup, in order: `[tag, href or null, name]`. */
 function itemsOf(markup: string): [string, string | null, string][] {
   return [...markup.matchAll(/<(a|button)\b([^>]*role="menuitem"[^>]*)>([\s\S]*?)<\/(?:a|button)>/g)].map((m) => [
     m[1] as string,
     /\bhref="([^"]*)"/.exec(m[2] as string)?.[1] ?? null,
-    // The ✓ cell of `D-363` is the row's mark, not its text.
-    (m[3] as string).replace(/<span class="am-menu__check"[^>]*>[^<]*<\/span>/, '').replace(/&amp;/g, '&'),
+    nameOf(m[3] as string),
   ]);
 }
 
-/** The rows that carry the ✓ cell, `[first line of the label, the mark ('✓' or '')]`, and which of them is `aria-current`. */
+/** One badge of a row: `[figure key, count, the badge's tone class, its tooltip]`. */
+type DrawnFigure = [string, number, string, string];
+
+/** The rows of a markup with what they say of themselves: the name, the badges drawn in them, and the accessible name of the row. */
+function rowsOf(markup: string): { name: string; figures: DrawnFigure[]; ariaLabel: string | null; object: boolean }[] {
+  return [...markup.matchAll(/<a\b([^>]*role="menuitem"[^>]*)>([\s\S]*?)<\/a>/g)].map((m) => ({
+    name: nameOf(m[2] as string),
+    figures: [...(m[2] as string).matchAll(/<span class="am-badge (am-badge--\w+) [^"]*" title="([^"]*)" aria-hidden="true" data-object-figure="(\w+)">(\d+)<\/span>/g)].map(
+      (f): DrawnFigure => [f[3] as string, Number(f[4]), f[1] as string, decode(f[2] as string)],
+    ),
+    ariaLabel: /\baria-label="([^"]*)"/.exec(m[1] as string)?.[1] ?? null,
+    object: /\bclass="[^"]*object[^"]*"/.test(m[1] as string),
+  }));
+}
+
+/** The rows that carry the ✓ cell, `[name, the mark ('✓' or '')]`, and which of them is `aria-current`. */
 function marksOf(markup: string): { readonly marks: [string, string][]; readonly current: string[] } {
   const rows = [...markup.matchAll(/<(a|button)\b([^>]*role="menuitem"[^>]*)>([\s\S]*?)<\/(?:a|button)>/g)];
   const marks: [string, string][] = [];
   const current: string[] = [];
   for (const row of rows) {
     const cell = /<span class="am-menu__check"[^>]*>([^<]*)<\/span>/.exec(row[3] as string);
-    const label = ((row[3] as string).replace(/<span class="am-menu__check"[^>]*>[^<]*<\/span>/, '').split('\n')[0] ?? '').replace(/&amp;/g, '&');
+    const label = nameOf(row[3] as string);
     if (cell !== null) marks.push([label, cell[1] as string]);
     if (/\baria-current="true"/.test(row[2] as string)) current.push(label);
   }
   return { marks, current };
+}
+
+/** What the button draws: the markup inside the menu button. */
+function buttonFace(markup: string): string {
+  return /<button\b[^>]*aria-haspopup="menu"[^>]*>([\s\S]*?)<\/button>/.exec(markup)?.[1] ?? '';
 }
 
 // ----------------------------------------------------------------------------- what a choice does
@@ -199,29 +236,75 @@ describe('a project row: the name and the original\'s two figures, each next to 
     const bare = project(C, 'Склад');
     expect(bare.audit_counts).toBeUndefined();
     expect(projectFigures(bare)).toBeNull();
+    expect(projectBadges(bare)).toBeNull();
     expect(projectRowLabels([bare])).toEqual(['Склад']);
     expect(projectRowLabels([bare])[0]).not.toMatch(/\d/);
+    // in a list: the row of the project with no counts has no badge and no sentence about them; its neighbours keep theirs
+    const rows = rowsOf(markupOf(at('/dashboard'), ready([MOST, bare])));
+    expect(rows.slice(0, 2).map((row) => [row.name, row.figures.length, row.ariaLabel])).toEqual([
+      ['Мост через Неву', 2, 'Мост через Неву: не запускались 2 · нет решений эксперта 5'],
+      ['Склад', 0, null],
+    ]);
   });
 
-  it('puts the name and the figures on two lines of one label, one line for the name', () => {
-    expect(projectRowLabels(PROJECTS)).toEqual([
-      'Мост через Неву\nне запускались 2 · нет решений эксперта 5',
-      'Школа №7\nне запускались 0 · нет решений эксперта 0',
-    ]);
+  it('a row\'s label is the name alone, on one line; the figures are not in it (UIP-G-08)', () => {
+    expect(projectRowLabels(PROJECTS)).toEqual(['Мост через Неву', 'Школа №7']);
     // A name with its own line breaks and runs of spaces is one line; the stored name is not touched.
     expect(projectRowLabels([project(C, '  Склад\n  №3  ')])).toEqual(['Склад №3']);
   });
 
-  it('renders each row as a link to its choice, with both figures and their words in its text', () => {
-    const items = itemsOf(markupOf(at('/dashboard'), ready()));
-    expect(items.slice(0, 2)).toEqual([
-      ['a', `/dashboard?project=${A}`, 'Мост через Неву\nне запускались 2 · нет решений эксперта 5'],
-      ['a', `/dashboard?project=${B}`, 'Школа №7\nне запускались 0 · нет решений эксперта 0'],
+  it('turns the two figures into two badges, the words in the tooltip: «не запускались» is not_run, «нет решений эксперта» is no_expert_decision', () => {
+    expect(projectBadges(MOST)).toEqual([
+      { key: 'not_run', count: 2, words: 'не запускались', title: 'Не запускались: 2' },
+      { key: 'no_expert_decision', count: 5, words: 'нет решений эксперта', title: 'Нет решений эксперта: 5' },
+    ]);
+    // the badge reads the contract's field, not a sum (2 + 3 awaiting would be 5, so use a server that says otherwise)
+    expect(projectBadges(project(C, 'Склад', { documents: 9, not_run: 1, awaiting_decision: 1, no_expert_decision: 7 }))?.map((one) => one.count)).toEqual([1, 7]);
+    // a zero the server sent is a badge; only an absent count is no badge
+    expect(projectBadges(SCHOOL)?.map((one) => one.count)).toEqual([0, 0]);
+  });
+
+  it('renders each row as a link to its choice: the name, then the two badges in the two tones of meaning, the words in their titles', () => {
+    const rows = rowsOf(markupOf(at('/dashboard'), ready()));
+    expect(rows.slice(0, 2)).toEqual([
+      {
+        name: 'Мост через Неву',
+        figures: [
+          ['not_run', 2, 'am-badge--degraded', 'Не запускались: 2'],
+          ['no_expert_decision', 5, 'am-badge--active', 'Нет решений эксперта: 5'],
+        ],
+        ariaLabel: 'Мост через Неву: не запускались 2 · нет решений эксперта 5',
+        object: true,
+      },
+      {
+        name: 'Школа №7',
+        figures: [
+          ['not_run', 0, 'am-badge--degraded', 'Не запускались: 0'],
+          ['no_expert_decision', 0, 'am-badge--active', 'Нет решений эксперта: 0'],
+        ],
+        ariaLabel: 'Школа №7: не запускались 0 · нет решений эксперта 0',
+        object: true,
+      },
+    ]);
+    expect(itemsOf(markupOf(at('/dashboard'), ready())).slice(0, 2)).toEqual([
+      ['a', `/dashboard?project=${A}`, 'Мост через Неву'],
+      ['a', `/dashboard?project=${B}`, 'Школа №7'],
+    ]);
+  });
+
+  it('the badges say nothing to assistive technology on their own: the row\'s name says both figures with their words', () => {
+    const markup = markupOf(at('/dashboard'), ready());
+    expect(markup.match(/data-object-figure="/g)).toHaveLength(4);
+    for (const badge of markup.match(/<span class="am-badge [^"]*"[^>]*>/g) ?? []) expect(badge).toContain('aria-hidden="true"');
+    // no row of fixed text has figures, and the fixed rows have no object step
+    expect(rowsOf(markup).slice(2).map((row) => [row.name, row.figures.length, row.object])).toEqual([
+      [ALL_PROJECTS_LABEL, 0, false],
+      [NEW_PROJECT_LABEL, 0, false],
     ]);
   });
 
   it('keeps the contract\'s order and does not sort', () => {
-    expect(projectRowLabels([SCHOOL, MOST]).map((label) => label.split('\n')[0])).toEqual(['Школа №7', 'Мост через Неву']);
+    expect(projectRowLabels([SCHOOL, MOST])).toEqual(['Школа №7', 'Мост через Неву']);
   });
 
   it('keeps two projects with the same name and the same figures apart, and keeps a project named like a fixed entry apart', () => {
@@ -369,29 +452,54 @@ describe('the button: the project\'s name, or «Все объекты», muted o
     for (const pathname of ['/', '/projects', '/queue', '/logs', '/workers', '/norms', '/admin/users']) {
       const model = buildSwitcherModel(at(pathname), ready());
       expect(model.hint, pathname).toBe(GLOBAL_SCREEN_HINT);
-      expect(model.triggerLabel, pathname).toBe(`Объекты: Все объекты, ${GLOBAL_SCREEN_HINT}`);
+      expect(model.triggerLabel, pathname).toBe(`Все объекты, ${GLOBAL_SCREEN_HINT}`);
+      expect(model.title, pathname).toBe(GLOBAL_SCREEN_HINT);
       const markup = markupOf(at(pathname), ready());
       expect(markup, pathname).toContain('data-project-scope="global"');
       expect(markup, pathname).toMatch(/class="[^"]*muted[^"]*" data-project-switcher/);
-      expect(markup, pathname).toContain('экран общий');
+      // UIP-G-08: the hint is in the button's tooltip and its accessible name, and is not drawn
+      expect(markup, pathname).toMatch(/<button\b[^>]*aria-label="Все объекты, экран общий" title="экран общий"/);
+      expect(buttonFace(markup), pathname).not.toContain('экран общий');
     }
     for (const pathname of ['/dashboard', '/knowledge-base', '/section-optimisation']) {
       const model = buildSwitcherModel(at(pathname), ready());
       expect(model.hint, pathname).toBeNull();
-      expect(model.triggerLabel, pathname).toBe('Объекты: Все объекты');
+      expect(model.triggerLabel, pathname).toBe('Все объекты');
+      expect(model.title, pathname).toBeNull();
       expect(markupOf(at(pathname), ready()), pathname).not.toMatch(/muted|экран общий/);
+      expect(markupOf(at(pathname), ready()), pathname).not.toMatch(/<button\b[^>]*\btitle=/);
     }
     // A required screen is not muted and has no hint; its project is the path's.
     const required = buildSwitcherModel(at(`/projects/${A}`), ready());
     expect(required.hint).toBeNull();
-    expect(required.triggerLabel).toBe('Объекты: Мост через Неву');
+    expect(required.triggerLabel).toBe('Объект: Мост через Неву');
     expect(markupOf(at(`/projects/${A}`), ready())).not.toMatch(/muted|экран общий/);
   });
 
   it('is a menu button named by what it shows: the trigger\'s accessible name is the model\'s', () => {
     const markup = markupOf(at('/dashboard', `project=${A}`), ready());
-    expect(markup).toMatch(/<button\b[^>]*aria-haspopup="menu"[^>]*aria-label="Объекты: Мост через Неву"/);
+    expect(markup).toMatch(/<button\b[^>]*aria-haspopup="menu"[^>]*aria-label="Объект: Мост через Неву"/);
     expect(markup).toContain('data-project-scope="optional"');
+  });
+
+  it('draws the name and the ▾ and nothing else: no caption «Объекты»/«Проекты», however the object is named (UIP-G-08)', () => {
+    for (const [address, list] of [
+      [at('/dashboard', `project=${A}`), ready()],
+      [at('/dashboard'), ready()],
+      [at('/queue'), ready()],
+      [at('/dashboard', `project=${C}`), { kind: 'loading' } as SwitcherList],
+    ] as const) {
+      const face = buttonFace(markupOf(address, list));
+      const parts = face.replace(/<[^>]+>/g, '|').split('|').filter((part) => part !== '');
+      // the value the model gives, and the ▾: a caption would be a third part before them
+      expect(parts, JSON.stringify([address.pathname, address.searchParams.toString()])).toEqual([buildSwitcherModel(address, list).value, '▾']);
+    }
+    expect(buttonFace(markupOf(at('/dashboard', `project=${A}`), ready()))).toMatch(/>Мост через Неву<\/span><span class="[^"]*" aria-hidden="true">▾<\/span>/);
+  });
+
+  it('can fail: a caption the face drew would add a part, and a name that is not in the button is not read as one', () => {
+    expect(buttonFace('<button class="am-menu__trigger" aria-haspopup="menu"><span><span>ОБЪЕКТЫ</span><span>Мост</span><span>▾</span></span></button>')).toContain('ОБЪЕКТЫ');
+    expect(buttonFace(markupOf(at('/dashboard', `project=${A}`), ready()))).not.toContain('ОБЪЕКТЫ');
   });
 });
 
@@ -508,7 +616,7 @@ describe('UIP-G-06: on a screen that follows the object, a silent address means 
       const model = buildSwitcherModel(at(pathname, '', B), ready());
       expect(model.projectUid, pathname).toBe(B);
       expect(model.value, pathname).toBe('Школа №7');
-      expect(model.triggerLabel, pathname).toBe('Объекты: Школа №7');
+      expect(model.triggerLabel, pathname).toBe('Объект: Школа №7');
       const { marks, current } = marksOf(markupOf(at(pathname, '', B), ready()));
       expect(marks, pathname).toEqual([['Мост через Неву', ''], ['Школа №7', '✓'], [ALL_PROJECTS_LABEL, '']]);
       expect(current, pathname).toEqual(['Школа №7']);
@@ -694,5 +802,91 @@ describe('UIP-G-06: the island reads the account only where its answer changes w
     known.setQueryData(queryKeys.account.me(), account(null));
     expect(renderScreen(known, createElement(ProjectSwitcherLive, { address: at('/dashboard') }))).toContain('>Все объекты</span>');
     expect(renderScreen(newClient(), createElement(ProjectSwitcherLive, { address: at('/dashboard') }))).toContain('>Загрузка…</span>');
+  });
+});
+
+// ------------------------------------------------------------- UIP-G-08: the menu that draws the badges
+
+describe('UIP-G-08: the selector\'s own menu is the shared menu\'s markup, class for class, plus the badges', () => {
+  const model = buildSwitcherModel(at('/dashboard', `project=${A}`), ready());
+  const props = switcherMenuProps(model, () => undefined);
+  const idsOf = (markup: string) => ({
+    triggerId: /<button\b[^>]*\bid="([^"]*)"/.exec(markup)?.[1] as string,
+    menuId: /<ul\b[^>]*\bid="([^"]*)"/.exec(markup)?.[1] as string,
+  });
+
+  it('the island renders exactly the closed view, with the list in it and hidden', () => {
+    const island = renderToStaticMarkup(createElement(ObjectMenu, props));
+    const closed = renderToStaticMarkup(createElement(ObjectMenuView, { ...props, state: MENU_CLOSED, ...idsOf(island) }));
+    expect(island).toBe(closed);
+    expect(island).toContain('aria-expanded="false"');
+    expect(island).toMatch(/<div class="am-menu__popup" hidden="">/);
+  });
+
+  it('draws the same markup as `Menu` for the rows that carry no badge: the shell\'s tests read this markup as they read that one', () => {
+    const plain = switcherMenuProps(buildSwitcherModel(at('/queue'), { kind: 'loading' }), () => undefined);
+    const ours = renderToStaticMarkup(createElement(ObjectMenuView, { ...plain, state: MENU_CLOSED, triggerId: 't', menuId: 'm' }));
+    // `title` is the one attribute `Menu` has no prop for; the hint of a global screen is said there
+    const theirs = renderToStaticMarkup(createElement(MenuView, { ...plain, state: MENU_CLOSED, triggerId: 't', menuId: 'm' }));
+    expect(ours.replace(' title="экран общий"', '')).toBe(theirs);
+    expect(ours).toContain('title="экран общий"');
+  });
+
+  it('opened, it shows the popup and the rows with their badges (the instrument that draws the menu open uses this view)', () => {
+    const open = renderToStaticMarkup(createElement(ObjectMenuView, { ...props, state: { open: true, active: 0 }, triggerId: 't', menuId: 'm' }));
+    expect(open).toContain('aria-expanded="true"');
+    expect(open).not.toContain('hidden=""');
+    expect(rowsOf(open)[0]?.figures.map(([key, count]) => [key, count])).toEqual([['not_run', 2], ['no_expert_decision', 5]]);
+  });
+
+  it('keeps the retry an action row with its handler, and the model\'s entries one row each, in order', () => {
+    const failed = buildSwitcherModel(at('/dashboard'), switcherListOf(undefined, apiError(503, 'dependency_unavailable', true)));
+    const retry = vi.fn();
+    const items = switcherMenuProps(failed, retry).items;
+    expect(items.map((item) => item.kind)).toEqual(['action', 'link', 'link']);
+    const first = items[0];
+    if (first.kind === 'action') first.onChoose?.();
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(switcherMenuProps(model, retry).items.map((item) => item.label)).toEqual(['Мост через Неву', 'Школа №7', ALL_PROJECTS_LABEL, NEW_PROJECT_LABEL]);
+  });
+});
+
+describe('UIP-G-08: the module\'s rules read the picker\'s size tokens and leave the button no frame', () => {
+  const WEB = fileURLToPath(new URL('../../..', import.meta.url));
+  const MODULE = readFileSync(join(WEB, 'src', 'widgets', 'project-switcher', 'ui', 'project-switcher.module.css'), 'utf8');
+  /** The declarations of the rule whose selector is exactly `selector`, or `null`. */
+  const rule = (selector: string): string | null => {
+    const at = MODULE.indexOf(`\n${selector} {`);
+    return at < 0 ? null : MODULE.slice(MODULE.indexOf('{', at) + 1, MODULE.indexOf('}', at));
+  };
+
+  it('the panel is the picker\'s width, at most its ceiling, and never wider than the viewport', () => {
+    const popup = rule('.switcher :global(.am-menu__popup)');
+    expect(popup).toContain('min-width: min(var(--am-picker-width), calc(100vw - 32px))');
+    expect(popup).toContain('max-width: min(var(--am-picker-width-max), calc(100vw - 32px))');
+  });
+
+  it('an object\'s row takes the picker\'s step, and a badge its narrowest width', () => {
+    expect(rule('.switcher .object')).toContain('min-height: var(--am-picker-row-step)');
+    expect(rule('.figure')).toContain('min-width: var(--am-picker-badge-min)');
+    expect(rule('.figure')).toContain('font-variant-numeric: tabular-nums');
+  });
+
+  it('the button has no frame, fill or shadow of its own, and no caption rule is left in the module', () => {
+    const trigger = rule('.switcher :global(.am-menu__trigger)') ?? '';
+    expect(trigger).not.toBe('');
+    expect(trigger).not.toMatch(/\bborder(?!-radius)[\w-]*:/);
+    expect(trigger).not.toMatch(/\bbackground/);
+    expect(trigger).not.toContain('box-shadow');
+    expect(MODULE).not.toMatch(/\.caption\b|\.hint\b|uppercase/);
+  });
+
+  it('colours the badges with the global badge tones, so the module declares no colour pair of its own for them', () => {
+    expect(rule('.figure')).not.toMatch(/\b(color|background)/);
+    expect(rule('.figures')).not.toMatch(/\b(color|background)/);
+  });
+
+  it('can fail: a selector that is not in the file reads as no rule', () => {
+    expect(rule('.switcher .no-such-rule')).toBeNull();
   });
 });

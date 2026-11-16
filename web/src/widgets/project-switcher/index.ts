@@ -1,12 +1,15 @@
 /**
- * Public API of the `project-switcher` widget: the «Проекты ▾» selector of the frame's top
+ * Public API of the `project-switcher` widget: the object selector of the frame's top
  * strip (`R-150b`). Importers use `@/widgets/project-switcher` and nothing deeper.
  */
 
 export type { ProjectSwitcherViewProps } from './ui/project-switcher';
 export { ProjectSwitcher, ProjectSwitcherLive, ProjectSwitcherView, switcherMenuProps } from './ui/project-switcher';
+export type { ObjectMenuItem, ObjectMenuProps, ObjectMenuViewProps } from './ui/object-menu';
+export { ObjectMenu, ObjectMenuView } from './ui/object-menu';
 
 export type {
+  RowFigure,
   SwitcherAddress,
   SwitcherEntry,
   SwitcherList,
@@ -21,10 +24,11 @@ export {
   NOT_RUN_LABEL,
   NO_EXPERT_DECISION_LABEL,
   RETRY_LABEL,
-  SWITCHER_CAPTION,
+  SWITCHER_LABEL,
   buildSwitcherModel,
   chooseProject,
   chosenProject,
+  projectBadges,
   projectFigures,
   projectRowLabels,
   switcherContext,
