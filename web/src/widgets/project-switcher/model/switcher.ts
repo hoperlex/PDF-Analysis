@@ -1,5 +1,5 @@
 /**
- * The project selector of the frame, as data (`R-150b`, `R-150c`, `UI-PARITY-01` wave 1).
+ * The object selector of the frame, as data (`R-150b`, `R-150c`, `UI-PARITY-01` wave 1).
  *
  * Pure functions over the address and the project list. Nothing here renders, fetches or
  * navigates: the widget turns a {@link SwitcherModel} into markup, and a choice is a plain link
@@ -25,14 +25,14 @@
  * clicked link chose; «Все объекты», «Новый объект» and the full list are not objects). The command is the widget's and not
  * this module's: nothing here fetches.
  *
- * ## The two numbers of a row
+ * ## The two numbers of a row (`UIP-G-08`)
  *
- * The original shows two figures beside each object. Both are the contract's own, read as
- * `Project.audit_counts` (`DocumentAuditCounts`): «не запускались» is `not_run`, «нет решений
- * эксперта» is `no_expert_decision` (`not_run + awaiting_decision`, `R-150o`). Each figure is
- * written next to the words that name it, so the row means the same to a screen reader as to an
- * eye. A project whose answer carries no `audit_counts` shows **no** figures: an absent count is
- * unknown, never zero.
+ * The original shows two figures beside each object, as small badges with no words and the words in a tooltip. Both are the
+ * contract's own, read as `Project.audit_counts` (`DocumentAuditCounts`): «не запускались» is `not_run`, «нет решений
+ * эксперта» is `no_expert_decision` (`not_run + awaiting_decision`, `R-150o`). A row carries them as {@link RowFigure}s (the
+ * count, its words and its tooltip), and its accessible name says the words beside the numbers, so the row means the same to
+ * a screen reader as to an eye. A project whose answer carries no `audit_counts` carries **no** figures and shows no badge:
+ * an absent count is unknown, never zero (a zero that the server did send is shown).
  *
  * ## The mark of the project that is open (`D-363`)
  *
@@ -55,7 +55,8 @@ import type { ProjectScope, ProjectSource, SearchParamsLike } from '@/shared/lib
 import { classifyProjectListFailure } from '@/entities/project';
 import type { ProjectListFailure } from '@/entities/project';
 
-export const SWITCHER_CAPTION = 'Объекты';
+/** The word before the object's name in the button's accessible name; the button shows no caption (`UIP-G-08`). */
+export const SWITCHER_LABEL = 'Объект';
 export const ALL_PROJECTS_LABEL = 'Все объекты';
 export const NEW_PROJECT_LABEL = 'Новый объект';
 export const MORE_PROJECTS_LABEL = 'Остальные объекты — в списке';
@@ -66,6 +67,16 @@ export const GLOBAL_SCREEN_HINT = 'экран общий';
 /** The two figures of a row, named as the original names them. */
 export const NOT_RUN_LABEL = 'не запускались';
 export const NO_EXPERT_DECISION_LABEL = 'нет решений эксперта';
+
+/** One of the two figures of a row, drawn as a badge. The words are in its tooltip and in the row's accessible name. */
+export interface RowFigure {
+  readonly key: 'not_run' | 'no_expert_decision';
+  readonly count: number;
+  /** The figure's words, as the original names it. */
+  readonly words: string;
+  /** The tooltip of the badge: the words, then the count. */
+  readonly title: string;
+}
 
 /** The address the selector reads: where the browser is, and its query string. */
 export interface SwitcherAddress {
@@ -110,20 +121,26 @@ export type SwitcherEntry =
       readonly current?: boolean;
       /** `UIP-G-06`: the entry chooses this object (a project's row); absent for «Все объекты», the list and «Новый объект». */
       readonly projectUid?: string;
+      /** `UIP-G-08`: the row's two figures, `not_run` then `no_expert_decision`; absent when the project's answer carries none. */
+      readonly figures?: readonly [RowFigure, RowFigure];
+      /** `UIP-G-08`: what a screen reader says for a row with figures: the name, then the figures with their words. */
+      readonly name?: string;
     }
   | { readonly kind: 'retry'; readonly label: string };
 
 export interface SwitcherModel {
   /** The class of the screen being shown; `null` for an address the registry does not have. */
   readonly scope: ProjectScope | null;
-  /** The project the address names, or `null` for «Все проекты». */
+  /** The project the address names, or `null` for «Все объекты». */
   readonly projectUid: string | null;
-  /** What the button shows: the project's name, or the reason it cannot. */
+  /** What the button shows: the object's name, or the reason it cannot. */
   readonly value: string;
-  /** «экран общий» on a global screen, else `null`. */
+  /** «экран общий» on a global screen, else `null`. It is said in the button's tooltip and its accessible name, not drawn. */
   readonly hint: string | null;
-  /** The button's accessible name. */
+  /** The button's accessible name: «Объект: <название>», or «Все объекты»; on a global screen the hint follows. */
   readonly triggerLabel: string;
+  /** The button's tooltip: the hint of a global screen, else `null`. */
+  readonly title: string | null;
   readonly notes: readonly SwitcherNote[];
   readonly entries: readonly [SwitcherEntry, ...SwitcherEntry[]];
 }
@@ -180,46 +197,51 @@ function createdDay(project: Project): string {
   return /^\d\d\.\d\d\.\d{4}/.test(text) ? text.slice(0, 10) : text;
 }
 
-/** The two figures of a project, or `null` when its answer carries none. */
+/** The two figures of a project in words, or `null` when its answer carries none. */
 export function projectFigures(project: Project): string | null {
   const counts = project.audit_counts;
   if (counts === undefined) return null;
   return `${NOT_RUN_LABEL} ${counts.not_run} · ${NO_EXPERT_DECISION_LABEL} ${counts.no_expert_decision}`;
 }
 
-function rowLabel(name: string, figures: string | null): string {
-  // A newline: the menu item's text is a plain string, and the widget's style reads it as a line break
-  // (`white-space: pre-line`), so the name and the figures are two lines of one item.
-  return figures === null ? name : `${name}\n${figures}`;
+function figure(key: RowFigure['key'], count: number, words: string): RowFigure {
+  return { key, count, words, title: `${words.charAt(0).toUpperCase()}${words.slice(1)}: ${count}` };
+}
+
+/** The two figures of a project as badges, `not_run` then `no_expert_decision`, or `null` when its answer carries none. */
+export function projectBadges(project: Project): readonly [RowFigure, RowFigure] | null {
+  const counts = project.audit_counts;
+  if (counts === undefined) return null;
+  return [figure('not_run', counts.not_run, NOT_RUN_LABEL), figure('no_expert_decision', counts.no_expert_decision, NO_EXPERT_DECISION_LABEL)];
 }
 
 /** The labels of the entries that are not projects. A project's row may not read as one of them. */
 const RESERVED_LABELS: readonly string[] = [ALL_PROJECTS_LABEL, MORE_PROJECTS_LABEL, NEW_PROJECT_LABEL, RETRY_LABEL];
 
 /**
- * One label per project, in the list's order, and none like another or like a fixed entry.
+ * One name per project, in the list's order: the name as displayed, told apart where the reader could not tell two rows apart.
  *
- * The menu keys an item by its label, and two projects can carry the same name and the same
- * figures (or one can be named «Новый проект» when the answer carries no figures); the reader
- * could not tell those rows apart either. Equal labels get the day the project was created,
- * and any that are still equal get their place among the equals.
+ * Two projects can carry the same name and the same figures (the badges are all that sets a row apart), and one can be named
+ * like a fixed entry of the menu («Новый объект»). Such names get the day the project was created, and any that are still
+ * equal get their place among the equals. Equal names with different figures are told apart by the figures and stay as they are.
  */
 export function projectRowLabels(projects: readonly Project[]): string[] {
   const names = projects.map(displayName);
-  const figures = projects.map(projectFigures);
-  const labels = names.map((name, index) => rowLabel(name, figures[index] ?? null));
+  const figures = projects.map((project) => projectFigures(project) ?? '');
+  const tie = (name: string, index: number): string => `${name}\n${figures[index]}`;
   const taken = new Map<string, number>();
-  for (const label of [...RESERVED_LABELS, ...labels]) taken.set(label, (taken.get(label) ?? 0) + 1);
-  const withDay = labels.map((label, index) =>
-    (taken.get(label) ?? 0) > 1
-      ? rowLabel(`${names[index]} (создан ${createdDay(projects[index] as Project)})`, figures[index] ?? null)
-      : label,
+  names.forEach((name, index) => taken.set(tie(name, index), (taken.get(tie(name, index)) ?? 0) + 1));
+  const withDay = names.map((name, index) =>
+    (taken.get(tie(name, index)) ?? 0) > 1 || RESERVED_LABELS.includes(name)
+      ? `${name} (создан ${createdDay(projects[index] as Project)})`
+      : name,
   );
-  const seen = new Map<string, number>(RESERVED_LABELS.map((label) => [label, 1]));
-  return withDay.map((label) => {
-    const count = (seen.get(label) ?? 0) + 1;
-    seen.set(label, count);
-    return count === 1 ? label : `${label} №${count}`;
+  const seen = new Map<string, number>();
+  return withDay.map((name, index) => {
+    const key = tie(name, index);
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
+    return count === 1 ? name : `${name} №${count}`;
   });
 }
 
@@ -279,6 +301,12 @@ function notesOf(list: SwitcherList): SwitcherNote[] {
   }
 }
 
+/** «Все объекты», or «Объект: <название>», and on a global screen the hint after it (`UIP-G-08`: the button draws no caption). */
+function triggerLabelOf(value: string, all: boolean, hint: string | null): string {
+  const name = all ? ALL_PROJECTS_LABEL : `${SWITCHER_LABEL}: ${value}`;
+  return hint === null ? name : `${name}, ${hint}`;
+}
+
 /** The whole selector for `address` and `list`. */
 export function buildSwitcherModel(address: SwitcherAddress, list: SwitcherList): SwitcherModel {
   const { scope, projectUid, source } = switcherContext(address);
@@ -293,12 +321,16 @@ export function buildSwitcherModel(address: SwitcherAddress, list: SwitcherList)
   if (list.kind === 'ready') {
     const labels = projectRowLabels(list.projects);
     list.projects.forEach((project, index) => {
+      const label = labels[index] as string;
+      const figures = projectBadges(project);
       entries.push({
         kind: 'link',
-        label: labels[index] as string,
+        label,
         href: chooseProject(address, project.project_uid),
         current: projectUid === project.project_uid,
         projectUid: project.project_uid,
+        // A project whose answer carries no counts has no badges and no words about them: unknown is not zero.
+        ...(figures === null ? {} : { figures, name: `${label}: ${projectFigures(project)}` }),
       });
     });
   }
@@ -313,7 +345,8 @@ export function buildSwitcherModel(address: SwitcherAddress, list: SwitcherList)
     projectUid,
     value,
     hint,
-    triggerLabel: `${SWITCHER_CAPTION}: ${value}${hint === null ? '' : `, ${hint}`}`,
+    triggerLabel: triggerLabelOf(value, projectUid === null && !waiting, hint),
+    title: hint,
     notes: notesOf(list),
     entries: [first as SwitcherEntry, ...rest],
   };
