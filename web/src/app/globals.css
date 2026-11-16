@@ -230,6 +230,64 @@
   --am-avatar-12: #a74981;
   --am-avatar-12-ink: #ffffff;
 
+  /*
+   * ---- the section palette (`UIP-G-17`, `Г1-C`) -----------------------------------
+   *
+   * Fifteen tokens, one per section: `--am-section-01` ... `--am-section-15`, numbered in hue
+   * order. Which token a section wears is the one list in
+   * `web/src/entities/project/model/section-colour.ts`; a section's colour is drawn as a dot
+   * (or a bar) on a neutral surface, never as a fill that carries text, so there is no ink
+   * token and no tint, and the code or the name always stands next to it (a colour is never
+   * the only carrier of the meaning).
+   *
+   * DERIVED, NOT PICKED, in the way the avatar palette is, and kept apart from it: an avatar
+   * names a person, these name a part of the documentation, and the two palettes share no
+   * token. The hues are OKLCH 138, 157, 179, 207, 233, 253, 273, 293, 311, 329, 348, 6, 25,
+   * 43 and 62 degrees, the arc from green round through blue and magenta to orange, with the
+   * muddy yellow-olive band from 75 to 130 degrees left out because at this lightness it
+   * reads as brown. They are not evenly spaced in angle but evenly spaced in OKLab: the
+   * teal and azure part of the arc has less chroma, so a fixed angle there is a smaller
+   * step, and the angles widen until every neighbour in the arc is about 0.045 away in both
+   * palettes (an even 20 degree spacing left two teals 0.037 apart). In the light palette every
+   * colour is OKLCH lightness 0.545 at chroma up to 0.14, held 0.002 under the sRGB edge
+   * where the gamut is lower (teal, azure, orange); in the dark palette every colour is
+   * lightness 0.75, same rule. One lightness per palette is the point: every dot then sits
+   * the same distance from the page.
+   *
+   * THE ORDER IS A STEP, NOT A RAMP. Token 01 is not "the first section": the list gives the
+   * section at menu position i (`PROJECT_STRUCTURE_ORDER`, counted from 0) the token number
+   * (4 i mod 15) + 1, so that neighbours in the menu are four hues (about 80 degrees) apart
+   * and a section is also far from the ones two and three places away in the menu.
+   *
+   * WHAT IS ASSERTED, by `tests/unit/styles/section-palette.test.ts`, which reads these
+   * declarations rather than a list: as many tokens as `PROJECT_SECTIONS` has sections, all
+   * of them in each of the three palette blocks, the two dark blocks equal, each colour at
+   * 3:1 or better against the page, the card, the sunken surface, the menu band and the
+   * menu's current-row tint in both palettes (WCAG 1.4.11, a graphic that identifies
+   * something), and an OKLab distance between any two colours and between menu neighbours
+   * that stays above the thresholds that file records. It prints the measured table.
+   *
+   * `--am-section-colour` is not a sixteenth colour: it is the one property a dot (or a
+   * row that holds a dot) sets to a section token, and the stylesheet of the dot reads. Its
+   * value here is the neutral colour a row «Без раздела» wears; a section sets it inline.
+   */
+  --am-section-01: #428228;
+  --am-section-02: #0b8551;
+  --am-section-03: #0d8271;
+  --am-section-04: #0d7f8b;
+  --am-section-05: #0b7aa5;
+  --am-section-06: #2971bf;
+  --am-section-07: #5667c1;
+  --am-section-08: #755db9;
+  --am-section-09: #8a55ab;
+  --am-section-10: #9b4e98;
+  --am-section-11: #a8497e;
+  --am-section-12: #b04764;
+  --am-section-13: #b34945;
+  --am-section-14: #b14f21;
+  --am-section-15: #a25d07;
+  --am-section-colour: var(--am-inert);
+
   /* ---- elevation --------------------------------------------------------------- */
   --am-shadow-0: none;
   --am-shadow-1: 0 1px 2px rgba(22, 25, 29, 0.06);
@@ -438,6 +496,23 @@
     --am-avatar-12: #e88bbf;
     --am-avatar-12-ink: #0d1219;
 
+    /* ---- the section palette: the same fifteen hues at lightness 0.75 --------------- */
+    --am-section-01: #80c368;
+    --am-section-02: #53c88a;
+    --am-section-03: #12c9b0;
+    --am-section-04: #16c4d6;
+    --am-section-05: #36bcf8;
+    --am-section-06: #70b2fd;
+    --am-section-07: #94a8fe;
+    --am-section-08: #b29cfe;
+    --am-section-09: #ca93ef;
+    --am-section-10: #de8cd9;
+    --am-section-11: #ee87bd;
+    --am-section-12: #f786a0;
+    --am-section-13: #fa8880;
+    --am-section-14: #f78e62;
+    --am-section-15: #ec9845;
+
     /* ---- elevation ---------------------------------------------------------------- */
     --am-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
     --am-shadow-2: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -515,6 +590,23 @@
   --am-avatar-11-ink: #0d1219;
   --am-avatar-12: #e88bbf;
   --am-avatar-12-ink: #0d1219;
+
+  /* ---- the section palette: the same fifteen hues at lightness 0.75 ----------------- */
+  --am-section-01: #80c368;
+  --am-section-02: #53c88a;
+  --am-section-03: #12c9b0;
+  --am-section-04: #16c4d6;
+  --am-section-05: #36bcf8;
+  --am-section-06: #70b2fd;
+  --am-section-07: #94a8fe;
+  --am-section-08: #b29cfe;
+  --am-section-09: #ca93ef;
+  --am-section-10: #de8cd9;
+  --am-section-11: #ee87bd;
+  --am-section-12: #f786a0;
+  --am-section-13: #fa8880;
+  --am-section-14: #f78e62;
+  --am-section-15: #ec9845;
 
   /* ---- elevation ---------------------------------------------------------------- */
   --am-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
