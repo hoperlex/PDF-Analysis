@@ -12,7 +12,18 @@
  *     (`switchProject`, which also drops the parameters that only meant something inside the old
  *     project);
  *   - on a `required` or `global` screen the choice opens the chosen project's page;
- *   - «Все проекты» on an optional screen removes the parameter; elsewhere it opens the list.
+ *   - «Все объекты» on an optional screen is the explicit `?project=all` (`UIP-G-06`: the absence of the parameter would
+ *     bring the account's last object back); elsewhere it opens the list.
+ *
+ * ## The object that is open (`UIP-G-06`)
+ *
+ * On an `optional` screen whose address names no object, the open object is the account's last one (`remembered`, from
+ * `getMe`), as `resolveProjectContext` says; the button names it and its row carries the ✓. While `getMe` is on its way the
+ * button says «Загрузка…». A `global` screen keeps what the address says.
+ *
+ * Choosing one object is also a command: the widget calls `setMyLastProject` for it (`chosenProject` says which object a
+ * clicked link chose; «Все объекты», «Новый объект» and the full list are not objects). The command is the widget's and not
+ * this module's: nothing here fetches.
  *
  * ## The two numbers of a row
  *
@@ -39,8 +50,8 @@
  */
 
 import type { Project, ProjectPage } from '@/shared/api';
-import { formatInstant, projectScopeOf, readProjectContext, routes, switchProject } from '@/shared/lib';
-import type { ProjectScope, SearchParamsLike } from '@/shared/lib';
+import { formatInstant, projectScopeOf, resolveProjectContext, routes, switchProject } from '@/shared/lib';
+import type { ProjectScope, ProjectSource, SearchParamsLike } from '@/shared/lib';
 import { classifyProjectListFailure } from '@/entities/project';
 import type { ProjectListFailure } from '@/entities/project';
 
@@ -61,6 +72,10 @@ export interface SwitcherAddress {
   /** The browser's pathname; `null` when it is not known (a render with no router). */
   readonly pathname: string | null;
   readonly searchParams: SearchParamsLike;
+  /** `last_project_uid` of `getMe`: the object an `optional` screen opens on when the address names none; `null` or absent for none. */
+  readonly remembered?: string | null | undefined;
+  /** `getMe` is on its way: the object of an address that names none is not known yet. */
+  readonly rememberedPending?: boolean | undefined;
 }
 
 /** What is known of the project list. */
@@ -93,6 +108,8 @@ export type SwitcherEntry =
       readonly href: string;
       /** `D-363`: the entry is a choice (a project, or «Все проекты»), and `true` marks the one made. Absent: not a choice. */
       readonly current?: boolean;
+      /** `UIP-G-06`: the entry chooses this object (a project's row); absent for «Все объекты», the list and «Новый объект». */
+      readonly projectUid?: string;
     }
   | { readonly kind: 'retry'; readonly label: string };
 
@@ -111,31 +128,45 @@ export interface SwitcherModel {
   readonly entries: readonly [SwitcherEntry, ...SwitcherEntry[]];
 }
 
-/** The class of the screen and the project its address names. */
+/**
+ * The class of the screen and the object it works in: the address's, or, on an `optional` screen whose address names none,
+ * the account's last one (`address.remembered`).
+ */
 export function switcherContext(address: SwitcherAddress): {
   readonly scope: ProjectScope | null;
   readonly projectUid: string | null;
+  readonly source: ProjectSource;
 } {
-  if (address.pathname === null) return { scope: null, projectUid: null };
-  return {
-    scope: projectScopeOf(address.pathname),
-    projectUid: readProjectContext(address.pathname, address.searchParams).projectUid,
-  };
+  if (address.pathname === null) return { scope: null, projectUid: null, source: 'none' };
+  const context = resolveProjectContext(address.pathname, address.searchParams, address.remembered);
+  return { scope: projectScopeOf(address.pathname), projectUid: context.projectUid, source: context.source };
 }
 
 /**
- * Where choosing `projectUid` (`null` is «Все проекты») leads from `address`.
+ * Where choosing `projectUid` (`null` is «Все объекты») leads from `address`.
  *
  * An unregistered address (a 404) has no class and nothing to rewrite, so it behaves like a
  * global screen: the choice opens the project's page, or the list.
  */
 export function chooseProject(address: SwitcherAddress, projectUid: string | null): string {
-  const { scope } = switcherContext(address);
+  const { scope, projectUid: open } = switcherContext(address);
   if (scope === 'optional' && address.pathname !== null) {
-    const query = switchProject(address.searchParams, projectUid).toString();
+    const query = switchProject(address.searchParams, projectUid, open).toString();
     return query === '' ? address.pathname : `${address.pathname}?${query}`;
   }
   return projectUid === null || projectUid === '' ? routes.projects() : routes.project(projectUid);
+}
+
+/**
+ * The object a click on the link `href` chose, or `null` when it chose none: «Все объекты», «Новый объект» and the full list
+ * are links of the menu too, and the all-objects view is never kept on the server. The caller asks the server to keep it.
+ */
+export function chosenProject(model: SwitcherModel, href: string | null): string | null {
+  if (href === null) return null;
+  for (const entry of model.entries) {
+    if (entry.kind === 'link' && entry.projectUid !== undefined && entry.href === href) return entry.projectUid;
+  }
+  return null;
 }
 
 /** A name for display: one line, no stray whitespace. The stored name is not changed. */
@@ -206,8 +237,9 @@ export function switcherListOf(data: ProjectPage | undefined, error: unknown): S
   return { kind: 'loading' };
 }
 
-/** What the button shows for `projectUid` given what is known of the list. */
-function valueOf(projectUid: string | null, list: SwitcherList): string {
+/** What the button shows for `projectUid` given what is known of the list; `waiting` is an object still to be named by `getMe`. */
+function valueOf(projectUid: string | null, list: SwitcherList, waiting: boolean): string {
+  if (waiting) return 'Загрузка…';
   if (projectUid === null) return ALL_PROJECTS_LABEL;
   switch (list.kind) {
     case 'loading':
@@ -249,8 +281,10 @@ function notesOf(list: SwitcherList): SwitcherNote[] {
 
 /** The whole selector for `address` and `list`. */
 export function buildSwitcherModel(address: SwitcherAddress, list: SwitcherList): SwitcherModel {
-  const { scope, projectUid } = switcherContext(address);
-  const value = valueOf(projectUid, list);
+  const { scope, projectUid, source } = switcherContext(address);
+  // An `optional` screen whose address is silent waits for the account's answer before it can name the object.
+  const waiting = address.rememberedPending === true && scope === 'optional' && source === 'none';
+  const value = valueOf(projectUid, list, waiting);
   const hint = scope === 'global' ? GLOBAL_SCREEN_HINT : null;
 
   const entries: SwitcherEntry[] = [];
@@ -264,10 +298,11 @@ export function buildSwitcherModel(address: SwitcherAddress, list: SwitcherList)
         label: labels[index] as string,
         href: chooseProject(address, project.project_uid),
         current: projectUid === project.project_uid,
+        projectUid: project.project_uid,
       });
     });
   }
-  entries.push({ kind: 'link', label: ALL_PROJECTS_LABEL, href: chooseProject(address, null), current: projectUid === null });
+  entries.push({ kind: 'link', label: ALL_PROJECTS_LABEL, href: chooseProject(address, null), current: projectUid === null && !waiting });
   if (list.kind === 'ready' && list.more) entries.push({ kind: 'link', label: MORE_PROJECTS_LABEL, href: routes.projects() });
   // The creation form lives on the project list; the selector links to it rather than copying it.
   entries.push({ kind: 'link', label: NEW_PROJECT_LABEL, href: routes.projects() });

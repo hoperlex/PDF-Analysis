@@ -3,8 +3,10 @@
 export type { SectionOptimisationAddress } from './model/address';
 export {
   DEFAULT_SECTION_OPTIMISATION_ADDRESS,
+  objectDecided,
   readSectionOptimisationAddress,
   sectionOptimisationSearch,
+  shownProject,
 } from './model/address';
 export type { SectionOptimisationTab, SectionOptimisationTabCounts } from './model/tabs';
 export { SECTION_OPTIMISATION_TABS, SECTION_OPTIMISATION_TAB_LABELS, sectionOptimisationTabText } from './model/tabs';

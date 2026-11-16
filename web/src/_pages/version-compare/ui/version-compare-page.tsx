@@ -59,8 +59,9 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
   const projects = useProjectList();
   const me = useMe();
   const product = useProductVersion(true);
-  // `R-150c`: the project follows the header, so it lives in the address; `initial` still seeds a static render.
-  const [addressProject, chooseProject] = useAddressProject(routes.versionComparison());
+  // `R-150c`, `UIP-G-06`: the project follows the header, so it lives in the address, and where that is silent it is the
+  // account's last object; `initial` still seeds a static render. A choice here is kept on the server like the header's.
+  const [addressProject, chooseProject, rememberFailure] = useAddressProject(routes.versionComparison());
   const chosen = (addressProject ?? initial?.projectUid ?? null) as ProjectUid | null;
   const setChosen = (next: ProjectUid | null) => chooseProject(next);
   // `UI-B-102`: the open set and the tab are in the address too (`?set=&tab=`), so Back, reload and a pasted link return to them.
@@ -142,6 +143,12 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
         />
       ) : null}
       {projects.isSuccess ? <div className={styles.toolbar}>{chooser}</div> : null}
+      {rememberFailure === null ? null : (
+        <p className="am-note" role="alert" data-remember-failure="">
+          Объект выбран, но не запомнен: {rememberFailure.detail}
+          {rememberFailure.correlationId === null ? null : ` Код обращения: ${rememberFailure.correlationId}`}
+        </p>
+      )}
       {moduleOff ? <ModuleOffState /> : null}
 
       {projectUid === null ? (

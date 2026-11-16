@@ -21,12 +21,15 @@ export { classifyListingFailure } from './listing-failure';
 
 // `R-150c` (`UI-PARITY-01`): the project the user works in, read from and written to the address.
 export type { ProjectContext, ProjectScope, ProjectSource, SearchParamsLike } from './project-context';
+// `UIP-G-06`: the order of what wins is in the module's header; «Все объекты» is `?project=all` (`ALL_PROJECTS_PARAM`).
 export {
+  ALL_PROJECTS_PARAM,
   PROJECT_DEPENDENT_PARAMS,
   PROJECT_PARAM,
   canonicalProjectParams,
   projectScopeOf,
   readProjectContext,
+  resolveProjectContext,
   switchProject,
   withProjectParam,
 } from './project-context';

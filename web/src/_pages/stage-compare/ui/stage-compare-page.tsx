@@ -14,8 +14,9 @@ export function StageComparePage() {
   const projects = useProjectList();
   const me = useMe();
   const product = useProductVersion(true);
-  // `R-150c`: the project follows the header, so it lives in the address.
-  const [addressProject, chooseProject] = useAddressProject(routes.stageComparison());
+  // `R-150c`, `UIP-G-06`: the project follows the header, so it lives in the address, and where that is silent it is the
+  // account's last object. A choice here is kept on the server like the header's.
+  const [addressProject, chooseProject, rememberFailure] = useAddressProject(routes.stageComparison());
   const chosen = addressProject as ProjectUid | null;
   const setChosen = (next: ProjectUid | null) => chooseProject(next);
   const projectItems = projects.data?.items ?? [];
@@ -45,6 +46,12 @@ export function StageComparePage() {
           </select>
         </label>
       ) : null}
+      {rememberFailure === null ? null : (
+        <p className="am-note" role="alert" data-remember-failure="">
+          Объект выбран, но не запомнен: {rememberFailure.detail}
+          {rememberFailure.correlationId === null ? null : ` Код обращения: ${rememberFailure.correlationId}`}
+        </p>
+      )}
       {projects.isSuccess && projectItems.length === 0 && moduleOn ? <EmptyState title="Объектов пока нет" detail="Создайте объект, затем добавьте документы П и Р." /> : null}
       {projects.isSuccess && projectItems.length > 1 && projectUid === null && moduleOn ? <EmptyState title="Выберите объект" detail="Пары и предложения относятся к одному объекту." /> : null}
       {projectUid !== null && moduleOn ? (

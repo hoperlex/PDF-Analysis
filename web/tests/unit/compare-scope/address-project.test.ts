@@ -16,7 +16,7 @@ describe('the comparison project in the address', () => {
     expect(next.get('foo')).toBe('bar');
   });
 
-  it('«Все объекты» removes the project', () => {
-    expect(switchProject(new URLSearchParams('project=prj_A'), null).get('project')).toBeNull();
+  it('«Все объекты» is the explicit ?project=all, so the account\'s last object does not come back (UIP-G-06)', () => {
+    expect(switchProject(new URLSearchParams('project=prj_A'), null).get('project')).toBe('all');
   });
 });

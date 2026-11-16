@@ -134,3 +134,13 @@
   color: var(--am-ink-muted);
   font-weight: 400;
 }
+
+/*
+ * The refusal to keep the chosen object, said beside the button (the closed list is hidden, and a refusal is not hidden). Only its
+ * place is here: it is drawn with `.noteAlert`, which carries the colour the strip's other refusals have (pause status).
+ */
+.rememberFailure {
+  align-self: center;
+  max-width: 24rem;
+  margin-left: var(--am-gap-sm);
+}

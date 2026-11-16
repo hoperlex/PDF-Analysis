@@ -13,7 +13,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/shared/api';
-import type { ErrorEnvelope, Project, ProjectPage } from '@/shared/api';
+import type { Account, ErrorEnvelope, Project, ProjectPage } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import {
@@ -27,6 +27,7 @@ import {
   RETRY_LABEL,
   buildSwitcherModel,
   chooseProject,
+  chosenProject,
   projectFigures,
   projectRowLabels,
   switcherListOf,
@@ -73,8 +74,8 @@ const ready = (projects: readonly Project[] = PROJECTS, over: Partial<Extract<Sw
   ...over,
 });
 
-function at(pathname: string | null, search = ''): SwitcherAddress {
-  return { pathname, searchParams: new URLSearchParams(search) };
+function at(pathname: string | null, search = '', remembered?: string | null): SwitcherAddress {
+  return { pathname, searchParams: new URLSearchParams(search), ...(remembered === undefined ? {} : { remembered }) };
 }
 
 function apiError(status: number, code: ErrorEnvelope['error_code'], retryable: boolean): ApiError {
@@ -132,13 +133,29 @@ describe('choosing a project (R-150c): the address is rewritten, nothing else ke
     expect(chooseProject(at('/dashboard'), B)).toBe(`/dashboard?project=${B}`);
   });
 
-  it('«Все объекты» on an optional screen removes the parameter and the dependent ones, and keeps the rest', () => {
-    expect(chooseProject(at('/dashboard', `project=${A}&section=AR&view=compact`), null)).toBe('/dashboard?view=compact');
-    expect(chooseProject(at('/section-optimisation', `project=${A}`), null)).toBe('/section-optimisation');
+  it('«Все объекты» on an optional screen is the explicit ?project=all, drops the dependent parameters and keeps the rest (UIP-G-06)', () => {
+    expect(chooseProject(at('/dashboard', `project=${A}&section=AR&view=compact`), null)).toBe('/dashboard?project=all&view=compact');
+    expect(chooseProject(at('/section-optimisation', `project=${A}`), null)).toBe('/section-optimisation?project=all');
+    // never the bare address: that would open on the account's last object again
+    expect(chooseProject(at('/dashboard', `project=${A}`, B), null)).not.toBe('/dashboard');
   });
 
   it('choosing the project the address already has changes nothing', () => {
     expect(chooseProject(at('/dashboard', `project=${A}&section=AR`), A)).toBe(`/dashboard?project=${A}&section=AR`);
+    expect(chooseProject(at('/dashboard', 'project=all&section=AR'), null)).toBe('/dashboard?project=all&section=AR');
+  });
+
+  it('choosing the account\'s last object, which the screen is on with a silent address, writes it down and keeps the screen\'s own parameters', () => {
+    expect(chooseProject(at('/dashboard', 'section=AR&view=compact', A), A)).toBe(`/dashboard?section=AR&view=compact&project=${A}`);
+    // another object is a change, and the old object's parameters go
+    expect(chooseProject(at('/dashboard', 'section=AR&view=compact', A), B)).toBe(`/dashboard?view=compact&project=${B}`);
+    expect(chooseProject(at('/dashboard', 'section=AR&view=compact', A), null)).toBe('/dashboard?view=compact&project=all');
+  });
+
+  it('on a global or required screen the last object is not the screen\'s: the choice leads where it always led', () => {
+    expect(chooseProject(at('/queue', '', A), B)).toBe(`/projects/${B}`);
+    expect(chooseProject(at('/queue', '', A), null)).toBe('/projects');
+    expect(chooseProject(at(`/projects/${A}`, '', B), B)).toBe(`/projects/${B}`);
   });
 
   it('on a required screen the choice opens the chosen project\'s page, whatever the path says', () => {
@@ -231,10 +248,10 @@ describe('the menu: the rows, then «Все объекты», then «Новый 
     expect(items.map(([, , text]) => text.split('\n')[0])).toEqual(['Мост через Неву', 'Школа №7', ALL_PROJECTS_LABEL, NEW_PROJECT_LABEL]);
   });
 
-  it('«Новый объект» leads to the project list, where the form is; «Все объекты» is the screen\'s own address without the project', () => {
+  it('«Новый объект» leads to the project list, where the form is; «Все объекты» is the screen\'s own address with ?project=all', () => {
     const optional = itemsOf(markupOf(at('/dashboard', `project=${A}`), ready())).slice(-2);
     expect(optional).toEqual([
-      ['a', '/dashboard', ALL_PROJECTS_LABEL],
+      ['a', '/dashboard?project=all', ALL_PROJECTS_LABEL],
       ['a', '/projects', NEW_PROJECT_LABEL],
     ]);
     const global = itemsOf(markupOf(at('/queue', `project=${A}`), ready())).slice(-2);
@@ -263,7 +280,7 @@ describe('the menu: the rows, then «Все объекты», then «Новый 
     expect(itemsOf(markup).map(([, href, text]) => [href, text.split('\n')[0]])).toEqual([
       [`/dashboard?project=${A}`, 'Мост через Неву'],
       [`/dashboard?project=${B}`, 'Школа №7'],
-      ['/dashboard', ALL_PROJECTS_LABEL],
+      ['/dashboard?project=all', ALL_PROJECTS_LABEL],
       ['/projects', MORE_PROJECTS_LABEL],
       ['/projects', NEW_PROJECT_LABEL],
     ]);
@@ -289,7 +306,7 @@ describe('a failed read: «Объекты не загрузились», a retry
     expect(markup).toContain('Код обращения: cid-switcher-1');
     expect(itemsOf(markup)).toEqual([
       ['button', null, RETRY_LABEL],
-      ['a', '/dashboard', ALL_PROJECTS_LABEL],
+      ['a', '/dashboard?project=all', ALL_PROJECTS_LABEL],
       ['a', '/projects', NEW_PROJECT_LABEL],
     ]);
   });
@@ -409,7 +426,8 @@ describe('the island: a render with no query client makes no request; the list i
     const enabledFor = (address: SwitcherAddress): boolean | undefined => {
       const client = newClient();
       renderScreen(client, createElement(ProjectSwitcherLive, { address }));
-      const queries = client.getQueryCache().getAll();
+      // The account's answer (`getMe`) is its own query, asked for below; only the list is read here.
+      const queries = client.getQueryCache().getAll().filter((query) => query.queryKey[0] !== 'account');
       expect(queries.map((query) => query.queryKey)).toEqual([queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT)]);
       return (queries[0]?.options as { enabled?: boolean }).enabled;
     };
@@ -479,5 +497,202 @@ describe('D-363: the list marks the project that is open, as the original\'s pic
     const bare = itemsOf(markupOf(at('/dashboard'), ready()));
     expect(marked.map(([tag, href, text]) => [tag, href, text])).toEqual(bare.map(([tag, , text], index) => [tag, marked[index]?.[1], text]));
     expect(marked.map(([, , text]) => text.split('\n')[0])).toEqual(['Мост через Неву', 'Школа №7', ALL_PROJECTS_LABEL, NEW_PROJECT_LABEL]);
+  });
+});
+
+// ----------------------------------------------------- UIP-G-06: the object the account chose last, and the command a choice is
+
+describe('UIP-G-06: on a screen that follows the object, a silent address means the account\'s last object', () => {
+  it('names it on the button and flags its row, on every optional screen', () => {
+    for (const pathname of ['/dashboard', '/knowledge-base', '/dispatcher', '/version-comparison', '/stage-comparison', '/section-optimisation', '/optimisation']) {
+      const model = buildSwitcherModel(at(pathname, '', B), ready());
+      expect(model.projectUid, pathname).toBe(B);
+      expect(model.value, pathname).toBe('Школа №7');
+      expect(model.triggerLabel, pathname).toBe('Объекты: Школа №7');
+      const { marks, current } = marksOf(markupOf(at(pathname, '', B), ready()));
+      expect(marks, pathname).toEqual([['Мост через Неву', ''], ['Школа №7', '✓'], [ALL_PROJECTS_LABEL, '']]);
+      expect(current, pathname).toEqual(['Школа №7']);
+    }
+  });
+
+  it('is beaten by ?project=<uid>, and by the explicit ?project=all, which names no object and flags «Все объекты»', () => {
+    expect(buildSwitcherModel(at('/dashboard', `project=${A}`, B), ready()).value).toBe('Мост через Неву');
+    const all = buildSwitcherModel(at('/dashboard', 'project=all', B), ready());
+    expect(all.projectUid).toBeNull();
+    expect(all.value).toBe(ALL_PROJECTS_LABEL);
+    expect(marksOf(markupOf(at('/dashboard', 'project=all', B), ready())).current).toEqual([ALL_PROJECTS_LABEL]);
+  });
+
+  it('is beaten by the path of a required screen, and is not read at all on a global one', () => {
+    expect(buildSwitcherModel(at(`/projects/${A}`, '', B), ready()).value).toBe('Мост через Неву');
+    const global = buildSwitcherModel(at('/queue', '', B), ready());
+    expect(global.value).toBe(ALL_PROJECTS_LABEL);
+    expect(global.hint).toBe(GLOBAL_SCREEN_HINT);
+  });
+
+  it('with no last object (null, absent, empty) the button says «Все объекты», as before', () => {
+    for (const remembered of [null, undefined, '']) {
+      expect(buildSwitcherModel(at('/dashboard', '', remembered), ready()).value).toBe(ALL_PROJECTS_LABEL);
+    }
+  });
+
+  it('says «Загрузка…» while the account\'s answer is on its way, and flags no row; once it is known it says the object', () => {
+    const waiting: SwitcherAddress = { ...at('/dashboard'), rememberedPending: true };
+    const model = buildSwitcherModel(waiting, ready());
+    expect(model.value).toBe('Загрузка…');
+    expect(marksOf(markupOf(waiting, ready())).current).toEqual([]);
+    // waiting changes nothing where the address already says: an object, the explicit all, a global screen
+    expect(buildSwitcherModel({ ...at('/dashboard', `project=${A}`), rememberedPending: true }, ready()).value).toBe('Мост через Неву');
+    expect(buildSwitcherModel({ ...at('/dashboard', 'project=all'), rememberedPending: true }, ready()).value).toBe(ALL_PROJECTS_LABEL);
+    expect(buildSwitcherModel({ ...at('/queue'), rememberedPending: true }, ready()).value).toBe(ALL_PROJECTS_LABEL);
+    expect(buildSwitcherModel({ ...at('/dashboard', '', B), rememberedPending: false }, ready()).value).toBe('Школа №7');
+  });
+
+  it('can fail: the object that is open is not the first row, nor the one the address would have named without the account', () => {
+    expect(buildSwitcherModel(at('/dashboard', '', B), ready()).value).not.toBe('Мост через Неву');
+    expect(buildSwitcherModel(at('/dashboard', '', B), ready()).value).not.toBe(ALL_PROJECTS_LABEL);
+  });
+
+  it('the first render of the island, which knows nothing of the account, does not say «Все объекты» on such a screen', () => {
+    navigation.pathname = '/dashboard';
+    navigation.search = '';
+    const markup = renderToStaticMarkup(createElement(ProjectSwitcher));
+    expect(markup).toContain('Загрузка…');
+    navigation.search = 'project=all';
+    expect(renderToStaticMarkup(createElement(ProjectSwitcher))).not.toContain('Загрузка…');
+  });
+});
+
+describe('UIP-G-06: which object a click on the menu chose', () => {
+  const model = buildSwitcherModel(at('/dashboard', '', A), ready(PROJECTS, { more: true }));
+  const hrefOf = (label: string): string => {
+    const entry = model.entries.find((candidate) => candidate.kind === 'link' && candidate.label.split('\n')[0] === label);
+    if (entry === undefined || entry.kind !== 'link') throw new Error(`no entry ${label}`);
+    return entry.href;
+  };
+
+  it('is the object of a project\'s row, whatever the address it leads to', () => {
+    expect(chosenProject(model, hrefOf('Мост через Неву'))).toBe(A);
+    expect(chosenProject(model, hrefOf('Школа №7'))).toBe(B);
+    const onGlobal = buildSwitcherModel(at('/queue'), ready());
+    expect(chosenProject(onGlobal, `/projects/${B}`)).toBe(B);
+  });
+
+  it('is nothing for «Все объекты», «Остальные объекты», «Новый объект», a link that is no entry, and no link: the all-objects view is never sent', () => {
+    expect(chosenProject(model, hrefOf(ALL_PROJECTS_LABEL))).toBeNull();
+    expect(chosenProject(model, hrefOf(MORE_PROJECTS_LABEL))).toBeNull();
+    expect(chosenProject(model, hrefOf(NEW_PROJECT_LABEL))).toBeNull();
+    expect(chosenProject(model, '/somewhere/else')).toBeNull();
+    expect(chosenProject(model, null)).toBeNull();
+    const onGlobal = buildSwitcherModel(at('/queue'), ready());
+    expect(chosenProject(onGlobal, '/projects')).toBeNull();
+  });
+
+  it('only a project\'s row carries the object it chooses', () => {
+    const carried = model.entries.map((entry) => (entry.kind === 'link' ? (entry.projectUid ?? null) : 'retry'));
+    expect(carried).toEqual([A, B, null, null, null]);
+  });
+
+  /** The wrapper's click handler, as the markup would carry it: `ProjectSwitcherView` is a plain component, so its element is read. */
+  function clickHandler(onNavigate: (uid: string | null) => void, shown = model) {
+    const element = ProjectSwitcherView({ model: shown, onRetry: () => undefined, onNavigate }) as { props: { onClick: (event: unknown) => void } };
+    return element.props.onClick;
+  }
+  const clickOn = (href: string | null) => ({ target: { closest: () => (href === null ? null : { getAttribute: () => href }) } });
+
+  it('the wrapper reports the object a click on a link of the menu chose, and null for a link that chose none', () => {
+    const chosen = vi.fn();
+    const onClick = clickHandler(chosen);
+    onClick(clickOn(hrefOf('Школа №7')));
+    onClick(clickOn(hrefOf(ALL_PROJECTS_LABEL)));
+    onClick(clickOn(null));
+    expect(chosen.mock.calls).toEqual([[B], [null]]);
+  });
+
+  it('a click on something that is not an element, or with no handler given, reports nothing and throws nothing', () => {
+    const chosen = vi.fn();
+    clickHandler(chosen)({ target: {} });
+    clickHandler(chosen)({ target: null as never });
+    expect(chosen).not.toHaveBeenCalled();
+    const element = ProjectSwitcherView({ model, onRetry: () => undefined }) as { props: { onClick: (event: unknown) => void } };
+    expect(() => element.props.onClick(clickOn(hrefOf('Школа №7')))).not.toThrow();
+  });
+});
+
+describe('UIP-G-06: a refusal to keep the choice is said beside the button, not inside the closed list', () => {
+  const model = buildSwitcherModel(at('/dashboard', `project=${A}`), ready());
+
+  it('shows nothing when there is none', () => {
+    for (const rememberFailure of [undefined, null]) {
+      const markup = renderToStaticMarkup(createElement(ProjectSwitcherView, { model, onRetry: () => undefined, rememberFailure }));
+      expect(markup).not.toContain('data-switcher-remember-failure');
+    }
+  });
+
+  it('says the object is open but not kept, with the sentence and the correlation id, as an alert', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ProjectSwitcherView, {
+        model,
+        onRetry: () => undefined,
+        rememberFailure: { detail: 'Запрос не дошёл до сервера.', correlationId: 'cid-remember-1' },
+      }),
+    );
+    expect(markup).toMatch(/<span class="[^"]*" role="alert" data-switcher-remember-failure="">Объект открыт, но не запомнен: Запрос не дошёл до сервера\. Код обращения: cid-remember-1<\/span>/);
+    // beside the button: outside the popup, which is hidden while the list is closed
+    expect(markup.indexOf('data-switcher-remember-failure')).toBeGreaterThan(markup.lastIndexOf('</ul></div>'));
+  });
+
+  it('leaves the correlation id out when there is none', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ProjectSwitcherView, { model, onRetry: () => undefined, rememberFailure: { detail: 'Отказ.', correlationId: null } }),
+    );
+    expect(markup).toContain('Объект открыт, но не запомнен: Отказ.<');
+    expect(markup).not.toContain('Код обращения');
+  });
+});
+
+describe('UIP-G-06: the island reads the account only where its answer changes what the button says', () => {
+  const account = (lastProject: string | null): Account =>
+    ({ user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', roles: ['expert'], last_project_uid: lastProject }) as unknown as Account;
+
+  const accountQuery = (address: SwitcherAddress) => {
+    const client = newClient();
+    renderScreen(client, createElement(ProjectSwitcherLive, { address }));
+    return client.getQueryCache().find({ queryKey: queryKeys.account.me() });
+  };
+
+  it('asks (enabled) on an optional screen with a silent address, and nowhere else', () => {
+    expect((accountQuery(at('/dashboard'))?.options as { enabled?: boolean }).enabled).toBe(true);
+    expect((accountQuery(at('/knowledge-base', 'tab=x'))?.options as { enabled?: boolean }).enabled).toBe(true);
+    for (const address of [at('/dashboard', `project=${A}`), at('/dashboard', 'project=all'), at(`/projects/${A}`), at('/queue'), at('/'), at(null)]) {
+      const query = accountQuery(address);
+      expect(query === undefined || (query.options as { enabled?: boolean }).enabled === false, JSON.stringify([address.pathname, address.searchParams.toString()])).toBe(true);
+    }
+  });
+
+  it('names the account\'s last object on the button once the one getMe query has it', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.account.me(), account(B));
+    client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), page(PROJECTS));
+    const markup = renderScreen(client, createElement(ProjectSwitcherLive, { address: at('/dashboard') }));
+    expect(markup).toContain('>Школа №7</span>');
+    expect(marksOf(markup).current).toEqual(['Школа №7']);
+    // the row's link keeps the screen and writes the object down
+    expect(itemsOf(markup).slice(0, 2).map(([, href]) => href)).toEqual([`/dashboard?project=${A}`, `/dashboard?project=${B}`]);
+  });
+
+  it('asks for the list, to name the object, as soon as the account has named one', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.account.me(), account(B));
+    renderScreen(client, createElement(ProjectSwitcherLive, { address: at('/dashboard') }));
+    const list = client.getQueryCache().find({ queryKey: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT) });
+    expect((list?.options as { enabled?: boolean }).enabled).toBe(true);
+  });
+
+  it('says «Все объекты» for an account with no last object, and «Загрузка…» while it is not known', () => {
+    const known = newClient();
+    known.setQueryData(queryKeys.account.me(), account(null));
+    expect(renderScreen(known, createElement(ProjectSwitcherLive, { address: at('/dashboard') }))).toContain('>Все объекты</span>');
+    expect(renderScreen(newClient(), createElement(ProjectSwitcherLive, { address: at('/dashboard') }))).toContain('>Загрузка…</span>');
   });
 });
