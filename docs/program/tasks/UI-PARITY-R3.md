@@ -117,3 +117,4 @@ previous screens. No feature switch is introduced; the two migrations carry thei
 
 | Point | `origin/dev` SHA | Note revision | Tasks |
 |---|---|---|---|
+| P1 | `39198d68c` | 0.30.0 rev 1 | G-01, G-02, G-03, G-04, G-11, G-13, G-14, G-17; FIX-01…07 |
