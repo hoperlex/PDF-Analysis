@@ -101,6 +101,8 @@ REQUIRED_OPERATIONS = {
     "getProductVersion",
     "listReleases",
     "markReleaseNotesRead",
+    # `UIP-G-05` (1.55.0, owner ruling Г7-B). The object the signed-in account chose last, remembered on the server; `getMe` reads it back.
+    "setMyLastProject",
     "listExecutionQueue",
     "listExecutionJournal",
     "cancelRun",
@@ -483,6 +485,8 @@ WRITE_OPERATIONS = {
     "reviewDecisionPattern",
     # `UI-A-93` (1.36.0): ending an account's sessions is keyed, so an exact repeat ends nothing more.
     "endUserSessions",
+    # `UIP-G-05` (1.55.0): remembering the object an account chose is keyed, so an exact repeat changes nothing.
+    "setMyLastProject",
     # `UI-PARITY-P0G`. Keyed like `setExecutionPaused`: a replay answers the same state and writes no second event.
     "setDocumentArchived",
     "renameDocument",

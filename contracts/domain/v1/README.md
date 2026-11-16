@@ -1,4 +1,4 @@
-> Current shared contract: **1.55.0**, migration **0068_reviewable_findings**, owned by ANALYSIS-REPAIR-INT-01. Catalog revision71 and the error/identity/state vocabularies are unchanged. The amendment separates reviewable Finding identity from exact evidence grounding; see the API contract. The original freeze record below is historical.
+> Current shared contract: **1.55.0**, migration **0069_account_last_project**, owned by ANALYSIS-REPAIR-INT-01 (the 1.55.0 amendment) and `UIP-G-05` (the additive `setMyLastProject`, migration 0069). Catalog revision71 and the error/identity/state vocabularies are unchanged. The amendment separates reviewable Finding identity from exact evidence grounding; see the API contract. The original freeze record below is historical.
 
 # Domain contract v1 — `1.8.0`, frozen (sealed revision 26)
 

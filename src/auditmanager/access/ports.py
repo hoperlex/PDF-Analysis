@@ -233,6 +233,12 @@ class AccountRepository(Protocol):
         """``endUserSessions``: not oneself; an archived or missing account is ``not_found``;
         raises the epoch, so every credential the account holds is refused."""
 
+    def last_project(self, session: Session, user_uid: str) -> str | None:
+        """``getMe``'s ``last_project_uid`` (`UIP-G-05`): the object the account chose last while it exists, or ``None``."""
+
+    def set_last_project(self, session: Session, *, user_uid: str, project_uid: str) -> None:
+        """``setMyLastProject`` (`UIP-G-05`): remember the object; ``not_found`` (``Project``) for none such."""
+
 
 @runtime_checkable
 class RegistrationRepository(Protocol):

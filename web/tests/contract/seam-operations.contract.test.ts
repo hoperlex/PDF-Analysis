@@ -253,6 +253,8 @@ describe('the seam operations', () => {
       'setExecutorSecret',
       'setFindingExecutionStatus',
       'setJobPriority',
+      // `UIP-G-05` (contract 1.55.0): remembering the object an account chose is keyed, so an exact repeat changes nothing.
+      'setMyLastProject',
       'setStageModelLayoutEnabled',
       'setStagePairCompleteness',
       // `CRIT-SEAL-50` (contract 1.51.0): the pause of the vectors is a keyed administrator write.

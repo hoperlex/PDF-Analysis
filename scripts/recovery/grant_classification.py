@@ -96,6 +96,7 @@ ALL_TABLE_PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REF
 #: :func:`observed_statements` names the statement for each; ``tests/integration/recovery/
 #: test_grant_classification.py`` holds the two together.
 READ_WRITE = frozenset((
+    "account_last_project",            # INSERT ... ON CONFLICT (user_uid) DO UPDATE (access/accounts.py, `0069`)
     "account_release_mark",            # INSERT ... ON CONFLICT (user_uid) DO UPDATE (releases/repository.py)
     "analysis_artifact_publication",  # INSERT, UPDATE, upsert (jobs/repository.py)
     "app_user",                       # INSERT, UPDATE, DELETE of an archived account (access/accounts.py)

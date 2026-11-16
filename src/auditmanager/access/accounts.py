@@ -87,6 +87,9 @@ _UNIQUE_VIOLATION: Final[str] = "23505"
 #: PostgreSQL's foreign-key-violation SQLSTATE: a RESTRICT reference refused a DELETE.
 _FOREIGN_KEY_VIOLATION: Final[str] = "23503"
 
+#: The one foreign key of ``account_last_project`` (migration ``0069``): the account. There is none to ``project`` (see the migration).
+_LAST_PROJECT_USER_KEY: Final[str] = "fk_account_last_project_user"
+
 #: Stable prefixes for the deployment log, as :mod:`auditmanager.access.repository` names its own.
 PROFILE_COMPLETED: Final[str] = "profile completed"
 ROLES_CHANGED: Final[str] = "roles changed"
@@ -128,6 +131,26 @@ class AccountInvariantViolation(DomainError):
 
 _SELECT_BY_UID_FOR_UPDATE = text(
     f"SELECT {_PUBLIC_COLUMNS} FROM app_user WHERE user_uid = :user_uid FOR UPDATE"
+)
+
+#: The object an account chose last (`UIP-G-05`, owner ruling Г7-B): one row per account. The row names a bare identity with no key to
+#: ``project`` (migration ``0069``), so the read joins it and an object that no longer exists reads as no choice at all.
+_SELECT_LAST_PROJECT = text(
+    "SELECT l.project_uid FROM account_last_project l "
+    "JOIN project p ON p.project_uid = l.project_uid WHERE l.user_uid = :user_uid"
+)
+
+_PROJECT_EXISTS = text("SELECT 1 FROM project WHERE project_uid = :project_uid")
+
+#: The choice is an upsert. Choosing the object already chosen writes nothing (``WHERE ... IS DISTINCT FROM``), so
+#: ``selected_at`` is the instant of the latest *change*.
+_UPSERT_LAST_PROJECT = text(
+    """
+    INSERT INTO account_last_project (user_uid, project_uid) VALUES (:user_uid, :project_uid)
+    ON CONFLICT (user_uid) DO UPDATE
+        SET project_uid = EXCLUDED.project_uid, selected_at = now()
+        WHERE account_last_project.project_uid IS DISTINCT FROM EXCLUDED.project_uid
+    """
 )
 
 _SELECT_ROLES = text(
@@ -709,6 +732,36 @@ class AccountRepository:
         return record
 
     # -- roles ---------------------------------------------------------------------------
+
+    def last_project(self, session: Session, user_uid: str) -> str | None:
+        """The identity of the object this account chose last (`UIP-G-05`), or ``None``.
+
+        ``None`` is every account that has not chosen one, and an account whose object no longer exists (erased or purged):
+        the row carries no key to the object, so it is read only while the object is there. "All objects" is never stored.
+        """
+        value = session.execute(_SELECT_LAST_PROJECT, {"user_uid": user_uid}).scalar_one_or_none()
+        return None if value is None else str(value)
+
+    def set_last_project(self, session: Session, *, user_uid: str, project_uid: str) -> None:
+        """Remember ``project_uid`` as the object this account chose last (`UIP-G-05`).
+
+        An object that does not exist is ``not_found`` (``aggregate_type: Project``), read in the caller's transaction before
+        the write; an object erased after that read leaves a row that :meth:`last_project` does not return. Choosing the
+        object already chosen changes nothing.
+        """
+        if session.execute(_PROJECT_EXISTS, {"project_uid": project_uid}).first() is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Project")
+        try:
+            with session.begin_nested():
+                session.execute(
+                    _UPSERT_LAST_PROJECT, {"user_uid": user_uid, "project_uid": project_uid}
+                )
+        except DBAPIError as exc:
+            if str(getattr(exc.orig, "sqlstate", "") or "") == _FOREIGN_KEY_VIOLATION:
+                violated = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+                if violated == _LAST_PROJECT_USER_KEY:
+                    raise _no_such_account() from exc
+            raise
 
     def grant_role(
         self,

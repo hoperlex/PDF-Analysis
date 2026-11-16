@@ -149,6 +149,8 @@ GUARDED = (
     ("getProductVersion", "GET", "/system/version"),
     ("listReleases", "GET", "/releases"),
     ("markReleaseNotesRead", "PUT", "/me/release-notes"),
+    # `UIP-G-05` (1.55.0): the account's own choice of an object is guarded like its read mark.
+    ("setMyLastProject", "PUT", "/me/last-project"),
     # `W53-SEAL-01`. The two execution reads and four commands share the same
     # authorization seam. Keep every operation in the sweep: a command whose body
     # is absent must still answer 401 before it can answer 422.

@@ -3946,12 +3946,14 @@ def _seam_role(role: str) -> str:
 # --------------------------------------------------------------------------------------
 
 
-def _account_view(account: Any, last_sign_in_at: datetime | None) -> AccountView:
+def _account_view(
+    account: Any, last_sign_in_at: datetime | None, last_project_uid: str | None = None
+) -> AccountView:
     """``auditmanager.access.models.Account`` as the frozen ``Account`` shape.
 
     ``last_sign_in_at`` is the access journal's answer for this account (`UI-A-92`), read by the caller for the whole
     set of accounts it renders: ``get_account`` itself does not read the journal, because the seam calls it on every
-    request."""
+    request. ``last_project_uid`` (`UIP-G-05`) is read only for the single-account reads; the listing never carries it."""
     record = account.record
     return AccountView(
         user_uid=str(record.user_uid),
@@ -3965,6 +3967,7 @@ def _account_view(account: Any, last_sign_in_at: datetime | None) -> AccountView
         is_default_credential=record.is_default_credential,
         archived_at=record.archived_at,
         last_sign_in_at=last_sign_in_at,
+        last_project_uid=last_project_uid,
     )
 
 
@@ -4008,7 +4011,11 @@ class AccountAdapter(_SessionHolder):
         account = self._accounts.get_account(session, user_uid)
         if account is None:
             raise _not_found("User")
-        return _account_view(account, _last_sign_ins(session, [account]).get(user_uid))
+        return _account_view(
+            account,
+            _last_sign_ins(session, [account]).get(user_uid),
+            self._accounts.last_project(session, user_uid),
+        )
 
     def get_account(self, *, user_uid: str) -> AccountView:
         return self._read(lambda session: self._view_of(session, user_uid))
@@ -4148,6 +4155,32 @@ class AccountAdapter(_SessionHolder):
 
         return self._write(work)
 
+    def set_last_project(self, *, user_uid: str, project_uid: str, idempotency_key: str) -> None:
+        """``setMyLastProject`` (contract 1.55.0, `UIP-G-05`): the key is claimed in the transaction of the write.
+
+        An exact repeat of the key (same account, same project) changes nothing; the same key for another account or
+        another project is ``idempotency_key_reuse``. An unknown project is ``not_found``, raised by ``auditmanager.access``
+        from the table's foreign key, so the refusal rolls the key's claim back with it and the client may retry the key.
+        """
+        from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
+
+        def work(session: Session) -> None:
+            commands = CommandRepository()
+            claim = commands.begin(
+                session,
+                command_type=SET_LAST_PROJECT_COMMAND,
+                idempotency_key=idempotency_key,
+                fingerprint=payload_fingerprint(
+                    {"command": "set_last_project.v1", "user_uid": user_uid, "project_uid": project_uid}
+                ),
+            )
+            if isinstance(claim, CommandReplay):
+                return
+            self._accounts.set_last_project(session, user_uid=user_uid, project_uid=project_uid)
+            commands.succeed(session, claim.command_id, {"project_uid": project_uid})
+
+        self._write(work)
+
     def list_auth_events(self, *, cursor: str | None, limit: int) -> models.AuthEventPage:
         """``listAuthEvents``: the access journal, newest first. The cursor is an event identity (``evt_``)."""
         from auditmanager.access.public import read_access_events
@@ -4233,6 +4266,10 @@ APPROVE_REGISTRATION_COMMAND = "approve_registration"
 #: Contract 1.36.0. The command type ``endUserSessions`` claims its idempotency key under; an account-side receipt, so
 #: ``scripts/recovery/product_purge.py`` keeps it with the access journal.
 END_USER_SESSIONS_COMMAND = "end_user_sessions"
+
+#: Contract 1.55.0 (`UIP-G-05`). The command type ``setMyLastProject`` claims its idempotency key under. Its outcome names the
+#: project, so ``scripts/recovery/product_purge.py`` classifies it as a product command (the choice goes with the project).
+SET_LAST_PROJECT_COMMAND = "set_last_project"
 
 
 class RegistrationAdapter(_SessionHolder):

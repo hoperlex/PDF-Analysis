@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
- *   sha256 a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e
+ *   sha256 4599c616e729aa4963cdf9828201ef10efc1f2b3e30fa19626a184a58ce64665
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -279,6 +279,7 @@ import type {
   SetFindingExecutionStatusRequest,
   SetGlobalVendorListRequest,
   SetJobPriorityRequest,
+  SetMyLastProjectRequest,
   SetProjectVendorListRequest,
   SetStageModelLayoutEnabledRequest,
   SetStagePairCompletenessRequest,
@@ -649,6 +650,7 @@ export const OPERATION_IDS = [
   'setFindingExecutionStatus',
   'setGlobalVendorList',
   'setJobPriority',
+  'setMyLastProject',
   'setProjectVendorList',
   'setStageModelLayoutEnabled',
   'setStagePairCompleteness',
@@ -7907,6 +7909,32 @@ export type SetJobPriorityInput = {
 export type SetJobPriorityResult = ExecutionQueueItem;
 
 // ------------------------------------------------------------------------------------
+// setMyLastProject - PUT /me/last-project
+// ------------------------------------------------------------------------------------
+
+/**
+ * Remember the object the signed-in account chose.
+ *
+ * `UIP-G-05` (contract 1.55.0, owner ruling Г7-B): the signed-in account's own choice of an object, kept on the server so that the screens that show all objects or one open on the object it chose last. Any complete account, roles or none; the credential names the account and the body cannot name another. `getMe` answers the choice as `last_project_uid`. An unknown project is `404 not_found`. `Idempotency-Key` is required: an identical repeat changes nothing, and a reused key with another project is `409 idempotency_key_reuse`. Choosing the object already chosen is a no-op. The all-objects view is not stored: there is no body for it, and a client that shows all objects simply does not call this. A link with `?project=` overrides the stored choice on the client.
+ */
+export type SetMyLastProjectInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetMyLastProjectRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setMyLastProject`. */
+export type SetMyLastProjectResult = void;
+
+// ------------------------------------------------------------------------------------
 // setProjectVendorList - PUT /projects/{project_uid}/vendor-lists/{section_code}
 // ------------------------------------------------------------------------------------
 
@@ -13176,6 +13204,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  setMyLastProject: {
+    operationId: 'setMyLastProject',
+    method: 'PUT',
+    path: '/me/last-project',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: null,
+    successStatuses: [204],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['account'],
   },
   setProjectVendorList: {
     operationId: 'setProjectVendorList',

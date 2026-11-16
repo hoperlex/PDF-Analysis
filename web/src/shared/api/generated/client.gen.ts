@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
- *   sha256 a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e
+ *   sha256 4599c616e729aa4963cdf9828201ef10efc1f2b3e30fa19626a184a58ce64665
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -578,6 +578,8 @@ import type {
   SetGlobalVendorListResult,
   SetJobPriorityInput,
   SetJobPriorityResult,
+  SetMyLastProjectInput,
+  SetMyLastProjectResult,
   SetProjectVendorListInput,
   SetProjectVendorListResult,
   SetStageModelLayoutEnabledInput,
@@ -4040,6 +4042,18 @@ export function setJobPriority(
 }
 
 /**
+ * Remember the object the signed-in account chose.
+ *
+ * `PUT /me/last-project` - a write; carries a required Idempotency-Key.
+ */
+export function setMyLastProject(
+  input: SetMyLastProjectInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetMyLastProjectResult>> {
+  return request<SetMyLastProjectResult>(OPERATIONS.setMyLastProject, input, options);
+}
+
+/**
  * Set Project Vendor List
  *
  * `PUT /projects/{project_uid}/vendor-lists/{section_code}`.
@@ -4912,6 +4926,7 @@ export const apiClient = {
   setFindingExecutionStatus,
   setGlobalVendorList,
   setJobPriority,
+  setMyLastProject,
   setProjectVendorList,
   setStageModelLayoutEnabled,
   setStagePairCompleteness,

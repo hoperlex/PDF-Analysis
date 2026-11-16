@@ -653,6 +653,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "updateMyProfile": _ANY_COMPLETE_ACCOUNT,
         "changePassword": _ANY_COMPLETE_ACCOUNT,
         "markReleaseNotesRead": _ANY_COMPLETE_ACCOUNT,
+        # `UIP-G-05`: the account's own choice of an object, like its read mark: any complete account, roles or none.
+        "setMyLastProject": _ANY_COMPLETE_ACCOUNT,
         # Product changes -- projects, uploads, runs, verdicts, comments, the export.
         "createProject": _EXPERT,
         "uploadDocument": _EXPERT,

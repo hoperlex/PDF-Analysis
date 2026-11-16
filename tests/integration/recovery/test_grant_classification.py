@@ -89,8 +89,8 @@ def test_the_four_classes_partition_the_tables_schema_coverage_declares() -> Non
     # pass and its advice, a finding's block evidence, the settings journal, the vectors' control and its journal, and the delivery journal.
     # `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one (165): the PNG render of a norm page.
     # `0066_run_deletion` (`RUN-DELETE-01`) adds one (166): the tombstone of a deleted run; `0067_precedents_wave5` (`CRIT-SEAL-53`) adds four (170):
-    # a pattern with its journal, the parameter facts and the cross evidence.
-    assert len(coverage.TABLES) == 170
+    # a pattern with its journal, the parameter facts and the cross evidence. `0069_account_last_project` (`UIP-G-05`) adds one (171): the object an account chose last.
+    assert len(coverage.TABLES) == 171
 
 
 def test_every_table_has_its_privileges_from_its_class() -> None:

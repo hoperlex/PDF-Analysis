@@ -15,7 +15,7 @@ from typing import Any
 
 from auditmanager.api.schemas.common import timestamp
 
-__all__ = ["AccountView", "PersonNamesView", "account_body"]
+__all__ = ["AccountView", "PersonNamesView", "account_body", "own_account_body"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +38,9 @@ class AccountView:
     archived_at: datetime | None
     #: Contract 1.36.0: the latest successful sign-in recorded in the access journal, ``None`` when there is none.
     last_sign_in_at: datetime | None
+    #: Contract 1.55.0 (`UIP-G-05`): the object the account chose last, ``None`` when it has chosen none. Read for the
+    #: account's own answers only (:func:`own_account_body`); an administrator's reads of another account never carry it.
+    last_project_uid: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,3 +67,12 @@ def account_body(view: AccountView) -> dict[str, Any]:
         "archived_at": None if view.archived_at is None else timestamp(view.archived_at),
         "last_sign_in_at": None if view.last_sign_in_at is None else timestamp(view.last_sign_in_at),
     }
+
+
+def own_account_body(view: AccountView) -> dict[str, Any]:
+    """:func:`account_body` plus ``last_project_uid``: what ``getMe`` and ``updateMyProfile`` answer.
+
+    The property is optional in the contract and present on exactly these two answers, ``null`` when the account has not
+    chosen an object. An administrator's reads of an account (``account_body``) omit it.
+    """
+    return {**account_body(view), "last_project_uid": view.last_project_uid}

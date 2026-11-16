@@ -139,6 +139,7 @@ __all__ = [
     "ReleaseEntry",
     "ReleaseList",
     "MarkReleaseNotesReadRequest",
+    "SetMyLastProjectRequest",
     "RunId",
     "JobId",
     "RunState",
@@ -3215,6 +3216,9 @@ class Account(_Object):
     #: Contract 1.36.0 (`UI-A-92`): the instant of the account's latest successful sign-in, read from the access
     #: journal; null when none is recorded (it never signed in, or signed in before the journal began).
     last_sign_in_at: datetime | None
+    #: Contract 1.55.0 (`UIP-G-05`): the object the account chose last, kept on the server; null when it has chosen none (or
+    #: its object is gone). Present on `getMe` and `updateMyProfile`, absent from an administrator's reads of an account.
+    last_project_uid: ProjectUid | None = Field(default=None, json_schema_extra=optional_property)
 
 
 class AccountPage(_Object):
@@ -3429,6 +3433,12 @@ class ReleaseList(_Object):
 
 class MarkReleaseNotesReadRequest(_Object):
     read_through: str
+
+
+class SetMyLastProjectRequest(_Object):
+    """Contract 1.55.0 (`UIP-G-05`): the object the signed-in account chose. The all-objects view is not sent."""
+
+    project_uid: ProjectUid
 
 
 class PersonNames(_Object):
