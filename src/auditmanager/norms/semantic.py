@@ -9,6 +9,9 @@ still judged by the norm review, never taken as a citation. The service's deploy
 (``docs/program/NORM-VECTOR-TEMP-01.md``); until it is deployed ``AUDITMANAGER_NORM_EMBED_URL`` is unset and nothing here is called.
 Remove this module when the permanent embedder lands.
 
+`NORM-ALL-FINDINGS-01`: a query that names a document (``СП 16.13330 ...``) is answered by :func:`semantic_norm_candidates_in_documents` --
+the same question, asked only of the windows of the documents the designation resolves to in the snapshot -- never over the whole snapshot.
+
 How it works: the observation's title and description go to the service. The vector goes to the corpus' HNSW index through
 :meth:`NormEmbeddingRepository.nearest`, and each nearest window gives one paragraph -- the longest reliable one in the window's
 paragraph span -- as a candidate in the exact shape the word search gives (``candidate_not_verified``).
@@ -22,11 +25,13 @@ import os
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any, Final
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
+from auditmanager.norms.embedding import vectors
 from auditmanager.norms.embedding.profile import DIMENSIONS, EMBEDDING_PROFILE
 from auditmanager.norms.embedding_repository import NormEmbeddingConflict, NormEmbeddingRepository
 from auditmanager.norms.search.display import reader_designation
@@ -34,11 +39,13 @@ from auditmanager.norms.search.display import reader_designation
 __all__ = [
     "EMBED_URL_ENV",
     "SEMANTIC_LOOKUP",
+    "ScopedSemanticResult",
     "SemanticUnavailable",
     "embed_text",
     "norm_embed_url",
     "observation_text",
     "semantic_norm_candidates",
+    "semantic_norm_candidates_in_documents",
 ]
 
 #: The service's address on the stack's internal network. Unset or blank: the semantic lookup is off.
@@ -122,8 +129,93 @@ def _nearest_paragraphs(session: Session, *, snapshot_id: str, vector: list[floa
         raise SemanticUnavailable("the snapshot has no embedding build")
     nearest = NormEmbeddingRepository(session).nearest(
         snapshot_id=snapshot_id, chunking_profile=str(build), query=vector, limit=limit * 2)  # type: ignore[arg-type]
+    return _window_candidates(session, snapshot_id=snapshot_id, windows=nearest, limit=limit)
+
+
+# --- `NORM-ALL-FINDINGS-01` (B3): by meaning, inside the document a query names -----------------------------------------------------
+#
+# A query that names a document ("СП 16.13330 ...", "ГОСТ 5264-80 ...") is a question about that document. The whole-snapshot lookup
+# above would answer it with another standard's neighbour, and the any-words fallback with whichever paragraph holds most of the words
+# (a concrete modulus of elasticity for an embedded-plate question). This variant asks the same index the same question and keeps only the
+# windows of the documents the designation resolves to **in this snapshot**. A designation that resolves to none gives no candidates and
+# never another standard.
+
+#: The documents a designation names in a snapshot: the search's own rule (``norms/search/service.py`` ``_DESIGNATION_FILTER``) -- a
+#: document matches when the designation's tokens equal its *leading* tokens, so ``СП 54`` finds ``СП_54_13330_2022`` and never
+#: ``СП_542_1325800_2024``.
+_DOCUMENTS = text(
+    """
+    SELECT d.norm_document_pk, d.norm_document_id
+      FROM norm_document d
+     WHERE d.norms_snapshot_id = :snapshot
+       AND d.designation_tokens @> norm_designation_tokens(:designation)
+       AND d.designation_tokens[1:cardinality(norm_designation_tokens(:designation))] = norm_designation_tokens(:designation)
+     ORDER BY d.norm_document_pk
+    """
+)
+#: Exact nearest windows of those documents. ``+ 0`` keeps the ORDER BY from matching the HNSW index: the index is one for every snapshot and
+#: document, a filter this narrow is applied after its scan (`D-124`) and a short scan would read as "nothing near". A document holds at most a
+#: few thousand windows, so the exact order costs less than the guess and cannot come back short.
+_NEAREST_IN_DOCUMENTS = text(
+    """
+    SELECT e.norm_chunk_pk, e.window_ordinal,
+           -(e.embedding <#> CAST(:query AS vector(1024))) AS inner_product
+      FROM norm_embedding e
+      JOIN norm_chunk c ON c.norm_chunk_pk = e.norm_chunk_pk
+     WHERE e.norms_snapshot_id = :snapshot AND e.chunking_profile = :chunking_profile
+       AND e.embedding_profile = :profile AND c.norm_document_pk IN :documents
+     ORDER BY (e.embedding <#> CAST(:query AS vector(1024))) + 0, e.norm_chunk_pk, e.window_ordinal
+     LIMIT :limit
+    """
+).bindparams(bindparam("documents", expanding=True))
+
+
+@dataclass(frozen=True, slots=True)
+class ScopedSemanticResult:
+    """What a document-scoped lookup found: the documents the designation resolved to (none: nothing was searched) and the candidates."""
+
+    designation: str
+    document_ids: tuple[str, ...]
+    candidates: list[dict[str, Any]]
+
+
+def semantic_norm_candidates_in_documents(
+    session: Session, *, snapshot_id: str, value: str, url: str, designation: str, limit: int = 3,
+    embed: Callable[[str, str], list[float]] = embed_text,
+) -> ScopedSemanticResult:
+    """Up to ``limit`` candidates near ``value``'s meaning among the paragraphs of the documents ``designation`` names, nearest first.
+
+    The designation is resolved first, in the snapshot: when it names no document nothing is embedded and nothing is returned. The
+    clause of a query is not a filter here (a meaning search has no clause); the candidates are still ``candidate_not_verified``.
+    """
+    rows = session.execute(_DOCUMENTS, {"snapshot": snapshot_id, "designation": designation}).all()
+    if not rows:
+        return ScopedSemanticResult(designation, (), [])
+    vector = embed(url, value)
+    build = session.execute(_BUILD, {"snapshot": snapshot_id, "profile": EMBEDDING_PROFILE}).scalar_one_or_none()
+    if build is None:
+        raise SemanticUnavailable("the snapshot has no embedding build")
+    try:
+        literal = vectors.pgvector_literal(vectors.pack(vector))
+    except vectors.VectorRefused as error:
+        raise SemanticUnavailable(f"VectorRefused: {error}") from None
+    windows = session.execute(_NEAREST_IN_DOCUMENTS, {
+        "snapshot": snapshot_id, "chunking_profile": str(build), "profile": EMBEDDING_PROFILE, "query": literal,
+        "documents": [int(row.norm_document_pk) for row in rows], "limit": limit * 2}).all()
+    nearest = [_Window(chunk_pk=int(row.norm_chunk_pk), window_ordinal=int(row.window_ordinal)) for row in windows]
+    return ScopedSemanticResult(designation, tuple(str(row.norm_document_id) for row in rows),
+                                _window_candidates(session, snapshot_id=snapshot_id, windows=nearest, limit=limit))
+
+
+@dataclass(frozen=True, slots=True)
+class _Window:
+    chunk_pk: int
+    window_ordinal: int
+
+
+def _window_candidates(session: Session, *, snapshot_id: str, windows: Any, limit: int) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
-    for window in nearest:
+    for window in windows:
         row = session.execute(_WINDOW_PARAGRAPH, {"chunk": window.chunk_pk, "window": window.window_ordinal,
                                                   "snapshot": snapshot_id, "profile": EMBEDDING_PROFILE}).one_or_none()
         if row is None or any(candidate["paragraph_id"] == str(row.norm_paragraph_id) for candidate in candidates):

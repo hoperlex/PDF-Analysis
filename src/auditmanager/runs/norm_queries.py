@@ -150,3 +150,33 @@ def plan_flow_norm_queries(observation: Mapping[str, Any]) -> dict[str, Any]:
         return {**planned, "reason": "internal_project_consistency"}
     return {**planned, "status": "requires_query", "reason": "normative_question_undetermined",
             "normative_question": None}
+
+
+#: `NORM-ALL-FINDINGS-01` (B1). The provenance, the plan reason and the two outcomes of the one model call that formulates queries for the
+#: findings ``plan_flow_norm_queries`` left at ``requires_query``.
+MODEL_QUERY_PLANNING = "model_query_planning"
+MODEL_NO_QUESTION_REASON = "model_no_normative_question"
+PLANNING_REFUSED_REASON = "norm_query_planning_refused"
+
+
+def plan_from_model_record(record: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The plan of an observation from the norm stage model's record for it (``parse_norm_queries``); ``None`` is a record that never came.
+
+    * ``decision=search`` -- ``model_proposed`` queries, each with provenance ``model_query_planning``. They are search text only: nothing
+      here asserts that a norm applies or exists.
+    * ``decision=no_normative_question`` -- ``not_applicable`` with the distinct reason :data:`MODEL_NO_QUESTION_REASON`; the lookup counts the
+      finding excluded, the model's own reason is kept in ``planning``.
+    * no accepted record (refused after its one repair, or absent) -- ``planning_refused``: a technical gap, never read as "no question".
+    """
+    if record is None:
+        return {"queries": [], "status": "planning_refused", "reason": PLANNING_REFUSED_REASON,
+                "normative_question": None, "provenance": []}
+    planning = {"input_id": record["input_id"], "decision": record["decision"], "model_reason": record["reason"]}
+    if record["decision"] == "no_normative_question":
+        return {"queries": [], "status": "not_applicable", "reason": MODEL_NO_QUESTION_REASON,
+                "normative_question": False, "provenance": [], "planning": planning}
+    queries = list(record["queries"])
+    return {"queries": queries, "status": "model_proposed", "reason": MODEL_QUERY_PLANNING, "normative_question": True,
+            "provenance": [{"query": query, "source_kind": MODEL_QUERY_PLANNING, "field": f"norm_query_planning.queries[{index}]",
+                            "literal": query, "character_start": 0, "character_end": len(query)}
+                           for index, query in enumerate(queries)], "planning": planning}

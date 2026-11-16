@@ -473,6 +473,8 @@ def test_a_phase_is_called_on_the_cell_of_its_row_and_a_phase_without_a_row_is_r
     expected = {"blocks:0:leg1": "blocks:leg1", "blocks:b002:judge": "blocks:judge", "blocks:0:leg1:repair:1": "blocks:leg1",
                 "blocks:b001:judge:repair:1": "blocks:judge", "comprehensive": "cross_check:main",
                 "comprehensive_analysis:b001": "cross_check:main", "norm_verification:b003:repair:1": "norms:main",
+                # `NORM-ALL-FINDINGS-01`: the norm stage model's query planning runs on the norms cell, like the norm review
+                "norm_verification:queries:0": "norms:main", "norm_verification:queries:2:repair:1": "norms:main",
                 "critic": "review:main", "finding_review:b001:repair:1": "review:main", "corrector": "correction:main"}
     for identity_, cell_key in expected.items():
         assert review._phase_binding(run_level, identity_).call.cell_key == cell_key, identity_
@@ -491,6 +493,7 @@ def test_the_phase_dictionary_maps_every_call_identity_of_the_workflow_to_one_ro
     expected = {
         "blocks:3": "blocks", "blocks:b002": "blocks", "blocks:3:leg1": "blocks", "blocks:3:leg2": "blocks", "blocks:3:judge": "blocks", "comprehensive": "cross_check", "comprehensive:2": "cross_check",
         "comprehensive_analysis:b001": "cross_check", "norm_verification": "norms", "norm_verification:b004": "norms",
+        "norm_verification:queries:1": "norms",
         "critic": "review", "finding_review:b001": "review", "corrector": "correction", "finding_correction:b003": "correction",
         "project_parameters": "cross_check", "text_analysis": "text",
     }

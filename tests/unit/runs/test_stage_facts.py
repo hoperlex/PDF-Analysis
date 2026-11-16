@@ -342,6 +342,7 @@ def test_an_extended_legacy_run_lists_the_chips_its_procedures_and_its_old_journ
 @pytest.mark.parametrize(("phase", "chip"), [
     ("blocks:3", "blocks"), ("merge", "merge"),
     ("v2:blocks:b001", "blocks"), ("v2:comprehensive", "cross_check"), ("v2:norm_verification:2", "norms"), ("v2:critic", "review"),
+    ("v2:norm_verification:queries:0", "norms"), ("v2:norm_verification:queries:0:repair:1", "norms"),  # NORM-ALL-FINDINGS-01 (B1)
     ("v2:corrector", "correction"),
     ("v3:w001:blocks:b002", "blocks"), ("v3:w014:comprehensive_analysis:b001", "cross_check"),
     ("v3:w002:norm_verification:b003", "norms"), ("v3:w002:finding_review:b001", "review"),

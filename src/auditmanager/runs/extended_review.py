@@ -24,7 +24,7 @@ from auditmanager.findings.public import BlockEvidenceItem, CandidateGroup, Cand
 from auditmanager.jobs.public import extended_unit
 from auditmanager.norms.public import (
     MAX_NORM_QUERY_CHARACTERS, SEARCH_WINDOW, SEMANTIC_LOOKUP, NormPageImages, SemanticUnavailable, norm_embed_url,
-    norm_observation_text, parse_norm_query, search_norms, semantic_norm_candidates,
+    norm_observation_text, parse_norm_query, search_norms, semantic_norm_candidates, semantic_norm_candidates_in_documents,
 )
 from auditmanager.runs.norm_stage_accounting import NO_NORM_NAMED_REASONS, NORM_REPLY_REFUSED, account_norm_inputs
 from auditmanager.runs.repository import RunRepository
@@ -677,9 +677,25 @@ def _asked_norm_question(item: dict) -> bool:
     return item.get("norm_status") != "not_applicable" and item.get("norm_reason") not in _NO_NORM_QUESTION
 
 
+def _receipt_outcome(receipt: dict, item: dict) -> None:
+    """The fields of a lookup receipt that restate the observation's outcome; written when the word lookup ends and again after the semantic one."""
+    receipt.update(status=item.get("norm_status"), reason=item.get("norm_reason"),
+        selected_candidate_ids=[candidate["paragraph_id"] for candidate in item.get("norm_candidates", [])],
+        selected_candidate_count=len(item.get("norm_candidates", [])))
+
+
 def _norms(session, observations: list[dict], snapshot_id: str | None,
            *, full_document: bool = False, checkpoint=None, lookup_receipts=None,
-           query_planning=False, strict_scope=False) -> list[str]:
+           query_planning=False, strict_scope=False, model_plans=None) -> list[str]:
+    """Look up candidate paragraphs for ``observations``; ``strict_scope`` is the fresh flow's policy.
+
+    ``model_plans`` (flow only, `NORM-ALL-FINDINGS-01` B1): ``{observation_id: plan}`` from the norm stage model's query planning
+    (``norm_queries.plan_from_model_record``); it answers an observation the literal planner left at ``requires_query`` and nothing else.
+    In the flow, with ``AUDITMANAGER_NORM_EMBED_URL`` set, a query the exact word search leaves without a hit is answered **by meaning**
+    (``_semantic_candidates``: inside the document the query names, else over the snapshot) and the any-words fallback is not run -- it
+    is what returned an unrelated paragraph for an embedded-plate question. Without the address the any-words fallback stays, and the
+    run says so (``norm_semantic_lookup_off``); every receipt names the method that produced its candidates (``norm_lookup_method``).
+    """
     # Candidate retrieval is deterministic corpus lookup, never edition validation.
     available = snapshot_id is not None
     cache: dict[str, list[dict]] = {}
@@ -687,12 +703,19 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
     lookup_pass = 1 + max((row.get("lookup_pass_ordinal", 0) for row in (lookup_receipts or [])), default=0)
     calls = 0
     warnings = []
+    embed_url = norm_embed_url() if strict_scope else None
+    receipt_of: dict[int, dict] = {}
+    if strict_scope and available and embed_url is None:
+        # Not silent: the word search is what answers this run, and the reader is told it is not the by-meaning lookup.
+        warnings.append("norm_semantic_lookup_off")
     for ordinal, item in enumerate(observations):
         query_plan = None
         if query_planning:
             from .norm_queries import plan_flow_norm_queries, plan_norm_queries
             query_plan = plan_flow_norm_queries(item) if strict_scope else plan_norm_queries(item)
-            if strict_scope:
+            if strict_scope and query_plan["status"] == "requires_query" and (model_plans or {}).get(item.get("observation_id")):
+                query_plan = deepcopy(model_plans[item["observation_id"]])
+            if strict_scope and query_plan["status"] != "planning_refused":
                 literal = plan_norm_queries({**item, "norm_queries": []})
                 if literal["reason"] == "literal_standard_reference":
                     bounds = literal["queries"]
@@ -730,13 +753,22 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
             if receipt is None:
                 return
             answered = [query for query in receipt["queries"] if query.get("status") == "completed"]
-            receipt.update(status=item.get("norm_status"), reason=item.get("norm_reason"),
-                selected_candidate_ids=[candidate["paragraph_id"] for candidate in item.get("norm_candidates", [])],
-                selected_candidate_count=len(item.get("norm_candidates", [])),
+            _receipt_outcome(receipt, item)
+            receipt.update(
                 queries_answered=len(answered), queries_without_answer=max(0, len(queries) - len(answered)),
                 search_calls_started=sum(query.get("search_started") is True for query in receipt["queries"]),
                 reused_query_answers=sum(query.get("cache_reused") is True for query in answered),
                 search_tail_not_read=any(query.get("has_more") is True for query in answered))
+            if strict_scope:
+                receipt["norm_lookup_method"] = "word" if answered else None
+        if receipt is not None:
+            receipt_of[id(item)] = receipt
+        if query_plan is not None and query_plan["status"] == "planning_refused":
+            # B1: the norm stage model's record for this finding never came (refused after its one repair, or absent). A gap of the work,
+            # not "no question": its reason is not one of NO_NORM_NAMED_REASONS, so the stage is partial and says why.
+            item.update(norm_status="unavailable", norm_reason=query_plan["reason"], norm_candidates=[])
+            finish_receipt()
+            continue
         if query_plan is not None and query_plan["status"] == "not_applicable":
             item.update(norm_status="not_applicable", norm_reason=query_plan["reason"],
                 norm_candidates=[], norm_review_status="not_required")
@@ -771,7 +803,8 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
                     page = search_norms(session, q=query, norms_snapshot_id=snapshot_id,
                         cursor=None, limit=3, timeout_ms=1200)
                     any_words = None
-                    if not page.items:
+                    replaced_by_meaning = not page.items and embed_url is not None
+                    if not page.items and not replaced_by_meaning:
                         any_words = _any_words_query(query)  # NORM-ANY-WORDS-01
                         if any_words is not None:
                             if strict_scope and receipt is not None:
@@ -796,6 +829,7 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
                     if receipt is not None:
                         cache_receipts[key] = {"has_more": page.next_cursor is not None, "received_hits": len(page.items),
                             **({} if any_words is None else {"any_words_query": any_words}),
+                            **({"any_words_replaced_by_semantic": True} if replaced_by_meaning else {}),
                             "hits": [{"snapshot_id": hit.norms_snapshot_id, "document_id": hit.norm_document_id,
                                 "paragraph_id": hit.norm_paragraph_id, "designation": hit.designation,
                                 "clause_number": hit.clause_number, "page_label": hit.page_label,
@@ -820,23 +854,19 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
             if active_query is not None:
                 active_query.update(status="failed", error_code=error.code.value, reason="lookup_unavailable")
         finish_receipt()
-    semantic_inputs = observations
-    if strict_scope:
-        semantic_inputs = []
-        for item in observations:
-            plan = item.get("norm_query_plan", {})
-            bounded = bool(plan.get("literal_scope")) or any(
-                parse_norm_query(query).designation is not None or parse_norm_query(query).clause is not None
-                for query in plan.get("queries", []))
-            if bounded:
-                # The existing semantic endpoint is snapshot-scoped, not
-                # document/edition/clause-scoped. It cannot replace a valid
-                # negative bounded answer with another standard's neighbour.
-                plan["semantic_lookup"] = "not_requested_bound_scope"
-            else:
-                semantic_inputs.append(item)
-    _semantic_candidates(session, semantic_inputs, snapshot_id, checkpoint=checkpoint, warnings=warnings,
-                         full_document=full_document)
+    # B3: a query that names a document is answered by meaning inside that document, never over the snapshot (which would offer another
+    # standard's neighbour) and never skipped (as the bounded scope was before `NORM-ALL-FINDINGS-01`).
+    attempts: dict[int, dict] = {}
+    _semantic_candidates(session, observations, snapshot_id, checkpoint=checkpoint, warnings=warnings,
+                         full_document=full_document, **({"flow": True, "record": attempts} if strict_scope else {}))
+    for item in observations:
+        receipt = receipt_of.get(id(item))
+        if receipt is None or not strict_scope:
+            continue
+        attempt = attempts.get(id(item))
+        _receipt_outcome(receipt, item)
+        if attempt is not None:
+            receipt.update(norm_lookup_method=attempt["method"], semantic_lookups=deepcopy(attempt["lookups"]))
     return sorted(set(warnings))
 
 
@@ -845,39 +875,84 @@ def _norms(session, observations: list[dict], snapshot_id: str | None,
 #: ``AUDITMANAGER_NORM_EMBED_URL`` is set. **Nothing here is hidden**: a lookup that fails, or one past the run's window, leaves its
 #: observation ``unavailable`` with its own reason -- a gap of the norm verification, so the procedure is ``partial`` and says why --
 #: and the run's warnings and the worker's log name the failure.
-_SEMANTIC_LOOKUPS_PER_RUN = 60
+#:
+#: `NORM-ALL-FINDINGS-01`: the window counts **lookups** (an embedding and a search), raised from 60 to 300 -- a full-document run has 43-171
+#: observations and a finding may name several documents. The flow also looks up the observations that asked a norm question and had no
+#: query (``normative_query_required``): before, they were the one outcome the lookup never reached.
+_SEMANTIC_LOOKUPS_PER_RUN = 300
 _SEMANTIC_TARGETS = frozenset({("not_found", None), ("unavailable", "query_not_proposed")})
+_FLOW_SEMANTIC_TARGETS = _SEMANTIC_TARGETS | {("unavailable", "normative_query_required")}
 _SEMANTIC_FAILED = "semantic_lookup_failed"
 _SEMANTIC_WINDOW_EXHAUSTED = "semantic_lookup_window_exhausted"
 
 
-def _semantic_candidates(session, observations, snapshot_id, *, checkpoint, warnings, full_document, url=None):
+def _semantic_lookups_of(item: dict) -> list[tuple[str, str | None]]:
+    """The lookups of a flow observation, in order: one by meaning inside each document its queries name (``("document", designation)``),
+    and one over the whole snapshot (``("snapshot", None)``) when some query names none or there is no query at all."""
+    queries = (item.get("norm_query_plan") or {}).get("queries") or []
+    documents: dict[str, str] = {}
+    unbounded = not queries
+    for query in queries:
+        designation = parse_norm_query(query).designation
+        if designation is None:
+            unbounded = True
+        else:
+            documents.setdefault(" ".join(designation.casefold().split()), designation)
+    return [*(("document", designation) for designation in documents.values()), *([("snapshot", None)] if unbounded else [])]
+
+
+def _semantic_candidates(session, observations, snapshot_id, *, checkpoint, warnings, full_document, url=None, flow=False, record=None):
     url = norm_embed_url() if url is None else url
     if url is None or snapshot_id is None:
         return
+    accepted = _FLOW_SEMANTIC_TARGETS if flow else _SEMANTIC_TARGETS
     targets = [item for item in observations
-               if (item.get("norm_status"), item.get("norm_reason")) in _SEMANTIC_TARGETS and not item.get("norm_candidates")
+               if (item.get("norm_status"), item.get("norm_reason")) in accepted and not item.get("norm_candidates")
                and norm_observation_text(item)]
+    cap = 6 if full_document else 3
+    used = 0
     for looked, item in enumerate(targets):
-        if looked >= _SEMANTIC_LOOKUPS_PER_RUN:
+        lookups = _semantic_lookups_of(item) if flow else [("snapshot", None)]
+        if used + len(lookups) > _SEMANTIC_LOOKUPS_PER_RUN:
             for rest in targets[looked:]:
                 rest.update(norm_status="unavailable", norm_reason=_SEMANTIC_WINDOW_EXHAUSTED)
             warnings.append("norm_semantic_lookup_window_exhausted")
             return
-        if checkpoint is not None:
-            checkpoint("extended_norm_semantic_lookup")
-        try:
-            found = semantic_norm_candidates(session, snapshot_id=snapshot_id, value=norm_observation_text(item), url=url,
-                                             limit=6 if full_document else 3)
-        except (SemanticUnavailable, SQLAlchemyError) as error:
-            session.rollback()
-            _log.error("norm semantic lookup failed for run observations (%s): %s", type(error).__name__, error, exc_info=True)
-            for rest in targets[looked:]:
-                rest.update(norm_status="unavailable", norm_reason=_SEMANTIC_FAILED)
-            warnings.append("norm_semantic_lookup_failed")
-            return
+        found, details = [], []
+        for scope, designation in lookups:
+            if checkpoint is not None:
+                checkpoint("extended_norm_semantic_lookup")
+            used += 1
+            try:
+                if scope == "document":
+                    result = semantic_norm_candidates_in_documents(
+                        session, snapshot_id=snapshot_id, value=norm_observation_text(item), url=url,
+                        designation=designation, limit=cap if len(lookups) == 1 else 3)
+                    part = result.candidates
+                    details.append({"scope": "document", "designation": designation,
+                        "document_ids": list(result.document_ids), "candidates": len(part)})
+                else:
+                    part = semantic_norm_candidates(session, snapshot_id=snapshot_id, value=norm_observation_text(item), url=url,
+                                                    limit=cap if len(lookups) == 1 else 3)
+                    details.append({"scope": "snapshot", "designation": None, "candidates": len(part)})
+            except (SemanticUnavailable, SQLAlchemyError) as error:
+                session.rollback()
+                _log.error("norm semantic lookup failed for run observations (%s): %s", type(error).__name__, error, exc_info=True)
+                for rest in targets[looked:]:
+                    rest.update(norm_status="unavailable", norm_reason=_SEMANTIC_FAILED)
+                warnings.append("norm_semantic_lookup_failed")
+                return
+            found.extend(candidate for candidate in part
+                         if all(candidate["paragraph_id"] != kept["paragraph_id"] for kept in found))
+        if record is not None:
+            # The method of the lookups that gave the candidates (or, when none did, of the ones that were tried).
+            pool = [row for row in details if row["candidates"]] or details
+            record[id(item)] = {"method": "semantic_scoped" if any(row["scope"] == "document" for row in pool) else "semantic",
+                                "lookups": details}
+            if isinstance(item.get("norm_query_plan"), dict):
+                item["norm_query_plan"]["semantic_lookup"] = deepcopy(details)
         if found:
-            item.update(norm_status="candidates", norm_candidates=found, norm_lookup_method=SEMANTIC_LOOKUP)
+            item.update(norm_status="candidates", norm_candidates=found[:cap], norm_lookup_method=SEMANTIC_LOOKUP)
 
 
 def run_extended_review(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
@@ -1528,12 +1603,59 @@ def _review_norms_per_record(*, state, request, call, identity, indexed, flow=Fa
     return gap
 
 
+def _plan_norm_queries_with_model(*, state, items, snapshot_id, model_id, section, settings, run, call, phase):
+    """`NORM-ALL-FINDINGS-01` (B1): the norm stage model formulates search queries for the findings that have none.
+
+    Which findings: those whose plan is ``requires_query`` (``plan_flow_norm_queries``) -- block legs return an empty ``norm_queries``, and the
+    literal planner will not invent one. Only those; a finding with proposed or derived queries is never asked. One batched call per up to
+    forty of them (``norm_verification:queries:N``), on the norms cell, **before** any lookup. A reply is read per record: one bad record costs
+    only itself, the one semantic repair the flow already allows is spent on the refused or missing ones, and an input with no accepted
+    record after it is a technical gap (``norm_query_planning_refused``). The queries are search text; they claim nothing.
+
+    Returns ``{observation_id: plan}`` (``norm_queries.plan_from_model_record``) for every finding asked; an empty mapping when nothing is
+    asked or the corpus is unavailable (nothing would be searched, so nothing is paid for).
+    """
+    from auditmanager.analysis.public import build_norm_query_request, norm_query_planning_limits, parse_norm_queries
+    from .norm_queries import plan_flow_norm_queries, plan_from_model_record
+    if snapshot_id is None:
+        return {}
+    # An item that already carries its plan (``norm_query_plan``, written by the lookup) has been through this stage: it is never asked again.
+    asked = [item for item in items if "norm_query_plan" not in item and plan_flow_norm_queries(item)["status"] == "requires_query"]
+    per_call = norm_query_planning_limits()["max_inputs_per_call"]
+    plans: dict[str, dict] = {}
+    receipts = state.setdefault("norm_query_planning", [])
+    for number, start in enumerate(range(0, len(asked), per_call)):
+        batch = asked[start:start + per_call]
+        inputs = {"xnq_" + extended_digest({"observation_id": item["observation_id"]})[:24]: item for item in batch}
+        request = build_norm_query_request(model_id=model_id, run_id=run.run_id, section=section, settings=settings, payload={
+            "observations": [{"input_id": key, "title": item["title"], "description": item["description"],
+                "source_ids": item["source_ids"]} for key, item in inputs.items()],
+            "source_sha256": state["source_sha256"]})
+        identity = f"norm_verification:queries:{number}"
+        response = call(request, identity)
+        records, gap = _received_reply(state=state, request=request, response=response, call=call, identity=identity,
+            parse=lambda text, **kwargs: parse_norm_queries(text, inputs=inputs, **kwargs),
+            policy={"semantic_repair_attempts": 1}, expected_inputs=set(inputs), procedure="norm_query_planning")
+        by_input = {record["input_id"]: record for record in records}
+        for key, item in inputs.items():
+            plan = plan_from_model_record(by_input.get(key))
+            if "planning" in plan:
+                plan["planning"]["batch"] = number
+            plans[item["observation_id"]] = plan
+        receipts.append({"identity": identity, "request_sha256": request.request_sha256, "inputs": len(inputs),
+            "accepted": len(by_input), "refused_or_missing": len(inputs) - len(by_input), "reply_gap": bool(gap)})
+        phase("norm_verification", "running")
+    return plans
+
+
 def _flow_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings):
     """Resolver parity: a valid negative lookup is completed work, not a failed job."""
     from auditmanager.analysis.public import build_norm_review_request
     items = state["observations"]
+    model_plans = _plan_norm_queries_with_model(state=state, items=items, snapshot_id=snapshot_id, model_id=model_id, section=section,
+        settings=settings, run=run, call=call, phase=phase)
     state["warnings"].extend(_norms(session, items, snapshot_id, full_document=True,
-        checkpoint=checkpoint, query_planning=True, strict_scope=True,
+        checkpoint=checkpoint, query_planning=True, strict_scope=True, model_plans=model_plans,
         lookup_receipts=state.setdefault("norm_lookup_receipts", [])))
     candidates = [item for item in items if item.get("norm_candidates")]
     for item in items:
@@ -1551,14 +1673,17 @@ def _flow_norm_verification(*, session, run, model_id, section, state, snapshot_
     # Deduplicate transmission by exact fragment, never replace all occurrences
     # of a paragraph with its first returned quote. Each variant has a temporary
     # request-local alias; persisted citations return the real paragraph identity.
-    batches, batch, characters = [], [], 0
-    for item in candidates:
-        size = len(item["title"]) + len(item["description"]) + sum(len(c["quote"]) for c in item["norm_candidates"])
-        if batch and (len(batch) >= 40 or characters + size > 80_000):
-            batches.append(batch); batch, characters = [], 0
-        batch.append(item); characters += size
-    if batch:
-        batches.append(batch)
+    #
+    # `NORM-ALL-FINDINGS-01` (B4): the calls are packed so that every candidate's paragraph context fits the call that carries it; a call that
+    # would overflow is closed and a new one started, nothing is omitted. An input whose own candidates fit no single call is a technical gap
+    # with its reason.
+    from .flow_norm_context import CONTEXT_OVER_BUDGET, attach_flow_norm_context, pack_norm_batches
+    batches, prefetched, over_budget = pack_norm_batches(session, candidates, snapshot_id=snapshot_id, checkpoint=checkpoint)
+    for item in over_budget:
+        item.update(norm_status="unavailable", norm_reason=CONTEXT_OVER_BUDGET, norm_review_status="not_reviewed",
+            norm_review_reason=CONTEXT_OVER_BUDGET, finding_norm_status="not_verified")
+    state["norm_batch_plan"] = {"batches": len(batches), "candidate_inputs": len(candidates), "over_budget_inputs": len(over_budget),
+        "contexts_read": len(prefetched), "contexts_unavailable": sum(value is None for value in prefetched.values())}
     for number, batch in enumerate(batches):
         originals, indexed, context = {}, {}, {}
         alias_to_paragraph = {}
@@ -1580,9 +1705,8 @@ def _flow_norm_verification(*, session, run, model_id, section, state, snapshot_
                     "norm_candidate_ids": [c["paragraph_id"] for c in item["norm_candidates"]]}
                     for key, item in indexed.items()], "norm_context": list(context.values()),
                 "source_sha256": state["source_sha256"], "candidate_identity_policy": "exact-fragment-alias-v1"})
-        from .flow_norm_context import attach_flow_norm_context
         request, context_receipt = attach_flow_norm_context(session, request, originals=originals,
-            indexed=indexed, snapshot_id=snapshot_id, checkpoint=checkpoint)
+            indexed=indexed, snapshot_id=snapshot_id, checkpoint=checkpoint, prefetched=prefetched)
         state.setdefault("normative_context_receipts", {})[str(number)] = context_receipt
         def save_accepted(accepted):
             for result in accepted:
@@ -1650,12 +1774,14 @@ def _source_sized(policy):
     return policy.get("completion_policy") == "source-complete-v1" or policy.get("source_sized_calls") is True
 
 
-def _received_reply(*, state, request, response, parse, call, identity, policy, expected_inputs=None, on_accepted=None):
+def _received_reply(*, state, request, response, parse, call, identity, policy, expected_inputs=None, on_accepted=None, procedure=None):
     """Keep valid records and repair a received semantic refusal under fresh consent.
 
     The second call has its own durable identity. Transport failures and ambiguous
     provider effects propagate; this helper never retries an unknown outcome.
+    ``procedure`` names what is repaired when the identity's first word does not (the norm query planning runs as ``norm_verification:queries:N``).
     """
+    procedure = procedure or identity.split(":", 1)[0]
     request = getattr(call, "prepared_requests", {}).get(identity, request)
     rejected = []
     try:
@@ -1690,11 +1816,11 @@ def _received_reply(*, state, request, response, parse, call, identity, policy, 
         from auditmanager.analysis.public import flow_repair_helper
         repaired_request = flow_repair_helper("build_flow_repair_request", request, rejected=rejected,
             accepted_records=accepted, reply_sha256=response.response_sha256,
-            procedure=identity.split(":", 1)[0], missing_input_ids=expected_inputs-{input_key(item) for item in accepted})
+            procedure=procedure, missing_input_ids=expected_inputs-{input_key(item) for item in accepted})
     else:
         repaired_request = build_semantic_repair_request(request, rejected=rejected,
             accepted_records=accepted, reply_sha256=response.response_sha256,
-            procedure=identity.split(":", 1)[0])
+            procedure=procedure)
     receipt.update(status="repairing", repair_request_sha256=repaired_request.request_sha256)
     repaired_response = call(repaired_request, identity + ":repair:1")
     repair_rejected = []

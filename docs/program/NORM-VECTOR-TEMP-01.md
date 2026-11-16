@@ -32,7 +32,17 @@ own text, so it cannot use them.
   are looked up by meaning; they carry `norm_lookup_method: semantic_temporary`, and the norm review judges every candidate.
 - Off unless the worker has `AUDITMANAGER_NORM_EMBED_URL`. A failure is never quiet: each affected observation becomes
   `unavailable / semantic_lookup_failed` (a gap, so «Нормы» is partial and says why), the run warns `norm_semantic_lookup_failed`,
-  and the worker logs the traceback. More than 60 lookups in a run: `semantic_lookup_window_exhausted`, the same way.
+  and the worker logs the traceback. More than the run's window of lookups (60, since `NORM-ALL-FINDINGS-01` 300): `semantic_lookup_window_exhausted`, the same way.
+
+## `NORM-ALL-FINDINGS-01` (2026-11-16): by meaning inside the named document
+
+In the fresh v2 flow a query that names a document (`СП 16.13330 ...`, `ГОСТ 5264-80 ...`) is answered by
+`semantic_norm_candidates_in_documents`: the same nearest-window question asked only of the windows of the documents the designation
+resolves to in the snapshot (the search's leading-token rule; an exact ordered scan, not the HNSW walk). A designation the snapshot does
+not hold gives no candidates (`not_found`) and never another standard. With the address set, the any-words fallback is not run in this
+flow; a query without a document is answered over the snapshot; a finding that asked a question and has no query is looked up too. The
+window is 300 lookups. With the address unset the word search stays and the run warns `norm_semantic_lookup_off`. Every lookup receipt
+carries `norm_lookup_method` (`word`, `semantic`, `semantic_scoped`) and its `semantic_lookups`.
 
 ## The embedder service
 

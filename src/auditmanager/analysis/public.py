@@ -373,6 +373,25 @@ def parse_norm_review(*args, **kwargs):
 __all__.extend(["build_norm_review_request", "parse_norm_review"])
 
 
+def build_norm_query_request(**kwargs):
+    from auditmanager.analysis.extended.norm_query_planning import build_norm_query_request as build
+    return build(**kwargs)
+
+
+def parse_norm_queries(*args, **kwargs):
+    from auditmanager.analysis.extended.norm_query_planning import parse_norm_queries as parse
+    return parse(*args, **kwargs)
+
+
+def norm_query_planning_limits():
+    """`NORM-ALL-FINDINGS-01`: how many findings one planning call carries (the cost estimate prices the same figure)."""
+    from auditmanager.analysis.extended.norm_query_planning import MAX_PLAN_INPUTS
+    return {"max_inputs_per_call": MAX_PLAN_INPUTS}
+
+
+__all__.extend(["build_norm_query_request", "parse_norm_queries", "norm_query_planning_limits"])
+
+
 def estimate_extended_visual_scope(**kwargs):
     from auditmanager.analysis.extended.estimate import estimate_visual_scope
     return estimate_visual_scope(**kwargs)

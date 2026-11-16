@@ -198,10 +198,12 @@ from auditmanager.norms.search import pdf_binding as norm_pdf_binding  # W55A-SE
 from auditmanager.norms.search import search as search_norms  # W55A-SEARCH-01
 from auditmanager.norms.semantic import (  # NORM-VECTOR-TEMP-01 (temporary)
     SEMANTIC_LOOKUP,
+    ScopedSemanticResult,
     SemanticUnavailable,
     norm_embed_url,
     observation_text as norm_observation_text,
     semantic_norm_candidates,
+    semantic_norm_candidates_in_documents,  # NORM-ALL-FINDINGS-01
 )
 from auditmanager.norms.search.query import (  # NORM-ANY-WORDS-01
     MAX_QUERY_CHARACTERS as MAX_NORM_QUERY_CHARACTERS,
@@ -376,10 +378,12 @@ __all__ = [
     "run_reference_pipeline",
     "search_norms",
     "SEMANTIC_LOOKUP",
+    "ScopedSemanticResult",
     "SemanticUnavailable",
     "norm_embed_url",
     "norm_observation_text",
     "semantic_norm_candidates",
+    "semantic_norm_candidates_in_documents",
     "parse_norm_query",
     "MAX_NORM_QUERY_CHARACTERS",
     "select_verified_retrieval_set",

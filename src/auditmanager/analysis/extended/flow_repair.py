@@ -28,8 +28,8 @@ def flow_policy():
         "analysis/extended/core.py", "analysis/extended/review.py",
         "analysis/extended/substantive_review.py", "analysis/extended/finding_proposals.py",
         "analysis/extended/consolidation.py", "analysis/extended/related_context.py",
-        "runs/v2_quality.py", "runs/extended_review.py", "runs/norm_queries.py",
-        "runs/flow_norm_context.py", "runs/norm_context.py", "norms/paragraph_context.py",
+        "analysis/extended/norm_query_planning.py", "runs/v2_quality.py", "runs/extended_review.py", "runs/norm_queries.py",
+        "runs/flow_norm_context.py", "runs/norm_context.py", "norms/paragraph_context.py", "norms/semantic.py",
         "precedents/candidate_context.py", "precedents/vectors/intents.py",
         "precedents/settings.py", "decision_memory/settings.py",
         "findings/publication.py", "jobs/extended_review.py")
@@ -39,17 +39,16 @@ def flow_policy():
     return {"version": VERSION, "bundle_sha256": sha.hexdigest()}
 
 
-#: Bundle digests of released code whose consents keep running on the code that follows them (`NORM-STATUS-ORIGINAL-01`).
+#: Bundle digests of released code whose consents keep running on the code that follows them.
 #:
-#: ``flow_policy()`` hashes ``runs/extended_review.py``, which that task had to edit, so every consent accepted before it carries a digest
-#: the new code no longer computes and would be refused at the start of its run (``flow_repair_changed_requires_consent``). The change only
-#: moves the status of the norm stage (what counts as a technical gap): no model call, prompt, request, price or stored reply differs, so
-#: the consent's cost and scope stay exactly what the user accepted. A fresh estimate gets the new digest from ``flow_policy()``.
-#:
-#: ``410f1310...`` is the digest of release 0.27.0 (``origin/main`` 275bde864, the code that issued every consent now in flight) and of
-#: the 0.28.0 candidate 899550ffe, whose hashed files equal it byte for byte. **An entry is added only for a change that alters no call,
-#: prompt, request, price or stored reply** -- never to carry a consent across a behavioural change.
-ACCEPTED_LEGACY_BUNDLES = frozenset({"410f1310291f2d5746824a33e82e3d04ebc0b896397049fb1433a1b81455bbf0"})
+#: Empty since `NORM-ALL-FINDINGS-01` (owner 2026-11-16). ``NORM-STATUS-ORIGINAL-01`` had listed the digest of release 0.27.0 because the
+#: change it carried moved no call, prompt, request, price or stored reply. The change that emptied the set does move them: findings with
+#: no norm query now cost one more model call per forty (``norm_verification:queries:N``), the lookup by meaning replaces the any-words
+#: fallback, every candidate's paragraph context is delivered in as many calls as it takes, and the estimate prices all of it. A consent
+#: accepted before it never priced that work, so it is refused at the start of its run (``flow_repair_changed_requires_consent``) and the
+#: user asks for a fresh estimate. **An entry is added only for a change that alters no call, prompt, request, price or stored reply** --
+#: never to carry a consent across a behavioural change. The mechanism stays: a later status-only change may list its predecessor here.
+ACCEPTED_LEGACY_BUNDLES: frozenset[str] = frozenset()
 
 
 def validate_flow_policy(value, *, compare_bundle=True):
@@ -177,6 +176,12 @@ def build_flow_repair_request(request, *, missing_input_ids=None, origin_request
         feedback = json.loads(body["messages"][-1]["content"])
         feedback["semantic_repair"]["origin_request_sha256"] = origin_request_sha256
         body["messages"][-1]["content"] = canonical(feedback)
+    if kwargs.get("procedure") == "norm_query_planning":
+        # `NORM-ALL-FINDINGS-01`: the reply to repair is the planning call's ``plans``, not observations.
+        body["system"] += (
+            "\nЭто уточнение шага plans: верни только записи plans по отказавшим или отсутствующим input_id; queries — "
+            "только поисковый текст без идентификаторов абзацев, номеров пунктов и цитат; no_normative_question — с пустым queries "
+            "и причиной.")
     body["system"] += (
         "\nАдресное уточнение: ранее принятые сервером записи не возвращай и не переписывай. "
         "Верни только исправления отказавших записей и ответы по отсутствующим input_id/required_pairs. "
@@ -187,6 +192,10 @@ def build_flow_repair_request(request, *, missing_input_ids=None, origin_request
         schema = body["output_config"]["format"]["schema"]
         if "reviews" in schema["properties"]:
             rows = schema["properties"]["reviews"]
+            rows["maxItems"] = len(allowed)
+            rows["items"]["properties"]["input_id"]["enum"] = allowed
+        elif "plans" in schema["properties"]:
+            rows = schema["properties"]["plans"]
             rows["maxItems"] = len(allowed)
             rows["items"]["properties"]["input_id"]["enum"] = allowed
         elif "observations" in schema["properties"]:

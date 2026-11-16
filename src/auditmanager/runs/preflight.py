@@ -624,14 +624,31 @@ class RunCostPreflight:
                     pair_calls = comprehensive_calls
                     extended["semantic_pair_call_limit"] = pair_calls
                     extended["semantic_repair_attempts"] = 1
-                    repair_calls = image_calls + comprehensive_calls + norm_calls + review_calls + pair_calls
+                    # `NORM-ALL-FINDINGS-01` (B5): every finding is checked by the norms. Two kinds of call the plan above did not have.
+                    # (1) The norm stage model formulates queries for the findings that have none: one call per forty of them, and the
+                    #     most findings the estimate allows is the forty-per-call figure it already uses -- ``norm_calls`` is one call per
+                    #     forty -- so one planning call each (`runs/extended_review._plan_norm_queries_with_model`).
+                    # (2) Every candidate's paragraph context is delivered, in as many norm review calls as the per-call budget takes
+                    #     instead of cutting it (`runs/flow_norm_context.pack_norm_batches`): ``norm_context.estimated_calls_per_review_call``
+                    #     calls where the plan above priced one. Both ride the norms row, each priced like a norm review call.
+                    from auditmanager.analysis.public import norm_query_planning_limits
+                    from .norm_context import estimated_calls_per_review_call
+                    most_findings = norm_calls * 40
+                    query_calls = math.ceil(most_findings / norm_query_planning_limits()["max_inputs_per_call"])
+                    context_calls = norm_calls * (estimated_calls_per_review_call() - 1)
+                    extra_norm_calls = query_calls + context_calls
+                    extra_calls += extra_norm_calls
+                    input_tokens += extra_norm_calls * 100_000
+                    output_tokens += extra_norm_calls * 12_000
+                    led("norms", extra_norm_calls, extra_norm_calls * 100_000)
+                    repair_calls = image_calls + comprehensive_calls + norm_calls + extra_norm_calls + review_calls + pair_calls
                     extra_calls += pair_calls + repair_calls
                     input_tokens += pair_calls * 100_000 + repair_calls * 100_000
                     output_tokens += (pair_calls + repair_calls) * 12_000
                     led("cross_check", pair_calls + comprehensive_calls + pair_calls,
                         (pair_calls + comprehensive_calls + pair_calls) * 100_000, floor=12_000)
                     led("blocks", image_calls, image_calls * 100_000, floor=12_000)
-                    led("norms", norm_calls, norm_calls * 100_000, floor=12_000)
+                    led("norms", norm_calls + extra_norm_calls, (norm_calls + extra_norm_calls) * 100_000, floor=12_000)
                     led("review", review_calls, review_calls * 100_000, floor=12_000)
             else:
                 raise _invalid("analysis_workflow", "unsupported_plan")

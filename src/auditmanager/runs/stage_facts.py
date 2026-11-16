@@ -95,7 +95,8 @@ _CHIP_OF_ROW: Final[Mapping[str, str]] = {chip.row: chip.id for chip in CHIPS if
 
 #: The first word of an extended phase -> the chip whose call it is. The phases the code writes today are ``blocks:N`` and ``merge`` (the
 #: first extended review), ``v2:<identity>`` and ``v3:<window>:<identity>`` (the batched reviews: ``blocks:bNNN``, ``comprehensive:N``,
-#: ``comprehensive_analysis:bNNN``, ``norm_verification[:N|:bNNN]``, ``critic``, ``finding_review:bNNN``, ``corrector``,
+#: ``comprehensive_analysis:bNNN``, ``norm_verification[:N|:bNNN|:queries:N]`` (``queries``: the norm stage model's query planning,
+#: `NORM-ALL-FINDINGS-01`), ``critic``, ``finding_review:bNNN``, ``corrector``,
 #: ``finding_correction:bNNN``, each with an optional ``:repair:1``), ``v3:global-cross-window:<identity>`` and
 #: ``v3:project-parameters:bNNN`` (the parameter passport belongs to the cross-check). An ensemble identity such as ``blocks:N:leg1``
 #: starts with the same word.
