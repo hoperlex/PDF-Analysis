@@ -36,7 +36,7 @@ export interface RoutePlaceholderProps {
    * claim something false about the system, and *"coming soon"* is a claim.
    *
    * Their one caller was the `/workers` stub, which said the alpha had no distributed
-   * workers. `W54-WORKERS-WEB` replaced it with the real «Исполнители» screen, so no
+   * workers. `W54-WORKERS-WEB` replaced it with the real «Диспетчер» screen (then named «Исполнители»), so no
    * section passes them today; they stay for a section deferred by decision rather than
    * on its way. They are optional and default to the existing strings.
    */

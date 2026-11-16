@@ -253,7 +253,8 @@ def test_a_v1_run_renders_with_labels_and_empty_norm_columns(preflight) -> None:
     assert (summary["A8"], summary["B8"]) == ("Критичность", "Количество")
     # «Сводка» counts: severities and categories in the same words, never the raw values.
     assert (summary["A9"], summary["B9"]) == ("Критическое", "0")
-    assert (summary["A14"], summary["B14"]) == ("Без серьёзности", "2")
+    # The row of findings with no severity is «Без критичности», under that same header (`UIP-FIX-07`; it was «Без серьёзности»).
+    assert (summary["A14"], summary["B14"]) == ("Без критичности", "2")
     assert (summary["A16"], summary["B16"]) == ("Документация", "2")
     assert not {"critical", "documentation", "pending"} & set(summary.values())
 
