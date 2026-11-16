@@ -1,29 +1,39 @@
 'use client';
 
 /**
- * The theme control in the application bar.
+ * The theme control in the application bar: ONE button that switches to the other theme.
  *
- * Three buttons rather than a switch, because the choice has three values and the third —
- * "follow the system" — is the default. A two-state switch would make the default
- * unreachable once the user had touched it, which is the behaviour that leaves a dark-mode
- * machine showing a light application for good.
+ * Until it is pressed nothing is chosen and the screen follows the operating system (the
+ * stored value is `system`, the document carries no `data-theme`, the media query in
+ * `globals.css` decides). A press switches to the OPPOSITE of the theme showing now and keeps
+ * that as an explicit choice. The glyph and the tooltip name the theme the press switches TO
+ * — the sun and «Светлая тема» in the dark theme, the moon and «Тёмная тема» in the light one
+ * — as the original application does.
  *
- * WHY IT STARTS AT `system` AND MOVES IN AN EFFECT. This component is rendered inside a
- * server-rendered frame. The server has no `localStorage`, so the markup it produces cannot
- * depend on one; a first client render that read storage would disagree with that markup and
- * React would discard the tree. So the first render on both sides is `system` — which is the
- * right answer for every visitor who has never chosen — and the stored choice is applied in
- * an effect.
+ * THE COST, NAMED RATHER THAN DISCOVERED. From this one control there is no way back to
+ * "follow the system": after the first press the choice is explicit for good. `system` is the
+ * state before the first press, not a position of the control. That is the owner's ruling
+ * (`Г2-B`, 2026-11-16) and it is how the original behaves; reversing it means a second
+ * control, not a change here.
  *
- * WHAT THE EFFECT NO LONGER COSTS (`P7-1`). It used to cost a visitor who chose the OPPOSITE
- * of their system preference one frame of the system's theme before the effect ran. The root
- * layout (`web/src/app/layout.tsx`) now runs a blocking inline script in `<head>`
+ * WHY IT STARTS UNRESOLVED AND MOVES IN AN EFFECT. This component is rendered inside a
+ * server-rendered frame. The server has no `localStorage` and no screen, so the markup it
+ * produces cannot depend on either; a first client render that read them would disagree with
+ * that markup and React would discard the tree. So the first render on both sides is
+ * `system` with the operating system's preference unknown, and the stored choice and the
+ * preference are read in an effect.
+ *
+ * WHAT THE FIRST PAINT DOES NOT WAIT FOR (`P7-1`). The PALETTE: the root layout
+ * (`web/src/app/layout.tsx`) runs a blocking inline script in `<head>`
  * (`shared/lib/theme-boot-script.ts`) that reads the same storage key and sets the same
- * `data-theme` on `<html>` before the first paint, so the PALETTE is right from the start.
- * What this effect still decides is the control's own state — which of the two buttons is
- * pressed — and it applies the choice again, which is idempotent. The script touches only the
- * attribute on `<html>`, which `<html suppressHydrationWarning>` covers; this component's
- * markup is unchanged and still equals the server's.
+ * `data-theme` on `<html>` before the first paint. The GLYPH: both icons are in the markup
+ * and `app-frame.module.css` shows one by the same selectors that choose the palette
+ * (`:root[data-theme='dark']`, and `:root:not([data-theme='light'])` under the dark media
+ * query), so it is right on the first frame and follows the system preference live. What the
+ * effect still decides is the control's NAME — the tooltip and `aria-label` — which is text
+ * and cannot be chosen by a stylesheet; until it runs the control is called «Сменить тему».
+ * The script touches only the attribute on `<html>`, which `<html suppressHydrationWarning>`
+ * covers; this component's markup is unchanged and still equals the server's.
  */
 
 import { useEffect, useState } from 'react';
@@ -32,64 +42,79 @@ import { Icon } from '@/shared/ui';
 
 import type { ThemeChoice } from './theme';
 import {
-
-  THEME_LABELS,
   applyThemeChoice,
+  oppositeThemeAppearance,
   readThemeChoice,
+  resolveThemeAppearance,
+  switchTheme,
+  systemDarkQuery,
   themeStorage,
-  writeThemeChoice,
+  themeSwitchLabel,
 } from './theme';
 
 export function ThemeToggle() {
   const [choice, setChoice] = useState<ThemeChoice>('system');
+  // `null` until the effect has asked the system; see the header for why not earlier.
+  const [systemDark, setSystemDark] = useState<boolean | null>(null);
 
   useEffect(() => {
     const stored = readThemeChoice(themeStorage());
     setChoice(stored);
     applyThemeChoice(document.documentElement, stored);
+
+    // The system's preference, and its changes: while the choice is `system` the stylesheet
+    // already follows the system by itself, and this keeps the control's name in step.
+    const query = systemDarkQuery();
+    setSystemDark(query === null ? false : query.matches);
+    if (query === null) return undefined;
+    const onChange = (event: { readonly matches: boolean }): void => setSystemDark(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
   }, []);
 
-  const pick = (next: ThemeChoice): void => {
-    setChoice(next);
-    writeThemeChoice(themeStorage(), next);
-    applyThemeChoice(document.documentElement, next);
+  const visible = resolveThemeAppearance(choice, systemDark);
+  const label = themeSwitchLabel(visible);
+
+  const press = (): void => {
+    // The preference is read again here, not taken from state, so a press always switches
+    // away from what is on screen even if a change event has not been delivered yet.
+    setChoice(
+      switchTheme(document.documentElement, themeStorage(), choice, systemDarkQuery()?.matches ?? false),
+    );
   };
 
   return (
-    <div className="am-theme" role="group" aria-label="Оформление">
+    <div className="am-theme">
       {/*
-        * TWO buttons, sun and moon, asked for by the owner 2026-09-22.
+        * One real `<button>`: reachable and operable from the keyboard with no handler of its
+        * own. Icon-only, so the name is `aria-label` (Russian: the rendered-language guard reads
+        * it, so it cannot silently become English) and the same text is the tooltip. It is an
+        * ACTION button, not a toggle in the ARIA sense: the name already says what the press
+        * does, so there is no `aria-pressed` (a pressed state AND a name that flips with it
+        * would be announced twice, and contradictorily).
         *
-        * `THEME_CHOICES` still has three members and `system` is still the default: it is the
-        * state you are in until you press one of these, `readThemeChoice` returns it, and the
-        * OS preference is honoured the whole time. What it no longer is, is a BUTTON.
+        * `data-theme-choice` is the machine value the next press writes. It is absent until the
+        * appearance is known, because the server cannot say it. The browser journey and the
+        * PA-01 criterion-4 evidence select on this name, so the wording is free to change.
         *
-        * THE CONSEQUENCE, NAMED RATHER THAN DISCOVERED: once a reviewer picks light or dark,
-        * there is no way back to "follow the system" from the interface. That is the cost of
-        * two controls instead of three and it is the owner's call; reversing it is one entry
-        * in the array below.
-        *
-        * Icon-only, so each carries an `aria-label`. Those labels are Russian and the
-        * rendered-language guard reads `aria-label`, so this cannot silently become English.
+        * Both glyphs are in the markup on purpose: the stylesheet shows the one that stands for
+        * the OTHER theme (see the header). `Icon` is decorative here: the button names itself.
         */}
-      {(['light', 'dark'] as const).map((value) => (
-        <button
-          key={value}
-          type="button"
-          className="am-theme__option"
-          /*
-           * The machine value, kept beside the icon. The browser journey and the PA-01
-           * criterion-4 evidence select on this attribute, so the wording is free to change.
-           */
-          data-theme-choice={value}
-          aria-pressed={value === choice}
-          aria-label={THEME_LABELS[value]}
-          title={THEME_LABELS[value]}
-          onClick={() => pick(value)}
-        >
-          <Icon name={value} />
-        </button>
-      ))}
+      <button
+        type="button"
+        className="am-theme__option"
+        data-theme-choice={visible === null ? undefined : oppositeThemeAppearance(visible)}
+        aria-label={label}
+        title={label}
+        onClick={press}
+      >
+        <span className="am-theme__icon am-theme__icon--sun">
+          <Icon name="light" />
+        </span>
+        <span className="am-theme__icon am-theme__icon--moon">
+          <Icon name="dark" />
+        </span>
+      </button>
     </div>
   );
 }
