@@ -1,7 +1,10 @@
 /**
- * `R-153h` (owner, 2026-11-09): the first item of «Работа» is «Проект» when the address names one project and «Проекты»
- * when it names none («Все проекты») — the user's road to those screens had been unclear since `R-150b` took the list
- * out of the menu rows.
+ * `R-153h` (owner, 2026-11-09): an item of «Работа» is «Объект» when the address names one object and «Объекты»
+ * when it names none («Все объекты») — the user's road to those screens had been unclear since `R-150b` took the list
+ * out of the menu rows. `UIP-G-07` puts it third, behind «Главная» and «Дашборд» (the integrator's ruling of the lane, as the
+ * question to the owner on the menu's preview), and makes the object the one `useCurrentProject` names: the explicit
+ * «Все объекты» (`?project=all`) rides the links, and the account's last object is the menu's object on a screen that follows
+ * the object, without being written onto the links.
  *
  * The item is not a registry row (both screens stay `inMenu: false`, which the registry guards hold): it is the
  * navigation's `projectEntry`, decided by `screenDecision` for the session and turned into an item by
@@ -21,6 +24,9 @@ import type { Navigation } from '@/_app/navigation';
 import type { ScreenEntry } from '@/shared/config';
 import { SCREEN_REGISTRY } from '@/shared/config';
 import { routes } from '@/shared/lib';
+
+import { queryKeys } from '@/shared/api';
+import type { Account } from '@/shared/api';
 
 import { newClient, renderWith } from '../screens/harness';
 import { ADMIN_ONLY, DEFAULT_CREDENTIAL, EXPERT, INCOMPLETE_PROFILE, NO_ROLES } from './subjects';
@@ -76,13 +82,13 @@ function draw(navigation: Navigation, pathname: string | null, projectUid?: stri
   return renderToStaticMarkup(createElement(FrameNavigationView, { navigation, pathname, projectUid }));
 }
 
-/** The first two links of each state: the entry and what «Работа» held first before it. */
-function firstTwo(markup: string): Record<StateName, Link[]> {
+/** The first three links of each state: «Главная», «Дашборд» and the entry that stands behind them (`UIP-G-07`). */
+function firstThree(markup: string): Record<StateName, Link[]> {
   const states = statesOf(markup);
   return {
-    row: linksOf(states.row).slice(0, 2),
-    rail: linksOf(states.rail).slice(0, 2),
-    stacked: linksOf(states.stacked).slice(0, 2),
+    row: linksOf(states.row).slice(0, 3),
+    rail: linksOf(states.rail).slice(0, 3),
+    stacked: linksOf(states.stacked).slice(0, 3),
   };
 }
 
@@ -117,13 +123,16 @@ describe('R-153h: who is offered the entry', () => {
     expect(noList.projectEntry).toEqual({ list: null, project: 'Объект' });
     expect(projectEntryItem(noList.projectEntry, null)).toBeNull();
     expect(projectEntryItem(noList.projectEntry, PROJECT)).toMatchObject({ label: 'Объект' });
-    expect(linksOf(statesOf(draw(noList, '/', null)).row)[0]?.href).toBe('/dashboard');
+    // No entry: «Работа» runs from «Дашборд» straight to «График работ».
+    expect(linksOf(statesOf(draw(noList, '/', null)).row).slice(0, 3).map((link) => link.href)).toEqual(['/', '/dashboard', '/schedule']);
     // The project page closed to an expert: «Проекты» stays, «Проект» goes — and an administrator keeps both.
     const noProject = buildNavigation(EXPERT, closed('/projects/[project_uid]'));
     expect(noProject.projectEntry).toEqual({ list: 'Объекты', project: null });
     expect(projectEntryItem(noProject.projectEntry, PROJECT)).toBeNull();
     expect(projectEntryItem(noProject.projectEntry, null)).toMatchObject({ label: 'Объекты' });
-    expect(linksOf(statesOf(draw(noProject, '/dashboard', PROJECT)).row)[0]?.href).toBe(`/dashboard?project=${PROJECT}`);
+    expect(linksOf(statesOf(draw(noProject, '/dashboard', PROJECT)).row).slice(0, 3).map((link) => link.href)).toEqual([
+      `/?project=${PROJECT}`, `/dashboard?project=${PROJECT}`, `/schedule?project=${PROJECT}`,
+    ]);
     expect(buildNavigation(ADMIN_ONLY, closed('/projects')).projectEntry).toEqual(BOTH);
     // Both closed: no entry at all.
     const neither = buildNavigation(EXPERT, closed('/projects', '/projects/[project_uid]'));
@@ -165,20 +174,27 @@ describe('R-153h: the item for the project the address names', () => {
     expect(withProjectEntry(bare, PROJECT)).toBe(bare);
   });
 
-  it('is the first item of «Работа», before «Дашборд», and leaves every other group as it was', () => {
+  it('is the third item of «Работа», behind «Главная» and «Дашборд», and leaves every other group as it was', () => {
     const live = buildNavigation(EXPERT);
-    for (const [projectUid, first] of [
+    const rows = live.groups[0]?.items ?? [];
+    for (const [projectUid, entry] of [
       [null, { address: '/projects', label: 'Объекты' }],
       [PROJECT, { address: `/projects/${PROJECT}`, label: 'Объект', screen: '/projects/[project_uid]' }],
     ] as const) {
       const shown = withProjectEntry(live, projectUid);
       expect(shown.groups.map((group) => group.group), String(projectUid)).toEqual(['work', 'knowledge', 'system']);
-      expect(shown.groups[0]?.items.slice(0, 2), String(projectUid)).toEqual([first, { address: '/dashboard', label: 'Дашборд' }]);
-      expect(shown.groups[0]?.items.slice(1), String(projectUid)).toEqual(live.groups[0]?.items);
+      expect(shown.groups[0]?.items.slice(0, 3), String(projectUid)).toEqual([
+        { address: '/', label: 'Главная' },
+        { address: '/dashboard', label: 'Дашборд' },
+        entry,
+      ]);
+      // Behind it, the rows as the registry orders them.
+      expect(shown.groups[0]?.items.slice(3), String(projectUid)).toEqual(rows.slice(2));
       expect(shown.groups.slice(1), String(projectUid)).toEqual(live.groups.slice(1));
     }
     // The navigation it was given is not touched.
-    expect(live.groups[0]?.items[0]).toEqual({ address: '/dashboard', label: 'Дашборд' });
+    expect(live.groups[0]?.items[0]).toEqual({ address: '/', label: 'Главная' });
+    expect(live.groups[0]?.items).toHaveLength(rows.length);
   });
 
   it('makes the «Работа» group, first, when the session has no other row in it', () => {
@@ -208,24 +224,26 @@ describe('R-153h: the item for the project the address names', () => {
 describe('R-153h: the entry in the bar, the compact rail and the stacked menu', () => {
   const live = buildNavigation(EXPERT);
 
-  it('with no project: «Объекты» first, leading to the list, then «Дашборд» — in all three states', () => {
+  it('with no project: «Главная», «Дашборд», then «Объекты», leading to the list — in all three states', () => {
     for (const projectUid of [null, undefined]) {
-      const found = firstTwo(draw(live, '/', projectUid));
+      const found = firstThree(draw(live, '/dashboard', projectUid));
       for (const [state, links] of Object.entries(found)) {
         expect(links.map((link) => [link.href, link.name]), `${state} ${String(projectUid)}`).toEqual([
-          ['/projects', 'Объекты'],
+          ['/', 'Главная'],
           ['/dashboard', 'Дашборд'],
+          ['/projects', 'Объекты'],
         ]);
       }
     }
   });
 
-  it('with a project: «Объект» first, leading to that project, then «Дашборд» carrying the project — in all three states', () => {
-    const found = firstTwo(draw(live, '/dashboard', PROJECT));
+  it('with a project: «Главная», «Дашборд» carrying the project, then «Объект», leading to that project — in all three states', () => {
+    const found = firstThree(draw(live, '/dashboard', PROJECT));
     for (const [state, links] of Object.entries(found)) {
       expect(links.map((link) => [link.href, link.name]), state).toEqual([
-        [`/projects/${PROJECT}`, 'Объект'],
+        [`/?project=${PROJECT}`, 'Главная'],
         [`/dashboard?project=${PROJECT}`, 'Дашборд'],
+        [`/projects/${PROJECT}`, 'Объект'],
       ]);
     }
   });
@@ -247,7 +265,8 @@ describe('R-153h: the entry in the bar, the compact rail and the stacked menu', 
   it('is aria-current="page" on the list, and only there', () => {
     expect(markedIn(draw(live, '/projects', null))).toEqual(Array(3).fill(['/projects']));
     expect(markedIn(draw(live, '/dashboard', null))).toEqual(Array(3).fill(['/dashboard']));
-    expect(markedIn(draw(live, '/', null))).toEqual([[], [], []]);
+    // `UIP-G-07`: `/` is «Главная» now, not the entry; the list is not the page shown.
+    expect(markedIn(draw(live, '/', null))).toEqual(Array(3).fill(['/']));
     // On the list with a project chosen, the item is the project's page, which is not the page shown.
     expect(markedIn(draw(live, '/projects', PROJECT))).toEqual([[], [], []]);
   });
@@ -259,10 +278,11 @@ describe('R-153h: the entry in the bar, the compact rail and the stacked menu', 
       groups: [{ group: 'work', label: 'Работа', items: [{ address: '/queue', label: 'Очередь' }] }],
     };
     const markup = renderToStaticMarkup(createElement(FrameNavigationView, { navigation: badged, pathname: `/projects/${PROJECT}`, projectUid: PROJECT, badges: {} }));
+    // The entry stands at the third place or, in a group of one row, after it: the place is a count (`PROJECT_ENTRY_PLACE`).
     const row = linksOf(statesOf(markup).row);
-    expect(row.map((link) => [link.href, link.current])).toEqual([[`/projects/${PROJECT}`, true], [`/queue?project=${PROJECT}`, false]]);
+    expect(row.map((link) => [link.href, link.current])).toEqual([[`/queue?project=${PROJECT}`, false], [`/projects/${PROJECT}`, true]]);
     const list = linksOf(statesOf(renderToStaticMarkup(createElement(FrameNavigationView, { navigation: badged, pathname: '/projects', projectUid: null, badges: {} }))).row);
-    expect(list.map((link) => [link.href, link.current])).toEqual([['/projects', true], ['/queue', false]]);
+    expect(list.map((link) => [link.href, link.current])).toEqual([['/queue', false], ['/projects', true]]);
   });
 
   it('marks the «Работа» group current on the project\'s page, as it did before', () => {
@@ -285,57 +305,113 @@ describe('R-153h: the entry in the bar, the compact rail and the stacked menu', 
   });
 
   it('can fail: a menu told another project leads to another page, and a menu told none does not lead to a project', () => {
-    expect(linksOf(draw(live, '/dashboard', PROJECT))[0]?.href).not.toEqual(linksOf(draw(live, '/dashboard', OTHER))[0]?.href);
-    expect(linksOf(draw(live, '/dashboard', null))[0]?.href).not.toContain(PROJECT);
-    expect(linksOf(draw(live, '/dashboard', PROJECT))[0]?.href).not.toEqual(linksOf(draw(live, '/dashboard', null))[0]?.href);
+    const entry = (markup: string): string | undefined => linksOf(statesOf(markup).row)[2]?.href;
+    expect(entry(draw(live, '/dashboard', PROJECT))).not.toEqual(entry(draw(live, '/dashboard', OTHER)));
+    expect(entry(draw(live, '/dashboard', null))).not.toContain(PROJECT);
+    expect(entry(draw(live, '/dashboard', PROJECT))).not.toEqual(entry(draw(live, '/dashboard', null)));
   });
 });
 
 // --------------------------------------------------------------------------------------------------- wiring
 
-describe('R-153h: the frame reads the project from the address', () => {
-  const frame = (navigation: Navigation = buildNavigation(EXPERT)): string =>
-    renderWith(newClient(), createElement(FrameNavigation, { navigation }));
-  /** The first link of each state of the frame as the address currently names the project. */
-  const firstOfEach = (): Link[] => Object.values(statesOf(frame())).map((state) => linksOf(state)[0] as Link);
+describe('R-153h: the frame reads the object from the address and, where the screen follows the object, from the account', () => {
+  const frame = (navigation: Navigation = buildNavigation(EXPERT), client = newClient()): string =>
+    renderWith(client, createElement(FrameNavigation, { navigation }));
+  /** The entry of each state of the frame as the address currently names the project: the third link, behind «Главная» and «Дашборд». */
+  const entryOfEach = (client = newClient()): Link[] =>
+    Object.values(statesOf(frame(buildNavigation(EXPERT), client))).map((state) => linksOf(state)[2] as Link);
+  /** A client that has read the account, whose last object is `lastProject`. */
+  const accountWith = (lastProject: string | null) => {
+    const client = newClient();
+    client.setQueryData(queryKeys.account.me(), { user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', roles: ['expert'], last_project_uid: lastProject } as unknown as Account);
+    return client;
+  };
+  const hrefsOf = (markup: string): string[] => linksOf(markup).map((link) => link.href);
 
   it('on a required screen, the project of the path: «Объект», current', () => {
     navigationState.pathname = routes.project(PROJECT);
     navigationState.search = '';
-    expect(firstOfEach()).toEqual(Array(3).fill({ href: `/projects/${PROJECT}`, name: 'Объект', current: true }));
+    expect(entryOfEach()).toEqual(Array(3).fill({ href: `/projects/${PROJECT}`, name: 'Объект', current: true }));
   });
 
   it('on an optional screen, the project of ?project=: «Объект», not the page shown', () => {
     navigationState.pathname = '/dashboard';
     navigationState.search = `project=${OTHER}`;
-    expect(firstOfEach()).toEqual(Array(3).fill({ href: `/projects/${OTHER}`, name: 'Объект', current: false }));
+    expect(entryOfEach()).toEqual(Array(3).fill({ href: `/projects/${OTHER}`, name: 'Объект', current: false }));
   });
 
   it('on the list with a project chosen, the item is that project\'s page', () => {
     navigationState.pathname = '/projects';
     navigationState.search = `project=${PROJECT}`;
-    expect(firstOfEach()).toEqual(Array(3).fill({ href: `/projects/${PROJECT}`, name: 'Объект', current: false }));
+    expect(entryOfEach()).toEqual(Array(3).fill({ href: `/projects/${PROJECT}`, name: 'Объект', current: false }));
   });
 
-  it('with no project in the address, «Все объекты»: «Объекты», current on the list', () => {
+  it('with no project in the address and none remembered, «Все объекты»: «Объекты», current on the list', () => {
     navigationState.pathname = '/projects';
     navigationState.search = '';
-    expect(firstOfEach()).toEqual(Array(3).fill({ href: '/projects', name: 'Объекты', current: true }));
+    expect(entryOfEach()).toEqual(Array(3).fill({ href: '/projects', name: 'Объекты', current: true }));
     navigationState.pathname = '/dashboard';
-    expect(firstOfEach()).toEqual(Array(3).fill({ href: '/projects', name: 'Объекты', current: false }));
+    expect(entryOfEach()).toEqual(Array(3).fill({ href: '/projects', name: 'Объекты', current: false }));
     navigationState.search = 'project=';
-    expect(firstOfEach()).toEqual(Array(3).fill({ href: '/projects', name: 'Объекты', current: false }));
+    expect(entryOfEach()).toEqual(Array(3).fill({ href: '/projects', name: 'Объекты', current: false }));
+    // The account answered that it has no last object: the same.
+    navigationState.search = '';
+    expect(entryOfEach(accountWith(null))).toEqual(Array(3).fill({ href: '/projects', name: 'Объекты', current: false }));
   });
 
   it('with a malformed ?project=, the list: the page itself says the value is no project', () => {
     navigationState.pathname = '/dashboard';
     navigationState.search = 'project=..%2Fadmin%2Fusers';
-    expect(firstOfEach().map((link) => link.href)).toEqual(Array(3).fill('/projects?project=..%2Fadmin%2Fusers'));
+    expect(entryOfEach().map((link) => link.href)).toEqual(Array(3).fill('/projects?project=..%2Fadmin%2Fusers'));
   });
 
   it('is nothing for a session the frame offers no menu', () => {
     navigationState.pathname = '/dashboard';
     navigationState.search = '';
     expect(frame(buildNavigation(null))).toBe('');
+  });
+
+  describe('UIP-G-06 and UIP-G-07: «Все объекты» chosen, and the account\'s last object', () => {
+    it('the explicit «Все объекты» (?project=all): «Объекты», and every link that takes a project carries ?project=all, last object or none', () => {
+      navigationState.pathname = '/dashboard';
+      navigationState.search = 'project=all';
+      for (const client of [newClient(), accountWith(PROJECT), accountWith(null)]) {
+        const hrefs = hrefsOf(statesOf(frame(buildNavigation(EXPERT), client)).row);
+        expect(hrefs.slice(0, 4)).toEqual(['/?project=all', '/dashboard?project=all', '/projects?project=all', '/schedule?project=all']);
+        // Every link of the bar that takes the parameter carries it: the choice survives a click on any of them.
+        expect(hrefs.filter((href) => !href.includes('?project=all'))).toEqual([]);
+      }
+    });
+
+    it('a screen that follows the object, its address silent, and the account\'s last object known: «Объект» of that object, and no ?project= written onto the links', () => {
+      navigationState.pathname = '/dashboard';
+      navigationState.search = '';
+      const states = statesOf(frame(buildNavigation(EXPERT), accountWith(PROJECT)));
+      for (const state of Object.values(states)) {
+        const links = linksOf(state);
+        expect(links.slice(0, 3).map((link) => [link.href, link.name]), 'the first three').toEqual([
+          ['/', 'Главная'],
+          ['/dashboard', 'Дашборд'],
+          [`/projects/${PROJECT}`, 'Объект'],
+        ]);
+        expect(links.filter((link) => link.href.includes('?')).map((link) => link.href)).toEqual([]);
+      }
+    });
+
+    it('the address beats the last object, and a screen that does not follow the object ignores it', () => {
+      navigationState.pathname = '/dashboard';
+      navigationState.search = `project=${OTHER}`;
+      expect(entryOfEach(accountWith(PROJECT)).map((link) => link.href)).toEqual(Array(3).fill(`/projects/${OTHER}`));
+      // «Очередь» is a global screen: it is not about one object, so the account's last one is not its object.
+      navigationState.pathname = '/queue';
+      navigationState.search = '';
+      expect(entryOfEach(accountWith(PROJECT)).map((link) => link.href)).toEqual(Array(3).fill('/projects'));
+    });
+
+    it('while the account is being read, the menu has no last object yet and says «Объекты»', () => {
+      navigationState.pathname = '/dashboard';
+      navigationState.search = '';
+      expect(entryOfEach(newClient()).map((link) => link.href)).toEqual(Array(3).fill('/projects'));
+    });
   });
 });

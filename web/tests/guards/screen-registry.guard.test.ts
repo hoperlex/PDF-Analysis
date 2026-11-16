@@ -141,7 +141,9 @@ function cycleFindings(registry: readonly ScreenEntry[]): string[] {
  */
 const R66: Partial<Record<ScreenGroup, string[]>> = {
   home: [],
-  work: ['/dashboard', '/section-optimisation', '/dispatcher', '/schedule', '/version-comparison', '/stage-comparison'],
+  // `UIP-G-07`: «Главная» first and «Дашборд» behind it; the object entry (`R-153h`) is drawn third, not a row; then the original's
+  // screens in the original's order, with «Назначения» and «Оптимизация разделов» after «График работ».
+  work: ['/', '/dashboard', '/schedule', '/dispatcher', '/section-optimisation', '/stage-comparison', '/version-comparison'],
   // `R-151m`: «Блоки» is a tab of the version, out of the menu.
   knowledge: ['/knowledge-base', '/norms'],
   system: ['/logs', '/workers', '/analysis-settings', '/queue'],
@@ -242,8 +244,9 @@ describe('every row has the shape §3.1 gives it', () => {
 
   it('R-60: exactly the five administrator screens require admin (the access journal is the fourth, 1.36.0; the advanced page of the executors is the fifth, `HOSTS-WEB-01`); R-150w: four operator screens require expert or admin', () => {
     expect(REGISTRY.filter((row) => Array.isArray(row.roles)).map((row) => [row.address, row.roles])).toEqual([
-      ['/dispatcher', ['expert', 'admin']],
+      // `UIP-G-07`: «График работ» stands before «Назначения» in the registry, as it does in the menu.
       ['/schedule', ['expert', 'admin']],
+      ['/dispatcher', ['expert', 'admin']],
       ['/logs', ['expert', 'admin']],
       ['/workers', ['expert', 'admin']],
       ['/workers/advanced', ['admin']],
@@ -277,7 +280,7 @@ describe('R-66: the groups, their members and their order', () => {
     for (const group of SCREEN_GROUPS) {
       expect(live[group], `group ${group}`).toEqual(R66[group] ?? []);
     }
-    expect(live.work[0]).toBe('/dashboard');
+    expect(live.work.slice(0, 2)).toEqual(['/', '/dashboard']);
     // R-150b: the screen stays registered and open; only the menu item is gone.
     expect(live.work).not.toContain('/projects');
     expect(REGISTRY.find((row) => row.address === '/projects')).toMatchObject({ inMenu: false, access: 'session', roles: 'any-role' });
@@ -290,6 +293,15 @@ describe('R-66: the groups, their members and their order', () => {
     expect(row?.inMenu, '/optimisation is in the menu; R-66 took it out').toBe(false);
     expect(row?.access).toBe('session');
     expect(routeAddresses().map((route) => route.address)).toContain('/optimisation');
+  });
+
+  it('UIP-G-07: «Главная» is the first row of «Работа», in the menu, and still the one product screen open to an account with no role (R-80)', () => {
+    const home = REGISTRY.find((entry) => entry.address === '/');
+    expect(home).toMatchObject({ label: 'Главная', group: 'work', access: 'session', roles: 'any', inMenu: true, projectScope: 'global' });
+    expect(REGISTRY.find((entry) => entry.group === 'work' && entry.inMenu)?.address).toBe('/');
+    // The group it left holds nothing now; the name stays in `SCREEN_GROUPS` for the top strip's labels.
+    expect(REGISTRY.filter((entry) => entry.group === 'home')).toEqual([]);
+    expect(SCREEN_GROUPS).toContain('home');
   });
 
   it('the four stubs are session screens any account holding a role opens (R-80), the queue only an expert or an administrator (R-150w)', () => {

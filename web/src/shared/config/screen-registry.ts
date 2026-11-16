@@ -60,7 +60,9 @@ export type ScreenAccess = (typeof SCREEN_ACCESS_LEVELS)[number];
 
 /**
  * The navigation groups (`W50-PLAN.md` §3.1, `R-66`). A group with no row the session may
- * open does not render.
+ * open does not render. `home` held «Главная» until `UIP-G-07` made it the first item of
+ * `work` (owner ruling Г5-B); no row is in `home` any more, and the name stays because the
+ * top strip's group labels (`_app/screen-context.tsx`) are typed over this list.
  */
 export const SCREEN_GROUPS = ['home', 'work', 'knowledge', 'system', 'admin', 'account', 'hidden'] as const;
 export type ScreenGroup = (typeof SCREEN_GROUPS)[number];
@@ -114,7 +116,11 @@ export type ScopedScreenEntry = ScreenEntry & { readonly projectScope: ProjectSc
  *
  * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов» (and «Назначения» since
  * `W61-DISPATCHER-01`, «Сравнение версий» since `CMP-VC-UI-01`); `R-150b` took «Проекты» out of
- * this group's menu, into the selector of the top strip; **Знания** — База знаний,
+ * this group's menu, into the selector of the top strip. `UIP-G-07` (owner rulings Г5-B, Г7-B, Г1-C and the second poll)
+ * sets the order of **Работа** as it is now: «Главная», «Дашборд», the object entry (`R-153h`, drawn between them and
+ * what follows, not a row), then the screens the original's menu has in the original's order — «График работ»,
+ * «Сравнение стадий», «Сравнение версий» — with our «Назначения» and «Оптимизация разделов» after «График работ».
+ * **Знания** — База знаний,
  * Блоки, «Нормы»; **Система** — Журнал выполнения, Диспетчер, «Настройки анализа»,
  * «Очередь». `/optimisation` left the menu and stayed a registered, reachable screen in
  * `hidden` until project optimisation became a project tab; since `W60-OPT-PROPOSALS-01`
@@ -134,13 +140,19 @@ export type ScopedScreenEntry = ScreenEntry & { readonly projectScope: ProjectSc
  * project, never from the menu.
  */
 export const SCREEN_REGISTRY = [
+  /*
+   * `UIP-G-07` (Г5-B): «Главная» is the first item of «Работа» and leads to `/`; the brand link still goes there too.
+   * `roles: 'any'` stays, because the screens around the guard need `/` open to a session with no role (`R-80`), so
+   * `buildNavigation` offers this row only beside another one: an account with no role has no product menu, and a
+   * menu with «Главная» alone would be one.
+   */
   {
     address: '/',
     label: 'Главная',
-    group: 'home',
+    group: 'work',
     access: 'session',
     roles: 'any',
-    inMenu: false,
+    inMenu: true,
     projectScope: 'global',
   },
 
@@ -150,10 +162,11 @@ export const SCREEN_REGISTRY = [
    * item of the `R-66` order. The address and the screen stay; the selector's «Новый проект» and,
    * from a required or global screen, «Все проекты» lead here.
    *
-   * `R-153h` (2026-11-09): the menu leads here again, but not through this row. The first item of «Работа» is
-   * «Проекты» when the address names no project and «Проект» (`/projects/[project_uid]`, below) when it names
+   * `R-153h` (2026-11-09): the menu leads here again, but not through this row. An item of «Работа» is
+   * «Объекты» when the address names no object and «Объект» (`/projects/[project_uid]`, below) when it names
    * one, drawn from the navigation's `projectEntry` (`_app/navigation.ts`) after `screenDecision` of these two
-   * rows. Both keep `inMenu: false`: the selector in the top strip stays, and the menu rows are unchanged.
+   * rows; since `UIP-G-07` it stands third, behind «Главная» and «Дашборд». Both keep `inMenu: false`: the selector
+   * in the top strip stays, and the menu rows are unchanged.
    */
   {
     address: '/projects',
@@ -173,14 +186,20 @@ export const SCREEN_REGISTRY = [
     inMenu: true,
     projectScope: 'optional',
   },
+  /*
+   * `UI-PARITY-P0P` (`R-150y`, `R-152a`…`R-152h`): «График работ». Expert and administrator: an expert reads their own row,
+   * an administrator every expert's and edits plans, the calendar and the reserve. Not a project's screen: the schedule spans
+   * every project. `UIP-G-07`: it is the first of the original's screens after the object entry, as in the original's menu;
+   * our «Назначения» and «Оптимизация разделов» follow it.
+   */
   {
-    address: '/section-optimisation',
-    label: 'Оптимизация разделов',
+    address: '/schedule',
+    label: 'График работ',
     group: 'work',
     access: 'session',
-    roles: 'any-role',
+    roles: ['expert', 'admin'],
     inMenu: true,
-    projectScope: 'optional',
+    projectScope: 'global',
   },
   /*
    * `W61-DISPATCHER-01` (roadmap Q-2): «Назначения». `any-role`, because both roles open it —
@@ -200,28 +219,9 @@ export const SCREEN_REGISTRY = [
     // `R-151m`: follows the header's project (`?project=`), «Все проекты» without it.
     projectScope: 'optional',
   },
-  /*
-   * `UI-PARITY-P0P` (`R-150y`, `R-152a`…`R-152h`): «График работ», after «Назначения» as in the original's menu. Expert
-   * and administrator: an expert reads their own row, an administrator every expert's and edits plans, the calendar and
-   * the reserve. Not a project's screen: the schedule spans every project.
-   */
   {
-    address: '/schedule',
-    label: 'График работ',
-    group: 'work',
-    access: 'session',
-    roles: ['expert', 'admin'],
-    inMenu: true,
-    projectScope: 'global',
-  },
-  /*
-   * `CMP-VC-UI-01` (plan §1.1, wave C1): «Сравнение версий». `any-role`: both roles open it, an expert sends the commands
-   * and the API refuses everything else. A module that is off is said so on the screen (`ProductVersion.comparison_modules`);
-   * the registry has no per-deployment column, so the entry is in the menu either way. The screen shows the off state.
-   */
-  {
-    address: '/version-comparison',
-    label: 'Сравнение версий',
+    address: '/section-optimisation',
+    label: 'Оптимизация разделов',
     group: 'work',
     access: 'session',
     roles: 'any-role',
@@ -231,6 +231,21 @@ export const SCREEN_REGISTRY = [
   {
     address: '/stage-comparison',
     label: 'Сравнение стадий',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+    projectScope: 'optional',
+  },
+  /*
+   * `CMP-VC-UI-01` (plan §1.1, wave C1): «Сравнение версий». `any-role`: both roles open it, an expert sends the commands
+   * and the API refuses everything else. A module that is off is said so on the screen (`ProductVersion.comparison_modules`);
+   * the registry has no per-deployment column, so the entry is in the menu either way. The screen shows the off state.
+   * `UIP-G-07`: after «Сравнение стадий», as in the original's menu.
+   */
+  {
+    address: '/version-comparison',
+    label: 'Сравнение версий',
     group: 'work',
     access: 'session',
     roles: 'any-role',

@@ -19,11 +19,17 @@
  * registered, reachable screen (`inMenu: false`). `RULING` below is the R-66 order **without** it,
  * and the `R-150b` cases after the menu cases hold the replacement.
  *
- * **`R-153h` (owner, 2026-11-09) brings the list back, but not as a row:** the first item of «Работа» is «Проект»
- * when the address names a project and «Проекты» when it names none, drawn from the navigation's `projectEntry`
+ * **`R-153h` (owner, 2026-11-09) brings the list back, but not as a row:** an item of «Работа» is «Объект»
+ * when the address names an object and «Объекты» when it names none, drawn from the navigation's `projectEntry`
  * (`web/tests/unit/shell/project-entry.test.ts` holds it). The frame in these cases has no router, so it names no
- * project: its first item is «Проекты», `/projects`. The registry still holds `/projects` with `inMenu: false`, and
- * the data cases below (`buildNavigation`'s groups) are unchanged.
+ * object: its item is «Объекты», `/projects`. The registry still holds `/projects` with `inMenu: false`, and
+ * the data cases below (`buildNavigation`'s groups) hold the rows alone.
+ *
+ * **`UIP-G-07` (Г5-B, Г7-B, Г1-C, the second poll) sets the order of «Работа» as `RULING` has it now:** «Главная» first (the
+ * brand link still leads home), «Дашборд» behind it, the object entry third, then the original's screens in the original's
+ * order («График работ», «Сравнение стадий», «Сравнение версий»; `PDF-proverka` 0ae48ea1 `frontend/index.html`) with our
+ * «Назначения» and «Оптимизация разделов» after «График работ». The «Разделы» group follows «Работа» for every session that
+ * may open the section page, on the current object; with none it has one row, «Выберите объект».
  *
  * The expectation below is typed from the ruling, not read from the registry, and the menu is
  * read three ways: the data the frame builds (`buildNavigation`), and the two rendered states of
@@ -67,17 +73,19 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
   {
     group: 'Работа',
     items: [
-      // `R-150b`: ['/projects', 'Проекты'] is no longer here; the selector in the top strip took it.
+      // `UIP-G-07`: «Главная» is the first item, leading to `/`.
+      ['/', 'Главная'],
+      // `R-150b`: ['/projects', 'Проекты'] is no longer a row; the selector in the top strip took it, and `R-153h` draws it third.
       ['/dashboard', 'Дашборд'],
-      ['/section-optimisation', 'Оптимизация разделов'],
-      // `W61-DISPATCHER-01` (roadmap Q-2) adds «Назначения» at the end of «Работа».
-      ['/dispatcher', 'Назначения'],
-      // `UI-PARITY-P0P` adds «График работ» after «Назначения», as the original's menu has it.
+      // `UI-PARITY-P0P`: «График работ», the first of the original's screens (the original's menu has it second, after «Главная»).
       ['/schedule', 'График работ'],
-      // `CMP-VC-UI-01` (plan §1.1) adds «Сравнение версий» after it.
-      ['/version-comparison', 'Сравнение версий'],
-      // `CMP-ACTIVATE-1030`: the owner activated the stage screen, and the menu offers it beside the version one.
+      // `W61-DISPATCHER-01` (roadmap Q-2): «Назначения», ours, after «График работ» (`UIP-G-07`).
+      ['/dispatcher', 'Назначения'],
+      ['/section-optimisation', 'Оптимизация разделов'],
+      // `CMP-ACTIVATE-1030`: the owner activated the stage screen; in the original's menu it stands before «Сравнение версий».
       ['/stage-comparison', 'Сравнение стадий'],
+      // `CMP-VC-UI-01` (plan §1.1): «Сравнение версий», the original's last.
+      ['/version-comparison', 'Сравнение версий'],
     ],
   },
   {
@@ -146,12 +154,10 @@ function readMenu(html: string): { readonly groups: string[]; readonly links: [s
   return { groups, links };
 }
 
-// `R-153h`: the frame renders with no router, so it names no project and its first link is the list; «Проект» replaces it
-// on a project's address (`project-entry.test.ts`).
-const RULED_LINKS: [string, string][] = [
-  ['/projects', 'Объекты'],
-  ...RULING.flatMap((g) => g.items.map(([a, l]) => [a, l] as [string, string])),
-];
+// `R-153h`, `UIP-G-07`: the frame renders with no router, so it names no object and the third link of «Работа», behind «Главная»
+// and «Дашборд», is the list; «Объект» replaces it on an object's address (`project-entry.test.ts`).
+const RULED_ROWS: [string, string][] = RULING.flatMap((g) => g.items.map(([a, l]) => [a, l] as [string, string]));
+const RULED_LINKS: [string, string][] = [...RULED_ROWS.slice(0, 2), ['/projects', 'Объекты'], ...RULED_ROWS.slice(2)];
 
 // --------------------------------------------------------------------------------- the menu
 
@@ -191,14 +197,15 @@ describe('R-66: the menu’s groups and items equal the ruling’s, in order', (
   it('as rendered, in the one-row bar: the same groups and links in the same order', () => {
     const markup = renderFrame(frameSession());
     const row = readMenu(region(markup, 'data-nav-state="row"'));
-    expect(row.groups).toEqual(['Работа', 'Знания', 'Система']);
+    // `UIP-G-07`: «Разделы» follows «Работа» for a session that may open the section page; with no object it holds one note, no link.
+    expect(row.groups).toEqual(['Работа', 'Разделы', 'Знания', 'Система']);
     expect(row.links).toEqual(RULED_LINKS);
   });
 
   it('as rendered, in the stacked «Меню»: «Меню», then the same groups and links in the same order', () => {
     const markup = renderFrame(frameSession());
     const stacked = readMenu(region(markup, 'data-nav-state="stacked"'));
-    expect(stacked.groups).toEqual(['Меню', 'Работа', 'Знания', 'Система']);
+    expect(stacked.groups).toEqual(['Меню', 'Работа', 'Разделы', 'Знания', 'Система']);
     expect(stacked.links).toEqual(RULED_LINKS);
   });
 });
@@ -431,17 +438,17 @@ describe('R-150b: «Объекты» left the menu rows, and the selector in the
     expect(SCREEN_REGISTRY.filter((row) => row.inMenu).map((row) => row.address)).not.toContain('/projects');
   });
 
-  it('is in no group of the data, and `R-153h` draws it only as the first item of «Работа» in all three states of the bar', () => {
+  it('is in no group of the data, and `R-153h` draws it only as the third item of «Работа» (`UIP-G-07`) in all three states of the bar', () => {
     for (const roles of ROLE_SETS) {
       const navigation = buildNavigation({ roles, isDefaultCredential: false, profileComplete: true });
       const offered = navigation.groups.flatMap((group) => group.items.map((item) => item.address));
       expect(offered, roles.join(',')).not.toContain('/projects');
-      expect(navigation.groups[0]?.items.map((item) => item.address)[0], roles.join(',')).toBe('/dashboard');
+      expect(navigation.groups[0]?.items.map((item) => item.address).slice(0, 2), roles.join(',')).toEqual(['/', '/dashboard']);
       const markup = renderFrame(frameSession({ roles }));
       for (const state of ['row', 'rail', 'stacked']) {
         const links = [...region(markup, `data-nav-state="${state}"`).matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1]);
         expect(links.filter((href) => href === '/projects'), `${roles.join(',')} ${state}`).toHaveLength(1);
-        expect(links[0], `${roles.join(',')} ${state}`).toBe('/projects');
+        expect(links.slice(0, 3), `${roles.join(',')} ${state}`).toEqual(['/', '/dashboard', '/projects']);
       }
     }
   });
