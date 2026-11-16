@@ -169,12 +169,12 @@ describe('the page of a block finding', () => {
     const cards = blockCardsOnPage(blocks, 3);
     const common = { cards, pages: [3], page: 3, onPageChange: () => {}, activeId: null, onChoose: () => {}, viewer: null } as const;
     const inline = renderScreen(newClient(), createElement(BlockEvidenceView, { ...common, onExpand: () => {} }));
-    const full = renderScreen(newClient(), createElement(BlockEvidenceView, { ...common, presentation: 'full', onExpand: () => {}, aside: createElement('p', null, 'Находка') }));
+    const full = renderScreen(newClient(), createElement(BlockEvidenceView, { ...common, presentation: 'full', onExpand: () => {}, aside: createElement('p', null, 'Панель замечания') }));
 
     expect(inline).toContain('data-expand-evidence');
     expect(full).not.toContain('data-expand-evidence');
     expect(full).toContain('data-presentation="full"');
-    expect(full).toContain('Находка');
+    expect(full).toContain('Панель замечания');
   });
 });
 

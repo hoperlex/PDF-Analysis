@@ -61,11 +61,11 @@ export function ReviewCandidateTable({ value, projectUid, published = [], sheetO
   const changeSeverity = (next: string) => { setSeverity(next); setPage(0); };
   return <section id="review-machine-candidates" className={styles.root} aria-label="Машинные кандидаты — только просмотр" data-review-candidates={reading.rows.length}>
     <div className={styles.heading}><h2>Машинные кандидаты <span>{reading.rows.length}</span></h2><span className={styles.readonly}>Только просмотр</span></div>
-    <p className={styles.note}>Сохранённые машинные наблюдения. Решения ✓/✕ доступны у находок выше. Эти строки не меняют число находок и экспертных решений.</p>
-    <p className={styles.note}>Исходных наблюдений: {reading.rawCount} · групп: {reading.groupCount}{reading.publishedGroups ? ` · уже в находках: ${reading.publishedGroups}` : ''}.</p>
+    <p className={styles.note}>Сохранённые машинные наблюдения. Решения ✓/✕ доступны у замечаний выше. Эти строки не меняют число замечаний и экспертных решений.</p>
+    <p className={styles.note}>Исходных наблюдений: {reading.rawCount} · групп: {reading.groupCount}{reading.publishedGroups ? ` · уже в замечаниях: ${reading.publishedGroups}` : ''}.</p>
     {reading.groupingIncomplete ? <p role="status">Группировка неполна; показаны все исходные наблюдения.</p> : null}
     <ReviewWarnings warnings={result.warnings} />
-    <div className={styles.chips} role="group" aria-label="Важность кандидатов, предложенная моделью">
+    <div className={styles.chips} role="group" aria-label="Критичность кандидатов, предложенная моделью">
       <span>Предложено моделью:</span>
       <button type="button" className="am-button am-button--quiet am-button--small" aria-pressed={severity === 'all'} onClick={() => changeSeverity('all')}>Все {reading.rows.length}</button>
       {PROPOSAL_SEVERITIES.filter((key) => reading.rows.some((row) => row.severity === key)).map((key) => <button type="button" key={key}
@@ -77,7 +77,7 @@ export function ReviewCandidateTable({ value, projectUid, published = [], sheetO
       <label>Источник<select value={origin} onChange={(event) => { setOrigin(event.target.value); setPage(0); }}><option value="all">Все источники</option><option value="drawing">Чертёж</option><option value="text">Текст</option><option value="cross_check">Сверка</option></select></label></div>
     <p className={styles.note} aria-live="polite">Показано {shown.length ? current * 25 + 1 : 0}–{current * 25 + shown.length} из {matches.length}.</p>
     <div className={styles.scroll}><table className={styles.table} aria-label="Таблица машинных кандидатов"><thead><tr>
-      {['№', 'Важность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'].map((label) => <th key={label} scope="col">{label}</th>)}
+      {['№', 'Критичность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'].map((label) => <th key={label} scope="col">{label}</th>)}
     </tr></thead><tbody>{shown.map((row) => <Fragment key={row.key}><tr data-candidate-row={row.key}>
       <td><button type="button" className="am-button am-button--quiet am-button--small" aria-expanded={opened === row.key}
         aria-label={`Открыть источники кандидата ${row.number}`} onClick={() => setOpened(opened === row.key ? null : row.key)}>К-{String(row.number).padStart(3, '0')}</button>{row.members.length > 1 ? <small>×{row.members.length}</small> : null}</td>

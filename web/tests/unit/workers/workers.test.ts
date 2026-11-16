@@ -1,5 +1,5 @@
 /**
- * `W54-WORKERS-WEB` — the «Исполнители» screen and the worker named on the queue.
+ * `W54-WORKERS-WEB` — the «Диспетчер» screen and the worker named on the queue.
  *
  * Plan §3.7: the registry lists online and stale workers first and offline ones collapsed;
  * an administrator, and only an administrator, sees the intake switch; any role reads the
@@ -366,7 +366,7 @@ describe('the queue names the worker holding a run', () => {
     return renderScreen(client, createElement(QueuePage));
   }
 
-  it('names it, linked to «Исполнители», for a running Job', () => {
+  it('names it, linked to «Диспетчер», for a running Job', () => {
     const markup = queue(running, page(REGISTRY));
     expect(markup).toContain('data-run-worker="held"');
     expect(markup).toContain(ONLINE.worker_id);

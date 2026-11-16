@@ -353,7 +353,7 @@ describe('this slice adds no second polling loop', () => {
     ALLOWED_EXTENDED_REVIEW_POLL.some((allowed) => path.endsWith(allowed));
 
   // The fourth named exception, the operational-list policy (`OPERATIONAL_LIST_POLLING`, `web/docs/PC01_UI_SEAM.md` §7.1). The
-  // execution queue, the execution journal, the «Исполнители» worker list and the pause state refresh themselves. The option is written
+  // execution queue, the execution journal, the «Диспетчер» worker list and the pause state refresh themselves. The option is written
   // once, in `operational-poll.ts`, and applied by spread to those four queries only; the assertion further down holds the source to that
   // shape. The side menu's counters (`_app/use-menu-badges.ts`: the queue, the knowledge base, the pending registrations) are the same
   // policy's second home and are named below (`D-333`).

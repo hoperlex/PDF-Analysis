@@ -243,8 +243,8 @@ export function FindingToolbar({
         </span>
         {hasSeverity(severities) ? (
           <div className={styles.severities} data-severity-strip="">
-            <div className={styles.filter} role="group" aria-label="Отбор по важности, решённой экспертом">
-              <span className={styles.stripLabel}>Важность (решение эксперта):</span>
+            <div className={styles.filter} role="group" aria-label="Отбор по критичности, решённой экспертом">
+              <span className={styles.stripLabel}>Критичность (решение эксперта):</span>
               <button
                 type="button"
                 className="am-button am-button--quiet am-button--small"
@@ -268,7 +268,7 @@ export function FindingToolbar({
               ))}
             </div>
             {!hasProposals ? null : (
-              <div className={styles.filter} role="group" aria-label="Отбор по важности, предложенной моделью" data-proposed-severity="">
+              <div className={styles.filter} role="group" aria-label="Отбор по критичности, предложенной моделью" data-proposed-severity="">
                 <span className={styles.stripLabel}>Предложено моделью (не решение эксперта):</span>
                 {SEVERITY_ORDER.map((value) => <button key={value} type="button"
                   className="am-button am-button--quiet am-button--small" aria-pressed={severity === `proposed:${value}`}
@@ -300,7 +300,7 @@ export function FindingToolbar({
               </button>
             ))}
           </div>
-          <div className={styles.filter} role="group" aria-label="Вид списка находок">
+          <div className={styles.filter} role="group" aria-label="Вид списка замечаний">
             {(['list', 'table'] as const).map((mode) => (
               <button
                 key={mode}
@@ -361,7 +361,7 @@ export function FindingList({
     if (onVerdictFilterChange !== undefined) onVerdictFilterChange(next);
     else setOwnFilter(next);
   };
-  if (isLoading === true) return <LoadingState what="находки" />;
+  if (isLoading === true) return <LoadingState what="замечания" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
 
   const total = countGrouped(groups);
@@ -370,11 +370,11 @@ export function FindingList({
   if (total === 0 && faults.length === 0) {
     return (
       <EmptyState
-        title="Находок нет"
+        title="Замечаний нет"
         detail={emptyDetail ?? (
           <p>
-            Прогон не опубликовал ни одной находки. Элементы модели, чьи цитаты не
-            разрешились по заявленным якорям, находками не являются и сохраняются только
+            Прогон не опубликовал ни одного замечания. Элементы модели, чьи цитаты не
+            разрешились по заявленным якорям, замечаниями не являются и сохраняются только
             как диагностика прогона.
           </p>
         )}
@@ -404,7 +404,7 @@ export function FindingList({
           title="Нарушение целостности данных"
           detail={
             <p>
-              Находок без свидетельств: {faults.length}. Шлюз свидетельств P02 делает такое
+              Замечаний без свидетельств: {faults.length}. Шлюз свидетельств P02 делает такое
               невозможным, поэтому это сообщаемая неисправность, а не пустая панель:{' '}
               {faults.map((fault) => fault.findingUid).join(', ')}
             </p>
@@ -424,7 +424,7 @@ export function FindingList({
 
       {shown.length === 0 ? (
         <p className="am-note" data-verdict-filter-empty={filter}>
-          {severity === 'all' ? 'Находок с таким вердиктом нет.' : 'Находок с таким отбором нет.'}
+          {severity === 'all' ? 'Замечаний с таким вердиктом нет.' : 'Замечаний с таким отбором нет.'}
         </p>
       ) : null}
 
@@ -486,7 +486,7 @@ export function FindingList({
                         {finding.decided_severity === undefined ? null : (
                           <SeverityBadge
                             severity={finding.decided_severity}
-                            title="Важность, решённая экспертом"
+                            title="Критичность, решённая экспертом"
                           />
                         )}
                         {/* `UI-A-73`: the verdict was carried over from an earlier version. */}

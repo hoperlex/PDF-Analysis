@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The tabs of «Исполнители» (`HOSTS-WEB-01`): «Серверы» and «Модели по этапам».
+ * The tabs of «Диспетчер» (`HOSTS-WEB-01`): «Серверы» and «Модели по этапам».
  *
  * The WAI-ARIA tabs pattern with automatic activation, as the tabs of «Блоки» are: a `tablist` of `tab` buttons, each naming
  * the `tabpanel` it controls and saying whether it is the open one; only the open tab is in the tab order, and the arrow keys,

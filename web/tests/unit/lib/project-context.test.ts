@@ -40,7 +40,7 @@ const OPTIONAL_PATHS = [
   '/optimisation',
   '/version-comparison',
   '/stage-comparison',
-  // `R-151m`: «Диспетчер» follows the header's project.
+  // `R-151m`: «Назначения» follows the header's project.
   '/dispatcher',
 ];
 const GLOBAL_PATHS = [

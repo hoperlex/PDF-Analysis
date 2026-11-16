@@ -17,7 +17,7 @@ function RecordSide({ row, side }: { readonly row: SavedResultRow['left']; reado
   const observation = savedObject(row.observation);
   return <div>
     <p className={styles.savedText}>{savedResultText(row)}</p>
-    {observation !== null ? <p>ID находки: <code>{String(row.finding_uid ?? '')}</code>. {savedExpertStateText(row)}</p> : null}
+    {observation !== null ? <p>ID замечания: <code>{String(row.finding_uid ?? '')}</code>. {savedExpertStateText(row)}</p> : null}
     {pages.length > 0 ? <p>Физические страницы PDF: {pages.join(', ')}.</p> : <p>Привязка к странице не передана.</p>}
     {observation !== null && typeof observation.recommendation_text === 'string' && observation.recommendation_text ? <p className={styles.savedText}>Рекомендация: {observation.recommendation_text}</p> : null}
     <a href={`${routes.run(side.run.project_uid, side.run.run_id)}#${observation === null ? 'extended-analysis' : 'findings'}`}>Открыть прогон и источники</a>
@@ -27,7 +27,7 @@ function RecordSide({ row, side }: { readonly row: SavedResultRow['left']; reado
 function SourceStatus({ side, label }: { readonly side: SavedResultSide; readonly label: string }) {
   const result = savedObject(side.extended?.result);
   const count = hasSavedPreliminary(side) && Array.isArray(result?.observations) ? result.observations.length : null;
-  return <p>{label}: {side.findings === null ? 'публикация находок не подтверждена' : `получено находок ${side.findings.length}`}; {count === null
+  return <p>{label}: {side.findings === null ? 'публикация замечаний не подтверждена' : `получено замечаний ${side.findings.length}`}; {count === null
     ? 'предварительные наблюдения недоступны или не были сохранены' : `получено предварительных наблюдений ${count}`}{side.extended?.status === 'partial' || side.extended?.status === 'failed' ? '; расширенный анализ неполон или завершился с ошибкой' : ''}. Получено: {formatInstant(side.receivedAt)}.</p>;
 }
 
@@ -72,7 +72,7 @@ export function SavedResultsComparison({ versionUid, left, right }: {
     } catch (error) { setDownloadError(error instanceof Error ? error.message : 'Не удалось сформировать выгрузку.'); }
   };
   return <section className={styles.savedPanel} aria-label="Сравнение сохранённых результатов">
-    <h3>Находки и предварительные наблюдения</h3>
+    <h3>Замечания и предварительные наблюдения</h3>
     <p>Сравните сохранённые результаты выбранных прогонов без новых обращений к модели. Разница относится к анализу одной версии; запись только с одной стороны не означает исправление документа.</p>
     {!terminal ? <p>Для чтения итоговых результатов дождитесь завершения обоих прогонов.</p> : null}
     {left.run_id === right.run_id ? <p>Выберите два разных прогона для сопоставления результатов.</p> : null}
@@ -80,17 +80,17 @@ export function SavedResultsComparison({ versionUid, left, right }: {
       <button type="button" className="am-button" disabled={!comparable || query.isFetching} onClick={start}>{query.data === undefined ? 'Сравнить сохранённые результаты' : 'Перечитать результаты'}</button>
       {query.isFetching ? <button type="button" className="am-button am-button--quiet" onClick={() => { setRequested(false); void client.cancelQueries({ queryKey: key, exact: true }); }}>Отменить чтение</button> : null}
     </div>
-    {query.isFetching ? <><LoadingState what="сохранённые результаты двух прогонов" /><p role="status">Получено находок: слева {progress.left}, справа {progress.right}.</p></> : null}
+    {query.isFetching ? <><LoadingState what="сохранённые результаты двух прогонов" /><p role="status">Получено замечаний: слева {progress.left}, справа {progress.right}.</p></> : null}
     {query.isError ? <p role="alert">{query.error instanceof SavedResultReadError ? query.error.message : 'Не удалось прочитать оба результата. Сравнение по неполным данным не построено; повторите чтение.'}</p> : null}
     {query.data === undefined ? null : <>
       <SourceStatus side={query.data[0]!} label="Слева" /><SourceStatus side={query.data[1]!} label="Справа" />
       <p>Предварительные наблюдения сопоставляются с учётом исходного поля текста, диапазона фрагмента и сохранённых цитат. Разные места одной страницы остаются отдельными; неподтверждённая привязка не используется для точного соответствия.</p>
-      <p>Каждый прогон получает новые ID находок. При разных ID соответствие требует точных текстов, рекомендаций, значений и полного набора исходных привязок, включая объединённые наблюдения. Предварительные наблюдения также сопоставляются по точному тексту и источникам. Повторы сохранены один к одному, похожие формулировки могут остаться отдельными. Экспертные состояния отражают момент чтения, а не историческое решение на дату запуска.</p>
-      <label>Показать <select value={filter} onChange={(event) => { setFilter(event.target.value); setPage(0); }}><option value="all">Все записи</option><option value="differences">Различия</option><option value="finding">Канонические находки</option><option value="preliminary">Предварительные наблюдения</option></select></label>
+      <p>Каждый прогон получает новые ID замечаний. При разных ID соответствие требует точных текстов, рекомендаций, значений и полного набора исходных привязок, включая объединённые наблюдения. Предварительные наблюдения также сопоставляются по точному тексту и источникам. Повторы сохранены один к одному, похожие формулировки могут остаться отдельными. Экспертные состояния отражают момент чтения, а не историческое решение на дату запуска.</p>
+      <label>Показать <select value={filter} onChange={(event) => { setFilter(event.target.value); setPage(0); }}><option value="all">Все записи</option><option value="differences">Различия</option><option value="finding">Канонические замечания</option><option value="preliminary">Предварительные наблюдения</option></select></label>
       <p>По фильтру {filtered.length} из {rows.length} записей. Выгрузка включает весь полученный набор.</p>
       {filtered.length === 0 ? <p>В доступных для сопоставления данных нет записей выбранного вида. Недоступные результаты не считались пустыми.</p> : <ol className={styles.savedRows} start={current * 25 + 1}>{filtered.slice(current * 25, (current + 1) * 25).map((row) => <li key={row.key}>
-        <h4>{row.kind === 'finding' ? 'Каноническая находка' : 'Предварительное наблюдение'} · {SAVED_COMPARISON_LABELS[row.comparison]}</h4>
-        {row.matchBasis === null ? null : <p>Основание: {SAVED_MATCH_LABELS[row.matchBasis]}.{row.matchBasis === 'exact_source_content' ? ' ID находок и их истории остаются раздельными.' : ''}</p>}
+        <h4>{row.kind === 'finding' ? 'Каноническое замечание' : 'Предварительное наблюдение'} · {SAVED_COMPARISON_LABELS[row.comparison]}</h4>
+        {row.matchBasis === null ? null : <p>Основание: {SAVED_MATCH_LABELS[row.matchBasis]}.{row.matchBasis === 'exact_source_content' ? ' ID замечаний и их истории остаются раздельными.' : ''}</p>}
         {row.expertStateChanged === null ? null : <p>Текущий вердикт и экспертная критичность {row.expertStateChanged ? 'различаются' : 'совпадают'}; решения не переносятся.</p>}
         <div className={styles.savedSides}><section aria-label="Запись слева"><h5>Слева</h5><RecordSide row={row.left} side={query.data![0]!} /></section><section aria-label="Запись справа"><h5>Справа</h5><RecordSide row={row.right} side={query.data![1]!} /></section></div>
       </li>)}</ol>}

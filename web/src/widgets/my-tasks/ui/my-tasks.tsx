@@ -76,7 +76,7 @@ export function MyTasksView({ items, roles }: MyTasksViewProps) {
 
 export interface MyTasksProps {
   readonly roles: readonly Role[];
-  /** The «Диспетчер» screen, where the whole list lives. */
+  /** The «Назначения» screen, where the whole list lives. */
   readonly listHref: string;
 }
 

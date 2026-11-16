@@ -67,7 +67,7 @@ function CaseRow({ item, onOpen }: { readonly item: DecisionMemoryCaseSummary; r
           <span className="am-kb__verdict" data-verdict={item.current_verdict}>{MEMORY_VERDICT_LABELS[item.current_verdict]}</span>
         )}
         {item.current_severity === null ? null : (
-          <span className={styles.inline}><SeverityBadge severity={item.current_severity} title="Важность, решённая экспертом" /></span>
+          <span className={styles.inline}><SeverityBadge severity={item.current_severity} title="Критичность, решённая экспертом" /></span>
         )}
         {item.decision_count > 1 ? <span className={`${styles.muted} ${styles.inline}`}>решений: {item.decision_count}</span> : null}
       </td>
@@ -102,7 +102,7 @@ export function DecisionMemoryList({ cases, isLoading, error, narrowed, onOpen, 
         )}
       />
     ) : (
-      <EmptyState title="Память решений пока пуста." detail="Дело появляется, когда эксперт принимает или отклоняет находку." />
+      <EmptyState title="Память решений пока пуста." detail="Дело появляется, когда эксперт принимает или отклоняет замечание." />
     );
   }
   return (

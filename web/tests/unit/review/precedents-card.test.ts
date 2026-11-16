@@ -24,7 +24,7 @@ afterEach(() => {
 const A = textFinding('D1', 'Не указан предел огнестойкости перекрытия.');
 const norm = (n: number) => ({ clause_number: `5.${n}`, designation: `СП 2.13130.2020`, norm_document_id: `ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}A`, norm_paragraph_id: `npar_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}B`, page_label: 10 + n });
 const kase = (n: number, verdict: 'accepted' | 'rejected', comment?: string) => ({
-  case_id: `dmc_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}C`, category: 'documentation', finding_text: `Похожая находка номер ${n}`, similarity: 0.9 - n / 100, verdict, ...(comment === undefined ? {} : { comment }),
+  case_id: `dmc_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}C`, category: 'documentation', finding_text: `Похожее замечание номер ${n}`, similarity: 0.9 - n / 100, verdict, ...(comment === undefined ? {} : { comment }),
 });
 
 const FULL = cardOf(A.finding_uid, {

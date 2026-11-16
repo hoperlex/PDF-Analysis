@@ -246,11 +246,11 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const detailFailure = detailQuery.error === null ? null : (
     <ErrorState
       {...(presentFailureOrNull(detailQuery.error, {
-        title: 'Не удалось загрузить находку',
+        title: 'Не удалось загрузить замечание',
         onRetry: () => {
           void detailQuery.refetch();
         },
-      }) ?? { title: 'Не удалось загрузить находку' })}
+      }) ?? { title: 'Не удалось загрузить замечание' })}
     />
   );
 
@@ -337,7 +337,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const detailContent = (
     <>
       {selectedUid === null ? null : detailQuery.isPending ? (
-        <LoadingState what="выбранная находка" />
+        <LoadingState what="выбранное замечание" />
       ) : detailFailure !== null ? (
         detailFailure
       ) : detail === null ? null : (
@@ -409,7 +409,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 title: 'Комментарий не добавлен',
               })
             }
-          /> : <p className="am-note" data-expert-only="DecisionPanel">Решения по находкам записывает эксперт.</p>}
+          /> : <p className="am-note" data-expert-only="DecisionPanel">Решения по замечаниям записывает эксперт.</p>}
           {/* `R-151g`: what the designer did with an accepted finding, as the original's SU-10 badge. */}
           {mayAct && (verdict.result?.current_verdict ?? detail.current_verdict) === 'accepted' ? (
             <ExecutionStatusControl
@@ -472,7 +472,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       isPending={exporter.isPending}
       lastFileName={exporter.lastFileName}
       verdict={exportVerdict}
-      scopeCaption="CSV и Excel: выбранный отбор по вердикту; все категории и уровни важности. Пакет аудита содержит полную историю прогона."
+      scopeCaption="CSV и Excel: выбранный отбор по вердикту; все категории и уровни критичности. Пакет аудита содержит полную историю прогона."
       mayImportDecisions={mayAct}
       // `UI-A-76`: the run's ZIP, for the session that may export, of the version this run read.
       auditPackage={mayAct ? { versionUid: run.version_uid } : undefined}
@@ -506,7 +506,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 data-diagnostic-observation-count={run.diagnostic_observation_count}
               >
                 шлюз привязки отклонил непривязанных элементов модели:{' '}
-                {run.diagnostic_observation_count}. Это диагностика, а не находки: их нет ни
+                {run.diagnostic_observation_count}. Это диагностика, а не замечания: их нет ни
                 в списке ниже, ни в строках CSV.
               </span>
             ) : null}
@@ -576,10 +576,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
               />
             ) : undefined}
             isLoading={findingsQuery.isPending}
-            emptyDetail={run?.state === 'partial' ? <p>Прогон завершился частично. Отсутствие опубликованных находок не подтверждает отсутствие замечаний.
+            emptyDetail={run?.state === 'partial' ? <p>Прогон завершился частично. Отсутствие опубликованных замечаний не подтверждает, что в документе их нет.
               {' '}<Link href={routes.run(projectUid, runId)}>Проверить этапы и ограничения прогона</Link>.</p> : undefined}
             error={presentFindingsFailure(findingsQuery.error, {
-              title: 'Не удалось загрузить находки',
+              title: 'Не удалось загрузить замечания',
               onRetry: () => {
                 void findingsQuery.refetch();
               },
@@ -603,12 +603,12 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
           onPrevious={shownAt < 0 ? stepTo(0) : stepTo(shownAt - 1)}
           onNext={shownAt < 0 ? stepTo(0) : stepTo(shownAt + 1)}
           onClose={() => { setExpanded(false); }}
-          title={detail?.observation.finding_text ?? 'Находка'}
+          title={detail?.observation.finding_text ?? 'Замечание'}
         >
           {selectedUid === null ? (
-            <p className="am-note">Выберите находку в списке.</p>
+            <p className="am-note">Выберите замечание в списке.</p>
           ) : detailQuery.isPending ? (
-            <LoadingState what="выбранная находка" />
+            <LoadingState what="выбранное замечание" />
           ) : evidenceProps === null || detail === null ? (
             detailFailure
           ) : !hasEvidencePage ? (

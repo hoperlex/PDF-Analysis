@@ -46,7 +46,7 @@ export const routes = {
   /** «Сравнение стадий»: catalog of expert-confirmed П↔Р pairs. */
   stageComparison: (): string => '/stage-comparison',
 
-  /** The worker registry, «Исполнители» (`W54-WORKERS-WEB`). */
+  /** The worker registry, «Диспетчер» (`W54-WORKERS-WEB`). */
   workers: (): string => '/workers',
 
   /** «Нормы»: the search over the current norms snapshot (`W55A-WEB-NORMS`). */

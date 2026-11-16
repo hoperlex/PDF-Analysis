@@ -112,10 +112,10 @@ export type ScopedScreenEntry = ScreenEntry & { readonly projectScope: ProjectSc
 /**
  * Every screen, in menu order within each group.
  *
- * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов» (and «Диспетчер» since
+ * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов» (and «Назначения» since
  * `W61-DISPATCHER-01`, «Сравнение версий» since `CMP-VC-UI-01`); `R-150b` took «Проекты» out of
  * this group's menu, into the selector of the top strip; **Знания** — База знаний,
- * Блоки, «Нормы»; **Система** — Журнал выполнения, Исполнители, «Настройки анализа»,
+ * Блоки, «Нормы»; **Система** — Журнал выполнения, Диспетчер, «Настройки анализа»,
  * «Очередь». `/optimisation` left the menu and stayed a registered, reachable screen in
  * `hidden` until project optimisation became a project tab; since `W60-OPT-PROPOSALS-01`
  * completed that tab its route has no screen of its own and redirects to `/projects` (the row
@@ -183,7 +183,7 @@ export const SCREEN_REGISTRY = [
     projectScope: 'optional',
   },
   /*
-   * `W61-DISPATCHER-01` (roadmap Q-2): «Диспетчер». `any-role`, because both roles open it —
+   * `W61-DISPATCHER-01` (roadmap Q-2): «Назначения». `any-role`, because both roles open it —
    * an administrator assigns and oversees, an expert works on what is given to them — and the
    * API decides what each reads and may do.
    *
@@ -192,7 +192,7 @@ export const SCREEN_REGISTRY = [
    */
   {
     address: '/dispatcher',
-    label: 'Диспетчер',
+    label: 'Назначения',
     group: 'work',
     access: 'session',
     roles: ['expert', 'admin'], // R-150w: not a viewer's screen
@@ -201,7 +201,7 @@ export const SCREEN_REGISTRY = [
     projectScope: 'optional',
   },
   /*
-   * `UI-PARITY-P0P` (`R-150y`, `R-152a`…`R-152h`): «График работ», after «Диспетчер» as in the original's menu. Expert
+   * `UI-PARITY-P0P` (`R-150y`, `R-152a`…`R-152h`): «График работ», after «Назначения» as in the original's menu. Expert
    * and administrator: an expert reads their own row, an administrator every expert's and edits plans, the calendar and
    * the reserve. Not a project's screen: the schedule spans every project.
    */
@@ -304,7 +304,7 @@ export const SCREEN_REGISTRY = [
   },
   {
     address: '/projects/[project_uid]/runs/[run_id]/review',
-    label: 'Разбор находок',
+    label: 'Разбор замечаний',
     group: 'work',
     access: 'session',
     roles: 'any-role',
@@ -362,7 +362,7 @@ export const SCREEN_REGISTRY = [
   },
   {
     address: '/workers',
-    label: 'Исполнители',
+    label: 'Диспетчер',
     group: 'system',
     access: 'session',
     roles: ['expert', 'admin'], // R-150w: not a viewer's screen
@@ -370,7 +370,7 @@ export const SCREEN_REGISTRY = [
     projectScope: 'global',
   },
   {
-    // `HOSTS-WEB-01` (plan 2026-11-09 §7.5): the former tabs of «Исполнители», folded, behind a quiet link on it. Not in the menu.
+    // `HOSTS-WEB-01` (plan 2026-11-09 §7.5): the former tabs of «Диспетчер», folded, behind a quiet link on it. Not in the menu.
     address: '/workers/advanced',
     label: 'Расширенные исполнители',
     group: 'hidden',

@@ -10,7 +10,7 @@
  * the engineer absent or present. An expert reads their own row and edits nothing.
  *
  * `D-319`: an administrator narrows the grid, the table and the tiles to one engineer, and a fourth tile, «Просрочки»,
- * counts the open assignments of «Диспетчер» planned before today; the page reads them and passes the number.
+ * counts the open assignments of «Назначения» planned before today; the page reads them and passes the number.
  */
 
 import Link from 'next/link';
@@ -85,7 +85,7 @@ function Percent({ value }: { readonly value: number | null }) {
 }
 
 const OVERDUE_TITLE =
-  'Открытые назначения «Диспетчера», у которых плановая дата раньше сегодняшнего дня. Работа без даты не считается.';
+  'Открытые назначения, у которых плановая дата раньше сегодняшнего дня. Работа без даты не считается.';
 
 function overdueValue(overdue: OverdueRead): string {
   if (overdue.kind === 'ready') return String(overdue.count);

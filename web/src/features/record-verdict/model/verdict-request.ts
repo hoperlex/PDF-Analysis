@@ -56,7 +56,7 @@ export type VerdictRefusal = (typeof VERDICT_REFUSALS)[number];
 export function verdictRefusalMessage(refusal: VerdictRefusal): string {
   switch (refusal) {
     case 'severity_required':
-      return 'Перед принятием выберите важность. Ничего не отправлено.';
+      return 'Перед принятием выберите критичность. Ничего не отправлено.';
   }
 }
 

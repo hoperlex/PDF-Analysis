@@ -100,7 +100,7 @@ function SectionMetrics({
       </span>
       <span className={`${styles.metric} ${styles.checked}`} title="Проверено экспертом">{audit?.checked ?? '—'}</span>
       <span className={`${styles.metric} ${styles.total}`} title="Документы"><strong>{documents}</strong></span>
-      <span className={`${styles.metric} ${styles.remarks}`} title="Находок">{audit?.findings ?? '—'}</span>
+      <span className={`${styles.metric} ${styles.remarks}`} title="Замечаний">{audit?.findings ?? '—'}</span>
     </span>
   );
 }
@@ -134,7 +134,7 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
           <span>Нет решений эксперта</span>
           <span>Проверено</span>
           <span>Документы</span>
-          <span>Находок</span>
+          <span>Замечаний</span>
         </span>
       </div>
       <ul className={styles.rows} data-section-count={PROJECT_SECTIONS.length}>

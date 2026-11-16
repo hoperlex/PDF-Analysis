@@ -2,14 +2,14 @@
 
 /**
  * «Календарь запаса» of «График работ» (`UI-PARITY-P0P`, `R-150y`, `R-152e`…`R-152h`): each active expert's open
- * assignments of «Диспетчер» on the days they are planned for, and a «Без даты» column for the rest. No daily limit.
+ * assignments of «Назначения» on the days they are planned for, and a «Без даты» column for the rest. No daily limit.
  *
  * A click on an assignment opens its document (its project when it has none), as the original's click on a dot opens the
  * project. An administrator moves work as in the original: drag an assignment (or the selection it belongs to) to another
  * day or another engineer's row; Ctrl/Cmd+click (or the space bar) adds it to the selection and Esc clears the selection;
  * «Раньше» and «Позже» move the selection a working day.
  * Every move is one keyed `scheduleAssignments` command and an event of the assignment's history; a move to another
- * expert is a reassignment in «Диспетчер». An expert reads their own row and moves nothing.
+ * expert is a reassignment in «Назначения». An expert reads their own row and moves nothing.
  *
  * `D-319`: an administrator narrows the rows to one engineer; the selection is cleared when the filter changes, so a move
  * never carries work the screen has stopped showing.

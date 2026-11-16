@@ -34,7 +34,7 @@ export function declares(css: string, selector: string, property: string, value:
 
 /**
  * Whether the page heading keeps its floor in `min-width` and nothing in its flex basis. A basis is a length along the main
- * axis, so a length there (`flex: 1 1 18rem`) is a HEIGHT where a screen stacks its header in a column: the «Диспетчер» hero
+ * axis, so a length there (`flex: 1 1 18rem`) is a HEIGHT where a screen stacks its header in a column: the «Назначения» hero
  * stood 288 px of empty space taller (UIP-G-11). `0%` is no length in a row and sizes by content in a column of auto height.
  */
 export function keepsHeadingFloorOffTheBasis(css: string): boolean {

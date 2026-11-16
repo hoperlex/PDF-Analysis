@@ -122,7 +122,7 @@ function Citations({ observation }: { readonly observation: FindingObservation }
       <h3 className={styles.heading}>Нормативные ссылки</h3>
       {citations.length === 0 ? (
         <p className="am-note">
-          Проверка нормативных ссылок выполнена: подтверждённых ссылок у этой находки нет.
+          Проверка нормативных ссылок выполнена: подтверждённых ссылок у этого замечания нет.
         </p>
       ) : (
         <ol className={styles.list}>
@@ -147,7 +147,7 @@ function Merged({
     <section className={styles.block} data-merged-observations={observations.length}>
       <h3 className={styles.heading}>Объединённые наблюдения: {observations.length}</h3>
       <p className="am-note">
-        В эту находку слиты несколько наблюдений. Они показаны так, как их прислал сервер;
+        В это замечание слиты несколько наблюдений. Они показаны так, как их прислал сервер;
         решение записывается по основному наблюдению.
       </p>
       <ul className={styles.list}>
@@ -173,7 +173,7 @@ function Merged({
                   Предложение модели:{' '}
                   <SeverityBadge
                     severity={item.proposed_severity}
-                    title="Важность, предложенная моделью"
+                    title="Критичность, предложенная моделью"
                   />
                 </p>
               )}

@@ -44,20 +44,23 @@ MAIN = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 
 #: The columns of a ``text_only`` workbook: the twelve of ``8dcf5a0aa``, as literals.
 TEXT_ONLY_COLUMNS = (
-    "№", "Лист/стр.", "Категория", "Замечание", "Рекомендация", "Серьёзность (решение эксперта)",
-    "Серьёзность (предложение модели)", "Норма (документ, пункт)", "Цитата нормы", "Решение эксперта", "Комментарий",
+    "№", "Лист/стр.", "Категория", "Замечание", "Рекомендация", "Критичность (решение эксперта)",
+    "Критичность (предложение модели)", "Норма (документ, пункт)", "Цитата нормы", "Решение эксперта", "Комментарий",
     "ID замечания",
 )
 #: The columns of a ``one_list`` workbook: the same, with «Источник» right after «Категория».
 ONE_LIST_COLUMNS = (
-    "№", "Лист/стр.", "Категория", "Источник", "Замечание", "Рекомендация", "Серьёзность (решение эксперта)",
-    "Серьёзность (предложение модели)", "Норма (документ, пункт)", "Цитата нормы", "Решение эксперта", "Комментарий",
+    "№", "Лист/стр.", "Категория", "Источник", "Замечание", "Рекомендация", "Критичность (решение эксперта)",
+    "Критичность (предложение модели)", "Норма (документ, пункт)", "Цитата нормы", "Решение эксперта", "Комментарий",
     "ID замечания",
 )
 #: SHA-256 of the whole workbook ``_corpus(<base writer>)`` renders. Captured from the writer of ``8dcf5a0aa`` (``3d6c0027...a38e``); re-pinned for «Объект»
 #: (`UIP-G-01`): the only byte change is the text of «Сводка» cell A2, «Проект» became «Объект» (read in ``test_xlsx_writer_labels`` and
 #: ``test_xlsx_run_export`` before this value was computed), and the old digest is the one the writer of ``135359a00`` still produced.
-TEXT_ONLY_WORKBOOK_SHA256 = "c9dc7c5990ee03e6a53b8369f3b04fe738991f167b8be6c0815bd35f2ee29b81"
+#: Re-pinned again for «Критичность» (`UIP-G-02`): «Сводка» cell A8 and «Замечания» cells F1 and G1 were «Серьёзность…» (the literal header lists above and
+#: ``test_xlsx_run_export`` read the new words, red against the old writer, before this value was computed); putting those three texts back
+#: reproduces ``c9dc7c59...9b81``.
+TEXT_ONLY_WORKBOOK_SHA256 = "1b61e9b5c82f6331467616e9b8e344b7168f17f8c28b764b7fd37939c57c6917"
 
 
 def _corpus(module: ModuleType) -> Any:

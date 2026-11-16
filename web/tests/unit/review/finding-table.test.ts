@@ -64,7 +64,7 @@ describe('the findings table', () => {
   it('draws the original’s columns and one row per finding, and no list beside it', () => {
     const markup = table();
     expect(markup).toContain('data-finding-table');
-    for (const column of ['№', 'Важность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение']) {
+    for (const column of ['№', 'Критичность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение']) {
       expect(markup).toContain(`>${column}</th>`);
     }
     expect((markup.match(/data-row-key=/g) ?? []).length).toBe(3);
@@ -82,11 +82,11 @@ describe('the findings table', () => {
 
   it('keeps the expert’s severity as the badge and the model’s as a labelled note', () => {
     const markup = table();
-    expect(markup).toContain('title="Важность, решённая экспертом"');
+    expect(markup).toContain('title="Критичность, решённая экспертом"');
     expect(markup).toContain('data-proposed-severity="economic"');
     expect(markup).toContain('предложено: Экономическое');
     // Only the first finding carries a decided severity: the proposal never became a badge.
-    expect((markup.match(/title="Важность, решённая экспертом"/g) ?? []).length).toBe(1);
+    expect((markup.match(/title="Критичность, решённая экспертом"/g) ?? []).length).toBe(1);
   });
 
   it('marks the verdict on the row and a merged finding by its count', () => {

@@ -15,7 +15,7 @@ export type RunTab = (typeof RUN_TABS)[number];
 
 export const RUN_TAB_LABELS: Readonly<Record<RunTab, string>> = {
   overview: 'Обзор',
-  journal: 'Журнал',
+  journal: 'Лог',
 };
 
 /** The tab a key press selects among the tabs shown, or `null` when the key is not one the tabs answer. */

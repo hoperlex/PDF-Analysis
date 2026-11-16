@@ -66,7 +66,7 @@ const UNKNOWN_ROLE_TITLE = 'Учётная запись содержит неи�
 const UNKNOWN_ROLE_DETAIL =
   'Сервер назвал роль, которой этот клиент не знает, поэтому решить, что показать на этой странице, достоверно нельзя — плитки скрыты.';
 
-/** «Диспетчер»'s registered address (`W61-DISPATCHER-01`); a static address needs no builder. */
+/** «Назначения»'s registered address (`W61-DISPATCHER-01`); a static address needs no builder. */
 const DISPATCHER_SCREEN: ScreenAddress = '/dispatcher';
 
 /** The role labels, or `null` when the set holds a value outside the contract's. */
@@ -94,7 +94,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
   const projects = opens('/projects', roles);
   const summary = opens('/dashboard', roles);
   const registrations = opens('/admin/registrations', roles);
-  // «Мои задачи» summarises the expert's own part of «Диспетчер»: mounted when the registry
+  // «Мои задачи» summarises the expert's own part of «Назначения»: mounted when the registry
   // opens that screen and the session holds `expert`, the role work is assigned to.
   const tasks = opens(DISPATCHER_SCREEN, roles) && roles.includes('expert');
 

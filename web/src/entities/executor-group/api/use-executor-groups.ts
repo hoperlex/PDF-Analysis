@@ -7,7 +7,7 @@
  *
  * Every key stays under the `execution` root, built from `queryKeys.execution.all()` as the
  * agent-install read does. Every command on a group, a rule or the mode invalidates that root, and
- * «Обновить» on the «Исполнители» screen reads again whatever the open tab shows, so none of the
+ * «Обновить» on the «Диспетчер» screen reads again whatever the open tab shows, so none of the
  * keys here needs a registry entry of its own. Every read is stale the moment it settles and
  * refreshes on tab return: an administrator opens these tabs to see the state now.
  *

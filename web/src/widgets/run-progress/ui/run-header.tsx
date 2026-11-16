@@ -52,7 +52,7 @@ export interface RunHeaderProps {
   readonly waiting: string | null;
   /** The group's precise reason, drawn under the waiting line. */
   readonly waitDetail: ReactNode;
-  /** «Разобрать находки» and «Отменить». */
+  /** «Разобрать замечания» and «Отменить». */
   readonly actions: ReactNode;
   readonly onOpenChip: (id: RunChipDefinition['id']) => void;
 }

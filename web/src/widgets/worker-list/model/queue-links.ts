@@ -1,5 +1,5 @@
 /**
- * The links «Обзор» of «Исполнители» makes into «Очередь» that carry a filter (second UX pass; the original's counters open its task list
+ * The links «Обзор» of «Диспетчер» makes into «Очередь» that carry a filter (second UX pass; the original's counters open its task list
  * narrowed to the state they count).
  *
  * Only the states that are ONE state of the queue: «Ошибка» is `failed` and «Остановлена после повторов» is `dead_letter`, so the list a

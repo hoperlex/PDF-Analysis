@@ -1,5 +1,5 @@
 /**
- * `HOSTS-WEB-01` — «Исполнители» as two tabs, «Серверы» above all: the summary, the row of a server and what each role is
+ * `HOSTS-WEB-01` — «Диспетчер» as two tabs, «Серверы» above all: the summary, the row of a server and what each role is
  * drawn of it, the window «Подключить сервер», and the reads the viewer never sends. The pure rules of a row are functions
  * (`entities/executor-host`), so each is a call; the screen is read from a render over a seeded cache.
  *

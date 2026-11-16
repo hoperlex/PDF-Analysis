@@ -266,7 +266,7 @@ export const queryKeys = {
     profiles: () => ['analysis', 'profiles'] as const,
   },
   /**
-   * «Диспетчер» (`W61-DISPATCHER-01`). One root, because every command — a creation or a
+   * «Назначения» (`W61-DISPATCHER-01`). One root, because every command — a creation or a
    * move — changes what more than one key answers: the list's row (status, assignee), the
    * detail's history and the home screen's «Мои задачи». Each command invalidates
    * `assignments.all()`.
@@ -343,13 +343,13 @@ export const queryKeys = {
     dispatch: () => ['execution', 'dispatch'] as const,
     /**
      * One page of `listWorkers` (`W54-WORKERS-WEB`). The page size is part of the key: the
-     * «Исполнители» screen pages through the registry, and the queue and run screens read
+     * «Диспетчер» screen pages through the registry, and the queue and run screens read
      * one larger first page only to name the worker holding a run.
      */
     workers: (cursor?: string, limit?: number) =>
       ['execution', 'workers', { cursor, limit }] as const,
     /**
-     * «Подключения» and «Назначения» of the «Исполнители» screen (`EXEC-HTTP-01`). The three
+     * «Подключения» and «Назначения» of the «Диспетчер» screen (`EXEC-HTTP-01`). The three
      * reads stay under `execution`: every command on a connection or a route changes what
      * more than one of them answers (the list's summary, the detail's revisions and probes,
      * the route's choices), so each command invalidates `execution.all()` like the intake

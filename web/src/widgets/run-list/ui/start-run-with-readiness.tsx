@@ -12,7 +12,7 @@
  * - **The layout is on, every cell has a server:** «Набор: Только Claude · по подписке · ⚠ не для клиентских документов · Модели по
  *   этапам ▸». A part by API: «… · часть по API — покажем оценку · …».
  * - **A cell has no server:** the button is inactive and the reason is said: «Нет Opus 5.5 — Анализ блоков · обратитесь к
- *   администратору». An administrator is told what to do instead of whom to ask: «подключите сервер в «Исполнители»», a link.
+ *   администратору». An administrator is told what to do instead of whom to ask: «подключите сервер в «Диспетчере»», a link.
  * - **The layout is off:** «Маршрут: прежний», and the button is as it was.
  * - **The server has no layout to speak of (503):** «Маршрут: автоматически», as before: this is not an error for the person.
  *
@@ -37,7 +37,7 @@ import {
 } from '@/features/start-run';
 import { PlanStagesDialog } from '@/widgets/run-stages-dialog';
 
-/** «Исполнители → Модели по этапам»: the tab is a place in the address (`/workers?tab=models`). */
+/** «Диспетчер → Модели по этапам»: the tab is a place in the address (`/workers?tab=models`). */
 export const MODELS_BY_STAGE_ADDRESS = `${routes.workers()}?tab=models`;
 
 export interface StartRunWithReadinessProps {

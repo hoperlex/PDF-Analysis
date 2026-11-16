@@ -169,7 +169,7 @@ describe('the registry is the route tree: every page has a row and every row a p
 
   it('reads a tree and a registry of a credible size', () => {
     // `W55A-WEB-NORMS` added the norms document view: 27 -> 28. `W61-DISPATCHER-01` added
-    // «Диспетчер»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
+    // «Назначения»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
     // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31. `R-151l` added «Раздел»: 31 -> 32. `R-151m` added
     // the version's «Блоки» tab: 32 -> 33. `UI-PARITY-P0P` added «График работ»: 33 -> 34.
     // `UI-A-94` (contract 1.36.0) added «Журнал входов»: 34 -> 35.
@@ -342,7 +342,7 @@ function scopeOf(registry: readonly ScreenEntry[], scope: ProjectScope): string[
 /** The ruling (`R-150c`): the screens that follow the header's project. Order is the registry's. */
 const OPTIONAL_SCREENS = [
   '/dashboard',
-  // `R-151m`: «Диспетчер» follows the header.
+  // `R-151m`: «Назначения» follows the header.
   '/dispatcher',
   '/section-optimisation',
   '/version-comparison',

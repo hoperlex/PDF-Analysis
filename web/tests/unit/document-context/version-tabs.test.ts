@@ -1,5 +1,5 @@
 /**
- * `UI-A-22`, `R-151m`: the version's tabs, «Версия · Блоки · Разбор · Оптимизация», the original's strip
+ * `UI-A-22`, `R-151m`: the version's tabs, «Инфо · Блоки · Разбор · Оптимизация», the original's strip
  * «Инфо · Блоки · Замечания · Оптимизация» in our nouns.
  *
  * What is held: the open tab is text and not a link; «Разбор» opens the version's newest run that published a result
@@ -29,7 +29,7 @@ const run = (id: string, state: RunState, findings = 0) =>
 describe('versionTabs', () => {
   it('names the four tabs in the order of the original’s strip', () => {
     expect(versionTabs({ ...FACTS, current: 'version', runs: [] }).map((tab) => tab.label)).toEqual([
-      'Версия', 'Блоки', 'Разбор', 'Оптимизация',
+      'Инфо', 'Блоки', 'Разбор', 'Оптимизация',
     ]);
   });
 

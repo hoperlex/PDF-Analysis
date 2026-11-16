@@ -1,6 +1,6 @@
 /**
- * Lane N2 — what lane N1 left on «Исполнители» and «Настройки анализа»: one opt-in two-column form in the global layer,
- * the page header and tabs of «Исполнители», the scroll regions of «Настройки анализа», the connection wizard and the
+ * Lane N2 — what lane N1 left on «Диспетчер» and «Настройки анализа»: one opt-in two-column form in the global layer,
+ * the page header and tabs of «Диспетчер», the scroll regions of «Настройки анализа», the connection wizard and the
  * runner-token panel, the focus ring of the cut-over proposal, and the menu's ✓ cell in the global layer (`D-396`).
  * Rendered in one static pass, and the CSS read as text where the assertion is about a rule.
  */
@@ -91,7 +91,7 @@ describe('item 1: one opt-in two-column form in the global layer', () => {
   });
 });
 
-describe('item 2: «Исполнители» says its page in one sentence', () => {
+describe('item 2: «Диспетчер» says its page in one sentence', () => {
   const page = (): string => renderScreen(newClient(), createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }));
 
   // `HOSTS-WEB-01`: the long text of the six tabs went with them; two tabs say themselves.

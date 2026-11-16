@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `/dispatcher` — «Диспетчер» (`W61-DISPATCHER-01`, roadmap Q-2).
+ * `/dispatcher` — «Назначения» (`W61-DISPATCHER-01`, roadmap Q-2).
  *
  * An administrator assigns a project, or one document of it, to an expert and sees every
  * assignment with its status and history, and may reassign or cancel it. An expert sees the
@@ -91,7 +91,7 @@ export function DispatcherPage({ roles }: DispatcherPageProps) {
   return (
     <section className="am-page" data-screen="dispatcher">
       <header className={`am-page__header ${styles.hero}`}>
-        <h1 className="am-page__title">Диспетчер</h1>
+        <h1 className="am-page__title">Назначения</h1>
         <p className="am-page__subtitle">
           {admin
             ? 'Назначение объектов и документов экспертам, их состояние и история.'

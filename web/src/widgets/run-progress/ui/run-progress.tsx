@@ -9,7 +9,7 @@
  * `RUN-SCREEN-01a` (plan `executors-runs-rework-plan` §9) rebuilt the layout on the same data; the rules below are the ones it kept.
  * The screen is a head over two tabs: the head states the run (its state, the stage it is on, a bar, the estimated finish, the live
  * line and the rail of chips) and what to do next; «Обзор» holds the findings and spend tiles, the outcome, the queue card and a folded
- * «Подробнее»; «Журнал» holds the run's events. A chip opens «Этапы анализа раздела», which holds the stage table, the planned
+ * «Подробнее»; «Лог» holds the run's events. A chip opens «Этапы анализа раздела», which holds the stage table, the planned
  * procedures, the executor and the preset.
  *
  * What this widget is careful about:
@@ -128,7 +128,7 @@ export interface RunProgressProps {
   /** The page's own controls for this run («Отменить прогон»), beside the review call in the head. */
   readonly actions?: ReactNode;
   /**
-   * The run's events, for the «Журнал» tab (`UI-B-39`). The page decides whether the account may read the journal (`R-150w`) and
+   * The run's events, for the «Лог» tab (`UI-B-39`). The page decides whether the account may read the journal (`R-150w`) and
    * passes it only then: with none the tab is not drawn, as it was not before for a read-only account.
    */
   readonly journal?: ReactNode;
@@ -142,8 +142,8 @@ function RunHolder({ runId }: { readonly runId: string }) {
 
 const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное значение.';
 
-/** «1 находка», «2 находки», «5 находок»: the forms `pluralRu` picks from. */
-const FINDING_FORMS: readonly [string, string, string] = ['находка', 'находки', 'находок'];
+/** «1 замечание», «2 замечания», «5 замечаний»: the forms `pluralRu` picks from. */
+const FINDING_FORMS: readonly [string, string, string] = ['замечание', 'замечания', 'замечаний'];
 
 function Outcome({ status }: { readonly status: RunStatus }) {
   const outcome = runOutcome(status);
@@ -162,7 +162,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
           <p>
             Прогон <span data-run-state="published">{STATE_LABELS.published}</span>:{' '}
             {outcome.findingCount === null
-              ? <em>число находок не сообщено</em>
+              ? <em>число замечаний не сообщено</em>
               : `${outcome.findingCount} ${pluralRu(outcome.findingCount, FINDING_FORMS)}`}.
           </p>
         </div>
@@ -258,7 +258,7 @@ function Recorded({ status }: { readonly status: RunStatus }) {
       </p>
       <p>
         Диагностическое наблюдение — это то, что прогон заметил, но не принял как
-        свидетельство. Это не находка, оно не считается находкой, и два итога никогда
+        свидетельство. Это не замечание, оно не считается замечанием, и два итога никогда
         не складываются.
       </p>
 
@@ -322,7 +322,7 @@ function Recorded({ status }: { readonly status: RunStatus }) {
 }
 
 /**
- * The tile «Находки» (`R-151j`): the run's findings by the severity the expert decided, read from the same complete list «Разбор»
+ * The tile «Замечания» (`R-151j`): the run's findings by the severity the expert decided, read from the same complete list «Разбор»
  * reads (`runFindingsQueryOptions`, one cache entry), and the way into «Разбор». Counts are over the whole run. A finding without a
  * decided severity is «Не определена»; the model's proposals are not counted here (they are on «Разбор», under their own label).
  * Until the list has been read, or when it cannot be, the tile shows only the way in: it claims no count it has not got.
@@ -340,10 +340,10 @@ function FindingsTile({ projectUid, status }: { readonly projectUid: string; rea
         { key: 'undetermined', label: 'Не определена', count: tally.decided.undetermined },
       ].filter((entry) => entry.count > 0);
   return (
-    <section className={styles.tile} aria-label="Находки" data-run-findings-tile="">
-      <h2>Находки</h2>
+    <section className={styles.tile} aria-label="Замечания" data-run-findings-tile="">
+      <h2>Замечания</h2>
       {strip.length === 0 ? null : (
-        <ul className={styles.severities} aria-label="Важность, решённая экспертом" data-severity-strip="">
+        <ul className={styles.severities} aria-label="Критичность, решённая экспертом" data-severity-strip="">
           {strip.map((entry) => (
             <li key={entry.key} className={styles.severity} data-severity={entry.key}>
               {entry.label} {entry.count}
@@ -460,8 +460,8 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
         {reviewable ? (
           <FindingsTile projectUid={projectUid} status={status} />
         ) : (
-          <section className={styles.tile} aria-label="Находки" data-run-findings-tile="">
-            <h2>Находки</h2>
+          <section className={styles.tile} aria-label="Замечания" data-run-findings-tile="">
+            <h2>Замечания</h2>
             {!isTerminalRunState(status.state) ? (
               // An open run has no result yet; «Разбирать нечего» is the sentence of a run that ended without one (`RUN-SCREEN-FIX-01`).
               <p className={styles.spendNote} data-run-findings-pending="">Появятся по ходу прогона.</p>
@@ -470,7 +470,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
                 title="Разбирать нечего."
                 detail={
                   <p>
-                    Находки появляются, только когда прогон{' '}
+                    Замечания появляются, только когда прогон{' '}
                     <span data-run-state="published">{STATE_LABELS.published}</span> или завершён{' '}
                     <span data-run-state="partial">{STATE_LABELS.partial}</span>. Этот прогон —{' '}
                     <span data-run-state={status.state}>{STATE_LABELS[status.state]}</span>.
@@ -588,7 +588,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
           <>
             {reviewable ? (
               <Link className="am-button" href={routes.review(projectUid, status.run_id)}>
-                Разобрать находки
+                Разобрать замечания
               </Link>
             ) : null}
             {actions}

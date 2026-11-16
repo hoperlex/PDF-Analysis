@@ -149,7 +149,7 @@ export const COST_BINDING_CHANGED = 'cost_estimate_binding_changed';
 export const GROUP_RATES_STALE_SENTENCE =
   'Нельзя согласиться на эту оценку: тарифы группы устарели — пересоберите группу. Тарифы модели изменились после того, как группа их запомнила, ' +
   'и первое же обращение к модели отказало бы: прежние тарифы больше не действуют. Исполнителю ничего не передано. ' +
-  'Администратор делает новую ревизию группы («Исполнители» → «Группы»), затем работу запускают заново.';
+  'Администратор делает новую ревизию группы («Диспетчер» → «Группы»), затем работу запускают заново.';
 
 /** `storage_integrity_error` of a comparison file: the received bytes are not the declared ones. */
 export const COMPARISON_INTEGRITY_SENTENCE =

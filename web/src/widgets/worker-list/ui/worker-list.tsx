@@ -1,5 +1,5 @@
 /**
- * «Исполнители» — the worker registry (`W54-WORKERS-WEB`, plan §3.7).
+ * «Диспетчер» — the worker registry (`W54-WORKERS-WEB`, plan §3.7).
  *
  * Online and stale workers first, offline ones collapsed below them. Each row says what the
  * worker is doing: its state, whether it takes new runs, its slots and version, when it

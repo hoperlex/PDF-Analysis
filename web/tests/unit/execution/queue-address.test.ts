@@ -8,7 +8,7 @@
  *   - a parameter that is not this screen's is carried through a write untouched;
  *   - the page, given the address the route read on the server, makes its FIRST read already filtered: the cache holds the
  *     filtered queue entry and not the unfiltered one, so no unfiltered request precedes it;
- *   - the link «Обзор» of «Исполнители» makes (`queueStateHref`) is read back by this screen as the state it names: the widget and the
+ *   - the link «Обзор» of «Диспетчер» makes (`queueStateHref`) is read back by this screen as the state it names: the widget and the
  *     page cannot import each other, so this is the place their two spellings of `state` are held to agree.
  */
 
@@ -104,7 +104,7 @@ describe('the page opened on an address', () => {
   });
 });
 
-describe('the links «Обзор» of «Исполнители» makes into the queue', () => {
+describe('the links «Обзор» of «Диспетчер» makes into the queue', () => {
   it('open the queue on the state they name', () => {
     for (const state of ['failed', 'dead_letter'] as const) {
       const href = queueStateHref(state);

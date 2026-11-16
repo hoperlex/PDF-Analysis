@@ -10,7 +10,7 @@ import type { VectorControl } from '@/shared/api';
 /** The badge's text; it exists only while the vectors are paused. */
 export const VECTORS_PAUSED_LABEL = 'Векторы на паузе';
 
-const CONSEQUENCE = 'прецеденты новых находок появятся после возобновления';
+const CONSEQUENCE = 'прецеденты новых замечаний появятся после возобновления';
 
 /** The badge's tooltip: since when (already worded, e.g. «с 10:00»; empty when the time is unknown) and what it means for the reader. */
 export function vectorsPausedHint(since: string): string {

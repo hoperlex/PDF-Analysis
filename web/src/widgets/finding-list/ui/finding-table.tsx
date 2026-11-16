@@ -78,11 +78,11 @@ function unlinkedPagesOf(finding: Finding, unlinkedPages: ReadonlySet<number> | 
   return [...cited].filter((page) => unlinkedPages.has(page)).sort((left, right) => left - right);
 }
 
-const COLUMNS = ['№', 'Важность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'] as const;
+const COLUMNS = ['№', 'Критичность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'] as const;
 
 function SeverityCell({ finding }: { readonly finding: Finding }) {
   if (finding.decided_severity !== undefined) {
-    return <SeverityBadge severity={finding.decided_severity} title="Важность, решённая экспертом" />;
+    return <SeverityBadge severity={finding.decided_severity} title="Критичность, решённая экспертом" />;
   }
   const proposed = finding.observation.proposed_severity;
   if (proposed === undefined) return <span className={styles.none}>—</span>;
@@ -156,7 +156,7 @@ export function FindingTable({
 }: FindingTableProps) {
   return (
     <div className={styles.scroll} data-finding-table="">
-      <table className={styles.table} aria-label="Находки прогона">
+      <table className={styles.table} aria-label="Замечания прогона">
         <colgroup>
           <col className={styles.colNumber} />
           <col className={styles.colSeverity} />

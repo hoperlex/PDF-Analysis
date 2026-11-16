@@ -24,7 +24,7 @@
  * analysis-profile registry, `W59-VERSION-UPLOAD-01` the upload of a further version of one
  * set, `W59-DECISION-CARRYOVER-01` the expert-confirmed carryover of a decision to the next
  * version, `W57B-NORMS-CATALOGUE-XLSX-01` the norms catalogue and the run's Excel workbook,
- * `W61-DISPATCHER-01` the four «Диспетчер» operations, `W60-OPT-MATCH-01` the priced
+ * `W61-DISPATCHER-01` the four «Назначения» operations, `W60-OPT-MATCH-01` the priced
  * specification of a document set and `W63-SECTION-FORM7-01` a section's combined Form-7
  * specification across projects.
  * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and

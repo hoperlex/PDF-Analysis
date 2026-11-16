@@ -66,7 +66,7 @@ describe('retained candidates in the same review journey', () => {
 
   it('has a dense read-only table and marks absent old proposals explicitly', () => {
     const markup = renderToStaticMarkup(createElement(ReviewCandidateTable, { value, projectUid: 'p' }));
-    for (const label of ['Важность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение', 'Только просмотр', 'В этом прогоне отдельно не сохранена']) {
+    for (const label of ['Критичность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение', 'Только просмотр', 'В этом прогоне отдельно не сохранена']) {
       expect(markup).toContain(label);
     }
     expect(markup).not.toContain('data-finding-row-actions');

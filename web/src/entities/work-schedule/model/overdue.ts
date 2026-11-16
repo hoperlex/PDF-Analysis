@@ -1,5 +1,5 @@
 /**
- * «Просрочки» of «Выполнено» (`D-319`): the open assignments of «Диспетчер» whose planned date is before today. The
+ * «Просрочки» of «Выполнено» (`D-319`): the open assignments of «Назначения» whose planned date is before today. The
  * count comes from the reserve read, which carries every open assignment with its `planned_on`; one without a date is
  * «без даты» and is not late, and a task planned for today is not late yet.
  */

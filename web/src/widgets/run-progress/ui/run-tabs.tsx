@@ -3,7 +3,7 @@
 /** @jsxRuntime automatic */
 
 /**
- * «Обзор» and «Журнал» (`RUN-SCREEN-01a`): the WAI-ARIA tabs pattern with automatic activation, as the tabs of «Блоки» and «Исполнители»
+ * «Обзор» and «Лог» (`RUN-SCREEN-01a`): the WAI-ARIA tabs pattern with automatic activation, as the tabs of «Блоки» and «Диспетчер»
  * are. A `tablist` of `tab` buttons, each naming the panel it controls and saying whether it is the open one; only the open tab is in the
  * tab order, and the arrow keys, Home and End move the selection and the focus (`tabAfterKey`). One panel is drawn, for the open tab,
  * with the open tab's content as its children: nothing of a closed tab is mounted, so the journal is not read until it is asked for.

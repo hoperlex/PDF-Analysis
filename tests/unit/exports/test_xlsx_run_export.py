@@ -249,6 +249,8 @@ def test_a_v1_run_renders_with_labels_and_empty_norm_columns(preflight) -> None:
     assert (summary["A7"], summary["B7"]) == (
         "Атрибуция", "ответы модели воспроизведены из записи (recorded)"
     )
+    # The header of the severity counts is «Критичность», the screens' word (`UIP-G-02`).
+    assert (summary["A8"], summary["B8"]) == ("Критичность", "Количество")
     # «Сводка» counts: severities and categories in the same words, never the raw values.
     assert (summary["A9"], summary["B9"]) == ("Критическое", "0")
     assert (summary["A14"], summary["B14"]) == ("Без серьёзности", "2")

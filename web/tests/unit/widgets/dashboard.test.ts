@@ -319,13 +319,13 @@ describe('every number the dashboard renders is the fixture, and nothing else is
     expect(markup).toContain('data-verdict="rejected"');
     expect(markup).toContain('data-verdict="needs_manual_review"');
     const text = visible(markup);
-    expect(text).toContain('Находок за всё время: 70');
+    expect(text).toContain('Замечаний за всё время: 70');
   });
 
   it('labels the verdict panel as all-time and keeps the findings that await a decision out of it (R-150q)', () => {
     const markup = render(SUMMARY);
     const panel = visible(sectionMarkup(markup, 'dashboard-verdicts-heading'));
-    expect(visible(markup)).toContain('Находки по вердикту, за всё время');
+    expect(visible(markup)).toContain('Замечания по вердикту, за всё время');
     expect(panel).toContain('По вердикту, за всё время');
     expect(panel).toContain('всех прогонов');
     // 13 is `awaiting_decision_findings`: the home tile's figure, a different count from this panel's 16.

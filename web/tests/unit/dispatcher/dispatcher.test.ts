@@ -1,5 +1,5 @@
 /**
- * «Диспетчер» on the web side (`W61-DISPATCHER-01`): which moves a viewer is offered, what a
+ * «Назначения» on the web side (`W61-DISPATCHER-01`): which moves a viewer is offered, what a
  * refusal says, who may be named as an assignee, and what the dispatcher's screen draws for
  * an administrator and for an expert.
  *

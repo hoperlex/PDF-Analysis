@@ -112,7 +112,7 @@ export function PresetForm({ preset, choices, onSaved }: PresetFormProps) {
         </select>
         {live.length === 0 ? (
           <p className="am-form__hint" role="status">
-            Подключений для выбора пока нет: сначала добавьте подключение на экране «Исполнители», вкладка «Подключения».
+            Подключений для выбора пока нет: сначала добавьте подключение на экране «Диспетчер», вкладка «Подключения».
           </p>
         ) : null}
       </div>

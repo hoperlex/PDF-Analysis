@@ -52,7 +52,7 @@ describe('the head', () => {
     expect(markup).toContain('этапов завершено 2 из 2');
     expect(markup).toMatch(/role="progressbar"[^>]*aria-valuemax="2"[^>]*aria-valuenow="2"[^>]*aria-valuetext="завершено 2 из 2"/);
     expect(markup.match(/data-segment="done"/g)).toHaveLength(2);
-    expect(markup).toMatch(/data-run-head=""[\s\S]*?Разобрать находки/);
+    expect(markup).toMatch(/data-run-head=""[\s\S]*?Разобрать замечания/);
   });
 
   it('counts «этап N из M» over the chips of this run while it is open, and draws the chip it is on as live', () => {
@@ -135,9 +135,9 @@ describe('the head', () => {
 
   it('puts the review call and the page\'s own controls in the head, and the review call only for a run that has findings', () => {
     expect(screen({ state: 'published' }, { actions: createElement('button', { 'data-test-cancel': '' }, 'Отменить') }))
-      .toMatch(/data-run-head=""[\s\S]*?Разобрать находки[\s\S]*?data-test-cancel/);
+      .toMatch(/data-run-head=""[\s\S]*?Разобрать замечания[\s\S]*?data-test-cancel/);
     const failed = screen({ state: 'failed', terminal_reason: 'analysis_failed' });
-    expect(failed).not.toContain('Разобрать находки');
+    expect(failed).not.toContain('Разобрать замечания');
   });
 
   it('shows the model and the server of a run that is on a chip that calls one, and neither on Подготовка', () => {
@@ -208,7 +208,7 @@ describe('the tabs', () => {
     const markup = screen({}, { journal: createElement('p', null, 'СОБЫТИЯ') });
     expect(markup).toMatch(/role="tablist"[^>]*aria-label="Разделы экрана прогона"/);
     expect(markup).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*tabindex="0"[^>]*data-run-tab="overview">Обзор</);
-    expect(markup).toMatch(/role="tab"[^>]*aria-selected="false"[^>]*tabindex="-1"[^>]*data-run-tab="journal">Журнал</);
+    expect(markup).toMatch(/role="tab"[^>]*aria-selected="false"[^>]*tabindex="-1"[^>]*data-run-tab="journal">Лог</);
     const tab = /role="tab" id="([^"]+)"[^>]*data-run-tab="overview"/.exec(markup)?.[1];
     expect(tab).toBeDefined();
     expect(markup).toContain(`role="tabpanel"`);
@@ -228,7 +228,7 @@ describe('the tabs', () => {
     expect(markup).toContain('data-run-spend=');
   });
 
-  it('offer «Журнал» on the page to an expert and an account not known yet, and not to a read-only account', () => {
+  it('offer «Лог» on the page to an expert and an account not known yet, and not to a read-only account', () => {
     const page = (roles?: string[]) => {
       const { status, client } = seeded({}, (c) => { if (roles !== undefined) c.setQueryData(queryKeys.account.me(), { roles }); });
       return renderScreen(client, createElement(RunPage, { projectUid: PROJECT_UID, runId: status.run_id }));
@@ -268,7 +268,7 @@ describe('the tiles', () => {
     finding_uid: `fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8${n}`, ...(severity === undefined ? {} : { decided_severity: severity }), observation: observation(),
   });
 
-  it('«Находки» counts the run by the severity the expert decided and links «Разбор»', () => {
+  it('«Замечания» counts the run by the severity the expert decided and links «Разбор»', () => {
     const markup = screen({}, {}, seedFindings([decided(1, 'critical'), decided(2, 'critical'), decided(3, 'economic'), decided(4)]));
     expect(markup).toContain('data-severity-strip=""');
     expect(markup).toContain('data-severity="critical">Критическое 2<');

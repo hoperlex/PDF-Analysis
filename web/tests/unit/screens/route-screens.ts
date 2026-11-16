@@ -510,7 +510,7 @@ export const SEEDS: readonly Seed[] = [
   },
   {
     /*
-     * `W61-DISPATCHER-01`: «Диспетчер» for an administrator — the creation form and every
+     * `W61-DISPATCHER-01`: «Назначения» for an administrator — the creation form and every
      * assignment with the administrator's moves.
      */
     address: '/dispatcher',

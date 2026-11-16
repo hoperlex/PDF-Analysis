@@ -79,7 +79,7 @@ function FindingRow({ record, kindLabel }: { readonly record: DecisionRecord; re
       <PlaceCell project={record.project_name} document={record.document_name} />
       <SectionCell code={record.section} />
       <td data-decided-severity={record.severity}>
-        {record.severity === undefined ? '—' : <SeverityBadge severity={record.severity} title="Важность, решённая экспертом" />}
+        {record.severity === undefined ? '—' : <SeverityBadge severity={record.severity} title="Критичность, решённая экспертом" />}
       </td>
       <td>
         <span className="am-kb__verdict" data-verdict={record.current_verdict}>
@@ -114,7 +114,7 @@ function FindingRow({ record, kindLabel }: { readonly record: DecisionRecord; re
           className="am-kb__link"
           href={`${routes.review(record.project_uid, record.run_id)}?finding=${encodeURIComponent(record.finding_uid)}`}
         >
-          Открыть находку
+          Открыть замечание
         </Link>
       </td>
     </tr>
@@ -172,12 +172,12 @@ export function KnowledgeBaseTable({ entries, kindLabel = false }: KnowledgeBase
             <th scope="col" className={styles.colType}>Тип</th>
             <th scope="col" className={styles.colPlace}>Объект</th>
             <th scope="col" className={styles.colSection}>Раздел</th>
-            <th scope="col" className={styles.colSeverity}>Важность</th>
+            <th scope="col" className={styles.colSeverity}>Критичность</th>
             <th scope="col" className={styles.colVerdict}>Решение</th>
             <th scope="col" className={styles.colText}>Суть</th>
             <th scope="col" className={styles.colReason}>Причина решения</th>
             <th scope="col" className={styles.colDate}>Дата</th>
-            <th scope="col" className={styles.colLink}>Находка</th>
+            <th scope="col" className={styles.colLink}>Замечание</th>
           </tr>
         </thead>
         <tbody>

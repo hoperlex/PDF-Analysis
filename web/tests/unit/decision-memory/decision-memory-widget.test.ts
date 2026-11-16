@@ -77,7 +77,7 @@ describe('the case', () => {
     expect(markup).toContain('Построение контекста документа');
     expect(markup).toContain('из записи');
     expect(markup).toContain('data-memory-decision="dmd_01M2545JSD15ETSNNV904X994C"');
-    expect(markup).toContain('решено на находке');
+    expect(markup).toContain('решено на замечании');
     // Evidence: one-based number, page, characters, block, the box with its unit and origin; three decimals at most.
     expect(markup).toContain('№1 · стр. 3 · символы 10–30');
     expect(markup).toContain('блок <code>b_000012</code>');
@@ -121,7 +121,7 @@ describe('the case', () => {
     expect(markup).toContain('data-memory-standing-note="forgotten"');
     expect(markup).toContain('Содержимое дела забыто');
     expect(markup).toContain('c'.repeat(64));
-    expect(markup).not.toContain('Находка и рекомендация');
+    expect(markup).not.toContain('Замечание и рекомендация');
     expect(markup).not.toContain('data-memory-finding-text');
     expect(markup).not.toContain('data-memory-decision=');
   });

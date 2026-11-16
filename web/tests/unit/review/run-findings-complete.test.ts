@@ -1,5 +1,5 @@
 /**
- * `UI-PARITY-COMPLETENESS-01`: «Разбор находок» shows EVERY finding of the run, or says it could
+ * `UI-PARITY-COMPLETENESS-01`: «Разбор замечаний» shows EVERY finding of the run, or says it could
  * not -- never the first page as if it were the whole.
  *
  * `listRunFindings` pages (50 by default, 200 at most). The review screen asked for one page and
@@ -61,7 +61,7 @@ function numbered(n: number): Finding {
     finding_uid: `fnd_01J9ZQ8K7NHVXW3T2R5M6P${tail}`,
     observation: observation({
       finding_observation_id: `fobs_01J9ZQ8K7NHVXW3T2R5M6P${tail}`,
-      finding_text: `Находка номер ${n}`,
+      finding_text: `Замечание номер ${n}`,
     }),
   });
 }
@@ -253,8 +253,8 @@ describe('the review screen shows the complete list, or the error, and never a p
 
     expect(markup).toContain('data-finding-count="107"');
     expect(rows(markup)).toBe(107);
-    for (const edge of [1, 50, 51, 100, 101, 107]) expect(markup).toContain(`Находка номер ${edge}<`);
-    expect(markup).not.toContain('Не удалось загрузить находки');
+    for (const edge of [1, 50, 51, 100, 101, 107]) expect(markup).toContain(`Замечание номер ${edge}<`);
+    expect(markup).not.toContain('Не удалось загрузить замечания');
     expect(list).toHaveBeenCalledTimes(3);
   });
 
@@ -266,12 +266,12 @@ describe('the review screen shows the complete list, or the error, and never a p
     const view = await mount();
     const markup = view.markup();
 
-    expect(markup).toContain('Не удалось загрузить находки');
+    expect(markup).toContain('Не удалось загрузить замечания');
     expect(markup).toContain('cid-page-2');
     expect(view.count('Повторить')).toBe(1);
     // The 50 findings of page 1 were read, and none of them is on the screen.
     expect(rows(markup)).toBe(0);
-    expect(markup).not.toContain('Находка номер 1<');
+    expect(markup).not.toContain('Замечание номер 1<');
     expect(markup).not.toContain('data-finding-count');
   });
 
@@ -303,8 +303,8 @@ describe('the review screen shows the complete list, or the error, and never a p
     const view = await mount();
     const markup = view.markup();
 
-    expect(markup).toContain('Не удалось загрузить находки');
-    expect(markup).toContain('Список находок не показан, чтобы не выдать часть за целое.');
+    expect(markup).toContain('Не удалось загрузить замечания');
+    expect(markup).toContain('Список замечаний не показан, чтобы не выдать часть за целое.');
     expect(view.count('Повторить')).toBe(1);
     expect(rows(markup)).toBe(0);
   });

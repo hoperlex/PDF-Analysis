@@ -12,5 +12,5 @@ export const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {
 
 /** The count of decisions on one finding, said in words: a lone digit beside a timestamp reads as an ordinal. */
 export function decisionCountWords(count: number): string {
-  return count === 1 ? 'одно решение по находке' : `решений по находке: ${count}`;
+  return count === 1 ? 'одно решение по замечанию' : `решений по замечанию: ${count}`;
 }

@@ -2,7 +2,7 @@
  * The tabs and the project chooser of «Сравнение версий» (`CMP-VC-UI-01`). Token reads only, no token declared here, no
  * `:not()` (the contrast census cannot read it); every rule is reached by a screen in `tests/unit/styles/screens.ts`, the open
  * tab by its `aria-selected` value — the attribute the tab really emits. The same rules as the tabs of «Блоки» and
- * «Исполнители», collocated because a page does not import another page's stylesheet.
+ * «Диспетчер», collocated because a page does not import another page's stylesheet.
  */
 
 .chooser {

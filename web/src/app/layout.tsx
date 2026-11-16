@@ -40,7 +40,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'AuditManager — PC-01',
-  description: 'Локальный разбор одного PDF: прогон, находки, решения, выгрузка CSV.',
+  description: 'Локальный разбор одного PDF: прогон, замечания, решения, выгрузка CSV.',
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {

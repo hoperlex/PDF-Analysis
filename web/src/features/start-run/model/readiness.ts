@@ -27,7 +27,7 @@ export const MODELS_BY_STAGE_LABEL = 'Модели по этапам ▸';
 export const READINESS_READING = 'Проверяем готовность…';
 export const READINESS_NOT_READ = 'Готовность запуска не прочитана; запуск проверит её сам.';
 export const CONTACT_ADMIN = 'обратитесь к администратору';
-export const CONNECT_SERVER = 'подключите сервер в «Исполнители»';
+export const CONNECT_SERVER = 'подключите сервер в «Диспетчере»';
 /** The reason when the answer says `ready: false` and names no cell: said as it is, not hidden. */
 export const NOT_READY = 'Запуск сейчас невозможен';
 

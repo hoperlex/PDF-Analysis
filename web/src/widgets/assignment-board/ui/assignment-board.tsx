@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * «Диспетчер» — the list of assignments with its filters, moves and history
+ * «Назначения» — the list of assignments with its filters, moves and history
  * (`W61-DISPATCHER-01`).
  *
  * The state chips (contract 1.36.0) carry the server's numbers: `overview` counts each status over the scope
