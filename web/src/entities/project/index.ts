@@ -28,6 +28,11 @@ export {
   structureRank,
 } from './model/section';
 
+export type { SectionColourStyle } from './model/section-colour';
+export { sectionColourStyle, sectionColourVar } from './model/section-colour';
+export type { SectionDotProps } from './ui/section-dot';
+export { SectionDot } from './ui/section-dot';
+
 export type { CreateProjectFailure, CreateProjectFailureKind } from './model/create-failure';
 export { classifyCreateProjectFailure } from './model/create-failure';
 

@@ -1,0 +1,16 @@
+/*
+ * The dot of a section: a small filled circle in the section's colour, drawn beside its code or its name.
+ * The colour is not declared here. It is read from the one custom property the markup sets
+ * (`sectionColourStyle` on the dot, or on a row that holds it), so the palette stays in `globals.css` and
+ * a theme changes the dot without a rule of its own. The size follows the text it stands beside.
+ */
+
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: var(--am-radius-pill);
+  background: var(--am-section-colour);
+  vertical-align: middle;
+}
