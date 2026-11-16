@@ -459,7 +459,8 @@ describe('R-150b: «Объекты» left the menu rows, and the selector in the
   it('stands in the top strip, after the screen\'s own name and before the stand, theme and account controls', () => {
     const markup = renderFrame(frameSession());
     const strip = markup.slice(markup.indexOf('class="am-app__utility"'), markup.indexOf('<main'));
-    const order = ['aria-label="Текущий раздел"', 'data-project-switcher', 'aria-label="Оформление"', 'data-account-menu'].map((marker) =>
+    // The theme is one button since `UIP-G-03` (no group «Оформление»); its wrapper `class="am-theme"` is the marker, as in `shell/frame.test.ts`.
+    const order = ['aria-label="Текущий раздел"', 'data-project-switcher', 'class="am-theme"', 'data-account-menu'].map((marker) =>
       strip.indexOf(marker),
     );
     expect(order.every((at) => at >= 0), JSON.stringify(order)).toBe(true);
