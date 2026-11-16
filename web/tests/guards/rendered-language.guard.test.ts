@@ -5838,7 +5838,7 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
     why: 'R-151m: the version\'s «Блоки» tab says this only for a version admitted for comparison only (upload_kind comparison_pdf); the matrix seeds one portal-bundle version for every screen. tests/unit/blocks/version-blocks.test.ts seeds that version and reads the sentence.',
   },
   {
-    label: 'Эта версия из другого проекта.',
+    label: 'Эта версия из другого объекта.',
     why: 'R-151m: the version\'s «Блоки» tab says this only when the version read answers a project other than the one in the address; the matrix seeds one project for every screen. tests/unit/blocks/version-blocks.test.ts seeds the mismatch and reads the sentence.',
   },
   {
@@ -5914,7 +5914,7 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
     why: 'RegistrationDecisionControls shows this after an approve or reject mutation fails. Its useMutation observer cannot be put into an error state by seeding a query cache.',
   },
   {
-    label: 'Загрузка: новый проект…',
+    label: 'Загрузка: новый объект…',
     why:
       "`create-project-form.tsx`, while its `useMutation` is in flight. One server pass " +
       'never has a settled mutation, and the harness cannot fire the submit that starts ' +
@@ -6038,14 +6038,14 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       'not clicked a project, so there is no query to seed an error into.',
   },
   {
-    label: 'Загрузка: документы проекта…',
+    label: 'Загрузка: документы объекта…',
     why:
       "`DocumentChooser`'s pending read, reached only once a project is chosen. Same " +
       'mechanism as the entry above it: the component does not exist, and its query does ' +
       'not exist, until a click this harness cannot fire has happened.',
   },
   {
-    label: 'В этом проекте нет опубликованных документов.',
+    label: 'В этом объекте нет опубликованных документов.',
     why:
       "`DocumentChooser`'s empty answer, reached only once a project is chosen and that " +
       'project turns out to have published nothing. Same mechanism: the component that ' +

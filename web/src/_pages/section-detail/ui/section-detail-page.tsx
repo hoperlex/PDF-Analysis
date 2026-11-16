@@ -62,10 +62,10 @@ export function SectionDetailPage({ projectUid, sectionCode, filter }: SectionDe
   const section = findProjectSection(sectionCode);
   if (!looksLikeProjectUid(projectUid) || section === null) {
     return (
-      <PageShell title="Раздел" actions={<Link href={routes.projects()}>Все проекты</Link>}>
+      <PageShell title="Раздел" actions={<Link href={routes.projects()}>Все объекты</Link>}>
         <UnsupportedState
           title="Это не адрес раздела."
-          detail="Раздел адресуется идентификатором проекта и кодом одного из пятнадцати разделов. Запроса не было."
+          detail="Раздел адресуется идентификатором объекта и кодом одного из пятнадцати разделов. Запроса не было."
         />
       </PageShell>
     );
@@ -132,7 +132,7 @@ function SectionDetail({
       <EmptyState
         title="В этом разделе пока нет документов."
         detail="Документ попадает в раздел, когда эксперт подтвердит раздел для его текущей версии на экране версии."
-        action={<Link className={styles.backLink} href={routes.project(projectUid)}>К разделам проекта</Link>}
+        action={<Link className={styles.backLink} href={routes.project(projectUid)}>К разделам объекта</Link>}
       />
     );
   } else {

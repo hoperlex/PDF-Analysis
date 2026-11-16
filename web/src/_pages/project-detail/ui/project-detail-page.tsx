@@ -86,10 +86,10 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
 
   if (!looksLikeProjectUid(projectUid)) {
     return (
-      <PageShell title="Проект" actions={<Link href={routes.projects()}>Все проекты</Link>}>
+      <PageShell title="Объект" actions={<Link href={routes.projects()}>Все объекты</Link>}>
         <UnsupportedState
-          title="Это не адрес проекта."
-          detail="Проект адресуется непрозрачным идентификатором. Запроса не было."
+          title="Это не адрес объекта."
+          detail="Объект адресуется непрозрачным идентификатором. Запроса не было."
         />
       </PageShell>
     );
@@ -101,10 +101,10 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
 
   return (
     <PageShell
-      title={project.data?.name ?? 'Проект'}
+      title={project.data?.name ?? 'Объект'}
       surface="canvas"
       subtitle={<code>{projectUid}</code>}
-      actions={<Link href={routes.projects()}>Все проекты</Link>}
+      actions={<Link href={routes.projects()}>Все объекты</Link>}
     >
       {/* `UI-A-35`: the original's row of numbers for the whole project, from the counters `getProject` carries. */}
       {project.data?.audit_counts === undefined ? null : (
@@ -112,7 +112,7 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
           <AuditTallyLine tally={tallyOfCounts(project.data.audit_counts)} label={project.data.name} />
         </div>
       )}
-      <nav className={styles.tabs} aria-label="Разделы проекта" data-project-tabs={tab}>
+      <nav className={styles.tabs} aria-label="Разделы объекта" data-project-tabs={tab}>
         {TABS.map((entry) => (
           <button
             key={entry.tab}

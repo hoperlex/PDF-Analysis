@@ -272,7 +272,7 @@ describe('R-66: the groups, their members and their order', () => {
     expect(menu(moved).system).not.toEqual(R66.system);
   });
 
-  it('the menu is exactly the ruling, group by group, in order — Дашборд first in Работа, since R-150b took Проекты out', () => {
+  it('the menu is exactly the ruling, group by group, in order — Дашборд first in Работа, since R-150b took Объекты out', () => {
     const live = menu(REGISTRY);
     for (const group of SCREEN_GROUPS) {
       expect(live[group], `group ${group}`).toEqual(R66[group] ?? []);
@@ -325,7 +325,7 @@ describe('R-66: the groups, their members and their order', () => {
     expect(labels['/analysis-settings']).toBe('Настройки анализа');
     expect(labels['/queue']).toBe('Очередь');
     expect(labels['/']).toBe('Главная');
-    expect(labels['/projects']).toBe('Проекты');
+    expect(labels['/projects']).toBe('Объекты');
     expect(labels['/admin/users']).toBe('Пользователи');
     expect(labels['/admin/registrations']).toBe('Заявки на регистрацию');
     expect(labels['/admin/auth-events']).toBe('Журнал входов');

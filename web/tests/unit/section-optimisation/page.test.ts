@@ -85,7 +85,7 @@ describe('opening on the address', () => {
   it('sets aside what it cannot read and says so', () => {
     const { markup } = page({ section: 'ZZ', project: 'nope', tab: 'history' });
     expect(markup).toContain('data-address-ignored="section project tab"');
-    expect(text(markup)).toContain('Из адреса не прочитано: раздел, проект, вкладка.');
+    expect(text(markup)).toContain('Из адреса не прочитано: раздел, объект, вкладка.');
     expect(selected(markup, 'AR')).toBe(true);
   });
 });

@@ -97,10 +97,10 @@ export function DocumentDetailPage({ projectUid, documentUid, roles = [] }: Docu
 
   if (!looksLikeProjectUid(projectUid) || !looksLikeDocumentUid(documentUid)) {
     return (
-      <PageShell title="Документ" actions={<Link href={routes.projects()}>Все проекты</Link>}>
+      <PageShell title="Документ" actions={<Link href={routes.projects()}>Все объекты</Link>}>
         <UnsupportedState
           title="Это не адрес документа."
-          detail="Проект и документ адресуются непрозрачными идентификаторами. Запроса не было."
+          detail="Объект и документ адресуются непрозрачными идентификаторами. Запроса не было."
         />
       </PageShell>
     );
@@ -154,8 +154,8 @@ function DocumentScreen({
       subtitle={<code>{documentUid}</code>}
       actions={
         <>
-          <Link href={routes.project(projectUid)}>К проекту</Link>{' '}
-          <Link href={routes.projects()}>Все проекты</Link>
+          <Link href={routes.project(projectUid)}>К объекту</Link>{' '}
+          <Link href={routes.projects()}>Все объекты</Link>
         </>
       }
     >
@@ -173,7 +173,7 @@ function DocumentScreen({
         {newest === undefined ? null : mayAct ? (
           <DocumentLifecycle projectUid={projectUid} documentUid={documentUid} title={title} archived={archived} />
         ) : archived ? (
-          <p className="am-note" role="status">Документ в архиве: его нет в списках проекта.</p>
+          <p className="am-note" role="status">Документ в архиве: его нет в списках объекта.</p>
         ) : null}
         {newest === undefined ? null : (
           <DocumentTags projectUid={projectUid} documentUid={documentUid} tags={newest.tags ?? []} mayEdit={mayAct} />

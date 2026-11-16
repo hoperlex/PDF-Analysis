@@ -145,12 +145,12 @@ describe('the project list renders each read outcome as a different state', () =
   it('in flight is a loading state, not silence', () => {
     const markup = list();
     expect(markup.toLowerCase()).toContain('загрузка');
-    expect(markup).not.toContain('Проектов пока нет.');
+    expect(markup).not.toContain('Объектов пока нет.');
   });
 
   it('a genuinely empty list says so, and does not look like a failure', () => {
     const markup = list((c) => c.setQueryData(LIST_KEY, page([])));
-    expect(markup).toContain('Проектов пока нет.');
+    expect(markup).toContain('Объектов пока нет.');
     expect(markup).not.toContain('data-list-failure');
     expect(markup.toLowerCase()).not.toContain('загрузка');
   });
@@ -159,7 +159,7 @@ describe('the project list renders each read outcome as a different state', () =
     const markup = list((c) => seedError(c, LIST_KEY, apiError(503, 'dependency_unavailable', true)));
     expect(markup).toContain('data-list-failure');
     expect(markup).toContain('corr-list-1');
-    expect(markup).not.toContain('Проектов пока нет.');
+    expect(markup).not.toContain('Объектов пока нет.');
   });
 
   it('offers a retry only when the decoded envelope said retryable', () => {

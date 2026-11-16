@@ -105,8 +105,8 @@ export function canAssignWork(roles: readonly Role[]): boolean {
 /** What the assignment covers, in words: the project, and the document when there is one. */
 export function assignmentScope(assignment: Pick<Assignment, 'project_name' | 'document_title'>): string {
   return assignment.document_title === null
-    ? `Проект «${assignment.project_name}»`
-    : `Документ «${assignment.document_title}» проекта «${assignment.project_name}»`;
+    ? `Объект «${assignment.project_name}»`
+    : `Документ «${assignment.document_title}» объекта «${assignment.project_name}»`;
 }
 
 /**

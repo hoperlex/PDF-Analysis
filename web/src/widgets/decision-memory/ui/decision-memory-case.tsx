@@ -125,7 +125,7 @@ export function DecisionMemoryCaseView({ data, isLoading, error, manage, onBack 
         <div><dt>Раздел</dt><dd><MemorySectionCell code={summary.section_code} /></dd></div>
         <div><dt>Записано</dt><dd><time dateTime={summary.captured_at}>{formatInstant(summary.captured_at)}</time></dd></div>
         <div><dt>Данные</dt><dd>{MEMORY_DATA_CLASS_LABELS[summary.data_class]}</dd></div>
-        <div><dt>Проект</dt><dd><code data-memory-origin-project={summary.origin_project_uid}>{summary.origin_project_uid}</code></dd></div>
+        <div><dt>Объект</dt><dd><code data-memory-origin-project={summary.origin_project_uid}>{summary.origin_project_uid}</code></dd></div>
         <div><dt>Кадры</dt><dd>{MEMORY_CROP_STATE_LABELS[summary.crop_state]}</dd></div>
         <div><dt>Дело</dt><dd><code>{summary.case_id}</code></dd></div>
       </dl>

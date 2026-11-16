@@ -42,7 +42,7 @@ function CardSide({ side, card, onOpenEvidence }: { readonly side: 'left' | 'rig
   return <section aria-label={side === 'left' ? 'Было' : 'Стало'}>
     <h5>{side === 'left' ? 'Было · П' : 'Стало · Р'}</h5><p>{text || 'Не указано'}</p>
     {textMetadata?.excerpt === true ? <aside data-stage-display-excerpt={side}><p>Показан экранный фрагмент: {textMetadata.displayedCharacters ?? '—'} из {textMetadata.fullCharacters ?? '—'} символов исходного текста. Полные цитаты сохранены в источниках V3 и JSON отчёта.</p><p>SHA256 полного текста: <code>{textMetadata.fullSha256 || 'Не передан'}</code>.</p></aside> : null}
-    {text === '' && !evidence.some((item) => item.absence_proven) ? <p className={styles.note}>Отсутствие объекта не доказано.</p> : null}
+    {text === '' && !evidence.some((item) => item.absence_proven) ? <p className={styles.note}>Отсутствие элемента не доказано.</p> : null}
     <div className={styles.evidence}>{evidence.map((item) => <div key={item.evidence_id}>
       <span>{item.kind}</span><button type="button" className="am-button" disabled={item.profile_id === undefined}
         onClick={() => onOpenEvidence(item, card)}>Открыть в PDF ↗</button>

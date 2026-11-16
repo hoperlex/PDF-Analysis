@@ -215,7 +215,7 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
           <strong>{PROJECT_SECTIONS.find((section) => section.code === selected)?.name}</strong>
           <span>Документов в разделе: {summary.byCode[selected]}.</span>
           {projectUid === null ? (
-            <Link href={routes.projects()}>Открыть проекты</Link>
+            <Link href={routes.projects()}>Открыть объекты</Link>
           ) : (
             <>
               <Link href={routes.projectSection(projectUid, selected)}>Открыть раздел</Link>

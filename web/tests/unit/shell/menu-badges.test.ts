@@ -577,7 +577,7 @@ describe('«База знаний» counts the entries of the project the addres
     expect(all?.label).toBe('Записей в базе знаний (замечания и предложения вместе): 12');
     const scoped = menuBadgesOf({ knowledgeBaseTotal: 12, knowledgeBaseOfProject: true })[KNOWLEDGE_BASE]?.[0];
     expect(scoped?.label).toBe(`${KNOWLEDGE_BASE_PROJECT_BADGE_LABEL}: 12`);
-    expect(scoped?.label).toBe('Записей в базе знаний выбранного проекта (замечания и предложения вместе): 12');
+    expect(scoped?.label).toBe('Записей в базе знаний выбранного объекта (замечания и предложения вместе): 12');
     expect(scoped?.count).toBe(12);
     expect(menuBadgesOf({ knowledgeBaseTotal: 0, knowledgeBaseOfProject: true })).toEqual({});
   });
@@ -587,7 +587,7 @@ describe('«База знаний» counts the entries of the project the addres
     client.setQueryData(PROJECT_KB_KEY, knowledgePage(12));
     const markup = frameAt(client, ADMIN_ONLY, '/dashboard', `project=${PROJECT}`);
     for (const which of ['row', 'rail', 'stacked'] as const) expect(kbPills(markup, which), which).toEqual(['count:12']);
-    expect(state(markup, 'row')).toContain('Записей в базе знаний выбранного проекта (замечания и предложения вместе): 12');
+    expect(state(markup, 'row')).toContain('Записей в базе знаний выбранного объекта (замечания и предложения вместе): 12');
     // The installation's 140 is not shown beside a project.
     expect(markup).not.toContain('99+');
   });

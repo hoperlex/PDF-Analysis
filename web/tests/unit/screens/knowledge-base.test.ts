@@ -121,7 +121,7 @@ describe('a row addresses its finding by the identities the record carries', () 
   });
 });
 
-describe('a row says where it belongs: «Проект · Документ · Раздел» (UI-PARITY-P0A)', () => {
+describe('a row says where it belongs: «Объект · Документ · Раздел» (UI-PARITY-P0A)', () => {
   function place(markup: string): string {
     const match = markup.match(/<p class="am-kb__meta" data-record-place="true">([^<]*)<\/p>/);
     if (match === null) throw new Error('no place line in the markup');
@@ -216,18 +216,18 @@ describe('an empty page under a category, a verdict or a project is about that s
     expect(markup).not.toContain('data-knowledge-base-empty="installation"');
   });
 
-  it('offers both ways back when a filter and a project are on: the reset button and «Все проекты»', () => {
+  it('offers both ways back when a filter and a project are on: the reset button and «Все объекты»', () => {
     const markup = empty(both);
     expect(markup).toMatch(/<button [^>]*class="am-button am-button--quiet"[^>]*>Сбросить категорию и вердикт<\/button>/);
-    expect(markup).toMatch(/<a [^>]*class="am-button am-button--quiet"[^>]*href="\/knowledge-base\?foo=bar"[^>]*>Все проекты<\/a>|<a [^>]*href="\/knowledge-base\?foo=bar"[^>]*class="am-button am-button--quiet"[^>]*>Все проекты<\/a>/);
+    expect(markup).toMatch(/<a [^>]*class="am-button am-button--quiet"[^>]*href="\/knowledge-base\?foo=bar"[^>]*>Все объекты<\/a>|<a [^>]*href="\/knowledge-base\?foo=bar"[^>]*class="am-button am-button--quiet"[^>]*>Все объекты<\/a>/);
   });
 
-  it('offers only the reset when only a filter is on, and only «Все проекты» when only a project is', () => {
+  it('offers only the reset when only a filter is on, and only «Все объекты» when only a project is', () => {
     const filterOnly = empty({ onResetFilters: () => {} });
     expect(filterOnly).toContain('Сбросить категорию и вердикт');
-    expect(filterOnly).not.toContain('Все проекты');
+    expect(filterOnly).not.toContain('Все объекты');
     const projectOnly = empty({ allProjectsHref: '/knowledge-base' });
-    expect(projectOnly).toContain('>Все проекты<');
+    expect(projectOnly).toContain('>Все объекты<');
     expect(projectOnly).not.toContain('Сбросить категорию и вердикт');
     expect(projectOnly).not.toContain('<button');
   });

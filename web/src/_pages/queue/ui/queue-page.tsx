@@ -249,7 +249,7 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
       actions={(
         <>
           {/* The original's «+ Добавить проекты»: work enters the queue from a project's documents, so the way there is one click. */}
-          <Link href={routes.projects()} title="Выберите проект и запустите аудит его документов" data-queue-add>+ Добавить проекты</Link>
+          <Link href={routes.projects()} title="Выберите объект и запустите аудит его документов" data-queue-add>+ Добавить объекты</Link>
           <button className="am-button am-button--quiet" type="button" onClick={() => { void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>
         </>
       )}

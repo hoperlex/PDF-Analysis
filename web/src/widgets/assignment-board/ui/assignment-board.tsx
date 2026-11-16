@@ -209,7 +209,7 @@ export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }
           <input
             type="search"
             value={text}
-            placeholder="Проект, документ, эксперт"
+            placeholder="Объект, документ, эксперт"
             maxLength={120}
             autoComplete="off"
             data-assignment-search=""

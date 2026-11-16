@@ -408,7 +408,7 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
             <span className={styles.tileLabel}>{filter.label}</span>
           </button>
         ))}
-        <div className={styles.tileInfo} title="Сколько всего версий у комплектов проекта и сколько переходов между соседними версиями.">
+        <div className={styles.tileInfo} title="Сколько всего версий у комплектов объекта и сколько переходов между соседними версиями.">
           <span className={styles.tileCount}>{overview.totals.versions}</span>
           <span className={styles.tileLabel}>версий · {overview.totals.transitions} переходов</span>
         </div>
@@ -532,7 +532,7 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
 
       {rows.length === 0 ? (
         <EmptyState
-          title={overview.sets.length === 0 ? 'В проекте ещё нет версий для сравнения.' : 'Ни один комплект не подходит под выбранное.'}
+          title={overview.sets.length === 0 ? 'В объекте ещё нет версий для сравнения.' : 'Ни один комплект не подходит под выбранное.'}
           detail={
             overview.sets.length === 0
               ? 'Нажмите «Загрузить проект со всеми версиями» и выберите папку с PDF.'

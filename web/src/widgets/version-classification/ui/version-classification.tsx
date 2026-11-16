@@ -175,7 +175,7 @@ export function VersionClassification({ address, roles }: VersionClassificationP
     body = <LoadingState what="стадию и раздел этой версии" />;
   } else if (review.isError) {
     const failure = failureMessage(review.error, {
-      not_found: 'Такой версии в этом документе и проекте нет.',
+      not_found: 'Такой версии в этом документе и объекте нет.',
     });
     body = (
       <ErrorState

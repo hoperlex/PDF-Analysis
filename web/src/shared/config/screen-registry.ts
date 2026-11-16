@@ -157,7 +157,7 @@ export const SCREEN_REGISTRY = [
    */
   {
     address: '/projects',
-    label: 'Проекты',
+    label: 'Объекты',
     group: 'work',
     access: 'session',
     roles: 'any-role',
@@ -239,7 +239,7 @@ export const SCREEN_REGISTRY = [
   },
   {
     address: '/projects/[project_uid]',
-    label: 'Проект',
+    label: 'Объект',
     group: 'work',
     access: 'session',
     roles: 'any-role',

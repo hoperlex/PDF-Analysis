@@ -57,7 +57,7 @@ export function StageWorkspace({ projectUid, mayAct }: { readonly projectUid: st
   const selectedPair = useQuery({ queryKey: ['stage-workspace-pair', projectUid, pairId],
     queryFn: async () => {
       const value = (await getStagePair({ path: { stage_pair_id: pairId } })).data;
-      if (value.project_uid !== projectUid) throw new Error('Пара относится к другому проекту.');
+      if (value.project_uid !== projectUid) throw new Error('Пара относится к другому объекту.');
       return value;
     }, enabled: pairId !== '' && listedPair === undefined, retry: false });
   const pair = listedPair ?? selectedPair.data;

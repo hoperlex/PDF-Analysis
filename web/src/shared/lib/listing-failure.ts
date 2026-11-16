@@ -95,7 +95,7 @@ interface ParentNoun {
 }
 
 const PARENT_GENITIVE: Readonly<Record<ListingParent, ParentNoun>> = {
-  project: { genitive: 'проекта', noSuch: 'Такого', thisOne: 'этого' },
+  project: { genitive: 'объекта', noSuch: 'Такого', thisOne: 'этого' },
   document: { genitive: 'документа', noSuch: 'Такого', thisOne: 'этого' },
   version: { genitive: 'версии', noSuch: 'Такой', thisOne: 'этой' },
 };

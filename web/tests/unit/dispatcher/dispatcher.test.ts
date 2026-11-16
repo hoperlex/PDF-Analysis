@@ -87,8 +87,8 @@ describe('the moves offered mirror the server table', () => {
   });
 
   it('names the scope: the project, or the document of the project', () => {
-    expect(assignmentScope(assignment('assigned'))).toBe('Проект «Школа»');
-    expect(assignmentScope(assignment('assigned', { document_title: 'КЖ-1' }))).toBe('Документ «КЖ-1» проекта «Школа»');
+    expect(assignmentScope(assignment('assigned'))).toBe('Объект «Школа»');
+    expect(assignmentScope(assignment('assigned', { document_title: 'КЖ-1' }))).toBe('Документ «КЖ-1» объекта «Школа»');
   });
 });
 

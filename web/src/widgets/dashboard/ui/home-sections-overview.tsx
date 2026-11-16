@@ -13,8 +13,8 @@ export function HomeSectionsOverview() {
 
   return (
     <section data-home-sections="">
-      <h2>Разделы проекта</h2>
-      {summary.isPending ? <LoadingState what="разделы проекта" /> : null}
+      <h2>Разделы объекта</h2>
+      {summary.isPending ? <LoadingState what="разделы объекта" /> : null}
       {failure === null ? null : (
         <ErrorState
           title={failure.title}

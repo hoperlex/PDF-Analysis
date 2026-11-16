@@ -241,7 +241,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'not_permitted',
         presentation: 'error',
-        title: 'Вам не разрешено загружать в этот проект.',
+        title: 'Вам не разрешено загружать в этот объект.',
         detail:
           PERMISSION_DENIED_DETAIL +
           classifiers(error.details, ['aggregate_type', 'required_capability']),
@@ -251,7 +251,7 @@ function fromApiError(error: ApiError): UploadFailure {
         ...base,
         kind: 'project_not_found',
         presentation: 'error',
-        title: 'Такого проекта не существует.',
+        title: 'Такого объекта не существует.',
         detail: catalogMessage(error.errorCode) + classifiers(error.details, ['aggregate_type']),
       };
     case 'conflict':

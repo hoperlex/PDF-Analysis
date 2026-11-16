@@ -61,10 +61,10 @@ export function classifyDashboardFailure(
     if (error.errorCode === 'not_found' && projectUid !== null) {
       return {
         kind: 'project_not_found',
-        title: 'Проект не найден',
+        title: 'Объект не найден',
         detail:
-          'В адресе указан проект, которого нет в системе или который вам не виден, поэтому сводку ' +
-          'по нему показать нельзя. Сводка по всем проектам доступна по ссылке ниже.',
+          'В адресе указан объект, которого нет в системе или который вам не виден, поэтому сводку ' +
+          'по нему показать нельзя. Сводка по всем объектам доступна по ссылке ниже.',
         correlationId: error.correlationId,
         retryable: false,
         errorCode: error.errorCode,

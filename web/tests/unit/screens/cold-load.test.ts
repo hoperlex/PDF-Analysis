@@ -116,7 +116,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
     const client = newClient();
     const markup = withRouter(client, createElement(ProjectDetailPage, { projectUid: PROJECT_UID }));
 
-    expect(markup).toContain('Загрузка: документы этого проекта…');
+    expect(markup).toContain('Загрузка: документы этого объекта…');
     // The exact sentence W15-RUN measured. Its presence is the defect.
     expect(markup).not.toContain('No version published in this session');
   });
@@ -163,7 +163,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
       empty,
       createElement(ProjectDetailPage, { projectUid: PROJECT_UID }),
     );
-    expect(emptyMarkup).toContain('В этом проекте пока нет документов.');
+    expect(emptyMarkup).toContain('В этом объекте пока нет документов.');
     expect(emptyMarkup).not.toContain('There is no such project.');
 
     const missing = newClient();
@@ -174,8 +174,8 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
     );
     // W18-SEAL made the server answer 404 rather than an empty page, precisely so these
     // two are different answers. A screen that collapsed them would undo that.
-    expect(missingMarkup).toContain('Такого проекта не существует.');
-    expect(missingMarkup).not.toContain('В этом проекте пока нет документов.');
+    expect(missingMarkup).toContain('Такого объекта не существует.');
+    expect(missingMarkup).not.toContain('В этом объекте пока нет документов.');
   });
 
   it('offers a route back to the project list', () => {

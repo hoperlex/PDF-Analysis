@@ -92,12 +92,12 @@ function visible(markup: string): string {
 }
 
 describe('the widget states its scope', () => {
-  it('says «Все проекты» when no project is asked for', () => {
+  it('says «Все объекты» when no project is asked for', () => {
     const client = newClient();
     client.setQueryData(queryKeys.dashboard.summary(), ALL);
     const markup = renderWith(client, createElement(Dashboard));
     expect(markup).toContain('data-dashboard-scope="all"');
-    expect(visible(markup)).toContain('Охват Все проекты');
+    expect(visible(markup)).toContain('Охват Все объекты');
     // Both projects are on screen: this is the whole deployment.
     expect(markup).toContain('Проект Альфа');
     expect(markup).toContain('Проект Бета');
@@ -109,7 +109,7 @@ describe('the widget states its scope', () => {
     const markup = renderWith(client, createElement(Dashboard, { projectUid: A }));
     expect(markup).toContain('data-dashboard-scope="project"');
     expect(visible(markup)).toContain('Охват Проект Альфа');
-    expect(markup).not.toContain('Все проекты');
+    expect(markup).not.toContain('Все объекты');
     expect(markup).not.toContain('Проект Бета');
   });
 
@@ -129,7 +129,7 @@ describe('the widget states its scope', () => {
 });
 
 describe('the cache key carries the project, so one project’s numbers never stand for another', () => {
-  it('shows a loading state, not «Все проекты», for a project whose summary is not cached', () => {
+  it('shows a loading state, not «Все объекты», for a project whose summary is not cached', () => {
     const client = newClient();
     client.setQueryData(queryKeys.dashboard.summary(), ALL);
     const markup = renderWith(client, createElement(Dashboard, { projectUid: A }));
@@ -138,7 +138,7 @@ describe('the cache key carries the project, so one project’s numbers never st
     expect(markup).not.toContain('data-dashboard-scope');
   });
 
-  it('shows a loading state, not the project, for «Все проекты» when only the project is cached', () => {
+  it('shows a loading state, not the project, for «Все объекты» when only the project is cached', () => {
     const client = newClient();
     client.setQueryData(queryKeys.dashboard.summary(A), ONLY_A);
     const markup = renderWith(client, createElement(Dashboard));
@@ -156,16 +156,16 @@ describe('the cache key carries the project, so one project’s numbers never st
 });
 
 describe('an unknown project is its own state', () => {
-  it('says «Проект не найден» with a link to «Все проекты», and shows no panel', () => {
+  it('says «Объект не найден» with a link to «Все объекты», and shows no panel', () => {
     const client = newClient();
     seedError(client, queryKeys.dashboard.summary(UNKNOWN), notFound());
     const markup = renderWith(
       client,
       createElement(Dashboard, { projectUid: UNKNOWN, allProjectsHref: '/dashboard?x=1' }),
     );
-    expect(markup).toContain('Проект не найден');
+    expect(markup).toContain('Объект не найден');
     expect(markup).toContain('data-dashboard-scope="unknown-project"');
-    expect(markup).toMatch(/<a [^>]*href="\/dashboard\?x=1"[^>]*>Все проекты<\/a>/);
+    expect(markup).toMatch(/<a [^>]*href="\/dashboard\?x=1"[^>]*>Все объекты<\/a>/);
     expect(markup).toContain('cid-dashboard-404');
     // Neither a summary of zeros nor of everything.
     expect(markup).not.toContain('Охват');
@@ -178,31 +178,31 @@ describe('an unknown project is its own state', () => {
     const client = newClient();
     seedError(client, queryKeys.dashboard.summary(), notFound());
     const markup = renderWith(client, createElement(Dashboard));
-    expect(markup).not.toContain('Проект не найден');
+    expect(markup).not.toContain('Объект не найден');
     expect(markup).toContain('Сводку прочитать не удалось.');
   });
 });
 
 describe('the page reads the project from the address and from nowhere else', () => {
-  it('states «Все проекты» for an address with no ?project=', () => {
+  it('states «Все объекты» for an address with no ?project=', () => {
     const client = newClient();
     client.setQueryData(queryKeys.dashboard.summary(), ALL);
     const markup = renderScreen(client, atAddress('/dashboard', '', createElement(DashboardPage)));
-    expect(visible(markup)).toContain('Охват Все проекты');
+    expect(visible(markup)).toContain('Охват Все объекты');
   });
 
-  it('states «Все проекты» for an empty ?project=', () => {
+  it('states «Все объекты» for an empty ?project=', () => {
     const client = newClient();
     client.setQueryData(queryKeys.dashboard.summary(), ALL);
     const markup = renderScreen(client, atAddress('/dashboard', 'project=', createElement(DashboardPage)));
-    expect(visible(markup)).toContain('Охват Все проекты');
+    expect(visible(markup)).toContain('Охват Все объекты');
   });
 
-  it('states «Все проекты» where no router is mounted (a one-pass render has no address)', () => {
+  it('states «Все объекты» where no router is mounted (a one-pass render has no address)', () => {
     const client = newClient();
     client.setQueryData(queryKeys.dashboard.summary(), ALL);
     const markup = renderScreen(client, createElement(DashboardPage));
-    expect(visible(markup)).toContain('Охват Все проекты');
+    expect(visible(markup)).toContain('Охват Все объекты');
   });
 
   it('reads the project of ?project= and states its name', () => {
@@ -219,8 +219,8 @@ describe('the page reads the project from the address and from nowhere else', ()
       client,
       atAddress('/dashboard', `x=1&project=${UNKNOWN}&section=AR`, createElement(DashboardPage)),
     );
-    expect(markup).toContain('Проект не найден');
-    expect(markup).toMatch(/<a [^>]*href="\/dashboard\?x=1"[^>]*>Все проекты<\/a>/);
+    expect(markup).toContain('Объект не найден');
+    expect(markup).toMatch(/<a [^>]*href="\/dashboard\?x=1"[^>]*>Все объекты<\/a>/);
   });
 
   it('is a bare /dashboard when the project was the only parameter', () => {
@@ -230,7 +230,7 @@ describe('the page reads the project from the address and from nowhere else', ()
       client,
       atAddress('/dashboard', `project=${UNKNOWN}`, createElement(DashboardPage)),
     );
-    expect(markup).toMatch(/<a [^>]*href="\/dashboard"[^>]*>Все проекты<\/a>/);
+    expect(markup).toMatch(/<a [^>]*href="\/dashboard"[^>]*>Все объекты<\/a>/);
   });
 });
 
@@ -274,11 +274,11 @@ describe('the project reaches the request, and a change of project asks again', 
     }
   }
 
-  it('sends no query at all for «Все проекты»', async () => {
+  it('sends no query at all for «Все объекты»', async () => {
     live = await mountLive(page(freshClient(), ''));
     await settled(live);
     expect(read.mock.calls).toEqual([[{}]]);
-    expect(visible(live.markup())).toContain('Охват Все проекты');
+    expect(visible(live.markup())).toContain('Охват Все объекты');
   });
 
   it('sends project_uid for ?project=', async () => {
@@ -311,15 +311,15 @@ describe('the project reaches the request, and a change of project asks again', 
     await settled(live);
 
     expect(read.mock.calls).toEqual([[{ query: { project_uid: A } }], [{}]]);
-    expect(visible(live.markup())).toContain('Охват Все проекты');
+    expect(visible(live.markup())).toContain('Охват Все объекты');
   });
 
-  it('shows «Проект не найден» for a project the server does not know, with the way out', async () => {
+  it('shows «Объект не найден» for a project the server does not know, with the way out', async () => {
     live = await mountLive(page(freshClient(), `project=${UNKNOWN}&x=1`));
     await settled(live);
     expect(read.mock.calls).toEqual([[{ query: { project_uid: UNKNOWN } }]]);
     const markup = live.markup();
-    expect(markup).toContain('Проект не найден');
+    expect(markup).toContain('Объект не найден');
     expect(markup).toContain('href="/dashboard?x=1"');
     expect(markup).not.toContain('Охват');
   });

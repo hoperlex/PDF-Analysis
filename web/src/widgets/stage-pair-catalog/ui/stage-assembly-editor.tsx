@@ -69,7 +69,7 @@ export function StageAssemblyCreator({ projectUid, mayAct }: { readonly projectU
   if (!mayAct) return null;
   return <details className={styles.decision} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Создать сборку Р и связать со стадией П</summary>
-    {documents.isFetching ? <p role="status">Открываем документы проекта…</p> : null}
+    {documents.isFetching ? <p role="status">Открываем документы объекта…</p> : null}
     <div className={styles.form}>
       <label>Документ П<select value={leftUid} disabled={busy || created !== null} onChange={(event) => { setLeftUid(event.target.value); setRightUids([]); }}>
         <option value="">Выберите документ</option>

@@ -149,7 +149,7 @@ function readMenu(html: string): { readonly groups: string[]; readonly links: [s
 // `R-153h`: the frame renders with no router, so it names no project and its first link is the list; «Проект» replaces it
 // on a project's address (`project-entry.test.ts`).
 const RULED_LINKS: [string, string][] = [
-  ['/projects', 'Проекты'],
+  ['/projects', 'Объекты'],
   ...RULING.flatMap((g) => g.items.map(([a, l]) => [a, l] as [string, string])),
 ];
 
@@ -413,13 +413,13 @@ describe('the frame’s menu per kind of visitor', () => {
 
 // ------------------------------------------------------------------------------------ R-150b
 
-describe('R-150b: «Проекты» left the menu rows, and the selector in the top strip took its place', () => {
+describe('R-150b: «Объекты» left the menu rows, and the selector in the top strip took its place', () => {
   const ROLE_SETS = [['expert'], ['admin'], ['admin', 'expert']] as const;
 
   it('/projects is a registered, open screen that no menu offers', () => {
     expect(screenAt('/projects')).toEqual({
       address: '/projects',
-      label: 'Проекты',
+      label: 'Объекты',
       group: 'work',
       access: 'session',
       roles: 'any-role',
@@ -444,15 +444,15 @@ describe('R-150b: «Проекты» left the menu rows, and the selector in the
     }
   });
 
-  it('is reached from the selector instead: «Новый проект» and «Все проекты» lead to it', () => {
+  it('is reached from the selector instead: «Новый объект» and «Все объекты» lead to it', () => {
     const selector = region(renderFrame(frameSession()), 'data-project-switcher');
     expect(selector).toContain('data-project-switcher');
     // The frame renders with no router, so its address is unknown and behaves like a global screen:
     // both entries are the project list.
     // «Все проекты» is the choice the address makes (it names no project), so it carries the ✓ cell of `D-363` after its words.
     expect([...selector.matchAll(/<a [^>]*role="menuitem"[^>]*href="([^"]+)"[^>]*>([^<]*)(?:<span class="am-menu__check"[^>]*>[^<]*<\/span>)?<\/a>/g)].map((m) => [m[1], m[2]])).toEqual([
-      ['/projects', 'Все проекты'],
-      ['/projects', 'Новый проект'],
+      ['/projects', 'Все объекты'],
+      ['/projects', 'Новый объект'],
     ]);
   });
 

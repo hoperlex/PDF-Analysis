@@ -27,8 +27,8 @@ const glyphs = {
 type GlyphName = keyof typeof glyphs;
 
 const byLabel: Readonly<Record<string, GlyphName>> = {
-  'Проекты': 'projects',
-  'Проект': 'project',
+  'Объекты': 'projects',
+  'Объект': 'project',
   'Дашборд': 'dashboard',
   'Оптимизация разделов': 'optimisation',
   'Диспетчер': 'dispatcher',

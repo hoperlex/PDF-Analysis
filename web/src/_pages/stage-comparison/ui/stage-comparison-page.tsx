@@ -68,11 +68,11 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
     return (
       <PageShell
         title={VERSION_SCREEN_TITLE}
-        actions={<Link href={routes.projects()}>Все проекты</Link>}
+        actions={<Link href={routes.projects()}>Все объекты</Link>}
       >
         <UnsupportedState
           title="Это не адрес версии."
-          detail="Проект и версия адресуются непрозрачными идентификаторами. Запроса не было."
+          detail="Объект и версия адресуются непрозрачными идентификаторами. Запроса не было."
         />
       </PageShell>
     );
@@ -85,7 +85,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
       actions={
         <>
           <Link href={routes.version(projectUid, versionUid)}>К версии</Link>{' '}
-          <Link href={routes.project(projectUid)}>К проекту</Link>
+          <Link href={routes.project(projectUid)}>К объекту</Link>
         </>
       }
     >

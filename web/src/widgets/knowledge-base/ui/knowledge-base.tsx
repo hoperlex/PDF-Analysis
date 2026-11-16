@@ -316,7 +316,7 @@ export function KnowledgeBase({ records: findingRecords, entries, isLoading, err
               )}
               {narrowing.allProjectsHref === undefined ? null : (
                 <Link className="am-button am-button--quiet" href={narrowing.allProjectsHref}>
-                  Все проекты
+                  Все объекты
                 </Link>
               )}
             </>

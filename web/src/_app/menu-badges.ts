@@ -114,7 +114,7 @@ const QUEUE_ERRORS_BADGE_TITLE =
 /** `D-362`: both journals, said in the label: the screen opens on «Замечания» and shows this figure under «Все». */
 export const KNOWLEDGE_BASE_BADGE_LABEL = 'Записей в базе знаний (замечания и предложения вместе)';
 /** `R-150c`: the same count, when the address names a project and the screen behind the item lists that project's entries. */
-export const KNOWLEDGE_BASE_PROJECT_BADGE_LABEL = 'Записей в базе знаний выбранного проекта (замечания и предложения вместе)';
+export const KNOWLEDGE_BASE_PROJECT_BADGE_LABEL = 'Записей в базе знаний выбранного объекта (замечания и предложения вместе)';
 export const REGISTRATIONS_BADGE_LABEL = 'Заявок на регистрацию, ожидающих решения';
 export const UNCHECKED_BADGE_LABEL = 'Не проверено экспертом';
 const UNCHECKED_BADGE_TITLE =

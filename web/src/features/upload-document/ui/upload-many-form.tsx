@@ -107,7 +107,7 @@ export function UploadManyView({
         </ol>
       )}
       {documentsPartial ? (
-        <p className="am-form__hint">В списке «Куда» — первые документы проекта; новую версию другого документа загрузите на его странице.</p>
+        <p className="am-form__hint">В списке «Куда» — первые документы объекта; новую версию другого документа загрузите на его странице.</p>
       ) : null}
       <div>
         <button type="button" className="am-button" disabled={ready === 0 || sending} onClick={onSend}>

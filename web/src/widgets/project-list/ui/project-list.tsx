@@ -26,7 +26,7 @@ export function ProjectList() {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useProjectList(cursor);
 
-  if (query.isPending) return <LoadingState what="проекты" />;
+  if (query.isPending) return <LoadingState what="объекты" />;
 
   if (query.isError) {
     const failure = classifyProjectListFailure(query.error);
@@ -47,8 +47,8 @@ export function ProjectList() {
   if (page.items.length === 0) {
     return (
       <EmptyState
-        title="Проектов пока нет."
-        detail="Создайте проект с помощью формы на этой странице, затем загрузите PDF годового отчёта для проверки."
+        title="Объектов пока нет."
+        detail="Создайте объект с помощью формы на этой странице, затем загрузите PDF годового отчёта для проверки."
       />
     );
   }

@@ -31,16 +31,16 @@ export function OptimisationPage() {
   }, [router]);
 
   return (
-    <PageShell title="Оптимизация" subtitle="Раздел перенесён в проект">
+    <PageShell title="Оптимизация" subtitle="Раздел перенесён в объект">
       <div className="am-state am-state--neutral" role="status" data-optimisation-moved="">
-        <p className="am-state__title">Оптимизация теперь на вкладке проекта.</p>
+        <p className="am-state__title">Оптимизация теперь на вкладке объекта.</p>
         <div className="am-state__detail">
-          Откройте проект и перейдите на вкладку «Оптимизация»: там прайс-лист проекта, вендор-листы
+          Откройте объект и перейдите на вкладку «Оптимизация»: там прайс-лист объекта, вендор-листы
           по разделам и предложения по более дешёвым аналогам с решениями экспертов. Открываю
-          список проектов.
+          список объектов.
         </div>
         <div className="am-state__action">
-          <Link href={OPTIMISATION_MOVED_TO}>Перейти к проектам</Link>
+          <Link href={OPTIMISATION_MOVED_TO}>Перейти к объектам</Link>
         </div>
       </div>
     </PageShell>

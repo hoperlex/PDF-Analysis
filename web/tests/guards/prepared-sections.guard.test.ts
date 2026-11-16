@@ -245,7 +245,7 @@ export function navTargets(markup: string): string[] {
 
 describe('R-23: each prepared section has a place in the navigation', () => {
   it('can fail: a frame that links to none of them', () => {
-    expect(navTargets('<a href="/projects">Проекты</a>')).toEqual(['/projects']);
+    expect(navTargets('<a href="/projects">Объекты</a>')).toEqual(['/projects']);
     expect(navTargets('<a href="/projects">П</a>')).not.toContain('/blocks');
   });
 

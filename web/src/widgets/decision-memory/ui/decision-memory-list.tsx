@@ -96,7 +96,7 @@ export function DecisionMemoryList({ cases, isLoading, error, narrowed, onOpen, 
     return narrowed ? (
       <EmptyState
         title="В памяти решений нет дел под этот отбор."
-        detail="Снимите отбор или выберите все проекты."
+        detail="Снимите отбор или выберите все объекты."
         action={onResetFilters === undefined ? undefined : (
           <button type="button" className="am-button am-button--quiet" onClick={onResetFilters}>Сбросить отбор</button>
         )}

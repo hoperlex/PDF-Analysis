@@ -72,7 +72,7 @@ function CreateProjectFormInner({ onCreated }: CreateProjectFormProps) {
       }}
     >
       <label htmlFor="new-project-name">
-        <strong>Новый проект</strong>
+        <strong>Новый объект</strong>
       </label>
       <div className="am-form__row">
         <input
@@ -84,7 +84,7 @@ function CreateProjectFormInner({ onCreated }: CreateProjectFormProps) {
             setName(event.target.value);
             setLocalProblem(null);
           }}
-          placeholder="Название проекта"
+          placeholder="Название объекта"
         />
         <button type="submit" className="am-button" disabled={mutation.isPending}>
           Создать
@@ -97,7 +97,7 @@ function CreateProjectFormInner({ onCreated }: CreateProjectFormProps) {
         </p>
       ) : null}
 
-      {mutation.isPending ? <LoadingState what="новый проект" /> : null}
+      {mutation.isPending ? <LoadingState what="новый объект" /> : null}
 
       {failure !== null && failure.presentation === 'unsupported' ? (
         <UnsupportedState title={failure.title} detail={failure.detail} />
@@ -134,6 +134,6 @@ function CreateProjectFormInner({ onCreated }: CreateProjectFormProps) {
  */
 export function CreateProjectForm(props: Parameters<typeof CreateProjectFormInner>[0]) {
   const mayAct = useMayActAsExpert();
-  if (!mayAct) return <p className="am-note" data-expert-only="CreateProjectForm">Создавать проекты может эксперт.</p>;
+  if (!mayAct) return <p className="am-note" data-expert-only="CreateProjectForm">Создавать объекты может эксперт.</p>;
   return <CreateProjectFormInner {...props} />;
 }

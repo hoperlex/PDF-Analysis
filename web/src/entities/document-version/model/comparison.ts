@@ -34,7 +34,7 @@ const REFUSAL_TEXT: Readonly<Record<RefusalReason, (side: string) => string>> = 
   same_version: () => 'Выбрана та же самая версия — сравнивать её с собой нечего.',
   version_not_found: () => 'Выбранная версия не найдена.',
   different_set: () => 'Выбранная версия относится к другому комплекту документов.',
-  foreign_project: () => 'Выбранная версия относится к другому проекту.',
+  foreign_project: () => 'Выбранная версия относится к другому объекту.',
   version_not_published: () => 'Одна из версий не опубликована.',
   version_order_invalid: () => 'Сначала должна идти более ранняя версия, затем более поздняя.',
   stage_unclassified: (side) => `У ${side} версии не указана стадия (П или Р).`,

@@ -42,7 +42,7 @@ function rows(items: readonly ExecutionQueueItem[], filtered = false): string {
 }
 
 describe('the row names the work', () => {
-  it('prints «Проект · Документ · Версия» as links to the project, the document and the version', () => {
+  it('prints «Объект · Документ · Версия» as links to the project, the document and the version', () => {
     const markup = rows([item()]);
     expect(markup).toContain('data-queue-work');
     expect(markup).toContain(`href="/projects/${QUEUE_WORK.project_uid}"`);

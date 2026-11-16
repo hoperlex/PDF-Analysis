@@ -30,11 +30,11 @@ export function DocumentList({ projectUid }: DocumentListProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useDocumentList(projectUid, cursor);
 
-  if (query.isPending) return <LoadingState what="документы этого проекта" />;
+  if (query.isPending) return <LoadingState what="документы этого объекта" />;
 
   if (query.isError) {
     const failure = classifyListingFailure(query.error, {
-      collection: 'документы этого проекта',
+      collection: 'документы этого объекта',
       parent: 'project',
     });
     return (
@@ -54,8 +54,8 @@ export function DocumentList({ projectUid }: DocumentListProps) {
   if (page.items.length === 0) {
     return (
       <EmptyState
-        title="В этом проекте пока нет документов."
-        detail="Загрузите PDF годового отчёта выше. Ничего не потеряно: в проекте действительно нет опубликованных документов."
+        title="В этом объекте пока нет документов."
+        detail="Загрузите PDF годового отчёта выше. Ничего не потеряно: в объекте действительно нет опубликованных документов."
       />
     );
   }

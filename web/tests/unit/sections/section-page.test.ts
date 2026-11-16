@@ -56,7 +56,7 @@ describe('the section page', () => {
   it('says an empty section is empty, and offers the way back to the project', () => {
     const markup = renderWith(seeded([]), createElement(SectionDetailPage, { projectUid: PROJECT_UID, sectionCode: 'AR' }));
     expect(markup).toContain('В этом разделе пока нет документов.');
-    expect(markup).toContain('К разделам проекта');
+    expect(markup).toContain('К разделам объекта');
   });
 
   it('pages forward when the server has more', () => {

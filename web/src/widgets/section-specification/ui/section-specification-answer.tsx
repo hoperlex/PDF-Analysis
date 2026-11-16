@@ -82,7 +82,7 @@ const FORM7_HEADINGS = [
   'Масса единицы, кг',
   'Примечание',
 ] as const;
-const PRICED_HEADINGS = ['Сопоставление', 'Позиция прайс-листа проекта', 'Цена', 'Сумма'] as const;
+const PRICED_HEADINGS = ['Сопоставление', 'Позиция прайс-листа объекта', 'Цена', 'Сумма'] as const;
 
 const STATUS_TONES: Readonly<Record<string, string>> = {
   matched: 'am-badge--ok',
@@ -129,7 +129,7 @@ function Sources({ project }: { readonly project: SectionSpecificationProject })
             {skipped > 0 ? (
               <span className={styles.hint}>
                 {' '}
-                (не прочитано строк таблиц: {skipped}; причины — в «Спецификации и ценах» комплекта, на вкладке «Оптимизация» проекта)
+                (не прочитано строк таблиц: {skipped}; причины — в «Спецификации и ценах» комплекта, на вкладке «Оптимизация» объекта)
               </span>
             ) : null}
           </li>
@@ -144,7 +144,7 @@ function Totals({ project }: { readonly project: SectionSpecificationProject }) 
   if (matching === null) {
     return (
       <p data-section-total="none" className={styles.hint}>
-        Итогов по проекту нет: {project.price_state === 'price_list_missing' ? 'у проекта нет прайс-листа.' : 'прайс-лист не читался.'}
+        Итогов по объекту нет: {project.price_state === 'price_list_missing' ? 'у объекта нет прайс-листа.' : 'прайс-лист не читался.'}
       </p>
     );
   }
@@ -152,10 +152,10 @@ function Totals({ project }: { readonly project: SectionSpecificationProject }) 
   const excludedTotal = excluded.reduce((sum, [, count]) => sum + count, 0);
   return (
     <div data-section-totals={project.project_uid}>
-      <h4 className={styles.subheading}>Итого по проекту — по однозначно сопоставленным строкам</h4>
+      <h4 className={styles.subheading}>Итого по объекту — по однозначно сопоставленным строкам</h4>
       {matching.totals.length === 0 ? (
         <p data-section-total="none">
-          Итога нет: ни одна строка проекта не сопоставлена с одной позицией его прайс-листа в той же единице
+          Итога нет: ни одна строка объекта не сопоставлена с одной позицией его прайс-листа в той же единице
           измерения и с числовым количеством.
         </p>
       ) : (
@@ -174,7 +174,7 @@ function Totals({ project }: { readonly project: SectionSpecificationProject }) 
         Сопоставлено: {matching.counts.matched}, неоднозначно: {matching.counts.ambiguous}, не сопоставлено:{' '}
         {matching.counts.unmatched}.{' '}
         {excludedTotal === 0
-          ? 'В итог вошли все строки проекта.'
+          ? 'В итог вошли все строки объекта.'
           : `Не вошли в итог строк: ${excludedTotal} — ${excluded
               .map(([reason, count]) => `${specificationExclusionLabel(reason)}: ${count}`)
               .join('; ')}.`}
@@ -197,7 +197,7 @@ function ProjectPanel({
         <Link href={routes.project(project.project_uid)}>{project.name}</Link>
         {' '}
         <span className={styles.hint}>
-          (<Link href={routes.projectOptimisation(project.project_uid)}>вкладка «Оптимизация» проекта</Link>)
+          (<Link href={routes.projectOptimisation(project.project_uid)}>вкладка «Оптимизация» объекта</Link>)
         </span>
       </h3>
       <p data-section-price-list={list?.price_list_id ?? 'none'}>
@@ -206,11 +206,11 @@ function ProjectPanel({
           : `Прайс-лист «${list.source_filename}», редакция ${list.revision_number}, позиций: ${list.position_count}: ${sectionPriceStateMessage(project.price_state)}.`}
       </p>
       <Sources project={project} />
-      <p data-section-project-rows={project.row_count}>Строк спецификации проекта: {project.row_count}.</p>
+      <p data-section-project-rows={project.row_count}>Строк спецификации объекта: {project.row_count}.</p>
       <Totals project={project} />
       {onSelectProject === null ? null : (
         <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => onSelectProject(project.project_uid)}>
-          Показать только этот проект
+          Показать только этот объект
         </button>
       )}
     </article>
@@ -399,7 +399,7 @@ function GroupHeader({
       <td colSpan={span} className={styles.groupCell}>
         <button type="button" className={styles.groupToggle} aria-expanded={!collapsed} onClick={onToggle}>
           <span className={styles.caret} aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
-          <span className={missing ? styles.missing : styles.groupName}>{project?.name ?? 'Проект'}</span>
+          <span className={missing ? styles.missing : styles.groupName}>{project?.name ?? 'Объект'}</span>
           {project === undefined ? null : (
             <span className={styles.hint}>
               {' '}· {sets} {pluralRu(sets, SET_WORD)}
@@ -409,8 +409,8 @@ function GroupHeader({
         </button>
         {' '}
         <span className={styles.hint}>
-          (<Link href={routes.project(group.projectUid)}>проект</Link>,{' '}
-          <Link href={routes.projectOptimisation(group.projectUid)}>вкладка «Оптимизация» проекта</Link>)
+          (<Link href={routes.project(group.projectUid)}>объект</Link>,{' '}
+          <Link href={routes.projectOptimisation(group.projectUid)}>вкладка «Оптимизация» объекта</Link>)
         </span>
       </td>
     </tr>
@@ -438,10 +438,10 @@ function GroupBody({
           {none
             ? 'Спецификация отсутствует'
             : searched
-              ? 'По текущему поиску строки спецификации этого проекта на этой странице не найдены.'
+              ? 'По текущему поиску строки спецификации этого объекта на этой странице не найдены.'
               : otherRows
-                ? 'Строки этого проекта — на другой странице списка.'
-                : 'Строк спецификации этого проекта нет.'}
+                ? 'Строки этого объекта — на другой странице списка.'
+                : 'Строк спецификации этого объекта нет.'}
         </td>
       </tr>
     );
@@ -477,7 +477,7 @@ function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerP
         title={searched ? 'По запросу строк не найдено' : 'Строк спецификации в разделе нет'}
         detail={
           searched
-            ? 'Поиск идёт по позиции, наименованию, названию группы, единице измерения и примечанию строк. Итоги проектов от поиска не зависят.'
+            ? 'Поиск идёт по позиции, наименованию, названию группы, единице измерения и примечанию строк. Итоги объектов от поиска не зависят.'
             : answer.row_count > 0
               ? 'Строки есть, но не на этой странице.'
               : 'Таблиц спецификации с графами «Наименование» и «Кол.» в сохранённом тексте текущих версий раздела не найдено или текст ещё не прочитан — состояние каждого комплекта указано выше.'
@@ -504,12 +504,12 @@ function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerP
               <th className={styles.cell} scope="col">
                 <span className={styles.positionHeading}>
                   <span>{FORM7_HEADINGS[0]}</span>
-                  <span className={styles.allToggle} role="group" aria-label="Управление всеми проектами">
-                    <button type="button" title="Развернуть все проекты" aria-label="Развернуть все проекты" data-section-expand-all="" onClick={() => setFolded(new Set())}>+</button>
+                  <span className={styles.allToggle} role="group" aria-label="Управление всеми объектами">
+                    <button type="button" title="Развернуть все объекты" aria-label="Развернуть все объекты" data-section-expand-all="" onClick={() => setFolded(new Set())}>+</button>
                     <button
                       type="button"
-                      title="Свернуть все проекты"
-                      aria-label="Свернуть все проекты"
+                      title="Свернуть все объекты"
+                      aria-label="Свернуть все объекты"
                       data-section-collapse-all=""
                       onClick={() => setFolded(new Set(groups.map((group) => group.projectUid)))}
                     >
@@ -549,7 +549,7 @@ function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerP
       </div>
       <p className="am-note">
         В сохранённом тексте графы «Тип, марка», «Код» и «Завод-изготовитель» не отделены от
-        наименования и показаны вместе с ним. Строки разных проектов не объединяются.
+        наименования и показаны вместе с ним. Строки разных объектов не объединяются.
       </p>
       <Pager answer={answer} onPage={onPage} />
     </>
@@ -574,15 +574,15 @@ export function SectionSpecificationAnswer({ answer, onPage, onSelectProject, co
           detail={
             answer.project_filter === null
               ? 'В сводку входят комплекты, текущую версию которых эксперт подтвердил для этого раздела на экране версии. Таких комплектов пока нет.'
-              : 'У выбранного проекта нет комплектов, текущая версия которых подтверждена для этого раздела.'
+              : 'У выбранного объекта нет комплектов, текущая версия которых подтверждена для этого раздела.'
           }
         />
       ) : (
         <>
           <p data-section-summary="">
-            Проектов в разделе: {answer.projects.length}, комплектов: {answer.source_count}
+            Объектов в разделе: {answer.projects.length}, комплектов: {answer.source_count}
             {tooLarge ? '.' : `, строк спецификации: ${answer.row_count}.`}
-            {' '}Итоги считаются отдельно по каждому проекту и каждой валюте; итога по разделу нет.
+            {' '}Итоги считаются отдельно по каждому объекту и каждой валюте; итога по разделу нет.
           </p>
           {/* `UI-PARITY-DENSE`: the projects side by side, as the original lists its projects in one table (they were stacked, one panel of five paragraphs each). */}
           <div className={styles.projects}>

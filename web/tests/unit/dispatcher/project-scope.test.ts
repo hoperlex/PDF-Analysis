@@ -34,12 +34,12 @@ describe('the dispatcher and the header’s project', () => {
     expect(listFilters(client)).toEqual([expect.objectContaining({ project_uid: PROJECT })]);
   });
 
-  it('filters nothing without a project, and says «Все проекты»', () => {
+  it('filters nothing without a project, and says «Все объекты»', () => {
     const client = newClient();
     renderWith(client, createElement(AssignmentBoard, { roles: ['admin'], viewerUid: null, experts: [] }));
     expect(listFilters(client)).toEqual([expect.not.objectContaining({ project_uid: expect.anything() })]);
     const markup = renderWith(newClient(), createElement(DispatcherPage, { roles: ['expert'] }));
     expect(markup).toContain('data-dispatcher-scope="all"');
-    expect(markup).toContain('Все проекты');
+    expect(markup).toContain('Все объекты');
   });
 });

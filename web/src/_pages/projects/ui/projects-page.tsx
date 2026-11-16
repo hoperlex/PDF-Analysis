@@ -20,13 +20,13 @@ import styles from './projects-page.module.css';
 
 export function ProjectsPage() {
   return (
-    <PageShell title="Проекты" surface="canvas">
+    <PageShell title="Объекты" surface="canvas">
       <div className={styles.layout}>
         <section className={styles.list} aria-labelledby="projects-list-title">
-          <h2 id="projects-list-title">Все проекты</h2>
+          <h2 id="projects-list-title">Все объекты</h2>
           <ProjectList />
         </section>
-        <section className={styles.create} aria-label="Создать проект">
+        <section className={styles.create} aria-label="Создать объект">
           <CreateProjectForm />
         </section>
       </div>

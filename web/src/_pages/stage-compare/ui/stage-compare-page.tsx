@@ -32,21 +32,21 @@ export function StageComparePage() {
       subtitle="Документы П и Р, подтверждённые пары и полнота комплекта."
       actions={moduleOn ? <a className="am-button" href={withProjectParam(routes.versionComparison(), projectUid)}>Сравнение версий</a> : undefined}
     >
-      {projectFailure === null ? null : <ErrorState title="Проекты не открылись" detail={projectFailure.detail} correlationId={projectFailure.correlationId} onRetry={projectFailure.retryable ? () => void projects.refetch() : undefined} />}
+      {projectFailure === null ? null : <ErrorState title="Объекты не открылись" detail={projectFailure.detail} correlationId={projectFailure.correlationId} onRetry={projectFailure.retryable ? () => void projects.refetch() : undefined} />}
       {productFailure === null ? null : <ErrorState title="Состояние модуля не прочитано" detail={productFailure.detail} correlationId={productFailure.correlationId} onRetry={productFailure.retryable ? () => void product.refetch() : undefined} />}
       {projects.isPending || product.isPending ? <LoadingState what="сравнение стадий" /> : null}
       {moduleOff ? <UnsupportedState title="Модуль «Сравнение стадий» выключен" detail="Операции сравнения стадий на этом стенде недоступны." /> : null}
       {projects.isSuccess && moduleOn ? (
         <label className={styles.projectChooser}>
-          Проект{' '}
+          Объект{' '}
           <select value={projectUid ?? ''} onChange={(event) => setChosen(event.target.value === '' ? null : event.target.value)}>
             <option value="">— выберите —</option>
             {projectItems.map((project) => <option key={project.project_uid} value={project.project_uid}>{project.name}</option>)}
           </select>
         </label>
       ) : null}
-      {projects.isSuccess && projectItems.length === 0 && moduleOn ? <EmptyState title="Проектов пока нет" detail="Создайте проект, затем добавьте документы П и Р." /> : null}
-      {projects.isSuccess && projectItems.length > 1 && projectUid === null && moduleOn ? <EmptyState title="Выберите проект" detail="Пары и предложения относятся к одному проекту." /> : null}
+      {projects.isSuccess && projectItems.length === 0 && moduleOn ? <EmptyState title="Объектов пока нет" detail="Создайте объект, затем добавьте документы П и Р." /> : null}
+      {projects.isSuccess && projectItems.length > 1 && projectUid === null && moduleOn ? <EmptyState title="Выберите объект" detail="Пары и предложения относятся к одному объекту." /> : null}
       {projectUid !== null && moduleOn ? (
         <div className={styles.workspace}>
           <StageWorkspace key={projectUid} projectUid={projectUid} mayAct={mayAct} />

@@ -38,8 +38,8 @@ describe('authored release screen paths', () => {
     missing.items[0] = { screen: '/removed', where: 'Главная' };
     expect(currentScreenFailures(missing)).toEqual(['unknown screen: /removed']);
     const stale = readNote(version);
-    stale.items[0] = { screen: '/projects', where: 'Старая группа › Проекты' };
-    expect(currentScreenFailures(stale)).toEqual(['wrong display path: Старая группа › Проекты']);
+    stale.items[0] = { screen: '/projects', where: 'Старая группа › Объекты' };
+    expect(currentScreenFailures(stale)).toEqual(['wrong display path: Старая группа › Объекты']);
   });
 
   it('does not revalidate an archived address when navigation changes', () => {

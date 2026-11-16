@@ -91,7 +91,7 @@ describe('the links the walk named hold the floor and give the surplus back (lan
     { what: 'the version title of a version row', css: ['entities', 'document-version', 'ui', 'version-row.module.css'], selector: '.title' },
     { what: 'the second link of a version row', css: ['entities', 'document-version', 'ui', 'version-row.module.css'], selector: '.secondary' },
     { what: '«все версии» of a document card', css: ['entities', 'document-version', 'ui', 'document-cards.module.css'], selector: '.history' },
-    { what: '«К разделам проекта» of the empty section', css: ['_pages', 'section-detail', 'ui', 'section-detail-page.module.css'], selector: '.backLink' },
+    { what: '«К разделам объекта» of the empty section', css: ['_pages', 'section-detail', 'ui', 'section-detail-page.module.css'], selector: '.backLink' },
     { what: '«Подать заявку на доступ» of the sign-in card', css: ['_pages', 'sign-in', 'ui', 'sign-in-page.module.css'], selector: '.register a' },
   ];
 
@@ -112,7 +112,7 @@ describe('the markup carries the classes the stylesheets read (lane TARGETS)', (
     // The tile's link carries no class (the rendered markup is pinned by `screens/home.test.ts`): `.project > a` reads its list item.
     expect(source('widgets', 'home-tiles', 'ui', 'recent-projects-tile.tsx')).toContain('<Link href={routes.project(project.project_uid)}>{project.name}</Link>');
     expect(source('entities', 'document-version', 'ui', 'document-cards.tsx')).toContain('<Link className={styles.history} href={documentHref} title="История версий документа">');
-    expect(source('_pages', 'section-detail', 'ui', 'section-detail-page.tsx')).toContain('<Link className={styles.backLink} href={routes.project(projectUid)}>К разделам проекта</Link>');
+    expect(source('_pages', 'section-detail', 'ui', 'section-detail-page.tsx')).toContain('<Link className={styles.backLink} href={routes.project(projectUid)}>К разделам объекта</Link>');
     expect(source('entities', 'project', 'ui', 'project-row.tsx')).toContain('<Link className={styles.name} href=');
     expect(source('entities', 'document-version', 'ui', 'version-row.tsx')).toContain('<Link className={styles.title} href={href}>');
     expect(source('entities', 'document-version', 'ui', 'version-row.tsx')).toContain('<Link className={styles.secondary} href={secondary.href}>');

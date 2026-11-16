@@ -18,7 +18,7 @@ export type OverviewGroup = 'waiting' | 'running' | 'failed' | 'ready';
 export type OverviewFilter = 'all' | OverviewGroup;
 
 export const OVERVIEW_FILTERS: readonly { readonly key: OverviewFilter; readonly label: string; readonly hint: string }[] = [
-  { key: 'all', label: 'Все', hint: 'Показать все комплекты проекта.' },
+  { key: 'all', label: 'Все', hint: 'Показать все комплекты объекта.' },
   { key: 'waiting', label: 'Ждут действия', hint: 'Комплекты, где следующий шаг за вами: что-то нужно запустить или проверить.' },
   { key: 'running', label: 'Идут', hint: 'Комплекты, где сейчас идёт расчёт или загрузка.' },
   { key: 'failed', label: 'Ошибки', hint: 'Комплекты с ошибкой разбора или одного из шагов.' },

@@ -50,9 +50,9 @@ export interface VersionComparePageProps {
   };
 }
 
-export const CHOOSE_PROJECT_TITLE = 'Выберите проект';
+export const CHOOSE_PROJECT_TITLE = 'Выберите объект';
 export const CHOOSE_PROJECT_DETAIL =
-  'Сравнение версий ведётся внутри проекта: выберите проект, и экран покажет его комплекты и версии.';
+  'Сравнение версий ведётся внутри объекта: выберите объект, и экран покажет его комплекты и версии.';
 export const UPLOAD_BUTTON = 'Загрузить проект со всеми версиями';
 
 export function VersionComparePage({ initial }: VersionComparePageProps) {
@@ -89,7 +89,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
 
   const chooser = (
     <label className={styles.chooser}>
-      Проект
+      Объект
       <select
         value={projectUid ?? ''}
         onChange={(event) => {
@@ -111,7 +111,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
   return (
     <PageShell
       title="Сравнение версий"
-      subtitle="Версии комплектов проекта: загрузка, разбор, сопоставление листов и сравнение соседних версий."
+      subtitle="Версии комплектов объекта: загрузка, разбор, сопоставление листов и сравнение соседних версий."
       actions={
         <>
         {product.data?.comparison_modules === 'versions,stages' ? <a className="am-button" href={withProjectParam(routes.stageComparison(), projectUid)}>Сравнение стадий</a> : null}
@@ -121,7 +121,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
           disabled={!mayAct || projectUid === null}
           title={
             projectUid === null
-              ? 'Сначала выберите проект.'
+              ? 'Сначала выберите объект.'
               : !mayAct
                 ? 'Загружать версии для сравнения может эксперт, когда модуль включён.'
                 : 'Загрузить PDF: один проект со всеми версиями или несколько проектов пакетом.'
@@ -133,11 +133,11 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
         </>
       }
     >
-      {projects.isPending ? <LoadingState what="проекты" /> : null}
+      {projects.isPending ? <LoadingState what="объекты" /> : null}
       {projects.isError ? (
         <ErrorState
-          title="Проекты не открылись"
-          detail={classifyListingFailure(projects.error, { collection: 'проекты', parent: 'project' }).detail}
+          title="Объекты не открылись"
+          detail={classifyListingFailure(projects.error, { collection: 'объекты', parent: 'project' }).detail}
           onRetry={() => void projects.refetch()}
         />
       ) : null}
@@ -147,7 +147,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
       {projectUid === null ? (
         projects.isSuccess ? (
           items.length === 0 ? (
-            <EmptyState title="Проектов пока нет." detail="Создайте проект на странице «Проекты», затем загрузите в него версии." />
+            <EmptyState title="Объектов пока нет." detail="Создайте объект на странице «Объекты», затем загрузите в него версии." />
           ) : (
             <EmptyState title={CHOOSE_PROJECT_TITLE} detail={CHOOSE_PROJECT_DETAIL} />
           )
@@ -165,7 +165,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
           )}
           {unknownSet ? (
             <p role="status" data-compare-unknown-set="">
-              Комплект из адреса не найден в этом проекте. Выберите комплект в таблице.
+              Комплект из адреса не найден в этом объекте. Выберите комплект в таблице.
             </p>
           ) : null}
           <AiQueueNotice sets={overview.data?.sets ?? []} />

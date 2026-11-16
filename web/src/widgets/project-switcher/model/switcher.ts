@@ -44,10 +44,10 @@ import type { ProjectScope, SearchParamsLike } from '@/shared/lib';
 import { classifyProjectListFailure } from '@/entities/project';
 import type { ProjectListFailure } from '@/entities/project';
 
-export const SWITCHER_CAPTION = 'Проекты';
-export const ALL_PROJECTS_LABEL = 'Все проекты';
-export const NEW_PROJECT_LABEL = 'Новый проект';
-export const MORE_PROJECTS_LABEL = 'Остальные проекты — в списке';
+export const SWITCHER_CAPTION = 'Объекты';
+export const ALL_PROJECTS_LABEL = 'Все объекты';
+export const NEW_PROJECT_LABEL = 'Новый объект';
+export const MORE_PROJECTS_LABEL = 'Остальные объекты — в списке';
 export const RETRY_LABEL = 'Повторить загрузку';
 /** Why the selector does not filter the screen it is on (`R-150c`: a global screen). */
 export const GLOBAL_SCREEN_HINT = 'экран общий';
@@ -217,7 +217,7 @@ function valueOf(projectUid: string | null, list: SwitcherList): string {
     case 'ready': {
       const found = list.projects.find((project) => project.project_uid === projectUid);
       if (found !== undefined) return displayName(found);
-      return list.more ? `Проект вне первых ${list.projects.length}` : 'Неизвестный проект';
+      return list.more ? `Объект вне первых ${list.projects.length}` : 'Неизвестный объект';
     }
   }
 }
@@ -225,12 +225,12 @@ function valueOf(projectUid: string | null, list: SwitcherList): string {
 function notesOf(list: SwitcherList): SwitcherNote[] {
   switch (list.kind) {
     case 'loading':
-      return [{ tone: 'status', text: 'Загрузка проектов…' }];
+      return [{ tone: 'status', text: 'Загрузка объектов…' }];
     case 'error':
       return [
         {
           tone: 'alert',
-          text: 'Проекты не загрузились',
+          text: 'Объекты не загрузились',
           detail: list.failure.title,
           ...(list.failure.correlationId === null ? {} : { correlationId: list.failure.correlationId }),
         },
@@ -240,7 +240,7 @@ function notesOf(list: SwitcherList): SwitcherNote[] {
       if (list.refreshFailure !== null) {
         notes.push({ tone: 'alert', text: 'Список мог устареть: обновить его не удалось.', detail: list.refreshFailure.title });
       }
-      if (list.projects.length === 0) notes.push({ tone: 'status', text: 'Проектов пока нет.' });
+      if (list.projects.length === 0) notes.push({ tone: 'status', text: 'Объектов пока нет.' });
       if (list.more) notes.push({ tone: 'status', text: `Показаны первые ${list.projects.length}.` });
       return notes;
     }

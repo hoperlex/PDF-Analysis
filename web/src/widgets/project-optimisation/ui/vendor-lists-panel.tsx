@@ -149,7 +149,7 @@ export function VendorListsView({
                     <VendorListEditor
                       title={
                         editing.scope === 'project'
-                          ? 'Список проекта для раздела'
+                          ? 'Список объекта для раздела'
                           : 'Общий список для раздела'
                       }
                       initial={
@@ -171,7 +171,7 @@ export function VendorListsView({
                           className="am-button am-button--quiet am-button--small"
                           onClick={() => onEdit({ sectionCode: item.section_code, scope: 'project' })}
                         >
-                          Изменить список проекта
+                          Изменить список объекта
                         </button>
                       ) : null}
                       {canEditProject && projectOverride ? (

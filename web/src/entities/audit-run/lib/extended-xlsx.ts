@@ -139,7 +139,7 @@ function tables(reading: ExtendedRunReview): Table[] {
     }
   }
   const parameterBody = object(result?.project_parameters);
-  const parameterRows: Row[] = [['ID кандидата', 'Название', 'Тип', 'Значение как в источнике', 'Единица как в источнике', 'Предмет/объект', 'Источники', 'Точные цитаты и диапазоны', 'Ключ пакета', 'Статус']];
+  const parameterRows: Row[] = [['ID кандидата', 'Название', 'Тип', 'Значение как в источнике', 'Единица как в источнике', 'Предмет', 'Источники', 'Точные цитаты и диапазоны', 'Ключ пакета', 'Статус']];
   for (const fact of objects(parameterBody?.facts)) parameterRows.push([fact.fact_id, fact.name, fact.parameter_type, fact.value,
     fact.unit, fact.subject, fact.source_ids, fact.source_evidence, fact.batch_key, fact.status]);
   const parameterReceipts: Row[] = [['Часть', 'Всего частей', 'Полная запись параметров, JSON, последовательные части без разделителей']];

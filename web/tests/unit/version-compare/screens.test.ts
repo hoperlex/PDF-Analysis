@@ -170,7 +170,7 @@ describe('«Проекты и этапы»', () => {
   });
 
   it('says what it is when there are no sets and when the filters leave none', () => {
-    expect(text(projects({ overview: overview({ sets: [] }) }))).toContain('В проекте ещё нет версий для сравнения.');
+    expect(text(projects({ overview: overview({ sets: [] }) }))).toContain('В объекте ещё нет версий для сравнения.');
     expect(text(projects({ view: { ...INITIAL_VIEW, query: 'нет такого шифра' } }))).toContain('Ни один комплект не подходит под выбранное.');
   });
 
@@ -542,7 +542,7 @@ describe('the page «Сравнение версий»', () => {
     const client = newClient();
     seedComparison(client, { overview: 'ok' });
     client.setQueryData(queryKeys.projects.list(undefined, 50), { items: [], page: { next_cursor: null } });
-    expect(text(renderScreen(client, createElement(VersionComparePage, {})))).toContain('Проектов пока нет.');
+    expect(text(renderScreen(client, createElement(VersionComparePage, {})))).toContain('Объектов пока нет.');
   });
 
   it('shows the two tabs, the button «Загрузить проект со всеми версиями», and the table once a project is chosen', () => {
@@ -613,7 +613,7 @@ describe('the page «Сравнение версий»', () => {
 
   it('cold, it renders the loading state of the projects and nothing else', () => {
     const t = text(renderScreen(newClient(), createElement(VersionComparePage, {})));
-    expect(t).toContain('Загрузка: проекты…');
+    expect(t).toContain('Загрузка: объекты…');
   });
 });
 

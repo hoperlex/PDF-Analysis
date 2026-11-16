@@ -259,7 +259,7 @@ def _validate(source: WorkbookInput) -> None:
 def _summary(source: WorkbookInput, cells: _Cells) -> bytes:
     rows = [_row(1, ("Параметр", "Значение"), 1, cells)]
     identity = (
-        ("Проект", source.project_uid),
+        ("Объект", source.project_uid),
         ("Версия", source.version_uid),
         ("Прогон", source.run_id),
         ("Профиль", source.profile_id),
