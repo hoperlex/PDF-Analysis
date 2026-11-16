@@ -141,7 +141,7 @@ describe('6 (live): the administrator rows are role-gated in the real registry',
     // `R-150w`: the operator's screens ask for expert or admin, so «Наблюдатель» does not open them.
     // `UI-PARITY-P0P`: «График работ» is the same operators' screen.
     // `HOSTS-WEB-01`: the advanced page of the executors is the administrator's alone, a row of its own beside «Диспетчер».
-    const operator = ['/dispatcher', '/schedule', '/logs', '/workers', '/workers/advanced', '/queue'];
+    const operator = ['/schedule', '/dispatcher', '/logs', '/workers', '/workers/advanced', '/queue'];
     // `R-80`: every other product row asks for any role (`any-role`), not for a listed one.
     expect(rows.filter((row) => Array.isArray(row.roles)).map((row) => row.address)).toEqual([...operator, ...admin]);
     expect(rows.filter((row) => row.group === 'admin').map((row) => row.address)).toEqual(admin);
