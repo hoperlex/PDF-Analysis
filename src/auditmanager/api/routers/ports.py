@@ -547,6 +547,21 @@ class BlockPort(Protocol):
         distinction this method exists to carry.
         """
 
+    def portal_block_count(self, *, version_uid: str) -> int | None:
+        """`UIP-S04-01`: how many portal blocks the version's built index holds, or ``None`` while there is none.
+
+        The index is the one :meth:`list_portal_blocks` reads: the portal geometry of the most recent run of the version
+        whose ``page_geometry_extraction`` succeeded and published ``geometry.portal_blocks``. The number is the one that
+        stage recorded when it published them (its ``portal_block_count`` metric), read from the stage result: **no
+        artifact is opened and the version's file is not parsed**, so the figure costs one query per run walked and is
+        safe to ask on every read of a version.
+
+        **Absent is not zero.** ``None`` is a version no run has produced portal geometry for (never run, run only over a
+        failed geometry stage, or admitted for comparison only and so without a portal bundle); ``0`` is a produced index
+        that genuinely holds no block. A stage result that recorded no usable number is ``None`` too, never a guess. An
+        unknown version is ``not_found``.
+        """
+
     def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
         """`UI-PARITY-P0O`: each page's sheet label from the version's portal geometry."""
 

@@ -1396,6 +1396,9 @@ class DocumentAudit(_Object):
     version's latest optimisation pass and how many of them have no decision in force (none, or a withdrawn one) -- the
     original's «Оптимизация N» pill. Both are present when a pass was started over the version and both are absent when none
     was; they are a fact beside the four words and change none of them (`R-150u`).
+
+    `getDocumentVersion` carries the same audit for the version it reads (`UIP-S04-01`), from the same read model, so a version
+    read and the same version listed never disagree.
     """
 
     state: Literal["not_run", "clean", "awaiting_decision", "checked"]
@@ -1447,11 +1450,19 @@ class DocumentVersion(_Object):
     #: `R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them.
     tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
-    #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version. Present on the items of `listDocuments`
-    #: only, where it is the audit of the document's current version; absent from every other answer that carries a
-    #: `DocumentVersion` (`uploadDocument`, `uploadDocumentVersion`, `getDocumentVersion`, `listVersions`,
+    #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version. Present on the items of `listDocuments`,
+    #: where it is the audit of the document's current version, and on `getDocumentVersion` (`UIP-S04-01`), where it is
+    #: the audit of the version read: the same figures from the same read model, so the two never disagree. Absent from
+    #: every other answer that carries a `DocumentVersion` (`uploadDocument`, `uploadDocumentVersion`, `listVersions`,
     #: `setDocumentArchived`, `renameDocument`, `setDocumentTags`), which read no runs.
     audit: DocumentAudit = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `UIP-S04-01` (programme `UI-PARITY-R3`, owner rulings G8-B and G12-B): the number of portal blocks of the
+    #: version, for the «Блоки N» tab. Present on `getDocumentVersion` only, and only while the block index is built:
+    #: it is the count the latest run whose `page_geometry_extraction` succeeded recorded for the portal blocks it
+    #: published, the same run and the same blocks `listVersionPortalBlocks` answers. **Absent is not zero**: a version
+    #: with no such run, or one admitted for comparison only (no portal bundle), carries no number. The version's
+    #: file is not read for it.
+    block_count: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DocumentVersionPage(_Object):

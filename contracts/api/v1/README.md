@@ -36,6 +36,17 @@ nullable `last_project_uid`: the object the account chose last, `null` when it c
 is migration `0069_account_last_project` (`account_last_project`, one row per account, `ON DELETE CASCADE` from the account; it holds
 the project as a bare identity with no foreign key, and `getMe` answers it only while the project exists). The client reads the choice from `getMe` and a link with `?project=` overrides it.
 
+Additive change under this version (`UIP-S04-01`, programme `UI-PARITY-R3`, owner rulings Г8-B and Г12-B; the version number is raised by
+the integrator once for the stage): **one optional property and one more place that carries an existing one; no path, operation or schema
+is added and nothing is removed or made required, so the surface counts above do not move.** `getDocumentVersion` now answers the
+`audit` (`DocumentAudit`) that `listDocuments` attaches to each item, for the version it reads: the same read model, so the two never
+disagree (the other operations that answer a `DocumentVersion` still carry none). `DocumentVersion` gains the optional `block_count`
+(integer, at least 0): the number of portal blocks of the version, for the «Блоки N» tab, present on `getDocumentVersion` only and only
+while the block index is built. It is the count the latest run of the version whose `page_geometry_extraction` succeeded and published
+portal blocks recorded in its stage result, the same run and the same blocks `listVersionPortalBlocks` answers; no object is read and
+the version's file is not parsed. **Absent is not zero**: a version no such run has reached, or one admitted for comparison only (no
+portal bundle), carries no `block_count`, while a built index that holds no block answers `0`.
+
 Publication correction (`ANALYSIS-REPAIR-CONFORMANCE-01`): CSV declares the existing
 validation envelope; the optional memory limitation uses the same nullable-string
 schema form as its served model. Allowed values/bounds and the API version are unchanged.
