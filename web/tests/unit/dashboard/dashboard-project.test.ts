@@ -1,7 +1,9 @@
 /**
- * «Дашборд» follows the project in the address (`UI-PARITY-01`, «Project context»).
+ * «Дашборд» follows the project in the address (`UI-PARITY-01`, «Project context»), and where the address is silent, the
+ * object the account chose last (`UIP-G-06`: `getMe`'s `last_project_uid`).
  *
- * The screen is class `optional`: without `?project=` it states «Все проекты»; with one it reads
+ * The screen is class `optional`: without `?project=` it states the account's last object, and «Все объекты» where there is
+ * none or where `?project=all` chose it; with `?project=<uid>` it reads
  * `getDashboardSummary` for that project and states its name; for a project the server does not
  * know (`404 not_found`) it says «Проект не найден» with a way to «Все проекты» and never shows a
  * summary of zeros or of everything.
@@ -21,12 +23,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/shared/api', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, getDashboardSummary: vi.fn() };
+  return { ...actual, getDashboardSummary: vi.fn(), getMe: vi.fn() };
 });
 
 import { DashboardEagerSeam, DashboardPage } from '@/_pages/dashboard';
-import { ApiError, RUN_STATE_VALUES, getDashboardSummary, queryKeys } from '@/shared/api';
-import type { ApiResponse, DashboardSummary, ErrorEnvelope } from '@/shared/api';
+import { ApiError, RUN_STATE_VALUES, getDashboardSummary, getMe, queryKeys } from '@/shared/api';
+import type { Account, ApiResponse, DashboardSummary, ErrorEnvelope } from '@/shared/api';
 import { PROJECT_SECTIONS } from '@/entities/project';
 import { Dashboard } from '@/widgets/dashboard';
 
@@ -212,7 +214,7 @@ describe('the page reads the project from the address and from nowhere else', ()
     expect(visible(markup)).toContain('Охват Проект Альфа');
   });
 
-  it('builds the way out from the address: the project and its own selection go, the other parameters stay', () => {
+  it('builds the way out from the address: the project and its own selection go, the other parameters stay, «Все объекты» is chosen', () => {
     const client = newClient();
     seedError(client, queryKeys.dashboard.summary(UNKNOWN), notFound());
     const markup = renderScreen(
@@ -220,17 +222,64 @@ describe('the page reads the project from the address and from nowhere else', ()
       atAddress('/dashboard', `x=1&project=${UNKNOWN}&section=AR`, createElement(DashboardPage)),
     );
     expect(markup).toContain('Объект не найден');
-    expect(markup).toMatch(/<a [^>]*href="\/dashboard\?x=1"[^>]*>Все объекты<\/a>/);
+    expect(markup).toMatch(/<a [^>]*href="\/dashboard\?x=1&(?:amp;)?project=all"[^>]*>Все объекты<\/a>/);
   });
 
-  it('is a bare /dashboard when the project was the only parameter', () => {
+  it('is /dashboard?project=all when the project was the only parameter: the absence of it would bring the last object back', () => {
     const client = newClient();
     seedError(client, queryKeys.dashboard.summary(UNKNOWN), notFound());
     const markup = renderScreen(
       client,
       atAddress('/dashboard', `project=${UNKNOWN}`, createElement(DashboardPage)),
     );
-    expect(markup).toMatch(/<a [^>]*href="\/dashboard"[^>]*>Все объекты<\/a>/);
+    expect(markup).toMatch(/<a [^>]*href="\/dashboard\?project=all"[^>]*>Все объекты<\/a>/);
+  });
+});
+
+/** The account as `getMe` answers it: only what these tests read. */
+function account(lastProject: string | null | undefined): Account {
+  return { user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', roles: ['expert'], ...(lastProject === undefined ? {} : { last_project_uid: lastProject }) } as unknown as Account;
+}
+
+describe('where the address is silent the page opens on the account’s last object (UIP-G-06)', () => {
+  function seeded(lastProject: string | null | undefined): QueryClient {
+    const client = newClient();
+    client.setQueryData(queryKeys.account.me(), account(lastProject));
+    client.setQueryData(queryKeys.dashboard.summary(), ALL);
+    client.setQueryData(queryKeys.dashboard.summary(A), ONLY_A);
+    client.setQueryData(queryKeys.dashboard.summary(B), ONLY_B);
+    return client;
+  }
+  const at = (client: QueryClient, query: string) =>
+    visible(renderScreen(client, atAddress('/dashboard', query, createElement(DashboardPage))));
+
+  it('names the last object for an address with no ?project=, and for an empty one', () => {
+    expect(at(seeded(A), '')).toContain('Охват Проект Альфа');
+    expect(at(seeded(A), 'project=')).toContain('Охват Проект Альфа');
+    expect(at(seeded(B), 'x=1')).toContain('Охват Проект Бета');
+  });
+
+  it('?project=<uid> beats the last object', () => {
+    expect(at(seeded(A), `project=${B}`)).toContain('Охват Проект Бета');
+  });
+
+  it('?project=all is «Все объекты», chosen, and beats the last object', () => {
+    const text = at(seeded(A), 'project=all');
+    expect(text).toContain('Охват Все объекты');
+    expect(text).toContain('Проект Бета');
+  });
+
+  it('with no last object (null, absent, not read yet) it is «Все объекты», as before', () => {
+    expect(at(seeded(null), '')).toContain('Охват Все объекты');
+    expect(at(seeded(undefined), '')).toContain('Охват Все объекты');
+    const unread = newClient();
+    unread.setQueryData(queryKeys.dashboard.summary(), ALL);
+    expect(at(unread, '')).toContain('Охват Все объекты');
+  });
+
+  it('can fail: the last object does not stand in for an address that chose one', () => {
+    expect(at(seeded(A), `project=${B}`)).not.toContain('Охват Проект Альфа');
+    expect(at(seeded(A), 'project=all')).not.toContain('Охват Проект Альфа');
   });
 });
 
@@ -242,7 +291,12 @@ describe('the project reaches the request, and a change of project asks again', 
     return { data, status: 200, correlationId: 'cid-dashboard' };
   }
 
+  const me = vi.mocked(getMe);
+
   beforeEach(() => {
+    me.mockReset();
+    // The account answers with no last object unless a test says otherwise.
+    me.mockImplementation((async () => ({ data: account(null), status: 200, correlationId: 'cid-me' })) as unknown as typeof getMe);
     read.mockReset();
     read.mockImplementation((async (input: { query?: { project_uid?: string } }) => {
       const project = input.query?.project_uid;
@@ -320,7 +374,72 @@ describe('the project reaches the request, and a change of project asks again', 
     expect(read.mock.calls).toEqual([[{ query: { project_uid: UNKNOWN } }]]);
     const markup = live.markup();
     expect(markup).toContain('Объект не найден');
-    expect(markup).toContain('href="/dashboard?x=1"');
+    expect(markup).toMatch(/href="\/dashboard\?project=all&(?:amp;)?x=1"/);
     expect(markup).not.toContain('Охват');
+  });
+
+  describe('the account’s last object (UIP-G-06)', () => {
+    const remembered = (uid: string | null) =>
+      me.mockImplementation((async () => ({ data: account(uid), status: 200, correlationId: 'cid-me' })) as unknown as typeof getMe);
+
+    it('opens on it for a silent address, and asks the server for that object', async () => {
+      remembered(A);
+      live = await mountLive(page(freshClient(), ''));
+      await settled(live);
+      expect(me).toHaveBeenCalledTimes(1);
+      expect(read.mock.calls.at(-1)).toEqual([{ query: { project_uid: A } }]);
+      expect(visible(live.markup())).toContain('Охват Проект Альфа');
+    });
+
+    it('asks once, for that object only, when the account is already known (the one getMe query is shared)', async () => {
+      const client = freshClient();
+      client.setQueryData(queryKeys.account.me(), account(A));
+      live = await mountLive(page(client, ''));
+      await settled(live);
+      expect(read.mock.calls).toEqual([[{ query: { project_uid: A } }]]);
+    });
+
+    it('does not ask for the account at all where the address names an object or chose «Все объекты»', async () => {
+      remembered(A);
+      live = await mountLive(page(freshClient(), `project=${B}`));
+      await settled(live);
+      expect(me).not.toHaveBeenCalled();
+      expect(read.mock.calls).toEqual([[{ query: { project_uid: B } }]]);
+      await live.unmount();
+
+      live = await mountLive(page(freshClient(), 'project=all'));
+      await settled(live);
+      expect(me).not.toHaveBeenCalled();
+      expect(read.mock.calls.at(-1)).toEqual([{}]);
+      expect(visible(live.markup())).toContain('Охват Все объекты');
+    });
+
+    it('stays on «Все объекты» when the account has no last object, or its answer failed', async () => {
+      live = await mountLive(page(freshClient(), ''));
+      await settled(live);
+      expect(read.mock.calls).toEqual([[{}]]);
+      expect(visible(live.markup())).toContain('Охват Все объекты');
+      await live.unmount();
+
+      me.mockReset();
+      me.mockRejectedValue(notFound());
+      read.mockClear();
+      live = await mountLive(page(freshClient(), ''));
+      await settled(live);
+      expect(read.mock.calls).toEqual([[{}]]);
+      expect(visible(live.markup())).toContain('Охват Все объекты');
+    });
+
+    it('the way out of the last object is «Все объекты» as ?project=all, which the last object does not override', async () => {
+      const client = freshClient();
+      client.setQueryData(queryKeys.account.me(), account(A));
+      live = await mountLive(page(client, 'x=1'));
+      await settled(live);
+      expect(visible(live.markup())).toContain('Охват Проект Альфа');
+      await live.update(page(client, 'x=1&project=all'));
+      await settled(live);
+      expect(read.mock.calls).toEqual([[{ query: { project_uid: A } }], [{}]]);
+      expect(visible(live.markup())).toContain('Охват Все объекты');
+    });
   });
 });

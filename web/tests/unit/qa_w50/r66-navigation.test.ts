@@ -330,7 +330,9 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     expect(markup).not.toContain('Раздел пока недоступен');
     expect(markup).not.toContain('data-route="/section-optimisation"');
     // One read, under its own key: the analysed section, unfiltered, first page.
-    const keys = client.getQueryCache().getAll().map((query) => query.queryKey);
+    // `UIP-G-06`: the screen follows the object, so it also reads the account's last one (`getMe`, the query every reader of the
+    // account shares); that read is the account's and not the section's, and is left out of the section's own.
+    const keys = client.getQueryCache().getAll().map((query) => query.queryKey).filter((key) => key[0] !== 'account');
     // Two reads, both of the AR section: the specification, and since contract 1.37.0 (lane C3, UI-PARITY-OPT-CARRYOVER)
     // the «Принято» tab's first page, whose server `total` is the number the tab shows without being opened.
     expect(keys, `the reads the screen made: ${JSON.stringify(keys)}`).toHaveLength(2);

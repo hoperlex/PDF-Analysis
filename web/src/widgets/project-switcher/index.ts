@@ -24,6 +24,7 @@ export {
   SWITCHER_CAPTION,
   buildSwitcherModel,
   chooseProject,
+  chosenProject,
   projectFigures,
   projectRowLabels,
   switcherContext,

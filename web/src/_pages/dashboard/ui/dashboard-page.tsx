@@ -14,34 +14,36 @@
  * wording also named the two words `R-39`/`D-109` ask this screen to avoid; the rewrite
  * says what the screen shows instead of what feeds it.
  *
- * **The project comes from the address, here, and nowhere else** (`UI-PARITY-01`, «Project
- * context»; the screen's registry class is `optional`). `?project=` is read with
- * `readProjectContext`, handed to the widget as a prop, and not kept: a reload, a pasted link and
- * Back/Forward all restore it from the address alone. No `?project=` is «Все проекты». The way
- * out of an unknown project is built here as well, with `switchProject(…, null)`, because only the
- * page knows the rest of the address that the link must keep.
+ * **The object comes from the address, and where it is silent, from the account** (`UI-PARITY-01`,
+ * «Project context», `UIP-G-06`; the screen's registry class is `optional`). `useCurrentProject` reads
+ * `?project=<uid>` first, then the explicit `?project=all`, then the object the account chose last
+ * (`getMe`); it is handed to the widget as a prop and not kept: a reload, a pasted link and
+ * Back/Forward restore it from the address and the account alone. No object anywhere is «Все объекты».
+ * The way out of an unknown object is built here as well, with `switchProject(…, null)` (`?project=all`,
+ * not the absence of the parameter, which would bring the same object back), because only the page
+ * knows the rest of the address that the link must keep.
  */
 
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
-import { readProjectContext, switchProject } from '@/shared/lib';
+import { switchProject } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
+import { useCurrentProject } from '@/entities/project';
 
 import { LazyDashboard } from './lazy-dashboard';
 
-/** This screen's registry address, the one `readProjectContext` classifies. */
+/** This screen's registry address, the one the registry classifies. */
 const DASHBOARD_ADDRESS = '/dashboard';
 
 /** What a render without a mounted router (a one-pass test render) reads as the query string. */
 const NO_PARAMS = new URLSearchParams();
 
 export function DashboardPage() {
-  // `null` only where no router is mounted; the address is then no address and names no project.
-  const pathname = usePathname();
+  // Outside the app router there is no address; `DASHBOARD_ADDRESS` stands in for the screen's own.
   const searchParams = useSearchParams() ?? NO_PARAMS;
-  const { projectUid } = readProjectContext(pathname ?? '', searchParams);
-  const withoutProject = switchProject(searchParams, null).toString();
-  const allProjectsHref = withoutProject === '' ? DASHBOARD_ADDRESS : `${DASHBOARD_ADDRESS}?${withoutProject}`;
+  const { projectUid } = useCurrentProject(DASHBOARD_ADDRESS);
+  const allProjects = switchProject(searchParams, null, projectUid).toString();
+  const allProjectsHref = `${DASHBOARD_ADDRESS}?${allProjects}`;
 
   return (
     <div data-dashboard-screen="true" data-dashboard-showcase="true">
