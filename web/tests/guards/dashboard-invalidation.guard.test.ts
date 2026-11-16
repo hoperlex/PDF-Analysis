@@ -170,7 +170,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/export-run/model/use-export-run.ts': false,
   'src/features/record-verdict/model/use-record-verdict.ts': true,
   'src/features/start-run/model/use-start-run.ts': true,
-  // `R-151a`: archiving or renaming a document moves the dashboard's documents and sections.
+  // `R-151a`: archiving or renaming a document moves the dashboard's documents and sections. The file's other hooks (the tags,
+  // `R-151e`, and the group, `UIP-G-10`) take the same refresh; the last test below holds each of the four to it, by name.
   'src/features/manage-document/model/use-manage-document.ts': true,
   // `R-151g`: the execution status is not a decision and moves no dashboard figure.
   'src/features/set-execution-status/model/use-set-execution-status.ts': false,
@@ -192,6 +193,9 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/start-run-from-stage/model/use-start-run-from-stage.ts': true,
   'src/features/set-job-priority/model/use-set-job-priority.ts': false,
   'src/features/pause-execution/model/use-pause-execution.ts': false,
+  // `PAUSE-WEB-01`: pausing or resuming the vectors writes the vector control's own read and invalidates only that key;
+  // no number the dashboard reads depends on it. Named here because it sits in the same feature as the queue's pause.
+  'src/features/pause-execution/model/use-set-vector-paused.ts': false,
   // `W54-WORKERS-WEB`: a worker's intake switch changes no number the dashboard reads.
   'src/features/set-worker-intake/model/use-set-worker-intake.ts': false,
   // `W55A-WEB-NORMS`: designating the current norms snapshot changes no number the dashboard
@@ -338,6 +342,43 @@ describe('every mutation hook is mapped to whether it invalidates the dashboard'
       );
     });
   }
+
+  /** The names of the top-level functions of `source` that call `useMutation`, sorted. */
+  const mutationHookNames = (source: string): string[] =>
+    parsed(source)
+      .statements.filter((statement): statement is ts.FunctionDeclaration => ts.isFunctionDeclaration(statement) && statement.name !== undefined)
+      .filter((statement) => subtreeCalls(statement, 'useMutation'))
+      .map((statement) => (statement.name as ts.Identifier).text)
+      .sort();
+
+  it('every mutation hook of manage-document, the group hook of UIP-G-10 among them, takes the refresh that invalidates the dashboard', () => {
+    // The table above is per file: one hook that left the shared refresh would not turn it red while another kept the call.
+    const hookPath = join(WEB_ROOT, 'src/features/manage-document/model/use-manage-document.ts');
+    const source = readText(hookPath);
+    const hooks = mutationHookNames(source);
+    expect(hooks, 'a mutation hook of this file is not named here').toEqual(
+      ['useRenameDocument', 'useSetDocumentArchived', 'useSetDocumentGroup', 'useSetDocumentTags'],
+    );
+    expect(declaredFunctionCallsExpression(source, 'useRefresh', DASHBOARD_INVALIDATION), 'the shared refresh no longer invalidates the dashboard').toBe(true);
+    for (const hook of hooks) {
+      expect(declaredFunctionCallsExpression(source, hook, 'useRefresh'), `${hook} does not take the refresh`).toBe(true);
+    }
+  });
+
+  it('goes red when a manage-document hook stops taking the refresh', () => {
+    const hookPath = join(WEB_ROOT, 'src/features/manage-document/model/use-manage-document.ts');
+    const source = readText(hookPath);
+    const start = source.indexOf('export function useSetDocumentGroup');
+    expect(start).toBeGreaterThan(0);
+    const call = 'const refresh = useRefresh(documentUid);';
+    const at = source.indexOf(call, start);
+    expect(at).toBeGreaterThan(start);
+    const without = `${source.slice(0, at)}const refresh = (): void => undefined;${source.slice(at + call.length)}`;
+    expect(declaredFunctionCallsExpression(without, 'useSetDocumentGroup', 'useRefresh')).toBe(false);
+    expect(declaredFunctionCallsExpression(without, 'useSetDocumentTags', 'useRefresh')).toBe(true);
+    // and a hook added to the file without a name here is found by the same reader
+    expect(mutationHookNames(`${source}\nexport function useNewHook() { return useMutation({ mutationFn }); }`)).toContain('useNewHook');
+  });
 
   it('goes red when create-project comments out the real invalidation call', () => {
     const hookPath = join(WEB_ROOT, 'src/features/create-project/model/use-create-project.ts');
