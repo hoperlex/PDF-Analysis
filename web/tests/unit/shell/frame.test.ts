@@ -205,12 +205,22 @@ describe('the footer', () => {
 });
 
 describe('the content utility row', () => {
-  it('keeps the existing theme and account controls once, after navigation and before content', () => {
+  it('keeps the one theme button and the account control once, after navigation and before content', () => {
     const markup = frame(EXPERT);
     expect(markup).toContain('class="am-app__utility"');
     expect(markup.indexOf('am-app__utility')).toBeGreaterThan(markup.indexOf('data-nav-state="stacked"'));
     expect(markup.indexOf('am-app__utility')).toBeLessThan(markup.indexOf('<main'));
-    expect(markup.match(/aria-label="Оформление"/g)).toHaveLength(1);
+    // One theme button (`UIP-G-03`, `Г2-B`): no group of two, no pressed state. The server cannot
+    // know which theme is showing, so it renders the neutral name; the theme's own name follows hydration.
+    expect(markup.match(/class="am-theme"/g)).toHaveLength(1);
+    expect(markup.match(/class="am-theme__option"/g)).toHaveLength(1);
+    expect(markup.match(/aria-label="Сменить тему"/g)).toHaveLength(1);
+    expect(markup).not.toContain('aria-label="Оформление"');
+    // The frame has other groups and a pressed sidebar toggle; only the theme's own markup is held to this.
+    const theme = /<div class="am-theme">.*?<\/button><\/div>/.exec(markup)?.[0] ?? '';
+    expect(theme).toContain('am-theme__option');
+    expect(theme).not.toContain('role="group"');
+    expect(theme).not.toContain('aria-pressed');
     // Two menu buttons: the project selector (`R-150b`) and the account menu, each once.
     expect(markup.match(/aria-haspopup="menu"/g)).toHaveLength(2);
     expect(markup.match(/data-project-switcher=""/g)).toHaveLength(1);

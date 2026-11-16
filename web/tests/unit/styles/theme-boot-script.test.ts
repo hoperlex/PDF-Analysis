@@ -36,6 +36,7 @@ import {
   applyThemeChoice,
   readThemeChoice,
 } from '@/_app';
+import { switchTheme } from '@/_app/theme';
 import { themeBootScript } from '@/shared/lib/theme-boot-script';
 
 import { WEB_ROOT, walkFiles } from '../../guards/lib/repo';
@@ -99,6 +100,37 @@ describe('the script does what ThemeToggle does, before paint', () => {
     const win = { localStorage: { getItem: (key: string) => (key === THEME_STORAGE_KEY ? 'dark' : null) } };
     expect(runScript(SOURCE, win).size).toBe(1);
     expect(runScript(wrong, win).size).toBe(0);
+  });
+});
+
+describe('what the single theme button stores is what the script applies on the next load', () => {
+  // `UIP-G-03`: one press stores an explicit `light` or `dark`, under the same key as before.
+  // The script must reproduce exactly the attribute that press put on the document, or a reload
+  // after the press would show the other theme for a frame: the flash this script exists to remove.
+  const STARTS = [
+    ['system', false],
+    ['system', true],
+    ['light', true],
+    ['dark', false],
+  ] as const;
+
+  for (const [choice, systemDark] of STARTS) {
+    it(`pressed from ${choice} on a ${systemDark ? 'dark' : 'light'} system: a reload shows the same attribute`, () => {
+      const kept: Record<string, string> = {};
+      const storage: ThemeStorage = {
+        getItem: (key) => kept[key] ?? null,
+        setItem: (key, value) => void (kept[key] = value),
+      };
+      const pressed = fakeRoot();
+      const made = switchTheme(pressed, storage, choice, systemDark);
+      expect(Object.keys(kept)).toEqual([THEME_STORAGE_KEY]);
+      expect([...runScript(SOURCE, { localStorage: storage })]).toEqual([[THEME_ATTRIBUTE, made]]);
+      expect([...pressed.attributes]).toEqual([[THEME_ATTRIBUTE, made]]);
+    });
+  }
+
+  it('is not vacuous: a start that was never pressed leaves the script with nothing to apply', () => {
+    expect(runScript(SOURCE, { localStorage: storageHolding(null) }).size).toBe(0);
   });
 });
 
