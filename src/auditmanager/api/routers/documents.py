@@ -322,6 +322,31 @@ def build_document_routes(
         )
         return json_response(200, encode_json(document_version_body(view)))
 
+    @router.put(
+        "/projects/{project_uid}/documents/{document_uid}/group",
+        operation_id="setDocumentGroup",
+        tags=["documents"],
+        status_code=200,
+        response_model=models.DocumentVersion,
+        responses={
+            **success(200, "The document's current version with its new group (none when it was cleared)."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+    )
+    def set_document_group(
+        project_uid: Annotated[models.ProjectUid, Path()],
+        document_uid: Annotated[models.DocumentUid, Path()],
+        body: models.SetDocumentGroupRequest,
+        idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
+    ) -> WireResponse:
+        # `UIP-G-10` (owner ruling Г11): the group is a value of the document, replaced as a whole; a blank value clears it.
+        view = documents.set_document_group(
+            project_uid=project_uid, document_uid=document_uid, group=body.group,
+            user_uid=subject.user_uid, idempotency_key=idempotency_key,
+        )
+        return json_response(200, encode_json(document_version_body(view)))
+
     @router.get(
         "/projects/{project_uid}/document-tags",
         operation_id="listDocumentTags",

@@ -23,7 +23,7 @@ CSV/XLSX accept optional human `verdict` selection (`active`, `all`, `unreviewed
 `accepted`, `rejected`; omitted means `all`). CSV appends grounding/limitation
 columns, including the count of unverified group members, when the result includes unverified rows; no invented page or quotation.
 `Finding.block_evidence` carries the group’s verified graphical members even when its canonical observation is text; its former per-observation limit of 64 is lifted for this union.
-The API has 301 paths, 330 operations and 821 schemas; migration head `0069`.
+The API has 302 paths, 331 operations and 822 schemas; migration head `0070`.
 The domain catalogs remain at candidate revision 71; their shared version advances.
 
 Additive change under this version (`UIP-G-05`, programme `UI-PARITY-R3`, owner ruling Г7-B; the version number is raised by the
@@ -46,6 +46,21 @@ while the block index is built. It is the count the latest run of the version wh
 portal blocks recorded in its stage result, the same run and the same blocks `listVersionPortalBlocks` answers; no object is read and
 the version's file is not parsed. **Absent is not zero**: a version no such run has reached, or one admitted for comparison only (no
 portal bundle), carries no `block_count`, while a built index that holds no block answers `0`.
+
+Additive change under this version (`UIP-G-10`, programme `UI-PARITY-R3`, owner ruling Г11; the version number is raised by the
+integrator once for the stage): **one operation, one schema and one optional property; nothing is removed or made required.**
+`setDocumentGroup` (`PUT /projects/{project_uid}/documents/{document_uid}/group`, `Idempotency-Key` required, `expert` and `admin` as for
+`setDocumentTags`, `viewer` refused) takes `SetDocumentGroupRequest` (`{group}`, a string of at most 40 characters or `null`) and answers `200`
+with the document's current `DocumentVersion` carrying the new `group`. The group is a value the document carries, not an entity: one optional
+text, 1 to 40 characters after trimming (leading and trailing spaces are dropped and inner runs of spaces collapse), beside the free `tags`,
+which stay and stay a filter. `null` or a blank text takes the document out of its group («Без группы»); a longer text is `422
+validation_failed`; a document of another project, or an unknown one, is `404 not_found`; a reused key with another group is `409
+idempotency_key_reuse`. The same group again changes nothing and records nothing; a change appends `document.group_set` (the group before and
+after, `null` for none) to the audit trail, like `document.tags_set`. `DocumentVersion` gains the optional `group`, answered by `listDocuments`,
+`getDocumentVersion` and `setDocumentGroup` and absent for none (every other operation that answers a `DocumentVersion` carries none). There is
+no group list, no rename of a group and no empty group: the groups of a section are the distinct values of its documents, in alphabetical order on
+the screen. Storage is migration `0070_document_group` (`document.group_label`, nullable, `ck_document_group_label_length`; the wire name is
+`group` because `GROUP` is a reserved word of SQL). 302 paths / 331 operations / 822 schemas.
 
 Publication correction (`ANALYSIS-REPAIR-CONFORMANCE-01`): CSV declares the existing
 validation envelope; the optional memory limitation uses the same nullable-string

@@ -1450,6 +1450,10 @@ class DocumentVersion(_Object):
     #: `R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them.
     tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `UIP-G-10` (contract 1.55.0, owner ruling Г11): the document's one optional group, on the reads that carry it
+    #: (`listDocuments`, `getDocumentVersion` and `setDocumentGroup`). Absent is «Без группы». A value of the document, not an
+    #: entity: it has no identity of its own and is shown in alphabetical order by the screen. The free `tags` are separate.
+    group: Annotated[str, Field(min_length=1, max_length=40)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version. Present on the items of `listDocuments`,
     #: where it is the audit of the document's current version, and on `getDocumentVersion` (`UIP-S04-01`), where it is
     #: the audit of the version read: the same figures from the same read model, so the two never disagree. Absent from
@@ -2139,6 +2143,16 @@ class SetDocumentTagsRequest(_Object):
     """`R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all."""
 
     tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)]
+
+
+class SetDocumentGroupRequest(_Object):
+    """`UIP-G-10` (contract 1.55.0): the document's new group, or ``null`` (or a blank text) to take it out of its group.
+
+    The text is trimmed and inner runs of spaces collapse; what remains is 1 to 40 characters. The bound is read on the text as sent
+    and again on the trimmed text, so a longer one is ``422 validation_failed``.
+    """
+
+    group: Annotated[str, Field(max_length=40)] | None
 
 
 class DocumentTagCount(_Object):

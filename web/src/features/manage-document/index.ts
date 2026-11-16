@@ -2,7 +2,7 @@
 
 export type { DocumentAddress } from './model/use-manage-document';
 export {
-  cleanTag, tagProblem, titleProblem, useRenameDocument, useSetDocumentArchived, useSetDocumentTags,
+  cleanTag, tagProblem, titleProblem, useRenameDocument, useSetDocumentArchived, useSetDocumentGroup, useSetDocumentTags,
 } from './model/use-manage-document';
 export type { DocumentLifecycleProps, DocumentLifecycleViewProps } from './ui/document-lifecycle';
 export { DocumentLifecycle, DocumentLifecycleView } from './ui/document-lifecycle';

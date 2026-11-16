@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
- *   sha256 c8aecb7ac20087716f29589d95784a77af71fe3ede086348ffbf37e0f275ce79
+ *   sha256 348a9c20359d5aea7a712c75bfa8f594fc127fbd1f52547cc288b3b15d540c87
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.55.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'c8aecb7ac20087716f29589d95784a77af71fe3ede086348ffbf37e0f275ce79';
+export const CONTRACT_DIGEST = '348a9c20359d5aea7a712c75bfa8f594fc127fbd1f52547cc288b3b15d540c87';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -649,6 +649,7 @@ export const SCHEMA_NAMES = [
   'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
   'SetDocumentArchivedRequest',
+  'SetDocumentGroupRequest',
   'SetDocumentTagsRequest',
   'SetEngineerAbsencesRequest',
   'SetExecutionPausedRequest',
@@ -4294,6 +4295,8 @@ export type DocumentVersion = {
   classification?: VersionClassification;
   display_title?: string;
   document_uid: DocumentUid;
+  /** `UIP-G-10` (contract 1.55.0, owner ruling Г11): the document's one optional group, on the reads that carry it (`listDocuments`, `getDocumentVersion` and `setDocumentGroup`). Absent is «Без группы». A value of the document, not an entity: it has no identity of its own, and the screen shows the groups in alphabetical order. The free `tags` are separate and unchanged. */
+  group?: string;
   input_manifest: Array<InputManifestEntry>;
   media_type: "application/pdf";
   page_count: number;
@@ -8002,6 +8005,11 @@ export type SetCurrentNormSnapshotRequest = {
 /** `R-151a` (contract 1.22.0): archive (`true`) or restore (`false`) one document. Nothing is deleted. */
 export type SetDocumentArchivedRequest = {
   archived: boolean;
+};
+
+/** `UIP-G-10` (contract 1.55.0): the document's new group, or `null` (or a blank text) to take it out of its group. The text is trimmed and inner runs of spaces collapse; what remains is 1 to 40 characters. The bound is read on the text as sent and again on the trimmed text, so a longer one is `422 validation_failed`. */
+export type SetDocumentGroupRequest = {
+  group: string | null;
 };
 
 /** `R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all. */

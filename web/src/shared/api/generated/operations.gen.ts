@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
- *   sha256 c8aecb7ac20087716f29589d95784a77af71fe3ede086348ffbf37e0f275ce79
+ *   sha256 348a9c20359d5aea7a712c75bfa8f594fc127fbd1f52547cc288b3b15d540c87
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -266,6 +266,7 @@ import type {
   SectionVendorList,
   SetCurrentNormSnapshotRequest,
   SetDocumentArchivedRequest,
+  SetDocumentGroupRequest,
   SetDocumentTagsRequest,
   SetEngineerAbsencesRequest,
   SetExecutionPausedRequest,
@@ -637,6 +638,7 @@ export const OPERATION_IDS = [
   'searchNorms',
   'setCurrentNormSnapshot',
   'setDocumentArchived',
+  'setDocumentGroup',
   'setDocumentTags',
   'setEngineerAbsences',
   'setExecutionPaused',
@@ -7551,6 +7553,37 @@ export type SetDocumentArchivedInput = {
 export type SetDocumentArchivedResult = DocumentVersion;
 
 // ------------------------------------------------------------------------------------
+// setDocumentGroup - PUT /projects/{project_uid}/documents/{document_uid}/group
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Document Group
+ *
+ * `UIP-G-10` (contract 1.55.0, owner ruling Г11): set, change or clear the one group a document carries. A group is a value of the document, not an entity: 1 to 40 characters after trimming (leading and trailing spaces are dropped and inner runs of spaces collapse); a longer text is `422 validation_failed`; `null` or a blank text takes the document out of its group («Без группы»). The free tags are separate and unchanged. `listDocuments` and `getDocumentVersion` answer the group as `group`, absent for none. The same group again changes nothing and records nothing; a change appends `document.group_set` (the group before and after, `null` for none) to the audit trail. `Idempotency-Key` is required: an identical repeat is replayed and a reused key with another group is `409 idempotency_key_reuse`. A document of another project, or an unknown one, is `404 not_found`. `expert` and `admin`, as for `setDocumentTags`; `viewer` is refused.
+ */
+export type SetDocumentGroupInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/group`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetDocumentGroupRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setDocumentGroup` (`application/json`, HTTP 200). */
+export type SetDocumentGroupResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
 // setDocumentTags - PUT /projects/{project_uid}/documents/{document_uid}/tags
 // ------------------------------------------------------------------------------------
 
@@ -13013,6 +13046,20 @@ export const OPERATIONS = {
     operationId: 'setDocumentArchived',
     method: 'PUT',
     path: '/projects/{project_uid}/documents/{document_uid}/archive',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  setDocumentGroup: {
+    operationId: 'setDocumentGroup',
+    method: 'PUT',
+    path: '/projects/{project_uid}/documents/{document_uid}/group',
     pathParams: ['document_uid', 'project_uid'],
     queryParams: [],
     headerParams: [],

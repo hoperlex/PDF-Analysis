@@ -470,6 +470,12 @@ class DocumentPort(Protocol):
         """`R-151e`: replace one document's free tags (at most ten, 1 to 40 characters each). Keyed."""
         ...
 
+    def set_document_group(
+        self, *, project_uid: str, document_uid: str, group: str | None, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        """`UIP-G-10`: set, change or clear one document's single group (1 to 40 characters after trimming; blank or ``None`` clears). Keyed."""
+        ...
+
     def list_document_tags(self, *, project_uid: str) -> models.DocumentTagList:
         """`R-151e`: each tag of the project's documents in use, with how many carry it."""
         ...
