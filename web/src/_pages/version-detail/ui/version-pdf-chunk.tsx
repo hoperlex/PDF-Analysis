@@ -8,8 +8,11 @@
  * screen harness provides, so the instruments that render in one synchronous pass see the drawer rather than its fallback. No static import
  * of the widget: `tests/guards/lazy-boundary.guard.test.ts` reads the import graph of `_pages` for one.
  *
- * The page mounts this only after «Просмотр PDF» is pressed, so the chunk (and pdf.js behind it, and the document's bytes) are asked for on
- * that press and not when the version page opens — the original creates its `<iframe>` the same way (`v-if="showVersionPdf"`).
+ * The document frame (`widgets/document-context`, `UIP-G-09`) mounts this, through the render function the version page hands it, only after
+ * «Просмотр PDF» is pressed, so the chunk (and pdf.js behind it, and the document's bytes) are asked for on that press and not when the
+ * version page opens — the original creates its `<iframe>` the same way (`v-if="showVersionPdf"`). The other pages of the document hand the
+ * frame no window and their button leads here; moving this wrapper into the frame, so that the window is the same on every tab and survives
+ * a change of tab and of version, is `UIP-S10-01` (it moves the import() edge this page's guards pin).
  *
  * **`ssr: false`** (`D-329`, argued in `_pages/dashboard/ui/lazy-dashboard.tsx`): the drawer exists only on the client, so the server never
  * writes a streamed boundary the client could disagree with. It is mounted after a press, never in the server's first pass, so this
