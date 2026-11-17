@@ -77,7 +77,7 @@ import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
-import { ExportPanel } from '@/widgets/export-panel';
+import { ExportBarView, ExportPanel } from '@/widgets/export-panel';
 import { ChangesPanelView, ComparisonViewerView, canShowOverlay, initialState, reduce, viewerGeometry } from '@/widgets/comparison-viewer';
 import type { EvidenceState } from '@/widgets/comparison-viewer';
 import { evidenceOf } from '@/entities/version-series';
@@ -3560,6 +3560,34 @@ export function screens(): Screen[] {
   add('SeverityBadge, the five severities proposed by the model', render(createElement('p', null,
     ...SEVERITY_VALUES.map((severity) => createElement(SeverityBadge, { key: severity, severity, proposed: true })),
   )));
+
+  /*
+   * `UIP-S06-05`: the bar of the file actions in every state it says -- each file being made (the package with its way to cancel
+   * and its phase), the files handed over, and a refusal of each kind under the row. The row itself (the button, its list, the
+   * «?» and its description) is drawn by every screen that draws «Разбор». At the very end, for the reason above.
+   */
+  {
+    const idle = { pending: false, lastFileName: null, error: null, onDownload: noop };
+    const idlePackage = { pending: false, status: null, error: null, onDownload: noop, onCancel: noop };
+    add('ExportBarView, each file being made', render(createElement(ExportBarView, {
+      runId: RUN_ID,
+      csv: { ...idle, pending: true },
+      xlsx: { ...idle, pending: true },
+      pack: { ...idlePackage, pending: true, status: 'Подготовка пакета аудита…' },
+    })));
+    add('ExportBarView, the files handed over', render(createElement(ExportBarView, {
+      runId: RUN_ID,
+      csv: { ...idle, lastFileName: 'findings.csv' },
+      xlsx: { ...idle, lastFileName: 'findings.xlsx' },
+      pack: { ...idlePackage, status: 'Пакет собран: исходный PDF и манифест.' },
+    })));
+    add('ExportBarView, a refusal of each file', render(createElement(ExportBarView, {
+      runId: RUN_ID,
+      csv: { ...idle, error: { title: 'В выгрузке отказано', detail: 'Файл не создан.', correlationId: 'cid-contrast-2' } },
+      xlsx: { ...idle, error: { title: 'Excel не выгружен', detail: 'Файл не создан.' } },
+      pack: { ...idlePackage, error: { title: 'Пакет аудита не собран', detail: 'Неполный ZIP не скачивается; повторите попытку.' } },
+    })));
+  }
 
   return out;
 }

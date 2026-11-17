@@ -1,5 +1,5 @@
 /**
- * `PREC-WEB`: the neutral label in the row, the collapsed queue «Рекомендовано снять», and the one line above the list.
+ * `PREC-WEB`: the neutral label in the row, the collapsed queue «Рекомендовано снять», and the one line of the night under the table.
  *
  * Each case can fail: the mutations in `.local/evidence/lane-prec-web/mutations.txt` break the code under each one and show the case red.
  */
@@ -137,7 +137,7 @@ describe('the queue «Рекомендовано снять»', () => {
   });
 });
 
-describe('the line above the list', () => {
+describe('the line of the night under the list', () => {
   const WINDOW = { start: '23:30', end: '05:45', tz: 'Europe/Moscow' };
 
   it('says the night and takes the hours and the zone from the setting', () => {
@@ -152,10 +152,14 @@ describe('the line above the list', () => {
     expect(precedentsUnavailableLine(null)).toBe('Прецеденты считаются ночью и появятся утром; после переезда в Яндекс — сразу после прогона');
   });
 
-  it('is drawn once over the list and is gone when the precedents are there', () => {
+  it('is drawn once, in a closed block under the table, and is gone when the precedents are there', () => {
+    // `UIP-S06-04`: the line no longer stands over the table; it lies under it in a block closed until it is opened.
     const away = reviewPage({ findings: [A, B], roles: EXPERT, precedents: runPrecedents([], { available: false }), control: vectorControl(WINDOW) });
     expect((away.match(/data-precedents-line/g) ?? []).length).toBe(1);
-    expect(away.indexOf('data-precedents-line')).toBeLessThan(away.indexOf('am-finding-list'));
+    expect(away.indexOf('data-precedents-line')).toBeGreaterThan(away.indexOf('am-finding-list'));
+    const fold = away.slice(away.lastIndexOf('<', away.indexOf('data-precedents-fold')), away.indexOf('>', away.indexOf('data-precedents-fold')) + 1);
+    expect(fold.startsWith('<details')).toBe(true);
+    expect(fold).not.toMatch(/\sopen(=|\s|>)/);
     const there = reviewPage({ findings: [A, B], roles: EXPERT, precedents: runPrecedents([label(A.finding_uid, 'often_rejected')]), control: vectorControl(WINDOW) });
     expect(there).not.toContain('data-precedents-line');
   });

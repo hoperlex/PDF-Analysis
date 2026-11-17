@@ -164,6 +164,21 @@ describe('the button', () => {
     expect(AUDIT_PACKAGE_TITLE).toContain('manifest.json');
   });
 
+  it('is «Пакет аудита» in the list under «Скачать ▾» on the bar of «Разбор», with the same tooltip and the same conditions', () => {
+    // `UIP-S06-05`: the file actions are one button; the package stays an item of it, offered where the page names the version.
+    for (const state of EXPORTABLE_RUN_STATES) {
+      const markup = panel(state, { layout: 'bar', auditPackage: { versionUid: VERSION } });
+      expect(markup).toContain('data-intent="export-audit-package"');
+      expect(markup).toContain('Пакет аудита');
+      expect(markup).toContain(`title="${AUDIT_PACKAGE_TITLE}"`);
+      expect(markup.indexOf('data-export-menu')).toBeLessThan(markup.indexOf('data-intent="export-audit-package"'));
+      expect(panel(state, { layout: 'bar' })).not.toContain('export-audit-package');
+    }
+    for (const state of RUN_STATE_VALUES.filter((candidate) => !isExportableRunState(candidate))) {
+      expect(panel(state, { layout: 'bar', auditPackage: { versionUid: VERSION } })).not.toContain('export-audit-package');
+    }
+  });
+
   it('is not offered to a session that may not export, nor for a run without a result', () => {
     expect(panel('published')).not.toContain('export-audit-package');
     for (const state of RUN_STATE_VALUES.filter((candidate) => !isExportableRunState(candidate))) {

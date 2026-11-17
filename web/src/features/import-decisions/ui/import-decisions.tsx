@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * «Загрузить решения из Excel» beside «Скачать Excel» on «Разбор» (`R-151d`, `importRunDecisions`).
+ * «Загрузить решения» beside «Скачать ▾» on «Разбор» (`R-151d`, `importRunDecisions`).
  *
  * The original pdf-proverka loads «Решение эксперта» and «Причина отклонения» back from its own report by
  * the finding's ID. Ours takes the workbook «Скачать Excel» produced, edited in «Решение эксперта»
@@ -59,14 +59,19 @@ export interface ImportDecisionsViewProps {
   readonly report: DecisionImportReport | null;
   readonly failure: string | null;
   readonly onChoose: (file: File) => void;
+  /**
+   * `UIP-S06-05`: in the bar of «Разбор» the control is a small button, one more item of the row it stands in, and each line of
+   * its report is a row of its own under it. Absent, the control is the button with its report stacked under it.
+   */
+  readonly inline?: boolean | undefined;
 }
 
 /** The control from state already in hand; rendered by the static harness in every branch. */
-export function ImportDecisionsView({ pending, report, failure, onChoose }: ImportDecisionsViewProps) {
+export function ImportDecisionsView({ pending, report, failure, onChoose, inline }: ImportDecisionsViewProps) {
   const refused = report?.rows.filter((row) => row.outcome === 'refused') ?? [];
   return (
-    <div className={styles.control} data-decision-import="">
-      <label className={`am-button am-button--quiet ${styles.pick}`} aria-disabled={pending}>
+    <div className={inline === true ? styles.inline : styles.control} data-decision-import="">
+      <label className={`am-button am-button--quiet ${inline === true ? 'am-button--small ' : ''}${styles.pick}`} aria-disabled={pending}>
         <input
           type="file"
           accept={ACCEPT}
@@ -78,7 +83,7 @@ export function ImportDecisionsView({ pending, report, failure, onChoose }: Impo
             if (file !== undefined) onChoose(file);
           }}
         />
-        {pending ? 'Загружаю решения…' : 'Загрузить решения из Excel'}
+        {pending ? 'Загружаю решения…' : 'Загрузить решения'}
       </label>
       {report !== null ? (
         <p className={styles.counts} data-import-recorded={report.recorded}>
@@ -100,12 +105,13 @@ export function ImportDecisionsView({ pending, report, failure, onChoose }: Impo
 }
 
 /** The connected control: checks the size before sending, then shows the server's report. */
-export function ImportDecisions({ runId }: { readonly runId: RunId }) {
+export function ImportDecisions({ runId, inline }: { readonly runId: RunId; readonly inline?: boolean | undefined }) {
   const importer = useImportDecisions({ runId });
   const [precheck, setPrecheck] = useState<string | null>(null);
   return (
     <ImportDecisionsView
       pending={importer.isPending}
+      inline={inline}
       report={importer.data ?? null}
       failure={precheck ?? (importer.error !== null ? importFailure(importer.error) : null)}
       onChoose={(file) => {

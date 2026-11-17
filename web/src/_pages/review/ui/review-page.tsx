@@ -18,8 +18,9 @@
  *    limitation and offer the same human decisions. Diagnostics without a Finding identity
  *    remain outside the ledger. An unverified finding never opens a fabricated page or quote.
  *
- * 2. **`provider_mode` stays visible.** It is on the run badge in the header, on the export
- *    panel, and on the evidence viewer's own provenance line. A recorded run must never be
+ * 2. **`provider_mode` stays visible.** It is on the run badge of the header line and on the
+ *    evidence viewer's own provenance line; the file actions (`UIP-S06-05`) draw no badge of
+ *    their own, so the header is the one place that says it. A recorded run must never be
  *    presentable as a live one, and the reviewer should not have to scroll to find out
  *    which they are looking at.
  *
@@ -35,7 +36,7 @@ import type { ReactNode } from 'react';
 
 import type { FindingObservationId, FindingUid, ProjectUid, RunId, VersionUid } from '@/shared/api';
 import { getFinding, listDecisionHistory, queryKeys } from '@/shared/api';
-import { ErrorState, LoadingState, PageShell, RunStateBadge } from '@/shared/ui';
+import { ErrorState, LoadingState, RunStateBadge } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
@@ -482,145 +483,149 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     />
   );
 
+  // The frame is `PageShell`'s (`am-page`, then the card of the body), but «Разбор» draws its header itself: the title, the
+  // state of the run with its mode, the two codes and the way back to the run stand in ONE small line (`UIP-S06-04`). The
+  // shell's header is a 19 px title over a subtitle over a row of actions, and spent a third of the first screen before the
+  // table (the original's first row stands at about a quarter of it). The shell is shared and is not changed for one screen.
   return (
-    <PageShell
-      title="Разбор"
-      subtitle={
-        run === null ? (
-          'Загрузка прогона…'
+    <section className="am-page">
+      <header className={styles.header} data-review-header="">
+        <h1 className={styles.title}>Разбор</h1>
+        {run === null ? (
+          <span className={styles.note}>Загрузка прогона…</span>
         ) : (
           <>
-            <span className="am-uid-row">
-              <RunStateBadge state={run.state} providerMode={run.provider_mode} />{' '}
-              <span className="am-uid" data-project-uid={projectUid}>
-                {projectUid}
-              </span>{' '}
-              <span className="am-uid" data-run-id={runId}>
-                {runId}
-              </span>
+            <RunStateBadge state={run.state} providerMode={run.provider_mode} />
+            <span className="am-uid" data-project-uid={projectUid}>
+              {projectUid}
             </span>
-            {run.diagnostic_observation_count !== undefined &&
-            run.diagnostic_observation_count > 0 ? (
-              <span
-                className="am-review__diagnostics"
-                data-diagnostic-observation-count={run.diagnostic_observation_count}
-              >
-                шлюз привязки отклонил непривязанных элементов модели:{' '}
-                {run.diagnostic_observation_count}. Это диагностика, а не замечания: их нет ни
-                в списке ниже, ни в строках CSV.
-              </span>
-            ) : null}
+            <span className="am-uid" data-run-id={runId}>
+              {runId}
+            </span>
+            <Link className={styles.back} href={routes.run(projectUid, runId)}>К прогону</Link>
           </>
-        )
-      }
-      actions={
-        <>
-          <Link href={routes.run(projectUid, runId)}>К прогону</Link>{' '}
-          <Link href={routes.project(projectUid)}>К объекту</Link>{' '}
-          <Link href={routes.projects()}>Все объекты</Link>
-        </>
-      }
-    >
-      <DocumentContext projectUid={projectUid} runId={runId} current="review" />
-      {/* `F8-WEB`: the caption that the candidates are separate machine observations is not true of a run that published them as findings. */}
-      <ExtendedReviewSummary projectUid={projectUid} runId={runId} oneList={run?.publication_mode === 'one_list' || runHasNonTextFindings(admitted.findings)} published={admitted.findings} />
-      {/*
-        The filters, the tally and the file actions across the whole width over the list and the open finding, as the
-        original's top row: the total and the severity chips at the left, the file actions at the right. A run with no
-        findings has no toolbar, and its file actions stand on their own.
-      */}
-      {admitted.findings.length === 0 ? <div className={styles.exportAlone}>{exportPanel}</div> : null}
-      <FindingToolbar
-        groups={groups}
-        verdictFilter={verdictFilter}
-        onVerdictFilterChange={setVerdictFilter}
-        severityFilter={severityFilter}
-        onSeverityFilterChange={setSeverityFilter}
-        view={view}
-        onViewChange={setView}
-        actions={admitted.findings.length === 0 ? undefined : exportPanel}
-      />
-      {precedentsAbsent && !vectorControl.isPending ? <PrecedentsLine window={vectorControl.data?.window ?? null} /> : null}
-      <div className={view === 'table' ? `am-review ${styles.layout} ${styles.layoutTable}` : `am-review ${styles.layout}`}>
-        <div className={view === 'table' ? `am-review__list ${styles.list} ${styles.listTable}` : `am-review__list ${styles.list}`}>
-          <FindingList
-            groups={groups}
-            verdictFilter={verdictFilter}
-            onVerdictFilterChange={setVerdictFilter}
-            severityFilter={severityFilter}
-            onSeverityFilterChange={setSeverityFilter}
-            view={view}
-            onViewChange={setView}
-            toolbar="outside"
-            blockCountOf={blockLinks === null ? undefined : (findingUid) => blocksOfFinding(blockLinks, findingUid).length}
-            unlinkedPages={blockLinks === null ? undefined : blockLinks.unlinkedPages}
-            precedentOf={precedentsAccess.read ? (findingUid) => labelByFinding.get(findingUid) : undefined}
-            onOpenQueued={(findingUid) => {
-              setSelection(selectFinding(findingUid));
-            }}
-            selectedFindingUid={selectedUid}
-            onSelect={(findingUid) => {
-              // A second press on the open row of the table closes it, as the original's strip does.
-              setSelection(view === 'table' && findingUid === selectedUid ? null : selectFinding(findingUid));
-            }}
-            renderExpansion={() => <OpenedFinding>{detailContent}</OpenedFinding>}
-            sheetOf={(page) => sheetOfPage(sheetLabels.data, page)}
-            // `R-151n`: ✓/✕ in each row, for a session that may decide.
-            renderRowActions={mayAct ? (finding) => (
-              <ReviewRowActions
-                finding={finding}
-                runId={runId}
-                onOpen={(findingUid) => {
-                  setSelection(selectFinding(findingUid));
-                }}
-              />
-            ) : undefined}
-            isLoading={findingsQuery.isPending}
-            emptyDetail={run?.state === 'partial' ? <p>Прогон завершился частично. Отсутствие опубликованных замечаний не подтверждает, что в документе их нет.
-              {' '}<Link href={routes.run(projectUid, runId)}>Проверить этапы и ограничения прогона</Link>.</p> : undefined}
-            error={presentFindingsFailure(findingsQuery.error, {
-              title: 'Не удалось загрузить замечания',
-              onRetry: () => {
-                void findingsQuery.refetch();
-              },
-            })}
-            integrityFaults={admitted.integrityFaults.map((fault) => ({
-              findingUid: fault.findingUid,
-              refusal: fault.refusal,
-            }))}
-          />
+        )}
+      </header>
+      {run !== null && run.diagnostic_observation_count !== undefined && run.diagnostic_observation_count > 0 ? (
+        <p
+          className="am-review__diagnostics"
+          data-diagnostic-observation-count={run.diagnostic_observation_count}
+        >
+          шлюз привязки отклонил непривязанных элементов модели: {run.diagnostic_observation_count}. Это диагностика, а не
+          замечания: их нет ни в списке ниже, ни в строках CSV.
+        </p>
+      ) : null}
+      <div className="am-page__body">
+        <DocumentContext projectUid={projectUid} runId={runId} current="review" />
+        {/*
+          The filters, the tally and the file actions across the whole width over the list and the open finding, as the
+          original's top row: the total and the severity chips at the left, the file actions at the right. A run with no
+          findings has no toolbar, and its file actions stand on their own.
+        */}
+        {admitted.findings.length === 0 ? <div className={styles.exportAlone}>{exportPanel}</div> : null}
+        <FindingToolbar
+          groups={groups}
+          verdictFilter={verdictFilter}
+          onVerdictFilterChange={setVerdictFilter}
+          severityFilter={severityFilter}
+          onSeverityFilterChange={setSeverityFilter}
+          view={view}
+          onViewChange={setView}
+          actions={admitted.findings.length === 0 ? undefined : exportPanel}
+        />
+        <div className={view === 'table' ? `am-review ${styles.layout} ${styles.layoutTable}` : `am-review ${styles.layout}`}>
+          <div className={view === 'table' ? `am-review__list ${styles.list} ${styles.listTable}` : `am-review__list ${styles.list}`}>
+            <FindingList
+              groups={groups}
+              verdictFilter={verdictFilter}
+              onVerdictFilterChange={setVerdictFilter}
+              severityFilter={severityFilter}
+              onSeverityFilterChange={setSeverityFilter}
+              view={view}
+              onViewChange={setView}
+              toolbar="outside"
+              blockCountOf={blockLinks === null ? undefined : (findingUid) => blocksOfFinding(blockLinks, findingUid).length}
+              unlinkedPages={blockLinks === null ? undefined : blockLinks.unlinkedPages}
+              precedentOf={precedentsAccess.read ? (findingUid) => labelByFinding.get(findingUid) : undefined}
+              onOpenQueued={(findingUid) => {
+                setSelection(selectFinding(findingUid));
+              }}
+              selectedFindingUid={selectedUid}
+              onSelect={(findingUid) => {
+                // A second press on the open row of the table closes it, as the original's strip does.
+                setSelection(view === 'table' && findingUid === selectedUid ? null : selectFinding(findingUid));
+              }}
+              renderExpansion={() => <OpenedFinding>{detailContent}</OpenedFinding>}
+              sheetOf={(page) => sheetOfPage(sheetLabels.data, page)}
+              // `R-151n`: ✓/✕ in each row, for a session that may decide.
+              renderRowActions={mayAct ? (finding) => (
+                <ReviewRowActions
+                  finding={finding}
+                  runId={runId}
+                  onOpen={(findingUid) => {
+                    setSelection(selectFinding(findingUid));
+                  }}
+                />
+              ) : undefined}
+              isLoading={findingsQuery.isPending}
+              emptyDetail={run?.state === 'partial' ? <p>Прогон завершился частично. Отсутствие опубликованных замечаний не подтверждает, что в документе их нет.
+                {' '}<Link href={routes.run(projectUid, runId)}>Проверить этапы и ограничения прогона</Link>.</p> : undefined}
+              error={presentFindingsFailure(findingsQuery.error, {
+                title: 'Не удалось загрузить замечания',
+                onRetry: () => {
+                  void findingsQuery.refetch();
+                },
+              })}
+              integrityFaults={admitted.integrityFaults.map((fault) => ({
+                findingUid: fault.findingUid,
+                refusal: fault.refusal,
+              }))}
+            />
+          </div>
+
+          {view === 'table' ? null : <div className={`am-review__detail ${styles.detail}`}>{detailContent}</div>}
         </div>
 
-        {view === 'table' ? null : <div className={`am-review__detail ${styles.detail}`}>{detailContent}</div>}
+        {/*
+          `UIP-S06-04`: under the table, three closed blocks in this order — the summary of the extended review, the line of the
+          precedents, the machine candidates. The table is what the page is for; none of them stands over it.
+        */}
+        {/* `F8-WEB`: the caption that the candidates are separate machine observations is not true of a run that published them as findings. */}
+        <ExtendedReviewSummary projectUid={projectUid} runId={runId} oneList={run?.publication_mode === 'one_list' || runHasNonTextFindings(admitted.findings)} published={admitted.findings} />
+        {precedentsAbsent && !vectorControl.isPending ? (
+          <details className={styles.fold} data-precedents-fold="">
+            <summary>Прецеденты ещё не посчитаны</summary>
+            <PrecedentsLine window={vectorControl.data?.window ?? null} />
+          </details>
+        ) : null}
+        <ReviewCandidates projectUid={projectUid} runId={runId} published={admitted.findings} sheetOf={(page) => sheetOfPage(sheetLabels.data, page)} />
+
+        {expanded ? (
+          <ReviewViewerDialog
+            position={shownAt < 0 ? null : shownAt + 1}
+            total={shownFindings.length}
+            onPrevious={shownAt < 0 ? stepTo(0) : stepTo(shownAt - 1)}
+            onNext={shownAt < 0 ? stepTo(0) : stepTo(shownAt + 1)}
+            onClose={() => { setExpanded(false); }}
+            title={detail?.observation.finding_text ?? 'Замечание'}
+          >
+            {selectedUid === null ? (
+              <p className="am-note">Выберите замечание в списке.</p>
+            ) : detailQuery.isPending ? (
+              <LoadingState what="выбранное замечание" />
+            ) : evidenceProps === null || detail === null ? (
+              detailFailure
+            ) : !hasEvidencePage ? (
+              <><EvidenceLimitation finding={detail} /><p>Подтверждённая страница для просмотра не указана.</p></>
+            ) : onBlocks ? (
+              blockView({ presentation: 'full', aside: viewerAside })
+            ) : (
+              <LazyEvidenceViewer {...evidenceProps} presentation="full" aside={viewerAside} />
+            )}
+          </ReviewViewerDialog>
+        ) : null}
+
       </div>
-
-      <ReviewCandidates projectUid={projectUid} runId={runId} published={admitted.findings} sheetOf={(page) => sheetOfPage(sheetLabels.data, page)} />
-
-      {expanded ? (
-        <ReviewViewerDialog
-          position={shownAt < 0 ? null : shownAt + 1}
-          total={shownFindings.length}
-          onPrevious={shownAt < 0 ? stepTo(0) : stepTo(shownAt - 1)}
-          onNext={shownAt < 0 ? stepTo(0) : stepTo(shownAt + 1)}
-          onClose={() => { setExpanded(false); }}
-          title={detail?.observation.finding_text ?? 'Замечание'}
-        >
-          {selectedUid === null ? (
-            <p className="am-note">Выберите замечание в списке.</p>
-          ) : detailQuery.isPending ? (
-            <LoadingState what="выбранное замечание" />
-          ) : evidenceProps === null || detail === null ? (
-            detailFailure
-          ) : !hasEvidencePage ? (
-            <><EvidenceLimitation finding={detail} /><p>Подтверждённая страница для просмотра не указана.</p></>
-          ) : onBlocks ? (
-            blockView({ presentation: 'full', aside: viewerAside })
-          ) : (
-            <LazyEvidenceViewer {...evidenceProps} presentation="full" aside={viewerAside} />
-          )}
-        </ReviewViewerDialog>
-      ) : null}
-
-    </PageShell>
+    </section>
   );
 }

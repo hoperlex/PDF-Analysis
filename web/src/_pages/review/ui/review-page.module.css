@@ -1,3 +1,47 @@
+/*
+ * `UIP-S06-04`: the header of «Разбор» is one small line: the title, the state of the run with its mode, the two codes and the
+ * way back to the run. The page used to open with a 19 px title over a subtitle over a row of three links; the table stood
+ * at 600 px of 900, and the original's stands at about a quarter of the screen. The frame under it is `DocumentContext`'s.
+ */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-2xs) var(--am-gap-sm);
+  margin-bottom: var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+}
+
+.title {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--am-text-base);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.note {
+  color: var(--am-ink-muted);
+}
+
+/* The way back stands at the right end of the line; a line that wraps keeps it on the last row. */
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--am-target-min);
+  margin-left: auto;
+}
+
+/*
+ * A closed block under the table (`UIP-S06-04`): the line of the precedents. The summary and the machine candidates are
+ * the extended-review widget's own, drawn the same way: one line until it is opened.
+ */
+.fold {
+  min-width: 0;
+  margin-block: var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+}
+
 /* A run with no findings: its file actions stand alone over the empty list. */
 .exportAlone {
   margin-bottom: var(--am-gap-sm);

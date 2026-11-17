@@ -1,8 +1,30 @@
-/* `R-151d`: «Загрузить решения из Excel» under «Скачать Excel». Tokens only. */
+/* `R-151d`: «Загрузить решения» beside the file actions of «Разбор». Tokens only. */
 .control {
   display: grid;
   gap: var(--am-gap-xs);
   justify-items: start;
+}
+
+/*
+ * `UIP-S06-05`: in the bar the control has no box of its own. Its button is one more item of the row it stands in, and each line of
+ * its report (the counts, the refused rows, a refusal of the file) is a row of its own at the row's end, under the buttons.
+ */
+.inline {
+  display: contents;
+}
+
+.inline .counts,
+.inline .refused,
+.inline .error {
+  flex-basis: 100%;
+  order: 3;
+  max-width: none;
+  text-align: right;
+}
+
+.inline .refused {
+  padding: 0;
+  list-style: none;
 }
 
 .pick {

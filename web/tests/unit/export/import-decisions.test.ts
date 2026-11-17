@@ -1,5 +1,5 @@
 /**
- * «Загрузить решения из Excel» (`R-151d`, `importRunDecisions`).
+ * «Загрузить решения» (`R-151d`, `importRunDecisions`).
  *
  * The expert loads the workbook «Скачать Excel» produced back, edited; the server matches rows by «ID
  * замечания». These cases pin what the control says: the counts, each refused row with its reason in
@@ -45,8 +45,24 @@ function refusal(constraint: string): ApiError {
 describe('the decision import control', () => {
   it('offers the file choice in words', () => {
     const markup = view();
-    expect(markup).toContain('Загрузить решения из Excel');
+    expect(markup).toContain('Загрузить решения');
+    expect(markup).not.toContain('из Excel');
     expect(markup).toContain('accept=".xlsx,');
+  });
+
+  it('is a small button of the bar’s row when asked to stand inline, with the same report under it', () => {
+    // `UIP-S06-05`: the same words and the same lines of the report; only the box around them is the row's.
+    const stacked = view({ report: REPORT, failure: 'Файл пуст.' });
+    const inline = view({ report: REPORT, failure: 'Файл пуст.', inline: true });
+    expect(stacked).not.toContain('am-button--small');
+    expect(inline).toContain('am-button--small');
+    for (const markup of [stacked, inline]) {
+      expect(markup).toContain('Загрузить решения');
+      expect(markup).toContain('Записано 2 · без изменений 40 · отклонено 2');
+      expect(markup).toContain(`Строка 7: ${IMPORT_REFUSAL_LABELS.unknown_finding}`);
+      expect(markup).toContain('Файл пуст.');
+    }
+    expect(inline).not.toBe(stacked);
   });
 
   it('says the counts and each refused row with its reason', () => {
@@ -67,6 +83,6 @@ describe('the decision import control', () => {
       runId: RUN, runState: 'published', providerMode: 'live', onExport: () => {}, mayImportDecisions,
     }));
     expect(() => panel(false)).not.toThrow();
-    expect(panel(false)).not.toContain('Загрузить решения из Excel');
+    expect(panel(false)).not.toContain('Загрузить решения');
   });
 });
