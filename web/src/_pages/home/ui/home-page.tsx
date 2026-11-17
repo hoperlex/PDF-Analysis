@@ -20,8 +20,11 @@
  * `/admin/registrations` — and is mounted only when the screen registry's
  * `screenRolesAdmit` opens that screen to this role set. So a tile cannot offer what the menu
  * and the guard refuse. `R-80`: an account with no role is suspended and the API refuses it
- * every product read, so its home page says «Роли не назначены.», mounts no tile and asks
- * the API nothing.
+ * every product read, so its home page says one sentence (`UIP-S21-01`: «Доступ к разделам ещё
+ * не назначен. Обратитесь к администратору.», the original's), mounts no tile and asks the API
+ * nothing. «Роли не назначены.» stays where it is a fact about the account — the account menu
+ * and `/403` — and is no longer repeated under the greeting. The page does not move on to a
+ * screen the account may open: a silent redirect is a silent fallback (`AGENTS.md` §4).
  *
  * **The props are `W50-REGISTRY-01`'s contract** and this task keeps them: the `/` route and
  * its seed in `web/tests/unit/screens/route-screens.ts` hand down the name and the roles of
@@ -75,6 +78,9 @@ const UNKNOWN_ROLE_TITLE = 'Учётная запись содержит неи�
 const UNKNOWN_ROLE_DETAIL =
   'Сервер назвал роль, которой этот клиент не знает, поэтому решить, что показать на этой странице, достоверно нельзя — плитки скрыты.';
 
+/** What an account sees when the registry opens nothing to it — above all an account with no role (`R-80`). */
+const NO_ACCESS_SENTENCE = 'Доступ к разделам ещё не назначен. Обратитесь к администратору.';
+
 /** «Назначения»'s registered address (`W61-DISPATCHER-01`); a static address needs no builder. */
 const DISPATCHER_SCREEN: ScreenAddress = '/dispatcher';
 
@@ -89,7 +95,7 @@ function labelsOf(roles: readonly Role[]): readonly string[] | null {
 }
 
 function rolesSentence(labels: readonly string[]): string {
-  return labels.length === 0 ? 'Роли не назначены.' : `Роли: ${labels.join(', ')}.`;
+  return `Роли: ${labels.join(', ')}.`;
 }
 
 /** Whether the registry opens `address` to this role set — the one rule the menu uses too. */
@@ -116,7 +122,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
             (`Петрова А. С.`), and a period after it reads `С..`.
           */}
           <h1 className={`am-page__title ${styles.greeting}`}>{`Здравствуйте, ${displayLabel}!`}</h1>
-          {labels === null ? null : (
+          {labels === null || labels.length === 0 ? null : (
             <p className="am-page__subtitle" data-roles={roles.join(' ')}>
               {rolesSentence(labels)}
             </p>
@@ -146,7 +152,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
           </>
         ) : (
           <p className="am-note" data-home-tiles="none">
-            Разделы с данными откроются, когда администратор назначит учётной записи роль.
+            {NO_ACCESS_SENTENCE}
           </p>
         )}
       </div>
