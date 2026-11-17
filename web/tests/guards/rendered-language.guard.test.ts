@@ -2961,6 +2961,16 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     seedClient: (client) => client.setQueryData(queryKeys.releases.version(), { comparison_modules: 'versions' }),
   },
   {
+    // `UIP-S16-01`: the module is on and the top strip names no object («Все объекты»): the screen asks for one, in one line.
+    name: 'stage-compare-no-object',
+    make: () => createElement(StageComparePage, {}),
+    seedClient: (client) => {
+      client.setQueryData(queryKeys.releases.version(), { comparison_modules: 'versions,stages' });
+      client.setQueryData(queryKeys.account.me(), { roles: ['expert'], last_project_uid: null });
+      client.setQueryData(KEYS.projects, { items: [project()], page: STAGE_PAGE });
+    },
+  },
+  {
     name: 'stage-compare-module-unread',
     make: () => createElement(StageComparePage, {}),
     seedClient: (client) => seedError(client, queryKeys.releases.version(), stageFailure()),

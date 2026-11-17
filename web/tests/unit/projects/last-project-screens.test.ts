@@ -265,38 +265,56 @@ describe('the retired /optimisation address follows the object', () => {
 
 // ------------------------------------------------------------------------------------------------- the comparison screens
 
-describe('the comparison screens\' chooser shows the object the screen is on', () => {
+describe('the comparison screens work in the object the screen is on', () => {
   const projects = [
     { project_uid: P1, name: 'Корпус 1', created_at: '2026-10-01T00:00:00Z', document_count: 3 },
     { project_uid: P2, name: 'Корпус 2', created_at: '2026-10-02T00:00:00Z', document_count: 1 },
   ];
 
-  function chooserOf(page: ReactElement, query: string, lastProject: string | null, modules: 'versions' | 'versions,stages'): string[] {
+  function screenOf(page: ReactElement, query: string, lastProject: string | null, modules: 'versions' | 'versions,stages'): string {
     const client = newClient();
     seedComparison(client, { modules, projects: false, overview: 'none' });
     client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), { items: projects, page: { next_cursor: null } });
     client.setQueryData(queryKeys.account.me(), account(lastProject));
-    const markup = renderScreen(client, createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, page));
-    // the chooser is the first select of both screens; the workspace below it has selects of its own
+    return renderScreen(client, createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, page));
+  }
+
+  function chooserOf(page: ReactElement, query: string, lastProject: string | null, modules: 'versions' | 'versions,stages'): string[] {
+    const markup = screenOf(page, query, lastProject, modules);
+    // the chooser is the first select of the screen; the workspace below it has selects of its own
     const chooser = /<select[\s\S]*?<\/select>/.exec(markup)?.[0] ?? '';
     return [...chooser.matchAll(/<option value="([^"]*)"[^>]*\bselected\b/g)].map((match) => match[1] as string);
   }
 
-  for (const [name, page, modules] of [
-    ['«Сравнение версий»', () => createElement(VersionComparePage), 'versions'],
-    ['«Сравнение стадий»', () => createElement(StageComparePage), 'versions,stages'],
-  ] as const) {
-    it(`${name}: the last object when the address names none`, () => {
-      expect(chooserOf(page(), '', P2, modules)).toEqual([P2]);
-    });
-
-    it(`${name}: the address beats it, and ?project=all leaves the choice empty`, () => {
-      expect(chooserOf(page(), `project=${P1}`, P2, modules)).toEqual([P1]);
-      expect(chooserOf(page(), 'project=all', P2, modules)).toEqual(['']);
-    });
-
-    it(`${name}: no last object leaves the choice empty, as before`, () => {
-      expect(chooserOf(page(), '', null, modules)).toEqual(['']);
-    });
+  /** `UIP-S16-01`: «Сравнение стадий» has no chooser; the object the workspace opens on is the top strip's. */
+  function workspaceOf(query: string, lastProject: string | null): string | null {
+    return /data-stage-workspace="([^"]*)"/.exec(screenOf(createElement(StageComparePage), query, lastProject, 'versions,stages'))?.[1] ?? null;
   }
+
+  it('«Сравнение версий»: the last object when the address names none', () => {
+    expect(chooserOf(createElement(VersionComparePage), '', P2, 'versions')).toEqual([P2]);
+  });
+
+  it('«Сравнение версий»: the address beats it, and ?project=all leaves the choice empty', () => {
+    expect(chooserOf(createElement(VersionComparePage), `project=${P1}`, P2, 'versions')).toEqual([P1]);
+    expect(chooserOf(createElement(VersionComparePage), 'project=all', P2, 'versions')).toEqual(['']);
+  });
+
+  it('«Сравнение версий»: no last object leaves the choice empty, as before', () => {
+    expect(chooserOf(createElement(VersionComparePage), '', null, 'versions')).toEqual(['']);
+  });
+
+  it('«Сравнение стадий»: the last object when the address names none', () => {
+    expect(workspaceOf('', P2)).toBe(P2);
+  });
+
+  it('«Сравнение стадий»: the address beats it, and ?project=all opens no workspace', () => {
+    expect(workspaceOf(`project=${P1}`, P2)).toBe(P1);
+    expect(workspaceOf('project=all', P2)).toBeNull();
+  });
+
+  it('«Сравнение стадий»: no last object opens no workspace and asks for the top strip', () => {
+    expect(workspaceOf('', null)).toBeNull();
+    expect(screenOf(createElement(StageComparePage), '', null, 'versions,stages')).toContain('Выберите объект в верхней строке');
+  });
 });

@@ -3,11 +3,13 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { StageComparePage } from '@/_pages/stage-compare';
+import { queryKeys } from '@/shared/api';
+import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { STAGE_PAIR_KEYS } from '@/entities/stage-pair';
 
 import { newClient, renderScreen } from './harness';
 import { DOCUMENT_UID, PROJECT_UID, uid } from '../version-compare/fixtures';
-import { READER, seedComparison } from '../version-compare/seed';
+import { EXPERT, READER, seedComparison } from '../version-compare/seed';
 
 const RIGHT = uid('doc', 18);
 const PAIR = uid('stp', 19);
@@ -24,6 +26,16 @@ const NAMES = new Map([
   [RIGHT, { title: 'Пояснительная записка, редакция 2', section: 'AR', stage: 'R' }],
 ]);
 
+/**
+ * The screen's address is a query in the provider. The object is the top strip's (`UIP-S16-01`), so it is in the address too:
+ * `?project=<uid>` unless the case is about an address that names none.
+ */
+function at(client: ReturnType<typeof newClient>, query: string): string {
+  return renderScreen(client, createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, createElement(StageComparePage)));
+}
+
+const OBJECT = `project=${PROJECT_UID}`;
+
 /** The screen on a given step: the address is what the screen reads, so the step is a query in the provider. */
 function onStep(query: string, expert = true): string {
   const client = newClient();
@@ -34,7 +46,7 @@ function onStep(query: string, expert = true): string {
   client.setQueryData(['stage-full-runs', PAIR], [RUN_ROW]);
   client.setQueryData(['stage-full-run', RUN], RUN_ROW);
   client.setQueryData(['stage-run-card-counts', RUN], { total: 9, review: 3, project_changes: 5 });
-  return renderScreen(client, createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, createElement(StageComparePage)));
+  return at(client, query === '' ? OBJECT : `${OBJECT}&${query}`);
 }
 
 function loaded(expert = true): string {
@@ -65,7 +77,7 @@ function loaded(expert = true): string {
     }],
     page: { next_cursor: null },
   });
-  return renderScreen(client, createElement(StageComparePage));
+  return at(client, OBJECT);
 }
 
 describe('stage comparison catalog', () => {
@@ -101,7 +113,7 @@ describe('stage comparison catalog', () => {
   it('does not mount the catalog when the stages module is off', () => {
     const client = newClient();
     seedComparison(client, { modules: 'versions' });
-    const html = renderScreen(client, createElement(StageComparePage));
+    const html = at(client, OBJECT);
     expect(html).toContain('Модуль «Сравнение стадий» выключен');
     expect(html).not.toContain('Пары стадий');
     expect(html).not.toContain('Наборы PDF и ZIP');
@@ -122,10 +134,11 @@ describe('stage comparison steps (UI-B-84, UI-B-85, UI-B-88, UI-B-93)', () => {
     expect(html).not.toContain('Семь шагов сравнения');
   });
 
-  it('puts «Загрузить проекты» at the bar for an expert, and withholds it from a reader', () => {
+  it('puts «Загрузить документы» at the bar for an expert, and withholds it from a reader', () => {
     const expert = onStep('');
     expect(expert).toContain('data-stage-upload-open');
-    expect(expert).toContain('>Загрузить проекты<');
+    expect(expert).toContain('>Загрузить документы<');
+    expect(expert).not.toContain('Загрузить проекты');
     expect(expert.indexOf('data-stage-upload-open')).toBeLessThan(expert.indexOf('Пары стадий'));
     expect(onStep('', false)).not.toContain('data-stage-upload-open');
   });
@@ -155,5 +168,81 @@ describe('stage comparison steps (UI-B-84, UI-B-85, UI-B-88, UI-B-93)', () => {
     const html = onStep('tab=changes');
     expect(html).toMatch(/data-stage-tab="changes"[^>]*aria-selected="true"[^>]*tabindex="0"/);
     expect(html).toMatch(/data-stage-tab="documentation"[^>]*aria-selected="false"[^>]*tabindex="-1"/);
+  });
+});
+
+describe('the top row of «Сравнение стадий» and its object (UIP-S16-01)', () => {
+  const html = onStep('');
+
+  it('has no heading line: no subtitle, no link to «Сравнение версий», no card that chooses the object', () => {
+    expect(html).not.toContain('am-page__header');
+    expect(html).not.toContain('am-page__subtitle');
+    expect(html).not.toContain('Документы П и Р, подтверждённые пары и полнота комплекта.');
+    expect(html).not.toContain('href="/version-comparison');
+    expect(html).not.toMatch(/<label[^>]*>Объект/);
+    expect(html).not.toContain('— выберите —');
+  });
+
+  it('keeps the heading for a reader of the screen: first in the markup, out of the flow', () => {
+    expect(html).toMatch(/<h1[^>]*>Сравнение стадий<\/h1>/);
+    expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('role="tablist"'));
+    expect(html).not.toContain('am-page__title');
+  });
+
+  it('is one line of the four steps at the left and «Загрузить документы» at the right, for an expert only', () => {
+    const steps = [...html.matchAll(/data-stage-tab="(\w+)"/g)].map((match) => match[1]);
+    expect(steps).toEqual(['documentation', 'sheets', 'changes', 'journal']);
+    const between = html.slice(html.indexOf('role="tablist"'), html.indexOf('data-stage-upload-open'));
+    expect(between).not.toMatch(/<(section|table|h[1-6]|label)\b/);
+    expect(onStep('', false)).not.toContain('Загрузить документы');
+  });
+
+  it('does not offer «Загрузить документы» on the other steps: they are for the pair already loaded', () => {
+    for (const step of ['tab=sheets', 'tab=changes', 'tab=journal']) expect(onStep(step)).not.toContain('Загрузить документы');
+  });
+});
+
+describe('the object of «Сравнение стадий» is the one of the top strip (UIP-S16-01, UIP-G-06)', () => {
+  function bare(query: string, last: string | null = null, seed: Parameters<typeof seedComparison>[1] = {}): string {
+    const client = newClient();
+    seedComparison(client, { modules: 'versions,stages', ...seed });
+    client.setQueryData(queryKeys.account.me(), { ...EXPERT, last_project_uid: last });
+    client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [PAIR_ROW], page: { next_cursor: null } });
+    return at(client, query);
+  }
+
+  it('opens on the object of the address', () => {
+    expect(bare(OBJECT)).toContain(`data-stage-workspace="${PROJECT_UID}"`);
+  });
+
+  it('opens on the account\'s last object where the address names none', () => {
+    expect(bare('', PROJECT_UID)).toContain(`data-stage-workspace="${PROJECT_UID}"`);
+  });
+
+  it('asks for an object in the top strip, in one line, for «Все объекты» and for no object, and opens no workspace', () => {
+    for (const markup of [bare('project=all', PROJECT_UID), bare('', null)]) {
+      expect(markup).toContain('Выберите объект в верхней строке');
+      expect(markup).not.toContain('data-stage-workspace');
+      expect(markup).not.toContain('role="tablist"');
+    }
+  });
+
+  it('does not pick the only object for the reader: with one object and none chosen the strip is asked as well', () => {
+    expect(bare('', null)).toContain('Выберите объект в верхней строке');
+  });
+
+  it('says there are no objects, and not that one is to be chosen, when the account has none', () => {
+    const client = newClient();
+    seedComparison(client, { modules: 'versions,stages', projects: false });
+    client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), { items: [], page: { next_cursor: null } });
+    const markup = at(client, '');
+    expect(markup).toContain('Объектов пока нет');
+    expect(markup).not.toContain('Выберите объект в верхней строке');
+  });
+
+  it('draws nothing of the screen but its heading where the module is off, whichever object is chosen', () => {
+    const markup = bare(OBJECT, null, { modules: 'versions' });
+    expect(markup).toContain('Модуль «Сравнение стадий» выключен');
+    expect(markup).not.toContain('Выберите объект в верхней строке');
   });
 });

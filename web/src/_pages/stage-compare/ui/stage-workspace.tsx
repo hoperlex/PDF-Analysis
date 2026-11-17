@@ -150,7 +150,7 @@ export function StageWorkspace({ projectUid, mayAct }: { readonly projectUid: st
   // `UI-B-88`: the original draws the rail of steps on «Сопоставление листов» and «Изменения проекта» only, and only for a chosen pair.
   const railHere = (tab === 'sheets' || tab === 'changes') && pair !== undefined && (runId === '' || coherentRun !== undefined);
   return <div className={styles.workspace} data-stage-workspace={projectUid}>
-    {/* The steps come first, as the original's `sc-steps-bar`; «Загрузить проекты» stands at the right of the bar on the first step. */}
+    {/* The steps come first, as the original's `sc-steps-bar`; «Загрузить документы» (`UIP-S16-01`) stands at the right of the same line on the first step. */}
     <div className={styles.tabbar}>
       <div role="tablist" aria-label="Разделы сравнения стадий" className={styles.tabs}>
         {STAGE_TABS.map((key) => <button key={key} id={`stage-tab-${key}`} type="button" role="tab" data-stage-tab={key}
@@ -161,7 +161,7 @@ export function StageWorkspace({ projectUid, mayAct }: { readonly projectUid: st
       </div>
       {tab === 'documentation' && mayAct ? <button type="button" className="am-button" data-stage-upload-open="" aria-expanded={uploadOpen}
         aria-controls="stage-upload-panel" title="Загрузить PDF или ZIP со стадией П или Р; документы подтверждает эксперт."
-        onClick={() => setUploadOpen((open) => !open)}>Загрузить проекты</button> : null}
+        onClick={() => setUploadOpen((open) => !open)}>Загрузить документы</button> : null}
     </div>
     {tab === 'documentation' ? null : <div className={styles.selection}>
       <label>Пара стадий<select data-stage-pair-select="" value={pairId} onChange={(event) => choosePair(event.target.value)}>
