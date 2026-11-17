@@ -88,7 +88,7 @@ export function SetEditor({ set, draft, fileNames, perSet, mayAct, busy, onDraft
               value={draft.addToExisting ? 'existing' : 'new'}
               onChange={(event) => onDraft({ ...draft, addToExisting: event.target.value === 'existing' })}
             >
-              <option value="new">Новый проект со всеми версиями</option>
+              <option value="new">Новый документ со всеми версиями</option>
               {set.existing_document_uid === undefined ? null : <option value="existing">Добавить версии в существующий комплект</option>}
             </select>
           </label>

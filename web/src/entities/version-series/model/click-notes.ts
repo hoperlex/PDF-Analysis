@@ -12,7 +12,7 @@ import type { ComparisonMatrixColumn, ComparisonSheetPair } from '@/shared/api';
 import type { Sides } from './matrix-view';
 import { adjacentSides, validSides } from './matrix-view';
 
-export const ONE_VERSION_NOTE = 'В проекте одна версия — сравнивать не с чем.';
+export const ONE_VERSION_NOTE = 'В документе одна версия — сравнивать не с чем.';
 export const CHOOSE_TWO_DIFFERENT = 'Выберите две разные версии.';
 export const CHAIN_NOTE =
   'Пара собрана по цепочке через промежуточные версии и не сравнивалась: сравниваются только соседние версии.';
@@ -41,7 +41,7 @@ export function answerClick(context: ClickContext): ClickAnswer {
   const b = names.get(sides.b ?? '') ?? '№?';
   if (!transitionExists) {
     return {
-      note: `Переход ${a} → ${b} ещё не посчитан: запустите «Сравнение соседних» на вкладке «Проекты и этапы».`,
+      note: `Переход ${a} → ${b} ещё не посчитан: запустите «Сравнение соседних» на вкладке «Документы и этапы».`,
     };
   }
   if (pair === null) {

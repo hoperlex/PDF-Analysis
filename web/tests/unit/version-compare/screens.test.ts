@@ -75,12 +75,12 @@ function text(markup: string): string {
     .replace(/\s+/g, ' ');
 }
 
-// ------------------------------------------------------------------------------ «Проекты и этапы»
+// ------------------------------------------------------------------------------ «Документы и этапы»
 
 const projects = (over: Partial<ProjectsAndStagesViewProps> = {}): string =>
   renderScreen(newClient(), createElement(ProjectsAndStagesView, projectsProps(over)));
 
-describe('«Проекты и этапы»', () => {
+describe('«Документы и этапы»', () => {
   it('draws the counters, the totals, the search, the filters, «Обновить» with the time, and the legend', () => {
     const t = text(projects());
     for (const word of ['Все', 'Ждут действия', 'Идут', 'Ошибки', 'Готовы', 'версий · 90 переходов', 'Марка', 'Порядок', 'Обновить', 'обновлено 10:15:30']) {
@@ -118,9 +118,10 @@ describe('«Проекты и этапы»', () => {
     expect(searched).toMatch(/data-overview-filter="failed"[^>]*><span[^>]*>1</);
   });
 
-  it('has the table «Проект · следующий шаг», «Версии» and all seven steps in the original\'s order', () => {
+  it('has the table «Документ · следующий шаг», «Версии» and all seven steps in the original\'s order', () => {
     const t = text(projects());
-    for (const header of ['Проект · следующий шаг', 'Версии', '1 Загрузка', '2 Разбор версий', '3 Сопоставление листов', '4 ИИ-проверка сомнительных пар', '5 Сравнение соседних', '6 ИИ-описание изменений', '7 Сводка и отчёт']) {
+    expect(t).not.toContain('Проект · следующий шаг');
+    for (const header of ['Документ · следующий шаг', 'Версии', '1 Загрузка', '2 Разбор версий', '3 Сопоставление листов', '4 ИИ-проверка сомнительных пар', '5 Сравнение соседних', '6 ИИ-описание изменений', '7 Сводка и отчёт']) {
       expect(t, header).toContain(header);
     }
     const headers = (projects().match(/<th scope="col"[\s\S]*?<\/th>/g) ?? []).map(text).join('|');
@@ -145,11 +146,11 @@ describe('«Проекты и этапы»', () => {
     expect(t).not.toContain('Далее:');
   });
 
-  it('shows the strip «В загрузке, ещё не в списке проектов:» with each unfinished upload', () => {
+  it('shows the strip «В загрузке, ещё не в списке документов:» with each unfinished upload', () => {
     const t = text(projects());
-    expect(t).toContain('В загрузке, ещё не в списке проектов:');
+    expect(t).toContain('В загрузке, ещё не в списке документов:');
     expect(t).toContain('передаётся · файлов 12 · комплектов 1 из 4');
-    expect(text(projects({ overview: overview({ pending_uploads: [] }) }))).not.toContain('В загрузке, ещё не в списке проектов');
+    expect(text(projects({ overview: overview({ pending_uploads: [] }) }))).not.toContain('В загрузке, ещё не в списке документов');
   });
 
   it('offers the step buttons to an expert only', () => {
@@ -536,21 +537,50 @@ describe('the page «Сравнение версий»', () => {
     expect(SCREEN_REGISTRY.filter((screen) => screen.label === 'Сравнение версий').length).toBe(1);
   });
 
-  it('asks for a project first, and takes the only project without a click', () => {
-    const t = text(page_({ overview: 'none' }));
-    expect(t).toContain('Корпус 1');
+  it('(UIP-S17-01) has no card that chooses the object and no subtitle: the object is the top strip\'s', () => {
+    const markup = page_({}, { initial: { projectUid: PROJECT_UID } });
+    expect(markup).not.toContain('<select');
+    expect(markup).not.toContain('Корпус 1');
+    expect(markup).not.toContain('am-page__subtitle');
+    expect(text(markup)).not.toContain('Версии комплектов объекта: загрузка');
+    expect(markup).toMatch(/<h1[^>]*>Сравнение версий<\/h1>/);
+  });
+
+  it('(UIP-S17-01) without an object says in one line where to choose it, and does not take the only object of the list', () => {
+    const markup = page_({ overview: 'none' });
+    expect(text(markup)).toContain('Выберите объект в верхней строке');
+    expect(markup).not.toContain('role="tablist"');
+    expect(markup).not.toContain('data-comparison-overview');
     const client = newClient();
     seedComparison(client, { overview: 'ok' });
     client.setQueryData(queryKeys.projects.list(undefined, 50), { items: [], page: { next_cursor: null } });
-    expect(text(renderScreen(client, createElement(VersionComparePage, {})))).toContain('Объектов пока нет.');
+    const none = text(renderScreen(client, createElement(VersionComparePage, {})));
+    expect(none).toContain('Объектов пока нет.');
+    expect(none).not.toContain('Выберите объект в верхней строке');
   });
 
-  it('shows the two tabs, the button «Загрузить проект со всеми версиями», and the table once a project is chosen', () => {
+  it('(UIP-S17-01) «Сравнение стадий» is a quiet link at the right of the row of the tabs, only where the stages module is on', () => {
+    const on = page_({ modules: 'versions,stages' }, { initial: { projectUid: PROJECT_UID } });
+    const link = /<a [^>]*href="([^"]*)"[^>]*>Сравнение стадий<\/a>/.exec(on);
+    expect(link?.[1]).toBe(`/stage-comparison?project=${PROJECT_UID}`);
+    // after the last tab and before the panel: the same row, outside the tablist
+    expect(on.indexOf('Сравнение стадий</a>')).toBeGreaterThan(on.lastIndexOf('data-compare-tab="sheets"'));
+    expect(on.indexOf('Сравнение стадий</a>')).toBeLessThan(on.indexOf('role="tabpanel"'));
+    expect(on.slice(on.indexOf('role="tablist"'), on.indexOf('Сравнение стадий</a>'))).toContain('</div>');
+    expect(on.indexOf('data-compare-tabs-aside')).toBeLessThan(on.indexOf('Сравнение стадий</a>'));
+    // not in the heading line any more
+    expect(on.indexOf('Сравнение стадий</a>')).toBeGreaterThan(on.indexOf('Загрузить документ со всеми версиями'));
+    expect(page_({ modules: 'versions' }, { initial: { projectUid: PROJECT_UID } })).not.toContain('Сравнение стадий</a>');
+  });
+
+  it('shows the two tabs, the button «Загрузить документ со всеми версиями», and the table once a project is chosen', () => {
     const markup = page_({}, { initial: { projectUid: PROJECT_UID } });
     const t = text(markup);
-    expect(t).toContain('Проекты и этапы');
+    expect(t).toContain('Документы и этапы');
+    expect(t).not.toContain('Проекты и этапы');
     expect(t).toContain('Сравнение листов');
-    expect(t).toContain('Загрузить проект со всеми версиями');
+    expect(t).toContain('Загрузить документ со всеми версиями');
+    expect(t).not.toContain('Загрузить проект со всеми версиями');
     expect(markup).toContain('data-comparison-overview');
     expect(markup).toMatch(/data-compare-tab="sheets"[^>]*disabled|disabled[^>]*data-compare-tab="sheets"/);
   });
@@ -589,7 +619,7 @@ describe('the page «Сравнение версий»', () => {
     expect(markup).toContain('data-comparison-module="off"');
     expect(text(markup)).toContain('Модуль «Сравнение версий» выключен');
     expect(markup).not.toContain('data-step-action');
-    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Загрузить проект со всеми версиями/);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Загрузить документ со всеми версиями/);
   });
 
   it('does not take an unread module set for an off one', () => {
@@ -606,9 +636,9 @@ describe('the page «Сравнение версий»', () => {
 
   it('opens the upload dialog the page was told to open', () => {
     const t = text(page_({}, { initial: { projectUid: PROJECT_UID, upload: 'single' } }));
-    expect(t).toContain('Загрузка проекта и версий');
+    expect(t).toContain('Загрузка документа и версий');
     const batch = text(page_({}, { initial: { projectUid: PROJECT_UID, upload: 'batch' } }));
-    expect(batch).toContain('Загрузка нескольких проектов');
+    expect(batch).toContain('Загрузка нескольких документов');
   });
 
   it('cold, it renders the loading state of the projects and nothing else', () => {
@@ -632,22 +662,23 @@ const dialog = (over: Partial<UploadDialogViewProps> = {}): string => renderToSt
 const names = new Map((upload().files ?? []).map((file) => [file.file_id, file.display_name] as const));
 
 describe('the upload dialogs', () => {
-  it('«Загрузка проекта и версий» picks a folder or files, says only PDFs go, and leads to the batch', () => {
+  it('«Загрузка документа и версий» picks a folder or files, says only PDFs go, and leads to the batch', () => {
     const t = text(dialog());
-    expect(t).toContain('Загрузка проекта и версий');
+    expect(t).toContain('Загрузка документа и версий');
     expect(t).toContain('Выберите папку с PDF (вложенные папки тоже читаются) или отдельные файлы. Исходные файлы не изменяются.');
     expect(t).toContain('Выбрать папку');
     expect(t).toContain('Выбрать файлы');
     expect(t).toContain('ZIP с PDF можно импортировать отдельно: после проверки подтвердите состав и порядок версий.');
-    expect(t).toContain('Пакетная загрузка: каждая папка — отдельный проект со своими версиями.');
+    expect(t).toContain('Пакетная загрузка: каждая папка — отдельный документ со своими версиями.');
     expect(t).not.toContain('После подготовки сравнить все соседние версии');
   });
 
-  it('«Загрузка нескольких проектов» has the two folder buttons, the flag, and the picked projects', () => {
+  it('«Загрузка нескольких документов» has the two folder buttons, the flag, and the picked documents', () => {
     const t = text(dialog({ mode: 'batch', groups: [{ group: 'Проекты/ЭМ', files: [], bytes: 3 * 1024 * 1024 }] }));
-    expect(t).toContain('Загрузка нескольких проектов');
+    expect(t).toContain('Загрузка нескольких документов');
     expect(t).toContain('Добавить папку');
-    expect(t).toContain('Добавить папку с проектами');
+    expect(t).toContain('Добавить папку с документами');
+    expect(t).toContain('Документ (папка)');
     expect(t).toContain('После подготовки сравнить все соседние версии');
     expect(t).toContain('Проекты/ЭМ');
     expect(t).toContain('Загрузить пакет');
@@ -692,13 +723,13 @@ describe('the upload dialogs', () => {
     const single = text(dialog({ upload: upload(), sets: proposalSets(), fileNames: names, phase: 'watching' }));
     expect(single).toContain('Подтвердить группировку и порядок');
     expect(single).not.toContain('Подтвердить состав и порядок');
-    expect(single).not.toContain('Подтвердить порядок во всех проектах');
+    expect(single).not.toContain('Подтвердить порядок во всех документах');
     const batch = text(dialog({ mode: 'batch', upload: upload({ state: 'processing' }), sets: proposalSets(), fileNames: names, phase: 'watching' }));
     expect(batch).toContain('Подтвердить состав и порядок');
-    expect(batch).toContain('Подтвердить порядок во всех проектах');
+    expect(batch).toContain('Подтвердить порядок во всех документах');
     expect(batch).toContain('Исключить');
     expect(batch).toContain('Повторить');
-    expect(batch).toContain('Пауза после текущего проекта');
+    expect(batch).toContain('Пауза после текущего документа');
     expect(batch).toContain('Удалить пакет');
     expect(text(dialog({ mode: 'batch', upload: upload({ state: 'paused' }), phase: 'watching' }))).toContain('Продолжить обработку');
   });

@@ -1,6 +1,7 @@
 /**
- * «Сравнение версий» reads its open set and tab from the address (`UI-B-102`) and draws the installation's AI queue above the tabs
- * (`version-comparison.js:76-79`). The static render cannot press a tab, so the address is a query in the provider.
+ * «Сравнение версий» reads its object (`UIP-S17-01`: the top strip's, `?project=`), its open set and tab from the address (`UI-B-102`)
+ * and draws the installation's AI queue above the tabs (`version-comparison.js:76-79`). The static render cannot press a tab, so the
+ * address is a query in the provider.
  */
 
 import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
@@ -11,16 +12,31 @@ import { VersionComparePage } from '@/_pages/version-compare';
 
 import { newClient, renderScreen } from '../screens/harness';
 
-import { DOCUMENT_UID, uid } from './fixtures';
+import { DOCUMENT_UID, PROJECT_UID, uid } from './fixtures';
 import { seedComparison } from './seed';
 
-function at(query: string, seed: Parameters<typeof seedComparison>[1] = { sheets: true }): string {
+/** The object is in the address, as the top strip puts it there, unless the case is about an address that names none. */
+function bare(query: string, seed: Parameters<typeof seedComparison>[1] = { sheets: true }): string {
   const client = newClient();
   seedComparison(client, seed);
   return renderScreen(client, createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, createElement(VersionComparePage)));
 }
 
+function at(query: string, seed: Parameters<typeof seedComparison>[1] = { sheets: true }): string {
+  return bare(query === '' ? `project=${PROJECT_UID}` : `project=${PROJECT_UID}&${query}`, seed);
+}
+
 describe('«Сравнение версий» and its address', () => {
+  it('works in the object of the address, and asks for one in the top strip where the address names none or «Все объекты»', () => {
+    expect(at('')).toContain('data-comparison-overview');
+    for (const query of ['', 'project=all', `set=${DOCUMENT_UID}&tab=sheets`]) {
+      const markup = bare(query);
+      expect(markup, query).toContain('Выберите объект в верхней строке');
+      expect(markup, query).not.toContain('data-comparison-overview');
+      expect(markup, query).not.toContain('data-comparison-sheets');
+    }
+  });
+
   it('opens the table with no set in the address', () => {
     const markup = at('');
     expect(markup).toContain('data-comparison-overview');

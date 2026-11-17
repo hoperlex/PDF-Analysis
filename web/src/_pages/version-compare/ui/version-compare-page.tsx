@@ -1,12 +1,18 @@
 'use client';
 
 /**
- * `/version-comparison` — «Сравнение версий» (plan §1.1, wave C1).
+ * `/version-comparison` — «Сравнение версий» (plan §1.1, wave C1; `UIP-S17-01`).
  *
- * A project is chosen on the screen (there is no global object, unlike the original); then two tabs. «Проекты и этапы» is
- * the table of the project's document sets and the steps of their comparison; a row opens «Сравнение листов» for that set:
- * the transitions between adjacent versions, the matrix of sheets and the viewer of one pair. The button «Загрузить проект
- * со всеми версиями» opens the upload dialogs.
+ * **The object** (`R-150c`, `UIP-G-06`; the registry class is `optional`) is the one of the top strip: the address says it first
+ * (`?project=<uid>`), and an address that says nothing opens on the object the account chose last. There is no card that chooses
+ * it on this screen and no subtitle. Without an object («Все объекты», or none remembered) the screen says in one line where to
+ * choose it; it does not pick the only object of the list for the reader. `initial.projectUid` still seeds a static render, which
+ * has no address.
+ *
+ * Then two tabs. «Документы и этапы» is the table of the object's document sets and the steps of their comparison; a row opens
+ * «Сравнение листов» for that set: the transitions between adjacent versions, the matrix of sheets and the viewer of one pair.
+ * «Сравнение стадий» is a quiet link at the right of the row of the tabs. The button «Загрузить документ со всеми версиями» opens
+ * the upload dialogs.
  *
  * **Composition only.** The tables and the matrix are `widgets/version-series`, the dialogs `widgets/comparison-upload`, the
  * viewer `widgets/comparison-viewer` (with its side panel «Изменения в листе»), the window «Сформировать PDF-отчёт…»
@@ -25,7 +31,7 @@ import type { DocumentUid, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState, PageShell } from '@/shared/ui';
 import { classifyListingFailure, routes, withProjectParam } from '@/shared/lib';
 import { useMe } from '@/entities/account';
-import { useAddressProject, useProjectList } from '@/entities/project';
+import { useCurrentProject, useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
 import { codeOf, useComparisonOverview, versionsModuleOn } from '@/entities/version-series';
 import { ComparisonViewer } from '@/widgets/comparison-viewer';
@@ -38,7 +44,6 @@ import type { CompareTab } from '../model/tabs';
 import { useCompareAddress } from '../model/use-compare-address';
 
 import { CompareTabs } from './compare-tabs';
-import styles from './version-compare-page.module.css';
 
 export interface VersionComparePageProps {
   /** Where the screen starts; a reload starts from nothing. The static render starts here too. */
@@ -50,20 +55,17 @@ export interface VersionComparePageProps {
   };
 }
 
-export const CHOOSE_PROJECT_TITLE = 'Выберите объект';
-export const CHOOSE_PROJECT_DETAIL =
-  'Сравнение версий ведётся внутри объекта: выберите объект, и экран покажет его комплекты и версии.';
-export const UPLOAD_BUTTON = 'Загрузить проект со всеми версиями';
+/** What the screen says, in one line, when there is no object: where to choose it. */
+export const CHOOSE_PROJECT_TITLE = 'Выберите объект в верхней строке';
+export const UPLOAD_BUTTON = 'Загрузить документ со всеми версиями';
 
 export function VersionComparePage({ initial }: VersionComparePageProps) {
   const projects = useProjectList();
   const me = useMe();
   const product = useProductVersion(true);
-  // `R-150c`, `UIP-G-06`: the project follows the header, so it lives in the address, and where that is silent it is the
-  // account's last object; `initial` still seeds a static render. A choice here is kept on the server like the header's.
-  const [addressProject, chooseProject, rememberFailure] = useAddressProject(routes.versionComparison());
-  const chosen = (addressProject ?? initial?.projectUid ?? null) as ProjectUid | null;
-  const setChosen = (next: ProjectUid | null) => chooseProject(next);
+  // `R-150c`, `UIP-G-06`, `UIP-S17-01`: the object is the top strip's: the address, and where that is silent the account's last
+  // object; `initial` still seeds a static render. The screen chooses nothing, so it keeps nothing for next time.
+  const current = useCurrentProject(routes.versionComparison());
   // `UI-B-102`: the open set and the tab are in the address too (`?set=&tab=`), so Back, reload and a pasted link return to them.
   const [address, goTo] = useCompareAddress({
     ...(initial?.documentUid === undefined ? {} : { documentUid: initial.documentUid }),
@@ -73,7 +75,9 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
   const [upload, setUpload] = useState<UploadMode | null>(initial?.upload ?? null);
 
   const items = projects.data?.items ?? [];
-  const projectUid: ProjectUid | null = chosen ?? (items.length === 1 ? ((items[0]?.project_uid ?? null) as ProjectUid | null) : null);
+  const projectUid = (current.projectUid ?? initial?.projectUid ?? null) as ProjectUid | null;
+  // The account's answer is on its way: the last object may still arrive, so «выберите объект» is not said yet.
+  const objectPending = projectUid === null && current.pending;
   const overview = useComparisonOverview(projectUid);
 
   const expert = me.data?.roles.includes('expert') === true;
@@ -88,50 +92,25 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
   const tab: CompareTab = documentUid === null ? 'projects' : address.tab;
   const heading = selectedSet === undefined ? 'Комплект' : codeOf(selectedSet) === '' ? 'Комплект без шифра' : codeOf(selectedSet);
 
-  const chooser = (
-    <label className={styles.chooser}>
-      Объект
-      <select
-        value={projectUid ?? ''}
-        onChange={(event) => {
-          // The address drops `set` and `tab` with the old project (`switchProject`).
-          setChosen(event.target.value === '' ? null : (event.target.value as ProjectUid));
-          setUpload(null);
-        }}
-      >
-        <option value="">— выберите —</option>
-        {items.map((project) => (
-          <option key={project.project_uid} value={project.project_uid}>
-            {project.name}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-
   return (
     <PageShell
       title="Сравнение версий"
-      subtitle="Версии комплектов объекта: загрузка, разбор, сопоставление листов и сравнение соседних версий."
       actions={
-        <>
-        {product.data?.comparison_modules === 'versions,stages' ? <a className="am-button" href={withProjectParam(routes.stageComparison(), projectUid)}>Сравнение стадий</a> : null}
         <button
           type="button"
           className="am-button"
           disabled={!mayAct || projectUid === null}
           title={
             projectUid === null
-              ? 'Сначала выберите объект.'
+              ? 'Сначала выберите объект в верхней строке.'
               : !mayAct
                 ? 'Загружать версии для сравнения может эксперт, когда модуль включён.'
-                : 'Загрузить PDF: один проект со всеми версиями или несколько проектов пакетом.'
+                : 'Загрузить PDF: один документ со всеми версиями или несколько документов пакетом.'
           }
           onClick={() => setUpload('single')}
         >
           {UPLOAD_BUTTON}
         </button>
-        </>
       }
     >
       {projects.isPending ? <LoadingState what="объекты" /> : null}
@@ -142,21 +121,15 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
           onRetry={() => void projects.refetch()}
         />
       ) : null}
-      {projects.isSuccess ? <div className={styles.toolbar}>{chooser}</div> : null}
-      {rememberFailure === null ? null : (
-        <p className="am-note" role="alert" data-remember-failure="">
-          Объект выбран, но не запомнен: {rememberFailure.detail}
-          {rememberFailure.correlationId === null ? null : ` Код обращения: ${rememberFailure.correlationId}`}
-        </p>
-      )}
       {moduleOff ? <ModuleOffState /> : null}
+      {objectPending ? <LoadingState what="объект" /> : null}
 
       {projectUid === null ? (
-        projects.isSuccess ? (
+        projects.isSuccess && !objectPending ? (
           items.length === 0 ? (
             <EmptyState title="Объектов пока нет." detail="Создайте объект на странице «Объекты», затем загрузите в него версии." />
           ) : (
-            <EmptyState title={CHOOSE_PROJECT_TITLE} detail={CHOOSE_PROJECT_DETAIL} />
+            <EmptyState title={CHOOSE_PROJECT_TITLE} />
           )
         ) : null
       ) : (
@@ -179,7 +152,14 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
           <CompareTabs
             active={tab}
             onSelect={(next) => goTo({ documentUid, tab: next })}
-            disabled={documentUid === null ? { sheets: 'Сначала выберите комплект на вкладке «Проекты и этапы».' } : {}}
+            disabled={documentUid === null ? { sheets: 'Сначала выберите комплект на вкладке «Документы и этапы».' } : {}}
+            aside={
+              product.data?.comparison_modules === 'versions,stages' ? (
+                <a className="am-button am-button--quiet am-button--small" href={withProjectParam(routes.stageComparison(), projectUid)}>
+                  Сравнение стадий
+                </a>
+              ) : null
+            }
             suffix={{
               ...(overview.data === undefined ? {} : { projects: String(overview.data.sets.length) }),
               ...(documentUid === null ? {} : { sheets: heading }),

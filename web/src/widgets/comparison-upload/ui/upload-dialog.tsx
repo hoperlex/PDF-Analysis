@@ -1,15 +1,15 @@
 'use client';
 
 /**
- * The upload dialogs of «Сравнение версий» (plan §1.1, `Q-CMP-5`): «Загрузка проекта и версий» for one project with its
- * proposal, and «Загрузка нескольких проектов» for a batch of projects (`frontend/static/js/version-comparison.js:435-502`,
+ * The upload dialogs of «Сравнение версий» (plan §1.1, `Q-CMP-5`): «Загрузка документа и версий» for one document with its
+ * proposal, and «Загрузка нескольких документов» for a batch of documents (`frontend/static/js/version-comparison.js:435-502`,
  * `version-comparison-batch.js:58-126`).
  *
  * Both are one flow over the same operations — declare the files, send them in parts, let the server read them into a
  * proposal of sets, confirm each set — and differ in what they put in front of the reader. The single dialog asks one
  * question after the proposal: «Подтвердить группировку и порядок». The batch dialog is a monitor of a queue: each set has its
  * own status and its own «Подтвердить состав и порядок», «Исключить» and «Повторить», the transfer can be stopped and continued,
- * the server's processing can be paused after the project in hand, and «Подтвердить порядок во всех проектах» confirms what the
+ * the server's processing can be paused after the document in hand, and «Подтвердить порядок во всех документах» confirms what the
  * reader proposed for every set at once. «После подготовки сравнить все соседние версии» is the batch's flag
  * (`compare_after_preparation`).
  *
@@ -54,9 +54,9 @@ import { ZipImport } from './zip-import';
 
 export type UploadMode = 'single' | 'batch';
 
-export const SINGLE_TITLE = 'Загрузка проекта и версий';
-export const BATCH_TITLE = 'Загрузка нескольких проектов';
-export const BATCH_SWITCH = 'Пакетная загрузка: каждая папка — отдельный проект со своими версиями.';
+export const SINGLE_TITLE = 'Загрузка документа и версий';
+export const BATCH_TITLE = 'Загрузка нескольких документов';
+export const BATCH_SWITCH = 'Пакетная загрузка: каждая папка — отдельный документ со своими версиями.';
 export const PICK_HINT =
   'Выберите папку с PDF (вложенные папки тоже читаются) или отдельные файлы. Исходные файлы не изменяются.';
 export const PROPOSAL_NOTE = 'Номер в имени файла, «Изм.» и дата выпуска — подсказки; порядок версий задаёте вы.';
@@ -119,7 +119,7 @@ function Picker({ mode, disabled, onPick }: { readonly mode: UploadMode; readonl
       </label>
       {mode === 'batch' ? (
         <label className={`am-button am-button--quiet ${styles.pick}`}>
-          Добавить папку с проектами
+          Добавить папку с документами
           <input className={styles.hiddenInput} type="file" multiple disabled={disabled} {...folder} onChange={choose('many')} />
         </label>
       ) : (
@@ -202,7 +202,7 @@ export function UploadDialogView(props: UploadDialogViewProps) {
               <table className={styles.table} data-picked-groups={props.groups.length}>
                 <thead>
                   <tr>
-                    <th scope="col">{batch ? 'Проект (папка)' : 'Папка'}</th>
+                    <th scope="col">{batch ? 'Документ (папка)' : 'Папка'}</th>
                     <th scope="col">Файлов</th>
                     <th scope="col">Размер</th>
                     <th scope="col">
@@ -330,7 +330,7 @@ export function UploadDialogView(props: UploadDialogViewProps) {
               ) : null}
               {batch && upload.state === 'processing' ? (
                 <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={props.onPause}>
-                  Пауза после текущего проекта
+                  Пауза после текущего документа
                 </button>
               ) : null}
               {batch && upload.state === 'paused' ? (
@@ -376,7 +376,7 @@ export function UploadDialogView(props: UploadDialogViewProps) {
             <p className={styles.actions}>
               {batch ? (
                 <button type="button" className="am-button" disabled={busy} onClick={props.onProposedAll}>
-                  Подтвердить порядок во всех проектах
+                  Подтвердить порядок во всех документах
                 </button>
               ) : (
                 <button type="button" className="am-button" disabled={busy} onClick={props.onConfirmAll}>
@@ -389,7 +389,7 @@ export function UploadDialogView(props: UploadDialogViewProps) {
       )}
 
       {upload !== undefined && upload.state === 'completed' ? (
-        <EmptyState title="Загрузка завершена." detail="Версии приняты. Состояние подготовки видно на вкладке «Проекты и этапы»." />
+        <EmptyState title="Загрузка завершена." detail="Версии приняты. Состояние подготовки видно на вкладке «Документы и этапы»." />
       ) : null}
 
       {props.notice === null ? null : (
@@ -510,7 +510,7 @@ export function UploadDialog({ projectUid, mode, mayAct, onSwitch, onClose }: Up
           if (uploadId !== null) void wrap(() => retry.mutateAsync({ uploadId, setId: set.set_id }), 'Комплект поставлен на повтор.');
         }}
         onPause={() => {
-          if (uploadId !== null) void wrap(() => act.mutateAsync({ uploadId, act: 'pause' }), 'Обработка встанет на паузу после текущего проекта.');
+          if (uploadId !== null) void wrap(() => act.mutateAsync({ uploadId, act: 'pause' }), 'Обработка встанет на паузу после текущего документа.');
         }}
         onResume={() => {
           if (uploadId !== null) void wrap(() => act.mutateAsync({ uploadId, act: 'resume' }), 'Обработка продолжается.');

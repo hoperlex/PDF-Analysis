@@ -194,6 +194,7 @@ import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.s
 import { StageUploadPanel } from '@/_pages/stage-compare/ui/stage-upload-panel';
 import { StageWorkspace } from '@/_pages/stage-compare/ui/stage-workspace';
 import { StageComparePage } from '@/_pages/stage-compare';
+import { VersionComparePage } from '@/_pages/version-compare';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { PdfPrecheckProgress } from '@/widgets/run-progress/ui/pdf-precheck-progress';
 import { executorGroupCapacityKey, executorGroupsKey, executorRoutingRulesKey } from '@/entities/executor-group';
@@ -2966,6 +2967,16 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     make: () => createElement(StageComparePage, {}),
     seedClient: (client) => {
       client.setQueryData(queryKeys.releases.version(), { comparison_modules: 'versions,stages' });
+      client.setQueryData(queryKeys.account.me(), { roles: ['expert'], last_project_uid: null });
+      client.setQueryData(KEYS.projects, { items: [project()], page: STAGE_PAGE });
+    },
+  },
+  {
+    // `UIP-S17-01`: «Сравнение версий» with no object in the top strip says in one line where to choose it.
+    name: 'version-compare-no-object',
+    make: () => createElement(VersionComparePage, {}),
+    seedClient: (client) => {
+      client.setQueryData(queryKeys.releases.version(), { comparison_modules: 'versions' });
       client.setQueryData(queryKeys.account.me(), { roles: ['expert'], last_project_uid: null });
       client.setQueryData(KEYS.projects, { items: [project()], page: STAGE_PAGE });
     },

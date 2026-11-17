@@ -21,7 +21,7 @@ export const UPLOAD_STATE_LABELS: Readonly<Record<ComparisonUploadState, string>
   uploading: 'передаётся',
   proposed: 'ждёт подтверждения',
   processing: 'обрабатывается',
-  paused: 'на паузе после текущего проекта',
+  paused: 'на паузе после текущего документа',
   completed: 'завершена',
   cancelled: 'удалена',
 };

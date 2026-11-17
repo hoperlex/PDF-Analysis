@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Tab «Проекты и этапы» (plan §1.1; `frontend/static/js/version-comparison-projects.js`): the counters, the
+ * Tab «Документы и этапы» (plan §1.1; `frontend/static/js/version-comparison-projects.js`): the counters, the
  * totals, the search, the filters, the sort, «Обновить», the legend, the strip of uploads that are not yet in the
  * list, and the table of document sets with their steps.
  *
@@ -461,7 +461,7 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
 
       {overview.pending_uploads.length === 0 ? null : (
         <div className={styles.pending} role="status" data-pending-uploads={overview.pending_uploads.length}>
-          <strong>В загрузке, ещё не в списке проектов:</strong>
+          <strong>В загрузке, ещё не в списке документов:</strong>
           <ul className={styles.pendingList}>
             {overview.pending_uploads.map((upload) => (
               <li key={upload.upload_id} data-upload-state={upload.state}>
@@ -535,7 +535,7 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
           title={overview.sets.length === 0 ? 'В объекте ещё нет версий для сравнения.' : 'Ни один комплект не подходит под выбранное.'}
           detail={
             overview.sets.length === 0
-              ? 'Нажмите «Загрузить проект со всеми версиями» и выберите папку с PDF.'
+              ? 'Нажмите «Загрузить документ со всеми версиями» и выберите папку с PDF.'
               : 'Сбросьте поиск, марку или выберите «Все».'
           }
         />
@@ -544,7 +544,7 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
           <table className={styles.table}>
             <thead>
               <tr>
-                <SortHeader label="Проект · следующий шаг" hint="Сортировать по шифру." sortKey="code" view={view} onView={onView} />
+                <SortHeader label="Документ · следующий шаг" hint="Сортировать по шифру." sortKey="code" view={view} onView={onView} />
                 <SortHeader label="Версии" hint="Сортировать по числу версий." sortKey="versions" view={view} onView={onView} />
                 {SHOWN_STEPS.map((step) => (
                   <th

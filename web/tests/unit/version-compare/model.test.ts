@@ -21,6 +21,7 @@ import {
   INITIAL_VIEW,
   NO_REFERENCE_SHEET,
   SOLE_SHEET,
+  UPLOAD_STATE_LABELS,
   WRONG_COLUMN,
   addEdit,
   adjacentSides,
@@ -637,6 +638,13 @@ describe('the draft of manual edits, and its rebase on a matrix that moved', () 
   });
 });
 
+describe('the words of an upload say «документ» for a set of documents (UIP-S17-01)', () => {
+  it('the paused state is paused after the current document, not the current project', () => {
+    expect(UPLOAD_STATE_LABELS.paused).toBe('на паузе после текущего документа');
+    for (const word of Object.values(UPLOAD_STATE_LABELS)) expect(word).not.toContain('проект');
+  });
+});
+
 describe('what a click says when there is nothing to open', () => {
   const m = matrix();
   const cols = m.columns ?? [];
@@ -648,11 +656,11 @@ describe('what a click says when there is nothing to open', () => {
   });
 
   it('explains each reason in the original\'s sentence', () => {
-    expect(answerClick({ ...context, columns: cols.slice(0, 1) })).toEqual({ note: 'В проекте одна версия — сравнивать не с чем.' });
+    expect(answerClick({ ...context, columns: cols.slice(0, 1) })).toEqual({ note: 'В документе одна версия — сравнивать не с чем.' });
     expect(answerClick({ ...context, sides: { a: V2, b: V2 } })).toEqual({ note: 'Выберите две разные версии.' });
     expect(answerClick({ ...context, sides: { a: V1, b: V3 } })).toEqual({ note: CHAIN_NOTE });
     expect(answerClick({ ...context, transitionExists: false })).toEqual({
-      note: 'Переход №2 → №3 ещё не посчитан: запустите «Сравнение соседних» на вкладке «Проекты и этапы».',
+      note: 'Переход №2 → №3 ещё не посчитан: запустите «Сравнение соседних» на вкладке «Документы и этапы».',
     });
     expect(answerClick({ ...context, pair: null })).toEqual({ note: 'У листа нет пары в версии №2.' });
     expect(answerClick({ ...context, pair: { ...(pairs()[0] as ComparisonSheetPair), state: 'computing' } })).toEqual({

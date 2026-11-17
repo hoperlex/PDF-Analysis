@@ -6,7 +6,7 @@
  *   - «Оптимизация разделов» (`/section-optimisation`): the address reader tells `?project=all` from an address that says
  *     nothing; the page opens on the last object only until the address or the reader has decided;
  *   - the retired `/optimisation`: redirects to the object's «Оптимизация» tab, and waits for the account's answer;
- *   - «Сравнение версий» and «Сравнение стадий»: the object of the chooser.
+ *   - «Сравнение версий» (`UIP-S17-01`) and «Сравнение стадий» (`UIP-S16-01`): the object of the top strip; neither has a chooser.
  */
 
 import { PathnameContext, SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
@@ -265,25 +265,35 @@ describe('the retired /optimisation address follows the object', () => {
 
 // ------------------------------------------------------------------------------------------------- the comparison screens
 
-describe('the comparison screens work in the object the screen is on', () => {
+describe('the comparison screens work in the object the top strip names', () => {
   const projects = [
     { project_uid: P1, name: 'Корпус 1', created_at: '2026-10-01T00:00:00Z', document_count: 3 },
     { project_uid: P2, name: 'Корпус 2', created_at: '2026-10-02T00:00:00Z', document_count: 1 },
   ];
 
-  function screenOf(page: ReactElement, query: string, lastProject: string | null, modules: 'versions' | 'versions,stages'): string {
+  function clientOf(modules: 'versions' | 'versions,stages', lastProject: string | null): ReturnType<typeof newClient> {
     const client = newClient();
     seedComparison(client, { modules, projects: false, overview: 'none' });
     client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), { items: projects, page: { next_cursor: null } });
     client.setQueryData(queryKeys.account.me(), account(lastProject));
-    return renderScreen(client, createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, page));
+    return client;
   }
 
-  function chooserOf(page: ReactElement, query: string, lastProject: string | null, modules: 'versions' | 'versions,stages'): string[] {
-    const markup = screenOf(page, query, lastProject, modules);
-    // the chooser is the first select of the screen; the workspace below it has selects of its own
-    const chooser = /<select[\s\S]*?<\/select>/.exec(markup)?.[0] ?? '';
-    return [...chooser.matchAll(/<option value="([^"]*)"[^>]*\bselected\b/g)].map((match) => match[1] as string);
+  function screenOf(page: ReactElement, query: string, lastProject: string | null, modules: 'versions' | 'versions,stages'): string {
+    return renderScreen(clientOf(modules, lastProject), createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, page));
+  }
+
+  /**
+   * `UIP-S17-01`: «Сравнение версий» has no chooser either; the object it reads the overview of is the top strip's. A static render
+   * builds the overview's query for the object the screen works in and for no other, so the cache names it.
+   */
+  function objectsOfVersions(query: string, lastProject: string | null): string[] {
+    const client = clientOf('versions', lastProject);
+    renderScreen(client, createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, createElement(VersionComparePage)));
+    return client.getQueryCache().getAll()
+      .map((entry) => entry.queryKey as readonly unknown[])
+      .filter((key) => key[0] === 'comparison' && key[1] === 'overview')
+      .map((key) => key[2] as string);
   }
 
   /** `UIP-S16-01`: «Сравнение стадий» has no chooser; the object the workspace opens on is the top strip's. */
@@ -292,16 +302,17 @@ describe('the comparison screens work in the object the screen is on', () => {
   }
 
   it('«Сравнение версий»: the last object when the address names none', () => {
-    expect(chooserOf(createElement(VersionComparePage), '', P2, 'versions')).toEqual([P2]);
+    expect(objectsOfVersions('', P2)).toEqual([P2]);
   });
 
-  it('«Сравнение версий»: the address beats it, and ?project=all leaves the choice empty', () => {
-    expect(chooserOf(createElement(VersionComparePage), `project=${P1}`, P2, 'versions')).toEqual([P1]);
-    expect(chooserOf(createElement(VersionComparePage), 'project=all', P2, 'versions')).toEqual(['']);
+  it('«Сравнение версий»: the address beats it, and ?project=all reads no object', () => {
+    expect(objectsOfVersions(`project=${P1}`, P2)).toEqual([P1]);
+    expect(objectsOfVersions('project=all', P2)).toEqual([]);
   });
 
-  it('«Сравнение версий»: no last object leaves the choice empty, as before', () => {
-    expect(chooserOf(createElement(VersionComparePage), '', null, 'versions')).toEqual(['']);
+  it('«Сравнение версий»: no last object reads none and asks for the top strip', () => {
+    expect(objectsOfVersions('', null)).toEqual([]);
+    expect(screenOf(createElement(VersionComparePage), '', null, 'versions')).toContain('Выберите объект в верхней строке');
   });
 
   it('«Сравнение стадий»: the last object when the address names none', () => {

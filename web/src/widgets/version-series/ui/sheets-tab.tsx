@@ -202,7 +202,7 @@ export function SheetsTabView(props: SheetsTabViewProps) {
             <span className={styles.caret} aria-hidden="true">
               {topHidden ? '▶' : '▼'}
             </span>
-            <span title="Комплект, с которым работаете. Другой комплект выбирается на вкладке «Проекты и этапы».">{props.heading}</span>
+            <span title="Комплект, с которым работаете. Другой комплект выбирается на вкладке «Документы и этапы».">{props.heading}</span>
           </button>
         </h2>
         <span className={styles.muted}>· версий: {columns.length}</span>
