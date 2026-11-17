@@ -26,11 +26,11 @@ import type { ApiResponse, DashboardSummary, ErrorEnvelope } from '@/shared/api'
 import { PROJECT_SECTIONS } from '@/entities/project';
 import { HomeSectionsOverview } from '@/widgets/dashboard';
 
-import { sectionAudit } from '../dashboard/audit-counts';
+import { sectionAudit } from './audit-counts';
 import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
-import { renderScreen, seedError } from './harness';
-import { LABEL, NO_NEXT, ULID_STEM, account, loaded, summary } from './home-fixtures';
+import { renderScreen, seedError } from '../screens/harness';
+import { LABEL, NO_NEXT, ULID_STEM, account, loaded, summary } from '../screens/home-fixtures';
 
 const A = `prj_${ULID_STEM}A`;
 const B = `prj_${ULID_STEM}B`;
