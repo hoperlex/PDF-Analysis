@@ -30,7 +30,11 @@ import {
   PROPOSAL_PAGE_LIMIT,
   carrySources,
 } from '@/entities/optimisation-proposal';
-import { ProposalDecisionFormView } from '@/features/decide-optimisation-proposal';
+import {
+  RECORDED_TEXT,
+  REVISE_NEEDS_REASON_TEXT,
+  ProposalDecisionFormView,
+} from '@/features/decide-optimisation-proposal';
 import { CarryOverProposalDecisionsView } from '@/features/carry-over-proposal-decisions';
 import { ImportProposalDecisionsView } from '@/features/import-proposal-decisions';
 import { StartOptimisationPassView } from '@/features/start-optimisation-pass';
@@ -414,8 +418,8 @@ export function carryOverShapes(): readonly ProposalShape[] {
         onLayout: noop,
         sheet: { url: SHEET_URL, isLoading: false, failure: null, onRetry: noop },
         controlsFor: (item: OptimisationProposal) => createElement(ProposalDecisionFormView, {
-          proposalId: item.optimisation_proposal_id, current: item.current_decision, comment: '', pending: false,
-          failure: null, onComment: noop, onDecide: noop,
+          proposalId: item.optimisation_proposal_id, current: item.current_decision, reason: '', sending: null,
+          note: null, onReason: noop, onDecide: noop,
         }),
         historyFor: () => createElement(ProposalHistoryPanelView, {
           open: true, pending: false, failure: null, items: [decision()], onToggle: noop, onRetry: noop,
@@ -426,6 +430,44 @@ export function carryOverShapes(): readonly ProposalShape[] {
       name: 'proposals-layout-switch-cards',
       make: () => createElement(ProposalListView, {
         page: proposalPage(), canDecide: false, onDecision: noop, onPage: noop, layout: 'cards', onLayout: noop,
+      }),
+    },
+    // `UIP-S09-03`: the decision field in the states the shapes above do not reach -- «На доработку» that would repeat (left out of «⋯»),
+    // a rejected proposal, a press on its way (✓ shows it; a revision holds the whole control) and «Записано». Appended here for the reason above.
+    {
+      name: 'decision-form-revise-repeat',
+      make: () => createElement(ProposalDecisionFormView, {
+        proposalId: DOOR_PROPOSAL, current: decision(), reason: decision().comment ?? '', sending: null, note: null,
+        onReason: noop, onDecide: noop,
+      }),
+    },
+    {
+      name: 'decision-form-rejected',
+      make: () => createElement(ProposalDecisionFormView, {
+        proposalId: DOOR_PROPOSAL, current: decision({ verdict: 'reject', comment: null }), reason: '', sending: null,
+        note: null, onReason: noop, onDecide: noop,
+      }),
+    },
+    {
+      name: 'decision-form-sending-accept',
+      make: () => createElement(ProposalDecisionFormView, {
+        proposalId: DOOR_PROPOSAL, current: null, reason: 'Подходит по марке.', sending: 'accept', note: null,
+        onReason: noop, onDecide: noop,
+      }),
+    },
+    {
+      name: 'decision-form-sending-revise',
+      make: () => createElement(ProposalDecisionFormView, {
+        proposalId: DOOR_PROPOSAL, current: null, reason: 'Заменить марку.', sending: 'revise', note: null,
+        onReason: noop, onDecide: noop,
+      }),
+    },
+    {
+      name: 'decision-form-recorded',
+      make: () => createElement(ProposalDecisionFormView, {
+        proposalId: DOOR_PROPOSAL, current: decision({ verdict: 'accept', comment: 'Подходит по марке.' }), reason: '',
+        sending: null, note: { tone: 'ok', text: RECORDED_TEXT }, recordedKey: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q9H',
+        onReason: noop, onDecide: noop,
       }),
     },
   ];
@@ -650,29 +692,28 @@ export function proposalShapes(): readonly ProposalShape[] {
     {
       name: 'decision-form-idle',
       make: () => createElement(ProposalDecisionFormView, {
-        proposalId: DOOR_PROPOSAL, current: null, comment: '', pending: false, failure: null,
-        onComment: noop, onDecide: noop,
+        proposalId: DOOR_PROPOSAL, current: null, reason: '', sending: null, note: null, onReason: noop, onDecide: noop,
       }),
     },
     {
       name: 'decision-form-repeat-blocked',
       make: () => createElement(ProposalDecisionFormView, {
-        proposalId: DOOR_PROPOSAL, current: decision({ verdict: 'accept', comment: null }), comment: '',
-        pending: false, failure: null, onComment: noop, onDecide: noop,
+        proposalId: DOOR_PROPOSAL, current: decision({ verdict: 'accept', comment: null }), reason: '', sending: null,
+        note: null, onReason: noop, onDecide: noop,
       }),
     },
     {
       name: 'decision-form-withdrawn',
       make: () => createElement(ProposalDecisionFormView, {
         proposalId: DOOR_PROPOSAL, current: decision({ verdict: 'revoke', comment: 'Ошибся, пересмотрю.' }),
-        comment: '', pending: false, failure: null, onComment: noop, onDecide: noop,
+        reason: '', sending: null, note: null, onReason: noop, onDecide: noop,
       }),
     },
     {
       name: 'decision-form-refused-nothing-to-revoke',
       make: () => createElement(ProposalDecisionFormView, {
-        proposalId: DOOR_PROPOSAL, current: null, comment: '', pending: false,
-        failure: failure(NOTHING_TO_REVOKE_TEXT), onComment: noop, onDecide: noop,
+        proposalId: DOOR_PROPOSAL, current: null, reason: '', sending: null,
+        note: { tone: 'fail', text: `Решение не записано. ${NOTHING_TO_REVOKE_TEXT}` }, onReason: noop, onDecide: noop,
       }),
     },
     // `UI-B-15`: «Загрузить решения» idle, loading, answered with a refused row of each kind, and refused whole.
@@ -713,16 +754,15 @@ export function proposalShapes(): readonly ProposalShape[] {
     {
       name: 'decision-form-revise-ready',
       make: () => createElement(ProposalDecisionFormView, {
-        proposalId: DOOR_PROPOSAL, current: null, comment: 'Заменить марку.', pending: false, failure: null,
-        onComment: noop, onDecide: noop,
+        proposalId: DOOR_PROPOSAL, current: null, reason: 'Заменить марку.', sending: null, note: null,
+        onReason: noop, onDecide: noop,
       }),
     },
     {
       name: 'decision-form-refused',
       make: () => createElement(ProposalDecisionFormView, {
-        proposalId: DOOR_PROPOSAL, current: null, comment: 'Заменить марку.', pending: false,
-        failure: failure('Для решения «На доработку» нужен комментарий: напишите, что изменить.'),
-        onComment: noop, onDecide: noop,
+        proposalId: DOOR_PROPOSAL, current: null, reason: '', sending: null,
+        note: { tone: 'fail', text: REVISE_NEEDS_REASON_TEXT }, onReason: noop, onDecide: noop,
       }),
     },
     // `UI-B-27`: «Принято» in every branch its container has.

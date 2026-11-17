@@ -4,8 +4,14 @@
  * only where it is stated, the controls each role is given, and every refusal in Russian.
  */
 
+import { QueryClientProvider } from '@tanstack/react-query';
 import { createElement } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/shared/api', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  decideOptimisationProposal: vi.fn(),
+}));
 
 import { OPTIMISATION_MOVED_TO, OptimisationPage } from '@/_pages/optimisation';
 import { CARRYOVER_REFUSAL_TEXT, carrySources } from '@/entities/optimisation-proposal';
@@ -24,14 +30,19 @@ import {
   ProposalListView,
   classifiedDocumentSets,
 } from '@/widgets/optimisation-proposals';
-import { ApiError } from '@/shared/api';
+import { ApiError, decideOptimisationProposal } from '@/shared/api';
 import type { ProposalDecisionImportRefusal } from '@/shared/api';
+import { ProposalDecisionForm, ProposalDecisionFormView } from '@/features/decide-optimisation-proposal';
 
 import { mountLive } from '../analysis-settings/live-render';
+import type { LiveRender } from '../analysis-settings/live-render';
 import { newClient, renderScreen } from '../screens/harness';
 import {
+  DOOR_PROPOSAL,
   OLDER_PASS_ID,
+  PASS_ID,
   arVersion,
+  carryOverShapes,
   decision,
   otherSectionVersion,
   pass,
@@ -43,7 +54,7 @@ import {
 } from './fixtures';
 
 function rendered(name: string): string {
-  const shape = proposalShapes().find((entry) => entry.name === name);
+  const shape = [...proposalShapes(), ...carryOverShapes()].find((entry) => entry.name === name);
   if (shape === undefined) throw new Error(`no shape ${name}`);
   const client = newClient();
   shape.seedClient?.(client);
@@ -115,11 +126,13 @@ describe('the loaded section for an expert', () => {
     expect(markup).not.toContain('Экономия: 0');
   });
 
-  it('gives an expert the start, the decision buttons and the CSV, and the current decision', () => {
+  it('gives an expert the start, the decision field of each row and the CSV, and the current decision', () => {
     expect(markup).toContain('Запустить проход');
-    expect(markup).toContain('Принять');
-    expect(markup).toContain('Отклонить');
-    expect(markup).toContain('На доработку');
+    // `UIP-S09-03`: ✓ and ✕ and the one-line «Причина» of the entity's field, «На доработку» in the menu «⋯».
+    expect(markup.match(/data-intent="accept"/g)).toHaveLength(2);
+    expect(markup.match(/data-intent="reject"/g)).toHaveLength(2);
+    expect(markup.match(/data-decision-reason=""/g)).toHaveLength(2);
+    expect(markup).toContain('role="menuitem" tabindex="-1">На доработку</button>');
     expect(markup).toContain('data-proposal-decision=');
     expect(markup).toContain('Выгрузить CSV предложений');
     expect(markup).toContain('Решение: <strong>на доработку</strong>, Петрова А.');
@@ -141,7 +154,9 @@ describe('the same section for an administrator', () => {
     expect(markup).toContain('Запустить проход может эксперт');
     expect(markup).not.toContain('Запустить проход</button>');
     expect(markup).not.toContain('data-proposal-decision=');
-    expect(markup).not.toContain('Принять');
+    expect(markup).not.toContain('data-decision-control');
+    expect(markup).not.toContain('На доработку</button>');
+    expect(markup).not.toContain('aria-label="Принять"');
   });
 });
 
@@ -181,41 +196,277 @@ describe('the other states', () => {
   });
 });
 
-describe('the decision form', () => {
-  it('blocks «На доработку» without a comment and a repeat of the current decision', () => {
-    const idle = rendered('decision-form-idle');
-    expect(idle).toContain('Комментарий к решению');
-    expect(idle).toContain('data-revise-hint');
-    expect(idle).toMatch(/<button[^>]*disabled=""[^>]*>На доработку<\/button>/);
-    const repeat = rendered('decision-form-repeat-blocked');
-    expect(repeat).toMatch(/<button[^>]*disabled=""[^>]*>Принять<\/button>/);
-    expect(repeat).not.toMatch(/<button[^>]*disabled=""[^>]*>Отклонить<\/button>/);
-    const ready = rendered('decision-form-revise-ready');
-    expect(ready).not.toMatch(/<button[^>]*disabled=""[^>]*>На доработку<\/button>/);
-    expect(ready).not.toContain('data-revise-hint');
+const noop = (): void => undefined;
+
+describe('the decision field (`UIP-S09-03`)', () => {
+  /** The opening tag of the button of this intent, as the markup draws it. */
+  function buttonOf(markup: string, intent: 'accept' | 'reject'): string {
+    const found = markup.match(new RegExp(`<button[^>]*data-intent="${intent}"[^>]*>`));
+    if (found === null) throw new Error(`no ${intent} button in ${markup}`);
+    return found[0];
+  }
+  const items = (markup: string): string[] => [...markup.matchAll(/<button[^>]*role="menuitem"[^>]*>([^<]*)<\/button>/g)].map((item) => item[1] ?? '');
+
+  it('is the entity’s field: ✓ green, ✕ red and a one-line «Причина», with «⋯» after them, and no second field of comment', () => {
+    const markup = rendered('decision-form-idle');
+    expect(markup).toContain('data-decision-control=""');
+    expect(buttonOf(markup, 'accept')).toContain('aria-label="Принять"');
+    expect(buttonOf(markup, 'reject')).toContain('aria-label="Отклонить"');
+    expect(markup).toMatch(/<input[^>]*aria-label="Причина"[^>]*placeholder="Причина"/);
+    expect(markup).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*aria-label="Другие решения"[^>]*><span aria-hidden="true">⋯<\/span><\/button>/);
+    expect(markup.indexOf('data-intent="reject"')).toBeLessThan(markup.indexOf('aria-haspopup="menu"'));
+    expect(markup).not.toContain('<textarea');
+    expect(markup).not.toContain('Комментарий к решению');
+    expect(markup).not.toContain('data-revise-hint');
+    expect(markup).toContain(`data-proposal-decision="${DOOR_PROPOSAL}"`);
   });
 
-  it('says a refusal in Russian', () => {
-    expect(rendered('decision-form-refused')).toContain('Решение по предложению не записано.');
+  it('puts «На доработку» in the menu, and «Снять решение» there only while a decision is in force', () => {
+    expect(items(rendered('decision-form-idle'))).toEqual(['На доработку']);
+    expect(items(rendered('decision-form-withdrawn'))).toEqual(['На доработку']);
+    expect(items(rendered('decision-form-repeat-blocked'))).toEqual(['На доработку', 'Снять решение']);
+    expect(items(rendered('decision-form-rejected'))).toEqual(['На доработку', 'Снять решение']);
   });
 
-  /** `UI-B-12`: «Снять решение» is offered while a decision is in force and not otherwise. */
-  it('offers «Снять решение» only while a decision is in force', () => {
-    expect(rendered('decision-form-idle')).toMatch(/<button[^>]*disabled=""[^>]*data-revoke-decision=[^>]*>Снять решение<\/button>|<button[^>]*data-revoke-decision=[^>]*disabled=""[^>]*>Снять решение<\/button>/);
-    expect(rendered('decision-form-withdrawn')).toMatch(/<button[^>]*(disabled=""[^>]*data-revoke-decision|data-revoke-decision[^>]*disabled="")[^>]*>Снять решение<\/button>/);
-    const standing = rendered('decision-form-repeat-blocked');
-    expect(standing).toContain('data-revoke-decision=');
-    expect(standing).not.toMatch(/<button[^>]*(disabled=""[^>]*data-revoke-decision|data-revoke-decision[^>]*disabled="")[^>]*>Снять решение<\/button>/);
+  it('does not offer a revision that would repeat the one in force, and offers the withdrawal instead', () => {
+    expect(items(rendered('decision-form-revise-repeat'))).toEqual(['Снять решение']);
+    // Another reason is another decision.
+    const other = renderScreen(newClient(), createElement(ProposalDecisionFormView, {
+      proposalId: DOOR_PROPOSAL, current: decision(), reason: 'Другая причина', sending: null, note: null, onReason: noop, onDecide: noop,
+    }));
+    expect(items(other)).toEqual(['На доработку', 'Снять решение']);
   });
 
-  it('lets a withdrawn proposal be decided again: no verdict is blocked as a repeat', () => {
-    const withdrawn = rendered('decision-form-withdrawn');
-    expect(withdrawn).not.toMatch(/<button[^>]*disabled=""[^>]*>Принять<\/button>/);
-    expect(withdrawn).not.toMatch(/<button[^>]*disabled=""[^>]*>Отклонить<\/button>/);
+  it('holds the verdict in force and a press on its way, and never the verdicts that are no decision', () => {
+    const accepted = rendered('decision-form-repeat-blocked');
+    expect(buttonOf(accepted, 'accept')).toContain('disabled');
+    expect(buttonOf(accepted, 'accept')).toContain('aria-pressed="true"');
+    expect(buttonOf(accepted, 'reject')).not.toContain('disabled');
+    const rejected = rendered('decision-form-rejected');
+    expect(buttonOf(rejected, 'reject')).toContain('disabled');
+    expect(buttonOf(rejected, 'accept')).not.toContain('disabled');
+    for (const name of ['decision-form-idle', 'decision-form-withdrawn']) {
+      expect(buttonOf(rendered(name), 'accept'), name).not.toContain('disabled');
+      expect(buttonOf(rendered(name), 'reject'), name).not.toContain('disabled');
+    }
+    // Sent back for revision holds neither ✓ nor ✕: the proposal is decided again from there.
+    const revise = renderScreen(newClient(), createElement(ProposalDecisionFormView, {
+      proposalId: DOOR_PROPOSAL, current: decision(), reason: '', sending: null, note: null, onReason: noop, onDecide: noop,
+    }));
+    expect(buttonOf(revise, 'accept')).not.toContain('disabled');
+    expect(buttonOf(revise, 'reject')).not.toContain('disabled');
+    const sending = rendered('decision-form-sending-accept');
+    expect(buttonOf(sending, 'accept')).toContain('disabled');
+    expect(buttonOf(sending, 'reject')).toContain('disabled');
+    expect(sending).toContain('aria-busy="true"');
+    expect(sending).not.toContain('inert');
   });
 
-  it('says that nothing stands to be withdrawn, in words', () => {
+  it('holds the whole control while a revision or a withdrawal is on its way', () => {
+    expect(rendered('decision-form-sending-revise')).toMatch(/<div[^>]*data-proposal-decision="[^"]+"[^>]*inert=""|<div[^>]*inert=""[^>]*data-proposal-decision=/);
+    expect(rendered('decision-form-idle')).not.toContain('inert');
+  });
+
+  it('says in the row what the last press did: a refusal before sending, the server’s reason and «Записано»', () => {
+    const refused = rendered('decision-form-refused');
+    expect(refused).toMatch(/role="alert"[^>]*>Для «На доработку» нужна причина</);
     expect(rendered('decision-form-refused-nothing-to-revoke')).toContain('Снимать нечего');
+    expect(rendered('decision-form-recorded')).toMatch(/role="status"[^>]*>Записано</);
+    expect(rendered('decision-form-idle')).not.toMatch(/role="(alert|status)"/);
+  });
+
+  it('keeps the text the expert is about to send in the field the entity owns', () => {
+    expect(rendered('decision-form-revise-ready')).not.toContain('Для «На доработку» нужна причина');
+  });
+});
+
+/**
+ * `UIP-S09-03`: the field mounted and pressed the way an expert presses it -- the real container over the real hook and React Query,
+ * the entity's real field and shared menu, typed into and pressed; only the transport, `decideOptimisationProposal`, is a stub, so
+ * each case reads the request a browser would put on the wire. The harness has no event propagation: typing is the field's own
+ * `onChange` and then the wrapper's, which in a browser receives the same event by bubbling.
+ */
+describe('a press in the field of a row (`UIP-S09-03`)', () => {
+  interface DomNode {
+    readonly nodeName: string;
+    readonly childNodes: readonly DomNode[];
+  }
+  type Props = { value?: string; onChange?: (event: unknown) => void };
+
+  let live: LiveRender | null = null;
+  let host: DomNode | null = null;
+  let written = 0;
+
+  const descendants = (node: DomNode): DomNode[] => node.childNodes.flatMap((child) => [child, ...descendants(child)]);
+  const propsOf = (node: DomNode): Props => {
+    const key = Object.keys(node).find((name) => name.startsWith('__reactProps$'));
+    return (node as unknown as Record<string, Props>)[key as string] as Props;
+  };
+  const field = (): Props => {
+    const inputs = descendants(host as DomNode).filter((node) => node.nodeName === 'input');
+    expect(inputs).toHaveLength(1);
+    return propsOf(inputs[0] as DomNode);
+  };
+  /** The wrapper that listens for the field's change events: the `div` that carries the proposal's marker. */
+  const wrapper = (): Props => {
+    const found = descendants(host as DomNode).filter((node) => {
+      const key = Object.keys(node).find((name) => name.startsWith('__reactProps$'));
+      return key !== undefined && (node as unknown as Record<string, Record<string, unknown>>)[key]?.['data-proposal-decision'] !== undefined;
+    });
+    expect(found).toHaveLength(1);
+    return propsOf(found[0] as DomNode);
+  };
+  async function type(text: string): Promise<void> {
+    await (live as LiveRender).settle(() => {
+      const event = { type: 'change', target: { value: text }, currentTarget: { value: text } };
+      (field().onChange as (event: unknown) => void)(event);
+      (wrapper().onChange as (event: unknown) => void)(event);
+    });
+  }
+  const shown = (): string => field().value ?? '';
+  const sent = () =>
+    vi.mocked(decideOptimisationProposal).mock.calls.map(([call]) => {
+      const { path, body, idempotencyKey } = call as unknown as {
+        path: { optimisation_proposal_id: string }; body: { verdict: string; comment?: string }; idempotencyKey: string;
+      };
+      return { id: path.optimisation_proposal_id, body, idempotencyKey };
+    });
+
+  async function mount(subject = proposal({ current_verdict: 'pending', current_decision: null })): Promise<LiveRender> {
+    live = await mountLive(
+      createElement(
+        QueryClientProvider,
+        { client: newClient() },
+        createElement(
+          'div',
+          { ref: (node: unknown) => { host = node as DomNode | null; } },
+          createElement(ProposalDecisionForm, { passId: PASS_ID, proposal: subject }),
+        ),
+      ),
+    );
+    return live;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    written = 0;
+    vi.mocked(decideOptimisationProposal).mockImplementation((async (call: { body: { verdict: string; comment?: string } }) => {
+      written += 1;
+      return {
+        data: {
+          decision: decision({ proposal_decision_id: `opd_01J9ZQ8K7NHVXW3T2R5M6P4Q${String(written).padStart(2, '0')}`, verdict: call.body.verdict as never }),
+          proposal: proposal(),
+        },
+      };
+    }) as never);
+  });
+
+  afterEach(async () => {
+    await live?.unmount();
+    live = null;
+    host = null;
+  });
+
+  it('sends ✓ with no reason as the verdict alone, and with a reason as the same event’s comment, trimmed', async () => {
+    await mount();
+    expect(await (live as LiveRender).press('✓')).toBe(true);
+    expect(sent()).toHaveLength(1);
+    expect(sent()[0]?.body).toEqual({ verdict: 'accept' });
+    expect(Object.keys(sent()[0]?.body ?? {})).toEqual(['verdict']);
+    await live?.unmount();
+    await mount();
+    await type('  Марка подходит  ');
+    expect(await (live as LiveRender).press('✓')).toBe(true);
+    expect(sent()[1]?.body).toEqual({ verdict: 'accept', comment: 'Марка подходит' });
+    expect(sent()).toHaveLength(2);
+  });
+
+  it('sends ✕ the same way: no reason is allowed, and a reason goes in the same event', async () => {
+    await mount();
+    expect(await (live as LiveRender).press('✕')).toBe(true);
+    expect(sent()[0]?.body).toEqual({ verdict: 'reject' });
+    await type('Не наш поставщик');
+    expect(await (live as LiveRender).press('✕')).toBe(true);
+    expect(sent()[1]?.body).toEqual({ verdict: 'reject', comment: 'Не наш поставщик' });
+  });
+
+  it('refuses «На доработку» with no reason, in the row, and sends nothing; a blank reason is none', async () => {
+    await mount();
+    expect(await (live as LiveRender).press('На доработку')).toBe(true);
+    expect(sent()).toEqual([]);
+    expect((live as LiveRender).markup()).toContain('Для «На доработку» нужна причина');
+    await type('   ');
+    expect(await (live as LiveRender).press('На доработку')).toBe(true);
+    expect(sent()).toEqual([]);
+    expect((live as LiveRender).markup()).toContain('Для «На доработку» нужна причина');
+  });
+
+  it('takes the refusal away when the expert writes the reason, and then sends «На доработку» with it', async () => {
+    await mount();
+    await (live as LiveRender).press('На доработку');
+    expect((live as LiveRender).markup()).toContain('Для «На доработку» нужна причина');
+    await type('Заменить марку.');
+    expect((live as LiveRender).markup()).not.toContain('Для «На доработку» нужна причина');
+    expect(await (live as LiveRender).press('На доработку')).toBe(true);
+    expect(sent()).toHaveLength(1);
+    expect(sent()[0]?.body).toEqual({ verdict: 'revise', comment: 'Заменить марку.' });
+  });
+
+  it('empties the field and says «Записано» once the press is written, and not before', async () => {
+    await mount();
+    await type('Марка подходит');
+    expect(shown()).toBe('Марка подходит');
+    await (live as LiveRender).press('✓');
+    expect(shown()).toBe('');
+    expect((live as LiveRender).markup()).toContain('Записано');
+    // The next thing typed is the end of what the last press said.
+    await type('Ещё одно');
+    expect(shown()).toBe('Ещё одно');
+    expect((live as LiveRender).markup()).not.toContain('Записано');
+  });
+
+  it('leaves the text where it is when the press fails, says why in the row, and a repeat of it carries the same key', async () => {
+    vi.mocked(decideOptimisationProposal).mockRejectedValueOnce(new Error('lost answer'));
+    await mount();
+    await type('Марка подходит');
+    await (live as LiveRender).press('✓');
+    expect(shown()).toBe('Марка подходит');
+    expect((live as LiveRender).markup()).toContain('Решение не записано.');
+    await (live as LiveRender).press('✓');
+    expect(sent()).toHaveLength(2);
+    expect(sent()[1]?.idempotencyKey).toBe(sent()[0]?.idempotencyKey);
+    expect(shown()).toBe('');
+  });
+
+  it('withdraws a decision in force with «Снять решение», with the reason when there is one, and offers it only then', async () => {
+    await mount(proposal({ current_verdict: 'accept', current_decision: decision({ verdict: 'accept', comment: null }) }));
+    expect((live as LiveRender).count('Снять решение')).toBe(1);
+    expect(await (live as LiveRender).press('Снять решение')).toBe(true);
+    expect(sent()[0]?.body).toEqual({ verdict: 'revoke' });
+    await type('Ошибся');
+    await (live as LiveRender).press('Снять решение');
+    expect(sent()[1]?.body).toEqual({ verdict: 'revoke', comment: 'Ошибся' });
+    await live?.unmount();
+    await mount();
+    expect((live as LiveRender).count('Снять решение')).toBe(0);
+    await live?.unmount();
+    await mount(proposal({ current_verdict: 'pending', current_decision: decision({ verdict: 'revoke', comment: null }) }));
+    expect((live as LiveRender).count('Снять решение')).toBe(0);
+  });
+
+  it('does not offer «На доработку» again with the reason it already carries, and offers it with another', async () => {
+    await mount(proposal({ current_verdict: 'revise', current_decision: decision({ verdict: 'revise', comment: 'Заменить марку.' }) }));
+    expect((live as LiveRender).count('На доработку')).toBe(1);
+    await type('Заменить марку.');
+    expect((live as LiveRender).count('На доработку')).toBe(0);
+    await type('Заменить производителя.');
+    expect((live as LiveRender).count('На доработку')).toBe(1);
+  });
+
+  it('holds ✓ while the verdict is in force, so a double press cannot append a second identical event', async () => {
+    await mount(proposal({ current_verdict: 'accept', current_decision: decision({ verdict: 'accept', comment: null }) }));
+    expect(await (live as LiveRender).press('✓')).toBe(false);
+    expect(sent()).toEqual([]);
   });
 });
 
