@@ -1,3 +1,23 @@
+/*
+ * The heading is for a reader of the screen: the top row of the workspace is the steps and the action (`UIP-S16-01`). It is out of
+ * the flow, so it is no space and no wide label of the page.
+ */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * The card of the old object chooser is gone; its rule stays until the census' list of rules no screen reaches
+ * (`contrast-pending.ts`) drops the row of this selector, which is not this task's file.
+ */
 .projectChooser {
   display: grid;
   gap: var(--am-gap-sm);

@@ -179,7 +179,7 @@ export function AiStepCellView({ set, step, row, mayAct, busy, selected, badge, 
         </span>
       ) : null}
       <span
-        className={`am-badge am-badge--${TONE_BADGES[shown.tone]}`}
+        className={`am-badge am-badge--${TONE_BADGES[shown.tone]} ${ownStyles.cellBadge}`}
         data-step-state={cell.state}
         {...(pausing === null ? {} : { 'data-ai-pause-reason': pausing })}
         title={shown.title === '' ? undefined : shown.title}

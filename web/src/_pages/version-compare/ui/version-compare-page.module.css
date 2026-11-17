@@ -1,44 +1,42 @@
 /*
- * The tabs and the project chooser of «Сравнение версий» (`CMP-VC-UI-01`). Token reads only, no token declared here, no
+ * The tabs of «Сравнение версий» (`CMP-VC-UI-01`). Token reads only, no token declared here, no
  * `:not()` (the contrast census cannot read it); every rule is reached by a screen in `tests/unit/styles/screens.ts`, the open
  * tab by its `aria-selected` value — the attribute the tab really emits. The same rules as the tabs of «Блоки» and
  * «Диспетчер», collocated because a page does not import another page's stylesheet.
  */
-
-.chooser {
-  display: inline-flex;
-  flex-direction: column;
-  gap: var(--am-gap-xs);
-  max-width: 100%;
-  font-size: var(--am-text-sm);
-  min-width: min(100%, 280px);
-}
-
-.toolbar {
-  display: flex;
-  align-items: end;
-  flex-wrap: wrap;
-  gap: var(--am-gap);
-  margin-bottom: var(--am-gap);
-  padding: var(--am-gap);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
-  background: var(--am-surface);
-}
 
 .tabs {
   margin-top: var(--am-gap-sm);
   min-width: 0;
 }
 
-.tablist {
+/*
+ * The row of the tabs is one card (`UIP-S17-01`): the tabs at the left, what the page puts beside them (the link to «Сравнение
+ * стадий») at the right; the link drops under the tabs when the row is too narrow for both.
+ */
+.tabbar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--am-gap-xs);
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
   padding: var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-surface);
+}
+
+.tablist {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.aside {
+  display: flex;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .tab {
@@ -98,7 +96,6 @@
 }
 
 @media (max-width: 780px) {
-  .toolbar,
   .panel {
     padding: var(--am-gap);
   }

@@ -3,7 +3,7 @@
  *
  * Pure, as the tabs of «Блоки» and «Диспетчер» are: the static render cannot fire a key event, and the WAI-ARIA tabs
  * pattern (automatic activation) is small enough to state as a table. «Сравнение листов» is open to a reader only once a
- * document set has been chosen on «Проекты и этапы», as the original's second tab is (`version-comparison.js:85-88`).
+ * document set has been chosen on «Документы и этапы», as the original's second tab is (`version-comparison.js:85-88`).
  */
 
 export const COMPARE_TABS = ['projects', 'sheets'] as const;
@@ -11,7 +11,7 @@ export const COMPARE_TABS = ['projects', 'sheets'] as const;
 export type CompareTab = (typeof COMPARE_TABS)[number];
 
 export const COMPARE_TAB_LABELS: Readonly<Record<CompareTab, string>> = {
-  projects: 'Проекты и этапы',
+  projects: 'Документы и этапы',
   sheets: 'Сравнение листов',
 };
 
