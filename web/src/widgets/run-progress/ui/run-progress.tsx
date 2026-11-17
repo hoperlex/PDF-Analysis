@@ -70,6 +70,7 @@ import { GroupWaitDetail } from '@/entities/executor-group';
 import { groupByCategory, runFindingsQueryOptions, SEVERITY_LABELS } from '@/entities/finding';
 import { tallySeverity } from '@/widgets/finding-list';
 import { NormReferencesSection } from '@/widgets/norm-references';
+import { restartReasonSentence } from '@/features/restart-run';
 import { RunStagesDialog } from '@/widgets/run-stages-dialog';
 import { ExtendedReview, useExtendedReviewReading } from '@/widgets/extended-review';
 import {
@@ -115,9 +116,11 @@ import type { RunChipDefinition } from '@/entities/audit-run';
 import styles from './run-progress.module.css';
 import { PdfPrecheckProgress } from './pdf-precheck-progress';
 import { RunHeader } from './run-header';
+import { RunReplacedNotice } from './run-replaced-notice';
 import { RunNextTask } from './run-next-task';
 import { RunTabs } from './run-tabs';
 import { RunWaitCells } from './run-wait-cells';
+import { interruptedSentence } from '../model/interrupted';
 import { startedFrom } from '../model/started-from';
 import { maySeeServer } from '../model/server-access';
 import type { RunTab } from '../model/run-tabs';
@@ -147,6 +150,8 @@ const FINDING_FORMS: readonly [string, string, string] = ['замечание', 
 
 function Outcome({ status }: { readonly status: RunStatus }) {
   const outcome = runOutcome(status);
+  const interruptedWords = interruptedSentence(status);
+  const restartSentence = status.terminal_detail === undefined ? null : restartReasonSentence(status.terminal_detail);
   switch (outcome.kind) {
     case 'in_flight':
       return (
@@ -219,9 +224,11 @@ function Outcome({ status }: { readonly status: RunStatus }) {
             )}
           </p>
           <p data-terminal-reason-note={note.kind}>{note.sentence}</p>
+          {/* `RUN-RESTART-01`: a restart that could not replay a saved reply failed before any paid call and says which chip and why. */}
+          {restartSentence === null ? null : <p data-restart-refusal="">{restartSentence}</p>}
           {outcome.interrupted === null ? null : (
             <p data-interrupted-reason={outcome.interrupted}>
-              Прогон был прерван и сверен: {outcome.interrupted}. Сейчас он не выполняется.
+              {interruptedWords ?? `Прогон был прерван и сверен: ${outcome.interrupted}. Сейчас он не выполняется.`}
             </p>
           )}
         </div>
@@ -439,6 +446,9 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
   const interrupted = interruptedReason(status);
   const executor = runExecutorLine(status);
   const from = startedFrom(status);
+  // `RUN-RESTART-01`: a restart that published deleted this run from the lists; it says so and leaves the way to the new run, and none of the
+  // actions of a live run (`replaced_by_run_id`; the run's data stays, so the page itself still reads).
+  const replacedBy = status.replaced_by_run_id ?? null;
   const reviewable = runHasPublishedResult(status.state);
   const showServer = maySeeServer(me.data?.roles);
   const modelShort = shortModelName(executor?.model);
@@ -457,7 +467,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
   const overview = (
     <>
       <div className={styles.tiles}>
-        {reviewable ? (
+        {replacedBy !== null ? null : reviewable ? (
           <FindingsTile projectUid={projectUid} status={status} />
         ) : (
           <section className={styles.tile} aria-label="Замечания" data-run-findings-tile="">
@@ -487,7 +497,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
 
       {interrupted !== null && status.state !== 'failed' ? (
         <p data-interrupted-reason={interrupted}>
-          У прогона указана причина прерывания: {interrupted}.
+          {interruptedSentence(status) ?? `У прогона указана причина прерывания: ${interrupted}.`}
         </p>
       ) : null}
 
@@ -557,6 +567,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
 
   return (
     <div className={styles.progress} data-run-id={status.run_id}>
+      {replacedBy === null ? null : <RunReplacedNotice projectUid={projectUid} replacedByRunId={replacedBy} />}
       <RunHeader
         status={status}
         chips={chips}
@@ -585,14 +596,17 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
           ) : null
         }
         actions={
-          <>
-            {reviewable ? (
-              <Link className="am-button" href={routes.review(projectUid, status.run_id)}>
-                Разобрать замечания
-              </Link>
-            ) : null}
-            {actions}
-          </>
+          // A run a restart replaced has no actions: it is not reviewed, cancelled or deleted again; its page says where the new run is.
+          replacedBy !== null ? null : (
+            <>
+              {reviewable ? (
+                <Link className="am-button" href={routes.review(projectUid, status.run_id)}>
+                  Разобрать замечания
+                </Link>
+              ) : null}
+              {actions}
+            </>
+          )
         }
         onOpenChip={setDialogChip}
       />

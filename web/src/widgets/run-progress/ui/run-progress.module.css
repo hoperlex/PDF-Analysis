@@ -13,6 +13,27 @@
   min-width: 0;
 }
 
+/* `RUN-RESTART-01`: the page of a run a restart replaced -- one prominent line above the head, with the way to the new run. */
+.replaced {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-left: 4px solid var(--am-accent);
+  border-radius: var(--am-radius);
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-1);
+}
+
+.replacedTitle {
+  font-size: var(--am-text-md);
+}
+
 /* ---- the head: state, stages and what to do next (the original's pipeline card) ---------------- */
 
 .head {
