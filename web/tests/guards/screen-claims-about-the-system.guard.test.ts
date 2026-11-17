@@ -161,7 +161,9 @@ describe('screens do not deny authentication carried by the contract', () => {
  * enum — never from a literal list of role names, and the prose from the same state-aware
  * inventory as the authentication half above. The vocabulary is bounded the same way: a role
  * or access-separation word and an absence word in one visible sentence. «Роли не назначены.»
- * — a fact about one account, which the home page and the account menu say — is permitted.
+ * — a fact about one account, which the account menu says — is permitted, and so is the
+ * home page's one sentence for an account with no role, «Доступ к разделам ещё не назначен.
+ * Обратитесь к администратору.» (`UIP-S21-01`).
  */
 
 interface RoleContract {
@@ -225,6 +227,7 @@ describe('screens do not deny the roles carried by the contract', () => {
       FRAME_FOOTER,
       'Роли: Эксперт, Администратор.',
       'Роли не назначены.',
+      'Доступ к разделам ещё не назначен. Обратитесь к администратору.',
       'Роли учётной записи не распознаны.',
       'У вашей учётной записи нет роли, которая открывает этот экран.',
       'Этот экран открывается только с ролью Администратор, а у вашей учётной записи её нет.',

@@ -87,6 +87,17 @@ The programme is complete when these scenarios pass in our application:
 
 Each wave adds functional browser-path checks for the scenarios it changes. Guard tests stay per wave. Visual acceptance (every registered address × 2 themes × 3 widths) runs once at the end (R-150h), after the contrast pending list is closed or explicitly accepted by the owner.
 
+## Not carried over: the original's page-reading screen (UIC-S18-01)
+
+Recorded under `UI-PARITY-R3` (`docs/program/tasks/UI-PARITY-R3.md`, task `UIP-S18-01`, owner decision `Г12-B` of the 2026-11-16 poll, per-screen variant C «не строить»). The original's «Документ» screen (page-by-page reading of a document's text and blocks) is not built, and neither is a «Текст страниц» sub-tab. Reasons:
+
+- Nothing in the original links to the screen: no menu item, button or row opens it, so no user path depends on it.
+- Reading is already covered here by «Просмотр PDF» (the pdf.js viewer) and by «Блоки» (the version tab, `R-151m`); a third reading surface would repeat them.
+- Image blocks in our model have none of the fields the original's screen shows for them, so the screen could not be filled honestly (no silent fallback, `AGENTS.md` §4).
+- `Г12-B` carries over what users act on, and technical detail stays off the main view; `R-153f` makes UI minimisation the priority and forbids a control no plan names.
+
+No code, screen or contract changes. This record does not rewrite any other decision of the programme; the integrator may merge it into the general decisions record.
+
 ## Debt
 
 Owner questions and follow-ups from this programme are `D-300`…`D-319` in `DEBT_REGISTER.md`.

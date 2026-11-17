@@ -129,13 +129,12 @@ export function isSignInRefusal(value: string | null | undefined): value is Sign
 export function signInRefusalMessage(refusal: SignInRefusal): string {
   switch (refusal) {
     case 'credentials':
+      // Two sentences (UIP-S19-01): the refusal and the policy, nothing else. The longer
+      // explanation of why the half that failed is not named lives in this file's comments.
       return (
-        'Войти не удалось: такая пара имени пользователя и пароля не принята. ' +
-        'Какая из двух частей не подошла, не сообщается — иначе по одному лишь ответу ' +
-        'можно было бы перебирать имена. Ничего не изменено. ' +
-        'После нескольких неудачных попыток подряд вход в учётную запись ненадолго ' +
-        'приостанавливается, и тогда не принимается даже верный пароль: подождите ' +
-        'несколько минут и попробуйте снова.'
+        'Такая пара имени пользователя и пароля не принята. ' +
+        'После нескольких неудачных попыток вход ненадолго приостанавливается: ' +
+        'подождите и повторите.'
       );
     case 'validation':
       return 'Заполните оба поля: имя пользователя и пароль. Запрос никуда не отправлен.';

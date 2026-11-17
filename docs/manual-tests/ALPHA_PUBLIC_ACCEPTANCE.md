@@ -417,9 +417,10 @@ pair and once with a definitely unknown pair. Compare the refusal code and
 all visible text byte for byte. Check the reason only in the administrator's
 queue.
 
-**PASS:** both sign-ins show the same general refusal, «Войти не удалось: такая пара
-имени пользователя и пароля не принята.» (these credentials were not
-accepted), with no distinction based on whether the request exists. The
+**PASS:** both sign-ins show the same general refusal, «Такая пара имени
+пользователя и пароля не принята.» (these credentials were not accepted;
+a second sentence says that sign-in pauses briefly after several failed
+attempts), with no distinction based on whether the request exists. The
 reason is visible to the administrator and absent for the applicant.
 
 ### A19 — administrator self-archive

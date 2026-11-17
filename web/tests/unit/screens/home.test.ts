@@ -139,7 +139,10 @@ describe('the greeting, from the subject the route hands down', () => {
       `Роли: ${ROLE_LABELS.expert}, ${ROLE_LABELS.admin}.`,
     );
     expect(draw(home(['admin']))).toContain(`Роли: ${ROLE_LABELS.admin}.`);
-    expect(draw(home([]))).toContain('Роли не назначены.');
+    // An account with no role gets no «Роли…» line under the greeting at all (`UIP-S21-01`): its one sentence is below.
+    const none = draw(home([]));
+    expect(none).not.toContain('Роли');
+    expect(none).not.toContain('data-roles=');
   });
 });
 
@@ -294,12 +297,30 @@ describe('the administrator’s tile, and what the page asks the API', () => {
 
   it('R-80: an empty role set gets no tile at all and asks the API nothing', async () => {
     const markup = draw(home([]), loaded());
-    expect(markup).toContain('Роли не назначены.');
     expect(markup).not.toContain('data-home-tile=');
     expect(markup).toContain('data-home-tiles="none"');
     expect(await requestsOf(home([]))).toEqual([]);
     // The page decides by the registry's rule, so a role it does not know opens nothing either.
     expect(screenRolesAdmit('any-role', [])).toBe(false);
+  });
+
+  it('UIP-S21-01: an account with no role reads one sentence in place of the roles line and the note below, and is not sent on', () => {
+    const SENTENCE = 'Доступ к разделам ещё не назначен. Обратитесь к администратору.';
+    const markup = draw(home([]), loaded());
+    const text = visibleText(markup);
+    // One sentence, once, in the body: not under the greeting, and not the old two lines.
+    expect(text.filter((line) => line === SENTENCE)).toHaveLength(1);
+    expect(markup).not.toContain('Роли не назначены.');
+    expect(markup).not.toContain('Разделы с данными откроются');
+    expect(openingTag(markup, 'data-home-tiles="none"')).toContain('am-note');
+    // The greeting stays; nothing moves the account on silently (AGENTS.md §4): no redirect markup, no link into a screen.
+    expect(markup).toContain(`Здравствуйте, ${LABEL}!`);
+    expect(markup).not.toContain('http-equiv="refresh"');
+    expect(markup).not.toContain('<a ');
+    // The observer holds a role, reads the table and the tiles, and does not see the sentence.
+    const viewer = draw(home(['viewer']), loaded());
+    expect(viewer).not.toContain(SENTENCE);
+    expect(viewer).toContain(`Роли: ${ROLE_LABELS.viewer}.`);
   });
 
   it('does not invent a link if the registration screen has no registry row', () => {

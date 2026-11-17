@@ -246,6 +246,14 @@ describe('every refusal is Russian, and says nothing about which half was wrong'
     expect(message).toContain('не принята');
   });
 
+  it('reads the credentials refusal as two sentences: the refusal and the policy (UIP-S19-01)', () => {
+    const message = signInRefusalMessage('credentials');
+    const sentences = message.split(/(?<=[.!?])\s+/).filter((part) => part.length > 0);
+    expect(sentences).toHaveLength(2);
+    expect(sentences[0]).toContain('не принята');
+    expect(/приостанавлива/i.test(sentences[1] as string)).toBe(true);
+  });
+
   it('puts no Latin letter on any shape of this screen', () => {
     const shapes = [
       render(createElement(SignInPage, {})),
