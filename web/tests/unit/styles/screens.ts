@@ -139,6 +139,7 @@ import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
+import { DecisionReasonControl, VerdictMark } from '@/entities/expert-decision';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, SectionDot } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { PauseStatusView } from '@/widgets/pause-status';
@@ -3510,6 +3511,30 @@ export function screens(): Screen[] {
       }),
     });
     add('AnalysisSettingsPage, the registry of every section read', renderScreen(settings, createElement(AnalysisSettingsPage, {})));
+  }
+
+  /*
+   * `UIP-S06-01`: the decision field of the `expert-decision` entity in every state its rules read -- open with a screen's own
+   * action in the slot, the verdict in force on either side with the line of the last press (recorded, refused), and a press on
+   * its way -- and the verdict mark in each of its four values and as the fault of a value outside the set. At the very end,
+   * for the reason above.
+   */
+  {
+    const control = (over: Partial<Parameters<typeof DecisionReasonControl>[0]>): string => render(createElement(DecisionReasonControl, {
+      verdict: 'pending', sending: null, note: null, onAccept: noop, onReject: noop, ...over,
+    }));
+    add('DecisionReasonControl, an open decision with an action of the screen in the slot', control({
+      extra: createElement('button', { type: 'button', className: 'am-button am-button--quiet am-button--small' }, 'На доработку'),
+    }));
+    add('DecisionReasonControl, accepted, the press recorded', control({ verdict: 'accepted', note: { tone: 'ok', text: 'Записано' } }));
+    add('DecisionReasonControl, rejected, the press refused', control({
+      verdict: 'rejected', note: { tone: 'fail', text: 'Перед принятием выберите критичность. Ничего не отправлено.' },
+    }));
+    add('DecisionReasonControl, a press on its way', control({ sending: 'accept' }));
+    add('VerdictMark, the four verdicts', render(createElement('p', null,
+      ...(['accepted', 'rejected', 'pending', 'needs_manual_review'] as const).map((verdict) => createElement(VerdictMark, { key: verdict, verdict })),
+    )));
+    add('VerdictMark, a value outside the closed set', render(createElement(VerdictMark, { verdict: 'approved' as Verdict })));
   }
 
   return out;
