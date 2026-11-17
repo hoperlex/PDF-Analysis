@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Path, Query
+from pydantic import WithJsonSchema
 
 from auditmanager.api.routers.declarations import (
     CursorParam,
@@ -17,10 +18,21 @@ from auditmanager.api.routers.ports import ProjectPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import page_body, paginate
+from auditmanager.api.schemas.models import optional_property
 from auditmanager.api.schemas.projects import project_body
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = ["build_project_routes"]
+
+# `UIP-S03-02` (contract 1.56.0): the order of the listing. `published` is the order the operation always had, newest first;
+# `name` is the order by the first number in the name. Inline, like `listDocuments`' own `order`: the two words are the whole
+# vocabulary and a parameter that named a component schema would add one. Any other value is `validation_failed`, never the
+# default order under another name.
+ProjectOrderParam = Annotated[
+    Literal["published", "name"],
+    WithJsonSchema({"type": "string", "enum": ["published", "name"], "default": "published"}),
+    Query(json_schema_extra=optional_property),
+]
 
 
 def build_project_routes(router: APIRouter, projects: ProjectPort) -> None:
@@ -59,12 +71,18 @@ def build_project_routes(router: APIRouter, projects: ProjectPort) -> None:
             **success(200, "One page of projects, newest first."),
             **envelope_responses(401, 403, 422, 500, 503),
         },
+        description=(
+            "`UIP-S03-02` (programme `UI-PARITY-R3`): the optional `order` parameter chooses the order of the whole listing, "
+            "`published` (the default and the order the operation always had, newest first) or `name`. The order is decided by "
+            "the server before the listing is paged, so it holds across pages."
+        ),
     )
     def list_projects(
         cursor: CursorParam = None,  # type: ignore[assignment]
         limit: LimitParam = 50,
+        order: ProjectOrderParam = "published",
     ) -> WireResponse:
-        rows = projects.list_projects()
+        rows = projects.list_projects(order=order)
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_project_sort_key)
         body = page_body([project_body(view) for view in page.items], page.next_cursor)
         return json_response(200, encode_json(body))

@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.56.0 (OpenAPI 3.1.0)
- *   sha256 1479da367147422abdc9d787ce300d11d4900c670972ea1fb3df2c457e82c29a
+ *   sha256 bd1396b36a49546b48c0a465c10424b04b160ee31b2ec34bc98dea40449bec69
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -3723,7 +3723,7 @@ export type GetRunStatusResult = RunStatus;
 /**
  * Get Section Specification
  *
- * «Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert|viewer`.
+ * «Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `document_uid` (`UIP-S11-05`) narrows it to one document set the same way, without scanning other projects, and a document that is unknown, of another project than `project_uid`, or whose current version is confirmed in another section is `404` (a current version nobody classified is answered, listed in `excluded`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert|viewer`.
  */
 export type GetSectionSpecificationInput = {
   /** Path parameters, substituted into `/sections/{section_code}/specification`. */
@@ -3732,6 +3732,7 @@ export type GetSectionSpecificationInput = {
   };
   /** Query string parameters. */
   query?: {
+    document_uid?: DocumentUid;
     /** Specification rows per answer. */
     limit?: number;
     /** Position in the list of rows that survive the search. */
@@ -4168,7 +4169,7 @@ export type GetVersionSectionReviewResult = SectionReview;
 /**
  * Get Work Schedule
  *
- * `UI-PARITY-P0P` (contract 1.31.0, rulings `R-151x`, `R-152a`…`R-152d`): one month of «График работ» -- the days (Saturday and Sunday off unless the administrator decided otherwise), and for each active expert the month's plan (`plan_is_default` when the stored default applies), the documents that became «Проверено экспертом» in the month credited to the author of their last verdict (`done`, `fact`) and the absent days. An administrator reads every active expert; an expert reads their own row. `role:admin|expert`.
+ * `UI-PARITY-P0P` (contract 1.31.0, rulings `R-151x`, `R-152a`…`R-152d`): one month of «График работ» -- the days (Saturday and Sunday off unless the administrator decided otherwise), and for each active expert the month's plan (`plan_is_default` when the stored default applies), the documents that became «Проверено экспертом» in the month credited to the author of their last verdict (`done`, `fact`), the absent days, and (`UIP-S14-01`) how many decisions the expert accepted and rejected in the month (`accepted_count`, `rejected_count`; findings and optimisation proposals together, the decisions that stand, not those carried over from an earlier version, credited to their author, the month and day cut in the schedule's time zone; `0` and `0` without decisions). An administrator reads every active expert; an expert reads their own row. `role:admin|expert`.
  */
 export type GetWorkScheduleInput = {
   /** Query string parameters. */
@@ -4415,12 +4416,13 @@ export type IssueTokenResult = IssueTokenResponse;
 /**
  * List Accepted Optimisation Proposals
  *
- * The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` states, present where `saving` is `null` and absent only at a zero current price. Any one role, `role:admin|expert|viewer`.
+ * The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project, `document_uid` (`UIP-S11-05`) to one document set and `section_code` to the versions an expert confirmed in that section; none is a parent, so an empty result is a `200` with no rows -- a document that does not exist, or that belongs to another project or section than the one named, included. `total` is the number of proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` states, present where `saving` is `null` and absent only at a zero current price. Any one role, `role:admin|expert|viewer`.
  */
 export type ListAcceptedOptimisationProposalsInput = {
   /** Query string parameters. */
   query?: {
     cursor?: Cursor;
+    document_uid?: DocumentUid;
     limit?: number;
     project_uid?: ProjectUid;
     section_code?: ProjectSection;
@@ -4995,6 +4997,8 @@ export type ListDecisionPatternsResult = DecisionPatternList;
  * Ordered by `(recorded_at, decision_id)` **descending** - the newest decision first, as `listProjects` orders projects - and that is a total order, stable across pages. The server's row sequence is never exposed, in a field or inside a cursor.
  *
  * `category` and `verdict` filter on the **finding**, exactly as they do on `listRunFindings`: the category of the finding the event was recorded against, and the verdict that now stands for it. Neither filters on the event. `project_uid` (`UI-PARITY-P0A`) filters on the finding in the same way: the finding must belong to that project. It is a filter and not a parent, so a project nothing was decided in -- or one that does not exist -- is an empty page. `total` is the number of entries that match all the filters given, on every page of the listing and not the number on this page. There is no parent identity in the path, so an empty journal is an empty page and never `not_found`.
+ *
+ * `execution_status` (`UIP-S12-01`) filters on the finding in the same way, by the designer's execution status (`R-151g`): one value or several, and the entry is kept when the finding's status is any of them. Each entry carries `execution_status` and `execution_status_at` when its finding has a status and neither when it has none; the status is not an expert decision, so setting it never changes a verdict, an entry or a count of them. The same two properties are on the finding of an entry of `listKnowledgeBaseEntries`.
  */
 export type ListDecisionsInput = {
   /** Query string parameters. */
@@ -5003,6 +5007,8 @@ export type ListDecisionsInput = {
     category?: FindingCategory;
     /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
     cursor?: Cursor;
+    /** `UIP-S12-01` (programme `UI-PARITY-R3`, owner rulings Г9-B and Г12-B): keep only the entries of findings whose designer execution status (`R-151g`) is any of these. One or more of `taken_into_account`, `amended`, `declined`, `agreed`, separated by commas (`agreed,amended`); the parameter written more than once is read as the same list. A finding with no status is in none of them. Absent means no status filter. An unknown value, or an empty element as in `agreed,`, is `422 validation_failed` with `constraint: enum`. It filters like `verdict`: `total` is the number of entries that match, so the count of one status is the `total` of that status read with `limit=1`. */
+    execution_status?: string;
     /** Page size. */
     limit?: number;
     /** Restrict the page to decisions on findings of this project. Absent means no project filter. */
@@ -5520,7 +5526,11 @@ export type ListPriceListRevisionsResult = PriceListRevisionList;
 // listProjects - GET /projects
 // ------------------------------------------------------------------------------------
 
-/** List projects, newest first. */
+/**
+ * List projects, newest first.
+ *
+ * `UIP-S03-02` (programme `UI-PARITY-R3`): the optional `order` parameter chooses the order of the whole listing, `published` (the default and the order the operation always had, newest first) or `name`. The order is decided by the server before the listing is paged, so it holds across pages.
+ */
 export type ListProjectsInput = {
   /** Query string parameters. */
   query?: {
@@ -5528,6 +5538,8 @@ export type ListProjectsInput = {
     cursor?: Cursor;
     /** Page size. */
     limit?: number;
+    /** `UIP-S03-02` (programme `UI-PARITY-R3`, owner ruling Г3-B): the order of the whole listing. `published` (the default) is the order the operation always had, newest first. `name` is decided by the server so that it holds across pages: by the first whole number written in the name, ascending (the digits of «213-А», «213. Школа» and «Школа 213» are all 213; leading zeros do not count, so «007» is 7), then names that have no number, alphabetically with letter case ignored (`casefold`); among equal numbers the rest of the name is compared the same way, and `project_uid` decides among equal names, so the order is total. The cursor is built on the identity and resumes after its row in the ordered listing; presented under another `order` it yields that listing's continuation or an empty page, never a page from another listing. Any other value is `422 validation_failed`. */
+    order?: "published" | "name";
   };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -10989,7 +11001,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/sections/{section_code}/specification',
     pathParams: ['section_code'],
-    queryParams: ['limit', 'offset', 'project_uid', 'q'],
+    queryParams: ['document_uid', 'limit', 'offset', 'project_uid', 'q'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -11395,7 +11407,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/optimisation-proposals/accepted',
     pathParams: [],
-    queryParams: ['cursor', 'limit', 'project_uid', 'section_code'],
+    queryParams: ['cursor', 'document_uid', 'limit', 'project_uid', 'section_code'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -11675,7 +11687,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/decisions',
     pathParams: [],
-    queryParams: ['category', 'cursor', 'limit', 'project_uid', 'verdict'],
+    queryParams: ['category', 'cursor', 'execution_status', 'limit', 'project_uid', 'verdict'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -11969,7 +11981,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/projects',
     pathParams: [],
-    queryParams: ['cursor', 'limit'],
+    queryParams: ['cursor', 'limit', 'order'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,

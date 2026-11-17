@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.56.0 (OpenAPI 3.1.0)
- *   sha256 1479da367147422abdc9d787ce300d11d4900c670972ea1fb3df2c457e82c29a
+ *   sha256 bd1396b36a49546b48c0a465c10424b04b160ee31b2ec34bc98dea40449bec69
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.56.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '1479da367147422abdc9d787ce300d11d4900c670972ea1fb3df2c457e82c29a';
+export const CONTRACT_DIGEST = 'bd1396b36a49546b48c0a465c10424b04b160ee31b2ec34bc98dea40449bec69';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -4154,7 +4154,7 @@ export const DECISION_PATTERN_STATUS_CAUSE_VALUES = [
 /** DecisionPatternStatusCause - the closed value set above. */
 export type DecisionPatternStatusCause = (typeof DECISION_PATTERN_STATUS_CAUSE_VALUES)[number];
 
-/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. */
+/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. `execution_status` and `execution_status_at` (`UIP-S12-01`, `R-151g`) are the designer's execution status of the finding the decision was taken on and when it was set, as on `Finding`; both are absent when the finding has none. The status is not an expert decision: it is read beside the record and never changes it, and a record is the same whether or not the finding has a status. */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
   author_label: string;
@@ -4168,6 +4168,9 @@ export type DecisionRecord = {
   document_name: string;
   document_uid: DocumentUid;
   event_type: DecisionEventType;
+  execution_status?: FindingExecutionStatus;
+  /** `UIP-S12-01` (`R-151g`): when the execution status of the finding was set. Present with `execution_status`. */
+  execution_status_at?: string;
   finding_observation_id: FindingObservationId;
   /** The observation's own words, as `FindingObservation.finding_text` carries them. It is the analysis's text and not this API's prose, so it is in whatever language the analysis produced. */
   finding_text: string;
@@ -9679,14 +9682,16 @@ export type WorkScheduleDoneDocument = {
   project_uid: ProjectUid;
 };
 
-/** One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences. */
+/** One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences, and how many decisions the engineer accepted and rejected in it (``accepted_count``, ``rejected_count``: findings and optimisation proposals together, the decisions that stand, taken directly and not carried over from an earlier version, credited to their author and cut by the day in the schedule's time zone; both ``0`` without decisions). */
 export type WorkScheduleEngineer = {
   absences: Array<string>;
+  accepted_count: number;
   done: Array<WorkScheduleDoneDocument>;
   fact: number;
   label: string;
   plan: number;
   plan_is_default: boolean;
+  rejected_count: number;
   user_uid: UserUid;
 };
 

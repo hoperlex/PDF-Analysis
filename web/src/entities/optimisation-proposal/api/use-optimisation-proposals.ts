@@ -101,18 +101,22 @@ export const ACCEPTED_PAGE_LIMIT = 20;
 
 export interface AcceptedProposalsFilter {
   readonly projectUid?: ProjectUid | null | undefined;
+  /** `UIP-S11-05`: one document set; a document nothing was accepted in, or that does not exist, answers an empty page. */
+  readonly documentUid?: DocumentUid | null | undefined;
   readonly sectionCode?: ProjectSection | null | undefined;
   readonly cursor?: string | undefined;
 }
 
 /**
  * `listAcceptedOptimisationProposals` (`UI-B-27`, contract 1.35.0): the proposals whose decision in force is an
- * acceptance, newest acceptance first, one page, optionally of one project and one section. The filters are
- * filters and not parents: a project or a section nothing was accepted in answers an empty page.
+ * acceptance, newest acceptance first, one page, optionally of one project, one document set (`UIP-S11-05`) and one
+ * section. The filters are filters and not parents: a project, a document set or a section nothing was accepted in
+ * answers an empty page.
  */
 export function acceptedProposalsQueryOptions(filter: AcceptedProposalsFilter = {}) {
   const query = {
     ...(filter.projectUid === undefined || filter.projectUid === null ? {} : { project_uid: filter.projectUid }),
+    ...(filter.documentUid === undefined || filter.documentUid === null ? {} : { document_uid: filter.documentUid }),
     ...(filter.sectionCode === undefined || filter.sectionCode === null ? {} : { section_code: filter.sectionCode }),
     ...(filter.cursor === undefined ? {} : { cursor: filter.cursor }),
     limit: ACCEPTED_PAGE_LIMIT,

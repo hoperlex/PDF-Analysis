@@ -90,6 +90,7 @@ class _Documents:
     projects: dict[str, str] = field(default_factory=dict)
     current: dict[str, list[DocumentVersionRecord]] = field(default_factory=dict)
     queried: list[tuple[str, str | None, str | None, int]] = field(default_factory=list)
+    required: list[str] = field(default_factory=list)
     tamper: Callable[[str, list[CurrentVersionPlacementRecord]], list[CurrentVersionPlacementRecord]] | None = None
     ignore_after: bool = False
 
@@ -100,6 +101,14 @@ class _Documents:
 
     def count_projects(self, session: Any) -> int:
         return len(self.projects)
+
+    def require_document(self, session: Any, document_uid: DocumentUid) -> ProjectUid:
+        """`UIP-S11-05`: the project a set belongs to, or `not_found` ``Document`` -- the real repository's answer."""
+        self.required.append(str(document_uid))
+        for uid, versions in self.current.items():
+            if any(record.document_uid == document_uid for record in versions):
+                return ProjectUid.parse(uid)
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
 
     def _placement(self, record: DocumentVersionRecord) -> CurrentVersionPlacementRecord:
         classification = record.classification
@@ -628,6 +637,115 @@ def test_the_project_filter_narrows_projects_exclusions_and_rows(world: World) -
     _refused(ErrorCode.NOT_FOUND, world.read, project_uid=str(ProjectUid.new()))
     refused = _refused(ErrorCode.VALIDATION_FAILED, world.read, project_uid="prj_bad")
     assert refused.detail_fields["field"] == "project_uid"
+
+
+def _document_of(world: World, project: str, title: str) -> str:
+    return next(
+        str(record.document_uid)
+        for record in world.documents.current[project]
+        if record.display_title == title
+    )
+
+
+def test_the_document_filter_narrows_projects_sources_exclusions_and_rows_to_one_set(world: World) -> None:
+    """`UIP-S11-05`: the set's own project is the scope, the set the whole answer."""
+    zarya = _uid(world, "Корпус 2 «Заря»")
+    extra = world.version(zarya, "АР-2.1", "AR")
+    whole = world.read(project_uid=zarya)
+    assert [source.display_title for source in whole.projects[0].sources] == ["АР-2", "АР-2.1"]
+    document = _document_of(world, zarya, "АР-2.1")
+
+    answer = world.read(document_uid=document)
+    assert answer.project_filter is None  # the echo is of the request: no project was named
+    (project,) = answer.projects
+    assert project.project_uid == zarya and project.price_state == PRICE_STATE_PRICED
+    (source,) = project.sources
+    assert (source.document_uid, source.version_uid) == (document, str(extra.version_uid))
+    assert source.state == SOURCE_STATE_READY and source.row_count == 4
+    assert project.row_count == answer.row_count == answer.rows.total == 4 and answer.source_count == 1
+    assert {(row.document_uid, row.version_uid) for row in answer.rows.items} == {(document, str(extra.version_uid))}
+    assert (answer.excluded, answer.excluded_count) == ((), 0)
+    # The same rows, priced the same way, as the set has inside its project's answer.
+    assert answer.rows.items == tuple(row for row in whole.rows.items if row.document_uid == document)
+    # A project named beside it is held to the same set; the totals are the set's own.
+    assert world.read(project_uid=zarya, document_uid=document) == replace(answer, project_filter=zarya)
+    assert [(t.currency, t.row_count) for t in whole.projects[0].totals] == [("RUB", 2)]  # both sets' doors
+    assert [(t.currency, t.row_count) for t in project.totals] == [("RUB", 1)]  # this set's door only
+    # The search and the paging work on the narrowed rows, and never change the project.
+    searched = world.read(document_uid=document, query="окно")
+    assert [row.row.name for row in searched.rows.items] == [WINDOW]
+    assert searched.projects == answer.projects and searched.row_count == 4
+    paged = world.read(document_uid=document, offset=3, limit=2)
+    assert (paged.rows.total, paged.rows.next_offset, len(paged.rows.items)) == (4, None, 1)
+
+
+def test_the_document_filter_reads_only_the_sets_own_project(world: World, monkeypatch) -> None:
+    """The set is found through its project: the deployment is not counted against the project bound, one project's
+    placements are walked, and no other project's runs are read."""
+    monkeypatch.setattr(module, "MAX_SCANNED_PROJECTS", 1)
+    assert world.read().limit_reason == LIMIT_PROJECTS  # the deployment alone is over the bound
+    alpha = _uid(world, "корпус 1 «Альфа»")
+    document = _document_of(world, alpha, "АР-1")
+    world.documents.queried.clear()
+    world.documents.required.clear()
+    world.reader.asked.clear()
+    answer = world.read(document_uid=document)
+    assert answer.state == SECTION_STATE_READY and answer.rows.total == 4
+    assert world.documents.required == [document]
+    assert [(kind, project) for kind, project, _, _ in world.documents.queried] == [
+        ("members", alpha), ("unclassified", alpha),
+    ]
+    assert world.reader.asked == [str(world.documents.current[alpha][0].version_uid)]
+    assert world.prices.asked == [alpha]
+
+
+def test_an_unclassified_set_is_answered_as_the_exclusion_it_is(world: World) -> None:
+    loose = _uid(world, "Корпус 4 без раздела")
+    other = world.version(loose, "Второй комплект", None)
+    document = _document_of(world, loose, "Новый комплект")
+    assert world.read(project_uid=loose).excluded_count == 2
+    answer = world.read(document_uid=document)
+    assert (answer.projects, answer.row_count, answer.source_count) == ((), 0, 0)
+    assert [(item.document_uid, item.reason) for item in answer.excluded] == [
+        (document, EXCLUSION_VERSION_UNCLASSIFIED),
+    ]
+    assert answer.excluded_count == 1 and answer.rows.total == 0
+    assert str(other.document_uid) not in {item.document_uid for item in answer.excluded}
+
+
+def test_a_document_that_is_not_in_the_answer_is_not_found_like_an_unknown_one(world: World) -> None:
+    """`UIP-S11-05`: unknown, another project's, another section's and one with no current version are one answer."""
+    zarya = _uid(world, "Корпус 2 «Заря»")
+    alpha = _uid(world, "корпус 1 «Альфа»")
+    kj = _uid(world, "Корпус 3 (КЖ)")
+    unknown = _refused(ErrorCode.NOT_FOUND, world.read, document_uid=str(DocumentUid.new()))
+    assert dict(unknown.detail_fields) == {"aggregate_type": "Document"}
+    foreign = _refused(
+        ErrorCode.NOT_FOUND, world.read, project_uid=zarya, document_uid=_document_of(world, alpha, "АР-1")
+    )
+    other_section = _refused(ErrorCode.NOT_FOUND, world.read, document_uid=_document_of(world, kj, "КЖ-3"))
+    assert dict(foreign.detail_fields) == dict(other_section.detail_fields) == dict(unknown.detail_fields)
+    assert str(other_section) == str(unknown)
+    # The same set is there in its own section, and in neither of the others.
+    assert world.read("KJ", document_uid=_document_of(world, kj, "КЖ-3")).rows.total == 4
+    _refused(ErrorCode.NOT_FOUND, world.read, "PB", document_uid=_document_of(world, kj, "КЖ-3"))
+    # A project that does not exist is still the project's error, ahead of the document's.
+    missing = _refused(ErrorCode.NOT_FOUND, world.read, project_uid=str(ProjectUid.new()), document_uid=str(DocumentUid.new()))
+    assert dict(missing.detail_fields) == {"aggregate_type": "Project"}
+
+
+def test_a_malformed_document_filter_is_refused_before_anything_is_read(world: World) -> None:
+    world.documents.queried.clear()
+    for value in ("doc_bad", "prj_01M2545JSD15ETSNNV904X991F", 7, ""):
+        refused = _refused(ErrorCode.VALIDATION_FAILED, world.read, document_uid=value)
+        assert refused.detail_fields["field"] == "document_uid", value
+    assert world.documents.queried == [] and world.documents.required == []
+
+
+def test_an_absent_document_filter_changes_nothing(world: World) -> None:
+    whole = world.read()
+    assert world.read(document_uid=None) == whole
+    assert world.documents.required == []
 
 
 def test_the_query_folds_case_yo_and_spaces_and_never_narrows_totals(world: World) -> None:

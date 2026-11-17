@@ -112,6 +112,13 @@ export interface DecisionJournalFilters {
    * two cache entries and a project change cannot show the other project's page.
    */
   readonly project_uid?: ProjectUid;
+  /**
+   * The execution statuses the journal is restricted to (`UIP-S12-01`, `R-151g`): one or more values of
+   * `FindingExecutionStatus` joined by commas, as the contract writes the list (`agreed,amended`). Absent is every
+   * entry: the parameter is left out, never sent empty. Part of the key, so two sets are two cache entries; write the
+   * values in the order of `FindingExecutionStatus` so the same set is the same entry.
+   */
+  readonly execution_status?: string;
   readonly cursor?: string;
   readonly limit?: number;
 }
@@ -142,6 +149,8 @@ export interface RegistrationListFilters {
 /** Filters that make a page of `getSectionSpecification` a distinct cache entry. */
 export interface SectionSpecificationFilters {
   readonly projectUid?: ProjectUid | null;
+  /** `UIP-S11-05`: one document set of the section; part of the key, since the answer is another one. */
+  readonly documentUid?: DocumentUid | null;
   readonly q?: string | null;
   readonly offset?: number;
   readonly limit?: number;
@@ -220,12 +229,14 @@ export const queryKeys = {
     /** Every proposal's history: what a workbook loaded back (`UI-B-15`) may have appended to many proposals at once. */
     allProposalDecisions: () => ['optimisation', 'proposal-decisions'] as const,
     /**
-     * `UI-B-27` (contract 1.35.0): one page of `listAcceptedOptimisationProposals`, by its filters. A decision on any
-     * proposal can add a row or take one away, so a decision invalidates the whole `allAccepted` prefix.
+     * `UI-B-27` (contract 1.35.0): one page of `listAcceptedOptimisationProposals`, by its filters (`UIP-S11-05`: the
+     * document set too). A decision on any proposal can add a row or take one away, so a decision invalidates the whole
+     * `allAccepted` prefix.
      */
     accepted: (
       filters: {
         readonly project_uid?: ProjectUid;
+        readonly document_uid?: DocumentUid;
         readonly section_code?: ProjectSection;
         readonly cursor?: string;
         readonly limit?: number;
@@ -234,8 +245,9 @@ export const queryKeys = {
     allAccepted: () => ['optimisation', 'accepted'] as const,
     /**
      * One page of `getSectionSpecification` (`W63-SECTION-FORM7-01`): a section's combined
-     * Form-7 specification across projects. The section is a filter, the project filter and
-     * the search text are part of the answer, so each is part of the key. Any project's
+     * Form-7 specification across projects. The section is a filter, the project filter, the
+     * document filter (`UIP-S11-05`) and the search text are part of the answer, so each is part
+     * of the key. Any project's
      * price list decides prices in it, and the upload command belongs to another slice, so the
      * read is never served from a cache: `staleTime: 0` re-reads it on every mount.
      */
@@ -249,6 +261,7 @@ export const queryKeys = {
         sectionCode,
         {
           projectUid: filter.projectUid ?? null,
+          documentUid: filter.documentUid ?? null,
           q: filter.q ?? null,
           offset: filter.offset ?? 0,
           limit: filter.limit ?? null,

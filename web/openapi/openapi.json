@@ -286,12 +286,27 @@
           "projects"
         ],
         "summary": "List projects, newest first.",
+        "description": "`UIP-S03-02` (programme `UI-PARITY-R3`): the optional `order` parameter chooses the order of the whole listing, `published` (the default and the order the operation always had, newest first) or `name`. The order is decided by the server before the listing is paged, so it holds across pages.",
         "parameters": [
           {
             "$ref": "#/components/parameters/Cursor"
           },
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "`UIP-S03-02` (programme `UI-PARITY-R3`, owner ruling Г3-B): the order of the whole listing. `published` (the default) is the order the operation always had, newest first. `name` is decided by the server so that it holds across pages: by the first whole number written in the name, ascending (the digits of «213-А», «213. Школа» and «Школа 213» are all 213; leading zeros do not count, so «007» is 7), then names that have no number, alphabetically with letter case ignored (`casefold`); among equal numbers the rest of the name is compared the same way, and `project_uid` decides among equal names, so the order is total. The cursor is built on the identity and resumes after its row in the ordered listing; presented under another `order` it yields that listing's continuation or an empty page, never a page from another listing. Any other value is `422 validation_failed`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "published",
+                "name"
+              ],
+              "default": "published"
+            }
           },
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -2295,7 +2310,7 @@
           "decisions"
         ],
         "summary": "Read the decision journal across findings, newest first.",
-        "description": "Every expert decision this deployment has recorded, in one listing, with the finding context each event was recorded against. `listDecisionHistory` answers *what was decided about this finding*; this answers *what has been decided*, which no operation could answer before and which a client could otherwise reach only by walking every run and every finding.\n\n**It is a projection and creates nothing.** `ADR-0012` holds: the current verdict, the reason aggregates and the knowledge-base views are rebuildable projections over the append-only ledger. Every property of `DecisionRecord` is rebuildable from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and this operation is the only place they are read together.\n\nOrdered by `(recorded_at, decision_id)` **descending** - the newest decision first, as `listProjects` orders projects - and that is a total order, stable across pages. The server's row sequence is never exposed, in a field or inside a cursor.\n\n`category` and `verdict` filter on the **finding**, exactly as they do on `listRunFindings`: the category of the finding the event was recorded against, and the verdict that now stands for it. Neither filters on the event. `project_uid` (`UI-PARITY-P0A`) filters on the finding in the same way: the finding must belong to that project. It is a filter and not a parent, so a project nothing was decided in -- or one that does not exist -- is an empty page. `total` is the number of entries that match all the filters given, on every page of the listing and not the number on this page. There is no parent identity in the path, so an empty journal is an empty page and never `not_found`.",
+        "description": "Every expert decision this deployment has recorded, in one listing, with the finding context each event was recorded against. `listDecisionHistory` answers *what was decided about this finding*; this answers *what has been decided*, which no operation could answer before and which a client could otherwise reach only by walking every run and every finding.\n\n**It is a projection and creates nothing.** `ADR-0012` holds: the current verdict, the reason aggregates and the knowledge-base views are rebuildable projections over the append-only ledger. Every property of `DecisionRecord` is rebuildable from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and this operation is the only place they are read together.\n\nOrdered by `(recorded_at, decision_id)` **descending** - the newest decision first, as `listProjects` orders projects - and that is a total order, stable across pages. The server's row sequence is never exposed, in a field or inside a cursor.\n\n`category` and `verdict` filter on the **finding**, exactly as they do on `listRunFindings`: the category of the finding the event was recorded against, and the verdict that now stands for it. Neither filters on the event. `project_uid` (`UI-PARITY-P0A`) filters on the finding in the same way: the finding must belong to that project. It is a filter and not a parent, so a project nothing was decided in -- or one that does not exist -- is an empty page. `total` is the number of entries that match all the filters given, on every page of the listing and not the number on this page. There is no parent identity in the path, so an empty journal is an empty page and never `not_found`.\n\n`execution_status` (`UIP-S12-01`) filters on the finding in the same way, by the designer's execution status (`R-151g`): one value or several, and the entry is kept when the finding's status is any of them. Each entry carries `execution_status` and `execution_status_at` when its finding has a status and neither when it has none; the status is not an expert decision, so setting it never changes a verdict, an entry or a count of them. The same two properties are on the finding of an entry of `listKnowledgeBaseEntries`.",
         "parameters": [
           {
             "$ref": "#/components/parameters/Cursor"
@@ -2316,6 +2331,15 @@
             "description": "Restrict the page to decisions on findings of this project. Absent means no project filter.",
             "schema": {
               "$ref": "#/components/schemas/ProjectUid"
+            }
+          },
+          {
+            "name": "execution_status",
+            "in": "query",
+            "required": false,
+            "description": "`UIP-S12-01` (programme `UI-PARITY-R3`, owner rulings Г9-B and Г12-B): keep only the entries of findings whose designer execution status (`R-151g`) is any of these. One or more of `taken_into_account`, `amended`, `declined`, `agreed`, separated by commas (`agreed,amended`); the parameter written more than once is read as the same list. A finding with no status is in none of them. Absent means no status filter. An unknown value, or an empty element as in `agreed,`, is `422 validation_failed` with `constraint: enum`. It filters like `verdict`: `total` is the number of entries that match, so the count of one status is the `total` of that status read with `limit=1`.",
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -6439,7 +6463,7 @@
           "optimisation"
         ],
         "summary": "Get Section Specification",
-        "description": "«Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert|viewer`.",
+        "description": "«Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `document_uid` (`UIP-S11-05`) narrows it to one document set the same way, without scanning other projects, and a document that is unknown, of another project than `project_uid`, or whose current version is confirmed in another section is `404` (a current version nobody classified is answered, listed in `excluded`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert|viewer`.",
         "operationId": "getSectionSpecification",
         "security": [
           {
@@ -6453,6 +6477,14 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/ProjectUid"
+            }
+          },
+          {
+            "name": "document_uid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentUid"
             }
           },
           {
@@ -23368,7 +23400,7 @@
         ],
         "summary": "Get Work Schedule",
         "operationId": "getWorkSchedule",
-        "description": "`UI-PARITY-P0P` (contract 1.31.0, rulings `R-151x`, `R-152a`…`R-152d`): one month of «График работ» -- the days (Saturday and Sunday off unless the administrator decided otherwise), and for each active expert the month's plan (`plan_is_default` when the stored default applies), the documents that became «Проверено экспертом» in the month credited to the author of their last verdict (`done`, `fact`) and the absent days. An administrator reads every active expert; an expert reads their own row. `role:admin|expert`.",
+        "description": "`UI-PARITY-P0P` (contract 1.31.0, rulings `R-151x`, `R-152a`…`R-152d`): one month of «График работ» -- the days (Saturday and Sunday off unless the administrator decided otherwise), and for each active expert the month's plan (`plan_is_default` when the stored default applies), the documents that became «Проверено экспертом» in the month credited to the author of their last verdict (`done`, `fact`), the absent days, and (`UIP-S14-01`) how many decisions the expert accepted and rejected in the month (`accepted_count`, `rejected_count`; findings and optimisation proposals together, the decisions that stand, not those carried over from an earlier version, credited to their author, the month and day cut in the schedule's time zone; `0` and `0` without decisions). An administrator reads every active expert; an expert reads their own row. `role:admin|expert`.",
         "security": [
           {
             "bearerAuth": []
@@ -23943,7 +23975,7 @@
         ],
         "summary": "List Accepted Optimisation Proposals",
         "operationId": "listAcceptedOptimisationProposals",
-        "description": "The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` states, present where `saving` is `null` and absent only at a zero current price. Any one role, `role:admin|expert|viewer`.",
+        "description": "The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project, `document_uid` (`UIP-S11-05`) to one document set and `section_code` to the versions an expert confirmed in that section; none is a parent, so an empty result is a `200` with no rows -- a document that does not exist, or that belongs to another project or section than the one named, included. `total` is the number of proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` states, present where `saving` is `null` and absent only at a zero current price. Any one role, `role:admin|expert|viewer`.",
         "security": [
           {
             "bearerAuth": []
@@ -23984,6 +24016,14 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/ProjectSection"
+            }
+          },
+          {
+            "name": "document_uid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentUid"
             }
           },
           {
@@ -30744,7 +30784,7 @@
       },
       "DecisionRecord": {
         "type": "object",
-        "description": "One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`.",
+        "description": "One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. `execution_status` and `execution_status_at` (`UIP-S12-01`, `R-151g`) are the designer's execution status of the finding the decision was taken on and when it was set, as on `Finding`; both are absent when the finding has none. The status is not an expert decision: it is read beside the record and never changes it, and a record is the same whether or not the finding has a status.",
         "additionalProperties": false,
         "required": [
           "decision_id",
@@ -30855,6 +30895,15 @@
           },
           "carried_from": {
             "$ref": "#/components/schemas/DecisionCarriedFrom"
+          },
+          "execution_status": {
+            "$ref": "#/components/schemas/FindingExecutionStatus"
+          },
+          "execution_status_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Execution Status At",
+            "description": "`UIP-S12-01` (`R-151g`): when the execution status of the finding was set. Present with `execution_status`."
           }
         }
       },
@@ -49058,6 +49107,16 @@
             "minimum": 0,
             "title": "Fact"
           },
+          "accepted_count": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Accepted Count"
+          },
+          "rejected_count": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Rejected Count"
+          },
           "done": {
             "items": {
               "$ref": "#/components/schemas/WorkScheduleDoneDocument"
@@ -49082,11 +49141,13 @@
           "plan",
           "plan_is_default",
           "fact",
+          "accepted_count",
+          "rejected_count",
           "done",
           "absences"
         ],
         "title": "WorkScheduleEngineer",
-        "description": "One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences."
+        "description": "One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences, and how many decisions the engineer accepted and rejected in it (``accepted_count``, ``rejected_count``: findings and optimisation proposals together, the decisions that stand, taken directly and not carried over from an earlier version, credited to their author and cut by the day in the schedule's time zone; both ``0`` without decisions)."
       },
       "WorkScheduleMonth": {
         "properties": {

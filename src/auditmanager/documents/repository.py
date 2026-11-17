@@ -24,6 +24,8 @@ a return value. See that module's docstring for why omission beats redaction.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Sequence
 from typing import Any, Final
 
 from sqlalchemy import text
@@ -50,7 +52,9 @@ __all__ = [
     "MAX_DISPLAY_TITLE",
     "MAX_PLACEMENT_PAGE",
     "MAX_PROJECT_NAME",
+    "PROJECT_ORDERS",
     "DocumentRepository",
+    "order_project_listing",
 ]
 
 #: The schema's own bounds, restated so a caller is refused with a typed error before
@@ -62,6 +66,52 @@ MAX_DISPLAY_TITLE: Final[int] = 400
 #: ``list_unclassified_current_versions`` returns. A caller that needs more reads the next
 #: page; no read here is unbounded.
 MAX_PLACEMENT_PAGE: Final[int] = 1000
+
+#: The orders ``listProjects`` offers (`UIP-S03-02`). ``published`` is the order of ``_LIST_PROJECTS`` itself -- newest first,
+#: the only order the operation had -- and ``name`` orders by the number in the name.
+PROJECT_ORDERS: Final[tuple[str, ...]] = ("published", "name")
+
+#: The first run of ASCII digits in a name: the number the ``name`` order sorts by. «213-А», «213. Школа» and «Школа 213» are
+#: all 213; a name with none has no number. A digit that is not ASCII is not a number here, so one reading is the same on every
+#: platform.
+_FIRST_NUMBER = re.compile(r"[0-9]+")
+
+
+def _project_name_key(record: ProjectListingRecord) -> tuple[int, int, str, str]:
+    """The sort key of ``order=name`` (`UIP-S03-02`): the name's first number ascending, the names without one after every
+    numbered name, the name compared without regard to letter case (``casefold``) among equal numbers and among the names
+    without one, and the identity last, so that two projects the comparison calls equal still have one total order (the
+    cursor of the listing is built on the identity and locates its row in this order).
+
+    The number is an ``int``, so «007» is 7 and «9» comes before «10». A name has at most ``MAX_PROJECT_NAME`` characters,
+    far below the length at which Python refuses to read a digit string.
+    """
+    found = _FIRST_NUMBER.search(record.name)
+    return (
+        1 if found is None else 0,
+        0 if found is None else int(found.group()),
+        record.name.casefold(),
+        str(record.project_uid),
+    )
+
+
+def order_project_listing(
+    records: Sequence[ProjectListingRecord], order: str
+) -> tuple[ProjectListingRecord, ...]:
+    """``listProjects`` rows in ``order`` (`UIP-S03-02`).
+
+    ``published`` returns the rows as they came, newest first, because that is the order ``_LIST_PROJECTS`` already gives
+    and re-sorting it here would hide a query that stopped honouring it. ``name`` sorts here and not in SQL: the rule is
+    Python's ``casefold`` and an integer parsed out of a text, which no database collation reproduces, and the whole
+    listing is already read in one statement. Any other value is refused rather than answered in the default order -- a
+    caller that mistypes an order must not believe it got the one it asked for.
+    """
+    if order == "published":
+        return tuple(records)
+    if order == "name":
+        return tuple(sorted(records, key=_project_name_key))
+    raise ValueError(f"{order!r} is not a project order; the orders are {PROJECT_ORDERS}")
+
 
 _INSERT_PROJECT = text(
     "INSERT INTO project (project_uid, name) VALUES (:project_uid, :name) "

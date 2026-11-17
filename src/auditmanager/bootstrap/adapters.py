@@ -674,7 +674,11 @@ class ProjectAdapter:
     def get_project(self, *, project_uid: str) -> ProjectView | None:
         return _project_of(self, project_uid)
 
-    def list_projects(self) -> Sequence[ProjectView]:
+    def list_projects(self, *, order: str = "published") -> Sequence[ProjectView]:
+        # `UIP-S03-02`: `order` is `published` (newest first, the listing as the repository's statement gives it) or `name`
+        # (the first number in the name, then the names without one). The documents boundary owns the rule
+        # (`order_project_listing`); an order it does not know is refused there, never answered in the default order.
+        #
         # `document_count` is carried, not recomputed: `IngestService.list_projects`
         # returns `ProjectListingRecord`s whose count came out of the same statement that
         # produced the row (`R-10`). Passing it here rather than counting here is what
@@ -693,8 +697,9 @@ class ProjectAdapter:
         # counters are two statements, as every panel of the dashboard is; a document published between them is in
         # one answer and not yet in the other, and the next poll agrees.
         from auditmanager.dashboard import AuditCountsRecord, DocumentAuditReadModel, counts_by_project
+        from auditmanager.documents.repository import order_project_listing
 
-        listing = self._service.list_projects()
+        listing = order_project_listing(self._service.list_projects(), order)
         with self._sessions() as session:
             counts = counts_by_project(DocumentAuditReadModel().groups(session))
         return tuple(
@@ -2987,6 +2992,7 @@ class DecisionAdapter(_SessionHolder):
         category: str | None = None,
         verdict: str | None = None,
         project_uid: str | None = None,
+        execution_statuses: Sequence[str] | None = None,
     ) -> Sequence[DecisionRecordView]:
         """The journal, filtered in the query rather than here.
 
@@ -2995,7 +3001,7 @@ class DecisionAdapter(_SessionHolder):
         deployment has ever taken. The predicate goes to PostgreSQL, against the same
         columns the record reports.
 
-        All three arguments (`UI-PARITY-P0A` added ``project_uid``) are named in the signature
+        All four arguments (`UI-PARITY-P0A` added ``project_uid``, `UIP-S12-01` ``execution_statuses``) are named in the signature
         rather than swallowed by ``**_``. The
         finding adapter's first version took ``**_`` and dropped its two filters, so a
         filtered request returned everything and looked like it had worked, and
@@ -3008,7 +3014,8 @@ class DecisionAdapter(_SessionHolder):
             return tuple(
                 _record_view(entry)
                 for entry in decision_journal(
-                    session, category=category, verdict=verdict, project_uid=project_uid
+                    session, category=category, verdict=verdict, project_uid=project_uid,
+                    execution_statuses=execution_statuses,
                 )
             )
 
@@ -3038,6 +3045,8 @@ def _record_view(entry: Any) -> DecisionRecordView:
         comment=entry.comment,
         section=entry.section,
         carried_from=_carried_from_view(entry.carried_from),
+        execution_status=entry.execution_status,
+        execution_status_at=entry.execution_status_at,
     )
 
 
@@ -5737,6 +5746,7 @@ class SectionSpecificationAdapter(_SessionHolder):
         offset: int,
         limit: int,
         user_uid: str,
+        document_uid: str | None = None,
     ) -> models.SectionSpecification:
         from auditmanager.access.public import AccountRepository
         from auditmanager.optimisation.public import read_section_specification
@@ -5748,6 +5758,7 @@ class SectionSpecificationAdapter(_SessionHolder):
                 actor_roles=AccountRepository().roles_of(session, user_uid),
                 reader=self._reader,
                 project_uid=project_uid,
+                document_uid=document_uid,
                 query=query,
                 offset=offset,
                 limit=limit,
@@ -6034,6 +6045,7 @@ class ScheduleAdapter(_SessionHolder):
             engineers=sorted((models.WorkScheduleEngineer(
                 user_uid=engineer.user_uid, label=labels.of(engineer.user_uid), plan=engineer.plan,
                 plan_is_default=engineer.plan_is_default, fact=engineer.fact,
+                accepted_count=engineer.accepted_count, rejected_count=engineer.rejected_count,
                 done=[models.WorkScheduleDoneDocument(
                     day=item.day, project_uid=item.project_uid, project_name=item.project_name,
                     document_uid=item.document_uid, document_title=item.document_title,
@@ -6758,7 +6770,7 @@ class OptimisationProposalAdapter(_SessionHolder):
         )
 
     def list_accepted_optimisation_proposals(
-        self, *, project_uid: str | None, section_code: str | None, user_uid: str
+        self, *, project_uid: str | None, section_code: str | None, user_uid: str, document_uid: str | None = None
     ) -> Sequence[models.AcceptedOptimisationProposal]:
         """`UI-B-27`: the accepted proposals, each acceptance's author named by the account's display label."""
         from auditmanager.access.public import AccountRepository
@@ -6771,6 +6783,7 @@ class OptimisationProposalAdapter(_SessionHolder):
                 actor_roles=accounts.roles_of(session, user_uid),
                 project_uid=project_uid,
                 section=section_code,
+                document_uid=document_uid,
             )
             labels = _Labels(session, accounts)
             return tuple(

@@ -90,6 +90,7 @@ from auditmanager.decisions import (
     decision_journal,
     record_decision,
 )
+from auditmanager.documents.repository import order_project_listing
 from auditmanager.findings import (
     BlockIndex,
     ObservationSet,
@@ -355,7 +356,10 @@ class IngestProjectAdapter:
             created_at=record.created_at,
         )
 
-    def list_projects(self) -> Sequence[ProjectView]:
+    def list_projects(self, *, order: str = "published") -> Sequence[ProjectView]:
+        # `UIP-S03-02`: the order is the documents boundary's own function, the one the shipped adapter calls, so this copy
+        # cannot define `name` differently from it.
+        #
         # No reversal. `B1`'s query is now `ORDER BY created_at DESC, project_uid DESC`,
         # which is the "newest first" the frozen document declares, so this adapter
         # forwards the order it is given.
@@ -374,7 +378,7 @@ class IngestProjectAdapter:
         # `R-10` the shipped adapter carries the count the repository measured; if this one
         # dropped it, every test in this suite that asserts the field would be asserting
         # against a fake that is no longer the application.
-        rows = self._ingest.list_projects()
+        rows = order_project_listing(self._ingest.list_projects(), order)
         return tuple(
             ProjectView(
                 project_uid=str(record.project_uid),
@@ -802,6 +806,7 @@ class LedgerDecisionAdapter:
         category: str | None = None,
         verdict: str | None = None,
         project_uid: str | None = None,
+        execution_statuses: Sequence[str] | None = None,
     ) -> Sequence[DecisionRecordView]:
         """The journal, straight off `W38-KB`'s read. No ordering is applied here.
 
@@ -831,9 +836,12 @@ class LedgerDecisionAdapter:
                 verdict=entry.verdict,
                 comment=entry.comment,
                 section=entry.section,
+                execution_status=entry.execution_status,
+                execution_status_at=entry.execution_status_at,
             )
             for entry in decision_journal(
-                self._session, category=category, verdict=verdict, project_uid=project_uid
+                self._session, category=category, verdict=verdict, project_uid=project_uid,
+                execution_statuses=execution_statuses,
             )
         )
 

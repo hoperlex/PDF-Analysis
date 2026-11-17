@@ -1149,7 +1149,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listProposalDecisionJournal": "/proposal-decisions",
         "listKnowledgeBaseEntries": "/knowledge-base/entries",
         # `UI-B-27` (1.35.0): the accepted proposals; its rows need decided proposals, so its filters are driven in
-        # `tests/integration/optimisation/proposals/test_accepted.py`.
+        # `tests/integration/optimisation/proposals/test_accepted.py` (and, for `document_uid`, `test_accepted_by_document.py`;
+        # that the router hands each filter to the port is `test_accepted_proposals_read_the_query_parameters_they_declare`).
         "listAcceptedOptimisationProposals": "/optimisation-proposals/accepted",
         # `UI-PARITY-P0P`. «График работ»: a month and a run of days, not pages; driven by its own test below.
         "getWorkSchedule": "/work-schedule?month=2026-11",
@@ -1160,7 +1161,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         f"{sorted(set(declared) ^ set(targets))}"
     )
     assert declared == {
-        "listProjects": {"cursor", "limit"},
+        # `UIP-S03-02` (the order of the listing): `published`, the default, or `name`.
+        "listProjects": {"cursor", "limit", "order"},
         "listRunFindings": {"category", "cursor", "limit", "verdict"},
         "listDecisionHistory": {"cursor", "limit"},
         # `UI-PARITY-P0E`, `P0G`, `P0H` (1.20.0, 1.22.0, 1.23.0): the section, archive and tag filters.
@@ -1168,7 +1170,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listDocuments": {"cursor", "limit", "section_code", "include_archived", "tag", "audit_state", "order"},
         "listVersions": {"cursor", "limit"},
         "listRuns": {"cursor", "limit"},
-        "listDecisions": {"category", "cursor", "limit", "verdict", "project_uid"},
+        # `UIP-S12-01`: the designer's execution status of the finding, one or several (comma-separated).
+        "listDecisions": {"category", "cursor", "limit", "verdict", "project_uid", "execution_status"},
         "listRegistrations": {"status", "cursor", "limit"},
         "listUsers": {"include_archived", "cursor", "limit"},
         "listAuthEvents": {"cursor", "limit"},
@@ -1186,7 +1189,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "getSpecificationPrices": {"offset", "limit"},
         "listOptimisationPasses": {"document_uid", "limit"},
         "listOptimisationProposals": {"decision", "offset", "limit"},
-        "getSectionSpecification": {"project_uid", "q", "offset", "limit"},
+        # `UIP-S11-05`: one document set of the section.
+        "getSectionSpecification": {"project_uid", "document_uid", "q", "offset", "limit"},
         "compareDocumentVersions": {
             "target_version_uid", "source_run_id", "target_run_id", "mode", "diff_offset",
             "diff_limit",
@@ -1196,7 +1200,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # `UI-PARITY-P0J` (1.25.0): the proposal decision journal, optionally of one project.
         "listProposalDecisionJournal": {"project_uid", "cursor", "limit"},
         "listKnowledgeBaseEntries": {"project_uid", "cursor", "limit"},
-        "listAcceptedOptimisationProposals": {"project_uid", "section_code", "cursor", "limit"},
+        # `UIP-S11-05`: `document_uid` beside the project and the section.
+        "listAcceptedOptimisationProposals": {"project_uid", "document_uid", "section_code", "cursor", "limit"},
         # `UI-PARITY-P0P` (1.31.0): the month of «Выполнено»; the reserve's first day and length.
         "getWorkSchedule": {"month"},
         "getWorkScheduleReserve": {"start", "days"},
@@ -1453,6 +1458,37 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             ):
                 inert.setdefault(operation_id, []).append("project_uid")
 
+        if "execution_status" in names and operation_id == "listDecisions":
+            # `UIP-S12-01`. The journal is deployment-wide, so the discriminating pair is the two accepted findings of this
+            # run, given two different statuses, against the status nothing here was given: each value keeps exactly the
+            # entries of the finding that carries it, a list keeps both, and a status nobody holds keeps none of ours.
+            # Only the entries of this run's own project are looked at, so rows another suite left behind cannot answer.
+            from auditmanager.access.public import UserRepository
+            from auditmanager.decisions.execution_status import set_execution_status
+
+            designer = str(UserRepository().create_user(
+                session, f"qs-execution-status-{uuid.uuid4().hex[:12]}@example.com",
+                f"qs-execution-status-{uuid.uuid4().hex}").user_uid)
+            for finding, status in ((first, "agreed"), (other, "amended")):
+                set_execution_status(session, finding_uid=finding.finding_uid, status=status, actor_uid=designer,
+                                     idempotency_key=f"qs-execution-status-{status}-{uuid.uuid4().hex[:8]}")
+            mine = f"project_uid={mixed_run.run.project_uid}"
+
+            def kept(values: str) -> list[dict[str, Any]]:
+                return ok(get(surface, f"{target}{sep}{mine}&execution_status={values}&limit=200"))["items"]
+
+            agreed, amended = kept("agreed"), kept("amended")
+            both, neither = kept("agreed,amended"), kept("declined")
+            if (
+                not agreed or {r["finding_uid"] for r in agreed} != {first.finding_uid}
+                or {r["execution_status"] for r in agreed} != {"agreed"}
+                or not amended or {r["finding_uid"] for r in amended} != {other.finding_uid}
+                or {r["decision_id"] for r in both} != {r["decision_id"] for r in agreed + amended}
+                or neither
+                or ok(get(surface, f"{target}{sep}{mine}&execution_status=agreed&limit=200"))["total"] != len(agreed)
+            ):
+                inert.setdefault(operation_id, []).append("execution_status")
+
         if "q" in names and operation_id == "listNormDocuments":
             # The catalogue's text filter keeps the document whose designation it starts.
             kept = ok(get(surface, f"{target}{sep}q={quote('ГОСТ 21.501')}&limit=200"))
@@ -1548,6 +1584,35 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             assert scoped, "a truncated filtered page carried no cursor"
             if get(surface, f"{target}{sep}limit=1&cursor={scoped}").status != 422:
                 inert.setdefault(operation_id, []).append("cursor scope")
+
+    # `UIP-S03-02`: `listProjects`' `order`. The ladder's six projects are named «Лестница 0» to «Лестница 5» and were stamped so
+    # that newest-first is 2, 0, 4, 3, 5, 1: under `order=name` they come back by the number in the name, which is their creation
+    # order, so a passthrough that ignores `order` answers the newest-first order and is caught. The listing is walked whole by its own
+    # cursors, because the ladder's numbers are not the only ones in a database other suites wrote into.
+    def walked_projects(query: str) -> list[str]:
+        walked: list[str] = []
+        cursor: str | None = None
+        for _ in range(10_000):
+            suffix = f"&cursor={quote(cursor)}" if cursor else ""
+            page = ok(get(shipped_router, f"/projects?{query}limit=200{suffix}"))
+            walked += uids(page, "project_uid")
+            cursor = page["page"]["next_cursor"]
+            if cursor is None:
+                return walked
+        raise AssertionError("the project listing did not end")
+
+    ours = set(ladder.created)
+    assert ladder.newest_first != ladder.created, "the ladder cannot tell the name order from the default"
+    if [u for u in walked_projects("order=name&") if u in ours] != ladder.created:
+        inert.setdefault("listProjects", []).append("order")
+    if [u for u in walked_projects("order=published&") if u in ours] != ladder.newest_first:
+        inert.setdefault("listProjects", []).append("order=published")
+    by_name = walked_projects("order=name&")
+    first_by_name = ok(get(shipped_router, "/projects?order=name&limit=1"))
+    second_by_name = ok(get(shipped_router, f"/projects?order=name&limit=1&cursor={quote(first_by_name['page']['next_cursor'])}"))
+    if (uids(first_by_name, "project_uid"), uids(second_by_name, "project_uid")) != ([by_name[0]], [by_name[1]]):
+        inert.setdefault("listProjects", []).append("cursor under order=name")
+    assert get(shipped_router, "/projects?order=newest&limit=1").status == 422, "an unknown order is refused"
 
     # `UI-PARITY-P0E`, `P0G`, `P0H`: `listDocuments`' section, archive and tag filters over the catalogue's three
     # documents -- one confirmed for АР, one archived, one tagged -- written after the sweep, which pages them all.
@@ -2190,7 +2255,8 @@ def test_optimisation_proposals_read_the_query_parameters_they_declare(
 def test_section_specification_reads_the_query_parameters_it_declares(
     shipped_router: Surface,
 ) -> None:
-    """`W63-SECTION-FORM7-01`: ``project_uid``, ``q``, ``offset`` and ``limit`` reach the port.
+    """`W63-SECTION-FORM7-01`: ``project_uid``, ``q``, ``offset`` and ``limit`` reach the port, and (`UIP-S11-05`)
+    ``document_uid`` with them.
 
     The rule of the sweep above -- supply the parameter and require the answer to change --
     over a port that answers what it was asked: it echoes the section code, the project filter,
@@ -2204,7 +2270,7 @@ def test_section_specification_reads_the_query_parameters_it_declares(
 
     class _Echo:
         def __init__(self) -> None:
-            self.asked: list[tuple[str, str | None, str | None, int, int]] = []
+            self.asked: list[tuple[str, str | None, str | None, str | None, int, int]] = []
 
         def get_section_specification(
             self,
@@ -2215,8 +2281,9 @@ def test_section_specification_reads_the_query_parameters_it_declares(
             offset: int,
             limit: int,
             user_uid: str,
+            document_uid: str | None = None,
         ) -> models.SectionSpecification:
-            self.asked.append((section_code, project_uid, query, offset, limit))
+            self.asked.append((section_code, project_uid, document_uid, query, offset, limit))
             return models.SectionSpecification.model_validate({
                 "section_code": section_code, "state": "ready", "limit_reason": None,
                 "project_filter": project_uid, "query": query,
@@ -2232,6 +2299,7 @@ def test_section_specification_reads_the_query_parameters_it_declares(
     build_section_specification_routes(router, echo)  # type: ignore[arg-type]
     surface = Surface(router)
     project = "prj_01M2545JSD15ETSNNV904X991F"
+    document = "doc_01M2545JSD15ETSNNV904X991H"
     inert: list[str] = []
 
     bare = ok(get(surface, "/sections/KJ/specification"))
@@ -2246,24 +2314,73 @@ def test_section_specification_reads_the_query_parameters_it_declares(
         inert.append("q")
     if (filtered["rows"]["offset"], filtered["rows"]["limit"]) != (120, 7):
         inert.append("offset/limit")
-    empty = ok(get(surface, "/sections/AR/specification?project_uid=&q="))
+    ok(get(surface, f"/sections/AR/specification?document_uid={document}"))
+    ok(get(surface, f"/sections/AR/specification?project_uid={project}&document_uid={document}&limit=3"))
+    empty = ok(get(surface, "/sections/AR/specification?project_uid=&document_uid=&q="))
     if (empty["project_filter"], empty["query"]) != (None, None):
         inert.append("empty values are absent")
     assert inert == [], f"getSectionSpecification accepts and ignores: {inert}; asked {echo.asked}"
     assert echo.asked == [
-        ("KJ", None, None, 0, 50),
-        ("AR", project, "дверь", 120, 7),
-        ("AR", None, None, 0, 50),
-    ]
+        ("KJ", None, None, None, 0, 50),
+        ("AR", project, None, "дверь", 120, 7),
+        ("AR", None, document, None, 0, 50),
+        ("AR", project, document, None, 0, 3),
+        ("AR", None, None, None, 0, 50),
+    ], "document_uid, the empty value included, did not reach the port as declared"
     before = len(echo.asked)
     for query in ("offset=-1", "limit=0", "limit=201", "offset=x", "limit=x", "project_uid=prj_bad",
-                  "q=" + "д" * 201):
+                  "document_uid=doc_bad", f"document_uid={project}", "q=" + "д" * 201):
         refused = get(surface, f"/sections/AR/specification?{query}")
         assert refused.status == 422, (query, refused.status, refused.body)
     for code in ("XX", "ar", "АР"):
         unknown = get(surface, f"/sections/{code}/specification")
         assert unknown.status == 404, (code, unknown.status, unknown.body)
         assert json.loads(unknown.body)["details"] == {"aggregate_type": "SectionSpecification"}
+    assert len(echo.asked) == before, "a refused request reached the port"
+
+
+def test_accepted_proposals_read_the_query_parameters_they_declare(shipped_router: Surface) -> None:
+    """`UIP-S11-05`: ``project_uid``, ``document_uid`` and ``section_code`` reach the port, only as declared.
+
+    The rule of the sweep above over a port that records what it was asked. What the filters select (and that an
+    unknown, a foreign or another section's document is an empty page and not a refusal) is proved against PostgreSQL in
+    ``tests/integration/optimisation/proposals/test_accepted_by_document.py``.
+    """
+    from auditmanager.api.routers.optimisation_proposals import build_optimisation_proposal_routes
+
+    class _Echo:
+        def __init__(self) -> None:
+            self.asked: list[tuple[str | None, str | None, str | None]] = []
+
+        def list_accepted_optimisation_proposals(
+            self, *, project_uid: str | None, section_code: str | None, user_uid: str, document_uid: str | None = None
+        ) -> list[Any]:
+            self.asked.append((project_uid, document_uid, section_code))
+            return []
+
+    echo = _Echo()
+    router = Router(credentials=shipped_router.router.credentials)
+    build_optimisation_proposal_routes(router, echo)  # type: ignore[arg-type]
+    surface = Surface(router)
+    accepted = "/optimisation-proposals/accepted"
+    project = "prj_01M2545JSD15ETSNNV904X991F"
+    document = "doc_01M2545JSD15ETSNNV904X991H"
+
+    for query in ("", f"?document_uid={document}", f"?project_uid={project}&document_uid={document}&section_code=KJ",
+                  "?project_uid=&document_uid=", f"?section_code=AR&document_uid={document}&limit=7"):
+        page = ok(get(surface, accepted + query))
+        assert (page["items"], page["total"]) == ([], 0), query
+    assert echo.asked == [
+        (None, None, None),
+        (None, document, None),
+        (project, document, "KJ"),
+        (None, None, None),
+        (None, document, "AR"),
+    ], "a filter was accepted and not handed to the port"
+    before = len(echo.asked)
+    for query in ("document_uid=doc_bad", f"document_uid={project}", "document_uid=" + "x" * 80):
+        refused = get(surface, f"{accepted}?{query}")
+        assert refused.status == 422, (query, refused.status, refused.body)
     assert len(echo.asked) == before, "a refused request reached the port"
 
 

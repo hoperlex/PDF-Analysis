@@ -367,7 +367,7 @@ class _UnusedProjectPort:
     def create_project(self, **_: Any) -> Any:  # pragma: no cover - never called
         raise AssertionError("this suite does not drive createProject")
 
-    def list_projects(self) -> Sequence[Any]:  # pragma: no cover - never called
+    def list_projects(self, *, order: str = "published") -> Sequence[Any]:  # pragma: no cover - never called
         raise AssertionError("this suite does not drive listProjects")
 
 

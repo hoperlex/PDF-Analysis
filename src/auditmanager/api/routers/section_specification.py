@@ -12,8 +12,10 @@ project and per currency (each project's ``matching``) and there is no section t
 without a price list serves its rows with no match and no figure. A current version nobody
 classified is listed in ``excluded``; one confirmed in another section never appears.
 
-``project_uid`` narrows the answer to one project (an unknown one is ``404``); ``q`` keeps the
-rows whose own Form-7 text contains it, without changing any project's state or totals.
+``project_uid`` narrows the answer to one project (an unknown one is ``404``); ``document_uid``
+(`UIP-S11-05`) narrows it to one document set the same way (an unknown one, one of another project
+than ``project_uid`` and one whose current version is confirmed in another section are ``404``);
+``q`` keeps the rows whose own Form-7 text contains it, without changing any project's state or totals.
 Rows are paged. A section code outside the fifteen addresses no section and is ``404``. A bound
 (projects scanned, member sets read, rows held) is an answer, not an error: ``200`` with
 ``state: section_too_large`` and the bound's name. Nothing is written. Any one role,
@@ -56,6 +58,15 @@ ProjectFilterParam = Annotated[
     WithJsonSchema({"$ref": "#/components/schemas/ProjectUid"}),
     Query(json_schema_extra=optional_property),
 ]
+# `UIP-S11-05` (programme `UI-PARITY-R3`): one document set of the section. Spelled as `listOptimisationPasses`' own
+# `document_uid` is: an inline `DocumentUid` query parameter whose shape is enforced (a malformed value is `422`), the empty
+# string the absent parameter.
+DocumentFilterParam = Annotated[
+    models.DocumentUid | None,
+    BeforeValidator(_absent),
+    WithJsonSchema({"$ref": "#/components/schemas/DocumentUid"}),
+    Query(json_schema_extra=optional_property),
+]
 RowQueryParam = Annotated[
     Annotated[str, Field(min_length=1, max_length=200)] | None,
     BeforeValidator(_absent),
@@ -94,8 +105,12 @@ def build_section_specification_routes(
             "totals exist per project and per currency only -- there is no section total. A "
             "current version nobody classified is listed in `excluded`; one confirmed in "
             "another section never appears. `project_uid` narrows the answer to one project "
-            "(an unknown one is `404`); `q` keeps the rows whose own text contains it and "
-            "never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set "
+            "(an unknown one is `404`); `document_uid` (`UIP-S11-05`) narrows it to one "
+            "document set the same way, without scanning other projects, and a document that "
+            "is unknown, of another project than `project_uid`, or whose current version is "
+            "confirmed in another section is `404` (a current version nobody classified is "
+            "answered, listed in `excluded`); `q` keeps the rows whose own text contains it "
+            "and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set "
             "without a published run or a saved text layer is its own `state`. Over a bound "
             "(projects scanned, member sets read, rows held) the answer is `200` with "
             "`state: section_too_large`, the bound in `limit_reason`, the membership listed "
@@ -107,6 +122,7 @@ def build_section_specification_routes(
         subject: CurrentSubject,
         section_code: Annotated[models.ProjectSection, Path()],
         project_uid: ProjectFilterParam = None,
+        document_uid: DocumentFilterParam = None,
         q: RowQueryParam = None,
         offset: RowOffsetParam = 0,
         limit: RowLimitParam = 50,
@@ -114,6 +130,7 @@ def build_section_specification_routes(
         answer = section_specifications.get_section_specification(
             section_code=section_code.value,
             project_uid=project_uid,
+            document_uid=document_uid,
             query=q,
             offset=offset,
             limit=limit,
