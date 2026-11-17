@@ -14,11 +14,11 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import type { NormCitation, Severity } from '@/shared/api';
+import type { DecisionCarriedFrom, NormCitation, Severity } from '@/shared/api';
 import { SEVERITY_VALUES } from '@/shared/api';
 import { groupByCategory, severityTone } from '@/entities/finding';
 import { ExportPanel } from '@/widgets/export-panel';
-import { FindingList, FindingToolbar, findingNumbers, findingViewOf, pagesParts } from '@/widgets/finding-list';
+import { FindingList, FindingRowActions, FindingToolbar, findingNumbers, findingViewOf, pagesParts } from '@/widgets/finding-list';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { declares } from '../styles/css-reads';
@@ -233,16 +233,21 @@ describe('the verdict on a row', () => {
     expect(at(A)).toBeLessThan(at(B));
   });
 
-  it('says the verdict in words in the decision cell, which is not struck through', () => {
+  it('says the verdict by its sign in the decision cell, the word being the sign’s name, and the cell is not struck through', () => {
     const markup = table();
     const cell = (uid: string): string => {
       const found = new RegExp(`data-row-key="${uid}"[\\s\\S]*?(<td class="[^"]*decisionCell[^"]*">[\\s\\S]*?</td>)`).exec(markup);
       if (found === null) throw new Error(`no decision cell of ${uid}`);
       return found[1] as string;
     };
-    expect(cell(B)).toContain('>отклонено<');
-    expect(cell(A)).toContain('>принято<');
-    expect(cell(C)).not.toContain('>отклонено<');
+    // One glyph (UIP-FIX-17: the cell is one line, and a word did not fit it beside the choice, ✓, ✕ and «Причина»); the word is its name.
+    expect(cell(B)).toContain('>✕<');
+    expect(cell(B)).toContain('aria-label="Отклонено"');
+    expect(cell(A)).toContain('>✓<');
+    expect(cell(A)).toContain('aria-label="Принято"');
+    expect(cell(C)).toContain('>—<');
+    expect(cell(C)).toContain('aria-label="Не решено"');
+    expect(cell(C)).not.toContain('Отклонено');
     expect(declares(TABLE_CSS, ".row[data-verdict-bucket='rejected'] > td.decisionCell", 'text-decoration', /^none$/)).toBe(true);
   });
 
@@ -292,6 +297,91 @@ describe('the size of a row and its words', () => {
     });
     expect(widths.reduce((sum, width) => sum + width, 0)).toBe(100);
     expect(widths[1]).toBeGreaterThanOrEqual(14);
+    // The finding is the widest column; the decision column is the second, for the whole line of its cell (`UIP-FIX-17`).
+    const text = widths[3] as number;
+    const decision = widths[6] as number;
+    expect(text).toBe(Math.max(...widths));
+    expect(decision).toBe([...widths].sort((left, right) => right - left)[1]);
+    expect(decision).toBeGreaterThanOrEqual(24);
+  });
+});
+
+/**
+ * `UIP-FIX-17`: the «Решение» cell is one line. Its markup is the sign, then the row's field (`FindingRowActions`), then the mark of a
+ * carried decision under them; its rules place the field from the cell, by the handles the markup carries, and each is checked first on a
+ * sheet that lacks it (so the check can fail) and then on the module.
+ */
+describe('the decision cell is one line', () => {
+  const CARRIED: DecisionCarriedFrom = {
+    decision_id: 'dec_01J9ZQ8K7NHVXW3T2R5M6P4Q9A',
+    finding_uid: 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q9B',
+    version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q9C',
+    version_ordinal: 2,
+  };
+  const withField = (props: Record<string, unknown> = {}): string =>
+    table({
+      renderRowActions: () =>
+        createElement(FindingRowActions, {
+          verdict: 'pending',
+          sending: null,
+          note: null,
+          onAccept: () => {},
+          onReject: () => {},
+          severity: { value: '', onChange: () => {}, required: true, invalid: false },
+        }),
+      ...props,
+    });
+  const cellOf = (markup: string, uid: string): string => {
+    const found = new RegExp(`data-row-key="${uid}"[\\s\\S]*?(<td class="[^"]*decisionCell[^"]*">[\\s\\S]*?</td></tr>)`).exec(markup);
+    if (found === null) throw new Error(`no decision cell of ${uid}`);
+    return found[1] as string;
+  };
+
+  it('stands the sign, the choice of severity, ✓, ✕ and «Причина» in that order in one box, and no word of the verdict', () => {
+    const cell = cellOf(withField(), C);
+    const at = (needle: string): number => cell.indexOf(needle);
+    expect(at('data-verdict="pending"')).toBeGreaterThan(-1);
+    expect(at('data-verdict="pending"')).toBeLessThan(at('data-row-severity'));
+    expect(at('data-row-severity')).toBeLessThan(at('data-intent="accept"'));
+    expect(at('data-intent="accept"')).toBeLessThan(at('data-intent="reject"'));
+    expect(at('data-intent="reject"')).toBeLessThan(at('data-decision-reason'));
+    expect(cell).not.toContain('am-badge');
+  });
+
+  it('puts the mark of a carried decision after the field, so it can stand under the line instead of inside it', () => {
+    const carried = findingDetail({
+      finding_uid: A,
+      current_verdict: 'accepted',
+      current_verdict_carried_from: CARRIED,
+      observation: observation({ finding_text: 'Перенесённое замечание' }),
+    });
+    const cell = cellOf(withField({ groups: groupByCategory([carried]) }), A);
+    expect(cell.indexOf('data-row-actions')).toBeGreaterThan(-1);
+    expect(cell.indexOf('data-row-actions')).toBeLessThan(cell.indexOf('data-carried-from'));
+  });
+
+  it('is drawn by the module: a row of one line that never wraps its field under the buttons, narrower in a narrow column', () => {
+    const rules: readonly (readonly [string, string, RegExp])[] = [
+      ['.decision', 'display', /^flex$/],
+      ['.decision', 'flex-wrap', /^wrap$/],
+      ['.decision', 'align-items', /^flex-start$/],
+      ['.decision > [data-verdict]', 'min-height', /^28px$/],
+      ['.decision [data-row-actions]', 'flex-wrap', /^nowrap$/],
+      ['.decision [data-row-actions]', 'max-width', /^none$/],
+      ['.decision [data-row-actions]', 'min-width', /^\d+(\.\d+)?rem$/],
+      ['.decision select[data-row-severity]', 'min-width', /^\d+(\.\d+)?rem$/],
+      ['.decision [data-decision-control]', 'min-width', /^\d+(\.\d+)?rem$/],
+      // The field takes the rest and gives first: no basis of its own (the base rule's 9rem is what put it under the buttons).
+      ['.decision [data-decision-control] input[data-decision-reason]', 'flex', /^1 1 0$/],
+      ['.decision [data-decision-control] input[data-decision-reason]', 'min-width', /^\d+(\.\d+)?rem$/],
+      // The line of the last press is the one thing that goes under; so is the carried mark.
+      ['.decision [data-decision-control] [data-decision-note]', 'flex', /^1 0 100%$/],
+      ['.decision > [data-carried-from]', 'flex', /^1 0 100%$/],
+    ];
+    for (const [selector, property, value] of rules) {
+      expect(declares('.decision { }', selector, property, value), `${selector} ${property} on a sheet without it`).toBe(false);
+      expect(declares(TABLE_CSS, selector, property, value), `${selector} ${property}`).toBe(true);
+    }
   });
 });
 

@@ -15,7 +15,9 @@
  * pill with the word «предложено» (`SeverityBadge proposed`) and never the plain one. A row wears a stripe at its left in the tone
  * of its severity, solid for a decided one and dashed for a proposed one (`data-severity-tone`, `data-severity-source`); a finding
  * with no severity has none. The verdict reads on the row as well: accepted rows stand on green, rejected rows are struck through
- * (the decision cell is not, so the buttons and the word of the verdict stay readable), and the order puts the rejected last.
+ * (the decision cell is not, so the buttons and the sign of the verdict stay readable), and the order puts the rejected last.
+ * The «Решение» cell is one line (`UIP-FIX-17`): the verdict's sign (`VerdictMark`: ✓, ✕ or a dash; the word is its name), the choice of
+ * severity where the model proposed one, ✓, ✕ and «Причина», so a row is not three lines high.
  * The norm cell lists the citations the server certified (`norm_citations`); absent means the citation gate never ran for the
  * finding and prints a dash, not «0» (`finding-basis`).
  */
@@ -35,7 +37,7 @@ import {
   severityTone,
 } from '@/entities/finding';
 import type { SeverityTone } from '@/entities/finding';
-import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, CarriedMark, VerdictMark } from '@/entities/expert-decision';
 import { declaredPages, findingPages } from '@/entities/finding-observation';
 import { clauseLabel } from '@/entities/norms';
 import { PrecedentMark } from '@/entities/decision-memory';
@@ -253,10 +255,10 @@ export function FindingTable({
                   <td className={styles.recommendation}>{finding.observation.recommendation_text}</td>
                   <td className={styles.decisionCell}>
                     <div className={styles.decision}>
-                      <VerdictBadge verdict={finding.current_verdict} />
-                      {/* `UI-A-73`: the verdict was carried over from an earlier version; absent, nothing is drawn. */}
-                      <CarriedMark carriedFrom={finding.current_verdict_carried_from} />
+                      <VerdictMark verdict={finding.current_verdict} />
                       {renderRowActions === undefined ? null : renderRowActions(finding)}
+                      {/* `UI-A-73`: the verdict was carried over from an earlier version; absent, nothing is drawn. Under the line. */}
+                      <CarriedMark carriedFrom={finding.current_verdict_carried_from} />
                     </div>
                   </td>
                 </tr>
