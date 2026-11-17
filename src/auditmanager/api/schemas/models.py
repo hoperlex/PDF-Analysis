@@ -8717,8 +8717,15 @@ class StagePair(_Object):
 
 
 class StagePairPage(_Object):
+    """One page of the project's stage pairs and, beside it, how many documents have no pair (`UIP-S16-02`, `Г12-B`): `unpaired_p_count`
+    documents of stage П and `unpaired_r_count` documents of stage Р. They are counted by the server over the whole project -- the
+    confirmed classification of each document's latest version, the confirmed pairs and the current members of an assembly; an archived
+    document is not counted -- and are the same on every page: a page of pairs does not change them."""
+
     items: list[StagePair]
     page: PageInfo
+    unpaired_p_count: Annotated[int, Field(ge=0)]
+    unpaired_r_count: Annotated[int, Field(ge=0)]
 
 
 class StagePairSuggestion(_Object):

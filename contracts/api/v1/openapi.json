@@ -45899,15 +45899,28 @@
           },
           "page": {
             "$ref": "#/components/schemas/PageInfo"
+          },
+          "unpaired_p_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unpaired P Count"
+          },
+          "unpaired_r_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unpaired R Count"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page"
+          "page",
+          "unpaired_p_count",
+          "unpaired_r_count"
         ],
-        "title": "StagePairPage"
+        "title": "StagePairPage",
+        "description": "One page of the project's stage pairs and, beside it, how many documents have no pair (`UIP-S16-02`, `Г12-B`): `unpaired_p_count`\ndocuments of stage П and `unpaired_r_count` documents of stage Р. They are counted by the server over the whole project -- the\nconfirmed classification of each document's latest version, the confirmed pairs and the current members of an assembly; an archived\ndocument is not counted -- and are the same on every page: a page of pairs does not change them."
       },
       "StagePairSuggestion": {
         "properties": {

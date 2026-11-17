@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.57.0 (OpenAPI 3.1.0)
- *   sha256 9b38aed9f9d901758162266c28c52bdedddfc812fe2510be5fcb0e8565df46dc
+ *   sha256 a74f6f890ad978a06050663cb4f79a9961025e5642d20467a1023453ee20b8e7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.57.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '9b38aed9f9d901758162266c28c52bdedddfc812fe2510be5fcb0e8565df46dc';
+export const CONTRACT_DIGEST = 'a74f6f890ad978a06050663cb4f79a9961025e5642d20467a1023453ee20b8e7';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -8927,9 +8927,17 @@ export type StagePairId = string;
 /** The contract pattern for `StagePairId`. Anchored; use with `new RegExp()`. */
 export const STAGE_PAIR_ID_PATTERN = "^stp_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/**
+ * One page of the project's stage pairs and, beside it, how many documents have no pair (`UIP-S16-02`, `Г12-B`): `unpaired_p_count`
+ * documents of stage П and `unpaired_r_count` documents of stage Р. They are counted by the server over the whole project -- the
+ * confirmed classification of each document's latest version, the confirmed pairs and the current members of an assembly; an archived
+ * document is not counted -- and are the same on every page: a page of pairs does not change them.
+ */
 export type StagePairPage = {
   items: Array<StagePair>;
   page: PageInfo;
+  unpaired_p_count: number;
+  unpaired_r_count: number;
 };
 
 export type StagePairSuggestion = {
