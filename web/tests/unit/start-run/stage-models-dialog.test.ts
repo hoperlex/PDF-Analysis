@@ -256,7 +256,7 @@ describe('the window with no plan to read: the saved layout, and the one word of
     expect(off).toContain(LAYOUT_OFF_NOTE);
     const refused = newClient();
     seedError(refused, stageLayoutKey(), new ApiError(500, {
-      contract_version: '1.58.0', error_code: 'internal_error', message: 'refused', correlation_id: 'cid-layout', retryable: false, details: {},
+      contract_version: '1.59.0', error_code: 'internal_error', message: 'refused', correlation_id: 'cid-layout', retryable: false, details: {},
     }, 'cid-layout'));
     const failed = renderScreen(refused, createElement(StageModelsDialog, { source: { kind: 'automatic' }, onClose: noop, staticOpen: true }));
     expect(failed).toContain('Модели по этапам не прочитаны');

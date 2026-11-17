@@ -62,6 +62,8 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
             # `R-151i`: the price of a run started from a stage; passed only when named, as the fields above are.
             **({"start_from_run_id": body.start_from_run_id} if body.start_from_run_id is not None else {}),
             **({"start_stage_id": body.start_stage_id.value} if body.start_stage_id is not None else {}),
+            # `RUN-RESTART-01`: the price of a restart of `start_from_run_id` from this chip; passed only when named, as the fields above are.
+            **({"restart_point": body.restart_point.value} if body.restart_point is not None else {}),
             relaxed_limits=body.relaxed_limits is True)
         # `D-322`: the six optional properties of `RunCostEstimate` are not nullable; one the route did not set is
         # absent, never `null` (the surface's rule, as `executors.py` states it).

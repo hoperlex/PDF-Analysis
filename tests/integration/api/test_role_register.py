@@ -67,6 +67,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "deleteRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/deletion"),
     "reauditRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
     "startRunFromStage": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/start-from-stage"),
+    # `RUN-RESTART-01` (1.59.0): the same hands as a re-audit and a start from a stage.
+    "restartRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/restart"),
     "setJobPriority": ("PUT", "/execution/queue/job_01M2545JSD15ETSNNV904X991T/priority"),
     "setExecutionPaused": ("PUT", "/execution/dispatch"),
     "getExecutionDispatch": ("GET", "/execution/dispatch"),
@@ -782,6 +784,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "deleteRun": frozenset({"expert", "admin"}),
     "reauditRun": frozenset({"expert", "admin"}),
     "startRunFromStage": frozenset({"expert", "admin"}),
+    "restartRun": frozenset({"expert", "admin"}),
     "appendDecision": _EXPERT,
     # `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict; admin alone does not.
     "carryOverDecision": _EXPERT,

@@ -26,6 +26,7 @@ from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 from auditmanager.api.security import CurrentSubject
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = ["build_stage_model_routes"]
 
@@ -119,4 +120,8 @@ def build_stage_model_routes(router: APIRouter, stage_models: StageModelPort) ->
         ),
     )
     def get_run_start_readiness(body: models.RunCostEstimateRequest) -> WireResponse:
+        # `RUN-RESTART-01`: the body is `RunCostEstimateRequest`'s, whose `restart_point` prices a restart through `estimateRunCost` only. The
+        # readiness of the one button does not know it, and a field a read drops is a silent fallback to the price of a whole run.
+        if body.restart_point is not None:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="restart_point", constraint="not_for_readiness")
         return json_response(200, _body(stage_models.get_start_readiness(body=body)))

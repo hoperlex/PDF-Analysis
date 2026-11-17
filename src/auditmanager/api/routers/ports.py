@@ -139,6 +139,19 @@ class ExecutionPort(Protocol):
         under the same key and payload, or a typed refusal -- ``analysis_input_invalid`` naming the stage and the reason
         when an output cannot be taken. Nothing is recomputed in place of a refused one."""
         ...
+    def restart_run(
+        self, *, run_id: str, restart_point: str, user_uid: str, idempotency_key: str,
+        cost_consent: dict[str, Any] | None = None,
+    ) -> RunStatusView:
+        """`RUN-RESTART-01` (`R-155a`..`R-155i`, contract 1.59.0): a NEW run that replaces the ended (``partial``, ``failed`` or
+        ``cancelled``) run ``run_id``: every chip before ``restart_point`` (one of ``RestartPoint``) is taken from the source chain with no
+        new paid call, the chip and the later ones are computed, the settings are the source's. The answer is the new run (202), a replay of
+        it under the same key and payload, or a typed refusal before anything is written:
+        ``state_transition_not_allowed`` (not ended, or ``published``), ``conflict`` (``restart_source_deleted``, ``restart_source_leased``,
+        ``restart_in_progress``), ``analysis_input_invalid`` (``details.reason`` ``restart_*`` with ``stage_id`` and ``restart_point``).
+        The source is tombstoned and its decisions carried in the terminal transaction of the new run, never here. The view carries
+        ``started_from_run_id`` and ``restart_point``; the source's own view carries ``replaced_by_run_id`` once replaced."""
+        ...
     def set_job_priority(
         self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
     ) -> models.ExecutionQueueItem: ...
@@ -723,7 +736,9 @@ class RunPort(Protocol):
                           preset_id: str | None = None, relaxed_limits: bool = False,
                           executor_group_id: str | None = None,  # EXEC2-GROUP-RUN-01
                           start_from_run_id: str | None = None,  # `R-151i`: the price of a start from a stage
-                          start_stage_id: str | None = None) -> models.RunCostEstimate: ...
+                          start_stage_id: str | None = None,
+                          restart_point: str | None = None,  # `RUN-RESTART-01`: the price of a restart of `start_from_run_id` from a chip
+                          ) -> models.RunCostEstimate: ...
 
     def start_run(
         self,

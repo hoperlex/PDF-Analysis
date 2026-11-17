@@ -10,9 +10,13 @@
 > `contracts/events/v1/**`. Where this document and one of those disagree, the frozen
 > contract wins and the disagreement is a defect in this file.
 
-## Current surface amendment — 1.58.0 / 0070
+## Current surface amendment — 1.59.0 / 0071
 
-`UIP-CONTRACT-04` (programme `UI-PARITY-R3`, stage 5): no operation is added, so the table of §7 and the list of keyed writes do not move; one schema joins the contract, `ExecutorHostWork` (a document a server is working on: `project_uid`, `document_uid`, `document_title`, the optional `stage_key` and `since`). `ExecutorHost` gains the optional `current_work` (up to 64 entries, filled only by `listExecutorHosts`), and `StagePairPage` gains `unpaired_p_count` and `unpaired_r_count`. The surface is 302 paths / 331 operations / 823 schemas; no migration, the head stays `0070_document_group`. The record of the change is `contracts/api/v1/README.md`.
+`RUN-RESTART-01` (owner rulings `R-155a`…`R-155i`): one keyed write joins the table of §7, `restartRun` (`POST /runs/{run_id}/restart`, `expert` or `admin`, `202`, answers the `RunStatus` of the NEW run): a new run that replaces a `partial`, `failed` or `cancelled` run from one of the eight stage chips (`RestartPoint`, the new enum; `RestartRunRequest` carries it and the optional `cost_consent`). `RunStatus` gains the optional `restart_point` (with `started_from_run_id` as the source) and `replaced_by_run_id` (on the source, once the new run published and the source was tombstoned); `RunCostEstimateRequest` gains `restart_point` and `RunCostEstimate` the restart fields; `DecisionCarriedFrom` gains the optional `run_id` and `mode` (`DecisionCarryMode`). Refusals reuse existing error codes with typed details (`conflict_reason` `restart_*`, `analysis_input_invalid` `reason` `restart_*` with the new safe key `restart_point`). Storage is migration `0071_run_restart` (`audit_run.restart_point`; the link of the replaced source is the restart command, `audit_run.command_id = audit_run_deletion.command_id`). The surface is 303 paths / 332 operations / 826 schemas. The record of the change is `contracts/api/v1/README.md`.
+
+## Surface amendment — 1.58.0 / 0070
+
+`UIP-CONTRACT-04` (programme `UI-PARITY-R3`, stage 5): no operation is added, so the table of §7 and the list of keyed writes do not move; one schema joins the contract, `ExecutorHostWork` (a document a server is working on: `project_uid`, `document_uid`, `document_title`, the optional `stage_key` and `since`). `ExecutorHost` gains the optional `current_work` (up to 64 entries, filled only by `listExecutorHosts`), and `StagePairPage` gains `unpaired_p_count` and `unpaired_r_count`. No migration, the head stays `0070_document_group`. The surface counts of this seal and the record of the change are in `contracts/api/v1/README.md`.
 
 ## Surface amendment — 1.57.0 / 0070
 
@@ -875,7 +879,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-331 operations, sealed. `A5` generates the typed client from this document; `B6`
+332 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1156,6 +1160,10 @@ moving an assignment to another expert goes through `dispatch`'s `transition_ass
 `UI-PARITY-S2` (contract `1.42.0`, migration `0060`) adds `startRunFromStage`: a new run that reuses the completed stage outputs of an
 earlier run before the chosen stage (`docs/program/RUN-FROM-STAGE-01.md`); the earlier run is unchanged.
 
+`RUN-RESTART-01` (contract `1.59.0`, migration `0071`) adds `restartRun`: a new run that replaces an ended (`partial`, `failed`, `cancelled`) run from one of the
+eight stage chips, with the earlier run's settings; the earlier run is tombstoned (`deleteRun`'s row) in the transaction that publishes the new run
+(`docs/program/tasks/RUN-RESTART-01.md`, `R-155a`…`R-155i`).
+
 `UI-PARITY-C6` (contract `1.41.0`, no migration) adds `listRunFindingBlocks`: the portal blocks that hold each published
 finding's evidence, derived on read from the run's text-layer block index and page inventory and the version's portal blocks
 (`analysis/geometry/finding_blocks.py`), so a finding can show the blocks it sits in and a block the findings in it.
@@ -1243,6 +1251,7 @@ could.
 | `listVersionSheetLabels` | `GET /versions/{version_uid}/sheet-labels` |
 | `listRunFindingBlocks` | `GET /runs/{run_id}/finding-blocks` |
 | `startRunFromStage` | `POST /runs/{run_id}/start-from-stage` |
+| `restartRun` | `POST /runs/{run_id}/restart` |
 | `listDecisionMemoryCases` | `GET /decision-memory/cases` |
 | `getDecisionMemoryCase` | `GET /decision-memory/cases/{case_id}` |
 | `getDecisionMemoryStatus` | `GET /decision-memory/status` |
@@ -1558,7 +1567,7 @@ Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
-  `approveRegistration`, `cancelRun`, `deleteRun`, `reauditRun`, `startRunFromStage`, `setJobPriority`,
+  `approveRegistration`, `cancelRun`, `deleteRun`, `reauditRun`, `startRunFromStage`, `restartRun`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setDocumentGroup`, `setMyLastProject`, `setFindingExecutionStatus`,
   `importRunDecisions`, `importOptimisationProposalDecisions`, `carryOverProposalDecisions`, `withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
   `scheduleAssignments`,

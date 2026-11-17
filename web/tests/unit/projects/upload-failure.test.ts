@@ -24,7 +24,7 @@ function envelope(
   details?: Record<string, string | number | boolean | null>,
 ): ErrorEnvelope {
   return {
-    contract_version: '1.58.0',
+    contract_version: '1.59.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'corr-upload-1',

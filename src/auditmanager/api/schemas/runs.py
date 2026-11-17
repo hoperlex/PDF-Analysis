@@ -141,6 +141,13 @@ class RunStatusView:
     #: both ``None`` (and both omitted) for a run that reuses nothing.
     started_from_run_id: str | None = None
     start_stage_id: str | None = None
+    #: `RUN-RESTART-01` (contract 1.59.0, `R-155a`): the chip a **restart** created this run from. Its source is ``started_from_run_id``; a run
+    #: has this or ``start_stage_id``, never both (``ck_audit_run_started_from_pair``, migration 0071). ``None`` (omitted) for every other run.
+    restart_point: str | None = None
+    #: `RUN-RESTART-01` (`R-155g`): on a run tombstoned **by a restart**, the run that replaced it -- the run whose ``command_id`` is the
+    #: tombstone's (``audit_run_deletion.command_id``, migration 0071). ``None`` (omitted) for any other run, a plain ``deleteRun`` included, and
+    #: for a source whose restart has not published.
+    replaced_by_run_id: str | None = None
     #: `W55A-SEAL-01` (R-113, CD-6). The norms snapshot the run pinned at creation, or
     #: ``None`` while no snapshot is current; rendered only when present.
     norms_snapshot_id: str | None = None
@@ -212,9 +219,15 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
     }
     if view.reaudit_of_run_id is not None:
         body["reaudit_of_run_id"] = view.reaudit_of_run_id
+    # `R-151i` and `RUN-RESTART-01`: the source with the first stage it computes (a start from a stage) or with the chip it restarts from.
     if view.started_from_run_id is not None and view.start_stage_id is not None:
         body["started_from_run_id"] = view.started_from_run_id
         body["start_stage_id"] = view.start_stage_id
+    elif view.started_from_run_id is not None and view.restart_point is not None:
+        body["started_from_run_id"] = view.started_from_run_id
+        body["restart_point"] = view.restart_point
+    if view.replaced_by_run_id is not None:
+        body["replaced_by_run_id"] = view.replaced_by_run_id
     if view.analysis_profile_id is not None:
         body["analysis_profile_id"] = view.analysis_profile_id
     if view.prompt_bundle_id is not None:

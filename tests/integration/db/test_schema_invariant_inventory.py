@@ -453,13 +453,21 @@ from sqlalchemy import Engine, text
 #: (``account_last_project``, to 185), columns +4 (the table's three and ``document.group_label``, to 1941), constraints +5 (the table's two format
 #: checks, its account foreign key and primary key, and ``ck_document_group_label_length``, to 2337), indexes +1 (the primary key, to 542); triggers,
 #: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0067`` seal.
+#: Resealed 2026-11-17 for ``0071_run_restart`` (`RUN-RESTART-01`), from this test's own observed output on throwaway PostgreSQL (the project image,
+#: container ``rr-l0-pg``) migrated fresh to ``0071``: columns +1 (``audit_run.restart_point``, to 1942), constraints +2 (``ck_audit_run_restart_point``
+#: and ``ck_audit_run_restart_has_starter_and_command``, to 2339; ``ck_audit_run_started_from_pair`` is redefined, same name, so only the digest moves),
+#: indexes +2 (the two partial unique indexes of the active restart and of the restart command, to 544), triggers +2
+#: (``trg_audit_run_deletion_by_restart`` and ``trg_audit_run_restart_command_frozen``, to 304; ``trg_audit_run_frozen_guard`` is re-created with
+#: the longer list, same name, so only the digest moves) and functions +1 (``am_guard_run_deletion_by_restart``, to 87; the second trigger uses the
+#: generic ``am_guard_frozen_columns``). Relations, views, extensions, sequences, policies and the state topology are byte-identical to the ``0070``
+#: seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1941, "eeb0c5557399704b98b7603f6a4895003dfa4cf5d6a67514a423758216d8c5f6"),
+    "columns": (1942, "52f4adc2596bcbe72ecce0010373eb55d8a973e54f64182bf3335ef28d47b015"),
     "relations": (185, "d946ca76640e7cf1d42bfc6cea4845074a20149a8317addfcda7b7dd6aa88a47"),
-    "constraints": (2337, "12114f12ab28718dd35c990fbe9cefdbdf7416c42f5a87bcc1a2a8baffeb463c"),
-    "indexes": (542, "b4d14de6279d3094914ada3fc2db7f7c0d21f4e4c4ee8cee52262070bb1262c9"),
-    "triggers": (302, "841b211ddd2d2199d75a5cf2a548b64fb8ae0dcafc4fc9976eed11b2ca8764e7"),
-    "functions": (86, "4ca8c9d63270876dad063cdea6c49a0e7aa5afba3ea7355ecb023b81cc22e664"),
+    "constraints": (2339, "276ae6b668e2e49112ea28e64c4031c3ff2705b1fe2d4fb555191fcf46a0657b"),
+    "indexes": (544, "a36fbeee2185577392932023f5ea329b6b3d38c73de655446cc570a0085ab70a"),
+    "triggers": (304, "83233aee4ed4954d770300998fa8960f423ce9e0ad3aa037b91de22b373b71a0"),
+    "functions": (87, "d534382579fd406a11f85dd4fd2cec95cc07e3a4c4fe95976cec96669eb0d953"),
     "views": (7, "5e78d3a1fd6d83febea265c402139aefd89d63afd83c1f38acd71979822d1ef8"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

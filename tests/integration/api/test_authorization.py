@@ -161,6 +161,8 @@ GUARDED = (
     ("deleteRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/deletion"),
     ("reauditRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
     ("startRunFromStage", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/start-from-stage"),
+    # `RUN-RESTART-01` (1.59.0): a new run that replaces an ended one; the same seam as a re-audit.
+    ("restartRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/restart"),
     (
         "setJobPriority", "PUT",
         "/execution/queue/job_01M2545JSD15ETSNNV904X991K/priority",

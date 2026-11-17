@@ -46,7 +46,7 @@ const READY: SwitcherList = { kind: 'ready', projects: [{ project_uid: A, name: 
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.58.0',
+    contract_version: '1.59.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-new-object-1',

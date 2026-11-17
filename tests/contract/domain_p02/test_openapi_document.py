@@ -150,6 +150,8 @@ REQUIRED_OPERATIONS = {
     "listRunFindingBlocks",
     # `UI-PARITY-S2`, `R-151i`. A new run that reuses an earlier run's stage outputs before the chosen stage.
     "startRunFromStage",
+    # `RUN-RESTART-01` (1.59.0), `R-155a`. A new run that replaces an ended run from one of the eight stage chips.
+    "restartRun",
     # `UI-PARITY-P0P`, `R-152a`…`R-152h`. «График работ»: the month, the reserve, the administrator's writes.
     "getWorkSchedule",
     "getWorkScheduleReserve",
@@ -478,6 +480,8 @@ WRITE_OPERATIONS = {
     "deleteRun",
     "reauditRun",
     "startRunFromStage",
+    # `RUN-RESTART-01` (1.59.0): a restart is keyed like the other two ways to start a run again.
+    "restartRun",
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",

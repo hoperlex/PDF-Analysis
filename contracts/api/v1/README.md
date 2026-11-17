@@ -11,7 +11,47 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.58.0` (`UI-PARITY-R3`)
+## Current contract `1.59.0` (`RUN-RESTART-01`)
+
+The seal of the task `RUN-RESTART-01` (`docs/program/tasks/RUN-RESTART-01.md`, owner rulings `R-155a`…`R-155i`): the analysis of an ended run is restarted from
+any of the eight stage chips of the run screen. Additive: **one operation, three schemas, optional properties of five existing schemas and one relaxed
+lower bound of an answer**; one migration (`0071_run_restart`, head `0071`), the restart case of one state machine rule, typed refusals of existing
+error codes and one new safe detail key; no new error code, no identity prefix, no state transition.
+
+- **`restartRun`** (`POST /runs/{run_id}/restart`, `Idempotency-Key` required, `expert` or `admin`, `202` with the `RunStatus` of the **new** run). The body
+  `RestartRunRequest` is `{restart_point, cost_consent?}`; `RestartPoint` is the new enum of the eight chips, in the rail's order: `preparation`, `text`,
+  `blocks`, `cross_check`, `merge`, `norms`, `review`, `correction`. It is its own enum and not `StageId`: a chip is a reader's grouping of stage ids and of the
+  extended review's procedures. The new run has every setting of the earlier run (`R-155f`), takes every chip before `restart_point` from the earlier run's
+  chain with no new paid call, computes the chip and the later ones, and — when it publishes — deletes the earlier run from the run lists with the
+  tombstone of `deleteRun` and carries the expert's decisions (`R-155a`, `R-155b`, `R-155g`). `startRunFromStage` is unchanged. A source that is not `partial`,
+  `failed` or `cancelled` is `409 state_transition_not_allowed` (`requested_state` `restart`); `409 conflict` with `conflict_reason` `restart_source_deleted`,
+  `restart_source_leased` or `restart_in_progress`; `422 analysis_input_invalid` with `details.reason` `restart_source_not_stage_layout`,
+  `restart_source_not_v2`, `restart_settings_differ`, `restart_text_not_reusable`, `restart_reply_missing` or `restart_request_changed`, and where the refusal
+  belongs to one chip `details.restart_point` (the new safe detail key of `analysis_input_invalid`) and `details.stage_id`. A replay that cannot be made at the
+  executor fails the new run with the same `terminal_reason` and `terminal_detail`, before any paid call.
+- **The link between the two runs.** The new run's `RunStatus` carries `started_from_run_id` (the source, as for `startRunFromStage`) and the new
+  `restart_point`; `start_stage_id` is then absent — a run has a start stage or a restart point, never both. A source that has been tombstoned **by a
+  restart** answers `replaced_by_run_id` (the new optional `RunStatus` property): the run that replaced it. No column is added for it: the tombstone and the
+  new run share the restart's command (`audit_run_deletion.command_id = audit_run.command_id`, migration `0071`), and the database refuses a tombstone that
+  names a restart's command unless that run is `published` and names the tombstoned run as its source. Before the new run publishes the source has no
+  tombstone and is listed as it was; the only pointer between the two is the new run's `started_from_run_id`. A run deleted with `deleteRun` replaces nothing.
+- **The estimate.** `RunCostEstimateRequest` gains the optional `restart_point`: with `start_from_run_id` (the source) and never with `start_stage_id` or a
+  route selector, `estimateRunCost` prices the chips the restart computes. `RunCostEstimate` answers `restart_point`, `reused_restart_points` and
+  `computed_restart_points` (the eight chips split in two), and its `calls` may be 0 (a restart whose computed chips make no model call). `getRunStartReadiness`
+  takes the same body and refuses `restart_point` (`422 validation_failed`).
+- **The origin of a carried decision.** `DecisionCarriedFrom` gains the optional `run_id` (the run that allocated the source finding: the «from run» origin
+  beside the version) and `mode` (`DecisionCarryMode`: `version`, `stage` or `restart`); both are absent on a decision carried before 1.59.0. A restart
+  carries a verdict as an ordinary decision event linked to its source decision and a comment as a comment event with provenance text and no link.
+
+The API has 303 paths, 332 operations and 826 schemas; migration head `0071`. The domain catalogs are at candidate revision 72 (the restart case of
+`audit_run.run_creation`, the refusal notes and the safe key `restart_point`); their shared version advances.
+
+Compatibility: additive for a reader. A client of 1.58.0 reads every answer of 1.59.0 unchanged (the new properties are optional and present only on a restart,
+on a replaced source, on a restart estimate and on a carried decision; `calls` only loses its lower bound), and every request of 1.58.0 is valid unchanged;
+`ErrorEnvelope.contract_version` and `info.version` are `1.59.0`. Until the lane that owns the command wires it, `restartRun` and the estimate of a restart
+answer `503 dependency_unavailable` with `details.dependency` `run_restart`.
+
+## Contract `1.58.0` (`UI-PARITY-R3`, historical)
 
 The stage 5 seal of the programme `UI-PARITY-R3` (the task is `docs/program/tasks/UI-PARITY-R3.md`, the seal is `UIP-CONTRACT-04`), raised once
 for the stage after the two server lanes of the stage were merged. Additive: **no operation is added; one schema, one optional property and two

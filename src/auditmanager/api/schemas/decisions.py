@@ -42,15 +42,24 @@ class DecisionCarriedFromView:
     finding_uid: str
     version_uid: str
     version_ordinal: int
+    #: `RUN-RESTART-01` (contract 1.59.0): the run that allocated the source finding, and how the decision was carried (``version``, ``stage`` or
+    #: ``restart``). Both ``None`` (and both omitted) for a decision whose reader did not read them; the contract declares them optional.
+    run_id: str | None = None
+    mode: str | None = None
 
 
 def decision_carried_from_body(view: DecisionCarriedFromView) -> dict[str, Any]:
-    return {
+    body: dict[str, Any] = {
         "decision_id": view.decision_id,
         "finding_uid": view.finding_uid,
         "version_uid": view.version_uid,
         "version_ordinal": view.version_ordinal,
     }
+    if view.run_id is not None:
+        body["run_id"] = view.run_id
+    if view.mode is not None:
+        body["mode"] = view.mode
+    return body
 
 
 @dataclass(frozen=True, slots=True)

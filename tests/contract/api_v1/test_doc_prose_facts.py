@@ -577,6 +577,11 @@ KNOWN_HISTORICAL_TRIPLES: frozenset[tuple[str, str]] = frozenset(
         # (`UIP-G-05`) and `0070_document_group` (`UIP-G-10`) and `UIP-CONTRACT-02` resealed the contract as 1.56.0, and the
         # file's "Facts of this tree" states the current head; the P1 entry is a record of its day and is kept as written.
         ("docs/program/CURRENT_STATE.md", "migration head `0068_reviewable"),
+        # CURRENT_STATE.md's `UI-PARITY-R3` entries of publication points P2 to P9 (2026-11-17) record the head of their day, "migration
+        # head `0070_document_group` unchanged". `RUN-RESTART-01` then added `0071_run_restart` (`audit_run.restart_point`) and resealed the
+        # contract as 1.59.0, and the file's "Facts of this tree" states the current head; the entries are records of their day and are kept
+        # as written.
+        ("docs/program/CURRENT_STATE.md", "migration head `0070_document"),
     }
 )
 
