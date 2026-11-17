@@ -6,6 +6,8 @@ export {
 export type { ExecutionQueueFilter, ExecutionQueueState, ExecutionQueueStateGroup } from './api/use-execution';
 /** The operational-list refresh options, for a read outside this entity that follows the same cadence (the menu's badges). */
 export { OPERATIONAL_LIST_POLL } from './api/operational-poll';
+export { journalStatus } from './model/journal-status';
+export type { JournalStatus } from './model/journal-status';
 export { journalCopyLine, journalCopyText } from './model/journal-copy';
 export type { JournalCopyScope } from './model/journal-copy';
 export { VECTORS_PAUSED_LABEL, vectorsPauseOf, vectorsPausedHint } from './model/vector-pause';
