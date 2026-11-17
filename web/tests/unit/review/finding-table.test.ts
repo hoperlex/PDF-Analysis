@@ -1,18 +1,27 @@
 /**
- * `UI-A-68`: the findings table of «Разбор» — the original's full-width table, with the norms it cites, the
+ * `UI-A-68`, `UIP-S06-07`: the findings table of «Разбор» — the original's full-width table, with the norms it cites, the
  * severity the expert decided apart from the one the model proposed, the verdict on the row, and the finding
- * opened under its row.
+ * opened under its row. A row wears a stripe at its left in the tone of its severity (solid when decided, dashed when it is the
+ * model's proposal), accepted rows stand on green, rejected rows are struck through and stand last. The look is held twice: the
+ * markup says which stripe, tint and strike a row asks for, and the module's own rules are read to hold that they exist, each
+ * checked first on a sheet that lacks the rule so the check can fail.
  */
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import type { NormCitation } from '@/shared/api';
-import { groupByCategory } from '@/entities/finding';
+import type { NormCitation, Severity } from '@/shared/api';
+import { SEVERITY_VALUES } from '@/shared/api';
+import { groupByCategory, severityTone } from '@/entities/finding';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList, FindingToolbar, findingNumbers, findingViewOf, pagesParts } from '@/widgets/finding-list';
 
+import { WEB_ROOT } from '../../guards/lib/repo';
+import { declares } from '../styles/css-reads';
 import { newClient, renderWith } from '../screens/harness';
 import { findingDetail, observation, RUN_ID } from './fixtures';
 
@@ -80,13 +89,20 @@ describe('the findings table', () => {
     expect(markup).toContain('ссылок нет');
   });
 
-  it('keeps the expert’s severity as the badge and the model’s as a labelled note', () => {
+  it('keeps the expert’s severity as the pill and the model’s as the dashed pill with the word «предложено»', () => {
     const markup = table();
     expect(markup).toContain('title="Критичность, решённая экспертом"');
-    expect(markup).toContain('data-proposed-severity="economic"');
-    expect(markup).toContain('предложено: Экономическое');
-    // Only the first finding carries a decided severity: the proposal never became a badge.
+    expect(markup).toContain('data-severity="critical"');
+    // The proposal is the same pill in its own variant: its own attribute, the dashed class, the word and the tooltip.
+    expect(markup).toMatch(/<span class="am-badge am-badge--degraded [^"]*proposed[^"]*" data-proposed-severity="economic" title="Предложение модели, не решение эксперта">/);
+    expect(markup).toContain('>Экономическое<');
+    expect(markup).toContain('>предложено<');
+    // Only the first finding carries a decided severity: the proposal never became a decision's pill.
     expect((markup.match(/title="Критичность, решённая экспертом"/g) ?? []).length).toBe(1);
+    expect((markup.match(/data-severity="/g) ?? []).length).toBe(1);
+    expect(markup).not.toContain('data-severity="economic"');
+    // The old note is gone, and a finding with no severity says a dash, not a pill.
+    expect(markup).not.toContain('предложено: ');
   });
 
   it('marks the verdict on the row and a merged finding by its count', () => {
@@ -140,6 +156,142 @@ describe('the findings table', () => {
     expect(list).toContain('data-verdict-bucket="accepted"');
     // The merged count shows on the list row too, beside its pages.
     expect(list).toContain('data-merged-observations="2"');
+  });
+});
+
+const TABLE_CSS = readFileSync(join(WEB_ROOT, 'src/widgets/finding-list/ui/finding-table.module.css'), 'utf8');
+
+/** The opening tag of a finding's row. */
+function rowTag(markup: string, uid: string): string {
+  const found = new RegExp(`<tr[^>]*data-row-key="${uid}"[^>]*>`).exec(markup);
+  if (found === null) throw new Error(`no row ${uid} in ${markup}`);
+  return found[0];
+}
+
+describe('the stripe at the left of a row', () => {
+  it('names the tone of the finding’s severity and whose it is: solid for the expert’s decision, dashed for the model’s proposal', () => {
+    const markup = table();
+    expect(rowTag(markup, A)).toContain('data-severity-tone="failed"');
+    expect(rowTag(markup, A)).toContain('data-severity-source="decided"');
+    expect(rowTag(markup, B)).toContain('data-severity-tone="degraded"');
+    expect(rowTag(markup, B)).toContain('data-severity-source="proposed"');
+  });
+
+  it('has none for a finding with no severity at all, and draws a dash in its cell', () => {
+    const markup = table();
+    expect(rowTag(markup, C)).not.toContain('data-severity-tone');
+    expect(rowTag(markup, C)).not.toContain('data-severity-source');
+    expect(markup).toMatch(new RegExp(`data-row-key="${C}"[\\s\\S]*?<td class="[^"]*severity[^"]*"><span class="[^"]*none[^"]*">—</span></td>`));
+  });
+
+  it('takes the decision over a proposal for the same finding, and its tone from the severity and from nothing else', () => {
+    const overruled = groupByCategory([
+      findingDetail({ finding_uid: A, decided_severity: 'economic', observation: observation({ proposed_severity: 'critical' }) }),
+    ]);
+    const markup = renderToStaticMarkup(createElement(FindingList, { groups: overruled, selectedFindingUid: null, onSelect: () => {}, view: 'table' }));
+    expect(rowTag(markup, A)).toContain('data-severity-tone="degraded"');
+    expect(rowTag(markup, A)).toContain('data-severity-source="decided"');
+  });
+
+  it('gives each of the five severities its own tone, decided and proposed alike', () => {
+    const tones = (source: 'decided' | 'proposed') => {
+      const findings = SEVERITY_VALUES.map((severity: Severity, index: number) => findingDetail({
+        finding_uid: `fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q${source === 'decided' ? 'D' : 'P'}${index}`,
+        ...(source === 'decided' ? { decided_severity: severity } : {}),
+        observation: observation({ ...(source === 'proposed' ? { proposed_severity: severity } : {}) }),
+      }));
+      const markup = renderToStaticMarkup(createElement(FindingList, {
+        groups: groupByCategory(findings), selectedFindingUid: null, onSelect: () => {}, view: 'table',
+      }));
+      return findings.map((one) => /data-severity-tone="(\w+)"/.exec(rowTag(markup, one.finding_uid))?.[1]);
+    };
+    const expected = SEVERITY_VALUES.map((severity: Severity) => severityTone(severity));
+    expect(new Set(expected).size).toBe(5);
+    expect(tones('decided')).toEqual(expected);
+    expect(tones('proposed')).toEqual(expected);
+  });
+
+  it('is drawn by the module: a left border on the first cell, in each tone’s colour, dashed for a proposal', () => {
+    // The check can fail: a sheet without the rule does not declare it.
+    expect(declares('.row { height: 1px; }', '.row > td:first-child', 'border-left', /solid/)).toBe(false);
+    const colours: Readonly<Record<string, string>> = {
+      failed: '--am-failed', degraded: '--am-degraded', active: '--am-accent', ok: '--am-ok', inert: '--am-inert',
+    };
+    expect(declares(TABLE_CSS, '.row > td:first-child', 'border-left', /^4px solid transparent$/)).toBe(true);
+    expect(declares(TABLE_CSS, ".row[data-severity-source='proposed'] > td:first-child", 'border-left-style', /^dashed$/)).toBe(true);
+    for (const tone of ['failed', 'degraded', 'active', 'ok', 'inert'] as const) {
+      expect(declares(TABLE_CSS, `.row[data-severity-tone='${tone}'] > td:first-child`, 'border-left-color', new RegExp(`^var\\(${colours[tone]}\\)$`)), tone).toBe(true);
+    }
+  });
+});
+
+describe('the verdict on a row', () => {
+  it('stands the waiting first, then the accepted, then the rejected last: C, A, B', () => {
+    const markup = table();
+    const at = (uid: string) => markup.indexOf(`data-row-key="${uid}"`);
+    expect(at(C)).toBeLessThan(at(A));
+    expect(at(A)).toBeLessThan(at(B));
+  });
+
+  it('says the verdict in words in the decision cell, which is not struck through', () => {
+    const markup = table();
+    const cell = (uid: string): string => {
+      const found = new RegExp(`data-row-key="${uid}"[\\s\\S]*?(<td class="[^"]*decisionCell[^"]*">[\\s\\S]*?</td>)`).exec(markup);
+      if (found === null) throw new Error(`no decision cell of ${uid}`);
+      return found[1] as string;
+    };
+    expect(cell(B)).toContain('>отклонено<');
+    expect(cell(A)).toContain('>принято<');
+    expect(cell(C)).not.toContain('>отклонено<');
+    expect(declares(TABLE_CSS, ".row[data-verdict-bucket='rejected'] > td.decisionCell", 'text-decoration', /^none$/)).toBe(true);
+  });
+
+  it('is drawn by the module: accepted rows on green, rejected rows struck through, the decision cell left alone', () => {
+    expect(declares(".row { }", ".row[data-verdict-bucket='rejected'] > td", 'text-decoration', /line-through/)).toBe(false);
+    expect(declares(TABLE_CSS, ".row[data-verdict-bucket='accepted'] > td", 'background', /^var\(--am-ok-light\)$/)).toBe(true);
+    expect(declares(TABLE_CSS, ".row[data-verdict-bucket='rejected'] > td", 'text-decoration', /^line-through$/)).toBe(true);
+    // A waiting row keeps the page's paper: no rule tints it and no rule strikes it.
+    expect(declares(TABLE_CSS, ".row[data-verdict-bucket='waiting'] > td", 'background', /./)).toBe(false);
+    expect(declares(TABLE_CSS, ".row[data-verdict-bucket='waiting'] > td", 'text-decoration', /./)).toBe(false);
+    expect(declares(TABLE_CSS, ".row[data-verdict-bucket='accepted'] > td", 'text-decoration', /./)).toBe(false);
+  });
+
+  it('leaves the opened finding under a rejected row unstruck: its strip is not one of the row’s cells', () => {
+    const markup = table({ selectedFindingUid: B, renderExpansion: () => createElement('p', null, 'ОТКРЫТАЯ НАХОДКА') });
+    expect(markup).toContain(`data-finding-expansion="${B}"`);
+    expect(rowTag(markup, B)).toContain('data-verdict-bucket="rejected"');
+    expect(/data-finding-expansion="[^"]*"/.exec(markup)?.[0]).toBeDefined();
+    expect(/<tr class="[^"]*expansion[^"]*"[^>]*data-verdict-bucket/.test(markup)).toBe(false);
+  });
+});
+
+describe('the size of a row and its words', () => {
+  it('is one step high, by the common token, and a one-line cell stands in the middle', () => {
+    expect(declares('.table { }', '.row', 'height', /var\(--am-row-step\)/)).toBe(false);
+    expect(declares(TABLE_CSS, '.row', 'height', /^var\(--am-row-step\)$/)).toBe(true);
+    expect(declares(TABLE_CSS, '.row > td', 'vertical-align', /^middle$/)).toBe(true);
+  });
+
+  it('cuts no word in a narrow column: cells and heads break only a word that cannot fit its own line', () => {
+    for (const selector of ['.row > td', '.head']) {
+      expect(declares(TABLE_CSS, selector, 'overflow-wrap', /^break-word$/), selector).toBe(true);
+      expect(declares(TABLE_CSS, selector, 'word-break', /^normal$/), selector).toBe(true);
+      expect(declares(TABLE_CSS, selector, 'overflow-wrap', /anywhere/), selector).toBe(false);
+    }
+    // The head may wrap between its words, so it is not held on one line.
+    expect(declares(TABLE_CSS, '.head', 'white-space', /nowrap/)).toBe(false);
+  });
+
+  it('keeps the original’s seven columns in the original’s order, the severity column wide enough for its longest word', () => {
+    const markup = table();
+    const heads = [...markup.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+    expect(heads).toEqual(['№', 'Критичность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение']);
+    const widths = ['colNumber', 'colSeverity', 'colPages', 'colText', 'colNorms', 'colRecommendation', 'colDecision'].map((name) => {
+      const found = new RegExp(`\\.${name}\\s*\\{[^}]*width:\\s*(\\d+)%`).exec(TABLE_CSS);
+      return Number(found?.[1]);
+    });
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBe(100);
+    expect(widths[1]).toBeGreaterThanOrEqual(14);
   });
 });
 

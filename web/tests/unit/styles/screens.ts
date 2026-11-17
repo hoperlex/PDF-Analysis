@@ -3603,5 +3603,44 @@ export function screens(): Screen[] {
     })));
   }
 
+  /*
+   * `UIP-S06-06`, `UIP-S06-07`: the table of «Разбор» over a run that holds every severity twice, decided and proposed, in the three
+   * verdicts, and one finding with no severity. Its stripes (five tones, solid and dashed), its tints, its struck rows, and the five
+   * plates over it with «Не определена» drawn, all stand in one screen so each tone's colour is measured on a waiting row, on the
+   * green of an accepted one and on the red of a rejected one. The list that was the default stands under `view: 'list'` above.
+   * At the very end, for the reason above.
+   */
+  {
+    const verdicts = ['pending', 'accepted', 'rejected'] as const;
+    const uid = (n: number): string => `fnd_01J9ZQ8K7NHVXW3T2R5M6P4QS${String(n).padStart(2, '0')}`;
+    const severityRows = SEVERITY_VALUES.flatMap((severity, index) => [
+      finding({
+        finding_uid: uid(index), category: 'internal_contradiction', current_verdict: verdicts[index % 3] as Verdict,
+        decided_severity: severity, observation: observation({ proposed_severity: severity }),
+      }),
+      finding({
+        finding_uid: uid(index + 10), category: 'dimensions', current_verdict: verdicts[(index + 1) % 3] as Verdict,
+        observation: observation({ proposed_severity: severity }),
+      }),
+    ]);
+    const bare = finding({ finding_uid: uid(30), category: 'dimensions', current_verdict: 'pending', observation: observation({}) });
+    add('FindingList, table of every severity decided and proposed, in every verdict', render(createElement(FindingList, {
+      view: 'table',
+      groups: groupByCategory([...severityRows, bare]),
+      selectedFindingUid: null,
+      onSelect: noop,
+      renderRowActions: (row: { readonly current_verdict: Verdict }) =>
+        createElement(FindingRowActions, { verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop }),
+    })));
+    add('FindingList, one severity plate pressed, the list link', render(createElement(FindingList, {
+      view: 'list',
+      groups: groupByCategory([...severityRows, bare]),
+      selectedFindingUid: null,
+      onSelect: noop,
+      severityFilter: 'economic',
+      verdictFilter: 'waiting',
+    })));
+  }
+
   return out;
 }

@@ -91,6 +91,15 @@ describe('the list and the table draw that order', () => {
     expect(rows(waiting, 'data-row-key')).toEqual([2, 4, 8]);
   });
 
+  it('stands every waiting row before every accepted row and every accepted row before every rejected one (`UIP-S06-07`)', () => {
+    const markup = renderToStaticMarkup(createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, view: 'table' }));
+    const buckets = [...markup.matchAll(/<tr[^>]*data-row-key="[^"]*"[^>]*data-verdict-bucket="(\w+)"/g)].map((m) => m[1]);
+    expect(buckets).toEqual(['waiting', 'waiting', 'waiting', 'accepted', 'accepted', 'accepted', 'rejected', 'rejected']);
+    // The two rejected rows are the last two, whatever place the run gave them.
+    expect(uids(RUN.filter((f) => f.current_verdict === 'rejected'))).toEqual([1, 5]);
+    expect(rows(markup, 'data-row-key').slice(-2)).toEqual([1, 5]);
+  });
+
   it('orders what is left of a filter in the same way', () => {
     const markup = renderToStaticMarkup(createElement(FindingList, {
       groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, view: 'table', severityFilter: 'undetermined',
