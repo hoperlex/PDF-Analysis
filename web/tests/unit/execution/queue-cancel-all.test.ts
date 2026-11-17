@@ -36,7 +36,7 @@ const job = (suffix: string, state: ExecutionQueueItem['state'] = 'queued', over
 });
 
 const envelope = (code: 'permission_denied' | 'state_transition_not_allowed' | 'conflict' | 'dependency_unavailable') => ({
-  contract_version: '1.57.0', error_code: code, message: 'Безопасный отказ.', correlation_id: 'cid-cancel-all', retryable: false,
+  contract_version: '1.58.0', error_code: code, message: 'Безопасный отказ.', correlation_id: 'cid-cancel-all', retryable: false,
 }) as const;
 
 const OVERVIEW: readonly ExecutionQueueStateCount[] = [

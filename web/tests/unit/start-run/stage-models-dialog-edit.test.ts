@@ -63,7 +63,7 @@ afterEach(async () => { await live?.unmount(); live = null; });
 
 function refusal(status: number): ApiError {
   return new ApiError(status, {
-    contract_version: '1.57.0', error_code: 'internal_error', message: 'refused', correlation_id: 'cid-edit', retryable: false, details: {},
+    contract_version: '1.58.0', error_code: 'internal_error', message: 'refused', correlation_id: 'cid-edit', retryable: false, details: {},
   }, 'cid-edit');
 }
 

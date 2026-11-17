@@ -681,7 +681,7 @@ describe('the top row of the tab (`UIP-S09-02`)', () => {
   it('says each refusal of a whole file, and each refusal of the carrying over, in a line of the row', () => {
     const refuse = (constraint: string) =>
       new ApiError(422, {
-        contract_version: '1.57.0', error_code: 'validation_failed', message: 'x',
+        contract_version: '1.58.0', error_code: 'validation_failed', message: 'x',
         correlation_id: 'cid-1', retryable: false, details: { field: 'file', constraint },
       }, 'cid-1');
     for (const constraint of ['not_our_export', 'unreadable', 'too_large', 'too_many_rows']) {

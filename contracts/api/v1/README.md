@@ -11,7 +11,22 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.57.0` (`UI-PARITY-R3`)
+## Current contract `1.58.0` (`UI-PARITY-R3`)
+
+The stage 5 seal of the programme `UI-PARITY-R3` (the task is `docs/program/tasks/UI-PARITY-R3.md`, the seal is `UIP-CONTRACT-04`), raised once
+for the stage after the two server lanes of the stage were merged. Additive: **no operation is added; one schema, one optional property and two
+required properties of an answer**; no migration (head `0070`), no error code, no identity prefix, no state machine. The two changes below were
+each made by their own lane while this file still read 1.57.0, and are one seal here:
+
+- **What a server is doing now (`UIP-S15-01`, owner ruling Г12-B).** `ExecutorHost` gains the optional `current_work`: at most 64 entries of the new schema `ExecutorHostWork` (`project_uid`, `document_uid`, `document_title`, the optional `stage_key` and `since`), oldest first, one for each call the server runs. `listExecutorHosts` always sends it (empty for a server that is free and for one that is off line); `getExecutorHost`, the writes and `ExecutorHostDetails.host` do not carry it. It names no model, no provider, no token and no run; those stay in the administrator's `ExecutorHostDetails.tasks`.
+- **How many documents have no pair (`UIP-S16-02`, owner ruling Г12-B).** `StagePairPage`, the answer of `listStagePairs`, gains `unpaired_p_count` and `unpaired_r_count` (integers from 0): how many documents of stage П and of stage Р have no pair in the whole project, the same on every page. The server always sends both, so they are required in the answer; the properties are new and a reader of 1.57.0 ignores them.
+
+The API has 302 paths, 331 operations and 823 schemas; migration head `0070`. The domain catalogs remain at candidate revision 71; their shared version advances.
+
+Compatibility: additive for a reader. A client of 1.57.0 reads every answer of 1.58.0 unchanged (`ExecutorHost.current_work` is optional and absent from every answer but
+`listExecutorHosts`; the two counts of `StagePairPage` are new properties), and every request of 1.57.0 is valid unchanged (no request changes); `ErrorEnvelope.contract_version` and `info.version` are `1.58.0`.
+
+## Contract `1.57.0` (`UI-PARITY-R3`, historical)
 
 The stage 4–5 seal of the programme `UI-PARITY-R3` (the task is `docs/program/tasks/UI-PARITY-R3.md`, the seal is `UIP-CONTRACT-03`), raised once
 for the two stages after the contract lanes of the stages were merged. Additive: **no operation and no schema is added; four optional query

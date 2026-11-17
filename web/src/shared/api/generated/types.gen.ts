@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.57.0 (OpenAPI 3.1.0)
- *   sha256 6a88ecb4a91c3bad046ec910cf4278b5ae4e01acb504291f9b34aeef5931aedd
+ *   AuditManager PC-01 API 1.58.0 (OpenAPI 3.1.0)
+ *   sha256 d6adb6bbe01ee12cc1e09c872d2097ec13393c4434e6b941e3a615d6a306bbe7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.57.0';
+export const CONTRACT_VERSION = '1.58.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '6a88ecb4a91c3bad046ec910cf4278b5ae4e01acb504291f9b34aeef5931aedd';
+export const CONTRACT_DIGEST = 'd6adb6bbe01ee12cc1e09c872d2097ec13393c4434e6b941e3a615d6a306bbe7';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -372,6 +372,7 @@ export const SCHEMA_NAMES = [
   'ExecutorHostSlots',
   'ExecutorHostState',
   'ExecutorHostTask',
+  'ExecutorHostWork',
   'ExecutorIdentityBasis',
   'ExecutorIntegrationAuthorisation',
   'ExecutorKind',
@@ -4377,7 +4378,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.57.0";
+  contract_version: "1.58.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4807,12 +4808,17 @@ export type ExecutorGroupStrategy = (typeof EXECUTOR_GROUP_STRATEGY_VALUES)[numb
 /**
  * A server (ADR-0028): its name, the «Использовать» switch, whether it is on line, the models it can serve now and its slots.
  * `models` holds only what can be used (an unavailable model is not listed); the reasons are in `ExecutorHostDetails`.
+ * `current_work` (`UIP-S15-01`) is what the server is doing now, oldest first, one entry for each call it runs (a document may appear
+ * more than once). It is on the servers of `listExecutorHosts` -- always, empty for a server that is free and for one that is off line
+ * (nothing is known to run there) -- and is absent from every other answer that carries a server (`getExecutorHost`, the writes and
+ * `ExecutorHostDetails.host`). The model, the provider and the run of a call stay in the administrator's `ExecutorHostDetails.tasks`.
  */
 export type ExecutorHost = {
   agent_version?: string;
   archived_at?: string;
   created_at: string;
   created_by: UserUid;
+  current_work?: Array<ExecutorHostWork>;
   display_name: string;
   enabled: boolean;
   host_id: ExecutorHostId;
@@ -4914,6 +4920,19 @@ export type ExecutorHostTask = {
   since: string;
   stage_key?: string;
   task_id: ExecutorTaskId;
+};
+
+/**
+ * One thing a server is doing now (`UIP-S15-01`): the document its call is about, the object the document belongs to (both by
+ * identity, for a link), the stage and since when. It names no model, no provider, no token and no run (`Г12-B`): the screen says
+ * what is being done, not with what. `stage_key` is absent when the call names no stage.
+ */
+export type ExecutorHostWork = {
+  document_title: string;
+  document_uid: DocumentUid;
+  project_uid: ProjectUid;
+  since: string;
+  stage_key?: string;
 };
 
 /** ``reported``: the response named the model. ``declared``: the executor asserted it. */
@@ -8908,9 +8927,17 @@ export type StagePairId = string;
 /** The contract pattern for `StagePairId`. Anchored; use with `new RegExp()`. */
 export const STAGE_PAIR_ID_PATTERN = "^stp_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/**
+ * One page of the project's stage pairs and, beside it, how many documents have no pair (`UIP-S16-02`, `Г12-B`): `unpaired_p_count`
+ * documents of stage П and `unpaired_r_count` documents of stage Р. They are counted by the server over the whole project -- the
+ * confirmed classification of each document's latest version, the confirmed pairs and the current members of an assembly; an archived
+ * document is not counted -- and are the same on every page: a page of pairs does not change them.
+ */
 export type StagePairPage = {
   items: Array<StagePair>;
   page: PageInfo;
+  unpaired_p_count: number;
+  unpaired_r_count: number;
 };
 
 export type StagePairSuggestion = {

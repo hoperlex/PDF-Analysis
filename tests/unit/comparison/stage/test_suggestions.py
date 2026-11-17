@@ -5,6 +5,8 @@ from __future__ import annotations
 from auditmanager.comparison.stage.suggestions import (
     StageDocument,
     StageSuggestion,
+    UnpairedCounts,
+    count_unpaired,
     suggest_stage_pairs,
 )
 
@@ -58,3 +60,37 @@ def test_two_confirmed_designations_keep_full_exact_confidence() -> None:
         ),
         bound_document_uids=frozenset(),
     ) == (StageSuggestion("doc_p", "doc_r", "section_designation_exact", 1.0),)
+
+
+# --- how many documents have no pair (`UIP-S16-02`) --------------------------------------------------------------------------
+
+
+def test_unpaired_counts_are_the_documents_no_confirmed_pair_binds_by_stage() -> None:
+    classified = (("doc_p1", "P"), ("doc_p2", "P"), ("doc_p3", "P"), ("doc_r1", "R"), ("doc_r2", "R"))
+    assert count_unpaired(classified, bound_document_uids=frozenset()) == UnpairedCounts(stage_p=3, stage_r=2)
+    assert count_unpaired(classified, bound_document_uids=frozenset({"doc_p1", "doc_r1"})) == UnpairedCounts(stage_p=2, stage_r=1)
+    assert count_unpaired(
+        classified, bound_document_uids=frozenset({"doc_p1", "doc_p2", "doc_p3", "doc_r1", "doc_r2"}),
+    ) == UnpairedCounts(stage_p=0, stage_r=0)
+
+
+def test_a_document_nobody_could_suggest_a_partner_for_is_still_without_a_pair() -> None:
+    documents = (
+        doc("doc_p1", "P", "AR", "A-01"),
+        doc("doc_p2", "P", "AR", "A-01"),  # two П with one designation: ambiguous
+        doc("doc_r1", "R", "AR", "A-01"),
+        doc("doc_p3", "P", "AR", " "),  # no designation at all
+    )
+    assert suggest_stage_pairs(documents, bound_document_uids=frozenset()) == (), "nothing here can be suggested"
+    classified = tuple((document.document_uid, document.stage) for document in documents)
+    assert count_unpaired(classified, bound_document_uids=frozenset()) == UnpairedCounts(stage_p=3, stage_r=1)
+
+
+def test_a_document_listed_twice_counts_once_a_bound_one_never_and_an_unknown_stage_for_neither() -> None:
+    assert count_unpaired(
+        (("doc_a", "P"), ("doc_a", "P"), ("doc_b", "R"), ("doc_b", "R"), ("doc_x", "X")), bound_document_uids=frozenset(),
+    ) == UnpairedCounts(stage_p=1, stage_r=1)
+    assert count_unpaired(
+        (("doc_a", "P"), ("doc_a", "P")), bound_document_uids=frozenset({"doc_a"}),
+    ) == UnpairedCounts(stage_p=0, stage_r=0)
+    assert count_unpaired((), bound_document_uids=frozenset()) == UnpairedCounts(stage_p=0, stage_r=0)
