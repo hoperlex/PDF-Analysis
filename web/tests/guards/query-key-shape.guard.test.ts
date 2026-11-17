@@ -29,6 +29,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { hashKey } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
 import { REPO_ROOT, WEB_ROOT, readText, repoRelative, walkFiles } from './lib/repo';
@@ -72,6 +73,45 @@ describe('norms query keys stay in one invalidation namespace (W55A-WEB-NORMS)',
       queryKeys.norms.content('ndoc_A'),
     ].map((key) => JSON.stringify(key));
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('the project list is one cache entry per order, under the root a project change invalidates (UIP-S03-03)', () => {
+  const newest = queryKeys.projects.list(undefined, 50);
+  const byName = queryKeys.projects.list(undefined, 50, 'name');
+
+  /** What the cache sees of a key: the hash a query is filed under. Two keys the cache cannot tell apart are one entry. */
+  const sameEntry = (a: readonly unknown[], b: readonly unknown[]): boolean => hashKey(a) === hashKey(b);
+
+  it('keeps «new first» the key every reader had: the default order and the named default are the old key, with no order in it', () => {
+    expect(sameEntry(newest, ['projects', 'list', { limit: 50 }])).toBe(true);
+    expect(sameEntry(queryKeys.projects.list(undefined, 50, 'published'), newest)).toBe(true);
+    expect(sameEntry(queryKeys.projects.list('c1', 50), ['projects', 'list', { cursor: 'c1', limit: 50 }])).toBe(true);
+    expect(sameEntry(queryKeys.projects.list(), ['projects', 'list', {}])).toBe(true);
+  });
+
+  it('files the list ordered by name as an entry of its own, for the first page and for every cursor', () => {
+    expect(sameEntry(byName, newest)).toBe(false);
+    expect(sameEntry(queryKeys.projects.list('c1', 50, 'name'), queryKeys.projects.list('c1', 50))).toBe(false);
+    expect(sameEntry(queryKeys.projects.list('c1', 50, 'name'), queryKeys.projects.list('c2', 50, 'name'))).toBe(false);
+    expect(sameEntry(queryKeys.projects.list(undefined, 5, 'name'), byName)).toBe(false);
+    const hashes = [newest, byName, queryKeys.projects.list('c1', 50), queryKeys.projects.list('c1', 50, 'name')].map((key) => hashKey(key));
+    expect(new Set(hashes).size).toBe(hashes.length);
+  });
+
+  it('keeps both under `projects.all()`, so a command that changes a project refreshes both orders', () => {
+    for (const key of [newest, byName, queryKeys.projects.list('c1', 50, 'name')]) {
+      expect(key.slice(0, 1)).toEqual(queryKeys.projects.all());
+      expect(key.slice(0, 2)).toEqual(['projects', 'list']);
+    }
+  });
+
+  it('can fail: a builder that dropped the order would file both orders as one entry, and the comparison above says so', () => {
+    const ignoringOrder = (cursor?: string, limit?: number): readonly unknown[] => ['projects', 'list', { cursor, limit }];
+    expect(sameEntry(ignoringOrder(undefined, 50), ignoringOrder(undefined, 50))).toBe(true);
+    // the real builder differs from that one exactly where it must, and nowhere else
+    expect(sameEntry(byName, ignoringOrder(undefined, 50))).toBe(false);
+    expect(sameEntry(newest, ignoringOrder(undefined, 50))).toBe(true);
   });
 });
 

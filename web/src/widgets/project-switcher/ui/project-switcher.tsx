@@ -33,6 +33,15 @@
  * click off the wrapper and asks the model which object the link chose (`chosenProject`). «Все объекты» is `?project=all`
  * and is not sent.
  *
+ * ## «Новый объект» (`UIP-S03-01`)
+ *
+ * Once the island is live, the last row of the menu is an action: it opens the window «Новый объект» (`./new-object-dialog`, the
+ * shared window with the page's own create form in it), and when the object has been made it becomes the open one as a click on
+ * its row does (`afterObjectCreated`: the choice is kept, the address is rewritten). The row is a link to the list's form until
+ * then (the first render, and a render with no island), and it is not offered at all to an account known not to be an expert
+ * (`R-150e`). Whether the account is an expert is read from the cache only: the selector asks the server for the account
+ * nowhere but where it has always asked, and an account not known yet leaves the row drawn.
+ *
  * ## Two layers, and a mount gate
  *
  * {@link ProjectSwitcherView} is pure markup from a {@link SwitcherModel}; the instruments that
@@ -42,16 +51,19 @@
  * (`_app/release-notices.tsx`), so a render of the frame with no client stays request-free.
  */
 
-import { useSearchParams, usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { ComponentType, MouseEvent } from 'react';
 
-import { useLastProject, useRememberProject } from '@/entities/account';
+import type { Account } from '@/shared/api';
+import { mayActAsExpert, meQueryOptions, useLastProject, useRememberProject } from '@/entities/account';
 import type { RememberProjectFailure } from '@/entities/account';
 import { useProjectList } from '@/entities/project';
 
-import { buildSwitcherModel, chosenProject, switcherContext, switcherListOf } from '../model/switcher';
+import { afterObjectCreated, buildSwitcherModel, chosenProject, switcherContext, switcherListOf } from '../model/switcher';
 import type { SwitcherAddress, SwitcherEntry, SwitcherModel, SwitcherNote } from '../model/switcher';
+import { NewObjectDialog } from './new-object-dialog';
 import { ObjectMenu } from './object-menu';
 import type { ObjectMenuItem, ObjectMenuProps } from './object-menu';
 import styles from './project-switcher.module.css';
@@ -82,23 +94,24 @@ function Notes({ notes }: { readonly notes: readonly SwitcherNote[] }) {
 
 /**
  * The props of the selector's menu for `model`. Exported so the instruments that render the
- * menu OPEN (the contrast census) render what the frame holds, not a copy.
+ * menu OPEN (the contrast census) render what the frame holds, not a copy. `onCreate` (`UIP-S03-01`): the island's way to open the
+ * window «Новый объект»; without it the row stays the link to the list's form.
  */
-export function switcherMenuProps(model: SwitcherModel, onRetry: () => void): ObjectMenuProps {
-  const items = model.entries.map(
-    (entry: SwitcherEntry): ObjectMenuItem =>
-      entry.kind === 'link'
-        ? {
-            kind: 'link',
-            label: entry.label,
-            href: entry.href,
-            ...(entry.current === undefined ? {} : { current: entry.current }),
-            ...(entry.projectUid === undefined ? {} : { object: true }),
-            ...(entry.figures === undefined ? {} : { figures: entry.figures }),
-            ...(entry.name === undefined ? {} : { name: entry.name }),
-          }
-        : { kind: 'action', label: entry.label, onChoose: onRetry },
-  );
+export function switcherMenuProps(model: SwitcherModel, onRetry: () => void, onCreate?: () => void): ObjectMenuProps {
+  const items = model.entries.map((entry: SwitcherEntry): ObjectMenuItem => {
+    if (entry.kind === 'retry') return { kind: 'action', label: entry.label, onChoose: onRetry };
+    // `UIP-S03-01`: with the island's handler the row that makes an object opens the window; without it, it is the link.
+    if (entry.creates === true && onCreate !== undefined) return { kind: 'action', label: entry.label, onChoose: onCreate };
+    return {
+      kind: 'link',
+      label: entry.label,
+      href: entry.href,
+      ...(entry.current === undefined ? {} : { current: entry.current }),
+      ...(entry.projectUid === undefined ? {} : { object: true }),
+      ...(entry.figures === undefined ? {} : { figures: entry.figures }),
+      ...(entry.name === undefined ? {} : { name: entry.name }),
+    };
+  });
   const [first, ...rest] = items;
   return {
     label: model.triggerLabel,
@@ -117,6 +130,8 @@ export function switcherMenuProps(model: SwitcherModel, onRetry: () => void): Ob
 export interface ProjectSwitcherViewProps {
   readonly model: SwitcherModel;
   readonly onRetry: () => void;
+  /** `UIP-S03-01`: opens the window «Новый объект». Absent: the row «Новый объект» is the link to the list's form. */
+  readonly onCreate?: (() => void) | undefined;
   /** The reader reached for the selector: pointer over it, focus on it, a press. */
   readonly onIntent?: (() => void) | undefined;
   /**
@@ -130,7 +145,7 @@ export interface ProjectSwitcherViewProps {
   readonly rememberFailure?: RememberProjectFailure | null | undefined;
 }
 
-export function ProjectSwitcherView({ model, onRetry, onIntent, menu = ObjectMenu, onNavigate, rememberFailure }: ProjectSwitcherViewProps) {
+export function ProjectSwitcherView({ model, onRetry, onCreate, onIntent, menu = ObjectMenu, onNavigate, rememberFailure }: ProjectSwitcherViewProps) {
   const Drawn = menu;
   // The click reaches the wrapper from a link of the menu (the menu takes no handler for a link). Read off the target, not `instanceof`:
   // the target is whatever the click landed on, and only an element can be asked for the link around it.
@@ -150,7 +165,7 @@ export function ProjectSwitcherView({ model, onRetry, onIntent, menu = ObjectMen
       onFocusCapture={onIntent}
       onClick={followed}
     >
-      <Drawn {...switcherMenuProps(model, onRetry)} />
+      <Drawn {...switcherMenuProps(model, onRetry, onCreate)} />
       {rememberFailure === null || rememberFailure === undefined ? null : (
         <span className={`${styles.noteAlert} ${styles.rememberFailure}`} role="alert" data-switcher-remember-failure="">
           Объект открыт, но не запомнен: {rememberFailure.detail}
@@ -167,28 +182,51 @@ export function ProjectSwitcherView({ model, onRetry, onIntent, menu = ObjectMen
  */
 export function ProjectSwitcherLive({ address }: { readonly address: Pick<SwitcherAddress, 'pathname' | 'searchParams'> }) {
   const [reached, setReached] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const router = useRouter();
   // The account is asked for only where its answer changes what the button says: an `optional` screen with a silent address.
   const own = switcherContext(address);
-  const last = useLastProject({ enabled: own.scope === 'optional' && own.source === 'none' });
+  const asksAccount = own.scope === 'optional' && own.source === 'none';
+  const last = useLastProject({ enabled: asksAccount });
+  // `UIP-S03-01`: whether to offer «Новый объект» is read from the account's one query under the SAME `enabled` as the read above,
+  // so it asks for nothing more (a second observer of one query is one request), and an account not known yet leaves the row drawn.
+  const mayCreate = mayActAsExpert(useQuery<Account>({ ...meQueryOptions(), enabled: asksAccount }).data?.roles);
   const resolved: SwitcherAddress = { ...address, remembered: last.projectUid, rememberedPending: last.pending };
   const needsName = switcherContext(resolved).projectUid !== null;
-  const query = useProjectList(undefined, { enabled: needsName || reached });
-  const model = buildSwitcherModel(resolved, switcherListOf(query.data, query.error));
+  // `UIP-S03-03`: the server orders the list by name (the number in the name, then alphabetically) before it is paged; the rows are
+  // drawn in the order they come, and this entry of the cache is not the «new first» list of the other screens.
+  const query = useProjectList(undefined, { enabled: needsName || reached, order: 'name' });
+  const model = buildSwitcherModel(resolved, switcherListOf(query.data, query.error, query.isFetching), { mayCreate });
   const { remember, failure, reset } = useRememberProject();
   return (
-    <ProjectSwitcherView
-      model={model}
-      onRetry={() => {
-        void query.refetch();
-      }}
-      onIntent={() => setReached(true)}
-      onNavigate={(projectUid) => {
-        // A choice of one object is kept; any other link clears the last refusal, which was about an earlier choice.
-        if (projectUid === null) reset();
-        else if (projectUid !== last.projectUid) remember(projectUid);
-      }}
-      rememberFailure={failure}
-    />
+    <>
+      <ProjectSwitcherView
+        model={model}
+        onRetry={() => {
+          void query.refetch();
+        }}
+        onCreate={() => setCreating(true)}
+        onIntent={() => setReached(true)}
+        onNavigate={(projectUid) => {
+          // A choice of one object is kept; any other link clears the last refusal, which was about an earlier choice.
+          if (projectUid === null) reset();
+          else if (projectUid !== last.projectUid) remember(projectUid);
+        }}
+        rememberFailure={failure}
+      />
+      {creating ? (
+        <NewObjectDialog
+          onClose={() => setCreating(false)}
+          onCreated={(project) => {
+            afterObjectCreated(resolved, project, {
+              remember,
+              navigate: (href) => router.push(href),
+              close: () => setCreating(false),
+            });
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
