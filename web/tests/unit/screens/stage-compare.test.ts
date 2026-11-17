@@ -41,7 +41,7 @@ function onStep(query: string, expert = true): string {
   const client = newClient();
   seedComparison(client, { modules: 'versions,stages', ...(expert ? {} : { account: READER }) });
   client.setQueryData([...STAGE_PAIR_KEYS.projectPairs(PROJECT_UID), 'workspace'], [PAIR_ROW]);
-  client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [PAIR_ROW], page: { next_cursor: null } });
+  client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [PAIR_ROW], page: { next_cursor: null }, unpaired_p_count: 0, unpaired_r_count: 0 });
   client.setQueryData(STAGE_PAIR_KEYS.documents(PROJECT_UID), NAMES);
   client.setQueryData(['stage-full-runs', PAIR], [RUN_ROW]);
   client.setQueryData(['stage-full-run', RUN], RUN_ROW);
@@ -54,7 +54,7 @@ function loaded(expert = true): string {
   seedComparison(client, { modules: 'versions,stages', ...(expert ? {} : { account: READER }) });
   client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), {
     items: [{ pair_id: PAIR, project_uid: PROJECT_UID, left_document_uid: DOCUMENT_UID, right_document_uid: RIGHT, completeness: 'unknown', state: 'confirmed', created_at: '2026-10-29T00:00:00Z' }],
-    page: { next_cursor: null },
+    page: { next_cursor: null }, unpaired_p_count: 3, unpaired_r_count: 2,
   });
   client.setQueryData(STAGE_PAIR_KEYS.suggestions(PROJECT_UID), {
     items: [{ left_document_uid: uid('doc', 20), right_document_uid: uid('doc', 21), reason: 'section_designation_exact', score: 1 }],
@@ -207,7 +207,7 @@ describe('the object of «Сравнение стадий» is the one of the to
     const client = newClient();
     seedComparison(client, { modules: 'versions,stages', ...seed });
     client.setQueryData(queryKeys.account.me(), { ...EXPERT, last_project_uid: last });
-    client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [PAIR_ROW], page: { next_cursor: null } });
+    client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [PAIR_ROW], page: { next_cursor: null }, unpaired_p_count: 0, unpaired_r_count: 0 });
     return at(client, query);
   }
 
@@ -244,5 +244,87 @@ describe('the object of «Сравнение стадий» is the one of the to
     const markup = bare(OBJECT, null, { modules: 'versions' });
     expect(markup).toContain('Модуль «Сравнение стадий» выключен');
     expect(markup).not.toContain('Выберите объект в верхней строке');
+  });
+});
+
+/** The text of the markup as a reader gets it: React's separators between a literal and an expression are not in it. */
+const plain = (html: string): string => html.replace(/<!-- -->/g, '');
+
+describe('the line over the table of pairs (UIP-S16-03)', () => {
+  /** The catalog with the pairs and the suggestions given: `loaded` fixes one suggestion, this one lets a case choose. */
+  function catalog(options: { expert?: boolean; suggestions?: number; unpaired?: [number, number]; nextCursor?: string | null } = {}): string {
+    const { expert = true, suggestions = 1, unpaired = [3, 2], nextCursor = null } = options;
+    const client = newClient();
+    seedComparison(client, { modules: 'versions,stages', ...(expert ? {} : { account: READER }) });
+    client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), {
+      items: [PAIR_ROW], page: { next_cursor: nextCursor }, unpaired_p_count: unpaired[0], unpaired_r_count: unpaired[1],
+    });
+    client.setQueryData(STAGE_PAIR_KEYS.suggestions(PROJECT_UID), {
+      items: Array.from({ length: suggestions }, (_, index) => ({
+        left_document_uid: uid('doc', 20 + index), right_document_uid: uid('doc', 60 + index), reason: 'section_designation_exact', score: 1,
+      })),
+      page: { next_cursor: null },
+    });
+    client.setQueryData(STAGE_PAIR_KEYS.documents(PROJECT_UID), NAMES);
+    return plain(at(client, OBJECT));
+  }
+
+  it('says «Сопоставлено · Возможных · Только П · Только Р» in one line, the last two as the server counted them', () => {
+    const html = catalog({ suggestions: 2, unpaired: [7, 4] });
+    expect(html).toMatch(/data-pair-counters="">Сопоставлено: 1 · Возможных: 2 · Только П: 7 · Только Р: 4</);
+  });
+
+  it('says zero documents without a pair as a number, and not as nothing', () => {
+    expect(catalog({ unpaired: [0, 0] })).toContain('Только П: 0 · Только Р: 0');
+  });
+
+  it('keeps the matched and the possible pairs of a page as the page\'s, and the server\'s counts as the object\'s', () => {
+    const html = catalog({ nextCursor: 'cur_2', unpaired: [5, 6] });
+    expect(html).toContain('Сопоставлено: 1 на этой странице · Возможных: 1 · Только П: 5 · Только Р: 6');
+  });
+
+  it('puts the counters and both buttons over the table, the confirmation of all first', () => {
+    const html = catalog({ suggestions: 3 });
+    const bar = html.indexOf('data-pair-toolbar');
+    const counters = html.indexOf('data-pair-counters');
+    const confirmAll = html.indexOf('Подтвердить все предложения (3)');
+    const launch = html.indexOf('Запустить анализ выбранных (0)');
+    const table = html.indexOf('<table');
+    expect(bar).toBeGreaterThan(html.indexOf('Пары стадий'));
+    expect([bar, counters, confirmAll, launch, table].every((at) => at > -1)).toBe(true);
+    expect(counters).toBeLessThan(confirmAll);
+    expect(confirmAll).toBeLessThan(launch);
+    expect(launch).toBeLessThan(table);
+  });
+
+  it('opens nothing of the batch until its button is pressed: no queue panel, no method, no estimate', () => {
+    const html = catalog();
+    expect(html).not.toContain('Очередь сравнения стадий');
+    expect(html).not.toContain('Сравнить выбранные пары');
+    // The one pair opens its own panel «Управление парой» under the table, with its own method and estimate: the batch's are not there.
+    const overTable = html.slice(html.indexOf('data-pair-toolbar'), html.indexOf('<table'));
+    expect(overTable).not.toContain('С описанием изменений ИИ');
+    expect(overTable).not.toContain('Метод сравнения');
+    expect(html).toMatch(/data-batch-launch=""[^>]*disabled/);
+  });
+
+  it('offers «Подтвердить все предложения» only where there is something to confirm', () => {
+    expect(catalog({ suggestions: 0 })).not.toContain('Подтвердить все предложения');
+    expect(catalog({ suggestions: 0 })).toContain('Возможных: 0');
+  });
+
+  it('keeps the counters for a reader and gives them neither button: the decisions are the expert\'s', () => {
+    const html = catalog({ expert: false, suggestions: 2 });
+    expect(html).toContain('Сопоставлено: 1 · Возможных: 2 · Только П: 3 · Только Р: 2');
+    expect(html).not.toContain('Подтвердить все предложения');
+    expect(html).not.toContain('Запустить анализ выбранных');
+  });
+
+  it('still says that the expert links the documents, and does not link them by itself', () => {
+    expect(catalog()).toContain('Документы связывает эксперт.');
+  });
+
+  it('does not draw the window of the confirmation until the button asks for it', () => {
+    expect(catalog({ suggestions: 2 })).not.toContain('<dialog');
   });
 });

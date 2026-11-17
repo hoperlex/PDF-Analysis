@@ -41,3 +41,9 @@
 .form fieldset { display: grid; gap: .5rem; }
 .assembly { width: 100%; }
 .assembly li { margin-block: .4rem; overflow-wrap: anywhere; }
+
+/* The line over the table (`UIP-S16-03`): the counters read as one line, and the window of «Подтвердить все» lists its pairs. */
+.counters { margin: 0; }
+.confirmList { margin-block: var(--am-gap-sm); padding-inline-start: var(--am-gap-lg); }
+.confirmList li { margin-block: var(--am-gap-xs); overflow-wrap: anywhere; }
+.reason { font-size: var(--am-text-sm); }

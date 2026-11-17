@@ -185,6 +185,7 @@ import { AnalysisPresets } from '@/widgets/analysis-presets';
 import { StageChanges, StageJournal } from '@/widgets/stage-changes';
 import { STAGE_REVIEW_KEYS } from '@/widgets/stage-changes/api/reads';
 import { StagePairCatalog } from '@/widgets/stage-pair-catalog';
+import { ConfirmAllSuggestionsView } from '@/widgets/stage-pair-catalog/ui/confirm-all-suggestions';
 import { StageRunControls } from '@/widgets/stage-run-controls';
 import { STAGE_RUN_KEYS } from '@/widgets/stage-run-controls/model/runs';
 import { StageSheetMap } from '@/widgets/stage-sheet-map';
@@ -2836,7 +2837,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'stage-pair-catalog-empty',
     make: () => createElement(StagePairCatalog, { projectUid: PROJECT_UID, mayAct: true }),
     seedClient: (client) => {
-      client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [], page: STAGE_PAGE });
+      client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [], page: STAGE_PAGE, unpaired_p_count: 0, unpaired_r_count: 0 });
       client.setQueryData(STAGE_PAIR_KEYS.suggestions(PROJECT_UID), { items: [], page: STAGE_PAGE });
     },
   },
@@ -2903,11 +2904,43 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [{
         pair_id: STAGE_PAIR_ID, project_uid: PROJECT_UID, state: 'confirmed', completeness: 'partial',
         left_document_uid: DOCUMENT_UID, right_document_uid: DOCUMENT_UID, created_at: '2026-10-09T10:00:00Z',
-      }], page: STAGE_PAGE });
+      }], page: STAGE_PAGE, unpaired_p_count: 2, unpaired_r_count: 1 });
       client.setQueryData(STAGE_PAIR_KEYS.suggestions(PROJECT_UID), { items: [], page: STAGE_PAGE });
       client.setQueryData(['stage-full-runs', STAGE_PAIR_ID], [stageRun()]);
       client.setQueryData(['stage-run-card-counts', STAGE_RUN_ID], { total: 4, review: 1, project_changes: 3 });
     },
+  },
+  {
+    // `UIP-S16-03`: an expert over a table with a confirmed pair and two suggestions: the counters (the documents without a pair
+    // are the server's numbers), «Подтвердить все предложения (N)» and «Запустить анализ выбранных (N)» over the table.
+    name: 'stage-pair-catalog-expert-line',
+    make: () => createElement(StagePairCatalog, { projectUid: PROJECT_UID, mayAct: true }),
+    seedClient: (client) => {
+      client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [{
+        pair_id: STAGE_PAIR_ID, project_uid: PROJECT_UID, state: 'confirmed', completeness: 'full',
+        left_document_uid: DOCUMENT_UID, right_document_uid: DOCUMENT_UID, created_at: '2026-10-09T10:00:00Z',
+      }], page: STAGE_PAGE, unpaired_p_count: 3, unpaired_r_count: 4 });
+      client.setQueryData(STAGE_PAIR_KEYS.suggestions(PROJECT_UID), { items: [
+        { left_document_uid: DOCUMENT_UID, right_document_uid: STAGE_SUGGESTED_DOCUMENT_UID, reason: 'section_designation_exact', score: 1 },
+        { left_document_uid: DOCUMENT_UID, right_document_uid: STAGE_OTHER_SUGGESTED_DOCUMENT_UID, reason: 'section_title_hint_exact', score: 1 },
+      ], page: STAGE_PAGE });
+      client.setQueryData(['stage-full-runs', STAGE_PAIR_ID], [stageRun()]);
+    },
+  },
+  {
+    // `UIP-S16-03`: the window of «Подтвердить все предложения» in its three moments: the list, the commands under way, the end with a refusal.
+    name: 'stage-confirm-all-review',
+    make: () => createElement(ConfirmAllSuggestionsView, { ...STAGE_CONFIRM_ALL_VIEW, phase: { kind: 'review' } }),
+  },
+  {
+    name: 'stage-confirm-all-running',
+    make: () => createElement(ConfirmAllSuggestionsView, { ...STAGE_CONFIRM_ALL_VIEW, phase: { kind: 'running', done: 1 } }),
+  },
+  {
+    name: 'stage-confirm-all-finished',
+    make: () => createElement(ConfirmAllSuggestionsView, { ...STAGE_CONFIRM_ALL_VIEW, phase: { kind: 'finished', result: {
+      total: 2, confirmed: 1, failures: [{ suggestion: STAGE_CONFIRM_ALL_VIEW.suggestions[1]!, error: stageFailure() }],
+    } } }),
   },
   {
     name: 'stage-run-controls-reading',
@@ -4208,6 +4241,16 @@ const STAGE_PAIR_ID = 'stp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const STAGE_OTHER_PAIR_ID = 'stp_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
 const STAGE_RUN_ID = 'crn_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const STAGE_NOOP = (): void => undefined;
+const STAGE_SUGGESTED_DOCUMENT_UID = 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
+const STAGE_OTHER_SUGGESTED_DOCUMENT_UID = 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8D';
+/** `UIP-S16-03`: what the window of «Подтвердить все предложения» is drawn with, the phase aside. */
+const STAGE_CONFIRM_ALL_VIEW = {
+  suggestions: [
+    { left_document_uid: DOCUMENT_UID, right_document_uid: STAGE_SUGGESTED_DOCUMENT_UID, reason: 'section_designation_exact', score: 1 },
+    { left_document_uid: DOCUMENT_UID, right_document_uid: STAGE_OTHER_SUGGESTED_DOCUMENT_UID, reason: 'section_title_hint_exact', score: 1 },
+  ],
+  total: 2, names: undefined, onConfirm: STAGE_NOOP, onRetry: STAGE_NOOP, onClose: STAGE_NOOP, staticOpen: true,
+} as const;
 const stageFailure = (): ApiError => apiError(503, 'dependency_unavailable');
 const STAGE_PAGE = { next_cursor: null } as { next_cursor: null };
 /** A run of the pair, as the workspace lists it and as it reads it back. */

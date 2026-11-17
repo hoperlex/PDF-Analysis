@@ -1,5 +1,8 @@
 .controls { display: grid; gap: .6rem; width: 100%; }
 .controls p { margin-block: .25rem; }
+/* The line over the table of pairs (`UIP-S16-03`): the counters at the left, the buttons at the right, wrapping under each other when narrow. */
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--am-gap-sm); }
+.bar > .actions { margin-inline-start: auto; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; }
 .actions label { display: inline-flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
 .estimate { padding: 1rem; border: 1px solid var(--am-line); border-radius: .5rem; }

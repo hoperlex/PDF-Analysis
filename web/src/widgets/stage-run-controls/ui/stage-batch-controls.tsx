@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { ComparisonAiEstimate, StageChainBatch, StageChainBatchSelection, StagePair } from '@/shared/api';
 import { ApiError, cancelStageChainBatch, estimateStageChainRun, failureMessage, getStageChainBatch,
@@ -29,6 +30,13 @@ export interface StageBatchControlsProps {
   readonly batchId?: string;
   readonly onBatchChange?: (batchId: string) => void;
   readonly onOpenRun?: (runId: string, pairId: string) => void;
+  /**
+   * What stands at the left of the line over the table (`UIP-S16-03`): the catalog's counters. The batch's button stands at its
+   * right, and the estimate and the consent open under the line, so the line and what it opens are one piece of the screen.
+   */
+  readonly summary?: ReactNode;
+  /** Buttons of the catalog that stand before «Запустить анализ выбранных (N)» in that line. */
+  readonly leadingActions?: ReactNode;
 }
 
 async function preparePairs(pairs: readonly StagePair[], withAi: boolean, engine: StageEngine): Promise<PreparedPair[]> {
@@ -47,7 +55,7 @@ export function StageBatchControls(props: StageBatchControlsProps) {
   return <StageBatchBody key={`${props.projectUid}|${props.batchId ?? ''}`} {...props} />;
 }
 
-function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId: suppliedBatchId, onBatchChange }: StageBatchControlsProps) {
+function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId: suppliedBatchId, onBatchChange, summary, leadingActions }: StageBatchControlsProps) {
   // `UI-B-85`: a pair is named by its documents (the reads are the catalog's own), and by its identifier only while they are unknown.
   const documentNames = useStageDocumentNames(projectUid).data;
   const knownPairs = useStagePairs(projectUid).data?.items ?? [];
@@ -103,44 +111,56 @@ function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId:
     } catch (failure) { setError(failure); }
     finally { setBusy(false); }
   };
-  const failure = error ?? prepared.error ?? status.error;
-  const missingMap = prepared.error === failure && failure instanceof MissingStageMap;
+  // A reading of the estimate that failed belongs to the panel that asked for it: once the panel is closed it is not said again.
+  const failure = error ?? (preparing ? prepared.error : null) ?? status.error;
+  const missingMap = preparing && prepared.error === failure && failure instanceof MissingStageMap;
   const message = failure === null ? null : missingMap
     ? { detail: 'Для выбранной пары нет сохранённой карты листов. Откройте «2. Сопоставление листов» и нажмите «Сохранить решение эксперта», затем подготовьте запуск снова.', correlationId: failure.correlationId }
     : failureMessage(failure);
-  return <section className={styles.batch} aria-label="Очередь сравнения стадий">
-    <h3>Сравнить выбранные пары</h3>
-    <p>Выбрано: {selectedPairs.length}. Пары выполнятся по очереди.</p>
-    {mayAct ? <div className={styles.actions}>
-      <StageEngineSelector value={engine} disabled={busy} onChange={(value) => { setEngine(value); if (value === 'v3_native_text_experimental') setWithAi(true); setAgreed({}); setPreparing(false); setError(null); held.current.clear(); }} />
-      <label><input type="checkbox" checked={withAi} disabled={busy || engine === 'v3_native_text_experimental'} onChange={(event) => { setWithAi(event.target.checked); setAgreed({}); setPreparing(false); held.current.clear(); }} />С описанием изменений ИИ</label>
-      <button type="button" className="am-button" disabled={busy || selectedPairs.length === 0 || selectedPairs.length > 100}
-        onClick={() => { setPreparing(true); setAgreed({}); setError(null); void prepared.refetch(); }}>Запустить анализ выбранных ({selectedPairs.length})</button>
-    </div> : null}
-    {selectedPairs.length > 100 ? <p role="alert">Выберите не более 100 пар.</p> : null}
-    {preparing ? <div>
-      {prepared.isFetching ? <p role="status">Читаем карты и оцениваем объём…</p> : null}
-      {prepared.data?.map((item) => <div key={item.pair.pair_id} className={styles.selection}>
-        <p>Пара {pairLabel(item.pair.pair_id)}</p>
-        {item.estimate === undefined ? <p>Без обращений к ИИ.</p> : <StageEstimateConsent estimate={item.estimate} engine={engine}
-          agreedDigest={agreed[item.pair.pair_id] ?? null} disabled={busy || !mayAct}
-          onAgree={(digest) => setAgreed((prior) => ({ ...prior, [item.pair.pair_id]: digest }))} />}
-      </div>)}
-      <div className={styles.actions}><button type="button" className="am-button" disabled={busy || !mayAct || !canStart || prepared.isFetching}
-        onClick={() => void start()}>Поставить в очередь</button>
-        <button type="button" className="am-button" disabled={busy} onClick={() => setPreparing(false)}>Отмена</button></div>
-    </div> : null}
-    {message === null ? null : <ErrorState title={missingMap ? 'Сначала сохраните карту листов' : 'Очередь не открыта или команда не выполнена'} detail={message.detail} correlationId={message.correlationId} />}
-    {batch === null ? null : <div>
-      <p>{RUN_WORDS[batch.state]} · {formatInstant(batch.created_at)}</p>
-      <dl>{Object.entries(batch.counts).map(([name, count]) => <div key={name}><dt>{name}</dt><dd>{count}</dd></div>)}</dl>
-      <ol>{batch.items.map((item) => <li key={item.item_id}>{pairLabel(item.pair_id)} · {RUN_WORDS[item.state]}
-        {item.run_id === undefined || onOpenRun === undefined ? null : <button type="button" className="am-button" onClick={() => onOpenRun(item.run_id!, item.pair_id)}>Открыть сравнение</button>}</li>)}</ol>
-      {mayAct ? <div className={styles.actions}>
-        {batch.state === 'queued' || batch.state === 'running' ? <button type="button" className="am-button" disabled={busy} onClick={() => void change('pause')}>Остановить очередь</button> : null}
-        {batch.state === 'paused' ? <button type="button" className="am-button" disabled={busy} onClick={() => void change('resume')}>Продолжить очередь</button> : null}
-        {['queued', 'running', 'paused'].includes(batch.state) ? <button type="button" className="am-button" disabled={busy} onClick={() => void change('cancel')}>Отменить очередь</button> : null}
+  // The options change what is estimated, so a changed option clears the agreements and the held keys and reads the estimate again.
+  const optionsChanged = () => { setAgreed({}); setError(null); held.current.clear(); };
+  const panelOpen = preparing || batch !== null || message !== null;
+  return <>
+    <div className={styles.bar} data-pair-toolbar="">
+      {summary}
+      {mayAct || leadingActions !== undefined ? <div className={styles.actions}>
+        {leadingActions}
+        {mayAct ? <button type="button" className="am-button" data-batch-launch="" aria-expanded={preparing} disabled={busy || selectedPairs.length === 0 || selectedPairs.length > 100}
+          onClick={() => { setPreparing(true); setAgreed({}); setError(null); void prepared.refetch(); }}>Запустить анализ выбранных ({selectedPairs.length})</button> : null}
       </div> : null}
-    </div>}
-  </section>;
+    </div>
+    {selectedPairs.length > 100 ? <p role="alert">Выберите не более 100 пар.</p> : null}
+    {panelOpen ? <section className={styles.batch} aria-label="Очередь сравнения стадий">
+      <h3>Сравнить выбранные пары</h3>
+      {preparing ? <p>Выбрано: {selectedPairs.length}. Пары выполнятся по очереди.</p> : null}
+      {preparing && mayAct ? <div className={styles.actions}>
+        <StageEngineSelector value={engine} disabled={busy} onChange={(value) => { setEngine(value); if (value === 'v3_native_text_experimental') setWithAi(true); optionsChanged(); }} />
+        <label><input type="checkbox" checked={withAi} disabled={busy || engine === 'v3_native_text_experimental'} onChange={(event) => { setWithAi(event.target.checked); optionsChanged(); }} />С описанием изменений ИИ</label>
+      </div> : null}
+      {preparing ? <div>
+        {prepared.isFetching ? <p role="status">Читаем карты и оцениваем объём…</p> : null}
+        {prepared.data?.map((item) => <div key={item.pair.pair_id} className={styles.selection}>
+          <p>Пара {pairLabel(item.pair.pair_id)}</p>
+          {item.estimate === undefined ? <p>Без обращений к ИИ.</p> : <StageEstimateConsent estimate={item.estimate} engine={engine}
+            agreedDigest={agreed[item.pair.pair_id] ?? null} disabled={busy || !mayAct}
+            onAgree={(digest) => setAgreed((prior) => ({ ...prior, [item.pair.pair_id]: digest }))} />}
+        </div>)}
+        <div className={styles.actions}><button type="button" className="am-button" disabled={busy || !mayAct || !canStart || prepared.isFetching}
+          onClick={() => void start()}>Поставить в очередь</button>
+          <button type="button" className="am-button" disabled={busy} onClick={() => { setPreparing(false); setError(null); }}>Отмена</button></div>
+      </div> : null}
+      {message === null ? null : <ErrorState title={missingMap ? 'Сначала сохраните карту листов' : 'Очередь не открыта или команда не выполнена'} detail={message.detail} correlationId={message.correlationId} />}
+      {batch === null ? null : <div>
+        <p>{RUN_WORDS[batch.state]} · {formatInstant(batch.created_at)}</p>
+        <dl>{Object.entries(batch.counts).map(([name, count]) => <div key={name}><dt>{name}</dt><dd>{count}</dd></div>)}</dl>
+        <ol>{batch.items.map((item) => <li key={item.item_id}>{pairLabel(item.pair_id)} · {RUN_WORDS[item.state]}
+          {item.run_id === undefined || onOpenRun === undefined ? null : <button type="button" className="am-button" onClick={() => onOpenRun(item.run_id!, item.pair_id)}>Открыть сравнение</button>}</li>)}</ol>
+        {mayAct ? <div className={styles.actions}>
+          {batch.state === 'queued' || batch.state === 'running' ? <button type="button" className="am-button" disabled={busy} onClick={() => void change('pause')}>Остановить очередь</button> : null}
+          {batch.state === 'paused' ? <button type="button" className="am-button" disabled={busy} onClick={() => void change('resume')}>Продолжить очередь</button> : null}
+          {['queued', 'running', 'paused'].includes(batch.state) ? <button type="button" className="am-button" disabled={busy} onClick={() => void change('cancel')}>Отменить очередь</button> : null}
+        </div> : null}
+      </div>}
+    </section> : null}
+  </>;
 }

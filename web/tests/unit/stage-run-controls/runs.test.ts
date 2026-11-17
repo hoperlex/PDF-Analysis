@@ -124,4 +124,39 @@ describe('stage run controls', () => {
     expect(html).toContain('Отменить очередь');
     expect(html).not.toContain('Завершено');
   });
+  it('stands as one line, the catalog\'s counters at the left and the buttons at the right, and opens no panel while idle (UIP-S16-03)', () => {
+    const html = renderScreen(newClient(), createElement(StageBatchControls, {
+      projectUid: uid('prj', 1), selectedPairs: [], mayAct: true,
+      summary: createElement('p', { 'data-summary': '' }, 'Сопоставлено: 1'),
+      leadingActions: createElement('button', { type: 'button', 'data-leading': '' }, 'Подтвердить все предложения (2)'),
+    })).replace(/<!-- -->/g, '');
+    const summary = html.indexOf('data-summary');
+    const leading = html.indexOf('data-leading');
+    const launch = html.indexOf('Запустить анализ выбранных (0)');
+    expect(summary).toBeGreaterThan(html.indexOf('data-pair-toolbar'));
+    expect(summary).toBeLessThan(leading);
+    expect(leading).toBeLessThan(launch);
+    expect(html).toMatch(/data-batch-launch=""[^>]*disabled/);
+    // Nothing of the estimate and the consent before the button is pressed: no panel, no method, no queue.
+    for (const absent of ['Очередь сравнения стадий', 'Сравнить выбранные пары', 'С описанием изменений ИИ', 'Поставить в очередь', 'Метод сравнения']) {
+      expect(html, absent).not.toContain(absent);
+    }
+  });
+  it('counts the chosen pairs in the button and keeps it for the expert alone', () => {
+    const pair = { pair_id: uid('stp', 1), project_uid: uid('prj', 1), left_document_uid: uid('doc', 1), right_document_uid: uid('doc', 2), state: 'confirmed', completeness: 'unknown', created_at: run().created_at } as const;
+    const expert = renderScreen(newClient(), createElement(StageBatchControls, { projectUid: uid('prj', 1), selectedPairs: [pair, { ...pair, pair_id: uid('stp', 2) }], mayAct: true }));
+    expect(expert).toContain('Запустить анализ выбранных (2)');
+    expect(expert).not.toMatch(/data-batch-launch=""[^>]*disabled/);
+    const reader = renderScreen(newClient(), createElement(StageBatchControls, { projectUid: uid('prj', 1), selectedPairs: [pair], mayAct: false,
+      summary: createElement('p', null, 'Сопоставлено: 1') }));
+    expect(reader).toContain('Сопоставлено: 1');
+    expect(reader).not.toContain('Запустить анализ выбранных');
+  });
+  it('refuses more than a hundred pairs in the open, before any panel', () => {
+    const pair = { pair_id: uid('stp', 1), project_uid: uid('prj', 1), left_document_uid: uid('doc', 1), right_document_uid: uid('doc', 2), state: 'confirmed', completeness: 'unknown', created_at: run().created_at } as const;
+    const html = renderScreen(newClient(), createElement(StageBatchControls, { projectUid: uid('prj', 1), mayAct: true,
+      selectedPairs: Array.from({ length: 101 }, (_, index) => ({ ...pair, pair_id: uid('stp', index + 1) })) }));
+    expect(html).toContain('Выберите не более 100 пар.');
+    expect(html).toMatch(/data-batch-launch=""[^>]*disabled/);
+  });
 });

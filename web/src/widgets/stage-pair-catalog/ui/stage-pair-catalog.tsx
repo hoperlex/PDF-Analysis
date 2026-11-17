@@ -15,6 +15,7 @@ import type { StageDocumentNames } from '@/entities/stage-pair';
 import { RUN_WORDS, StageBatchControls, StageRunControls, useLatestPairRun } from '@/widgets/stage-run-controls';
 
 import { withRowVisibility } from '../model/rows-in-view';
+import { ConfirmAllSuggestions } from './confirm-all-suggestions';
 import { RowInView } from './row-in-view';
 import { StageAssemblyCreator, StageAssemblyEditor } from './stage-assembly-editor';
 import styles from './stage-pair-catalog.module.css';
@@ -88,6 +89,8 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
   const confirm = useConfirmStagePair();
   const completeness = useSetStagePairCompleteness();
   const [selected, setSelected] = useState<StagePairSuggestion | null>(null);
+  // The list «Подтвердить все предложения» was opened over: the suggestions of that moment, not the ones read again under it.
+  const [confirmAllOver, setConfirmAllOver] = useState<readonly StagePairSuggestion[] | null>(null);
   const [batchSelection, setBatchSelection] = useState<Record<string, StagePair>>({});
   const [batchId, setBatchId] = useState<string | undefined>();
   // `undefined`: not chosen yet (a single pair opens by itself); `null`: the reader closed the panel.
@@ -106,6 +109,14 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
   const managedPair = items.find((pair) => pair.pair_id === managedId);
   const selectable = items.filter((pair) => pair.state === 'confirmed');
   const nameOfPair = (pair: StagePair): string => `${documentCaption(names, pair.left_document_uid)} → ${pair.right_document_uid === undefined ? 'сборка Р' : documentCaption(names, pair.right_document_uid)}`;
+
+  const suggestionItems = suggestions.data?.items ?? [];
+  // `UIP-S16-03`: the matched and the possible pairs are those of the page read; the documents without a pair are the server's count of the whole object.
+  const counters = pairs.data === undefined || suggestions.data === undefined ? null : (
+    <p className={styles.counters} data-pair-counters="">
+      Сопоставлено: {selectable.length}{pairs.data.page.next_cursor === null ? '' : ' на этой странице'} · Возможных: {suggestionItems.length}{suggestions.data.page.next_cursor === null ? '' : ' на этой странице'} · Только П: {pairs.data.unpaired_p_count} · Только Р: {pairs.data.unpaired_r_count}
+    </p>
+  );
 
   const columns: TableColumn<StagePair>[] = [
     ...(mayAct ? [{
@@ -162,11 +173,14 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
             <button type="button" className="am-button" onClick={() => void pairs.refetch()}>Обновить</button>
           </div>
         </div>
-        {pairs.data === undefined || suggestions.data === undefined ? null : (
-          <p data-pair-counters="">
-            Сопоставлено: {selectable.length}{pairs.data.page.next_cursor === null ? '' : ' на этой странице'} · Возможных пар: {suggestions.data.items.length}{suggestions.data.page.next_cursor === null ? '' : ' на этой странице'}
-          </p>
-        )}
+        <StageBatchControls projectUid={projectUid} selectedPairs={Object.values(batchSelection)} mayAct={mayAct} onBatchChange={setBatchId}
+          {...(batchId === undefined ? {} : { batchId })} {...(onOpenRun === undefined ? {} : { onOpenRun })}
+          summary={counters}
+          leadingActions={mayAct && suggestionItems.length > 0
+            ? <button type="button" className="am-button" data-confirm-all-open="" disabled={busy} onClick={() => setConfirmAllOver(suggestionItems)}>
+                Подтвердить все предложения ({suggestionItems.length})
+              </button>
+            : undefined} />
         {pairs.isPending ? <LoadingState what="пары стадий" /> : null}
         {pairFailure === null ? null : <ErrorState title="Пары стадий не открылись" detail={pairFailure.detail} correlationId={pairFailure.correlationId} onRetry={pairFailure.retryable ? () => void pairs.refetch() : undefined} />}
         {pairs.data?.items.length === 0 ? <EmptyState title="Подтверждённых пар пока нет" detail="Пары появятся после решения эксперта по документам П и Р." /> : null}
@@ -200,8 +214,6 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
         </section>
       )}
 
-      <StageBatchControls projectUid={projectUid} selectedPairs={Object.values(batchSelection)} mayAct={mayAct} onBatchChange={setBatchId}
-        {...(batchId === undefined ? {} : { batchId })} {...(onOpenRun === undefined ? {} : { onOpenRun })} />
       <StageAssemblyCreator projectUid={projectUid} mayAct={mayAct} />
 
       <section aria-labelledby="stage-suggestions-heading">
@@ -243,6 +255,9 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
             <button type="button" className="am-button" disabled={busy} onClick={() => setSelected(null)}>Отмена</button>
           </div>
         </section>
+      )}
+      {confirmAllOver === null ? null : (
+        <ConfirmAllSuggestions projectUid={projectUid} suggestions={confirmAllOver} names={names} onClose={() => setConfirmAllOver(null)} />
       )}
       {commandFailure === null ? null : <ErrorState title="Решение не сохранено" detail={commandFailure.detail} correlationId={commandFailure.correlationId} />}
     </div>

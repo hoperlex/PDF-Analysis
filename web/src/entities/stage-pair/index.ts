@@ -3,3 +3,5 @@ export { STAGE_PAIR_KEYS, useStagePairs, useStagePairSuggestions, useConfirmStag
 export { completenessLabel, suggestionReason } from './model/words';
 export type { StageDocumentName, StageDocumentNames } from './model/documents';
 export { documentCaption, namesOf, useStageDocumentNames } from './model/documents';
+export type { ConfirmAll, ConfirmAllFailure, ConfirmAllResult, ConfirmedPairRequest } from './model/confirm-all';
+export { HeldPairKeys, confirmSuggestions, pairSignature, useConfirmStagePairs } from './model/confirm-all';
