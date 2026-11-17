@@ -18,8 +18,10 @@
  *
  * Names come from reads the pages already make or that the query cache shares: the version (title and number) and the
  * run (its version). A page that holds the version (the document page holds its newest) hands it in (`version`) and the
- * frame reads nothing for it. A name that is not known yet, or whose read failed, is the generic word («Объект», «Документ»);
- * the row never invents a name and never blocks the page.
+ * frame reads none for the names. The numbers on «Блоки» and «Оптимизация» (`UIP-S04-02`) are the version's own read, the
+ * same entry, so the frame reads it for them even then: a version held from a listing carries neither (`useVersionFigures`).
+ * A name that is not known yet, or whose read failed, is the generic word («Объект», «Документ»); the row never invents a
+ * name and never blocks the page, and a number the read did not give is not drawn.
  */
 
 import type { ReactNode } from 'react';
@@ -33,6 +35,7 @@ import { useDocumentVersion } from '@/entities/document-version';
 import { findProjectSection, useProject } from '@/entities/project';
 
 import type { TabLevel } from '../model/version-tabs';
+import { useVersionFigures } from '../api/use-version-figures';
 import { VersionBar } from './version-bar';
 import type { PdfSlot } from './version-bar';
 import { VersionTabs } from './version-tabs';
@@ -58,8 +61,6 @@ export interface DocumentContextProps {
   readonly sectionCode?: string | undefined;
   /** The version the page already holds (the document page's newest); the frame then reads none of its own. */
   readonly version?: DocumentVersion | undefined;
-  /** The number of «Блоки» (`UIP-S04-02` hands it in); absent is not zero. */
-  readonly blockCount?: number | undefined;
   /** The PDF window of the page, when the page has one; the button of the bar opens it in place. */
   readonly pdf?: PdfSlot | undefined;
 }
@@ -147,7 +148,7 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
 }
 
 export function DocumentContext({
-  projectUid, current, documentUid, versionUid, runId, sectionLabel, sectionCode, version: held, blockCount, pdf,
+  projectUid, current, documentUid, versionUid, runId, sectionLabel, sectionCode, version: held, pdf,
 }: DocumentContextProps) {
   const run = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== undefined && versionUid === undefined });
   const knownVersion = (versionUid as VersionUid | undefined) ?? held?.version_uid ?? run.data?.version_uid;
@@ -173,10 +174,21 @@ export function DocumentContext({
   // The tabs read the version's runs, so they wait for the version itself (`D-16`: runs are asked for only once the version is known).
   const framed = FRAMED.includes(current) && knownVersion !== undefined && version !== undefined && ownDocument !== undefined;
   const level = current as TabLevel;
+  // `UIP-S04-02`: the numbers of «Блоки» and «Оптимизация» are the version's own read, held or not; none while it has not answered.
+  const figures = useVersionFigures(framed ? knownVersion : undefined);
   let tabs: ReactNode = null;
   let bar: ReactNode = null;
   if (framed) {
-    tabs = <VersionTabs projectUid={projectUid} versionUid={knownVersion} documentUid={ownDocument} current={level} blockCount={blockCount} />;
+    tabs = (
+      <VersionTabs
+        projectUid={projectUid}
+        versionUid={knownVersion}
+        documentUid={ownDocument}
+        current={level}
+        blockCount={figures?.blockCount}
+        optimisation={figures?.optimisation}
+      />
+    );
     bar = <VersionBar projectUid={projectUid} documentUid={ownDocument} version={version} level={level} pdf={pdf} />;
   }
   return (

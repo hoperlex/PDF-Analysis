@@ -18,8 +18,12 @@ export {
 
 // `UI-A-22`, `R-151m`, `UIP-G-09`: the version's tabs, «Инфо · Блоки · Лог · Разбор · Оптимизация», and where another
 // version or neighbour opens on the same tab.
-export type { OptimisationCount, TabLevel, VersionTab, VersionTabFacts, VersionTabKey } from './model/version-tabs';
-export { latestResultRun, mayReadLogOf, runLogAddress, versionTabs } from './model/version-tabs';
+export type {
+  OptimisationCount, TabLevel, VersionFigures, VersionTab, VersionTabFacts, VersionTabKey,
+} from './model/version-tabs';
+export {
+  latestResultRun, mayReadLogOf, optimisationOf, runLogAddress, versionFigures, versionTabs,
+} from './model/version-tabs';
 export type { TabTarget } from './model/tab-address';
 export { levelAddress, levelNeedsRuns, targetOfAudit, targetOfRuns, versionChoiceLevel } from './model/tab-address';
 export type { VersionTabsViewProps } from './ui/version-tabs';
