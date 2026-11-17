@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import type { Finding } from '@/shared/api';
@@ -14,6 +14,24 @@ import { MachineAdvice } from './machine-advice';
 import { ReviewWarnings } from './review-warnings';
 import { SourceInspector, sourceKind, sourcePage } from './source-inspector';
 import styles from './review-candidates.module.css';
+
+/** The closed block the machine candidates stand in, under the table of «Разбор»; the summary's link names it. */
+export const CANDIDATES_BLOCK_ID = 'review-machine-candidates';
+
+/**
+ * The link to the candidates opens the block before the browser scrolls to it: a fragment address alone would land on a
+ * closed line. Without a block in the page (the candidates were not read, or there are none) it is an ordinary link.
+ */
+export function openCandidatesBlock(): void {
+  const block = document.getElementById(CANDIDATES_BLOCK_ID);
+  if (block instanceof HTMLDetailsElement) block.open = true;
+}
+
+/** The columns of the table, each with the class that gives it its width. */
+const COLUMNS = [
+  ['№', 'colNumber'], ['Критичность', 'colSeverity'], ['Лист / стр.', 'colPage'], ['Замечание', 'colFinding'],
+  ['Норма', 'colNorm'], ['Рекомендация', 'colAdvice'], ['Решение', 'colDecision'],
+] as const;
 
 const ORIGIN = { text: 'Текст', drawing: 'Чертёж', cross_check: 'Сверка', unknown: 'Источник не сохранён' };
 const titleOf = (title: string) => (CATEGORY_LABELS as Readonly<Record<string, string>>)[title] ?? title;
@@ -50,6 +68,11 @@ export function ReviewCandidateTable({ value, projectUid, published = [], sheetO
   const [origin, setOrigin] = useState('all');
   const [page, setPage] = useState(0);
   const [opened, setOpened] = useState<string | null>(null);
+  const block = useRef<HTMLDetailsElement>(null);
+  // A saved address that names the block opens it: the browser would otherwise scroll to a closed line.
+  useEffect(() => {
+    if (window.location.hash === `#${CANDIDATES_BLOCK_ID}` && block.current !== null) block.current.open = true;
+  }, []);
   const result = typeof value === 'object' && value !== null ? value as CandidateRecord : {};
   const needle = search.trim().toLocaleLowerCase('ru');
   const matches = reading.rows.filter((row) => (severity === 'all' || (row.severity ?? 'undetermined') === severity)
@@ -59,8 +82,8 @@ export function ReviewCandidateTable({ value, projectUid, published = [], sheetO
   const shown = matches.slice(current * 25, (current + 1) * 25);
   if (reading.rows.length === 0) return null;
   const changeSeverity = (next: string) => { setSeverity(next); setPage(0); };
-  return <section id="review-machine-candidates" className={styles.root} aria-label="Машинные кандидаты — только просмотр" data-review-candidates={reading.rows.length}>
-    <div className={styles.heading}><h2>Машинные кандидаты <span>{reading.rows.length}</span></h2><span className={styles.readonly}>Только просмотр</span></div>
+  return <details ref={block} id={CANDIDATES_BLOCK_ID} className={styles.root} aria-label="Машинные кандидаты — только просмотр" data-review-candidates={reading.rows.length}>
+    <summary className={styles.heading}><strong>Машинные кандидаты <span>{reading.rows.length}</span></strong><span className={styles.readonly}>Только просмотр</span></summary>
     <p className={styles.note}>Сохранённые машинные наблюдения. Решения ✓/✕ доступны у замечаний выше. Эти строки не меняют число замечаний и экспертных решений.</p>
     <p className={styles.note}>Исходных наблюдений: {reading.rawCount} · групп: {reading.groupCount}{reading.publishedGroups ? ` · уже в замечаниях: ${reading.publishedGroups}` : ''}.</p>
     {reading.groupingIncomplete ? <p role="status">Группировка неполна; показаны все исходные наблюдения.</p> : null}
@@ -77,7 +100,7 @@ export function ReviewCandidateTable({ value, projectUid, published = [], sheetO
       <label>Источник<select value={origin} onChange={(event) => { setOrigin(event.target.value); setPage(0); }}><option value="all">Все источники</option><option value="drawing">Чертёж</option><option value="text">Текст</option><option value="cross_check">Сверка</option></select></label></div>
     <p className={styles.note} aria-live="polite">Показано {shown.length ? current * 25 + 1 : 0}–{current * 25 + shown.length} из {matches.length}.</p>
     <div className={styles.scroll}><table className={styles.table} aria-label="Таблица машинных кандидатов"><thead><tr>
-      {['№', 'Критичность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'].map((label) => <th key={label} scope="col">{label}</th>)}
+      {COLUMNS.map(([label, width]) => <th key={label} scope="col" className={styles[width]}>{label}</th>)}
     </tr></thead><tbody>{shown.map((row) => <Fragment key={row.key}><tr data-candidate-row={row.key}>
       <td><button type="button" className="am-button am-button--quiet am-button--small" aria-expanded={opened === row.key}
         aria-label={`Открыть источники кандидата ${row.number}`} onClick={() => setOpened(opened === row.key ? null : row.key)}>К-{String(row.number).padStart(3, '0')}</button>{row.members.length > 1 ? <small>×{row.members.length}</small> : null}</td>
@@ -93,7 +116,7 @@ export function ReviewCandidateTable({ value, projectUid, published = [], sheetO
     </tr>{opened === row.key ? <tr><td colSpan={7}><CandidateDetail row={row} versionUid={text(result.version_uid)} projectUid={projectUid} /></td></tr> : null}</Fragment>)}</tbody></table></div>
     {matches.length === 0 ? <p>Под выбранные фильтры кандидаты не попали.</p> : null}
     {matches.length > 25 ? <nav className={styles.chips} aria-label="Страницы машинных кандидатов"><button type="button" className="am-button am-button--quiet" disabled={current === 0} onClick={() => setPage(current - 1)}>Предыдущие</button><span>{current + 1} / {Math.ceil(matches.length / 25)}</span><button type="button" className="am-button am-button--quiet" disabled={(current + 1) * 25 >= matches.length} onClick={() => setPage(current + 1)}>Следующие</button></nav> : null}
-  </section>;
+  </details>;
 }
 
 export function ReviewCandidates({ runId, ...props }: Omit<Parameters<typeof ReviewCandidateTable>[0], 'value'> & { readonly runId: string }) {
