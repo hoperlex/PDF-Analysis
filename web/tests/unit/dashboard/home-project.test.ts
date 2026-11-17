@@ -62,7 +62,7 @@ const ONLY_B = counted(200);
 
 function notFound(): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.58.0',
+    contract_version: '1.59.0',
     error_code: 'not_found',
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-home-404',

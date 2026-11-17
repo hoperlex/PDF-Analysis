@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "UIP-CONTRACT-04",
+  "owner": "RUN-RESTART-01",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "d6adb6bbe01ee12cc1e09c872d2097ec13393c4434e6b941e3a615d6a306bbe7",
-    "content_commit": "69e5930b55aa95fb377288736c77d2bd32cdb3e4",
-    "content_commit_subject": "feat(api): listStagePairs says how many П and how many Р documents have no pair (UIP-S16-02)",
+    "sha256": "b044db4b85ba12a6659f63958e8ce8a5689dd8d747d5f6bc3db52ab7238d062d",
+    "content_commit": "dbe63b0982e4ce9813db2be6cdaa1df78fecaf18",
+    "content_commit_subject": "chore(contract): reseal 1.59.0 for restartRun -- the surface (303/332/826), the head 0071, the catalogs at candidate revision 72 (RUN-RESTART-01)",
     "dispatch_named_commit": "ccf8d47bd4dedb4ffc2eb613fba28267f4557202",
-    "commit_note": "Resealed by UIP-CONTRACT-04: contract 1.58.0 for UI-PARITY-R3 stage 5, on top of 1.57.0. Additive: the optional ExecutorHost.current_work with the new schema ExecutorHostWork, filled only by listExecutorHosts (UIP-S15-01), and the required unpaired_p_count and unpaired_r_count of StagePairPage (UIP-S16-02). No operation is added. content_commit is the last commit that changed the contract before this reseal; the reseal commit carries the lock itself.",
+    "commit_note": "Resealed by RUN-RESTART-01: contract 1.59.0, on top of 1.58.0. Additive: the operation restartRun (POST /runs/{run_id}/restart), the schemas RestartPoint, RestartRunRequest and DecisionCarryMode, the optional RunStatus.restart_point and replaced_by_run_id, RunCostEstimateRequest.restart_point, the optional restart_point, reused_restart_points and computed_restart_points of RunCostEstimate (whose calls may be 0) and DecisionCarriedFrom.run_id and mode. content_commit is the commit that carries the 1.59.0 contract bytes (the content and the version moved in one commit); the next commit carries the lock itself.",
     "openapi_version": "3.1.0",
-    "info_version": "1.58.0",
-    "paths": 302,
-    "operations": 331,
-    "component_schemas": 823,
+    "info_version": "1.59.0",
+    "paths": 303,
+    "operations": 332,
+    "component_schemas": 826,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "d6adb6bbe01ee12cc1e09c872d2097ec13393c4434e6b941e3a615d6a306bbe7",
+    "snapshot_sha256": "b044db4b85ba12a6659f63958e8ce8a5689dd8d747d5f6bc3db52ab7238d062d",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "baa919980209d53b6c39572f4500b8c56fdcb2e017fde96cbc10febec88c54d3",
-      "index.ts": "fc69aafcc1f7d3f15a7775942048fc5886cdd8fc57af7a1bda23daf693287c98",
-      "operations.gen.ts": "d8241797c32ed04e524ab36903a8afa454b94370a5bfd4674179433d3d1ab4aa",
-      "types.gen.ts": "ebf526a94d974e5f62475c9062392179f922128e81e56b318af3fdb532ce7c46"
+      "client.gen.ts": "036bab01438e7909bbd0e7d66d9055d3456be8d5054e87ac9216877ec258a78b",
+      "index.ts": "2f080f3ace33a505275db6a8f105187abc977f350be9b9d7a61772946d1e24b1",
+      "operations.gen.ts": "ab304916647207ce7e3a959de65de8fd2b460f76fd3d27c8bc1a18a812c97e9a",
+      "types.gen.ts": "8acd8e5e22f234237cd20998b91c7cf829e81260373b9c8aacbd47a678b99713"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

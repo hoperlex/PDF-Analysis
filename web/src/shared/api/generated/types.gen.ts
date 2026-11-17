@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.58.0 (OpenAPI 3.1.0)
- *   sha256 d6adb6bbe01ee12cc1e09c872d2097ec13393c4434e6b941e3a615d6a306bbe7
+ *   AuditManager PC-01 API 1.59.0 (OpenAPI 3.1.0)
+ *   sha256 b044db4b85ba12a6659f63958e8ce8a5689dd8d747d5f6bc3db52ab7238d062d
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.58.0';
+export const CONTRACT_VERSION = '1.59.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'd6adb6bbe01ee12cc1e09c872d2097ec13393c4434e6b941e3a615d6a306bbe7';
+export const CONTRACT_DIGEST = 'b044db4b85ba12a6659f63958e8ce8a5689dd8d747d5f6bc3db52ab7238d062d';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -278,6 +278,7 @@ export const SCHEMA_NAMES = [
   'DashboardSummary',
   'DecideOptimisationProposalRequest',
   'DecisionCarriedFrom',
+  'DecisionCarryMode',
   'DecisionEvent',
   'DecisionEventPage',
   'DecisionEventType',
@@ -584,6 +585,8 @@ export const SCHEMA_NAMES = [
   'RenameDocumentRequest',
   'ReportRunnerHealthRequest',
   'ResetUserPasswordRequest',
+  'RestartPoint',
+  'RestartRunRequest',
   'ResumeComparisonAiJobRequest',
   'ResumeStageChainRunRequest',
   'ReviewDecisionPatternRequest',
@@ -3852,13 +3855,35 @@ export type DecideOptimisationProposalRequest = {
  *
  * ``decision_id`` is the source decision's own identity and ``finding_uid`` and ``version_uid`` the finding and the
  * version it was made on. ``version_ordinal`` is the version's display order («V2») and is never an identity.
+ *
+ * `RUN-RESTART-01` (contract 1.59.0, `R-155b`): ``run_id`` is the run whose analysis allocated the source finding -- the «from run» origin
+ * beside the version, present on every carried decision whose source finding is known -- and ``mode`` how the decision was carried:
+ * ``version`` and ``stage`` (the confirmed carryovers of `W59-DECISION-CARRYOVER-01`, from an earlier version) or ``restart`` (made by the
+ * server when a restarted run published, between two runs of the **same** version: ``version_uid`` is then the version of the carrying
+ * finding too). Both are absent on a decision carried before 1.59.0.
  */
 export type DecisionCarriedFrom = {
   decision_id: DecisionId;
   finding_uid: FindingUid;
+  mode?: DecisionCarryMode;
+  run_id?: RunId;
   version_ordinal: number;
   version_uid: VersionUid;
 };
+
+/**
+ * `RUN-RESTART-01` (contract 1.59.0): how a decision was carried to a finding (``DecisionCarriedFrom.mode``). `version`: an expert confirmed
+ * the carryover from a finding of an earlier version in the comparison of versions; `stage`: in the comparison of stages П → Р; `restart`: the
+ * server carried it, for a restarted run that published, to the finding of the new run that matches the source verbatim.
+ */
+export const DECISION_CARRY_MODE_VALUES = [
+  'version',
+  'stage',
+  'restart',
+] as const;
+
+/** DecisionCarryMode - the closed value set above. */
+export type DecisionCarryMode = (typeof DECISION_CARRY_MODE_VALUES)[number];
 
 /** One appended event. Never updated and never removed. `carried_from` (`UI-A-73`, contract 1.39.0) names the decision of an earlier version's finding that an expert carried over to this finding (`DecisionCarriedFrom`); it is absent for an event an expert made directly, and for every event written before migration `0058`, whose rendered `comment` still says where it came from. */
 export type DecisionEvent = {
@@ -4378,7 +4403,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.58.0";
+  contract_version: "1.59.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -7142,6 +7167,39 @@ export type ResetUserPasswordRequest = {
 };
 
 /**
+ * `RUN-RESTART-01` (contract 1.59.0, `R-155a`): the stage chip a restart of an ended run starts from -- the eight chips of the run screen
+ * (``web/src/entities/audit-run/model/stage-dictionary.ts``), in the order the rail draws them. It is its **own** enum and not ``StageId``: a chip
+ * is a reader's grouping of stage ids and of the extended review's procedures (``cross_check`` is no stage id, ``preparation`` covers three).
+ *
+ * The chip named is computed, with every later one; every earlier one is taken from the source chain. ``preparation`` takes nothing: a full rerun
+ * with the source's settings. ``merge`` makes no model call. ``text`` is the stage ``text_analysis``; ``blocks`` the stage ``block_analysis``;
+ * ``cross_check`` the procedure ``comprehensive_analysis``; ``merge`` ``finding_merge``; ``norms`` ``norm_verification``; ``review``
+ * ``finding_review``; ``correction`` ``finding_correction``.
+ */
+export const RESTART_POINT_VALUES = [
+  'preparation',
+  'text',
+  'blocks',
+  'cross_check',
+  'merge',
+  'norms',
+  'review',
+  'correction',
+] as const;
+
+/** RestartPoint - the closed value set above. */
+export type RestartPoint = (typeof RESTART_POINT_VALUES)[number];
+
+/**
+ * `RUN-RESTART-01` (contract 1.59.0, `R-155a`): the chip the new run computes from; every earlier chip is taken from the run in the path.
+ * ``cost_consent`` confirms the estimate of ``estimateRunCost`` with ``start_from_run_id`` and this ``restart_point``.
+ */
+export type RestartRunRequest = {
+  cost_consent?: RunCostConsent;
+  restart_point: RestartPoint;
+};
+
+/**
  * Resumes a paused job. ``consent`` is required after ``overrun`` and ``route_changed`` (a new
  * estimate for what is left) and ignored after the other pause reasons.
  */
@@ -7250,6 +7308,7 @@ export type RunCostConsent = {
 export type RunCostEstimate = {
   billing: "metered" | "unmetered" | "mixed";
   calls: number;
+  computed_restart_points?: Array<RestartPoint>;
   computed_stage_ids?: Array<StageId>;
   connection_revision_id?: ExecutorRevisionId;
   currency: "USD";
@@ -7267,6 +7326,8 @@ export type RunCostEstimate = {
   provider_mode: ProviderMode;
   recommended_ceiling_micros: number;
   relaxed_limits: boolean;
+  restart_point?: RestartPoint;
+  reused_restart_points?: Array<RestartPoint>;
   reused_stage_ids?: Array<StageId>;
   routing_rule_revision_id?: ExecutorRoutingRuleRevisionId;
   scope: "run";
@@ -7284,6 +7345,7 @@ export type RunCostEstimateRequest = {
   preset_id?: PresetId;
   reaudit_of_run_id?: RunId;
   relaxed_limits?: boolean;
+  restart_point?: RestartPoint;
   start_from_run_id?: RunId;
   start_stage_id?: StageId;
   version_uid: VersionUid;
@@ -7619,6 +7681,8 @@ export type RunStatus = {
   /** `EXEC2-SEAL-1`: why a `queued` Run is waiting for its executor, derived from the database at read time. Null (and omitted) for a Run that is not waiting for one. A Run admitted by a rule or a group (`binding_state` `pending`) reports its stored `wait_reason` instead and carries no `queue_reason`. */
   queue_reason?: RunQueueReason | null;
   reaudit_of_run_id?: RunId;
+  replaced_by_run_id?: RunId;
+  restart_point?: RestartPoint;
   run_id: RunId;
   stages: Array<StageState>;
   start_stage_id?: StageId;

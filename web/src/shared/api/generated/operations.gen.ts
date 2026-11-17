@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.58.0 (OpenAPI 3.1.0)
- *   sha256 d6adb6bbe01ee12cc1e09c872d2097ec13393c4434e6b941e3a615d6a306bbe7
+ *   AuditManager PC-01 API 1.59.0 (OpenAPI 3.1.0)
+ *   sha256 b044db4b85ba12a6659f63958e8ce8a5689dd8d747d5f6bc3db52ab7238d062d
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -239,6 +239,7 @@ import type {
   RenameDocumentRequest,
   ReportRunnerHealthRequest,
   ResetUserPasswordRequest,
+  RestartRunRequest,
   ResumeComparisonAiJobRequest,
   ResumeStageChainRunRequest,
   ReviewDecisionPatternRequest,
@@ -615,6 +616,7 @@ export const OPERATION_IDS = [
   'reportRunnerHealth',
   'requestExecutorProbe',
   'resetUserPassword',
+  'restartRun',
   'restoreDecisionMemoryCase',
   'restoreUser',
   'resumeComparisonAiPairCheck',
@@ -6935,6 +6937,36 @@ export type ResetUserPasswordInput = {
 export type ResetUserPasswordResult = Account;
 
 // ------------------------------------------------------------------------------------
+// restartRun - POST /runs/{run_id}/restart
+// ------------------------------------------------------------------------------------
+
+/**
+ * Restart Run
+ *
+ * `RUN-RESTART-01` (`R-155a`..`R-155i`): restart the analysis of an ENDED run from one of the eight stage chips of the run screen (`restart_point`). A NEW run of the earlier run's document version is created (a terminal run is never reopened) with every setting the earlier run froze -- the norms snapshot, the analysis profile and prompts, the policies, the stage plan and its models (`R-155f`; a new setting goes through `reauditRun`). Every chip before `restart_point` is taken from the earlier run's chain with no new paid call: the stage artifacts by reference and the earlier model replies replayed, the earlier chain being walked back through runs that were themselves restarts; `restart_point` and every later chip are computed. `preparation` takes nothing: it is a full rerun with the same settings. The earlier run is not changed. It must be `partial`, `failed` or `cancelled` (`R-155a`; a running run is stopped first with `cancelRun`, `R-155d`), a stage-layout run of the extended review v2. The new run is linked to it by `started_from_run_id` and `restart_point` on its `RunStatus` (`start_stage_id` is then absent). While the new run is in progress, or if it fails, the earlier run stays listed and unchanged (`R-155g`); when the new run publishes, in the same transaction the earlier run is deleted from the run lists with the tombstone of `deleteRun` -- its data stays -- and the expert's decisions on its findings are carried to the new run's findings that match verbatim (`DecisionCarriedFrom.mode` `restart`). From then on the earlier run's `RunStatus` carries `replaced_by_run_id`, the new run. Served starts require fresh confirmed cost consent from `estimateRunCost` with `start_from_run_id` and `restart_point`: the price is for the chips the new run computes and the digest is bound to this earlier run and chip. Accepted keys replay their recorded outcome. Refusals, each before anything is written, not even the key: `404 not_found` for an unknown run; `409 state_transition_not_allowed` (`details.machine` `audit_run`, `current_state`, `requested_state` `restart`) for a run that is `published` or has not ended; `409 conflict` with `details.conflict_reason` `restart_source_deleted` (the earlier run has been deleted from the run lists, by `deleteRun` or by a restart that published), `restart_source_leased` (its work still holds a live lease: it has not stopped yet) or `restart_in_progress` (another restart of this run has not ended; stop it with `cancelRun`); `422 analysis_input_invalid` with `details.reason` and, where the refusal belongs to one chip, `details.restart_point` and `details.stage_id`: `restart_source_not_stage_layout`, `restart_source_not_v2`, `restart_settings_differ` (the settings the earlier run froze are not the ones a restart would use, so its replies would not replay), `restart_text_not_reusable`, `restart_reply_missing` (no saved reply for a call that chip would take, also one silenced by the breaker) and `restart_request_changed` (a saved reply exists but for another request; a restart from a chip after `norms` can refuse at `norms` because norm lookups are not provably repeatable for a run made before 1.59.0), plus the `source_stage_*` reasons of `startRunFromStage` for the artifacts of `preparation` taken by reference. A replay that cannot be made at the executor fails the new run with the same `terminal_reason` and `terminal_detail`, before any paid call; nothing is published and the earlier run stays.
+ */
+export type RestartRunInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/restart`. */
+  path: {
+    run_id: RunId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: RestartRunRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `restartRun` (`application/json`, HTTP 202). */
+export type RestartRunResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
 // restoreDecisionMemoryCase - POST /decision-memory/cases/{case_id}/restore
 // ------------------------------------------------------------------------------------
 
@@ -12745,6 +12777,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['users'],
+  },
+  restartRun: {
+    operationId: 'restartRun',
+    method: 'POST',
+    path: '/runs/{run_id}/restart',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [202],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   restoreDecisionMemoryCase: {
     operationId: 'restoreDecisionMemoryCase',

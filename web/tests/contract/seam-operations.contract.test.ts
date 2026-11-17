@@ -220,6 +220,8 @@ describe('the seam operations', () => {
       'removeComparisonLaunchEntry',
       'renameDocument',
       'requestExecutorProbe',
+      // `RUN-RESTART-01` (contract 1.59.0): a restart is a keyed expert command, like `reauditRun`.
+      'restartRun',
       // `DECISION-MEMORY-M2` (contract 1.44.0): withdrawing and restoring a memory case are keyed administrator commands.
       'restoreDecisionMemoryCase',
       'resumeComparisonAiPairCheck',
