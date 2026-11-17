@@ -9195,10 +9195,17 @@
           "The waiting run is in the queue, ahead of the finished ones. An expert may cancel it and is offered neither the",
           "priority field nor the pause: those are an administrator's."
         ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button",
+            "text": "Подробнее ▾"
+          }
+        ],
         "captures": [
           {
             "kind": "text",
-            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) > p > span > code",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) [data-queue-more] > p > span > code",
             "as": [
               "job_id"
             ],
@@ -9251,6 +9258,11 @@
         ],
         "actions": [
           {
+            "do": "click",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button",
+            "text": "Подробнее ▾"
+          },
+          {
             "do": "fill",
             "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) input[name=\"priority\"]",
             "value": "500"
@@ -9285,6 +9297,11 @@
           "The administrator raises the waiting job's priority to 7 (confirmation first); the row says so."
         ],
         "actions": [
+          {
+            "do": "click",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button",
+            "text": "Подробнее ▾"
+          },
           {
             "do": "fill",
             "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) input[name=\"priority\"]",
@@ -9444,8 +9461,8 @@
         ],
         "expects_present": [
           {
-            "selector": "p > a",
-            "text_matches": "^Открыть прогон {reaudit_run_id}$"
+            "selector": "p > a[href$=\"/runs/{reaudit_run_id}\"]",
+            "text_matches": "^Открыть прогон$"
           }
         ],
         "screen": "queue",
