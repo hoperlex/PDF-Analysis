@@ -55,6 +55,11 @@
   border-color: var(--am-accent);
 }
 
+/* `UIP-S02-07`: the menu's popup hangs over the cards after this one, which are painted later; the card holding focus is raised over them (under the bar at the bottom, 8). */
+.card:focus-within {
+  z-index: 2;
+}
+
 /*
  * The whole card opens its version, as the original's does (`UI-A-45`): the title link is stretched over the card, and the
  * card's other controls (the number of the version, the selection box, the marks that lead somewhere) sit above it.
@@ -170,4 +175,55 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/*
+ * `UIP-S02-07`: the card's menu «⋯» stands at the right end of the line of the marks (the line of the name has no room left at 161 px). The
+ * trigger is the shared menu's, drawn as a quiet 24 px square; its popup is as wide as its one item and opens under the trigger's right
+ * edge, so it stays inside the card's column where the card is the first of its row.
+ */
+.foot {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.menu {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  margin-inline-start: auto;
+}
+
+.menu :global(.am-menu__trigger) {
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
+  padding: 0;
+  border-radius: var(--am-radius-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-md);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.menu :global(.am-menu__trigger:hover),
+.menu :global(.am-menu__trigger[aria-expanded='true']) {
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+  box-shadow: none;
+}
+
+.menu :global(.am-menu__popup) {
+  min-width: 0;
+}
+
+/* `UIP-S02-07`: a card that can be dragged says so by the pointer, and the one picked up steps back while it is dragged. */
+.cardDraggable {
+  cursor: grab;
+}
+
+.cardPicked {
+  opacity: 0.5;
 }

@@ -16,7 +16,7 @@
  */
 
 import { Fragment } from 'react';
-import type { ReactNode } from 'react';
+import type { DragEvent, ReactNode } from 'react';
 import Link from 'next/link';
 
 import type { DocumentVersion } from '@/shared/api';
@@ -35,11 +35,31 @@ export interface DocumentCardAddresses {
   readonly documentHref: string;
 }
 
+/**
+ * `UIP-S02-07`: what a card does when the reader drags it (the browser's own drag and drop, no library). The screen decides where it may
+ * be dropped; the card only says it was picked up and that the drag ended.
+ */
+export interface DocumentCardDrag {
+  /** The card of this version was picked up. */
+  readonly onStart: (version: DocumentVersion) => void;
+  /** The drag ended, dropped or not. */
+  readonly onEnd: () => void;
+}
+
 export interface DocumentCardGridProps {
   readonly documents: readonly DocumentVersion[];
   readonly addresses: (version: DocumentVersion) => DocumentCardAddresses;
   /** A selection control for one card, or nothing; drawn in the card's corner. */
   readonly select?: ((version: DocumentVersion) => ReactNode) | undefined;
+  /**
+   * `UIP-S02-07`: the card's own menu «⋯», or nothing. The screen builds it (an entity imports no feature) and it is drawn at the right
+   * end of the line of the marks, above the card's stretched link.
+   */
+  readonly menu?: ((version: DocumentVersion) => ReactNode) | undefined;
+  /** `UIP-S02-07`: with it the cards can be dragged; without it they cannot. */
+  readonly drag?: DocumentCardDrag | undefined;
+  /** `UIP-S02-07`: the `document_uid` of the card being dragged, so that it looks picked up. */
+  readonly dragging?: string | null | undefined;
   /**
    * `UI-PARITY-DOC-AUDIT`: where «Разбор» of a result run opens. A card whose item carries an audit draws its marks
    * (`audit` is on `listDocuments` items only); with this, the mark «Замечания» of a document that was run links to the review.
@@ -114,7 +134,7 @@ function cardTooltip(version: DocumentVersion, facts: readonly CardFact[]): stri
 }
 
 export function DocumentCardGrid({
-  documents, addresses, select, reviewAddress, optimisationAddress, leading, classification = 'both',
+  documents, addresses, select, menu, drag, dragging, reviewAddress, optimisationAddress, leading, classification = 'both',
 }: DocumentCardGridProps) {
   return (
     <ul className={styles.grid} data-document-cards={documents.length}>
@@ -122,14 +142,48 @@ export function DocumentCardGrid({
       {documents.map((version) => {
         const { href, documentHref } = addresses(version);
         const control = select?.(version) ?? null;
+        const menuControl = menu?.(version) ?? null;
         const facts = cardFacts(version, classification);
         const archived = version.archived_at !== undefined;
+        const classNames = [styles.card];
+        if (archived) classNames.push(styles.cardArchived);
+        if (drag !== undefined) classNames.push(styles.cardDraggable);
+        if (dragging === version.document_uid) classNames.push(styles.cardPicked);
+        const marks = (
+          <AuditMarks
+            audit={version.audit}
+            reviewHref={
+              version.audit?.result_run_id === undefined || reviewAddress === undefined
+                ? undefined
+                : reviewAddress(version.audit.result_run_id)
+            }
+            optimisationHref={optimisationAddress?.(version)}
+            runHref={activeRunHref(version)}
+          />
+        );
         return (
           <li
             key={version.document_uid}
-            className={archived ? `${styles.card} ${styles.cardArchived}` : styles.card}
+            className={classNames.join(' ')}
             data-version-uid={version.version_uid}
             data-document-uid={version.document_uid}
+            {...(drag === undefined
+              ? {}
+              : {
+                  draggable: true,
+                  onDragStart: (event: DragEvent<HTMLLIElement>) => {
+                    const { dataTransfer, currentTarget } = event;
+                    dataTransfer.effectAllowed = 'move';
+                    // A drag that starts on a link carries the link's address, and a drop outside the groups could open it: the card carries
+                    // its name only (a browser starts no drag without data), and the picture of the drag is the card, not the link's text.
+                    dataTransfer.clearData();
+                    dataTransfer.setData('text/plain', documentCardTitle(version));
+                    const box = currentTarget.getBoundingClientRect();
+                    dataTransfer.setDragImage(currentTarget, event.clientX - box.left, event.clientY - box.top);
+                    drag.onStart(version);
+                  },
+                  onDragEnd: () => drag.onEnd(),
+                })}
           >
             {/* One line: the name (the whole of it in the tooltip), the number of the version, the box that chooses the card. */}
             <div className={styles.top}>
@@ -140,16 +194,13 @@ export function DocumentCardGrid({
               {control === null ? null : <label className={styles.select}>{control}</label>}
             </div>
             {/* `UIP-S02-02`: the original's two pills «Замечания» and «Оптимизация», each with its sign of how far it has gone. */}
-            <AuditMarks
-              audit={version.audit}
-              reviewHref={
-                version.audit?.result_run_id === undefined || reviewAddress === undefined
-                  ? undefined
-                  : reviewAddress(version.audit.result_run_id)
-              }
-              optimisationHref={optimisationAddress?.(version)}
-              runHref={activeRunHref(version)}
-            />
+            {/* `UIP-S02-07`: the card's menu «⋯», where the screen gives one, stands at the right end of the marks' line. */}
+            {menuControl === null ? marks : (
+              <div className={styles.foot}>
+                {marks}
+                <span className={styles.menu} data-card-menu="">{menuControl}</span>
+              </div>
+            )}
             {archived ? <span className={styles.archived} aria-hidden="true">В архиве</span> : null}
             {isComparisonOnly(version) ? <ComparisonOnlyMark version={version} /> : null}
             <span
