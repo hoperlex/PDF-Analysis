@@ -39,7 +39,8 @@ import type {
 import type { FailureMessage } from '@/shared/api/failure-message';
 import { failureMessage } from '@/shared/api/failure-message';
 import { formatInstant, routes, useAddressState } from '@/shared/lib';
-import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
+import { EmptyState, ErrorState, LoadingState, Menu } from '@/shared/ui';
+import type { MenuItem } from '@/shared/ui';
 import {
   COMPARISON_ONLY_MARK,
   COMPARISON_ONLY_OPTIMISATION_NOTE,
@@ -202,6 +203,10 @@ export function PassList({ passes, active, onOpen }: PassListProps) {
   );
 }
 
+/** The files the pass offers, in the words their buttons always had (the browser journey presses them by these). */
+export const EXPORT_CSV_LABEL = 'Выгрузить CSV предложений';
+export const EXPORT_XLSX_LABEL = 'Выгрузить таблицу решений (.xlsx)';
+
 export interface ExportProposalsViewProps {
   readonly pending: boolean;
   readonly failure: FailureMessage | null;
@@ -214,7 +219,16 @@ export interface ExportProposalsViewProps {
   readonly carryOverControl?: ReactNode;
 }
 
-/** «Выгрузить CSV», «Выгрузить таблицу решений» and «Загрузить решения» with the refusal, from state already in hand. Rendered by the harness. */
+/**
+ * The right half of the top row (`UIP-S09-02`): «Файлы ▾» (the shared menu: the CSV of the proposals and, for an expert, the
+ * workbook of decisions), «Загрузить решения» and «Перенести решения из V#» (the features' own controls, which are not changed:
+ * only the place is).
+ *
+ * Nothing stands over the row. What a file says while it is made (one line) and its refusal stand under it, in the words they
+ * always had; what a load or a carrying over reports is the control's own and flows to the row's end (`.tools`). A press on a
+ * file while another is being made is ignored: the shared menu draws no disabled item, and the line under the row says why.
+ * Rendered by the harness.
+ */
 export function ExportProposalsView({
   pending,
   failure,
@@ -223,32 +237,37 @@ export function ExportProposalsView({
   importControl,
   carryOverControl,
 }: ExportProposalsViewProps) {
+  const items: [MenuItem, ...MenuItem[]] = [
+    { kind: 'action', label: EXPORT_CSV_LABEL, onChoose: () => { if (!pending) onDownload(); } },
+  ];
+  if (onDownloadXlsx !== undefined) {
+    items.push({ kind: 'action', label: EXPORT_XLSX_LABEL, onChoose: () => { if (!pending) onDownloadXlsx(); } });
+  }
   return (
-    <div data-proposals-export="">
-      <p>
-        <button type="button" className="am-button am-button--quiet" disabled={pending} onClick={onDownload}>
-          Выгрузить CSV предложений
-        </button>
-        {onDownloadXlsx === undefined ? null : (
-          <>
-            {' '}
-            <button type="button" className="am-button am-button--quiet" disabled={pending} onClick={onDownloadXlsx}>
-              Выгрузить таблицу решений (.xlsx)
-            </button>
-          </>
-        )}
-      </p>
-      {importControl ?? null}
-      {carryOverControl ?? null}
-      {failure !== null ? (
-        <ErrorState
-          title="Файл не выгружен"
-          detail={failure.detail}
-          correlationId={failure.correlationId}
-          onRetry={onDownload}
-        />
+    <>
+      <div className={styles.tools} data-proposals-export="">
+        <span className={styles.files} data-proposals-files="">
+          <Menu label="Файлы" trigger={<>Файлы <span aria-hidden="true">▾</span></>} items={items} />
+        </span>
+        {importControl ?? null}
+        {carryOverControl ?? null}
+      </div>
+      {pending ? (
+        <p className={styles.fileNote} role="status" data-proposals-export-state="pending">
+          Готовлю файл…
+        </p>
       ) : null}
-    </div>
+      {failure !== null ? (
+        <div className={styles.refusal} data-proposals-export-refusal="">
+          <ErrorState
+            title="Файл не выгружен"
+            detail={failure.detail}
+            correlationId={failure.correlationId}
+            onRetry={onDownload}
+          />
+        </div>
+      ) : null}
+    </>
   );
 }
 

@@ -223,6 +223,19 @@ describe('the link to the other layout', () => {
     expect(asked).toEqual(['cards', 'table']);
   });
 
+  it('stands in the left half of the top row, after the plates and «Всего», and the actions keep the right (`UIP-S09-02`)', () => {
+    const markup = list({ onLayout: noop, actions: createElement('div', { 'data-test-actions': '' }) });
+    const at = (marker: string) => markup.indexOf(marker);
+    expect(at('data-decision-filter')).toBeGreaterThan(-1);
+    expect(at('data-proposal-total')).toBeGreaterThan(at('data-decision-filter'));
+    expect(at('data-proposal-layout=')).toBeGreaterThan(at('data-proposal-total'));
+    expect(at('data-test-actions')).toBeGreaterThan(at('data-proposal-layout='));
+    // The left half is one block that ends before the actions begin: the link is inside it, the actions are not.
+    const left = /<div class="[^"]*stripLeft[^"]*">([\s\S]*?)<\/nav><\/div>/.exec(markup)?.[1] ?? '';
+    expect(left).toContain('data-proposal-layout-link');
+    expect(left).not.toContain('data-test-actions');
+  });
+
   it('is not drawn where nothing can write the address', () => {
     expect(list({})).not.toContain('Раскладка предложений');
     expect(list({ layout: 'cards' })).not.toContain('Показать таблицей');

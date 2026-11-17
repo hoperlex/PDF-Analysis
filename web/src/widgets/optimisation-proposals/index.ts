@@ -24,6 +24,8 @@ export type {
   ProposalSetChooserProps,
 } from './ui/optimisation-proposals';
 export {
+  EXPORT_CSV_LABEL,
+  EXPORT_XLSX_LABEL,
   OptimisationByDocument,
   ExportProposalsView,
   OptimisationProposals,
@@ -50,6 +52,7 @@ export type {
   ProposalHistoryProps,
   ProposalListProps,
   ProposalListViewProps,
+  ProposalTotalProps,
   SheetDocument,
 } from './ui/proposal-list';
 export {
@@ -59,4 +62,5 @@ export {
   ProposalHistoryPanelView,
   ProposalList,
   ProposalListView,
+  ProposalTotal,
 } from './ui/proposal-list';

@@ -5,13 +5,42 @@
  */
 
 import { createElement } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { OPTIMISATION_MOVED_TO, OptimisationPage } from '@/_pages/optimisation';
-import { ProposalCard, ProposalHistoryView, classifiedDocumentSets } from '@/widgets/optimisation-proposals';
+import { CARRYOVER_REFUSAL_TEXT, carrySources } from '@/entities/optimisation-proposal';
+import { CarryOverProposalDecisionsView } from '@/features/carry-over-proposal-decisions';
+import {
+  PROPOSAL_IMPORT_REFUSAL_LABELS,
+  ImportProposalDecisionsView,
+  importProposalFailure,
+} from '@/features/import-proposal-decisions';
+import {
+  EXPORT_CSV_LABEL,
+  EXPORT_XLSX_LABEL,
+  ExportProposalsView,
+  ProposalCard,
+  ProposalHistoryView,
+  ProposalListView,
+  classifiedDocumentSets,
+} from '@/widgets/optimisation-proposals';
+import { ApiError } from '@/shared/api';
+import type { ProposalDecisionImportRefusal } from '@/shared/api';
 
+import { mountLive } from '../analysis-settings/live-render';
 import { newClient, renderScreen } from '../screens/harness';
-import { arVersion, decision, otherSectionVersion, proposal, proposalShapes, SHEET_URL, unclassifiedVersion } from './fixtures';
+import {
+  OLDER_PASS_ID,
+  arVersion,
+  decision,
+  otherSectionVersion,
+  pass,
+  proposal,
+  proposalPage,
+  proposalShapes,
+  SHEET_URL,
+  unclassifiedVersion,
+} from './fixtures';
 
 function rendered(name: string): string {
   const shape = proposalShapes().find((entry) => entry.name === name);
@@ -263,5 +292,163 @@ describe('«Открыть лист» (`UI-B-09`)', () => {
       }));
       expect(markup, `page ${page}`).not.toContain('data-open-sheet');
     }
+  });
+});
+
+/**
+ * `UIP-S09-02`: the top row over the table. At the left the plates of the decisions with the pass's counts and «Всего: N»; at the
+ * right «Файлы ▾» (the shared menu), «Загрузить решения» and «Перенести решения из V#», which are the features' own controls drawn
+ * where they were drawn before but in one row. No paragraph of buttons and no caption stands over it, and what a file or a load
+ * refuses stands under it in the words it always had.
+ */
+describe('the top row of the tab (`UIP-S09-02`)', () => {
+  const noop = (): void => undefined;
+  const loaded = rendered('proposals-loaded');
+  const CORRELATION = '0f0e9d8c-7b6a-4948-b726-150413021100';
+
+  /** The text of each button of the plates, without the separators the server render may put between text nodes. */
+  const plates = (markup: string): string[] => {
+    const nav = /<nav[^>]*data-decision-filter="[^"]*"[^>]*>([\s\S]*?)<\/nav>/.exec(markup)?.[1] ?? '';
+    return [...nav.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((button) => (button[1] ?? '').replace(/<!-- -->/g, ''));
+  };
+
+  const earlier = [
+    pass({ version_ordinal: 2 }),
+    pass({ optimisation_pass_id: OLDER_PASS_ID, version_ordinal: 1, decision_counts: { pending: 2, accept: 3, reject: 1, revise: 2 } }),
+  ];
+  const carryOver = (failure: string | null = null) =>
+    createElement(CarryOverProposalDecisionsView, {
+      sources: carrySources(earlier, earlier[0] as never),
+      confirming: null, pending: false, report: null, failure, onAsk: noop, onConfirm: noop, onCancel: noop,
+    });
+  const imported = (failure: string | null = null, report: Parameters<typeof ImportProposalDecisionsView>[0]['report'] = null) =>
+    createElement(ImportProposalDecisionsView, { pending: false, report, failure, onChoose: noop });
+  const row = (props: Record<string, unknown> = {}) =>
+    renderScreen(newClient(), createElement(ExportProposalsView, { pending: false, failure: null, onDownload: noop, ...props }));
+
+  it('shows the plates of the decisions with the pass’s counts, then «Всего: N», at the left of the row', () => {
+    // The seed's pass holds two proposals: one waiting, one for revision.
+    expect(plates(loaded)).toEqual(['Все (2)', 'не решено (1)', 'принято (0)', 'отклонено (0)', 'на доработку (1)']);
+    expect(loaded).toMatch(/data-proposal-total="2"[^>]*>Всего: (<!-- -->)?2</);
+    const at = (marker: string) => loaded.indexOf(marker);
+    expect(at('data-decision-filter')).toBeGreaterThan(-1);
+    expect(at('data-proposal-total')).toBeGreaterThan(at('data-decision-filter'));
+    expect(at('data-proposal-layout=')).toBeGreaterThan(at('data-proposal-total'));
+    expect(at('data-proposals-export')).toBeGreaterThan(at('data-proposal-layout='));
+    expect(at('data-proposal-table')).toBeGreaterThan(at('data-proposals-export'));
+  });
+
+  it('counts the pass, not the filtered page: the plates and «Всего» are the pass’s under a filter', () => {
+    const filtered = renderScreen(
+      newClient(),
+      createElement(ProposalListView, {
+        page: proposalPage({ decision: 'accept', items: [], total: 0 }),
+        canDecide: true,
+        onDecision: noop,
+        onPage: noop,
+      }),
+    );
+    expect(filtered).toMatch(/data-proposal-total="2"/);
+    expect(plates(filtered)).toEqual(['Все (2)', 'не решено (1)', 'принято (0)', 'отклонено (0)', 'на доработку (1)']);
+    expect(filtered).toMatch(/data-decision-filter="accept"/);
+  });
+
+  it('offers «Файлы ▾» as the shared menu, and each file as an item of it, to an expert and to an administrator', () => {
+    for (const markup of [loaded, rendered('proposals-loaded-admin')]) {
+      expect(markup).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*aria-label="Файлы"[^>]*>Файлы <span aria-hidden="true">▾<\/span><\/button>/);
+      expect(markup).toContain(`role="menuitem" tabindex="-1">${EXPORT_CSV_LABEL}</button>`);
+      expect(markup).toContain(`role="menuitem" tabindex="-1">${EXPORT_XLSX_LABEL}</button>`);
+    }
+  });
+
+  it('draws no paragraph of buttons and no file or load over the plates', () => {
+    expect(loaded).not.toMatch(/<p[^>]*>\s*<button[^>]*>Выгрузить/);
+    const before = loaded.slice(0, loaded.indexOf('data-decision-filter'));
+    expect(before).not.toContain('Выгрузить');
+    expect(before).not.toContain('Загрузить решения');
+  });
+
+  it('stands the load and the carrying over after the files, in the one block of the row, for an expert', () => {
+    const markup = row({ onDownloadXlsx: noop, importControl: imported(), carryOverControl: carryOver() });
+    const at = (marker: string) => markup.indexOf(marker);
+    expect(at('data-proposals-files')).toBeGreaterThan(-1);
+    expect(at('data-proposal-decision-import')).toBeGreaterThan(at('data-proposals-files'));
+    expect(at('data-proposal-decision-carryover')).toBeGreaterThan(at('data-proposal-decision-import'));
+    expect(markup).toContain('Загрузить решения');
+    expect(markup).toContain('Перенести решения из V1');
+    const block = /<div class="[^"]*tools[^"]*" data-proposals-export="">([\s\S]*)<\/div>$/.exec(markup);
+    expect(block?.[1], 'the row is one block').toContain('data-proposal-decision-carryover');
+  });
+
+  it('offers a reader who does not decide the files and no load', () => {
+    const admin = rendered('proposals-loaded-admin');
+    expect(admin).toContain(EXPORT_CSV_LABEL);
+    expect(admin).not.toContain('Загрузить решения');
+    expect(admin).not.toContain('Перенести решения');
+  });
+
+  it('says a refused file under the row, in the words it always had, with the server’s reason and its correlation id', () => {
+    const markup = row({ failure: { detail: 'Файл не удалось выгрузить.', correlationId: CORRELATION } });
+    expect(markup.indexOf('Файл не выгружен')).toBeGreaterThan(markup.indexOf('data-proposals-files'));
+    expect(markup).toContain('Файл не удалось выгрузить.');
+    expect(markup).toContain(CORRELATION);
+    expect(markup).toContain('data-proposals-export-refusal');
+    expect(row()).not.toContain('Файл не выгружен');
+  });
+
+  it('says every refused row of a load, each in its own words, inside the row’s block after the button', () => {
+    const reasons = Object.keys(PROPOSAL_IMPORT_REFUSAL_LABELS) as ProposalDecisionImportRefusal[];
+    const rows = reasons.map((reason, index) => ({ row: index + 2, outcome: 'refused' as const, reason }));
+    const markup = row({
+      importControl: imported(null, {
+        optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8N', recorded: 0, unchanged: 0, refused: rows.length, rows,
+      }),
+    });
+    const upload = markup.slice(markup.indexOf('data-proposal-decision-import'));
+    for (const [index, reason] of reasons.entries()) {
+      const sentence = `Строка ${index + 2}: ${PROPOSAL_IMPORT_REFUSAL_LABELS[reason]}`;
+      expect(upload, reason).toContain(sentence);
+      expect(upload.indexOf(sentence), reason).toBeGreaterThan(upload.indexOf('Загрузить решения'));
+    }
+    expect(upload).toContain(`отклонено ${rows.length}`);
+  });
+
+  it('says each refusal of a whole file, and each refusal of the carrying over, in a line of the row', () => {
+    const refuse = (constraint: string) =>
+      new ApiError(422, {
+        contract_version: '1.57.0', error_code: 'validation_failed', message: 'x',
+        correlation_id: 'cid-1', retryable: false, details: { field: 'file', constraint },
+      }, 'cid-1');
+    for (const constraint of ['not_our_export', 'unreadable', 'too_large', 'too_many_rows']) {
+      const sentence = importProposalFailure(refuse(constraint));
+      const markup = row({ importControl: imported(sentence) });
+      expect(markup, constraint).toContain(`role="alert">${sentence}</p>`);
+    }
+    for (const [reason, sentence] of Object.entries(CARRYOVER_REFUSAL_TEXT)) {
+      expect(row({ carryOverControl: carryOver(sentence) }), reason).toContain(`role="alert">${sentence}</p>`);
+    }
+  });
+
+  it('hands the press on a file to its handler, and ignores it while a file is being made, saying so', async () => {
+    const csv = vi.fn();
+    const xlsx = vi.fn();
+    const live = await mountLive(createElement(ExportProposalsView, { pending: false, failure: null, onDownload: csv, onDownloadXlsx: xlsx }));
+    expect(await live.press(EXPORT_CSV_LABEL)).toBe(true);
+    expect(await live.press(EXPORT_XLSX_LABEL)).toBe(true);
+    expect([csv.mock.calls.length, xlsx.mock.calls.length]).toEqual([1, 1]);
+    expect(live.markup()).not.toContain('data-proposals-export-state');
+    await live.update(createElement(ExportProposalsView, { pending: true, failure: null, onDownload: csv, onDownloadXlsx: xlsx }));
+    await live.press(EXPORT_CSV_LABEL);
+    await live.press(EXPORT_XLSX_LABEL);
+    expect([csv.mock.calls.length, xlsx.mock.calls.length]).toEqual([1, 1]);
+    expect(live.markup()).toContain('data-proposals-export-state="pending"');
+    expect(live.markup()).toContain('Готовлю файл…');
+    await live.unmount();
+  });
+
+  it('offers the workbook only where it is given', () => {
+    const plain = row();
+    expect(plain).toContain(EXPORT_CSV_LABEL);
+    expect(plain).not.toContain(EXPORT_XLSX_LABEL);
   });
 });

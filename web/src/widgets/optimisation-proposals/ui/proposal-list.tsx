@@ -4,6 +4,11 @@
  * A pass's proposals (`W60-OPT-PROPOSALS-01`): the decision filter, the cards of one page and
  * the paging. The filter narrows the page; the pass's counts by decision always count every
  * proposal.
+ *
+ * **The top row (`UIP-S09-02`).** One line over the table, as the original's: at the left the plates of the decisions with
+ * their counts (the pass's own, so they count every proposal whatever the filter) and «Всего: N»; at the right what the
+ * container gives as `actions` -- the files, the load of decisions, the carrying over of an earlier version's. No paragraph
+ * and no caption stands over it; what a file or a load says when it is refused stands in a line under it.
  */
 
 import { useState } from 'react';
@@ -39,7 +44,7 @@ export interface DecisionFilterProps {
   readonly onSelect: (state: ProposalDecisionState | null) => void;
 }
 
-/** «Все» and one button per decision state, each with how many proposals stand in it. */
+/** «Все» and one button per decision state, each with how many proposals stand in it: the plates of the top row. */
 export function DecisionFilter({ selected, counts, total, onSelect }: DecisionFilterProps) {
   return (
     <nav className={styles.filters} aria-label="Фильтр по решению" data-decision-filter={selected ?? 'all'}>
@@ -63,6 +68,20 @@ export function DecisionFilter({ selected, counts, total, onSelect }: DecisionFi
         </button>
       ))}
     </nav>
+  );
+}
+
+export interface ProposalTotalProps {
+  /** The pass's own count of proposals, whatever the filter. */
+  readonly total: number;
+}
+
+/** `UIP-S09-02`: «Всего: N» after the plates, as the original says it; the pass's count, not the filtered page's. */
+export function ProposalTotal({ total }: ProposalTotalProps) {
+  return (
+    <span className={styles.total} data-proposal-total={total}>
+      Всего: {total}
+    </span>
   );
 }
 
@@ -197,8 +216,8 @@ export interface ProposalListViewProps {
   /** `UI-B-09`: the pass's version PDF; absent, the cards offer no «Открыть лист». */
   readonly sheet?: SheetDocument | undefined;
   /**
-   * `UI-B-05`/`UI-B-16`: the pass's actions (the export, the import of decisions). The original puts its counts by
-   * decision and its buttons in one strip above the table; they stand beside the decision filter here.
+   * `UI-B-05`/`UI-B-16`, `UIP-S09-02`: the pass's actions (the files, the import of decisions). The original puts its counts by
+   * decision and its buttons in one strip above the table; they stand at the right of it here, in the row of the plates.
    */
   readonly actions?: ReactNode;
   /** The pass's facts, between the strip and the proposals (`UI-B-05`). */
@@ -227,13 +246,16 @@ export function ProposalListView({
   return (
     <div data-proposal-list={page.total}>
       <div className={styles.strip}>
-        <DecisionFilter
-          selected={page.decision}
-          counts={pass.decision_counts}
-          total={pass.proposal_count}
-          onSelect={onDecision}
-        />
-        {onLayout === undefined ? null : <LayoutSwitch selected={layout} onSelect={onLayout} />}
+        <div className={styles.stripLeft}>
+          <DecisionFilter
+            selected={page.decision}
+            counts={pass.decision_counts}
+            total={pass.proposal_count}
+            onSelect={onDecision}
+          />
+          <ProposalTotal total={pass.proposal_count} />
+          {onLayout === undefined ? null : <LayoutSwitch selected={layout} onSelect={onLayout} />}
+        </div>
         {actions ?? null}
       </div>
       {summary ?? null}

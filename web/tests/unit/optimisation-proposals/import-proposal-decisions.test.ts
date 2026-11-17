@@ -170,6 +170,27 @@ describe('the export beside it', () => {
   });
 });
 
+describe('the control in the top row (`UIP-S09-02`)', () => {
+  it('changes its place and nothing else: its own markup stands whole in the row, after «Файлы ▾»', () => {
+    const control = (failure: string | null) =>
+      createElement(ImportProposalDecisionsView, { pending: false, report: report(), failure, onChoose: noop });
+    for (const failure of [null, 'Файл пуст.']) {
+      const alone = renderToStaticMarkup(control(failure));
+      const inRow = renderToStaticMarkup(
+        createElement(ExportProposalsView, { pending: false, failure: null, onDownload: noop, onDownloadXlsx: noop, importControl: control(failure) }),
+      );
+      expect(inRow).toContain(alone);
+      expect(inRow.indexOf(alone)).toBeGreaterThan(inRow.indexOf('data-proposals-files'));
+    }
+  });
+
+  it('is not in the row for a reader who does not decide: the row is handed no control', () => {
+    const inRow = renderToStaticMarkup(createElement(ExportProposalsView, { pending: false, failure: null, onDownload: noop, onDownloadXlsx: noop }));
+    expect(inRow).not.toContain('data-proposal-decision-import');
+    expect(inRow).not.toContain('Загрузить решения');
+  });
+});
+
 describe('the command', () => {
   type Captured = {
     mutationFn: (input: { file: File }) => Promise<ProposalDecisionImportReport>;
