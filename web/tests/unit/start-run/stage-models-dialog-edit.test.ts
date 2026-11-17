@@ -131,9 +131,10 @@ describe('the form, in the same window', () => {
     const markup = draw(cacheOf(['admin']), { initiallyEditing: true });
     expect(markup).toContain('data-stage-models-dialog');
     expect(markup).toContain('data-layout-editor');
+    // The sets the form offers are those the servers can serve now: the seeded servers serve the Claude models and not the Codex ones.
     expect(markup).toContain('Только Claude');
-    expect(markup).toContain('Только Codex');
     expect(markup).toContain('Свой набор');
+    expect(markup).not.toContain('Только Codex');
     expect(markup).toContain('>Сохранить набор</button>');
     expect(markup).toContain('>Отменить</button>');
     // In place of the table, and in place of the window's own buttons: the form has «Сохранить набор» and «Отменить».
