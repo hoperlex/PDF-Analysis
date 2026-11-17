@@ -23,8 +23,13 @@
  * route, which has just checked them; they decide only which of those is drawn.
  *
  * `UI-A-27` «Просмотр PDF»: the original's button in the version bar opens the version's PDF in a drawer from the bottom of the
- * page. The button is in the page's actions; the drawer is the PDF page viewer (`widgets/evidence-viewer`, pdf.js), mounted through a
- * lazy boundary only once the button is pressed, so neither the viewer's code nor the document's bytes are asked for before.
+ * page. `UIP-G-09`: the button is the frame's, in its version bar on every page of the document; this page hands the frame the
+ * drawer (`pdf`), the PDF page viewer (`widgets/evidence-viewer`, pdf.js), mounted through a lazy boundary only once the button is
+ * pressed, so neither the viewer's code nor the document's bytes are asked for before. A button pressed on another page of the
+ * document leads here with `?pdf=1`, and the window opens on arrival; the address is then cleaned of it.
+ *
+ * `UIP-G-09`: the page's header carries no code and no links: the frame names the document and its version, the version's code is in
+ * «Сведения о версии и файле», and the way up is the frame's row.
  *
  * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind`
  * `comparison_pdf`) carries the mark «PDF без пакета портала» in its panel; its run list
@@ -32,11 +37,11 @@
  */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import type { Role, RunStatus } from '@/shared/api';
-import { ErrorState, Icon, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
 import {
@@ -46,7 +51,8 @@ import {
 } from '@/entities/document-version';
 import { RunList } from '@/widgets/run-list';
 import { VersionClassification } from '@/widgets/version-classification';
-import { DocumentContext } from '@/widgets/document-context';
+import { DocumentContext, PDF_OPEN_PARAM } from '@/widgets/document-context';
+import type { PdfDrawerProps } from '@/widgets/document-context';
 import { LazyDocumentViewer } from './version-pdf-chunk';
 import styles from './version-detail-page.module.css';
 
@@ -57,12 +63,28 @@ export interface VersionDetailPageProps {
   readonly roles: readonly Role[];
 }
 
+/** The address without the one-time request to open the PDF window (`?pdf=1`); everything else of it stays. */
+export function withoutPdfRequest(search: string): string {
+  const params = new URLSearchParams(search);
+  params.delete(PDF_OPEN_PARAM);
+  const rest = params.toString();
+  return rest === '' ? '' : `?${rest}`;
+}
+
+/** The window is drawn by the frame, through this page's lazy boundary. */
+const renderPdf = (drawer: PdfDrawerProps) => <LazyDocumentViewer {...drawer} />;
+
 export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDetailPageProps) {
   const router = useRouter();
   const wellFormed = looksLikeProjectUid(projectUid) && looksLikeVersionUid(versionUid);
   const version = useDocumentVersion(wellFormed ? versionUid : null);
-  // `UI-A-27`: nothing of the drawer exists until this is true.
-  const [pdfOpen, setPdfOpen] = useState(false);
+  // `UIP-G-09`: a button of another page of the document asked for the window (`?pdf=1`); outside the app router there is no address.
+  const searchParams = useSearchParams();
+  const [openAtStart] = useState(() => searchParams?.get(PDF_OPEN_PARAM) === '1');
+  useEffect(() => {
+    if (!openAtStart) return;
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${withoutPdfRequest(window.location.search)}${window.location.hash}`);
+  }, [openAtStart]);
 
   if (!wellFormed) {
     return (
@@ -83,32 +105,13 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
     : `Версия ${version.data.version_ordinal}${documentTitle === undefined || documentTitle === null ? '' : ` · ${documentTitle}`}`;
 
   return (
-    <PageShell
-      title={title}
-      subtitle={<code>{versionUid}</code>}
-      actions={
-        <>
-          {version.data === undefined ? null : (
-            <>
-              <button
-                type="button"
-                className="am-button am-button--quiet am-button--small"
-                aria-pressed={pdfOpen}
-                title="Открыть PDF этой версии снизу"
-                data-version-pdf-toggle=""
-                onClick={() => setPdfOpen((open) => !open)}
-              >
-                <Icon name="document" /> Просмотр PDF
-              </button>{' '}
-              <Link href={routes.document(version.data.project_uid, version.data.document_uid)}>Все версии документа</Link>{' '}
-            </>
-          )}
-          <Link href={routes.project(ownerProjectUid)}>К объекту</Link>{' '}
-          <Link href={routes.projects()}>Все объекты</Link>
-        </>
-      }
-    >
-      <DocumentContext projectUid={ownerProjectUid} versionUid={versionUid} current="version" />
+    <PageShell title={title}>
+      <DocumentContext
+        projectUid={ownerProjectUid}
+        versionUid={versionUid}
+        current="version"
+        pdf={{ render: renderPdf, openAtStart }}
+      />
       {version.isPending ? <LoadingState what="эту версию" /> : null}
       {version.isError ? (
         <ErrorState
@@ -155,14 +158,6 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
           </section>
         </div>
       )}
-      {pdfOpen && version.data !== undefined ? (
-        <LazyDocumentViewer
-          versionUid={version.data.version_uid}
-          title={documentTitle === undefined || documentTitle === null ? `Версия ${version.data.version_ordinal}` : `${documentTitle} · Версия ${version.data.version_ordinal}`}
-          pageCount={version.data.page_count}
-          onClose={() => setPdfOpen(false)}
-        />
-      ) : null}
     </PageShell>
   );
 }

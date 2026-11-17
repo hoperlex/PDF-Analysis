@@ -6,10 +6,14 @@
  * The only screen that polls, and it polls through the one shared loop. Review is a
  * child of this route, not a sibling: a finding is only meaningful against the run that
  * produced it.
+ *
+ * `UIP-G-09`: the frame's «Лог» leads to the latest run of a version on its journal (`?tab=journal`). The page then draws the
+ * run's events under the frame, with «Лог» the open tab, instead of the overview; «Прогон» in the frame's row is the way back.
+ * A read-only account is offered no journal (`R-150w`), so its `?tab=journal` is the overview.
  */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { PageShell } from '@/shared/ui';
 import { routes } from '@/shared/lib';
@@ -32,6 +36,9 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
   const router = useRouter();
   // `UI-B-39`, `R-150w`: the run's events are an operator's read, so a read-only account is not offered the tab at all.
   const journal = mayReadJournal(me.data?.roles) ? <RunEvents runId={runId} /> : undefined;
+  // Outside the app router there is no address: the overview.
+  const asksForJournal = useSearchParams()?.get('tab') === 'journal';
+  const journalOpen = journal !== undefined && asksForJournal;
   return (
     <PageShell
       title="Прогон"
@@ -48,24 +55,28 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
         </>
       }
     >
-      <DocumentContext projectUid={projectUid} runId={runId} current="run" />
+      <DocumentContext projectUid={projectUid} runId={runId} current={journalOpen ? 'log' : 'run'} />
       <div className={styles.content}>
-        {/* «Отменить прогон» sits in the head beside the stages, as the original's «Отменить» on its pipeline card; «Удалить прогон»
-            (`RUN-DELETE-01`) takes its place once the run has ended without a clean result, and after it the page leaves for the run's
-            version, where the run is no longer listed. «Запустить с этапа»
-            (`UI-A-60`) moved into «Этапы анализа раздела», which a chip of the rail opens; the events are the tab «Лог»
-            (`RUN-SCREEN-01a`). */}
-        <LazyRunProgress
-          projectUid={projectUid}
-          runId={runId}
-          actions={
-            <>
-              <CancelRunControl runId={runId} />
-              <DeleteRunControl runId={runId} onDeleted={(run) => router.push(routes.version(run.project_uid, run.version_uid))} />
-            </>
-          }
-          {...(journal === undefined ? {} : { journal })}
-        />
+        {journalOpen ? journal : (
+          <>
+            {/* «Отменить прогон» sits in the head beside the stages, as the original's «Отменить» on its pipeline card; «Удалить прогон»
+                (`RUN-DELETE-01`) takes its place once the run has ended without a clean result, and after it the page leaves for the run's
+                version, where the run is no longer listed. «Запустить с этапа»
+                (`UI-A-60`) moved into «Этапы анализа раздела», which a chip of the rail opens; the events are the tab «Лог»
+                (`RUN-SCREEN-01a`). */}
+            <LazyRunProgress
+              projectUid={projectUid}
+              runId={runId}
+              actions={
+                <>
+                  <CancelRunControl runId={runId} />
+                  <DeleteRunControl runId={runId} onDeleted={(run) => router.push(routes.version(run.project_uid, run.version_uid))} />
+                </>
+              }
+              {...(journal === undefined ? {} : { journal })}
+            />
+          </>
+        )}
       </div>
     </PageShell>
   );

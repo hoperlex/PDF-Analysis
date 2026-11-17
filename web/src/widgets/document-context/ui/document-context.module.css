@@ -1,13 +1,20 @@
-/* `UI-A-22`: the context strip of the document pages. Tokens only. */
+/* `UI-A-22`, `UIP-G-09`: the frame of the document pages. Tokens only. */
 
-/* The whole row: the breadcrumb and version choice on the left, the version's tabs and neighbours on the right. */
+/* The frame: the row of the breadcrumb and the tabs, then the version bar. */
+.frame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  margin-bottom: var(--am-gap-sm);
+}
+
+/* The first row: the breadcrumb on the left, the version's tabs on the right. */
 .bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--am-gap-xs) var(--am-gap);
-  margin-bottom: var(--am-gap-sm);
 }
 
 .strip {
@@ -69,7 +76,16 @@
   font-weight: 600;
 }
 
-/* `UI-A-24`: the version choice beside the strip. */
+/* The version bar (`UIP-G-09`): the version choice, «Просмотр PDF» and the neighbours, under the tabs on every page of the document. */
+.versionBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  font-size: var(--am-text-sm);
+}
+
+/* `UI-A-24`: the version choice in the bar. */
 .switch {
   display: inline-flex;
   flex-wrap: wrap;
@@ -92,9 +108,10 @@
   font-size: var(--am-text-sm);
 }
 
-/* On a version page the neighbours share the context row, so they leave no gap under it. */
-.aside .neighbours {
+/* In the version bar the neighbours share its row, so they leave no gap under it, and stand at its end as the original's «← Предыдущий 1 / 7 Следующий →». */
+.versionBar .neighbours {
   margin-bottom: 0;
+  margin-left: auto;
 }
 
 .neighbourPosition {

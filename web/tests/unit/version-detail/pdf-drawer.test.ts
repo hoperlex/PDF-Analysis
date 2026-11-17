@@ -1,9 +1,12 @@
 /**
- * «Просмотр PDF» on the version page (`UI-A-27`), the second UX pass of 2026-11-07.
+ * «Просмотр PDF» on the version page (`UI-A-27`), the second UX pass of 2026-11-07; `UIP-G-09`: the button is the document
+ * frame's, in its version bar, and the page hands the frame the drawer; the frame's own tests (`document-context/version-tabs.test.ts`)
+ * hold the button on the other pages, as a link to this page with the window open (`?pdf=1`).
  *
  * What is held, each with the reason a screen-wide instrument cannot hold it:
  *
- *   - the page offers the button once the version is read, and draws NONE of the drawer before it is pressed: neither the drawer nor a
+ *   - the page offers the button once the version is read, in the frame's version bar and not in the page's header, and draws NONE of
+ *     the drawer before it is pressed: neither the drawer nor a
  *     request for the document's bytes (a one-pass render cannot press, so "closed by default" is read as: the toggle is there, unpressed,
  *     and the drawer's marker and its content request are not);
  *   - the drawer's bar: the document and version it is about, ‹ N / M › with the end pages disabled, «Открыть PDF ↗» only when the bytes
@@ -17,6 +20,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { queryKeys } from '@/shared/api';
 import { DocumentViewer, DocumentViewerView } from '@/widgets/evidence-viewer';
 import { VersionDetailPage } from '@/_pages/version-detail';
+import { withoutPdfRequest } from '@/_pages/version-detail/ui/version-detail-page';
 
 import { newClient, renderScreen, renderWith } from '../screens/harness';
 import { PROJECT_UID, VERSION_UID, version } from '../sections/fixtures';
@@ -49,6 +53,28 @@ describe('the version page', () => {
     expect(markup).toMatch(/<button[^>]*aria-pressed="false"[^>]*data-version-pdf-toggle=""/);
     expect(markup).not.toContain('data-version-pdf=""');
     expect(markup).not.toContain('aria-label="Просмотр PDF"');
+  });
+
+  it('puts the button in the frame’s version bar, with the hint «Весь документ, снизу», and nothing but the frame in the page’s header', () => {
+    const markup = seeded();
+    expect(markup.indexOf('data-version-pdf-toggle')).toBeGreaterThan(markup.indexOf('data-version-bar'));
+    expect(markup).toContain('title="Весь документ, снизу"');
+    expect(markup).not.toContain('Открыть PDF этой версии снизу');
+    // the header has no code and no links: the frame names the document, and the code is in «Сведения о версии и файле»
+    const header = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'));
+    expect(header).not.toContain('<code');
+    expect(header).not.toContain('<a ');
+    expect(markup).not.toContain('Все версии документа');
+    const facts = markup.slice(markup.indexOf('data-version-facts'));
+    expect(facts).toContain(`data-version-uid="${VERSION_UID}"`);
+    expect(facts).toContain(`<code>${VERSION_UID}</code>`);
+  });
+
+  it('opens its window from another tab’s request and cleans the request from the address', () => {
+    expect(withoutPdfRequest('?pdf=1')).toBe('');
+    expect(withoutPdfRequest('?foo=bar&pdf=1')).toBe('?foo=bar');
+    expect(withoutPdfRequest('')).toBe('');
+    expect(withoutPdfRequest('?foo=bar')).toBe('?foo=bar');
   });
 
   it('offers nothing before the version is read: no button for a document nobody has found', () => {
