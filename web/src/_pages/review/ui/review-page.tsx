@@ -18,8 +18,9 @@
  *    limitation and offer the same human decisions. Diagnostics without a Finding identity
  *    remain outside the ledger. An unverified finding never opens a fabricated page or quote.
  *
- * 2. **`provider_mode` stays visible.** It is on the run badge in the header, on the export
- *    panel, and on the evidence viewer's own provenance line. A recorded run must never be
+ * 2. **`provider_mode` stays visible.** It is on the run badge of the header line and on the
+ *    evidence viewer's own provenance line; the file actions (`UIP-S06-05`) draw no badge of
+ *    their own, so the header is the one place that says it. A recorded run must never be
  *    presentable as a live one, and the reviewer should not have to scroll to find out
  *    which they are looking at.
  *

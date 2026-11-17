@@ -1,39 +1,124 @@
 /*
- * The export panel as a bar (`layout="bar"`): the original's toolbar over the table, one row, not a card under it.
- * Tokens only. The global `.am-export__*` rules keep the card; every rule here is doubled on the bar's own class so
- * it wins over them whichever sheet loaded last.
+ * The export panel as a bar (`layout="bar"`, `UIP-S06-05`): the original's file actions at the right of the top row over the
+ * table, with no frame, no title and no state badge. «Скачать ▾» opens a small list of the files; «Загрузить решения» (the
+ * feature's own control) and the «?» stand beside it; under them, in one line, what the file actions say. Tokens only. The
+ * global `.am-export__*` rules keep the card; every rule here is doubled on the bar's own class where it must win over them.
  */
 
 .bar {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--am-gap-2xs);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* The buttons: one row that wraps as a whole. The control for the decisions puts its own report at the row's end (`order`). */
+.row {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--am-gap-xs) var(--am-gap);
-  margin: 0;
-  padding: var(--am-gap-xs) var(--am-gap-sm);
+  justify-content: flex-end;
+  gap: var(--am-gap-xs);
+}
+
+/* A popover is a `<details>` under its summary; the summary is the button. */
+.popover {
+  position: relative;
+  display: inline-block;
+}
+
+.trigger,
+.help {
+  list-style: none;
+}
+
+/* The «?» is a round small button: the description is not what the row is for. */
+.help {
+  min-width: var(--am-target-min);
+  padding-inline: var(--am-gap-xs);
+  border-radius: var(--am-radius-pill);
+}
+
+/* The panel under the button, anchored to its right edge as the shared menu's is and capped by the viewport. */
+.popup {
+  position: absolute;
+  top: calc(100% + var(--am-gap-2xs));
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  min-width: 12rem;
+  max-width: min(28rem, calc(100vw - 2 * var(--am-gap-md)));
+  padding: var(--am-gap-xs);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-sm);
+  border-radius: var(--am-radius);
   background: var(--am-paper);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
 }
 
-.bar .barHeader {
+.items {
+  display: grid;
   margin: 0;
-  gap: var(--am-gap-sm);
+  padding: 0;
+  list-style: none;
 }
 
-.bar .barHeader h3 {
+.item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--am-target-min);
+  padding: var(--am-gap-xs) var(--am-gap-md);
+  border: 0;
+  border-radius: var(--am-radius-sm);
+  background: none;
+  color: var(--am-ink);
+  font: inherit;
   font-size: var(--am-text-md);
+  text-align: left;
+  cursor: pointer;
 }
 
-/* The file's description is one short line beside the buttons; it opens into the whole sentence and the columns. */
+.item:hover {
+  background: var(--am-surface);
+}
+
+.item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* What the «?» opens: the sentence about the selection, then the line about the file that opens into its columns. */
+.scope {
+  margin: 0 0 var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+}
+
 .bar .barDisclosure {
-  flex: 0 1 auto;
   margin: 0;
   padding: var(--am-gap-xs) var(--am-gap-sm);
   font-size: var(--am-text-xs);
 }
 
-.bar .barLast {
-  flex-basis: 100%;
+/* The one line under the buttons: the state of a file being made, the file handed over, the package's phase. */
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--am-gap-2xs) var(--am-gap);
+  font-size: var(--am-text-sm);
+}
+
+.status .done {
   margin: 0;
+}
+
+/* A refusal says its words under the row, at the row's width at most; its block is the shared error state. */
+.refusal {
+  max-width: 40rem;
+  text-align: right;
 }

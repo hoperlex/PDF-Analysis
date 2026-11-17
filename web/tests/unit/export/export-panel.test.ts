@@ -30,9 +30,12 @@ import {
   exportRunCsv,
   isExportableRunState,
 } from '@/shared/api';
-import { ExportPanel } from '@/widgets/export-panel';
+import { ExportBarView, ExportPanel, xlsxFailure } from '@/widgets/export-panel';
+import type { ExportBarViewProps, ExportFileState, ExportPackageState } from '@/widgets/export-panel';
 
+import { mountLive } from '../analysis-settings/live-render';
 import { RUN_ID, render } from '../review/fixtures';
+import { newClient, renderWith } from '../screens/harness';
 
 function panel(runState: RunState, overrides: Record<string, unknown> = {}) {
   return render(
@@ -203,5 +206,181 @@ describe('the panel holds no polling state', () => {
     expect(markup).not.toContain('polling');
     expect(markup).not.toContain('progress');
     expect(markup).not.toContain('export_id');
+  });
+});
+
+/**
+ * `UIP-S06-05`: the files of «Разбор» as one button «Скачать ▾» and, for an expert, «Загрузить решения», with the «?» beside them.
+ * Every file, every condition under which it is offered and every refusal the panel said before it says still; the frame, the
+ * title «Выгрузка» and the state badge inside the panel are gone (the header line of the page says the state and the mode).
+ */
+describe('the bar of «Разбор»', () => {
+  const bar = (runState: RunState, overrides: Record<string, unknown> = {}) => panel(runState, { layout: 'bar', ...overrides });
+  const SCOPE = 'CSV и Excel: выбранный отбор по вердикту.';
+  const VERSION = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+
+  it('has no frame, no title and no state badge of its own', () => {
+    for (const state of EXPORTABLE_RUN_STATES) {
+      const markup = bar(state);
+      expect(markup).not.toContain('Выгрузка');
+      expect(markup).not.toContain('<h3');
+      expect(markup).not.toContain('am-export__header');
+      expect(markup).not.toContain('data-run-state');
+      expect(markup).not.toContain('data-provider-mode');
+    }
+  });
+
+  it('puts the files of an exportable run in one button, CSV and Excel in it, and nothing else on the row', () => {
+    const markup = bar('published');
+    expect(markup).toContain('data-export-menu');
+    expect(markup).toContain('Скачать');
+    expect(markup).toContain('data-intent="export"');
+    expect(markup).toContain('data-intent="export-xlsx"');
+    expect(markup).toContain('data-export-format="csv"');
+    expect(markup).toContain('data-export-format="xlsx"');
+    // The CSV is named after the run where the button used to carry the name.
+    expect(markup).toContain(`title="${csvFileName(RUN_ID)}"`);
+    expect(markup.indexOf('data-export-menu')).toBeLessThan(markup.indexOf('data-intent="export"'));
+    expect(markup).not.toContain('export-audit-package');
+    expect(markup).not.toContain('data-decision-import');
+  });
+
+  it.each(EXPORTABLE_RUN_STATES)('offers the files for %s and none of them for a run without a result', (state) => {
+    expect(bar(state)).toContain('data-exportable="true"');
+    for (const other of RUN_STATE_VALUES.filter((candidate) => !isExportableRunState(candidate))) {
+      const markup = bar(other);
+      expect(markup).toContain('data-exportable="false"');
+      expect(markup).toContain('У этого прогона нет результата для выгрузки');
+      expect(markup).not.toContain('data-export-menu');
+      expect(markup).not.toContain('data-intent="export"');
+      expect(markup).not.toContain('data-intent="export-xlsx"');
+    }
+  });
+
+  it('offers the audit package only where the page names the version, in the same menu', () => {
+    const markup = bar('published', { auditPackage: { versionUid: VERSION } });
+    expect(markup).toContain('data-intent="export-audit-package"');
+    expect(markup).toContain('data-export-format="audit-package"');
+    expect(markup).toContain('Пакет аудита');
+    expect(markup).toContain('title="ZIP одного прогона: CSV замечаний');
+    expect(markup.indexOf('data-export-menu')).toBeLessThan(markup.indexOf('data-intent="export-audit-package"'));
+    expect(bar('queued', { auditPackage: { versionUid: VERSION } })).not.toContain('export-audit-package');
+  });
+
+  it('offers «Загрузить решения» to an expert only, beside the button', () => {
+    const asked = (mayImportDecisions: boolean) => renderWith(newClient(), createElement(ExportPanel, {
+      runId: RUN_ID, runState: 'published', providerMode: 'recorded', onExport: () => {}, layout: 'bar', mayImportDecisions,
+    }));
+    const expert = asked(true);
+    expect(expert).toContain('Загрузить решения');
+    expect(expert).toContain('data-decision-import');
+    expect(expert.indexOf('data-export-menu')).toBeLessThan(expert.indexOf('data-decision-import'));
+    expect(expert.indexOf('data-decision-import')).toBeLessThan(expert.indexOf('data-export-help'));
+    expect(asked(false)).not.toContain('Загрузить решения');
+  });
+
+  it('opens the sentence about the selection and the line about the file from the «?»', () => {
+    const markup = bar('published', { scopeCaption: SCOPE, verdict: 'accepted' });
+    const help = markup.indexOf('data-export-help');
+    expect(help).toBeGreaterThan(-1);
+    expect(markup.indexOf('data-export-scope="accepted"')).toBeGreaterThan(help);
+    expect(markup.indexOf(SCOPE)).toBeGreaterThan(help);
+    expect(markup.indexOf(`О файле: колонок ${CSV_COLUMNS.length}`)).toBeGreaterThan(help);
+    // The columns are still the constant's, in order, behind that line.
+    const rendered = [...markup.matchAll(/data-csv-column="([^"]+)"/g)].map((match) => match[1]);
+    expect(rendered).toEqual([...CSV_COLUMNS]);
+    expect(markup).toContain(CSV_ENCODING.charset);
+    expect(bar('published')).not.toContain('data-export-scope');
+  });
+
+  it('says the CSV’s refusal and its file under the row, in the words it had', () => {
+    const refused = bar('published', { error: { title: 'В выгрузке отказано', detail: 'Файл не создан.', correlationId: 'cid-bar-1' } });
+    expect(refused).toContain('В выгрузке отказано');
+    expect(refused).toContain('Файл не создан.');
+    expect(refused).toContain('cid-bar-1');
+    expect(refused.indexOf('В выгрузке отказано')).toBeGreaterThan(refused.indexOf('data-export-help'));
+    const done = bar('published', { lastFileName: csvFileName(RUN_ID) });
+    expect(done).toContain(`data-last-file="${csvFileName(RUN_ID)}"`);
+    expect(done).toContain(`Скачан ${csvFileName(RUN_ID)}`);
+    expect(done.indexOf('data-export-status')).toBeGreaterThan(done.indexOf('data-export-help'));
+    expect(bar('published')).not.toContain('data-export-status');
+    // The refusal of a run without a result is said where it always was.
+    const refusedQueued = bar('queued', { error: { title: 'В выгрузке отказано' } });
+    expect(refusedQueued).toContain('В выгрузке отказано');
+  });
+});
+
+describe('every state a file action can say, on the bar', () => {
+  const idle: ExportFileState = { pending: false, lastFileName: null, error: null, onDownload: () => {} };
+  const idlePackage: ExportPackageState = { pending: false, status: null, error: null, onDownload: () => {}, onCancel: () => {} };
+  const view = (over: Partial<ExportBarViewProps> = {}) => render(createElement(ExportBarView, { runId: RUN_ID, csv: idle, xlsx: idle, pack: null, ...over }));
+
+  it('says nothing while nothing has been asked', () => {
+    expect(view()).not.toContain('data-export-status');
+    expect(view({ pack: idlePackage })).not.toContain('data-export-status');
+  });
+
+  it('says «Готовлю…», «Готовлю Excel…» and «Собираю пакет…» with the way to cancel it, and disables the file being made', () => {
+    const csv = view({ csv: { ...idle, pending: true } });
+    expect(csv).toContain('Готовлю…');
+    expect(csv).toMatch(/data-intent="export"[^>]*disabled/);
+    expect(csv).not.toMatch(/data-intent="export-xlsx"[^>]*disabled/);
+    const xlsx = view({ xlsx: { ...idle, pending: true } });
+    expect(xlsx).toContain('Готовлю Excel…');
+    expect(xlsx).toMatch(/data-intent="export-xlsx"[^>]*disabled/);
+    const pack = view({ pack: { ...idlePackage, pending: true, status: 'Подготовка пакета аудита…' } });
+    expect(pack).toContain('Собираю пакет…');
+    expect(pack).toContain('data-intent="cancel-audit-package"');
+    expect(pack).toContain('data-audit-package-status');
+    expect(pack).toContain('Подготовка пакета аудита…');
+    expect(pack).toMatch(/data-intent="export-audit-package"[^>]*disabled/);
+    expect(view({ pack: idlePackage })).not.toContain('cancel-audit-package');
+  });
+
+  it('says «Скачан …» for each file handed over, and what the package holds', () => {
+    const markup = view({
+      csv: { ...idle, lastFileName: 'one.csv' }, xlsx: { ...idle, lastFileName: 'two.xlsx' },
+      pack: { ...idlePackage, status: 'Пакет собран: исходный PDF и манифест.' },
+    });
+    expect(markup).toContain('Скачан one.csv');
+    expect(markup).toContain('Скачан two.xlsx');
+    expect(markup).toContain('data-last-file="one.csv"');
+    expect(markup).toContain('data-last-file="two.xlsx"');
+    expect(markup).toContain('Пакет собран: исходный PDF и манифест.');
+    expect((markup.match(/data-export-status/g) ?? []).length).toBe(1);
+  });
+
+  it('says each refusal with the words it had, under the row', () => {
+    const markup = view({
+      csv: { ...idle, error: { title: 'В выгрузке отказано', detail: 'Файл не создан.' } },
+      xlsx: { ...idle, error: xlsxFailure(new Error('x')) },
+      pack: { ...idlePackage, error: { title: 'Пакет аудита не собран', detail: 'Неполный ZIP не скачивается; повторите попытку.' } },
+    });
+    for (const words of ['В выгрузке отказано', 'Файл не создан.', 'Excel не выгружен', 'Пакет аудита не собран', 'Неполный ZIP не скачивается']) {
+      expect(markup).toContain(words);
+      expect(markup.indexOf(words)).toBeGreaterThan(markup.indexOf('data-export-help'));
+    }
+    expect((markup.match(/role="alert"/g) ?? []).length).toBe(3);
+  });
+
+  it('hands a press on each file to its own action, once, and does nothing for a file that is being made', async () => {
+    const calls: string[] = [];
+    const file = (name: string, pending = false): ExportFileState => ({ ...idle, pending, onDownload: () => { calls.push(name); } });
+    const pack = (pending = false): ExportPackageState => ({ ...idlePackage, pending, onDownload: () => { calls.push('package'); }, onCancel: () => { calls.push('cancel'); } });
+    const live = await mountLive(createElement(ExportBarView, { runId: RUN_ID, csv: file('csv'), xlsx: file('xlsx'), pack: pack() }));
+    try {
+      expect(await live.press('CSV')).toBe(true);
+      expect(await live.press('Excel')).toBe(true);
+      expect(await live.press('Пакет аудита')).toBe(true);
+      expect(calls).toEqual(['csv', 'xlsx', 'package']);
+      await live.update(createElement(ExportBarView, { runId: RUN_ID, csv: file('csv', true), xlsx: file('xlsx', true), pack: pack(true) }));
+      expect(await live.press('CSV')).toBe(false);
+      expect(await live.press('Excel')).toBe(false);
+      expect(await live.press('Пакет аудита')).toBe(false);
+      expect(await live.press('Отменить')).toBe(true);
+      expect(calls).toEqual(['csv', 'xlsx', 'package', 'cancel']);
+    } finally {
+      await live.unmount();
+    }
   });
 });
