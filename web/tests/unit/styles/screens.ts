@@ -121,6 +121,7 @@ import { ProjectList } from '@/widgets/project-list';
 import { LastRunCard, RunList, StartRunWithReadiness } from '@/widgets/run-list';
 import { RunEta, RunProgress } from '@/widgets/run-progress';
 import { RunStagesDialog, StageModelsDialogView } from '@/widgets/run-stages-dialog';
+import { RestartRunConfirm } from '@/features/restart-run';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { DocumentContext, SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
@@ -1097,6 +1098,28 @@ export function screens(): Screen[] {
     add('RunStagesDialog, a run with a stage plan: a blocks ensemble, its facts, a subscription part and a price', dialog(planStatus, 'blocks', blocksProcedure, stagesAnswer));
     add('RunStagesDialog, a run with a stage plan: a failed chip with its error code and reason', dialog(planStatus, 'text', blocksProcedure, stagesAnswer));
     add('RunStagesDialog, the stages could not be read: the run\'s model and the line that says so', dialog(planStatus, 'text', blocksProcedure, { phase: 'error' }));
+    // `RUN-RESTART-01`: the open confirmation of «Перезапустить с этого этапа» (the plan, the sentence about the old run, the norms warning, the
+    // price and the failure line) and the page of a run a restart replaced (the notice and the way to the new run). The control draws the
+    // confirmation from these plain data in a press; one render pass cannot make the press.
+    const restartConfirm = (over: Partial<Parameters<typeof RestartRunConfirm>[0]>) => renderScreen(newClient(), createElement(RestartRunConfirm, {
+      point: 'review', taken: ['preparation', 'text', 'blocks', 'cross_check', 'merge', 'norms'], computed: ['review', 'correction'], loading: false,
+      cost: null, failure: null, sending: false, canSend: true, onSend: () => undefined, onCancel: () => undefined, ...over,
+    }));
+    add('RestartRunConfirm, from the critic: the plan, the old run, the norms warning', restartConfirm({}));
+    add('RestartRunConfirm, from the preparation: nothing taken, and a refusal under it', restartConfirm({
+      point: 'preparation', taken: [], computed: ['preparation', 'text', 'blocks', 'cross_check', 'merge', 'norms', 'review', 'correction'],
+      failure: 'Этот прогон уже удалён, перезапустить его нельзя.', canSend: false,
+    }));
+    add('RestartRunConfirm, the price is being read', restartConfirm({ point: 'blocks', taken: null, computed: null, loading: true, canSend: false }));
+    add('RunProgress, a run a restart replaced: the notice and the way to the new run', seededRun(
+      { state: 'partial', degradation_set: ['text_analysis'], stages: prepared, replaced_by_run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8N' as never },
+      () => undefined,
+    ));
+    add('RunProgress, a restarted run that stopped at the norms: the chip it was restarted from and the sentence', seededRun(
+      { state: 'failed', stages: prepared, started_from_run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z' as never, restart_point: 'review',
+        terminal_reason: 'analysis_input_invalid', terminal_detail: { stage_id: 'norm_verification', reason: 'restart_request_changed' } },
+      () => undefined,
+    ));
     add(
       'RunProgress running with the stages read: one model line under each model chip',
       seededRun(

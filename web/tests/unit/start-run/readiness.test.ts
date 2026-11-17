@@ -292,8 +292,8 @@ describe('«Модели по этапам ▸» opens the window «Модели
     expect(markup).toContain('Sonnet 5.5');
     expect(markup).toContain('среднее');
     expect(markup).toContain('по подписке');
-    // No fact of a run: no state, start, end, duration, tokens or error code, and no start from this stage.
-    for (const fact of ['data-fact-row', 'Состояние', 'Начало', 'Окончание', 'Длительность', 'Код ошибки', 'Запустить с этого этапа']) {
+    // No fact of a run: no state, start, end, duration, tokens or error code, and no restart from this stage.
+    for (const fact of ['data-fact-row', 'Состояние', 'Начало', 'Окончание', 'Длительность', 'Код ошибки', 'Запустить с этого этапа', 'Перезапустить с этого этапа']) {
       expect(markup, fact).not.toContain(fact);
     }
     // «Запустить» stays one button: the window does not start anything (`R-153a`).

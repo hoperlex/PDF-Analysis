@@ -7,7 +7,7 @@
  *   - **the run**: «Прогон от 16.11.2026 14:05» and its state in a word (the badge of the runs table), «Открыть прогон». A run that is
  *     still going says so and sends the reader to the run's page, because the card is read once and never moves;
  *   - **the stages**: one button for each chip of the run, its name, its state in a word and the time it took (`lastRunChips`). A press
- *     opens the window «Этапы анализа раздела» (`RunStagesDialog`), the run page's own, with «Запустить с этого этапа» for the account
+ *     opens the window «Этапы анализа раздела» (`RunStagesDialog`), the run page's own, with «Перезапустить с этого этапа» (a run that ended without a clean result) for the account
  *     that may start a run (the window's control decides that, not this card). No token, no cost and no model is drawn on the card; the
  *     model of a stage is in the chip's hint, for an administrator only (`chipHint`);
  *   - **«Запустить»** with its one line under it, filled as it always was (`StartRunWithReadiness`): the one control of `R-153a`, not

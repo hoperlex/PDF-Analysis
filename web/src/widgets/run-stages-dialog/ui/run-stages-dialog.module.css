@@ -268,3 +268,8 @@
 .start {
   margin-top: var(--am-gap-sm);
 }
+
+/* The restart is not offered for every run: with nothing in it the wrapper takes no room. */
+.start:empty {
+  display: none;
+}

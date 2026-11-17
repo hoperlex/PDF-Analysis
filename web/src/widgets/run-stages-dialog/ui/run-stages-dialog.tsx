@@ -21,7 +21,7 @@
  * stages (`StageTable`) is drawn only for a chip that has two or more (the preparation has three); a chip with one has its state and
  * its times in «Факт» already. The extended review's planned procedures («План полного анализа», moved here from the review panel)
  * keep their place, and are left out only where the answer is read and there is a single procedure, which «Факт» says as well. The
- * memo «Как устроен этап» is collapsed, and «Запустить с этого этапа» is for the stages a new run may be started from.
+ * memo «Как устроен этап» is collapsed, and «Перезапустить с этого этапа» (`RUN-RESTART-01`) is one button for each chip of a run that ended without a clean result.
  *
  * A native modal `<dialog>`, as the pair viewer and the review's full-screen view are: the browser keeps focus inside, Esc closes it
  * (the `close` event calls `onClose`), the page behind is inert, and focus returns to the chip that opened it. Where `showModal` is
@@ -33,8 +33,7 @@
 
 import { useId } from 'react';
 
-import type { RunStage, RunStageFacts, RunStatus, StageId } from '@/shared/api';
-import { STAGE_ID_VALUES } from '@/shared/api';
+import type { RunStage, RunStageFacts, RunStatus } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
 import {
   CHIP_STATE_LABELS,
@@ -58,7 +57,7 @@ import type {
   StageActivity,
 } from '@/entities/audit-run';
 import { procedureReasonSentence } from '@/widgets/extended-review';
-import { StartRunFromStageControl } from '@/features/start-run-from-stage';
+import { RestartRunControl, restartPointOf } from '@/features/restart-run';
 
 import { CHIP_ALGORITHMS } from '../model/chip-algorithms';
 import { callsText, cellLines, costText, hasModelWork, tokensText } from '../model/stage-cells';
@@ -98,8 +97,6 @@ const PROCEDURE_STATUS_LABELS: Readonly<Record<ProcedureStatus, string>> = {
   unavailable: 'Недоступно',
   skipped: 'Пропущено',
 };
-
-const isStageId = (value: string): value is StageId => (STAGE_ID_VALUES as readonly string[]).includes(value);
 
 /** Plan rows: the run's model and its server. */
 function PlanRows({ chip, status, showServer }: { readonly chip: RunChip; readonly status: RunStatus; readonly showServer: boolean }) {
@@ -366,11 +363,7 @@ export function RunStagesDialog({
             </details>
 
             <div className={styles.start}>
-              <StartRunFromStageControl
-                runId={status.run_id}
-                stageIds={chip.definition.stageIds.filter(isStageId)}
-                label="Запустить с этого этапа"
-              />
+              <RestartRunControl run={status} point={restartPointOf(chip.definition.id)} />
             </div>
           </section>
         )}

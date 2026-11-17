@@ -25,10 +25,18 @@ import {
   stageOfChip,
 } from '@/entities/audit-run';
 import type { RunChip, RunChipDefinition } from '@/entities/audit-run';
+import { stageIdsTakenBefore } from '@/features/restart-run';
 
-/** The stage ids this run took from the run it was started from (`started_from_run_id` and `start_stage_id` come together or not at all). */
-export function reusedStageIdsOf(status: Pick<RunStatus, 'started_from_run_id' | 'start_stage_id'>): ReadonlySet<string> | undefined {
-  if (status.started_from_run_id === undefined || status.start_stage_id === undefined) return undefined;
+/**
+ * The stage ids this run took from the run it was started from: `started_from_run_id` comes with `start_stage_id` (a start from a stage)
+ * or with `restart_point` (a restart, `RUN-RESTART-01`), not with both.
+ */
+export function reusedStageIdsOf(
+  status: Pick<RunStatus, 'started_from_run_id' | 'start_stage_id' | 'restart_point'>,
+): ReadonlySet<string> | undefined {
+  if (status.started_from_run_id === undefined) return undefined;
+  if (status.restart_point !== undefined) return stageIdsTakenBefore(status.restart_point);
+  if (status.start_stage_id === undefined) return undefined;
   const index = (PC01_STAGE_IDS as readonly string[]).indexOf(status.start_stage_id);
   return index < 0 ? undefined : new Set(PC01_STAGE_IDS.slice(0, index));
 }
