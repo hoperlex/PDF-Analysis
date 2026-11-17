@@ -46,6 +46,13 @@ export const routes = {
   /** «Сравнение стадий»: catalog of expert-confirmed П↔Р pairs. */
   stageComparison: (): string => '/stage-comparison',
 
+  /**
+   * «Назначения» (`UIP-S14-03`), optionally with the expert the form «Назначить работу» opens on (`?expert=`, an account
+   * identifier). The screen applies the value only when it is one of its active experts.
+   */
+  dispatcher: (expert?: string): string =>
+    expert === undefined ? '/dispatcher' : `/dispatcher?expert=${encodeURIComponent(expert)}`,
+
   /** The worker registry, «Диспетчер» (`W54-WORKERS-WEB`). */
   workers: (): string => '/workers',
 

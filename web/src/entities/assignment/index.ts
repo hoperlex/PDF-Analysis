@@ -1,6 +1,7 @@
 /** Public API of the `assignment` entity (`W61-DISPATCHER-01`). */
 
 export { ASSIGNMENT_PAGE_LIMIT, useAssignment, useAssignments } from './api/use-assignments';
+export { EXPERT_PARAM, parseExpertAddress, resolveExpertChoice } from './model/expert-address';
 export type { AssignmentFailure } from './model/failure';
 export { assignmentFailure } from './model/failure';
 export {
