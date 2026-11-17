@@ -14,3 +14,8 @@ export const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {
 export function decisionCountWords(count: number): string {
   return count === 1 ? 'одно решение по замечанию' : `решений по замечанию: ${count}`;
 }
+
+/** «принято» as «Принято»: a label of the vocabulary said at the start of a sentence. */
+export function sentenceCase(label: string): string {
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+}

@@ -23,6 +23,10 @@
  *
  * `useDecisionVerdictTotals` (`UI-B-32`) is the same listing read for its `total` alone: one page of one
  * record per verdict, so the numbers on the knowledge base's verdict chips are the server's counts over every page.
+ *
+ * `execution_status` (`UIP-S12-01`, `UIP-S12-04`) is the designer's execution status of the finding, as the contract's filter takes it:
+ * one or more of the four values joined by commas, written in the order `executionStatusQuery` (`entities/finding`) gives.
+ * `useDecisionStatusTotals` reads it for the numbers of the second group of cards, the same way: one record a page, the count in `total`.
  */
 
 import { useQueries, useQuery } from '@tanstack/react-query';
@@ -36,15 +40,18 @@ export const JOURNAL_PAGE_LIMIT = 50;
 export interface DecisionJournalQuery {
   readonly category?: FindingCategory | undefined;
   readonly verdict?: Verdict | undefined;
+  /** The designer's execution statuses, as the contract's filter writes them (`agreed,amended`); absent is no status filter. */
+  readonly execution_status?: string | undefined;
   readonly project_uid?: ProjectUid | undefined;
   readonly cursor?: string | undefined;
 }
 
-export function useDecisionJournal({ category, verdict, project_uid, cursor }: DecisionJournalQuery = {}, enabled = true) {
+export function useDecisionJournal({ category, verdict, execution_status, project_uid, cursor }: DecisionJournalQuery = {}, enabled = true) {
   const filters = {
     ...(project_uid === undefined ? {} : { project_uid }),
     ...(category === undefined ? {} : { category }),
     ...(verdict === undefined ? {} : { verdict }),
+    ...(execution_status === undefined ? {} : { execution_status }),
     ...(cursor === undefined ? {} : { cursor }),
     limit: JOURNAL_PAGE_LIMIT,
   };
@@ -102,6 +109,39 @@ export function useDecisionVerdictTotals({ category, project_uid }: Pick<Decisio
     pending: totals[2]?.data?.total,
     all: totals[3]?.data?.total,
   };
+}
+
+/**
+ * `UIP-S12-04`: how many journal entries each set of the designer's execution statuses stands for -- the numbers of the cards «Приняли
+ * в работу» and «Исправили замечание», and of «any status at all», which is what lets that group of cards be drawn.
+ *
+ * The server counts, as for the verdict chips: each number is the `total` of `listDecisions` for that set of statuses (one text as the
+ * contract's filter writes it, `agreed,amended`), read with `limit=1`, under the same project and category the list is read under. They
+ * never follow the verdict, which a status does not depend on. The sets are the caller's: an entity does not import its sibling, and
+ * which statuses a card means is `entities/finding`'s (`EXECUTION_GROUP_STATUSES`). The answer is one number a set, in the order of the
+ * sets given, and a read that has not answered, or failed, is `undefined`, never a zero. The number of sets is fixed for a caller.
+ */
+export function useDecisionStatusTotals(
+  { category, project_uid }: Pick<DecisionJournalQuery, 'category' | 'project_uid'>,
+  statusSets: readonly string[],
+  enabled = true,
+): readonly (number | undefined)[] {
+  const totals = useQueries({
+    queries: statusSets.map((execution_status) => {
+      const filters = {
+        ...(project_uid === undefined ? {} : { project_uid }),
+        ...(category === undefined ? {} : { category }),
+        execution_status,
+        limit: 1,
+      };
+      return {
+        queryKey: queryKeys.findings.journal(filters),
+        queryFn: async (): Promise<DecisionRecordPage> => (await listDecisions({ query: filters })).data,
+        enabled,
+      };
+    }),
+  });
+  return totals.map((total) => total.data?.total);
 }
 
 /**

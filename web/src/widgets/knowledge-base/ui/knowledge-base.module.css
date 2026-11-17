@@ -86,8 +86,13 @@ ol.records {
 
 /*
  * `UI-B-34`: the table view, the original's `kb-table`. Tokens only; the colours are the global ones the rows already read
- * (`.am-kb__verdict`, `.am-badge--*`). The frame scrolls sideways on a narrow screen rather than squeezing the nine columns, and
- * a row's verdict is the stripe at its left edge, as the events view's border is.
+ * (`.am-badge--*`, `VerdictMark`'s own). The frame scrolls sideways on a narrow screen rather than squeezing the eight columns, and
+ * a row's verdict is the stripe at its left edge, as the events view's border is, with its sign in the first cell.
+ *
+ * `UIP-S12-02`: a row is one or two lines, `--am-row-step-tall` (the step `UIP-G-14` made for this screen) high; the cells do not
+ * break a word (`break-word`, as the base layer says: `anywhere` made a column one letter wide and «Планировочные решения»
+ * broke mid-word), the object and the document are one line cut with an ellipsis, the date is one line, and the gist and the reason
+ * are cut at two lines. Whatever is cut is the tooltip of its cell.
  */
 .tableFrame {
   max-width: 100%;
@@ -101,21 +106,20 @@ ol.records {
 }
 
 /*
- * `WALK-V5`: no column of the table is narrower than three lines of its own words. `td { overflow-wrap: anywhere }` lets a cell shrink to
- * one character, so with `width: 100%` the browser did squeeze the nine columns instead of letting the frame scroll: measured on a
- * built stand the type cell was 53 px wide and 202 px tall at 1280 (11 lines of «Внутреннее противоречие»), the project 69 x 93, the
- * date 41 x 71 and the table 706 px wide in a 303 px frame at 360 px. Each column now has a floor; the table is wider than the frame
- * only where the nine floors (53.5 rem) do not fit, and the frame, not the cells, takes the difference. The floors are as low as three
- * lines allow, so the columns with long text (the gist and the reason) keep the rest of the width and the rows stay short.
+ * `WALK-V5`: no column of the table is narrower than three lines of its own words. With `width: 100%` a column that may shrink to
+ * one character is squeezed instead of letting the frame scroll: measured on a built stand the type cell was 53 px wide and 202 px
+ * tall at 1280 (11 lines of «Внутреннее противоречие»), the date 41 x 71 and the table 706 px wide in a 303 px frame at 360 px.
+ * Each column has a floor; the table is wider than the frame only where the eight floors do not fit, and the frame, not the cells,
+ * takes the difference. The floors are as low as three lines allow, so the columns with long text (the gist and the reason) keep the
+ * rest of the width and the rows stay short.
  */
-.colType { min-width: 6.5rem; }
+.colType { min-width: 8rem; }
 .colPlace { min-width: 7.5rem; }
 .colSection { min-width: 3.5rem; }
-.colSeverity { min-width: 4.5rem; }
-.colVerdict { min-width: 6rem; }
+.colSeverity { min-width: 6.5rem; }
 .colText { min-width: 7rem; }
 .colReason { min-width: 7rem; }
-.colDate { min-width: 6rem; }
+.colDate { min-width: 8.5rem; }
 .colLink { min-width: 5.5rem; }
 
 .table th {
@@ -133,43 +137,70 @@ ol.records {
 .table td {
   padding: var(--am-gap-xs) var(--am-gap-sm);
   border-bottom: 1px solid var(--am-grid-line);
-  overflow-wrap: anywhere;
-  vertical-align: top;
+  overflow-wrap: break-word;
+  word-break: normal;
+  vertical-align: middle;
+}
+
+.table tbody tr {
+  height: var(--am-row-step-tall);
 }
 
 .table tbody tr:hover {
   background: var(--am-surface);
 }
 
-.table tbody tr[data-current-verdict='accepted'] > :first-child {
+.table tbody tr[data-current-verdict='accepted'] > :first-child,
+.table tbody tr[data-proposal-verdict='accept'] > :first-child {
   box-shadow: inset 3px 0 0 var(--am-ok);
 }
 
-.table tbody tr[data-current-verdict='rejected'] > :first-child {
+.table tbody tr[data-current-verdict='rejected'] > :first-child,
+.table tbody tr[data-proposal-verdict='reject'] > :first-child {
   box-shadow: inset 3px 0 0 var(--am-failed);
 }
 
-/* The project's name over the document's, and a date over its author: the second line is the quieter one. */
-.project {
-  display: block;
-  font-weight: 600;
+/* The verdict's sign before the type: it keeps its width and the type's words wrap beside it. */
+.typeLine {
+  display: flex;
+  align-items: baseline;
+  gap: var(--am-gap-xs);
 }
 
-.document {
+/* The object and its document, one line; a name that does not fit is cut and the whole is the tooltip. */
+.place {
   display: block;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A text the row cuts at two lines; the whole text is the tooltip of the span. */
+.clamp {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.cellDate {
+  white-space: nowrap;
+}
+
+.cellLink {
+  white-space: nowrap;
 }
 
 .cellMuted {
   color: var(--am-ink-muted);
 }
 
-.event {
-  margin-left: var(--am-gap-xs);
-}
-
-/* `D-344`: «↩ Перенесено из V#» after the event label, set off by the same gap; the mark's own colour and size are its entity's. */
+/* What stands under the reason: a quiet word, or the mark of a carried decision. */
+.aside,
 .carried {
-  margin-left: var(--am-gap-xs);
+  display: block;
+  margin-top: var(--am-gap-2xs);
+  font-size: var(--am-text-xs);
 }

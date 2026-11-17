@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { parseRules } from '../styles/contrast';
+import { declares, withoutMedia } from '../styles/css-reads';
 
 const read = (path: string): string => readFileSync(join(WEB_ROOT, 'src', path), 'utf8');
 const PAGE = read('_pages/knowledge-base/ui/knowledge-base-page.module.css');
@@ -58,5 +59,58 @@ describe('the «Предложения» rows', () => {
       comment: area(JOURNAL, '.comment'),
       meta: area(JOURNAL, '.meta'),
     }).toEqual({ head: 'head', text: 'text', comment: 'comment', meta: 'meta' });
+  });
+});
+
+/**
+ * `UIP-S12-02`: the table's rows are one or two lines. A stylesheet is read here, not measured (the suite renders markup in `node`);
+ * each reading runs first on a fixture that lacks the rule, so it can fail, and then on the real module.
+ */
+describe('the table’s rows are dense (UIP-S12-02)', () => {
+  const OLD = '.table td { overflow-wrap: anywhere; vertical-align: top; }\n.table tbody tr:hover { background: x; }';
+  const base = withoutMedia(WIDGET);
+
+  it('can fail: the old cells, which break a word anywhere and state no row height, read as wrong', () => {
+    expect(declares(OLD, '.table td', 'overflow-wrap', /^break-word$/)).toBe(false);
+    expect(declares(OLD, '.table tbody tr', 'height', /^var\(--am-row-step-tall\)$/)).toBe(false);
+    expect(declares(OLD, '.place', 'text-overflow', /^ellipsis$/)).toBe(false);
+  });
+
+  it('keeps a word whole in a cell: break-word, never anywhere', () => {
+    expect(declares(base, '.table td', 'overflow-wrap', /^break-word$/)).toBe(true);
+    expect(declares(base, '.table td', 'word-break', /^normal$/)).toBe(true);
+    expect(/overflow-wrap:\s*anywhere/.test(base.slice(base.indexOf('.tableFrame')))).toBe(false);
+  });
+
+  it('gives a row the step `UIP-G-14` made for this screen, a token and no literal', () => {
+    expect(declares(base, '.table tbody tr', 'height', /^var\(--am-row-step-tall\)$/)).toBe(true);
+  });
+
+  it('cuts the object and the document at one line with an ellipsis, and the gist and the reason at two lines', () => {
+    expect(declares(base, '.place', 'white-space', /^nowrap$/)).toBe(true);
+    expect(declares(base, '.place', 'text-overflow', /^ellipsis$/)).toBe(true);
+    expect(declares(base, '.place', 'overflow', /^hidden$/)).toBe(true);
+    expect(declares(base, '.clamp', '-webkit-line-clamp', /^2$/)).toBe(true);
+    expect(declares(base, '.clamp', 'overflow', /^hidden$/)).toBe(true);
+  });
+
+  it('keeps the date and the way to the finding on one line', () => {
+    expect(declares(base, '.cellDate', 'white-space', /^nowrap$/)).toBe(true);
+    expect(declares(base, '.cellLink', 'white-space', /^nowrap$/)).toBe(true);
+  });
+
+  it('draws the verdict stripe of a finding and of a proposal, in the ok and failed tokens', () => {
+    const stripe = (selector: string) =>
+      parseRules(WIDGET, 'module').find((rule) => rule.selector.split(',').some((part) => part.trim() === selector))?.declarations.get('box-shadow');
+    expect(stripe(".table tbody tr[data-current-verdict='accepted'] > :first-child")).toBe('inset 3px 0 0 var(--am-ok)');
+    expect(stripe(".table tbody tr[data-current-verdict='rejected'] > :first-child")).toBe('inset 3px 0 0 var(--am-failed)');
+    expect(stripe(".table tbody tr[data-proposal-verdict='accept'] > :first-child")).toBe('inset 3px 0 0 var(--am-ok)');
+    expect(stripe(".table tbody tr[data-proposal-verdict='reject'] > :first-child")).toBe('inset 3px 0 0 var(--am-failed)');
+  });
+
+  it('has no «Решение» column left: neither its floor nor its event label', () => {
+    expect(WIDGET).not.toContain('.colVerdict');
+    expect(read('widgets/knowledge-base/ui/knowledge-base-table.tsx')).not.toContain('colVerdict');
+    expect(read('widgets/knowledge-base/ui/knowledge-base-table.tsx')).not.toContain('am-kb__event');
   });
 });

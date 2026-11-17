@@ -35,16 +35,83 @@
   overflow-x: auto;
 }
 
-/* `UI-B-32`: the verdict chips above the list, each a button with the server's count beside its name. */
-.chips {
+/*
+ * `UIP-S12-03`: the top row -- the group «Эксперт» (a caption over its cards) on the left, with «Заказчик и проектировщик» beside it
+ * once there is a status to count (`UIP-S12-04`), «Фильтры ▾» and «Память решений» on the right (`margin-left: auto`). The row wraps,
+ * and below 780px the groups stack and the actions take the whole width, so nothing runs off a phone.
+ */
+.topRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--am-gap-sm) var(--am-gap-lg);
+  margin-bottom: var(--am-gap-sm);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-2xs);
+  min-width: 0;
+}
+
+.groupName {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 750;
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+}
+
+.cards {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-xs);
-  margin: 0 0 var(--am-gap-sm);
 }
 
-.chipCount {
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin-left: auto;
+}
+
+/* «Фильтры ▾» is the browser's own disclosure: its panel opens under the handle, over the list, and closes with the handle. */
+.filterMenu {
+  position: relative;
+}
+
+.filterMenu > summary {
+  list-style: none;
+}
+
+.filterMenu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.filterMenu > .filters {
+  position: absolute;
+  top: calc(100% + var(--am-gap-xs));
+  right: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: min(40rem, calc(100vw - 2 * var(--am-gap)));
+}
+
+/* How many of the filters in the panel are not at their first-screen value. */
+.filterCount {
+  margin-left: var(--am-gap-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+.memoryFilters {
+  margin-bottom: var(--am-gap-sm);
+}
+
+.cardCount {
   font-variant-numeric: tabular-nums;
   font-weight: 750;
 }
@@ -95,5 +162,25 @@
   .filters,
   .results {
     padding: var(--am-gap-sm);
+  }
+
+  .topRow {
+    align-items: stretch;
+  }
+
+  .actions {
+    margin-left: 0;
+  }
+
+  /* On a phone the panel is part of the page: it opens in the flow, the whole width, and pushes the list down. */
+  .filterMenu {
+    flex: 1 1 100%;
+  }
+
+  .filterMenu > .filters {
+    position: static;
+    width: auto;
+    max-width: none;
+    margin-top: var(--am-gap-xs);
   }
 }
