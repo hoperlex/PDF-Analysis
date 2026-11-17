@@ -49,8 +49,9 @@ describe('the head', () => {
     const markup = screen({ stages: [...PREP, 'text_analysis' as const].map((id) => ok(id)) });
     expect(markup).toContain('data-run-head=""');
     expect(markup).toContain('data-run-state="published"');
-    expect(markup).toContain('этапов завершено 2 из 2');
-    expect(markup).toMatch(/role="progressbar"[^>]*aria-valuemax="2"[^>]*aria-valuenow="2"[^>]*aria-valuetext="завершено 2 из 2"/);
+    // `bed5a549f`: «выполнено успешно» counts the chips that are `done`; «завершено» counts every chip whose work ended (`chipProgress`).
+    expect(markup).toContain('этапов выполнено успешно 2 из 2; завершено 2');
+    expect(markup).toMatch(/role="progressbar"[^>]*aria-valuemax="2"[^>]*aria-valuenow="2"[^>]*aria-valuetext="выполнено успешно 2 из 2; завершено 2"/);
     expect(markup.match(/data-segment="done"/g)).toHaveLength(2);
     expect(markup).toMatch(/data-run-head=""[\s\S]*?Разобрать замечания/);
   });
