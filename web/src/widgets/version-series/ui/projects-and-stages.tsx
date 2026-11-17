@@ -78,6 +78,7 @@ import {
   nextSort,
   parseStoredView,
   nextStepSentence,
+  ONE_VERSION_SENTENCE,
   parseSort,
   sortValue,
   stepActions,
@@ -160,15 +161,29 @@ export interface ProjectsAndStagesViewProps {
   readonly onDialogClose?: () => void;
 }
 
+/**
+ * `UIP-S17-02`: a chip says as much as its column holds. «Одна версия — сравнивать не с чем» is the original's sentence and it is
+ * longer than the column; the chip says «одна версия» and the whole sentence is its hint. The other sentences wrap inside the chip.
+ */
+export const ONE_VERSION_CHIP = 'одна версия';
+const SHORT_CHIPS: ReadonlyMap<string, string> = new Map([[ONE_VERSION_SENTENCE, ONE_VERSION_CHIP]]);
+
+export function chipOf(sentence: string): { readonly text: string; readonly title: string | undefined } {
+  const short = SHORT_CHIPS.get(sentence);
+  return short === undefined ? { text: sentence, title: undefined } : { text: short, title: sentence };
+}
+
 function Chip({ set }: { readonly set: ComparisonOverviewSet }) {
   const group = groupOf(set);
+  const chip = chipOf(nextStepSentence(set));
   return (
     <span
-      className={`am-badge am-badge--${GROUP_BADGES[group]}`}
+      className={`am-badge am-badge--${GROUP_BADGES[group]} ${styles.chip}`}
       data-overview-group={group}
       {...(set.next_step === undefined ? {} : { 'data-next-step': set.next_step })}
+      title={chip.title}
     >
-      {nextStepSentence(set)}
+      {chip.text}
     </span>
   );
 }
@@ -206,7 +221,7 @@ function StepCell({
         <span className={aiStyles.queueBadge} title={`Очередь запуска: ${badge.title}`} data-queue-badge="">{badge.short}</span>
       ) : null}
       <span
-        className={`am-badge am-badge--${TONE_BADGES[shown.tone]}`}
+        className={`am-badge am-badge--${TONE_BADGES[shown.tone]} ${styles.cellBadge}`}
         data-step-state={entry.state}
         title={shown.title === '' ? undefined : shown.title}
       >
@@ -242,17 +257,19 @@ function SortHeader({
   sortKey,
   view,
   onView,
+  className,
 }: {
   readonly label: string;
   readonly hint: string;
   readonly sortKey: SortKey;
   readonly view: OverviewView;
   readonly onView: (view: OverviewView) => void;
+  readonly className?: string | undefined;
 }) {
   const active = view.sort.key === sortKey;
   const direction = active ? (view.sort.direction === 'asc' ? ' ▲' : ' ▼') : '';
   return (
-    <th scope="col" aria-sort={active ? (view.sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <th scope="col" className={className} aria-sort={active ? (view.sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button
         type="button"
         className={styles.sortButton}
@@ -541,15 +558,16 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
         />
       ) : (
         <div className={styles.tableBox}>
-          <table className={styles.table}>
+          <table className={`${styles.table} ${styles.stepsTable}`}>
             <thead>
               <tr>
-                <SortHeader label="Документ · следующий шаг" hint="Сортировать по шифру." sortKey="code" view={view} onView={onView} />
-                <SortHeader label="Версии" hint="Сортировать по числу версий." sortKey="versions" view={view} onView={onView} />
+                <SortHeader label="Документ · следующий шаг" hint="Сортировать по шифру." sortKey="code" view={view} onView={onView} className={styles.colCode} />
+                <SortHeader label="Версии" hint="Сортировать по числу версий." sortKey="versions" view={view} onView={onView} className={styles.colVersions} />
                 {SHOWN_STEPS.map((step) => (
                   <th
                     key={step}
                     scope="col"
+                    className={styles.colStep}
                     aria-sort={view.sort.key === step ? (view.sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
                   >
                     {mayAct && (SELECTABLE_STEPS as readonly ComparisonStepId[]).includes(step) ? (

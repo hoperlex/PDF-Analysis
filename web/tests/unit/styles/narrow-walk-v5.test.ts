@@ -23,6 +23,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { SHOWN_STEPS } from '@/entities/version-series';
+
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { declares, declaresIn, withoutMedia } from './css-reads';
 
@@ -95,6 +97,50 @@ describe('«Сравнение версий»: the «Версии» cell is the 
     expect(declares(SERIES, '.versionsCell .note', 'display', /^block$/)).toBe(true);
     expect(declares(SERIES, '.versionsCell .note', 'white-space', /^nowrap$/)).toBe(true);
     expect(source('widgets', 'version-series', 'ui', 'projects-and-stages.tsx')).toContain('<td className={styles.versionsCell}>');
+  });
+});
+
+describe('«Сравнение версий»: the table of the steps keeps the original\'s widths and a badge stays inside its column (UIP-S17-02)', () => {
+  const SERIES = source('widgets', 'version-series', 'ui', 'version-series.module.css');
+  const SELECTORS = ['.stepsTable .chip', '.stepsTable .cellBadge'] as const;
+
+  it('can fail: the old stylesheet, `anywhere` cells and a badge that does not wrap, reads as wrong', () => {
+    const OLD = '.table th, .table td { overflow-wrap: anywhere; }\n.tile, .tileInfo { display: flex; }';
+    for (const column of ['.colCode', '.colVersions', '.colStep'] as const) expect(minRem(OLD, column), column).toBeNull();
+    expect(declares(OLD, '.stepsTable td', 'overflow-wrap', /^break-word$/)).toBe(false);
+    expect(declares(OLD, '.tileInfo', 'margin-left', /^auto$/)).toBe(false);
+    for (const selector of SELECTORS) expect(declares(OLD, selector, 'white-space', /^normal$/), selector).toBe(false);
+  });
+
+  it('floors the columns at about the original\'s 1390 px in all (it was about 1455): the document, the versions and seven steps', () => {
+    const base = withoutMedia(SERIES);
+    const floors = (minRem(base, '.colCode') ?? 0) + (minRem(base, '.colVersions') ?? 0) + SHOWN_STEPS.length * (minRem(base, '.colStep') ?? 0);
+    expect(SHOWN_STEPS.length).toBe(7);
+    expect(floors * 16).toBeGreaterThanOrEqual(1340);
+    expect(floors * 16).toBeLessThanOrEqual(1420);
+    expect(minRem(base, '.colVersions') ?? 0).toBeGreaterThanOrEqual(6.5);
+  });
+
+  it('wraps a word at its own break, not inside it, and a badge in a cell wraps inside its column', () => {
+    expect(declares(SERIES, '.stepsTable td', 'overflow-wrap', /^break-word$/)).toBe(true);
+    expect(declares(SERIES, '.stepsTable th', 'overflow-wrap', /^break-word$/)).toBe(true);
+    expect(declares(SERIES, '.stepsTable td', 'word-break', /^normal$/)).toBe(true);
+    for (const selector of SELECTORS) {
+      expect(declares(SERIES, selector, 'white-space', /^normal$/), selector).toBe(true);
+      expect(declares(SERIES, selector, 'overflow-wrap', /^break-word$/), selector).toBe(true);
+    }
+  });
+
+  it('stands the tile «версий · переходов» at the right end of the row of the tiles', () => {
+    expect(declares(withoutMedia(SERIES), '.tileInfo', 'margin-left', /^auto$/)).toBe(true);
+  });
+
+  it('reads every floor and every wrapping rule from a class the markup carries', () => {
+    const table = source('widgets', 'version-series', 'ui', 'projects-and-stages.tsx');
+    for (const name of ['styles.colCode', 'styles.colVersions', 'styles.colStep', 'styles.stepsTable', 'styles.chip', 'styles.cellBadge']) {
+      expect(table, name).toContain(name);
+    }
+    expect(source('widgets', 'version-series', 'ui', 'ai-step-cell.tsx')).toContain('ownStyles.cellBadge');
   });
 });
 

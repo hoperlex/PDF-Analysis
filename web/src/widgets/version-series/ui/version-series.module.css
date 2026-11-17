@@ -93,6 +93,11 @@
   text-align: left;
 }
 
+/* `UIP-S17-02`: the tile «версий · переходов» stands at the right end of the row of the tiles, as the original's does. */
+.tileInfo {
+  margin-left: auto;
+}
+
 .tile {
   cursor: pointer;
 }
@@ -194,14 +199,51 @@
   position: sticky;
   left: 0;
   z-index: 1;
-  min-width: 10rem;
+  min-width: 14rem;
   max-width: 16rem;
   background: var(--am-surface);
+}
+
+/*
+ * `UIP-S17-02`: the widths of the table of the steps are the original's, about 1390 px of floors (14 rem for the document and its chip,
+ * 6.5 rem for the versions, 9.5 rem for each of the seven steps) where it was about 1455, so the table is no wider than it must be.
+ * A word is not cut in a column (`break-word`, as the shared table's cell since `UIP-G-14`: `anywhere` let a column fall to one letter),
+ * and a badge in a cell is as wide as its column and no wider: it wraps instead of running over the next column.
+ */
+.stepsTable th,
+.stepsTable td {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.colCode {
+  min-width: 14rem;
+}
+
+.colVersions {
+  min-width: 6.5rem;
+}
+
+.colStep {
+  min-width: 9.5rem;
+}
+
+.stepsTable .chip,
+.stepsTable .cellBadge {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+  text-align: left;
 }
 
 @media (max-width: 780px) {
   .tableBox {
     max-height: none;
+  }
+
+  .codeCell,
+  .colCode {
+    min-width: 10rem;
   }
 }
 

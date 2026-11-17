@@ -141,9 +141,19 @@ describe('«Документы и этапы»', () => {
     // the chip is the original's sentence for the step it names and that step's state (OVERVIEW 6.2), with no «Далее:» in front
     for (const sentence of [
       'Идёт загрузка', 'Идёт разбор версий', 'Разбор версии с ошибкой — повторить', 'Идёт сопоставление листов',
-      'Несопоставленных листов: 4 — вручную', 'Сравнение соседних на паузе — продолжить', 'Одна версия — сравнивать не с чем', 'Готово',
+      'Несопоставленных листов: 4 — вручную', 'Сравнение соседних на паузе — продолжить', 'Готово',
     ]) expect(t, sentence).toContain(sentence);
     expect(t).not.toContain('Далее:');
+  });
+
+  it('(UIP-S17-02) says «одна версия» on the chip of a set with one version and keeps the whole sentence in its hint, so it fits its column', () => {
+    const markup = projects();
+    expect(text(markup)).toContain('одна версия');
+    expect(text(markup)).not.toContain('Одна версия — сравнивать не с чем');
+    expect(markup).toMatch(/<span[^>]*data-overview-group="ready"[^>]*title="Одна версия — сравнивать не с чем"[^>]*>одна версия<\/span>/);
+    // the other sentences are said whole and carry no hint of their own: nothing was shortened
+    expect(markup).toMatch(/data-next-step="profile"[^>]*>Идёт разбор версий<\/span>/);
+    expect(markup).not.toMatch(/data-next-step="profile"[^>]*title=/);
   });
 
   it('shows the strip «В загрузке, ещё не в списке документов:» with each unfinished upload', () => {
