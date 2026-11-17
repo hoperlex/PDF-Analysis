@@ -20,8 +20,8 @@ export { sectionChoices, wholeListing } from './model/section-choices';
 // `UIP-S02-06`: the section's cards by group, made of the whole listing.
 export type { DocumentGroup } from './model/group-documents';
 export { GROUP_NAME_MAX_LENGTH, NO_GROUP_LABEL, groupDocuments, groupOf, orderGroupNames } from './model/group-documents';
-export type { GroupDrop, GroupsWalkNoteProps, SectionGroupGrid, SectionGroupsProps } from './ui/section-groups';
-export { GroupsWalkNote, SectionGroup, SectionGroups } from './ui/section-groups';
+export type { GroupDrop, SectionGroupGrid, SectionGroupsProps } from './ui/section-groups';
+export { SectionGroup, SectionGroups } from './ui/section-groups';
 // `UIP-S02-07`: moving a document into a group, by dragging its card or by «Группа…» in the card's menu.
 export type {
   DragSource, EditingAction, EditingState, GroupAnswer, GroupChoice, GroupRequest, MoveNotice, PendingMove,

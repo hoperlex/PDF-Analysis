@@ -16,11 +16,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { DecisionCarriedFrom, NormCitation, Severity } from '@/shared/api';
 import { SEVERITY_VALUES } from '@/shared/api';
-import { groupByCategory, severityTone } from '@/entities/finding';
+import { SEVERITY_LABELS, groupByCategory, severityTone } from '@/entities/finding';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList, FindingRowActions, FindingToolbar, findingNumbers, findingViewOf, pagesParts } from '@/widgets/finding-list';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
+import { parseRules } from '../styles/contrast';
 import { declares } from '../styles/css-reads';
 import { newClient, renderWith } from '../screens/harness';
 import { findingDetail, observation, RUN_ID } from './fixtures';
@@ -160,6 +161,25 @@ describe('the findings table', () => {
 });
 
 const TABLE_CSS = readFileSync(join(WEB_ROOT, 'src/widgets/finding-list/ui/finding-table.module.css'), 'utf8');
+const GLOBALS_CSS = readFileSync(join(WEB_ROOT, 'src/app/globals.css'), 'utf8');
+
+/** The last value a sheet gives a property of a selector (the later rule winning), or `''`. */
+function valueOf(css: string, selector: string, property: string): string {
+  let found = '';
+  for (const rule of parseRules(css, 'test')) {
+    if (rule.selector.split(',').some((part) => part.trim() === selector)) found = rule.declarations.get(property) ?? found;
+  }
+  return found;
+}
+
+/** A length of the sheets, in px: `Npx`, `Nem` of `em`, or a `var(--token)` of the root, however many steps deep. */
+function lengthPx(value: string, em: number): number {
+  const token = /^var\((--[\w-]+)\)$/.exec(value.trim());
+  if (token !== null) return lengthPx(valueOf(GLOBALS_CSS, ':root', token[1] as string), em);
+  const length = /^(\d+(?:\.\d+)?)(px|em)$/.exec(value.trim());
+  if (length === null) throw new Error(`not a length: ${value}`);
+  return Number(length[1]) * (length[2] === 'em' ? em : 1);
+}
 
 /** The opening tag of a finding's row. */
 function rowTag(markup: string, uid: string): string {
@@ -296,13 +316,74 @@ describe('the size of a row and its words', () => {
       return Number(found?.[1]);
     });
     expect(widths.reduce((sum, width) => sum + width, 0)).toBe(100);
-    expect(widths[1]).toBeGreaterThanOrEqual(14);
+    // `UIP-DEBT-02`: the model's proposal in one line asks for 16 % (the test below counts it); it was 14 %.
+    expect(widths[1]).toBeGreaterThanOrEqual(16);
     // The finding is the widest column; the decision column is the second, for the whole line of its cell (`UIP-FIX-17`).
     const text = widths[3] as number;
     const decision = widths[6] as number;
     expect(text).toBe(Math.max(...widths));
+    expect(text).toBeGreaterThan(decision);
     expect(decision).toBe([...widths].sort((left, right) => right - left)[1]);
     expect(decision).toBeGreaterThanOrEqual(24);
+  });
+
+  /**
+   * `UIP-DEBT-02`: the pill of the model's proposal -- the name, `· предложено` -- stands in one line in its column at 1440 px. The suite
+   * cannot measure a width, so the width is counted: the pill is the name and the qualifier at the widest advance of the monospace faces
+   * `--am-font-mono` names (0.602 em: DejaVu Sans Mono and Menlo; Consolas and Liberation Mono are 0.55 and 0.6), the pill's own gap, padding
+   * and border read from `globals.css`, against the column's share of the table less what the cell keeps of its padding. The count is run
+   * first on sheets that lack the cure, so it can fail.
+   */
+  describe('the pill of a proposal', () => {
+    const ADVANCE = 0.602;
+    const PAGE = 1440;
+    const TABLE = PAGE - 2 * 16 - 2; // the page's gutter of 16 px a side, the frame's border of 1 px a side
+    const MARK_CHARS = '· предложено'.length;
+
+    function room(css: string): number {
+      const share = Number(/\.colSeverity\s*\{[^}]*width:\s*(\d+)%/.exec(css)?.[1]);
+      const padding = valueOf(css, '.row > td.severity', 'padding-inline') || valueOf(css, '.row > td', 'padding').split(/\s+/)[1] || '';
+      return (share / 100) * TABLE - 2 * lengthPx(padding, 0);
+    }
+    function pill(name: string): { readonly name: number; readonly whole: number } {
+      const font = lengthPx(valueOf(GLOBALS_CSS, '.am-badge', 'font-size'), 0);
+      const mark = font * lengthPx(valueOf(GLOBALS_CSS, '.am-badge__qualifier', 'font-size'), 1);
+      const padding = lengthPx(valueOf(GLOBALS_CSS, '.am-badge', 'padding').split(/\s+/)[1] ?? '', 0);
+      const border = lengthPx(valueOf(GLOBALS_CSS, '.am-badge', 'border').split(/\s+/)[0] ?? '', 0);
+      const chrome = 2 * padding + 2 * border;
+      const alone = name.length * ADVANCE * font;
+      return { name: alone + chrome, whole: alone + lengthPx(valueOf(GLOBALS_CSS, '.am-badge', 'gap'), 0) + MARK_CHARS * ADVANCE * mark + chrome };
+    }
+    const fits = (css: string, name: string) => pill(name).whole <= room(css);
+
+    const WIDEST = SEVERITY_LABELS.operational;
+    const NARROWER_COLUMN = TABLE_CSS.replace(/(\.colSeverity\s*\{[^}]*width:\s*)16%/, (_all, head: string) => `${head}14%`);
+    const WIDER_CELL_PADDING = TABLE_CSS.replace(/\.row > td\.severity\s*\{[^}]*\}/, '');
+
+    it('counts: the old column and the old padding cannot hold it, so the count can fail', () => {
+      expect(WIDEST).toBe('Эксплуатационное');
+      expect(fits(NARROWER_COLUMN, WIDEST)).toBe(false);
+      expect(fits(WIDER_CELL_PADDING, WIDEST)).toBe(false);
+    });
+
+    it('fits the four names that are one word in the column, the longest of them with room to spare', () => {
+      for (const severity of ['critical', 'economic', 'operational', 'recommendation'] as const) {
+        expect(fits(TABLE_CSS, SEVERITY_LABELS[severity]), severity).toBe(true);
+      }
+      expect(room(TABLE_CSS) - pill(WIDEST).whole).toBeGreaterThanOrEqual(4);
+    });
+
+    it('puts «Проверить смежный раздел» in a line of its own and «· предложено» under it, as the name alone is 166 px', () => {
+      const name = SEVERITY_LABELS.check_adjacent;
+      expect(fits(TABLE_CSS, name)).toBe(false);
+      expect(pill(name).name).toBeLessThanOrEqual(room(TABLE_CSS));
+    });
+
+    it('never cuts the word: the qualifier is one piece, and the pill still wraps between its pieces for a narrow cell', () => {
+      expect(declares('.severity { }', '.severity :global(.am-badge__qualifier)', 'white-space', /^nowrap$/)).toBe(false);
+      expect(declares(TABLE_CSS, '.severity :global(.am-badge__qualifier)', 'white-space', /^nowrap$/)).toBe(true);
+      expect(declares(TABLE_CSS, '.severity :global(.am-badge)', 'flex-wrap', /^wrap$/)).toBe(true);
+    });
   });
 });
 

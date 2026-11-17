@@ -28,9 +28,14 @@
   width: 5%;
 }
 
-/* Wide enough for «Эксплуатационное» in a pill; the longer names wrap between their words. */
+/*
+ * `UIP-DEBT-02`: wide enough for the longest pill of the model's proposal, «Эксплуатационное · предложено», in one line at 1440 px
+ * (a table of 1440 - 2 x 16 - 2 x 1 = 1406 px): 16 % is 225 px, the cell keeps 217 px of it and the pill, at the monospace face's
+ * widest advance (0.602 em), is 211 px. «Проверить смежный раздел» is 166 px by itself, so its «· предложено» goes under it; the
+ * names wrap between their words and «предложено» is never cut (`.severity` below).
+ */
 .colSeverity {
-  width: 14%;
+  width: 16%;
 }
 
 .colPages {
@@ -39,7 +44,7 @@
 
 /* The finding is the widest column of the table. */
 .colText {
-  width: 26%;
+  width: 25%;
 }
 
 .colNorms {
@@ -52,7 +57,7 @@
 
 /* Wide enough for the whole line of the «Решение» cell (the sign, the choice of severity, ✓, ✕ and «Причина») at the width of a desktop. */
 .colDecision {
-  width: 25%;
+  width: 24%;
 }
 
 .head {
@@ -175,11 +180,23 @@
   text-align: center;
 }
 
-/* A pill in this column breaks between its words, and drops «предложено» under the name, instead of running out of the cell. */
+/* `UIP-DEBT-02`: 4 px of padding a side, not 8 -- none of a cell's padding shows, and the 8 px it gives back are the pill's. */
+.row > td.severity {
+  padding-inline: var(--am-gap-xs);
+}
+
+/*
+ * A pill in this column breaks between its words, and drops «предложено» under the name, instead of running out of the cell; the
+ * word «· предложено» itself is one piece, so a narrow cell moves it as a whole and never splits it.
+ */
 .severity :global(.am-badge) {
   flex-wrap: wrap;
   justify-content: center;
   white-space: normal;
+}
+
+.severity :global(.am-badge__qualifier) {
+  white-space: nowrap;
 }
 
 .none {

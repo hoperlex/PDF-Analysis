@@ -7,7 +7,8 @@
  *
  * Drawn only when the section has a group at all (`groupDocuments` answers `null` otherwise, and the page draws the plain grid with
  * no heading). The groups are made of the whole listing, so the numbers in the headings are the groups' own: while the pages are being
- * read the page says so ({@link GroupsWalkNote}) and when one failed it says that, with «Повторить» — it never draws groups from a part.
+ * read, or when one failed, it draws no group from a part — the one line that says so, with «Повторить», is the row over the cards
+ * (`SectionBatchBar`), which the choosing of whole-section documents shares (`UIP-DEBT-02`).
  *
  * The Σ card that opens the section's grid stays the first cell of the first group, as the original's does. Everything else a grid
  * of cards takes (the addresses, the selection box) is the same for every group and comes in once, as `grid`.
@@ -17,12 +18,11 @@
  * so the card can be taken out of its group by dropping it there; it is not drawn at any other time (a group is there as long as a
  * document is in it).
  *
- * Presentational: the groups, the walk, the drag and the cards' slots come in as props.
+ * Presentational: the groups, the drag and the cards' slots come in as props.
  */
 
 import type { DragEvent, ReactNode } from 'react';
 
-import { ErrorState } from '@/shared/ui';
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { DocumentCardGridProps } from '@/entities/document-version';
 
@@ -30,7 +30,6 @@ import type { DocumentGroup } from '../model/group-documents';
 import { NO_GROUP_LABEL } from '../model/group-documents';
 import { dropRequest } from '../model/group-move';
 import type { DragSource } from '../model/group-move';
-import type { ListingWalk } from '../model/use-listing-walk';
 import styles from './section-groups.module.css';
 
 /** What every group's grid takes but its documents and its first cell: the same for each group. */
@@ -128,36 +127,4 @@ export function SectionGroups({ groups, leading, grid, drop }: SectionGroupsProp
       ))}
     </div>
   );
-}
-
-export interface GroupsWalkNoteProps {
-  /** The listing read to its end, or `idle` when the page is all of it. */
-  readonly walk: ListingWalk;
-}
-
-/**
- * What the page says while it cannot yet say whether the section has groups: the line that the pages are being read, and, when one
- * could not be read, the error with the retry. Nothing once the listing is known whole.
- */
-export function GroupsWalkNote({ walk }: GroupsWalkNoteProps) {
-  if (walk.status === 'pending') {
-    return (
-      <p className={styles.reading} role="status" data-groups-walk="pending">
-        Читаю все страницы раздела…
-      </p>
-    );
-  }
-  if (walk.status === 'failed') {
-    return (
-      <div className={styles.failed} data-groups-walk="failed">
-        <ErrorState
-          title="Не удалось прочитать все страницы раздела"
-          detail="Группы показываются, только когда раздел прочитан целиком; пока ниже карточки этой страницы без групп."
-          onRetry={walk.retry}
-          retryLabel="Повторить"
-        />
-      </div>
-    );
-  }
-  return null;
 }

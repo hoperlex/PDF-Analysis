@@ -70,7 +70,7 @@ function documentKeys(client: ReturnType<typeof newClient>): readonly string[] {
 describe('a section of more than one page', () => {
   it('counts the controls over every page, not the fifty in view', () => {
     const markup = render(seededTwoPages());
-    expect(markup).toContain('data-batch-scope="section"');
+    expect(markup).not.toContain('data-listing-walk');
     expect(markup).toContain('data-select-all="5"');
     expect(markup).toContain('aria-label="Выбрать все документы раздела: 5"');
     expect(markup).toContain('title="Документов, которые не запускались: 3"');
@@ -82,8 +82,11 @@ describe('a section of more than one page', () => {
     const client = newClient();
     client.setQueryData(key(undefined), page(FIRST_PAGE, 'c2'));
     const markup = render(client);
-    expect(markup).toContain('data-batch-walk="pending"');
+    expect(markup).toContain('data-listing-walk="pending"');
     expect(markup).toContain('Читаю все страницы раздела');
+    // `UIP-DEBT-02`: the walk is one, and so is the line that says it is being read — the groups and the choosing share it.
+    expect(markup.match(/Читаю все страницы раздела/g)).toHaveLength(1);
+    expect(markup.match(/data-listing-walk=/g)).toHaveLength(1);
     expect(markup).toContain('data-select-all="waiting"');
     expect(markup).toMatch(/<input[^>]*aria-label="Выбрать все документы раздела"[^>]*disabled=""/);
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Выделить необработанные<\/button>/);
@@ -99,9 +102,13 @@ describe('a section of more than one page', () => {
       message: 'Сообщение об отказе.', correlation_id: correlation, retryable: false,
     }, correlation));
     const markup = render(client);
-    expect(markup).toContain('data-batch-walk="failed"');
-    expect(markup).toContain('Не удалось прочитать все страницы раздела');
+    expect(markup).toContain('data-listing-walk="failed"');
+    expect(markup).toContain('Не удалось прочитать все страницы раздела: группы не показаны, выбрать документы целиком пока нельзя.');
     expect(markup).toContain('>Повторить</button>');
+    // `UIP-DEBT-02`: one line and one «Повторить» for the one walk, not one for the groups and one for the choosing.
+    expect(markup.match(/Не удалось прочитать все страницы раздела/g)).toHaveLength(1);
+    expect(markup.match(/>Повторить<\/button>/g)).toHaveLength(1);
+    expect(markup.match(/data-listing-walk=/g)).toHaveLength(1);
     expect(markup).toContain('data-select-all="waiting"');
     expect(markup).not.toContain('Выбрать все документы раздела:');
   });
@@ -122,17 +129,18 @@ describe('a section that fits one page', () => {
     const client = newClient();
     client.setQueryData(key(undefined), page(FIRST_PAGE, null));
     const markup = render(client);
-    expect(markup).toContain('data-batch-scope="page"');
     expect(markup).toContain('data-select-all="2"');
     expect(markup).toContain('title="Документов, которые не запускались: 1"');
-    expect(markup).not.toContain('data-batch-walk');
+    expect(markup).not.toContain('data-listing-walk');
     expect(documentKeys(client)).toHaveLength(1);
   });
 
   it('draws no row at all where no document can be started', () => {
     const client = newClient();
     client.setQueryData(key(undefined), page([version()], null));
-    expect(render(client)).not.toContain('data-batch-controls');
+    const markup = render(client);
+    expect(markup).not.toContain('data-select-all');
+    expect(markup).not.toContain('data-listing-walk');
   });
 });
 
@@ -142,7 +150,6 @@ describe('a session that cannot start an audit', () => {
     client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
     client.setQueryData(key(undefined), page(FIRST_PAGE, 'c2'));
     const markup = render(client);
-    expect(markup).not.toContain('data-batch-controls');
     expect(markup).not.toContain('data-select-all');
     expect(markup).not.toContain('Выделить необработанные');
     expect(markup).not.toContain('data-tally-select');
@@ -151,7 +158,23 @@ describe('a session that cannot start an audit', () => {
     // `UIP-S02-06`: this test said «reads no page beyond the one in view» while only «Выбрать все» needed the whole listing. The groups are
     // made of the whole listing and are shown to everyone, so the second page is read for a viewer too (here it is being read).
     expect(documentKeys(client)).toHaveLength(2);
-    expect(markup).toContain('data-groups-walk="pending"');
+    expect(markup).toContain('data-listing-walk="pending"');
+    expect(markup.match(/Читаю все страницы раздела/g)).toHaveLength(1);
+  });
+
+  it('is told, when a page could not be read, that the groups are not shown and nothing of choosing, with one «Повторить»', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+    client.setQueryData(key(undefined), page(FIRST_PAGE, 'c2'));
+    const correlation = '0f0e9d8c-7b6a-4948-b726-150413021100';
+    seedError(client, key('c2'), new ApiError(503, {
+      contract_version: '1.58.0', error_code: 'dependency_unavailable',
+      message: 'Сообщение об отказе.', correlation_id: correlation, retryable: false,
+    }, correlation));
+    const markup = render(client);
+    expect(markup).toContain('Не удалось прочитать все страницы раздела: группы не показаны.');
+    expect(markup).not.toContain('выбрать документы целиком');
+    expect(markup.match(/>Повторить<\/button>/g)).toHaveLength(1);
   });
 });
 
@@ -209,7 +232,7 @@ describe('the header and the row over the cards on their own', () => {
 
   it('keeps the start out of the row over the cards: the row has the words about the reading and the panel, and no button to start', () => {
     expect(bar({ status: 'complete', items: WHOLE }, 5)).not.toContain('Запустить');
-    expect(bar({ status: 'pending' }, 5)).toContain('data-batch-walk="pending"');
+    expect(bar({ status: 'pending' }, 5)).toContain('data-listing-walk="pending"');
     expect(bar({ status: 'pending' }, 5)).not.toContain('Запустить');
   });
 });
