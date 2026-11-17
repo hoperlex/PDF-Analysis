@@ -53,17 +53,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The page says the pages are being read, and, when one failed, says that and offers to try again. */
-.reading {
-  margin: 0 0 var(--am-gap-sm);
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-}
-
-.failed {
-  margin-bottom: var(--am-gap-sm);
-}
-
 /* `UIP-S02-07`: the group the dragged card is over takes the accent's frame, solid, so the place it will land is the one that is lit. */
 .groupOver {
   border-style: solid;

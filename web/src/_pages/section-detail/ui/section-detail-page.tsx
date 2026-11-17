@@ -47,7 +47,7 @@ import { wholeListing } from '../model/section-choices';
 import { useListingWalk } from '../model/use-listing-walk';
 import { SectionBatchBar } from './section-batch-bar';
 import { GroupEditingLayer, useGroupEditing } from './group-editing';
-import { GroupsWalkNote, SectionGroups } from './section-groups';
+import { SectionGroups } from './section-groups';
 import { SectionHeader } from './section-header';
 import { SectionSelectionBar } from './section-selection-bar';
 import styles from './section-detail-page.module.css';
@@ -197,8 +197,6 @@ function SectionDetail({
         )}
         {groups === null ? (
           <>
-            {/* `UIP-S02-06`: until the whole listing is read the page cannot say whether the section has groups. */}
-            <GroupsWalkNote walk={walk} />
             <DocumentCardGrid documents={query.data.items} leading={sigma} {...grid} />
             <div className="am-pager">
               {cursors.length === 0 ? null : (
@@ -252,7 +250,7 @@ function SectionDetail({
             <TagFilter projectUid={projectUid} tag={tag} onTag={(next) => { setTag(next); setCursors([]); }} />
           </div>
           {query.data === undefined ? null : (
-            <SectionBatchBar projectUid={projectUid} selection={batch} pageDocuments={query.data.items} walk={walk} />
+            <SectionBatchBar projectUid={projectUid} selection={batch} walk={walk} />
           )}
           {body}
           {/* `UIP-S02-07`: under the cards, what was said of the last move, the command of a dropped card and the window «Группа…». */}

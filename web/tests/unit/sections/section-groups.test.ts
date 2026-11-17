@@ -136,7 +136,7 @@ describe('the section page of a section with groups', () => {
     expect(markup).not.toContain('data-group-kind');
     expect(headings(markup)).toEqual([]);
     expect(markup).toContain('data-document-cards="2"');
-    expect(markup).not.toContain('data-groups-walk');
+    expect(markup).not.toContain('data-listing-walk');
   });
 
   it('is the same to a session that cannot act as an expert', () => {
@@ -157,7 +157,7 @@ describe('a section of more than one page', () => {
     const markup = render(client);
     // the first page held one of «Корпус А», the whole listing holds three
     expect(headings(markup)).toEqual([['Корпус А', 3], ['Корпус Б', 1], [NO_GROUP_LABEL, 1]]);
-    expect(markup).not.toContain('data-groups-walk');
+    expect(markup).not.toContain('data-listing-walk');
     expect(markup).not.toContain('>Далее<');
     expect(markup.match(/data-document-uid=/g)).toHaveLength(5);
   });
@@ -176,7 +176,9 @@ describe('a section of more than one page', () => {
     const client = newClient();
     client.setQueryData(key(undefined), page(FIRST, 'c2'));
     const markup = render(client);
-    expect(markup).toMatch(/<p[^>]*role="status"[^>]*data-groups-walk="pending"[^>]*>Читаю все страницы раздела…<\/p>/);
+    expect(markup).toMatch(/<p[^>]*role="status"[^>]*data-listing-walk="pending"[^>]*><span[^>]*>Читаю все страницы раздела…<\/span><\/p>/);
+    // `UIP-DEBT-02`: an expert's page has the choosing waiting for the same walk, and still says it once.
+    expect(markup.match(/Читаю все страницы раздела/g)).toHaveLength(1);
     expect(markup).not.toContain('data-section-groups');
     expect(headings(markup)).toEqual([]);
     // the page's own cards stay, plain, with the way to the next page
@@ -193,10 +195,11 @@ describe('a section of more than one page', () => {
       message: 'Сообщение об отказе.', correlation_id: correlation, retryable: false,
     }, correlation));
     const markup = render(client);
-    expect(markup).toMatch(/data-groups-walk="failed"[^]*Не удалось прочитать все страницы раздела[^]*>Повторить<\/button>/);
+    expect(markup).toMatch(/data-listing-walk="failed"[^]*Не удалось прочитать все страницы раздела[^]*>Повторить<\/button>/);
+    expect(markup.match(/>Повторить<\/button>/g)).toHaveLength(1);
     expect(markup).not.toContain('data-section-groups');
     expect(headings(markup)).toEqual([]);
-    expect(markup).not.toContain('data-groups-walk="pending"');
+    expect(markup).not.toContain('data-listing-walk="pending"');
   });
 
   it('keeps the narrowing of the page: the groups of «не запускались» are those of that listing', () => {

@@ -73,7 +73,7 @@
   padding-bottom: var(--am-gap-lg);
 }
 
-/* The note of the listing being read or why it stopped, under the filters (the choosing itself is the header's, `UIP-S02-01`). */
+/* The one note of the listing being read or why it stopped, under the filters (the choosing itself is the header's, `UIP-S02-01`). */
 .batchBar {
   display: flex;
   flex-wrap: wrap;
@@ -96,9 +96,4 @@
   min-height: var(--am-target-min);
   padding-block: calc((var(--am-target-min) - 1lh) / 2);
   margin-block: calc((1lh - var(--am-target-min)) / 2);
-}
-
-/* A row with nothing in it (no choice made, nothing being read) takes no height. */
-.batchBar:empty {
-  display: none;
 }
