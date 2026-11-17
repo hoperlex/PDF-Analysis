@@ -60,13 +60,26 @@ What it does, in five threads
 Temporaries
 -----------
 A stage's temporary PDF is removed by a context manager, which a ``SIGKILL`` never reaches. The
-sweep at process start (``__main__``) takes what is older than the live attempt's ceiling plus a
-minute, and the files of the kill that *caused* the restart are younger than that, so they stay
-until a later start -- never, in a worker that is not restarted again. This thread repeats the
-sweep while the worker runs, with a margin of :data:`TEMPORARIES_LIVE_MARGIN_SECONDS` over the
-live attempt's absolute ceiling (``ATTEMPT_HARD_CAP_SECONDS``, two hours)
-because this process's own attempts may be live. Housekeeping: a sweep that fails is
-logged at error and tried again; it never stops the worker.
+sweep at process start (``__main__``) takes what is older than ``jobs.temporaries.STALE_AFTER_SECONDS``
+(two hours and a minute), and the files of the kill that *caused* the restart are younger than that,
+so they stay until a later start -- or until the sweep of this thread. It repeats the sweep while the
+worker runs, with a margin of :data:`TEMPORARIES_LIVE_MARGIN_SECONDS` over that age, and **only while
+no slot is busy**: a live attempt has no age ceiling (`R-155c`), so no age proves that the attempt
+which made a file is gone while one of this process's attempts may still hold it. Housekeeping: a
+sweep that fails is logged at error and tried again; it never stops the worker.
+
+Slot recovery
+-------------
+The fence of an attempt (the silence watchdog of ``jobs.lease``, ``cancelRun``, another process's
+reclaim, a lost lease) revokes its authority, not its thread, and a slot is a thread. A thread that
+hangs would hold its slot -- and, with the default of one slot, every run behind it -- for ever. The
+heartbeat of a revoked attempt waits :data:`~auditmanager.jobs.public.ATTEMPT_RETURN_GRACE_SECONDS`
+for its work thread to return, and if it has not, tells this service (:meth:`WorkerService._slot_lost`,
+installed with ``jobs.public.install_slot_recovery``). The service then stops claiming, marks itself
+:attr:`~WorkerService.failed` and stops waiting for that run, so ``__main__`` drains the *other* slots
+for the usual bounded time and exits non-zero; the container's restart policy (``restart:
+unless-stopped`` of the ``worker`` service in ``compose.server.yml``) starts a fresh worker under a new
+identity. State is durable: the leases of what was still in flight expire and are reclaimed.
 
 Drain
 -----
@@ -91,11 +104,14 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.jobs.public import (
-    ATTEMPT_HARD_CAP_SECONDS,
     JOB_WAKEUP_CHANNEL,
+    TEMPORARIES_STALE_AFTER_SECONDS,
     ExecutionNotClaimed,
     JobRepository,
+    RevokedAttempt,
     SweepReport,
+    current_slot_recovery,
+    install_slot_recovery,
     sweep_stale_temporaries,
 )
 from auditmanager.workers.registry import HEARTBEAT_SECONDS, WorkerRegistry
@@ -130,11 +146,9 @@ PROBE_POLL_SECONDS: Final[float] = 2.0
 #: (`DEBT-TEMP-SWEEP-01`). A pass lists one directory and removes nothing unless something
 #: stale is there.
 TEMPORARIES_SWEEP_SECONDS: Final[float] = 300.0
-#: What a running worker adds to the live attempt's ceiling before it calls a temporary stale. The
-#: sweep at process start runs before any attempt exists and adds a minute; here this process's own
-#: attempts may hold a file, so the margin is five minutes. The file is made after the claim and
-#: the heartbeat fences the attempt no later than its ceiling, so an older file belongs to an
-#: attempt that no longer holds authority.
+#: What a running worker adds to the stale age (``jobs.temporaries.STALE_AFTER_SECONDS``) before it calls a temporary stale. The sweep at
+#: process start runs before any attempt exists; the running sweep runs only while no slot is busy (``_temporaries_loop``), and the margin
+#: of five minutes covers a slot that becomes busy between that look and the directory listing: its file is younger than any age here.
 TEMPORARIES_LIVE_MARGIN_SECONDS: Final[float] = 300.0
 
 #: Files in the state directory. The identity is written once; the heartbeat file's
@@ -168,9 +182,10 @@ class ComparisonWork(Protocol):
 
 
 def sweep_running_temporaries() -> SweepReport:
-    """The sweep of a worker that is running: the start sweep's rules, a longer margin."""
+    """The sweep of a worker that is running: the start sweep's rules, a longer margin. The caller runs it only while no slot
+    is busy (:meth:`WorkerService._temporaries_loop`)."""
     return sweep_stale_temporaries(
-        older_than=float(ATTEMPT_HARD_CAP_SECONDS) + TEMPORARIES_LIVE_MARGIN_SECONDS,
+        older_than=float(TEMPORARIES_STALE_AFTER_SECONDS) + TEMPORARIES_LIVE_MARGIN_SECONDS,
     )
 
 
@@ -324,6 +339,9 @@ class WorkerService:
         #: The runs handed to a slot and not yet finished, by their future. The run ids are what
         #: the hint must not offer again and must treat as occupying their connection.
         self._in_flight: dict[Future[None], str] = {}
+        #: The runs whose slot was declared lost (:meth:`_slot_lost`): their work thread outlived the revocation of its authority and is
+        #: no longer waited for. They still count in :attr:`busy` -- the thread does hold the slot -- but not in :meth:`drain`.
+        self._abandoned: set[str] = set()
         #: `CMP-WORK-01`: the comparison items handed to a slot and not yet finished, by their
         #: future. Kept apart from the Runs because ``_in_flight``'s values are Run ids, which the
         #: hint offers to the queue; they count in :attr:`busy`, so they occupy a slot.
@@ -347,7 +365,7 @@ class WorkerService:
 
     @property
     def failed(self) -> bool:
-        """The registry row disappeared under the process; it must restart."""
+        """The process must restart: the registry row disappeared under it, or a slot was lost (:meth:`_slot_lost`)."""
         return self._failed.is_set()
 
     @property
@@ -372,6 +390,8 @@ class WorkerService:
             "worker %s registered (version %s, %d slot(s))",
             self._worker_id, self._version, self._slots,
         )
+        # `R-155c`: the heartbeat of an attempt whose work thread outlives the revocation of its authority tells this worker.
+        install_slot_recovery(self._slot_lost)
         loops = [
             (self._heartbeat_loop, "auditmanager-worker-heartbeat"),
             (self._dispatch_loop, "auditmanager-worker-dispatch"),
@@ -392,7 +412,10 @@ class WorkerService:
         deadline = None if timeout is None else monotonic() + timeout
         while True:
             with self._lock:
-                pending = set(self._in_flight) | set(self._comparison_in_flight)
+                # A run whose slot was declared lost (`_slot_lost`) is not waited for: its thread is not coming back.
+                pending = {
+                    future for future, run_id in self._in_flight.items() if run_id not in self._abandoned
+                } | set(self._comparison_in_flight)
             if not pending:
                 return True
             remaining = None if deadline is None else deadline - monotonic()
@@ -404,9 +427,27 @@ class WorkerService:
         """Stop every thread this service started. Does not wait for runs; see drain."""
         self._draining.set()
         self._stopped.set()
+        if current_slot_recovery() == self._slot_lost:
+            install_slot_recovery(None)
         for thread in self._threads:
             thread.join(timeout=_TICK_SECONDS * 5)
         self._pool.shutdown(wait=False, cancel_futures=True)
+
+    def _slot_lost(self, notice: RevokedAttempt) -> None:
+        """The work thread of ``notice.run_id`` has outlived the revocation of its authority by the grace (`R-155c`).
+
+        Called from that attempt's heartbeat thread. The slot is gone for good, so this worker stops claiming, is marked
+        :attr:`failed`, and no longer waits for that run in :meth:`drain`: ``__main__`` drains the other slots for the usual
+        bounded time and exits non-zero, and the container's restart policy starts a fresh worker. Leases are reclaimed."""
+        with self._lock:
+            self._abandoned.add(notice.run_id)
+        _log.error(
+            "worker %s: the work thread of run %s (attempt %s) has not returned %g s after its authority was revoked (%s); its slot "
+            "is lost, so this worker stops claiming and exits, and the container restart policy starts a fresh one",
+            self._worker_id, notice.run_id, notice.attempt_id, notice.grace_seconds, notice.reason,
+        )
+        self._draining.set()
+        self._failed.set()
 
     # -- the loops ------------------------------------------------------------------
     def _heartbeat_loop(self) -> None:
@@ -490,6 +531,11 @@ class WorkerService:
         itself logs what it removed and what it could not.
         """
         while not self._stopped.wait(self._temporaries_sweep_seconds):
+            busy = self.busy
+            if busy:
+                # `R-155c`: a live attempt has no age ceiling, so while a slot is in use a stage temporary of any age may be its own.
+                _log.debug("worker %s: temporaries sweep skipped, %d slot(s) busy", self._worker_id, busy)
+                continue
             try:
                 self._temporaries_sweep()
             except Exception:

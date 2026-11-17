@@ -4,12 +4,14 @@
 The sweep itself (exact names, age, owner, links, errors) is proved in
 ``tests/unit/jobs/test_stale_temporaries.py``, and the two process starts that call it in
 ``tests/unit/runs/test_serving_start_sweeps_temporaries.py``. What neither can show: the sweep at
-start takes only what is older than the live attempt's ceiling plus a minute, and the files of the
-kill that *caused* the restart are younger, so they stay for as long as the worker is not
-restarted again. These tests show that a **started worker service** sweeps again and again while it runs,
-keeps going when a sweep fails, stops when the service stops, refuses a zero interval, and --
-through the real sweep, with a clock moved forward -- removes the stale stage files, keeps a
-file younger than the live margin and a file it did not write.
+start takes only what is older than the stale age (7260 s), and the files of the kill that *caused*
+the restart are younger, so they stay until the running sweep takes them -- which it does only while
+**no slot is busy** (`R-155c`: a live attempt has no age ceiling, so no age proves its file is gone).
+These tests show that a **started worker service** sweeps again and again while it runs, skips a pass
+while a slot is busy and takes it up again when the slot is free, keeps going when a sweep fails,
+stops when the service stops, refuses a zero interval, and -- through the real sweep, with a clock
+moved forward -- removes the stale stage files, keeps a file younger than the live margin and a file
+it did not write.
 
 No database, no container: the service runs over a registry and a session factory that answer
 and do nothing else, and a wake-up that only waits.
@@ -30,7 +32,8 @@ from typing import Any, cast
 import pytest
 
 from auditmanager.jobs import temporaries
-from auditmanager.jobs.public import ATTEMPT_HARD_CAP_SECONDS, SweepReport
+from auditmanager.jobs.public import SweepReport
+from auditmanager.jobs.temporaries import STALE_AFTER_SECONDS
 from auditmanager.workers import service as service_module
 from auditmanager.workers.service import WorkerService, sweep_running_temporaries
 
@@ -153,6 +156,38 @@ def test_a_started_worker_sweeps_again_and_again_and_stops_sweeping_when_it_stop
     assert sweep.calls == settled, "the sweep went on after the service stopped"
 
 
+def test_the_sweep_is_skipped_while_a_slot_is_busy_and_taken_up_when_it_is_free(
+    make_service: Callable[..., WorkerService],
+) -> None:
+    """`R-155c`: a live attempt has no age ceiling, so while one of this worker's slots is in use a temporary of any age may be
+    its own. The service knows its attempts (``busy``), so it does not sweep then -- and does when the last slot is free."""
+    sweep = _CountingSweep(wanted=1)
+    service = make_service(temporaries_sweep=sweep, temporaries_sweep_seconds=0.02)
+    release = threading.Event()
+    running = threading.Event()
+
+    def hold_a_slot(_run: str, _worker: str) -> None:
+        running.set()
+        release.wait(timeout=30)
+
+    service._execute = hold_a_slot  # type: ignore[attr-defined]
+    service._worker_id = "wrk_unit"  # type: ignore[attr-defined]  # registered, as `start` would
+    future = service._pool.submit(service._run_one, "run_busy")  # type: ignore[attr-defined]
+    with service._lock:  # type: ignore[attr-defined]
+        service._in_flight[future] = "run_busy"  # type: ignore[attr-defined]
+    future.add_done_callback(service._finished)  # type: ignore[attr-defined]
+    assert running.wait(timeout=10) and service.busy == 1
+
+    service.start()
+    time.sleep(0.4)  # twenty passes' worth
+    assert sweep.calls == 0, "a pass swept while a slot was busy"
+
+    release.set()
+    assert sweep.enough.wait(timeout=10), "the sweep did not resume when the slot was free"
+    assert service.busy == 0
+    service.stop()
+
+
 def test_a_sweep_that_raises_is_logged_at_error_and_the_next_pass_still_runs(
     make_service: Callable[..., WorkerService], caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -220,11 +255,10 @@ def directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Directory:
     return _Directory(tmp_path, monkeypatch)
 
 
-def test_the_running_sweep_leaves_what_a_live_attempt_could_still_hold(directory: _Directory) -> None:
+def test_the_running_sweep_leaves_what_is_younger_than_the_stale_age_and_the_margin(directory: _Directory) -> None:
     directory.populate()
-    # 200 s past a live attempt's ceiling: beyond the start sweep's minute, short of the live
-    # margin (300 s).
-    directory.advance_to(ATTEMPT_HARD_CAP_SECONDS + 200)
+    # 200 s past the stale age: short of the live margin (300 s).
+    directory.advance_to(STALE_AFTER_SECONDS + 200)
 
     report = sweep_running_temporaries()
 
@@ -236,7 +270,7 @@ def test_the_running_sweep_removes_the_stale_stage_temporaries_and_only_those(
     directory: _Directory,
 ) -> None:
     directory.populate()
-    directory.advance_to(ATTEMPT_HARD_CAP_SECONDS + 400)
+    directory.advance_to(STALE_AFTER_SECONDS + 400)
 
     report = sweep_running_temporaries()
 
@@ -250,7 +284,7 @@ def test_a_started_worker_with_the_default_sweep_reclaims_a_killed_stage_file(
 ) -> None:
     """The default wiring: no sweep is passed, and the started service still reclaims."""
     directory.populate()
-    directory.advance_to(ATTEMPT_HARD_CAP_SECONDS + 400)
+    directory.advance_to(STALE_AFTER_SECONDS + 400)
     service = make_service(temporaries_sweep_seconds=0.02)
 
     service.start()

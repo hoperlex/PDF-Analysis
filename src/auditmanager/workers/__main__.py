@@ -3,7 +3,10 @@
 ``serve`` builds the worker runtime from the environment (``EXECUTION_ROLE=worker``, the
 API's configuration without ``AUDITMANAGER_API_TOKEN``), registers, and runs until
 ``SIGTERM`` or ``SIGINT``; then it drains for at most :data:`DRAIN_SECONDS` and exits. A
-refused configuration exits ``2`` before anything is registered.
+refused configuration exits ``2`` before anything is registered. A service that marks itself
+failed -- its registry row vanished, or a slot was lost because the work thread of a revoked attempt
+did not return (`R-155c`, ``WorkerService._slot_lost``) -- is drained and exits ``1`` without a signal,
+and the container's restart policy brings a fresh worker.
 
 ``health`` is the container's health check. It reads only the state directory -- the
 identity file and the heartbeat file's age -- and touches neither the database nor the
@@ -21,7 +24,7 @@ import threading
 import time
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 #: How long ``SIGTERM`` waits for runs in flight. Below the compose ``stop_grace_period``
 #: (300 s), so the process exits by itself and is not killed mid-write.
@@ -93,10 +96,22 @@ def serve(environ: Mapping[str, str]) -> int:
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
     service.start()
-    while not stop.wait(1.0):
+    return run_until_stopped(service, stop)
+
+
+def run_until_stopped(
+    service: Any, stop: threading.Event, *, drain_seconds: float = DRAIN_SECONDS, poll_seconds: float = 1.0,
+) -> int:
+    """Wait for ``stop`` (a signal) or for the service to mark itself failed, drain, stop the service; the process's exit code.
+
+    ``0`` for a drained service that did not fail, ``1`` otherwise. The wait for the runs in flight is bounded by
+    ``drain_seconds``; a run whose slot the service declared lost is not waited for (``WorkerService.drain``), so a worker whose only
+    slot hangs exits at once instead of after the whole drain."""
+    while not stop.wait(poll_seconds):
         if service.failed:
+            _log.error("worker %s marked itself failed; draining and exiting for a restart", service.worker_id)
             break
-    drained = service.drain(timeout=DRAIN_SECONDS)
+    drained = service.drain(timeout=drain_seconds)
     if not drained:
         _log.warning(
             "worker %s exits with %d run(s) in flight; their leases expire and are reclaimed",
