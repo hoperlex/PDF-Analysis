@@ -265,13 +265,18 @@ export function EvidenceViewer({
         <span className="am-evidence__provider" data-provider-mode={observationProviderMode(observation)}>
           {observationProviderMode(observation) === 'live' ? 'живой вызов' : 'из записи'}
         </span>
-        {/* The whole document in the browser's own reader, opened on this page (the original's «↗»). */}
+        {/*
+          The whole document in the browser's own reader, in a new tab, on this page (the original's «↗»). The hint says what the
+          button is, because the button of the version bar, «Просмотр PDF», is the other way to a PDF and opens this app's own
+          viewer from below (`UIP-S10-01`).
+        */}
         {documentUrl !== null ? (
           <a
             className={styles.tool}
             href={pdfPageUrl(documentUrl, page)}
             target="_blank"
             rel="noopener noreferrer"
+            title={`Открыть исходный файл в новой вкладке, в просмотрщике браузера, на странице ${page}`}
             data-open-document={page}
           >
             Открыть PDF ↗

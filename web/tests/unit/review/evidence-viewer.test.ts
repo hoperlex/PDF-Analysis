@@ -96,6 +96,32 @@ describe('the declared page is the page opened', () => {
     expect(markup.replace(/<a [^>]*data-open-document="11"[^>]*>/, '')).not.toContain('#page=');
   });
 
+  it('says in the hint of «Открыть PDF ↗» that it is the browser’s reader, in a new tab, on the finding’s page (UIP-S10-01)', () => {
+    const open = (page: number) =>
+      render(
+        createElement(EvidenceViewer, {
+          observation: observation({ evidence: [evidence({ page_number: page })] }),
+          activePage: page,
+          onPageChange: () => {},
+          documentUrl: OBJECT_URL,
+        }),
+      );
+    const link = (markup: string) => /<a\b[^>]*data-open-document="\d+"[^>]*>/.exec(markup)?.[0] ?? '';
+    expect(link(open(11))).toContain('title="Открыть исходный файл в новой вкладке, в просмотрщике браузера, на странице 11"');
+    expect(link(open(3))).toContain('на странице 3');
+    expect(open(11)).toContain('Открыть PDF ↗');
+    // no bytes, no link, and so no hint of one
+    const none = render(
+      createElement(EvidenceViewer, {
+        observation: observation({ evidence: [evidence({ page_number: 11 })] }),
+        activePage: 11,
+        onPageChange: () => {},
+        documentUrl: null,
+      }),
+    );
+    expect(none).not.toContain('в просмотрщике браузера');
+  });
+
   it('falls back to the first declared page when asked for one that is not declared', () => {
     // Not a cosmetic fallback: showing page 3 of the PDF for a finding that cited page 7
     // puts text in front of the reviewer that this finding never quoted.
