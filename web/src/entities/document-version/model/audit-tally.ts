@@ -85,9 +85,12 @@ const FINDING_WORD: readonly [string, string, string] = ['замечание', '
  * The parts of the line, in the original's column order: total, not started, awaiting a decision, checked, findings.
  * A state that is zero is omitted (a row of zeros says nothing), except the total, which is always the first part;
  * «без замечаний» appears only when some document has it, so the parts always add up to the total.
+ *
+ * `UIP-S02-01`: a screen that already states the number of documents beside its title (the section page's «(N)») asks for the
+ * parts without the total (`total: false`), and the line is the states and the findings only.
  */
-export function tallyParts(tally: AuditTally): readonly TallyPart[] {
-  const parts: TallyPart[] = [
+export function tallyParts(tally: AuditTally, options: { readonly total?: boolean } = {}): readonly TallyPart[] {
+  const parts: TallyPart[] = options.total === false ? [] : [
     {
       key: 'documents',
       label: pluralRu(tally.documents, DOCUMENT_WORD),

@@ -21,3 +21,76 @@
 a.chip {
   text-decoration: none;
 }
+
+/*
+ * The marks of a document card (UIP-S02-02): «Замечания N ✓» and «Оптимизация N ·», in one row of the card. Colour is the badge tone's
+ * (`.am-badge--ok`, `--degraded`, `--inert`), measured by the census; this is layout only. A pill is a 24 px target at the least
+ * (`--am-target-min`) and spends 4 px, not the badge's 8, on each side, so two of them and a «!» stand in a card 161 px wide.
+ * `.marks .mark` is two classes so it wins over `.am-badge` whichever stylesheet comes last.
+ */
+
+.marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.marks .mark {
+  align-items: center;
+  gap: var(--am-gap-xs);
+  min-height: var(--am-target-min);
+  padding: 0 var(--am-gap-xs);
+  text-decoration: none;
+}
+
+/* A mark that leads somewhere stands above the card's stretched link, so its own address is the one that opens. */
+.marks a.mark,
+.marks a.run {
+  position: relative;
+  z-index: 1;
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.partial {
+  font-weight: 700;
+}
+
+/* The run in flight is a sentence: it wraps inside the card rather than widen it. */
+.run {
+  min-height: var(--am-target-min);
+}
+
+/*
+ * Text that is read and not seen: the words of a mark on a card too narrow for them, and the state in words. Clipped, not removed, so a
+ * screen reader and a find-in-page still reach it. The word of a mark («Замечания», «Оптимизация») is of this kind until the card is wide
+ * enough to carry it: 17 rem is the width of the card at which both pills with their words, the sign and a «!» fit in one row.
+ */
+.hidden,
+.label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@container (min-width: 17rem) {
+  .label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+}
+
+.sign {
+  font-weight: 700;
+}

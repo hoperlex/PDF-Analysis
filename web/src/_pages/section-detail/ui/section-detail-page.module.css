@@ -9,16 +9,71 @@
 }
 
 
-.sigmaBadge {
-  align-self: flex-start;
+/*
+ * The Σ card (UI-A-53, UIP-S02-02) is the grid's first cell and the size of a document's: its title opens the section's optimisation (the link
+ * is stretched over the card, as a document's title is) and the two links under it open its two views, with no figure (the server's light answer
+ * for «проектов·строк» is an open question). The links stand above the stretched one and are 24 px targets.
+ *
+ * Measured in headless Chrome with the product's own font: at 11.5 px «Спецификация» is 82 px and «Кандидаты» 62 px, together 144 px, and a card of
+ * 161 px has 143 px inside 8 px of padding. So the Σ card keeps 4 px at the sides (151 px inside, 6 spare at 1440 px) and its two links are
+ * plain underlined text, not bordered pills, which would need 12 px more; where a card is narrower still (6 in a row at 1200 px) the links
+ * give way with an ellipsis and the tooltip says the whole word.
+ */
+.sigmaTitle {
+  margin: 0;
+  font-size: var(--am-text-sm);
+  font-weight: 600;
 }
 
-.sigmaNote {
-  color: var(--am-ink-muted);
+.sigmaTitle a {
+  display: block;
+  min-height: var(--am-target-min);
+  overflow: hidden;
+  line-height: var(--am-target-min);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sigmaTitle a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.sigma {
+  font-weight: 700;
+}
+
+.sigmaLinks {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.sigmaLink {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  min-height: var(--am-target-min);
+  overflow: hidden;
+  color: var(--am-accent-strong);
   font-size: var(--am-text-xs);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  text-decoration: underline;
+  white-space: nowrap;
 }
 
-/* `R-151c`: «Выбрать все» and the batch start, under the filters; the note beside them says what is being read or why it stopped. */
+/* `UIP-S02-03`: while a card is chosen the bar sticks to the bottom; the page keeps room under the cards for it. */
+.reserve {
+  padding-bottom: var(--am-gap-lg);
+}
+
+/* The note of the listing being read or why it stopped, under the filters (the choosing itself is the header's, `UIP-S02-01`). */
 .batchBar {
   display: flex;
   flex-wrap: wrap;
@@ -41,4 +96,9 @@
   min-height: var(--am-target-min);
   padding-block: calc((var(--am-target-min) - 1lh) / 2);
   margin-block: calc((1lh - var(--am-target-min)) / 2);
+}
+
+/* A row with nothing in it (no choice made, nothing being read) takes no height. */
+.batchBar:empty {
+  display: none;
 }

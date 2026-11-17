@@ -1,29 +1,53 @@
 /*
- * Documents as a grid of cards (`R-151s`, UI-A-45): the original's section layout on our tokens. Spacing,
- * radii and type are tokens (`--am-*`); the column floor keeps one card per row on a phone (no horizontal
- * scroll) and about six to seven on a wide screen.
+ * Documents as a dense grid of cards (R-151s, UI-A-45; UIP-S02-02): the original's section layout on our tokens. Sizes are the tokens
+ * of UIP-G-14 (`--am-card-doc-width` 161 px, `--am-card-doc-height` 67 px); spacing, radii and type are tokens too.
+ *
+ * The grid. At 1440 px with the sidebar open the page is 1226 px wide and its margins are 24 px, so a row has 1178 px. The column floor is the
+ * card's width less one `--am-gap-md` (149 px): seven columns need 7 x 149 + 6 x 8 = 1091 px and eight need 1248, so a row of 1091 to
+ * 1247 px holds seven cards, which then stretch (1fr) to 1/7 of the row, 160 px at 1178 (the original's 161) and still 159 px where a
+ * browser takes 17 px of the row for its scrollbar. The page's own card (12 px padding and a border, the project page) leaves 1152 px: seven
+ * cards of 158 px. A wide screen takes more columns of the same width; a phone (590 px and under) takes one column, so a card is as wide as the
+ * screen and says the words of its marks.
+ *
+ * The card. Its height is at least the token and grows with its content, because the type may not be smaller than 11.5 px and a control
+ * may not be smaller than 24 px: 1 + 4 (padding) + 24 (the line of name, version and box) + 4 (gap) + 24 (the marks) + 4 + 1 = 62 px, so
+ * the token's 67 px decides, as in the original; a third line (a run in flight, an archived document, a comparison-only mark) makes the cards
+ * of that row taller, and only then.
  */
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--am-card-doc-width) - var(--am-gap-md))), 1fr));
   gap: var(--am-gap-sm);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/*
+ * `container-type`: the marks read the width of their own card, not of the screen, to say their words or leave them to the tooltip
+ * (audit-chip.module.css). A card is a grid item, so its width is the track's and does not depend on what is in it.
+ */
 .card {
   position: relative;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: var(--am-gap-xs);
   min-width: 0;
-  padding: var(--am-gap-sm);
+  min-height: var(--am-card-doc-height);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
+}
+
+@media (max-width: 590px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .card:hover,
@@ -33,7 +57,7 @@
 
 /*
  * The whole card opens its version, as the original's does (`UI-A-45`): the title link is stretched over the card, and the
- * card's other controls (the history link, the selection box, a chip that leads to «Разбор», a tag) sit above it.
+ * card's other controls (the number of the version, the selection box, the marks that lead somewhere) sit above it.
  */
 .title a::after {
   content: '';
@@ -41,87 +65,87 @@
   inset: 0;
 }
 
-.topEnd,
-.badges a,
-.tags {
+.ordinal,
+.select {
   position: relative;
   z-index: 1;
 }
 
+/* The line of the name, the number of the version and the box: 24 px high, the height of the controls in it. */
 .top {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-xs);
-  font-size: var(--am-text-xs);
+  min-width: 0;
 }
 
-.pages {
-  color: var(--am-ink-muted);
+/* The name is one line, cut with an ellipsis; the whole of it is the tooltip's first line. The link is a 24 px target (`D-564`). */
+.title {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--am-text-sm);
+  font-weight: 600;
 }
 
-/* The history link and the selection box sit at the row's end; the row wraps on a narrow card. */
-.topEnd {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--am-gap-xs);
-  margin-left: auto;
+.title a {
+  display: block;
+  min-height: var(--am-target-min);
+  overflow: hidden;
+  line-height: var(--am-target-min);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /*
- * `D-564`: «все версии» is a 24 px target (it was 17 px, one line of 11.5 px text). The surplus is padding, and the same amount of
- * margin is taken back, so the top row of the card keeps its height; a title that wraps keeps its lines.
+ * The number of the version, a link to the document's versions (it was «все версии» in a row of its own). `D-564`: a 24 px target, the
+ * surplus is padding and the same amount of margin is taken back, so the line keeps its height.
  */
-.history {
+.ordinal {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--am-target-min);
   min-height: var(--am-target-min);
   padding-block: calc((var(--am-target-min) - 1lh) / 2);
+  padding-inline: var(--am-gap-xs);
   margin-block: calc((1lh - var(--am-target-min)) / 2);
-}
-
-/* `UI-A-53`: the Σ card that opens the grid, a control of the section and not a document. */
-.leading {
-  display: flex;
-  flex-direction: column;
-  gap: var(--am-gap-xs);
-  min-width: 0;
-  padding: var(--am-gap-sm);
-  border: 1px dashed var(--am-accent);
-  border-radius: var(--am-radius);
-  background: var(--am-accent-light);
-}
-
-.ordinal {
-  padding: 0 var(--am-gap-xs);
   border-radius: var(--am-radius-sm);
   background: var(--am-accent-light);
   color: var(--am-accent-strong);
   font-size: var(--am-text-xs);
   font-weight: 600;
+  text-decoration: none;
 }
 
+/* The box that chooses the card: the label is the 24 px target, the box inside is the browser's. */
 .select {
   display: inline-flex;
+  flex: none;
   align-items: center;
+  justify-content: center;
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
+  cursor: pointer;
 }
 
-.title {
-  margin: 0;
-  overflow-wrap: anywhere;
-  font-size: var(--am-text-md);
-  font-weight: 600;
-  line-height: var(--am-leading-tight);
-}
-
-.badges {
+/*
+ * `UI-A-53`: the Σ card that opens the grid, a control of the section and not a document; the same size as a document's. It keeps 4 px at the
+ * sides, not 8: its two links need the width (see section-detail-page.module.css).
+ */
+.leading {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
   gap: var(--am-gap-xs);
   min-width: 0;
-}
-
-.badges:empty {
-  display: none;
+  min-height: var(--am-card-doc-height);
+  padding: var(--am-gap-xs);
+  border: 1px dashed var(--am-accent);
+  border-radius: var(--am-radius);
+  background: var(--am-accent-light);
 }
 
 /* `R-151a`: an archived document, listed only on request, says so and steps back. */
@@ -135,41 +159,15 @@
   font-size: var(--am-text-xs);
 }
 
-/* `R-151e`: a document's free tags, as compact chips. */
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--am-gap-xs);
-  margin: 0;
-}
-
-.tag {
-  padding: 0 var(--am-gap-xs);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-pill);
-  color: var(--am-ink-soft);
-  font-size: var(--am-text-xs);
-}
-
-/* The findings the result run published, beside the audit chip. */
-.findings {
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-/* The proposals of the document's latest optimisation pass (`D-361`), beside the findings. */
-.optimisation {
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-/* The marker while some proposals still wait for an expert: set off, and not a colour alone. */
-.optimisationMark {
-  margin-left: var(--am-gap-xs);
-  padding: 0 var(--am-gap-xs);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-pill);
-  color: var(--am-ink-soft);
+/*
+ * What the card says in words and not in a line: read by a screen reader and found by the browser, not drawn. The tooltip carries the
+ * same facts for the pointer.
+ */
+.facts {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
