@@ -423,7 +423,9 @@ describe('the list «Без сущностей»', () => {
     for (const pageFindings of [BY_PAGE, undefined]) {
       const fallback = list({ ...(pageFindings === undefined ? {} : { pageFindings }), initialPage: 'empty' });
       expect(fallback).not.toContain('data-portal-empty');
-      expect(count(fallback, 'data-portal-page=')).toBe(5);
+      // «Все блоки»: one solid grid, not a section per page (`UIP-S07-01`)
+      expect(count(fallback, 'data-portal-grid="all"')).toBe(1);
+      expect(count(fallback, 'data-portal-page=')).toBe(0);
     }
   });
 });
