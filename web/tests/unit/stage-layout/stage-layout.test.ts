@@ -13,7 +13,8 @@ import type { ModelCatalogue, Role, StageModelLayout } from '@/shared/api';
 import { ApiError, COMPARISON_LAYOUT_KIND_VALUES, queryKeys } from '@/shared/api';
 import {
   BLOCK_SCHEMES, COMPARISON_KIND_LABELS, COMPARISON_NONE_NOTE, NAMED_KITS, blockSchemeOf, cellText, comparisonKitCells, comparisonTable, effortsOf, kitCells,
-  kitIsOffered, kitModelIds, layoutFailure, layoutRefusalSentence, layoutTable, pairIsInCatalogue, rowOfStageKey,
+  StageModelsTable as EntityStageModelsTable, kitIsOffered, kitModelIds, layoutFailure, layoutRefusalSentence, layoutTable, pairIsInCatalogue,
+  rowOfStageKey,
 } from '@/entities/stage-layout';
 import {
   LayoutEditorView, LayoutSwitchView, chooseKit, draftChanged, draftProblem, draftRequest, initialDraft, modelOptions, offeredBlockSchemes,
@@ -109,6 +110,15 @@ describe('the expert reads the table and has no control', () => {
     expect(admin).toContain('data-layout-edit');
     expect(admin).toContain('>Изменить<');
     expect(admin.match(/data-layout-cell=/g)).toHaveLength(6);
+  });
+
+  it('is one table for the tab and for the window of a start: the widget re-exports the entity\'s component (UIP-S15-02)', () => {
+    expect(StageModelsTable).toBe(EntityStageModelsTable);
+    const viaEntity = renderScreen(newClient(), createElement(EntityStageModelsTable, { layout: LAYOUT_COMPARISON, admin: true, onEdit: () => {} }));
+    const viaWidget = renderScreen(newClient(), createElement(StageModelsTable, { layout: LAYOUT_COMPARISON, admin: true, onEdit: () => {} }));
+    expect(viaWidget).toBe(viaEntity);
+    expect(viaEntity).toContain('data-layout-comparison-group');
+    expect(viaEntity).toContain('data-layout-edit');
   });
 
   it('says a row that is served carries no mark', () => {
