@@ -7,7 +7,9 @@ fails loudly on a shape that is not one.
 
 * the reads (``list_hosts``, ``get_host``, ``get_host_details``) answer from facts read at one database instant: the report snapshot, the pulse, the
   «Использовать» journal, the slots and the cooldowns. Availability is **computed here, on read**, and the reasons for a model being unavailable
-  appear **only** in the administrator's details, never in a list (ADR-0028 decision 16);
+  appear **only** in the administrator's details, never in a list (ADR-0028 decision 16). The list also says what each server is doing now
+  (``current_work``, `UIP-S15-01`: the document, its object, the stage, since when -- no model, provider or run); the model, provider and run of a
+  call are the administrator's details too;
 * the writes commit on a clean return. ``get_agent_install`` is a write on a read (an overdue session ends as ``failed``), so it commits too.
 
 No method returns a secret but ``issue_enrollment`` (the grant's, once); no view carries a hash, a key, a path or a sealed byte.
@@ -78,6 +80,19 @@ class HostsService:
             slots_total=facts.slots_total, slots_in_use=facts.slots_in_use, created_at=facts.record.created_at,
             created_by=facts.record.created_by, archived_at=facts.record.archived_at)
 
+    @classmethod
+    def _list_item(cls, facts: Any, models: Any) -> dict[str, Any]:
+        """``ExecutorHost`` as the **list** has it (`UIP-S15-01`): the server and what it is doing now (``current_work``) -- the document, its
+        object, the stage and since when. Never a model, a provider, a token or a run: those stay in the administrator's details. The field is
+        always there (empty for a server that is free or off line); every other read of a server leaves it out."""
+        return {
+            **cls._host_view(facts, models),
+            "current_work": [
+                _present(project_uid=item.project_uid, document_uid=item.document_uid, document_title=item.document_title,
+                         stage_key=item.stage_key, since=item.since)
+                for item in facts.work],
+        }
+
     def _one_host(self, session: Session, host_id: str) -> dict[str, Any]:
         from auditmanager.executors.public import model_availability, read_hosts
 
@@ -92,8 +107,8 @@ class HostsService:
         from auditmanager.executors.public import model_availability, read_hosts
 
         def work(session: Session) -> dict[str, Any]:
-            facts = read_hosts(session)
-            items = [self._host_view(item, model_availability(item)) for item in facts]
+            facts = read_hosts(session, with_work=True)
+            items = [self._list_item(item, model_availability(item)) for item in facts]
             online = [item for item in facts if item.state != "offline"]
             return {
                 "items": items, "online": len(online), "total": len(facts),

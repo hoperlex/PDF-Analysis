@@ -31,7 +31,7 @@ and ``constraint`` ``provider_not_reported`` or ``range``, ``field`` ``providers
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Final
@@ -68,7 +68,14 @@ from auditmanager.executors.enrollment import (
 from auditmanager.executors.enrollment_repository import EnrollmentRepository
 from auditmanager.executors.group_repository import GroupRepository
 from auditmanager.executors.groups import GroupSettings, MemberRequest, clean_display_name
-from auditmanager.executors.host_repository import ActiveTask, HostRecord, HostRepository, StoredReport, SystemConnectionRow
+from auditmanager.executors.host_repository import (
+    ActiveTask,
+    HostRecord,
+    HostRepository,
+    HostWork,
+    StoredReport,
+    SystemConnectionRow,
+)
 from auditmanager.executors.hosts import (
     ACCESS_SUBSCRIPTION,
     COOLDOWN_SECONDS,
@@ -212,6 +219,9 @@ class HostFacts:
     cooldowns: Mapping[tuple[str, str], datetime]
     connections: tuple[SystemConnectionRow, ...]
     now: datetime
+    #: What the host is doing now (`UIP-S15-01`), oldest first. Read only when asked (``read_hosts(with_work=True)``) and empty for a host
+    #: that is off line: its claims are not known to be running. Empty is also what a read that did not ask for it holds.
+    work: tuple[HostWork, ...] = ()
 
     @property
     def state(self) -> str:
@@ -240,10 +250,11 @@ class HostDetails:
 
 def read_hosts(
     session: Session, host_ids: Sequence[str] | None = None, *, repo: HostRepository | None = None,
-    include_archived: bool = False,
+    include_archived: bool = False, with_work: bool = False,
 ) -> list[HostFacts]:
     """The facts of the named hosts (every live host when none are named), newest first, read now. A named host that does not exist is
-    absent from the answer."""
+    absent from the answer. ``with_work`` also reads what each host is doing now (``HostFacts.work``): the list of servers asks for it,
+    the readers of availability do not."""
     store = repo or HostRepository()
     if host_ids is None:
         records = store.list_hosts(session, include_archived=include_archived)
@@ -253,6 +264,7 @@ def read_hosts(
     uses, ages, reports = store.current_use(session, ids), store.pulse_ages(session, ids), store.get_reports(session, ids)
     journal, cooldowns = store.slot_journal(session, ids), store.cooldowns_of(session, ids)
     connections = store.system_connections(session, ids)
+    working = store.work_of(session, ids) if with_work else {}
     now = session.execute(text("SELECT clock_timestamp()")).scalar_one()
     facts: list[HostFacts] = []
     for record in records:
@@ -265,11 +277,14 @@ def read_hosts(
                 slots=slots_in_force(provider.access, journal.get((record.host_id, provider.provider))),
                 in_use=store.pool_units(session, pool)))
         use = uses.get(record.host_id)
-        facts.append(HostFacts(
+        found = HostFacts(
             record=record, enabled=bool(use and use[0]), pulse_age_seconds=ages.get(record.host_id), report=report,
             slots=tuple(slots),
             cooldowns={(p, m): until for (h, p, m), until in cooldowns.items() if h == record.host_id},
-            connections=tuple(row for row in connections if row.host_id == record.host_id), now=now))
+            connections=tuple(row for row in connections if row.host_id == record.host_id), now=now)
+        if found.state != "offline" and record.host_id in working:
+            found = replace(found, work=tuple(working[record.host_id]))
+        facts.append(found)
     return facts
 
 
