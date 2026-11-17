@@ -45,6 +45,19 @@ export function noContactSentence(lastSeen: string | undefined): string {
   return `нет связи с ${formatTime(lastSeen)}`;
 }
 
+/** «последний сигнал 14:02» (the reader's local time); nothing for a server that has never been in touch. */
+export function lastSignalSentence(lastSeen: string | undefined): string | null {
+  if (lastSeen === undefined || Number.isNaN(new Date(lastSeen).getTime())) return null;
+  return `последний сигнал ${formatTime(lastSeen)}`;
+}
+
+/** What a card says a server is doing (`UIP-S15-03`): the label before the first task, and the rest of a long list. */
+export const NOW_LABEL = 'Сейчас:';
+export const NOW_LIST_LABEL = 'Что сейчас идёт на сервере';
+export function workMoreSentence(more: number): string {
+  return `и ещё ${more}`;
+}
+
 /** «На связи 2 из 3 · свободно 3 из 5». */
 export function summarySentence(online: number, total: number, slotsFree: number, slotsTotal: number): string {
   return `На связи ${online} из ${total} · свободно ${slotsFree} из ${slotsTotal}`;

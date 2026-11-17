@@ -56,6 +56,8 @@ import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
 import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
+import { ExecutorHostTasks, HostsOverviewView } from '@/widgets/executor-hosts';
+import { tasksPeriodRange } from '@/entities/executor-host';
 import { ExecutorStageModels, StageLayoutAdvanced, StageModelsTable } from '@/widgets/executor-stage-models';
 import { CommandTabView, ConnectWindow, DeleteHostView, InstallSessionView, SshFormView } from '@/features/manage-executor-host';
 import { LayoutEditorView } from '@/features/manage-stage-layout';
@@ -63,6 +65,10 @@ import {
   CATALOGUE as HOSTS_CATALOGUE, COMPARISON_CELLS as HOSTS_COMPARISON_CELLS, ISSUED as HOSTS_ISSUED, LAYOUT as HOSTS_LAYOUT,
   LAYOUT_COMPARISON as HOSTS_LAYOUT_COMPARISON, LAYOUT_EMPTY as HOSTS_LAYOUT_EMPTY, LAYOUT_OFF as HOSTS_LAYOUT_OFF,
   SERVER_ONLINE as HOSTS_ONLINE, install as hostsInstall, seedDetails as seedHostDetails, seedHosts, seedLayout,
+} from '../workers/hosts-fixtures';
+import {
+  HOST_LIST as HOSTS_LIST, JOB_DONE as HOSTS_JOB_DONE, JOB_FAILED as HOSTS_JOB_FAILED, JOB_QUEUED as HOSTS_JOB_QUEUED,
+  JOB_RUNNING as HOSTS_JOB_RUNNING, QUEUE_OVERVIEW as HOSTS_QUEUE_OVERVIEW, queuePage as hostsQueuePage, seedQueue as seedHostsQueue,
 } from '../workers/hosts-fixtures';
 import { SectionFilterBar, SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
@@ -3413,6 +3419,42 @@ export function screens(): Screen[] {
       ),
     ),
   );
+
+  /*
+   * `UIP-S15-06`: the tabs «Обзор» and «Задачи» of «Диспетчер» (`/workers`), whose colour rules are those of `executor-hosts.module.css`:
+   * the strip of five numbers with the warning border of «Ошибки» and the cards in a short form, the strip when the queue is not read
+   * and with no servers, and the three groups of the tasks — the active ones, the completed ones with their period, and the errors
+   * with the reason. The period is counted from a fixed moment, so the seeded keys are the keys the tab reads.
+   */
+  {
+    const OPENED = new Date('2026-11-09T11:06:00Z');
+    const readAt = { updatedAt: OPENED.getTime() };
+    const client = newClient();
+    seedHosts(client);
+    seedHostsQueue(client, hostsQueuePage([]), {}, readAt);
+    seedHostsQueue(client, hostsQueuePage([HOSTS_JOB_RUNNING, HOSTS_JOB_QUEUED]), { stateGroup: 'active' }, readAt);
+    seedHostsQueue(client, hostsQueuePage([HOSTS_JOB_DONE]), { stateGroup: 'completed', ...tasksPeriodRange('today', OPENED) }, readAt);
+    seedHostsQueue(client, hostsQueuePage([HOSTS_JOB_FAILED]), { stateGroup: 'errors' }, readAt);
+    client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+    add('WorkersPage overview tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'overview' | 'tasks' }>, { initialTab: 'overview' })));
+    add('WorkersPage tasks tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'overview' | 'tasks' }>, { initialTab: 'tasks' })));
+    add('ExecutorHostTasks completed, with the period', renderScreen(client, createElement(ExecutorHostTasks, {
+      roles: ['expert'], initialGroup: 'completed', initialPeriod: 'today', now: OPENED,
+    })));
+    add('ExecutorHostTasks errors, with the reason', renderScreen(client, createElement(ExecutorHostTasks, { roles: ['expert'], initialGroup: 'errors', now: OPENED })));
+    // A fourth task of a server: three are named and the rest is «и ещё N» (`.nowMore`).
+    add('HostRow with more tasks than a card names', renderScreen(client, createElement(HostRow, {
+      host: { ...HOSTS_ONLINE, current_work: [...(HOSTS_ONLINE.current_work ?? []), ...(HOSTS_ONLINE.current_work ?? [])] },
+      admin: false, asOf: OPENED.getTime(),
+    })));
+    add('HostsOverviewView, the queue not read', renderScreen(newClient(), createElement(HostsOverviewView, {
+      list: HOSTS_LIST, queue: null, asOf: OPENED.getTime(), onShowServers: noop,
+    })));
+    add('HostsOverviewView, no servers, no error', renderScreen(newClient(), createElement(HostsOverviewView, {
+      list: { items: [], online: 0, slots_free: 0, slots_total: 0, total: 0 },
+      queue: { overview: HOSTS_QUEUE_OVERVIEW, liveFailures: 0 }, asOf: OPENED.getTime(), onShowServers: noop,
+    })));
+  }
 
   // `CMP-VIEWER-01`: the sheet viewer (plan §1.1). Every rule of `comparison-viewer.module.css` is reached below: the
   // overlay with a selected difference, its boxes, the sheet being dragged and the neighbouring-sheet controls; the swipe

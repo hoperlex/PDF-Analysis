@@ -94,11 +94,11 @@ describe('item 1: one opt-in two-column form in the global layer', () => {
 describe('item 2: «Диспетчер» says its page in one sentence', () => {
   const page = (): string => renderScreen(newClient(), createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'servers' }));
 
-  // `HOSTS-WEB-01`: the long text of the six tabs went with them; two tabs say themselves.
+  // `HOSTS-WEB-01`: the long text of the six tabs went with them; four tabs say themselves (`UIP-S15-06`: the sentence names the servers, what runs on them and the model of each stage).
   it('puts one sentence under the title and no disclosure of explanations over the tabs', () => {
     const markup = page();
     const subtitle = /<p class="am-page__subtitle">([^<]*)<\/p>/.exec(markup)?.[1] ?? '';
-    expect(subtitle).toBe('Серверы, на которых работают модели, и модель каждого этапа анализа.');
+    expect(subtitle).toBe('Серверы, что на них сейчас идёт и какая модель у каждого этапа.');
     expect(subtitle.split(/[.!?]/).filter((part) => part.trim() !== '')).toHaveLength(1);
     expect(markup).not.toContain('data-workers-about');
   });
