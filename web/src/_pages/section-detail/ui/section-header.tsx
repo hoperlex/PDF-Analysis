@@ -16,7 +16,8 @@
  * «ждут решения N» choose across every page of the listing in view, read to its end by the server's cursor, and wait — disabled —
  * while pages are being read or when one failed; none of them ever chooses part of the section as if it were the whole. They are
  * drawn only for a session that may start an audit (`BatchSelection.selection`), and not at all when no document of the listing
- * can be started. The state of the reading, and the retry, are said by {@link SectionBatchBar}, which also starts the chosen ones.
+ * can be started. The state of the reading, and the retry, are said by {@link SectionBatchBar}; the chosen ones are started from the
+ * bottom bar (`SectionSelectionBar`, `UIP-S02-03`).
  *
  * Presentational over what the page already holds: the figures, the page's documents, the walk and the selection come in as props.
  */

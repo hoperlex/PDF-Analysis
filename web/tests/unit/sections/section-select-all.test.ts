@@ -11,6 +11,8 @@
  * the seeded pages name.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -18,15 +20,27 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, queryKeys } from '@/shared/api';
 import type { DocumentAudit, DocumentVersion } from '@/shared/api';
 import { DOCUMENT_PAGE_LIMIT } from '@/entities/document-version';
-import { SectionBatchBar, SectionDetailPage, SectionHeader } from '@/_pages/section-detail';
+import { SectionBatchBar, SectionDetailPage, SectionHeader, SectionSelectionBar } from '@/_pages/section-detail';
 import type { ListingWalk } from '@/_pages/section-detail';
 import { auditTally } from '@/entities/document-version';
 import { findProjectSection } from '@/entities/project';
 import type { ProjectSection } from '@/entities/project';
 import type { BatchSelection } from '@/widgets/project-sections';
 
+import { WEB_ROOT } from '../../guards/lib/repo';
+import { parseRules } from '../styles/contrast';
 import { newClient, renderWith, seedError } from '../screens/harness';
 import { PROJECT_UID, classification, otherVersion, page, version } from './fixtures';
+
+/** The declarations of every rule whose selector list names `selector`, the later rule winning, as the cascade has it. */
+function declared(css: string, selector: string): ReadonlyMap<string, string> {
+  const merged = new Map<string, string>();
+  for (const rule of parseRules(css, 'module')) {
+    if (!rule.selector.split(',').some((part) => part.trim() === selector)) continue;
+    for (const [property, value] of rule.declarations) merged.set(property, value);
+  }
+  return merged;
+}
 
 const key = (cursor: string | undefined, state?: DocumentAudit['state']) =>
   queryKeys.projects.documents(PROJECT_UID, cursor, DOCUMENT_PAGE_LIMIT, 'AR', false, undefined, state, 'audit');
@@ -138,7 +152,7 @@ describe('a session that cannot start an audit', () => {
   });
 });
 
-describe('the header and the start row on their own', () => {
+describe('the header and the row over the cards on their own', () => {
   const selection: BatchSelection = {
     selection: { selected: new Set<string>(), onToggle: () => undefined },
     chosenCount: 0, batch: null, choose: () => undefined, clear: () => undefined, openBatch: () => undefined, closeBatch: () => undefined,
@@ -190,8 +204,67 @@ describe('the header and the start row on their own', () => {
     expect(markup).not.toContain('Выделить необработанные');
   });
 
-  it('starts the chosen ones from the row, and says nothing of starting while none is chosen', () => {
-    expect(bar({ status: 'complete', items: WHOLE }, 5)).toContain('Запустить аудит (5)');
-    expect(bar({ status: 'complete', items: WHOLE }, 0)).not.toContain('Запустить аудит');
+  it('keeps the start out of the row over the cards: the row has the words about the reading and the panel, and no button to start', () => {
+    expect(bar({ status: 'complete', items: WHOLE }, 5)).not.toContain('Запустить');
+    expect(bar({ status: 'pending' }, 5)).toContain('data-batch-walk="pending"');
+    expect(bar({ status: 'pending' }, 5)).not.toContain('Запустить');
+  });
+});
+
+// ------------------------------------------------------------------ the bar at the bottom (UIP-S02-03)
+
+describe('the bottom bar of the chosen documents', () => {
+  const chosen = (chosenCount: number, over: Partial<BatchSelection> = {}): BatchSelection => ({
+    selection: { selected: new Set<string>(), onToggle: () => undefined },
+    chosenCount, batch: null, choose: () => undefined, clear: () => undefined, openBatch: () => undefined, closeBatch: () => undefined, ...over,
+  });
+  const bar = (selection: BatchSelection) => renderToStaticMarkup(createElement(SectionSelectionBar, { selection }));
+
+  it('says how many are chosen and offers to start all of them and to clear the choice, in that order', () => {
+    const markup = bar(chosen(5));
+    expect(markup).toContain('role="region"');
+    expect(markup).toContain('aria-label="Выбранные документы"');
+    expect(markup).toMatch(/<span[^>]*role="status"[^>]*>Выбрано: 5<\/span>/);
+    expect(markup).toMatch(/<button type="button"[^>]*data-batch-start[^>]*>Запустить все \(5\)<\/button>/);
+    expect(markup).toMatch(/<button type="button"[^>]*data-clear-selection[^>]*>Снять выделение<\/button>/);
+    expect(markup.indexOf('Выбрано: 5')).toBeLessThan(markup.indexOf('Запустить все'));
+    expect(markup.indexOf('Запустить все')).toBeLessThan(markup.indexOf('Снять выделение'));
+    expect(markup).toContain('data-batch-selection="5"');
+  });
+
+  it('is drawn only while something is chosen', () => {
+    expect(bar(chosen(0))).toBe('');
+  });
+
+  it('is drawn for whoever may start an audit and for no one else, nor while the batch panel holds the choice', () => {
+    // `selection` is `undefined` for a session that cannot start an audit, and while the panel is open
+    expect(bar(chosen(5, { selection: undefined }))).toBe('');
+  });
+
+  it('is the last thing of the page and the page keeps room under the cards while it is drawn', () => {
+    const page = readFileSync(join(WEB_ROOT, 'src/_pages/section-detail/ui/section-detail-page.tsx'), 'utf8');
+    const body = page.slice(page.indexOf('{body}'));
+    expect(body).toContain('<SectionSelectionBar selection={batch} />');
+    expect(body.slice(body.indexOf('<SectionSelectionBar'))).not.toMatch(/<DocumentCardGrid|<Section(?:Header|BatchBar)/);
+    expect(page).toContain("batch.chosenCount > 0 ? `am-section ${styles.reserve}` : 'am-section'");
+    const css = readFileSync(join(WEB_ROOT, 'src/_pages/section-detail/ui/section-detail-page.module.css'), 'utf8');
+    expect(declared(css, '.reserve').get('padding-bottom')).toBe('var(--am-gap-lg)');
+  });
+
+  it('sticks to the bottom of the area, under the sticky strip, with tokens only', () => {
+    const css = readFileSync(join(WEB_ROOT, 'src/_pages/section-detail/ui/section-selection-bar.module.css'), 'utf8');
+    const rule = declared(css, '.bar');
+    expect(rule.get('position')).toBe('sticky');
+    expect(rule.get('bottom')).toBe('0');
+    // the strip at the top is 9 (`.am-app__utility`); a dialog is in the top layer
+    expect(Number(rule.get('z-index'))).toBeLessThan(9);
+    expect(Number(rule.get('z-index'))).toBeGreaterThan(0);
+    for (const property of ['padding', 'margin-top', 'gap']) expect(rule.get(property), property).toMatch(/^var\(--am-gap/);
+  });
+
+  it('can fail: a bar that is not sticky, or sits above the strip, is read as such', () => {
+    const wrong = declared('.bar { position: static; bottom: 0; z-index: 40; }', '.bar');
+    expect(wrong.get('position')).not.toBe('sticky');
+    expect(Number(wrong.get('z-index'))).toBeGreaterThan(9);
   });
 });

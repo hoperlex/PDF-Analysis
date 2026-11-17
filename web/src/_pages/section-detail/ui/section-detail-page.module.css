@@ -68,7 +68,12 @@
   white-space: nowrap;
 }
 
-/* `R-151c`: «Выбрать все» and the batch start, under the filters; the note beside them says what is being read or why it stopped. */
+/* `UIP-S02-03`: while a card is chosen the bar sticks to the bottom; the page keeps room under the cards for it. */
+.reserve {
+  padding-bottom: var(--am-gap-lg);
+}
+
+/* The note of the listing being read or why it stopped, under the filters (the choosing itself is the header's, `UIP-S02-01`). */
 .batchBar {
   display: flex;
   flex-wrap: wrap;

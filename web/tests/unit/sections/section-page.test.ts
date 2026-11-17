@@ -1,5 +1,6 @@
 /**
- * «Раздел» — one section of one project (`R-151l`), its documents as cards (`R-151s`).
+ * «Раздел» — one section of one project (`R-151l`), its documents as cards (`R-151s`). The start of the chosen ones is the bar at the
+ * bottom (`UIP-S02-03`); a static render has nothing chosen, so the bar's own cases are in `section-select-all.test.ts`.
  *
  * The page reads `listDocuments` with `section_code` (contract 1.20.0): its cache entry is keyed by the section,
  * so it never shows another section's or the whole project's page. It refuses a malformed address itself, without
@@ -145,7 +146,8 @@ describe('the section page keeps the original’s controls', () => {
     expect((markup.match(/type="checkbox"/g) ?? []).length).toBe(2 + 1 + 1); // two cards, the line's box and «Показать архивные»
     expect(markup).toContain('data-select-all="2"');
     expect(markup).toContain('aria-label="Выбрать все документы раздела: 2"');
-    expect(markup).not.toContain('Запустить аудит (');
+    expect(markup).not.toContain('data-batch-bar');
+    expect(markup).not.toContain('Запустить все');
     expect(markup).not.toContain('Снять выделение');
   });
 

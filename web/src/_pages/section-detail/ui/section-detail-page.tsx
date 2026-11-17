@@ -20,7 +20,7 @@
  * необработанные» and «Снять выделение», and at the right end «+ Добавить» and «Обновить». There is no second line of crumbs in the page.
  * The cards open with the Σ card «Оптимизация раздела». The box, «Выделить необработанные» and «ждут решения N» choose across every page
  * of the listing in view, read to its end by the server's cursor (`useListingWalk`), and the chosen documents start together with one
- * consent for the batch (`R-151c`); the tag filter and «Показать архивные» stand in their own row over the cards (`R-151e`, `R-151a`);
+ * consent for the batch (`R-151c`), from the bar that sticks to the bottom of the area while a card is chosen (`SectionSelectionBar`); the tag filter and «Показать архивные» stand in their own row over the cards (`R-151e`, `R-151a`);
  * «+ Добавить» leads to the project's upload.
  *
  * The route answers a malformed address with not-found; the screen refuses one as well (a project uid without
@@ -45,6 +45,7 @@ import { ArchivedToggle, TagFilter, selectionSlot, useBatchSelection, useSection
 import { useListingWalk } from '../model/use-listing-walk';
 import { SectionBatchBar } from './section-batch-bar';
 import { SectionHeader } from './section-header';
+import { SectionSelectionBar } from './section-selection-bar';
 import styles from './section-detail-page.module.css';
 
 export interface SectionDetailPageProps {
@@ -210,7 +211,7 @@ function SectionDetail({
         onRefresh={() => void query.refetch()}
       />
       <div className="am-page__body am-page__body--canvas">
-        <section className="am-section" data-section-page={section.code}>
+        <section className={batch.chosenCount > 0 ? `am-section ${styles.reserve}` : 'am-section'} data-section-page={section.code}>
           <div className={styles.filters}>
             <ArchivedToggle
               checked={showArchived}
@@ -225,6 +226,8 @@ function SectionDetail({
             <SectionBatchBar projectUid={projectUid} selection={batch} pageDocuments={query.data.items} walk={walk} />
           )}
           {body}
+          {/* `UIP-S02-03`: the last thing of the page, so scrolled to its end it covers no card; `reserve` is room below the cards. */}
+          <SectionSelectionBar selection={batch} />
         </section>
       </div>
     </section>

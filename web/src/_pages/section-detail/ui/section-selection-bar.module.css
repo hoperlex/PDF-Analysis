@@ -1,0 +1,36 @@
+/*
+ * The bottom bar of a section's selection (UIP-S02-03). It sticks to the bottom of the area while a card is chosen and is the last thing
+ * of the page, so scrolled to the end it stands after the last row and covers nothing; `margin-top` is the room between them. It sits
+ * under the sticky strip at the top (z-index 9 there) and under every dialog. Tokens only.
+ */
+
+.bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-sm);
+  margin-top: var(--am-gap);
+  padding: var(--am-gap-sm) var(--am-gap-md);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-3);
+}
+
+.count {
+  color: var(--am-ink);
+  font-size: var(--am-text-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+}

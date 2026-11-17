@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * The start of the documents a reader chose together, and the notes of the listing's reading (`R-151c`, `UI-A-35`).
+ * The words about the listing being read to its end, and the batch panel that «Запустить все» opens (`R-151c`, `UI-A-35`).
  *
- * **The choosing moved to the section's header** (`UIP-S02-01`, `SectionHeader`): the box «(N)», «Выделить необработанные», the plaque
- * «ждут решения N» and «Снять выделение» sit in its one line. This row keeps what is not a choice: the start of the chosen documents
- * and the existing batch panel (one consent per run stays on the server, `BatchStartPanel`), and the words about the reading —
- * while the listing's pages are being read to their end (`useListingWalk`) the row says so, and when one cannot be read it says that
- * and offers to try again; the header's controls choose nothing from a part of the section.
+ * **The choosing is the header's** (`UIP-S02-01`, `SectionHeader`) **and the start is the bottom bar's** (`UIP-S02-03`,
+ * `SectionSelectionBar`). What stays here, over the cards: while the listing's pages are being read to their end (`useListingWalk`) the
+ * row says so, and when one cannot be read it says that and offers to try again — the header's controls choose nothing from a part of
+ * the section — and the existing batch panel, which holds the estimate and the ONE consent for the batch (it stays on the server,
+ * `BatchStartPanel`; it is a dialog of the shared layer, so where it stands in the page is no matter).
  */
 
 import type { DocumentVersion, ProjectUid } from '@/shared/api';
@@ -35,11 +35,6 @@ export function SectionBatchBar({ projectUid, selection, pageDocuments, walk }: 
     <>
       {!visible ? null : (
         <p className={styles.batchBar} data-batch-controls="" data-batch-selection={selection.chosenCount} data-batch-scope={walk.status === 'idle' ? 'page' : 'section'}>
-          {selection.chosenCount === 0 ? null : (
-            <button type="button" className="am-button am-button--small" onClick={selection.openBatch}>
-              Запустить аудит ({selection.chosenCount})
-            </button>
-          )}
           {walk.status === 'pending' ? (
             <span role="status" className={styles.batchNote} data-batch-walk="pending">
               Читаю все страницы раздела, чтобы выбрать документы целиком.

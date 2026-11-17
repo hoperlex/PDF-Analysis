@@ -7,6 +7,8 @@ export type { SectionHeaderProps } from './ui/section-header';
 export { SectionHeader, objectHomeHref } from './ui/section-header';
 export type { SectionBatchBarProps } from './ui/section-batch-bar';
 export { SectionBatchBar } from './ui/section-batch-bar';
+export type { SectionSelectionBarProps } from './ui/section-selection-bar';
+export { SectionSelectionBar } from './ui/section-selection-bar';
 export type { ListingScope, ListingWalk } from './model/use-listing-walk';
 export { useListingWalk } from './model/use-listing-walk';
 export type { SectionChoices } from './model/section-choices';
