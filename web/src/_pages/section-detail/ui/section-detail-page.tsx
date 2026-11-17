@@ -46,6 +46,7 @@ import { groupDocuments } from '../model/group-documents';
 import { wholeListing } from '../model/section-choices';
 import { useListingWalk } from '../model/use-listing-walk';
 import { SectionBatchBar } from './section-batch-bar';
+import { GroupEditingLayer, useGroupEditing } from './group-editing';
 import { GroupsWalkNote, SectionGroups } from './section-groups';
 import { SectionHeader } from './section-header';
 import { SectionSelectionBar } from './section-selection-bar';
@@ -113,6 +114,8 @@ function SectionDetail({
   // `UIP-S02-06`: the cards by group when the whole listing is known and a document of it has one; `null`, the plain grid.
   const whole = query.data === undefined ? null : wholeListing(query.data.items, walk);
   const groups = whole === null ? null : groupDocuments(whole);
+  // `UIP-S02-07`: the card's menu «Группа…» and the dragging of a card onto a group, for a session that may act as an expert.
+  const editing = useGroupEditing({ projectUid, enabled: mayAct, known: whole ?? query.data?.items ?? [] });
   // `UI-A-35`: the server's count of this section over the whole project, used while nothing narrows the listing.
   const exact = useSectionFigures(projectUid);
   const figures = auditFilter === null && !showArchived && tag === null ? exact.data?.get(section.code) : undefined;
@@ -168,6 +171,10 @@ function SectionDetail({
     const grid = {
       classification: 'stage' as const,
       select: selectionSlot(batch.selection),
+      menu: editing.menu,
+      // Cards are dragged where there are groups to drop them on.
+      drag: groups === null ? undefined : editing.drag,
+      dragging: editing.dragging,
       addresses: (version: DocumentVersion) => ({
         href: routes.version(projectUid, version.version_uid),
         documentHref: routes.document(projectUid, version.document_uid),
@@ -205,7 +212,7 @@ function SectionDetail({
           </>
         ) : (
           // `UIP-S02-06`: the whole listing, by group; there is no page to turn.
-          <SectionGroups groups={groups} leading={sigma} grid={grid} />
+          <SectionGroups groups={groups} leading={sigma} grid={grid} drop={editing.drop} />
         )}
       </>
     );
@@ -245,6 +252,8 @@ function SectionDetail({
             <SectionBatchBar projectUid={projectUid} selection={batch} pageDocuments={query.data.items} walk={walk} />
           )}
           {body}
+          {/* `UIP-S02-07`: under the cards, what was said of the last move, the command of a dropped card and the window «Группа…». */}
+          <GroupEditingLayer layer={editing.layer} />
           {/* `UIP-S02-03`: the last thing of the page, so scrolled to its end it covers no card; `reserve` is room below the cards. */}
           <SectionSelectionBar selection={batch} />
         </section>

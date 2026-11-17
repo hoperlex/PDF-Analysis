@@ -93,7 +93,9 @@ import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
-import { SectionDetailPage } from '@/_pages/section-detail';
+import {
+  GroupDialog, GroupEditingLayer, SectionDetailPage, SectionGroups, groupDocuments, movedSentence, refusedSentence,
+} from '@/_pages/section-detail';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { DocumentDetailPage } from '@/_pages/document-detail';
 import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
@@ -3808,6 +3810,29 @@ export function screens(): Screen[] {
     failed.setQueryData(listing(undefined), { items: [inGroup('1', 'Корпус Б'), inGroup('2')], page: { next_cursor: 'Y3Vyc29y' } });
     seedError(failed, listing('Y3Vyc29y'), apiError(503, 'dependency_unavailable', true));
     add('SectionDetailPage a page could not be read', renderScreen(failed, createElement(SectionDetailPage, { projectUid: PROJECT_UID, sectionCode: 'AR' })));
+
+    /*
+     * `UIP-S02-07`: the window «Группа…» (the choices and the field, drawn open), the groups while a card is dragged over one of them and
+     * while it is dragged out of the last group (the empty «Без группы» with its words), and the line under the cards after a move. The
+     * card's menu «⋯» is in «SectionDetailPage by group» above (a session that may act is shown it).
+     */
+    const dragged = { documentUid: inGroup('2', 'Корпус А').document_uid, title: 'Документ 2', group: 'Корпус А' };
+    const places = (over: string | null | undefined) => ({ source: dragged, over, onOver: noop, onLeave: noop, onDrop: noop });
+    const gridOf = { addresses: () => ({ href: '/projects', documentHref: '/projects' }) };
+    const byName = groupDocuments([inGroup('1', 'Корпус Б'), inGroup('2', 'Корпус А'), inGroup('3'), inGroup('4', 'Корпус А')]) ?? [];
+    add('SectionGroups with a card dragged over a group', render(createElement(SectionGroups, { groups: byName, grid: gridOf, drop: places('Корпус Б') })));
+    add('SectionGroups with a card dragged out of the last group', render(createElement(SectionGroups, {
+      groups: groupDocuments([inGroup('1', 'Корпус Б'), inGroup('2', 'Корпус А')]) ?? [], grid: gridOf, drop: places(null),
+    })));
+    add('GroupDialog for a document in a group', renderScreen(newClient(), createElement(GroupDialog, {
+      projectUid: PROJECT_UID, version: inGroup('2', 'Корпус А') as never,
+      groups: [{ name: 'Корпус А', count: 2 }, { name: 'Корпус Б', count: 1 }], onClose: noop, onDone: noop, staticOpen: true,
+    })));
+    const layerOf = (notice: { kind: 'moving' | 'moved' | 'refused'; text: string }) => createElement(GroupEditingLayer, {
+      layer: { projectUid: PROJECT_UID, notice, move: null, dialog: null, onMoveSettled: noop, onDialogClose: noop, onDialogDone: noop },
+    });
+    add('GroupEditingLayer with a move done', render(layerOf({ kind: 'moved', text: movedSentence('Документ 2', 'Корпус Б') })));
+    add('GroupEditingLayer with a move refused', render(layerOf({ kind: 'refused', text: refusedSentence('Документ 2', 'Корпус Б', 'Документ в архиве.') })));
   }
 
   return out;

@@ -16,5 +16,19 @@ export { sectionChoices, wholeListing } from './model/section-choices';
 // `UIP-S02-06`: the section's cards by group, made of the whole listing.
 export type { DocumentGroup } from './model/group-documents';
 export { GROUP_NAME_MAX_LENGTH, NO_GROUP_LABEL, groupDocuments, groupOf, orderGroupNames } from './model/group-documents';
-export type { GroupsWalkNoteProps, SectionGroupGrid, SectionGroupsProps } from './ui/section-groups';
-export { GroupsWalkNote, SectionGroups } from './ui/section-groups';
+export type { GroupDrop, GroupsWalkNoteProps, SectionGroupGrid, SectionGroupsProps } from './ui/section-groups';
+export { GroupsWalkNote, SectionGroup, SectionGroups } from './ui/section-groups';
+// `UIP-S02-07`: moving a document into a group, by dragging its card or by «Группа…» in the card's menu.
+export type {
+  DragSource, EditingAction, EditingState, GroupAnswer, GroupChoice, GroupRequest, MoveNotice, PendingMove,
+} from './model/group-move';
+export {
+  EDITING_IDLE, dragSourceOf, dropRequest, editingReducer, movedSentence, movingSentence, newGroupProblem, refusedSentence,
+  resolveGroupChoice,
+} from './model/group-move';
+export type { GroupDialogProps, KnownGroup } from './ui/group-dialog';
+export {
+  GROUP_DIALOG_CANCEL_LABEL, GROUP_DIALOG_SAVE_LABEL, GROUP_DIALOG_TITLE, GroupDialog, NEW_GROUP_LABEL,
+} from './ui/group-dialog';
+export type { GroupEditing, GroupEditingInput, GroupEditingLayerProps } from './ui/group-editing';
+export { GROUP_MENU_ITEM_LABEL, GroupEditingLayer, useGroupEditing } from './ui/group-editing';

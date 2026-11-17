@@ -63,3 +63,19 @@
 .failed {
   margin-bottom: var(--am-gap-sm);
 }
+
+/* `UIP-S02-07`: the group the dragged card is over takes the accent's frame, solid, so the place it will land is the one that is lit. */
+.groupOver {
+  border-style: solid;
+  border-color: var(--am-accent);
+  box-shadow: var(--am-ring);
+}
+
+/* The empty «Без группы» that stands while a card is dragged out of its last group: the words say what dropping there does. */
+.dropHint {
+  margin: 0;
+  padding: var(--am-gap-md);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  text-align: center;
+}
