@@ -227,6 +227,9 @@ export function ExecutionQueue({
                 className={`am-button am-button--quiet am-button--small ${styles.moreToggle}`}
                 aria-expanded={opened}
                 aria-controls={panelId}
+                // The glyph is part of the label's text (the journey presses «Подробнее ▾» by it, and `rendered-language` reads it as the
+                // element's text), so the name a screen reader gets is said once, without the glyph.
+                aria-label="Подробнее"
                 data-queue-more-toggle=""
                 onClick={() => setOpenRows((current) => {
                   const next = new Set(current);
@@ -235,7 +238,7 @@ export function ExecutionQueue({
                   return next;
                 })}
               >
-                Подробнее <span aria-hidden="true">{opened ? '▴' : '▾'}</span>
+                {`Подробнее ${opened ? '▴' : '▾'}`}
               </button>
             </div>
             {/* What a reader needs at once to act on a row stays in it: why it waits, why it failed, why it was interrupted. */}
