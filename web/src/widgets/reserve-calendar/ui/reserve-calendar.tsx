@@ -13,6 +13,10 @@
  *
  * `D-319`: an administrator narrows the rows to one engineer; the selection is cleared when the filter changes, so a move
  * never carries work the screen has stopped showing.
+ *
+ * `UIP-S14-04`: the toolbar gives an administrator two ways out, as the original's buttons do. «Назначить работу» is a link
+ * to «Назначения», with the engineer of the choice «Инженер» when one is made, where the work is assigned; «Отпуск /
+ * отсутствие» asks the page, through a callback, to open «Выполнено» in the mode of the absences. An expert sees neither.
  */
 
 import Link from 'next/link';
@@ -47,6 +51,11 @@ export interface ReserveCalendarViewProps {
   /** The engineer the rows are narrowed to, resolved against the engineers of this read. */
   readonly filter: EngineerFilter;
   readonly onEngineer: (engineer: string | null) => void;
+  /**
+   * «Отпуск / отсутствие»: the page opens «Выполнено» in the mode of the absences. The button is drawn only where there is
+   * somebody to answer it, so the widget never names the page.
+   */
+  readonly onAbsences?: (() => void) | undefined;
   /** Today, `YYYY-MM-DD`; a test passes a fixed one. */
   readonly today?: string;
   /** The selection and the drop target to start with; a static render (the style census) seeds them. */
@@ -112,6 +121,7 @@ export function ReserveCalendarView({
   onStart,
   filter,
   onEngineer,
+  onAbsences,
   today = todayIso(),
   initialSelection = [],
   initialOver = null,
@@ -235,6 +245,18 @@ export function ReserveCalendarView({
             ›
           </button>
         </div>
+        {admin ? (
+          <div className={styles.actions} data-reserve-tools="">
+            <Link className="am-button am-button--small" href={routes.dispatcher(filter.uid ?? undefined)} data-reserve-assign="">
+              Назначить работу
+            </Link>
+            {onAbsences === undefined ? null : (
+              <button type="button" className="am-button am-button--quiet am-button--small" data-reserve-absences="" onClick={onAbsences}>
+                Отпуск / отсутствие
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
       {admin ? (
         <p className="am-note">
