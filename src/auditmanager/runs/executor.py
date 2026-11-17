@@ -65,6 +65,7 @@ outbox delivery remain out of scope.
 
 from __future__ import annotations
 
+import logging
 import time
 from functools import partial, wraps
 from dataclasses import dataclass, field, replace
@@ -140,7 +141,19 @@ from auditmanager.runs.crop_budget import MAX_CROP_BYTES, CropByteBudget
 from auditmanager.runs.provider import ProviderBinding, ProviderResolver
 from auditmanager.runs.stage_facts import SECTION_ROLLUP_MESSAGE, extended_rollup_message
 from auditmanager.runs.stage_plan import call_journal_columns
+from auditmanager.runs.restart import (
+    REASON_NOT_V2,
+    REPLACING_STATES,
+    RestartRefused,
+    RestartSpec,
+    refusal as restart_refusal,
+    spec_of as restart_spec_of,
+    takes_preparation as restart_takes_preparation,
+    takes_text as restart_takes_text,
+    tombstone_lineage,
+)
 from auditmanager.runs.stage_reuse import plan_stage_reuse, visual_only_pages_allowed
+from auditmanager.runs.restart_text import reuse_saved_text
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -167,6 +180,8 @@ from auditmanager.shared.identity import (
 from auditmanager.storage.public import BlobStore, DurablePublicationStore
 from auditmanager.storage.public import BlobMetadataRepository
 from auditmanager.storage.public import BlobDeclaration, VerifiedBlob, parse_blob_id
+
+_log = logging.getLogger(__name__)
 
 Clock = Callable[[], datetime]
 
@@ -1001,7 +1016,7 @@ def _section_relaxed_limits(session: Session, run: RunRow) -> bool:
     if run.command_id is None:
         return False  # Legacy in-process Runs predate command custody.
     command = CommandRepository().get(session, CommandId.parse(run.command_id))
-    if command.command_type not in {"start_audit_run", "reaudit_run", "start_run_from_stage"} or command.state != "succeeded":
+    if command.command_type not in {"start_audit_run", "reaudit_run", "start_run_from_stage", "restart_run"} or command.state != "succeeded":
         raise DomainError(ErrorCode.INTERNAL_ERROR, message="section Run has no accepted command")
     outcome = command.outcome
     if (outcome is None or outcome.get("run_id") != run.run_id
@@ -1226,6 +1241,9 @@ def _execute_run_body(
     # effect on every caller path, including direct integration invocations.
     session.commit()
     attempt_context = start_attempt_lease_heartbeat(session, authority)
+    # `RUN-RESTART-01` (L2, `R-155c`): the Attempt is not *live* until its first sign of life, and a not-live Attempt's first model call is cut to
+    # the watchdog window that is left. The claim is the first one; every stretch of local work below signals again.
+    attempt_context.progress()
     if checkpoint is not None:
         checkpoint()
 
@@ -1341,6 +1359,23 @@ def _execute_run_body(
     # is the run's failure terminal and nothing is recomputed in its place. A second Attempt after a lost lease reaches the
     # same rows by the same upsert. The row says which run the stage was taken from (``reused_from_run_id``).
     reused_stage_ids: frozenset[str] = frozenset()
+    # `RUN-RESTART-01`: the run of a restart takes the preparation stages of its source by reference (every chip but «Подготовка»), the saved text
+    # observations byte for byte (the chips after «Текст») and the model replies of the chips before its own. v3 is refused at the command.
+    restart_spec: RestartSpec | None = restart_spec_of(session, run)
+    if restart_spec is not None and v3_workflow:
+        raise restart_refusal(REASON_NOT_V2, "text")
+    if restart_spec is not None and restart_takes_preparation(restart_spec.point):
+        plan = plan_stage_reuse(
+            session, source_run_id=restart_spec.source_run_id, start_stage_id="text_analysis",
+            visual_only_pages=v3_workflow, runs=run_repo,
+        )
+        for reused in plan.reused:
+            taken = reused.as_stage_result(source_run_id=plan.source_run_id, at=clock())
+            _persist(session, run_repo, run_id, taken)
+            outputs.absorb(taken)
+        reused_stage_ids = frozenset(plan.reused_stage_ids)
+        session.commit()
+        attempt_context.progress()
     if run.start_stage_id is not None and run.started_from_run_id is not None:
         plan = plan_stage_reuse(
             session, source_run_id=run.started_from_run_id, start_stage_id=run.start_stage_id,
@@ -1357,6 +1392,7 @@ def _execute_run_body(
             continue
         run_repo.stage_started(session, run_id=run_id, stage_id=stage_id)
         session.commit()
+        attempt_context.progress()
         # Fresh statistics runs count crop bytes without the historical 2 GiB refusal.
         # Previously accepted commands retain their frozen relaxed_limits value.
         stage_store = CropByteBudget(
@@ -1399,6 +1435,7 @@ def _execute_run_body(
             result=result,
         )
         outputs.absorb(result)
+        attempt_context.progress()
         if result.status is not StageStatus.SUCCEEDED:
             # A failed preparation stage removes the inputs the rest of the chain
             # needs. Continuing would produce a cascade of identical
@@ -1410,6 +1447,8 @@ def _execute_run_body(
     # A halted chain never reaches the provider, so it has no attempts rather than one
     # failed attempt. The two are different claims and the tally says which.
     attempts = not_attempted(policy)
+    #: `RUN-RESTART-01`: set when a replay the restart needs cannot be made. The evidence gate is then not asked and the run fails.
+    restart_refused: RestartRefused | None = None
     if not halted:
         run_repo.stage_started(session, run_id=run_id, stage_id="text_analysis")
         session.commit()
@@ -1423,6 +1462,7 @@ def _execute_run_body(
             checkpoint=effect_checkpoint,
         )
         binding = None
+        reused_text = False  # `RUN-RESTART-01`: the text row is the source chain's, by reference: persisted, never bound to this Attempt
         try:
             binding = _bind_provider(
                 session, run, attempt_context, providers, adapter, config
@@ -1520,6 +1560,24 @@ def _execute_run_body(
                     empty_ref,_=publish_artifact(text_store,"analysis.text_observations",observations_document)
                     text_result=replace(text_result,artifacts=(empty_ref,),metrics={**text_result.metrics,
                         "native_text_unavailable":True,"model_call_count":0,"pages_analysed":0})
+            elif restart_spec is not None and restart_takes_text(restart_spec.point):
+                # `RUN-RESTART-01`: the text observations of the source chain are taken byte for byte (``runs.restart_text``): no text call, no
+                # new blob, the same artifact reference. One that cannot be taken fails the stage with the named reason, before any paid call.
+                attempts = not_attempted(policy)
+                try:
+                    text_result, observations_document = reuse_saved_text(
+                        session, run=run, spec=restart_spec, text_layer_ref=outputs.refs.get(ROLE_TEXT_LAYER), store=text_store,
+                        at=clock(), runs=run_repo, blobs=blob_repo,
+                    )
+                except RestartRefused as refused:
+                    restart_refused = refused
+                    observations_document = None
+                    text_result = _text_stage_result(
+                        TextAnalysisOutcome(status="failed", artifact=None, model_calls=(), error=refused.domain_error()),
+                        artifact_ref=None, attempts=attempts, started=clock(), finished=clock(),
+                    )
+                else:
+                    reused_text = True
             else:
                 text_result, observations_document, attempts = _run_text_analysis_stage(
                 run_id=run_id,
@@ -1551,15 +1609,19 @@ def _execute_run_body(
                     max_reply_bytes=None if relaxed_limits else MAX_REPLY_BYTES,
                 )),
             )
-        _persist_and_bind(
-            session,
-            runs=run_repo,
-            jobs=job_repo,
-            blobs=blob_repo,
-            authority=authority,
-            run_id=run_id,
-            result=text_result,
-        )
+        if reused_text or restart_refused is not None:
+            # By reference (or refused before it): there is no artifact of this Attempt to bind. The same upsert as the reused stages.
+            _persist(session, run_repo, run_id, text_result)
+        else:
+            _persist_and_bind(
+                session,
+                runs=run_repo,
+                jobs=job_repo,
+                blobs=blob_repo,
+                authority=authority,
+                run_id=run_id,
+                result=text_result,
+            )
         if v3_workflow and v3_pretext_invoked:
             v3_stage_result=text_result
             v3_pretext_ambiguous=has_ambiguous_provider_effect(session,run_id=run_id);session.commit()
@@ -1614,6 +1676,9 @@ def _execute_run_body(
                 if current_run.state != "running":
                     raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
                 session.commit()
+                # A boundary of the review is a sign of life of the worker's own work: a replayed reply (which makes no call), a norm lookup, the
+                # inputs read. A silence of 30 minutes outside a call fails the Attempt (`R-155c`).
+                attempt_context.progress()
                 if effect_checkpoint is not None:
                     effect_checkpoint(boundary)
 
@@ -1628,6 +1693,7 @@ def _execute_run_body(
 
             def extended_progress(status: str, result: dict[str, Any]) -> None:
                 nonlocal text_result
+                attempt_context.progress()
                 ref = publish_extended("analysis.extended_review",
                     {"run_id": run_id, "status": status, "result": result})
                 artifacts = tuple(a for a in text_result.artifacts if a.role != "analysis.extended_review")
@@ -1661,7 +1727,7 @@ def _execute_run_body(
                 session.commit()
 
             skip_reason = None
-            if text_result.status is StageStatus.FAILED:
+            if text_result.status is StageStatus.FAILED and restart_refused is None:
                 # Source-safe visual work is independent of text parser/admission success.
                 # Unknown paid text effects and unavailable routes forbid further dispatch.
                 unknown = any(effect.run_id == run_id for effect in job_repo.unresolved_provider_effects(session))
@@ -1673,30 +1739,49 @@ def _execute_run_body(
                 elif text_result.error is not None and text_result.error.code in {
                         ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED, ErrorCode.MODEL_IDENTITY_MISMATCH}:
                     skip_reason = "provider_binding_unavailable"
-            if skip_reason:
+            if restart_refused is not None:
+                pass  # the text was refused above: the failed row says why and the review has nothing to run on
+            elif skip_reason:
                 skipped = planned_workflow_result(reason=skip_reason,terminal=True,policy=extended_policy)
                 extended_progress("unavailable",skipped)
             else:
-                run_extended_review(session, run=run, authority=authority, jobs=job_repo,
-                    journal=_DurableCallJournal(session, job_repo, authority, effect_checkpoint,
-                        call=binding.call, context=attempt_context),
-                    binding=binding, outputs=outputs, store=text_store, meter=meter,
-                    publish=publish_extended, progress=extended_progress,
-                    checkpoint=extended_checkpoint, observations_document=observations_document,
-                    snapshot_id=run.norms_snapshot_id, profile_sha256=text_profile.content_sha256,
-                    policy=extended_policy,bind_native=bind_native)
+                try:
+                    run_extended_review(session, run=run, authority=authority, jobs=job_repo,
+                        journal=_DurableCallJournal(session, job_repo, authority, effect_checkpoint,
+                            call=binding.call, context=attempt_context),
+                        binding=binding, outputs=outputs, store=text_store, meter=meter,
+                        publish=publish_extended, progress=extended_progress,
+                        checkpoint=extended_checkpoint, observations_document=observations_document,
+                        snapshot_id=run.norms_snapshot_id, profile_sha256=text_profile.content_sha256,
+                        policy=extended_policy,bind_native=bind_native,
+                        **({"restart": restart_spec} if restart_spec is not None else {}))
+                except RestartRefused as refused:
+                    # `RUN-RESTART-01`: a replay that cannot be made is the run's failure, not a partial result: the text row fails with the named
+                    # reason and the chip, the evidence gate below is not asked, nothing is published and the source is neither tombstoned nor carried.
+                    restart_refused = refused
+                    observations_document = None
+                    text_result = replace(
+                        text_result, status=StageStatus.FAILED, error=StageError.from_domain_error(refused.domain_error()),
+                    )
+                    _persist(session, run_repo, run_id, text_result)
+                    outputs.absorb(text_result)
+                    session.commit()
 
     # `W54-JUDGE-Y` F5: the gate's artifacts are read from the store here, before the
     # advance below locks the run row, so no S3 read happens under that lock.
-    gate_inputs = _read_gate_inputs(
+    attempt_context.progress()
+    # `RUN-RESTART-01`: a restart that could not take a reply publishes nothing, whatever the saved parts of its review hold.
+    gate_inputs = None if restart_refused is not None else _read_gate_inputs(
         observations_document=observations_document, outputs=outputs, blob_store=blob_store,
         publication_mode=_publication_mode(run), run_id=run_id, version_uid=run.version_uid,
     )
+    attempt_context.progress()
 
     run_repo.advance(session, run_id=run_id, from_state="running", to_state="validating")
 
     # -- validating: the evidence gate, then the terminal it implies ----------
     gate_ran, publication = _run_evidence_gate(session, run=run, inputs=gate_inputs)
+    attempt_context.progress()
 
     # An unread extended result is a persisted coverage gap, never an empty successful
     # one-list publication. Keep the already published, grounded text findings.
@@ -1749,9 +1834,22 @@ def _execute_run_body(
         terminal_reason=selection.terminal_reason,
         terminal_detail=selection.terminal_detail,
     )
+    # `RUN-RESTART-01` (`R-155g`): a restart run that published (``published`` or ``partial``) replaces its source in the transaction that moved its
+    # state -- the guard of migration 0071 refuses the tombstone before that and for a run that failed. Every other run of its lineage that ended
+    # without a published result goes with it, so one run of the lineage stays listed. Nothing is written for a run that failed or was refused.
+    carry_after_commit = False
+    if restart_spec is not None and selection.state in REPLACING_STATES:
+        attempt_context.progress()
+        tombstone_lineage(session, run=run_repo.get(session, run_id), runs=run_repo)
+        carry_after_commit = True
     job_repo.finish_execution(
         session, authority, publishes_result=selection.is_publishable
     )
+    if carry_after_commit:
+        # The terminal and the tombstones are one transaction; the decisions of the lineage are carried **after** it commits, by the idempotent
+        # step of ``decisions`` (a failure is logged and left to the sweeper, never the run's).
+        session.commit()
+        _carry_restart_decisions(session, run=run_repo.get(session, run_id), context=attempt_context)
 
     return ExecutionResult(
         run_id=run_id,
@@ -1764,6 +1862,34 @@ def _execute_run_body(
         gate_ran=gate_ran,
         model_attempts=attempts,
     )
+
+
+def _carry_restart_decisions(session: Session, *, run: RunRow, context: AttemptContext) -> None:
+    """The expert's decisions on the findings of the restart's lineage, carried to the verbatim-matching findings of ``run`` (`R-155b`).
+
+    Called after the terminal transaction committed (the carry opens its own sessions and commits per target finding, so no transaction of this one is
+    open) and before the heartbeat stops, with a sign of life on each side. ``decisions`` owns the step (``carry_restart_decisions`` is idempotent and
+    gathers the lineage itself; on an item that failed it writes no marker, so the sweeper retries); a failure is logged and left to the worker's sweeper
+    (``pending_restart_carries``), because the run has published and a carry that failed must never change that."""
+    context.progress()
+    try:
+        from auditmanager.decisions.public import carry_restart_decisions
+    except ImportError:
+        _log.warning("restart run %s published; the decision carry is not available in this build (left to the sweeper)", run.run_id)
+        return
+    bind = session.get_bind()
+    try:
+        from sqlalchemy.engine import Connection
+        from sqlalchemy.orm import sessionmaker
+
+        engine = bind.engine if isinstance(bind, Connection) else bind
+        report = carry_restart_decisions(sessionmaker(bind=engine), run_id=run.run_id, actor_user_uid=str(run.started_by_user_uid))
+        as_fields = getattr(report, "as_fields", None)
+        _log.info("the decision carry of restart run %s: %s", run.run_id, as_fields() if callable(as_fields) else report)
+    except Exception:  # noqa: BLE001 - a carry that failed is the sweeper's, never the published run's
+        _log.exception("the decision carry of restart run %s failed; left to the sweeper", run.run_id)
+    finally:
+        context.progress()
 
 
 @wraps(_execute_run_body)
