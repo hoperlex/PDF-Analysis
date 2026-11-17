@@ -480,6 +480,37 @@ describe('the screen this seam redirects to can render every outcome it produces
     expect(markup).toContain('отзывает');
   });
 
+  it('UIP-S19-03: the rule stands on one line under the new password; the two long explanations are folded in a plain «Подробнее»', () => {
+    const RULE = 'Не менее 8 символов; не совпадает с логином, именем и адресом почты.';
+    const markup = render(createElement(ChangePasswordPage, { login: LOGIN }));
+    // The rule: once, after the «Новый пароль» field and before the confirmation, tied to the input for assistive technology.
+    expect(markup.split(RULE)).toHaveLength(2);
+    const ruleAt = markup.indexOf(RULE);
+    expect(markup.indexOf('id="change-password-new"')).toBeLessThan(ruleAt);
+    expect(ruleAt).toBeLessThan(markup.indexOf('id="change-password-confirm"'));
+    expect(markup).toMatch(/<input[^>]*id="change-password-new"[^>]*aria-describedby="change-password-rule"/);
+    expect(markup).toMatch(/<p[^>]*id="change-password-rule"[^>]*>Не менее 8 символов;/);
+    // The disclosure: a native, closed `details` (not a window), holding exactly the two long explanations.
+    const folds = markup.match(/<details[^>]*>[\s\S]*?<\/details>/g) ?? [];
+    expect(folds).toHaveLength(1);
+    const fold = folds[0] as string;
+    expect(fold).not.toMatch(/<details[^>]*\sopen/);
+    expect(fold).toContain('<summary>Подробнее</summary>');
+    expect(fold).toContain('Смена пароля отзывает все выданные пропуска');
+    expect(fold).toContain('Эта страница не хранит ни пароль, ни пропуск');
+    expect(markup).not.toContain('<dialog');
+    // Neither explanation stands outside the fold any more, and the subtitle still says what the change revokes.
+    const outside = markup.replace(fold, '');
+    expect(outside).not.toContain('Смена пароля отзывает все выданные пропуска');
+    expect(outside).not.toContain('Эта страница не хранит');
+    expect(outside).toContain('Смена пароля отзывает все ранее выданные пропуска этой учётной записи.');
+    // The fields, the button and the forced-change «Выйти» are where they were.
+    expect(outside).toContain('Сменить пароль</button>');
+    const forced = render(createElement(ChangePasswordPage, { mustChange: true }));
+    expect(forced).toContain('data-change-password-leave=""');
+    expect(forced).toContain('data-change-password-required="true"');
+  });
+
   it('is built from files that ship no client JavaScript', () => {
     for (const relative of SLICE_FILES) {
       const source = readFileSync(join(WEB_ROOT, relative), 'utf8');
