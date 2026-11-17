@@ -2,7 +2,14 @@
 
 /**
  * The knowledge base as the original's table (`UI-B-34`, `kb-table`): one decision a row, the columns the original reads
- * across -- type, project, section, severity, the decision, the gist, the reason, the date -- and the way to the finding.
+ * across -- type, object and document, section, severity, the gist, the reason, the date -- and the way to the finding.
+ *
+ * **A row is one or two lines (`UIP-S12-02`, `Г12-B`).** There is no «Решение» column: the verdict is the stripe at the row's
+ * left edge and the sign in the first cell (`VerdictMark`: ✓ green, ✕ red, the word as its accessible name), so the colour
+ * is never the only carrier. The object and the document are one cell on one line, cut with a tooltip when they do not fit;
+ * the date is one line in the reader's local time (`UIP-G-13`), and the exact UTC stamp, the event, the author and how many
+ * decisions the finding holds are its tooltip. The gist and the reason are cut at two lines with the whole text as a tooltip.
+ * A decision carried over from an earlier version says so under the reason, not in a cell of its own.
  *
  * It is the default view of the screen, as the original's is; the rows as events (the widget's other view) stay one press away.
  * It draws what the server sent and derives nothing: the project, the document and the section are the record's own
@@ -20,15 +27,16 @@
  */
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
-import type { DecisionRecord, KnowledgeBaseEntry, ProposalDecisionRecord } from '@/shared/api';
-import { formatInstant, routes } from '@/shared/lib';
-import { CATEGORY_LABELS, CarriedMark, VERDICT_LABELS } from '@/entities/expert-decision';
+import type { DecisionRecord, KnowledgeBaseEntry, ProposalDecisionRecord, ProposalVerdict } from '@/shared/api';
+import { formatInstant, formatInstantUtc, routes } from '@/shared/lib';
+import { CATEGORY_LABELS, CarriedMark, VerdictMark } from '@/entities/expert-decision';
 import { DECISION_EVENT_LABELS } from '@/entities/optimisation-proposal';
 import { SeverityBadge } from '@/entities/finding';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
 
-import { EVENT_TYPE_LABELS, decisionCountWords } from '../model/labels';
+import { EVENT_TYPE_LABELS, decisionCountWords, sentenceCase } from '../model/labels';
 import styles from './knowledge-base.module.css';
 
 export interface KnowledgeBaseTableProps {
@@ -53,16 +61,87 @@ function SectionCell({ code }: { readonly code: string | undefined }) {
   );
 }
 
+/** The object and its document in one line; what does not fit is cut and the whole is the tooltip. */
 function PlaceCell({ project, document }: { readonly project: string; readonly document: string }) {
+  const place = `${project} · ${document}`;
   return (
     <td>
-      <span className={styles.project}>{project}</span>
-      <span className={styles.document}>{document}</span>
+      <span className={styles.place} title={place}>
+        {place}
+      </span>
+    </td>
+  );
+}
+
+/** The decision's own words, cut at two lines with the whole text as the tooltip. */
+function Clamped({ text }: { readonly text: string }) {
+  return (
+    <span className={styles.clamp} title={text}>
+      {text}
+    </span>
+  );
+}
+
+/**
+ * The reason of a decision, and under it the mark of a decision carried over from an earlier version. A missing reason is a
+ * dash, never a blank; a decision made directly draws no mark and no empty wrapper (`D-344`, `D-335`).
+ */
+function ReasonCell({
+  reason,
+  carriedFrom,
+  aside,
+}: {
+  readonly reason: string | null | undefined;
+  readonly carriedFrom: { readonly version_ordinal: number } | undefined;
+  /** A quiet word under the reason: what a decision with no reason of its own says. */
+  readonly aside?: string | undefined;
+}) {
+  return (
+    <td>
+      {reason !== null && reason !== undefined ? <Clamped text={reason} /> : aside === undefined ? <span className={styles.cellMuted}>—</span> : null}
+      {aside === undefined ? null : <span className={`${styles.cellMuted} ${styles.aside}`}>{aside}</span>}
+      {carriedFrom === undefined ? null : (
+        <span className={styles.carried}>
+          <CarriedMark carriedFrom={carriedFrom} />
+        </span>
+      )}
+    </td>
+  );
+}
+
+/**
+ * The date on one line, in the reader's local time (`UIP-G-13`); the tooltip says the rest: the event, the exact UTC stamp, who,
+ * and how many decisions the finding holds.
+ */
+function DateCell({ at, tooltip, eventCount }: { readonly at: string; readonly tooltip: string; readonly eventCount?: number | undefined }) {
+  return (
+    <td className={styles.cellDate}>
+      <time dateTime={at} title={tooltip} {...(eventCount === undefined ? {} : { 'data-event-count': eventCount })}>
+        {formatInstant(at)}
+      </time>
+    </td>
+  );
+}
+
+/** The first cell: the verdict's sign, then the type (`Замечание · ` before the category in «Все»). */
+function TypeCell({ sign, children }: { readonly sign: ReactNode; readonly children: ReactNode }) {
+  return (
+    <td>
+      <span className={styles.typeLine}>
+        {sign}
+        <span className="am-kb__category">{children}</span>
+      </span>
     </td>
   );
 }
 
 function FindingRow({ record, kindLabel }: { readonly record: DecisionRecord; readonly kindLabel: boolean }) {
+  const tooltip = [
+    EVENT_TYPE_LABELS[record.event_type],
+    formatInstantUtc(record.recorded_at),
+    record.author_label,
+    decisionCountWords(record.decision_event_count),
+  ].join(' · ');
   return (
     <tr
       data-decision-id={record.decision_id}
@@ -72,43 +151,25 @@ function FindingRow({ record, kindLabel }: { readonly record: DecisionRecord; re
       data-current-verdict={record.current_verdict}
       data-verdict={record.verdict ?? 'none'}
     >
-      <td className="am-kb__category">
+      <TypeCell sign={<VerdictMark verdict={record.current_verdict} />}>
         {kindLabel ? 'Замечание · ' : null}
         {CATEGORY_LABELS[record.category]}
-      </td>
+      </TypeCell>
       <PlaceCell project={record.project_name} document={record.document_name} />
       <SectionCell code={record.section} />
       <td data-decided-severity={record.severity}>
         {record.severity === undefined ? '—' : <SeverityBadge severity={record.severity} title="Критичность, решённая экспертом" />}
       </td>
       <td>
-        <span className="am-kb__verdict" data-verdict={record.current_verdict}>
-          {VERDICT_LABELS[record.current_verdict]}
-        </span>
-        <span className={`am-kb__event ${styles.event}`}>{EVENT_TYPE_LABELS[record.event_type]}</span>
-        {/*
-         * `D-344`, `UI-A-73`: a decision the expert carried over from an earlier version's finding says so, «↩ Перенесено из V2»,
-         * beside the verdict as «Разбор» draws it. `carried_from` is the record's own (the server's structured link); a decision
-         * made directly has none and draws nothing -- not an empty wrapper either.
-         */}
-        {record.carried_from === undefined ? null : (
-          <span className={styles.carried}>
-            <CarriedMark carriedFrom={record.carried_from} />
-          </span>
-        )}
+        <Clamped text={record.finding_text} />
       </td>
-      <td>{record.finding_text}</td>
-      <td className={record.comment === null || record.comment === undefined ? styles.cellMuted : undefined}>
-        {record.comment === null || record.comment === undefined ? '—' : record.comment}
-      </td>
-      <td>
-        <time dateTime={record.recorded_at}>{formatInstant(record.recorded_at)}</time>
-        <span className={styles.document}>{record.author_label}</span>
-        <span className={styles.document} data-event-count={record.decision_event_count}>
-          {decisionCountWords(record.decision_event_count)}
-        </span>
-      </td>
-      <td>
+      {/*
+       * `D-344`, `UI-A-73`: a decision the expert carried over from an earlier version's finding says so, «↩ Перенесено из V2»,
+       * under the reason, as «Разбор» draws it beside the verdict. `carried_from` is the record's own (the server's structured link).
+       */}
+      <ReasonCell reason={record.comment} carriedFrom={record.carried_from} />
+      <DateCell at={record.recorded_at} tooltip={tooltip} eventCount={record.decision_event_count} />
+      <td className={styles.cellLink}>
         {/* `ADR-0010`, `UI-B-38`: the link is built from `project_uid`, `run_id` and `finding_uid`; «Разбор» opens on that finding. */}
         <Link
           className="am-kb__link"
@@ -121,37 +182,35 @@ function FindingRow({ record, kindLabel }: { readonly record: DecisionRecord; re
   );
 }
 
+/** A proposal's verdict as the sign of the first cell: accepted ✓, rejected ✕; «на доработку» and «решение снято» carry none. */
+function proposalSign(verdict: ProposalVerdict) {
+  if (verdict === 'accept') return <VerdictMark verdict="accepted" />;
+  if (verdict === 'reject') return <VerdictMark verdict="rejected" />;
+  return null;
+}
+
 function ProposalRow({ record }: { readonly record: ProposalDecisionRecord }) {
+  const tooltip = [formatInstantUtc(record.decided_at), record.actor_label].join(' · ');
   return (
     <tr data-proposal-decision-id={record.proposal_decision_id} data-proposal-verdict={record.verdict}>
-      <td className="am-kb__category">Предложение</td>
+      <TypeCell sign={proposalSign(record.verdict)}>Предложение</TypeCell>
       <PlaceCell project={record.project_name} document={record.document_name} />
       <SectionCell code={record.section} />
       <td className={styles.cellMuted}>—</td>
       <td>
-        <span className="am-kb__verdict" data-verdict={record.verdict}>
-          {DECISION_EVENT_LABELS[record.verdict]}
-        </span>
-        {/*
-         * `D-335`, `UI-B-14`: a decision the expert carried over from an earlier version's pass says so, «↩ Перенесено из V2», beside
-         * the verdict as a finding's does. `carried_from` is the record's own (the server's structured link); a decision made
-         * directly has none and draws nothing -- not an empty wrapper either.
-         */}
-        {record.carried_from === undefined ? null : (
-          <span className={styles.carried}>
-            <CarriedMark carriedFrom={record.carried_from} />
-          </span>
-        )}
+        <Clamped text={`${record.row_text} · поставщик ${record.proposed_vendor} · ед. ${record.unit}`} />
       </td>
-      <td>
-        {record.row_text} · поставщик {record.proposed_vendor} · ед. {record.unit}
-      </td>
-      <td className={record.comment === null ? styles.cellMuted : undefined}>{record.comment === null ? '—' : record.comment}</td>
-      <td>
-        <time dateTime={record.decided_at}>{formatInstant(record.decided_at)}</time>
-        <span className={styles.document}>{record.actor_label}</span>
-      </td>
-      <td>
+      {/*
+       * `D-335`, `UI-B-14`: a decision carried over from an earlier version's pass says so under the reason, as a finding's does;
+       * a decision made directly has none and draws nothing -- not an empty wrapper either.
+       */}
+      <ReasonCell
+        reason={record.comment}
+        carriedFrom={record.carried_from}
+        aside={record.verdict === 'revise' || record.verdict === 'revoke' ? sentenceCase(DECISION_EVENT_LABELS[record.verdict]) : undefined}
+      />
+      <DateCell at={record.decided_at} tooltip={tooltip} />
+      <td className={styles.cellLink}>
         <Link
           className="am-kb__link"
           href={routes.documentOptimisation(record.project_uid, record.document_uid, record.optimisation_pass_id)}
@@ -170,10 +229,9 @@ export function KnowledgeBaseTable({ entries, kindLabel = false }: KnowledgeBase
         <thead>
           <tr>
             <th scope="col" className={styles.colType}>Тип</th>
-            <th scope="col" className={styles.colPlace}>Объект</th>
+            <th scope="col" className={styles.colPlace}>Объект · документ</th>
             <th scope="col" className={styles.colSection}>Раздел</th>
             <th scope="col" className={styles.colSeverity}>Критичность</th>
-            <th scope="col" className={styles.colVerdict}>Решение</th>
             <th scope="col" className={styles.colText}>Суть</th>
             <th scope="col" className={styles.colReason}>Причина решения</th>
             <th scope="col" className={styles.colDate}>Дата</th>

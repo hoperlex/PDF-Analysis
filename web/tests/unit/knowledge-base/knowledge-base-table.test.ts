@@ -1,11 +1,13 @@
 /**
- * `UI-B-34`: the knowledge base as the original's table, and the page's default view.
+ * `UI-B-34`, `UIP-S12-02`: the knowledge base as the original's table, and the page's default view.
  *
- * What is held: one row a decision with the project, the section, the severity, the verdict, the reason and the date each in its
- * own column; the project and the section are the record's own (no further read, no label made up for a section the record
- * does not carry); «Все» draws a finding and a proposal in the same table; the widget still draws the events when it is not
- * told otherwise, so the screens that render it as it was keep their markup; the page opens on the table and the events
- * are one press away; a closed vocabulary still fails closed in the table.
+ * What is held: one row a decision, the columns «Тип · Объект · документ · Раздел · Критичность · Суть · Причина решения · Дата»
+ * and the way to the finding, in that order, and no «Решение» column: the verdict is the sign in the first cell (✓ green, ✕ red,
+ * the word as its name) and the stripe at the row's edge; the object and the document are one cell; the date is one line with
+ * the UTC stamp, the author and the count of decisions as its tooltip; the five severities are five tones. The project and the
+ * section are the record's own (no further read, no label made up for a section the record does not carry); «Все» draws a finding
+ * and a proposal in the same table; the widget still draws the events when it is not told otherwise, so the screens that render it
+ * as it was keep their markup; a closed vocabulary still fails closed in the table.
  */
 
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -53,29 +55,89 @@ function cells(markup: string): string[] {
 }
 
 describe('the table', () => {
-  it('has the original’s columns, in the original’s order, and one row a decision', () => {
+  it('has the original’s columns, in the original’s order, and no «Решение» column', () => {
     const markup = table([record(), record({ decision_id: 'dec_01M2545JSD15ETSNNV904X992A' })]);
     const heads = [...markup.matchAll(/<th scope="col"(?: class="[^"]*")?>([^<]*)<\/th>/g)].map((head) => head[1]);
-    expect(heads).toEqual(['Тип', 'Объект', 'Раздел', 'Критичность', 'Решение', 'Суть', 'Причина решения', 'Дата', 'Замечание']);
+    expect(heads).toEqual(['Тип', 'Объект · документ', 'Раздел', 'Критичность', 'Суть', 'Причина решения', 'Дата', 'Замечание']);
+    expect(heads).not.toContain('Решение');
     expect(markup.match(/<tr data-decision-id=/g) ?? []).toHaveLength(2);
     expect(markup).toContain('data-record-count="2"');
     expect(markup).toContain('data-knowledge-base-view="table"');
     expect(markup).not.toContain('am-kb__record');
   });
 
-  it('puts the project over its document, the section by its short name with the title as a tooltip, and the reason in a column', () => {
-    const [type, place, section, severity, verdict, gist, reason, date, link] = cells(table([record()]));
-    expect(type).toBe('Внутреннее противоречие');
-    expect(place).toBe('Школа АР-1');
+  it('is eight cells a row, the way to the finding the last', () => {
+    expect(cells(table([record()]))).toHaveLength(8);
+    expect(cells(table([record()])).at(-1)).toBe('Открыть замечание');
+  });
+
+  it('puts the object and its document in one cell on one line, the whole as a tooltip, the section by its short name, the reason in a column', () => {
+    const [type, place, section, severity, gist, reason, date, link] = cells(table([record()]));
+    expect(type).toBe('✓ Внутреннее противоречие');
+    expect(place).toBe('Школа · АР-1');
     expect(section).toBe('АР');
     expect(severity).not.toBe('—');
-    expect(verdict).toContain('принято');
     expect(gist).toBe('Срок поставки указан как 30 дней в §4 и как 45 дней в §9.');
     expect(reason).toBe('Согласовано с заказчиком.');
-    expect(date).toContain('Петрова А.');
-    expect(date).toContain('одно решение по замечанию');
+    expect(date).toBe('10.09.2026 09:00');
     expect(link).toBe('Открыть замечание');
-    expect(table([record()])).toContain('title="Архитектурные решения (АР)"');
+    const markup = table([record()]);
+    expect(markup).toContain('title="Школа · АР-1"');
+    expect(markup).toContain('title="Архитектурные решения (АР)"');
+    // The gist and the reason are cut at two lines; the whole text is the tooltip.
+    expect(markup).toContain('title="Срок поставки указан как 30 дней в §4 и как 45 дней в §9."');
+    expect(markup).toContain('title="Согласовано с заказчиком."');
+  });
+
+  it('says a long name whole in the tooltip, and prints it whole for the stylesheet to cut', () => {
+    const long = 'Учебный корпус «Маяк-7» с подземной парковкой и пристроенным спортивным залом';
+    const markup = table([record({ project_name: long, document_name: 'АР-1. Планы этажей' })]);
+    expect(markup).toContain(`title="${long} · АР-1. Планы этажей"`);
+    expect(cells(markup)[1]).toBe(`${long} · АР-1. Планы этажей`);
+  });
+
+  it('draws the verdict as a sign with a name, ✓ for a decision for and ✕ for one against, and no word «приём» or «ПРИЁМ» beside it', () => {
+    const accepted = table([record()]);
+    expect(accepted).toMatch(/<span[^>]*role="img"[^>]*aria-label="Принято"[^>]*data-verdict="accepted"[^>]*>✓<\/span>/);
+    const rejected = table([record({ current_verdict: 'rejected', verdict: 'rejected', event_type: 'reject' })]);
+    expect(rejected).toMatch(/<span[^>]*role="img"[^>]*aria-label="Отклонено"[^>]*data-verdict="rejected"[^>]*>✕<\/span>/);
+    for (const markup of [accepted, rejected]) {
+      // What the reader sees is the cells' text: the event's word is in a tooltip only, and no cell of its own prints it.
+      expect(cells(markup).join(' ')).not.toMatch(/приём|отклонение|ПРИЁМ|принято|отклонено/i);
+      expect(markup).not.toContain('am-kb__verdict');
+    }
+  });
+
+  it('says the sign of the verdict that STANDS, whatever event the row is: a comment on an accepted finding is still ✓', () => {
+    const markup = table([record({ event_type: 'comment', verdict: null, comment: 'Спорно.' })]);
+    expect(markup).toContain('aria-label="Принято"');
+    expect(markup).toContain('data-event-type="comment"');
+  });
+
+  it('gives a finding nobody has decided a dash for a sign, named «Не решено», not a tick', () => {
+    const markup = table([record({ current_verdict: 'pending', verdict: null, event_type: 'comment' })]);
+    expect(markup).toContain('aria-label="Не решено"');
+    expect(markup).not.toContain('>✓<');
+    expect(markup).not.toContain('>✕<');
+  });
+
+  it('prints the date on one line, and puts the exact UTC stamp, the event, the author and the count in its tooltip', () => {
+    const markup = table([record({ decision_event_count: 3 })]);
+    const date = cells(markup)[6];
+    expect(date).toBe('10.09.2026 09:00');
+    expect(date).not.toContain('Петрова');
+    expect(date).not.toContain('UTC');
+    const tooltip = /<time[^>]*title="([^"]*)"/.exec(markup)?.[1] ?? '';
+    expect(tooltip).toContain('2026-09-10 09:00:00 UTC');
+    expect(tooltip).toContain('Петрова А.');
+    expect(tooltip).toContain('решений по замечанию: 3');
+    expect(tooltip).toContain('приём');
+    expect(markup).toContain('data-event-count="3"');
+    expect(markup).toContain('dateTime="2026-09-10T09:00:00.000Z"');
+  });
+
+  it('says one decision in words that do not read as an ordinal', () => {
+    expect(table([record()])).toContain('одно решение по замечанию');
   });
 
   it('leaves the section’s cell empty, and names none, for a version no expert has classified', () => {
@@ -90,13 +152,25 @@ describe('the table', () => {
   it('says a missing comment and a missing severity as a dash, never as a blank or a zero', () => {
     const { severity, ...without } = record({ comment: null });
     void severity;
-    const [, , , sev, , , reason] = cells(table([without]));
+    const [, , , sev, , reason] = cells(table([without]));
     expect(sev).toBe('—');
     expect(reason).toBe('—');
   });
 
-  it('says how many decisions the finding holds, in words that decline', () => {
-    expect(table([record({ decision_event_count: 3 })])).toContain('решений по замечанию: 3');
+  it('draws the five severities in five tones: red, amber, accent, green and grey, each with its own word', () => {
+    const tones: readonly (readonly [NonNullable<DecisionRecord['severity']>, string, string])[] = [
+      ['critical', 'failed', 'Критическое'],
+      ['economic', 'degraded', 'Экономическое'],
+      ['operational', 'active', 'Эксплуатационное'],
+      ['recommendation', 'ok', 'Рекомендация'],
+      ['check_adjacent', 'inert', 'Проверить смежный раздел'],
+    ];
+    for (const [severity, tone, word] of tones) {
+      const markup = table([record({ severity })]);
+      expect(markup, severity).toContain(`class="am-badge am-badge--${tone}" data-severity="${severity}"`);
+      expect(cells(markup)[3], severity).toBe(word);
+    }
+    expect(new Set(tones.map(([, tone]) => tone)).size).toBe(5);
   });
 
   it('links the finding by the identities the record carries and by nothing else', () => {
@@ -147,11 +221,49 @@ describe('«Все» in the table', () => {
 
   it('gives a proposal the same columns: place, section, the row and its vendor, the reason and the way to its optimisation', () => {
     const row = markup.slice(markup.indexOf('data-proposal-decision-id'));
-    expect(row).toContain('Мост через Неву');
+    expect(row).toContain('Мост через Неву · Архитектурные решения');
+    expect(row).not.toContain('Решение');
     expect(row).toContain('Дверь металлическая ДМ-1 · поставщик ООО «Двери» · ед. шт');
     expect(row).toContain('Аналог не подходит.');
     expect(row).toContain('Открыть оптимизацию');
     expect(row).toContain('data-section-cell="AR"');
+  });
+});
+
+describe('a proposal’s verdict in the table', () => {
+  const PROPOSAL = (verdict: 'accept' | 'reject' | 'revise' | 'revoke', comment: string | null): KnowledgeBaseEntry => ({
+    kind: 'proposal',
+    occurred_at: '2026-11-06T09:00:00Z',
+    proposal: {
+      proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+      optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', verdict, comment, actor_label: 'Иванова А. С.',
+      decided_at: '2026-11-06T09:00:00Z', project_uid: `prj_${ULID}`, project_name: 'Мост через Неву', document_uid: `doc_${ULID}`,
+      document_name: 'Архитектурные решения', version_uid: `ver_${ULID}`, section: 'AR', row_text: 'Дверь металлическая ДМ-1',
+      proposed_vendor: 'ООО «Двери»', unit: 'шт',
+    },
+  });
+  const draw = (verdict: 'accept' | 'reject' | 'revise' | 'revoke', comment: string | null = null) => table([], [PROPOSAL(verdict, comment)]);
+
+  it('is ✓ for an acceptance and ✕ for a rejection, with the stripe’s marker on the row', () => {
+    expect(draw('accept')).toContain('aria-label="Принято"');
+    expect(draw('accept')).toContain('data-proposal-verdict="accept"');
+    expect(draw('reject')).toContain('aria-label="Отклонено"');
+    expect(draw('reject')).toContain('data-proposal-verdict="reject"');
+  });
+
+  it('is no sign for «на доработку» and «решение снято», which are not decisions for or against: their words stand under the reason', () => {
+    for (const [verdict, word] of [['revise', 'На доработку'], ['revoke', 'Решение снято']] as const) {
+      const markup = draw(verdict);
+      expect(markup).not.toContain('role="img"');
+      expect(cells(markup)[5]).toBe(word);
+    }
+    expect(cells(draw('revise', 'Уточните марку.'))[5]).toBe('Уточните марку. На доработку');
+  });
+
+  it('draws the date of a proposal on one line, with the UTC stamp and the actor in the tooltip', () => {
+    const markup = draw('accept');
+    expect(cells(markup)[6]).toBe('06.11.2026 09:00');
+    expect(markup).toContain('title="2026-11-06 09:00:00 UTC · Иванова А. С."');
   });
 });
 

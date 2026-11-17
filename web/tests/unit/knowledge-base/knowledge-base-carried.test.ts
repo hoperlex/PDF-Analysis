@@ -152,21 +152,29 @@ for (const view of ['table', 'events'] as const) {
   }
 }
 
+/** The «Причина решения» cell of the table: the sixth, after the type, the object, the section, the severity and the gist. */
+const REASON_CELL = 5;
+
 describe('where the mark stands', () => {
-  it('in the table, in the cell of the decision, after its verdict', () => {
+  it('in the table, in the cell of the reason, under the reason (`UIP-S12-02`: there is no «Решение» cell)', () => {
     const cells = cellsOf(rowOf(tableOf([CARRIED, DIRECT]), CARRIED_ID));
-    const decision = cells[4] ?? '';
-    expect(decision).toContain('принято');
-    expect(decision).toContain(MARK);
-    expect(decision.indexOf('принято')).toBeLessThan(decision.indexOf(MARK));
+    const reason = cells[REASON_CELL] ?? '';
+    expect(reason).toContain('Согласовано с заказчиком.');
+    expect(reason).toContain(MARK);
+    expect(reason.indexOf('Согласовано')).toBeLessThan(reason.indexOf(MARK));
     // No other cell of the row carries it.
     expect(cells.filter((cell) => cell.includes('Перенесено'))).toHaveLength(1);
   });
 
-  it('in the table, a decision made directly has an unchanged decision cell', () => {
-    const decision = cellsOf(rowOf(tableOf([CARRIED, DIRECT]), DIRECT_ID))[4] ?? '';
-    expect(decision).toContain('принято');
-    expect(decision).not.toContain('Перенесено');
+  it('in the table, the mark stands under the reason in the markup too, after the reason’s own span', () => {
+    const cell = rowOf(tableOf([CARRIED, DIRECT]), CARRIED_ID).match(/<td>(<span[^>]*>Согласовано с заказчиком\.<\/span>[\s\S]*?)<\/td>/)?.[1] ?? '';
+    expect(cell).toMatch(/^<span[^>]*>Согласовано с заказчиком\.<\/span><span class="[^"]*"><span[^>]*data-carried-from="2"/);
+  });
+
+  it('in the table, a decision made directly has an unchanged reason cell', () => {
+    const reason = cellsOf(rowOf(tableOf([CARRIED, DIRECT]), DIRECT_ID))[REASON_CELL] ?? '';
+    expect(reason).toBe('Согласовано с заказчиком.');
+    expect(reason).not.toContain('Перенесено');
   });
 
   it('in the events, in the heading of the row, beside the verdict', () => {
@@ -179,10 +187,10 @@ describe('where the mark stands', () => {
   it('wraps nothing for a decision made directly (no empty, spaced wrapper in the table)', () => {
     const markup = tableOf([DIRECT]);
     expect(markup).not.toContain('data-carried-from');
-    const decisionCell = rowOf(markup, DIRECT_ID).match(/<td>(<span class="am-kb__verdict"[\s\S]*?)<\/td>/)?.[1] ?? '';
-    expect(decisionCell).not.toBe('');
-    // The verdict and the event label are the only two spans of the cell.
-    expect(decisionCell.match(/<span\b/g) ?? []).toHaveLength(2);
+    const reasonCell = rowOf(markup, DIRECT_ID).match(/<td>(<span[^>]*>Согласовано с заказчиком\.<\/span>[\s\S]*?)<\/td>/)?.[1] ?? '';
+    expect(reasonCell).not.toBe('');
+    // The reason is the only span of the cell.
+    expect(reasonCell.match(/<span\b/g) ?? []).toHaveLength(1);
   });
 });
 
@@ -226,14 +234,14 @@ describe('the proposals half (`D-335`, contract 1.43.0)', () => {
     });
   }
 
-  it('stands in the verdict cell of the table, after the verdict, and wraps nothing for a direct decision', () => {
+  it('stands in the reason cell of the table, under the reason, and wraps nothing for a direct decision', () => {
     const cell = (entry: KnowledgeBaseEntry) =>
-      cellsOf(draw('table', entry).match(/<tr\b[^>]*data-proposal-decision-id=[\s\S]*?<\/tr>/)?.[0] ?? '')[4] ?? '';
+      cellsOf(draw('table', entry).match(/<tr\b[^>]*data-proposal-decision-id=[\s\S]*?<\/tr>/)?.[0] ?? '')[REASON_CELL] ?? '';
     const carried = cell(carriedProposal(2));
     expect(carried).toContain(MARK);
-    expect(carried.indexOf('принято')).toBeGreaterThanOrEqual(0);
-    expect(carried.indexOf('принято')).toBeLessThan(carried.indexOf(MARK));
-    expect(cell(PROPOSAL)).not.toContain('Перенесено');
+    expect(carried.indexOf('Аналог подходит.')).toBeGreaterThanOrEqual(0);
+    expect(carried.indexOf('Аналог подходит.')).toBeLessThan(carried.indexOf(MARK));
+    expect(cell(PROPOSAL)).toBe('Аналог подходит.');
   });
 
   it('keeps the finding rows of «Все» as they were: one mark for the one carried finding decision, one for the carried proposal', () => {

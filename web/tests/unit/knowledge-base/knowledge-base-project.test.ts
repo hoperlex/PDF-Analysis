@@ -325,13 +325,13 @@ describe('the page opens on the table', () => {
     live = null;
   });
 
-  it('draws the table with the project and the section in their own cells, and the events after a press, with no further read', async () => {
+  it('draws the table with the object and its document in one cell and the section in its own, and the events after a press, with no further read', async () => {
     live = await mountLive(page(freshClient(), ''));
     await settled(live);
     expect(live.markup()).toContain('data-knowledge-base-table');
     expect(live.markup()).not.toContain('class="am-kb__record"');
     expect(live.markup()).toMatch(/<button[^>]*aria-pressed="true"[^>]*data-kb-view="table"/);
-    expect(visible(live.markup())).toContain('Проект Альфа АР-1');
+    expect(visible(live.markup())).toContain('Проект Альфа · АР-1');
     const reads = queries().length;
     expect(await press(live, 'События')).toBe(true);
     expect(live.markup()).toContain('class="am-kb__record"');
