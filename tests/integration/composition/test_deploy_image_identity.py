@@ -719,7 +719,9 @@ def test_the_identity_step_runs_after_the_build_and_before_the_stack_is_brought_
     # The COMMANDS, anchored at the start of a line: `compose build` and `compose up -d`
     # both appear in this script's own header comment, and a search that found those
     # would report an order nothing executes.
-    build = at(r"^compose build \|\| BUILD_STATUS=")
+    # Since `build-overload` (2026-11-17) the build is started in the background under the host
+    # watcher; the launch line is the build's position.
+    build = at(r"^compose build </dev/null &$")
     identity = at(r"^    keep_identity_if_unchanged \"\$INSTANCE-api\"")
     up = at(r"^compose up -d \|\| UP_STATUS=")
     assert build < identity < up, (build, identity, up)
