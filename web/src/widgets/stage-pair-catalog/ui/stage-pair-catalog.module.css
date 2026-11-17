@@ -47,3 +47,19 @@
 .confirmList { margin-block: var(--am-gap-sm); padding-inline-start: var(--am-gap-lg); }
 .confirmList li { margin-block: var(--am-gap-xs); overflow-wrap: anywhere; }
 .reason { font-size: var(--am-text-sm); }
+
+/*
+ * A possible pair among the rows of the table (`UIP-S16-04`): the pill «предложение» is the status pill of the other lists with a
+ * dashed edge (the element-and-class selector outranks the badge's own solid border), and the row it stands in has dashed rules, so
+ * that a suggestion reads as one at a glance. The word is the first carrier and the dash the second. The row is found by its key
+ * (`suggestion:…`, which the catalog gives it and the shared table prints as `data-row-key`), not by `:has()`, which the contrast
+ * census does not evaluate. No colour is declared here: the tone comes from `am-badge--pending`, where the census reads it; the
+ * table's own rules keep their colour and width.
+ */
+span.proposed {
+  border-style: dashed;
+}
+
+.catalog tr[data-row-key^='suggestion:'] > td {
+  border-bottom-style: dashed;
+}

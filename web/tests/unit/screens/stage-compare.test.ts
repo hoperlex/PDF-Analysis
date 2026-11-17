@@ -81,17 +81,20 @@ function loaded(expert = true): string {
 }
 
 describe('stage comparison catalog', () => {
-  it('shows confirmed pairs separately from nonbinding suggestions and offers expert acts', () => {
+  it('shows the nonbinding suggestions as rows of the pairs table, marked as such, and offers expert acts (UIP-S16-04)', () => {
     const html = loaded();
     expect(html).toContain('Пары стадий');
     expect(html).toContain('Наборы PDF и ZIP');
     expect(html).toContain('Загрузить новый набор');
     expect(html).toContain('АР-01.pdf');
     expect(html).toContain('Подтвердить документ');
-    expect(html).toContain('Возможные пары');
+    expect(html).not.toContain('Возможные пары');
     expect(html).toContain('Полнота не указана');
-    expect(html).toContain('Совпадают раздел и подтверждённый шифр');
-    expect(html).toContain('Проверить связь');
+    const table = html.slice(html.indexOf('<table'), html.indexOf('</table>'));
+    expect(table).toContain('>предложение<');
+    expect(table).toContain('Совпадают раздел и подтверждённый шифр');
+    expect(table).toMatch(/data-pair-confirm=""[^>]*>Подтвердить</);
+    expect(html).not.toContain('Проверить связь');
     expect(html).toContain('Полный');
     expect(html).toContain('3. Изменения проекта');
     expect(html).toContain('4. Отчёт');
@@ -105,8 +108,8 @@ describe('stage comparison catalog', () => {
     expect(html).not.toContain('Загрузить новый набор');
     expect(html).toContain('АР-01.pdf');
     expect(html).not.toContain('Подтвердить документ');
-    expect(html).toContain('Возможные пары');
-    expect(html).not.toContain('Проверить связь');
+    expect(html).toContain('>предложение<');
+    expect(html).not.toContain('data-pair-confirm');
     expect(html).not.toContain('>Неполный</button>');
   });
 
@@ -126,7 +129,8 @@ describe('stage comparison steps (UI-B-84, UI-B-85, UI-B-88, UI-B-93)', () => {
     const html = onStep('');
     expect(html.indexOf('role="tablist"')).toBeGreaterThan(-1);
     expect(html.indexOf('role="tablist"')).toBeLessThan(html.indexOf('Пары стадий'));
-    for (const header of ['Проект / раздел', 'Метод и модель', 'Дата', 'Изменения', 'Требуют проверки', 'Статус']) expect(html).toContain(header);
+    for (const header of ['Документ / раздел', 'Метод и модель', 'Дата', 'Изменения', 'Требуют проверки', 'Статус']) expect(html).toContain(header);
+    expect(html).not.toContain('Проект / раздел');
     expect(html).toContain('Пояснительная записка · AR');
     expect(html).toContain('Пояснительная записка, редакция 2 · AR');
     expect(html).toContain('Цепочка · с ИИ');
