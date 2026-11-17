@@ -1,18 +1,19 @@
 /*
- * `UI-PARITY-DENSE`: the original's front door is its section table, with no greeting block. The greeting stays (it is
- * where the roles are named) as one compact band: the title at the page-title size, the roles under it.
+ * `UI-PARITY-DENSE`: the original's front door is its section table, with no greeting block. `UIP-S01-01`: the greeting is one line
+ * and has no frame: the title at the page-title size and the roles beside it, on the same line where they fit and under it
+ * where they do not. The name is the one thing that can be wider than the page (a 60-letter last name is one word), so the title
+ * breaks anywhere and the box may shrink.
  */
-.hero {
-  padding: var(--am-gap);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
-  background: var(--am-paper);
-  box-shadow: var(--am-shadow-1);
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--am-gap);
+  min-width: 0;
 }
 
-.heading {
-  flex: 1 1 auto;
-  min-width: 0;
+.heading :global(.am-page__subtitle) {
+  margin: 0;
 }
 
 .greeting {
@@ -23,11 +24,9 @@
 }
 
 /*
- * `WALK-V4`: the tasks and the section table sit side by side only where the table fits. A row of the table needs about 520 px
- * beside its name (five numbers of 5.5rem, the arrow, the gaps and the paddings), so the name column is the width of the
- * table's column minus that: measured on a built stand it was 0 px at 1280 and 52 px at 1440 (the rows became 797 and 145 px
- * tall and the page 9065 px), 144 px at 1600 (rows of three lines) and 190 px at 1680 (two lines). One column below 1680 px
- * keeps the name at the width of the page.
+ * `UIP-S01-01`: one column at every width. The table of sections comes first and takes the page; «Мои задачи» follow it. The
+ * `WALK-V4` reason for two columns from 1680 px (tasks beside the table) is gone with the table's width: it needs about 560 px
+ * beside its name, which only the whole page gives it at the narrower widths and which a half page did not.
  */
 .overviewGrid {
   display: grid;
@@ -36,10 +35,6 @@
   gap: var(--am-gap);
   min-width: 0;
   margin-bottom: var(--am-gap);
-}
-
-.overviewGrid > :only-child {
-  grid-column: 1 / -1;
 }
 
 .tasks,
@@ -59,19 +54,9 @@
   align-items: start;
 }
 
-.sections {
-  height: 100%;
-}
-
 .tasks :global(.am-section) > h2:first-child,
 .sections :global([data-home-sections]) > h2:first-child {
   margin-top: 0;
-}
-
-@media (min-width: 1680px) {
-  .overviewGrid {
-    grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
-  }
 }
 
 @media (max-width: 1279px) {
@@ -85,7 +70,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .hero,
   .tasks,
   .sections {
     padding: var(--am-gap);

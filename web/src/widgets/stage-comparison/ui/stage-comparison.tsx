@@ -97,7 +97,7 @@ const FACT_LABELS: Readonly<Record<FactId, string>> = {
   created_at: 'Создан',
   terminal_at: 'Завершён',
   duration: 'Длительность',
-  published_finding_count: 'Опубликованных находок',
+  published_finding_count: 'Опубликованных замечаний',
   diagnostic_observation_count: 'Диагностических наблюдений',
   model_call_count: 'Вызовов модели',
   cost_micros: 'Стоимость',

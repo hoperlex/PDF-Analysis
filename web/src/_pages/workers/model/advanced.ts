@@ -1,5 +1,5 @@
 /**
- * The advanced page of «Исполнители» (`HOSTS-WEB-01`, plan 2026-11-09 §7.5), `/workers/advanced`, for an administrator.
+ * The advanced page of «Диспетчер» (`HOSTS-WEB-01`, plan 2026-11-09 §7.5), `/workers/advanced`, for an administrator.
  *
  * It keeps what the screen had before it became two tabs, folded: «Подключения», «Группы», «Правила», «Назначения»,
  * «Процессы» (with the working switch of intake), the analysis presets moved here, and «Модели по этапам» with the switch
@@ -27,16 +27,16 @@ export const ADVANCED_SECTION_LABELS: Readonly<Record<AdvancedSection, string>> 
 /** The address of the page, as the screen registry has it. */
 export const WORKERS_ADVANCED_ADDRESS = '/workers/advanced';
 
-/** The quiet link on «Исполнители», for an administrator. */
+/** The quiet link on «Диспетчер», for an administrator. */
 export const ADVANCED_LINK_LABEL = 'Расширенные ▸';
-export const BACK_LINK_LABEL = '◂ Исполнители';
+export const BACK_LINK_LABEL = '◂ Диспетчер';
 
 export function isAdvancedSection(value: unknown): value is AdvancedSection {
   return typeof value === 'string' && (ADVANCED_SECTIONS as readonly string[]).includes(value);
 }
 
 /**
- * The section an old tab of «Исполнители» is now: the five tabs that moved keep their name (`?tab=routes`), and «Обзор», which
+ * The section an old tab of «Диспетчер» is now: the five tabs that moved keep their name (`?tab=routes`), and «Обзор», which
  * became the summary line, has none.
  */
 export function legacyAdvancedTab(tab: string | undefined): AdvancedSection | null {

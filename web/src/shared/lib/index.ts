@@ -1,7 +1,9 @@
 /** Public API of `shared/lib`. Generic helpers only; nothing domain-specific. */
 
 export { assertNever } from './assert-never';
-export { formatInstant } from './format-instant';
+// `UIP-G-13`: every moment of time on a screen, local and in the original's form; UTC only for a tooltip and a copy.
+export type { InstantInput } from './format-instant';
+export { formatClock, formatDayMonth, formatInstant, formatInstantUtc, formatTime } from './format-instant';
 
 export type { IntentRecord } from './intent-key';
 export { resolveIntentKey } from './intent-key';
@@ -19,12 +21,15 @@ export { classifyListingFailure } from './listing-failure';
 
 // `R-150c` (`UI-PARITY-01`): the project the user works in, read from and written to the address.
 export type { ProjectContext, ProjectScope, ProjectSource, SearchParamsLike } from './project-context';
+// `UIP-G-06`: the order of what wins is in the module's header; «Все объекты» is `?project=all` (`ALL_PROJECTS_PARAM`).
 export {
+  ALL_PROJECTS_PARAM,
   PROJECT_DEPENDENT_PARAMS,
   PROJECT_PARAM,
   canonicalProjectParams,
   projectScopeOf,
   readProjectContext,
+  resolveProjectContext,
   switchProject,
   withProjectParam,
 } from './project-context';

@@ -19,7 +19,10 @@
  * the findings'), a decision filter and the proposals page by page with their provenance,
  * both prices and the saving where a price-list position and a numeric quantity state it.
  * An expert starts a pass and decides each proposal (accept, reject, or revise with a
- * comment); an administrator reads. The CSV is the server's file for the open pass.
+ * reason); an administrator reads. The CSV is the server's file for the open pass.
+ *
+ * **The passes (`UIP-S09-04`).** One element, «Проход от … ▾», at the right of the top row of the proposals: it chooses the pass and
+ * opens its facts (`PassMenu`). The address `?pass=` is read as before, and a pass it names that the set does not have is said.
  *
  * Nothing here is a finding, reads one or changes one, and a model proposes nothing.
  */
@@ -38,8 +41,9 @@ import type {
 } from '@/shared/api';
 import type { FailureMessage } from '@/shared/api/failure-message';
 import { failureMessage } from '@/shared/api/failure-message';
-import { formatInstant, routes, useAddressState } from '@/shared/lib';
-import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
+import { routes, useAddressState } from '@/shared/lib';
+import { EmptyState, ErrorState, LoadingState, Menu } from '@/shared/ui';
+import type { MenuItem } from '@/shared/ui';
 import {
   COMPARISON_ONLY_MARK,
   COMPARISON_ONLY_OPTIMISATION_NOTE,
@@ -50,7 +54,6 @@ import {
 import { projectSectionOf } from '@/entities/project';
 import {
   PROPOSAL_PAGE_LIMIT,
-  describeCounts,
   useOptimisationPasses,
   useOptimisationProposals,
 } from '@/entities/optimisation-proposal';
@@ -64,7 +67,7 @@ import { pageLimitOf, readProposalLayout, writeProposalLayout } from '../model/l
 import { useExportProposalsCsv } from '../model/use-export-proposals-csv';
 import { useExportProposalsXlsx } from '../model/use-export-proposals-xlsx';
 import styles from './optimisation-proposals.module.css';
-import { PassSummary } from './pass-summary';
+import { PassMenu } from './pass-summary';
 import { ProposalList } from './proposal-list';
 import type { SheetDocument } from './proposal-list';
 
@@ -121,7 +124,7 @@ export function ProposalSetChooser({ sets, selected, onSelect, partial }: Propos
   if (sets.length === 0) {
     return (
       <EmptyState
-        title="В проекте нет комплектов с подтверждённым разделом"
+        title="В объекте нет комплектов с подтверждённым разделом"
         detail="Предложения строятся для комплекта, текущую версию которого эксперт отнёс к одному из разделов. Подтвердите раздел на экране версии."
       />
     );
@@ -159,7 +162,7 @@ export function ProposalSetChooser({ sets, selected, onSelect, partial }: Propos
         </div>
       ) : null}
       {partial ? (
-        <p className="am-note">Предложены комплекты первой страницы списка документов проекта.</p>
+        <p className="am-note">Предложены комплекты первой страницы списка документов объекта.</p>
       ) : null}
     </div>
   );
@@ -171,7 +174,10 @@ export interface PassListProps {
   readonly onOpen: (passId: OptimisationPassId) => void;
 }
 
-/** The set's passes, newest first, each with its counts by decision. */
+/**
+ * The set's passes, as the one element «Проход от … ▾» (`UIP-S09-04`): the open pass in a button, and in its panel the choice of
+ * another pass with the counts of each and the facts of the open one. A set with no pass says so.
+ */
 export function PassList({ passes, active, onOpen }: PassListProps) {
   if (passes.length === 0) {
     return (
@@ -181,26 +187,12 @@ export function PassList({ passes, active, onOpen }: PassListProps) {
       />
     );
   }
-  return (
-    <ul className={styles.passes} aria-label="Проходы комплекта" data-pass-count={passes.length}>
-      {passes.map((pass) => (
-        <li key={pass.optimisation_pass_id} className={styles.pass}>
-          <button
-            type="button"
-            className={pass.optimisation_pass_id === active ? 'am-button' : 'am-button am-button--quiet'}
-            aria-pressed={pass.optimisation_pass_id === active}
-            onClick={() => onOpen(pass.optimisation_pass_id)}
-          >
-            Проход от {formatInstant(pass.started_at)}
-          </button>
-          <span>
-            предложений — {pass.proposal_count}; {describeCounts(pass)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
+  return <PassMenu passes={passes} active={active} onOpen={onOpen} />;
 }
+
+/** The files the pass offers, in the words their buttons always had (the browser journey presses them by these). */
+export const EXPORT_CSV_LABEL = 'Выгрузить CSV предложений';
+export const EXPORT_XLSX_LABEL = 'Выгрузить таблицу решений (.xlsx)';
 
 export interface ExportProposalsViewProps {
   readonly pending: boolean;
@@ -212,9 +204,20 @@ export interface ExportProposalsViewProps {
   readonly importControl?: ReactNode;
   /** `UI-B-14`: «Перенести решения из V#», offered to an expert only, and only when an earlier version has a pass. */
   readonly carryOverControl?: ReactNode;
+  /** `UIP-S09-04`: «Проход от … ▾», the last item of the row. */
+  readonly passControl?: ReactNode;
 }
 
-/** «Выгрузить CSV», «Выгрузить таблицу решений» and «Загрузить решения» with the refusal, from state already in hand. Rendered by the harness. */
+/**
+ * The right half of the top row (`UIP-S09-02`): «Файлы ▾» (the shared menu: the CSV of the proposals and, for an expert, the
+ * workbook of decisions), «Загрузить решения» and «Перенести решения из V#» (the features' own controls, which are not changed:
+ * only the place is), and the pass element «Проход от … ▾» (`UIP-S09-04`).
+ *
+ * Nothing stands over the row. What a file says while it is made (one line) and its refusal stand under it, in the words they
+ * always had; what a load or a carrying over reports is the control's own and flows to the row's end (`.tools`). A press on a
+ * file while another is being made is ignored: the shared menu draws no disabled item, and the line under the row says why.
+ * Rendered by the harness.
+ */
 export function ExportProposalsView({
   pending,
   failure,
@@ -222,33 +225,40 @@ export function ExportProposalsView({
   onDownloadXlsx,
   importControl,
   carryOverControl,
+  passControl,
 }: ExportProposalsViewProps) {
+  const items: [MenuItem, ...MenuItem[]] = [
+    { kind: 'action', label: EXPORT_CSV_LABEL, onChoose: () => { if (!pending) onDownload(); } },
+  ];
+  if (onDownloadXlsx !== undefined) {
+    items.push({ kind: 'action', label: EXPORT_XLSX_LABEL, onChoose: () => { if (!pending) onDownloadXlsx(); } });
+  }
   return (
-    <div data-proposals-export="">
-      <p>
-        <button type="button" className="am-button am-button--quiet" disabled={pending} onClick={onDownload}>
-          Выгрузить CSV предложений
-        </button>
-        {onDownloadXlsx === undefined ? null : (
-          <>
-            {' '}
-            <button type="button" className="am-button am-button--quiet" disabled={pending} onClick={onDownloadXlsx}>
-              Выгрузить таблицу решений (.xlsx)
-            </button>
-          </>
-        )}
-      </p>
-      {importControl ?? null}
-      {carryOverControl ?? null}
-      {failure !== null ? (
-        <ErrorState
-          title="Файл не выгружен"
-          detail={failure.detail}
-          correlationId={failure.correlationId}
-          onRetry={onDownload}
-        />
+    <>
+      <div className={styles.tools} data-proposals-export="">
+        <span className={styles.files} data-proposals-files="">
+          <Menu label="Файлы" trigger={<>Файлы <span aria-hidden="true">▾</span></>} items={items} />
+        </span>
+        {importControl ?? null}
+        {carryOverControl ?? null}
+        {passControl ?? null}
+      </div>
+      {pending ? (
+        <p className={styles.fileNote} role="status" data-proposals-export-state="pending">
+          Готовлю файл…
+        </p>
       ) : null}
-    </div>
+      {failure !== null ? (
+        <div className={styles.refusal} data-proposals-export-refusal="">
+          <ErrorState
+            title="Файл не выгружен"
+            detail={failure.detail}
+            correlationId={failure.correlationId}
+            onRetry={onDownload}
+          />
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -257,9 +267,11 @@ interface ActivePassProps {
   readonly canDecide: boolean;
   /** The set's passes, newest first: the earlier versions' decisions can be carried from them (`UI-B-14`). */
   readonly passes: readonly OptimisationPass[];
+  /** The reader chose another pass in «Проход от … ▾». */
+  readonly onOpen: (passId: OptimisationPassId) => void;
 }
 
-function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
+function ActivePass({ passId, canDecide, passes, onOpen }: ActivePassProps) {
   // `D-372`: the decision filter is in the address (`?decision=`; «Все» is the absent parameter), as the layout is, so a link, a
   // reload and Back/Forward return to it. A filter is not a place to go Back to: choosing one replaces the entry.
   const [decision, setDecision] = useAddressState(readProposalDecision, writeProposalDecision);
@@ -282,8 +294,13 @@ function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
     failure: pdf.error === null || pdf.error === undefined ? null : failureMessage(pdf.error),
     onRetry: pdf.refetch,
   };
+  // `UIP-S09-04`: the element of the pass stands in the top row once the proposals are read; until then, and when they are refused,
+  // it stands alone at the right, so another pass can be chosen when this one cannot be read.
+  const passControl = <PassList passes={passes} active={passId} onOpen={onOpen} />;
+  const read = proposals.data !== undefined && failure === null;
   return (
     <div>
+      {read ? null : <div className={styles.passOnly}>{passControl}</div>}
       {proposals.isPending ? <LoadingState what="предложений" /> : null}
       {failure !== null ? (
         <ErrorState
@@ -295,7 +312,7 @@ function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
       ) : null}
       {proposals.data !== undefined && failure === null ? (
         <>
-          {/* `UI-B-05`: the original's strip -- the counts by decision and the buttons -- comes first; the pass's facts follow it. */}
+          {/* `UI-B-05`, `UIP-S09-04`: the original's strip -- the counts by decision, the buttons and the pass -- comes first. */}
           <ProposalList
             page={proposals.data}
             canDecide={canDecide}
@@ -310,12 +327,6 @@ function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
               setLayout(next, 'replace');
               setOffset(0);
             }}
-            summary={
-              <details className={styles.details} data-pass-summary="">
-                <summary>Сведения о проходе</summary>
-                <PassSummary pass={proposals.data.optimisation_pass} />
-              </details>
-            }
             actions={
               <ExportProposalsView
                 pending={exporter.isPending || workbook.isPending}
@@ -326,6 +337,7 @@ function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
                 carryOverControl={
                   canDecide ? <CarryOverProposalDecisions pass={proposals.data.optimisation_pass} passes={passes} /> : null
                 }
+                passControl={passControl}
               />
             }
             sheet={sheet}
@@ -408,10 +420,10 @@ export function OptimisationProposals({
           только из прайс-листа, экономия считается только при числовом количестве.
         </p>
       </details>
-      {!fixed && documents.isPending ? <LoadingState what="документов проекта" /> : null}
+      {!fixed && documents.isPending ? <LoadingState what="документов объекта" /> : null}
       {!fixed && documentsFailure !== null ? (
         <ErrorState
-          title="Документы проекта не прочитаны"
+          title="Документы объекта не прочитаны"
           detail={documentsFailure.detail}
           correlationId={documentsFailure.correlationId}
           onRetry={() => void documents.refetch()}
@@ -452,9 +464,15 @@ export function OptimisationProposals({
               Проход из адреса не найден среди проходов этого комплекта: открыт последний.
             </p>
           ) : null}
-          <PassList passes={list} active={activePass} onOpen={setChosenPass} />
+          {activePass === null ? <PassList passes={list} active={null} onOpen={setChosenPass} /> : null}
           {activePass !== null ? (
-            <ActivePass key={activePass} passId={activePass} canDecide={roles.includes('expert')} passes={list} />
+            <ActivePass
+              key={activePass}
+              passId={activePass}
+              canDecide={roles.includes('expert')}
+              passes={list}
+              onOpen={setChosenPass}
+            />
           ) : null}
         </>
       ) : null}
@@ -475,19 +493,19 @@ export function OptimisationByDocument({ projectUid }: { readonly projectUid: Pr
       <h2 id="optimisation-by-document-heading" className={styles.heading}>Предложения по документам</h2>
       <p className={styles.rule}>
         Проходы оптимизации и предложения ведутся у каждого документа на его вкладке «Оптимизация». Здесь —
-        документы проекта с подтверждённым разделом.
+        документы объекта с подтверждённым разделом.
       </p>
-      {documents.isPending ? <LoadingState what="документов проекта" /> : null}
+      {documents.isPending ? <LoadingState what="документов объекта" /> : null}
       {failure !== null ? (
         <ErrorState
-          title="Документы проекта не прочитаны"
+          title="Документы объекта не прочитаны"
           detail={failure.detail}
           correlationId={failure.correlationId}
           onRetry={() => void documents.refetch()}
         />
       ) : null}
       {documents.data !== undefined && sets.length === 0 ? (
-        <p className="am-note">В проекте нет документов с подтверждённым разделом.</p>
+        <p className="am-note">В объекте нет документов с подтверждённым разделом.</p>
       ) : null}
       {sets.length === 0 ? null : (
         <ul data-optimisation-documents={sets.length}>
@@ -502,7 +520,7 @@ export function OptimisationByDocument({ projectUid }: { readonly projectUid: Pr
         </ul>
       )}
       {documents.data !== undefined && documents.data.page.next_cursor !== null ? (
-        <p className="am-note">Показаны документы первой страницы проекта.</p>
+        <p className="am-note">Показаны документы первой страницы объекта.</p>
       ) : null}
     </section>
   );

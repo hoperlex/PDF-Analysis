@@ -16,6 +16,10 @@
  * Plus the idempotency rule that follows from them: a retry of the same accept reuses its
  * key, and an accept with another severity is another command with another key.
  *
+ * And the reason typed beside ✓ or ✕ (`UIP-S06-02`), which goes in the same event as its
+ * `comment`: trimmed, absent when empty, on either verdict, and part of the intent -- the same
+ * text after a failure keeps the key, other text is another command.
+ *
  * The hook is exercised through its configuration, as `carry-over-command.test.ts` does:
  * `useMutation` hands back the configuration it was given plus a recording `mutate`, and
  * `useRef`/`useState` are plain holders, so the test holds the very `mutationFn` the browser
@@ -193,6 +197,50 @@ describe('a reject never carries a severity', () => {
   });
 });
 
+describe('the reason typed beside the press goes in the same event as its comment', () => {
+  const REASON = 'Пункт подтверждён по листу 3';
+
+  it('carries the reason, trimmed, on an accept and on a reject', () => {
+    for (const intent of ['accept', 'reject'] as const) {
+      expect(buildVerdictRequest({ intent, observationId: OBSERVATION_ID, reason: `  ${REASON}\n` })).toEqual({
+        kind: 'ok',
+        request: { event_type: intent, finding_observation_id: OBSERVATION_ID, comment: REASON },
+      });
+    }
+  });
+
+  it('adds no comment key when the reason is absent, empty or blank', () => {
+    for (const reason of [undefined, '', '   \n\t ']) {
+      const checked = buildVerdictRequest({ intent: 'accept', observationId: OBSERVATION_ID, reason });
+      expect(Object.keys((checked as { request: object }).request).sort()).toEqual(['event_type', 'finding_observation_id']);
+    }
+  });
+
+  it('changes nothing else in the reason: interior whitespace, quotes and Cyrillic are the expert’s words', () => {
+    const words = 'см.  §4 — «Исполнитель»';
+    const checked = buildVerdictRequest({ intent: 'reject', observationId: OBSERVATION_ID, reason: words });
+    expect((checked as { request: AppendDecisionRequest }).request.comment).toBe(words);
+  });
+
+  it('keeps the reason together with the severity the expert chose, and never on a refusal', () => {
+    expect(
+      buildVerdictRequest({
+        intent: 'accept',
+        observationId: OBSERVATION_ID,
+        proposedSeverity: 'critical',
+        decidedSeverity: 'economic',
+        reason: REASON,
+      }),
+    ).toEqual({
+      kind: 'ok',
+      request: { event_type: 'accept', finding_observation_id: OBSERVATION_ID, comment: REASON, severity: 'economic' },
+    });
+    expect(
+      buildVerdictRequest({ intent: 'accept', observationId: OBSERVATION_ID, proposedSeverity: 'critical', reason: REASON }),
+    ).toEqual({ kind: 'refused', refusal: 'severity_required' });
+  });
+});
+
 describe('the refusal has words, in Russian, for every member', () => {
   it('names each reason in Cyrillic with no Latin word', () => {
     expect(VERDICT_REFUSALS.length).toBeGreaterThan(0);
@@ -222,6 +270,16 @@ describe('the intent signature follows the severity', () => {
     const signatures = [
       intentSignature(ACCEPT),
       ...SEVERITY_VALUES.map((severity) => intentSignature({ ...ACCEPT, severity })),
+    ];
+    expect(new Set(signatures).size).toBe(signatures.length);
+  });
+
+  it('tells an accept with a reason from one without, and one reason from another', () => {
+    const signatures = [
+      intentSignature(ACCEPT),
+      intentSignature({ ...ACCEPT, comment: 'Пункт подтверждён' }),
+      intentSignature({ ...ACCEPT, comment: 'Пункт не подтверждён' }),
+      intentSignature({ ...ACCEPT, event_type: 'reject', comment: 'Пункт подтверждён' }),
     ];
     expect(new Set(signatures).size).toBe(signatures.length);
   });
@@ -287,6 +345,53 @@ describe('pressing Accept and Reject through the hook', () => {
     expect(sent).toEqual([{ event_type: 'reject', finding_observation_id: OBSERVATION_ID }]);
     expect(hook().refusal).toBeNull();
   });
+
+  it('sends the reason as the comment of the one accept, and of the one reject', () => {
+    hook().record('accept', OBSERVATION_ID as never, undefined, ' Пункт подтверждён ');
+    hook().record('reject', OBSERVATION_ID as never, undefined, 'Не относится к разделу');
+    expect(sent).toEqual([
+      { event_type: 'accept', finding_observation_id: OBSERVATION_ID, comment: 'Пункт подтверждён' },
+      { event_type: 'reject', finding_observation_id: OBSERVATION_ID, comment: 'Не относится к разделу' },
+    ]);
+  });
+
+  it('sends no comment for an empty reason, and the legacy request stays two keys', () => {
+    hook().record('accept', OBSERVATION_ID as never, undefined, '');
+    hook().record('reject', OBSERVATION_ID as never, undefined, '  ');
+    expect(sent).toEqual([
+      { event_type: 'accept', finding_observation_id: OBSERVATION_ID },
+      { event_type: 'reject', finding_observation_id: OBSERVATION_ID },
+    ]);
+    for (const request of sent) expect(Object.keys(request as object)).toHaveLength(2);
+  });
+
+  it('does not send a refused accept with its reason, and keeps the reason out of the refusal', () => {
+    hook().record('accept', OBSERVATION_ID as never, { proposed: 'critical' }, 'Пункт подтверждён');
+    expect(sent).toEqual([]);
+    expect(hook().refusal).toBe('severity_required');
+  });
+
+  it('sends the severity the expert chose and the reason in one accept, and sends them once the choice a refusal asked for is made (`UIP-S06-08`)', () => {
+    hook().record('accept', OBSERVATION_ID as never, { proposed: 'critical' }, 'Размер подтверждён');
+    expect(sent).toEqual([]);
+    expect(hook().refusal).toBe('severity_required');
+
+    hook().record('accept', OBSERVATION_ID as never, { proposed: 'critical', decided: 'economic' }, ' Размер подтверждён ');
+    expect(sent).toEqual([
+      { event_type: 'accept', finding_observation_id: OBSERVATION_ID, comment: 'Размер подтверждён', severity: 'economic' },
+    ]);
+    // The press that was sent cleared the refusal of the one before it.
+    expect(hook().refusal).toBeNull();
+  });
+
+  it('never sends the model’s proposal as the severity: the proposal alone is a refusal, whichever it is', () => {
+    for (const proposed of SEVERITY_VALUES) {
+      sent.length = 0;
+      hook().record('accept', OBSERVATION_ID as never, { proposed });
+      expect(sent, proposed).toEqual([]);
+      expect(hook().refusal).toBe('severity_required');
+    }
+  });
 });
 
 describe('the request the hook’s mutation puts on the wire', () => {
@@ -312,6 +417,36 @@ describe('the request the hook’s mutation puts on the wire', () => {
       { body: AppendDecisionRequest; idempotencyKey: string },
     ][];
     expect(calls.map(([call]) => call.body.severity)).toEqual(['critical', 'critical', 'economic']);
+    expect(calls[0]?.[0].idempotencyKey).toBe(calls[1]?.[0].idempotencyKey);
+    expect(calls[2]?.[0].idempotencyKey).not.toBe(calls[1]?.[0].idempotencyKey);
+  });
+
+  it('reuses one key when the same accept with the same reason is pressed again after a failure, and mints another for other text', async () => {
+    vi.mocked(appendDecision).mockRejectedValueOnce(new Error('connection closed'));
+    vi.mocked(appendDecision).mockResolvedValue({ data: { current_verdict: 'accepted' } } as never);
+    hook();
+    const mutationFn = (hold.config as { mutationFn: (press: unknown) => Promise<unknown> })
+      .mutationFn;
+    const accept = {
+      event_type: 'accept',
+      finding_observation_id: OBSERVATION_ID,
+      comment: 'Пункт подтверждён по листу 3',
+    };
+
+    const press = (request: unknown) => ({ findingUid: FINDING_UID, request });
+
+    await expect(mutationFn(press(accept))).rejects.toThrow('connection closed');
+    await mutationFn(press(accept));
+    await mutationFn(press({ ...accept, comment: 'Пункт подтверждён по листу 4' }));
+
+    const calls = vi.mocked(appendDecision).mock.calls as unknown as [
+      { body: AppendDecisionRequest; idempotencyKey: string },
+    ][];
+    expect(calls.map(([call]) => call.body.comment)).toEqual([
+      'Пункт подтверждён по листу 3',
+      'Пункт подтверждён по листу 3',
+      'Пункт подтверждён по листу 4',
+    ]);
     expect(calls[0]?.[0].idempotencyKey).toBe(calls[1]?.[0].idempotencyKey);
     expect(calls[2]?.[0].idempotencyKey).not.toBe(calls[1]?.[0].idempotencyKey);
   });

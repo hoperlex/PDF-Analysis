@@ -13,7 +13,7 @@
  *         `dead_letter`) only grow; they are not a "now" and make no count badge.
  *       - The red error badge (`D-331`, `D-395`): `live_failure_count` of the same page (contract 1.43.0) -- the failed
  *         (`failed`, `dead_letter`) jobs that nothing has answered yet, over all history. The original's badge is
- *         `kpis.errors` of «Диспетчер»: the failed attempts that are still the job's live attempt, not a retried or
+ *         `kpis.errors` of «Назначения»: the failed attempts that are still the job's live attempt, not a retried or
  *         superseded one. The server says it: a failed job counts unless a later job of the same document version and
  *         analysis exists (it was run again, re-audited or started from a stage). So the figure returns to zero by being
  *         answered and not by ageing, and a failure that happened today is in it whenever its job was accepted. (Until
@@ -114,7 +114,7 @@ const QUEUE_ERRORS_BADGE_TITLE =
 /** `D-362`: both journals, said in the label: the screen opens on «Замечания» and shows this figure under «Все». */
 export const KNOWLEDGE_BASE_BADGE_LABEL = 'Записей в базе знаний (замечания и предложения вместе)';
 /** `R-150c`: the same count, when the address names a project and the screen behind the item lists that project's entries. */
-export const KNOWLEDGE_BASE_PROJECT_BADGE_LABEL = 'Записей в базе знаний выбранного проекта (замечания и предложения вместе)';
+export const KNOWLEDGE_BASE_PROJECT_BADGE_LABEL = 'Записей в базе знаний выбранного объекта (замечания и предложения вместе)';
 export const REGISTRATIONS_BADGE_LABEL = 'Заявок на регистрацию, ожидающих решения';
 export const UNCHECKED_BADGE_LABEL = 'Не проверено экспертом';
 const UNCHECKED_BADGE_TITLE =

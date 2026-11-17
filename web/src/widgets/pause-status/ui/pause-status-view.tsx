@@ -22,7 +22,7 @@ import type { ComponentType } from 'react';
 import type { VectorsPause } from '@/entities/execution';
 import { VECTORS_PAUSED_LABEL, vectorsPausedHint } from '@/entities/execution';
 import type { ExecutionDispatchStatus } from '@/shared/api';
-import { routes } from '@/shared/lib';
+import { formatTime, routes } from '@/shared/lib';
 import type { MenuItem, MenuProps } from '@/shared/ui';
 import { Menu } from '@/shared/ui';
 
@@ -36,12 +36,12 @@ export const PAUSE_BUTTON_LABEL = 'Пауза';
 
 /** What each menu item names, and what a choice does to it. */
 export function dispatchItemLabel(paused: boolean): string {
-  return `Выдача анализа — ${paused ? 'возобновить' : 'приостановить'}`;
+  return `Выдача анализа — ${paused ? 'продолжить' : 'пауза'}`;
 }
 
 export function vectorsItemLabel(vectors: VectorsPause): string {
   if (vectors.kind === 'unread') return 'Векторы — состояние не прочитано';
-  return `Векторы — ${vectors.paused ? 'возобновить' : 'приостановить'}`;
+  return `Векторы — ${vectors.paused ? 'продолжить' : 'пауза'}`;
 }
 
 export interface PauseStatusViewProps {
@@ -73,10 +73,8 @@ export interface PauseStatusViewProps {
 }
 
 function sinceLabel(changedAt: string | undefined): string {
-  if (changedAt === undefined) return '';
-  const at = new Date(changedAt);
-  if (Number.isNaN(at.getTime())) return '';
-  return `с ${at.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+  if (changedAt === undefined || Number.isNaN(new Date(changedAt).getTime())) return '';
+  return `с ${formatTime(changedAt)}`;
 }
 
 /** The items of the one button's menu, in order: the queue, then the vectors (absent until their first read settles). */
@@ -118,7 +116,7 @@ export function PauseStatusView({
   const paused = status.paused;
   const pausedVectors = vectors?.kind === 'read' && vectors.paused ? vectors : null;
   if (!paused && pausedVectors === null && !mayToggle) return null;
-  const question = paused ? 'Возобновить выдачу задач?' : 'Приостановить выдачу задач?';
+  const question = paused ? 'Продолжить выдачу задач?' : 'Поставить выдачу задач на паузу?';
   const Drawn = menu;
   return (
     <span className={styles.status} data-pause-status={paused ? 'paused' : 'running'}>
@@ -146,7 +144,7 @@ export function PauseStatusView({
         <span className={styles.confirm} role="group" aria-label={question}>
           <span className={styles.question}>{question}</span>
           <button type="button" className="am-button" disabled={busy} onClick={onConfirm}>
-            {paused ? 'Возобновить' : 'Приостановить'}
+            {paused ? 'Продолжить' : 'Пауза'}
           </button>
           <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={onCancel}>
             Отмена

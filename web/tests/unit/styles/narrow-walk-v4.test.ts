@@ -2,7 +2,7 @@
  * Three layout faults of 0.20.3 that no width assertion could see, because nothing scrolled sideways: a grid column collapsed and the
  * page grew taller instead (browser walk WALK-V4, 2026-11-09, a throwaway stand of a built `next start`, DOM facts over CDP).
  *
- *  - «Главная»: the tasks and the section table sat side by side from 1280 px. The table's row needs about 520 px beside its name
+ *  - «Главная»: the tasks and the section table sat side by side from 1280 px (`UIP-S01-01`: the table now comes first and takes the page, in one column at every width; the readers below keep the measurements). The table's row needs about 520 px beside its name
  *    (five numbers of 5.5rem, the arrow, the gaps and the paddings), and the table's column is 0.575 of the page less 293 px: the
  *    name button was 12 px wide at 1280 (rows 797 px tall, the page 9065 px), 104 px at 1440, 242 px at 1680. Two columns now start
  *    at 1680 px, where the name is 190 px and a row is two lines at most.
@@ -43,7 +43,6 @@ const SECTIONS = readFileSync(join(WEB_ROOT, 'src', 'widgets', 'dashboard', 'ui'
 
 const ONE_TRACK = /^minmax\(0, 1fr\)$/;
 const HOME_TWO = /^minmax\(300px, 0\.85fr\) minmax\(0, 1\.15fr\)$/;
-const VERSION_TWO = /^minmax\(0, 1fr\) minmax\(0, 1\.2fr\)$/;
 
 describe('the readers of a stylesheet can fail (lane WALK-V4)', () => {
   const OLD_HOME =
@@ -63,7 +62,7 @@ describe('the readers of a stylesheet can fail (lane WALK-V4)', () => {
   });
 });
 
-describe('«Главная»: the tasks and the section table share a row only where the table fits (lane WALK-V4)', () => {
+describe('«Главная»: the table of sections and the tasks stand in one column at every width (lane WALK-V4; `UIP-S01-01` took the second column away)', () => {
   it('can fail: the old stylesheet, two tracks from the base rule, reads as wrong', () => {
     const old =
       '.overviewGrid { display: grid; grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr); }\n' +
@@ -72,21 +71,29 @@ describe('«Главная»: the tasks and the section table share a row only w
     expect(columnBreakpoints(old, '.overviewGrid')).toEqual([]);
   });
 
-  it('is one column by default, and two only inside one min-width block', () => {
-    expect(declares(withoutMedia(HOME), '.overviewGrid', 'grid-template-columns', ONE_TRACK)).toBe(true);
-    expect(columnBreakpoints(HOME, '.overviewGrid')).toHaveLength(1);
+  it('can fail: the 0.30.0 stylesheet, one track and a second one from 1680 px, reads as two columns', () => {
+    const before =
+      '.overviewGrid { display: grid; grid-template-columns: minmax(0, 1fr); }\n' +
+      '@media (min-width: 1680px) { .overviewGrid { grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr); } }';
+    expect(columnBreakpoints(before, '.overviewGrid')).toEqual([1680]);
   });
 
-  it('starts the second column where the section table leaves its name 190 px (measured 190 px at 1680, 144 px at 1600)', () => {
-    // The table's column is 0.575 of the page less 293 px; a row spends 556 px of it (the panel's 34, the row's 34, the five numbers
-    // of 5.5rem with their gaps 456, the arrow 16 and two gaps 16), and the name sits 52 px inside its button (the badge and the gap).
-    const column = (viewport: number): number => 0.575 * (viewport - 293);
-    const name = (viewport: number): number => column(viewport) - 556 - 52;
-    expect(Math.round(name(1680))).toBe(190);
-    expect(Math.round(name(1280))).toBeLessThan(0);
-    const [breakpoint] = columnBreakpoints(HOME, '.overviewGrid');
-    expect(breakpoint).toBeDefined();
-    expect(name(breakpoint ?? 0)).toBeGreaterThanOrEqual(189);
+  it('is one column by default, and no min-width block gives it a second track', () => {
+    expect(declares(withoutMedia(HOME), '.overviewGrid', 'grid-template-columns', ONE_TRACK)).toBe(true);
+    expect(columnBreakpoints(HOME, '.overviewGrid')).toEqual([]);
+  });
+
+  it('leaves the table the whole page, so its name keeps 190 px wherever a row is one line (from 1101 px, `WALK-V5`)', () => {
+    // The page is the viewport less the frame and the gaps (293 px, as measured by the walk); a row spends 556 px of the table's width
+    // (the panel's 34, the row's 34, the five numbers of 5.5rem with their gaps 456, the arrow 16 and two gaps 16), and the name sits
+    // 52 px inside its button (the badge and the gap). Two columns gave the table 0.575 of the page, 144 px of name at 1600.
+    const name = (page: number): number => page - 556 - 52;
+    const whole = (viewport: number): number => viewport - 293;
+    const half = (viewport: number): number => 0.575 * (viewport - 293);
+    expect(Math.round(name(half(1680)))).toBe(190); // the old second column's own breakpoint: measured 190
+    expect(Math.round(name(half(1600)))).toBe(144); // measured 144
+    expect(name(whole(1101))).toBeGreaterThanOrEqual(189);
+    expect(name(whole(1280))).toBeGreaterThan(name(half(1680)));
   });
 
   it('keeps the tiles at two columns below 1280 px, as before', () => {
@@ -95,7 +102,7 @@ describe('«Главная»: the tasks and the section table share a row only w
   });
 });
 
-describe('«Версия документа»: classification and runs share a row only where the runs\' table fits (lane WALK-V4)', () => {
+describe('«Версия документа»: classification, runs and facts stand in one column at every width (lane WALK-V4; `UIP-S04-04` took the second column away)', () => {
   it('can fail: the old stylesheet, two tracks from 1280 px, reads as wrong', () => {
     const old =
       '.columns { display: grid; grid-template-columns: minmax(0, 1fr); }\n' +
@@ -104,23 +111,27 @@ describe('«Версия документа»: classification and runs share a r
     expect(columnBreakpoints(old, '.columns')[0]).toBeLessThan(1691);
   });
 
-  it('is one column by default, and two only inside one min-width block', () => {
-    expect(declares(withoutMedia(VERSION), '.columns', 'grid-template-columns', ONE_TRACK)).toBe(true);
-    expect(columnBreakpoints(VERSION, '.columns')).toHaveLength(1);
-    const [breakpoint] = columnBreakpoints(VERSION, '.columns');
-    expect(declaresIn(VERSION, `min-width: ${breakpoint}px`, '.columns', 'grid-template-columns', VERSION_TWO)).toBe(true);
+  it('can fail: a page column with a two-track min-width block reads as two columns', () => {
+    const two =
+      '.stack { display: grid; grid-template-columns: minmax(0, 1fr); }\n' +
+      '@media (min-width: 1280px) { .stack { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); } }';
+    expect(columnBreakpoints(two, '.stack')).toEqual([1280]);
   });
 
-  it('starts the second column where it holds the runs\' table: 714 px of columns and 34 px of panel (measured)', () => {
-    // The page is the viewport less the frame's 303 px; the columns share it less a 16 px gap, 1fr and 1.2fr.
-    const secondColumn = (viewport: number): number => ((viewport - 303 - 16) * 1.2) / 2.2;
+  it('is one column at every width: the page column declares no track list and no min-width block gives it a second track', () => {
+    expect(declares(withoutMedia(VERSION), '.stack', 'display', /^grid$/)).toBe(true);
+    expect(declares(withoutMedia(VERSION), '.stack', 'grid-template-columns', /./)).toBe(false);
+    expect(columnBreakpoints(VERSION, '.stack')).toEqual([]);
+    expect(VERSION).not.toContain('grid-template-columns');
+  });
+
+  it('gives the runs\' table the whole page: 714 px of columns and 34 px of panel fit from 1051 px (303 px frame)', () => {
+    // The page is the viewport less the frame's 303 px, and it is one column now, so the runs' table has all of it.
+    const page = (viewport: number): number => viewport - 303;
     const needed = 714 + 34;
-    expect(Math.round(secondColumn(1680))).toBe(742); // measured 742: the table scrolled by 6 px
-    expect(Math.round(secondColumn(1280))).toBe(524); // measured 524
-    const [breakpoint] = columnBreakpoints(VERSION, '.columns');
-    expect(breakpoint).toBeDefined();
-    expect(secondColumn(breakpoint ?? 0)).toBeGreaterThanOrEqual(needed);
-    expect(Math.round(secondColumn(1760))).toBe(786); // measured: the table's box was 752 px
+    expect(page(1280)).toBe(977);
+    expect(page(1280)).toBeGreaterThanOrEqual(needed);
+    expect(page(needed + 303)).toBe(needed); // the narrowest viewport where the table fits without a scroll
   });
 });
 
@@ -155,9 +166,14 @@ describe('«Главная» and «Дашборд» on a phone and a tablet: a s
     expect(declares(withoutMedia(SECTIONS), '.metrics', 'grid-template-columns', /^repeat\(5, 5\.5rem\)$/)).toBe(true);
   });
 
-  it('keeps the header\'s labels over the numbers: one track, no «Раздел» cell, no empty arrow cell', () => {
+  it('keeps the header\'s labels over the numbers: one track, no «Раздел» cell drawn, no empty arrow cell', () => {
     expect(declaresIn(SECTIONS, PHONE, '.header', 'grid-template-columns', ONE_TRACK)).toBe(true);
-    expect(declaresIn(SECTIONS, PHONE, '.header > :first-child', 'display', /^none$/)).toBe(true);
+    // `UIP-S01-02`: the «Раздел» heading is not drawn on a phone but is still read, so it is taken out of the layout as a visually
+    // hidden box (its definition is the table's) and not with `display: none`, which would take it from a screen reader too.
+    expect(declaresIn(SECTIONS, PHONE, '.nameHead', 'position', /^absolute$/)).toBe(true);
+    expect(declaresIn(SECTIONS, PHONE, '.nameHead', 'clip-path', /^inset\(50%\)$/)).toBe(true);
+    expect(declaresIn(SECTIONS, PHONE, '.header > :first-child', 'display', /^none$/)).toBe(false);
+    expect(declaresIn(SECTIONS, PHONE, '.nameHead', 'display', /^none$/)).toBe(false);
     expect(declaresIn(SECTIONS, PHONE, '.header::after', 'display', /^none$/)).toBe(true);
   });
 });

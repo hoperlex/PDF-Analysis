@@ -33,8 +33,8 @@ export function precedentCaption(label: PrecedentFindingLabel): string | null {
 export function precedentTitle(label: PrecedentFindingLabel): string {
   const { votes } = label;
   return (
-    `Решения экспертов по похожим находкам: всего ${votes.total} (отклонено ${votes.rejected}, принято ${votes.accepted}), ` +
-    `независимых ${votes.independent}, проектов ${votes.projects}. Это справка, а не решение: решаете вы.`
+    `Решения экспертов по похожим замечаниям: всего ${votes.total} (отклонено ${votes.rejected}, принято ${votes.accepted}), ` +
+    `независимых ${votes.independent}, объектов ${votes.projects}. Это справка, а не решение: решаете вы.`
   );
 }
 
@@ -61,7 +61,7 @@ export function precedentsUnavailableLine(window: VectorWindow | null): string {
 /** At most two hints on a card (plan-v5 2.5). */
 export const MAX_HINTS = 2;
 
-const VERDICT_PAST: Readonly<Record<PrecedentCase['verdict'], string>> = { accepted: 'принята', rejected: 'отклонена' };
+const VERDICT_PAST: Readonly<Record<PrecedentCase['verdict'], string>> = { accepted: 'принято', rejected: 'отклонено' };
 
 /** One hint as a line. `text` is always an expert's words (the comment of a rejecting decision), never a model's. */
 export function precedentHintLine(hint: PrecedentHint, cases: readonly PrecedentCase[]): string {
@@ -73,8 +73,8 @@ export function precedentHintLine(hint: PrecedentHint, cases: readonly Precedent
     case 'p5': {
       const verdict = cases.find((one) => one.case_id === hint.case_id)?.verdict;
       return verdict === undefined
-        ? 'Такая находка уже была в прошлой версии документа'
-        : `Такая находка уже была в прошлой версии документа: ${VERDICT_PAST[verdict]}`;
+        ? 'Такое замечание уже было в прошлой версии документа'
+        : `Такое замечание уже было в прошлой версии документа: ${VERDICT_PAST[verdict]}`;
     }
   }
 }

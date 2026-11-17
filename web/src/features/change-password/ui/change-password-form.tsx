@@ -41,6 +41,12 @@ import {
   isChangePasswordSuccess,
 } from '../model/exchange';
 
+/**
+ * The rule for a new password, on one line under its field (`UIP-S19-03`). The longer explanation of what the
+ * change revokes is the page's own «Подробнее»; the screen's subtitle already says that it revokes.
+ */
+const PASSWORD_RULE = 'Не менее 8 символов; не совпадает с логином, именем и адресом почты.';
+
 export interface ChangePasswordFormProps {
   /** How the previous attempt ended, if there was one. */
   readonly outcome?: ChangePasswordOutcome | null | undefined;
@@ -83,7 +89,11 @@ export function ChangePasswordForm({ outcome, next }: ChangePasswordFormProps) {
           minLength={8}
           maxLength={1024}
           placeholder="Новый пароль"
+          aria-describedby="change-password-rule"
         />
+        <p className="am-form__hint" id="change-password-rule" data-change-password-rule="">
+          {PASSWORD_RULE}
+        </p>
       </div>
 
       <div className="am-form__field">
@@ -107,13 +117,6 @@ export function ChangePasswordForm({ outcome, next }: ChangePasswordFormProps) {
           Сменить пароль
         </button>
       </div>
-
-      <p className="am-form__hint">
-        Смена пароля отзывает все выданные пропуска этой учётной записи: всё, что было
-        выдано под прежним паролем, перестаёт приниматься в тот же момент. На этом
-        устройстве сеанс продолжится новым пропуском; везде, где вход был выполнен раньше,
-        потребуется войти заново.
-      </p>
 
       {reported !== null ? (
         <div data-change-password-outcome={reported}>

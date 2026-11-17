@@ -1,0 +1,105 @@
+/*
+ * The shared window (`UIP-G-04`, `dialog.tsx`). Every colour, radius and gap is a global `--am-*` token and no token is
+ * declared here. Laid out as the original's modal is: the title at the top left with its close button at the top right
+ * (16px, bold), the body below, the buttons in a row at the bottom, right-aligned.
+ *
+ * No `::backdrop` rule: the contrast census declines that pseudo-element and the page-dimming colour has no token yet, so
+ * the dimming stays the browser's. Every colour-bearing rule below is reached once a screen draws the window open
+ * (`staticOpen`).
+ */
+
+.dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-width: none;
+  max-height: 90vh;
+  padding: 0 0 var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  overflow: hidden;
+}
+
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.sm {
+  width: min(440px, calc(100vw - 2 * var(--am-gap)));
+}
+
+.md {
+  width: min(600px, calc(100vw - 2 * var(--am-gap)));
+}
+
+.lg {
+  width: min(1040px, calc(100vw - 2 * var(--am-gap)));
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--am-gap);
+  padding: var(--am-gap-lg) var(--am-gap-lg) var(--am-gap-md);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--am-text-lg);
+  font-weight: 700;
+  line-height: var(--am-leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface);
+  color: var(--am-ink-muted);
+  font: inherit;
+  font-size: var(--am-text-lg);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--am-motion-fast) var(--am-ease),
+    color var(--am-motion-fast) var(--am-ease);
+}
+
+.close:hover {
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--am-ink);
+  outline-offset: 2px;
+}
+
+/* The body scrolls between the title and the buttons; the small vertical padding keeps a focus ring at its edge from being clipped. */
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--am-gap-2xs) var(--am-gap-lg);
+  overflow-y: auto;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--am-gap-sm);
+  padding: var(--am-gap-md) var(--am-gap-lg) 0;
+}

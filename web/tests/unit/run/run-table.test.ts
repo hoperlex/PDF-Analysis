@@ -48,7 +48,7 @@ describe('the columns', () => {
   it('are the six the owner named, in order, each a column header', () => {
     const markup = table(runStatus());
     const heads = [...markup.matchAll(/<th[^>]*scope="col"[^>]*>([\s\S]*?)<\/th>/g)].map((head) => text(head[1] as string));
-    expect(heads).toEqual(['Состояние', 'Начат', 'Запустил', 'Длительность', 'Находок', 'Действия']);
+    expect(heads).toEqual(['Состояние', 'Начат', 'Запустил', 'Длительность', 'Замечаний', 'Действия']);
   });
 
   it('are a table and not a list of blocks', () => {

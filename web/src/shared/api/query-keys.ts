@@ -36,7 +36,7 @@
 
 import type { DataTag } from '@tanstack/react-query';
 
-import type { ListDecisionMemoryCasesInput } from './generated/operations.gen';
+import type { ListDecisionMemoryCasesInput, ListProjectsInput } from './generated/operations.gen';
 import type {
   AssignmentStatus,
   AssignmentUid,
@@ -102,6 +102,9 @@ export const QUERY_NAMESPACES = [
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
 
+/** The order of the project list the server can give (`listProjects`'s `order`, `UIP-S03-02`). */
+export type ProjectListOrder = NonNullable<NonNullable<ListProjectsInput['query']>['order']>;
+
 /** Filters that make a decision journal page a distinct cache entry. */
 export interface DecisionJournalFilters {
   readonly category?: FindingCategory;
@@ -112,6 +115,13 @@ export interface DecisionJournalFilters {
    * two cache entries and a project change cannot show the other project's page.
    */
   readonly project_uid?: ProjectUid;
+  /**
+   * The execution statuses the journal is restricted to (`UIP-S12-01`, `R-151g`): one or more values of
+   * `FindingExecutionStatus` joined by commas, as the contract writes the list (`agreed,amended`). Absent is every
+   * entry: the parameter is left out, never sent empty. Part of the key, so two sets are two cache entries; write the
+   * values in the order of `FindingExecutionStatus` so the same set is the same entry.
+   */
+  readonly execution_status?: string;
   readonly cursor?: string;
   readonly limit?: number;
 }
@@ -142,6 +152,8 @@ export interface RegistrationListFilters {
 /** Filters that make a page of `getSectionSpecification` a distinct cache entry. */
 export interface SectionSpecificationFilters {
   readonly projectUid?: ProjectUid | null;
+  /** `UIP-S11-05`: one document set of the section; part of the key, since the answer is another one. */
+  readonly documentUid?: DocumentUid | null;
   readonly q?: string | null;
   readonly offset?: number;
   readonly limit?: number;
@@ -220,12 +232,14 @@ export const queryKeys = {
     /** Every proposal's history: what a workbook loaded back (`UI-B-15`) may have appended to many proposals at once. */
     allProposalDecisions: () => ['optimisation', 'proposal-decisions'] as const,
     /**
-     * `UI-B-27` (contract 1.35.0): one page of `listAcceptedOptimisationProposals`, by its filters. A decision on any
-     * proposal can add a row or take one away, so a decision invalidates the whole `allAccepted` prefix.
+     * `UI-B-27` (contract 1.35.0): one page of `listAcceptedOptimisationProposals`, by its filters (`UIP-S11-05`: the
+     * document set too). A decision on any proposal can add a row or take one away, so a decision invalidates the whole
+     * `allAccepted` prefix.
      */
     accepted: (
       filters: {
         readonly project_uid?: ProjectUid;
+        readonly document_uid?: DocumentUid;
         readonly section_code?: ProjectSection;
         readonly cursor?: string;
         readonly limit?: number;
@@ -234,8 +248,9 @@ export const queryKeys = {
     allAccepted: () => ['optimisation', 'accepted'] as const,
     /**
      * One page of `getSectionSpecification` (`W63-SECTION-FORM7-01`): a section's combined
-     * Form-7 specification across projects. The section is a filter, the project filter and
-     * the search text are part of the answer, so each is part of the key. Any project's
+     * Form-7 specification across projects. The section is a filter, the project filter, the
+     * document filter (`UIP-S11-05`) and the search text are part of the answer, so each is part
+     * of the key. Any project's
      * price list decides prices in it, and the upload command belongs to another slice, so the
      * read is never served from a cache: `staleTime: 0` re-reads it on every mount.
      */
@@ -249,6 +264,7 @@ export const queryKeys = {
         sectionCode,
         {
           projectUid: filter.projectUid ?? null,
+          documentUid: filter.documentUid ?? null,
           q: filter.q ?? null,
           offset: filter.offset ?? 0,
           limit: filter.limit ?? null,
@@ -266,7 +282,7 @@ export const queryKeys = {
     profiles: () => ['analysis', 'profiles'] as const,
   },
   /**
-   * «Диспетчер» (`W61-DISPATCHER-01`). One root, because every command — a creation or a
+   * «Назначения» (`W61-DISPATCHER-01`). One root, because every command — a creation or a
    * move — changes what more than one key answers: the list's row (status, assignee), the
    * detail's history and the home screen's «Мои задачи». Each command invalidates
    * `assignments.all()`.
@@ -343,13 +359,13 @@ export const queryKeys = {
     dispatch: () => ['execution', 'dispatch'] as const,
     /**
      * One page of `listWorkers` (`W54-WORKERS-WEB`). The page size is part of the key: the
-     * «Исполнители» screen pages through the registry, and the queue and run screens read
+     * «Диспетчер» screen pages through the registry, and the queue and run screens read
      * one larger first page only to name the worker holding a run.
      */
     workers: (cursor?: string, limit?: number) =>
       ['execution', 'workers', { cursor, limit }] as const,
     /**
-     * «Подключения» and «Назначения» of the «Исполнители» screen (`EXEC-HTTP-01`). The three
+     * «Подключения» and «Назначения» of the «Диспетчер» screen (`EXEC-HTTP-01`). The three
      * reads stay under `execution`: every command on a connection or a route changes what
      * more than one of them answers (the list's summary, the detail's revisions and probes,
      * the route's choices), so each command invalidates `execution.all()` like the intake
@@ -366,7 +382,15 @@ export const queryKeys = {
   },
   projects: {
     all: () => ['projects'] as const,
-    list: (cursor?: string, limit?: number) => ['projects', 'list', { cursor, limit }] as const,
+    /**
+     * One page of `listProjects`. `order` (`UIP-S03-03`, contract 1.57.0) is the server's order of the whole listing and is part
+     * of the key, so a page read in one order is never served for the other: `published` (newest first, the default, and the
+     * order every reader had before the parameter existed) is the key with no `order` in it, which is the key those readers still
+     * have; `name` (by the number in the name, then alphabetically) is a key of its own. Both sit under `projects.all()`, so a
+     * command that changes the list invalidates both.
+     */
+    list: (cursor?: string, limit?: number, order?: ProjectListOrder) =>
+      ['projects', 'list', { cursor, limit, order: order === 'name' ? 'name' : undefined }] as const,
     detail: (projectUid: ProjectUid) => ['projects', 'detail', projectUid] as const,
     /**
      * One page of `listDocuments` for one project.

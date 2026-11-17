@@ -138,7 +138,7 @@ describe('the words', () => {
   it('say a whole refused file by the constraint the server names, else by the catalogue', () => {
     const refuse = (constraint: string) =>
       new ApiError(422, {
-        contract_version: '1.55.0', error_code: 'validation_failed', message: 'x',
+        contract_version: '1.57.0', error_code: 'validation_failed', message: 'x',
         correlation_id: 'cid-1', retryable: false, details: { field: 'file', constraint },
       }, 'cid-1');
     expect(importProposalFailure(refuse('not_our_export'))).toContain('лист «Предложения» с колонкой идентификаторов предложений');
@@ -167,6 +167,27 @@ describe('the export beside it', () => {
     expect(both).toContain('Выгрузить CSV предложений');
     expect(both).toContain('Выгрузить таблицу решений (.xlsx)');
     expect(both).toContain('data-proposal-decision-import');
+  });
+});
+
+describe('the control in the top row (`UIP-S09-02`)', () => {
+  it('changes its place and nothing else: its own markup stands whole in the row, after «Файлы ▾»', () => {
+    const control = (failure: string | null) =>
+      createElement(ImportProposalDecisionsView, { pending: false, report: report(), failure, onChoose: noop });
+    for (const failure of [null, 'Файл пуст.']) {
+      const alone = renderToStaticMarkup(control(failure));
+      const inRow = renderToStaticMarkup(
+        createElement(ExportProposalsView, { pending: false, failure: null, onDownload: noop, onDownloadXlsx: noop, importControl: control(failure) }),
+      );
+      expect(inRow).toContain(alone);
+      expect(inRow.indexOf(alone)).toBeGreaterThan(inRow.indexOf('data-proposals-files'));
+    }
+  });
+
+  it('is not in the row for a reader who does not decide: the row is handed no control', () => {
+    const inRow = renderToStaticMarkup(createElement(ExportProposalsView, { pending: false, failure: null, onDownload: noop, onDownloadXlsx: noop }));
+    expect(inRow).not.toContain('data-proposal-decision-import');
+    expect(inRow).not.toContain('Загрузить решения');
   });
 });
 

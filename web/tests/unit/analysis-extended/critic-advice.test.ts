@@ -155,7 +155,7 @@ describe('the caption of the run', () => {
     const markup = summary(true);
 
     expect(markup).not.toContain('отдельные машинные наблюдения');
-    expect(markup).not.toContain('Нулевой список находок');
+    expect(markup).not.toContain('Нулевой список замечаний');
     expect(markup).toContain('предварительных кандидатов: 1');
     expect(markup).toContain('Открыть расширенный анализ');
   });

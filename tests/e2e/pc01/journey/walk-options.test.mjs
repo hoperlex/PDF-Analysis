@@ -110,11 +110,11 @@ test('D-380: the wait expression is null until the screen is in the state, becau
 
 test('D-380: a route that is not in the asked-for state is a finding that says what the screen showed', () => {
   const waited = { ok: false, value: null, detail: { ok: false, seen: [0, 0] } };
-  const [finding] = stateFindings('stage-compare', 'confirmed_pair', CONFIRMED_PAIR, waited, 'Сравнение стадий\nВыберите проект');
+  const [finding] = stateFindings('stage-compare', 'confirmed_pair', CONFIRMED_PAIR, waited, 'Сравнение стадий\nВыберите объект');
   assert.match(finding, /^stage-compare: this read asks for the state 'confirmed_pair'/);
   assert.match(finding, /within 20000 ms/);
   assert.match(finding, /last reading \{"ok":false,"seen":\[0,0\]\}/);
-  assert.match(finding, /Выберите проект/);
+  assert.match(finding, /Выберите объект/);
   assert.deepEqual(stateFindings('stage-compare', 'confirmed_pair', CONFIRMED_PAIR, { ok: true, value: { ok: true, seen: [1, 1] } }, ''), []);
 });
 

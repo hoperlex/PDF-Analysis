@@ -139,6 +139,7 @@ __all__ = [
     "ReleaseEntry",
     "ReleaseList",
     "MarkReleaseNotesReadRequest",
+    "SetMyLastProjectRequest",
     "RunId",
     "JobId",
     "RunState",
@@ -1045,7 +1046,7 @@ class FindingCategory(str, enum.Enum):
     #: (plan-v5 section 4): a group of drawing candidates, and a group that mixes the sources of the blocks and the cross-check.
     DRAWING_DISCREPANCY = "drawing_discrepancy"
     CROSS_SOURCE = "cross_source"
-    #: `CRIT-SEAL-53` (contract 1.55.0): a parameter of the project (an area, a number of storeys, a load) stated differently in two documents of the
+    #: `CRIT-SEAL-53` (contract 1.54.0): a parameter of the project (an area, a number of storeys, a load) stated differently in two documents of the
     #: project: a finding of the newer document's run, with the other document's evidence in `cross_evidence` (owner ruling Н6).
     PARAMETER_MISMATCH = "parameter_mismatch"
 
@@ -1140,7 +1141,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.55.0"]
+    contract_version: Literal["1.57.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1395,6 +1396,9 @@ class DocumentAudit(_Object):
     version's latest optimisation pass and how many of them have no decision in force (none, or a withdrawn one) -- the
     original's «Оптимизация N» pill. Both are present when a pass was started over the version and both are absent when none
     was; they are a fact beside the four words and change none of them (`R-150u`).
+
+    `getDocumentVersion` carries the same audit for the version it reads (`UIP-S04-01`), from the same read model, so a version
+    read and the same version listed never disagree.
     """
 
     state: Literal["not_run", "clean", "awaiting_decision", "checked"]
@@ -1446,11 +1450,23 @@ class DocumentVersion(_Object):
     #: `R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them.
     tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
-    #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version. Present on the items of `listDocuments`
-    #: only, where it is the audit of the document's current version; absent from every other answer that carries a
-    #: `DocumentVersion` (`uploadDocument`, `uploadDocumentVersion`, `getDocumentVersion`, `listVersions`,
+    #: `UIP-G-10` (contract 1.56.0, owner ruling Г11): the document's one optional group, on the reads that carry it
+    #: (`listDocuments`, `getDocumentVersion` and `setDocumentGroup`). Absent is «Без группы». A value of the document, not an
+    #: entity: it has no identity of its own and is shown in alphabetical order by the screen. The free `tags` are separate.
+    group: Annotated[str, Field(min_length=1, max_length=40)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version. Present on the items of `listDocuments`,
+    #: where it is the audit of the document's current version, and on `getDocumentVersion` (`UIP-S04-01`), where it is
+    #: the audit of the version read: the same figures from the same read model, so the two never disagree. Absent from
+    #: every other answer that carries a `DocumentVersion` (`uploadDocument`, `uploadDocumentVersion`, `listVersions`,
     #: `setDocumentArchived`, `renameDocument`, `setDocumentTags`), which read no runs.
     audit: DocumentAudit = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `UIP-S04-01` (programme `UI-PARITY-R3`, owner rulings G8-B and G12-B): the number of portal blocks of the
+    #: version, for the «Блоки N» tab. Present on `getDocumentVersion` only, and only while the block index is built:
+    #: it is the count the latest run whose `page_geometry_extraction` succeeded recorded for the portal blocks it
+    #: published, the same run and the same blocks `listVersionPortalBlocks` answers. **Absent is not zero**: a version
+    #: with no such run, or one admitted for comparison only (no portal bundle), carries no number. The version's
+    #: file is not read for it.
+    block_count: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DocumentVersionPage(_Object):
@@ -1809,7 +1825,7 @@ class RunWaitCell(_Object):
 
 
 class RunPublicationMode(str, enum.Enum):
-    """`CRIT-SEAL-53` (contract 1.55.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan."""
+    """`CRIT-SEAL-53` (contract 1.54.0): `audit_run.publication_mode`, frozen when the run starts. `one_list` needs a stage plan."""
 
     TEXT_ONLY = "text_only"
     ONE_LIST = "one_list"
@@ -1902,7 +1918,7 @@ class RunStatus(_Object):
     #: median duration of similar recent runs. Absent while the run's job is not leased or running, before its first
     #: attempt, and without enough similar history; never invented.
     estimated_finish_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.55.0, asked by `F8-WEB`): how the run published its findings, frozen at its start: `text_only` (the findings of the text
+    #: `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): how the run published its findings, frozen at its start: `text_only` (the findings of the text
     #: analysis, and the candidates of the extended review beside them) or `one_list` (the candidates are findings of the same list). Absent is read as
     #: `text_only`.
     publication_mode: RunPublicationMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -2127,6 +2143,16 @@ class SetDocumentTagsRequest(_Object):
     """`R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all."""
 
     tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)]
+
+
+class SetDocumentGroupRequest(_Object):
+    """`UIP-G-10` (contract 1.56.0): the document's new group, or ``null`` (or a blank text) to take it out of its group.
+
+    The text is trimmed and inner runs of spaces collapse; what remains is 1 to 40 characters. The bound is read on the text as sent
+    and again on the trimmed text, so a longer one is ``422 validation_failed``.
+    """
+
+    group: Annotated[str, Field(max_length=40)] | None
 
 
 class DocumentTagCount(_Object):
@@ -2468,7 +2494,7 @@ class FindingBlockEvidence(_Object):
 
 
 class FindingCrossEvidence(_Object):
-    """`CRIT-SEAL-53` (contract 1.55.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
+    """`CRIT-SEAL-53` (contract 1.54.0, owner ruling Н6): one item of the evidence of a finding that stands in **another** document of the project -- the
     version, the page, the quote and its span in that version's text layer. `Evidence` is untouched; this is the other document's, with its `version_uid`."""
 
     evidence_ordinal: Annotated[int, Field(ge=0)]
@@ -2523,7 +2549,7 @@ class FindingObservation(_Object):
     )  # type: ignore[assignment]
     #: `CRIT-SEAL-50` (contract 1.51.0): absent means `text_span`, the only kind before.
     grounding_kind: FindingGroundingKind = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.55.0, asked by `F8-WEB`): the candidate of the extended review the observation was published from (`xobs_` and its
+    #: `CRIT-SEAL-53` (contract 1.54.0, asked by `F8-WEB`): the candidate of the extended review the observation was published from (`xobs_` and its
     #: key); absent for an observation that was not published from a candidate. The card of a finding reads the critic's advice and the corrector's
     #: refinement through it.
     extended_observation_ref: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
@@ -2582,7 +2608,7 @@ class Finding(_Object):
         default=None, json_schema_extra=optional_property
     )
     origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.55.0): the evidence of the finding in another document of the project (a finding of category `parameter_mismatch`);
+    #: `CRIT-SEAL-53` (contract 1.54.0): the evidence of the finding in another document of the project (a finding of category `parameter_mismatch`);
     #: absent for a finding with no such evidence.
     cross_evidence: Annotated[list[FindingCrossEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
@@ -2632,7 +2658,7 @@ class FindingDetail(_Object):
         default=None, json_schema_extra=optional_property
     )
     origin: FindingOrigin = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `CRIT-SEAL-53` (contract 1.55.0): as on ``Finding``.
+    #: `CRIT-SEAL-53` (contract 1.54.0): as on ``Finding``.
     cross_evidence: Annotated[list[FindingCrossEvidence], Field(max_length=64)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
@@ -2847,6 +2873,11 @@ class DecisionRecord(_Object):
     decision_event_count: Annotated[int, Field(ge=0)]
     #: `UI-A-73` (contract 1.39.0): as on ``DecisionEvent``.
     carried_from: DecisionCarriedFrom = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `UIP-S12-01` (`R-151g`): the designer's execution status of the finding the decision was taken on, and when it was
+    #: set; as on ``Finding``. Absent when the finding has none. Not an expert decision: it never changes this record.
+    execution_status: FindingExecutionStatus = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    execution_status_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DecisionRecordPage(_Object):
@@ -2958,13 +2989,15 @@ class WorkScheduleDoneDocument(_Object):
 
 
 class WorkScheduleEngineer(_Object):
-    """One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences."""
+    """One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences, and how many decisions the engineer accepted and rejected in it (``accepted_count``, ``rejected_count``: findings and optimisation proposals together, the decisions that stand, taken directly and not carried over from an earlier version, credited to their author and cut by the day in the schedule's time zone; both ``0`` without decisions)."""
 
     user_uid: UserUid
     label: Annotated[str, Field(min_length=1, max_length=254)]
     plan: Annotated[int, Field(ge=0, le=999)]
     plan_is_default: bool
     fact: Annotated[int, Field(ge=0)]
+    accepted_count: Annotated[int, Field(ge=0)]
+    rejected_count: Annotated[int, Field(ge=0)]
     done: list[WorkScheduleDoneDocument]
     absences: list[date]
 
@@ -3215,6 +3248,9 @@ class Account(_Object):
     #: Contract 1.36.0 (`UI-A-92`): the instant of the account's latest successful sign-in, read from the access
     #: journal; null when none is recorded (it never signed in, or signed in before the journal began).
     last_sign_in_at: datetime | None
+    #: Contract 1.56.0 (`UIP-G-05`): the object the account chose last, kept on the server; null when it has chosen none (or
+    #: its object is gone). Present on `getMe` and `updateMyProfile`, absent from an administrator's reads of an account.
+    last_project_uid: ProjectUid | None = Field(default=None, json_schema_extra=optional_property)
 
 
 class AccountPage(_Object):
@@ -3429,6 +3465,12 @@ class ReleaseList(_Object):
 
 class MarkReleaseNotesReadRequest(_Object):
     read_through: str
+
+
+class SetMyLastProjectRequest(_Object):
+    """Contract 1.56.0 (`UIP-G-05`): the object the signed-in account chose. The all-objects view is not sent."""
+
+    project_uid: ProjectUid
 
 
 class PersonNames(_Object):
@@ -10145,7 +10187,7 @@ class AppendPrecedentSettingRequest(_Object):
     value: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
 
 
-# --- `CRIT-SEAL-53` (contract 1.55.0): failure patterns and the quality table -------------------------------------------
+# --- `CRIT-SEAL-53` (contract 1.54.0): failure patterns and the quality table -------------------------------------------
 DecisionPatternId = TypeAliasType("DecisionPatternId", Annotated[str, Field(pattern=rf"^dmp_{_ULID}$")])
 
 

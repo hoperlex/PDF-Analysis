@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
- *   sha256 a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e
+ *   AuditManager PC-01 API 1.57.0 (OpenAPI 3.1.0)
+ *   sha256 6a88ecb4a91c3bad046ec910cf4278b5ae4e01acb504291f9b34aeef5931aedd
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.55.0';
+export const CONTRACT_VERSION = '1.57.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e';
+export const CONTRACT_DIGEST = '6a88ecb4a91c3bad046ec910cf4278b5ae4e01acb504291f9b34aeef5931aedd';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -649,6 +649,7 @@ export const SCHEMA_NAMES = [
   'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
   'SetDocumentArchivedRequest',
+  'SetDocumentGroupRequest',
   'SetDocumentTagsRequest',
   'SetEngineerAbsencesRequest',
   'SetExecutionPausedRequest',
@@ -662,6 +663,7 @@ export const SCHEMA_NAMES = [
   'SetFindingExecutionStatusRequest',
   'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
+  'SetMyLastProjectRequest',
   'SetProjectVendorListRequest',
   'SetStageModelLayoutEnabledRequest',
   'SetStagePairCompletenessRequest',
@@ -901,6 +903,8 @@ export type Account = {
   is_default_credential: boolean;
   /** Null until somebody gives the names. */
   last_name: string | null;
+  /** The object the account chose last through `setMyLastProject`, kept on the server; null when it has chosen none or its object is gone (the all-objects view is not stored). Optional: present on `getMe` and `updateMyProfile`, which read the signed-in account, and absent from an administrator's reads of an account. */
+  last_project_uid?: ProjectUid | null;
   /** The instant of the account's latest successful sign-in, read from the access journal; null when none is recorded (the account never signed in, or signed in before the journal began). Present on every Account answer, including `getMe`. */
   last_sign_in_at: string | null;
   /** The sign-in identifier: the normalised e-mail address (trimmed, lower-case, ASCII, an internationalised domain in its `xn--` form, at most 254 characters) once the profile is complete, or the legacy login an account created before the identity upgrade keeps until it completes its profile. Not an identity of this surface. */
@@ -3824,7 +3828,7 @@ export type Cursor = string;
 
 /** `getDashboardSummary`'s whole answer. All four panels, one read, one optional filter: the request's `project_uid` (`UI-PARITY-P0A`) restricts every panel to that project and the answer carries no echo of it. It also carries `awaiting_decision_findings`, the findings still awaiting a decision in the result runs of current versions (`R-150q`). */
 export type DashboardSummary = {
-  /** Findings whose current verdict is undecided (`pending` or `needs_manual_review`) in the result runs of current versions (`R-150q`). The figure of the tile «Находки, ожидающие решения». Unlike `findings_by_verdict`, which counts every finding of every run («за всё время»), it follows only the current versions, and it is restricted by `project_uid` like every panel. */
+  /** Findings whose current verdict is undecided (`pending` or `needs_manual_review`) in the result runs of current versions (`R-150q`). The figure of the tile «Замечания, ожидающие решения». Unlike `findings_by_verdict`, which counts every finding of every run («за всё время»), it follows only the current versions, and it is restricted by `project_uid` like every panel. */
   awaiting_decision_findings: number;
   documents_by_project: Array<ProjectDocumentCount>;
   findings_by_verdict: Array<VerdictCount>;
@@ -4150,7 +4154,7 @@ export const DECISION_PATTERN_STATUS_CAUSE_VALUES = [
 /** DecisionPatternStatusCause - the closed value set above. */
 export type DecisionPatternStatusCause = (typeof DECISION_PATTERN_STATUS_CAUSE_VALUES)[number];
 
-/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. */
+/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. `execution_status` and `execution_status_at` (`UIP-S12-01`, `R-151g`) are the designer's execution status of the finding the decision was taken on and when it was set, as on `Finding`; both are absent when the finding has none. The status is not an expert decision: it is read beside the record and never changes it, and a record is the same whether or not the finding has a status. */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
   author_label: string;
@@ -4164,6 +4168,9 @@ export type DecisionRecord = {
   document_name: string;
   document_uid: DocumentUid;
   event_type: DecisionEventType;
+  execution_status?: FindingExecutionStatus;
+  /** `UIP-S12-01` (`R-151g`): when the execution status of the finding was set. Present with `execution_status`. */
+  execution_status_at?: string;
   finding_observation_id: FindingObservationId;
   /** The observation's own words, as `FindingObservation.finding_text` carries them. It is the analysis's text and not this API's prose, so it is in whatever language the analysis produced. */
   finding_text: string;
@@ -4233,6 +4240,8 @@ export type DocumentActiveRun = {
  * `active_run` (`UI-A-47`, contract 1.40.0) names the version's run in flight -- its latest run of the standard analysis in state `queued`, `running` or `validating`, by the order of the result run -- and is absent when none is. It is a fact beside the four words and changes none of them: a document whose first run is in flight is still `not_run`, and a `checked` one with a re-run in flight is still `checked`.
  *
  * `optimisation_proposal_count` and `optimisation_undecided_count` (`D-361`, contract 1.43.0) are the proposals of the version's latest optimisation pass and how many of them have no decision in force (none, or a withdrawn one) -- the original's «Оптимизация N» pill. Both are present when a pass was started over the version and both are absent when none was: absent is "no optimisation read", never zero. They are a fact beside the four words and change none of them (`R-150u`).
+ *
+ * `getDocumentVersion` carries the same audit for the version it reads (`UIP-S04-01`), from the same read model, so a version read and the same version listed never disagree.
  */
 export type DocumentAudit = {
   active_run?: DocumentActiveRun;
@@ -4283,10 +4292,14 @@ export type DocumentVersion = {
   /** `R-151a` (contract 1.22.0): when the document was archived; absent while it is in use. */
   archived_at?: string;
   audit?: DocumentAudit;
+  /** `UIP-S04-01` (contract 1.56.0): the number of portal blocks of the version, for the «Блоки N» tab. Present on `getDocumentVersion` only, and only while the block index is built: it is the count recorded by the latest run of the version whose `page_geometry_extraction` succeeded and published portal blocks, the same run and the same blocks `listVersionPortalBlocks` answers. **Absent is not zero**: a version no such run has reached, or one admitted for comparison only (no portal bundle), carries no number. The version's file is not read for it. */
+  block_count?: number;
   byte_size: number;
   classification?: VersionClassification;
   display_title?: string;
   document_uid: DocumentUid;
+  /** `UIP-G-10` (contract 1.56.0, owner ruling Г11): the document's one optional group, on the reads that carry it (`listDocuments`, `getDocumentVersion` and `setDocumentGroup`). Absent is «Без группы». A value of the document, not an entity: it has no identity of its own, and the screen shows the groups in alphabetical order. The free `tags` are separate and unchanged. */
+  group?: string;
   input_manifest: Array<InputManifestEntry>;
   media_type: "application/pdf";
   page_count: number;
@@ -4364,7 +4377,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.55.0";
+  contract_version: "1.57.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -7997,6 +8010,11 @@ export type SetDocumentArchivedRequest = {
   archived: boolean;
 };
 
+/** `UIP-G-10` (contract 1.56.0): the document's new group, or `null` (or a blank text) to take it out of its group. The text is trimmed and inner runs of spaces collapse; what remains is 1 to 40 characters. The bound is read on the text as sent and again on the trimmed text, so a longer one is `422 validation_failed`. */
+export type SetDocumentGroupRequest = {
+  group: string | null;
+};
+
 /** `R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all. */
 export type SetDocumentTagsRequest = {
   tags: Array<string>;
@@ -8069,6 +8087,11 @@ export type SetGlobalVendorListRequest = {
 
 export type SetJobPriorityRequest = {
   priority: number;
+};
+
+/** The object the signed-in account chose (contract 1.56.0, `UIP-G-05`). The all-objects view is not sent: a client that shows all objects does not call `setMyLastProject`. */
+export type SetMyLastProjectRequest = {
+  project_uid: ProjectUid;
 };
 
 /**
@@ -9659,14 +9682,16 @@ export type WorkScheduleDoneDocument = {
   project_uid: ProjectUid;
 };
 
-/** One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences. */
+/** One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences, and how many decisions the engineer accepted and rejected in it (``accepted_count``, ``rejected_count``: findings and optimisation proposals together, the decisions that stand, taken directly and not carried over from an earlier version, credited to their author and cut by the day in the schedule's time zone; both ``0`` without decisions). */
 export type WorkScheduleEngineer = {
   absences: Array<string>;
+  accepted_count: number;
   done: Array<WorkScheduleDoneDocument>;
   fact: number;
   label: string;
   plan: number;
   plan_is_default: boolean;
+  rejected_count: number;
   user_uid: UserUid;
 };
 
@@ -9696,7 +9721,7 @@ export type WorkScheduleReserveEngineer = {
   user_uid: UserUid;
 };
 
-/** `R-152e`: an open assignment of «Диспетчер» and its planned date; ``planned_on`` absent is «без даты». */
+/** `R-152e`: an open assignment of «Назначения» and its planned date; ``planned_on`` absent is «без даты». */
 export type WorkScheduleReserveItem = {
   assignment_uid: AssignmentUid;
   document_title?: string;

@@ -127,6 +127,11 @@ class DecisionRecordView:
     section: str | None = None
     #: `UI-A-73`: as on ``DecisionEventView``.
     carried_from: DecisionCarriedFromView | None = None
+    #: `UIP-S12-01` (`R-151g`): the designer's execution status of the finding the decision was taken on, and when it was
+    #: set -- the two ``FindingView`` carries. Omitted from the wire body, never sent as ``null``: absent means the finding
+    #: has no status. Not part of the decision: the status is not an expert decision.
+    execution_status: str | None = None
+    execution_status_at: datetime | None = None
 
 
 def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
@@ -159,6 +164,10 @@ def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
         body["section"] = view.section
     if view.carried_from is not None:
         body["carried_from"] = decision_carried_from_body(view.carried_from)
+    if view.execution_status is not None:
+        body["execution_status"] = view.execution_status
+        if view.execution_status_at is not None:
+            body["execution_status_at"] = timestamp(view.execution_status_at)
     return body
 
 

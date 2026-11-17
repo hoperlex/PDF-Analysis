@@ -92,7 +92,7 @@ describe('«Просрочки» on «Выполнено»', () => {
   it('counts the open assignments planned before today, and says what it counts in its title', () => {
     const tile = overdueTile(page(['admin']));
     expect(tile).toContain('data-schedule-overdue="ready"');
-    expect(tile).toContain('Открытые назначения «Диспетчера», у которых плановая дата раньше сегодняшнего дня. Работа без даты не считается.');
+    expect(tile).toContain('Открытые назначения, у которых плановая дата раньше сегодняшнего дня. Работа без даты не считается.');
     expect(tile).toMatch(/Просрочки<\/span><span[^>]*>2<\/span>/);
     expect(tile).toContain('Назначения с прошедшей датой');
   });

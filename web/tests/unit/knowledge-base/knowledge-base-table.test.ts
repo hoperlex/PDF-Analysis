@@ -56,7 +56,7 @@ describe('the table', () => {
   it('has the original’s columns, in the original’s order, and one row a decision', () => {
     const markup = table([record(), record({ decision_id: 'dec_01M2545JSD15ETSNNV904X992A' })]);
     const heads = [...markup.matchAll(/<th scope="col"(?: class="[^"]*")?>([^<]*)<\/th>/g)].map((head) => head[1]);
-    expect(heads).toEqual(['Тип', 'Проект', 'Раздел', 'Важность', 'Решение', 'Суть', 'Причина решения', 'Дата', 'Находка']);
+    expect(heads).toEqual(['Тип', 'Объект', 'Раздел', 'Критичность', 'Решение', 'Суть', 'Причина решения', 'Дата', 'Замечание']);
     expect(markup.match(/<tr data-decision-id=/g) ?? []).toHaveLength(2);
     expect(markup).toContain('data-record-count="2"');
     expect(markup).toContain('data-knowledge-base-view="table"');
@@ -73,8 +73,8 @@ describe('the table', () => {
     expect(gist).toBe('Срок поставки указан как 30 дней в §4 и как 45 дней в §9.');
     expect(reason).toBe('Согласовано с заказчиком.');
     expect(date).toContain('Петрова А.');
-    expect(date).toContain('одно решение по находке');
-    expect(link).toBe('Открыть находку');
+    expect(date).toContain('одно решение по замечанию');
+    expect(link).toBe('Открыть замечание');
     expect(table([record()])).toContain('title="Архитектурные решения (АР)"');
   });
 
@@ -96,7 +96,7 @@ describe('the table', () => {
   });
 
   it('says how many decisions the finding holds, in words that decline', () => {
-    expect(table([record({ decision_event_count: 3 })])).toContain('решений по находке: 3');
+    expect(table([record({ decision_event_count: 3 })])).toContain('решений по замечанию: 3');
   });
 
   it('links the finding by the identities the record carries and by nothing else', () => {

@@ -41,7 +41,11 @@ def build_schedule_routes(router: APIRouter, schedule: SchedulePort) -> None:
             "`UI-PARITY-P0P` (contract 1.31.0, rulings `R-151x`, `R-152a`…`R-152d`): one month of «График работ» -- the "
             "days (Saturday and Sunday off unless the administrator decided otherwise), and for each active expert the "
             "month's plan (`plan_is_default` when the stored default applies), the documents that became «Проверено "
-            "экспертом» in the month credited to the author of their last verdict (`done`, `fact`) and the absent days. "
+            "экспертом» in the month credited to the author of their last verdict (`done`, `fact`), the absent days, and "
+            "(`UIP-S14-01`) how many decisions the expert accepted and rejected in the month (`accepted_count`, "
+            "`rejected_count`; findings and optimisation proposals together, the decisions that stand, not those carried "
+            "over from an earlier version, credited to their author, the month and day cut in the schedule's time zone; "
+            "`0` and `0` without decisions). "
             "An administrator reads every active expert; an expert reads their own row. `role:admin|expert`."
         ),
     )

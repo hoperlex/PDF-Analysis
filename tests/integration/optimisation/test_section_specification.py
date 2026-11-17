@@ -411,6 +411,88 @@ def test_project_filter_query_and_paging(world: World) -> None:
     _refused(ErrorCode.NOT_FOUND, world.read, project_uid=str(ProjectUid.new()))
 
 
+def test_the_document_filter_answers_one_set_priced_as_it_is_in_the_section(world: World) -> None:
+    """`UIP-S11-05`: a set addressed by its document, through its own project, on real rows."""
+    p = world.projects
+    school = p["school"]
+    world.set(school, "13АВ-РД-АР школа корпус Б", "AR")
+    whole = world.read()
+    _, document, version = world.versions["13АВ-РД-АР школа корпус Б"]
+    world.reader.asked_runs.clear()
+
+    answer = world.read(document_uid=document)
+    assert answer.state == SECTION_STATE_READY and answer.project_filter is None
+    (project,) = answer.projects
+    assert project.project_uid == school and project.price_state == PRICE_STATE_PRICED
+    (source,) = project.sources
+    assert (source.document_uid, source.version_uid, source.state) == (document, version, SOURCE_STATE_READY)
+    assert answer.source_count == 1 and answer.row_count == answer.rows.total == project.row_count == 3
+    assert {(row.document_uid, row.version_uid) for row in answer.rows.items} == {(document, version)}
+    assert answer.rows.items == tuple(row for row in whole.rows.items if row.document_uid == document)
+    # The project's price list prices it; the project's other set and the other projects are not read.
+    assert [(t.currency, t.amount) for t in project.totals] == [("EUR", Decimal("2550.00")), ("RUB", Decimal("100000"))]
+    assert world.reader.asked_runs == [version]
+    # Another project named beside the set's own is the same answer as an unknown set.
+    assert world.read(project_uid=school, document_uid=document).projects == answer.projects
+    _refused(ErrorCode.NOT_FOUND, world.read, project_uid=p["kindergarten"], document_uid=document)
+    # The search and the paging act on the set's rows only.
+    assert [row.row.name for row in world.read(document_uid=document, query="окно").rows.items] == [WINDOW]
+    second = world.read(document_uid=document, offset=2, limit=2)
+    assert (second.rows.total, second.rows.next_offset, [row.row.name for row in second.rows.items]) == (3, None, [ANCHOR])
+
+
+def test_the_document_filter_finds_its_set_across_membership_pages(world: World, monkeypatch) -> None:
+    school = world.projects["school"]
+    for number in range(3):
+        world.set(school, f"13АВ-РД-АР школа часть {number}", "AR")
+        world.set(school, f"Комплект {number}", None)
+    _, member, _ = world.versions["13АВ-РД-АР школа часть 1"]
+    _, loose, _ = world.versions["Комплект 2"]
+    expected = (world.read(document_uid=member), world.read(document_uid=loose))
+    monkeypatch.setattr(module, "_MEMBERSHIP_PAGE", 1)
+    assert (world.read(document_uid=member), world.read(document_uid=loose)) == expected
+    assert [source.document_uid for source in expected[0].projects[0].sources] == [member]
+    assert [item.document_uid for item in expected[1].excluded] == [loose] and expected[1].excluded_count == 1
+
+
+def test_an_unclassified_current_version_of_the_set_is_the_exclusion_it_is(world: World) -> None:
+    p = world.projects
+    _, document, _ = world.versions["05-РД-АР склад"]  # v1 confirmed AR, v2 (current) unclassified
+    answer = world.read(document_uid=document)
+    assert (answer.projects, answer.row_count, answer.source_count) == ((), 0, 0)
+    assert [(item.project_uid, item.document_uid, item.version_uid, item.reason) for item in answer.excluded] == [
+        (p["warehouse"], document, world.current_warehouse, EXCLUSION_VERSION_UNCLASSIFIED),
+    ]
+    assert answer.excluded_count == 1 and answer.rows.total == 0
+    assert world.reader.asked_runs == []
+
+
+def test_a_document_outside_the_answer_is_not_found_exactly_like_an_unknown_one(world: World) -> None:
+    """`UIP-S11-05`: unknown, in another section, with no version and in another project are one answer."""
+    p = world.projects
+    empty = documents.create_document(
+        world.session, project_uid=ProjectUid.parse(p["school"]), display_title="Пустой комплект"
+    )
+    world.session.commit()
+    _, other_section, _ = world.versions["11-РД-КЖ поликлиника"]
+    _, school_document, _ = world.versions["13АВ-РД-АР школа"]
+    answers = [
+        _refused(ErrorCode.NOT_FOUND, world.read, document_uid=str(DocumentUid.new())),
+        _refused(ErrorCode.NOT_FOUND, world.read, document_uid=other_section),
+        _refused(ErrorCode.NOT_FOUND, world.read, document_uid=str(empty)),
+        _refused(ErrorCode.NOT_FOUND, world.read, project_uid=p["garage"], document_uid=school_document),
+    ]
+    assert {str(error) for error in answers} == {str(answers[0])}
+    assert {tuple(sorted(error.detail_fields.items())) for error in answers} == {(("aggregate_type", "Document"),)}
+    # In its own section the set is answered, and the read touched no other set's text.
+    assert world.read("KJ", document_uid=other_section).rows.total == 3
+    # A project that does not exist keeps its own error, ahead of the document's.
+    missing = _refused(ErrorCode.NOT_FOUND, world.read, project_uid=str(ProjectUid.new()), document_uid=other_section)
+    assert dict(missing.detail_fields) == {"aggregate_type": "Project"}
+    for value in ("doc_bad", p["school"], 7):
+        assert _refused(ErrorCode.VALIDATION_FAILED, world.read, document_uid=value).detail_fields["field"] == "document_uid"
+
+
 def test_over_the_source_bound_the_membership_is_served_and_no_text_read(
     world: World, monkeypatch
 ) -> None:

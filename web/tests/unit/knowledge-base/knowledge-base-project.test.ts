@@ -1,11 +1,12 @@
 /**
  * «База знаний» follows the project in the address (`UI-PARITY-01`, «Project context»).
  *
- * The screen is class `optional`: without `?project=` it reads the whole journal and states «Все
- * проекты»; with one it sends `project_uid`, states the project and how many entries match
+ * The screen is class `optional`: without `?project=` it reads the account's last object (`UIP-G-06`: `getMe`'s
+ * `last_project_uid`), and the whole journal, stating «Все объекты», where there is none or where `?project=all` chose it;
+ * with `?project=<uid>` it sends `project_uid`, states the project and how many entries match
  * (`total`, not the length of the page), and a change of project returns to the first page as a
  * change of filter does. An unknown project is an empty page with `total: 0`, and the screen shows
- * the uid it was given and the empty state of a selection, with «Все проекты» as the way out — it does
+ * the uid it was given and the empty state of a selection, with «Все объекты» (`?project=all`) as the way out — it does
  * not claim the project exists, and it does not claim that the installation has no decision (`D-313`).
  *
  * Mounted live (`analysis-settings/live-render.ts`) under a mounted address, because a project
@@ -19,12 +20,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/shared/api', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, listDecisions: vi.fn(), listProjects: vi.fn() };
+  return { ...actual, getMe: vi.fn(), listDecisions: vi.fn(), listProjects: vi.fn() };
 });
 
 import { KnowledgeBaseEagerSeam, KnowledgeBasePage } from '@/_pages/knowledge-base';
-import { listDecisions, listProjects } from '@/shared/api';
-import type { ApiResponse, DecisionRecord, DecisionRecordPage } from '@/shared/api';
+import { getMe, listDecisions, listProjects, queryKeys } from '@/shared/api';
+import type { Account, ApiResponse, DecisionRecord, DecisionRecordPage } from '@/shared/api';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 
@@ -83,6 +84,10 @@ function answer(items: DecisionRecord[], next: string | null, total: number): Ap
 type Query = { category?: string; verdict?: string; cursor?: string; limit?: number; project_uid?: string };
 
 const journal = vi.mocked(listDecisions);
+const me = vi.mocked(getMe);
+/** The account as `getMe` answers it: only what these tests read; no role, so the memory tab is not offered. */
+const account = (lastProject: string | null): Account =>
+  ({ user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', roles: [], last_project_uid: lastProject }) as unknown as Account;
 const projects = vi.mocked(listProjects);
 const everyQuery = (): Query[] => journal.mock.calls.map((call) => (call[0] as { query: Query }).query);
 /**
@@ -92,6 +97,9 @@ const everyQuery = (): Query[] => journal.mock.calls.map((call) => (call[0] as {
 const queries = (): Query[] => everyQuery().filter((query) => query.limit !== 1);
 
 beforeEach(() => {
+  me.mockReset();
+  // The account answers with no last object unless a test says otherwise.
+  me.mockImplementation((async () => ({ data: account(null), status: 200, correlationId: 'cid-me' })) as unknown as typeof getMe);
   journal.mockReset();
   journal.mockImplementation((async (input: { query: Query }) => {
     const { project_uid: project, cursor } = input.query;
@@ -159,11 +167,11 @@ describe('the project reaches the request', () => {
     return live;
   }
 
-  it('sends no project_uid for «Все проекты»', async () => {
+  it('sends no project_uid for «Все объекты»', async () => {
     const view = await mountAt('');
     expect(queries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
     expect(view.markup()).toContain('data-journal-scope="all"');
-    expect(visible(view.markup())).toContain('Охват Все проекты');
+    expect(visible(view.markup())).toContain('Охват Все объекты');
   });
 
   it('sends no project_uid for an empty ?project=', async () => {
@@ -211,7 +219,7 @@ describe('the screen states its scope and how many entries match', () => {
     const view = await mountAt(`project=${A}`);
     expect(view.markup()).toContain('data-journal-scope="project"');
     expect(visible(view.markup())).toContain('Охват Проект Альфа 3 записи');
-    expect(view.markup()).not.toContain('Все проекты');
+    expect(view.markup()).not.toContain('Все объекты');
   });
 
   it('declines the noun with the number', async () => {
@@ -229,10 +237,10 @@ describe('the screen states its scope and how many entries match', () => {
     expect(text).not.toContain('ещё не принято ни одного решения');
     // It does not claim the project exists: no name was found for it anywhere.
     expect(text).not.toContain('Проект Альфа');
-    // The scope line still names the project. «Все проекты» is the way out below it, once, as a link to the unfiltered screen.
-    expect(text).not.toContain('Охват Все проекты');
-    expect(text.match(/Все проекты/g)).toHaveLength(1);
-    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base"[^>]*>Все проекты<\/a>/);
+    // The scope line still names the project. «Все объекты» is the way out below it, once, as a link to the screen with every object chosen.
+    expect(text).not.toContain('Охват Все объекты');
+    expect(text.match(/Все объекты/g)).toHaveLength(1);
+    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?project=all"[^>]*>Все объекты<\/a>/);
     // Only the project narrows the list, so there is no category or verdict to reset.
     expect(text).not.toContain('Сбросить категорию и вердикт');
   });
@@ -245,9 +253,67 @@ describe('the screen states its scope and how many entries match', () => {
     expect(text).not.toContain('ещё не принято ни одного решения');
   });
 
-  it('does not read the project list for «Все проекты»', async () => {
+  it('does not read the project list for «Все объекты»', async () => {
     await mountAt('');
     expect(projects).not.toHaveBeenCalled();
+  });
+});
+
+describe('where the address is silent the page opens on the account’s last object (UIP-G-06)', () => {
+  let live: LiveRender | null = null;
+  afterEach(async () => {
+    await live?.unmount();
+    live = null;
+  });
+
+  const remembered = (uid: string | null) =>
+    me.mockImplementation((async () => ({ data: account(uid), status: 200, correlationId: 'cid-me' })) as unknown as typeof getMe);
+
+  async function mountAt(query: string, client = freshClient()): Promise<LiveRender> {
+    live = await mountLive(page(client, query));
+    await settled(live);
+    return live;
+  }
+
+  it('sends project_uid of the last object for a silent address, and states its name', async () => {
+    remembered(A);
+    const view = await mountAt('');
+    expect(queries().at(-1)).toEqual({ project_uid: A, limit: JOURNAL_PAGE_LIMIT });
+    expect(visible(view.markup())).toContain('Охват Проект Альфа');
+    expect(view.markup()).toContain('data-journal-scope="project"');
+  });
+
+  it('asks once, for that object only, when the account is already known', async () => {
+    const client = freshClient();
+    client.setQueryData(queryKeys.account.me(), account(A));
+    await mountAt('', client);
+    expect(queries()).toEqual([{ project_uid: A, limit: JOURNAL_PAGE_LIMIT }]);
+  });
+
+  it('?project=<uid> beats it', async () => {
+    remembered(A);
+    await mountAt(`project=${B}`);
+    expect(queries()).toEqual([{ project_uid: B, limit: JOURNAL_PAGE_LIMIT }]);
+  });
+
+  it('?project=all is «Все объекты», chosen: the whole journal, whatever the account chose last', async () => {
+    remembered(A);
+    const view = await mountAt('project=all');
+    expect(queries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
+    expect(visible(view.markup())).toContain('Охват Все объекты');
+  });
+
+  it('is one getMe for the page, not a second one for the object: the memory access reads the same query', async () => {
+    remembered(A);
+    await mountAt('');
+    expect(me).toHaveBeenCalledTimes(1);
+  });
+
+  it('no last object: the whole journal, as before', async () => {
+    remembered(null);
+    const view = await mountAt('');
+    expect(queries().at(-1)).toEqual({ limit: JOURNAL_PAGE_LIMIT });
+    expect(visible(view.markup())).toContain('Охват Все объекты');
   });
 });
 
@@ -292,7 +358,7 @@ describe('each record says where it belongs, in the events view', () => {
     live = null;
   });
 
-  it('prints «Проект · Документ · Раздел» with the section’s name from the catalogue', async () => {
+  it('prints «Объект · Документ · Раздел» with the section’s name from the catalogue', async () => {
     live = await mountLive(page(freshClient(), ''));
     await settled(live);
     await press(live, 'События');
@@ -361,8 +427,8 @@ describe('an empty page under a selection is about the selection, and the way ba
     expect(text).not.toContain('ещё не принято ни одного решения');
     expect(text).not.toContain('Решений пока нет');
     // No project is chosen, so there is no «Все проекты» to offer: the words appear once, in the scope line, and are no link.
-    expect(text.match(/Все проекты/g)).toHaveLength(1);
-    expect(view.markup()).not.toMatch(/<a [^>]*>Все проекты<\/a>/);
+    expect(text.match(/Все объекты/g)).toHaveLength(1);
+    expect(view.markup()).not.toMatch(/<a [^>]*>Все объекты<\/a>/);
 
     // A verdict as well, so that the reset is seen to clear both.
     await change(view, 'Вердикт', 'accepted');
@@ -376,7 +442,7 @@ describe('an empty page under a selection is about the selection, and the way ba
     expect(view.count('Сбросить категорию и вердикт')).toBe(0);
   });
 
-  it('offers «Все проекты» with the rest of the address kept, beside the reset, when a project and a verdict are on', async () => {
+  it('offers «Все объекты» with the rest of the address kept, beside the reset, when a project and a verdict are on', async () => {
     nothingFor(null, 'rejected');
     // `foo` is kept; `tab` is one of the parameters that only meant something inside the old project and goes with it.
     const view = await mountAt(`project=${A}&foo=bar&tab=x`);
@@ -384,16 +450,24 @@ describe('an empty page under a selection is about the selection, and the way ba
     const text = visible(view.markup());
     expect(text).toContain('По выбранному отбору решений нет');
     expect(text).toContain('Сбросить категорию и вердикт');
-    expect(text.match(/Все проекты/g)).toHaveLength(1);
+    expect(text.match(/Все объекты/g)).toHaveLength(1);
     // The verdict is a parameter of the address now (`D-372`), so it stays with `foo`, as every parameter that is not the project's does.
-    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar&(?:amp;)?verdict=rejected"[^>]*>Все проекты<\/a>/);
+    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?project=all&(?:amp;)?foo=bar&(?:amp;)?verdict=rejected"[^>]*>Все объекты<\/a>/);
     // The scope line still states the project the reader is in. An empty page carries no record to name it, and the project list
     // does not hold it, so the line shows the uid it was given, as it does for any project the page cannot name.
     expect(view.markup()).toContain('data-journal-scope="project"');
     expect(text).toContain(`Охват ${A} 0 записей`);
   });
 
-  it('resets from the empty state back to the project’s own first page, not to «Все проекты»', async () => {
+  it('the way out of the account’s last object is «Все объекты» as ?project=all, with the rest of the address kept (UIP-G-06)', async () => {
+    me.mockImplementation((async () => ({ data: account(B), status: 200, correlationId: 'cid-me' })) as unknown as typeof getMe);
+    nothingFor(null, 'rejected');
+    const view = await mountAt('foo=bar');
+    expect(await change(view, 'Вердикт', 'rejected')).toBe(true);
+    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar&(?:amp;)?verdict=rejected&(?:amp;)?project=all"[^>]*>Все объекты<\/a>/);
+  });
+
+  it('resets from the empty state back to the project’s own first page, not to «Все объекты»', async () => {
     nothingFor('dimensions', null);
     const view = await mountAt(`project=${A}`);
     await change(view, 'Категория', 'dimensions');
@@ -402,7 +476,7 @@ describe('an empty page under a selection is about the selection, and the way ba
     const text = visible(view.markup());
     expect(text).toContain('Решение номер 11');
     expect(text).toContain('Охват Проект Альфа');
-    expect(text).not.toContain('Охват Все проекты');
+    expect(text).not.toContain('Охват Все объекты');
   });
 });
 

@@ -76,7 +76,7 @@ function tables(reading: ExtendedRunReview): Table[] {
     ...(result?.substantive_review === undefined ? [] : [['Выполнение смысловой критики и учет входов', result.substantive_review] as Row]),
     ['Нормы', 'Ни исторические пороги, ни актуальность и применимость нормативных ссылок этим отчётом не подтверждены.'],
     ['Страницы', 'Только физические номера страниц PDF из source.page_number, начиная с 1. Номера листов не выводятся из имени или ID.'],
-    ['Дубли', 'Общий свод и записи окон показаны отдельно с областью происхождения; это не дополнительные уникальные находки.'],
+    ['Дубли', 'Общий свод и записи окон показаны отдельно с областью происхождения; это не дополнительные уникальные замечания.'],
     ['Полные данные', 'RawJSONchunks: соединить второй столбец по порядку, без разделителей. Все исходные поля API сохранены.'],
     ['Ограничения', result?.warnings], ['Причина состояния', result?.reason],
   ];
@@ -139,7 +139,7 @@ function tables(reading: ExtendedRunReview): Table[] {
     }
   }
   const parameterBody = object(result?.project_parameters);
-  const parameterRows: Row[] = [['ID кандидата', 'Название', 'Тип', 'Значение как в источнике', 'Единица как в источнике', 'Предмет/объект', 'Источники', 'Точные цитаты и диапазоны', 'Ключ пакета', 'Статус']];
+  const parameterRows: Row[] = [['ID кандидата', 'Название', 'Тип', 'Значение как в источнике', 'Единица как в источнике', 'Предмет', 'Источники', 'Точные цитаты и диапазоны', 'Ключ пакета', 'Статус']];
   for (const fact of objects(parameterBody?.facts)) parameterRows.push([fact.fact_id, fact.name, fact.parameter_type, fact.value,
     fact.unit, fact.subject, fact.source_ids, fact.source_evidence, fact.batch_key, fact.status]);
   const parameterReceipts: Row[] = [['Часть', 'Всего частей', 'Полная запись параметров, JSON, последовательные части без разделителей']];

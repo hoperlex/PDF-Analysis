@@ -28,3 +28,9 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
 }
+
+/* `UIP-S02-01`: «ждут решения N» that chooses the documents it counts: a pressed state that is not colour alone (a heavier face and a ring). */
+button.part[aria-pressed='true'] {
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px currentColor;
+}

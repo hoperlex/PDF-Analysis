@@ -1,0 +1,78 @@
+/*
+ * `UIP-S04-04`: the panel «Стадия и раздел» of the version's «Инфо». It owns its frame (the page no longer wraps it) and has two shapes:
+ * the form shape (unconfirmed: the heading, then the form or the sentence) and, once the section is confirmed, the one-line row
+ * (the label, the badges, who confirmed and when, «Исправить») with the record behind «Подробнее». Tokens only.
+ */
+.panel {
+  min-width: 0;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+.panel > h2:first-child {
+  margin-top: 0;
+}
+
+/* The confirmed section is one line, so the frame is as tight as the line. */
+.panelRow {
+  padding: var(--am-gap-xs) var(--am-gap);
+}
+
+.confirmed {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+/* The label, the section's colour and badges, who confirmed and when, «Исправить» at the far end; it wraps on a narrow screen and never scrolls. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+/* The page's own `h2` (the rule of `.am-page__body h2`) is a section rule; here it is the row's label, so its rule and margins give way. */
+.row > .label {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: var(--am-text-md);
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.said {
+  color: var(--am-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.row > .correct {
+  margin-left: auto;
+}
+
+/* Notes under the row (the conflict, a section without a profile) say what the row cannot; they keep the page's paragraph rhythm. */
+.confirmed > p {
+  margin: 0;
+}
+
+.more > summary {
+  cursor: pointer;
+  color: var(--am-ink-muted);
+}
+
+.more[open] > summary {
+  margin-bottom: var(--am-gap-xs);
+}
+
+.more > p {
+  margin: 0 0 var(--am-gap-xs);
+}

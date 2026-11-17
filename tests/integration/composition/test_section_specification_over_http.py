@@ -282,10 +282,53 @@ def test_unknown_project_and_unknown_section_are_404(world) -> None:
         assert answer.json()["details"] == {"aggregate_type": "SectionSpecification"}
 
 
+def test_the_document_filter_reads_one_set_and_an_outsider_is_404_like_an_unknown_one(world) -> None:
+    """`UIP-S11-05`: ``document_uid`` over HTTP. The set is its own scope (no project need be named, and the lane's
+    other projects are not read); a document that is unknown, of another project than the named one, or confirmed in
+    another section is the same ``404 Document``; an unclassified current version is answered, as an exclusion."""
+    projects, uploads = world["projects"], world["uploads"]
+    document = uploads["priced"]["document_uid"]
+    alone = _read(world, document_uid=document)
+    assert alone.status_code == 200, alone.content
+    body = alone.json()
+    assert body["project_filter"] is None and body["state"] == "ready"
+    assert [item["project_uid"] for item in body["projects"]] == [projects["priced"]]
+    assert [source["document_uid"] for source in body["projects"][0]["sources"]] == [document]
+    assert (body["source_count"], body["excluded"], body["excluded_count"]) == (1, [], 0)
+    # Named with its own project it is the same answer, apart from the echo of the project filter.
+    named = _read(world, project_uid=projects["priced"], document_uid=document).json()
+    assert named["project_filter"] == projects["priced"]
+    assert named["projects"] == body["projects"] and named["rows"] == body["rows"]
+    assert _read(world, document_uid="", project_uid=projects["priced"]).json() == _read(
+        world, project_uid=projects["priced"]
+    ).json()  # the empty value is the absent one
+
+    outsiders = {
+        "unknown": {"document_uid": "doc_01M2545JSD15ETSNNV904X991F"},
+        "another section": {"document_uid": uploads["other"]["document_uid"]},
+        "another project": {"project_uid": projects["bare"], "document_uid": document},
+    }
+    for name, query in outsiders.items():
+        refused = _read(world, **query)
+        assert refused.status_code == 404, (name, refused.content)
+        assert refused.json()["error_code"] == "not_found", name
+        assert refused.json()["details"] == {"aggregate_type": "Document"}, name
+    assert _read(world, "KJ", document_uid=uploads["other"]["document_uid"]).status_code == 200
+
+    loose = _read(world, document_uid=uploads["loose"]["document_uid"])
+    assert loose.status_code == 200, loose.content
+    answer = loose.json()
+    assert (answer["projects"], answer["row_count"], answer["excluded_count"]) == ([], 0, 1)
+    assert [(item["project_uid"], item["version_uid"], item["reason"]) for item in answer["excluded"]] == [
+        (projects["loose"], uploads["loose"]["version_uid"], "version_unclassified"),
+    ]
+
+
 @pytest.mark.parametrize(
     "query",
     [
         {"limit": 0}, {"limit": 201}, {"offset": -1}, {"project_uid": "prj_bad"}, {"q": "д" * 201},
+        {"document_uid": "doc_bad"}, {"document_uid": "prj_01M2545JSD15ETSNNV904X991F"},
     ],
 )
 def test_malformed_filters_and_paging_are_422(world, query) -> None:

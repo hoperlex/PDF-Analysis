@@ -35,7 +35,7 @@ from auditmanager.api.routers.multipart import (
     UploadRoute,
     require_a_strict_multipart_body,
 )
-from auditmanager.api.routers.ports import DocumentPort
+from auditmanager.api.routers.ports import BlockPort, DocumentPort
 from auditmanager.api.schemas.models import optional_property
 from auditmanager.api.routers.wire import (
     StreamingWireResponse,
@@ -121,7 +121,12 @@ DocumentOrderParam = Annotated[
 ]
 
 
-def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
+def build_document_routes(
+    router: APIRouter, documents: DocumentPort, blocks: BlockPort | None = None
+) -> None:
+    """``blocks`` answers the block count ``getDocumentVersion`` carries (`UIP-S04-01`). It is optional, like
+    ``build_router``'s own ``blocks``: an application wired without a block port serves the read without the number,
+    which is what "no index" already means on the wire -- the property is absent, never zero."""
 
     # `W55B-FIX` (X-3): declared through ``add_api_route`` for its ``route_class_override``,
     # the one argument the decorator does not take. ``UploadRoute`` parses this operation's
@@ -317,6 +322,31 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         )
         return json_response(200, encode_json(document_version_body(view)))
 
+    @router.put(
+        "/projects/{project_uid}/documents/{document_uid}/group",
+        operation_id="setDocumentGroup",
+        tags=["documents"],
+        status_code=200,
+        response_model=models.DocumentVersion,
+        responses={
+            **success(200, "The document's current version with its new group (none when it was cleared)."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+    )
+    def set_document_group(
+        project_uid: Annotated[models.ProjectUid, Path()],
+        document_uid: Annotated[models.DocumentUid, Path()],
+        body: models.SetDocumentGroupRequest,
+        idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
+    ) -> WireResponse:
+        # `UIP-G-10` (owner ruling Г11): the group is a value of the document, replaced as a whole; a blank value clears it.
+        view = documents.set_document_group(
+            project_uid=project_uid, document_uid=document_uid, group=body.group,
+            user_uid=subject.user_uid, idempotency_key=idempotency_key,
+        )
+        return json_response(200, encode_json(document_version_body(view)))
+
     @router.get(
         "/projects/{project_uid}/document-tags",
         operation_id="listDocumentTags",
@@ -387,7 +417,11 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         status_code=200,
         response_model=models.DocumentVersion,
         responses={
-            **success(200, "One published version and its input manifest."),
+            **success(
+                200,
+                "The version, its input manifest, its audit (`UIP-S04-01`) and, once its block index is built, "
+                "its portal block count.",
+            ),
             **envelope_responses(401, 403, 404, 500, 503),
         },
     )
@@ -395,7 +429,17 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         version_uid: Annotated[models.VersionUid, Path()],
     ) -> WireResponse:
         view = documents.get_version(version_uid=version_uid)
-        return json_response(200, encode_json(document_version_body(view)))
+        # `UIP-S04-01`: the numbers the frame of a document shows on its tabs. The audit is the one `listDocuments`
+        # attaches to each item (the same port read, so the two never disagree); the block count is the built index's
+        # and is absent while there is none. Both are read after the version is known to exist, so an unknown version
+        # is still the `404` of `get_version`.
+        audit = documents.document_audits(version_uids=[view.version_uid])[view.version_uid]
+        block_count = (
+            None if blocks is None else blocks.portal_block_count(version_uid=view.version_uid)
+        )
+        return json_response(
+            200, encode_json(document_version_body(replace(view, audit=audit, block_count=block_count)))
+        )
 
     @router.get(
         "/versions/{version_uid}/content",

@@ -283,11 +283,12 @@ describe('every number the dashboard renders is the fixture, and nothing else is
   it('opens with the section overview and its original-style code badges', () => {
     const markup = render(SUMMARY);
     expect(markup).toContain('data-dashboard-showcase="true"');
-    expect(markup).toContain('>Сводка по проектам</h2>');
+    expect(markup).toContain('>Сводка по объектам</h2>');
     expect(markup.indexOf('dashboard-sections-heading')).toBeLessThan(markup.indexOf('dashboard-documents-heading'));
-    expect(markup).toContain('>Разделы проекта</h2>');
+    expect(markup).toContain('>Разделы объекта</h2>');
     expect(markup).toContain('>AR</span>');
-    expect(markup).toContain('>Документы</span>');
+    // `UIP-S01-02`: the heading of the documents column is the original's «Всего».
+    expect(markup).toContain('>Всего</span>');
   });
 
   it('renders exactly the fixture’s numbers, nothing invented', () => {
@@ -319,13 +320,13 @@ describe('every number the dashboard renders is the fixture, and nothing else is
     expect(markup).toContain('data-verdict="rejected"');
     expect(markup).toContain('data-verdict="needs_manual_review"');
     const text = visible(markup);
-    expect(text).toContain('Находок за всё время: 70');
+    expect(text).toContain('Замечаний за всё время: 70');
   });
 
   it('labels the verdict panel as all-time and keeps the findings that await a decision out of it (R-150q)', () => {
     const markup = render(SUMMARY);
     const panel = visible(sectionMarkup(markup, 'dashboard-verdicts-heading'));
-    expect(visible(markup)).toContain('Находки по вердикту, за всё время');
+    expect(visible(markup)).toContain('Замечания по вердикту, за всё время');
     expect(panel).toContain('По вердикту, за всё время');
     expect(panel).toContain('всех прогонов');
     // 13 is `awaiting_decision_findings`: the home tile's figure, a different count from this panel's 16.
@@ -389,44 +390,89 @@ describe('every number the dashboard renders is the fixture, and nothing else is
 });
 
 /**
- * `WEB-SECTION-COPY-01`: the sentence above the section rows says what the server counts, and
- * does not blame the upload form for «Без раздела». The server places a document in the section
- * an expert confirmed for its current version (`SECTION-READ-MODEL-01`); the upload form names no
- * section and is not the cause. Nothing pinned the old sentence, so none of these cases failed
- * before the repair; each of them fails against it. Mutations run by hand against these cases
- * and confirmed red, then reverted (the table is in `docs/program/WEB-SECTION-COPY-01.md`):
- *
- *   1. the old paragraph restored in `sections-panel.tsx` — caught by the first two cases;
- *   2. a figure written into the new paragraph («Всего разделов: 99.») — caught by the case
- *      that forbids a digit in the sentence, and by `renders exactly the fixture's numbers`.
- *      The local case exists because the global one is blind to a figure that happens to be a
- *      fixture count: with «15» in the sentence only the local case goes red;
- *   3. `data-analysed-by` put back to the removed `data-analysed` — caught by the last case;
- *   4. the `<p>` deleted — caught by the first case.
+ * `WEB-SECTION-COPY-01`, `UIP-S01-02`: what the server counts is said in the headings, not in a paragraph over the rows. The server
+ * places a document in the section an expert confirmed for its current version (`SECTION-READ-MODEL-01`); the upload form names no
+ * section and is not the cause of «Без раздела». The sentence that says so was a three-line paragraph above the table; the original
+ * has none, so it is now the definition of the heading «Раздел» and the hint of the row «Без раздела». Each other heading has the
+ * definition of its own («документов, у которых …»), as the tooltip and as text a screen reader reads, and the header is not hidden
+ * from assistive technology.
  */
-describe('the sections panel says what the count is, not where the unclassified row comes from', () => {
+describe('the sections panel says what the count is in its headings, not in a paragraph above the rows', () => {
   const panel = (): string => sectionMarkup(render(SUMMARY), 'dashboard-sections-heading');
-
-  it('says a document stands in the section an expert confirmed for its current version', () => {
-    const text = visible(panel());
-    expect(text).toContain(
-      'Документ учитывается в том разделе, который эксперт подтвердил для его текущей версии.',
+  const heads = (): { column: string; title: string; words: string; hidden: string }[] =>
+    [...panel().matchAll(/<span class="[^"]*" title="([^"]*)" data-column="([a-z_]+)"><span>([^<]*)<\/span><span class="[^"]*">([^<]*)<\/span><\/span>/gu)].map(
+      (match) => ({ title: match[1] ?? '', column: match[2] ?? '', words: match[3] ?? '', hidden: match[4] ?? '' }),
     );
-    expect(text).toContain('Пока раздел не подтверждён, документ попадает в строку «Без раздела».');
-    expect(text).toContain('Раздел подтверждает эксперт на экране версии.');
+
+  it('reads the headings of the original, in its order, and the total row as «Итого»', () => {
+    expect(heads().map((head) => head.words)).toEqual([
+      'Раздел',
+      'Не запускались на проверку',
+      'Нет решений эксперта',
+      'Проверено экспертом',
+      'Всего',
+      'Замечаний',
+    ]);
+    expect(heads().map((head) => head.column)).toEqual(['section', 'not_run', 'no_expert_decision', 'checked', 'total', 'findings']);
+    const total = /<li[^>]*data-section="total"[^>]*>([\s\S]*?)<\/li>/u.exec(panel())?.[1] ?? '';
+    expect(total).toContain('>Итого</span>');
+    expect(total).not.toContain('Итого по разделам');
+  });
+
+  it('does not hide the header from assistive technology: every heading and its definition are in the text a reader gets', () => {
+    const header = /<div class="[^"]*" data-sections-head="">([\s\S]*?)<\/div>/u.exec(panel())?.[0] ?? '';
+    expect(header).not.toBe('');
+    expect(header).not.toContain('aria-hidden');
+    // The text as a reader assembles it: no space is added between two inline elements.
+    const text = header.replace(/<[^>]*>/gu, '');
+    for (const head of heads()) {
+      expect(text, head.column).toContain(`${head.words}. ${head.title}`);
+    }
+  });
+
+  it('gives every heading its definition twice: as the tooltip and as text a screen reader reads after its words', () => {
+    expect(heads()).toHaveLength(6);
+    for (const head of heads()) {
+      expect(head.title, head.column).not.toBe('');
+      expect(head.hidden, head.column).toBe(`. ${head.title}`);
+    }
+  });
+
+  it('defines the four counts of documents by «документов, у которых …», and the remarks by what they are in', () => {
+    const byColumn = Object.fromEntries(heads().map((head) => [head.column, head.title]));
+    for (const column of ['not_run', 'no_expert_decision', 'checked', 'total']) {
+      expect(byColumn[column], column).toMatch(/^Документов, у которых /u);
+    }
+    expect(byColumn.findings).toMatch(/^Замечаний в результатах проверки/u);
+  });
+
+  it('says a document stands in the section an expert confirmed for its current version, in the definition of «Раздел»', () => {
+    const section = heads().find((head) => head.column === 'section');
+    expect(section?.title).toContain('Документ учитывается в том разделе, который эксперт подтвердил для его текущей версии.');
+    expect(section?.title).toContain('Пока раздел не подтверждён, документ попадает в строку «Без раздела».');
+    expect(section?.title).toContain('Раздел подтверждает эксперт на экране версии.');
+  });
+
+  it('has no paragraph over the table: its meaning is in the headings and in the hint of «Без раздела»', () => {
+    expect(panel()).not.toMatch(/<p[\s>]/u);
+    expect(panel()).not.toContain('am-state__correlation');
+    const row = /<li[^>]*data-section="unclassified"[^>]*>[\s\S]*?<\/li>/u.exec(panel())?.[0] ?? '';
+    expect(row).toMatch(/title="Документы, у которых эксперт ещё не подтвердил раздел текущей версии\. Раздел подтверждает эксперт на экране версии\."/u);
+    expect(visible(row)).toContain(`Без раздела: ${PROJECT_SECTIONS.length + 1}`);
   });
 
   it('does not blame the upload form for the unclassified row', () => {
-    const text = visible(panel());
-    expect(text).not.toMatch(/загрузк|загруж|отправленн/iu);
-    expect(text).not.toContain('Форма');
-    expect(text).not.toContain('при загрузке');
+    const everything = `${panel()} ${heads().map((head) => head.title).join(' ')}`;
+    expect(visible(everything)).not.toMatch(/загрузк|загруж|отправленн/iu);
+    expect(visible(everything)).not.toContain('Форма');
+    expect(visible(everything)).not.toContain('при загрузке');
   });
 
-  it('writes no digit in its sentence, so every number on the panel is a count of the server', () => {
-    const sentence = panel().match(/<p[^>]*>([\s\S]*?)<\/p>/u);
-    expect(sentence, 'the explanatory paragraph is missing').not.toBeNull();
-    expect(visible(sentence![1]!)).not.toMatch(/\d/u);
+  it('writes no digit in a definition, so every number on the panel is a count of the server', () => {
+    for (const head of heads()) expect(head.title, head.column).not.toMatch(/\d/u);
+    const row = /<li[^>]*data-section="unclassified"[^>]*title="([^"]*)"/u.exec(panel())?.[1] ?? '';
+    expect(row).not.toBe('');
+    expect(row).not.toMatch(/\d/u);
   });
 
   it('marks each row with the route that analyses its section: АР by the six checks, the rest by their profile', () => {

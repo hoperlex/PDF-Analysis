@@ -10,6 +10,7 @@ from fastapi import APIRouter, Path
 from auditmanager.api.routers.declarations import (
     CategoryFilterParam,
     CursorParam,
+    ExecutionStatusFilterParam,
     LimitParam,
     ProjectUidFilterParam,
     VerdictFilterParam,
@@ -167,11 +168,19 @@ def build_decision_routes(
         category: CategoryFilterParam = None,  # type: ignore[assignment]
         verdict: VerdictFilterParam = None,  # type: ignore[assignment]
         project_uid: ProjectUidFilterParam = None,  # type: ignore[assignment]
+        execution_status: ExecutionStatusFilterParam = None,  # type: ignore[assignment]
     ) -> WireResponse:
+        # `UIP-S12-01`. The execution status narrows the finding as `verdict` does, so `total` is the number of entries
+        # of the findings that carry any of the statuses asked for: a group's count is this filter's `total`, read with
+        # `limit=1`. A status named twice is one status; the port gets each once, in the order first written.
         rows = decisions.decision_journal(
             category=None if category is None else category.value,
             verdict=None if verdict is None else verdict.value,
             project_uid=project_uid,
+            execution_statuses=(
+                None if execution_status is None
+                else tuple(dict.fromkeys(status.value for status in execution_status))
+            ),
         )
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_decision_sort_key)
         body = page_body([decision_record_body(view) for view in page.items], page.next_cursor)
@@ -240,7 +249,9 @@ def build_decision_routes(
         # Sorted by the instant itself: the rendered string drops a zero fraction, so two renderings do not compare as
         # their instants do. The cursor carries the rendered triple, which `paginate` locates and never compares.
         entries: list[tuple[tuple[datetime, str, str], tuple[str, str, str], dict[str, object]]] = []
-        for view in decisions.decision_journal(category=None, verdict=None, project_uid=project_uid):
+        for view in decisions.decision_journal(
+            category=None, verdict=None, project_uid=project_uid, execution_statuses=None
+        ):
             at = timestamp(view.recorded_at)
             entries.append(((_aware(view.recorded_at), "finding", view.decision_id), (at, "finding", view.decision_id), {
                 "kind": "finding", "occurred_at": at, "finding": decision_record_body(view),

@@ -24,6 +24,8 @@ export type {
   ProposalSetChooserProps,
 } from './ui/optimisation-proposals';
 export {
+  EXPORT_CSV_LABEL,
+  EXPORT_XLSX_LABEL,
   OptimisationByDocument,
   ExportProposalsView,
   OptimisationProposals,
@@ -31,8 +33,8 @@ export {
   ProposalSetChooser,
   classifiedDocumentSets,
 } from './ui/optimisation-proposals';
-export type { PassSummaryProps } from './ui/pass-summary';
-export { PassSummary } from './ui/pass-summary';
+export type { PassMenuProps, PassSummaryProps } from './ui/pass-summary';
+export { PassMenu, PassSummary } from './ui/pass-summary';
 export type { ProposalTableProps } from './ui/proposal-table';
 export { ProposalTable } from './ui/proposal-table';
 export type {
@@ -50,6 +52,7 @@ export type {
   ProposalHistoryProps,
   ProposalListProps,
   ProposalListViewProps,
+  ProposalTotalProps,
   SheetDocument,
 } from './ui/proposal-list';
 export {
@@ -59,4 +62,5 @@ export {
   ProposalHistoryPanelView,
   ProposalList,
   ProposalListView,
+  ProposalTotal,
 } from './ui/proposal-list';

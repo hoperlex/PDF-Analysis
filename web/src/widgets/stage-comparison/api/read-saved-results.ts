@@ -27,21 +27,21 @@ export async function readSavedResult(runId: RunId, versionUid: VersionUid, sign
       if (++pages > 1000) throw new SavedResultReadError('Достигнут предел 1000 страниц списка. Неполное сравнение не построено.');
       const page = (await listRunFindings({ path: { run_id: runId }, query: { limit: 100, ...(cursor === undefined ? {} : { cursor }) } }, { signal })).data;
       for (const row of page.items) {
-        if (row.run_id !== runId || row.version_uid !== versionUid || row.project_uid !== before.project_uid || ids.has(row.finding_uid)) throw new SavedResultReadError('Идентичность находок изменилась или повторилась при чтении. Обновите данные и повторите.');
+        if (row.run_id !== runId || row.version_uid !== versionUid || row.project_uid !== before.project_uid || ids.has(row.finding_uid)) throw new SavedResultReadError('Идентичность замечаний изменилась или повторилась при чтении. Обновите данные и повторите.');
         for (const observation of [row.observation, ...(row.merged_observations ?? [])]) {
           if (observation.run_id !== runId || observationIds.has(observation.finding_observation_id)) throw new SavedResultReadError('Исходное или объединённое наблюдение относится к другому прогону либо повторяется. Сравнение не построено.');
           observationIds.add(observation.finding_observation_id);
         }
         ids.add(row.finding_uid); findings.push(row); account(row);
-        if (findings.length > MAX_FINDINGS) throw new SavedResultReadError('Получено более 20000 находок. Неполное сравнение не построено.');
+        if (findings.length > MAX_FINDINGS) throw new SavedResultReadError('Получено более 20000 замечаний. Неполное сравнение не построено.');
       }
       progress(findings.length);
       const next = page.page.next_cursor;
       if (next === null || next === undefined) break;
-      if (visited.has(next)) throw new SavedResultReadError('Повторился курсор списка находок. Полное чтение не подтверждено.');
+      if (visited.has(next)) throw new SavedResultReadError('Повторился курсор списка замечаний. Полное чтение не подтверждено.');
       visited.add(next); cursor = next;
     }
-    if (findings.length !== before.published_finding_count) throw new SavedResultReadError('Число полученных находок не совпадает с сохранённым итогом прогона. Обновите данные и повторите.');
+    if (findings.length !== before.published_finding_count) throw new SavedResultReadError('Число полученных замечаний не совпадает с сохранённым итогом прогона. Обновите данные и повторите.');
   }
   let extended: SavedResultSide['extended'] = null;
   let extendedUnavailable = false;

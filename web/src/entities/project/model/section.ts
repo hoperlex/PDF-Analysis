@@ -160,7 +160,7 @@ export class UnknownProjectSectionError extends Error {
   readonly code: string;
 
   constructor(code: string) {
-    super(`Раздел проекта: код ${code} вне каталога этой версии приложения.`);
+    super(`Раздел объекта: код ${code} вне каталога этой версии приложения.`);
     this.name = 'UnknownProjectSectionError';
     this.code = code;
   }

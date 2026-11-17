@@ -44,3 +44,12 @@ export { VerdictBadge } from './ui/verdict-badge';
 export { carriedFromMark } from './model/carried-from';
 export type { CarriedMarkProps } from './ui/carried-mark';
 export { CarriedMark } from './ui/carried-mark';
+
+/**
+ * `UIP-S06-01`: the decision field (✓, ✕, «Причина», the line of the last press, a slot for a screen's further actions) and
+ * the one-glyph verdict mark (✓ green, ✕ red, a dash). Pure markup: the screen that uses them sends the decision.
+ */
+export type { DecisionIntent, DecisionNote, DecisionReasonControlProps } from './ui/decision-reason-control';
+export { DecisionReasonControl } from './ui/decision-reason-control';
+export type { VerdictMarkProps } from './ui/verdict-mark';
+export { VerdictMark } from './ui/verdict-mark';

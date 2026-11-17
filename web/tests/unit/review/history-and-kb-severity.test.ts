@@ -125,8 +125,8 @@ describe('the decision history shows the severity beside the verdict', () => {
 
   it('says whose severity it is, in words: the expert’s, decided with the verdict', () => {
     const markup = history([decisionEvent({ severity: 'economic' })]);
-    expect(visibleText(markup)).toContain('важность');
-    expect(markup).toContain('title="Важность, решённая экспертом"');
+    expect(visibleText(markup)).toContain('критичность');
+    expect(markup).toContain('title="Критичность, решённая экспертом"');
   });
 
   it('puts it after the verdict and before the time and the author', () => {
@@ -194,7 +194,7 @@ describe('the decision history shows the severity beside the verdict', () => {
       }),
     ]);
     expect(markup).toContain('data-history-fault="closed-vocabulary"');
-    expect(markup).toContain('важность');
+    expect(markup).toContain('критичность');
     expect(markup).not.toContain('class="am-history__event"');
     expect(markup).not.toContain('Проверенное решение.');
     expect(markup).not.toContain('urgent');
@@ -237,7 +237,7 @@ describe('an event without a severity renders the markup it always rendered', ()
     const markup = history([decisionEvent()]);
     expect(markup).not.toContain('data-severity');
     expect(markup).not.toContain('data-decided-severity');
-    expect(markup).not.toContain('важность');
+    expect(markup).not.toContain('критичность');
     expect(markup).not.toContain('am-badge');
   });
 });
@@ -255,8 +255,8 @@ describe('the knowledge base shows the severity beside the verdict', () => {
 
   it('says whose severity it is, in words', () => {
     const markup = base([record({ severity: 'operational' })]);
-    expect(visibleText(markup)).toContain('важность');
-    expect(markup).toContain('title="Важность, решённая экспертом"');
+    expect(visibleText(markup)).toContain('критичность');
+    expect(markup).toContain('title="Критичность, решённая экспертом"');
   });
 
   it('puts it in the heading, after the verdict and before the event type', () => {
@@ -300,7 +300,7 @@ describe('the knowledge base shows the severity beside the verdict', () => {
   it('shows a value outside the closed set as the badge’s fault, not as a blank or as a word', () => {
     const markup = base([record({ severity: 'urgent' as Severity })]);
     expect(markup).toContain('data-closed-vocabulary-fault="severity"');
-    expect(markup).toContain('Неизвестная важность');
+    expect(markup).toContain('Неизвестная критичность');
     // The machine value may sit on a `data-` attribute; no reader sees it there.
     expect(visibleText(markup).join(' ')).not.toContain('urgent');
   });
@@ -321,7 +321,7 @@ describe('a record without a severity renders the markup it always rendered', ()
   it('adds no badge, no label and no data attribute to the legacy markup', () => {
     const markup = base([record()]);
     expect(markup).not.toContain('data-severity');
-    expect(markup).not.toContain('важность');
+    expect(markup).not.toContain('критичность');
     expect(markup).not.toContain('am-badge');
   });
 });

@@ -227,7 +227,7 @@ describe('the report in words', () => {
       new ApiError(
         409,
         {
-          contract_version: '1.55.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-1', retryable: false,
+          contract_version: '1.57.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-1', retryable: false,
           details: { aggregate_type: 'OptimisationPass', conflict_reason: reason },
         },
         'cid-1',
@@ -283,6 +283,41 @@ describe('the export beside it', () => {
       }),
     );
     expect(both).toContain('data-proposal-decision-carryover');
+  });
+});
+
+describe('the control in the top row (`UIP-S09-02`)', () => {
+  it('changes its place and nothing else: its button, its confirmation step and its report stand whole in the row', () => {
+    const [source] = carrySources(passes, open);
+    const states = [
+      { confirming: null, report: null, failure: null },
+      { confirming: source ?? null, report: null, failure: null },
+      { confirming: null, report: report(), failure: null },
+      { confirming: null, report: null, failure: 'Нельзя переносить решения прохода в него же.' },
+    ];
+    for (const state of states) {
+      const props = {
+        sources: carrySources(passes, open), pending: false, onAsk: noop, onConfirm: noop, onCancel: noop, ...state,
+      };
+      const alone = renderToStaticMarkup(createElement(CarryOverProposalDecisionsView, props));
+      const inRow = renderToStaticMarkup(
+        createElement(ExportProposalsView, {
+          pending: false, failure: null, onDownload: noop, onDownloadXlsx: noop,
+          carryOverControl: createElement(CarryOverProposalDecisionsView, props),
+        }),
+      );
+      expect(inRow).toContain(alone);
+      expect(inRow.indexOf(alone)).toBeGreaterThan(inRow.indexOf('data-proposals-files'));
+    }
+  });
+
+  it('is not in the row where no earlier version has a pass: nothing is drawn for it', () => {
+    const none = renderToStaticMarkup(
+      createElement(CarryOverProposalDecisionsView, {
+        sources: [], confirming: null, pending: false, report: null, failure: null, onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    );
+    expect(none).toBe('');
   });
 });
 

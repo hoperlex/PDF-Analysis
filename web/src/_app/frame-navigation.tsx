@@ -18,32 +18,40 @@
  * renders the frame once sees all three. A hidden state is `display: none`, which also takes it
  * out of the accessibility tree and the tab order.
  *
- * ## The project is carried (`R-150c`)
+ * ## The object is carried (`R-150c`, `UIP-G-06`)
  *
- * The project the address names (`?project=` on an optional or global screen, the path on a
- * required one) rides on every link whose target may take it: `withProjectParam` adds it to an
- * optional or global screen and leaves a required one alone. The address stays the only source
- * of the project; the links are rewritten from it on each render, so the choice outlives a click.
+ * The object the address names (`?project=` on an optional or global screen, the path on a required one) rides on every link
+ * whose target may take it: `withProjectParam` adds it to an optional or global screen and leaves a required one alone. The
+ * explicit «Все объекты» (`?project=all`) rides the same way, so the choice outlives a click instead of letting the
+ * account's last object come back on the next screen. The account's last object (`useCurrentProject`, on a screen that
+ * follows the object) is **not** carried: it is the next screen's own default, and writing it into every link would turn a
+ * default into a choice. The address stays the only source of an explicit choice; the links are rewritten from it on each
+ * render, so the choice outlives a click.
  *
- * ## «Проект» or «Проекты», first in «Работа» (`R-153h`)
+ * ## «Объект» or «Объекты», third in «Работа» (`R-153h`, `UIP-G-07`)
  *
- * The first item of «Работа» depends on the project the address names: «Проект», linking to that project's page, when
- * one is current, and «Проекты», linking to the list, when none is. It is not a registry row of the menu (the registry
- * holds both screens with `inMenu: false`; the top strip's selector is unchanged): `buildNavigation` carries it as the
+ * «Работа» opens with «Главная» and «Дашборд»; the item after them depends on the object that is current: «Объект», linking to
+ * that object's page, when one is, and «Объекты», linking to the list, when none is. It is not a registry row of the menu (the
+ * registry holds both screens with `inMenu: false`; the top strip's selector is unchanged): `buildNavigation` carries it as the
  * navigation's `projectEntry`, decided by `screenDecision` like every row, and {@link FrameNavigationView} turns it into
  * an item with `withProjectEntry` from the `projectUid` it is given — so the bar, the compact rail and the stacked menu
- * draw the same first item, and it is `aria-current="page"` on the page it leads to. Like a required target it takes no
+ * draw the same item, and it is `aria-current="page"` on the page it leads to. Like a required target it takes no
  * `?project=`; the list takes the parameter it is given, as the other global screens do.
  *
- * ## The project's sections (`UI-A-04`, `R-153g`)
+ * ## The object's sections (`UI-A-04`, `R-153g`, `UIP-G-07`)
  *
- * Under the current project only, a «Разделы» group follows «Работа»: one link per section of that project, the ones
- * with no document too (a muted 0, no red badge), with its mark and a count badge, leading to the section page (`section-navigation.ts`). It is
- * the same disclosure as the other groups, closed unless a section page is the one shown. Its button carries the group's own counters (`D-360`): the red sum of the sections' «не проверено экспертом» and, in grey,
- * the documents it lists, through the `Disclosure`'s `badge` slot, so they are seen while it is folded. With no project in the
- * address the group is not drawn, and `FrameNavigation` makes no read; with one, `use-section-navigation.ts` reads
- * the dashboard's summary of that project. {@link FrameNavigationView} takes the group's content as data
- * (`sections`), so every state of it is drawn without a query client.
+ * A «Разделы» group follows «Работа» **always** (for a session that may open the section page): one link per section of the
+ * current object, the ones with no document too (a muted 0, no red badge), each with the dot of its colour (`SectionDot`), its
+ * code and its counters, leading to the section page (`section-navigation.ts`). It is the same disclosure as the other groups,
+ * closed unless a section page is the one shown. Its button carries the group's own counters (`D-360`): the red sum of the
+ * sections' «не проверено экспертом» and, in grey, the documents it lists, through the `Disclosure`'s `badge` slot, so they are
+ * seen while it is folded. The object is the one `useCurrentProject` names: the address's, or on a screen that follows the
+ * object the account's last one. With none («Все объекты», chosen or not) the group has one row, «Выберите объект», and no
+ * sections; with one, `use-section-navigation.ts` reads the dashboard's summary of it. {@link FrameNavigationView} takes the
+ * group's content as data (`sections`), so every state of it is drawn without a query client.
+ *
+ * Without a query client (a bare render of the frame) nothing can be read, neither the account nor the sections: the object is
+ * the address's alone, and the group is drawn only for the state that needs no read.
  *
  * ## Counters beside the items (`UI-A-05`, `UI-A-06`, `UI-A-91`)
  *
@@ -72,10 +80,12 @@ import { Fragment, useContext, useId, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-import { readProjectContext, withProjectParam } from '@/shared/lib';
+import { HOME_SCREEN } from '@/shared/config';
+import { ALL_PROJECTS_PARAM, readProjectContext, withProjectParam } from '@/shared/lib';
+import type { ProjectSource } from '@/shared/lib';
 import type { DisclosureBadge, DisclosureProps } from '@/shared/ui';
 import { Disclosure } from '@/shared/ui';
-import { looksLikeProjectUid } from '@/entities/project';
+import { SectionDot, looksLikeProjectUid, useCurrentProject } from '@/entities/project';
 
 import type { MenuBadge, MenuBadgeSource, MenuBadges } from './menu-badges';
 import { badgeSourceAt, badgeSourcesOf, itemLabelWithBadges, uncheckedBadges, uncheckedClause } from './menu-badges';
@@ -85,8 +95,8 @@ import { BadgedLinks, ItemBadges, RailBadges } from './navigation-badges';
 import { NavigationGlyph } from './navigation-glyph';
 import type { SectionNavigation } from './section-navigation';
 import {
-  SECTIONS_DOCUMENTS_LABEL, SECTIONS_FAILED_NOTE, SECTIONS_GROUP_LABEL, SECTIONS_LOADING_NOTE, sectionEntryLabel,
-  sectionsSummary, sectionsSummaryLabel,
+  SECTIONS_DOCUMENTS_LABEL, SECTIONS_FAILED_NOTE, SECTIONS_GROUP_LABEL, SECTIONS_LOADING_NOTE, SECTIONS_NO_OBJECT_NOTE,
+  sectionEntryLabel, sectionsSummary, sectionsSummaryLabel,
 } from './section-navigation';
 import { useMenuBadges } from './use-menu-badges';
 import { useSectionNavigation } from './use-section-navigation';
@@ -105,9 +115,19 @@ export interface FrameNavigationViewProps {
   readonly navigation: Navigation;
   /** The browser's pathname; `null` when it is not known, and then nothing is marked. */
   readonly pathname: string | null;
-  /** The project the address names (`R-150c`), carried onto the links that may take it. Absent or `null`: none. */
+  /**
+   * The object that is current (`R-150c`, `UIP-G-06`): the address's, or on a screen that follows the object the account's
+   * last one. The project entry and the counters of «База знаний» follow it; it is carried onto the links that may take it
+   * unless `carriedProject` says otherwise. Absent or `null`: none.
+   */
   readonly projectUid?: string | null | undefined;
-  /** `UI-A-04`: the «Разделы» group's content for the current project. Absent: the group is not drawn. */
+  /**
+   * What rides on the links as `?project=`: an object's uid, {@link ALL_PROJECTS_PARAM} for the explicit «Все объекты»
+   * (`UIP-G-07`), `null` for nothing. Absent: `projectUid`. It differs from `projectUid` when the object is only the
+   * account's last one, which the next screen defaults to by itself, or when the address chose «Все объекты».
+   */
+  readonly carriedProject?: string | null | undefined;
+  /** `UI-A-04`, `UIP-G-07`: the «Разделы» group's content for the current object. Absent: the group is not drawn. */
   readonly sections?: SectionNavigation | undefined;
   /**
    * `UI-A-06`, `UI-A-91`: the counters beside the items, by the item's address. Absent: this render is not told of any,
@@ -126,9 +146,9 @@ export interface FrameNavigationViewProps {
 const NO_BADGES: readonly MenuBadge[] = [];
 const NO_SOURCES: ReadonlySet<MenuBadgeSource> = new Set();
 
-function links(group: NavigationGroup, current: CurrentScreen | null, projectUid: string | null) {
+function links(group: NavigationGroup, current: CurrentScreen | null, carried: string | null) {
   return group.items.map((item) => ({
-    href: withProjectParam(item.address, projectUid),
+    href: withProjectParam(item.address, carried),
     label: item.label,
     icon: <NavigationGlyph label={item.label} />,
     current: itemIsCurrent(item, current),
@@ -146,17 +166,17 @@ function groupOf(
   common: GroupCommon,
   group: NavigationGroup,
   current: CurrentScreen | null,
-  projectUid: string | null,
+  carried: string | null,
   badges: MenuBadges | undefined,
 ): ReactNode {
   if (badges !== undefined && group.items.some((item) => badgeSourceAt(item.address) !== null)) {
     return (
       <Group {...common}>
-        <BadgedLinks group={group} current={current} projectUid={projectUid} badges={badges} />
+        <BadgedLinks group={group} current={current} projectUid={carried} badges={badges} />
       </Group>
     );
   }
-  return <Group {...common} links={links(group, current, projectUid)} />;
+  return <Group {...common} links={links(group, current, carried)} />;
 }
 
 function RailLink({
@@ -215,15 +235,24 @@ function RailLink({
   );
 }
 
+/** The sentence a group with no list says: why there is none (`UIP-G-07`: no object; still reading; could not be read whole). */
+const SECTIONS_NOTES = {
+  none: SECTIONS_NO_OBJECT_NOTE,
+  loading: SECTIONS_LOADING_NOTE,
+  failed: SECTIONS_FAILED_NOTE,
+} as const;
+
 /**
  * What a «Разделы» group holds: the list, or the sentence that says why there is none. The list is every section of
- * the project (`R-153g`); one with no document shows a muted 0, no red badge, and links to its page like the others.
+ * the object (`R-153g`); one with no document shows a muted 0, no red badge, and links to its page like the others. Each
+ * link is the dot of the section's colour (`UIP-G-17`), its code, the red count of documents no expert has checked and the
+ * count of documents.
  */
 function SectionsPanel({ sections }: { readonly sections: SectionNavigation }) {
-  if (sections.status === 'loading' || sections.status === 'failed') {
+  if (sections.status !== 'ready') {
     return (
       <p className={styles.sectionNote} data-section-nav-status={sections.status}>
-        {sections.status === 'loading' ? SECTIONS_LOADING_NOTE : SECTIONS_FAILED_NOTE}
+        {SECTIONS_NOTES[sections.status]}
       </p>
     );
   }
@@ -238,6 +267,7 @@ function SectionsPanel({ sections }: { readonly sections: SectionNavigation }) {
             aria-current={entry.current ? 'page' : undefined}
             title={entry.name}
           >
+            <SectionDot code={entry.code} />
             <span className={styles.sectionMark}>{entry.abbr}</span>
             <ItemBadges badges={uncheckedBadges(entry.awaitingDecision)}>
               <span className={entry.count === 0 ? `${styles.sectionCount} ${styles.sectionCountEmpty}` : styles.sectionCount}>{entry.count}</span>
@@ -299,13 +329,14 @@ export function FrameNavigationView({
   navigation,
   pathname,
   projectUid = null,
+  carriedProject = projectUid,
   sections,
   badges,
   disclosure = Disclosure,
 }: FrameNavigationViewProps) {
   const Group = disclosure;
-  // `R-153h`: «Проект» or «Проекты» is the first item of «Работа», by the project the address names. One navigation for the
-  // bar, the compact rail and the stacked menu, so the item is in all three.
+  // `R-153h`, `UIP-G-07`: «Объект» or «Объекты» is the third item of «Работа», by the object that is current. One navigation
+  // for the bar, the compact rail and the stacked menu, so the item is in all three.
   const { groups } = withProjectEntry(navigation, projectUid);
   if (groups.length === 0) return null;
   const current = currentScreen(pathname);
@@ -318,7 +349,7 @@ export function FrameNavigationView({
       <div className={styles.row} data-nav-state="row">
         {groups.map((group) => (
           <Fragment key={group.group}>
-            {groupOf(Group, { label: group.label, current: inGroup(group), layout: 'inline', defaultOpen: true, closeOnNavigate: false, closeOnOutside: false }, group, current, projectUid, badges)}
+            {groupOf(Group, { label: group.label, current: inGroup(group), layout: 'inline', defaultOpen: true, closeOnNavigate: false, closeOnOutside: false }, group, current, carriedProject, badges)}
             {sections !== undefined && afterGroup(group) ? sectionsGroup(Group, sections, true) : null}
           </Fragment>
         ))}
@@ -332,7 +363,7 @@ export function FrameNavigationView({
                 return (
                   <RailLink
                     key={item.address}
-                    href={withProjectParam(item.address, projectUid)}
+                    href={withProjectParam(item.address, carriedProject)}
                     label={itemLabelWithBadges(item.label, own)}
                     wrapTooltip={own.length > 0}
                     glyph={<NavigationGlyph label={item.label} />}
@@ -352,7 +383,7 @@ export function FrameNavigationView({
                       href={entry.href}
                       label={sectionEntryLabel(entry)}
                       tooltipText={`${entry.name}: ${entry.count}${unchecked === null ? '' : `, ${unchecked}`}`}
-                      glyph={<span data-nav-glyph="section" aria-hidden="true">{entry.abbr}</span>}
+                      glyph={<span className={styles.railSection} data-nav-glyph="section" aria-hidden="true"><SectionDot code={entry.code} />{entry.abbr}</span>}
                       badges={uncheckedBadges(entry.awaitingDecision)}
                       current={entry.current}
                     />
@@ -369,7 +400,7 @@ export function FrameNavigationView({
             {groups.map((group) => (
               <Fragment key={group.group}>
                 <li className={styles.stackedItem}>
-                  {groupOf(Group, { label: group.label, layout: 'inline', current: inGroup(group), closeOnNavigate: false }, group, current, projectUid, badges)}
+                  {groupOf(Group, { label: group.label, layout: 'inline', current: inGroup(group), closeOnNavigate: false }, group, current, carriedProject, badges)}
                 </li>
                 {sections !== undefined && afterGroup(group) ? <li className={styles.stackedItem}>{sectionsGroup(Group, sections, false)}</li> : null}
               </Fragment>
@@ -383,48 +414,116 @@ export function FrameNavigationView({
 
 const NO_PARAMS = new URLSearchParams();
 
-interface ConnectedProps {
+/**
+ * What the frame knows of the object that is current: its uid (`null` for «Все объекты»), where it came from, and whether
+ * the account's last object, which the address's silence leaves to `getMe`, is still on its way.
+ */
+interface CurrentObject {
+  readonly projectUid: string | null;
+  readonly source: ProjectSource;
+  readonly pending: boolean;
+}
+
+const NO_OBJECT: CurrentObject = { projectUid: null, source: 'none', pending: false };
+
+/**
+ * What rides on the links (`R-150c`, `UIP-G-07`): the object the address names (`path`, `query`), or the explicit «Все объекты»
+ * as {@link ALL_PROJECTS_PARAM}; never the account's last object, which is the next screen's own default.
+ */
+function carriedOf(object: CurrentObject): string | null {
+  if (object.source === 'all') return ALL_PROJECTS_PARAM;
+  return object.source === 'path' || object.source === 'query' ? object.projectUid : null;
+}
+
+/** The navigation as it is drawn, less the counters: what every connected layer below passes on to the view. */
+interface ViewData {
   readonly navigation: Navigation;
   readonly pathname: string | null;
   readonly projectUid: string | null;
-  /** The reads the menu's counters need (`badgeSourcesOf`); never empty here. */
-  readonly sources: ReadonlySet<MenuBadgeSource>;
+  readonly carriedProject: string | null;
   readonly sections?: SectionNavigation | undefined;
 }
 
-/** The frame's navigation with its counters read: mounted only where there is a query client and an item that carries one. */
-function FrameNavigationWithBadges({ navigation, pathname, projectUid, sources, sections }: ConnectedProps) {
-  // `R-150c`: «База знаний» follows the header's project, which the address names; the other counters are global.
-  const badges = useMenuBadges(sources, projectUid);
-  return <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} sections={sections} badges={badges} />;
+/** The reads the menu's counters need (`badgeSourcesOf`); never empty where {@link FrameNavigationWithBadges} is mounted. */
+interface WithSources extends ViewData {
+  readonly sources: ReadonlySet<MenuBadgeSource>;
 }
 
-/** The frame's navigation with the project's «Разделы» read: mounted only where the group is offered. */
-function FrameNavigationWithSections({
-  navigation,
-  pathname,
-  projectUid,
-  sources,
-}: Omit<ConnectedProps, 'pathname' | 'projectUid' | 'sections'> & { readonly pathname: string; readonly projectUid: string }) {
-  const sections = useSectionNavigation(projectUid, pathname);
+/** The frame's navigation with its counters read: mounted only where there is a query client and an item that carries one. */
+function FrameNavigationWithBadges({ sources, ...view }: WithSources) {
+  // `R-150c`: «База знаний» follows the header's object (the one the screen shows), the other counters are global.
+  const badges = useMenuBadges(sources, view.projectUid);
+  return <FrameNavigationView {...view} badges={badges} />;
+}
+
+/** The view, with the counters read when the session's menu holds an item that carries one. */
+function FrameNavigationCounted({ sources, ...view }: WithSources) {
   return sources.size === 0
-    ? <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} sections={sections} />
-    : <FrameNavigationWithBadges navigation={navigation} pathname={pathname} projectUid={projectUid} sections={sections} sources={sources} />;
+    ? <FrameNavigationView {...view} />
+    : <FrameNavigationWithBadges sources={sources} {...view} />;
+}
+
+/** The frame's navigation with the object's «Разделы» read: mounted only where the group is offered and the object is one. */
+function FrameNavigationWithSections({ projectUid, ...rest }: Omit<WithSources, 'projectUid'> & { readonly projectUid: string }) {
+  const sections = useSectionNavigation(projectUid, rest.pathname);
+  return <FrameNavigationCounted {...rest} projectUid={projectUid} sections={sections} />;
+}
+
+interface ConnectedProps {
+  readonly navigation: Navigation;
+  readonly pathname: string | null;
+  readonly object: CurrentObject;
+  readonly offersSections: boolean;
+  /** Whether there is a query client: the counters, the account's last object and the sections are read only where there is. */
+  readonly connected: boolean;
+}
+
+/** One navigation for one current object: decides what the «Разделы» group has to say, and mounts the reads it needs. */
+function FrameNavigationOfObject({ navigation, pathname, object, offersSections, connected }: ConnectedProps) {
+  const { projectUid } = object;
+  const view: WithSources = {
+    navigation,
+    pathname,
+    projectUid,
+    carriedProject: carriedOf(object),
+    sources: connected ? badgeSourcesOf(navigation) : NO_SOURCES,
+  };
+  if (!offersSections) return <FrameNavigationCounted {...view} />;
+  // An object the address spells as no uid has no sections the group could name; the page itself says so. The account's last
+  // object is still on its way: say so, and read nothing.
+  if (object.pending) return <FrameNavigationCounted {...view} sections={{ status: 'loading' }} />;
+  if (projectUid === null || !looksLikeProjectUid(projectUid)) return <FrameNavigationCounted {...view} sections={{ status: 'none' }} />;
+  // The sections are read from the dashboard's summary, which needs a query client; without one the group has nothing to say.
+  return connected
+    ? <FrameNavigationWithSections {...view} projectUid={projectUid} />
+    : <FrameNavigationCounted {...view} />;
+}
+
+/** No query client (a bare render of the frame): the object is the address's alone, and nothing is read. */
+function FrameNavigationOfAddress({ navigation, offersSections }: Omit<FrameNavigationProps, 'offersSections'> & { readonly offersSections: boolean }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams() ?? NO_PARAMS;
+  const object: CurrentObject = pathname === null ? NO_OBJECT : { ...readProjectContext(pathname, searchParams), pending: false };
+  return <FrameNavigationOfObject navigation={navigation} pathname={pathname} object={object} offersSections={offersSections} connected={false} />;
+}
+
+/** With a query client: the object is `useCurrentProject`'s, the address's or, on a screen that follows the object, the account's last. */
+function FrameNavigationOfCurrentProject({ navigation, offersSections }: Omit<FrameNavigationProps, 'offersSections'> & { readonly offersSections: boolean }) {
+  const pathname = usePathname();
+  const current = useCurrentProject(HOME_SCREEN);
+  // A frame that does not know its address (a render outside the app router) names no object.
+  const object: CurrentObject = pathname === null ? NO_OBJECT : current;
+  return <FrameNavigationOfObject navigation={navigation} pathname={pathname} object={object} offersSections={offersSections} connected />;
 }
 
 export function FrameNavigation({ navigation, offersSections = false }: FrameNavigationProps) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams() ?? NO_PARAMS;
-  const projectUid = pathname === null ? null : readProjectContext(pathname, searchParams).projectUid;
-  // The counters are read only where there is a query client (the application's root layout always has one; a bare
-  // render of the frame, as the shell's tests make, does not) and only for the items this session's menu holds.
+  // The reads are made only where there is a query client (the application's root layout always has one; a bare render of
+  // the frame, as the shell's tests make, does not) and the counters only for the items this session's menu holds.
   const client = useContext(QueryClientContext);
-  const sources = client === undefined ? NO_SOURCES : badgeSourcesOf(navigation);
-  // The group needs a current project the section pages can name; a malformed uid is the page's own refusal to say.
-  if (offersSections && pathname !== null && projectUid !== null && looksLikeProjectUid(projectUid)) {
-    return <FrameNavigationWithSections navigation={navigation} pathname={pathname} projectUid={projectUid} sources={sources} />;
-  }
-  return sources.size === 0
-    ? <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} />
-    : <FrameNavigationWithBadges navigation={navigation} pathname={pathname} projectUid={projectUid} sources={sources} />;
+  // A session with no menu (a guest, a default credential, an incomplete profile, an account with no role) draws nothing and
+  // so asks for nothing: not the account's last object, not a counter.
+  if (navigation.groups.length === 0 && navigation.projectEntry === undefined) return null;
+  return client === undefined
+    ? <FrameNavigationOfAddress navigation={navigation} offersSections={offersSections} />
+    : <FrameNavigationOfCurrentProject navigation={navigation} offersSections={offersSections} />;
 }

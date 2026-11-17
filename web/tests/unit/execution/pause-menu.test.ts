@@ -37,10 +37,10 @@ import { newClient } from '../screens/harness';
 
 const BADGE = 'Векторы на паузе';
 const TRIGGER = 'Пауза▾';
-const QUEUE_ITEM = 'Выдача анализа — приостановить';
-const QUEUE_ITEM_RESUME = 'Выдача анализа — возобновить';
-const VECTORS_ITEM = 'Векторы — приостановить';
-const VECTORS_ITEM_RESUME = 'Векторы — возобновить';
+const QUEUE_ITEM = 'Выдача анализа — пауза';
+const QUEUE_ITEM_RESUME = 'Выдача анализа — продолжить';
+const VECTORS_ITEM = 'Векторы — пауза';
+const VECTORS_ITEM_RESUME = 'Векторы — продолжить';
 const RUNNING = { paused: false, changed_at: '2026-11-05T10:00:00Z' };
 const STOPPED = { paused: true, changed_at: '2026-11-05T10:00:00Z' };
 
@@ -109,8 +109,8 @@ describe('one button, not two', () => {
     expect(markup).toContain(QUEUE_ITEM_RESUME);
     expect(markup).toContain(VECTORS_ITEM_RESUME);
     // The old pair of buttons, one per state, is gone.
-    expect(markup).not.toContain('>Возобновить</button>');
-    expect(markup).not.toContain('>Приостановить</button>');
+    expect(markup).not.toContain('>Продолжить</button>');
+    expect(markup).not.toContain('>Пауза</button>');
   });
 
   it('opening the button shows the menu; choosing an item closes it again', async () => {
@@ -147,8 +147,8 @@ describe('the badge «Векторы на паузе» exists only during a paus
       status: RUNNING, failed: false, mayToggle: false, asking: false, busy: false, error: null,
       onAsk: () => {}, onConfirm: () => {}, onCancel: () => {}, vectors: { kind: 'read', paused: true, since },
     } satisfies PauseStatusViewProps));
-    expect(view('2026-11-11T09:00:00Z')).toMatch(/title="Векторы на паузе с \d{2}:\d{2}; прецеденты новых находок появятся после возобновления"/);
-    expect(view(undefined)).toContain('title="Векторы на паузе; прецеденты новых находок появятся после возобновления"');
+    expect(view('2026-11-11T09:00:00Z')).toMatch(/title="Векторы на паузе с \d{2}:\d{2}; прецеденты новых замечаний появятся после возобновления"/);
+    expect(view(undefined)).toContain('title="Векторы на паузе; прецеденты новых замечаний появятся после возобновления"');
   });
 
   it('does not touch the queue badge: that one still links to «Очередь» and is its own', async () => {
@@ -197,9 +197,9 @@ describe('each item calls its own operation', () => {
     const strip_ = await strip(seeded(['admin']));
     await strip_.press(TRIGGER);
     await strip_.press(QUEUE_ITEM);
-    expect(strip_.markup()).toContain('Приостановить выдачу задач?');
+    expect(strip_.markup()).toContain('Поставить выдачу задач на паузу?');
     expect(setExecutionPaused).not.toHaveBeenCalled();
-    await strip_.press('Приостановить');
+    await strip_.press('Пауза');
     expect(setExecutionPaused).toHaveBeenCalledTimes(1);
     expect(setExecutionPaused).toHaveBeenCalledWith({ body: { paused: true }, idempotencyKey: expect.stringMatching(/\S+/) });
     expect(setVectorPaused).not.toHaveBeenCalled();
@@ -238,7 +238,7 @@ describe('each item calls its own operation', () => {
 
   it('a refused command shows the refusal and keeps its key for the retry; a new intent gets a new key', async () => {
     const refusal = new ApiError(403, {
-      contract_version: '1.55.0', error_code: 'permission_denied', message: 'no', correlation_id: 'vector-refused', retryable: false,
+      contract_version: '1.57.0', error_code: 'permission_denied', message: 'no', correlation_id: 'vector-refused', retryable: false,
     }, 'vector-refused');
     vi.mocked(setVectorPaused).mockRejectedValueOnce(refusal);
     const strip_ = await strip(seeded(['admin']));
@@ -258,7 +258,7 @@ describe('each item calls its own operation', () => {
 
   it('an unread state of the vectors offers no switch: nothing is sent from a state nobody read', async () => {
     vi.mocked(getVectorControl).mockRejectedValue(new ApiError(503, {
-      contract_version: '1.55.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'vector-down', retryable: true,
+      contract_version: '1.57.0', error_code: 'dependency_unavailable', message: 'down', correlation_id: 'vector-down', retryable: true,
     }, 'vector-down'));
     const client = seeded(['admin'], RUNNING, null);
     const strip_ = await strip(client);

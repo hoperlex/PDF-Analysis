@@ -8,7 +8,7 @@
  * `force-dynamic` because the guard reads a cookie, and a screen served from a cache is a
  * screen showing somebody else's session.
  *
- * **Old addresses keep working (`HOSTS-WEB-01`).** «Исполнители» has two tabs, «Серверы» and «Модели по этапам»; the former
+ * **Old addresses keep working (`HOSTS-WEB-01`).** «Диспетчер» has two tabs, «Серверы» and «Модели по этапам»; the former
  * tabs «Подключения», «Группы», «Правила», «Назначения» and «Процессы» are on `/workers/advanced`. An address that names one
  * of them (`?tab=connections`), or a connection for the key form (`?connection=`, where the BFF's `executor-secret` door sends
  * the person back with how the last key post ended, `?secret=`), is redirected there with its parameters; the key form itself

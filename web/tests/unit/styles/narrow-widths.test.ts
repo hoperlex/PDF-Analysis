@@ -32,6 +32,19 @@ export function declares(css: string, selector: string, property: string, value:
   );
 }
 
+/**
+ * Whether the page heading keeps its floor in `min-width` and nothing in its flex basis. A basis is a length along the main
+ * axis, so a length there (`flex: 1 1 18rem`) is a HEIGHT where a screen stacks its header in a column: the «Назначения» hero
+ * stood 288 px of empty space taller (UIP-G-11). `0%` is no length in a row and sizes by content in a column of auto height.
+ */
+export function keepsHeadingFloorOffTheBasis(css: string): boolean {
+  const heading = '.am-page__header > :first-child';
+  return (
+    declares(css, heading, 'flex', /^1 1 0%$/) &&
+    declares(css, heading, 'min-width', /^min\(18rem, 100%\)$/)
+  );
+}
+
 const globals = readFileSync(GLOBALS, 'utf8');
 
 describe('the shared stylesheets keep a screen inside 390 px', () => {
@@ -47,8 +60,24 @@ describe('the shared stylesheets keep a screen inside 390 px', () => {
 
   it('wraps the page header and lets its heading shrink below its content', () => {
     expect(declares(globals, '.am-page__header', 'flex-wrap', /^wrap$/)).toBe(true);
-    expect(declares(globals, '.am-page__header > :first-child', 'min-width', /^0$/)).toBe(true);
+    // A floor that is a length (`min(18rem, 100%)`), not `auto`: the content's width never holds the heading up.
+    expect(declares(globals, '.am-page__header > :first-child', 'min-width', /^min\(18rem, 100%\)$/)).toBe(true);
     expect(declares(globals, '.am-page__title', 'overflow-wrap', /anywhere/)).toBe(true);
+  });
+
+  it('can fail: tells a heading floor kept in the flex basis from one kept in `min-width`', () => {
+    const heading = '.am-page__header > :first-child';
+    const old = `${heading} { flex: 1 1 18rem; min-width: 0; }`;
+    const fixed = `${heading} { flex: 1 1 0%; min-width: min(18rem, 100%); }`;
+    expect(keepsHeadingFloorOffTheBasis(old)).toBe(false);
+    expect(keepsHeadingFloorOffTheBasis(fixed)).toBe(true);
+    expect(keepsHeadingFloorOffTheBasis(`${heading} { flex: 1 1 288px; min-width: min(18rem, 100%); }`)).toBe(false);
+    expect(keepsHeadingFloorOffTheBasis(`${heading} { flex: 1 1 0%; min-width: 0; }`)).toBe(false);
+    expect(keepsHeadingFloorOffTheBasis('.other { flex: 1 1 0%; min-width: min(18rem, 100%); }')).toBe(false);
+  });
+
+  it('keeps the heading\'s floor out of the flex basis, so a header stacked in a column is not 288 px taller', () => {
+    expect(keepsHeadingFloorOffTheBasis(globals)).toBe(true);
   });
 
   it('caps the page actions at the header\'s width so their links wrap inside them', () => {

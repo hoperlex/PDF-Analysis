@@ -1086,7 +1086,7 @@ const FINDINGS: readonly Finding[] = [
  * ONE ACCEPT PER `Severity` (`WEB-HOOKS-PER-FINDING-01`).
  *
  * `WEB-REVIEW-FOLLOWUPS-01` made the decision history and the knowledge base print the severity
- * the expert decided beside the verdict, as «важность» and the badge's Russian label. This
+ * the expert decided beside the verdict, as «критичность» and the badge's Russian label. This
  * guard rendered both screens with events that carried none, so the new wording was pinned by
  * that slice's own test and not here -- and, worse, `Severity` was not among the translated
  * schemas, so a raw `critical` printed in its place would have been read as contract
@@ -1139,7 +1139,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.55.0',
+    contract_version: '1.57.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1151,7 +1151,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.55.0',
+    contract_version: '1.57.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1282,7 +1282,7 @@ const KEYS = {
   journal: queryKeys.findings.journal({ limit: JOURNAL_PAGE_LIMIT }),
   executionQueue: queryKeys.execution.queue(),
   executionJournal: queryKeys.execution.journal(),
-  // `W54-WORKERS-WEB`: the «Исполнители» screen's first page.
+  // `W54-WORKERS-WEB`: the «Диспетчер» screen's first page.
   workers: queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT),
   // `EXEC-HTTP-01`: the list of «Подключения» and the routes of «Назначения». Each connection's
   // detail is seeded beside them by `seedExecutors`, under keys that depend on the connection.
@@ -1315,7 +1315,7 @@ const KEYS = {
   normParagraphs: queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, NORM_PARAGRAPH_PAGE_LIMIT),
   // `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's first page with no filter.
   normCatalogue: queryKeys.norms.catalogue(undefined, undefined, undefined, NORM_CATALOGUE_PAGE_LIMIT),
-  // `W61-DISPATCHER-01`: «Диспетчер»'s first page, the home screen's «Мои задачи», and one
+  // `W61-DISPATCHER-01`: «Назначения»'s first page, the home screen's «Мои задачи», and one
   // assignment's history.
   assignments: queryKeys.assignments.list({ limit: ASSIGNMENT_PAGE_LIMIT }),
   myTasks: queryKeys.assignments.list({ mine: true, limit: MY_TASKS_LIMIT }),
@@ -1367,7 +1367,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
    * TWO records, and the second one is not decoration.
    *
    * `W38-KB` put an English string in the knowledge base's SINGULAR branch -- "одно решение
-   * по находке" against "решений по находке: N" -- and this guard stayed GREEN, because the
+   * по замечанию" against "решений по замечанию: N" -- and this guard stayed GREEN, because the
    * one seeded record carried `decision_event_count: 2` and the singular arm was never
    * rendered. The mutation was sound; the coverage was not. Same shape as the empty-list
    * branch `W32-SEE` found and the four run states a wave-33 judge found: **a mutation that
@@ -2135,7 +2135,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.55.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.57.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2252,7 +2252,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         onSelect: () => undefined,
         renderRowActions: (row: { readonly current_verdict: Finding['current_verdict'] }) =>
           createElement(FindingRowActions, { verdict: row.current_verdict, sending: null, note: null, onAccept: () => undefined, onReject: () => undefined }),
-        renderExpansion: () => createElement('p', null, 'Открытая находка.'),
+        renderExpansion: () => createElement('p', null, 'Открытое замечание.'),
       })),
   },
   {
@@ -2994,7 +2994,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     }),
   },
   /*
-   * `W54-WORKERS-WEB`. The worker list's branches the «Исполнители» page reaches only from
+   * `W54-WORKERS-WEB`. The worker list's branches the «Диспетчер» page reaches only from
    * a page the cache states do not hold: a state outside the sealed set, an empty later
    * page, a page with no worker on line; and every sentence a queue or run row uses to name
    * (or not name) the worker holding a run.
@@ -3030,7 +3030,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     ),
   },
   /*
-   * `EXEC-HTTP-01`, moved by `HOSTS-WEB-01`. The former tabs of «Исполнители» are sections of the advanced page, rendered here
+   * `EXEC-HTTP-01`, moved by `HOSTS-WEB-01`. The former tabs of «Диспетчер» are sections of the advanced page, rendered here
    * as an administrator (the page opened on the section) and as an expert (the widget itself: the page is not an expert's),
    * with the key form opened for a connection; every outcome of the key post (the form is a
    * server component, so its eight sentences are rendered here on their own); a refused
@@ -3136,7 +3136,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     ])),
   },
   /*
-   * `HOSTS-WEB-01` (ADR-0028). «Исполнители» in two tabs, as the roles meet them: «Серверы» (the administrator with the
+   * `HOSTS-WEB-01` (ADR-0028). «Диспетчер» in two tabs, as the roles meet them: «Серверы» (the administrator with the
    * switch, the menu and the button; an expert with none; a viewer with the refusal; the empty list), what a row opens
    * («Подробнее» with the reasons a model is unavailable, «Удалить»), «Модели по этапам» (the table for both roles, the layout
    * switched off, none saved, the form), the window «Подключить сервер» on both its tabs and in each state of the install, and
@@ -4403,7 +4403,7 @@ const TRANSLATED_SCHEMAS = [
   'ProjectStage',
   'ProjectSection',
   // `WEB-HOOKS-PER-FINDING-01`: the severity the expert decided, said beside the verdict in the
-  // decision history and the knowledge base as «важность Критическое» (`SEVERITY_LABELS`), with
+  // decision history and the knowledge base as «критичность Критическое» (`SEVERITY_LABELS`), with
   // the contract value in `data-severity` only. Left out, `critical` printed in its place would
   // have been read as contract vocabulary and permitted.
   'Severity',
@@ -4423,7 +4423,7 @@ const TRANSLATED_SCHEMAS = [
   'ExecutorIdentityBasis',
   'ExecutorRateCheck',
   'ExecutorWorkKind',
-  // `HOSTS-SEAL-1` (ADR-0028): «Исполнители» and «Модели по этапам» say the state of a server, a model and a provider's login, the
+  // `HOSTS-SEAL-1` (ADR-0028): «Диспетчер» and «Модели по этапам» say the state of a server, a model and a provider's login, the
   // access, the effort and the row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. `review`,
   // `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid` and `online` are plain English words and must not be permitted bare.
   // `HOSTS-WEB-01` renders them (the markers are in `SCHEMA_MARKERS` below; `ModelProbeState` and `RunStartRoute` wait in `NOT_YET_ON_A_SCREEN`).
@@ -4653,7 +4653,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.55.0',
+            contract_version: '1.57.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4675,7 +4675,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.55.0',
+            contract_version: '1.57.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -5336,7 +5336,7 @@ const SCHEMA_MARKERS: readonly {
     attribute: 'data-readiness-route',
     why: '`widgets/run-list/ui/start-run-with-readiness.tsx` through `features/start-run/ui/readiness-line.tsx`: the line under «Запустить», «Набор: Только Claude · по подписке · …» on the layout\'s route and «Маршрут: прежний» on the old one.',
   },
-  // `HOSTS-WEB-01` (ADR-0028): «Исполнители» in two tabs. The contract value is in a `data-` attribute and the screen says it in Russian.
+  // `HOSTS-WEB-01` (ADR-0028): «Диспетчер» in two tabs. The contract value is in a `data-` attribute and the screen says it in Russian.
   {
     schema: 'StageRowKey',
     attribute: 'data-stage-row',
@@ -5838,7 +5838,7 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
     why: 'R-151m: the version\'s «Блоки» tab says this only for a version admitted for comparison only (upload_kind comparison_pdf); the matrix seeds one portal-bundle version for every screen. tests/unit/blocks/version-blocks.test.ts seeds that version and reads the sentence.',
   },
   {
-    label: 'Эта версия из другого проекта.',
+    label: 'Эта версия из другого объекта.',
     why: 'R-151m: the version\'s «Блоки» tab says this only when the version read answers a project other than the one in the address; the matrix seeds one project for every screen. tests/unit/blocks/version-blocks.test.ts seeds the mismatch and reads the sentence.',
   },
   {
@@ -5867,7 +5867,7 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   },
   {
     label: 'Действие не выполнено.',
-    why: '«Диспетчер» and «Мои задачи» show this only after the transitionAssignment mutation settles with a failure. One static render cannot press a move button or seed the mutation observer through a query cache.',
+    why: '«Назначения» and «Мои задачи» show this only after the transitionAssignment mutation settles with a failure. One static render cannot press a move button or seed the mutation observer through a query cache.',
   },
   {
     label: 'Назначение не создано.',
@@ -5914,7 +5914,7 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
     why: 'RegistrationDecisionControls shows this after an approve or reject mutation fails. Its useMutation observer cannot be put into an error state by seeding a query cache.',
   },
   {
-    label: 'Загрузка: новый проект…',
+    label: 'Загрузка: новый объект…',
     why:
       "`create-project-form.tsx`, while its `useMutation` is in flight. One server pass " +
       'never has a settled mutation, and the harness cannot fire the submit that starts ' +
@@ -6038,14 +6038,14 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       'not clicked a project, so there is no query to seed an error into.',
   },
   {
-    label: 'Загрузка: документы проекта…',
+    label: 'Загрузка: документы объекта…',
     why:
       "`DocumentChooser`'s pending read, reached only once a project is chosen. Same " +
       'mechanism as the entry above it: the component does not exist, and its query does ' +
       'not exist, until a click this harness cannot fire has happened.',
   },
   {
-    label: 'В этом проекте нет опубликованных документов.',
+    label: 'В этом объекте нет опубликованных документов.',
     why:
       "`DocumentChooser`'s empty answer, reached only once a project is chosen and that " +
       'project turns out to have published nothing. Same mechanism: the component that ' +
@@ -6054,7 +6054,7 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   {
     label: 'На этой странице ничего не нашлось.',
     why:
-      "«Диспетчер»'s answer when the typed search leaves nothing of the page already read " +
+      "«Назначения»'s answer when the typed search leaves nothing of the page already read " +
       '(`UI-PARITY` P5). The search text is a `useState` the administrator fills, so one static pass starts ' +
       'with it empty and the page whole; the pure narrowing is held by `filterAssignments` in `tests/unit/dispatcher`.',
   },
@@ -6259,7 +6259,7 @@ describe('every branch the widgets have is rendered by some state in this matrix
  *
  * | declared | matched | what it really is |
  * |---|---|---|
- * | `Создан` | `Создан 2026-09-10 08:00:00 UTC · документов 2` | every project row's created date |
+ * | `Создан` | `Создан 10.09.2026 08:00 · документов 2` | every project row's created date |
  * | `Эта версия` | `Эта версия и её манифест неизменяемы.` | the version panel's standing prose |
  * | `Прогон` | `Прогон использует тот режим провайдера…` | the start-run control's own note |
  * | `25 MiB` | `Не более 25 MiB.` | the upload envelope, printed before any file is chosen |

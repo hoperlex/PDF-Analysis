@@ -53,7 +53,7 @@ describe('where the section appears', () => {
   // facts, and the sentences that qualify the figures close the screen (`RUN-SCREEN-01a`).
   it('sits after the run\'s own facts, before the notes on its figures', () => {
     const markup = page('published');
-    const review = markup.indexOf('Разобрать находки');
+    const review = markup.indexOf('Разобрать замечания');
     const facts = markup.indexOf('Сведения о прогоне');
     const section = markup.indexOf('data-norm-references=""');
     const notes = markup.indexOf('Пояснения к цифрам');

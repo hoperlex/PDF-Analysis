@@ -1,7 +1,10 @@
 /*
- * The findings table of «Разбор» (`UI-A-68`), dense as the original's: rows of 4px/8px cells, the head in small
- * capitals, the finding, its norms and its recommendation side by side, and the opened finding in a strip under
- * its row. Tokens only; the verdict reads on the row as a tint, the badge in the last cell says it in words.
+ * The findings table of «Разбор» (`UI-A-68`, `UIP-S06-07`), dense as the original's: rows one step high (`--am-row-step`, `UIP-G-14`)
+ * of 4px/8px cells, the head in small capitals, the finding, its norms and its recommendation side by side, and the opened finding in
+ * a strip under its row. Tokens only. A row reads at a glance by three things the colour is not the only carrier of: the stripe at
+ * its left in the tone of its severity (solid when the expert decided it, dashed when it is the model's proposal, and the pill in the
+ * cell says which in words), the tint of an accepted row, and the strike-through of a rejected one; the word of the verdict stands in
+ * the last cell. A word is not cut in a narrow column: the cells break only a word that cannot fit its own line at all.
  */
 
 .scroll {
@@ -25,24 +28,25 @@
   width: 5%;
 }
 
+/* Wide enough for «Эксплуатационное» in a pill; the longer names wrap between their words. */
 .colSeverity {
-  width: 12%;
+  width: 14%;
 }
 
 .colPages {
-  width: 8%;
+  width: 9%;
 }
 
 .colText {
-  width: 25%;
+  width: 24%;
 }
 
 .colNorms {
-  width: 17%;
+  width: 16%;
 }
 
 .colRecommendation {
-  width: 21%;
+  width: 20%;
 }
 
 .colDecision {
@@ -59,28 +63,77 @@
   letter-spacing: var(--am-tracking-caps);
   text-align: left;
   text-transform: uppercase;
-  white-space: nowrap;
+  /* A narrow head wraps between its words («Лист / стр.») and never inside one. */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
-/* A row brought to the top of the screen when its finding opens stops below the page's pinned header. */
+/* A row is one step high and grows with its content; a row brought to the top of the screen when its finding opens stops below the pinned header. */
 .row {
+  height: var(--am-row-step);
   scroll-margin-top: 6rem;
 }
 
+/* A one-line cell stands in the middle of its row; a word is cut only when it cannot fit its own line. */
 .row > td {
   padding: var(--am-gap-xs) var(--am-gap-sm);
   border-bottom: 1px solid var(--am-line-soft);
-  vertical-align: top;
-  overflow-wrap: anywhere;
+  vertical-align: middle;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
-/* The verdict on the row: the original's green and red rows. A waiting row keeps the page's paper. */
+/*
+ * The stripe at the left of a row, in the tone of its severity (`severityTone`: red, amber, teal, green, grey): solid when the
+ * expert decided the severity, dashed when it is the model's proposal. A row with no severity keeps the space, empty, so the
+ * numbers stand in one column. The tone is only the edge; the pill in the severity cell says the name, and the dashed pill says
+ * «предложено», so the stripe is never the only statement.
+ */
+.row > td:first-child {
+  border-left: 4px solid transparent;
+}
+
+.row[data-severity-source='proposed'] > td:first-child {
+  border-left-style: dashed;
+}
+
+.row[data-severity-tone='failed'] > td:first-child {
+  border-left-color: var(--am-failed);
+}
+
+.row[data-severity-tone='degraded'] > td:first-child {
+  border-left-color: var(--am-degraded);
+}
+
+.row[data-severity-tone='active'] > td:first-child {
+  border-left-color: var(--am-accent);
+}
+
+.row[data-severity-tone='ok'] > td:first-child {
+  border-left-color: var(--am-ok);
+}
+
+.row[data-severity-tone='inert'] > td:first-child {
+  border-left-color: var(--am-inert);
+}
+
+/*
+ * The verdict on the row: the original's green rows for the accepted; the rejected are struck through, as the original's, and keep
+ * a red tint. A waiting row keeps the page's paper. The line is put on the cell and runs through its text but not through a pill or a
+ * button (an inline box of its own); the decision cell is not struck at all, so the buttons, the field and the word of the verdict
+ * read as they do on every other row.
+ */
 .row[data-verdict-bucket='accepted'] > td {
   background: var(--am-ok-light);
 }
 
 .row[data-verdict-bucket='rejected'] > td {
   background: var(--am-failed-light);
+  text-decoration: line-through;
+}
+
+.row[data-verdict-bucket='rejected'] > td.decisionCell {
+  text-decoration: none;
 }
 
 .row[aria-current='true'] > td {
@@ -120,9 +173,11 @@
   text-align: center;
 }
 
-.proposal {
-  color: var(--am-ink-muted);
-  font-style: italic;
+/* A pill in this column breaks between its words, and drops «предложено» under the name, instead of running out of the cell. */
+.severity :global(.am-badge) {
+  flex-wrap: wrap;
+  justify-content: center;
+  white-space: normal;
 }
 
 .none {

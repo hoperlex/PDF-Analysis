@@ -572,6 +572,11 @@ KNOWN_HISTORICAL_TRIPLES: frozenset[tuple[str, str]] = frozenset(
         # 675 schemas". `UI-PARITY-P0G` (1.22.0) added `setDocumentArchived` and `renameDocument` (252 / 280 / 677), and the
         # file's "Facts of this tree" states the current triple; the P0E entry is a record of its day and is kept as written.
         ("docs/program/CURRENT_STATE.md", "250 paths / 278 operations / 675 schemas"),
+        # CURRENT_STATE.md's `UI-PARITY-R3` entry of publication point P1 (2026-11-17) records the head of its day, "API
+        # `1.55.0` and migration head `0068_reviewable_findings` unchanged". Stage 2 then added `0069_account_last_project`
+        # (`UIP-G-05`) and `0070_document_group` (`UIP-G-10`) and `UIP-CONTRACT-02` resealed the contract as 1.56.0, and the
+        # file's "Facts of this tree" states the current head; the P1 entry is a record of its day and is kept as written.
+        ("docs/program/CURRENT_STATE.md", "migration head `0068_reviewable"),
     }
 )
 

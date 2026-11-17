@@ -77,7 +77,7 @@ export function UploadPriceListFormView({
     >
       <div className="am-form">
         <label htmlFor="price-list-file">
-          <strong>Прайс-лист проекта (CSV или книга Excel, до 10 MiB)</strong>
+          <strong>Прайс-лист объекта (CSV или книга Excel, до 10 MiB)</strong>
         </label>
         <input
           id="price-list-file"

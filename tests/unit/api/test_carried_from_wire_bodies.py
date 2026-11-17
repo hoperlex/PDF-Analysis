@@ -149,4 +149,6 @@ def test_the_record_still_restates_the_event_property_set_plus_the_context() -> 
     assert record - event == {
         "project_uid", "run_id", "document_uid", "version_uid", "project_name", "document_name", "section",
         "category", "finding_text", "current_verdict", "decision_event_count",
+        # `UIP-S12-01`: the designer's execution status of the finding, read beside the record (`R-151g`).
+        "execution_status", "execution_status_at",
     }

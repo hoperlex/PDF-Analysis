@@ -6,14 +6,25 @@
  * only — how many registration requests wait for a decision. A session holding `expert` also
  * gets «Мои задачи» (`W61-DISPATCHER-01`): its open assignments, with their moves and links.
  *
+ * ## The order, and the object (`UIP-S01-01`)
+ *
+ * The original's front door is its table of sections, so the table comes first: the greeting is one line with the roles
+ * beside it and no frame, the table «Разделы объекта» spans the page, «Мои задачи» follow it and the three tiles close the
+ * page, in one column at every width. The table is counted over the object the screen works in (`LazyHomeSections` reads
+ * it: the address, then the account's last object; the screen's registry class is `optional`), and the tiles and «Мои задачи»
+ * keep counting every object.
+ *
  * ## Which tiles: the registry decides, as it does for the screens they summarise
  *
  * Each tile summarises one registered screen — `/projects`, `/dashboard`,
  * `/admin/registrations` — and is mounted only when the screen registry's
  * `screenRolesAdmit` opens that screen to this role set. So a tile cannot offer what the menu
  * and the guard refuse. `R-80`: an account with no role is suspended and the API refuses it
- * every product read, so its home page says «Роли не назначены.», mounts no tile and asks
- * the API nothing.
+ * every product read, so its home page says one sentence (`UIP-S21-01`: «Доступ к разделам ещё
+ * не назначен. Обратитесь к администратору.», the original's), mounts no tile and asks the API
+ * nothing. «Роли не назначены.» stays where it is a fact about the account — the account menu
+ * and `/403` — and is no longer repeated under the greeting. The page does not move on to a
+ * screen the account may open: a silent redirect is a silent fallback (`AGENTS.md` §4).
  *
  * **The props are `W50-REGISTRY-01`'s contract** and this task keeps them: the `/` route and
  * its seed in `web/tests/unit/screens/route-screens.ts` hand down the name and the roles of
@@ -35,7 +46,8 @@
  *
  * `displayLabel` is `Фамилия И. О.` with a last name of up to sixty letters, which in one word
  * is wider than the 780 px floor at the title's size. The heading's own rule breaks it
- * anywhere (`home-page.module.css`), so it wraps instead of widening the page.
+ * anywhere (`home-page.module.css`), so it wraps instead of widening the page; the roles
+ * stand beside it where they fit and under it where they do not.
  */
 
 import type { Role } from '@/shared/api';
@@ -66,7 +78,10 @@ const UNKNOWN_ROLE_TITLE = 'Учётная запись содержит неи�
 const UNKNOWN_ROLE_DETAIL =
   'Сервер назвал роль, которой этот клиент не знает, поэтому решить, что показать на этой странице, достоверно нельзя — плитки скрыты.';
 
-/** «Диспетчер»'s registered address (`W61-DISPATCHER-01`); a static address needs no builder. */
+/** What an account sees when the registry opens nothing to it — above all an account with no role (`R-80`). */
+const NO_ACCESS_SENTENCE = 'Доступ к разделам ещё не назначен. Обратитесь к администратору.';
+
+/** «Назначения»'s registered address (`W61-DISPATCHER-01`); a static address needs no builder. */
 const DISPATCHER_SCREEN: ScreenAddress = '/dispatcher';
 
 /** The role labels, or `null` when the set holds a value outside the contract's. */
@@ -80,7 +95,7 @@ function labelsOf(roles: readonly Role[]): readonly string[] | null {
 }
 
 function rolesSentence(labels: readonly string[]): string {
-  return labels.length === 0 ? 'Роли не назначены.' : `Роли: ${labels.join(', ')}.`;
+  return `Роли: ${labels.join(', ')}.`;
 }
 
 /** Whether the registry opens `address` to this role set — the one rule the menu uses too. */
@@ -94,20 +109,20 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
   const projects = opens('/projects', roles);
   const summary = opens('/dashboard', roles);
   const registrations = opens('/admin/registrations', roles);
-  // «Мои задачи» summarises the expert's own part of «Диспетчер»: mounted when the registry
+  // «Мои задачи» summarises the expert's own part of «Назначения»: mounted when the registry
   // opens that screen and the session holds `expert`, the role work is assigned to.
   const tasks = opens(DISPATCHER_SCREEN, roles) && roles.includes('expert');
 
   return (
     <section className="am-page" data-screen="home">
-      <header className={`am-page__header ${styles.hero}`}>
+      <header className="am-page__header">
         <div className={styles.heading}>
           {/*
             One text node, and an exclamation rather than a period: the name form ends in one
             (`Петрова А. С.`), and a period after it reads `С..`.
           */}
           <h1 className={`am-page__title ${styles.greeting}`}>{`Здравствуйте, ${displayLabel}!`}</h1>
-          {labels === null ? null : (
+          {labels === null || labels.length === 0 ? null : (
             <p className="am-page__subtitle" data-roles={roles.join(' ')}>
               {rolesSentence(labels)}
             </p>
@@ -123,8 +138,8 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
           <>
             {tasks || summary ? (
               <div className={styles.overviewGrid}>
-                {tasks ? <div className={styles.tasks}><MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /></div> : null}
                 {summary ? <div className={styles.sections}><LazyHomeSections /></div> : null}
+                {tasks ? <div className={styles.tasks}><MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /></div> : null}
               </div>
             ) : null}
             {projects || summary || registrations ? (
@@ -137,7 +152,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
           </>
         ) : (
           <p className="am-note" data-home-tiles="none">
-            Разделы с данными откроются, когда администратор назначит учётной записи роль.
+            {NO_ACCESS_SENTENCE}
           </p>
         )}
       </div>

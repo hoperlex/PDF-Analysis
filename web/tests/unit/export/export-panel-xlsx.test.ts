@@ -23,7 +23,7 @@ function panel(runState: RunState) {
 
 function refusal(status: number, code: ErrorCode, details: Record<string, string> = {}): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.55.0',
+    contract_version: '1.57.0',
     error_code: code,
     message: 'English the client never prints.',
     correlation_id: 'cid-xlsx-1',
@@ -34,6 +34,20 @@ function refusal(status: number, code: ErrorCode, details: Record<string, string
 }
 
 describe('«Скачать Excel»', () => {
+  // `UIP-S06-05`: on the bar of «Разбор» the workbook is «Excel» in the list under «Скачать ▾», on the same rule.
+  it.each(EXPORTABLE_RUN_STATES)('is an item of «Скачать ▾» on the bar for %s, and only there', (state) => {
+    const markup = render(createElement(ExportPanel, { runId: RUN_ID, runState: state, providerMode: 'recorded', onExport: () => {}, layout: 'bar' }));
+    expect(markup).toContain('data-intent="export-xlsx"');
+    expect(markup).toContain('data-export-format="xlsx"');
+    expect(markup).toContain('>Excel<');
+    expect(markup.indexOf('data-export-menu')).toBeLessThan(markup.indexOf('data-intent="export-xlsx"'));
+  });
+
+  it.each(RUN_STATE_VALUES.filter((state) => !isExportableRunState(state)))('is not on the bar for %s', (state) => {
+    expect(render(createElement(ExportPanel, { runId: RUN_ID, runState: state, providerMode: 'recorded', onExport: () => {}, layout: 'bar' })))
+      .not.toContain('data-intent="export-xlsx"');
+  });
+
   it.each(EXPORTABLE_RUN_STATES)('is offered beside the CSV for %s', (state) => {
     const markup = panel(state);
     expect(markup).toContain('data-intent="export"');

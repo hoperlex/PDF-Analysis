@@ -73,6 +73,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "setDocumentArchived": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/archive"),
     "renameDocument": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/title"),
     "setDocumentTags": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/tags"),
+    # `UIP-G-10` (1.56.0): the one optional group of a document, guarded like its tags.
+    "setDocumentGroup": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/group"),
     "listDocumentTags": ("GET", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/document-tags"),
     "setFindingExecutionStatus": ("PUT", "/findings/fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/execution-status"),
     "listProposalDecisionJournal": ("GET", "/proposal-decisions"),
@@ -471,6 +473,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "getProductVersion": ("GET", "/system/version"),
     "listReleases": ("GET", "/releases"),
     "markReleaseNotesRead": ("PUT", "/me/release-notes"),
+    # `UIP-G-05` (1.56.0): the account's own choice of an object (any complete account).
+    "setMyLastProject": ("PUT", "/me/last-project"),
     "changePassword": ("POST", "/auth/password"),
     "getMe": ("GET", "/me"),
     "updateMyProfile": ("PATCH", "/me"),
@@ -520,6 +524,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "setDocumentArchived": _ANY_ROLE,
     "renameDocument": _ANY_ROLE,
     "setDocumentTags": _ANY_ROLE,
+    "setDocumentGroup": _ANY_ROLE,
     "listDocumentTags": _READ,
     "setFindingExecutionStatus": _EXPERT,
     "listProposalDecisionJournal": _READ,
@@ -760,6 +765,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getProductVersion": _ANY,
     "listReleases": _ANY,
     "markReleaseNotesRead": _ANY,
+    "setMyLastProject": _ANY,
     "getMe": _ANY,
     "updateMyProfile": _ANY,
     "changePassword": _ANY,

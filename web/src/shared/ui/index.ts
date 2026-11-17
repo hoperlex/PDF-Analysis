@@ -62,3 +62,6 @@ export { CostApproval, ceilingMicros, microsAsUsd, usableCostEstimate } from './
 
 export type { TableColumn, TableProps } from './table';
 export { Table } from './table';
+
+export type { DialogProps, DialogSize } from './dialog';
+export { Dialog } from './dialog';

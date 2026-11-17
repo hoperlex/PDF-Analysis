@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `/dispatcher` — «Диспетчер» (`W61-DISPATCHER-01`, roadmap Q-2).
+ * `/dispatcher` — «Назначения» (`W61-DISPATCHER-01`, roadmap Q-2).
  *
  * An administrator assigns a project, or one document of it, to an expert and sees every
  * assignment with its status and history, and may reassign or cancel it. An expert sees the
@@ -15,12 +15,12 @@
  */
 
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 import type { Account, Role } from '@/shared/api';
-import { readProjectContext, switchProject } from '@/shared/lib';
+import { switchProject } from '@/shared/lib';
 import { useMe } from '@/entities/account';
-import { useProjectList } from '@/entities/project';
+import { useCurrentProject, useProjectList } from '@/entities/project';
 import { USER_PAGE_LIMIT, useUsers } from '@/entities/user';
 import { canAssignWork } from '@/entities/assignment';
 import { CreateAssignmentForm } from '@/features/create-assignment';
@@ -40,18 +40,18 @@ export function expertOptions(accounts: readonly Account[]): readonly ExpertOpti
     .map((account) => ({ userUid: account.user_uid, label: account.display_label }));
 }
 
-/** This screen's registry address, the one `readProjectContext` classifies (`R-151m`: it follows the header). */
+/** This screen's registry address, the one the registry classifies (`R-151m`: it follows the header). */
 const DISPATCHER_ADDRESS = '/dispatcher';
 const NO_PARAMS = new URLSearchParams();
 
 /** «Все проекты» or the project's name, and the way back to all of them, as the dashboard says its scope. */
 function ProjectScope({ projectUid, allProjectsHref }: { readonly projectUid: string | null; readonly allProjectsHref: string }) {
   const projects = useProjectList(undefined, { enabled: projectUid !== null });
-  if (projectUid === null) return <p className="am-note" data-dispatcher-scope="all">Все проекты</p>;
-  const name = projects.data?.items.find((item) => item.project_uid === projectUid)?.name ?? 'Проект';
+  if (projectUid === null) return <p className="am-note" data-dispatcher-scope="all">Все объекты</p>;
+  const name = projects.data?.items.find((item) => item.project_uid === projectUid)?.name ?? 'Объект';
   return (
     <p className="am-note" data-dispatcher-scope="project">
-      Проект: {name} · <Link href={allProjectsHref}>Все проекты</Link>
+      Объект: {name} · <Link href={allProjectsHref}>Все объекты</Link>
     </p>
   );
 }
@@ -79,22 +79,22 @@ function AdministratorTools({ roles, viewerUid, projectUid }: { readonly roles: 
 }
 
 export function DispatcherPage({ roles }: DispatcherPageProps) {
-  // `R-151m`: the project comes from the address only; a reload or a pasted link restores it.
-  const pathname = usePathname();
+  // `R-151m`, `UIP-G-06`: the object comes from the address, and where it is silent, from the account's last one; a reload or a
+  // pasted link restores it. «Все объекты» is the explicit `?project=all`.
   const searchParams = useSearchParams() ?? NO_PARAMS;
-  const { projectUid } = readProjectContext(pathname ?? '', searchParams);
-  const withoutProject = switchProject(searchParams, null).toString();
-  const allProjectsHref = withoutProject === '' ? DISPATCHER_ADDRESS : `${DISPATCHER_ADDRESS}?${withoutProject}`;
+  const { projectUid } = useCurrentProject(DISPATCHER_ADDRESS);
+  const allProjects = switchProject(searchParams, null, projectUid).toString();
+  const allProjectsHref = `${DISPATCHER_ADDRESS}?${allProjects}`;
   const me = useMe();
   const viewerUid = me.isSuccess ? me.data.user_uid : null;
   const admin = canAssignWork(roles);
   return (
     <section className="am-page" data-screen="dispatcher">
       <header className={`am-page__header ${styles.hero}`}>
-        <h1 className="am-page__title">Диспетчер</h1>
+        <h1 className="am-page__title">Назначения</h1>
         <p className="am-page__subtitle">
           {admin
-            ? 'Назначение проектов и документов экспертам, их состояние и история.'
+            ? 'Назначение объектов и документов экспертам, их состояние и история.'
             : 'Работа, назначенная вам: возьмите её в работу, отметьте выполненной или верните с причиной.'}
         </p>
       </header>

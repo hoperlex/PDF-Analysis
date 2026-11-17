@@ -77,8 +77,11 @@ EXIT_OK, EXIT_USAGE, EXIT_REFUSED, EXIT_FAILED = 0, 2, 3, 4
 
 #: Accounts and everything account-side. The sign-in throttle is columns of ``app_user`` and
 #: ``registration_request``; there is no table of its own.
+#: `0069_account_last_project` (`UIP-G-05`): the object an account chose last is the account's own preference, like its release read mark. It names
+#: the project by a bare identity with no foreign key (so it is outside the project erase's closure) and is read only while the project exists, so a
+#: purge of product data keeps it and the accounts' choices read as none until they choose again.
 KEEP_ACCOUNT_TABLES = frozenset((
-    "account_release_mark", "app_user", "app_user_role", "registration_request",
+    "account_last_project", "account_release_mark", "app_user", "app_user_role", "registration_request",
 ))
 #: The release notes the ``release-notes`` service loads.
 KEEP_RELEASE_TABLES = frozenset(("release", "release_revision"))
@@ -310,9 +313,15 @@ KEEP_COMMAND_TYPES = frozenset((
     "review_decision_pattern",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
+    # Contract 1.56.0 (`UIP-G-05`): the receipt of an account's choice of an object. Its outcome names the project, so the project erase counts it
+    # as the project's receipt (and deletes it with the project) and a purge of product data deletes it; the choice itself is KEEP and the next
+    # choice writes it again.
+    "set_last_project",
     # `UI-PARITY-P0G`..`P0L`, `P0P`: a document archived, renamed or tagged, an execution status, decisions imported from
     # a run's workbook, and assignments placed on days are about the project's documents, findings and assignments.
     "import_run_decisions", "rename_document", "schedule_assignments", "set_document_archived", "set_document_tags",
+    # `UIP-G-10` (contract 1.56.0): a document's group is about the project's documents, a product command like `set_document_tags`.
+    "set_document_group",
     "set_finding_execution_status",
     "start_stage_review_ai", "resume_stage_review_ai", "cancel_stage_review_ai", "apply_stage_link_repair",
     "resume_stage_chain_run", "start_stage_chain_batch", "pause_stage_chain_batch",

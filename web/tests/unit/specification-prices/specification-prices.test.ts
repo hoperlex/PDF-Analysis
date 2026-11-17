@@ -230,7 +230,7 @@ describe('the set chooser offers the sets an expert confirmed in any section', (
     const markup = renderToStaticMarkup(createElement(SpecificationPricesChooser, {
       sets: [], selected: null, onSelect: () => undefined, partial: false,
     }));
-    expect(markup).toContain('В проекте нет комплектов с подтверждённым разделом');
+    expect(markup).toContain('В объекте нет комплектов с подтверждённым разделом');
     expect(markup).toContain('Подтвердите раздел на экране версии.');
     expect(markup).not.toContain('раздела АР');
   });
@@ -258,7 +258,7 @@ describe('the set chooser offers the sets an expert confirmed in any section', (
       client,
       queryKeys.optimisation.specificationPrices(PROJECT, DOCUMENT, 0, SPECIFICATION_ROW_LIMIT),
       new ApiError(404, {
-        contract_version: '1.55.0', error_code: 'not_found', message: 'Нет такого комплекта.',
+        contract_version: '1.57.0', error_code: 'not_found', message: 'Нет такого комплекта.',
         correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false,
       }, '0f0e9d8c-7b6a-4948-b726-150413021100'),
     );
@@ -304,7 +304,7 @@ describe('the «Оптимизация» tab', () => {
     const markup = renderScreen(newClient(), createElement(ProjectOptimisation, {
       projectUid: PROJECT as never, roles: ['expert'],
     }));
-    const price = markup.indexOf('Прайс-листы проекта');
+    const price = markup.indexOf('Прайс-листы объекта');
     const specification = markup.indexOf('data-specification-prices');
     const vendors = markup.indexOf('Вендор-листы по разделам');
     expect(price).toBeGreaterThan(-1);

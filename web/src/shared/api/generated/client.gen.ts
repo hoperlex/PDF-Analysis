@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.55.0 (OpenAPI 3.1.0)
- *   sha256 a4081d34014de0c36678a89399885ca1da33f4a99a5d93b2ea8df0295c10724e
+ *   AuditManager PC-01 API 1.57.0 (OpenAPI 3.1.0)
+ *   sha256 6a88ecb4a91c3bad046ec910cf4278b5ae4e01acb504291f9b34aeef5931aedd
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -552,6 +552,8 @@ import type {
   SetCurrentNormSnapshotResult,
   SetDocumentArchivedInput,
   SetDocumentArchivedResult,
+  SetDocumentGroupInput,
+  SetDocumentGroupResult,
   SetDocumentTagsInput,
   SetDocumentTagsResult,
   SetEngineerAbsencesInput,
@@ -578,6 +580,8 @@ import type {
   SetGlobalVendorListResult,
   SetJobPriorityInput,
   SetJobPriorityResult,
+  SetMyLastProjectInput,
+  SetMyLastProjectResult,
   SetProjectVendorListInput,
   SetProjectVendorListResult,
   SetStageModelLayoutEnabledInput,
@@ -3884,6 +3888,18 @@ export function setDocumentArchived(
 }
 
 /**
+ * Set Document Group
+ *
+ * `PUT /projects/{project_uid}/documents/{document_uid}/group` - a write; carries a required Idempotency-Key.
+ */
+export function setDocumentGroup(
+  input: SetDocumentGroupInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetDocumentGroupResult>> {
+  return request<SetDocumentGroupResult>(OPERATIONS.setDocumentGroup, input, options);
+}
+
+/**
  * Set Document Tags
  *
  * `PUT /projects/{project_uid}/documents/{document_uid}/tags` - a write; carries a required Idempotency-Key.
@@ -4037,6 +4053,18 @@ export function setJobPriority(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetJobPriorityResult>> {
   return request<SetJobPriorityResult>(OPERATIONS.setJobPriority, input, options);
+}
+
+/**
+ * Remember the object the signed-in account chose.
+ *
+ * `PUT /me/last-project` - a write; carries a required Idempotency-Key.
+ */
+export function setMyLastProject(
+  input: SetMyLastProjectInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetMyLastProjectResult>> {
+  return request<SetMyLastProjectResult>(OPERATIONS.setMyLastProject, input, options);
 }
 
 /**
@@ -4899,6 +4927,7 @@ export const apiClient = {
   searchNorms,
   setCurrentNormSnapshot,
   setDocumentArchived,
+  setDocumentGroup,
   setDocumentTags,
   setEngineerAbsences,
   setExecutionPaused,
@@ -4912,6 +4941,7 @@ export const apiClient = {
   setFindingExecutionStatus,
   setGlobalVendorList,
   setJobPriority,
+  setMyLastProject,
   setProjectVendorList,
   setStageModelLayoutEnabled,
   setStagePairCompleteness,

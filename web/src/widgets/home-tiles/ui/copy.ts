@@ -19,8 +19,8 @@
  * guard's coverage assertion, held for this page by the file that can reach it.
  */
 
-export const NO_PROJECTS_TITLE = 'Проектов ещё нет.';
-export const NO_PROJECTS_DETAIL = 'Первый проект создаётся на странице «Проекты».';
+export const NO_PROJECTS_TITLE = 'Объектов ещё нет.';
+export const NO_PROJECTS_DETAIL = 'Первый объект создаётся на странице «Объекты».';
 
 export const INCOMPLETE_SUMMARY_TITLE = 'Сводка пришла неполной.';
 export const INCOMPLETE_SUMMARY_DETAIL =

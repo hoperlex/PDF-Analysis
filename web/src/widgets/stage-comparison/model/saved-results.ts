@@ -172,7 +172,7 @@ function preliminaryIndex(side: SavedResultSide) {
 
 /** Read-only correspondence: durable finding identity or exact wording and actual source binding. */
 export function compareSavedResults(left: SavedResultSide, right: SavedResultSide): readonly SavedResultRow[] {
-  if (left.run.project_uid !== right.run.project_uid || left.run.version_uid !== right.run.version_uid) throw new Error('Для сопоставления сохранённых находок нужны прогоны одного проекта и одной неизменяемой версии.');
+  if (left.run.project_uid !== right.run.project_uid || left.run.version_uid !== right.run.version_uid) throw new Error('Для сопоставления сохранённых замечаний нужны прогоны одного объекта и одной неизменяемой версии.');
   const result: SavedResultRow[] = [];
   // An unavailable list is not an empty side. Do not publish one-sided finding differences for it.
   if (left.findings !== null && right.findings !== null) {

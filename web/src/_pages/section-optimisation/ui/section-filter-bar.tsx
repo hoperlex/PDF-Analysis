@@ -63,7 +63,7 @@ export interface SectionFilterBarProps {
 
 export function SectionFilterBar({ sectionCode, projectUid, options, onSection, onProject }: SectionFilterBarProps) {
   return (
-    <form className={styles.filterBar} aria-label="Раздел и проект" onSubmit={(event) => event.preventDefault()} data-section-filter-bar="">
+    <form className={styles.filterBar} aria-label="Раздел и объект" onSubmit={(event) => event.preventDefault()} data-section-filter-bar="">
       <label className={styles.filterField}>
         <span>Раздел</span>
         {/* The literal id is what the PC-01 journey's write half addresses (`section-form7-without-members`), and its
@@ -82,14 +82,14 @@ export function SectionFilterBar({ sectionCode, projectUid, options, onSection, 
         </select>
       </label>
       <label className={styles.filterField}>
-        <span>Проект</span>
+        <span>Объект</span>
         <select
           id="section-specification-project"
           value={projectUid ?? ''}
           onChange={(event) => onProject(event.target.value === '' ? null : (event.target.value as ProjectUid))}
           data-section-project-filter={options.length}
         >
-          <option value="">Все проекты раздела</option>
+          <option value="">Все объекты раздела</option>
           {options.map((option) => (
             <option key={option.projectUid} value={option.projectUid}>
               {option.name ?? <ProjectOptionName projectUid={option.projectUid} />}

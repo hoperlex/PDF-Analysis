@@ -13,24 +13,34 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { ProjectPage } from '@/shared/api';
+import type { ListProjectsInput, ProjectPage } from '@/shared/api';
 import { listProjects, queryKeys } from '@/shared/api';
 
 /** Page size. Inside the contract's 1..200 bound and equal to the contract default. */
 export const PROJECT_PAGE_LIMIT = 50;
 
+/** The order of the listing: `listProjects`'s own `order` (`UIP-S03-02`). */
+export type ProjectListOrder = NonNullable<NonNullable<ListProjectsInput['query']>['order']>;
+
 export interface ProjectListOptions {
   /** `false` reads the cache only and starts no request. Absent means `true`. */
   readonly enabled?: boolean;
+  /** `UIP-S03-03`: the server's order of the listing. Absent is `published`, newest first, and sends no parameter. */
+  readonly order?: ProjectListOrder;
 }
 
 export function useProjectList(cursor?: string, options: ProjectListOptions = {}) {
   return useQuery<ProjectPage>({
-    queryKey: queryKeys.projects.list(cursor, PROJECT_PAGE_LIMIT),
+    queryKey: queryKeys.projects.list(cursor, PROJECT_PAGE_LIMIT, options.order),
     enabled: options.enabled ?? true,
     queryFn: async () => {
       const response = await listProjects({
-        query: { ...(cursor === undefined ? {} : { cursor }), limit: PROJECT_PAGE_LIMIT },
+        query: {
+          ...(cursor === undefined ? {} : { cursor }),
+          limit: PROJECT_PAGE_LIMIT,
+          // The default order sends nothing: the request every reader made before the parameter existed.
+          ...(options.order === undefined || options.order === 'published' ? {} : { order: options.order }),
+        },
       });
       return response.data;
     },

@@ -134,10 +134,10 @@ function ProjectStep({ selection, onSelection }: Pick<RunPickerProps, 'selection
   return (
     <StepSelect
       step="project"
-      label="Проект"
-      placeholder="Выберите проект"
-      nothing="Проектов пока нет"
-      failure="Не удалось прочитать список проектов."
+      label="Объект"
+      placeholder="Выберите объект"
+      nothing="Объектов пока нет"
+      failure="Не удалось прочитать список объектов."
       status={statusOf(read)}
       options={options}
       truncated={(read.data?.page.next_cursor ?? null) !== null}
@@ -156,7 +156,7 @@ function DocumentStep({ projectUid, selection, onSelection }: Pick<RunPickerProp
       step="document"
       label="Документ"
       placeholder="Выберите документ"
-      nothing="В проекте нет документов"
+      nothing="В объекте нет документов"
       failure="Не удалось прочитать список документов."
       status={statusOf(read)}
       options={options}
@@ -212,11 +212,11 @@ export function RunPicker({ selection, runId, onSelection, onChooseRun }: RunPic
   const { projectUid, documentUid, versionUid } = selection;
   return (
     <fieldset className={styles.picker} data-journal-picker>
-      <legend className="am-form__hint">Выберите прогон по проекту, документу и версии</legend>
+      <legend className="am-form__hint">Выберите прогон по объекту, документу и версии</legend>
       <div className={styles.steps}>
         <ProjectStep selection={selection} onSelection={onSelection} />
         {projectUid === null
-          ? <IdleStep step="document" label="Документ" waiting="Сначала выберите проект" />
+          ? <IdleStep step="document" label="Документ" waiting="Сначала выберите объект" />
           : <DocumentStep projectUid={projectUid} selection={selection} onSelection={onSelection} />}
         {documentUid === null
           ? <IdleStep step="version" label="Версия" waiting="Сначала выберите документ" />

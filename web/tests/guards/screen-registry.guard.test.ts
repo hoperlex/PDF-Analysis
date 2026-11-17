@@ -16,7 +16,7 @@
  *     make a redirect cycle impossible.
  *   - **the project class** (`R-150c`, `UI-PARITY-01`). Every row states a `projectScope`; the
  *     `required` rows are exactly the ones with `[project_uid]` in the address; the `optional`
- *     set is exactly six screens; every other row is `global`.
+ *     set is exactly eight screens («Главная» among them since `UIP-S01-01`); every other row is `global`.
  *
  * Every check is a pure function over rows, exercised against a deliberately broken registry
  * — which proves it can go red — and against the live one.
@@ -141,7 +141,9 @@ function cycleFindings(registry: readonly ScreenEntry[]): string[] {
  */
 const R66: Partial<Record<ScreenGroup, string[]>> = {
   home: [],
-  work: ['/dashboard', '/section-optimisation', '/dispatcher', '/schedule', '/version-comparison', '/stage-comparison'],
+  // `UIP-G-07`: «Главная» first and «Дашборд» behind it; the object entry (`R-153h`) is drawn third, not a row; then the original's
+  // screens in the original's order, with «Назначения» and «Оптимизация разделов» after «График работ».
+  work: ['/', '/dashboard', '/schedule', '/dispatcher', '/section-optimisation', '/stage-comparison', '/version-comparison'],
   // `R-151m`: «Блоки» is a tab of the version, out of the menu.
   knowledge: ['/knowledge-base', '/norms'],
   system: ['/logs', '/workers', '/analysis-settings', '/queue'],
@@ -169,7 +171,7 @@ describe('the registry is the route tree: every page has a row and every row a p
 
   it('reads a tree and a registry of a credible size', () => {
     // `W55A-WEB-NORMS` added the norms document view: 27 -> 28. `W61-DISPATCHER-01` added
-    // «Диспетчер»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
+    // «Назначения»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
     // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31. `R-151l` added «Раздел»: 31 -> 32. `R-151m` added
     // the version's «Блоки» tab: 32 -> 33. `UI-PARITY-P0P` added «График работ»: 33 -> 34.
     // `UI-A-94` (contract 1.36.0) added «Журнал входов»: 34 -> 35.
@@ -242,8 +244,9 @@ describe('every row has the shape §3.1 gives it', () => {
 
   it('R-60: exactly the five administrator screens require admin (the access journal is the fourth, 1.36.0; the advanced page of the executors is the fifth, `HOSTS-WEB-01`); R-150w: four operator screens require expert or admin', () => {
     expect(REGISTRY.filter((row) => Array.isArray(row.roles)).map((row) => [row.address, row.roles])).toEqual([
-      ['/dispatcher', ['expert', 'admin']],
+      // `UIP-G-07`: «График работ» stands before «Назначения» in the registry, as it does in the menu.
       ['/schedule', ['expert', 'admin']],
+      ['/dispatcher', ['expert', 'admin']],
       ['/logs', ['expert', 'admin']],
       ['/workers', ['expert', 'admin']],
       ['/workers/advanced', ['admin']],
@@ -272,12 +275,12 @@ describe('R-66: the groups, their members and their order', () => {
     expect(menu(moved).system).not.toEqual(R66.system);
   });
 
-  it('the menu is exactly the ruling, group by group, in order — Дашборд first in Работа, since R-150b took Проекты out', () => {
+  it('the menu is exactly the ruling, group by group, in order — Дашборд first in Работа, since R-150b took Объекты out', () => {
     const live = menu(REGISTRY);
     for (const group of SCREEN_GROUPS) {
       expect(live[group], `group ${group}`).toEqual(R66[group] ?? []);
     }
-    expect(live.work[0]).toBe('/dashboard');
+    expect(live.work.slice(0, 2)).toEqual(['/', '/dashboard']);
     // R-150b: the screen stays registered and open; only the menu item is gone.
     expect(live.work).not.toContain('/projects');
     expect(REGISTRY.find((row) => row.address === '/projects')).toMatchObject({ inMenu: false, access: 'session', roles: 'any-role' });
@@ -290,6 +293,17 @@ describe('R-66: the groups, their members and their order', () => {
     expect(row?.inMenu, '/optimisation is in the menu; R-66 took it out').toBe(false);
     expect(row?.access).toBe('session');
     expect(routeAddresses().map((route) => route.address)).toContain('/optimisation');
+  });
+
+  it('UIP-G-07: «Главная» is the first row of «Работа», in the menu, and still the one product screen open to an account with no role (R-80)', () => {
+    const home = REGISTRY.find((entry) => entry.address === '/');
+    expect(home).toMatchObject({ label: 'Главная', group: 'work', access: 'session', roles: 'any', inMenu: true });
+    // `UIP-S01-01`: it follows the object the header chose, so the choice changes its table and does not lead away from it.
+    expect(home?.projectScope).toBe('optional');
+    expect(REGISTRY.find((entry) => entry.group === 'work' && entry.inMenu)?.address).toBe('/');
+    // The group it left holds nothing now; the name stays in `SCREEN_GROUPS` for the top strip's labels.
+    expect(REGISTRY.filter((entry) => entry.group === 'home')).toEqual([]);
+    expect(SCREEN_GROUPS).toContain('home');
   });
 
   it('the four stubs are session screens any account holding a role opens (R-80), the queue only an expert or an administrator (R-150w)', () => {
@@ -325,7 +339,7 @@ describe('R-66: the groups, their members and their order', () => {
     expect(labels['/analysis-settings']).toBe('Настройки анализа');
     expect(labels['/queue']).toBe('Очередь');
     expect(labels['/']).toBe('Главная');
-    expect(labels['/projects']).toBe('Проекты');
+    expect(labels['/projects']).toBe('Объекты');
     expect(labels['/admin/users']).toBe('Пользователи');
     expect(labels['/admin/registrations']).toBe('Заявки на регистрацию');
     expect(labels['/admin/auth-events']).toBe('Журнал входов');
@@ -341,8 +355,10 @@ function scopeOf(registry: readonly ScreenEntry[], scope: ProjectScope): string[
 
 /** The ruling (`R-150c`): the screens that follow the header's project. Order is the registry's. */
 const OPTIONAL_SCREENS = [
+  // `UIP-S01-01` (Г7-B): the front door's table of sections is counted over the object the header chose.
+  '/',
   '/dashboard',
-  // `R-151m`: «Диспетчер» follows the header.
+  // `R-151m`: «Назначения» follows the header.
   '/dispatcher',
   '/section-optimisation',
   '/version-comparison',
@@ -402,7 +418,7 @@ describe('R-150c: every row states how the screen relates to the project', () =>
     expect(REGISTRY.find((row) => row.address === '/projects')?.projectScope).toBe('global');
   });
 
-  it('optional: exactly the seven screens that follow the header', () => {
+  it('optional: exactly the eight screens that follow the header, «Главная» among them (UIP-S01-01)', () => {
     expect(scopeOf(REGISTRY, 'optional').sort()).toEqual([...OPTIONAL_SCREENS].sort());
   });
 

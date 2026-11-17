@@ -14,7 +14,7 @@ import { classifyCreateProjectFailure, classifyProjectListFailure } from '@/enti
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.55.0',
+    contract_version: '1.57.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'corr-1',
@@ -40,7 +40,7 @@ describe('creating a project', () => {
     expect(inProgress.kind).toBe('in_progress');
     expect(inProgress.retryable).toBe(true);
     expect(inProgress.detail).toContain('тем же ключом');
-    expect(inProgress.detail).toContain('второй проект');
+    expect(inProgress.detail).toContain('второй объект');
 
     expect(reuse.kind).toBe('duplicate_intent');
     expect(reuse.retryable).toBe(false);

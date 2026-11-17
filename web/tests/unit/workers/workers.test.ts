@@ -1,5 +1,5 @@
 /**
- * `W54-WORKERS-WEB` — the «Исполнители» screen and the worker named on the queue.
+ * `W54-WORKERS-WEB` — the «Диспетчер» screen and the worker named on the queue.
  *
  * Plan §3.7: the registry lists online and stale workers first and offline ones collapsed;
  * an administrator, and only an administrator, sees the intake switch; any role reads the
@@ -65,7 +65,7 @@ function list(roles: Role[], items: readonly ExecutionWorker[] = REGISTRY, onPre
 
 function envelope(code: 'permission_denied' | 'dependency_unavailable') {
   return {
-    contract_version: '1.55.0', error_code: code,
+    contract_version: '1.57.0', error_code: code,
     message: 'Безопасный отказ.', correlation_id: 'cid-workers-1', retryable: false,
   } as const;
 }
@@ -205,8 +205,8 @@ describe('«Скопировать диагностику» on a worker’s row 
       'Приём: Берёт новые прогоны',
       'Слотов: 1',
       'Версия: 0.5.0',
-      'Запущен: 2026-10-12 10:00:00 UTC',
-      'Последний сигнал: 2026-10-12 10:05:00 UTC',
+      'Запущен: 12.10.2026 10:00',
+      'Последний сигнал: 12.10.2026 10:05',
       `Текущие прогоны: ${RUN_ID}`,
     ]);
   });
@@ -366,7 +366,7 @@ describe('the queue names the worker holding a run', () => {
     return renderScreen(client, createElement(QueuePage));
   }
 
-  it('names it, linked to «Исполнители», for a running Job', () => {
+  it('names it, linked to «Диспетчер», for a running Job', () => {
     const markup = queue(running, page(REGISTRY));
     expect(markup).toContain('data-run-worker="held"');
     expect(markup).toContain(ONLINE.worker_id);

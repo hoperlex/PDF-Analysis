@@ -5,6 +5,10 @@
  * specification row with the two positions in the middle, the verdict with its form and history at the right. What this file
  * holds is that the grid names exist for every child, that the verdict group really holds the decision line, the controls
  * and the history together (a form outside it would fall into the middle column), and that a narrow screen stacks them.
+ *
+ * `UIP-S09-01`: the same module draws the table, which is the tab's default. The last block holds what its CSS says of a decided row (an
+ * accepted row on the frame's «ok» green, a rejected row struck through but for its decision cell and its state word, colour from tokens
+ * only, no word cut mid-letter, the row's height and padding the global table's) and that the markup carries the names that CSS selects.
  */
 
 import { readFileSync } from 'node:fs';
@@ -12,7 +16,8 @@ import { join } from 'node:path';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { ProposalCard } from '@/widgets/optimisation-proposals';
+import { ProposalDecisionFormView } from '@/features/decide-optimisation-proposal';
+import { ProposalCard, ProposalTable } from '@/widgets/optimisation-proposals';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { parseRules } from '../styles/contrast';
@@ -63,6 +68,43 @@ describe('a proposal row', () => {
   });
 });
 
+/**
+ * `UIP-S09-03`: the field of the decision stands in the verdict group of a card and in the decision cell of a table row, after the
+ * decision line, and is one component in both places: ✓, ✕, «⋯» and the one-line «Причина» of the entity.
+ */
+describe('the decision field in a card and in a row (`UIP-S09-03`)', () => {
+  const noop = (): void => undefined;
+  const field = (item = proposal({ current_verdict: 'pending', current_decision: null })) =>
+    createElement(ProposalDecisionFormView, {
+      proposalId: item.optimisation_proposal_id, current: item.current_decision, reason: '', sending: null, note: null,
+      onReason: noop, onDecide: noop,
+    });
+
+  it('stands in the verdict group of a card, after the decision line and before the history', () => {
+    const markup = renderScreen(newClient(), createElement(ProposalCard, {
+      proposal: proposal({ current_verdict: 'revise', current_decision: decision() }),
+      controls: field(proposal({ current_verdict: 'revise', current_decision: decision() })),
+      history: createElement('div', { 'data-test-history': '' }),
+    }));
+    const group = /<div class="[^"]*judgement[^"]*">([\s\S]*?)<\/div><\/article>/.exec(markup)?.[1] ?? '';
+    expect(group.indexOf('data-decision-control')).toBeGreaterThan(group.indexOf('Решение:'));
+    expect(group.indexOf('data-test-history')).toBeGreaterThan(group.indexOf('data-decision-control'));
+    expect(group).toContain('data-decision-reason');
+    expect(group).not.toContain('<textarea');
+  });
+
+  it('stands in the decision cell of a table row, once, with the same markers as in a card', () => {
+    const item = proposal({ current_verdict: 'revise', current_decision: decision() });
+    const markup = renderScreen(newClient(), createElement(ProposalTable, { items: [item], canDecide: true, controlsFor: field }));
+    const cell = /<td class="[^"]*judgement[^"]*">([\s\S]*?)<\/td><\/tr>/.exec(markup)?.[1] ?? '';
+    expect(cell.match(/data-decision-control=""/g)).toHaveLength(1);
+    expect(cell.match(/data-intent="(accept|reject)"/g)).toHaveLength(2);
+    expect(cell).toContain(`data-proposal-decision="${item.optimisation_proposal_id}"`);
+    // The columns are the same seven: the reason is no column of its own.
+    expect(markup.match(/<th /g)).toHaveLength(7);
+  });
+});
+
 describe('the action bar of a proposals tab', () => {
   function loaded(): string {
     const shape = proposalShapes().find((entry) => entry.name === 'proposals-loaded');
@@ -100,15 +142,98 @@ describe('the strip over the proposals (UI-B-05)', () => {
     const first = markup.indexOf('data-proposal="');
     expect(filter).toBeGreaterThan(-1);
     expect(exportAt).toBeGreaterThan(filter);
+    // The facts stand in the panel of the pass element, which is the last item of the strip's right half (`UIP-S09-04`).
     expect(facts).toBeGreaterThan(exportAt);
     expect(first).toBeGreaterThan(facts);
     // One strip holds both.
     expect(markup.slice(markup.lastIndexOf('<div', filter), exportAt)).toMatch(/strip/);
   });
 
-  it('keeps the pass’s facts in the markup, in a block the reader opens', () => {
+  it('keeps the pass’s facts in the markup, behind the button «Проход от … ▾» the reader opens (`UIP-S09-04`)', () => {
     const markup = loaded();
-    expect(markup).toMatch(/<details[^>]*data-pass-summary=""[^>]*><summary>Сведения о проходе<\/summary>/);
+    // The disclosure «Сведения о проходе» is gone: the facts stand in the panel of the one element of the pass, closed.
+    expect(markup).not.toContain('Сведения о проходе');
+    expect(markup).toMatch(/<details[^>]*data-pass-menu=""[^>]*><summary[^>]*>Проход от /);
+    expect(/<details[^>]*data-pass-menu=""[^>]*>/.exec(markup)?.[0]).not.toContain('open');
     expect(markup).toContain('не смешиваются со счётчиками замечаний');
+  });
+});
+
+describe('the table’s rows by verdict (`UIP-S09-01`)', () => {
+  const selectors = (rule: { readonly selector: string }): string[] => rule.selector.split(',').map((part) => part.trim());
+  const declared = (selector: string, property: string): string | undefined =>
+    rules.find((rule) => selectors(rule).includes(selector))?.declarations.get(property);
+  const ROW = ".proposalTable tbody tr[data-decision='";
+  const tableRules = rules.filter((rule) => selectors(rule).some((part) => part.startsWith('.proposalTable')));
+
+  it('draws an accepted row on the frame’s «ok» green, from the token', () => {
+    expect(declared(`${ROW}accept'] > td`, 'background')).toBe('var(--am-ok-light)');
+  });
+
+  it('strikes a rejected row through, but for the decision cell and the state word, and keeps its number struck', () => {
+    expect(declared(`${ROW}reject'] > td`, 'text-decoration')).toBe('line-through');
+    expect(declared(`${ROW}reject'] > td.judgement`, 'text-decoration')).toBe('none');
+    expect(declared(`${ROW}reject'] > td.numberCell`, 'text-decoration')).toBe('none');
+    expect(declared(`${ROW}reject'] > td.numberCell > strong`, 'text-decoration')).toBe('line-through');
+  });
+
+  it('draws only the verdicts that carry a colour or a line: a row waiting or sent back is plain', () => {
+    const verdicts = new Set(tableRules.flatMap((rule) => selectors(rule)).flatMap((part) => [...part.matchAll(/data-decision='([a-z]+)'/g)].map((match) => match[1])));
+    expect([...verdicts].sort()).toEqual(['accept', 'reject']);
+  });
+
+  it('takes every colour from a token', () => {
+    for (const rule of [...tableRules, ...rules.filter((entry) => selectors(entry).includes('.layoutLink'))]) {
+      for (const property of ['color', 'background', 'background-color', 'box-shadow', 'border-color', 'text-decoration-color']) {
+        const value = rule.declarations.get(property);
+        if (value === undefined) continue;
+        expect(value, `${rule.selector} { ${property} }`).not.toMatch(/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i);
+      }
+    }
+  });
+
+  it('never cuts a word mid-letter, and leaves the row’s height and padding to the global table', () => {
+    for (const rule of tableRules) {
+      expect(rule.declarations.get('overflow-wrap'), `${rule.selector} overflow-wrap`).not.toBe('anywhere');
+      expect(rule.declarations.get('word-break'), `${rule.selector} word-break`).toBeUndefined();
+      for (const property of ['height', 'min-height', 'padding', 'padding-block', 'padding-inline', 'border', 'border-collapse']) {
+        expect(rule.declarations.has(property), `${rule.selector} { ${property} }`).toBe(false);
+      }
+    }
+  });
+
+  it('relies on the global table for what it does not say: a row of one step, a word kept whole', () => {
+    const globals = parseRules(readFileSync(join(WEB_ROOT, 'src/app/globals.css'), 'utf8'), 'global');
+    const own = (selector: string, property: string) =>
+      globals.find((rule) => selectors(rule).includes(selector))?.declarations.get(property);
+    expect(own('tbody tr', 'height')).toBe('var(--am-row-step)');
+    expect(own('tbody td', 'overflow-wrap')).toBe('break-word');
+    expect(own('tbody td', 'word-break')).toBe('normal');
+  });
+
+  const rowWith = (verdict: 'accept' | 'reject' | 'pending') =>
+    renderScreen(
+      newClient(),
+      createElement(ProposalTable, {
+        items: [proposal({ current_verdict: verdict, current_decision: verdict === 'pending' ? null : decision({ verdict }) })],
+        canDecide: true,
+        controlsFor: () => createElement('div', { 'data-test-controls': '' }),
+      }),
+    );
+
+  it('carries the names that CSS selects: the verdict on the row, the number cell and the decision cell', () => {
+    for (const verdict of ['accept', 'reject'] as const) {
+      const markup = rowWith(verdict);
+      expect(markup).toContain(`data-decision="${verdict}"`);
+      expect(markup).toMatch(/<td class="[^"]*numberCell[^"]*"><strong>1<\/strong><span class="[^"]*state[^"]*">/);
+      // The decision cell is the last one, and it holds the controls: the line is not drawn over a button.
+      expect(markup).toMatch(/<td class="[^"]*judgement[^"]*">[\s\S]*data-test-controls[\s\S]*<\/td><\/tr>/);
+    }
+  });
+
+  it('says the verdict in words as well as in colour and line', () => {
+    expect(rowWith('accept')).toMatch(/<span class="[^"]*state[^"]*">принято<\/span>/);
+    expect(rowWith('reject')).toMatch(/<span class="[^"]*state[^"]*">отклонено<\/span>/);
+    expect(rowWith('reject')).toContain('Решение: <strong>отклонено</strong>');
   });
 });

@@ -55,6 +55,78 @@ export interface SectionTotals {
   readonly audit: SectionAuditFigures | undefined;
 }
 
+/**
+ * `UIP-S01-02` (Г4-B, Г3-B): the words of the section table's header, each with its definition.
+ *
+ * The labels are the original's («Не запускались на проверку», «Нет решений эксперта», «Проверено экспертом», «Всего», «Замечаний»).
+ * A definition says what the column counts in the words of `UI-PARITY-METRICS.md` (§1 the counted document and its current version,
+ * §2 the result run, §3 the figures on the wire; the draft's M-01 … M-06): «документов, у которых …». It is shown as the heading's
+ * tooltip and is in the text a screen reader reads, so the table needs no paragraph above it. A definition names no digit and no
+ * word the dictionary does not have, so every number on the panel is still a count the server sent.
+ *
+ * The «Раздел» definition is the sentence the panel used to carry above its rows: where a document stands (`SECTION-READ-MODEL-01`,
+ * `D-180`) and who confirms it. It is the same sentence, word for word, and it still blames nothing for the unclassified row.
+ */
+export interface SectionColumn {
+  readonly key: 'section' | 'not_run' | 'no_expert_decision' | 'checked' | 'total' | 'findings';
+  /** What the heading says, and the title of the figure under it. */
+  readonly label: string;
+  /** The definition: the heading's tooltip and its text for a screen reader. */
+  readonly definition: string;
+}
+
+export const SECTION_NAME_COLUMN: SectionColumn = {
+  key: 'section',
+  label: 'Раздел',
+  definition:
+    'Документ учитывается в том разделе, который эксперт подтвердил для его текущей версии. ' +
+    'Пока раздел не подтверждён, документ попадает в строку «Без раздела». Раздел подтверждает эксперт на экране версии.',
+};
+
+/** The five figures of a row, in the table's order: not run, without an expert decision, checked, all, remarks. */
+export const SECTION_METRIC_COLUMNS = {
+  notRun: {
+    key: 'not_run',
+    label: 'Не запускались на проверку',
+    definition:
+      'Документов, у которых на текущей версии нет результата проверки: она не запускалась, ещё идёт, отменена или не удалась.',
+  },
+  noExpertDecision: {
+    key: 'no_expert_decision',
+    label: 'Нет решений эксперта',
+    definition:
+      'Документов, у которых на текущей версии проверка не запускалась или остались замечания, по которым эксперт ещё не принял решения.',
+  },
+  checked: {
+    key: 'checked',
+    label: 'Проверено экспертом',
+    definition:
+      'Документов, у которых на текущей версии есть результат проверки с замечаниями и эксперт принял решение по каждому из них: принял или отклонил.',
+  },
+  total: {
+    key: 'total',
+    label: 'Всего',
+    definition:
+      'Документов, у которых текущая версия отнесена к этому разделу; версии одного документа считаются один раз.',
+  },
+  findings: {
+    key: 'findings',
+    label: 'Замечаний',
+    definition:
+      'Замечаний в результатах проверки текущих версий документов раздела, независимо от решения эксперта.',
+  },
+} as const satisfies Record<string, SectionColumn>;
+
+/** The total row's name (`UI-A-36`): the original's «Σ Итого». */
+export const SECTION_TOTAL_LABEL = 'Итого';
+
+/**
+ * The tooltip of the row «Без раздела» (and its text for a screen reader): who stands in it and how a document leaves it. Its
+ * meaning is the second half of the sentence the panel used to carry above its rows; the other half is the «Раздел» definition.
+ */
+export const SECTION_UNCLASSIFIED_HINT =
+  'Документы, у которых эксперт ещё не подтвердил раздел текущей версии. Раздел подтверждает эксперт на экране версии.';
+
 export interface SectionBreakdownSummary {
   readonly byCode: Readonly<Record<ProjectSectionCode, number>>;
   readonly totals: SectionTotals;

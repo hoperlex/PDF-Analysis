@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ReleaseList } from '@/shared/api';
 import { checkWebVersion, hasErrorCode, shouldShowUpdate, VersionCheckError } from '@/shared/api';
-import { getWebBuildId, MissingConfigurationError, NEXT_PARAM, safeReturnPath, SIGN_IN_SCREEN } from '@/shared/config';
+import { getWebBuildId, HOME_SCREEN, MissingConfigurationError, NEXT_PARAM, safeReturnPath, SIGN_IN_SCREEN } from '@/shared/config';
 import type { SessionEndReason } from '@/shared/lib';
 import { SESSION_END_REASON_PARAM } from '@/shared/lib';
 import { useReleases } from '@/entities/release';
@@ -102,6 +102,27 @@ export function bundleBuildId(): string | null {
     if (error instanceof MissingConfigurationError) return null;
     throw error;
   }
+}
+
+/** Which of the strips the reads asked for. */
+export interface NoticeWants {
+  readonly banner: boolean;
+  readonly whatsNew: boolean;
+  readonly markFault: boolean;
+}
+
+/**
+ * What stands on this screen (`UIP-G-16`, decision Г12-B).
+ *
+ * «Что нового» is a line of the home screen (`HOME_SCREEN`) and of no other: it is an invitation to read, not a
+ * condition of working, and on a working screen it only pushed the content down. The failed read mark belongs to it —
+ * it can only follow a press of «Закрыть», which is on that line — so it goes with it. «Доступна новая версия» is a
+ * different notice (the served build is newer than this tab's), it asks for a reload, and it stays on every screen.
+ * The notes themselves stay one press away in «История версий» of the account menu.
+ */
+export function noticesOn(pathname: string | null, wanted: NoticeWants): NoticeWants {
+  const home = pathname === HOME_SCREEN;
+  return { banner: wanted.banner, whatsNew: wanted.whatsNew && home, markFault: wanted.markFault && home };
 }
 
 /** The two reads a trigger may start. */
@@ -236,12 +257,15 @@ export function ReleaseNotices() {
     mark.mutate(newest, { onError: () => setMarkFault(true), onSuccess: () => setMarkFault(false) });
   };
 
-  const bannerShown = showBanner && available !== null;
-  const whatsNewShown = showWhatsNew && newest !== null && releases.data !== undefined;
-  if (!bannerShown && !whatsNewShown && !markFault) return null;
+  const shown = noticesOn(pathname, {
+    banner: showBanner && available !== null,
+    whatsNew: showWhatsNew && newest !== null && releases.data !== undefined,
+    markFault,
+  });
+  if (!shown.banner && !shown.whatsNew && !shown.markFault) return null;
   return (
     <div className={styles.notices}>
-      {bannerShown && available !== null ? (
+      {shown.banner && available !== null ? (
         <UpdateBannerView
           onUpdate={() => window.location.reload()}
           onLater={() => {
@@ -250,10 +274,10 @@ export function ReleaseNotices() {
           }}
         />
       ) : null}
-      {whatsNewShown && newest !== null && releases.data !== undefined ? (
+      {shown.whatsNew && newest !== null && releases.data !== undefined ? (
         <WhatsNewView listing={releases.data} newest={newest} onClose={closeWhatsNew} />
       ) : null}
-      {markFault ? <MarkFaultView /> : null}
+      {shown.markFault ? <MarkFaultView /> : null}
     </div>
   );
 }

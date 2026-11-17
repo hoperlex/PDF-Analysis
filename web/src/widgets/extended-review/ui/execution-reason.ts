@@ -1,7 +1,7 @@
 /** Saved workflow failures, distinct from a machine critic's recommendation. */
 const EXECUTION_REASONS: Readonly<Record<string, string>> = {
   v2_quality_changed_requires_consent: 'Правила анализа изменились после оценки. Для новых обращений нужен новый прогон со свежей оценкой.',
-  finding_proposals_changed_requires_consent: 'Правила предложений важности и рекомендаций изменились после оценки. Для новых обращений нужен новый прогон со свежей оценкой.',
+  finding_proposals_changed_requires_consent: 'Правила предложений критичности и рекомендаций изменились после оценки. Для новых обращений нужен новый прогон со свежей оценкой.',
   input_passport_pdf_binding_invalid: 'Исходный PDF не соответствует файлу, закреплённому за версией. Новые обращения остановлены.',
   related_context_incomplete: 'Не весь найденный связанный контекст вошёл в запрос. Ограничения сохранены в записи анализа.',
   substantive_review_reply_refused: 'Часть ответов содержательного критика не прошла проверку. Исходные наблюдения сохранены; непроверенные не получили одобрения.',
@@ -16,7 +16,7 @@ const EXECUTION_REASONS: Readonly<Record<string, string>> = {
   project_parameters_value_not_in_quote: 'Значение параметра не подтверждено его исходной цитатой.',
   project_parameters_facts_rejected: 'Часть параметров не прошла проверку по источникам. Подтверждённые записи сохранены.',
   project_parameters_reply_partially_rejected: 'Часть ответов с параметрами не прошла проверку по источникам. Подтверждённые записи сохранены.',
-  unsupported_parameter_candidates_rejected: 'Неподтверждённые кандидаты отклонены и сохранены в истории проверки. В параметры проекта они не включены.',
+  unsupported_parameter_candidates_rejected: 'Неподтверждённые кандидаты отклонены и сохранены в истории проверки. В параметры объекта они не включены.',
   rejected_unsupported_candidate: 'Кандидат отклонён: его значение или цитата не подтверждены исходным текстом.',
   extended_reply_or_source_invalid: 'Ответ модели получен, но его структура или ссылки на исходные материалы не прошли проверку.',
   comprehensive_analysis_reply_refused: 'Ответ комплексной сверки получен, но не прошёл проверку по источникам.',

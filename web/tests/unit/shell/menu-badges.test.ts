@@ -330,6 +330,11 @@ function frame(client: QueryClient, subject: AppFrameSession | null): string {
   return renderWith(client, createElement(FrameNavigation, { navigation: buildNavigation(subject), offersSections: false }));
 }
 
+/** The counters' reads: every entry the frame filed but the account's (`UIP-G-06`), which is the menu's object and not a counter. */
+function counterReads(client: QueryClient) {
+  return client.getQueryCache().getAll().filter((query) => query.queryKey[0] !== 'account');
+}
+
 function seeded(): QueryClient {
   const client = newClient();
   // 30 failed jobs in the whole history, and the server says none of them is still the last word (`D-395`).
@@ -403,9 +408,14 @@ describe('the frame reads the counters from the cache entries of the screens the
   it('files the three reads under their keys, once each: the queue counter, the base\'s «Все» chip entry, the tile\'s entry', () => {
     const client = newClient();
     frame(client, ADMIN_ONLY);
-    const reads = client.getQueryCache().getAll().map((query) => query.queryHash).sort();
+    // `UIP-G-06`, `UIP-G-07`: «/dashboard» follows the object and its address names none, so the frame also asks the account which
+    // object it chose last (`getMe`, the one entry every reader of the account shares) — the menu's object, not a counter.
+    const reads = counterReads(client).map((query) => query.queryHash).sort();
     expect(reads).toEqual(
       [QUEUE_KEY, KB_KEY, PENDING_KEY].map((key) => client.defaultQueryOptions({ queryKey: [...key] }).queryHash).sort(),
+    );
+    expect(client.getQueryCache().getAll().map((query) => String(query.queryKey)).sort()).toEqual(
+      [String(queryKeys.account.me()), String(QUEUE_KEY), String(KB_KEY), String(PENDING_KEY)].sort(),
     );
   });
 
@@ -478,7 +488,7 @@ describe('the frame reads the counters from the cache entries of the screens the
   it('follows the operational-list cadence of polling.ts on every read, which the queue screen\'s own read already does', () => {
     const client = newClient();
     frame(client, ADMIN_ONLY);
-    for (const query of client.getQueryCache().getAll()) {
+    for (const query of counterReads(client)) {
       const options = query.options as { refetchInterval?: unknown; refetchIntervalInBackground?: unknown };
       expect(options.refetchInterval, String(query.queryKey)).toBe(OPERATIONAL_LIST_POLL.refetchInterval);
       expect(options.refetchIntervalInBackground, String(query.queryKey)).toBe(false);
@@ -577,7 +587,7 @@ describe('«База знаний» counts the entries of the project the addres
     expect(all?.label).toBe('Записей в базе знаний (замечания и предложения вместе): 12');
     const scoped = menuBadgesOf({ knowledgeBaseTotal: 12, knowledgeBaseOfProject: true })[KNOWLEDGE_BASE]?.[0];
     expect(scoped?.label).toBe(`${KNOWLEDGE_BASE_PROJECT_BADGE_LABEL}: 12`);
-    expect(scoped?.label).toBe('Записей в базе знаний выбранного проекта (замечания и предложения вместе): 12');
+    expect(scoped?.label).toBe('Записей в базе знаний выбранного объекта (замечания и предложения вместе): 12');
     expect(scoped?.count).toBe(12);
     expect(menuBadgesOf({ knowledgeBaseTotal: 0, knowledgeBaseOfProject: true })).toEqual({});
   });
@@ -587,7 +597,7 @@ describe('«База знаний» counts the entries of the project the addres
     client.setQueryData(PROJECT_KB_KEY, knowledgePage(12));
     const markup = frameAt(client, ADMIN_ONLY, '/dashboard', `project=${PROJECT}`);
     for (const which of ['row', 'rail', 'stacked'] as const) expect(kbPills(markup, which), which).toEqual(['count:12']);
-    expect(state(markup, 'row')).toContain('Записей в базе знаний выбранного проекта (замечания и предложения вместе): 12');
+    expect(state(markup, 'row')).toContain('Записей в базе знаний выбранного объекта (замечания и предложения вместе): 12');
     // The installation's 140 is not shown beside a project.
     expect(markup).not.toContain('99+');
   });

@@ -404,6 +404,16 @@
   pointer-events: none;
 }
 
+/*
+ * `UIP-G-07`: in the compact rail a section's dot (`SectionDot`, the colour of `UIP-G-17`) stands above its code, so the colour and
+ * the letters do not share the 40 px the link has; in the bar and the stacked menu the dot is a flex item of the link, before the code.
+ */
+.railSection {
+  display: grid;
+  justify-items: center;
+  gap: var(--am-gap-2xs);
+}
+
 .sectionNote {
   margin: 0 0 0 var(--am-gap);
   padding: var(--am-gap-xs) var(--am-gap-sm);
@@ -480,19 +490,62 @@
   box-shadow: var(--am-shadow-1);
 }
 
-/* The icon is centred in its button; as an inline box it stood on the text baseline, two pixels high. */
+/*
+ * The theme control is ONE round button now (`theme-toggle.tsx`): a 28 px target in a 2 px ring, 34 px over all, the size of
+ * the original's button. The glyph is centred in it; as an inline box it stood on the text baseline, two pixels high.
+ */
 .end :global(.am-theme__option) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 26px;
-  min-height: 24px;
-  padding: var(--am-gap-2xs) var(--am-gap-xs);
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  font-size: var(--am-text-lg);
 }
 
-.end :global(.am-theme__option[aria-pressed='true']) {
-  background: var(--am-accent-light);
-  color: var(--am-accent-strong);
+/*
+ * The glyph stands for the theme the press switches TO: the sun while the screen is dark, the moon while it is light. Both are
+ * in the markup, and these rules read the same two things the palette does (`globals.css`: the explicit choice on `<html>` and
+ * `prefers-color-scheme`), so the right glyph is on the first frame, before any script has run, and follows the system by
+ * itself. In the order the cascade needs: the light screen's answer; an explicit dark choice over it; under a dark system the
+ * sun by default, and an explicit light choice over that. (No `:not()`: the contrast census' matcher declines it, and the palette's
+ * own `:root:not([data-theme='light'])` is the one it already names.)
+ */
+.end :global(.am-theme__icon) {
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.end :global(.am-theme__icon--moon) {
+  display: inline-flex;
+}
+
+:global(:root[data-theme='dark']) .end :global(.am-theme__icon--moon) {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .end :global(.am-theme__icon--sun) {
+  display: inline-flex;
+}
+
+@media (prefers-color-scheme: dark) {
+  .end :global(.am-theme__icon--moon) {
+    display: none;
+  }
+
+  .end :global(.am-theme__icon--sun) {
+    display: inline-flex;
+  }
+
+  :global(:root[data-theme='light']) .end :global(.am-theme__icon--moon) {
+    display: inline-flex;
+  }
+
+  :global(:root[data-theme='light']) .end :global(.am-theme__icon--sun) {
+    display: none;
+  }
 }
 
 /*

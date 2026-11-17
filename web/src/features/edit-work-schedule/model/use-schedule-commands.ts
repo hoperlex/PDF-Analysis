@@ -9,7 +9,7 @@
  * again later (a day made a day off, back, and off again) is a new command and not a replay of the first.
  *
  * Every success invalidates `workSchedule.all()`; a move also `assignments.all()`, because a move to another expert is
- * a reassignment in «Диспетчер».
+ * a reassignment in «Назначения».
  */
 
 import { useRef } from 'react';

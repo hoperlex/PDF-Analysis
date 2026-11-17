@@ -11,9 +11,13 @@
  * Pure markup: findings and callbacks in, rows out. The shared `Table` is not used because it has no room for
  * an opened row, a verdict on the row or a column that is not text; it stays as it is for its other readers.
  *
- * The severity cell keeps the two apart (`R-151j`): the expert's decision is a badge, the model's proposal is a
- * labelled note and never the badge. The norm cell lists the citations the server certified (`norm_citations`);
- * absent means the citation gate never ran for the finding and prints a dash, not «0» (`finding-basis`).
+ * The severity keeps the two apart (`R-151j`, `UIP-S06-07`): the expert's decision is a pill, the model's proposal is the dashed
+ * pill with the word «предложено» (`SeverityBadge proposed`) and never the plain one. A row wears a stripe at its left in the tone
+ * of its severity, solid for a decided one and dashed for a proposed one (`data-severity-tone`, `data-severity-source`); a finding
+ * with no severity has none. The verdict reads on the row as well: accepted rows stand on green, rejected rows are struck through
+ * (the decision cell is not, so the buttons and the word of the verdict stay readable), and the order puts the rejected last.
+ * The norm cell lists the citations the server certified (`norm_citations`); absent means the citation gate never ran for the
+ * finding and prints a dash, not «0» (`finding-basis`).
  */
 
 import { Fragment } from 'react';
@@ -23,13 +27,14 @@ import type { Finding, PrecedentFindingLabel } from '@/shared/api';
 import {
   EXECUTION_STATUS_LABELS,
   EvidenceLimitation,
-  SEVERITY_LABELS,
   OriginChip,
   SeverityBadge,
   findingOriginOf,
   normCitationStateLabel,
   normCitationStateMeaning,
+  severityTone,
 } from '@/entities/finding';
+import type { SeverityTone } from '@/entities/finding';
 import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages, findingPages } from '@/entities/finding-observation';
 import { clauseLabel } from '@/entities/norms';
@@ -78,19 +83,22 @@ function unlinkedPagesOf(finding: Finding, unlinkedPages: ReadonlySet<number> | 
   return [...cited].filter((page) => unlinkedPages.has(page)).sort((left, right) => left - right);
 }
 
-const COLUMNS = ['№', 'Важность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'] as const;
+const COLUMNS = ['№', 'Критичность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'] as const;
+
+/** The stripe of a row: the tone of the finding's severity, and whose it is. Nothing for a finding with no severity at all. */
+function stripeOf(finding: Finding): { readonly tone: SeverityTone; readonly source: 'decided' | 'proposed' } | null {
+  if (finding.decided_severity !== undefined) return { tone: severityTone(finding.decided_severity), source: 'decided' };
+  const proposed = finding.observation.proposed_severity;
+  return proposed === undefined ? null : { tone: severityTone(proposed), source: 'proposed' };
+}
 
 function SeverityCell({ finding }: { readonly finding: Finding }) {
   if (finding.decided_severity !== undefined) {
-    return <SeverityBadge severity={finding.decided_severity} title="Важность, решённая экспертом" />;
+    return <SeverityBadge severity={finding.decided_severity} title="Критичность, решённая экспертом" />;
   }
   const proposed = finding.observation.proposed_severity;
   if (proposed === undefined) return <span className={styles.none}>—</span>;
-  return (
-    <span className={styles.proposal} data-proposed-severity={proposed} title="Предложение модели, не решение эксперта">
-      предложено: {SEVERITY_LABELS[proposed]}
-    </span>
-  );
+  return <SeverityBadge severity={proposed} proposed />;
 }
 
 function NormCell({ finding }: { readonly finding: Finding }) {
@@ -156,7 +164,7 @@ export function FindingTable({
 }: FindingTableProps) {
   return (
     <div className={styles.scroll} data-finding-table="">
-      <table className={styles.table} aria-label="Находки прогона">
+      <table className={styles.table} aria-label="Замечания прогона">
         <colgroup>
           <col className={styles.colNumber} />
           <col className={styles.colSeverity} />
@@ -182,6 +190,7 @@ export function FindingTable({
             const merged = finding.merged_observations?.length ?? 0;
             const expansion = selected && renderExpansion !== undefined ? renderExpansion(finding) : null;
             const blocks = blockCountOf?.(finding.finding_uid);
+            const stripe = stripeOf(finding);
             return (
               <Fragment key={finding.finding_uid}>
                 <tr
@@ -189,6 +198,8 @@ export function FindingTable({
                   aria-current={selected ? 'true' : undefined}
                   data-row-key={finding.finding_uid}
                   data-verdict-bucket={verdictBucket(finding.current_verdict)}
+                  data-severity-tone={stripe?.tone}
+                  data-severity-source={stripe?.source}
                 >
                   <td className={styles.number}>
                     <button
@@ -240,7 +251,7 @@ export function FindingTable({
                     <NormCell finding={finding} />
                   </td>
                   <td className={styles.recommendation}>{finding.observation.recommendation_text}</td>
-                  <td>
+                  <td className={styles.decisionCell}>
                     <div className={styles.decision}>
                       <VerdictBadge verdict={finding.current_verdict} />
                       {/* `UI-A-73`: the verdict was carried over from an earlier version; absent, nothing is drawn. */}

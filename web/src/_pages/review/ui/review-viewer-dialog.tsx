@@ -99,7 +99,7 @@ export function ReviewViewerDialog({
       ref={dialog}
       className={styles.dialog}
       open={staticOpen ? true : undefined}
-      aria-label="Находка на странице документа"
+      aria-label="Замечание на странице документа"
       data-review-viewer=""
       onClick={(event) => {
         // A press on the backdrop lands on the dialog itself; inside, it lands on the content.
@@ -108,14 +108,14 @@ export function ReviewViewerDialog({
     >
       <div className={styles.box}>
         <header className={styles.bar}>
-          <div className={styles.steps} role="group" aria-label="Находки списка">
+          <div className={styles.steps} role="group" aria-label="Замечания списка">
             <button
               type="button"
               className={styles.step}
               onClick={onPrevious}
               disabled={onPrevious === undefined}
-              aria-label="Предыдущая находка"
-              title="Предыдущая находка"
+              aria-label="Предыдущее замечание"
+              title="Предыдущее замечание"
             >
               ‹
             </button>
@@ -127,8 +127,8 @@ export function ReviewViewerDialog({
               className={styles.step}
               onClick={onNext}
               disabled={onNext === undefined}
-              aria-label="Следующая находка"
-              title="Следующая находка"
+              aria-label="Следующее замечание"
+              title="Следующее замечание"
             >
               ›
             </button>

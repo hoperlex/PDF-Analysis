@@ -8,7 +8,7 @@ export async function readStagePairs(projectUid: string): Promise<StagePair[]> {
   const seen = new Set<string>();
   do {
     const page = (await listStagePairs({ path: { project_uid: projectUid }, query: { limit: 100, ...(cursor === undefined ? {} : { cursor }) } })).data;
-    if (page.items.some((pair) => pair.project_uid !== projectUid)) throw new Error('Получены пары другого проекта.');
+    if (page.items.some((pair) => pair.project_uid !== projectUid)) throw new Error('Получены пары другого объекта.');
     items.push(...page.items);
     cursor = page.page.next_cursor ?? undefined;
     if (cursor !== undefined && seen.has(cursor)) throw new Error('Список пар обновился. Повторите запрос.');

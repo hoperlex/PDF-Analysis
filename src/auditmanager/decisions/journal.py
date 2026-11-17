@@ -31,6 +31,7 @@ sequence is never exposed, in a field or inside a cursor.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -68,6 +69,13 @@ __all__ = ["JournalEntry", "decision_journal"]
 #: classified has no row and ``section`` is NULL; the legacy ``document.section`` is not read at all,
 #: for the reason the dashboard states.
 #:
+#: **The execution status** (`UIP-S12-01`, ruling `R-151g`, migration ``0054``) is the finding's
+#: designer-entered status, read through ``finding_execution_status`` (at most one row per finding,
+#: so the join cannot multiply an event). ``LEFT JOIN``: a finding with no status has no row and the
+#: record carries neither field. It is joined to read and to narrow only -- the status is not an
+#: expert decision, so nothing here touches the verdict, the ledger or a count of them. The filter
+#: takes the whole set at once (``= ANY``) and compares the **same column the record reports**.
+#:
 #: ``total`` on the wire is the length of what this returns, counted at the edge before it pages: the
 #: listing already pages in Python over this whole result, so the count cannot be a second definition
 #: of "matching" that drifts from the rows.
@@ -98,7 +106,9 @@ _JOURNAL = text(
         cs.decision_id AS carried_decision_id,
         cs.finding_uid AS carried_finding_uid,
         cf.version_uid AS carried_version_uid,
-        cv.version_ordinal AS carried_version_ordinal
+        cv.version_ordinal AS carried_version_ordinal,
+        es.status AS execution_status,
+        es.set_at AS execution_status_at
     FROM expert_decision_event e
     JOIN finding f ON f.finding_uid = e.finding_uid
     JOIN finding_observation o ON o.finding_observation_id = e.finding_observation_id
@@ -110,9 +120,11 @@ _JOURNAL = text(
     LEFT JOIN expert_decision_event cs ON cs.decision_id = e.carried_from_decision_id
     LEFT JOIN finding cf ON cf.finding_uid = cs.finding_uid
     LEFT JOIN document_version cv ON cv.version_uid = cf.version_uid
+    LEFT JOIN finding_execution_status es ON es.finding_uid = e.finding_uid
     WHERE (CAST(:category AS text) IS NULL OR o.category = CAST(:category AS text))
       AND (CAST(:verdict AS text) IS NULL OR v.current_verdict = CAST(:verdict AS text))
       AND (CAST(:project_uid AS text) IS NULL OR f.project_uid = CAST(:project_uid AS text))
+      AND (CAST(:execution_statuses AS text[]) IS NULL OR es.status = ANY(CAST(:execution_statuses AS text[])))
     ORDER BY e.recorded_at DESC, e.decision_id COLLATE "C" DESC
     """
 )
@@ -160,6 +172,10 @@ class JournalEntry:
     #: `UI-A-73` (migration ``0058``): where a carried event came from, or ``None`` for an event made directly (and for
     #: every event written before the migration).
     carried_from: CarriedOrigin | None = None
+    #: `UIP-S12-01` (`R-151g`): the designer's execution status of the finding and when it was set; both ``None`` for a
+    #: finding with no status. Not an expert decision: it is read beside the record and never changes it.
+    execution_status: str | None = None
+    execution_status_at: datetime | None = None
 
 
 def decision_journal(
@@ -168,6 +184,7 @@ def decision_journal(
     category: str | None = None,
     verdict: str | None = None,
     project_uid: str | None = None,
+    execution_statuses: Sequence[str] | None = None,
 ) -> tuple[JournalEntry, ...]:
     """Every recorded decision, newest first, optionally narrowed.
 
@@ -181,7 +198,12 @@ def decision_journal(
     reports as ``project_uid``. It is a filter and not a parent, so a project that does not exist
     matches nothing and is an empty tuple, not a refusal.
 
-    All three are filtered **in the query**, against the same columns this function reports. A
+    ``execution_statuses`` (`UIP-S12-01`) keeps the entries of findings whose execution status is **any of** the
+    values given -- ``None`` is no filter. It narrows the **finding**, as the three above do, and a finding with no
+    status matches none of the values: only a finding that has one can be kept by it. An empty sequence is refused
+    rather than read as "no filter" or as "nothing": a caller with no statuses to ask for leaves the argument out.
+
+    All four are filtered **in the query**, against the same columns this function reports. A
     filter applied to one column and reported from another is the shape `W12` recorded: a
     query that shares an assumption with its subject cannot see the subject being wrong.
 
@@ -198,8 +220,16 @@ def decision_journal(
     event whose account is unknown (NULL) is listed exactly as one whose account is known;
     an inner join there would silently drop the whole of history.
     """
+    if execution_statuses is not None and len(execution_statuses) == 0:
+        raise ValueError("execution_statuses is None for no filter; an empty sequence names no status")
     rows = session.execute(
-        _JOURNAL, {"category": category, "verdict": verdict, "project_uid": project_uid}
+        _JOURNAL,
+        {
+            "category": category,
+            "verdict": verdict,
+            "project_uid": project_uid,
+            "execution_statuses": None if execution_statuses is None else sorted(set(execution_statuses)),
+        },
     ).mappings()
     return tuple(
         JournalEntry(
@@ -224,6 +254,8 @@ def decision_journal(
             finding_text=row["finding_text"],
             current_verdict=row["current_verdict"],
             decision_event_count=row["decision_event_count"],
+            execution_status=row["execution_status"],
+            execution_status_at=row["execution_status_at"],
             carried_from=(
                 None if row["carried_decision_id"] is None else CarriedOrigin(
                     decision_id=row["carried_decision_id"], finding_uid=row["carried_finding_uid"],

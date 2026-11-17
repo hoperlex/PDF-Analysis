@@ -2,7 +2,7 @@
 
 /**
  * The tabs of «Сравнение версий»: «Проекты и этапы» and «Сравнение листов». The WAI-ARIA tabs pattern with automatic
- * activation, as the tabs of «Блоки» and «Исполнители» are: a `tablist` of `tab` buttons, each naming the `tabpanel` it
+ * activation, as the tabs of «Блоки» and «Диспетчер» are: a `tablist` of `tab` buttons, each naming the `tabpanel` it
  * controls; only the open tab is in the tab order, and the arrow keys, Home and End move the selection and the focus. One
  * panel is drawn, for the open tab: nothing of a closed tab is mounted, so a closed tab reads nothing from the API.
  */

@@ -57,7 +57,7 @@ export class RunFindingsReadFault extends Error {
   }
 }
 
-const NOT_COMPLETE = 'Список находок не показан, чтобы не выдать часть за целое.';
+const NOT_COMPLETE = 'Список замечаний не показан, чтобы не выдать часть за целое.';
 
 /**
  * Read every page of one run's findings, in the order the server gave them.
@@ -78,7 +78,7 @@ export async function readAllRunFindings(
     signal.throwIfAborted();
     if (pages > RUN_FINDINGS_MAX_PAGES) {
       throw new RunFindingsReadFault(
-        `Сервер не закончил список находок за ${RUN_FINDINGS_MAX_PAGES} страниц. ${NOT_COMPLETE}`,
+        `Сервер не закончил список замечаний за ${RUN_FINDINGS_MAX_PAGES} страниц. ${NOT_COMPLETE}`,
       );
     }
 
@@ -93,7 +93,7 @@ export async function readAllRunFindings(
     for (const finding of response.data.items) {
       if (identities.has(finding.finding_uid)) {
         throw new RunFindingsReadFault(
-          `Одна и та же находка пришла на двух страницах списка. ${NOT_COMPLETE}`,
+          `Одно и то же замечание пришло на двух страницах списка. ${NOT_COMPLETE}`,
         );
       }
       identities.add(finding.finding_uid);
@@ -103,7 +103,7 @@ export async function readAllRunFindings(
     const next = response.data.page.next_cursor;
     if (next === null || next === undefined) break;
     if (cursors.has(next)) {
-      throw new RunFindingsReadFault(`Сервер повторил курсор списка находок. ${NOT_COMPLETE}`);
+      throw new RunFindingsReadFault(`Сервер повторил курсор списка замечаний. ${NOT_COMPLETE}`);
     }
     cursors.add(next);
     cursor = next;

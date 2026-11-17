@@ -19,7 +19,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
 
 import { DocumentDetailPage } from '@/_pages/document-detail';
 import { listDocuments, queryKeys } from '@/shared/api';
-import type { ApiResponse, DocumentVersion, DocumentVersionPage, ProjectUid } from '@/shared/api';
+import type { ApiResponse, DocumentAudit, DocumentVersion, DocumentVersionPage, ProjectUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import {
   DOCUMENT_PAGE_LIMIT,
@@ -27,7 +27,7 @@ import {
   sectionListingAudit,
   sectionPosition,
 } from '@/entities/document-version';
-import { SectionNeighbours, SectionNeighboursView } from '@/widgets/document-context';
+import { SectionNeighbours, SectionNeighboursView, levelAddress } from '@/widgets/document-context';
 import { findProjectSection } from '@/entities/project';
 
 import { mountLive } from '../analysis-settings/live-render';
@@ -127,6 +127,41 @@ describe('the strip', () => {
     const markup = draw(2);
     expect(linkOf(markup, 'prev')).toEqual({ href: routes.document(PROJECT_UID, B.document_uid), title: 'Документ B', text: '‹ Предыдущий' });
     expect(linkOf(markup, 'next')).toEqual({ href: routes.document(PROJECT_UID, D.document_uid), title: 'Документ D', text: 'Следующий ›' });
+  });
+
+  // `UIP-G-09`: the neighbour opens on the tab the reader is on.
+  describe('on a tab', () => {
+    const drawOn = (level: Parameters<typeof levelAddress>[0], neighbours: { previous: DocumentVersion; next: DocumentVersion }): string =>
+      renderToStaticMarkup(createElement(SectionNeighboursView, {
+        projectUid: PROJECT_UID, section: AR, level, place: { position: 2, total: 3, ...neighbours },
+      }));
+    const audited = (suffix: string, audit: DocumentAudit): DocumentVersion =>
+      otherVersion(suffix, { audit, classification: classification({ section_code: 'AR' }) });
+    const audit = (over: Partial<DocumentAudit>): DocumentAudit =>
+      ({ finding_count: 0, undecided_finding_count: 0, partial: false, state: 'not_run', ...over });
+
+    it('keeps a tab of the version: the neighbour’s current version on «Инфо» and on «Блоки»', () => {
+      const markup = drawOn('blocks', { previous: B, next: D });
+      expect(markup).toContain(`href="${routes.versionBlocks(PROJECT_UID, B.version_uid)}"`);
+      expect(markup).toContain(`href="${routes.versionBlocks(PROJECT_UID, D.version_uid)}"`);
+      expect(drawOn('version', { previous: B, next: D })).toContain(`href="${routes.version(PROJECT_UID, B.version_uid)}"`);
+    });
+
+    it('keeps «Разбор» and «Лог» on the neighbour’s run as its audit names it, and its «Инфо» where it has none', () => {
+      const withRun = audited('P', audit({ result_run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8P', state: 'checked' }));
+      const withoutRun = audited('N', audit({}));
+      const review = drawOn('review', { previous: withRun, next: withoutRun });
+      expect(review).toContain(`href="${routes.review(PROJECT_UID, 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8P')}"`);
+      expect(review).toContain(`href="${routes.version(PROJECT_UID, withoutRun.version_uid)}"`);
+      const log = drawOn('log', { previous: withRun, next: withoutRun });
+      expect(log).toContain(`href="${routes.run(PROJECT_UID, 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8P')}?tab=journal"`);
+      expect(log).toContain(`href="${routes.version(PROJECT_UID, withoutRun.version_uid)}"`);
+    });
+
+    it('keeps the document’s own pages on the neighbour’s document, as it did before there was a tab', () => {
+      expect(drawOn('optimisation', { previous: B, next: D })).toContain(`href="${routes.documentOptimisation(PROJECT_UID, B.document_uid)}"`);
+      expect(drawOn('document', { previous: B, next: D })).toContain(`href="${routes.document(PROJECT_UID, B.document_uid)}"`);
+    });
   });
 
   it('draws no link where there is no neighbour: the first has no previous, the last no next', () => {

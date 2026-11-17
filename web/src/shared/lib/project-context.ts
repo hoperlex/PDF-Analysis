@@ -1,11 +1,25 @@
 /**
- * The project the user works in, read from and written to the address (`R-150c`,
- * `docs/program/UI-PARITY-01.md` «Project context»).
+ * The project (the «объект») the user works in, read from the address, or, when the address names none, taken from the
+ * account's last choice (`R-150c`, `UI-PARITY-01` «Project context», `UIP-G-06`, owner ruling Г7-B).
  *
- * **The address is the only source of the project.** No store, no cookie, no copy in client state:
- * a reload, a pasted link and Back/Forward all restore the project from the address alone. These
- * helpers are the one place that knows how it is spelled. They are pure functions over a pathname
- * and a query string; they do not navigate and they do not fetch.
+ * **The address is the only source of an explicit choice.** No store, no cookie, no copy in client state: a reload, a pasted
+ * link and Back/Forward all restore the project from the address alone. What the address does not say, the server's
+ * answer fills in: `getMe` carries `last_project_uid`, the object the account chose last in the list (`setMyLastProject`);
+ * there is no hidden state of the browser tab. These helpers are the one place that knows how it is spelled. They are pure
+ * functions over a pathname, a query string and the account's answer; they do not navigate and they do not fetch.
+ *
+ * ## The order of what wins (`resolveProjectContext`)
+ *
+ *   1. the path, `/projects/[project_uid]…` (a `required` screen);
+ *   2. `?project=<project_uid>`;
+ *   3. `?project=all`, the explicit choice «Все объекты»;
+ *   4. the account's `last_project_uid`, on an `optional` screen only;
+ *   5. nothing: «Все объекты».
+ *
+ * «Все объекты» is written `?project=all` ({@link ALL_PROJECTS_PARAM}). The absence of the parameter is no longer «все
+ * объекты»: it is «the object the account chose last», and where there is none, «все объекты». `all` can never be a
+ * project's uid (those are `prj_…`), and the explicit choice is not sent to the server (`setMyLastProject` has no body
+ * for it), so it lives in the address only.
  *
  * ## The three classes
  *
@@ -15,14 +29,15 @@
  *   - `required`: the project is in the path (`/projects/[project_uid]…`). It is always there; a
  *     `?project=` beside it is redundant, and where the two disagree **the path wins**.
  *   - `optional`: the screen follows the project the header chose, carried in `?project=`.
- *     Without it the screen shows «Все проекты» (a comparison asks to choose one).
- *   - `global`: the screen is not about one project. It ignores `?project=`, but the frame carries
- *     it on, so a chosen project survives a visit to «Очередь» and back.
+ *     Without it the screen shows the account's last object, and «Все объекты» where there is none (a comparison asks to
+ *     choose one).
+ *   - `global`: the screen is not about one project. It ignores `?project=` and the account's last choice, but the frame
+ *     carries the address's project on, so a chosen project survives a visit to «Очередь» and back.
  *
  * An address no registry row matches (a 404, a typo) has no class: nothing reads a project from it
  * and nothing is added to links that lead to it.
  *
- * ## Why these four and not a generic query-string helper
+ * ## Why these helpers and not a generic query-string helper
  *
  * Each has a rule of its own: which source wins, which parameters die with a project change, which
  * targets must not receive the parameter. They are not a general `getParam`/`setParam`.
@@ -39,6 +54,12 @@ import { SCREEN_REGISTRY, screenMatching } from '@/shared/config';
 export const PROJECT_PARAM = 'project';
 
 /**
+ * The value of `?project=` that is the explicit choice «Все объекты» (`UIP-G-06`). It beats the account's last object, which
+ * the absence of the parameter does not. A project uid is `prj_…`, so it never reads as this.
+ */
+export const ALL_PROJECTS_PARAM = 'all';
+
+/**
  * The parameters that only mean something inside one project. A project change removes them: a
  * `section`, `version`, `pair`, `set`, `run`, `cursor` or `tab` of one project names nothing in
  * another, and carrying it over would open the new project on a stale selection.
@@ -51,11 +72,14 @@ const PROJECT_SEGMENT = '[project_uid]';
 /** The class of a screen, as the registry states it. */
 export type ProjectScope = NonNullable<ScreenEntry['projectScope']>;
 
-/** Where the project of an address came from: its path, its `?project=`, or nowhere. */
-export type ProjectSource = 'path' | 'query' | 'none';
+/**
+ * Where the project came from: the path, a `?project=<uid>`, the explicit `?project=all` (no project, chosen), the account's
+ * last object (`resolveProjectContext` only; an address alone never says it), or nowhere.
+ */
+export type ProjectSource = 'path' | 'query' | 'all' | 'remembered' | 'none';
 
 export interface ProjectContext {
-  /** The project's uid as the address spells it; `null` when the address names none. */
+  /** The project's uid; `null` for «Все объекты», chosen (`source` `all`) or not (`none`). */
   readonly projectUid: string | null;
   readonly source: ProjectSource;
 }
@@ -64,6 +88,7 @@ export interface ProjectContext {
 export type SearchParamsLike = Pick<URLSearchParams, 'get' | 'toString'>;
 
 const NO_PROJECT: ProjectContext = { projectUid: null, source: 'none' };
+const ALL_CHOSEN: ProjectContext = { projectUid: null, source: 'all' };
 
 /** The registry row of `pathname` (no query, no fragment), with its class checked to be stated. */
 function rowOf(
@@ -90,7 +115,7 @@ function pathProjectUid(pathname: string, row: ScreenEntry): string {
   return uid;
 }
 
-/** The project in a query string; an empty `?project=` names none. */
+/** The raw `?project=` of a query string: a uid, {@link ALL_PROJECTS_PARAM}, or `null`; an empty one names none. */
 function queryProjectUid(searchParams: SearchParamsLike): string | null {
   const value = searchParams.get(PROJECT_PARAM);
   return value === null || value === '' ? null : value;
@@ -114,11 +139,14 @@ export function projectScopeOf(
 }
 
 /**
- * The project an address names, and where it came from.
+ * The project an address names, and where it came from. The address alone: the account's last object is
+ * {@link resolveProjectContext}'s.
  *
  *   - on a `required` screen, the path's `project_uid` (`'path'`), whatever `?project=` says;
- *   - on an `optional` or `global` screen, the non-empty `?project=` (`'query'`) — a `global`
+ *   - on an `optional` or `global` screen, the non-empty `?project=<uid>` (`'query'`) — a `global`
  *     screen ignores it for its own content but the frame still reads it, to carry it on;
+ *   - `?project=all` is the explicit «Все объекты»: no project, and `'all'`, so that it can be told from an address that
+ *     says nothing;
  *   - otherwise nothing (`'none'`): no parameter, an empty one, or an address with no class.
  *
  * @param pathname the path only, without query or fragment.
@@ -132,7 +160,30 @@ export function readProjectContext(
   if (row === undefined) return NO_PROJECT;
   if (row.projectScope === 'required') return { projectUid: pathProjectUid(pathname, row), source: 'path' };
   const fromQuery = queryProjectUid(searchParams);
-  return fromQuery === null ? NO_PROJECT : { projectUid: fromQuery, source: 'query' };
+  if (fromQuery === null) return NO_PROJECT;
+  return fromQuery === ALL_PROJECTS_PARAM ? ALL_CHOSEN : { projectUid: fromQuery, source: 'query' };
+}
+
+/**
+ * The project a screen works in: what the address names, and where it names none, the account's last object.
+ *
+ * `remembered` is `last_project_uid` of `getMe`: a uid, or `null`/`undefined` for «no last object» and «not known (yet)».
+ * It is read only on an `optional` screen, the ones that follow the object; a `global` screen and an address with no class
+ * keep what the address says. The order is {@link readProjectContext}'s (path, `?project=<uid>`, `?project=all`), then the
+ * remembered object (`'remembered'`), then nothing.
+ *
+ * @param pathname the path only, without query or fragment.
+ */
+export function resolveProjectContext(
+  pathname: string,
+  searchParams: SearchParamsLike,
+  remembered: string | null | undefined,
+  registry: readonly ScreenEntry[] = SCREEN_REGISTRY,
+): ProjectContext {
+  const fromAddress = readProjectContext(pathname, searchParams, registry);
+  if (fromAddress.source !== 'none') return fromAddress;
+  if (remembered === null || remembered === undefined || remembered === '') return fromAddress;
+  return projectScopeOf(pathname, registry) === 'optional' ? { projectUid: remembered, source: 'remembered' } : fromAddress;
 }
 
 /**
@@ -176,7 +227,8 @@ export function canonicalProjectParams(
  *     and keeps the rest of its query and its fragment;
  *   - a `required` target is returned unchanged — its project is in its path, and a second copy
  *     could only disagree with it;
- *   - `projectUid` `null` (or empty), «Все проекты», removes `?project=` from an `optional` or
+ *   - `projectUid` {@link ALL_PROJECTS_PARAM} carries the explicit «Все объекты» the same way, as `?project=all`;
+ *   - `projectUid` `null` (or empty), no project, removes `?project=` from an `optional` or
  *     `global` target;
  *   - an `href` that is not a registered address of this application (another origin, a typo,
  *     a relative path) is returned unchanged.
@@ -212,19 +264,29 @@ export function withProjectParam(
 /**
  * The query string after the user chooses `newProjectUid` in the header, on an `optional` or
  * `global` screen: the new project is set, and every parameter that only meant something inside the
- * old one ({@link PROJECT_DEPENDENT_PARAMS}) is removed. `null` (or empty) is «Все проекты»:
- * `project` is removed.
+ * old one ({@link PROJECT_DEPENDENT_PARAMS}) is removed. `null` (or empty) is «Все объекты», and it is a choice like any
+ * other: `?project=all` ({@link ALL_PROJECTS_PARAM}), not the absence of the parameter, which would let the account's last
+ * object come back (`UIP-G-06`).
  *
- * Choosing the project the address already has changes nothing — the user keeps their selection.
- * Every other parameter is kept. On a `required` screen the header navigates to the chosen
- * project's page instead; that is a path, not a query, and not this function.
+ * Choosing what the address already says changes nothing — the user keeps their selection. The dependent parameters go
+ * with a change of project, and only then: `effectiveProjectUid` is the project the screen is on when the address says
+ * none (the account's last object), so choosing that very object writes it into the address and keeps the rest; left out,
+ * it is read from the address (`?project=<uid>`, or `null` for `all` and for none). Every other parameter is kept. On a
+ * `required` screen the header navigates to the chosen project's page instead; that is a path, not a query, and not this
+ * function.
  */
-export function switchProject(searchParams: SearchParamsLike, newProjectUid: string | null): URLSearchParams {
+export function switchProject(
+  searchParams: SearchParamsLike,
+  newProjectUid: string | null,
+  effectiveProjectUid?: string | null,
+): URLSearchParams {
   const params = new URLSearchParams(searchParams.toString());
-  const wanted = newProjectUid === '' ? null : newProjectUid;
-  if (queryProjectUid(params) === wanted) return params;
-  if (wanted === null) params.delete(PROJECT_PARAM);
-  else params.set(PROJECT_PARAM, wanted);
-  for (const dependent of PROJECT_DEPENDENT_PARAMS) params.delete(dependent);
+  const wanted = newProjectUid === null || newProjectUid === '' ? ALL_PROJECTS_PARAM : newProjectUid;
+  const current = queryProjectUid(params);
+  if (current === wanted) return params;
+  const before = effectiveProjectUid !== undefined ? effectiveProjectUid : current === ALL_PROJECTS_PARAM ? null : current;
+  const after = wanted === ALL_PROJECTS_PARAM ? null : wanted;
+  params.set(PROJECT_PARAM, wanted);
+  if (before !== after) for (const dependent of PROJECT_DEPENDENT_PARAMS) params.delete(dependent);
   return params;
 }

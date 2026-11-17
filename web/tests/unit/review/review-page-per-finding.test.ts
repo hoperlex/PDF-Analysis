@@ -71,6 +71,7 @@ import {
   RUN_ID,
   decisionEvent,
   findingDetail,
+  inListView,
   observation,
   runStatus,
 } from './fixtures';
@@ -98,7 +99,7 @@ function screenOpenOn(first: FindingDetail, second: FindingDetail): string {
     });
   }
   (world.model as MutationModel).rewind();
-  return renderScreen(client, createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
+  return renderScreen(client, inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })));
 }
 
 const onA = (): string => screenOpenOn(FINDING_A, FINDING_B);

@@ -1,3 +1,4 @@
+import { PathnameContext, SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
@@ -57,29 +58,38 @@ describe('human review of a meaningful issue with incomplete evidence', () => {
     client.setQueryData(queryKeys.runs.findings(RUN_ID), { data: { items: [item], page } });
     client.setQueryData(queryKeys.findings.detail(item.finding_uid), { data: findingDetail({ ...item }) });
     client.setQueryData(queryKeys.findings.decisions(item.finding_uid), { data: { items: [], page } });
-    const markup = renderWith(client, createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
+    // The table opens no finding of its own (`UIP-S06-06`); the list opens the first one beside it, and its panel is what is read here.
+    const query = new URLSearchParams({ view: 'list' });
+    const markup = renderWith(client, createElement(PathnameContext.Provider, { value: '/review' }, createElement(SearchParamsContext.Provider, { value: query as never },
+      createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }))));
     expect(markup).toContain('data-unverified-review');
     expect(markup).toContain('data-no-evidence-page');
     expect(markup).toContain('data-intent="accept"');
     expect(markup).toContain('data-intent="reject"');
     expect(markup).not.toContain('data-evidence-quote');
     expect(markup).not.toContain('data-block-evidence');
-    expect(markup).toContain('data-export-scope="active"');
+    // «Все» is the default choice, so the file actions describe the whole run, not a part of it.
+    expect(markup).toContain('data-export-scope="all"');
   });
 
-  it('keeps uncertain issues active and retains rejected human decisions in explicit history', () => {
+  it('keeps uncertain issues in the table by default, and a rejected human decision stays on it, last', () => {
     const item = unverified();
     const rejected = { ...item, finding_uid: 'rejected', current_verdict: 'rejected' as const };
     const groups = groupByCategory([item, rejected]);
-    expect(verdictFilterOf(null)).toBe('active');
-    expect(filterGroups(groups, 'active').flatMap((group) => group.findings)).toEqual([item]);
+    expect(verdictFilterOf(null)).toBe('all');
+    expect(filterGroups(groups, 'waiting').flatMap((group) => group.findings)).toEqual([item]);
     expect(filterGroups(groups, 'all').flatMap((group) => group.findings)).toEqual([item, rejected]);
-    const active = render(createElement(FindingList, { groups, selectedFindingUid: null, onSelect: () => {} }));
-    expect(active).toContain('data-finding-visible-count="1"');
-    expect(active).not.toContain('data-finding-uid="rejected"');
-    const history = render(createElement(FindingList, { groups, verdictFilter: 'all', selectedFindingUid: null, onSelect: () => {} }));
-    expect(history).toContain('data-finding-uid="rejected"');
+    expect(filterGroups(groups, 'rejected').flatMap((group) => group.findings)).toEqual([rejected]);
+    const all = render(createElement(FindingList, { groups, selectedFindingUid: null, onSelect: () => {} }));
+    expect(all).toContain('data-row-key="rejected"');
+    expect(all.indexOf(`data-row-key="${item.finding_uid}"`)).toBeLessThan(all.indexOf('data-row-key="rejected"'));
+    // The uncertain one still says what it is, beside a verdict that is not its own.
+    expect(all).toContain('data-evidence-limitation="unverified"');
+    const waiting = render(createElement(FindingList, { groups, verdictFilter: 'waiting', selectedFindingUid: null, onSelect: () => {} }));
+    expect(waiting).toContain(`data-row-key="${item.finding_uid}"`);
+    expect(waiting).not.toContain('data-row-key="rejected"');
     const restored = groupByCategory([item, { ...rejected, current_verdict: 'accepted' }]);
-    expect(filterGroups(restored, 'active').flatMap((group) => group.findings)).toHaveLength(2);
+    expect(filterGroups(restored, 'waiting').flatMap((group) => group.findings)).toEqual([item]);
+    expect(filterGroups(restored, 'accepted')).toHaveLength(1);
   });
 });

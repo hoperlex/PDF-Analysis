@@ -125,7 +125,7 @@ describe('the options each step of the picker offers', () => {
     delete untitled.display_title;
     expect(documentOptions([untitled])[0]?.label).toBe('ПЗ.pdf');
     expect(versionOptions([version()])).toEqual([{
-      value: VERSION_UID, label: 'Версия 2 · 2026-09-18 06:55:52 UTC · страниц 8',
+      value: VERSION_UID, label: 'Версия 2 · 18.09.2026 06:55 · страниц 8',
     }]);
   });
 
@@ -135,9 +135,9 @@ describe('the options each step of the picker offers', () => {
       runStatus({ run_id: SECOND_RUN_ID, state: 'failed' }),
       runStatus({ run_id: `${RUN_ID.slice(0, -1)}Y`, state: 'archived' as RunStatus['state'] }),
     ]);
-    expect(runs[0]).toEqual({ value: RUN_ID, label: '2026-09-10 08:00:00 UTC · опубликован · Петрова А. С.' });
-    expect(runs[1]?.label).toBe('2026-09-10 08:00:00 UTC · отказ');
-    expect(runs[2]?.label).toBe(`2026-09-10 08:00:00 UTC · ${UNRECOGNISED_RUN_STATE}`);
+    expect(runs[0]).toEqual({ value: RUN_ID, label: '10.09.2026 08:00 · опубликован · Петрова А. С.' });
+    expect(runs[1]?.label).toBe('10.09.2026 08:00 · отказ');
+    expect(runs[2]?.label).toBe(`10.09.2026 08:00 · ${UNRECOGNISED_RUN_STATE}`);
   });
 });
 
@@ -148,7 +148,7 @@ describe('the picker, drawn', () => {
     expect(step(markup, 'project')).toContain('data-journal-step-status="ready"');
     expect(step(markup, 'project')).toContain('Корпус на Лесной');
     for (const [name, waiting] of [
-      ['document', 'Сначала выберите проект'], ['version', 'Сначала выберите документ'], ['run', 'Сначала выберите версию'],
+      ['document', 'Сначала выберите объект'], ['version', 'Сначала выберите документ'], ['run', 'Сначала выберите версию'],
     ] as const) {
       const text = step(markup, name);
       expect(text, name).toContain('data-journal-step-status="idle"');
@@ -162,11 +162,11 @@ describe('the picker, drawn', () => {
   it('walks to the runs of the chosen version and marks the run in view', () => {
     const markup = picker(seededPicker(), { selection: FULL_SELECTION, runId: SECOND_RUN_ID });
     expect(step(markup, 'document')).toContain('Пояснительная записка');
-    expect(step(markup, 'version')).toContain('Версия 1 · 2026-09-18 06:55:52 UTC');
+    expect(step(markup, 'version')).toContain('Версия 1 · 18.09.2026 06:55');
     const runs = step(markup, 'run');
     expect(runs).toContain('Все прогоны');
-    expect(runs).toContain('2026-09-10 08:00:00 UTC · опубликован · Петрова А. С.');
-    expect(runs).toContain(`<option value="${SECOND_RUN_ID}" selected="">2026-09-11 08:00:00 UTC · отказ</option>`);
+    expect(runs).toContain('10.09.2026 08:00 · опубликован · Петрова А. С.');
+    expect(runs).toContain(`<option value="${SECOND_RUN_ID}" selected="">11.09.2026 08:00 · отказ</option>`);
     expect(runs).not.toContain(`<option value="${RUN_ID}" selected`);
     expect(markup).toContain('data-journal-scope="run"');
     expect(markup).toContain(`<code>${SECOND_RUN_ID}</code>`);
@@ -181,7 +181,7 @@ describe('the picker, drawn', () => {
     const client = newClient();
     client.setQueryData(PROJECTS_KEY, projectPage([PROJECT]));
     seedError(client, DOCUMENTS_KEY, new ApiError(503, {
-      contract_version: '1.55.0', error_code: 'dependency_unavailable', message: 'Безопасная фраза.',
+      contract_version: '1.57.0', error_code: 'dependency_unavailable', message: 'Безопасная фраза.',
       correlation_id: 'cid-picker-1', retryable: true,
     }, 'cid-picker-1'));
     const failed = picker(client, { selection: { projectUid: PROJECT_UID, documentUid: null, versionUid: null } });
@@ -195,7 +195,7 @@ describe('the picker, drawn', () => {
     client.setQueryData(DOCUMENTS_KEY, versionPage([]));
     client.setQueryData(PROJECTS_KEY, projectPage([PROJECT], MORE));
     const markup = picker(client, { selection: { projectUid: PROJECT_UID, documentUid: null, versionUid: null } });
-    expect(step(markup, 'document')).toContain('В проекте нет документов');
+    expect(step(markup, 'document')).toContain('В объекте нет документов');
     expect(step(markup, 'document')).toContain('disabled');
     expect(step(markup, 'project')).toContain('data-journal-step-truncated="project"');
     expect(step(markup, 'project')).toContain('Показана первая страница списка.');

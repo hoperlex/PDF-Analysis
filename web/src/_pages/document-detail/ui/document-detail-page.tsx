@@ -28,7 +28,7 @@ import { useMayActAsExpert } from '@/entities/account';
 import { DocumentLifecycle, DocumentTags } from '@/features/manage-document';
 import { UploadVersionPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
-import { DocumentContext, SectionNeighbours } from '@/widgets/document-context';
+import { DocumentContext } from '@/widgets/document-context';
 import { OptimisationProposals } from '@/widgets/optimisation-proposals';
 import styles from './document-detail-page.module.css';
 
@@ -39,13 +39,12 @@ export interface DocumentDetailPageProps {
   readonly roles?: readonly Role[] | undefined;
 }
 
-/** `R-151r`: the document's tabs, in the address as `?tab=`; an absent or unknown value is «Версии». */
+/**
+ * `R-151r`: the document's two places, in the address as `?tab=`; an absent or unknown value is «Версии». `UIP-G-09`: the
+ * choice between them is the frame's: «Оптимизация» is its tab, and the list of versions is the page the document's own
+ * name in the frame leads to, so the page draws no tab row of its own.
+ */
 export type DocumentTab = 'versions' | 'optimisation';
-
-const DOCUMENT_TABS: readonly { readonly tab: DocumentTab; readonly label: string }[] = [
-  { tab: 'versions', label: 'Версии' },
-  { tab: 'optimisation', label: 'Оптимизация' },
-];
 
 /**
  * The address after choosing a tab: leaving «Оптимизация» drops what belongs to it — the pass, the proposals'
@@ -92,15 +91,14 @@ export function DocumentDetailPage({ projectUid, documentUid, roles = [] }: Docu
   const writeAddress = (params: URLSearchParams) => {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
-  const setTab = (next: DocumentTab) => writeAddress(tabAddress(searchParams, next));
   const setPass = (next: string | null) => writeAddress(passAddress(searchParams, next));
 
   if (!looksLikeProjectUid(projectUid) || !looksLikeDocumentUid(documentUid)) {
     return (
-      <PageShell title="Документ" actions={<Link href={routes.projects()}>Все проекты</Link>}>
+      <PageShell title="Документ" actions={<Link href={routes.projects()}>Все объекты</Link>}>
         <UnsupportedState
           title="Это не адрес документа."
-          detail="Проект и документ адресуются непрозрачными идентификаторами. Запроса не было."
+          detail="Объект и документ адресуются непрозрачными идентификаторами. Запроса не было."
         />
       </PageShell>
     );
@@ -118,7 +116,6 @@ export function DocumentDetailPage({ projectUid, documentUid, roles = [] }: Docu
       documentUid={documentUid as DocumentUid}
       roles={roles}
       tab={tab}
-      setTab={setTab}
       pass={pass}
       setPass={setPass}
       goToNewVersion={goToNewVersion}
@@ -131,13 +128,12 @@ export function DocumentDetailPage({ projectUid, documentUid, roles = [] }: Docu
  * version's read carries it), with rename and archive for a session that may act, and a note while it is archived.
  */
 function DocumentScreen({
-  projectUid, documentUid, roles, tab, setTab, pass, setPass, goToNewVersion,
+  projectUid, documentUid, roles, tab, pass, setPass, goToNewVersion,
 }: {
   readonly projectUid: ProjectUid;
   readonly documentUid: DocumentUid;
   readonly roles: readonly Role[];
   readonly tab: DocumentTab;
-  readonly setTab: (next: DocumentTab) => void;
   /** `UI-B-02`: the pass the address names, and the write of another one onto it. */
   readonly pass: string | null;
   readonly setPass: (next: string | null) => void;
@@ -154,44 +150,34 @@ function DocumentScreen({
       subtitle={<code>{documentUid}</code>}
       actions={
         <>
-          <Link href={routes.project(projectUid)}>К проекту</Link>{' '}
-          <Link href={routes.projects()}>Все проекты</Link>
+          <Link href={routes.project(projectUid)}>К объекту</Link>{' '}
+          <Link href={routes.projects()}>Все объекты</Link>
         </>
       }
     >
+      {/*
+        `UIP-G-09`: the same frame as on every page of the document, with the newest version in view (the page holds it, so the
+        frame reads none). «Оптимизация» is its tab; the neighbours between the documents of the section (`UI-A-28`) and the
+        section the current version is confirmed for (`UI-A-23`) are the frame's, from that version.
+      */}
       <DocumentContext
         projectUid={projectUid}
         documentUid={documentUid}
-        current="document"
-        // `UI-A-23`: the section the current version is confirmed for opens the strip, a link to the section page.
+        current={tab === 'optimisation' ? 'optimisation' : 'document'}
         sectionCode={newest?.classification?.section_code}
-        // `UI-A-28`: between the documents of the section the current version is confirmed for.
-        aside={<SectionNeighbours projectUid={projectUid} documentUid={documentUid} sectionCode={newest?.classification?.section_code} />}
+        version={newest}
       />
       {/* The document's own controls share one row: rename and archive, and its tags. */}
       <div className={styles.toolbar}>
         {newest === undefined ? null : mayAct ? (
           <DocumentLifecycle projectUid={projectUid} documentUid={documentUid} title={title} archived={archived} />
         ) : archived ? (
-          <p className="am-note" role="status">Документ в архиве: его нет в списках проекта.</p>
+          <p className="am-note" role="status">Документ в архиве: его нет в списках объекта.</p>
         ) : null}
         {newest === undefined ? null : (
           <DocumentTags projectUid={projectUid} documentUid={documentUid} tags={newest.tags ?? []} mayEdit={mayAct} />
         )}
       </div>
-      <nav className={styles.tabs} aria-label="Разделы документа" data-document-tabs={tab}>
-        {DOCUMENT_TABS.map((entry) => (
-          <button
-            key={entry.tab}
-            type="button"
-            className={styles.tab}
-            aria-pressed={entry.tab === tab}
-            onClick={() => setTab(entry.tab)}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </nav>
       {tab === 'optimisation' ? (
         <section className={styles.panel} aria-label="Оптимизация документа">
           <OptimisationProposals

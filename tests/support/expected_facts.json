@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 300,
+    "path_count": 302,
     "operations": [
       [
         "DELETE",
@@ -1575,6 +1575,11 @@
       ],
       [
         "PUT",
+        "/me/last-project",
+        "setMyLastProject"
+      ],
+      [
+        "PUT",
         "/me/release-notes",
         "markReleaseNotesRead"
       ],
@@ -1592,6 +1597,11 @@
         "PUT",
         "/projects/{project_uid}/documents/{document_uid}/archive",
         "setDocumentArchived"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/group",
+        "setDocumentGroup"
       ],
       [
         "PUT",
@@ -2278,6 +2288,7 @@
       "SectionVendorList",
       "SetCurrentNormSnapshotRequest",
       "SetDocumentArchivedRequest",
+      "SetDocumentGroupRequest",
       "SetDocumentTagsRequest",
       "SetEngineerAbsencesRequest",
       "SetExecutionPausedRequest",
@@ -2291,6 +2302,7 @@
       "SetFindingExecutionStatusRequest",
       "SetGlobalVendorListRequest",
       "SetJobPriorityRequest",
+      "SetMyLastProjectRequest",
       "SetProjectVendorListRequest",
       "SetStageModelLayoutEnabledRequest",
       "SetStagePairCompletenessRequest",
@@ -2476,6 +2488,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0068_reviewable_findings",
-  "contract_version": "1.55.0"
+  "migration_head": "0070_document_group",
+  "contract_version": "1.57.0"
 }

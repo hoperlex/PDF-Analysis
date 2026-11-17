@@ -605,7 +605,9 @@ class TestN1ComponentReferenceResolution:
         # `CRIT-SEAL-50` adds three: `getExecutorTaskContext`, `getRunPrecedents` and `getFindingPrecedents` address a task, a run and a finding.
         # `RUN-DELETE-01` adds one: `deleteRun` refuses an unknown run.
         # `CRIT-SEAL-53` adds one: `reviewDecisionPattern` addresses a pattern by identity. (`listDecisionPatterns` and `getQualityTable` name no parent.)
-        assert len(report) == 236, report
+        # `UIP-G-05` adds one: `setMyLastProject` refuses an unknown project.
+        # `UIP-G-10` adds one: `setDocumentGroup` addresses a document by identity (and so a project).
+        assert len(report) == 238, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

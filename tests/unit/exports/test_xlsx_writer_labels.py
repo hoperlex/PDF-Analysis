@@ -129,7 +129,7 @@ def test_the_summary_counts_are_labelled_and_no_raw_value_survives_anywhere() ->
     )
     summary, sheet, _ = _sheets(_source(*findings))
     assert [summary[f"A{row}"] for row in range(9, 15)] == [
-        *SEVERITY_WORDS.values(), "Без серьёзности",
+        *SEVERITY_WORDS.values(), "Без критичности",
     ]
     # Categories keep the order of the contract value, and show the label.
     counted = [summary[f"A{row}"] for row in range(16, 28)]
@@ -137,6 +137,25 @@ def test_the_summary_counts_are_labelled_and_no_raw_value_survives_anywhere() ->
     for sheet_cells in (summary, sheet):
         leaked = RAW_VALUES & set(sheet_cells.values())
         assert not leaked, leaked
+
+
+def test_the_summary_names_the_construction_object_as_the_screens_do() -> None:
+    """`UIP-G-01`: the first identity row of «Сводка» is «Объект» (the project's uid), never «Проект»."""
+    summary, _, _ = _sheets(_source(_finding()))
+    assert (summary["A2"], summary["B2"]) == ("Объект", "prj_01M5B0000000000000000000P1")
+    assert [summary[f"A{row}"] for row in range(2, 8)] == [
+        "Объект", "Версия", "Прогон", "Профиль", "Ключ снимка", "Атрибуция",
+    ]
+    assert "Проект" not in summary.values()
+
+
+def test_the_severity_is_named_criticality_in_the_findings_header_and_in_the_summary_as_the_screens_do() -> None:
+    """`UIP-G-02`: the screens say «Критичность», so the two findings columns and the summary header of the severity counts do too (never «Серьёзность»)."""
+    summary, sheet, _ = _sheets(_source(_finding()))
+    assert (sheet["F1"], sheet["G1"]) == ("Критичность (решение эксперта)", "Критичность (предложение модели)")
+    assert (summary["A8"], summary["B8"]) == ("Критичность", "Количество")
+    headers = [sheet[f"{column}1"] for column in "ABCDEFGHIJKL"] + [summary["A8"]]
+    assert not [header for header in headers if "Серьёзность" in header]
 
 
 def test_identifiers_and_free_text_are_written_verbatim_even_when_they_look_like_a_value() -> None:
@@ -336,8 +355,17 @@ def _text_digest(archive: zipfile.ZipFile, sheet: str) -> str:
 TEXT_DIGESTS = {
     # Re-pinned when the profile id of the corpus changed from a profile name to ``profile_1`` (only «Сводка» echoes it): with the old
     # literal the writer still produced ``e25dac70...6b5b6``, and «Замечания» below is unchanged.
-    "xl/worksheets/sheet1.xml": "7212170fa8478ac2e927e5339220fdacd14aa6537502b2a8852eb2416530169a",
-    "xl/worksheets/sheet2.xml": "9553ccf6ed7a998918977f1ef9cdbaa36066b8bbdaefae9d96fa0e926c190adb",
+    # Re-pinned for «Объект» (`UIP-G-01`): the first identity row of «Сводка» (cell A2) was «Проект». The new value was computed after
+    # `test_the_summary_names_the_construction_object_as_the_screens_do` read the new word; reverting that one cell's text gives ``7212170f...169a`` again.
+    # Re-pinned for «Критичность» (`UIP-G-02`): the summary header of the severity counts (cell A8 of «Сводка») and the two severity headers
+    # of «Замечания» (F1, G1) were «Серьёзность…». The new values were computed after `test_the_severity_is_named_criticality_in_the_findings_header_and_in_the_summary_as_the_screens_do`
+    # read the new words; putting just those three texts back reproduces ``3d8f7b9a...06d6`` and ``9553ccf6...adb`` again.
+    # Re-pinned for «Без критичности» (`UIP-FIX-07`): the summary row of the findings with no severity (cell A14 of «Сводка», not an enum cell) was
+    # «Без серьёзности». The new value was computed after the literal in `test_the_summary_counts_are_labelled_and_no_raw_value_survives_anywhere`
+    # was red against the old writer and the writer was changed; putting just that one text back reproduces ``52fb47bb...d750`` again.
+    # «Замечания» (sheet2) is unchanged.
+    "xl/worksheets/sheet1.xml": "d3e541285705502c76d5b72ff85f4b472ae0826f1f90af3b7570ecbe33265d36",
+    "xl/worksheets/sheet2.xml": "d16af11611b7dfadd1415738b53ee47815713e2a4afd7171f78fcbe5ca0b9452",
 }
 
 

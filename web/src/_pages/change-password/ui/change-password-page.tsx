@@ -58,12 +58,22 @@ export function ChangePasswordPage({ outcome, mustChange, next }: ChangePassword
           </p>
         ) : null}
         <ChangePasswordForm outcome={outcome} next={next} />
-        <p className="am-note">
-          Оба пароля уходят на сервер этого приложения и дальше — на сервер учётных записей.
-          Эта страница не хранит ни пароль, ни пропуск и не обращается к хранилищу браузера.
-          Новый пропуск выдаётся сразу после смены и остаётся на сервере: в браузер
-          возвращается только непрозрачный номер сеанса.
-        </p>
+        {/* A plain disclosure, not a window and not a script (`C-22`, `UIP-S19-03`): the two long explanations, folded. */}
+        <details className={styles.more} data-change-password-more="">
+          <summary>Подробнее</summary>
+          <p className="am-note">
+            Смена пароля отзывает все выданные пропуска этой учётной записи: всё, что было
+            выдано под прежним паролем, перестаёт приниматься в тот же момент. На этом
+            устройстве сеанс продолжится новым пропуском; везде, где вход был выполнен раньше,
+            потребуется войти заново.
+          </p>
+          <p className="am-note">
+            Оба пароля уходят на сервер этого приложения и дальше — на сервер учётных записей.
+            Эта страница не хранит ни пароль, ни пропуск и не обращается к хранилищу браузера.
+            Новый пропуск выдаётся сразу после смены и остаётся на сервере: в браузер
+            возвращается только непрозрачный номер сеанса.
+          </p>
+        </details>
         {mustChange === true ? (
           // The original's page ends with «Выйти»: an account that is shut out of every other screen until it changes its
           // password can still leave. A POST to the session's own door, as the frame's menu does; no script.

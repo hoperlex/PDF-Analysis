@@ -33,10 +33,14 @@
 }
 
 .cell {
+  /* A row is `--am-row-step` high: a one-line cell stands exactly one step, a longer one grows the row (a cell's `height` is its floor). */
+  height: var(--am-row-step);
   padding: var(--am-gap-xs) var(--am-gap-sm);
   border-bottom: 1px solid var(--am-line);
-  vertical-align: top;
-  overflow-wrap: anywhere;
+  vertical-align: middle;
+  /* A word keeps its width: `anywhere` made a column's minimum one letter, so «Планировочные решения» broke mid-word. */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .row[aria-current='true'] .cell {

@@ -331,14 +331,20 @@ class ProjectPort(Protocol):
     def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
         """Create a project, or replay the recorded outcome of an identical request."""
 
-    def list_projects(self) -> Sequence[ProjectView]:
-        """Every project, **newest first**.
+    def list_projects(self, *, order: str = "published") -> Sequence[ProjectView]:
+        """Every project, **newest first** under the default ``order="published"``.
 
         The order is part of this declaration, not a detail of the implementation: the
         router pages the sequence and never re-sorts it, so a port that returned oldest
         first would page correctly through the wrong listing. `listProjects` says newest
         first and `tests/integration/api/test_query_surface.py` asserts it over
         timestamps whose order is deliberately not the identity order.
+
+        ``order="name"`` (`UIP-S03-02`) is the other order the operation offers: by the first
+        whole number in the name ascending, then the names without one, each compared without
+        regard to letter case, and the identity last, so it is total. It is this port's to
+        decide, for the reason the paragraph above gives: the router pages the sequence it is
+        handed. The router refuses any other value before it reaches here.
 
         The edge cuts pages out of what this returns. No query surface in this tree
         accepts a cursor, and for PC-01 that is the right trade: see the query-surface
@@ -470,6 +476,12 @@ class DocumentPort(Protocol):
         """`R-151e`: replace one document's free tags (at most ten, 1 to 40 characters each). Keyed."""
         ...
 
+    def set_document_group(
+        self, *, project_uid: str, document_uid: str, group: str | None, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        """`UIP-G-10`: set, change or clear one document's single group (1 to 40 characters after trimming; blank or ``None`` clears). Keyed."""
+        ...
+
     def list_document_tags(self, *, project_uid: str) -> models.DocumentTagList:
         """`R-151e`: each tag of the project's documents in use, with how many carry it."""
         ...
@@ -545,6 +557,21 @@ class BlockPort(Protocol):
         (``status="produced"``, ``blocks=()``). An implementation that returned the empty
         tuple for both without varying ``status`` would have destroyed exactly the
         distinction this method exists to carry.
+        """
+
+    def portal_block_count(self, *, version_uid: str) -> int | None:
+        """`UIP-S04-01`: how many portal blocks the version's built index holds, or ``None`` while there is none.
+
+        The index is the one :meth:`list_portal_blocks` reads: the portal geometry of the most recent run of the version
+        whose ``page_geometry_extraction`` succeeded and published ``geometry.portal_blocks``. The number is the one that
+        stage recorded when it published them (its ``portal_block_count`` metric), read from the stage result: **no
+        artifact is opened and the version's file is not parsed**, so the figure costs one query per run walked and is
+        safe to ask on every read of a version.
+
+        **Absent is not zero.** ``None`` is a version no run has produced portal geometry for (never run, run only over a
+        failed geometry stage, or admitted for comparison only and so without a portal bundle); ``0`` is a produced index
+        that genuinely holds no block. A stage result that recorded no usable number is ``None`` too, never a guess. An
+        unknown version is ``not_found``.
         """
 
     def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
@@ -895,6 +922,7 @@ class DecisionPort(Protocol):
         category: str | None,
         verdict: str | None,
         project_uid: str | None,
+        execution_statuses: Sequence[str] | None = None,
     ) -> Sequence[DecisionRecordView]:
         """Every recorded decision, across findings, **newest first**.
 
@@ -915,6 +943,12 @@ class DecisionPort(Protocol):
         **finding** to the project it belongs to, as the two filters above narrow it by
         category and verdict. It is a filter and not a parent: a project nothing was decided
         in -- or one that does not exist -- matches no row and yields an empty sequence.
+
+        ``execution_statuses`` (`UIP-S12-01`) is ``None`` for no filter, and otherwise the values (each of the frozen
+        ``FindingExecutionStatus``, none repeated) of which the finding's designer execution status must be **any**: a
+        finding with no status is in none of them. It narrows the **finding** as the filters above do, and the record
+        carries ``execution_status`` and ``execution_status_at`` when the finding has a status, whether or not it is
+        filtered. The status is not an expert decision: it never changes the record's verdict or the number of entries.
 
         Each record also carries where its decision belongs (`document_uid`, `version_uid`,
         and the display names `project_name` and `document_name`, joined at read time and
@@ -1120,6 +1154,11 @@ class AccountPort(Protocol):
     def list_auth_events(self, *, cursor: str | None, limit: int) -> models.AuthEventPage:
         """The access journal, newest first, one page (contract 1.36.0, `UI-A-94`). The cursor is the last event's
         identity and nothing else; an administrator's read, decided by the seam."""
+
+    def set_last_project(self, *, user_uid: str, project_uid: str, idempotency_key: str) -> None:
+        """``setMyLastProject`` (contract 1.56.0, `UIP-G-05`): remember the object the account chose. ``user_uid`` is the
+        verified subject's, never a body's. Keyed: an exact repeat changes nothing, another project under the same key is
+        ``idempotency_key_reuse``; an unknown project is ``not_found`` (``Project``). ``getMe`` reads the choice back."""
 
 
 @runtime_checkable
@@ -1431,8 +1470,10 @@ class SectionSpecificationPort(Protocol):
     A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives. The
     answer is always a ``SectionSpecification``: a bound that stops it (``section_too_large``)
     and a set without a run or a saved text are states in the answer, never an error envelope
-    and never an empty table. An unknown ``project_uid`` filter is ``404``. Nothing behind
-    this port writes.
+    and never an empty table. An unknown ``project_uid`` filter is ``404``, and so is a
+    ``document_uid`` filter (`UIP-S11-05`) that names no set of this section's answer: an
+    unknown one, one of another project than ``project_uid`` and one whose current version is
+    confirmed in another section. Nothing behind this port writes.
     """
 
     def get_section_specification(
@@ -1444,6 +1485,7 @@ class SectionSpecificationPort(Protocol):
         offset: int,
         limit: int,
         user_uid: str,
+        document_uid: str | None = None,
     ) -> models.SectionSpecification:
         """The section's combined specification of current versions, priced per project."""
 
@@ -1650,10 +1692,11 @@ class OptimisationProposalPort(Protocol):
         one keyed command, one report."""
 
     def list_accepted_optimisation_proposals(
-        self, *, project_uid: str | None, section_code: str | None, user_uid: str
+        self, *, project_uid: str | None, section_code: str | None, user_uid: str, document_uid: str | None = None
     ) -> Sequence[models.AcceptedOptimisationProposal]:
         """`UI-B-27`: the proposals whose decision in force is an acceptance, newest acceptance first, optionally of
-        one project and one section; the edge pages them."""
+        one project, one document set (`UIP-S11-05`) and one section; the edge pages them. Every filter is a filter, so
+        a document set nothing was accepted in, or that does not exist, is an empty answer."""
 
 
 # --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------

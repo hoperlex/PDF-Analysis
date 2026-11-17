@@ -50,19 +50,19 @@ function Body() {
   if (figures.projects === 0) {
     return (
       <EmptyState
-        title="Сводка появится вместе с первым проектом."
-        detail="Пока в системе нет ни одного проекта, считать нечего."
+        title="Сводка появится вместе с первым объектом."
+        detail="Пока в системе нет ни одного объекта, считать нечего."
       />
     );
   }
 
   return (
     <dl className={styles.figures}>
-      <dt>Проекты</dt>
+      <dt>Объекты</dt>
       <dd data-summary-figure="projects">{figures.projects}</dd>
       <dt>Документы</dt>
       <dd data-summary-figure="documents">{figures.documents}</dd>
-      <dt>Находки, ожидающие решения</dt>
+      <dt>Замечания, ожидающие решения</dt>
       <dd data-summary-figure="awaiting-decision-findings">{figures.awaitingDecisionFindings}</dd>
       <dt>Прогоны</dt>
       <dd data-summary-figure="runs">{figures.runs}</dd>

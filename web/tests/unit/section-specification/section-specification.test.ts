@@ -102,7 +102,7 @@ describe('the money rule on screen, project by project', () => {
       const row = rowMarkup(markup, id);
       expect(row).toContain('data-section-status="price_list_missing"');
       expect(row).toContain('data-section-counted="no"');
-      expect(row).toContain('нет прайс-листа проекта');
+      expect(row).toContain('нет прайс-листа объекта');
       expect(cell(markup, id, 'data-section-price')).toBe('none|—');
       expect(cell(markup, id, 'data-section-amount')).toBe('none|—');
     }
@@ -166,7 +166,7 @@ describe('rows are addressed and never merged', () => {
     );
     const panel = markup.slice(markup.indexOf(`data-section-project="${SECTION_PROJECT_B}"`));
     expect(panel).toContain(`href="/projects/${SECTION_PROJECT_B}?tab=optimisation"`);
-    expect(panel).toContain('вкладка «Оптимизация» проекта');
+    expect(panel).toContain('вкладка «Оптимизация» объекта');
     expect(panel).toContain('оптимизация комплекта');
     // The project and the set keep their own links: the new ones are added, not substituted.
     expect(panel).toContain(`href="/projects/${SECTION_PROJECT_B}"`);
@@ -189,7 +189,7 @@ describe('rows are addressed and never merged', () => {
     for (const heading of [
       'Позиция', 'Наименование и техническая характеристика', 'Тип, марка, обозначение документа, опросного листа',
       'Код оборудования, изделия, материала', 'Завод-изготовитель', 'Единица измерения', 'Количество', 'Масса единицы, кг',
-      'Примечание', 'Сопоставление', 'Позиция прайс-листа проекта', 'Цена', 'Сумма',
+      'Примечание', 'Сопоставление', 'Позиция прайс-листа объекта', 'Цена', 'Сумма',
     ]) {
       // The first graph's heading shares its cell with the «+» and «−» of the project folds.
       expect(markup).toContain(heading === 'Позиция' ? `<span>${heading}</span>` : `${heading}</th>`);
@@ -253,7 +253,7 @@ describe('what is said instead of a table', () => {
       if (reason !== 'projects') {
         expect(text(markup)).toContain(SECTION_SOURCE_STATE_MESSAGES.not_read);
         expect(text(markup)).toContain(SECTION_PRICE_STATE_MESSAGES.not_read);
-        expect(markup).toContain('Показать только этот проект');
+        expect(markup).toContain('Показать только этот объект');
       }
     });
   }
@@ -262,7 +262,7 @@ describe('what is said instead of a table', () => {
     const none = { projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0 };
     expect(text(render(sectionAnswer(none)))).toContain('В разделе нет подтверждённых комплектов');
     const narrowed = render(sectionAnswer({ ...none, project_filter: SECTION_PROJECT_A as never }));
-    expect(text(narrowed)).toContain('У выбранного проекта нет комплектов, текущая версия которых подтверждена для этого раздела.');
+    expect(text(narrowed)).toContain('У выбранного объекта нет комплектов, текущая версия которых подтверждена для этого раздела.');
   });
 
   it('says a search that finds nothing found nothing, without touching the projects’ totals', () => {
@@ -275,10 +275,10 @@ describe('what is said instead of a table', () => {
   });
 
   it('offers to narrow to one project only while the section is not narrowed', () => {
-    expect((render(sectionAnswer()).match(/Показать только этот проект/g) ?? []).length).toBe(2);
-    expect(render(sectionAnswer(), null)).not.toContain('Показать только этот проект');
+    expect((render(sectionAnswer()).match(/Показать только этот объект/g) ?? []).length).toBe(2);
+    expect(render(sectionAnswer(), null)).not.toContain('Показать только этот объект');
     const narrowed = render(sectionAnswer({ project_filter: SECTION_PROJECT_A as never }));
-    expect(narrowed).not.toContain('Показать только этот проект');
+    expect(narrowed).not.toContain('Показать только этот объект');
   });
 
   it('reports a value outside the sets this build knows instead of guessing', () => {
@@ -304,7 +304,7 @@ describe('the section picker and the container', () => {
     expect(values).toHaveLength(15);
     expect(markup).toContain('Архитектурные решения (АР)');
     expect(markup).toContain('data-section-picker="15"');
-    expect(markup).toContain('Все проекты раздела');
+    expect(markup).toContain('Все объекты раздела');
     expect(markup).toContain('data-section-project-filter="0"');
   });
 
@@ -329,7 +329,7 @@ describe('the section picker and the container', () => {
     const client = newClient();
     const correlation = '0f0e9d8c-7b6a-4948-b726-150413021100';
     seedError(client, sectionKey(), new ApiError(503, {
-      contract_version: '1.55.0', error_code: 'dependency_unavailable',
+      contract_version: '1.57.0', error_code: 'dependency_unavailable',
       message: 'Сообщение об отказе.', correlation_id: correlation, retryable: false,
     }, correlation));
     const markup = renderScreen(client, createElement(SectionSpecificationSection));
@@ -358,7 +358,7 @@ describe('the original’s Form 7: nine graphs, the rows grouped under a project
     const head = markup.slice(markup.indexOf('<thead>'), markup.indexOf('</thead>'));
     expect((head.match(/scope="col"/g) ?? []).length).toBe(9);
     for (const number of [1, 2, 3, 4, 5, 6, 7, 8, 9]) expect(head).toContain(`>${number}</th>`);
-    for (const heading of ['Сопоставление', 'Позиция прайс-листа проекта', 'Цена', 'Сумма']) {
+    for (const heading of ['Сопоставление', 'Позиция прайс-листа объекта', 'Цена', 'Сумма']) {
       expect(head).not.toContain(`>${heading}</th>`);
     }
     expect(rowMarkup(markup, A_COUNTED)).not.toContain('data-section-price');
@@ -405,16 +405,16 @@ describe('the original’s Form 7: nine graphs, the rows grouped under a project
     const answer = sectionAnswer();
     const otherPage = sectionAnswer({ rows: { ...answer.rows!, items: answer.rows!.items.slice(0, 4), total: 6 } });
     expect(render(otherPage, () => undefined, 'form7')).toContain('data-section-group-empty="page"');
-    expect(text(render(otherPage, () => undefined, 'form7'))).toContain('Строки этого проекта — на другой странице списка.');
+    expect(text(render(otherPage, () => undefined, 'form7'))).toContain('Строки этого объекта — на другой странице списка.');
     const searched = sectionAnswer({ query: 'щит', rows: { ...answer.rows!, items: answer.rows!.items.slice(0, 4), total: 4 } });
-    expect(text(render(searched, () => undefined, 'form7'))).toContain('По текущему поиску строки спецификации этого проекта на этой странице не найдены.');
+    expect(text(render(searched, () => undefined, 'form7'))).toContain('По текущему поиску строки спецификации этого объекта на этой странице не найдены.');
   });
 
   it('has the original’s «+» and «−» for every project in the heading of the first graph', () => {
     expect(markup).toContain('data-section-expand-all=""');
     expect(markup).toContain('data-section-collapse-all=""');
-    expect(markup).toContain('aria-label="Развернуть все проекты"');
-    expect(markup).toContain('aria-label="Свернуть все проекты"');
+    expect(markup).toContain('aria-label="Развернуть все объекты"');
+    expect(markup).toContain('aria-label="Свернуть все объекты"');
   });
 
   it('keeps every row’s address under its name, and does not drop a row of a project the answer does not list', () => {

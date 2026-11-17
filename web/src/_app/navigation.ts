@@ -7,7 +7,8 @@
  * the screen. The menu offers exactly the rows whose answer is `open`, so it cannot offer a
  * screen the guard would refuse, nor hide one the guard would open. This module adds only
  * what the registry has no column for: the names of the groups and their order in the bar, and
- * the one item that is not a row but a choice between two (`ProjectEntry`, `R-153h`).
+ * the one item that is not a row but a choice between two (`ProjectEntry`, `R-153h`). The order of «Работа» is `UIP-G-07`'s:
+ * «Главная», «Дашборд», the project entry, then the rest of the registry's rows.
  *
  * Hiding a row is presentation. The guard and the API refuse on their own evidence; a stale
  * subject shows a menu its holder cannot use and nothing more.
@@ -15,7 +16,7 @@
 
 import { looksLikeProjectUid } from '@/entities/project';
 import type { ScreenDecisionSubject, ScreenEntry, ScreenGroup } from '@/shared/config';
-import { SCREEN_REGISTRY, screenAt, screenDecision, screenMatching } from '@/shared/config';
+import { HOME_SCREEN, SCREEN_REGISTRY, screenAt, screenDecision, screenMatching } from '@/shared/config';
 import { routes } from '@/shared/lib';
 
 /** The groups the bar shows as disclosures, in `R-66`'s order. */
@@ -50,16 +51,17 @@ export interface NavigationGroup {
 }
 
 /**
- * The first item of «Работа» (`R-153h`), which is not one row but one of two, chosen by the project the address names:
- * «Проект» when one is current, «Проекты» when none is («Все проекты»). The registry holds both screens with
+ * An item of «Работа» (`R-153h`, `UIP-G-07`), which is not one row but one of two, chosen by the object the address names:
+ * «Объект» when one is current, «Объекты» when none is («Все объекты»). The registry holds both screens with
  * `inMenu: false` (`R-150b` moved the list into the top strip's selector, which stays), so the menu does not read them
- * as rows; it offers them through this entry. Each field is the screen's label when the session may open it
- * ({@link screenDecision}), `null` when it may not — the entry never offers a screen the guard would refuse.
+ * as rows; it offers them through this entry, third in the group ({@link PROJECT_ENTRY_PLACE}). Each field is the
+ * screen's label when the session may open it ({@link screenDecision}), `null` when it may not — the entry never offers a
+ * screen the guard would refuse.
  */
 export interface ProjectEntry {
-  /** «Проекты», the list at `/projects`; the item when no project is current. */
+  /** «Объекты», the list at `/projects`; the item when no object is current. */
   readonly list: string | null;
-  /** «Проект», the current project's page at `/projects/{uid}`; the item when a project is current. */
+  /** «Объект», the current object's page at `/projects/{uid}`; the item when an object is current. */
   readonly project: string | null;
 }
 
@@ -90,20 +92,23 @@ function itemOf(screen: ScreenEntry): NavigationItem {
  * The menu for `subject` (or a guest, `null`): the registry's `inMenu` rows whose
  * {@link screenDecision} is `open`, grouped in
  * {@link MENU_GROUPS} order, each group's rows in registry order.
- * The home screen stays reachable through the brand link in `AppFrame`.
+ * «Главная» is the registry's first row of «Работа» (`UIP-G-07`); the brand link in `AppFrame` leads home too.
  *
  * A guest, a session on its default credential and one with an incomplete profile open no
  * `session` row, so they get an empty menu — the account menu is how the latter two leave
  * that state. A row in a group the bar does not show (`account`, `hidden`) is never offered.
+ * `R-80`: «Главная» is the one product row an account with no role may open, and a menu of «Главная» alone is no
+ * product navigation, so the row is offered only beside another one; that account gets the empty menu it always had.
  *
- * The result also carries the {@link ProjectEntry} — «Проект» or «Проекты», first in «Работа» —
- * which the browser resolves against the project the address names ({@link withProjectEntry}).
+ * The result also carries the {@link ProjectEntry} — «Объект» or «Объекты», third in «Работа» — which the browser
+ * resolves against the object the address names ({@link withProjectEntry}).
  */
 export function buildNavigation(
   subject: ScreenDecisionSubject | null,
   registry: readonly ScreenEntry[] = SCREEN_REGISTRY,
 ): Navigation {
-  const open = registry.filter((screen) => screen.inMenu && screenDecision(screen, subject) === 'open');
+  const decided = registry.filter((screen) => screen.inMenu && screenDecision(screen, subject) === 'open');
+  const open = decided.some((screen) => screen.address !== HOME_SCREEN) ? decided : [];
   const groups: NavigationGroup[] = [];
   for (const group of MENU_GROUPS) {
     const [first, ...rest] = open.filter((screen) => screen.group === group).map(itemOf);
@@ -133,9 +138,9 @@ export function projectEntryOf(
 }
 
 /**
- * The item `entry` stands for when the address names `projectUid` (`R-153h`): «Проект», linking to that project's page,
- * for a project the address spells as one; «Проекты», linking to the list, when it names none. A value that is not a
- * project's uid names no project the menu could open — the page itself says so, as it does for the «Разделы» group — so
+ * The item `entry` stands for when the address names `projectUid` (`R-153h`): «Объект», linking to that object's page,
+ * for an object the address spells as one; «Объекты», linking to the list, when it names none. A value that is not an
+ * object's uid names no object the menu could open — the page itself says so, as it does for the «Разделы» group — so
  * the list is offered. `null` when the session may not open the screen the case calls for.
  */
 export function projectEntryItem(
@@ -154,9 +159,16 @@ export function projectEntryItem(
 }
 
 /**
- * `navigation` with its {@link ProjectEntry} drawn as an item: the first of «Работа», before «Дашборд». The group is
- * made when the session has no other row in it. Pure, and the same navigation for the bar, the compact rail and the
- * stacked menu, which all draw `groups`.
+ * Where the project entry stands in «Работа» (`UIP-G-07`): after the two leading rows, «Главная» and «Дашборд», and before the
+ * original's screens. The place is a count, not an address, because `_app` writes no address by hand; the navigation tests
+ * hold the two leading rows to the registry, so a registry that moves them reddens a case instead of moving the entry.
+ */
+export const PROJECT_ENTRY_PLACE = 2;
+
+/**
+ * `navigation` with its {@link ProjectEntry} drawn as an item: the third of «Работа», behind «Главная» and «Дашборд»
+ * ({@link PROJECT_ENTRY_PLACE}). The group is made when the session has no other row in it. Pure, and the same navigation
+ * for the bar, the compact rail and the stacked menu, which all draw `groups`.
  */
 export function withProjectEntry(
   navigation: Navigation,
@@ -166,8 +178,13 @@ export function withProjectEntry(
   const item = projectEntryItem(navigation.projectEntry, projectUid, registry);
   if (item === null) return navigation;
   const work = navigation.groups.find((group) => group.group === 'work');
-  const first: NavigationGroup = { group: 'work', label: MENU_GROUP_LABELS.work, items: [item, ...(work?.items ?? [])] };
-  return { ...navigation, groups: work === undefined ? [first, ...navigation.groups] : navigation.groups.map((group) => (group === work ? first : group)) };
+  const rows = work?.items ?? [];
+  const placed: NavigationGroup = {
+    group: 'work',
+    label: MENU_GROUP_LABELS.work,
+    items: [...rows.slice(0, PROJECT_ENTRY_PLACE), item, ...rows.slice(PROJECT_ENTRY_PLACE)] as [NavigationItem, ...NavigationItem[]],
+  };
+  return { ...navigation, groups: work === undefined ? [placed, ...navigation.groups] : navigation.groups.map((group) => (group === work ? placed : group)) };
 }
 
 /** Whether `item` is the page being shown: its registry address, or the shape of its templated one, is the current screen's. */

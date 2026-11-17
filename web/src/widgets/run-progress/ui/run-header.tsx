@@ -22,7 +22,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import type { RunStages, RunStatus } from '@/shared/api';
-import { formatInstant, routes } from '@/shared/lib';
+import { formatInstantUtc, routes } from '@/shared/lib';
 import { PROVIDER_MODE_LABELS, RunStateBadge, runStageLabel } from '@/shared/ui';
 import { chipProgress, isRunAnimating, runFinishEstimate } from '@/entities/audit-run';
 import type { LiveProgress, RunChip, RunChipDefinition, RunExecutorLine, RunFinishEstimate } from '@/entities/audit-run';
@@ -52,7 +52,7 @@ export interface RunHeaderProps {
   readonly waiting: string | null;
   /** The group's precise reason, drawn under the waiting line. */
   readonly waitDetail: ReactNode;
-  /** «Разобрать находки» and «Отменить». */
+  /** «Разобрать замечания» and «Отменить». */
   readonly actions: ReactNode;
   readonly onOpenChip: (id: RunChipDefinition['id']) => void;
 }
@@ -66,7 +66,7 @@ export function RunEta({ finish }: { readonly finish: RunFinishEstimate | null }
   if (finish === null) return null;
   return (
     <span className={styles.eta} data-run-eta={finish.iso} data-run-eta-late={finish.late ? '' : undefined}>
-      ≈ до <time dateTime={finish.iso} title={formatInstant(finish.iso)}>{finish.clock}</time>
+      ≈ до <time dateTime={finish.iso} title={formatInstantUtc(finish.iso)}>{finish.clock}</time>
       {finish.late ? ' · дольше обычного' : null}
     </span>
   );

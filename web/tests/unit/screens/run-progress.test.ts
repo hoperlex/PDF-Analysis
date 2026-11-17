@@ -193,7 +193,7 @@ describe('review is offered only by a run that published a result (U-03)', () =>
   it.each(REVIEWABLE)('a %s run links to review', (state) => {
     const markup = screen({ state });
     expect(markup).toContain(`/projects/${PROJECT_UID}/runs/${RUN_ID}/review`);
-    expect(markup).toContain('Разобрать находки');
+    expect(markup).toContain('Разобрать замечания');
   });
 
   it.each(NOT_REVIEWABLE)('a %s run offers no review link and says why', (state) => {
@@ -345,20 +345,20 @@ describe('unknown label-table keys fail the whole run reading closed', () => {
 });
 
 /** The count of published findings, said by the banner of a published run; no other outcome says one. */
-const FINDING_COUNT_CLAIM = /Прогон <span data-run-state="published">[^<]*<\/span>: (?:\d+ находк|<em>число находок)/u;
+const FINDING_COUNT_CLAIM = /Прогон <span data-run-state="published">[^<]*<\/span>: (?:\d+ замечани|<em>число замечаний)/u;
 
 /** `published` is the success terminal; `partial` and `failed` borrow nothing from it. */
 describe('the three terminals are three different claims', () => {
   it('published states its finding count in one short sentence, with the Russian plural of the count', () => {
     const sentence = (count: number) => screen({ state: 'published', published_finding_count: count })
       .match(/data-run-outcome="published"[^>]*><p>([\s\S]*?)<\/p>/)?.[1]?.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-    expect(sentence(25)).toBe('Прогон опубликован: 25 находок.');
-    expect(sentence(7)).toBe('Прогон опубликован: 7 находок.');
+    expect(sentence(25)).toBe('Прогон опубликован: 25 замечаний.');
+    expect(sentence(7)).toBe('Прогон опубликован: 7 замечаний.');
     // 1, 2 to 4, 5 and 11 to 14 take three different forms, and zero is a count, not an absence.
     expect([1, 2, 4, 5, 11, 12, 21, 0].map(sentence)).toEqual([
-      'Прогон опубликован: 1 находка.', 'Прогон опубликован: 2 находки.', 'Прогон опубликован: 4 находки.',
-      'Прогон опубликован: 5 находок.', 'Прогон опубликован: 11 находок.', 'Прогон опубликован: 12 находок.',
-      'Прогон опубликован: 21 находка.', 'Прогон опубликован: 0 находок.',
+      'Прогон опубликован: 1 замечание.', 'Прогон опубликован: 2 замечания.', 'Прогон опубликован: 4 замечания.',
+      'Прогон опубликован: 5 замечаний.', 'Прогон опубликован: 11 замечаний.', 'Прогон опубликован: 12 замечаний.',
+      'Прогон опубликован: 21 замечание.', 'Прогон опубликован: 0 замечаний.',
     ]);
     // The old sentence and its technical word are gone.
     expect(screen({ state: 'published', published_finding_count: 7 })).not.toContain('терминального');
@@ -366,8 +366,8 @@ describe('the three terminals are three different claims', () => {
 
   it('published with an unreported count says so rather than showing zero', () => {
     const markup = screen({ state: 'published', published_finding_count: null as never });
-    expect(markup).toContain('Прогон <span data-run-state="published">опубликован</span>: <em>число находок не сообщено</em>.');
-    expect(markup).not.toContain('0 находок');
+    expect(markup).toContain('Прогон <span data-run-state="published">опубликован</span>: <em>число замечаний не сообщено</em>.');
+    expect(markup).not.toContain('0 замечаний');
     expect(markup).not.toContain('Published findings: 0');
   });
 
@@ -502,7 +502,7 @@ describe('findings and diagnostic observations are two counts, never one (M-6)',
       published_finding_count: 3,
       diagnostic_observation_count: 11,
     });
-    expect(markup).toContain('3 находки.');
+    expect(markup).toContain('3 замечания.');
     expect(markup).toContain('data-diagnostic-observation-count="11"');
     expect(markup).toContain('3');
     expect(markup).toContain('Диагностические наблюдения');
@@ -514,7 +514,7 @@ describe('findings and diagnostic observations are two counts, never one (M-6)',
 
   it('says in words that an observation is not a finding', () => {
     const markup = screen({ state: 'published', published_finding_count: 1 }).toLowerCase();
-    expect(markup).toContain('это не находка');
+    expect(markup).toContain('это не замечание');
   });
 
   it('reports an unreported diagnostic count as unreported, not as zero', () => {
@@ -677,7 +677,7 @@ describe('W54-WORKERS-WEB: the run names the worker holding it', () => {
     return renderWith(client, createElement(RunProgress, { projectUid: PROJECT_UID, runId: status.run_id }));
   }
 
-  it('names it while the run is running or validating, linked to «Исполнители»', () => {
+  it('names it while the run is running or validating, linked to «Диспетчер»', () => {
     for (const state of ['running', 'validating'] as const) {
       const markup = withWorkers(state, [{ worker_id: WORKER_ID, current_run_ids: [RUN_ID] }]);
       expect(markup).toContain('data-run-worker="held"');

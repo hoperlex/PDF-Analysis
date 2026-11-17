@@ -733,7 +733,7 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | next version | upload a bundle as version 2 and 3 | a bare PDF is refused by the browser, nothing sent |
 | comparison, П→Р, carried decision | compare, carry a verdict (confirmation pressed twice: one `POST`) | admin-only gets the read-only sentence; П against Р is refused without the switch; a carried row offers nothing again |
 | «Настройки анализа» | the fifteen sections and their profiles | no form, no field, no select |
-| «Диспетчер», «Мои задачи» | assign (twice), take, complete | admin-only cannot take the work; an expert sees no creation form; a return needs a reason |
+| «Назначения», «Мои задачи» | assign (twice), take, complete | admin-only cannot take the work; an expert sees no creation form; a return needs a reason |
 | price lists | upload the committed CSV (twice, ten positions); a second revision with formula-named vendors, a priceless row and an analog | admin-only sees no upload; an empty file; a table with no columns (422) |
 | vendor lists | the global list (administrator), the project list | an expert is offered no global button; a row with no vendor |
 | «Спецификация и цены» | the committed set's seven rows read, six matched, five counted (RUB 501478), two left out with their reasons | `price_list_missing` before any list |
@@ -741,7 +741,7 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | «Оптимизация разделов», dashboard | the АР section across projects (an `ar_bound` step); the section panel counts the journey's own section, ПБ | a section with no members |
 | «Нормы» | designate a snapshot, search, catalogue + filter | an unqualified snapshot has no button; an expert has no designation; an empty query |
 | exports | a run's CSV and Excel (the saved file is read) | admin-only is refused `permission_denied` |
-| «Очередь», «Исполнители» | pause, a waiting run, priority, cancel, re-audit, resume; worker intake off and on | an expert has no priority or pause; 500 is out of range |
+| «Очередь», «Диспетчер» | pause, a waiting run, priority, cancel, re-audit, resume; worker intake off and on | an expert has no priority or pause; 500 is out of range |
 | the run page, «Запустить с этапа» | the first run is continued from «Анализ текста»: the estimate names the reused and the computed stages, the consent is given, the new run is started through the source run's door and ends `published` with the source's findings | a run that was cancelled while it waited has nothing to take: the price is refused `422 analysis_input_invalid` and nothing is started; the first run is read again and carries no mark of a start from a stage |
 | «Память решений» (the fourth «Тип» of «База знаний») | the tab is pressed and lists the case the first decision was captured as; the case is opened; «Отозвать» with a closed reason (pressed twice: one keyed `POST`); the list under «Отозвано»; «Вернуть» (pressed twice: one keyed `POST`) | a withdrawal without a reason is a held button; «Действует» holds nothing of the withdrawn case and says the selection is empty; an expert reads the case and is offered no withdrawal control and no status line (the viewer is not walked: `D-650`) |
 | account | profile, password change, sign-out, version history | a surname is required; mismatch and wrong current password; the old pass is refused after a change |
@@ -856,7 +856,7 @@ walk the rest alone, as a PARTIAL run (exit 3).
 
 * **A worker beside the API.** The queue and worker steps need a registered worker: run the API
   with `EXECUTION_ROLE=api` and `python -m auditmanager.workers serve` (`EXECUTION_ROLE=worker`, no
-  deployment secret). With `EXECUTION_ROLE=all` the Исполнители list is honestly empty and the step
+  deployment secret). With `EXECUTION_ROLE=all` the «Диспетчер» list of workers is honestly empty and the step
   that reads it fails.
 * **A norms snapshot to designate.** `PYTHONPATH=src .venv/bin/python
   tests/e2e/pc01/journey/seed_norms.py` writes, by SQL, one qualified and one unqualified synthetic

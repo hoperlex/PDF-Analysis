@@ -14,7 +14,7 @@ import { useState } from 'react';
 
 import type { AuthEvent } from '@/shared/api';
 import { AUTH_EVENT_TYPE_VALUES } from '@/shared/api';
-import { formatInstant, routes } from '@/shared/lib';
+import { formatInstant, formatInstantUtc, routes } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import {
   AUTH_EVENT_LABELS,
@@ -55,7 +55,7 @@ export function AuthEventRows({ items }: { readonly items: readonly AuthEvent[] 
             const details = authEventDetails(event);
             return (
               <tr key={event.event_id} data-auth-event={event.event_type}>
-                <td className={styles.when}>{formatInstant(event.occurred_at)}</td>
+                <td className={styles.when}><time dateTime={event.occurred_at} title={formatInstantUtc(event.occurred_at)}>{formatInstant(event.occurred_at)}</time></td>
                 <td>
                   <span className={`am-badge am-badge--${AUTH_EVENT_TONES[event.event_type]}`}>{AUTH_EVENT_LABELS[event.event_type]}</span>
                   {details.map((detail) => <small key={detail} className={styles.detail}>{detail}</small>)}

@@ -35,7 +35,7 @@ function queueMarkup(request: RegistrationRequest): string {
 
 function refusal(code: ErrorEnvelope['error_code']): ApiError {
   return new ApiError(409, {
-    contract_version: '1.55.0', error_code: code,
+    contract_version: '1.57.0', error_code: code,
     message: 'Refused', correlation_id: 'cid-request-1', retryable: false,
   }, 'cid-request-1');
 }
@@ -50,8 +50,8 @@ describe('administrator registration queue', () => {
     expect(markup).toContain('am-badge--degraded');
   });
 
-  it('draws the submission time in UTC, the way the lists do, and a queue with nobody waiting says so', () => {
-    expect(queueMarkup(REQUEST)).toContain('2026-10-08 00:00:00 UTC');
+  it('draws the submission time in the reader’s time, the way the lists do, and a queue with nobody waiting says so', () => {
+    expect(queueMarkup(REQUEST)).toContain('08.10.2026 00:00');
     const client = newClient();
     client.setQueryData(queryKeys.registrations.list({ status: 'pending', limit: 50 }), { items: [], page: { next_cursor: null }, pending_total: 0 });
     const empty = renderScreen(client, createElement(RegistrationQueue));

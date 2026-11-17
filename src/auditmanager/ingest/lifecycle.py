@@ -1,10 +1,12 @@
-"""A document's lifecycle after upload: archive, restore, rename (`UI-PARITY-P0G`, ruling `R-151a`).
+"""A document's lifecycle after upload: archive, restore, rename (`UI-PARITY-P0G`, ruling `R-151a`), tags and group.
 
 The original deletes and renames folders; the owner ruled «Архив и переименование» instead. Nothing here deletes:
 
 * ``set_document_archived`` hides a document from lists (``archived_at``, ``archived_by_user_uid``, migration 0052) or
   brings it back; its versions, runs, findings and decisions stay exactly as they were and stay addressable.
 * ``rename_document`` changes ``document.display_title``; ``document_uid`` is the identity and never changes.
+* ``set_document_group`` sets, changes or clears the one optional group a document carries (``document.group_label``, migration 0070,
+  `UIP-G-10`, owner ruling Г11): a value of the document, not an entity, beside the free tags.
 
 Each is a keyed command (``CommandRepository``): a replay of the same key and payload answers the same state and
 writes nothing twice; the same key with another payload is ``idempotency_key_reuse``. Each appends one ``audit_event``
@@ -55,7 +57,7 @@ def _lock(session: Session, document_uid: str, project_uid: str) -> tuple[bool, 
     return row[2] is not None, str(row[3])
 
 
-def _event(session: Session, event_type: str, document_uid: str, payload: dict[str, str]) -> None:
+def _event(session: Session, event_type: str, document_uid: str, payload: dict[str, str | None]) -> None:
     session.execute(_EVENT, {
         "event_id": str(AuditEventId.new()),
         "event_type": event_type,
@@ -184,3 +186,60 @@ def set_document_tags(
             "actor_uid": actor_uid, "from": ", ".join(current), "to": ", ".join(wanted),
         })
     ledger.succeed(session, claimed.command_id, {"document_uid": document_uid, "tags": wanted})
+
+
+# -- group (`UIP-G-10`, migration 0070) -----------------------------------------------------------------------------
+
+#: A group is 1 to ``GROUP_MAX`` characters after trimming (``ck_document_group_label_length``).
+GROUP_MAX = 40
+
+_GROUP_OF = text("SELECT group_label FROM document WHERE document_uid = :document_uid")
+_SET_GROUP = text(
+    "UPDATE document SET group_label = :group_label, updated_at = now() WHERE document_uid = :document_uid"
+)
+
+
+def clean_group(value: str | None) -> str | None:
+    """The group as stored: trimmed, inner runs of whitespace collapsed; a blank value is no group (``None``).
+
+    The bound is checked on the cleaned text: a group is 1 to 40 characters, and a longer one is ``validation_failed``.
+    """
+    if value is None:
+        return None
+    group = " ".join(value.split())
+    if not group:
+        return None
+    if len(group) > GROUP_MAX:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED, field="group", constraint="length",
+            message=f"a group is at most {GROUP_MAX} characters",
+        )
+    return group
+
+
+def group_of(session: Session, document_uid: str) -> str | None:
+    value = session.execute(_GROUP_OF, {"document_uid": document_uid}).scalar_one_or_none()
+    return None if value is None else str(value)
+
+
+def set_document_group(
+    session: Session, *, project_uid: str, document_uid: str, group: str | None, actor_uid: str,
+    idempotency_key: str, commands: CommandRepository | None = None,
+) -> None:
+    """Set, change or clear one document's group. The same group again changes nothing and records nothing."""
+    DocumentUid.parse(document_uid)
+    wanted = clean_group(group)
+    ledger = commands or CommandRepository()
+    claimed = ledger.begin(
+        session, command_type="set_document_group", idempotency_key=IdempotencyKey(idempotency_key),
+        fingerprint=payload_fingerprint({"document_uid": document_uid, "group": wanted}),
+    )
+    if isinstance(claimed, CommandReplay):
+        return
+    assert isinstance(claimed, CommandStarted)
+    _lock(session, document_uid, project_uid)
+    current = group_of(session, document_uid)
+    if current != wanted:
+        session.execute(_SET_GROUP, {"document_uid": document_uid, "group_label": wanted})
+        _event(session, "document.group_set", document_uid, {"actor_uid": actor_uid, "from": current, "to": wanted})
+    ledger.succeed(session, claimed.command_id, {"document_uid": document_uid, "group": wanted})

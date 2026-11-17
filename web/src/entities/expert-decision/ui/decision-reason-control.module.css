@@ -1,0 +1,86 @@
+/*
+ * `UIP-S06-01`: the decision field -- ✓ green, ✕ red, a one-line «Причина», the line that says what the last press did.
+ *
+ * Tokens only. The buttons are `.am-button--quiet` ones from `globals.css`; this file gives them the verdict's two inks and
+ * the pressed fill. The selectors carry the element (`button.accept`) so that they outrank the base button's own hover and
+ * disabled rules whatever order the two sheets arrive in, and the held look is written out here (the base's own disabled
+ * tokens) so that a held button does not take the hover tint. The census reads `:hover` and `:disabled` but not `:enabled`.
+ */
+
+.control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  min-width: 0;
+}
+
+.buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+/* The field takes what the buttons leave and wraps under them when there is not a word's width left. */
+input[type='text'].reason {
+  flex: 1 1 9rem;
+  min-width: 0;
+  /* As tall as `.am-button--small` beside it; the element-and-attribute selector outranks the global field's 34 px. */
+  min-height: 28px;
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+}
+
+button.accept {
+  border-color: var(--am-ok);
+  color: var(--am-ok);
+}
+
+button.accept:hover {
+  border-color: var(--am-ok);
+  background: var(--am-ok-light);
+  color: var(--am-ok);
+}
+
+button.reject {
+  border-color: var(--am-failed);
+  color: var(--am-failed);
+}
+
+button.reject:hover {
+  border-color: var(--am-failed);
+  background: var(--am-failed-light);
+  color: var(--am-failed);
+}
+
+/* A button held while a press is on its way: the base button's own held look, so it does not look decided. */
+button.accept:disabled,
+button.reject:disabled {
+  border-color: var(--am-line);
+  background: var(--am-inert-light);
+  color: var(--am-ink-soft);
+}
+
+/* The verdict in force: filled, and held (a press that repeats it is not offered). After the held look, so it wins over it. */
+button.accept[aria-pressed='true'] {
+  border-color: var(--am-ok);
+  background: var(--am-ok-light);
+  color: var(--am-ok);
+}
+
+button.reject[aria-pressed='true'] {
+  border-color: var(--am-failed);
+  background: var(--am-failed-light);
+  color: var(--am-failed);
+}
+
+.noteOk {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.noteFail {
+  color: var(--am-failed);
+  font-size: var(--am-text-xs);
+}

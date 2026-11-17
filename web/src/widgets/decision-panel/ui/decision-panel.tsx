@@ -124,7 +124,7 @@ export function DecisionPanel({
           )}
           {decidedSeverity === undefined ? null : (
             <span className={styles.decided} data-decided-severity={decidedSeverity}>
-              важность <SeverityBadge severity={decidedSeverity} title="Важность, решённая экспертом" />
+              критичность <SeverityBadge severity={decidedSeverity} title="Критичность, решённая экспертом" />
             </span>
           )}
         </span>
@@ -137,10 +137,10 @@ export function DecisionPanel({
             data-proposed-severity={proposedSeverity}
           >
             Предложение модели:{' '}
-            <SeverityBadge severity={proposedSeverity} title="Важность, предложенная моделью" />
+            <SeverityBadge severity={proposedSeverity} title="Критичность, предложенная моделью" />
           </p>
           <label htmlFor="decision-severity">
-            Важность при принятии
+            Критичность при принятии
           </label>
           <select
             id="decision-severity"
@@ -153,7 +153,7 @@ export function DecisionPanel({
               if (next !== null) onSeverityChosen?.();
             }}
           >
-            <option value="">Выберите важность</option>
+            <option value="">Выберите критичность</option>
             {SEVERITY_VALUES.map((value) => (
               <option key={value} value={value}>
                 {SEVERITY_LABELS[value]}
@@ -161,7 +161,7 @@ export function DecisionPanel({
             ))}
           </select>
           <p className="am-decision__note">
-            Предложение модели не становится решением само: важность записывается только
+            Предложение модели не становится решением само: критичность записывается только
             при принятии и только та, что выбрана здесь. При отклонении она не записывается.
           </p>
           {severityRefusal === null || severityRefusal === undefined ? null : (

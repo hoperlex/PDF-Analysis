@@ -46,6 +46,7 @@ import {
   VERSION_UID,
   evidence,
   findingDetail,
+  inListView,
   observation,
   runStatus,
 } from './fixtures';
@@ -273,7 +274,7 @@ function seeded(...pages: ReturnType<typeof portalPage>[]) {
 
 function apiError(): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.55.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'cid-strip', retryable: true,
+    contract_version: '1.57.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'cid-strip', retryable: true,
   };
   return new ApiError(503, envelope, 'cid-strip');
 }
@@ -363,7 +364,7 @@ function reviewMarkup(pages: readonly number[], seed: (client: ReturnType<typeof
   client.setQueryData(queryKeys.findings.detail(detail.finding_uid), { data: detail });
   client.setQueryData(queryKeys.findings.decisions(detail.finding_uid), { data: { items: [], page: { next_cursor: null } } });
   seed(client);
-  return renderScreen(client, createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
+  return renderScreen(client, inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })));
 }
 
 describe('«Разбор» shows the strip of the page the viewer opens on', () => {

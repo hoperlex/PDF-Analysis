@@ -149,7 +149,7 @@ describe('the rule can tell agreement from disagreement, and says which it canno
 
   it('calls the repaired sentence agreement, and the other two nouns too', () => {
     expect(disagreements('Такой версии не существует.')).toEqual([]);
-    expect(disagreements('Такого проекта не существует.')).toEqual([]);
+    expect(disagreements('Такого объекта не существует.')).toEqual([]);
     expect(disagreements('Такого документа не существует.')).toEqual([]);
     expect(disagreements('На сервере нет этой версии, поэтому перечислять здесь нечего.'))
       .toEqual([]);
@@ -165,7 +165,7 @@ describe('the rule can tell agreement from disagreement, and says which it canno
     // And the known exception really is excluded rather than silently misread.
     expect(genderOf('времени')).toBe('unclassified');
     expect(genderOf('версии')).toBe('feminine');
-    expect(genderOf('проекта')).toBe('masculine-or-neuter');
+    expect(genderOf('объекта')).toBe('masculine-or-neuter');
   });
 });
 
@@ -268,7 +268,7 @@ function contractErrorCodes(): readonly string[] {
 
 function envelope(code: ErrorCode): ApiError {
   const body: ErrorEnvelope = {
-    contract_version: '1.55.0',
+    contract_version: '1.57.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -281,7 +281,7 @@ function envelope(code: ErrorCode): ApiError {
 function listingSentences(): readonly { readonly where: string; readonly text: string }[] {
   const out: { where: string; text: string }[] = [];
   const collections: Record<string, string> = {
-    project: 'документы этого проекта',
+    project: 'документы этого объекта',
     document: 'версии этого документа',
     version: 'прогоны этой версии',
   };
@@ -309,7 +309,7 @@ function executorRefusalSentences(): readonly { readonly where: string; readonly
   const refusal = (
     code: ErrorCode, details: Record<string, string>, message: string,
   ): ApiError => new ApiError(code === 'validation_failed' ? 422 : 503, {
-    contract_version: '1.55.0', error_code: code, message, correlation_id: 'cid-gender',
+    contract_version: '1.57.0', error_code: code, message, correlation_id: 'cid-gender',
     retryable: code !== 'validation_failed', details,
   }, 'cid-gender');
   const unavailable = ['archived', 'kind_not_served', 'not_probed', 'no_revision', null].map((reason) => ({

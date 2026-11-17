@@ -67,10 +67,10 @@ describe('no address is written into _app by hand', () => {
 
   it('can fail: every spelling of a hand-written address is caught, and a comment is not', () => {
     const probe = [
-      '<Link href="/projects">Проекты</Link>;',
+      '<Link href="/projects">Объекты</Link>;',
       "<Link href={'/dashboard'}>Дашборд</Link>;",
       '<Link href={`/blocks`}>Блоки</Link>;',
-      '<Link href={`/projects/${id}`}>Проект</Link>;',
+      '<Link href={`/projects/${id}`}>Объект</Link>;',
       "const item = { href: '/account' };",
       '<form method="post" action="/bff/v1/session/end" />;',
       '// a comment naming /queue is prose',

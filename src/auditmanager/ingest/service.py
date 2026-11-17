@@ -280,6 +280,30 @@ class IngestService:
             record, archived_at = self._current(session, DocumentUid.parse(document_uid))
             return record, archived_at, self._documents.tags_of(session, DocumentUid.parse(document_uid))
 
+    def groups_in_project(self, project_uid: ProjectUid) -> dict[str, str]:
+        """`UIP-G-10`: ``{document_uid: group}`` of the project's documents that have one."""
+        with session_scope(self._factory) as session:
+            return self._documents.groups_in(session, project_uid)
+
+    def group_of_document(self, document_uid: DocumentUid) -> str | None:
+        """`UIP-G-10`: one document's group, ``None`` for «Без группы». Unknown is ``not_found``."""
+        with session_scope(self._factory) as session:
+            return self._documents.group_of(session, document_uid)
+
+    def set_document_group(
+        self, *, project_uid: str, document_uid: str, group: str | None, actor_uid: str, idempotency_key: str,
+    ) -> tuple[DocumentVersionRecord, Any, str | None]:
+        """`UIP-G-10`: set, change or clear a document's group; answer its current version, archive time and group."""
+        from auditmanager.ingest.lifecycle import set_document_group
+
+        with session_scope(self._factory) as session:
+            set_document_group(
+                session, project_uid=project_uid, document_uid=document_uid, group=group,
+                actor_uid=actor_uid, idempotency_key=idempotency_key,
+            )
+            record, archived_at = self._current(session, DocumentUid.parse(document_uid))
+            return record, archived_at, self._documents.group_of(session, DocumentUid.parse(document_uid))
+
     def document_archived_at(self, document_uid: DocumentUid) -> Any:
         """When one document was archived, ``None`` while in use. Unknown is ``not_found``."""
         with session_scope(self._factory) as session:

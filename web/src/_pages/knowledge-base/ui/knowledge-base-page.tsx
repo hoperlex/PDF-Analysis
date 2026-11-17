@@ -18,12 +18,13 @@
  * The journal is paged (50 per page, newest first): «Далее» and «Назад» walk the server's
  * opaque cursors with a stack, and changing either filter returns to the first page.
  *
- * **The project comes from the address, here, and nowhere else** (`UI-PARITY-01`, «Project
- * context»; the screen's registry class is `optional`). `?project=` is read with
- * `readProjectContext` and sent as `project_uid`; it is one of the journal's filters, so it is in
- * the cache key, and — like a filter change — a project change returns to the first page. No
- * `?project=` is «Все проекты». The screen says which of the two it shows, and how many entries
- * match (`total` of the page, not the length of the page on screen).
+ * **The object comes from the address, and where it is silent, from the account** (`UI-PARITY-01`,
+ * «Project context», `UIP-G-06`; the screen's registry class is `optional`). `useCurrentProject` reads
+ * `?project=<uid>`, then the explicit `?project=all`, then the object the account chose last, and it is
+ * sent as `project_uid`; it is one of the journal's filters, so it is in the cache key, and — like a
+ * filter change — a change of object returns to the first page. No object is «Все объекты». The screen
+ * says which of the two it shows, and how many entries match (`total` of the page, not the length of the
+ * page on screen).
  *
  * **The verdict chips** (`UI-B-32`) above the list -- «Принято», «Отклонено», «Не решено», «Все» -- set the same `verdict` the
  * select below them sets, and carry the server's count of that verdict (`useDecisionVerdictTotals`: `total` of
@@ -43,12 +44,12 @@
  * be accepted.
  */
 
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 import type { ErrorStateProps } from '@/shared/ui';
 import type { ProjectUid } from '@/shared/api';
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
-import { readProjectContext, switchProject, useAddressState } from '@/shared/lib';
+import { switchProject, useAddressState } from '@/shared/lib';
 import { LoadingState, PageShell } from '@/shared/ui';
 import type { DecisionVerdictTotals } from '@/entities/expert-decision';
 import {
@@ -58,6 +59,7 @@ import {
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { DecisionMemoryFilters } from '@/widgets/decision-memory';
 import { useMemoryAccess } from '@/entities/decision-memory';
+import { useCurrentProject } from '@/entities/project';
 import { useProjectList } from '@/entities/project';
 
 import {
@@ -101,11 +103,11 @@ const CATEGORY_CHOICE_LABELS: Readonly<Record<CategoryChoice, string>> = {
 /** What a render without a mounted router (a one-pass test render) reads as the query string. */
 const NO_PARAMS = new URLSearchParams();
 
-/** This screen's registry address, the one `readProjectContext` classifies. */
+/** This screen's registry address, the one the registry classifies. */
 const KNOWLEDGE_BASE_ADDRESS = '/knowledge-base';
 
 /** The scope the screen states when no project is chosen. */
-const ALL_PROJECTS = 'Все проекты';
+const ALL_PROJECTS = 'Все объекты';
 
 /**
  * The project's name, for the scope line. From the records the server just sent when there are
@@ -165,17 +167,17 @@ const KIND_LABELS: Readonly<Record<KbKind, string>> = {
 };
 
 const SUBTITLE =
-  'Все решения проверяющего по находкам, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий.';
+  'Все решения проверяющего по замечаниям, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий.';
 
 /** `D-495`: the memory is not a projection. It is the record of what the expert saw and decided, kept apart from the project. */
 const MEMORY_SUBTITLE =
-  'Память решений: то, что эксперт видел и решил в момент решения. Хранится отдельно и остаётся после удаления проекта и документа; это история, а не действующий вердикт.';
+  'Память решений: то, что эксперт видел и решил в момент решения. Хранится отдельно и остаётся после удаления объекта и документа; это история, а не действующий вердикт.';
 
 export function KnowledgeBasePage() {
-  // `null` only where no router is mounted; the address is then no address and names no project.
-  const pathname = usePathname();
+  // `UIP-G-06`: the object comes from the address (`?project=<uid>`, or `?project=all`), and where it is silent, from the
+  // account's last one. Outside the app router `KNOWLEDGE_BASE_ADDRESS` stands in for the screen's own address.
   const searchParams = useSearchParams() ?? NO_PARAMS;
-  const { projectUid } = readProjectContext(pathname ?? '', searchParams);
+  const { projectUid } = useCurrentProject(KNOWLEDGE_BASE_ADDRESS);
 
   // The type, the view and the two filters are in the address (`?kind=&view=&category=&verdict=`, `D-372`), so a link, a reload and the
   // side menu's «База знаний» (no query) return to the same filter. A choice REPLACES the entry: a filter is not a place to go Back to.
@@ -234,11 +236,11 @@ export function KnowledgeBasePage() {
 
   /*
    * `D-313`: an empty page under a category, a verdict or a project is about that selection, not
-   * about the installation. The way out is the filters reset, and «Все проекты» built like the
-   * dashboard builds it (`switchProject(…, null)`: every other parameter of the address stays).
+   * about the installation. The way out is the filters reset, and «Все объекты» built like the
+   * dashboard builds it (`switchProject(…, null)`, `?project=all`: every other parameter of the address stays).
    */
   const filtered = category !== 'all' || verdict !== 'all';
-  const withoutProject = switchProject(searchParams, null).toString();
+  const allProjects = switchProject(searchParams, null, projectUid).toString();
   const narrowing =
     !filtered && projectUid === null
       ? undefined
@@ -251,8 +253,7 @@ export function KnowledgeBasePage() {
           ...(projectUid === null
             ? {}
             : {
-                allProjectsHref:
-                  withoutProject === '' ? KNOWLEDGE_BASE_ADDRESS : `${KNOWLEDGE_BASE_ADDRESS}?${withoutProject}`,
+                allProjectsHref: `${KNOWLEDGE_BASE_ADDRESS}?${allProjects}`,
               }),
         };
 
@@ -392,7 +393,7 @@ export function KnowledgeBasePage() {
             isLoading={everything.isPending}
             // «Все» has no category or verdict: only the project narrows it, and «Все проекты» is the way out.
             narrowing={projectUid === null ? undefined : {
-              allProjectsHref: withoutProject === '' ? KNOWLEDGE_BASE_ADDRESS : `${KNOWLEDGE_BASE_ADDRESS}?${withoutProject}`,
+              allProjectsHref: `${KNOWLEDGE_BASE_ADDRESS}?${allProjects}`,
             }}
             error={everything.error === null ? null : journalFailure(everything.error, () => void everything.refetch())}
           />

@@ -28,7 +28,7 @@ export function assignmentFailure(error: unknown): AssignmentFailure {
       return {
         kind: 'assignment_open',
         detail:
-          'У этого проекта или документа уже есть незакрытое назначение. Переназначьте или отмените его вместо нового.',
+          'У этого объекта или документа уже есть незакрытое назначение. Переназначьте или отмените его вместо нового.',
         correlationId: error.correlationId,
       };
     }

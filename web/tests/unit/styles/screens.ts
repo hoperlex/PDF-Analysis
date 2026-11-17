@@ -14,6 +14,7 @@
  * fixtures `tests/unit/review` already uses, and adds no dependency.
  */
 
+import { PathnameContext, SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { createElement } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 
@@ -68,7 +69,10 @@ import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { SpecificationPricesAnswer, SpecificationPricesChooser } from '@/widgets/specification-prices';
-import { OptimisationByDocument, ProposalSetChooser } from '@/widgets/optimisation-proposals';
+import { ExportProposalsView, OptimisationByDocument, OptimisationProposals, ProposalListView, ProposalSetChooser } from '@/widgets/optimisation-proposals';
+import { CarryOverProposalDecisionsView } from '@/features/carry-over-proposal-decisions';
+import { ImportProposalDecisionsView } from '@/features/import-proposal-decisions';
+import { carrySources } from '@/entities/optimisation-proposal';
 import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
@@ -77,7 +81,7 @@ import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
-import { ExportPanel } from '@/widgets/export-panel';
+import { ExportBarView, ExportPanel } from '@/widgets/export-panel';
 import { ChangesPanelView, ComparisonViewerView, canShowOverlay, initialState, reduce, viewerGeometry } from '@/widgets/comparison-viewer';
 import type { EvidenceState } from '@/widgets/comparison-viewer';
 import { evidenceOf } from '@/entities/version-series';
@@ -103,7 +107,7 @@ import {
   CLAUDE_CELLS, ENSEMBLE_CELLS, READINESS_MIXED, blockedReadiness, modelLines, readiness,
 } from '../start-run/readiness-fixtures';
 import { ProjectList } from '@/widgets/project-list';
-import { RunList, StartRunWithReadiness } from '@/widgets/run-list';
+import { LastRunCard, RunList, StartRunWithReadiness } from '@/widgets/run-list';
 import { RunEta, RunProgress } from '@/widgets/run-progress';
 import { PlanStagesDialog, RunStagesDialog } from '@/widgets/run-stages-dialog';
 import { readinessPlan } from '@/entities/stage-layout';
@@ -132,14 +136,15 @@ import type {
 import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
 import type { Account, AnalysisPreset, AnalysisProfileListItem } from '@/shared/api';
 import type { RegistrationRequest, RunStartReadiness, RunWaitCell } from '@/shared/api';
-import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
+import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, SEVERITY_VALUES, queryKeys } from '@/shared/api';
 import { routes } from '@/shared/lib';
-import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
+import { AVATAR_PALETTE_SIZE, Avatar, Dialog, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
-import { groupByCategory } from '@/entities/finding';
-import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
+import { SeverityBadge, groupByCategory } from '@/entities/finding';
+import { DecisionReasonControl, VerdictMark } from '@/entities/expert-decision';
+import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, SectionDot } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { PauseStatusView } from '@/widgets/pause-status';
 import { UpdateTime } from '@/entities/execution';
@@ -211,7 +216,11 @@ import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixt
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY, seedExecutors,
 } from '../workers/executor-fixtures';
-import { carryOverShapes, proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
+import {
+  AR_DOCUMENT_UID as PROPOSALS_DOCUMENT_UID, OLDER_PASS_ID as PROPOSALS_OLDER_PASS_ID, PROPOSALS_PROJECT_UID, SHEET_URL as PROPOSALS_SHEET_URL, carryOverShapes, decision as proposalDecision,
+  pass as proposalPass, proposal as proposalOf, proposalPage as proposalPageOf, proposalShapes, seedLoadedProposals,
+  tapeProposal as tapeProposalOf,
+} from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
 import { ACCEPTED_PROJECT_A, acceptedPage } from '../section-optimisation/fixtures';
 
@@ -225,7 +234,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.55.0',
+    contract_version: '1.57.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -235,6 +244,16 @@ function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError
 }
 
 const noop = (): void => {};
+
+/**
+ * «Разбор» opens as the table in every run (`UIP-S06-06`), and the table opens no finding of its own. The screens that were taken
+ * for the list beside the open finding -- the card, the panel, the strips under the page -- are drawn under `?view=list`, so the
+ * census keeps reaching them; the table is drawn by the screens that stand at the end of this list.
+ */
+function inListView(page: ReactElement): ReactElement {
+  const query = new URLSearchParams({ view: 'list' });
+  return createElement(PathnameContext.Provider, { value: '/review' }, createElement(SearchParamsContext.Provider, { value: query as never }, page));
+}
 
 /** The four identities this census uses, keyed as `web/src/app`'s directories spell them. */
 const IDENTITIES = {
@@ -1084,14 +1103,32 @@ export function screens(): Screen[] {
     'Table, the findings table shape',
     render(
       createElement(Table<{ readonly id: string; readonly text: string }>, {
-        caption: 'Находки прогона',
+        caption: 'Замечания прогона',
         columns: [
           { key: 'id', header: '№', cell: (row: { readonly id: string; readonly text: string }) => row.id },
-          { key: 'text', header: 'Находка', cell: (row: { readonly id: string; readonly text: string }) => row.text },
+          { key: 'text', header: 'Замечание', cell: (row: { readonly id: string; readonly text: string }) => row.text },
         ],
-        rows: [{ id: '1', text: 'Первая находка' }, { id: '2', text: 'Вторая находка' }],
+        rows: [{ id: '1', text: 'Первое замечание' }, { id: '2', text: 'Второе замечание' }],
         rowKey: (row: { readonly id: string; readonly text: string }) => row.id,
         currentKey: '2',
+      }),
+    ),
+  );
+
+  // `UIP-G-04`, `UIP-FIX-01`: the shared window, drawn open (`staticOpen`) with a title, a body and two buttons, so the four
+  // colour-bearing rules of `dialog.module.css` (`.dialog`, `.close`, `.close:hover`, `.close:focus-visible`) are reached by a screen.
+  add(
+    'Dialog, open: title, body, two buttons',
+    render(
+      createElement(Dialog, {
+        title: 'Модели по этапам',
+        onClose: () => undefined,
+        staticOpen: true,
+        actions: [
+          createElement('button', { key: 'cancel', type: 'button', className: 'am-button am-button--quiet' }, 'Отмена'),
+          createElement('button', { key: 'run', type: 'button', className: 'am-button' }, 'Запустить'),
+        ],
+        children: createElement('p', null, 'Тело окна'),
       }),
     ),
   );
@@ -1153,6 +1190,27 @@ export function screens(): Screen[] {
     }],
     onNext: null, onPrevious: null,
   })));
+  // `UIP-S08-02`: the log of one run in groups by stage: a stage at work with its pages across a change of day (`.day`, `.stage`,
+  // `.pages`), a stage that ended in a failure with its code, the run's own states, and the executor's folded «Выполнение».
+  {
+    const event = (id: string, eventType: string, occurredAt: string, payload: Record<string, string | number>, aggregate = 'AuditRun') => ({
+      event_id: `evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8${id}`, run_id: RUN_ID, aggregate_id: aggregate === 'AuditRun' ? RUN_ID : 'att_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      aggregate_type: aggregate, event_type: eventType, occurred_at: occurredAt, payload,
+    });
+    add('ExecutionJournal, the log of one run in groups', withRouter(createElement(ExecutionJournal, {
+      scope: 'run',
+      entries: [
+        event('A', 'stage.progress', '2026-10-10T00:05:00Z', { stage_id: 'text_analysis', completed_pages: 3, total_pages: 10 }),
+        event('B', 'stage.started', '2026-10-09T23:55:00Z', { stage_id: 'text_analysis' }),
+        event('C', 'stage.finished', '2026-10-09T23:50:00Z', { stage_id: 'block_analysis', state: 'failed', error_code: 'analysis_failed' }),
+        event('D', 'stage.finished', '2026-10-09T23:40:00Z', { stage_id: 'source_preparation', state: 'succeeded' }),
+        event('E', 'audit_run.transition', '2026-10-09T23:30:00Z', { to_state: 'running' }),
+        event('F', 'job.transition', '2026-10-09T23:29:00Z', { to_state: 'running' }, 'Job'),
+        event('G', 'provider.prepared', '2026-10-09T23:28:00Z', { state: 'prepared' }, 'Attempt'),
+      ],
+      onNext: null, onPrevious: null,
+    })));
+  }
   // `UI-B-40` / `UI-B-43`: the run picker at its last step with a run in view and every list cut at its first page
   // (`populatedClient` answers each with a next cursor), a step whose list could not be read, and the controls of the
   // page in both modes -- the `.picker`, `.steps`, `.step`, `.scope`, `.controls`, `.toggle`, `.count` and `.notes` rules.
@@ -1813,6 +1871,7 @@ export function screens(): Screen[] {
     'FindingList selected',
     render(
       createElement(FindingList, {
+        view: 'list',
         groups: groupByCategory(FINDINGS),
         selectedFindingUid: FINDING_UID,
         onSelect: noop,
@@ -1841,6 +1900,7 @@ export function screens(): Screen[] {
   })));
   // `R-151g`: an accepted finding's execution status in its row, and the control with a refusal.
   add('FindingList with an execution status', render(createElement(FindingList, {
+    view: 'list',
     groups: groupByCategory(FINDINGS.map((finding, index) => index === 0
       ? { ...finding, current_verdict: 'accepted' as const, execution_status: 'amended' as const, merged_observations: [V2_OBSERVATION, V2_SIBLING] }
       : { ...finding, current_verdict: 'rejected' as const })),
@@ -1848,7 +1908,7 @@ export function screens(): Screen[] {
     onSelect: noop,
   })));
   add('ExecutionStatusControl with a refusal', render(createElement(ExecutionStatusControlView, {
-    status: 'taken_into_account', busy: false, error: 'Статус ставится только принятой находке.', onChange: noop,
+    status: 'taken_into_account', busy: false, error: 'Статус ставится только принятому замечанию.', onChange: noop,
   })));
   // `R-151d`: the decision import while sending, and its report with refused rows and a file refusal.
   add('ImportDecisions while sending', render(createElement(ImportDecisionsView, {
@@ -1897,7 +1957,7 @@ export function screens(): Screen[] {
           createElement(FindingRowActions, {
             verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop,
           }),
-        renderExpansion: () => createElement('p', null, 'Открытая находка: цитата на странице и решение эксперта.'),
+        renderExpansion: () => createElement('p', null, 'Открытое замечание: цитата на странице и решение эксперта.'),
       }),
     ),
   );
@@ -1905,6 +1965,7 @@ export function screens(): Screen[] {
     'FindingList with row actions, recorded and refused',
     render(
       createElement(FindingList, {
+        view: 'list',
         groups: groupByCategory(FINDINGS),
         selectedFindingUid: FINDING_UID,
         onSelect: noop,
@@ -1914,7 +1975,7 @@ export function screens(): Screen[] {
             sending: finding.finding_uid === FINDING_UID ? 'accept' : null,
             note: finding.finding_uid === FINDING_UID
               ? { tone: 'ok', text: 'Записано' }
-              : { tone: 'fail', text: 'Перед принятием выберите важность. Ничего не отправлено.' },
+              : { tone: 'fail', text: 'Перед принятием выберите критичность. Ничего не отправлено.' },
             onAccept: noop,
             onReject: noop,
           }),
@@ -2096,7 +2157,7 @@ export function screens(): Screen[] {
         groups: [],
         selectedFindingUid: null,
         onSelect: noop,
-        error: { title: 'Не удалось получить находки', detail: 'Сервис недоступен.', correlationId: 'cid-contrast-1' },
+        error: { title: 'Не удалось получить замечания', detail: 'Сервис недоступен.', correlationId: 'cid-contrast-1' },
       }),
     ),
   );
@@ -2371,6 +2432,19 @@ export function screens(): Screen[] {
     add('DocumentList loaded', at(createElement(DocumentList, { projectUid: PROJECT_UID })));
     add('VersionList loaded', at(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
     add('RunList loaded', at(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+    // `UIP-S04-03`: «Последний прогон»: ряд этапов в каждом состоянии, на которое есть правило (прогон идёт, этапы прочитаны), и очередь без прочитанных этапов (первый этап ждёт).
+    {
+      const facts = { calls_succeeded: 0, calls_failed: 0, calls_retried: 0, input_tokens: 0, output_tokens: 0, subscription_input_tokens: 0, subscription_output_tokens: 0, cost_micros: 0, started_at: '2026-09-10T08:00:00Z', finished_at: '2026-09-10T08:00:30Z' };
+      const stageOf = (chip: 'preparation' | 'text' | 'blocks' | 'cross_check' | 'merge', state: 'pending' | 'running' | 'done' | 'partial' | 'failed') => ({ chip, stage_ids: ['x'], plan: [], facts: { ...facts, state } });
+      const readClient = populatedClient();
+      readClient.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [runStatus({ run_id: RUN_ID, state: 'running', terminal_at: null })], page: { next_cursor: null } });
+      readClient.setQueryData(runStagesKey(RUN_ID), { run_id: RUN_ID, state: 'running', plan_source: 'run_binding', items: [stageOf('preparation', 'done'), stageOf('text', 'partial'), stageOf('blocks', 'failed'), stageOf('cross_check', 'running'), stageOf('merge', 'pending')] });
+      add('LastRunCard, a run going, the stages read: a chip in each state', renderScreen(readClient, createElement(LastRunCard, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+      const queuedClient = populatedClient();
+      queuedClient.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [runStatus({ run_id: RUN_ID, state: 'queued', terminal_at: null })], page: { next_cursor: null } });
+      add('LastRunCard, a queued run, the stages not read: the first chip waits', renderScreen(queuedClient, createElement(LastRunCard, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+      add('LastRunCard, the stage window open on a chip', renderScreen(readClient, createElement(LastRunCard, { projectUid: PROJECT_UID, versionUid: VERSION_UID, initiallyOpenChip: 'text' })));
+    }
     // `RunTable`: the dense run table in the states its cells branch on — the executor and preset lines
     // under the badge (a queued run waiting for its executor, a published run started with a preset), a
     // run with a starter's label, a failed run (no «Разобрать», no findings count) and a partial run — so the muted second line, the
@@ -2655,7 +2729,7 @@ export function screens(): Screen[] {
       'ReviewPage loaded',
       renderScreen(
         client,
-        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+        inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
       ),
     );
   }
@@ -2695,7 +2769,7 @@ export function screens(): Screen[] {
       };
       add(
         'ReviewPage loaded, with the cited page’s blocks',
-        renderScreen(withBlocks(true), createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
+        renderScreen(withBlocks(true), inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }))),
       );
       const strip = (page: number, over: Partial<Parameters<typeof ReviewPageBlocks>[0]> = {}) =>
         createElement(ReviewPageBlocks, { projectUid: PROJECT_UID, versionUid: VERSION_UID, page, ...over });
@@ -2813,7 +2887,7 @@ export function screens(): Screen[] {
       'ReviewPage loaded, v2 finding',
       renderScreen(
         client,
-        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+        inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
       ),
     );
   }
@@ -3125,7 +3199,7 @@ export function screens(): Screen[] {
     const work: DisclosureProps = {
       label: 'Работа',
       links: [
-        { href: '/projects', label: 'Проекты', current: true },
+        { href: '/projects', label: 'Объекты', current: true },
         { href: '/dashboard', label: 'Дашборд' },
       ],
     };
@@ -3133,7 +3207,7 @@ export function screens(): Screen[] {
       label: 'Система',
       links: [
         { href: '/logs', label: 'Журнал выполнения' },
-        { href: '/workers', label: 'Исполнители' },
+        { href: '/workers', label: 'Диспетчер' },
       ],
     };
     add('Disclosure closed', inBar(createElement(Disclosure, work)));
@@ -3215,6 +3289,21 @@ export function screens(): Screen[] {
       ),
     );
   }
+
+  // `UIP-G-17`: the section dot, one per section and the neutral one. The rule of `section-dot.module.css` reads a custom
+  // property that the markup sets, so the census measures no pair in it; it is rendered here so that the rule is reached.
+  add(
+    'Section dots, one per section and the neutral one',
+    render(
+      createElement(
+        'ul',
+        null,
+        ...[...PROJECT_SECTIONS.map((section) => section.code), null].map((code) =>
+          createElement('li', { key: code ?? 'none' }, createElement(SectionDot, { code }), code ?? 'Без раздела'),
+        ),
+      ),
+    ),
+  );
 
   // `CMP-VIEWER-01`: the sheet viewer (plan §1.1). Every rule of `comparison-viewer.module.css` is reached below: the
   // overlay with a selected difference, its boxes, the sheet being dragged and the neighbouring-sheet controls; the swipe
@@ -3390,7 +3479,7 @@ export function screens(): Screen[] {
     onSelect: noop,
   })));
   /*
-   * Lane N2: the screens the density pass of «Исполнители» and «Настройки анализа» measures and that no other census screen
+   * Lane N2: the screens the density pass of «Диспетчер» (`/workers`) and «Настройки анализа» measures and that no other census screen
    * draws open. The forms stand as the views the pages open them as (a closed `<details>` hides its form from a browser's layout,
    * so the group form is rendered by itself); the wizard in its steps (the kind of connection, the agent's name and model with the
    * two ways to install, the SSH form, the one command shown once, OpenRouter, and the key step after it); the runner-token
@@ -3477,6 +3566,219 @@ export function screens(): Screen[] {
       }),
     });
     add('AnalysisSettingsPage, the registry of every section read', renderScreen(settings, createElement(AnalysisSettingsPage, {})));
+  }
+
+  /*
+   * `UIP-S06-01`: the decision field of the `expert-decision` entity in every state its rules read -- open with a screen's own
+   * action in the slot, the verdict in force on either side with the line of the last press (recorded, refused), and a press on
+   * its way -- and the verdict mark in each of its four values and as the fault of a value outside the set. At the very end,
+   * for the reason above.
+   */
+  {
+    const control = (over: Partial<Parameters<typeof DecisionReasonControl>[0]>): string => render(createElement(DecisionReasonControl, {
+      verdict: 'pending', sending: null, note: null, onAccept: noop, onReject: noop, ...over,
+    }));
+    add('DecisionReasonControl, an open decision with an action of the screen in the slot', control({
+      extra: createElement('button', { type: 'button', className: 'am-button am-button--quiet am-button--small' }, 'На доработку'),
+    }));
+    add('DecisionReasonControl, accepted, the press recorded', control({ verdict: 'accepted', note: { tone: 'ok', text: 'Записано' } }));
+    add('DecisionReasonControl, rejected, the press refused', control({
+      verdict: 'rejected', note: { tone: 'fail', text: 'Перед принятием выберите критичность. Ничего не отправлено.' },
+    }));
+    add('DecisionReasonControl, a press on its way', control({ sending: 'accept' }));
+    add('VerdictMark, the four verdicts', render(createElement('p', null,
+      ...(['accepted', 'rejected', 'pending', 'needs_manual_review'] as const).map((verdict) => createElement(VerdictMark, { key: verdict, verdict })),
+    )));
+    add('VerdictMark, a value outside the closed set', render(createElement(VerdictMark, { verdict: 'approved' as Verdict })));
+  }
+
+  /*
+   * `UIP-S06-03`: the severity badge in each of its five tones, as the expert's decision and as the model's proposal (the same
+   * pill with a dashed edge, the word «предложено» after the label and its tooltip). At the very end, for the reason above.
+   */
+  add('SeverityBadge, the five severities decided', render(createElement('p', null,
+    ...SEVERITY_VALUES.map((severity) => createElement(SeverityBadge, { key: severity, severity })),
+  )));
+  add('SeverityBadge, the five severities proposed by the model', render(createElement('p', null,
+    ...SEVERITY_VALUES.map((severity) => createElement(SeverityBadge, { key: severity, severity, proposed: true })),
+  )));
+
+  /*
+   * `UIP-S06-05`: the bar of the file actions in every state it says -- each file being made (the package with its way to cancel
+   * and its phase), the files handed over, and a refusal of each kind under the row. The row itself (the button, its list, the
+   * «?» and its description) is drawn by every screen that draws «Разбор». At the very end, for the reason above.
+   */
+  {
+    const idle = { pending: false, lastFileName: null, error: null, onDownload: noop };
+    const idlePackage = { pending: false, status: null, error: null, onDownload: noop, onCancel: noop };
+    add('ExportBarView, each file being made', render(createElement(ExportBarView, {
+      runId: RUN_ID,
+      csv: { ...idle, pending: true },
+      xlsx: { ...idle, pending: true },
+      pack: { ...idlePackage, pending: true, status: 'Подготовка пакета аудита…' },
+    })));
+    add('ExportBarView, the files handed over', render(createElement(ExportBarView, {
+      runId: RUN_ID,
+      csv: { ...idle, lastFileName: 'findings.csv' },
+      xlsx: { ...idle, lastFileName: 'findings.xlsx' },
+      pack: { ...idlePackage, status: 'Пакет собран: исходный PDF и манифест.' },
+    })));
+    add('ExportBarView, a refusal of each file', render(createElement(ExportBarView, {
+      runId: RUN_ID,
+      csv: { ...idle, error: { title: 'В выгрузке отказано', detail: 'Файл не создан.', correlationId: 'cid-contrast-2' } },
+      xlsx: { ...idle, error: { title: 'Excel не выгружен', detail: 'Файл не создан.' } },
+      pack: { ...idlePackage, error: { title: 'Пакет аудита не собран', detail: 'Неполный ZIP не скачивается; повторите попытку.' } },
+    })));
+  }
+
+  /*
+   * `UIP-S06-06`, `UIP-S06-07`: the table of «Разбор» over a run that holds every severity twice, decided and proposed, in the three
+   * verdicts, and one finding with no severity. Its stripes (five tones, solid and dashed), its tints, its struck rows, and the five
+   * plates over it with «Не определена» drawn, all stand in one screen so each tone's colour is measured on a waiting row, on the
+   * green of an accepted one and on the red of a rejected one. The list that was the default stands under `view: 'list'` above.
+   * At the very end, for the reason above.
+   */
+  {
+    const verdicts = ['pending', 'accepted', 'rejected'] as const;
+    const uid = (n: number): string => `fnd_01J9ZQ8K7NHVXW3T2R5M6P4QS${String(n).padStart(2, '0')}`;
+    const severityRows = SEVERITY_VALUES.flatMap((severity, index) => [
+      finding({
+        finding_uid: uid(index), category: 'internal_contradiction', current_verdict: verdicts[index % 3] as Verdict,
+        decided_severity: severity, observation: observation({ proposed_severity: severity }),
+      }),
+      finding({
+        finding_uid: uid(index + 10), category: 'dimensions', current_verdict: verdicts[(index + 1) % 3] as Verdict,
+        observation: observation({ proposed_severity: severity }),
+      }),
+    ]);
+    const bare = finding({ finding_uid: uid(30), category: 'dimensions', current_verdict: 'pending', observation: observation({}) });
+    add('FindingList, table of every severity decided and proposed, in every verdict', render(createElement(FindingList, {
+      view: 'table',
+      groups: groupByCategory([...severityRows, bare]),
+      selectedFindingUid: null,
+      onSelect: noop,
+      renderRowActions: (row: { readonly current_verdict: Verdict }) =>
+        createElement(FindingRowActions, { verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop }),
+    })));
+    add('FindingList, one severity plate pressed, the list link', render(createElement(FindingList, {
+      view: 'list',
+      groups: groupByCategory([...severityRows, bare]),
+      selectedFindingUid: null,
+      onSelect: noop,
+      severityFilter: 'economic',
+      verdictFilter: 'waiting',
+    })));
+  }
+
+  /*
+   * `UIP-S06-08`: the choice «Критичность» beside ✓ in a row, in the four states it is drawn in -- empty, refused for want of a choice
+   * (invalid, with the row's own sentence under it), chosen, and held (a press on its way, a finding already accepted) -- in the table's
+   * «Решение» column and in a list row. At the very end, for the reason above.
+   */
+  {
+    const uid = (n: number): string => `fnd_01J9ZQ8K7NHVXW3T2R5M6P4QT${String(n).padStart(2, '0')}`;
+    const rows = [
+      finding({ finding_uid: uid(0), current_verdict: 'pending', observation: observation({ proposed_severity: 'critical' }) }),
+      finding({ finding_uid: uid(1), current_verdict: 'pending', observation: observation({ proposed_severity: 'economic' }) }),
+      finding({ finding_uid: uid(2), current_verdict: 'pending', observation: observation({ proposed_severity: 'operational' }) }),
+      finding({
+        finding_uid: uid(3), current_verdict: 'accepted', decided_severity: 'recommendation',
+        observation: observation({ proposed_severity: 'critical' }),
+      }),
+      finding({ finding_uid: uid(4), current_verdict: 'pending', observation: observation({}) }),
+    ];
+    const refusal = { tone: 'fail', text: 'Перед принятием выберите критичность. Ничего не отправлено.' } as const;
+    const actions = (row: Finding) => {
+      const proposal = row.observation.proposed_severity !== undefined;
+      const at = rows.findIndex((one) => one.finding_uid === row.finding_uid);
+      return createElement(FindingRowActions, {
+        verdict: row.current_verdict,
+        sending: at === 2 ? 'accept' : null,
+        note: at === 0 ? refusal : null,
+        onAccept: noop,
+        onReject: noop,
+        severity: !proposal ? undefined : {
+          value: at === 1 ? 'economic' : at === 3 ? 'recommendation' : at === 2 ? 'operational' : '',
+          required: row.decided_severity === undefined,
+          invalid: at === 0,
+          onChange: noop,
+        },
+      });
+    };
+    for (const view of ['table', 'list'] as const) {
+      add(`FindingList ${view}, the choice of severity beside ✓ in each of its states`, render(createElement(FindingList, {
+        view, groups: groupByCategory(rows), selectedFindingUid: null, onSelect: noop, renderRowActions: actions,
+      })));
+    }
+  }
+
+  /*
+   * `UIP-S09-02`: the top row of the proposals tab with every part drawn at once -- the plates with their counts and «Всего», the link to
+   * the cards, «Файлы ▾», «Загрузить решения» with the refusal of two rows and of the file, «Перенести решения из V1» asking for its
+   * confirmation, and a refused file in the line under the row; then the same row while a file is being made. The table under it carries
+   * a decided row of each colour. At the very end, for the reason above.
+   */
+  {
+    const open = proposalPass({ version_ordinal: 2, decision_counts: { pending: 1, accept: 1, reject: 1, revise: 0 }, proposal_count: 3 });
+    const earlier = proposalPass({
+      optimisation_pass_id: PROPOSALS_OLDER_PASS_ID, version_ordinal: 1, decision_counts: { pending: 2, accept: 3, reject: 1, revise: 2 },
+    });
+    const sources = carrySources([open, earlier], open);
+    const page = proposalPageOf({
+      optimisation_pass: open,
+      items: [
+        proposalOf({ current_verdict: 'accept', current_decision: proposalDecision({ verdict: 'accept' }) }),
+        tapeProposalOf(),
+        proposalOf({
+          optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4QA3', ordinal: 3, current_verdict: 'reject',
+          current_decision: proposalDecision({ verdict: 'reject', comment: null }),
+        }),
+      ],
+      total: 3,
+    });
+    const view = (actions: ReactElement) => renderScreen(newClient(), createElement(ProposalListView, {
+      page, canDecide: false, onDecision: noop, onPage: noop, layout: 'table', onLayout: noop,
+      sheet: { url: PROPOSALS_SHEET_URL, isLoading: false, failure: null, onRetry: noop }, actions,
+    }));
+    add('OptimisationProposals top row, files, load refused, carrying over to confirm, file refused', view(createElement(ExportProposalsView, {
+      pending: false,
+      failure: { detail: 'Файл не удалось выгрузить.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100' } as never,
+      onDownload: noop,
+      onDownloadXlsx: noop,
+      importControl: createElement(ImportProposalDecisionsView, {
+        pending: false, onChoose: noop, failure: 'Файл пуст.',
+        report: {
+          optimisation_pass_id: open.optimisation_pass_id, recorded: 1, unchanged: 1, refused: 2,
+          rows: [
+            { row: 4, outcome: 'refused', reason: 'unknown_proposal' },
+            { row: 7, outcome: 'refused', reason: 'comment_required' },
+          ],
+        },
+      }),
+      carryOverControl: createElement(CarryOverProposalDecisionsView, {
+        sources, confirming: sources[0] ?? null, pending: false, report: null, failure: null, onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    })));
+    add('OptimisationProposals top row, a file being made', view(createElement(ExportProposalsView, {
+      pending: true, failure: null, onDownload: noop, onDownloadXlsx: noop,
+    })));
+  }
+
+  /*
+   * `UIP-S09-04`: «Проход от … ▾» of a set with a single pass (the panel holds the facts and no choice), and of a set whose newest pass
+   * the address does not name (the line that says so over the top row). The panel of the two passes is in «OptimisationProposals loaded».
+   * At the very end, for the reason above.
+   */
+  {
+    const one = newClient();
+    seedLoadedProposals(one);
+    one.setQueryData(queryKeys.optimisation.passes(PROPOSALS_PROJECT_UID, PROPOSALS_DOCUMENT_UID), { items: [proposalPass()] });
+    add('OptimisationProposals one pass', renderScreen(one, createElement(OptimisationProposals, { projectUid: PROPOSALS_PROJECT_UID, roles: ['expert'] })));
+    const missing = newClient();
+    seedLoadedProposals(missing);
+    add('OptimisationProposals pass of the address not found', renderScreen(missing, createElement(OptimisationProposals, {
+      projectUid: PROPOSALS_PROJECT_UID, roles: ['expert'], passId: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q9X', onPassChange: noop,
+    })));
   }
 
   return out;

@@ -125,7 +125,7 @@ export function DecisionMemoryCaseView({ data, isLoading, error, manage, onBack 
         <div><dt>Раздел</dt><dd><MemorySectionCell code={summary.section_code} /></dd></div>
         <div><dt>Записано</dt><dd><time dateTime={summary.captured_at}>{formatInstant(summary.captured_at)}</time></dd></div>
         <div><dt>Данные</dt><dd>{MEMORY_DATA_CLASS_LABELS[summary.data_class]}</dd></div>
-        <div><dt>Проект</dt><dd><code data-memory-origin-project={summary.origin_project_uid}>{summary.origin_project_uid}</code></dd></div>
+        <div><dt>Объект</dt><dd><code data-memory-origin-project={summary.origin_project_uid}>{summary.origin_project_uid}</code></dd></div>
         <div><dt>Кадры</dt><dd>{MEMORY_CROP_STATE_LABELS[summary.crop_state]}</dd></div>
         <div><dt>Дело</dt><dd><code>{summary.case_id}</code></dd></div>
       </dl>
@@ -144,12 +144,12 @@ export function DecisionMemoryCaseView({ data, isLoading, error, manage, onBack 
       <div className={styles.columns}>
         <div className={styles.column}>
           {content === null ? null : (
-            <Section title="Находка и рекомендация">
+            <Section title="Замечание и рекомендация">
               <p className={styles.text} data-memory-finding-text="">{content.finding_text}</p>
               <p className={styles.text} data-memory-recommendation-text="">{content.recommendation_text}</p>
               <p className={styles.itemMeta}>
                 {content.proposed_severity === null ? null : (
-                  <span className={styles.inlineEnd}><SeverityBadge severity={content.proposed_severity} title="Важность, предложенная моделью" /></span>
+                  <span className={styles.inlineEnd}><SeverityBadge severity={content.proposed_severity} title="Критичность, предложенная моделью" /></span>
                 )}
                 {content.required_value === null && content.stated_value === null ? null : (
                   <>
@@ -168,7 +168,7 @@ export function DecisionMemoryCaseView({ data, isLoading, error, manage, onBack 
                   <p className={styles.itemMeta}>
                     <span className="am-kb__verdict" data-verdict={decision.verdict}>{MEMORY_VERDICT_LABELS[decision.verdict]}</span>
                     {decision.severity === null ? null : (
-                      <span className={styles.inline}><SeverityBadge severity={decision.severity} title="Важность, решённая экспертом" /></span>
+                      <span className={styles.inline}><SeverityBadge severity={decision.severity} title="Критичность, решённая экспертом" /></span>
                     )}{' '}
                     · {MEMORY_ORIGIN_KIND_LABELS[decision.origin_kind]} · <time dateTime={decision.decided_at}>{formatInstant(decision.decided_at)}</time>
                   </p>

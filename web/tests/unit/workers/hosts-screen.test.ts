@@ -1,5 +1,5 @@
 /**
- * `HOSTS-WEB-01` — «Исполнители» as two tabs, «Серверы» above all: the summary, the row of a server and what each role is
+ * `HOSTS-WEB-01` — «Диспетчер» as two tabs, «Серверы» above all: the summary, the row of a server and what each role is
  * drawn of it, the window «Подключить сервер», and the reads the viewer never sends. The pure rules of a row are functions
  * (`entities/executor-host`), so each is a call; the screen is read from a render over a seeded cache.
  *
@@ -75,7 +75,10 @@ describe('the words of a server row', () => {
   it('says when contact was lost, or that there never was one', () => {
     const at = new Date('2026-11-09T11:02:00Z');
     const two = (n: number) => String(n).padStart(2, '0');
+    // The reader's own clock: `vitest.config.ts` pins the zone to UTC, so the literal is the local reading too.
+    expect(noContactSentence('2026-11-09T11:02:00Z')).toBe('нет связи с 11:02');
     expect(noContactSentence('2026-11-09T11:02:00Z')).toBe(`нет связи с ${two(at.getHours())}:${two(at.getMinutes())}`);
+    expect(noContactSentence('not a time')).toBe('нет связи');
     expect(noContactSentence(undefined)).toContain('ещё не выходил на связь');
   });
 });
@@ -292,7 +295,7 @@ describe('the switch «Использовать»', () => {
     expect(requests[0]?.line).toBe(`PUT /bff/v1/executor-hosts/${SERVER_ONLINE.host_id}/enabled {"enabled":false}`);
     expect(requests[0]?.key).toMatch(/\S+/);
     const refusal = new ApiError(409, {
-      contract_version: '1.55.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-host-1', retryable: false, details: { conflict_reason: 'host_archived' },
+      contract_version: '1.57.0', error_code: 'conflict', message: 'x', correlation_id: 'cid-host-1', retryable: false, details: { conflict_reason: 'host_archived' },
     }, null);
     const failure = hostFailure(refusal, true);
     expect(failure.detail).toBe('Сервер удалён: изменить его уже нельзя.');

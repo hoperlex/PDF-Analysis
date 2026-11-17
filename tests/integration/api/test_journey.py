@@ -112,6 +112,10 @@ def test_the_ingest_path_publishes_an_immutable_version(
     }
 
     fetched = ok(dispatch(router, Request.build("GET", f"/versions/{version['version_uid']}")))
+    # `UIP-S04-01`: the read also carries the audit of the version (never run here, so `not_run`); the upload's answer reads
+    # no runs. Everything else is the same version.
+    audit = fetched.pop("audit")
+    assert audit == {"state": "not_run", "partial": False, "finding_count": 0, "undecided_finding_count": 0}
     assert fetched == version, "the read and the write disagree about the same version"
 
 

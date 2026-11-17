@@ -6,8 +6,9 @@ The original's section-optimisation screen has a tab of the experts' accepted op
 is not listed). Every pass is read, so a proposal accepted in an earlier pass stays in the library; each row names its
 pass, version and project, and a proposal is identified by its own ``opr_`` identity, never by its position in a pass.
 
-The two filters are filters and not parents: ``project_uid`` narrows to one project and ``section`` to the versions an
-expert confirmed in that section (``version_classification_current``). Newest acceptance first, then the decision id,
+The three filters are filters and not parents: ``project_uid`` narrows to one project, ``document_uid`` (`UIP-S11-05`)
+to one document set and ``section`` to the versions an expert confirmed in that section
+(``version_classification_current``). Newest acceptance first, then the decision id,
 so the order is total and a page can be resumed by a cursor.
 """
 
@@ -22,7 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import IdentityError, ProjectUid
+from auditmanager.shared.identity import DocumentUid, IdentityError, ProjectUid
 
 from .generator import saving_percent_for
 from .policy import AGGREGATE_OPTIMISATION_PROPOSAL, VERDICT_ACCEPT, require_reader
@@ -59,6 +60,7 @@ _ACCEPTED = text(
     JOIN document doc ON doc.document_uid = s.document_uid
     LEFT JOIN version_classification_current c ON c.version_uid = s.version_uid
     WHERE (CAST(:project_uid AS text) IS NULL OR s.project_uid = CAST(:project_uid AS text))
+      AND (CAST(:document_uid AS text) IS NULL OR s.document_uid = CAST(:document_uid AS text))
       AND (CAST(:section AS text) IS NULL OR c.section_code = CAST(:section AS text))
     ORDER BY cur.decided_at DESC, cur.proposal_decision_id COLLATE "C" DESC
     """
@@ -110,12 +112,14 @@ def list_accepted_proposals(
     actor_roles: frozenset[str],
     project_uid: str | None = None,
     section: str | None = None,
+    document_uid: str | None = None,
 ) -> tuple[AcceptedProposal, ...]:
     """Every proposal whose decision in force is an acceptance, newest acceptance first.
 
-    ``project_uid`` and ``section`` are filters: a project or a section nothing was accepted in yields nothing, not
-    ``not_found``. A malformed project identity is ``validation_failed``; an account with no role reads nothing
-    (``permission_denied``, `R-80`).
+    ``project_uid``, ``document_uid`` and ``section`` are filters: a project, a document set or a section nothing was
+    accepted in yields nothing, not ``not_found`` -- so a document that does not exist, one of another project than the
+    named one and one of another section than the named one are all the same empty answer. A malformed project or
+    document identity is ``validation_failed``; an account with no role reads nothing (``permission_denied``, `R-80`).
     """
     require_reader(frozenset(actor_roles), aggregate_type=AGGREGATE_OPTIMISATION_PROPOSAL)
     project: str | None = None
@@ -124,8 +128,15 @@ def list_accepted_proposals(
             project = str(ProjectUid.parse(project_uid))
         except (IdentityError, TypeError):
             raise DomainError(ErrorCode.VALIDATION_FAILED, field="project_uid", constraint="pattern") from None
+    document: str | None = None
+    if document_uid is not None:
+        try:
+            document = str(DocumentUid.parse(document_uid))
+        except (IdentityError, TypeError):
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="document_uid", constraint="pattern") from None
     rows = session.execute(
-        _ACCEPTED, {"accept": VERDICT_ACCEPT, "project_uid": project, "section": section}
+        _ACCEPTED,
+        {"accept": VERDICT_ACCEPT, "project_uid": project, "document_uid": document, "section": section},
     ).mappings()
     return tuple(
         AcceptedProposal(

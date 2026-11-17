@@ -51,7 +51,7 @@ describe('the version’s «Блоки» tab', () => {
     const markup = tab(withVersion(blocksVersion(true)));
     expect(markup).toContain('role="tablist"');
     expect(markup).not.toContain('1. Версия');
-    expect(markup).not.toContain('Выбрать проект');
+    expect(markup).not.toContain('Выбрать объект');
   });
 
   it('ends the context strip in «Блоки» and links back to the version', () => {
@@ -63,7 +63,7 @@ describe('the version’s «Блоки» tab', () => {
 
   it('says a version of another project is from another project, and links to its own tab', () => {
     const markup = tab(withVersion(blocksVersion(true, { project_uid: OTHER_PROJECT })));
-    expect(markup).toContain('Эта версия из другого проекта.');
+    expect(markup).toContain('Эта версия из другого объекта.');
     expect(markup).toContain(`href="/projects/${OTHER_PROJECT}/versions/${BLOCKS_VERSION_UID}/blocks"`);
     expect(markup).not.toContain('role="tablist"');
   });
@@ -112,7 +112,8 @@ describe('the page chosen above the tiles lives in the address of the version’
     for (const search of ['page=all', '', 'page=0', 'page=abc', 'page=9']) {
       navigation.search = search;
       const markup = tab(withBlocks());
-      expect(markup.split('data-portal-page=').length - 1, search).toBe(3);
+      expect(markup.split('data-portal-grid="all"').length - 1, search).toBe(1);
+      expect(markup.split('data-portal-page=').length - 1, search).toBe(0);
       expect(chip(markup, 'all'), search).toContain('aria-pressed="true"');
     }
   });

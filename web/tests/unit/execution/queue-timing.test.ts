@@ -1,6 +1,7 @@
 /**
  * The queue row's timing line (`widgets/execution-queue/model/timing.ts`): the original's «ЧЧ:ММ → ЧЧ:ММ · длительность»,
- * in UTC, with the day where it is not the same day.
+ * in the reader's time, with the day where it is not the same day. The zone is the one `vitest.config.ts` pins (UTC) unless a test
+ * names one.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -37,6 +38,17 @@ describe('the timing of a job', () => {
     const asOf = Date.parse('2026-10-09T10:05:00Z');
     expect(queueTiming({ started_at: '2026-10-09T10:01:00Z' }, asOf)).toEqual({ start: '09.10 10:01', end: null, duration: '4 мин' });
     expect(queueTiming({ started_at: '2026-10-09T10:01:00Z' }, null)).toEqual({ start: '09.10 10:01', end: null, duration: null });
+  });
+
+  it('reads the clock and the day in the reader\'s zone, so a job across the reader\'s midnight carries its end day', () => {
+    // 23:50 and 00:20 UTC are 02:50 and 03:20 in Moscow (the same day there), and 09:50 and 10:20 in Vladivostok.
+    const job = { started_at: '2026-10-09T23:50:00Z', finished_at: '2026-10-10T00:20:00Z' };
+    expect(queueTiming(job, null, 'Europe/Moscow')).toEqual({ start: '10.10 02:50', end: '03:20', duration: '30 мин' });
+    expect(queueTiming(job, null, 'Asia/Vladivostok')).toEqual({ start: '10.10 09:50', end: '10:20', duration: '30 мин' });
+    // 20:50Z to 21:20Z crosses Moscow's midnight but not UTC's.
+    const evening = { started_at: '2026-10-09T20:50:00Z', finished_at: '2026-10-09T21:20:00Z' };
+    expect(queueTiming(evening, null, 'UTC')).toEqual({ start: '09.10 20:50', end: '21:20', duration: '30 мин' });
+    expect(queueTiming(evening, null, 'Europe/Moscow')).toEqual({ start: '09.10 23:50', end: '10.10 00:20', duration: '30 мин' });
   });
 
   it('keeps the end of a job that finished without ever starting', () => {

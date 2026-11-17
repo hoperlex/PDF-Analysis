@@ -35,7 +35,7 @@ export const UPLOAD_CONSTRAINT_TEXT: Readonly<Record<string, string>> = {
 export const VENDOR_LIST_CONFLICT_TEXT =
   'Список изменили, пока вы его редактировали. Обновите вкладку и внесите изменение снова.';
 export const INHERIT_WITH_ENTRIES_TEXT =
-  'Чтобы вернуться к общему списку, сначала удалите записи списка проекта.';
+  'Чтобы вернуться к общему списку, сначала удалите записи списка объекта.';
 
 function constraintOf(error: unknown): string | null {
   if (!(error instanceof ApiError) || error.errorCode !== 'validation_failed') return null;

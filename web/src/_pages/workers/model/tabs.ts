@@ -1,5 +1,5 @@
 /**
- * The tabs of «Исполнители» (`HOSTS-WEB-01`, plan 2026-11-09 §7.1), and how the keyboard moves between them.
+ * The tabs of «Диспетчер» (`HOSTS-WEB-01`, plan 2026-11-09 §7.1), and how the keyboard moves between them.
  *
  * Pure, as `_pages/blocks/model/tabs.ts` is: the static render this suite has cannot fire a key event, and the WAI-ARIA tabs
  * pattern (automatic activation) is small enough to state as a table.

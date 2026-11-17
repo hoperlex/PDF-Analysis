@@ -53,7 +53,7 @@ export const FORMAT_LABELS: Readonly<Record<PriceListFormat, string>> = {
 };
 
 export const VENDOR_SOURCE_LABELS: Readonly<Record<VendorListSource, string>> = {
-  project: 'список проекта',
+  project: 'список объекта',
   global: 'общий список',
   none: 'не задан',
 };

@@ -158,7 +158,7 @@ export function StageV3Report({ runId, cards, run, onOpenEvidence }: { readonly 
       <label>Поиск параметра <input type="search" value={filter} onChange={(event) => { setFilter(event.target.value); setParameterPage(0); }} /></label>
       {parameters.length === 0 ? <p>Структурированные параметры ещё не сохранены. Наблюдения без параметров включены в выгрузку.</p> : <>
         <p>По поиску: {visible.length} из {parameters.length}. На экране до 25 параметров; выгрузки содержат все сохранённые записи.</p>
-        <div className={styles.tableScroll}><table><thead><tr><th>Объект и параметр</th><th>Исходный Miner</th><th>Независимая машинная сверка</th><th>Источники</th></tr></thead>
+        <div className={styles.tableScroll}><table><thead><tr><th>Предмет и параметр</th><th>Исходный Miner</th><th>Независимая машинная сверка</th><th>Источники</th></tr></thead>
           <tbody>{shownParameters.map(({ card, parameter }) => <tr key={parameter.key}>
             <th scope="row">{parameter.subject}<br />{parameter.name || 'Не указано'}<p>{parameter.location}</p></th>
             <td>{parameter.oldValue || 'Не указано'} → {parameter.newValue || 'Не указано'} {parameter.unit}</td>

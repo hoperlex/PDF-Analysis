@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 
 /** Small original line drawings for the product menu; the shared Feather set is unchanged. */
 const glyphs = {
+  // «Главная» (UIP-G-07): a house, the first item of «Работа».
+  home: <path d="M3 11.5 12 4l9 7.5M5.5 10v9a1 1 0 0 0 1 1H10v-5.5h4V20h3.5a1 1 0 0 0 1-1v-9" />,
   projects: <path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 3h18" />,
   // «Проект» (R-153h): the same folder holding the lines of a sheet — one project, where «Проекты» is the shelf.
   project: <><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" /><path d="M8 12h8M8 16h5" /></>,
@@ -27,11 +29,12 @@ const glyphs = {
 type GlyphName = keyof typeof glyphs;
 
 const byLabel: Readonly<Record<string, GlyphName>> = {
-  'Проекты': 'projects',
-  'Проект': 'project',
+  'Главная': 'home',
+  'Объекты': 'projects',
+  'Объект': 'project',
   'Дашборд': 'dashboard',
   'Оптимизация разделов': 'optimisation',
-  'Диспетчер': 'dispatcher',
+  'Назначения': 'dispatcher',
   'График работ': 'schedule',
   'Сравнение версий': 'versions',
   'Сравнение стадий': 'stages',
@@ -39,7 +42,7 @@ const byLabel: Readonly<Record<string, GlyphName>> = {
   'Блоки': 'blocks',
   'Нормы': 'norms',
   'Журнал выполнения': 'logs',
-  'Исполнители': 'workers',
+  'Диспетчер': 'workers',
   'Настройки анализа': 'settings',
   'Очередь': 'queue',
   'Пользователи': 'users',

@@ -96,7 +96,7 @@ function PageFindingsPanel({
           {reading.findings.map((finding) => (
             <li key={finding.finding_uid} className={styles.finding} data-finding-uid={finding.finding_uid}>
               {finding.decided_severity === undefined ? null : (
-                <SeverityBadge severity={finding.decided_severity} title="Важность, решённая экспертом" />
+                <SeverityBadge severity={finding.decided_severity} title="Критичность, решённая экспертом" />
               )}
               <span className={styles.findingText}>{finding.observation.finding_text}</span>{' '}
               <Link

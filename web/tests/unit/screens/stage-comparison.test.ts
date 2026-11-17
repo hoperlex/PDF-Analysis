@@ -152,7 +152,7 @@ describe('the four states of a comparison screen are four different states', () 
 
   it('renders an error state — not an empty list — when the request failed', () => {
     const envelope: ErrorEnvelope = {
-      contract_version: '1.55.0',
+      contract_version: '1.57.0',
       error_code: 'dependency_unavailable',
       message: 'Одна безопасная для вызывающей стороны фраза.',
       correlation_id: 'cid-comparison-1',
@@ -305,7 +305,7 @@ describe('the screen says what is missing without explaining the transport', () 
   // compared from what the system saved, with no new model call. The screen therefore offers it and no
   // longer promises it for later -- a promise left on screen beside the feature would say two things.
   it('offers the comparison of the saved findings, and promises nothing for later', () => {
-    expect(text).toContain('Находки и предварительные наблюдения');
+    expect(text).toContain('Замечания и предварительные наблюдения');
     expect(text).toContain('без новых обращений к модели');
     expect(text).not.toContain('появится позже');
   });

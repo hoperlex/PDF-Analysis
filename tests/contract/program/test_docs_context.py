@@ -43,7 +43,7 @@ class DocumentationCropTests(unittest.TestCase):
         lines = documents["docs/program/CURRENT_STATE.md"]
         self.assertEqual([n for c in crops for n in range(c.start, c.end + 1)],
                          list(range(1, len(lines) + 1)))
-        self.assertTrue(any("BLOCK16-INT-1030" in c.title for c in crops))
+        self.assertTrue(any("EXEC2-INT-1" in c.title for c in crops))
 
 
 if __name__ == "__main__":

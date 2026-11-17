@@ -27,6 +27,8 @@ EXPECTED_TABLES = {
     "release",
     "release_revision",
     "account_release_mark",
+    # `0069_account_last_project` (`UIP-G-05`): the object an account chose last, one row per account.
+    "account_last_project",
     # `0017_execution_queue`: one durable pause-control row, inserted lazily.
     "execution_control",
     # `0018_norm_custody`: custody admissions and bindings, and the paid repair journal.

@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0068_reviewable_findings"
+HEAD = "0070_document_group"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -109,6 +109,8 @@ TABLES = frozenset((
     # `0067_precedents_wave5` (`CRIT-SEAL-53`): a failure pattern with its status journal (KEEP, the content side of a case), the parameters a run found
     # and the evidence of a finding in another version (PRODUCT).
     "decision_memory_pattern", "decision_memory_pattern_status_event", "finding_cross_evidence", "project_parameter_fact",
+    # `0069_account_last_project` (`UIP-G-05`): the object an account chose last (KEEP, the account side; no key to `project`).
+    "account_last_project",
 ))
 
 #: Views at ``HEAD``. A view carries no rows; it is restored from the dump and checked by name.
@@ -579,7 +581,10 @@ SEQUENCES = {
 #: `0067_precedents_wave5` (`CRIT-SEAL-53`) adds four tables: 41 checks, seven foreign keys, four primary keys and three unique constraints. Over
 #: ``0065``'s c 1547, f 407, p 164, t 9, u 139 that is c 1591, f 417, p 169, t 9, u 143 (the sum of the two seals' measured deltas; re-measured by the
 #: inventory test on a throwaway database at ``0067``, 2026-11-11, main→dev merge).
-CONSTRAINT_COUNTS = {"c": 1594, "f": 417, "p": 169, "t": 9, "u": 143}
+#: `0069_account_last_project` (`UIP-G-05`) adds one table: two checks (the shapes of the two identities), one foreign key (the account) and the
+#: primary key (one row per account): c 1596, f 418, p 170, t 9, u 143.
+#: `0070_document_group` (`UIP-G-10`) adds one check to the existing ``document`` table (``ck_document_group_label_length``): c 1597.
+CONSTRAINT_COUNTS = {"c": 1597, "f": 418, "p": 170, "t": 9, "u": 143}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -602,7 +607,8 @@ CONSTRAINT_COUNTS = {"c": 1594, "f": 417, "p": 169, "t": 9, "u": 143}
 #: `0065_norm_crop_render` adds two (its primary key and the Blob lookup): 528 (measured on a throwaway database at ``0065``, 2026-11-11).
 #: `0066_run_deletion` adds two (its primary key and the unique receipt) and `0067_precedents_wave5` eleven (four primary keys, three unique
 #: constraints and four lookups): 528 + 13 = 541 (re-measured on a throwaway database at ``0067``, 2026-11-11, main→dev merge).
-INDEX_COUNT = 541
+#: `0069_account_last_project` adds one (its primary key): 542.
+INDEX_COUNT = 542
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

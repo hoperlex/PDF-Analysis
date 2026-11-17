@@ -46,6 +46,8 @@ export function monthFixture(): WorkScheduleMonth {
         plan: 12,
         plan_is_default: false,
         fact: 5,
+        accepted_count: 9,
+        rejected_count: 3,
         done: [
           done('2026-11-02', 1, 'АР Раздел 3'),
           done('2026-11-03', 2, 'КР Раздел 4'),
@@ -55,7 +57,10 @@ export function monthFixture(): WorkScheduleMonth {
         ],
         absences: ['2026-11-10', '2026-11-11'],
       },
-      { user_uid: EXPERT_B, label: 'Петров Борис', plan: 20, plan_is_default: true, fact: 0, done: [], absences: [] },
+      {
+        user_uid: EXPERT_B, label: 'Петров Борис', plan: 20, plan_is_default: true, fact: 0, accepted_count: 0, rejected_count: 0,
+        done: [], absences: [],
+      },
     ],
   };
 }

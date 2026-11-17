@@ -213,6 +213,11 @@ def test_a_real_document_version_validates(
     )
     _valid(results, "uploaded")
     _valid(results, "fetched")
+    # `UIP-S04-01`: the read also carries the audit of the version (never run here, so `not_run`); the upload's answer reads
+    # no runs. Both validated above; everything else is the same version.
+    assert fetched.pop("audit") == {
+        "state": "not_run", "partial": False, "finding_count": 0, "undecided_finding_count": 0,
+    }
     assert fetched == version
 
 

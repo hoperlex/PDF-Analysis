@@ -242,14 +242,19 @@ def test_a_v1_run_renders_with_labels_and_empty_norm_columns(preflight) -> None:
     assert "A4" not in findings
 
     summary = _cells(export.content, "xl/worksheets/sheet1.xml")
+    # The first identity row is named «Объект» as the screens name it (`UIP-G-01`); its value is still the project uid.
+    assert (summary["A2"], summary["B2"]) == ("Объект", "prj_1")
     assert (summary["A4"], summary["B4"]) == ("Прогон", RUN)
     assert (summary["A6"], summary["B6"]) == ("Ключ снимка", "")
     assert (summary["A7"], summary["B7"]) == (
         "Атрибуция", "ответы модели воспроизведены из записи (recorded)"
     )
+    # The header of the severity counts is «Критичность», the screens' word (`UIP-G-02`).
+    assert (summary["A8"], summary["B8"]) == ("Критичность", "Количество")
     # «Сводка» counts: severities and categories in the same words, never the raw values.
     assert (summary["A9"], summary["B9"]) == ("Критическое", "0")
-    assert (summary["A14"], summary["B14"]) == ("Без серьёзности", "2")
+    # The row of findings with no severity is «Без критичности», under that same header (`UIP-FIX-07`; it was «Без серьёзности»).
+    assert (summary["A14"], summary["B14"]) == ("Без критичности", "2")
     assert (summary["A16"], summary["B16"]) == ("Документация", "2")
     assert not {"critical", "documentation", "pending"} & set(summary.values())
 

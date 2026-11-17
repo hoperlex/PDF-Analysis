@@ -10,7 +10,7 @@
  *      page level and survives a change of selected finding, and `mutation.data` is the last
  *      answer whatever finding is on screen; the page prefers it over the finding's own
  *      verdict, so finding A's answer was shown on finding B.
- *   4. `clearRefusal` — the refusal sentence («Перед принятием выберите важность…») is the
+ *   4. `clearRefusal` — the refusal sentence («Перед принятием выберите критичность…») is the
  *      answer to the PREVIOUS press; once the expert picks a severity it is no longer true,
  *      and it must go without sending anything and without touching the mutation.
  *

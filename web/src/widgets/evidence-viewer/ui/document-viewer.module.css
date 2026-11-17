@@ -50,7 +50,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: var(--am-strip-height);
+  min-width: var(--am-strip-height-compact);
   height: var(--am-gap-xl);
   margin: 0;
   padding: 0 var(--am-gap-xs);
@@ -80,9 +80,22 @@
 }
 
 .position {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
   color: var(--am-ink-muted);
   font-family: var(--am-font-mono);
   font-size: var(--am-text-sm);
+  text-align: center;
+}
+
+/*
+ * The page number between the steps (`UIP-S10-01`). The width is the input's `size` (the digits of the last page), so no length is
+ * spelled here; the global text-field rule has a higher specificity than a lone class, hence the parent in the selector.
+ */
+.position .pageField {
+  min-height: var(--am-gap-xl);
+  padding: 0 var(--am-gap-xs);
   text-align: center;
 }
 

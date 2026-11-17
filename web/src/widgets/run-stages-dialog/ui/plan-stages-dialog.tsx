@@ -11,7 +11,7 @@
  * effort and how it would be paid. A cell whose model no server has says «⚠ нет на серверах», and nothing else is marked.
  *
  * It is built from the plan the readiness answer states (`readinessPlan`), never from a run. An administrator is also drawn
- * «Изменить», a link to «Исполнители → Модели по этапам»; everyone else reads and has no control (`R-150w`, plan §7.4). The server and
+ * «Изменить», a link to «Диспетчер → Модели по этапам»; everyone else reads and has no control (`R-150w`, plan §7.4). The server and
  * its name are not shown: the readiness says how a cell is paid, not which server will take it, and none is invented.
  *
  * The window is the run's window's chrome (`./run-stages-dialog.module.css`, the same native modal, `../model/use-modal-dialog.ts`).

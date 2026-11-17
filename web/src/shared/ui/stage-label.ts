@@ -42,7 +42,9 @@
  * and a list that was right once.
  *
  * The wording follows each stage's own `title` in `contracts/analysis/v1/stage-registry.json`
- * rather than being invented, so a reader who has the contract open recognises the row.
+ * rather than being invented, so a reader who has the contract open recognises the row —
+ * except that the contract's English «finding» is the reader's «замечание» (UIP-G-02: the
+ * original's word), so the three stages that carry it say «замечаний».
  * `web/tests/guards/stage-vocabulary.guard.test.ts` holds the keys to the contract enum in
  * both directions and refuses a label that is not Cyrillic.
  */
@@ -55,9 +57,9 @@ export const STAGE_LABELS: Readonly<Record<StageId, string>> = {
   document_context_build: 'Построение контекста документа',
   text_analysis: 'Анализ текста',
   block_analysis: 'Блочный и визуальный анализ',
-  finding_merge: 'Слияние и дедупликация находок',
-  finding_review: 'Проверка и обоснование находок',
-  finding_correction: 'Исправление находок',
+  finding_merge: 'Слияние и дедупликация замечаний',
+  finding_review: 'Проверка и обоснование замечаний',
+  finding_correction: 'Исправление замечаний',
   norm_verification: 'Нормативная проверка',
 };
 

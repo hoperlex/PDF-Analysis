@@ -674,7 +674,11 @@ class ProjectAdapter:
     def get_project(self, *, project_uid: str) -> ProjectView | None:
         return _project_of(self, project_uid)
 
-    def list_projects(self) -> Sequence[ProjectView]:
+    def list_projects(self, *, order: str = "published") -> Sequence[ProjectView]:
+        # `UIP-S03-02`: `order` is `published` (newest first, the listing as the repository's statement gives it) or `name`
+        # (the first number in the name, then the names without one). The documents boundary owns the rule
+        # (`order_project_listing`); an order it does not know is refused there, never answered in the default order.
+        #
         # `document_count` is carried, not recomputed: `IngestService.list_projects`
         # returns `ProjectListingRecord`s whose count came out of the same statement that
         # produced the row (`R-10`). Passing it here rather than counting here is what
@@ -693,8 +697,9 @@ class ProjectAdapter:
         # counters are two statements, as every panel of the dashboard is; a document published between them is in
         # one answer and not yet in the other, and the next poll agrees.
         from auditmanager.dashboard import AuditCountsRecord, DocumentAuditReadModel, counts_by_project
+        from auditmanager.documents.repository import order_project_listing
 
-        listing = self._service.list_projects()
+        listing = order_project_listing(self._service.list_projects(), order)
         with self._sessions() as session:
             counts = counts_by_project(DocumentAuditReadModel().groups(session))
         return tuple(
@@ -1029,9 +1034,15 @@ class DocumentAdapter:
         )
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
-        from auditmanager.shared.identity import VersionUid
+        from dataclasses import replace
 
-        return _version_view(self._service.get_version(VersionUid.parse(version_uid)))
+        from auditmanager.shared.identity import DocumentUid, VersionUid
+
+        view = _version_view(self._service.get_version(VersionUid.parse(version_uid)))
+        # `UIP-G-10`: the document's group is read beside the version, so the frame of a document knows it without a listing.
+        if hasattr(self._service, "group_of_document"):
+            view = replace(view, group=self._service.group_of_document(DocumentUid.parse(view.document_uid)))
+        return view
 
     def read_content(self, *, version_uid: str) -> bytes:
         from auditmanager.shared.identity import VersionUid
@@ -1072,9 +1083,13 @@ class DocumentAdapter:
         parsed = ProjectUid.parse(project_uid)
         archived = self._service.archived_documents(parsed) if hasattr(self._service, "archived_documents") else {}
         tags = self._service.tags_in_project(parsed) if hasattr(self._service, "tags_in_project") else {}
+        groups = self._service.groups_in_project(parsed) if hasattr(self._service, "groups_in_project") else {}
         wanted = None if tag is None else " ".join(tag.split()).casefold()
         views = tuple(
-            replace(view, archived_at=archived.get(view.document_uid), tags=tuple(tags.get(view.document_uid, ())))
+            replace(
+                view, archived_at=archived.get(view.document_uid), tags=tuple(tags.get(view.document_uid, ())),
+                group=groups.get(view.document_uid),
+            )
             for view in (_version_view(record) for record in self._service.list_documents(parsed))
             # `R-151a`: an archived document is listed only on request.
             if (include_archived or view.document_uid not in archived)
@@ -1174,6 +1189,17 @@ class DocumentAdapter:
             actor_uid=user_uid, idempotency_key=idempotency_key,
         )
         return replace(_version_view(record), archived_at=archived_at, tags=tuple(current))
+
+    def set_document_group(
+        self, *, project_uid: str, document_uid: str, group: str | None, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        from dataclasses import replace
+
+        record, archived_at, current = self._service.set_document_group(
+            project_uid=project_uid, document_uid=document_uid, group=group,
+            actor_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return replace(_version_view(record), archived_at=archived_at, group=current)
 
     def list_document_tags(self, *, project_uid: str) -> models.DocumentTagList:
         from auditmanager.shared.identity import ProjectUid
@@ -2131,7 +2157,7 @@ class BlockAdapter(_SessionHolder):
     class _PortalSource:
         """The run a version's portal geometry is read from, and the references to join."""
 
-        __slots__ = ("run_id", "portal_blocks", "page_crops", "recognised_text")
+        __slots__ = ("run_id", "portal_blocks", "page_crops", "recognised_text", "block_count")
 
         def __init__(
             self,
@@ -2140,11 +2166,15 @@ class BlockAdapter(_SessionHolder):
             portal_blocks: Mapping[str, Any],
             page_crops: Mapping[str, Any] | None,
             recognised_text: Mapping[str, Any] | None,
+            block_count: int | None = None,
         ) -> None:
             self.run_id = run_id
             self.portal_blocks = portal_blocks
             self.page_crops = page_crops
             self.recognised_text = recognised_text
+            #: `UIP-S04-01`: what the geometry stage recorded as the number of blocks it published in ``portal_blocks``
+            #: (its ``portal_block_count`` metric), or ``None`` when the stage result holds no usable number.
+            self.block_count = block_count
 
     @staticmethod
     def _artifact_reference(
@@ -2208,7 +2238,20 @@ class BlockAdapter(_SessionHolder):
                 if preparation is None
                 else BlockAdapter._artifact_reference(preparation.artifacts, ROLE_RECOGNISED_TEXT)
             ),
+            block_count=BlockAdapter._recorded_block_count(geometry.metrics),
         )
+
+    @staticmethod
+    def _recorded_block_count(metrics: Mapping[str, Any]) -> int | None:
+        """The block count a geometry stage recorded for its portal blocks, or ``None`` when it recorded no count.
+
+        A non-negative integer and nothing else: a flag is an ``int`` in Python and is not a count, a float or a string is
+        not one the stage writes, and a missing key is a stage result that predates the metric. None of those becomes a
+        number here (`UIP-S04-01`: absent is never zero)."""
+        value = metrics.get("portal_block_count")
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return None
+        return value
 
     def evidence_boxes_in(
         self, session: Session, run_id: str
@@ -2285,6 +2328,15 @@ class BlockAdapter(_SessionHolder):
                 if entry.get("kind") == KIND_PORTAL_DESCRIPTION and entry.get("text")
             }
         return tuple({**record, "portal_description": descriptions.get(record["portal_block_id"])} for record in records)
+
+    def portal_block_count(self, *, version_uid: str) -> int | None:
+        """`UIP-S04-01`: the number of portal blocks of the version's built index, or ``None`` while there is none.
+
+        The run is the one :meth:`list_portal_blocks` reads (:meth:`_portal_source`), and the number is the one its geometry
+        stage recorded in its stage result: no artifact is opened, no object is read from storage and the version's file is
+        not parsed. An unknown version is ``not_found``."""
+        source = self._portal_source(version_uid)
+        return None if source is None else source.block_count
 
     def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
         """`UI-PARITY-P0O`: one read of the portal blocks document (not the crops, not the recognised text) folded into
@@ -2940,6 +2992,7 @@ class DecisionAdapter(_SessionHolder):
         category: str | None = None,
         verdict: str | None = None,
         project_uid: str | None = None,
+        execution_statuses: Sequence[str] | None = None,
     ) -> Sequence[DecisionRecordView]:
         """The journal, filtered in the query rather than here.
 
@@ -2948,7 +3001,7 @@ class DecisionAdapter(_SessionHolder):
         deployment has ever taken. The predicate goes to PostgreSQL, against the same
         columns the record reports.
 
-        All three arguments (`UI-PARITY-P0A` added ``project_uid``) are named in the signature
+        All four arguments (`UI-PARITY-P0A` added ``project_uid``, `UIP-S12-01` ``execution_statuses``) are named in the signature
         rather than swallowed by ``**_``. The
         finding adapter's first version took ``**_`` and dropped its two filters, so a
         filtered request returned everything and looked like it had worked, and
@@ -2961,7 +3014,8 @@ class DecisionAdapter(_SessionHolder):
             return tuple(
                 _record_view(entry)
                 for entry in decision_journal(
-                    session, category=category, verdict=verdict, project_uid=project_uid
+                    session, category=category, verdict=verdict, project_uid=project_uid,
+                    execution_statuses=execution_statuses,
                 )
             )
 
@@ -2991,6 +3045,8 @@ def _record_view(entry: Any) -> DecisionRecordView:
         comment=entry.comment,
         section=entry.section,
         carried_from=_carried_from_view(entry.carried_from),
+        execution_status=entry.execution_status,
+        execution_status_at=entry.execution_status_at,
     )
 
 
@@ -3946,12 +4002,14 @@ def _seam_role(role: str) -> str:
 # --------------------------------------------------------------------------------------
 
 
-def _account_view(account: Any, last_sign_in_at: datetime | None) -> AccountView:
+def _account_view(
+    account: Any, last_sign_in_at: datetime | None, last_project_uid: str | None = None
+) -> AccountView:
     """``auditmanager.access.models.Account`` as the frozen ``Account`` shape.
 
     ``last_sign_in_at`` is the access journal's answer for this account (`UI-A-92`), read by the caller for the whole
     set of accounts it renders: ``get_account`` itself does not read the journal, because the seam calls it on every
-    request."""
+    request. ``last_project_uid`` (`UIP-G-05`) is read only for the single-account reads; the listing never carries it."""
     record = account.record
     return AccountView(
         user_uid=str(record.user_uid),
@@ -3965,6 +4023,7 @@ def _account_view(account: Any, last_sign_in_at: datetime | None) -> AccountView
         is_default_credential=record.is_default_credential,
         archived_at=record.archived_at,
         last_sign_in_at=last_sign_in_at,
+        last_project_uid=last_project_uid,
     )
 
 
@@ -4008,7 +4067,11 @@ class AccountAdapter(_SessionHolder):
         account = self._accounts.get_account(session, user_uid)
         if account is None:
             raise _not_found("User")
-        return _account_view(account, _last_sign_ins(session, [account]).get(user_uid))
+        return _account_view(
+            account,
+            _last_sign_ins(session, [account]).get(user_uid),
+            self._accounts.last_project(session, user_uid),
+        )
 
     def get_account(self, *, user_uid: str) -> AccountView:
         return self._read(lambda session: self._view_of(session, user_uid))
@@ -4148,6 +4211,32 @@ class AccountAdapter(_SessionHolder):
 
         return self._write(work)
 
+    def set_last_project(self, *, user_uid: str, project_uid: str, idempotency_key: str) -> None:
+        """``setMyLastProject`` (contract 1.56.0, `UIP-G-05`): the key is claimed in the transaction of the write.
+
+        An exact repeat of the key (same account, same project) changes nothing; the same key for another account or
+        another project is ``idempotency_key_reuse``. An unknown project is ``not_found``, raised by ``auditmanager.access``
+        from the table's foreign key, so the refusal rolls the key's claim back with it and the client may retry the key.
+        """
+        from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
+
+        def work(session: Session) -> None:
+            commands = CommandRepository()
+            claim = commands.begin(
+                session,
+                command_type=SET_LAST_PROJECT_COMMAND,
+                idempotency_key=idempotency_key,
+                fingerprint=payload_fingerprint(
+                    {"command": "set_last_project.v1", "user_uid": user_uid, "project_uid": project_uid}
+                ),
+            )
+            if isinstance(claim, CommandReplay):
+                return
+            self._accounts.set_last_project(session, user_uid=user_uid, project_uid=project_uid)
+            commands.succeed(session, claim.command_id, {"project_uid": project_uid})
+
+        self._write(work)
+
     def list_auth_events(self, *, cursor: str | None, limit: int) -> models.AuthEventPage:
         """``listAuthEvents``: the access journal, newest first. The cursor is an event identity (``evt_``)."""
         from auditmanager.access.public import read_access_events
@@ -4233,6 +4322,10 @@ APPROVE_REGISTRATION_COMMAND = "approve_registration"
 #: Contract 1.36.0. The command type ``endUserSessions`` claims its idempotency key under; an account-side receipt, so
 #: ``scripts/recovery/product_purge.py`` keeps it with the access journal.
 END_USER_SESSIONS_COMMAND = "end_user_sessions"
+
+#: Contract 1.56.0 (`UIP-G-05`). The command type ``setMyLastProject`` claims its idempotency key under. Its outcome names the
+#: project, so ``scripts/recovery/product_purge.py`` classifies it as a product command (the choice goes with the project).
+SET_LAST_PROJECT_COMMAND = "set_last_project"
 
 
 class RegistrationAdapter(_SessionHolder):
@@ -5653,6 +5746,7 @@ class SectionSpecificationAdapter(_SessionHolder):
         offset: int,
         limit: int,
         user_uid: str,
+        document_uid: str | None = None,
     ) -> models.SectionSpecification:
         from auditmanager.access.public import AccountRepository
         from auditmanager.optimisation.public import read_section_specification
@@ -5664,6 +5758,7 @@ class SectionSpecificationAdapter(_SessionHolder):
                 actor_roles=AccountRepository().roles_of(session, user_uid),
                 reader=self._reader,
                 project_uid=project_uid,
+                document_uid=document_uid,
                 query=query,
                 offset=offset,
                 limit=limit,
@@ -5950,6 +6045,7 @@ class ScheduleAdapter(_SessionHolder):
             engineers=sorted((models.WorkScheduleEngineer(
                 user_uid=engineer.user_uid, label=labels.of(engineer.user_uid), plan=engineer.plan,
                 plan_is_default=engineer.plan_is_default, fact=engineer.fact,
+                accepted_count=engineer.accepted_count, rejected_count=engineer.rejected_count,
                 done=[models.WorkScheduleDoneDocument(
                     day=item.day, project_uid=item.project_uid, project_name=item.project_name,
                     document_uid=item.document_uid, document_title=item.document_title,
@@ -6674,7 +6770,7 @@ class OptimisationProposalAdapter(_SessionHolder):
         )
 
     def list_accepted_optimisation_proposals(
-        self, *, project_uid: str | None, section_code: str | None, user_uid: str
+        self, *, project_uid: str | None, section_code: str | None, user_uid: str, document_uid: str | None = None
     ) -> Sequence[models.AcceptedOptimisationProposal]:
         """`UI-B-27`: the accepted proposals, each acceptance's author named by the account's display label."""
         from auditmanager.access.public import AccountRepository
@@ -6687,6 +6783,7 @@ class OptimisationProposalAdapter(_SessionHolder):
                 actor_roles=accounts.roles_of(session, user_uid),
                 project_uid=project_uid,
                 section=section_code,
+                document_uid=document_uid,
             )
             labels = _Labels(session, accounts)
             return tuple(

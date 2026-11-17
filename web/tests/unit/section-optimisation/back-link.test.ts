@@ -23,7 +23,7 @@ describe('the link back', () => {
   it('leads to the project’s section page when the address names a project and a section', () => {
     const markup = page({ section: 'KJ', project: PROJECT });
     expect(markup).toContain('data-section-optimisation-back="section"');
-    expect(markup).toContain(`<a href="/projects/${PROJECT}/sections/KJ">← К разделу проекта</a>`);
+    expect(markup).toContain(`<a href="/projects/${PROJECT}/sections/KJ">← К разделу объекта</a>`);
   });
 
   it('leads to the dashboard when it names no project', () => {

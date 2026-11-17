@@ -13,12 +13,20 @@
  * **`BETA-LIVE-JOURNEY-01` repaired it, 2026-10-21, because running it showed 19 of its checks
  * red against a tree whose expectations had moved on without it** (`D-186`). Three things had
  * changed and each is now typed from `web/src/shared/config/screen-registry.ts`, the ruling's
- * source: «Диспетчер» joined «Работа»; an administrator also sees «Администрирование»; and since
+ * source: «Назначения» joined «Работа»; an administrator also sees «Администрирование»; and since
  * `R-80` an account with no role sees «Главная» and nothing else. `/optimisation` is a pointer
  * that replaces itself with the projects list (`W60-OPT-PROPOSALS-01`). And «Оптимизация
  * разделов», «Нормы», «Настройки анализа» and «Очередь» are no stubs any more: they open, say
  * nothing about not being ready and call their own reads (`W63`, `W55A`, `W59`, `W53`); an
  * account with no role is refused them at the guard (`/403`), without a product read.
+ *
+ * **`UIP-FIX-10`: the menu is the registry's again, as `UIP-G-07` orders it** (`web/src/shared/config/screen-registry.ts`,
+ * `web/src/_app/navigation.ts`). «Главная» is the first item of «Работа», not a link of the row of its own; the project
+ * entry (`R-153h`) is «Объекты» (no object is current on `/`), third; «График работ», «Сравнение стадий» and «Сравнение
+ * версий» joined «Работа»; a «Разделы» group follows it always, with no list on `/` (no object); «Блоки» left «Знания»
+ * (`R-151m`) and «Журнал входов» joined «Администрирование»; an account with no role has no menu at all (`R-80`: «Главная»
+ * is offered only beside another row), so there is no row to read. The checks of `/optimisation` and of the four graduated
+ * screens are unchanged.
  */
 
 import { parseArgs, recorder, signIn, withColdBrowser } from './lib.mjs';
@@ -26,32 +34,41 @@ import { parseArgs, recorder, signIn, withColdBrowser } from './lib.mjs';
 const args = parseArgs(process.argv.slice(2));
 const ORIGIN = args.origin;
 
-// The ruling's menu, from the registry. Any account holding a role sees the first four groups;
-// an administrator also sees the fifth; an account with no role sees «Главная» alone (`R-80`).
+// The ruling's menu, from the registry (`UIP-G-07`). Any account holding `expert` or `admin` sees the four groups below,
+// read in the row at `/`, where no object is current: «Работа» with «Объекты» (the project entry) third, «Разделы» with no list
+// of its own, «Знания», «Система»; an administrator also sees «Администрирование»; an account with no role has no menu (`R-80`),
+// so the frame draws no row and the reading is `null`.
 const ANY_ROLE = [
-  ['/', 'Главная'],
   [
     'Работа',
     [
-      ['/projects', 'Проекты'],
+      ['/', 'Главная'],
       ['/dashboard', 'Дашборд'],
+      ['/projects', 'Объекты'],
+      ['/schedule', 'График работ'],
+      ['/dispatcher', 'Назначения'],
       ['/section-optimisation', 'Оптимизация разделов'],
-      ['/dispatcher', 'Диспетчер'],
+      ['/stage-comparison', 'Сравнение стадий'],
+      ['/version-comparison', 'Сравнение версий'],
     ],
   ],
-  ['Знания', [['/knowledge-base', 'База знаний'], ['/blocks', 'Блоки'], ['/norms', 'Нормы']]],
+  ['Разделы', []],
+  ['Знания', [['/knowledge-base', 'База знаний'], ['/norms', 'Нормы']]],
   [
     'Система',
-    [['/logs', 'Журнал выполнения'], ['/workers', 'Исполнители'], ['/analysis-settings', 'Настройки анализа'], ['/queue', 'Очередь']],
+    [['/logs', 'Журнал выполнения'], ['/workers', 'Диспетчер'], ['/analysis-settings', 'Настройки анализа'], ['/queue', 'Очередь']],
   ],
 ];
 const RULED = {
   admin: [
     ...ANY_ROLE,
-    ['Администрирование', [['/admin/users', 'Пользователи'], ['/admin/registrations', 'Заявки на регистрацию']]],
+    [
+      'Администрирование',
+      [['/admin/users', 'Пользователи'], ['/admin/registrations', 'Заявки на регистрацию'], ['/admin/auth-events', 'Журнал входов']],
+    ],
   ],
   expert: ANY_ROLE,
-  none: [['/', 'Главная']],
+  none: null,
 };
 
 // The four screens that were honest stubs and are screens now: what each reads on a cold open.

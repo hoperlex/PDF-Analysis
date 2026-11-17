@@ -3,18 +3,21 @@
  * helpers read and write it. Each test names the rule it holds.
  *
  * The classes come from the live screen registry (`required` under `/projects/[project_uid]`,
- * `optional` for the six screens that follow the header, `global` for the rest), plus one
+ * `optional` for the eight screens that follow the header, `global` for the rest), plus one
  * fixture registry for the cases the live one cannot reach: a row with no class.
  */
 
 import { describe, expect, it } from 'vitest';
 
 import type { ScreenEntry } from '@/shared/config';
+import { SCREEN_REGISTRY } from '@/shared/config';
 import {
+  ALL_PROJECTS_PARAM,
   PROJECT_DEPENDENT_PARAMS,
   canonicalProjectParams,
   projectScopeOf,
   readProjectContext,
+  resolveProjectContext,
   switchProject,
   withProjectParam,
 } from '@/shared/lib';
@@ -34,17 +37,18 @@ const REQUIRED_PATHS = [
   `/projects/${A}/runs/run_1/review`,
 ];
 const OPTIONAL_PATHS = [
+  // `UIP-S01-01` (Г7-B): «Главная» follows the header's object -- its table of sections is counted over it.
+  '/',
   '/dashboard',
   '/knowledge-base',
   '/section-optimisation',
   '/optimisation',
   '/version-comparison',
   '/stage-comparison',
-  // `R-151m`: «Диспетчер» follows the header's project.
+  // `R-151m`: «Назначения» follows the header's project.
   '/dispatcher',
 ];
 const GLOBAL_PATHS = [
-  '/',
   '/projects',
   '/queue',
   '/logs',
@@ -70,6 +74,16 @@ describe('projectScopeOf: the registry class of the screen an address is', () =>
   it('is null for an address no row matches, and never a class by default', () => {
     expect(projectScopeOf('/no-such-screen')).toBeNull();
     expect(projectScopeOf(`/projects/${A}/no-such-child`)).toBeNull();
+  });
+
+  it('UIP-S01-01: «Главная» (`/`) follows the object: it takes the last one where the address is silent, and `?project=all` still beats it', () => {
+    expect(projectScopeOf('/')).toBe('optional');
+    expect(resolveProjectContext('/', q(''), A)).toEqual({ projectUid: A, source: 'remembered' });
+    expect(resolveProjectContext('/', q(`project=${B}`), A)).toEqual({ projectUid: B, source: 'query' });
+    expect(resolveProjectContext('/', q('project=all'), A)).toEqual({ projectUid: null, source: 'all' });
+    // Can fail: the same row as `global` is the old behaviour, which ignores the account's last object.
+    const asGlobal = SCREEN_REGISTRY.map((row) => (row.address === '/' ? { ...row, projectScope: 'global' as const } : row));
+    expect(resolveProjectContext('/', q(''), A, asGlobal)).toEqual({ projectUid: null, source: 'none' });
   });
 
   it('can fail: a registry row with no class is an error, not a quiet `global`', () => {
@@ -106,7 +120,7 @@ describe('readProjectContext: the project an address names, and where it came fr
     }
   });
 
-  it('optional: no parameter, or an empty one, is «Все проекты»', () => {
+  it('optional: no parameter, or an empty one, is «Все объекты»', () => {
     for (const path of OPTIONAL_PATHS) {
       expect(readProjectContext(path, q('')), path).toEqual({ projectUid: null, source: 'none' });
       expect(readProjectContext(path, q('project=')), path).toEqual({ projectUid: null, source: 'none' });
@@ -119,6 +133,17 @@ describe('readProjectContext: the project an address names, and where it came fr
       expect(readProjectContext(path, q(`project=${A}`)), path).toEqual({ projectUid: A, source: 'query' });
       expect(readProjectContext(path, q('')), path).toEqual({ projectUid: null, source: 'none' });
     }
+  });
+
+  it('optional and global: ?project=all is «Все объекты», chosen: no project, and told from an address that says nothing', () => {
+    expect(ALL_PROJECTS_PARAM).toBe('all');
+    for (const path of [...OPTIONAL_PATHS, ...GLOBAL_PATHS]) {
+      expect(readProjectContext(path, q('project=all')), path).toEqual({ projectUid: null, source: 'all' });
+    }
+  });
+
+  it('required: ?project=all beside a path changes nothing -- the path wins', () => {
+    expect(readProjectContext(`/projects/${A}`, q('project=all'))).toEqual({ projectUid: A, source: 'path' });
   });
 
   it('a repeated ?project= is read as its first value', () => {
@@ -134,6 +159,62 @@ describe('readProjectContext: the project an address names, and where it came fr
 
   it('can fail: swapping the winner would be seen -- the path value is not the query value', () => {
     expect(readProjectContext(`/projects/${A}`, q(`project=${B}`)).projectUid).not.toBe(B);
+  });
+});
+
+describe('resolveProjectContext: the address first, then the account\'s last object (UIP-G-06)', () => {
+  it('optional, a silent address: the account\'s last object', () => {
+    for (const path of OPTIONAL_PATHS) {
+      expect(resolveProjectContext(path, q(''), A), path).toEqual({ projectUid: A, source: 'remembered' });
+      expect(resolveProjectContext(path, q('project='), A), path).toEqual({ projectUid: A, source: 'remembered' });
+      expect(resolveProjectContext(path, q('tab=x'), A), path).toEqual({ projectUid: A, source: 'remembered' });
+    }
+  });
+
+  it('optional: ?project=<uid> beats the last object', () => {
+    for (const path of OPTIONAL_PATHS) {
+      expect(resolveProjectContext(path, q(`project=${B}`), A), path).toEqual({ projectUid: B, source: 'query' });
+    }
+  });
+
+  it('optional: the explicit ?project=all beats the last object, and no project results', () => {
+    for (const path of OPTIONAL_PATHS) {
+      expect(resolveProjectContext(path, q('project=all'), A), path).toEqual({ projectUid: null, source: 'all' });
+    }
+  });
+
+  it('required: the path beats the last object and ?project= alike', () => {
+    for (const path of REQUIRED_PATHS) {
+      expect(resolveProjectContext(path, q(`project=${B}`), B), path).toEqual({ projectUid: A, source: 'path' });
+      expect(resolveProjectContext(path, q(''), B), path).toEqual({ projectUid: A, source: 'path' });
+    }
+  });
+
+  it('no last object (null, undefined, empty), or none known yet: «Все объекты», as before', () => {
+    for (const path of OPTIONAL_PATHS) {
+      for (const remembered of [null, undefined, '']) {
+        expect(resolveProjectContext(path, q(''), remembered), path).toEqual({ projectUid: null, source: 'none' });
+      }
+    }
+  });
+
+  it('global and unregistered addresses never take the last object -- only the screens that follow the object do', () => {
+    for (const path of GLOBAL_PATHS) {
+      expect(resolveProjectContext(path, q(''), A), path).toEqual({ projectUid: null, source: 'none' });
+      expect(resolveProjectContext(path, q(`project=${B}`), A), path).toEqual({ projectUid: B, source: 'query' });
+    }
+    expect(resolveProjectContext('/no-such-screen', q(''), A)).toEqual({ projectUid: null, source: 'none' });
+  });
+
+  it('can fail: the order is path > ?project=<uid> > ?project=all > last object, each beating the next', () => {
+    const order = [
+      resolveProjectContext(`/projects/${A}`, q(`project=${B}`), B).source,
+      resolveProjectContext('/dashboard', q(`project=${A}`), B).source,
+      resolveProjectContext('/dashboard', q('project=all'), B).source,
+      resolveProjectContext('/dashboard', q(''), B).source,
+      resolveProjectContext('/dashboard', q(''), null).source,
+    ];
+    expect(order).toEqual(['path', 'query', 'all', 'remembered', 'none']);
   });
 });
 
@@ -161,6 +242,10 @@ describe('canonicalProjectParams: the query an address should have', () => {
     expect(canonicalProjectParams('/queue', q(`project=${A}&state=failed`)).toString()).toBe(
       `project=${A}&state=failed`,
     );
+  });
+
+  it('optional and global: the explicit ?project=all is kept as it is', () => {
+    expect(canonicalProjectParams('/dashboard', q('x=1&project=all')).toString()).toBe('x=1&project=all');
   });
 
   it('optional and global: an empty ?project= is dropped (no project is no parameter)', () => {
@@ -216,14 +301,20 @@ describe('withProjectParam: carrying the project onto a link', () => {
     expect(withProjectParam(`/dashboard?x=1&project=${A}`, A)).toBe(`/dashboard?x=1&project=${A}`);
   });
 
-  it('«Все проекты» (null) removes the parameter and keeps the rest', () => {
+  it('carries the explicit «Все объекты» as ?project=all, and an existing project gives way to it', () => {
+    expect(withProjectParam('/dashboard', ALL_PROJECTS_PARAM)).toBe('/dashboard?project=all');
+    expect(withProjectParam(`/dashboard?project=${A}&x=1`, ALL_PROJECTS_PARAM)).toBe('/dashboard?project=all&x=1');
+    expect(withProjectParam(`/projects/${A}`, ALL_PROJECTS_PARAM)).toBe(`/projects/${A}`);
+  });
+
+  it('no project (null) removes the parameter and keeps the rest', () => {
     expect(withProjectParam(`/dashboard?project=${A}&x=1`, null)).toBe('/dashboard?x=1');
     expect(withProjectParam(`/dashboard?project=${A}#top`, null)).toBe('/dashboard#top');
     expect(withProjectParam('/dashboard', null)).toBe('/dashboard');
     expect(withProjectParam('/dashboard?x=1', '')).toBe('/dashboard?x=1');
   });
 
-  it('a required target is not touched by «Все проекты» either', () => {
+  it('a required target is not touched by «Все объекты» either', () => {
     expect(withProjectParam(`/projects/${A}`, null)).toBe(`/projects/${A}`);
   });
 
@@ -260,19 +351,41 @@ describe('switchProject: choosing a project in the header', () => {
     );
   });
 
-  it('chooses a project from «Все проекты»: the dependent parameters go too', () => {
+  it('chooses a project from «Все объекты»: the dependent parameters go too', () => {
     expect(switchProject(q('section=s1&state=failed'), A).toString()).toBe(`state=failed&project=${A}`);
   });
 
-  it('«Все проекты» (null) removes project and the dependent parameters', () => {
-    expect(switchProject(q(`project=${A}&section=s1&version=v1&state=failed`), null).toString()).toBe('state=failed');
-    expect(switchProject(q(`project=${A}`), '').toString()).toBe('');
+  it('«Все объекты» (null) is the explicit ?project=all, and the dependent parameters go', () => {
+    expect(switchProject(q(`project=${A}&section=s1&version=v1&state=failed`), null).toString()).toBe(
+      'project=all&state=failed',
+    );
+    expect(switchProject(q(`project=${A}`), '').toString()).toBe('project=all');
+  });
+
+  it('«Все объекты» is not the absence of the parameter: that would bring the account\'s last object back', () => {
+    expect(switchProject(q(`project=${A}`), null).has('project')).toBe(true);
+    expect(switchProject(q(`project=${A}`), null).get('project')).toBe(ALL_PROJECTS_PARAM);
+    // and from the project the account's last object supplied, the address learns it is chosen
+    expect(switchProject(q('state=failed'), null, A).toString()).toBe('state=failed&project=all');
   });
 
   it('choosing the project the address already has changes nothing', () => {
     const same = `project=${A}&section=s1&cursor=c9`;
     expect(switchProject(q(same), A).toString()).toBe(same);
-    expect(switchProject(q('section=s1'), null).toString()).toBe('section=s1');
+    const all = 'project=all&section=s1';
+    expect(switchProject(q(all), null).toString()).toBe(all);
+  });
+
+  it('«Все объекты» from an address that says nothing and shows no object writes it down and keeps the rest', () => {
+    expect(switchProject(q('section=s1'), null).toString()).toBe('section=s1&project=all');
+  });
+
+  it('choosing the object the screen is already on (the account\'s last one) writes it and keeps the dependent parameters', () => {
+    expect(switchProject(q('section=s1&state=failed'), A, A).toString()).toBe(`section=s1&state=failed&project=${A}`);
+    // another object is a change whatever the address said
+    expect(switchProject(q('section=s1&state=failed'), B, A).toString()).toBe(`state=failed&project=${B}`);
+    // the explicit all, chosen when the screen was on the last object, is a change too
+    expect(switchProject(q('section=s1'), null, A).toString()).toBe('project=all');
   });
 
   it('removes a repeated dependent parameter whole', () => {

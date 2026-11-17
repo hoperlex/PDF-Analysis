@@ -1,5 +1,5 @@
 /**
- * «Диспетчер» on the web side (`W61-DISPATCHER-01`): which moves a viewer is offered, what a
+ * «Назначения» on the web side (`W61-DISPATCHER-01`): which moves a viewer is offered, what a
  * refusal says, who may be named as an assignee, and what the dispatcher's screen draws for
  * an administrator and for an expert.
  *
@@ -87,14 +87,14 @@ describe('the moves offered mirror the server table', () => {
   });
 
   it('names the scope: the project, or the document of the project', () => {
-    expect(assignmentScope(assignment('assigned'))).toBe('Проект «Школа»');
-    expect(assignmentScope(assignment('assigned', { document_title: 'КЖ-1' }))).toBe('Документ «КЖ-1» проекта «Школа»');
+    expect(assignmentScope(assignment('assigned'))).toBe('Объект «Школа»');
+    expect(assignmentScope(assignment('assigned', { document_title: 'КЖ-1' }))).toBe('Документ «КЖ-1» объекта «Школа»');
   });
 });
 
 function refusal(code: ErrorEnvelope['error_code'], details: NonNullable<ErrorEnvelope['details']>): ApiError {
   return new ApiError(409, {
-    contract_version: '1.55.0',
+    contract_version: '1.57.0',
     error_code: code,
     message: 'raw server message',
     correlation_id: 'cid-dispatch-1',

@@ -9,7 +9,8 @@ import { NavigationGlyph } from './navigation-glyph';
 import styles from './app-frame.module.css';
 
 const previewLabels = {
-  work: ['Проекты', 'Дашборд', 'Сравнение версий', 'Сравнение стадий'],
+  // `UIP-G-07`: «Главная» first, as in the menu itself; the rows follow the registry's order, not this list's.
+  work: ['Главная', 'Объекты', 'Дашборд', 'Сравнение версий', 'Сравнение стадий'],
   knowledge: ['База знаний', 'Нормы'],
   system: ['Настройки анализа'],
 } as const;
@@ -35,7 +36,7 @@ export function GuestNavigationPreview() {
       <div className={styles.guestPreviewNote}>
         <span className={styles.guestPreviewNoteIcon}>↗</span>
         <strong>После входа</strong>
-        <p>Рабочие разделы и проекты откроются после авторизации.</p>
+        <p>Рабочие разделы и объекты откроются после авторизации.</p>
         <span className={styles.guestPreviewPill}>Только превью</span>
       </div>
     </div>

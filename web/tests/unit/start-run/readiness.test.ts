@@ -60,7 +60,7 @@ const reasonOf = (markup: string): string | null => {
 
 function refusal(status: number, code: ErrorCode, details: Record<string, string> = {}): ApiError {
   return new ApiError(status, {
-    contract_version: '1.55.0', error_code: code, message: 'refused', correlation_id: 'cid-readiness', retryable: false, details,
+    contract_version: '1.57.0', error_code: code, message: 'refused', correlation_id: 'cid-readiness', retryable: false, details,
   }, 'cid-readiness');
 }
 
@@ -290,7 +290,7 @@ describe('«Модели по этапам ▸» opens the stage window in plan 
     expect(view.markup()).not.toContain('data-stages-plan');
   });
 
-  it('is drawn with «Изменить» for an administrator, leading to «Исполнители → Модели по этапам», and for nobody else', async () => {
+  it('is drawn with «Изменить» for an administrator, leading to «Диспетчер → Модели по этапам», and for nobody else', async () => {
     const admin = await mount({ roles: ['admin', 'expert'], initiallyOpen: true });
     expect(MODELS_BY_STAGE_ADDRESS).toBe('/workers?tab=models');
     expect(admin.view.markup()).toContain('data-plan-edit=""');

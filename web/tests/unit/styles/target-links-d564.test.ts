@@ -5,7 +5,7 @@
  *
  *  - the project name in the project list («Проекты», «Оптимизация») and on «Главная» (21 px);
  *  - the version title (21 px) and the second link of a version row in the document's list;
- *  - «все версии» of a document card (17 px) and «К разделам проекта» of the empty section (17 px);
+ *  - «все версии» of a document card (17 px; `UIP-S02-02` made the number of the version the link to the document's versions) and «К разделам проекта» of the empty section (17 px);
  *  - «Подать заявку на доступ» of the sign-in card (19 px).
  *
  * The cure is the one `D-431` used for a held run's link: the surplus that makes the link 24 px is PADDING, and the same amount is taken
@@ -90,8 +90,8 @@ describe('the links the walk named hold the floor and give the surplus back (lan
     { what: 'the project name on «Главная»', css: ['widgets', 'home-tiles', 'ui', 'home-tiles.module.css'], selector: '.project > a' },
     { what: 'the version title of a version row', css: ['entities', 'document-version', 'ui', 'version-row.module.css'], selector: '.title' },
     { what: 'the second link of a version row', css: ['entities', 'document-version', 'ui', 'version-row.module.css'], selector: '.secondary' },
-    { what: '«все версии» of a document card', css: ['entities', 'document-version', 'ui', 'document-cards.module.css'], selector: '.history' },
-    { what: '«К разделам проекта» of the empty section', css: ['_pages', 'section-detail', 'ui', 'section-detail-page.module.css'], selector: '.backLink' },
+    { what: 'the number of the version of a document card (its link to the versions, was «все версии»)', css: ['entities', 'document-version', 'ui', 'document-cards.module.css'], selector: '.ordinal' },
+    { what: '«К разделам объекта» of the empty section', css: ['_pages', 'section-detail', 'ui', 'section-detail-page.module.css'], selector: '.backLink' },
     { what: '«Подать заявку на доступ» of the sign-in card', css: ['_pages', 'sign-in', 'ui', 'sign-in-page.module.css'], selector: '.register a' },
   ];
 
@@ -111,8 +111,8 @@ describe('the markup carries the classes the stylesheets read (lane TARGETS)', (
   it('puts each class on its link', () => {
     // The tile's link carries no class (the rendered markup is pinned by `screens/home.test.ts`): `.project > a` reads its list item.
     expect(source('widgets', 'home-tiles', 'ui', 'recent-projects-tile.tsx')).toContain('<Link href={routes.project(project.project_uid)}>{project.name}</Link>');
-    expect(source('entities', 'document-version', 'ui', 'document-cards.tsx')).toContain('<Link className={styles.history} href={documentHref} title="История версий документа">');
-    expect(source('_pages', 'section-detail', 'ui', 'section-detail-page.tsx')).toContain('<Link className={styles.backLink} href={routes.project(projectUid)}>К разделам проекта</Link>');
+    expect(source('entities', 'document-version', 'ui', 'document-cards.tsx')).toContain('<Link className={styles.ordinal} href={documentHref} title="Все версии документа">');
+    expect(source('_pages', 'section-detail', 'ui', 'section-detail-page.tsx')).toContain('<Link className={styles.backLink} href={routes.project(projectUid)}>К разделам объекта</Link>');
     expect(source('entities', 'project', 'ui', 'project-row.tsx')).toContain('<Link className={styles.name} href=');
     expect(source('entities', 'document-version', 'ui', 'version-row.tsx')).toContain('<Link className={styles.title} href={href}>');
     expect(source('entities', 'document-version', 'ui', 'version-row.tsx')).toContain('<Link className={styles.secondary} href={secondary.href}>');

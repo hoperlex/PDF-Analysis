@@ -11,11 +11,13 @@ import { createElement } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  ReleaseNotices, bundleBuildId, listenForTabReturn, readOnRoute, signInAfterRefusal,
+  ReleaseNotices, bundleBuildId, listenForTabReturn, noticesOn, readOnRoute, signInAfterRefusal,
 } from '@/_app/release-notices';
-import type { NoticeReads, TabDocument } from '@/_app/release-notices';
+import type { NoticeReads, NoticeWants, TabDocument } from '@/_app/release-notices';
 
-import { NEXT_PARAM, RETURN_PATH_MAX_LENGTH, SIGN_IN_SCREEN, safeReturnPath } from '@/shared/config';
+import {
+  HOME_SCREEN, NEXT_PARAM, RETURN_PATH_MAX_LENGTH, SCREEN_REGISTRY, SIGN_IN_SCREEN, safeReturnPath,
+} from '@/shared/config';
 import { SESSION_END_REASONS, SESSION_END_REASON_PARAM, isSessionEndReason, sessionEndReasonOf } from '@/shared/lib';
 
 import { newClient, renderScreen } from '../screens/harness';
@@ -101,6 +103,46 @@ describe('notice triggers', () => {
     expect(source).toMatch(/readOnRoute\(previous, pathname, reads\)/);
     expect(source.match(/void refetch\(\)/g) ?? []).toHaveLength(1);
     expect(source).not.toMatch(/=\s*getWebBuildId\(\)/);
+  });
+});
+
+describe('«Что нового» stands on the home screen only (UIP-G-16, Г12-B)', () => {
+  const everything: NoticeWants = { banner: true, whatsNew: true, markFault: true };
+
+  it('shows the strip, and the failed mark that follows its «Закрыть», on «Главная»', () => {
+    expect(HOME_SCREEN).toBe('/');
+    expect(noticesOn(HOME_SCREEN, everything)).toEqual(everything);
+  });
+
+  it('shows neither on any other registered screen, and on an unknown or unread address', () => {
+    const others = SCREEN_REGISTRY.map((row) => row.address as string).filter((address) => address !== HOME_SCREEN);
+    expect(others.length).toBeGreaterThan(10);
+    for (const address of [...others, '/nowhere-registered', null]) {
+      expect(noticesOn(address, everything), String(address)).toEqual({ banner: true, whatsNew: false, markFault: false });
+    }
+  });
+
+  it('keeps «Доступна новая версия» on every screen: it is not «Что нового»', () => {
+    for (const address of [HOME_SCREEN, '/projects', '/queue', '/account', null]) {
+      expect(noticesOn(address, { banner: true, whatsNew: false, markFault: false }).banner, String(address)).toBe(true);
+      expect(noticesOn(address, { banner: false, whatsNew: true, markFault: true }).banner, String(address)).toBe(false);
+    }
+  });
+
+  it('asks for nothing that was not asked: no strip appears from a false want, on the home screen too', () => {
+    expect(noticesOn(HOME_SCREEN, { banner: false, whatsNew: false, markFault: false }))
+      .toEqual({ banner: false, whatsNew: false, markFault: false });
+  });
+
+  it('is what the component renders by: every strip is read from the filtered result', () => {
+    const source = readFileSync(new URL('../../../src/_app/release-notices.tsx', import.meta.url), 'utf8');
+    expect(source).toMatch(/noticesOn\(pathname, \{/);
+    expect(source).toMatch(/shown\.banner/);
+    expect(source).toMatch(/shown\.whatsNew/);
+    expect(source).toMatch(/shown\.markFault/);
+    // no strip is rendered from its own flag any more
+    expect(source).not.toMatch(/\{markFault \?/);
+    expect(source).not.toMatch(/\{whatsNewShown/);
   });
 });
 

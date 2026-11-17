@@ -1,5 +1,5 @@
 /**
- * The polling policy of the queue, the journal and the «Исполнители» worker list.
+ * The polling policy of the queue, the journal and the «Диспетчер» worker list.
  *
  * The schedule is asserted on the pure functions, without timers. The wiring is asserted on
  * real React Query `Query` objects: the settled-read counters are what the policy leans on,
@@ -183,7 +183,7 @@ describe('what the operational lists poll, and what they do not', () => {
     expect(workersQueryOptions(undefined, WORKER_PAGE_LIMIT).enabled).toBe(true);
   });
 
-  it('polls nothing it was not told to: the connection list and the routes of «Исполнители» stay on demand', () => {
+  it('polls nothing it was not told to: the connection list and the routes of «Диспетчер» stay on demand', () => {
     expect(connectionsQueryOptions()).not.toHaveProperty('refetchInterval');
     expect(routesQueryOptions()).not.toHaveProperty('refetchInterval');
   });

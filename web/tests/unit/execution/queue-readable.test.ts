@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExecutionQueueItem } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
-import { formatInstant } from '@/shared/lib';
+import { formatInstantUtc } from '@/shared/lib';
 import {
   QUEUE_STATE_OPTIONS, jobStateLabel, queueItemError, queueQueryOptions,
 } from '@/entities/execution';
@@ -42,7 +42,7 @@ function rows(items: readonly ExecutionQueueItem[], filtered = false): string {
 }
 
 describe('the row names the work', () => {
-  it('prints «Проект · Документ · Версия» as links to the project, the document and the version', () => {
+  it('prints «Объект · Документ · Версия» as links to the project, the document and the version', () => {
     const markup = rows([item()]);
     expect(markup).toContain('data-queue-work');
     expect(markup).toContain(`href="/projects/${QUEUE_WORK.project_uid}"`);
@@ -73,9 +73,11 @@ describe('the row says when the job started and ended', () => {
   it('prints the original\'s «начало → конец · длительность» line, with the exact instants in the tooltips', () => {
     const markup = rows([item({ state: 'failed', started_at: STARTED, finished_at: FINISHED })]);
     expect(markup).toContain('data-queue-timing="8 мин 30 с"');
-    expect(markup).toContain(`<time dateTime="${STARTED}" title="Начат: ${formatInstant(STARTED)}" data-queue-started="true">09.10 10:01</time>`);
-    expect(markup).toContain(`<time dateTime="${FINISHED}" title="Завершён: ${formatInstant(FINISHED)}" data-queue-finished="true">10:09</time>`);
-    expect(markup).toContain(' UTC');
+    expect(markup).toContain(`<time dateTime="${STARTED}" title="Начат: ${formatInstantUtc(STARTED)}" data-queue-started="true">09.10 10:01</time>`);
+    expect(markup).toContain(`<time dateTime="${FINISHED}" title="Завершён: ${formatInstantUtc(FINISHED)}" data-queue-finished="true">10:09</time>`);
+    // «UTC» is the tooltip's alone: the line itself is the reader's time and carries no zone word.
+    expect(markup).toContain('title="Начат: 2026-10-09 10:01:00 UTC"');
+    expect(markup.replace(/title="[^"]*"/g, '')).not.toContain('UTC');
   });
 
   it('measures a running job to the last read and leaves its end open', () => {

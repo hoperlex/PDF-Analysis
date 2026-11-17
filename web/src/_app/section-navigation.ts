@@ -2,8 +2,8 @@
  * The «Разделы» group of the side menu, as data (`UI-A-04`, owner ruling `R-151l`).
  *
  * The original's menu has a parent «Разделы» with one sub-item per discipline of the current object, each with a
- * count badge, leading to that discipline's page. Here the object is the **current project** (`R-150c`: the project
- * the address names), the page is the section page (`/projects/[project_uid]/sections/[section_code]`), and the
+ * count badge, leading to that discipline's page. Here the object is the **current project** (`R-150c`, `UIP-G-06`: the
+ * object the address names, or, on a screen that follows the object, the account's last one), the page is the section page (`/projects/[project_uid]/sections/[section_code]`), and the
  * counts are the ones the dashboard's section panel shows: `getDashboardSummary` for that project, whose
  * `section_breakdown` counts a document in the section an expert confirmed for its current version and leaves the
  * archived ones out. This module adds no read of its own; `use-section-navigation.ts` asks the dashboard's.
@@ -21,8 +21,12 @@
  * all fifteen entries, which is why the group has no note for an empty list (it was `SECTIONS_EMPTY_NOTE` until
  * `R-153g`): that case cannot occur.
  *
- * The labels are the section page's own: the Cyrillic mark a designer writes on a title block (`АР`) and, as the
- * link's name and tooltip, the section's name. The Latin code reaches the markup only as a data attribute.
+ * **The group is always there (`UIP-G-07`, Г5-B).** With no current object («Все объекты», chosen or not) it has one row,
+ * «Выберите объект», and no sections: the menu does not make up a list, nor a figure, for every object at once.
+ *
+ * The labels are the section page's own: the Cyrillic mark a designer writes on a title block (`АР`), the dot of the
+ * section's colour before it (`SectionDot`, `UIP-G-17`; drawn by the menu, it is not data) and, as the link's name and
+ * tooltip, the section's name. The Latin code reaches the markup only as a data attribute.
  *
  * **The red badge (`UI-A-05`).** Beside the count, a section whose documents wait for an expert shows how many:
  * `audit_counts.awaiting_decision` of the same row, the documents of the section whose result run has a finding
@@ -63,8 +67,12 @@ export interface SectionNavigationEntry {
   readonly current: boolean;
 }
 
-/** What the group has to say: still reading, could not be read whole, or the list (always all of the sections). */
+/**
+ * What the group has to say: there is no object to list the sections of (`UIP-G-07`: the explicit «Все объекты», or none
+ * chosen and none remembered), still reading, could not be read whole, or the list (always all of the sections).
+ */
 export type SectionNavigation =
+  | { readonly status: 'none' }
   | { readonly status: 'loading' }
   | { readonly status: 'failed' }
   | { readonly status: 'ready'; readonly entries: readonly SectionNavigationEntry[] };
@@ -75,9 +83,13 @@ export const SECTIONS_GROUP_LABEL = 'Разделы';
 /** What the grey number on the group's button counts (the original's «Всего проектов (без ИРД)»). */
 export const SECTIONS_DOCUMENTS_LABEL = 'Документов в разделах';
 
-/** The words of a group that has no list to show. */
-export const SECTIONS_LOADING_NOTE = 'Разделы проекта загружаются…';
-export const SECTIONS_FAILED_NOTE = 'Разделы проекта не удалось прочитать.';
+/**
+ * The words of a group that has no list to show. «Выберите объект» is the one row of the group when no object is current
+ * (`UIP-G-07`): no section is invented for «Все объекты», and no figure beside the note.
+ */
+export const SECTIONS_NO_OBJECT_NOTE = 'Выберите объект';
+export const SECTIONS_LOADING_NOTE = 'Разделы объекта загружаются…';
+export const SECTIONS_FAILED_NOTE = 'Разделы объекта не удалось прочитать.';
 
 /**
  * The accessible name of a sub-item: the mark, the name and the count, which the visible badge shortens to a number,

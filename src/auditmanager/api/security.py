@@ -404,6 +404,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "renameDocument": _ANY_ROLE,
         # `R-151e`: tagging is expert or administrator work; the catalogue is a product read.
         "setDocumentTags": _ANY_ROLE,
+        # `UIP-G-10` (owner ruling Г11): the group is set by the hands that set the tags; a viewer only reads it.
+        "setDocumentGroup": _ANY_ROLE,
         "listDocumentTags": _PRODUCT_READ,
         # `R-151g`: the execution status is set by an expert, as the expert's registry of the original is kept.
         "setFindingExecutionStatus": _EXPERT,
@@ -653,6 +655,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "updateMyProfile": _ANY_COMPLETE_ACCOUNT,
         "changePassword": _ANY_COMPLETE_ACCOUNT,
         "markReleaseNotesRead": _ANY_COMPLETE_ACCOUNT,
+        # `UIP-G-05`: the account's own choice of an object, like its read mark: any complete account, roles or none.
+        "setMyLastProject": _ANY_COMPLETE_ACCOUNT,
         # Product changes -- projects, uploads, runs, verdicts, comments, the export.
         "createProject": _EXPERT,
         "uploadDocument": _EXPERT,

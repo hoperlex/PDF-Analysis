@@ -59,7 +59,7 @@ describe('the choice', () => {
     expect(markup).toContain('Новая версия: Архитектурные решения');
     expect(markup).toContain('не будет загружен:');
     expect(markup).toContain('Загрузить 1');
-    expect(markup).toContain('первые документы проекта');
+    expect(markup).toContain('первые документы объекта');
   });
 });
 

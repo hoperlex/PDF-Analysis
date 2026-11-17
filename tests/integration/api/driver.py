@@ -250,6 +250,9 @@ class SuiteAccountAdapter:
     def update_my_profile(self, **_: Any) -> Any:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
 
+    def set_last_project(self, **_: Any) -> None:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Project")
+
     def update_account(self, **_: Any) -> Any:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
 

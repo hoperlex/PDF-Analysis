@@ -31,7 +31,7 @@ const ACCOUNT: Account = {
 
 function refusal(code: ErrorEnvelope['error_code'], reason: string): ApiError {
   return new ApiError(409, {
-    contract_version: '1.55.0',
+    contract_version: '1.57.0',
     error_code: code,
     message: 'Refused',
     correlation_id: 'cid-user-1',
@@ -80,7 +80,7 @@ describe('administrator account screens', () => {
     });
     const markup = renderScreen(client, createElement(UserList));
     expect(markup).toContain('Последний вход</th>');
-    expect(markup).toContain('2026-11-05 09:30:15 UTC');
+    expect(markup).toContain('05.11.2026 09:30');
     expect(markup).toContain('data-user-last-sign-in="at"');
     expect(markup).toContain('data-user-last-sign-in="never"');
     expect(markup).toContain('Входов не было');
@@ -89,7 +89,7 @@ describe('administrator account screens', () => {
   it('shows «Последний вход» on the card (`UI-A-92`)', () => {
     const client = newClient();
     client.setQueryData(queryKeys.users.detail(ACCOUNT.user_uid), ACCOUNT);
-    expect(renderScreen(client, createElement(UserCard, { userUid: ACCOUNT.user_uid }))).toContain('data-user-last-sign-in="at">2026-11-05 09:30:15 UTC</dd>');
+    expect(renderScreen(client, createElement(UserCard, { userUid: ACCOUNT.user_uid }))).toContain('data-user-last-sign-in="at">05.11.2026 09:30</dd>');
     client.setQueryData(queryKeys.users.detail(ACCOUNT.user_uid), { ...ACCOUNT, last_sign_in_at: null });
     expect(renderScreen(client, createElement(UserCard, { userUid: ACCOUNT.user_uid }))).toContain('data-user-last-sign-in="never">Входов не было</dd>');
   });

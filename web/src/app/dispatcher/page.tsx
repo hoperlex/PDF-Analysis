@@ -1,5 +1,5 @@
 /**
- * `/dispatcher` — the route file for «Диспетчер» (`W61-DISPATCHER-01`).
+ * `/dispatcher` — the route file for «Назначения» (`W61-DISPATCHER-01`).
  *
  * Delegation-only: the route decides nothing about assignments. It hands the screen the
  * session's roles — the guard has just read them, and the screen draws the administrator's

@@ -118,7 +118,7 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
       </p>
       {hasNextPage ? (
         <p className="am-note" data-structure-page="partial">
-          Показаны документы этой страницы списка; остальные документы проекта — на следующих
+          Показаны документы этой страницы списка; остальные документы объекта — на следующих
           страницах.
         </p>
       ) : null}
@@ -254,10 +254,10 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
 
   let body;
   if (query.isPending) {
-    body = <LoadingState what="документы этого проекта" />;
+    body = <LoadingState what="документы этого объекта" />;
   } else if (query.isError) {
     const failure = classifyListingFailure(query.error, {
-      collection: 'документы этого проекта',
+      collection: 'документы этого объекта',
       parent: 'project',
     });
     body = (
@@ -273,8 +273,8 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
   } else if (query.data.items.length === 0 && cursor === undefined) {
     body = (
       <EmptyState
-        title="В этом проекте пока нет документов."
-        detail="Загрузите комплект документации в панели «Загрузка». Ничего не потеряно: в проекте действительно нет опубликованных документов."
+        title="В этом объекте пока нет документов."
+        detail="Загрузите комплект документации в панели «Загрузка». Ничего не потеряно: в объекте действительно нет опубликованных документов."
       />
     );
   } else {
@@ -315,7 +315,7 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
   return (
     <section className="am-section" data-project-sections={projectUid}>
       <div className={styles.titleRow}>
-        <h2>Разделы проекта</h2>
+        <h2>Разделы объекта</h2>
         <ArchivedToggle
           checked={showArchived}
           onChange={(checked) => {

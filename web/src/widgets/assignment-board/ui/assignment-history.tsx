@@ -6,7 +6,7 @@
  */
 
 import type { AssignmentEvent } from '@/shared/api';
-import { formatInstant } from '@/shared/lib';
+import { formatInstant, formatInstantUtc } from '@/shared/lib';
 import { ErrorState, LoadingState } from '@/shared/ui';
 import { ASSIGNMENT_EVENT_LABELS, assignmentFailure, useAssignment } from '@/entities/assignment';
 
@@ -18,7 +18,7 @@ export function AssignmentHistoryView({ history }: { readonly history: readonly 
       {history.map((event) => (
         <li key={event.event_id} data-assignment-event={event.kind}>
           <strong>{ASSIGNMENT_EVENT_LABELS[event.kind]}</strong> — {event.actor_label},{' '}
-          {formatInstant(event.occurred_at)}
+          <time dateTime={event.occurred_at} title={formatInstantUtc(event.occurred_at)}>{formatInstant(event.occurred_at)}</time>
           {event.new_assignee_label === null ? null : <>; новый ответственный: {event.new_assignee_label}</>}
           {event.reason === null ? null : <>; причина: {event.reason}</>}
         </li>

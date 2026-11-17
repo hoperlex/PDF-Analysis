@@ -12,6 +12,11 @@
  * read views: replicating an accepted optimisation into other projects is a later slice, and nothing here writes. The
  * section code only filters; rows are never merged across projects and the totals exist per project and per currency.
  *
+ * **The object** (`UIP-G-06`; the registry class is `optional`). An address that names a project narrows to it; `?project=all` is
+ * the explicit «Все объекты»; an address that says nothing opens on the object the account chose last (`getMe`), and on every
+ * object where there is none. Any choice in the page's own filter is the reader's and stands (it is written into the address,
+ * «Все объекты» as `?project=all`), and the account's answer arriving late never overrides it.
+ *
  * **The address.** `?section=<code>&project=<project_uid>&tab=accepted` opens the page on that section, narrowed to that
  * project, on that tab (`UI-B-20`); the page keeps the address in step with the choices, and carries the section and the
  * project from one tab to the other. A parameter the address carries that is not a section code or a project identity is
@@ -35,12 +40,13 @@ import type { KeyboardEvent } from 'react';
 import type { ProjectSection, ProjectUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
+import { useLastProject } from '@/entities/account';
 import { useAcceptedOptimisationProposals } from '@/entities/optimisation-proposal';
 import { useSectionSpecification } from '@/entities/section-specification';
 import { SectionAcceptedOptimisations } from '@/widgets/section-accepted-optimisations';
 import { SectionSpecificationSection } from '@/widgets/section-specification';
 
-import { DEFAULT_SECTION_OPTIMISATION_ADDRESS, sectionOptimisationSearch } from '../model/address';
+import { DEFAULT_SECTION_OPTIMISATION_ADDRESS, objectDecided, sectionOptimisationSearch, shownProject } from '../model/address';
 import type { SectionOptimisationAddress } from '../model/address';
 import { SECTION_OPTIMISATION_TABS, sectionOptimisationTabText } from '../model/tabs';
 import type { SectionOptimisationTab, SectionOptimisationTabCounts } from '../model/tabs';
@@ -55,7 +61,7 @@ export interface SectionOptimisationPageProps {
 
 const IGNORED_TEXT = {
   section: 'раздел',
-  project: 'проект',
+  project: 'объект',
   tab: 'вкладка',
 } as const;
 
@@ -63,20 +69,25 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
   const base = useId();
   const buttons = useRef<Partial<Record<SectionOptimisationTab, HTMLButtonElement | null>>>({});
   const [tab, setTab] = useState<SectionOptimisationTab>(initial.tab);
-  const [filter, setFilter] = useState<{ readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }>({
-    sectionCode: initial.sectionCode,
-    projectUid: initial.projectUid,
-  });
+  // `decided`: the address, or the reader, has decided the object (a project or «Все объекты»). Until then the account's last
+  // object stands in (`shownProject`), so a late `getMe` is applied to an untouched page and never to one the reader has set.
+  const [filter, setFilter] = useState<{
+    readonly sectionCode: ProjectSection;
+    readonly projectUid: ProjectUid | null;
+    readonly decided: boolean;
+  }>({ sectionCode: initial.sectionCode, projectUid: initial.projectUid, decided: objectDecided(initial) });
+  const last = useLastProject({ enabled: !filter.decided });
+  const projectUid = shownProject(filter, last.projectUid);
 
   // The tabs' numbers. `row_count` counts every row in scope apart from the text search, and only a `ready` answer has
   // one worth showing: a section the server stopped at a bound (`section_too_large`) lists no rows.
   const specification = useSectionSpecification({
     sectionCode: filter.sectionCode,
-    projectUid: filter.projectUid,
+    projectUid,
     query: '',
     offset: 0,
   });
-  const accepted = useAcceptedOptimisationProposals({ sectionCode: filter.sectionCode, projectUid: filter.projectUid });
+  const accepted = useAcceptedOptimisationProposals({ sectionCode: filter.sectionCode, projectUid });
   const counts: SectionOptimisationTabCounts = {
     specification:
       specification.data !== undefined && specification.data.section_code === filter.sectionCode && specification.data.state === 'ready'
@@ -96,25 +107,34 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
   }, [answer, filter.sectionCode]);
   // The narrowed answer lists the project it is narrowed to, so it names it; before it arrives the option reads the project.
   const answeredName =
-    answer === undefined || filter.projectUid === null || answer.section_code !== filter.sectionCode
+    answer === undefined || projectUid === null || answer.section_code !== filter.sectionCode
       ? null
-      : (answer.projects.find((project) => project.project_uid === filter.projectUid)?.name ?? null);
-  const projectOptions = projectFilterOptions(members, filter.projectUid, answeredName);
+      : (answer.projects.find((project) => project.project_uid === projectUid)?.name ?? null);
+  const projectOptions = projectFilterOptions(members, projectUid, answeredName);
 
-  function keep(next: { readonly tab: SectionOptimisationTab; readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }) {
+  function keep(next: {
+    readonly tab: SectionOptimisationTab;
+    readonly sectionCode: ProjectSection;
+    readonly projectUid: ProjectUid | null;
+    readonly allProjects: boolean;
+  }) {
     // A reload or a pasted link opens the same view: the address follows every choice, without a new history entry.
     if (typeof window !== 'undefined') window.history.replaceState(null, '', sectionOptimisationSearch(next));
   }
 
+  // What the address says of the object: the one shown, and «Все объекты» as `?project=all` when it was chosen. An untouched
+  // page with no last object says nothing, and a reload then asks the account again.
+  const addressed = (uid: ProjectUid | null) => ({ projectUid: uid, allProjects: uid === null && filter.decided });
+
   function chooseTab(next: SectionOptimisationTab) {
     setTab(next);
-    keep({ tab: next, ...filter });
+    keep({ tab: next, sectionCode: filter.sectionCode, ...addressed(projectUid) });
   }
 
   function chooseFilter(next: { readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }) {
     if (next.sectionCode !== filter.sectionCode) setMembers([]);
-    setFilter(next);
-    keep({ tab, ...next });
+    setFilter({ ...next, decided: true });
+    keep({ tab, ...next, allProjects: next.projectUid === null });
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -139,7 +159,7 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
   return (
     <PageShell
       title="Оптимизация разделов"
-      subtitle="Сводная спецификация раздела по текущим версиям комплектов всех проектов и принятые экспертами оптимизации. Экран только показывает данные: переносить решения между проектами здесь пока нельзя."
+      subtitle="Сводная спецификация раздела по текущим версиям комплектов всех объектов и принятые экспертами оптимизации. Экран только показывает данные: переносить решения между объектами здесь пока нельзя."
     >
       {initial.ignored.length === 0 ? null : (
         <p className={styles.notice} data-address-ignored={initial.ignored.join(' ')}>
@@ -150,11 +170,11 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
         * The original's «←» on this screen leads back to the section's projects. The way back here is where the reader came
         * from: the project's section page when the address names a project, and the dashboard (the section table) when it names none.
         */}
-      <p className={styles.back} data-section-optimisation-back={filter.projectUid === null ? 'dashboard' : 'section'}>
-        {filter.projectUid === null ? (
+      <p className={styles.back} data-section-optimisation-back={projectUid === null ? 'dashboard' : 'section'}>
+        {projectUid === null ? (
           <Link href="/dashboard">← К дашборду</Link>
         ) : (
-          <Link href={routes.projectSection(filter.projectUid, filter.sectionCode)}>← К разделу проекта</Link>
+          <Link href={routes.projectSection(projectUid, filter.sectionCode)}>← К разделу объекта</Link>
         )}
       </p>
       <div className={styles.tabs}>
@@ -184,7 +204,7 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
           </div>
           <SectionFilterBar
             sectionCode={filter.sectionCode}
-            projectUid={filter.projectUid}
+            projectUid={projectUid}
             options={projectOptions}
             onSection={(sectionCode) => chooseFilter({ sectionCode, projectUid: null })}
             onProject={(projectUid) => chooseFilter({ sectionCode: filter.sectionCode, projectUid })}
@@ -201,11 +221,11 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
           {tab === 'specification' ? (
             <SectionSpecificationSection
               sectionCode={filter.sectionCode}
-              projectUid={filter.projectUid}
+              projectUid={projectUid}
               onSelectProject={(projectUid) => chooseFilter({ sectionCode: filter.sectionCode, projectUid })}
             />
           ) : (
-            <SectionAcceptedOptimisations sectionCode={filter.sectionCode} projectUid={filter.projectUid} />
+            <SectionAcceptedOptimisations sectionCode={filter.sectionCode} projectUid={projectUid} />
           )}
         </div>
       </div>

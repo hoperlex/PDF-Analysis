@@ -27,13 +27,13 @@ import type { Finding, FindingCategory, PrecedentFindingLabel, Severity } from '
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
-import { EXECUTION_STATUS_LABELS, EvidenceLimitation, OriginChip, SEVERITY_LABELS, SeverityBadge, countGrouped, findingOriginOf } from '@/entities/finding';
+import { EXECUTION_STATUS_LABELS, EvidenceLimitation, OriginChip, SEVERITY_LABELS, SeverityBadge, countGrouped, findingOriginOf, severityTone } from '@/entities/finding';
 import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
 import { findingPages } from '@/entities/finding-observation';
 import { PrecedentMark, isCancelSuggested } from '@/entities/decision-memory';
 
-import { findingNumbers, findingsAsShown, groupsInVerdictOrder, pagesLabel, verdictBucket } from '../model/presentation';
-import type { VerdictFilter } from '../model/presentation';
+import { SEVERITY_ORDER, findingNumbers, findingsAsShown, groupsInVerdictOrder, pagesLabel, plateOf, plateTotal, severityPlates, verdictBucket } from '../model/presentation';
+import type { PlateSeverity, VerdictFilter } from '../model/presentation';
 import { CancelQueue, cancelQueueOf } from './cancel-queue';
 import { FindingTable } from './finding-table';
 import styles from './finding-list.module.css';
@@ -57,7 +57,7 @@ export interface FindingListProps {
   readonly integrityFaults?: readonly FindingIntegrityFault[] | undefined;
   /** Coverage-aware wording supplied by the page for an empty partial result. */
   readonly emptyDetail?: ReactNode | undefined;
-  /** The verdict filter, when the page keeps it (in the address). Absent, the list keeps its own. */
+  /** The verdict filter, when the page keeps it (in the address). Absent, the list keeps its own («Все»). */
   readonly verdictFilter?: VerdictFilter | undefined;
   readonly onVerdictFilterChange?: ((filter: VerdictFilter) => void) | undefined;
   /**
@@ -71,10 +71,10 @@ export interface FindingListProps {
   readonly blockCountOf?: ((findingUid: string) => number | undefined) | undefined;
   /** The run's `unlinked_pages`: a finding that cites one has a block count that is partial, and the table says so. */
   readonly unlinkedPages?: ReadonlySet<number> | undefined;
-  /** `R-151j`: the severity filter, when the page keeps it (in the address). Absent, the list keeps its own. */
+  /** `R-151j`: the severity filter, when the page keeps it (in the address). Absent, the list keeps its own («Все»). */
   readonly severityFilter?: SeverityFilter | undefined;
   readonly onSeverityFilterChange?: ((filter: SeverityFilter) => void) | undefined;
-  /** The way the findings are drawn, when the page keeps it (in the address, `?view=`). Absent, the list keeps its own. */
+  /** The way the findings are drawn, when the page keeps it (in the address, `?view=`). Absent, the list keeps its own (the table). */
   readonly view?: FindingView | undefined;
   readonly onViewChange?: ((view: FindingView) => void) | undefined;
   /**
@@ -97,24 +97,27 @@ export interface FindingListProps {
   readonly onOpenQueued?: ((findingUid: string) => void) | undefined;
 }
 
-/** The two ways to read the findings: the list beside the open finding, or the full-width table of the original. */
+/** The two ways to read the findings: the full-width table of the original (the default), or the list beside the open finding. */
 export type FindingView = 'list' | 'table';
 
-/** A view read from the address: an absent or unknown value is the list. */
+/** A view read from the address (`UIP-S06-06`): the table opens in every run; only `list` opens the list. */
 export function findingViewOf(value: string | null): FindingView {
-  return value === 'table' ? 'table' : 'list';
+  return value === 'list' ? 'list' : 'table';
 }
 
 /**
- * `R-151j`: the severity strip. The canonical severity is the expert's decision (`decided_severity`); a finding
- * without one is «Не определена». The model's proposal (`observation.proposed_severity`) is counted on its own,
- * labelled row with its own explicit filter; it never decides (AGENTS §4). Counts and filter share one scope: the whole run, which
- * the page loads entirely (`R-150i`).
+ * `R-151j`, `UIP-S06-06`: the severity plates. A plate counts and selects a finding by its decided severity and, for a finding
+ * nobody has decided, by the model's proposal (`plateOf`); a finding with neither is «Не определена», and its plate is drawn only
+ * while there is one. The plate's tooltip splits its number into «решено экспертом» and «предложено моделью», and the two stay
+ * apart in the data (`decided_severity`, `observation.proposed_severity`): neither becomes the other (AGENTS §4). Counts and
+ * filter share one scope: the whole run, which the page loads entirely (`R-150i`). A press on the pressed plate lifts the filter.
  */
-export type SeverityFilter = 'all' | Severity | 'undetermined' | `proposed:${Severity}`;
+export type SeverityFilter = 'all' | PlateSeverity;
 
-const SEVERITY_ORDER: readonly Severity[] = ['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'];
-
+/**
+ * The two counts kept apart, decided and proposed, as the run page's tile «Замечания» reads them (it shows only what the expert
+ * decided). The plates of «Разбор» count both together and say the split in a tooltip: `severityPlates`.
+ */
 export interface SeverityTally {
   readonly decided: Readonly<Record<Severity | 'undetermined', number>>;
   readonly proposed: Readonly<Record<Severity, number>>;
@@ -135,10 +138,16 @@ export function tallySeverity(groups: readonly FindingGroup<Finding>[]): Severit
   return { decided, proposed };
 }
 
-/** A severity filter read from the address: an absent or unknown value is «Все». */
+/**
+ * A severity filter read from the address: an absent or unknown value is «Все». An address written before the proposals had
+ * their own plates (`?severity=proposed:critical`) opens as the plate it names (`?severity=critical`): the plate counts both.
+ */
 export function severityFilterOf(value: string | null): SeverityFilter {
-  return value === 'undetermined' || SEVERITY_ORDER.includes(value as Severity)
-    || (value?.startsWith('proposed:') === true && SEVERITY_ORDER.includes(value.slice(9) as Severity)) ? (value as SeverityFilter) : 'all';
+  if (value?.startsWith('proposed:') === true) {
+    const named = value.slice('proposed:'.length) as Severity;
+    return SEVERITY_ORDER.includes(named) ? named : 'all';
+  }
+  return value === 'undetermined' || SEVERITY_ORDER.includes(value as Severity) ? (value as SeverityFilter) : 'all';
 }
 
 export function filterBySeverity(
@@ -147,19 +156,13 @@ export function filterBySeverity(
 ): readonly FindingGroup<Finding>[] {
   if (filter === 'all') return groups;
   return groups
-    .map((group) => ({ ...group, findings: group.findings.filter((f) => filter.startsWith('proposed:')
-      ? f.observation.proposed_severity === filter.slice(9) : (f.decided_severity ?? 'undetermined') === filter) }))
+    .map((group) => ({ ...group, findings: group.findings.filter((f) => plateOf(f) === filter) }))
     .filter((group) => group.findings.length > 0);
 }
 
-/** Whether a run carries any severity at all; a legacy run has none and draws no strip. */
-function hasSeverity(tally: SeverityTally): boolean {
-  return SEVERITY_ORDER.some((severity) => tally.decided[severity] > 0 || tally.proposed[severity] > 0);
-}
-
-/** A missing or unknown filter opens the active review queue; all history remains available. */
+/** A missing or unknown filter is «Все»; the address of the earlier default, `?verdict=active`, opens as «Все» too. */
 export function verdictFilterOf(value: string | null): VerdictFilter {
-  return value === 'all' || value === 'waiting' || value === 'accepted' || value === 'rejected' ? value : 'active';
+  return value === 'waiting' || value === 'accepted' || value === 'rejected' ? value : 'all';
 }
 
 export interface VerdictTally {
@@ -180,18 +183,24 @@ export function filterGroups(
 ): readonly FindingGroup<Finding>[] {
   if (filter === 'all') return groups;
   return groups
-    .map((group) => ({ ...group, findings: group.findings.filter((f) => filter === 'active'
-      ? f.current_verdict !== 'rejected' : verdictBucket(f.current_verdict) === filter) }))
+    .map((group) => ({ ...group, findings: group.findings.filter((f) => verdictBucket(f.current_verdict) === filter) }))
     .filter((group) => group.findings.length > 0);
 }
 
+/** `UIP-S06-06`: the one choice «Показывать», in the order the table stands: waiting, accepted, rejected. */
 const FILTERS: readonly { readonly value: VerdictFilter; readonly label: string }[] = [
-  { value: 'active', label: 'Активные' },
-  { value: 'all', label: 'Все, включая историю' },
-  { value: 'waiting', label: 'Ожидают решения' },
+  { value: 'all', label: 'Все' },
+  { value: 'waiting', label: 'Ждут' },
   { value: 'accepted', label: 'Приняты' },
   { value: 'rejected', label: 'Отклонены' },
 ];
+
+/** The tooltip of a plate: how many of its findings the expert decided and how many only the model proposed. */
+function plateTitle(severity: PlateSeverity, plates: ReturnType<typeof severityPlates>): string {
+  if (severity === 'undetermined') return 'Критичность не решена экспертом и не предложена моделью';
+  const count = plates.bySeverity[severity];
+  return `решено экспертом: ${count.decided} · предложено моделью: ${count.proposed}`;
+}
 
 
 /** Category labels. The contract value is what the row carries; this is only the heading. */
@@ -213,10 +222,12 @@ export interface FindingToolbarProps {
 }
 
 /**
- * The strip over the findings, as the original's top row: the run's total and the verdicts' tally, the filter by
- * verdict, the way to read the findings, and the severity chips. The page may stand it across the whole width
- * above the list and the open finding (`toolbar="outside"` on the list); by default it stands inside the list.
- * Counts and filters are over the whole run (`R-150i`), never over what is on screen.
+ * The strip over the findings, as the original's top row (`UIP-S06-06`). Its first row: at the left the five severity plates
+ * with their numbers (a press selects the severity, a second press lifts it; «Не определена» only while a finding has none) and
+ * the run's totals «Всего: N · Принято: n · Отклонено: m»; at the right the file actions. Under it one row: the choice
+ * «Показывать: Все / Ждут / Приняты / Отклонены» and the link to the other way of reading the findings. The page may stand it
+ * across the whole width above the list and the open finding (`toolbar="outside"` on the list); by default it stands inside the
+ * list. Counts and filters are over the whole run (`R-150i`), never over what is on screen.
  */
 export function FindingToolbar({
   groups,
@@ -231,90 +242,69 @@ export function FindingToolbar({
   const total = countGrouped(groups);
   if (total === 0) return null;
   const tally = tallyVerdicts(groups);
-  const severities = tallySeverity(groups);
-  const hasProposals = SEVERITY_ORDER.some((value) => severities.proposed[value] > 0);
+  const plates = severityPlates(groups);
+  const drawn: readonly PlateSeverity[] = [...SEVERITY_ORDER, ...(plates.undetermined > 0 ? ['undetermined' as const] : [])];
+  const hasSeverity = SEVERITY_ORDER.some((value) => plateTotal(plates.bySeverity[value]) > 0);
+  const otherView: FindingView = view === 'table' ? 'list' : 'table';
   return (
-    <div className={styles.toolbar}>
-      {/* The original's top row: the total and the severity chips on the left, the file actions on the right. */}
+    <div className={styles.toolbar} data-finding-toolbar="">
+      {/* The original's top row: the plates and the totals at the left, the file actions at the right. */}
       <div className={styles.top}>
-        <strong className={styles.total} data-finding-total={total}>Всего: {total}</strong>
-        <span data-finding-visible-count={countGrouped(filterBySeverity(filterGroups(groups, filter), severity))}>
-          Показано: {countGrouped(filterBySeverity(filterGroups(groups, filter), severity))}
-        </span>
-        {hasSeverity(severities) ? (
-          <div className={styles.severities} data-severity-strip="">
-            <div className={styles.filter} role="group" aria-label="Отбор по важности, решённой экспертом">
-              <span className={styles.stripLabel}>Важность (решение эксперта):</span>
-              <button
-                type="button"
-                className="am-button am-button--quiet am-button--small"
-                aria-pressed={severity === 'all'}
-                data-severity-filter="all"
-                onClick={() => setSeverity('all')}
-              >
-                Все
-              </button>
-              {[...SEVERITY_ORDER, 'undetermined' as const].map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className="am-button am-button--quiet am-button--small"
-                  aria-pressed={severity === value}
-                  data-severity-filter={value}
-                  onClick={() => setSeverity(value)}
-                >
-                  {value === 'undetermined' ? 'Не определена' : SEVERITY_LABELS[value]} {severities.decided[value]}
-                </button>
-              ))}
+        <div className={styles.lead}>
+          {hasSeverity ? (
+            <div className={styles.plates} role="group" aria-label="Отбор по критичности" data-severity-strip="">
+              {drawn.map((value) => {
+                const count = value === 'undetermined' ? plates.undetermined : plateTotal(plates.bySeverity[value]);
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`am-badge am-badge--${value === 'undetermined' ? 'inert' : severityTone(value)} ${styles.plate}`}
+                    aria-pressed={severity === value}
+                    title={plateTitle(value, plates)}
+                    data-severity-filter={value}
+                    data-plate-count={count}
+                    onClick={() => setSeverity(severity === value ? 'all' : value)}
+                  >
+                    <span className="am-badge__label">{value === 'undetermined' ? 'Не определена' : SEVERITY_LABELS[value]}</span>
+                    {' '}
+                    <span className={styles.count}>{count}</span>
+                  </button>
+                );
+              })}
             </div>
-            {!hasProposals ? null : (
-              <div className={styles.filter} role="group" aria-label="Отбор по важности, предложенной моделью" data-proposed-severity="">
-                <span className={styles.stripLabel}>Предложено моделью (не решение эксперта):</span>
-                {SEVERITY_ORDER.map((value) => <button key={value} type="button"
-                  className="am-button am-button--quiet am-button--small" aria-pressed={severity === `proposed:${value}`}
-                  data-severity-filter={`proposed:${value}`} onClick={() => setSeverity(`proposed:${value}`)}>
-                  {SEVERITY_LABELS[value]} {severities.proposed[value]}
-                </button>)}
-              </div>
-            )}
-          </div>
-        ) : null}
+          ) : null}
+          <p className={styles.totals} data-verdict-tally={`${tally.waiting}/${tally.accepted}/${tally.rejected}`}>
+            <strong className={styles.total} data-finding-total={total}>Всего: {total}</strong>
+            {' · '}Принято: {tally.accepted}{' · '}Отклонено: {tally.rejected}
+          </p>
+        </div>
         {actions === undefined ? null : <div className={styles.actions}>{actions}</div>}
       </div>
-      <div className={styles.verdicts} data-finding-toolbar="">
-        <p className={styles.tally} data-verdict-tally={`${tally.waiting}/${tally.accepted}/${tally.rejected}`}>
-          Ожидают решения: {tally.waiting} · Приняты: {tally.accepted} · Отклонены: {tally.rejected}
-        </p>
-        <div className={styles.controls}>
-          <div className={styles.filter} role="group" aria-label="Отбор по вердикту">
-            {FILTERS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className="am-button am-button--quiet am-button--small"
-                aria-pressed={filter === option.value}
-                data-verdict-filter={option.value}
-                onClick={() => setFilter(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <div className={styles.filter} role="group" aria-label="Вид списка находок">
-            {(['list', 'table'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className="am-button am-button--quiet am-button--small"
-                aria-pressed={view === mode}
-                data-finding-view={mode}
-                onClick={() => setView(mode)}
-              >
-                {mode === 'list' ? 'Список' : 'Таблица'}
-              </button>
-            ))}
-          </div>
+      <div className={styles.show}>
+        <div className={styles.filter} role="group" aria-label="Показывать">
+          <span className={styles.showLabel} aria-hidden="true">Показывать:</span>
+          {FILTERS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className="am-button am-button--quiet am-button--small"
+              aria-pressed={filter === option.value}
+              data-verdict-filter={option.value}
+              onClick={() => setFilter(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
+        <button
+          type="button"
+          className={styles.viewLink}
+          data-finding-view-link={otherView}
+          onClick={() => setView(otherView)}
+        >
+          {otherView === 'list' ? 'Показать списком' : 'Показать таблицей'}
+        </button>
       </div>
     </div>
   );
@@ -343,14 +333,14 @@ export function FindingList({
   precedentOf,
   onOpenQueued,
 }: FindingListProps) {
-  const [ownFilter, setOwnFilter] = useState<VerdictFilter>('active');
+  const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
   const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
   const severity = severityFilter ?? ownSeverity;
   const setSeverity = (next: SeverityFilter) => {
     if (onSeverityFilterChange !== undefined) onSeverityFilterChange(next);
     else setOwnSeverity(next);
   };
-  const [ownView, setOwnView] = useState<FindingView>('list');
+  const [ownView, setOwnView] = useState<FindingView>('table');
   const view = viewFromPage ?? ownView;
   const setView = (next: FindingView) => {
     if (onViewChange !== undefined) onViewChange(next);
@@ -361,7 +351,7 @@ export function FindingList({
     if (onVerdictFilterChange !== undefined) onVerdictFilterChange(next);
     else setOwnFilter(next);
   };
-  if (isLoading === true) return <LoadingState what="находки" />;
+  if (isLoading === true) return <LoadingState what="замечания" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
 
   const total = countGrouped(groups);
@@ -370,11 +360,11 @@ export function FindingList({
   if (total === 0 && faults.length === 0) {
     return (
       <EmptyState
-        title="Находок нет"
+        title="Замечаний нет"
         detail={emptyDetail ?? (
           <p>
-            Прогон не опубликовал ни одной находки. Элементы модели, чьи цитаты не
-            разрешились по заявленным якорям, находками не являются и сохраняются только
+            Прогон не опубликовал ни одного замечания. Элементы модели, чьи цитаты не
+            разрешились по заявленным якорям, замечаниями не являются и сохраняются только
             как диагностика прогона.
           </p>
         )}
@@ -404,7 +394,7 @@ export function FindingList({
           title="Нарушение целостности данных"
           detail={
             <p>
-              Находок без свидетельств: {faults.length}. Шлюз свидетельств P02 делает такое
+              Замечаний без свидетельств: {faults.length}. Шлюз свидетельств P02 делает такое
               невозможным, поэтому это сообщаемая неисправность, а не пустая панель:{' '}
               {faults.map((fault) => fault.findingUid).join(', ')}
             </p>
@@ -424,7 +414,7 @@ export function FindingList({
 
       {shown.length === 0 ? (
         <p className="am-note" data-verdict-filter-empty={filter}>
-          {severity === 'all' ? 'Находок с таким вердиктом нет.' : 'Находок с таким отбором нет.'}
+          {severity === 'all' ? 'Замечаний с таким вердиктом нет.' : 'Замечаний с таким отбором нет.'}
         </p>
       ) : null}
 
@@ -486,7 +476,7 @@ export function FindingList({
                         {finding.decided_severity === undefined ? null : (
                           <SeverityBadge
                             severity={finding.decided_severity}
-                            title="Важность, решённая экспертом"
+                            title="Критичность, решённая экспертом"
                           />
                         )}
                         {/* `UI-A-73`: the verdict was carried over from an earlier version. */}

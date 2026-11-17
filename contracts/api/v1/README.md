@@ -11,7 +11,76 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.55.0` (`ANALYSIS-REPAIR-INT-01`)
+## Current contract `1.57.0` (`UI-PARITY-R3`)
+
+The stage 4–5 seal of the programme `UI-PARITY-R3` (the task is `docs/program/tasks/UI-PARITY-R3.md`, the seal is `UIP-CONTRACT-03`), raised once
+for the two stages after the contract lanes of the stages were merged. Additive: **no operation and no schema is added; four optional query
+parameters, two optional properties and two required properties of an answer**; no migration (head `0070`), no error code, no identity prefix,
+no state machine. The four changes below were each made by their own lane while this file still read 1.56.0, and are one seal here:
+
+- **The order of the project list (`UIP-S03-02`, owner ruling Г3-B).** `listProjects` takes the optional query `order`: `published` (the default, and the order the operation always had, newest first) or `name`. `name` is decided by the server before paging, so it holds across pages: by the first whole number written in the name, ascending, then the names without a number by `casefold`, and `project_uid` decides among equals. Another value is `422 validation_failed`.
+- **One document of a section's specification and of the accepted proposals (`UIP-S11-05`).** `getSectionSpecification` and `listAcceptedOptimisationProposals` take the optional query `document_uid`, which narrows the answer to one document set. For the specification an unknown document, one of another project than `project_uid` or one confirmed in another section is `404`; for the accepted proposals it is a filter and an empty page is a `200`.
+- **The execution status in the decision journal (`UIP-S12-01`, owner rulings Г9-B and Г12-B).** `DecisionRecord` gains the optional `execution_status` and `execution_status_at` (the designer's status of the finding and when it was set, as on `Finding`; absent where the finding has none), and `listDecisions` takes the optional query `execution_status`, a comma-separated list of `taken_into_account`, `amended`, `declined`, `agreed`; an unknown value or an empty element is `422 validation_failed`.
+- **The month's decision counts of an engineer (`UIP-S14-01`).** `WorkScheduleEngineer` gains `accepted_count` and `rejected_count` (integers from 0; the decisions that stand, findings and optimisation proposals together, taken directly and credited to their author, the month cut in the schedule's time zone). The server always sends both, so they are required in the answer; the properties are new and a reader of 1.56.0 ignores them.
+
+The API has 302 paths, 331 operations and 822 schemas; migration head `0070`. The domain catalogs remain at candidate revision 71; their shared version advances.
+
+Compatibility: additive for a reader. A client of 1.56.0 reads every answer of 1.57.0 unchanged (the new properties of `DecisionRecord` are optional and absent
+where the finding has no status; the two counts of `WorkScheduleEngineer` are new properties), and every request of 1.56.0 is valid unchanged (the new query parameters
+are optional and an absent one means the behaviour the operation always had); `ErrorEnvelope.contract_version` and `info.version` are `1.57.0`.
+
+## Contract `1.56.0` (`UI-PARITY-R3`, historical)
+
+The stage-2 seal of the programme `UI-PARITY-R3` (screens that follow the original PDF-proverka; the task is
+`docs/program/tasks/UI-PARITY-R3.md`, the seal is `UIP-CONTRACT-02`), raised once for the stage after the contract lanes of the stage were merged.
+Additive: **two operations, two schemas and three optional properties; nothing is removed or made required**; two migrations,
+`0069_account_last_project` and `0070_document_group` (head `0070`); no error code, no identity prefix, no state machine. The four changes
+below were each made by their own lane while this file still read 1.55.0, and are one seal here:
+
+- **The object an account chose last (`UIP-G-05`).** `setMyLastProject` (`PUT /me/last-project`), `SetMyLastProjectRequest`, and the optional `Account.last_project_uid`.
+- **The audit and the block count of a version (`UIP-S04-01`).** `getDocumentVersion` answers `audit`; `DocumentVersion.block_count` is new. No path, operation or schema.
+- **The group of a document (`UIP-G-10`).** `setDocumentGroup` (`PUT /projects/{project_uid}/documents/{document_uid}/group`), `SetDocumentGroupRequest`, and the optional `DocumentVersion.group`.
+- **Words only (`UIP-G-02`).** The description of `exportRunXlsx` names the columns «Критичность (решение эксперта)» and «Критичность (предложение модели)» (it said «Серьёзность»), the tag, operation and schema descriptions name the screens «Назначения» (the assignments, formerly «Диспетчер») and «Замечания, ожидающие решения» (formerly «Находки…»). No shape, default or bound moves.
+
+The API has 302 paths, 331 operations and 822 schemas; migration head `0070`. The domain catalogs remain at candidate revision 71; their shared version advances.
+
+Compatibility: additive for a reader. A client of 1.55.0 reads every answer of 1.56.0 unchanged (the new properties are optional and absent where
+the operation does not carry them); `ErrorEnvelope.contract_version` and `info.version` are `1.56.0`.
+
+Additive change (`UIP-G-05`, programme `UI-PARITY-R3`, owner ruling Г7-B): **one operation, one schema and one optional property; nothing is removed or made required.**
+`setMyLastProject` (`PUT /me/last-project`, `Idempotency-Key` required, any complete account, roles or none) takes
+`SetMyLastProjectRequest` (`{project_uid}`) and answers `204`; an unknown project is `404 not_found`, a reused key with another
+project is `409 idempotency_key_reuse`, a malformed body or identity is `422 validation_failed`. `Account` gains the optional,
+nullable `last_project_uid`: the object the account chose last, `null` when it chose none or its object is gone. It is present on
+`getMe` and `updateMyProfile` and absent from an administrator's reads of an account. The all-objects view is not stored. Storage
+is migration `0069_account_last_project` (`account_last_project`, one row per account, `ON DELETE CASCADE` from the account; it holds
+the project as a bare identity with no foreign key, and `getMe` answers it only while the project exists). The client reads the choice from `getMe` and a link with `?project=` overrides it.
+
+Additive change (`UIP-S04-01`, programme `UI-PARITY-R3`, owner rulings Г8-B and Г12-B): **one optional property and one more place that carries an existing one; no path, operation or schema
+is added and nothing is removed or made required, so the surface counts above do not move.** `getDocumentVersion` now answers the
+`audit` (`DocumentAudit`) that `listDocuments` attaches to each item, for the version it reads: the same read model, so the two never
+disagree (the other operations that answer a `DocumentVersion` still carry none). `DocumentVersion` gains the optional `block_count`
+(integer, at least 0): the number of portal blocks of the version, for the «Блоки N» tab, present on `getDocumentVersion` only and only
+while the block index is built. It is the count the latest run of the version whose `page_geometry_extraction` succeeded and published
+portal blocks recorded in its stage result, the same run and the same blocks `listVersionPortalBlocks` answers; no object is read and
+the version's file is not parsed. **Absent is not zero**: a version no such run has reached, or one admitted for comparison only (no
+portal bundle), carries no `block_count`, while a built index that holds no block answers `0`.
+
+Additive change (`UIP-G-10`, programme `UI-PARITY-R3`, owner ruling Г11): **one operation, one schema and one optional property; nothing is removed or made required.**
+`setDocumentGroup` (`PUT /projects/{project_uid}/documents/{document_uid}/group`, `Idempotency-Key` required, `expert` and `admin` as for
+`setDocumentTags`, `viewer` refused) takes `SetDocumentGroupRequest` (`{group}`, a string of at most 40 characters or `null`) and answers `200`
+with the document's current `DocumentVersion` carrying the new `group`. The group is a value the document carries, not an entity: one optional
+text, 1 to 40 characters after trimming (leading and trailing spaces are dropped and inner runs of spaces collapse), beside the free `tags`,
+which stay and stay a filter. `null` or a blank text takes the document out of its group («Без группы»); a longer text is `422
+validation_failed`; a document of another project, or an unknown one, is `404 not_found`; a reused key with another group is `409
+idempotency_key_reuse`. The same group again changes nothing and records nothing; a change appends `document.group_set` (the group before and
+after, `null` for none) to the audit trail, like `document.tags_set`. `DocumentVersion` gains the optional `group`, answered by `listDocuments`,
+`getDocumentVersion` and `setDocumentGroup` and absent for none (every other operation that answers a `DocumentVersion` carries none). There is
+no group list, no rename of a group and no empty group: the groups of a section are the distinct values of its documents, in alphabetical order on
+the screen. Storage is migration `0070_document_group` (`document.group_label`, nullable, `ck_document_group_label_length`; the wire name is
+`group` because `GROUP` is a reserved word of SQL). 302 paths / 331 operations / 822 schemas.
+
+## Contract `1.55.0` (`ANALYSIS-REPAIR-INT-01`, historical)
 
 Human-review admission and source grounding are separate. `FindingGroundingKind`
 adds `unverified`; its observation has a required `unverified_reason`, and may have

@@ -1,5 +1,5 @@
 /**
- * «Скачать пакет аудита» (UI-A-76): the ZIP of one run on «Разбор находок».
+ * «Скачать пакет аудита» (UI-A-76): the ZIP of one run on «Разбор замечаний».
  *
  * The original packs the audit's results into an archive «для обсуждения в любой нейронке». Here the archive is the
  * evidence package the comparisons already build in the browser (`features/export-evidence-package`, kind
@@ -32,7 +32,7 @@ import type { ErrorStateProps } from '@/shared/ui';
 
 /** What the button's tooltip says the package holds. */
 export const AUDIT_PACKAGE_TITLE =
-  'ZIP одного прогона: CSV находок с вердиктами и комментариями экспертов, отчёты расширенного анализа (MD, HTML, JSON, '
+  'ZIP одного прогона: CSV замечаний с вердиктами и комментариями экспертов, отчёты расширенного анализа (MD, HTML, JSON, '
   + 'технический XLSX) — если у прогона есть такая запись, исходный PDF версии и manifest.json с SHA-256 каждого файла. '
   + 'Если любой файл получить не удалось, ZIP не создаётся.';
 
@@ -160,7 +160,7 @@ export async function buildAuditPackage(args: BuildAuditPackageArgs): Promise<{ 
 }
 
 const PHASE_LABEL: Readonly<Record<AuditPackageProgress['phase'], string>> = {
-  csv: 'Получение CSV находок',
+  csv: 'Получение CSV замечаний',
   extended: 'Получение отчёта расширенного анализа',
   preparing: 'Подготовка пакета',
   sources: 'Получение исходного PDF',
@@ -177,7 +177,7 @@ export function auditPackageDoneLine(summary: AuditPackageSummary): string {
   const files = summary.reports.length;
   const head = `${summary.fileName}: ${files === 1 ? '1 файл отчёта' : `${files} файлов отчётов`}, исходный PDF и манифест.`;
   if (summary.extended === 'absent') {
-    return `${head} Записи расширенного анализа с наблюдениями у прогона нет, поэтому из отчётов в пакете только CSV находок.`;
+    return `${head} Записи расширенного анализа с наблюдениями у прогона нет, поэтому из отчётов в пакете только CSV замечаний.`;
   }
   return summary.extendedStatus === 'completed' || summary.extendedStatus === 'partial'
     ? `${head} Отчёты расширенного анализа — предварительные, не решения эксперта.`
@@ -197,7 +197,7 @@ export function auditPackageFailure(error: unknown): ErrorStateProps {
       return { title, detail: `${reason.message} ${tail}` };
     }
     const message = failureMessage(reason);
-    const what = error.step === 'csv' ? 'CSV находок' : 'запись расширенного анализа';
+    const what = error.step === 'csv' ? 'CSV замечаний' : 'запись расширенного анализа';
     return { title, detail: `Не удалось получить ${what}: ${message.detail} ${tail}`, correlationId: message.correlationId };
   }
   if (error instanceof EvidencePackageError) return { title, detail: `${error.message} ${tail}` };

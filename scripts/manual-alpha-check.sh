@@ -511,13 +511,13 @@ printf 'Скрипт не просит и не сохраняет credentials.\n
 
 record_manual "A01" "deploy SHA и вход" \
   "Workflow/verify-deployed подтверждает deployed SHA, равный проверенному candidate SHA; вход приводит на /."
-record_manual "A02" "проект" \
-  "Создан один проект с уникальным именем; project_uid переживает cold reload."
+record_manual "A02" "объект" \
+  "Создан один объект с уникальным именем; project_uid переживает cold reload."
 record_manual "A03" "положительный комплект" \
   "bundles/ar_baseline.zip создаёт версию; version_uid доступен после reload; upload failure отсутствует."
 record_manual "A04" "прогон" \
   "POST /runs -> 202 queued; <=150 s итог published/partial; четыре стадии; provider_mode=live."
-record_manual "A05" "находки и evidence" \
+record_manual "A05" "замечания и evidence" \
   "Найдены >=2 из SI-01..SI-03, 0 из CTL-01..CTL-06; все цитаты есть на заявленных страницах."
 record_manual "A06" "решения" \
   "Accept, reject и comment — отдельные события; reload и knowledge base сохраняют проекцию."

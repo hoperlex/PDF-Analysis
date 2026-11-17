@@ -100,7 +100,7 @@ export function StageExperimentalParameters({ experimental, card, onOpenEvidence
   return <section aria-label="Параметры экспериментального V3" data-stage-v3-parameters="">
     <h5>Параметры V3 · предварительная машинная сверка</h5>
     <p>Только текст PDF. Инженер не подтверждал результат. Соответствие нормам не проверялось.</p>
-    {body.engineering_subject === undefined ? null : <p>Объект: {text(body.engineering_subject)}</p>}
+    {body.engineering_subject === undefined ? null : <p>Предмет: {text(body.engineering_subject)}</p>}
     {body.change_summary === undefined ? null : <p>{text(body.change_summary)}</p>}
     {parameters.length === 0 ? <p>Структурированные параметры не переданы.</p> : <div className={styles.tableScroll}><table>
       <thead><tr><th>Параметр</th><th>Было</th><th>Стало</th><th>Единица</th><th>Место</th><th>Машинная сверка</th></tr></thead>

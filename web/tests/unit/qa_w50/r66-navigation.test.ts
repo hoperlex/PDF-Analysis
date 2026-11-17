@@ -5,7 +5,7 @@
  * `OWNER_RULINGS_2026-09-17.md` §3.22: **Работа** — Проекты `/projects`, Дашборд `/dashboard`,
  * «Оптимизация разделов» `/section-optimisation`; **Знания** — База знаний
  * `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub); **Система** — Журнал выполнения
- * `/logs`, Исполнители `/workers`, «Настройки анализа» `/analysis-settings` (stub), «Очередь»
+ * `/logs`, Диспетчер `/workers`, «Настройки анализа» `/analysis-settings` (stub), «Очередь»
  * `/queue`; `/optimisation` leaves the menu and stays a registered, reachable screen
  * (group `hidden`). W53 built `/logs` and `/queue`, `W55A-WEB-NORMS` built `/norms`,
  * `W59-ANALYSIS-SETTINGS-01` built `/analysis-settings` and `W63-SECTION-FORM7-01` built
@@ -19,11 +19,17 @@
  * registered, reachable screen (`inMenu: false`). `RULING` below is the R-66 order **without** it,
  * and the `R-150b` cases after the menu cases hold the replacement.
  *
- * **`R-153h` (owner, 2026-11-09) brings the list back, but not as a row:** the first item of «Работа» is «Проект»
- * when the address names a project and «Проекты» when it names none, drawn from the navigation's `projectEntry`
+ * **`R-153h` (owner, 2026-11-09) brings the list back, but not as a row:** an item of «Работа» is «Объект»
+ * when the address names an object and «Объекты» when it names none, drawn from the navigation's `projectEntry`
  * (`web/tests/unit/shell/project-entry.test.ts` holds it). The frame in these cases has no router, so it names no
- * project: its first item is «Проекты», `/projects`. The registry still holds `/projects` with `inMenu: false`, and
- * the data cases below (`buildNavigation`'s groups) are unchanged.
+ * object: its item is «Объекты», `/projects`. The registry still holds `/projects` with `inMenu: false`, and
+ * the data cases below (`buildNavigation`'s groups) hold the rows alone.
+ *
+ * **`UIP-G-07` (Г5-B, Г7-B, Г1-C, the second poll) sets the order of «Работа» as `RULING` has it now:** «Главная» first (the
+ * brand link still leads home), «Дашборд» behind it, the object entry third, then the original's screens in the original's
+ * order («График работ», «Сравнение стадий», «Сравнение версий»; `PDF-proverka` 0ae48ea1 `frontend/index.html`) with our
+ * «Назначения» and «Оптимизация разделов» after «График работ». The «Разделы» group follows «Работа» for every session that
+ * may open the section page, on the current object; with none it has one row, «Выберите объект».
  *
  * The expectation below is typed from the ruling, not read from the registry, and the menu is
  * read three ways: the data the frame builds (`buildNavigation`), and the two rendered states of
@@ -67,17 +73,19 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
   {
     group: 'Работа',
     items: [
-      // `R-150b`: ['/projects', 'Проекты'] is no longer here; the selector in the top strip took it.
+      // `UIP-G-07`: «Главная» is the first item, leading to `/`.
+      ['/', 'Главная'],
+      // `R-150b`: ['/projects', 'Проекты'] is no longer a row; the selector in the top strip took it, and `R-153h` draws it third.
       ['/dashboard', 'Дашборд'],
-      ['/section-optimisation', 'Оптимизация разделов'],
-      // `W61-DISPATCHER-01` (roadmap Q-2) adds «Диспетчер» at the end of «Работа».
-      ['/dispatcher', 'Диспетчер'],
-      // `UI-PARITY-P0P` adds «График работ» after «Диспетчер», as the original's menu has it.
+      // `UI-PARITY-P0P`: «График работ», the first of the original's screens (the original's menu has it second, after «Главная»).
       ['/schedule', 'График работ'],
-      // `CMP-VC-UI-01` (plan §1.1) adds «Сравнение версий» after it.
-      ['/version-comparison', 'Сравнение версий'],
-      // `CMP-ACTIVATE-1030`: the owner activated the stage screen, and the menu offers it beside the version one.
+      // `W61-DISPATCHER-01` (roadmap Q-2): «Назначения», ours, after «График работ» (`UIP-G-07`).
+      ['/dispatcher', 'Назначения'],
+      ['/section-optimisation', 'Оптимизация разделов'],
+      // `CMP-ACTIVATE-1030`: the owner activated the stage screen; in the original's menu it stands before «Сравнение версий».
       ['/stage-comparison', 'Сравнение стадий'],
+      // `CMP-VC-UI-01` (plan §1.1): «Сравнение версий», the original's last.
+      ['/version-comparison', 'Сравнение версий'],
     ],
   },
   {
@@ -92,7 +100,7 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
     group: 'Система',
     items: [
       ['/logs', 'Журнал выполнения'],
-      ['/workers', 'Исполнители'],
+      ['/workers', 'Диспетчер'],
       ['/analysis-settings', 'Настройки анализа'],
       ['/queue', 'Очередь'],
     ],
@@ -146,12 +154,10 @@ function readMenu(html: string): { readonly groups: string[]; readonly links: [s
   return { groups, links };
 }
 
-// `R-153h`: the frame renders with no router, so it names no project and its first link is the list; «Проект» replaces it
-// on a project's address (`project-entry.test.ts`).
-const RULED_LINKS: [string, string][] = [
-  ['/projects', 'Проекты'],
-  ...RULING.flatMap((g) => g.items.map(([a, l]) => [a, l] as [string, string])),
-];
+// `R-153h`, `UIP-G-07`: the frame renders with no router, so it names no object and the third link of «Работа», behind «Главная»
+// and «Дашборд», is the list; «Объект» replaces it on an object's address (`project-entry.test.ts`).
+const RULED_ROWS: [string, string][] = RULING.flatMap((g) => g.items.map(([a, l]) => [a, l] as [string, string]));
+const RULED_LINKS: [string, string][] = [...RULED_ROWS.slice(0, 2), ['/projects', 'Объекты'], ...RULED_ROWS.slice(2)];
 
 // --------------------------------------------------------------------------------- the menu
 
@@ -191,14 +197,15 @@ describe('R-66: the menu’s groups and items equal the ruling’s, in order', (
   it('as rendered, in the one-row bar: the same groups and links in the same order', () => {
     const markup = renderFrame(frameSession());
     const row = readMenu(region(markup, 'data-nav-state="row"'));
-    expect(row.groups).toEqual(['Работа', 'Знания', 'Система']);
+    // `UIP-G-07`: «Разделы» follows «Работа» for a session that may open the section page; with no object it holds one note, no link.
+    expect(row.groups).toEqual(['Работа', 'Разделы', 'Знания', 'Система']);
     expect(row.links).toEqual(RULED_LINKS);
   });
 
   it('as rendered, in the stacked «Меню»: «Меню», then the same groups and links in the same order', () => {
     const markup = renderFrame(frameSession());
     const stacked = readMenu(region(markup, 'data-nav-state="stacked"'));
-    expect(stacked.groups).toEqual(['Меню', 'Работа', 'Знания', 'Система']);
+    expect(stacked.groups).toEqual(['Меню', 'Работа', 'Разделы', 'Знания', 'Система']);
     expect(stacked.links).toEqual(RULED_LINKS);
   });
 });
@@ -330,12 +337,14 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     expect(markup).not.toContain('Раздел пока недоступен');
     expect(markup).not.toContain('data-route="/section-optimisation"');
     // One read, under its own key: the analysed section, unfiltered, first page.
-    const keys = client.getQueryCache().getAll().map((query) => query.queryKey);
+    // `UIP-G-06`: the screen follows the object, so it also reads the account's last one (`getMe`, the query every reader of the
+    // account shares); that read is the account's and not the section's, and is left out of the section's own.
+    const keys = client.getQueryCache().getAll().map((query) => query.queryKey).filter((key) => key[0] !== 'account');
     // Two reads, both of the AR section: the specification, and since contract 1.37.0 (lane C3, UI-PARITY-OPT-CARRYOVER)
     // the «Принято» tab's first page, whose server `total` is the number the tab shows without being opened.
     expect(keys, `the reads the screen made: ${JSON.stringify(keys)}`).toHaveLength(2);
     expect(keys[0]?.slice(0, 3)).toEqual(['optimisation', 'section-specification', 'AR']);
-    expect(keys[0]?.[3]).toEqual({ projectUid: null, q: null, offset: 0, limit: 50 });
+    expect(keys[0]?.[3]).toEqual({ projectUid: null, documentUid: null, q: null, offset: 0, limit: 50 });
     expect(keys[1]?.slice(0, 2)).toEqual(['optimisation', 'accepted']);
     expect(keys[1]?.[2]).toMatchObject({ section_code: 'AR' });
   });
@@ -413,13 +422,13 @@ describe('the frame’s menu per kind of visitor', () => {
 
 // ------------------------------------------------------------------------------------ R-150b
 
-describe('R-150b: «Проекты» left the menu rows, and the selector in the top strip took its place', () => {
+describe('R-150b: «Объекты» left the menu rows, and the selector in the top strip took its place', () => {
   const ROLE_SETS = [['expert'], ['admin'], ['admin', 'expert']] as const;
 
   it('/projects is a registered, open screen that no menu offers', () => {
     expect(screenAt('/projects')).toEqual({
       address: '/projects',
-      label: 'Проекты',
+      label: 'Объекты',
       group: 'work',
       access: 'session',
       roles: 'any-role',
@@ -429,37 +438,38 @@ describe('R-150b: «Проекты» left the menu rows, and the selector in the
     expect(SCREEN_REGISTRY.filter((row) => row.inMenu).map((row) => row.address)).not.toContain('/projects');
   });
 
-  it('is in no group of the data, and `R-153h` draws it only as the first item of «Работа» in all three states of the bar', () => {
+  it('is in no group of the data, and `R-153h` draws it only as the third item of «Работа» (`UIP-G-07`) in all three states of the bar', () => {
     for (const roles of ROLE_SETS) {
       const navigation = buildNavigation({ roles, isDefaultCredential: false, profileComplete: true });
       const offered = navigation.groups.flatMap((group) => group.items.map((item) => item.address));
       expect(offered, roles.join(',')).not.toContain('/projects');
-      expect(navigation.groups[0]?.items.map((item) => item.address)[0], roles.join(',')).toBe('/dashboard');
+      expect(navigation.groups[0]?.items.map((item) => item.address).slice(0, 2), roles.join(',')).toEqual(['/', '/dashboard']);
       const markup = renderFrame(frameSession({ roles }));
       for (const state of ['row', 'rail', 'stacked']) {
         const links = [...region(markup, `data-nav-state="${state}"`).matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1]);
         expect(links.filter((href) => href === '/projects'), `${roles.join(',')} ${state}`).toHaveLength(1);
-        expect(links[0], `${roles.join(',')} ${state}`).toBe('/projects');
+        expect(links.slice(0, 3), `${roles.join(',')} ${state}`).toEqual(['/', '/dashboard', '/projects']);
       }
     }
   });
 
-  it('is reached from the selector instead: «Новый проект» and «Все проекты» lead to it', () => {
+  it('is reached from the selector instead: «Новый объект» and «Все объекты» lead to it', () => {
     const selector = region(renderFrame(frameSession()), 'data-project-switcher');
     expect(selector).toContain('data-project-switcher');
     // The frame renders with no router, so its address is unknown and behaves like a global screen:
     // both entries are the project list.
     // «Все проекты» is the choice the address makes (it names no project), so it carries the ✓ cell of `D-363` after its words.
     expect([...selector.matchAll(/<a [^>]*role="menuitem"[^>]*href="([^"]+)"[^>]*>([^<]*)(?:<span class="am-menu__check"[^>]*>[^<]*<\/span>)?<\/a>/g)].map((m) => [m[1], m[2]])).toEqual([
-      ['/projects', 'Все проекты'],
-      ['/projects', 'Новый проект'],
+      ['/projects', 'Все объекты'],
+      ['/projects', 'Новый объект'],
     ]);
   });
 
   it('stands in the top strip, after the screen\'s own name and before the stand, theme and account controls', () => {
     const markup = renderFrame(frameSession());
     const strip = markup.slice(markup.indexOf('class="am-app__utility"'), markup.indexOf('<main'));
-    const order = ['aria-label="Текущий раздел"', 'data-project-switcher', 'aria-label="Оформление"', 'data-account-menu'].map((marker) =>
+    // The theme is one button since `UIP-G-03` (no group «Оформление»); its wrapper `class="am-theme"` is the marker, as in `shell/frame.test.ts`.
+    const order = ['aria-label="Текущий раздел"', 'data-project-switcher', 'class="am-theme"', 'data-account-menu'].map((marker) =>
       strip.indexOf(marker),
     );
     expect(order.every((at) => at >= 0), JSON.stringify(order)).toBe(true);

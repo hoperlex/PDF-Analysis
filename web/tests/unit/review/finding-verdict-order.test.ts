@@ -67,7 +67,7 @@ describe('the list and the table draw that order', () => {
     [...markup.matchAll(new RegExp(`${attribute}="(fnd_[A-Z0-9]+)"`, 'g'))].map((m) => Number((m[1] as string).slice(-2)));
 
   it('draws the list’s rows in order inside their category, the headings staying where the run puts them', () => {
-    const markup = renderToStaticMarkup(createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {} }));
+    const markup = renderToStaticMarkup(createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, view: 'list' }));
     expect(rows(markup, 'data-finding-uid')).toEqual([2, 4, 3, 6, 1, 5, 8, 7]);
     expect(markup.indexOf('data-category="internal_contradiction"')).toBeLessThan(markup.indexOf('data-category="dimensions"'));
   });
@@ -78,6 +78,26 @@ describe('the list and the table draw that order', () => {
     expect([...findingNumbers(GROUPS).values()]).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     // Finding 8 stands third and is still «№ 8»: the number belongs to the run, not to the row’s place.
     expect(markup).toContain(`data-finding-uid="${uid(8)}">8</button>`);
+  });
+
+  it('opens as the table with every finding, the rejected last: the defaults of the list are «Все» and the table', () => {
+    const markup = renderToStaticMarkup(createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {} }));
+    expect(markup).toContain('data-finding-table');
+    expect(markup).not.toContain('am-finding-group');
+    expect(rows(markup, 'data-row-key')).toEqual([2, 4, 8, 3, 6, 7, 1, 5]);
+    // «Все» is pressed and the two rejected findings, 1 and 5, are on the screen at the end.
+    expect(markup).toMatch(/aria-pressed="true"[^>]*data-verdict-filter="all"/);
+    const waiting = renderToStaticMarkup(createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, verdictFilter: 'waiting' }));
+    expect(rows(waiting, 'data-row-key')).toEqual([2, 4, 8]);
+  });
+
+  it('stands every waiting row before every accepted row and every accepted row before every rejected one (`UIP-S06-07`)', () => {
+    const markup = renderToStaticMarkup(createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, view: 'table' }));
+    const buckets = [...markup.matchAll(/<tr[^>]*data-row-key="[^"]*"[^>]*data-verdict-bucket="(\w+)"/g)].map((m) => m[1]);
+    expect(buckets).toEqual(['waiting', 'waiting', 'waiting', 'accepted', 'accepted', 'accepted', 'rejected', 'rejected']);
+    // The two rejected rows are the last two, whatever place the run gave them.
+    expect(uids(RUN.filter((f) => f.current_verdict === 'rejected'))).toEqual([1, 5]);
+    expect(rows(markup, 'data-row-key').slice(-2)).toEqual([1, 5]);
   });
 
   it('orders what is left of a filter in the same way', () => {
@@ -163,7 +183,7 @@ describe('the blocks of a finding in the table', () => {
 
   it('draws no count in the list, whose rows are the finding’s text', () => {
     const markup = renderToStaticMarkup(createElement(FindingList, {
-      groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, blockCountOf: () => 3,
+      groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, view: 'list', blockCountOf: () => 3,
     }));
     expect(markup).not.toContain('data-finding-block-count');
   });

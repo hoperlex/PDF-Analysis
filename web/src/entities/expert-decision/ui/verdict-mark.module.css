@@ -1,0 +1,27 @@
+/* `UIP-S06-01`: the verdict mark -- ✓ green, ✕ red, a dash for what is not decided. Tokens only; the word is the accessible name. */
+.mark {
+  display: inline-block;
+  min-width: 1em;
+  font-size: var(--am-text-md);
+  font-weight: 700;
+  line-height: var(--am-leading-tight);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.accepted {
+  color: var(--am-ok);
+}
+
+.rejected {
+  color: var(--am-failed);
+}
+
+.undecided {
+  color: var(--am-ink-muted);
+}
+
+.fault {
+  color: var(--am-failed);
+  font-size: var(--am-text-xs);
+}

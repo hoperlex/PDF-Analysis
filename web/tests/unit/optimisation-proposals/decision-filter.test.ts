@@ -21,15 +21,15 @@ import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { queryKeys } from '@/shared/api';
-import { PROPOSAL_PAGE_LIMIT } from '@/entities/optimisation-proposal';
-import { OptimisationProposals, readProposalDecision, writeProposalDecision } from '@/widgets/optimisation-proposals';
+import { OptimisationProposals, ProposalListView, readProposalDecision, writeProposalDecision } from '@/widgets/optimisation-proposals';
 
 import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
 import { RoutedReviewAddress, currentSearch, resetRoutedAddress, writtenAddresses, writtenHow, writtenStates } from '../review/routed-review-address';
-import { newClient } from '../screens/harness';
+import { newClient, renderScreen } from '../screens/harness';
 import {
   AR_DOCUMENT_UID,
+  FIRST_PAGE_LIMIT,
   PASS_ID,
   PROPOSALS_PROJECT_UID,
   arVersion,
@@ -39,6 +39,47 @@ import {
 } from './fixtures';
 
 const read = (query: string) => readProposalDecision(new URLSearchParams(query));
+
+describe('the plates of the top row (`UIP-S09-02`)', () => {
+  const noop = (): void => undefined;
+  const view = (props: Record<string, unknown> = {}) =>
+    renderScreen(
+      newClient(),
+      createElement(ProposalListView, {
+        page: proposalPage({
+          optimisation_pass: pass({ proposal_count: 12, decision_counts: { pending: 3, accept: 5, reject: 1, revise: 3 } }),
+          items: [proposal()],
+          total: 12,
+        }),
+        canDecide: false,
+        onDecision: noop,
+        onPage: noop,
+        ...props,
+      }),
+    );
+  const plates = (markup: string): string[] => {
+    const nav = /<nav[^>]*data-decision-filter="[^"]*"[^>]*>([\s\S]*?)<\/nav>/.exec(markup)?.[1] ?? '';
+    return [...nav.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((button) => (button[1] ?? '').replace(/<!-- -->/g, ''));
+  };
+
+  it('is «Все» and one plate per decision with its count, in the order waiting, accepted, rejected, for revision', () => {
+    expect(plates(view())).toEqual(['Все (12)', 'не решено (3)', 'принято (5)', 'отклонено (1)', 'на доработку (3)']);
+  });
+
+  it('says «Всего: N» with the pass’s own count after the plates', () => {
+    const markup = view();
+    expect(markup).toMatch(/data-proposal-total="12"[^>]*>Всего: (<!-- -->)?12</);
+    // After the plates' own block, not inside it: «Всего» is not a plate and cannot be pressed.
+    expect(markup.indexOf('data-proposal-total')).toBeGreaterThan(markup.indexOf('</nav>'));
+  });
+
+  it('presses the plate of the chosen state, and no other', () => {
+    const markup = view({ page: proposalPage({ decision: 'reject', items: [], total: 0, optimisation_pass: pass({ proposal_count: 12, decision_counts: { pending: 3, accept: 5, reject: 1, revise: 3 } }) }) });
+    expect(markup).toContain('data-decision-filter="reject"');
+    expect(markup.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(markup).toMatch(/aria-pressed="true"[^>]*>отклонено \((<!-- -->)?1(<!-- -->)?\)</);
+  });
+});
 
 describe('the decision filter address', () => {
   it('reads each of the four decision states, and anything else as «Все»', () => {
@@ -83,9 +124,9 @@ describe('the container follows the address', () => {
     client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, staleTime: Infinity } });
     client.setQueryData(queryKeys.projects.documents(PROPOSALS_PROJECT_UID, undefined, 50), { items: [arVersion()], page: { next_cursor: null } as never });
     client.setQueryData(queryKeys.optimisation.passes(PROPOSALS_PROJECT_UID, AR_DOCUMENT_UID), { items: [pass()] });
-    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, null, 0, PROPOSAL_PAGE_LIMIT), proposalPage());
-    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, 'reject', 0, PROPOSAL_PAGE_LIMIT), rejected());
-    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, 'accept', 0, PROPOSAL_PAGE_LIMIT), proposalPage({ decision: 'accept', items: [], total: 0 }));
+    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, null, 0, FIRST_PAGE_LIMIT), proposalPage());
+    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, 'reject', 0, FIRST_PAGE_LIMIT), rejected());
+    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, 'accept', 0, FIRST_PAGE_LIMIT), proposalPage({ decision: 'accept', items: [], total: 0 }));
     return client;
   }
 
