@@ -1,7 +1,13 @@
+'use client';
+
 /**
  * «12 документов · не запускались 4 · ждут решения 3 · проверено 5 · 27 замечаний»: the original's section row of
  * numbers (`UI-A-35`), as one row of compact badges. Presentational: it takes figures already counted
  * ({@link auditTally}, {@link tallyOfCounts}) and holds no query.
+ *
+ * `UIP-S02-01`: the section page states the number of documents beside its title and asks for the line without the total
+ * (`total={false}`); its «ждут решения N» is then a button that chooses those documents (`awaiting`), as the original's
+ * «Не проверено (N)» with its box does. The line holds an event handler, so the module is a client one.
  */
 
 import Link from 'next/link';
@@ -22,9 +28,20 @@ export interface AuditTallyLineProps {
    * the badge is plain.
    */
   readonly notRunHref?: string | undefined;
+  /** `UIP-S02-01`: draw the plain total «N документов» as the first part. The default; the section page states it as «(N)». */
+  readonly total?: boolean | undefined;
+  /**
+   * `UIP-S02-01`: «ждут решения N» as a button that chooses the documents it counts (`onPress`), `pressed` while every one of them
+   * is chosen. Absent, or `onPress` absent, the badge is plain: nothing can be chosen yet (the listing is still being read).
+   */
+  readonly awaiting?: {
+    readonly onPress: (() => void) | undefined;
+    readonly pressed: boolean;
+    readonly title: string;
+  } | undefined;
 }
 
-export function AuditTallyLine({ tally, partial = false, label, notRunHref }: AuditTallyLineProps) {
+export function AuditTallyLine({ tally, partial = false, label, notRunHref, total = true, awaiting }: AuditTallyLineProps) {
   return (
     <span
       className={styles.line}
@@ -33,7 +50,7 @@ export function AuditTallyLine({ tally, partial = false, label, notRunHref }: Au
       data-audit-tally={tally.documents}
       data-audit-tally-partial={partial ? 'true' : 'false'}
     >
-      {tallyParts(tally).map((part) => {
+      {tallyParts(tally, { total }).map((part) => {
         const content = part.key === 'findings' || part.key === 'documents'
           ? <><span className={styles.count}>{part.count}</span> {part.label}</>
           : <>{part.label} <span className={styles.count}>{part.count}</span></>;
@@ -41,6 +58,19 @@ export function AuditTallyLine({ tally, partial = false, label, notRunHref }: Au
           <span key={part.key} className={part.key === 'documents' ? styles.total : styles.part} title={part.title} data-tally={part.key}>
             {content}
           </span>
+        ) : part.key === 'awaitingDecision' && awaiting?.onPress !== undefined ? (
+          <button
+            key={part.key}
+            type="button"
+            className={`am-badge am-badge--${part.tone} ${styles.part}`}
+            title={awaiting.title}
+            aria-pressed={awaiting.pressed}
+            onClick={awaiting.onPress}
+            data-tally={part.key}
+            data-tally-select=""
+          >
+            {content}
+          </button>
         ) : part.key === 'notRun' && notRunHref !== undefined ? (
           <Link key={part.key} href={notRunHref} className={`am-badge am-badge--${part.tone} ${styles.part}`} title={part.title} data-tally={part.key} data-tally-link="">
             {content}

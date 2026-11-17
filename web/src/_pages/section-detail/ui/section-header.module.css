@@ -1,0 +1,75 @@
+/*
+ * The one line over a section's cards (UIP-S02-01). The sizes are tokens: a control is 24 px at the least (`--am-target-min`), the
+ * gaps are the dense ones; the line wraps on a narrow window instead of leaving it, and the actions keep the right end of the last row.
+ */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  min-width: 0;
+  margin-bottom: var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+}
+
+/* «←»: a 24 px target, a quiet glyph; it names the object's «Главная» for a screen reader. */
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
+  font-size: var(--am-text-lg);
+  line-height: 1;
+  text-decoration: none;
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  margin: 0;
+  font-size: var(--am-text-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: var(--am-leading-tight);
+}
+
+/* The code is the section's own mark beside its dot, the name is the heading. */
+.code {
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* «(N)»: the documents of the section, beside the name. */
+.count {
+  color: var(--am-ink-soft);
+  font-size: var(--am-text-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* The box that chooses every document: the label is the 24 px target, the box inside is the browser's. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
+  cursor: pointer;
+}
+
+/* «+ Добавить» and «Обновить» stand at the right end of the line. */
+.end {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin-left: auto;
+}

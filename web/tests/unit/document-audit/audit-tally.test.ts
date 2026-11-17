@@ -77,6 +77,16 @@ describe('tallyParts — the words of the row', () => {
     expect(parts.map((part) => part.key)).toEqual(['documents', 'notRun']);
   });
 
+  it('leaves the total out when the screen states the number beside its title (UIP-S02-01), and keeps every other part', () => {
+    const withTotal = tallyParts(auditTally(DOCS)).map((part) => part.key);
+    const without = tallyParts(auditTally(DOCS), { total: false }).map((part) => part.key);
+    expect(withTotal[0]).toBe('documents');
+    expect(without).toEqual(withTotal.slice(1));
+    expect(without).toEqual(['notRun', 'awaitingDecision', 'checked', 'clean', 'findings']);
+    // a set with no state and no finding is then no part at all, not a total of its own
+    expect(tallyParts({ ...EMPTY_TALLY, documents: 3 }, { total: false })).toEqual([]);
+  });
+
   it('agrees the nouns with the number', () => {
     expect(tallyParts({ ...EMPTY_TALLY, documents: 1 })[0]?.label).toBe('документ');
     expect(tallyParts({ ...EMPTY_TALLY, documents: 3 })[0]?.label).toBe('документа');
@@ -95,6 +105,28 @@ describe('AuditTallyLine', () => {
     expect(markup).not.toContain('по документам этой страницы');
   });
 
+  it('draws no total with `total={false}`, and the number it left out is still the group’s data-audit-tally', () => {
+    const markup = renderWith(newClient(), createElement(AuditTallyLine, { tally: auditTally(DOCS), total: false }));
+    expect(markup).not.toContain('data-tally="documents"');
+    expect(markup).toContain('data-audit-tally="6"');
+    expect(markup).toContain('data-tally="notRun"');
+  });
+
+  it('makes «ждут решения N» a button only when the screen gives it an action, pressed while it holds', () => {
+    const plain = renderWith(newClient(), createElement(AuditTallyLine, { tally: auditTally(DOCS) }));
+    expect(plain).not.toContain('<button');
+    const waiting = renderWith(newClient(), createElement(AuditTallyLine, {
+      tally: auditTally(DOCS), awaiting: { onPress: undefined, pressed: false, title: 'ещё читается' },
+    }));
+    expect(waiting).not.toContain('<button');
+    const live = renderWith(newClient(), createElement(AuditTallyLine, {
+      tally: auditTally(DOCS), awaiting: { onPress: () => undefined, pressed: true, title: 'Выбрать' },
+    }));
+    expect(live).toMatch(/<button[^>]*aria-pressed="true"[^>]*data-tally="awaitingDecision"[^>]*>ждут решения <span[^>]*>1<\/span><\/button>/);
+    // none of the other badges is a button
+    expect((live.match(/<button/g) ?? []).length).toBe(1);
+  });
+
   it('says in words that a page of a longer list was counted', () => {
     const markup = renderWith(newClient(), createElement(AuditTallyLine, { tally: auditTally(DOCS), partial: true }));
     expect(markup).toContain('data-audit-tally-partial="true"');
@@ -103,7 +135,7 @@ describe('AuditTallyLine', () => {
 });
 
 describe('where the row is drawn', () => {
-  it('under the section page’s title, from the documents the page holds', () => {
+  it('in the section page’s header, from the documents the page holds', () => {
     const client = newClient();
     client.setQueryData(
       queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR', false, undefined, undefined, 'audit'),

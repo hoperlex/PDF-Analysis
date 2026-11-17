@@ -42,3 +42,8 @@
   padding-block: calc((var(--am-target-min) - 1lh) / 2);
   margin-block: calc((1lh - var(--am-target-min)) / 2);
 }
+
+/* A row with nothing in it (no choice made, nothing being read) takes no height. */
+.batchBar:empty {
+  display: none;
+}
