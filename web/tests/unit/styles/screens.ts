@@ -1172,6 +1172,27 @@ export function screens(): Screen[] {
     }],
     onNext: null, onPrevious: null,
   })));
+  // `UIP-S08-02`: the log of one run in groups by stage: a stage at work with its pages across a change of day (`.day`, `.stage`,
+  // `.pages`), a stage that ended in a failure with its code, the run's own states, and the executor's folded «Выполнение».
+  {
+    const event = (id: string, eventType: string, occurredAt: string, payload: Record<string, string | number>, aggregate = 'AuditRun') => ({
+      event_id: `evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8${id}`, run_id: RUN_ID, aggregate_id: aggregate === 'AuditRun' ? RUN_ID : 'att_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      aggregate_type: aggregate, event_type: eventType, occurred_at: occurredAt, payload,
+    });
+    add('ExecutionJournal, the log of one run in groups', withRouter(createElement(ExecutionJournal, {
+      scope: 'run',
+      entries: [
+        event('A', 'stage.progress', '2026-10-10T00:05:00Z', { stage_id: 'text_analysis', completed_pages: 3, total_pages: 10 }),
+        event('B', 'stage.started', '2026-10-09T23:55:00Z', { stage_id: 'text_analysis' }),
+        event('C', 'stage.finished', '2026-10-09T23:50:00Z', { stage_id: 'block_analysis', state: 'failed', error_code: 'analysis_failed' }),
+        event('D', 'stage.finished', '2026-10-09T23:40:00Z', { stage_id: 'source_preparation', state: 'succeeded' }),
+        event('E', 'audit_run.transition', '2026-10-09T23:30:00Z', { to_state: 'running' }),
+        event('F', 'job.transition', '2026-10-09T23:29:00Z', { to_state: 'running' }, 'Job'),
+        event('G', 'provider.prepared', '2026-10-09T23:28:00Z', { state: 'prepared' }, 'Attempt'),
+      ],
+      onNext: null, onPrevious: null,
+    })));
+  }
   // `UI-B-40` / `UI-B-43`: the run picker at its last step with a run in view and every list cut at its first page
   // (`populatedClient` answers each with a next cursor), a step whose list could not be read, and the controls of the
   // page in both modes -- the `.picker`, `.steps`, `.step`, `.scope`, `.controls`, `.toggle`, `.count` and `.notes` rules.
