@@ -74,6 +74,73 @@
   gap: var(--am-gap-2xs);
 }
 
+/* `UIP-S13-03`: the way to the other pages while every record of this one is hidden. */
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--am-gap-sm);
+  margin: var(--am-gap-sm) 0 0;
+}
+
+/*
+ * `UIP-S13-03`: the panel «Добавить документы»: the object, the documents of it that can be run with a box and their section each, the count
+ * and the buttons. Layout only; every colour is the global classes'.
+ */
+.add {
+  display: grid;
+  gap: var(--am-gap-sm);
+}
+
+.addObject {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+.addObject select {
+  max-width: 100%;
+}
+
+.addList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  min-height: var(--am-row-step);
+  min-width: 0;
+}
+
+.addTitle {
+  flex: 1 1 14rem;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.addSection {
+  flex: 0 1 18rem;
+  min-width: 0;
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.addActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  margin: 0;
+}
+
 @media (max-width: 780px) {
   .panel,
   .intent {
