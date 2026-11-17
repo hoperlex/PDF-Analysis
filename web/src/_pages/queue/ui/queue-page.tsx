@@ -20,6 +20,7 @@ import { usePauseExecution } from '@/features/pause-execution';
 import { ComparisonQueueBlock, ExecutionQueue, QueueProgress, QueueStateStrip } from '@/widgets/execution-queue';
 import { EmptyState, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { EMPTY_QUEUE_ADDRESS, readQueueAddress, writeQueueAddress } from '../model/address';
+import { cancellableCount } from '../model/cancel-queue';
 import { finishedCount, visibleRows } from '../model/hide-finished';
 import type { QueueAddress } from '../model/address';
 import { isQueuePeriod, queuePeriodStart } from '../model/period';
@@ -27,8 +28,10 @@ import type { QueuePeriod } from '../model/period';
 import { reauditEstimateChanged, reauditStep } from '../model/reaudit-start';
 import type { ReauditStep } from '../model/reaudit-start';
 import { AddDocumentsPanel } from './add-documents-panel';
+import { CancelQueueButton, CancelQueuePanel } from './cancel-queue';
 import { QueueFilters } from './queue-filters';
 import { ReauditStart } from './reaudit-start';
+import { useCancelQueue } from './use-cancel-queue';
 import styles from './queue-page.module.css';
 
 interface RunIntent {
@@ -135,7 +138,9 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS, initiallyAddin
     intent?.kind === 'reaudit' ? intent.key : null);
   const priority = useSetJobPriority();
   const pause = usePauseExecution();
-  const busy = cancel.isPending || reaudit.isPending || priority.isPending || pause.isPending;
+  // `UIP-S13-04`: «Отменить очередь» is a sequence of cancels of its own; while it reads or sends, the page's other commands wait.
+  const sweep = useCancelQueue();
+  const busy = cancel.isPending || reaudit.isPending || priority.isPending || pause.isPending || sweep.busy;
   const roles = account.data?.roles ?? [];
   // Putting work in the queue is starting an audit, which the server allows an expert only (`R-150e`); until the roles are read the way in stays.
   const mayStart = mayActAsExpert(account.data?.roles);
@@ -272,6 +277,8 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS, initiallyAddin
       subtitle="Устойчивые задачи прогонов. Данные обновляются автоматически, пока вкладка открыта, и по запросу."
       actions={(
         <>
+          {/* `UIP-S13-04`: one press cancels what is waiting or running, run by run; drawn for the roles that may cancel a run, for a number the server said. */}
+          <CancelQueueButton count={canExecute(roles, 'cancel') ? cancellableCount(queue.data?.overview) : 0} busy={busy} onClick={sweep.begin} />
           {/* The original's «+ Добавить проекты»: it opens the panel on this page, where the documents of an object are put in the queue. */}
           {mayStart ? (
             <button className="am-button" type="button" aria-expanded={adding} data-queue-add onClick={() => setAdding((open) => !open)}>
@@ -315,6 +322,7 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS, initiallyAddin
       </div>
       {/* `UIP-S13-02`: «N / M», its bar and «✓ N ✗ M», from the overview over the period. */}
       <QueueProgress overview={queue.data?.overview} />
+      <CancelQueuePanel queue={sweep} />
       {queue.data?.paused === true ? <p role="status" className="am-note" data-execution-paused>Выдача задач приостановлена.</p> : null}
       {account.isPending ? <LoadingState what="права на управление очередью" /> : null}
       {accountFailure !== null ? (
