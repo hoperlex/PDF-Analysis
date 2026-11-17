@@ -19,7 +19,7 @@
  * rendered by `UploadOutcome`, which the next-version form shares (`W59-VERSION-UPLOAD-01`).
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { DocumentVersion, ProjectUid } from '@/shared/api';
 import { useIntentKey } from '@/shared/lib';
@@ -31,17 +31,25 @@ import {
   precheckUploadFile,
 } from '@/entities/document-version';
 
+import { showChosen } from '../model/drop-files';
 import { useUploadDocument } from '../model/use-upload-document';
+import { DropZone } from './drop-zone';
 import { UploadOutcome } from './upload-outcome';
 
 export interface UploadDocumentFormProps {
   readonly projectUid: ProjectUid;
   /** Called with the published version, so the screen can offer to start a run. */
   readonly onUploaded?: ((version: DocumentVersion) => void) | undefined;
+  /**
+   * Called with the files of a drop on the field when there is more than one (`UIP-S22-03`): they go to «Несколько файлов»,
+   * which the caller opens. Without it the field takes one archive and says so when several are dropped.
+   */
+  readonly onDropMany?: ((files: readonly File[]) => void) | undefined;
 }
 
-export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFormProps) {
+export function UploadDocumentForm({ projectUid, onUploaded, onDropMany }: UploadDocumentFormProps) {
   const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [displayTitle, setDisplayTitle] = useState('');
   const [precheck, setPrecheck] = useState<UploadPrecheckProblem | null>(null);
 
@@ -57,6 +65,18 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
     mutation.reset();
     setFile(chosen);
     setPrecheck(chosen === null ? null : precheckUploadFile(chosen));
+  };
+
+  /** A drop on the field: one file is chosen as the picker would choose it, several go where the caller put them. */
+  const dropped = (files: readonly File[]) => {
+    const [only] = files;
+    if (only === undefined) return;
+    if (files.length > 1) {
+      onDropMany?.(files);
+      return;
+    }
+    choose(only);
+    showChosen(fileInput.current, only);
   };
 
   const send = () => {
@@ -80,16 +100,24 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
       }}
     >
       <div className="am-form">
-        <label htmlFor="upload-file">
-          <strong>Комплект портала (ZIP)</strong>
-        </label>
-        <input
-          id="upload-file"
-          name="file"
-          type="file"
-          accept={PC01_UPLOAD_ENVELOPE.accept}
-          onChange={(event) => choose(event.target.files?.[0] ?? null)}
-        />
+        <DropZone onFiles={dropped} several={onDropMany !== undefined}>
+          <label htmlFor="upload-file">
+            <strong>Комплект портала (ZIP)</strong>
+          </label>
+          <input
+            id="upload-file"
+            name="file"
+            type="file"
+            ref={fileInput}
+            accept={PC01_UPLOAD_ENVELOPE.accept}
+            onChange={(event) => choose(event.target.files?.[0] ?? null)}
+          />
+          <p className="am-form__hint">
+            {onDropMany === undefined
+              ? 'Архив можно перетащить сюда.'
+              : 'Архив можно перетащить сюда; несколько архивов откроют «Несколько файлов».'}
+          </p>
+        </DropZone>
 
         <label htmlFor="upload-title">
           Отображаемое название{' '}

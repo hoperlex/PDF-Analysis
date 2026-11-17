@@ -25,7 +25,8 @@ import type { ReactNode } from 'react';
 
 import type { DocumentUid, DocumentVersion, ProjectUid } from '@/shared/api';
 import { PC01_UPLOAD_ENVELOPE, UPLOAD_ENVELOPE_RULES, documentCardTitle, useDocumentList } from '@/entities/document-version';
-import { UploadDocumentForm, UploadDocumentVersionForm, UploadManyForm } from '@/features/upload-document';
+import type { DropToMany } from '@/features/upload-document';
+import { UploadDocumentForm, UploadDocumentVersionForm, UploadManyForm, useDropToMany } from '@/features/upload-document';
 import { useMayActAsExpert } from '@/entities/account';
 
 export interface UploadPanelProps {
@@ -35,6 +36,8 @@ export interface UploadPanelProps {
 }
 
 function UploadPanelInner({ projectUid, onUploaded }: UploadPanelProps) {
+  // `UIP-S22-03`: several archives dropped on the single field go to «Несколько файлов», which opens to show them.
+  const toMany = useDropToMany();
   return (
     <section className="am-section">
       <h2>Загрузка</h2>
@@ -49,9 +52,10 @@ function UploadPanelInner({ projectUid, onUploaded }: UploadPanelProps) {
       <UploadDocumentForm
         projectUid={projectUid}
         {...(onUploaded === undefined ? {} : { onUploaded })}
+        onDropMany={toMany.onDropMany}
       />
 
-      <UploadMany projectUid={projectUid} />
+      <UploadMany projectUid={projectUid} toMany={toMany} />
     </section>
   );
 }
@@ -60,15 +64,17 @@ function UploadPanelInner({ projectUid, onUploaded }: UploadPanelProps) {
  * `R-151b`: several files at once, each to its explicit target. The targets are the project's documents from the
  * read the project page already makes (its first page; the form says when there are more).
  */
-function UploadMany({ projectUid }: { readonly projectUid: ProjectUid }) {
+function UploadMany({ projectUid, toMany }: { readonly projectUid: ProjectUid; readonly toMany: DropToMany }) {
   // `UI-PARITY-DOC-AUDIT`: the project page reads the listing in the server's audit order; the same request, so the one cache entry.
   const documents = useDocumentList(projectUid, undefined, undefined, false, undefined, { order: 'audit' });
   const items = documents.data?.items ?? [];
+  // Closed until a reader opens it or a drop of several files brings them to it.
   return (
-    <details data-upload-many-panel="">
+    <details data-upload-many-panel="" open={toMany.open} onToggle={(event) => toMany.onToggle(event.currentTarget.open)}>
       <summary>Несколько файлов</summary>
       <UploadManyForm
         projectUid={projectUid}
+        dropped={toMany.dropped}
         documents={items.map((item) => ({ documentUid: item.document_uid, title: documentCardTitle(item) }))}
         documentsPartial={(documents.data?.page.next_cursor ?? null) !== null}
       />

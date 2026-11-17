@@ -8,16 +8,20 @@
  * empty, too large) is listed with that reason and not sent. After «Загрузить» each file shows its own outcome: the
  * published version, or the server's reason.
  *
+ * Files may also arrive by a drop on the single form's field (`UIP-S22-03`): the caller passes them as `dropped`, and they
+ * become the choice exactly as the picker's would, with the same browser checks.
+ *
  * {@link UploadManyView} is pure markup; {@link UploadManyForm} holds the choice and sends.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 import type { DocumentUid, ProjectUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { PC01_UPLOAD_ENVELOPE, formatBytes, precheckProblemMessage, precheckUploadFile } from '@/entities/document-version';
 
+import type { DroppedFiles } from '../model/drop-files';
 import type { ManyFile, ManyOutcome, UploadTarget } from '../model/upload-many';
 import { NEW_DOCUMENT, sendable, targetOf, targetValue } from '../model/upload-many';
 import { useUploadMany } from '../model/use-upload-many';
@@ -122,11 +126,21 @@ export interface UploadManyFormProps {
   readonly projectUid: ProjectUid;
   readonly documents: readonly UploadTargetOption[];
   readonly documentsPartial: boolean;
+  /** Files dropped on the single form's field: each new `id` is a new choice. */
+  readonly dropped?: DroppedFiles | undefined;
 }
 
-export function UploadManyForm({ projectUid, documents, documentsPartial }: UploadManyFormProps) {
+export function UploadManyForm({ projectUid, documents, documentsPartial, dropped }: UploadManyFormProps) {
   const [files, setFiles] = useState<readonly ManyFile[]>([]);
   const upload = useUploadMany(projectUid);
+  const choose = (chosen: readonly File[]) => {
+    upload.reset();
+    setFiles(chosen.map((file, index) => ({ id: String(index), file, precheck: precheckUploadFile(file), target: NEW_DOCUMENT })));
+  };
+  // The effect runs once per drop (`id`): what the reader chose before is replaced, as a second pick in the picker replaces it.
+  useEffect(() => {
+    if (dropped !== undefined) choose(dropped.files);
+  }, [dropped?.id]);
   return (
     <UploadManyView
       projectUid={projectUid}
@@ -135,10 +149,7 @@ export function UploadManyForm({ projectUid, documents, documentsPartial }: Uplo
       documents={documents}
       documentsPartial={documentsPartial}
       sending={upload.sending}
-      onChoose={(chosen) => {
-        upload.reset();
-        setFiles(chosen.map((file, index) => ({ id: String(index), file, precheck: precheckUploadFile(file), target: NEW_DOCUMENT })));
-      }}
+      onChoose={choose}
       onTarget={(id, target) => setFiles((list) => list.map((item) => item.id === id ? { ...item, target } : item))}
       onSend={() => { void upload.send(files); }}
     />
