@@ -58,6 +58,7 @@ import {
   PROJECT_UID,
   RUN_ID,
   findingDetail,
+  inListView,
   observation,
   runStatus,
 } from './fixtures';
@@ -72,7 +73,7 @@ function mount(detail: FindingDetail): void {
   client.setQueryData(queryKeys.findings.decisions(detail.finding_uid), {
     data: { items: [], page: { next_cursor: null } },
   });
-  renderScreen(client, createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
+  renderScreen(client, inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })));
 }
 
 const calls: unknown[][] = [];

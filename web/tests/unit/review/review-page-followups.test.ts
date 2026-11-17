@@ -81,6 +81,7 @@ import {
   RUN_ID,
   decisionEvent,
   findingDetail,
+  inListView,
   observation,
   runStatus,
 } from './fixtures';
@@ -95,7 +96,7 @@ function mount(detail: FindingDetail): string {
   client.setQueryData(queryKeys.findings.decisions(detail.finding_uid), {
     data: { items: [], page: { next_cursor: null } },
   });
-  return renderScreen(client, createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
+  return renderScreen(client, inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })));
 }
 
 const v2 = findingDetail({ observation: observation({ proposed_severity: 'critical' }) });

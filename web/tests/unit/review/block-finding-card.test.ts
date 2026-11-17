@@ -16,7 +16,7 @@ import { queryKeys } from '@/shared/api';
 import { BLOCK_FRAME_SENTENCES, BlockEvidenceView, ReviewPage, ReviewViewerAside, blockCardsOnPage, blockFrameOf, blockPages } from '@/_pages/review';
 
 import { newClient, renderScreen } from '../screens/harness';
-import { PROJECT_UID, RUN_ID, blockEvidence, blockFinding, decisionEvent, finding, runStatus } from './fixtures';
+import { PROJECT_UID, RUN_ID, blockEvidence, blockFinding, decisionEvent, finding, inListView, runStatus } from './fixtures';
 
 const BLOCK_UID = 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8D';
 const PAGE = { next_cursor: null } as { next_cursor: null };
@@ -36,7 +36,7 @@ function review(findings: readonly Finding[], extended?: unknown, view?: 'table'
   client.setQueryData(queryKeys.findings.decisions(open.finding_uid), { data: { items: [decisionEvent()], page: PAGE } });
   if (extended !== undefined) client.setQueryData(['extended-run-review', RUN_ID], { run_id: RUN_ID, status: 'completed', result: extended });
   const page = createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID });
-  if (view === undefined) return renderScreen(client, page);
+  if (view === undefined) return renderScreen(client, inListView(page));
   // The address carries the way the findings are read (`?view=table`), as the browser's does.
   const query = new URLSearchParams({ view, finding: open.finding_uid });
   return renderScreen(

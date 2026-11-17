@@ -49,7 +49,8 @@ export const navigation = { search: '' };
 
 /** The review screen over a seeded cache. `roles` seeds the account; without it the account is not known yet. */
 export function reviewPage(seed: PageSeed): string {
-  navigation.search = seed.search ?? '';
+  // The list beside the open finding is what these cases read (`UIP-S06-06`: the table opens by default); a case that reads the table names its own address.
+  navigation.search = seed.search ?? 'view=list';
   const client = newClient();
   const envelope = { next_cursor: null } as { next_cursor: null };
   if (seed.roles !== undefined) client.setQueryData(queryKeys.account.me(), { user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', roles: seed.roles, login: 'эксперт' });

@@ -83,7 +83,7 @@ describe('a block finding in the list', () => {
     });
     expect(findingPages(block)).toEqual([3, 5]);
 
-    const markup = render(createElement(FindingList, { groups: groupByCategory([block]), selectedFindingUid: null, onSelect: () => {} }));
+    const markup = render(createElement(FindingList, { groups: groupByCategory([block]), selectedFindingUid: null, onSelect: () => {}, view: 'list' }));
 
     expect(markup).toContain(`data-finding-uid="${BLOCK_UID}"`);
     expect(markup).toContain('data-pages="3,5"');
