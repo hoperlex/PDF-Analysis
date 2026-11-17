@@ -26,22 +26,23 @@
  * says which of the two it shows, and how many entries match (`total` of the page, not the length of the
  * page on screen).
  *
- * **The verdict chips** (`UI-B-32`) above the list -- «Принято», «Отклонено», «Не решено», «Все» -- set the same `verdict` the
- * select below them sets, and carry the server's count of that verdict (`useDecisionVerdictTotals`: `total` of
- * `listDecisions` read with `limit=1`, under the same project and category). The page counts nothing itself; a count the
- * server has not answered is drawn «—», not a zero.
+ * **One top row** (`UIP-S12-03`, `Г9-B`, `Г12-B`): on the left the group «Эксперт» -- the cards «Отклонено», «Принято», «Все» and, only
+ * while the journal holds such a decision, «Не решено» (`UI-B-32`: each card sets the `verdict` and carries the server's count of it,
+ * `useDecisionVerdictTotals`: `total` of `listDecisions` read with `limit=1`, under the same project and category; the page counts
+ * nothing itself, and a count the server has not answered is drawn «—», not a zero); on the right «Фильтры ▾» (the type, the view and
+ * the category, in the browser's own disclosure) and «Память решений». The screen opens on «Отклонено», and «Все» is a chosen card
+ * (`?verdict=all`, `model/address.ts`). There is no list of verdicts beside the cards: it said the same thing twice.
  *
- * **«Память решений»** (`D-495`, `DECISION-MEMORY-01`) is the fourth «Тип»: the copy of what an expert saw and decided, kept after the
- * project and the document are gone. The expert and the administrator are offered it; the viewer sees nothing of it, neither the
- * button nor the tab through an address (`useMemoryAccess`: hidden, not disabled). It has its own filters and its open case in the
- * address (`model/memory-address.ts`), and the administrator's «Отозвать» / «Вернуть» and status line; the page only composes it.
- * Unlike the journal it is not a projection: the memory is a primary record from the moment of capture (`ADR-0027`).
+ * **«Память решений»** (`D-495`, `DECISION-MEMORY-01`) is a button of its own beside «Фильтры ▾», not one of the types: the copy of what
+ * an expert saw and decided, kept after the project and the document are gone. The expert and the administrator are offered it; the
+ * viewer sees nothing of it, neither the button nor the tab through an address (`useMemoryAccess`: hidden, not disabled). It has its
+ * own filters and its open case in the address (`model/memory-address.ts`), and the administrator's «Отозвать» / «Вернуть» and status
+ * line; the page only composes it. Unlike the journal it is not a projection: the memory is a primary record from the moment of
+ * capture (`ADR-0027`).
  *
- * The two filters are the contract's own `category` and `verdict`, and they mean what the
- * contract says they mean: the **finding's** category, and the verdict that now stands for
- * it. Neither filters the event, so a comment left on a finding that was later accepted is
- * in the `принято` page — which is right: the comment is part of how that finding came to
- * be accepted.
+ * The category and the verdict are the contract's own, and they mean what the contract says they mean: the **finding's** category, and
+ * the verdict that now stands for it. Neither filters the event, so a comment left on a finding that was later accepted is in the
+ * `принято` page — which is right: the comment is part of how that finding came to be accepted.
  */
 
 import { useSearchParams } from 'next/navigation';
@@ -63,7 +64,7 @@ import { useCurrentProject } from '@/entities/project';
 import { useProjectList } from '@/entities/project';
 
 import {
-  CATEGORY_CHOICES, DEFAULT_KB_ADDRESS, VERDICT_CHOICES, readKbAddress, writeKbAddress,
+  CATEGORY_CHOICES, DEFAULT_KB_ADDRESS, readKbAddress, writeKbAddress,
 } from '../model/address';
 import type { CategoryChoice, KbAddress, KbKind, KbView, VerdictChoice } from '../model/address';
 import { NO_CURSORS, useCursorWalk } from '../model/use-cursor-walk';
@@ -75,24 +76,21 @@ import styles from './knowledge-base-page.module.css';
 /** `UI-B-34`: the labels of how the decisions are drawn (the choice itself is in the address, `model/address.ts`). */
 const VIEW_LABELS: Readonly<Record<KbView, string>> = { table: 'Таблица', events: 'События' };
 
-const VERDICT_CHOICE_LABELS: Readonly<Record<VerdictChoice, string>> = {
-  all: 'Любой вердикт',
-  pending: 'Не решено',
-  accepted: 'Принято',
-  rejected: 'Отклонено',
-  needs_manual_review: 'Нужен ручной разбор',
-};
-
 /**
- * `UI-B-32`: the verdict chips above the list, in the order of the original's cards -- decided for, decided against,
- * undecided, everything. A chip sets the same verdict the «Вердикт» select sets; its number is the server's count of
- * that verdict over the journal (`useDecisionVerdictTotals`), never the length of the page on screen.
+ * `UIP-S12-03`: the cards of the group «Эксперт», in the order of the original's -- decided against, decided for, undecided, everything.
+ * A card sets the verdict the list is read under; its number is the server's count of that verdict over the journal
+ * (`useDecisionVerdictTotals`), never the length of the page on screen, in the tone the verdict has everywhere (red, green, grey).
  */
-const VERDICT_CHIPS: readonly { readonly choice: VerdictChoice; readonly label: string; readonly total: keyof DecisionVerdictTotals }[] = [
-  { choice: 'accepted', label: 'Принято', total: 'accepted' },
-  { choice: 'rejected', label: 'Отклонено', total: 'rejected' },
-  { choice: 'pending', label: 'Не решено', total: 'pending' },
-  { choice: 'all', label: 'Все', total: 'all' },
+const EXPERT_CARDS: readonly {
+  readonly choice: VerdictChoice;
+  readonly label: string;
+  readonly total: keyof DecisionVerdictTotals;
+  readonly tone: 'failed' | 'ok' | 'pending' | 'inert';
+}[] = [
+  { choice: 'rejected', label: 'Отклонено', total: 'rejected', tone: 'failed' },
+  { choice: 'accepted', label: 'Принято', total: 'accepted', tone: 'ok' },
+  { choice: 'pending', label: 'Не решено', total: 'pending', tone: 'pending' },
+  { choice: 'all', label: 'Все', total: 'all', tone: 'inert' },
 ];
 
 const CATEGORY_CHOICE_LABELS: Readonly<Record<CategoryChoice, string>> = {
@@ -166,8 +164,8 @@ const KIND_LABELS: Readonly<Record<KbKind, string>> = {
   memory: 'Память решений',
 };
 
-const SUBTITLE =
-  'Все решения проверяющего по замечаниям, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий.';
+/** `UIP-S12-03`: one plain line; what the journal is made of is not the reader's to know. */
+const SUBTITLE = 'Решения эксперта по замечаниям, новые сверху.';
 
 /** `D-495`: the memory is not a projection. It is the record of what the expert saw and decided, kept apart from the project. */
 const MEMORY_SUBTITLE =
@@ -239,7 +237,10 @@ export function KnowledgeBasePage() {
    * about the installation. The way out is the filters reset, and «Все объекты» built like the
    * dashboard builds it (`switchProject(…, null)`, `?project=all`: every other parameter of the address stays).
    */
-  const filtered = category !== 'all' || verdict !== 'all';
+  // `UIP-S12-03`: the screen opens on «Отклонено», so a narrowed list is the ordinary one; but a journal that holds no decision at all
+  // (the server's count of «Все» under this project is zero) is not «narrowed»: there is nothing to widen to.
+  const nothingDecided = category === 'all' && verdictTotals.all === 0;
+  const filtered = (category !== 'all' || verdict !== 'all') && !nothingDecided;
   const allProjects = switchProject(searchParams, null, projectUid).toString();
   const narrowing =
     !filtered && projectUid === null
@@ -257,79 +258,124 @@ export function KnowledgeBasePage() {
               }),
         };
 
+  // `UIP-S12-03`: how many of the filters inside «Фильтры ▾» are not at the first screen's value, said as a number on its handle so a
+  // filtered list never looks like the whole of it. Only the filters the current type draws are counted.
+  const showView = kind === 'findings' || kind === 'all';
+  const activeFilters =
+    (kind === 'all' || kind === 'proposals' ? 1 : 0) +
+    (showView && view !== DEFAULT_KB_ADDRESS.view ? 1 : 0) +
+    (kind === 'findings' && category !== 'all' ? 1 : 0);
+
   return (
     <PageShell
       title="База знаний"
       surface="canvas"
       subtitle={kind === 'memory' ? MEMORY_SUBTITLE : SUBTITLE}
     >
-      <div className={`am-kb__filters ${styles.filters}`} role="group" aria-label="Отбор решений">
-        <div className="am-kb__filter" role="group" aria-label="Тип решений">
-          <span>Тип</span>
-          {(memoryAccess.read ? (['all', 'findings', 'proposals', 'memory'] as const) : (['all', 'findings', 'proposals'] as const)).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={kind === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
-              aria-pressed={kind === value}
-              data-kb-kind={value}
-              onClick={() => { choose({ kind: value }); setProposalCursors(NO_CURSORS); setAllCursors(NO_CURSORS); }}
-            >
-              {KIND_LABELS[value]}
-            </button>
-          ))}
-        </div>
-        {kind === 'proposals' || kind === 'memory' ? null : (
-          <div className="am-kb__filter" role="group" aria-label="Вид списка">
-            <span>Вид</span>
-            {(['table', 'events'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={view === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
-                aria-pressed={view === value}
-                data-kb-view={value}
-                onClick={() => choose({ view: value })}
-              >
-                {VIEW_LABELS[value]}
-              </button>
-            ))}
+      <div className={styles.topRow} data-kb-top-row="">
+        {kind !== 'findings' ? null : (
+          <div className={styles.group} role="group" aria-label="Эксперт" data-kb-group="expert">
+            <span className={styles.groupName}>Эксперт</span>
+            <div className={styles.cards}>
+              {EXPERT_CARDS.map(({ choice, label, total: figure, tone }) => {
+                const count = verdictTotals[figure];
+                const pressed = verdict === choice;
+                // «Не решено» is drawn only while the journal holds such a decision (or while it is the card that is chosen).
+                if (choice === 'pending' && !pressed && !(count !== undefined && count > 0)) return null;
+                return (
+                  <button
+                    key={choice}
+                    type="button"
+                    className="am-button am-button--quiet"
+                    aria-pressed={pressed}
+                    data-kb-verdict={choice}
+                    data-kb-verdict-total={count}
+                    // A cursor belongs to the filter it was issued under: a new verdict starts at the first page (`useCursorWalk`).
+                    onClick={() => choose({ verdict: choice })}
+                  >
+                    {label} <span className={`am-badge am-badge--${tone} ${styles.cardCount}`}>{count ?? '—'}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
-        {kind !== 'findings' ? null : <>
-        <div className="am-kb__filter">
-          <label htmlFor="kb-filter-category">Категория</label>
-          <select
-            id="kb-filter-category"
-            value={category}
-            onChange={(event) => choose({ category: event.target.value as CategoryChoice })}
-          >
-            {CATEGORY_CHOICES.map((choice) => (
-              <option key={choice} value={choice}>
-                {CATEGORY_CHOICE_LABELS[choice]}
-              </option>
-            ))}
-          </select>
+        <div className={styles.actions}>
+          <details className={styles.filterMenu} data-kb-filter-menu="">
+            <summary className="am-button am-button--quiet am-button--small">
+              Фильтры ▾
+              {activeFilters === 0 ? null : <span className={styles.filterCount} data-kb-filter-count={activeFilters}>{activeFilters}</span>}
+            </summary>
+            <div className={`am-kb__filters ${styles.filters}`} role="group" aria-label="Отбор решений">
+              <div className="am-kb__filter" role="group" aria-label="Тип решений">
+                <span>Тип</span>
+                {(['all', 'findings', 'proposals'] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={kind === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
+                    aria-pressed={kind === value}
+                    data-kb-kind={value}
+                    onClick={() => { choose({ kind: value }); setProposalCursors(NO_CURSORS); setAllCursors(NO_CURSORS); }}
+                  >
+                    {KIND_LABELS[value]}
+                  </button>
+                ))}
+              </div>
+              {!showView ? null : (
+                <div className="am-kb__filter" role="group" aria-label="Вид списка">
+                  <span>Вид</span>
+                  {(['table', 'events'] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={view === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
+                      aria-pressed={view === value}
+                      data-kb-view={value}
+                      onClick={() => choose({ view: value })}
+                    >
+                      {VIEW_LABELS[value]}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {kind !== 'findings' ? null : (
+                <div className="am-kb__filter">
+                  <label htmlFor="kb-filter-category">Категория</label>
+                  <select
+                    id="kb-filter-category"
+                    value={category}
+                    onChange={(event) => choose({ category: event.target.value as CategoryChoice })}
+                  >
+                    {CATEGORY_CHOICES.map((choice) => (
+                      <option key={choice} value={choice}>
+                        {CATEGORY_CHOICE_LABELS[choice]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </details>
+          {!memoryAccess.read ? null : (
+            <button
+              type="button"
+              className="am-button am-button--quiet"
+              aria-pressed={kind === 'memory'}
+              data-kb-kind="memory"
+              // The same button leaves the tab: it is a switch, and the first screen is where it returns to.
+              onClick={() => { choose({ kind: kind === 'memory' ? DEFAULT_KB_ADDRESS.kind : 'memory' }); setProposalCursors(NO_CURSORS); setAllCursors(NO_CURSORS); }}
+            >
+              {KIND_LABELS.memory}
+            </button>
+          )}
         </div>
-        <div className="am-kb__filter">
-          <label htmlFor="kb-filter-verdict">Вердикт</label>
-          <select
-            id="kb-filter-verdict"
-            value={verdict}
-            onChange={(event) => choose({ verdict: event.target.value as VerdictChoice })}
-          >
-            {VERDICT_CHOICES.map((choice) => (
-              <option key={choice} value={choice}>
-                {VERDICT_CHOICE_LABELS[choice]}
-              </option>
-            ))}
-          </select>
-        </div>
-        </>}
-        {kind !== 'memory' || !memoryAccess.read || memory.caseId !== null ? null : (
-          <DecisionMemoryFilters value={memory.filters} onChange={memory.setFilters} />
-        )}
       </div>
+      {kind !== 'memory' || !memoryAccess.read || memory.caseId !== null ? null : (
+        <div className={`am-kb__filters ${styles.filters} ${styles.memoryFilters}`} role="group" aria-label="Отбор дел памяти">
+          <DecisionMemoryFilters value={memory.filters} onChange={memory.setFilters} />
+        </div>
+      )}
       {kind === 'memory' ? (
         memoryAccess.read ? (
           <MemoryResults
@@ -423,26 +469,6 @@ export function KnowledgeBasePage() {
         </div>
       ) : null}
       {kind !== 'findings' ? null : <div className={styles.results}>
-        {/* `UI-B-32`: the original's verdict cards as chips with the server's counts; a chip sets the «Вердикт» filter. */}
-        <div className={styles.chips} role="group" aria-label="Решения по вердикту" data-kb-verdict-chips="">
-          {VERDICT_CHIPS.map(({ choice, label, total: figure }) => {
-            const count = verdictTotals[figure];
-            return (
-              <button
-                key={choice}
-                type="button"
-                className={verdict === choice ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
-                aria-pressed={verdict === choice}
-                data-kb-verdict={choice}
-                data-kb-verdict-total={count}
-                // A cursor belongs to the filter it was issued under: a new verdict starts at the first page (`useCursorWalk`).
-                onClick={() => choose({ verdict: choice })}
-              >
-                {label} <span className={styles.chipCount}>{count ?? '—'}</span>
-              </button>
-            );
-          })}
-        </div>
         <p className={styles.scope} data-journal-scope={projectUid === null ? 'all' : 'project'}>
           <span className={styles.scopeKey}>Охват</span>
           <strong className={styles.scopeValue}>

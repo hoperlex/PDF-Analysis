@@ -81,6 +81,13 @@ async function press(view: LiveRender, label: string): Promise<boolean> {
   return delivered;
 }
 
+/** A card of the group «Эксперт» by the verdict it sets, whatever number it carries. */
+async function card(view: LiveRender, choice: string): Promise<boolean> {
+  const delivered = await view.pressMarked('data-kb-verdict', choice);
+  await settled(view);
+  return delivered;
+}
+
 async function change(view: LiveRender, label: string, value: string): Promise<boolean> {
   const delivered = await view.change(label, value);
   await settled(view);
@@ -144,7 +151,7 @@ describe('«Далее» and «Назад» walk the journal by cursor', () => {
     expect(markup).toContain('Решение номер 1<');
     expect(markup).toContain('Решение номер 2<');
     expect(markup).not.toContain('Решение номер 3<');
-    expect(queries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
     expect(await press(view, 'Назад')).toBe(false);
   });
 
@@ -161,9 +168,9 @@ describe('«Далее» and «Назад» walk the journal by cursor', () => {
     // The last page names no cursor: «Далее» is there, and it is disabled.
     expect(await press(view, 'Далее')).toBe(false);
     expect(queries()).toEqual([
-      { limit: JOURNAL_PAGE_LIMIT },
-      { limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-1' },
-      { limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-2' },
+      { verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT },
+      { verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-1' },
+      { verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-2' },
     ]);
   });
 
@@ -228,28 +235,28 @@ describe('a filter change returns to the first page', () => {
 
     expect(await change(view, 'Категория', 'dimensions')).toBe(true);
 
-    expect(queries()).toEqual([{ category: 'dimensions', limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ category: 'dimensions', verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
     expect(view.markup()).toContain('Решение отобранное по категории');
     expect(view.count('Назад')).toBe(0);
   });
 
-  it('asks for the new verdict with NO cursor', async () => {
+  it('asks for the new verdict, the card «Принято», with NO cursor', async () => {
     const view = await onSecondPage();
 
-    expect(await change(view, 'Вердикт', 'accepted')).toBe(true);
+    expect(await card(view, 'accepted')).toBe(true);
 
     expect(queries()).toEqual([{ verdict: 'accepted', limit: JOURNAL_PAGE_LIMIT }]);
     expect(view.markup()).toContain('Решение отобранное по вердикту');
   });
 
-  it('does not bring the old cursor back when the filter is cleared', async () => {
+  it('does not bring the old cursor back when the card is taken off again: back on «Отклонено» is its first page', async () => {
     const view = await onSecondPage();
-    await change(view, 'Вердикт', 'accepted');
+    await card(view, 'accepted');
     journal.mockClear();
 
-    await change(view, 'Вердикт', 'all');
+    await card(view, 'rejected');
 
-    // The first page of the unfiltered journal, not page 2 and not a read from the old cursor.
+    // The first page of the rejected decisions, not page 2 and not a read from the old cursor.
     expect(view.markup()).toContain('Решение номер 1<');
     expect(view.markup()).not.toContain('Решение номер 3<');
     expect(queries().every((query) => query.cursor === undefined)).toBe(true);

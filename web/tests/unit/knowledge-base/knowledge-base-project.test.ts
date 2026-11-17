@@ -169,27 +169,27 @@ describe('the project reaches the request', () => {
 
   it('sends no project_uid for «Все объекты»', async () => {
     const view = await mountAt('');
-    expect(queries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
     expect(view.markup()).toContain('data-journal-scope="all"');
     expect(visible(view.markup())).toContain('Охват Все объекты');
   });
 
   it('sends no project_uid for an empty ?project=', async () => {
     await mountAt('project=');
-    expect(queries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
   });
 
   it('sends project_uid for ?project=, beside the filters', async () => {
     await mountAt(`project=${A}`);
-    expect(queries()).toEqual([{ project_uid: A, limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ project_uid: A, verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
   });
 
   it('keeps project_uid on every page of the walk', async () => {
     const view = await mountAt(`project=${A}`);
     expect(await press(view, 'Далее')).toBe(true);
     expect(queries()).toEqual([
-      { project_uid: A, limit: JOURNAL_PAGE_LIMIT },
-      { project_uid: A, limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-a1' },
+      { project_uid: A, verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT },
+      { project_uid: A, verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-a1' },
     ]);
     expect(view.markup()).toContain('Решение номер 13<');
   });
@@ -220,6 +220,19 @@ describe('the screen states its scope and how many entries match', () => {
     expect(view.markup()).toContain('data-journal-scope="project"');
     expect(visible(view.markup())).toContain('Охват Проект Альфа 3 записи');
     expect(view.markup()).not.toContain('Все объекты');
+  });
+
+  it('puts the scope line, once, under the top row and over the list, and explains the screen in one plain line (UIP-S12-03)', async () => {
+    const markup = (await mountAt(`project=${A}`)).markup();
+    expect(markup.match(/data-journal-scope=/g) ?? []).toHaveLength(1);
+    expect(markup.indexOf('data-kb-top-row')).toBeGreaterThanOrEqual(0);
+    expect(markup.indexOf('data-kb-top-row')).toBeLessThan(markup.indexOf('data-journal-scope'));
+    expect(markup.indexOf('data-journal-scope')).toBeLessThan(markup.indexOf('data-knowledge-base-table'));
+    const text = visible(markup);
+    expect(text).toContain('Решения эксперта по замечаниям, новые сверху.');
+    // What the journal is made of is not for the screen to say.
+    expect(text).not.toContain('проекция');
+    expect(text).not.toContain('пересчитывается');
   });
 
   it('declines the noun with the number', async () => {
@@ -278,7 +291,7 @@ describe('where the address is silent the page opens on the account’s last obj
   it('sends project_uid of the last object for a silent address, and states its name', async () => {
     remembered(A);
     const view = await mountAt('');
-    expect(queries().at(-1)).toEqual({ project_uid: A, limit: JOURNAL_PAGE_LIMIT });
+    expect(queries().at(-1)).toEqual({ project_uid: A, verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT });
     expect(visible(view.markup())).toContain('Охват Проект Альфа');
     expect(view.markup()).toContain('data-journal-scope="project"');
   });
@@ -287,19 +300,19 @@ describe('where the address is silent the page opens on the account’s last obj
     const client = freshClient();
     client.setQueryData(queryKeys.account.me(), account(A));
     await mountAt('', client);
-    expect(queries()).toEqual([{ project_uid: A, limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ project_uid: A, verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
   });
 
   it('?project=<uid> beats it', async () => {
     remembered(A);
     await mountAt(`project=${B}`);
-    expect(queries()).toEqual([{ project_uid: B, limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ project_uid: B, verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
   });
 
   it('?project=all is «Все объекты», chosen: the whole journal, whatever the account chose last', async () => {
     remembered(A);
     const view = await mountAt('project=all');
-    expect(queries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
     expect(visible(view.markup())).toContain('Охват Все объекты');
   });
 
@@ -312,7 +325,7 @@ describe('where the address is silent the page opens on the account’s last obj
   it('no last object: the whole journal, as before', async () => {
     remembered(null);
     const view = await mountAt('');
-    expect(queries().at(-1)).toEqual({ limit: JOURNAL_PAGE_LIMIT });
+    expect(queries().at(-1)).toEqual({ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT });
     expect(visible(view.markup())).toContain('Охват Все объекты');
   });
 });
@@ -430,29 +443,29 @@ describe('an empty page under a selection is about the selection, and the way ba
     expect(text.match(/Все объекты/g)).toHaveLength(1);
     expect(view.markup()).not.toMatch(/<a [^>]*>Все объекты<\/a>/);
 
-    // A verdict as well, so that the reset is seen to clear both.
-    await change(view, 'Вердикт', 'accepted');
+    // A verdict as well (the card «Принято», which the category leaves at zero), so that the reset is seen to clear both.
+    expect(await press(view, 'Принято 0')).toBe(true);
     expect(visible(view.markup())).toContain('По выбранному отбору решений нет');
     expect(await press(view, 'Сбросить категорию и вердикт')).toBe(true);
 
     const after = visible(view.markup());
     expect(after).toContain('Решение номер 1');
     expect(after).not.toContain('По выбранному отбору');
-    // Both filters are back on «Любая категория» and «Любой вердикт»: pressing the button once cleared the two.
+    // The category is back on «Любая категория» and the verdict on «Все»: pressing the button once cleared the two.
+    expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-verdict="all"/);
     expect(view.count('Сбросить категорию и вердикт')).toBe(0);
   });
 
-  it('offers «Все объекты» with the rest of the address kept, beside the reset, when a project and a verdict are on', async () => {
+  it('offers «Все объекты» with the rest of the address kept, beside the reset, when a project is on and the screen is on «Отклонено»', async () => {
     nothingFor(null, 'rejected');
     // `foo` is kept; `tab` is one of the parameters that only meant something inside the old project and goes with it.
     const view = await mountAt(`project=${A}&foo=bar&tab=x`);
-    expect(await change(view, 'Вердикт', 'rejected')).toBe(true);
     const text = visible(view.markup());
     expect(text).toContain('По выбранному отбору решений нет');
     expect(text).toContain('Сбросить категорию и вердикт');
     expect(text.match(/Все объекты/g)).toHaveLength(1);
-    // The verdict is a parameter of the address now (`D-372`), so it stays with `foo`, as every parameter that is not the project's does.
-    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?project=all&(?:amp;)?foo=bar&(?:amp;)?verdict=rejected"[^>]*>Все объекты<\/a>/);
+    // «Отклонено» is the first screen's verdict (`UIP-S12-03`), so the address carries none and nothing of it is kept; `foo` stays.
+    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?project=all&(?:amp;)?foo=bar"[^>]*>Все объекты<\/a>/);
     // The scope line still states the project the reader is in. An empty page carries no record to name it, and the project list
     // does not hold it, so the line shows the uid it was given, as it does for any project the page cannot name.
     expect(view.markup()).toContain('data-journal-scope="project"');
@@ -463,8 +476,7 @@ describe('an empty page under a selection is about the selection, and the way ba
     me.mockImplementation((async () => ({ data: account(B), status: 200, correlationId: 'cid-me' })) as unknown as typeof getMe);
     nothingFor(null, 'rejected');
     const view = await mountAt('foo=bar');
-    expect(await change(view, 'Вердикт', 'rejected')).toBe(true);
-    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar&(?:amp;)?verdict=rejected&(?:amp;)?project=all"[^>]*>Все объекты<\/a>/);
+    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar&(?:amp;)?project=all"[^>]*>Все объекты<\/a>/);
   });
 
   it('resets from the empty state back to the project’s own first page, not to «Все объекты»', async () => {
@@ -498,7 +510,7 @@ describe('a change of project returns to the first page', () => {
     await live.update(page(client, `project=${B}`));
     await settled(live);
 
-    expect(queries()).toEqual([{ project_uid: B, limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ project_uid: B, verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
     expect(live.markup()).toContain('Решение номер 21<');
     expect(live.count('Назад')).toBe(0);
   });
@@ -544,7 +556,7 @@ describe('a change of project returns to the first page', () => {
     await live.update(page(client, ''));
     await settled(live);
 
-    expect(queries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
+    expect(queries()).toEqual([{ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
     expect(live.count('Назад')).toBe(0);
   });
 

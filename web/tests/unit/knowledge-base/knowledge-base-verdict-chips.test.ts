@@ -1,10 +1,12 @@
 /**
- * `UI-B-32`: the knowledge base's verdict chips -- «Принято», «Отклонено», «Не решено», «Все» -- with the server's counts.
+ * `UI-B-32`, `UIP-S12-03`: the knowledge base's top row -- the group «Эксперт» with the cards «Отклонено», «Принято», «Не решено» (only
+ * while there is such a decision) and «Все», «Фильтры ▾» and «Память решений» on the right -- with the server's counts.
  *
- * Each chip's number is the `total` of `listDecisions` for its verdict, read with `limit=1`, under the same project and
+ * Each card's number is the `total` of `listDecisions` for its verdict, read with `limit=1`, under the same project and
  * category the list is read under. The tests hold what a plausible wrong version would break: a number taken from the
- * length of the page on screen, a number that follows the verdict the chip itself sets, a zero drawn for a read that
- * failed, and a chip that keeps a cursor of the page before it.
+ * length of the page on screen, a number that follows the verdict the card itself sets, a zero drawn for a read that
+ * failed, a card that keeps a cursor of the page before it, a screen that opens on «Все» and not on «Отклонено», a «Не решено»
+ * card that stays at zero, and a list of verdicts beside the cards that says the same thing twice.
  *
  * Mounted live (`analysis-settings/live-render.ts`) because a press and a select change are events the one-pass render
  * cannot deliver. Only the transport is replaced.
@@ -65,9 +67,12 @@ function answer(items: DecisionRecord[], next: string | null, total: number): Ap
 
 type Query = { category?: string; verdict?: string; cursor?: string; limit?: number; project_uid?: string };
 
+/** What the server says «Не решено» holds; a test that wants the card gone sets it to zero. */
+let undecided = 40;
+
 /** What the server says each verdict holds, by the filters a read carries: not one of them is the length of a page. */
 function totalOf(query: Query): number {
-  const base = { accepted: 12, rejected: 5, pending: 40, all: 57 };
+  const base = { accepted: 12, rejected: 5, pending: undecided, all: 57 };
   const narrowed = { accepted: 2, rejected: 1, pending: 3, all: 6 };
   const projectOnly = { accepted: 7, rejected: 0, pending: 9, all: 16 };
   const figures = query.category !== undefined ? narrowed : query.project_uid !== undefined ? projectOnly : base;
@@ -83,6 +88,7 @@ const countQueries = (): Query[] => everyQuery().filter((query) => query.limit =
 const listQueries = (): Query[] => everyQuery().filter((query) => query.limit !== 1);
 
 beforeEach(() => {
+  undecided = 40;
   journal.mockReset();
   journal.mockImplementation((async (input: { query: Query }) => {
     const query = input.query;
@@ -142,7 +148,7 @@ function chipTag(markup: string, choice: string): string {
   return found[0];
 }
 
-describe('the verdict chips carry the server’s counts', () => {
+describe('the cards carry the server’s counts', () => {
   let live: LiveRender | null = null;
   afterEach(async () => {
     await live?.unmount();
@@ -166,11 +172,11 @@ describe('the verdict chips carry the server’s counts', () => {
         { limit: 1 },
       ]),
     );
-    // The list is read as it always was: the first page, no verdict, no cursor.
-    expect(listQueries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
+    // The screen opens on «Отклонено»: the first page of the rejected decisions, no cursor.
+    expect(listQueries()).toEqual([{ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
   });
 
-  it('draws the chips in the original’s order with the server’s numbers, not the length of the page on screen', async () => {
+  it('draws the cards in the original’s order, under the caption «Эксперт», with the server’s numbers, not the length of the page on screen', async () => {
     const view = await mountAt();
     expect(PAGE_1).toHaveLength(2);
     expect(view.count('Принято 12')).toBe(1);
@@ -178,16 +184,54 @@ describe('the verdict chips carry the server’s counts', () => {
     expect(view.count('Не решено 40')).toBe(1);
     expect(view.count('Все 57')).toBe(1);
     const text = visible(view.markup());
-    expect(text.indexOf('Принято 12')).toBeLessThan(text.indexOf('Отклонено 5'));
-    expect(text.indexOf('Отклонено 5')).toBeLessThan(text.indexOf('Не решено 40'));
+    expect(text.indexOf('Эксперт')).toBeLessThan(text.indexOf('Отклонено 5'));
+    expect(text.indexOf('Отклонено 5')).toBeLessThan(text.indexOf('Принято 12'));
+    expect(text.indexOf('Принято 12')).toBeLessThan(text.indexOf('Не решено 40'));
     expect(text.indexOf('Не решено 40')).toBeLessThan(text.indexOf('Все 57'));
     expect(chipTag(view.markup(), 'rejected')).toContain('data-kb-verdict-total="5"');
+    expect(view.markup()).toMatch(/role="group" aria-label="Эксперт"/);
   });
 
-  it('starts on «Все», the list’s own default', async () => {
+  it('gives each number the tone its verdict has everywhere: red for «Отклонено», green for «Принято», grey for the rest', async () => {
+    const markup = (await mountAt()).markup();
+    const pill = (choice: string) => new RegExp(`data-kb-verdict="${choice}"[^>]*>[^<]*<span class="am-badge am-badge--(\\w+)`).exec(markup)?.[1];
+    expect([pill('rejected'), pill('accepted'), pill('pending'), pill('all')]).toEqual(['failed', 'ok', 'pending', 'inert']);
+  });
+
+  it('starts on «Отклонено», the original’s first card, and «Все» is a card that has to be chosen', async () => {
     const view = await mountAt();
-    expect(chipTag(view.markup(), 'all')).toContain('aria-pressed="true"');
+    expect(chipTag(view.markup(), 'rejected')).toContain('aria-pressed="true"');
+    expect(chipTag(view.markup(), 'all')).toContain('aria-pressed="false"');
     expect(chipTag(view.markup(), 'accepted')).toContain('aria-pressed="false"');
+  });
+
+  it('draws «Не решено» only while the journal holds such a decision', async () => {
+    undecided = 0;
+    const view = await mountAt();
+    expect(view.count('Не решено 0')).toBe(0);
+    expect(view.markup()).not.toContain('data-kb-verdict="pending"');
+    // The three others are there, with the zero it answered for the one that is not.
+    expect(view.count('Отклонено 5')).toBe(1);
+    expect(view.count('Принято 12')).toBe(1);
+    expect(view.count('Все 57')).toBe(1);
+  });
+
+  it('keeps «Не решено» on screen when it is the card that is chosen, even at zero, so the list never says a filter that is not drawn', async () => {
+    undecided = 0;
+    const view = await mountAt('verdict=pending');
+    expect(view.count('Не решено 0')).toBe(1);
+    expect(chipTag(view.markup(), 'pending')).toContain('aria-pressed="true"');
+  });
+
+  it('draws «Не решено» for a count the server has not answered for it: no card is shown on a number nobody read', async () => {
+    journal.mockImplementation((async (input: { query: Query }) => {
+      const query = input.query;
+      if (query.limit === 1 && query.verdict === 'pending') throw new Error('the count read failed');
+      if (query.limit === 1) return answer([PAGE_1[0] as DecisionRecord], null, totalOf(query));
+      return answer(PAGE_1, null, totalOf(query));
+    }) as unknown as typeof listDecisions);
+    const view = await mountAt();
+    expect(view.markup()).not.toContain('data-kb-verdict="pending"');
   });
 
   it('keeps a zero the server answered as a zero', async () => {
@@ -233,7 +277,7 @@ describe('the verdict chips carry the server’s counts', () => {
   });
 });
 
-describe('a chip sets the verdict filter', () => {
+describe('a card sets the verdict filter', () => {
   let live: LiveRender | null = null;
   afterEach(async () => {
     await live?.unmount();
@@ -252,10 +296,10 @@ describe('a chip sets the verdict filter', () => {
     expect(await press(view, 'Принято 12')).toBe(true);
     expect(listQueries()).toEqual([{ verdict: 'accepted', limit: JOURNAL_PAGE_LIMIT }]);
     expect(chipTag(view.markup(), 'accepted')).toContain('aria-pressed="true"');
-    expect(chipTag(view.markup(), 'all')).toContain('aria-pressed="false"');
+    expect(chipTag(view.markup(), 'rejected')).toContain('aria-pressed="false"');
   });
 
-  it('does not recount: a chip’s number is its own verdict’s, whatever verdict is chosen', async () => {
+  it('does not recount: a card’s number is its own verdict’s, whatever verdict is chosen', async () => {
     const view = await mountAt();
     journal.mockClear();
     await press(view, 'Не решено 40');
@@ -264,45 +308,100 @@ describe('a chip sets the verdict filter', () => {
     expect(view.count('Все 57')).toBe(1);
   });
 
-  it('is the same filter as the «Вердикт» select: the select moves the chips', async () => {
+  it('has no list of verdicts beside the cards: they say the same thing, so the screen says it once', async () => {
     const view = await mountAt();
-    expect(await change(view, 'Вердикт', 'rejected')).toBe(true);
-    expect(chipTag(view.markup(), 'rejected')).toContain('aria-pressed="true"');
-    expect(chipTag(view.markup(), 'all')).toContain('aria-pressed="false"');
+    expect(view.markup()).not.toContain('kb-filter-verdict');
+    expect(view.markup()).not.toContain('Любой вердикт');
+    expect(visible(view.markup())).not.toContain('Вердикт');
+    await expect(view.change('Вердикт', 'rejected')).rejects.toThrow(/expected one label/);
   });
 
   it('returns to the first page, because a cursor belongs to the filter it was issued under', async () => {
     const view = await mountAt();
     expect(await press(view, 'Далее')).toBe(true);
-    expect(listQueries().at(-1)).toEqual({ limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-1' });
+    expect(listQueries().at(-1)).toEqual({ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-1' });
     journal.mockClear();
-    await press(view, 'Отклонено 5');
-    expect(listQueries()).toEqual([{ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
+    await press(view, 'Принято 12');
+    expect(listQueries()).toEqual([{ verdict: 'accepted', limit: JOURNAL_PAGE_LIMIT }]);
     expect(listQueries().every((query) => query.cursor === undefined)).toBe(true);
   });
 
-  it('«Все» takes the verdict off again, as the select’s «Любой вердикт» does', async () => {
+  it('«Все» takes the verdict off, and is the one card that asks for no verdict', async () => {
     const view = await mountAt();
-    await press(view, 'Принято 12');
     journal.mockClear();
     await press(view, 'Все 57');
-    // The unfiltered first page is already in the cache from the mount, so no new read is needed for it; what is
-    // asserted is that no read carries a verdict or a cursor, and that the chip and the list are back on «Все».
-    expect(listQueries().every((query) => query.verdict === undefined && query.cursor === undefined)).toBe(true);
+    expect(listQueries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
     expect(chipTag(view.markup(), 'all')).toContain('aria-pressed="true"');
-    expect(chipTag(view.markup(), 'accepted')).toContain('aria-pressed="false"');
+    expect(chipTag(view.markup(), 'rejected')).toContain('aria-pressed="false"');
     expect(visible(view.markup())).toContain('Решение номер 1');
+    // Back on «Отклонено», and the cards’ own numbers were never asked again.
+    journal.mockClear();
+    await press(view, 'Отклонено 5');
+    expect(countQueries()).toEqual([]);
+    expect(chipTag(view.markup(), 'rejected')).toContain('aria-pressed="true"');
   });
 });
 
-describe('the chips belong to «Замечания» only', () => {
-  it('draws no chip and reads no count for the proposals half', async () => {
+describe('the top row (UIP-S12-03)', () => {
+  let live: LiveRender | null = null;
+  afterEach(async () => {
+    await live?.unmount();
+    live = null;
+  });
+
+  async function mountAt(query = ''): Promise<LiveRender> {
+    live = await mountLive(page(freshClient(), query));
+    await settled(live);
+    return live;
+  }
+
+  it('keeps the type, the view and the category inside «Фильтры ▾», the browser’s own disclosure, and nothing else', async () => {
+    const markup = (await mountAt()).markup();
+    const menu = /<details[^>]*data-kb-filter-menu[^>]*>([\s\S]*?)<\/details>/.exec(markup)?.[1] ?? '';
+    expect(menu).toMatch(/^<summary[^>]*>Фильтры ▾<\/summary>/);
+    for (const word of ['Тип', 'Вид', 'Категория']) expect(visible(menu)).toContain(word);
+    for (const choice of ['all', 'findings', 'proposals']) expect(menu).toContain(`data-kb-kind="${choice}"`);
+    expect(menu).not.toContain('data-kb-kind="memory"');
+    expect(menu).not.toContain('data-kb-verdict');
+    // Closed until it is opened: the handle says nothing is narrowed, and the cards are outside it.
+    expect(markup).not.toMatch(/<details[^>]*\sopen/);
+    expect(markup).not.toContain('data-kb-filter-count');
+  });
+
+  it('says how many of the filters inside are not at their first-screen value, on the handle', async () => {
+    const view = await mountAt('category=dimensions&view=events');
+    expect(view.markup()).toMatch(/<summary[^>]*>Фильтры ▾<span[^>]*data-kb-filter-count="2"[^>]*>2<\/span><\/summary>/);
+  });
+
+  it('keeps the cards on the left and the handle on the right, in one row', async () => {
+    const view = await mountAt();
+    const row = /<div[^>]*data-kb-top-row[^>]*>([\s\S]*?)<div class="[^"]*actions[^"]*">([\s\S]*)/.exec(view.markup());
+    expect(row).not.toBeNull();
+    expect(row?.[1]).toContain('data-kb-group="expert"');
+    expect(row?.[1]).not.toContain('data-kb-filter-menu');
+    expect(row?.[2]).toContain('data-kb-filter-menu');
+    expect(row?.[2]).not.toContain('data-kb-group');
+  });
+
+  it('draws the cards for «Замечания» only, and the handle and the memory button on every type', async () => {
+    const view = await mountAt();
+    for (const label of ['Предложения', 'Все']) {
+      await press(view, label);
+      expect(view.markup()).not.toContain('data-kb-group');
+      expect(view.markup()).toContain('data-kb-filter-menu');
+    }
+  });
+});
+
+describe('the cards belong to «Замечания» only', () => {
+  it('draws no card and reads no count for the proposals half', async () => {
     const live = await mountLive(page(freshClient(), ''));
     try {
       await settled(live);
       journal.mockClear();
       await press(live, 'Предложения');
-      expect(live.markup()).not.toContain('data-kb-verdict-chips');
+      expect(live.markup()).not.toContain('data-kb-group');
+      expect(live.markup()).not.toContain('data-kb-verdict');
       expect(countQueries()).toEqual([]);
     } finally {
       await live.unmount();

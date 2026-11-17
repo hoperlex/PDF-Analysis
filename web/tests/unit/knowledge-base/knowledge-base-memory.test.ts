@@ -178,6 +178,35 @@ describe('«Память решений»', () => {
       expect((await mountAt('', ['admin'])).count('Память решений')).toBe(1);
     });
 
+    it('draws it as a button of its own beside «Фильтры ▾», not as one of the types, outside the disclosure that holds the types (UIP-S12-03)', async () => {
+      const view = await mountAt('');
+      const markup = view.markup();
+      const menu = /<details[^>]*data-kb-filter-menu[^>]*>[\s\S]*?<\/details>/.exec(markup)?.[0] ?? '';
+      expect(menu).not.toBe('');
+      expect(menu).not.toContain('Память решений');
+      expect(menu).not.toContain('data-kb-kind="memory"');
+      expect(markup.indexOf('data-kb-kind="memory"')).toBeGreaterThan(markup.indexOf(menu) + menu.length - 1);
+      expect(markup.match(/data-kb-kind="memory"/g) ?? []).toHaveLength(1);
+      // The three types stay in the disclosure, and none of them is pressed while the memory is on screen.
+      await view.press('Память решений');
+      await settled(view);
+      for (const choice of ['all', 'findings', 'proposals']) expect(view.markup()).toMatch(new RegExp(`aria-pressed="false"[^>]*data-kb-kind="${choice}"`));
+      expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-kind="memory"/);
+    });
+
+    it('is a switch: the same button takes the screen back to the first one, and the memory’s parameters off the address', async () => {
+      const view = await mountAt('kind=memory&mstatus=withdrawn');
+      expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-kind="memory"/);
+      journal.mockClear();
+      await view.press('Память решений');
+      await settled(view);
+      expect(currentSearch()).toBe('');
+      expect(view.markup()).toMatch(/aria-pressed="false"[^>]*data-kb-kind="memory"/);
+      expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-kind="findings"/);
+      expect(view.markup()).not.toContain('data-memory-results');
+      expect(journal).toHaveBeenCalled();
+    });
+
     it('waits for the account when the address names the tab, and reads nothing meanwhile', async () => {
       me.mockReset();
       me.mockImplementation((() => new Promise(() => undefined)) as never);

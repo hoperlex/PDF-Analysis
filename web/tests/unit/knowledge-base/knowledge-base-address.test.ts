@@ -2,6 +2,10 @@
  * `D-372`: «База знаний» keeps its type, view, category and verdict in the address (`?kind=&view=&category=&verdict=`), so a saved link,
  * a reload and the side menu's «База знаний» (no query) return to the same filter, as «Очередь» does.
  *
+ * `UIP-S12-03`: the screen opens on «Отклонено», as the original's does. The default verdict is `rejected`, so the plain address and the
+ * side menu's read the rejected decisions; «Все» is a chosen card and is written `?verdict=all`; an old link with `?verdict=accepted`,
+ * `rejected` or `pending` means what it meant. `UIP-S12-04`'s `?execution=` (the second group of cards) is part of the same pair.
+ *
  * Held here, each with a case that shows it can fail:
  *
  *   - the address is read and written as a pure pair against the closed sets: a value outside them is the default and is never echoed,
@@ -93,39 +97,73 @@ const read = (query: string) => readKbAddress(new URLSearchParams(query));
 const write = (query: string, next: Parameters<typeof writeKbAddress>[1]) => writeKbAddress(new URLSearchParams(query), next).toString();
 
 describe('the knowledge-base address, read', () => {
-  it('names the type, the view and the two filters; an empty address is the first screen of the application', () => {
+  it('names the type, the view and the filters; an empty address is the first screen of the application', () => {
     expect(read('kind=proposals&view=events&category=dimensions&verdict=accepted')).toEqual({
-      kind: 'proposals', view: 'events', category: 'dimensions', verdict: 'accepted',
+      kind: 'proposals', view: 'events', category: 'dimensions', verdict: 'accepted', execution: 'any',
     });
     expect(read('')).toEqual(DEFAULT_KB_ADDRESS);
-    expect(read('kind=&view=&category=&verdict=')).toEqual(DEFAULT_KB_ADDRESS);
-    expect(DEFAULT_KB_ADDRESS).toEqual({ kind: 'findings', view: 'table', category: 'all', verdict: 'all' });
+    expect(read('kind=&view=&category=&verdict=&execution=')).toEqual(DEFAULT_KB_ADDRESS);
+    expect(DEFAULT_KB_ADDRESS).toEqual({ kind: 'findings', view: 'table', category: 'all', verdict: 'rejected', execution: 'any' });
+  });
+
+  it('opens on «Отклонено»: the plain address is the rejected decisions, and «Все» is an explicit choice', () => {
+    expect(read('').verdict).toBe('rejected');
+    expect(read('verdict=rejected').verdict).toBe('rejected');
+    expect(read('verdict=all').verdict).toBe('all');
+    // `all` is not the default any more: an address that narrows nothing and names `all` is a different address from the plain one.
+    expect(read('verdict=all')).not.toEqual(DEFAULT_KB_ADDRESS);
+    expect(read('category=all&verdict=all')).toEqual({ ...DEFAULT_KB_ADDRESS, verdict: 'all' });
+  });
+
+  it('reads the old addresses as they always read: a verdict named is the verdict chosen', () => {
+    for (const verdict of ['accepted', 'rejected', 'pending'] as const) expect(read(`verdict=${verdict}`).verdict).toBe(verdict);
+    expect(read('kind=all&verdict=accepted&view=events')).toEqual({ ...DEFAULT_KB_ADDRESS, kind: 'all', verdict: 'accepted', view: 'events' });
+  });
+
+  it('reads the designer’s card group from ?execution=, and nothing else is a card', () => {
+    expect(read('execution=working').execution).toBe('working');
+    expect(read('execution=fixed').execution).toBe('fixed');
+    expect(read('execution=any').execution).toBe('any');
+    expect(read('execution=declined').execution).toBe('any');
+    expect(read('execution=taken_into_account,agreed').execution).toBe('any');
   });
 
   it('drops a value outside the closed sets instead of echoing it', () => {
-    expect(read('kind=everything&view=cards&category=weather&verdict=needs_manual_review')).toEqual(DEFAULT_KB_ADDRESS);
-    expect(read('verdict=ACCEPTED').verdict).toBe('all');
-    expect(read('category=all&verdict=all')).toEqual(DEFAULT_KB_ADDRESS);
+    expect(read('kind=everything&view=cards&category=weather&verdict=needs_manual_review&execution=done')).toEqual(DEFAULT_KB_ADDRESS);
+    // A verdict that is not one of the four is the default, which is now «Отклонено», not «Все».
+    expect(read('verdict=ACCEPTED').verdict).toBe('rejected');
+    expect(read('verdict=weather').verdict).toBe('rejected');
   });
 });
 
 describe('the knowledge-base address, written', () => {
   it('writes what is not the default, and the default is the absent parameter', () => {
-    expect(write('', { ...DEFAULT_KB_ADDRESS, verdict: 'rejected', view: 'events' })).toBe('view=events&verdict=rejected');
+    expect(write('', { ...DEFAULT_KB_ADDRESS, verdict: 'accepted', view: 'events' })).toBe('view=events&verdict=accepted');
     expect(write('verdict=rejected&view=events', DEFAULT_KB_ADDRESS)).toBe('');
     expect(write('', { ...DEFAULT_KB_ADDRESS, kind: 'all' })).toBe('kind=all');
+    expect(write('', { ...DEFAULT_KB_ADDRESS, execution: 'working' })).toBe('execution=working');
+    expect(write('execution=fixed', DEFAULT_KB_ADDRESS)).toBe('');
+  });
+
+  it('writes «Все» as ?verdict=all, because the absent parameter is «Отклонено» now, and «Отклонено» as no parameter', () => {
+    expect(write('', { ...DEFAULT_KB_ADDRESS, verdict: 'all' })).toBe('verdict=all');
+    expect(write('verdict=all', { ...DEFAULT_KB_ADDRESS, verdict: 'rejected' })).toBe('');
+    expect(write('verdict=accepted', { ...DEFAULT_KB_ADDRESS, verdict: 'all' })).toBe('verdict=all');
   });
 
   it('carries the project and any other parameter through', () => {
     expect(write('project=prj_X&foo=bar', { ...DEFAULT_KB_ADDRESS, category: 'dimensions' })).toBe('project=prj_X&foo=bar&category=dimensions');
     expect(write('project=prj_X&verdict=pending', DEFAULT_KB_ADDRESS)).toBe('project=prj_X');
+    expect(write('project=all&verdict=all', { ...DEFAULT_KB_ADDRESS, verdict: 'all' })).toBe('project=all&verdict=all');
   });
 
   it('round-trips every value of every parameter', () => {
     for (const kind of ['all', 'findings', 'proposals'] as const) {
       for (const verdict of ['all', 'accepted', 'rejected', 'pending'] as const) {
-        const next = { ...DEFAULT_KB_ADDRESS, kind, verdict, view: 'events' as const, category: 'roof' as const };
-        expect(read(write('', next))).toEqual(next);
+        for (const execution of ['any', 'working', 'fixed'] as const) {
+          const next = { ...DEFAULT_KB_ADDRESS, kind, verdict, execution, view: 'events' as const, category: 'roof' as const };
+          expect(read(write('', next))).toEqual(next);
+        }
       }
     }
   });
@@ -165,6 +203,20 @@ describe('the page follows the address', () => {
     return { view: live, client };
   }
 
+  it('opens on «Отклонено» at the plain address, with no read of anything else before it', async () => {
+    const { view } = await mountAt('');
+    expect(listQueries()).toEqual([{ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }]);
+    expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-verdict="rejected"/);
+    expect(view.markup()).toMatch(/aria-pressed="false"[^>]*data-kb-verdict="all"/);
+  });
+
+  it('opens on «Все» only when the address chooses it, and then asks for no verdict', async () => {
+    const { view } = await mountAt('verdict=all');
+    expect(listQueries()).toEqual([{ limit: JOURNAL_PAGE_LIMIT }]);
+    expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-verdict="all"/);
+    expect(view.markup()).toMatch(/aria-pressed="false"[^>]*data-kb-verdict="rejected"/);
+  });
+
   it('opens on the filter the address names, with no unfiltered read before it', async () => {
     const { view } = await mountAt('category=dimensions&verdict=accepted');
     expect(listQueries()).toEqual([{ category: 'dimensions', verdict: 'accepted', limit: JOURNAL_PAGE_LIMIT }]);
@@ -173,13 +225,17 @@ describe('the page follows the address', () => {
     expect(view.markup()).toMatch(/aria-pressed="false"[^>]*data-kb-verdict="all"/);
   });
 
-  it('writes a chosen verdict onto the address, replacing the entry, and takes it off again with «Все»', async () => {
+  it('writes a chosen card onto the address, replacing the entry; «Все» is written, «Отклонено» is the absent parameter', async () => {
     const { view } = await mountAt('project=prj_X');
-    await view.press('Отклонено 10');
+    await view.press('Принято 10');
     await settled(view);
-    expect(currentSearch()).toBe('project=prj_X&verdict=rejected');
-    expect(listQueries().at(-1)).toEqual({ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT, project_uid: 'prj_X' });
+    expect(currentSearch()).toBe('project=prj_X&verdict=accepted');
+    expect(listQueries().at(-1)).toEqual({ verdict: 'accepted', limit: JOURNAL_PAGE_LIMIT, project_uid: 'prj_X' });
     await view.press('Все 10');
+    await settled(view);
+    expect(currentSearch()).toBe('project=prj_X&verdict=all');
+    expect(listQueries().at(-1)).toEqual({ limit: JOURNAL_PAGE_LIMIT, project_uid: 'prj_X' });
+    await view.press('Отклонено 10');
     await settled(view);
     expect(currentSearch()).toBe('project=prj_X');
   });
@@ -207,11 +263,11 @@ describe('the page follows the address', () => {
 
   it('follows a navigation: another address is another filter, and the side menu’s plain address clears it', async () => {
     const client = freshClient();
-    const { view } = await mountAt('verdict=rejected', client);
-    expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-verdict="rejected"/);
+    const { view } = await mountAt('verdict=accepted', client);
+    expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-verdict="accepted"/);
     await view.update(page(client, ''));
     await settled(view);
-    expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-verdict="all"/);
+    expect(view.markup()).toMatch(/aria-pressed="true"[^>]*data-kb-verdict="rejected"/);
   });
 
   it('does not use a cursor walked under the old filter for the new one', async () => {
@@ -219,7 +275,7 @@ describe('the page follows the address', () => {
     const { view } = await mountAt('', client);
     await view.press('Далее');
     await settled(view);
-    expect(listQueries().at(-1)).toEqual({ limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-1' });
+    expect(listQueries().at(-1)).toEqual({ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT, cursor: 'cursor-1' });
     journal.mockClear();
     // A link to another filter: the page walked past is forgotten, whatever pressed nothing.
     await view.update(page(client, 'verdict=pending'));
