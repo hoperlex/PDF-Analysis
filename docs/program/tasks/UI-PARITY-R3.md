@@ -124,3 +124,4 @@ previous screens. No feature switch is introduced; the two migrations carry thei
 | P4 | `35bc680ee` | 0.30.3 rev 1 | S03-01, S03-03, S02-01..03, S18-01, S19-01, S19-03, S21-01, S09-02..04 (publisher session; main by owner PR #59 `810fdcfe0`) |
 | P5 | `1a6cf86e5` | 0.30.4 rev 1 | S02-04..07; FIX-17..20; database pins of 0068..0070 resealed by the publisher |
 | P6 | `6ea6e36ac` | 0.30.5 rev 1 | S13-01..04, S15-02, S05-01..04, S11-01..04, S11-06, S12-02..04; FIX-21..23 |
+| P7 | `1953f94f9` | 0.30.6 rev 1 | S14-02..04, S16-01, S17-01..03, S22-02, S22-03; FIX-24, FIX-26 |
