@@ -1,4 +1,4 @@
-/** Public API of the `section-optimisation` page slice (`R-66`, `UI-B-20`): the page and the address it reads. */
+/** Public API of the `section-optimisation` page slice (`R-66`, `UI-B-20`): the page, its header and the address it reads. */
 
 export type { SectionOptimisationAddress } from './model/address';
 export {
@@ -12,5 +12,7 @@ export type { SectionOptimisationTab, SectionOptimisationTabCounts } from './mod
 export { SECTION_OPTIMISATION_TABS, SECTION_OPTIMISATION_TAB_LABELS, sectionOptimisationTabText } from './model/tabs';
 export type { SectionOptimisationPageProps } from './ui/section-optimisation-page';
 export { SectionOptimisationPage } from './ui/section-optimisation-page';
-export type { ProjectFilterOption, SectionFilterBarProps, SectionMember } from './ui/section-filter-bar';
-export { ProjectOptionName, SectionFilterBar, projectFilterOptions } from './ui/section-filter-bar';
+export type { SectionFilterBarProps } from './ui/section-filter-bar';
+export { SectionFilterBar } from './ui/section-filter-bar';
+export type { SectionHeaderProps } from './ui/section-header';
+export { SECTION_ABOUT_TEXT, SectionHeader, sectionBackTarget, sectionLeadLine } from './ui/section-header';

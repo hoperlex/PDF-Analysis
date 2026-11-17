@@ -115,7 +115,8 @@ describe('«Оптимизация разделов»: the page opens on the acc
   it('narrows to the last object for an address that says nothing about the object', () => {
     const markup = pageWith(A, { section: 'KJ' });
     expect(back(markup)).toBe('section');
-    expect(markup).toContain(`<a href="/projects/${A}/sections/KJ">← К разделу объекта</a>`);
+    // `UIP-S11-01`: the arrow of the header, whose name says where it leads.
+    expect(/<a [^>]*data-section-optimisation-back="section"[^>]*>←<\/a>/.exec(markup)?.[0]).toContain(`href="/projects/${A}/sections/KJ"`);
   });
 
   it('is beaten by ?project=<uid>, and by ?project=all, which stays on every object', () => {
@@ -151,9 +152,14 @@ describe('«Оптимизация разделов»: the page opens on the acc
     expect(objectDecided(readSectionOptimisationAddress({ project: 'prj_nope' }))).toBe(false);
   });
 
-  it('the project filter shows the last object chosen', () => {
-    const markup = pageWith(A, { section: 'KJ' });
-    expect(markup).toMatch(new RegExp(`<option value="${A}"[^>]*selected`));
+  it('reads the last object\'s specification and offers no list of projects (`UIP-S11-01`: the object is the top strip\'s)', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.account.me(), account(A));
+    const markup = renderScreen(client, createElement(SectionOptimisationPage, { initial: readSectionOptimisationAddress({ section: 'KJ' }) }));
+    expect(markup).not.toContain('data-section-project-filter');
+    const reads = client.getQueryCache().getAll().map((query) => query.queryKey as readonly unknown[]);
+    expect(reads.some((key) => key[1] === 'section-specification' && (key[3] as { projectUid: string | null }).projectUid === A)).toBe(true);
+    expect(reads.some((key) => key[1] === 'section-specification' && (key[3] as { projectUid: string | null }).projectUid === null)).toBe(false);
   });
 });
 

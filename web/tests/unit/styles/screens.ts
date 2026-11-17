@@ -226,7 +226,7 @@ import {
   tapeProposal as tapeProposalOf,
 } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
-import { ACCEPTED_PROJECT_A, acceptedPage } from '../section-optimisation/fixtures';
+import { acceptedPage } from '../section-optimisation/fixtures';
 
 import type { Screen } from './contrast';
 import { auditCounts, sectionAudit } from '../dashboard/audit-counts';
@@ -1433,10 +1433,7 @@ export function screens(): Screen[] {
   add('SectionOptimisationPage accepted tab, an address it could not read', withRouter(createElement(SectionOptimisationPage, {
     initial: readSectionOptimisationAddress({ section: 'ZZ', tab: 'accepted' }),
   })));
-  add('SectionFilterBar', render(createElement(SectionFilterBar, {
-    sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_A as never,
-    options: [{ projectUid: ACCEPTED_PROJECT_A as never, name: 'Школа на пятьсот мест' }], onSection: noop, onProject: noop,
-  })));
+  add('SectionFilterBar', render(createElement(SectionFilterBar, { sectionCode: 'AR', onSection: noop })));
   add('SectionAcceptedList ready', render(createElement(SectionAcceptedList, {
     page: acceptedPage(), hasPrevious: false, onPrevious: noop, onNext: noop,
   })));

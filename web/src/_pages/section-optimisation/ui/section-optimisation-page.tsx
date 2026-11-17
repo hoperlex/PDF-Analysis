@@ -1,21 +1,25 @@
 'use client';
 
 /**
- * `/section-optimisation` — «Оптимизация разделов» (`R-66`, group «Работа»;
- * `W63-SECTION-FORM7-01`, `UI-B-20`, `UI-B-22`, `UI-B-27`).
+ * `/section-optimisation` — «Оптимизация раздела» (`R-66`, group «Работа»;
+ * `W63-SECTION-FORM7-01`, `UI-B-20`, `UI-B-22`, `UI-B-27`, `UIP-S11-01`).
  *
  * Two tabs, as in the original: «Спецификация» — `getSectionSpecification` answers, for a section, the
  * combined Form-7 specification of the current versions of every project whose document set an expert confirmed in it
- * (the nine columns of the form with the project, set, version, sheet and page on every row, a project filter and a text
+ * (the nine columns of the form with the project, set, version, sheet and page on every row and a text
  * search, each row matched against its own project's price list) — and «Принято» — the optimisation proposals whose
  * decision in force is an acceptance, across the section's projects (`listAcceptedOptimisationProposals`). Both are
  * read views: replicating an accepted optimisation into other projects is a later slice, and nothing here writes. The
  * section code only filters; rows are never merged across projects and the totals exist per project and per currency.
  *
- * **The object** (`UIP-G-06`; the registry class is `optional`). An address that names a project narrows to it; `?project=all` is
- * the explicit «Все объекты»; an address that says nothing opens on the object the account chose last (`getMe`), and on every
- * object where there is none. Any choice in the page's own filter is the reader's and stands (it is written into the address,
- * «Все объекты» as `?project=all`), and the account's answer arriving late never overrides it.
+ * **The header** (`UIP-S11-01`) is the original's: «←», the section's badge, «Уровень раздела», «Оптимизация раздела», the list of
+ * sections (ours: one screen for all fifteen) and one line of what the screen holds; the long paragraph is behind «ⓘ».
+ *
+ * **The object** (`UIP-G-06`, `UIP-S11-01`; the registry class is `optional`) is the one of the top strip, and there is no list of
+ * projects on this screen. The address says it first (`?project=<uid>`, `?project=all` for «Все объекты»), and an address that
+ * says nothing opens on the object the account chose last (`getMe`), and on every object where there is none. The screen reads it
+ * from the live address (`useCurrentProject`), so a choice in the top strip moves the scope of both tabs without a reload. Where
+ * no router is mounted (a one-pass render, which has no address) the address the route read (`initial`) stands.
  *
  * **The address.** `?section=<code>&project=<project_uid>&tab=accepted` opens the page on that section, narrowed to that
  * project, on that tab (`UI-B-20`); the page keeps the address in step with the choices, and carries the section and the
@@ -25,23 +29,20 @@
  * opening it. The two reads are the tabs' own first reads -- the same query keys, so an open tab and its number are one
  * request -- and the number of a tab whose read has not answered, was refused or was stopped at a bound is left off.
  *
- * **The row of the tabs** holds the section and the project (`UI-B-24`), as the original's toolbar holds its project: one choice
- * for both tabs, made once. The «Форма 7» tab shows the form's nine graphs with the rows grouped under a row per project that
- * folds («+» and «−» unfold and fold them all), as the original draws it (`UI-B-23`).
+ * **The row of the tabs** holds the tabs only. The «Форма 7» tab shows the form's nine graphs with the rows grouped under a row per
+ * project that folds («+» and «−» unfold and fold them all), as the original draws it (`UI-B-23`).
  *
  * Not `/optimisation`, which is the optimisation of one project and stays registered, outside
  * the menu, until it becomes a tab of the project screen.
  */
 
-import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
 import type { ProjectSection, ProjectUid } from '@/shared/api';
-import { routes } from '@/shared/lib';
-import { PageShell } from '@/shared/ui';
-import { useLastProject } from '@/entities/account';
 import { useAcceptedOptimisationProposals } from '@/entities/optimisation-proposal';
+import { useAddressProject, useCurrentProject } from '@/entities/project';
 import { useSectionSpecification } from '@/entities/section-specification';
 import { SectionAcceptedOptimisations } from '@/widgets/section-accepted-optimisations';
 import { SectionSpecificationSection } from '@/widgets/section-specification';
@@ -50,8 +51,7 @@ import { DEFAULT_SECTION_OPTIMISATION_ADDRESS, objectDecided, sectionOptimisatio
 import type { SectionOptimisationAddress } from '../model/address';
 import { SECTION_OPTIMISATION_TABS, sectionOptimisationTabText } from '../model/tabs';
 import type { SectionOptimisationTab, SectionOptimisationTabCounts } from '../model/tabs';
-import { SectionFilterBar, projectFilterOptions } from './section-filter-bar';
-import type { SectionMember } from './section-filter-bar';
+import { SectionHeader } from './section-header';
 import styles from './section-optimisation-page.module.css';
 
 export interface SectionOptimisationPageProps {
@@ -65,52 +65,46 @@ const IGNORED_TEXT = {
   tab: 'вкладка',
 } as const;
 
+/** This screen's registry address: it stands in for the address where no router is mounted, so the class (`optional`) is known. */
+const SECTION_OPTIMISATION_ADDRESS = '/section-optimisation';
+
+/** Rewrite the address to `search` without a new history entry, where there is a browser history to write to. */
+function rewriteAddress(search: string): void {
+  if (typeof window === 'undefined' || typeof window.history?.replaceState !== 'function') return;
+  window.history.replaceState(null, '', search);
+}
+
 export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION_ADDRESS }: SectionOptimisationPageProps) {
   const base = useId();
   const buttons = useRef<Partial<Record<SectionOptimisationTab, HTMLButtonElement | null>>>({});
   const [tab, setTab] = useState<SectionOptimisationTab>(initial.tab);
-  // `decided`: the address, or the reader, has decided the object (a project or «Все объекты»). Until then the account's last
-  // object stands in (`shownProject`), so a late `getMe` is applied to an untouched page and never to one the reader has set.
-  const [filter, setFilter] = useState<{
-    readonly sectionCode: ProjectSection;
-    readonly projectUid: ProjectUid | null;
-    readonly decided: boolean;
-  }>({ sectionCode: initial.sectionCode, projectUid: initial.projectUid, decided: objectDecided(initial) });
-  const last = useLastProject({ enabled: !filter.decided });
-  const projectUid = shownProject(filter, last.projectUid);
+  const [sectionCode, setSectionCode] = useState<ProjectSection>(initial.sectionCode);
+
+  // The object is the top strip's (`UIP-S11-01`): the live address, and where it says nothing the account's last object, through
+  // `useCurrentProject`, so a choice in the strip changes the scope of both tabs with no reload. Where no router is mounted the
+  // address the route read stands: an object it decided, or the account's last one (`shownProject`) until it has.
+  const routed = usePathname() !== null;
+  const live = useCurrentProject(SECTION_OPTIMISATION_ADDRESS);
+  // The button of a project's panel narrows the screen to that object the way the top strip does: by the address, kept for next time.
+  const [, chooseObject, rememberFailure] = useAddressProject(SECTION_OPTIMISATION_ADDRESS);
+  const liveProject = live.projectUid as ProjectUid | null;
+  const projectUid = routed
+    ? liveProject
+    : shownProject({ projectUid: initial.projectUid, decided: objectDecided(initial) }, liveProject);
+  // «Все объекты» was chosen, in the address, and the address says it as `?project=all`; an address that says nothing says nothing.
+  const allProjects = projectUid === null && (routed ? live.source === 'all' : initial.allProjects === true);
 
   // The tabs' numbers. `row_count` counts every row in scope apart from the text search, and only a `ready` answer has
   // one worth showing: a section the server stopped at a bound (`section_too_large`) lists no rows.
-  const specification = useSectionSpecification({
-    sectionCode: filter.sectionCode,
-    projectUid,
-    query: '',
-    offset: 0,
-  });
-  const accepted = useAcceptedOptimisationProposals({ sectionCode: filter.sectionCode, projectUid });
+  const specification = useSectionSpecification({ sectionCode, projectUid, query: '', offset: 0 });
+  const accepted = useAcceptedOptimisationProposals({ sectionCode, projectUid });
   const counts: SectionOptimisationTabCounts = {
     specification:
-      specification.data !== undefined && specification.data.section_code === filter.sectionCode && specification.data.state === 'ready'
+      specification.data !== undefined && specification.data.section_code === sectionCode && specification.data.state === 'ready'
         ? specification.data.row_count
         : null,
     accepted: accepted.data?.total ?? null,
   };
-
-  // The projects of the section, from the unnarrowed read: the only answer that lists every one. Kept while a project is chosen,
-  // when the read lists that project alone, and dropped with the section.
-  const [members, setMembers] = useState<readonly SectionMember[]>([]);
-  const answer = specification.data;
-  useEffect(() => {
-    if (answer !== undefined && answer.section_code === filter.sectionCode && answer.project_filter === null) {
-      setMembers(answer.projects.map((project) => ({ projectUid: project.project_uid, name: project.name })));
-    }
-  }, [answer, filter.sectionCode]);
-  // The narrowed answer lists the project it is narrowed to, so it names it; before it arrives the option reads the project.
-  const answeredName =
-    answer === undefined || projectUid === null || answer.section_code !== filter.sectionCode
-      ? null
-      : (answer.projects.find((project) => project.project_uid === projectUid)?.name ?? null);
-  const projectOptions = projectFilterOptions(members, projectUid, answeredName);
 
   function keep(next: {
     readonly tab: SectionOptimisationTab;
@@ -119,22 +113,29 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
     readonly allProjects: boolean;
   }) {
     // A reload or a pasted link opens the same view: the address follows every choice, without a new history entry.
-    if (typeof window !== 'undefined') window.history.replaceState(null, '', sectionOptimisationSearch(next));
+    rewriteAddress(sectionOptimisationSearch(next));
   }
 
-  // What the address says of the object: the one shown, and «Все объекты» as `?project=all` when it was chosen. An untouched
-  // page with no last object says nothing, and a reload then asks the account again.
-  const addressed = (uid: ProjectUid | null) => ({ projectUid: uid, allProjects: uid === null && filter.decided });
+  // The top strip rewrites the address in its own way (it drops the section and the tab, which mean something inside one object):
+  // when the object moves under the page, the page writes back what it shows, so a reload opens the same view. The object that
+  // arrives late from the account (`pending` to the last object) is no move: nobody has chosen anything yet.
+  const objectKey = live.pending ? null : (projectUid ?? '');
+  const seenObject = useRef<string | null>(objectKey);
+  useEffect(() => {
+    if (objectKey === null) return;
+    if (seenObject.current !== null && seenObject.current !== objectKey) keep({ tab, sectionCode, projectUid, allProjects });
+    seenObject.current = objectKey;
+    // Only a change of the object writes the address here; the rest is written by the choices themselves.
+  }, [objectKey]);
 
   function chooseTab(next: SectionOptimisationTab) {
     setTab(next);
-    keep({ tab: next, sectionCode: filter.sectionCode, ...addressed(projectUid) });
+    keep({ tab: next, sectionCode, projectUid, allProjects });
   }
 
-  function chooseFilter(next: { readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }) {
-    if (next.sectionCode !== filter.sectionCode) setMembers([]);
-    setFilter({ ...next, decided: true });
-    keep({ tab, ...next, allProjects: next.projectUid === null });
+  function chooseSection(next: ProjectSection) {
+    setSectionCode(next);
+    keep({ tab, sectionCode: next, projectUid, allProjects });
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -157,78 +158,66 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
   };
 
   return (
-    <PageShell
-      title="Оптимизация разделов"
-      subtitle="Сводная спецификация раздела по текущим версиям комплектов всех объектов и принятые экспертами оптимизации. Экран только показывает данные: переносить решения между объектами здесь пока нельзя."
-    >
-      {initial.ignored.length === 0 ? null : (
-        <p className={styles.notice} data-address-ignored={initial.ignored.join(' ')}>
-          Из адреса не прочитано: {initial.ignored.map((name) => IGNORED_TEXT[name]).join(', ')}. Экран открыт с выбором по умолчанию.
-        </p>
-      )}
-      {/*
-        * The original's «←» on this screen leads back to the section's projects. The way back here is where the reader came
-        * from: the project's section page when the address names a project, and the dashboard (the section table) when it names none.
-        */}
-      <p className={styles.back} data-section-optimisation-back={projectUid === null ? 'dashboard' : 'section'}>
-        {projectUid === null ? (
-          <Link href="/dashboard">← К дашборду</Link>
-        ) : (
-          <Link href={routes.projectSection(projectUid, filter.sectionCode)}>← К разделу объекта</Link>
+    <section className="am-page" data-screen="section-optimisation">
+      <SectionHeader sectionCode={sectionCode} projectUid={projectUid} onSection={chooseSection} />
+      <div className="am-page__body">
+        {initial.ignored.length === 0 ? null : (
+          <p className={styles.notice} data-address-ignored={initial.ignored.join(' ')}>
+            Из адреса не прочитано: {initial.ignored.map((name) => IGNORED_TEXT[name]).join(', ')}. Экран открыт с выбором по умолчанию.
+          </p>
         )}
-      </p>
-      <div className={styles.tabs}>
-        {/* `UI-B-24`: as the original's toolbar, the tabs on the left and the choice of section and project beside them. */}
-        <div className={styles.toolbar}>
-          <div role="tablist" aria-label="Вкладки оптимизации раздела" className={styles.tablist}>
-            {SECTION_OPTIMISATION_TABS.map((name) => (
-              <button
-                key={name}
-                ref={(element) => {
-                  buttons.current[name] = element;
-                }}
-                type="button"
-                role="tab"
-                id={`${base}-tab-${name}`}
-                aria-selected={name === tab}
-                aria-controls={`${base}-panel`}
-                tabIndex={name === tab ? 0 : -1}
-                className={styles.tab}
-                data-section-optimisation-tab={name}
-                onClick={() => chooseTab(name)}
-                onKeyDown={onKeyDown}
-              >
-                {sectionOptimisationTabText(name, counts)}
-              </button>
-            ))}
+        {rememberFailure === null ? null : (
+          <p className="am-note" role="alert" data-remember-failure="">
+            Объект выбран, но не запомнен: {rememberFailure.detail}
+            {rememberFailure.correlationId === null ? null : ` Код обращения: ${rememberFailure.correlationId}`}
+          </p>
+        )}
+        <div className={styles.tabs}>
+          {/* `UI-B-24`: as the original's toolbar, the tabs on the left. The section is chosen in the header, the object in the top strip. */}
+          <div className={styles.toolbar}>
+            <div role="tablist" aria-label="Вкладки оптимизации раздела" className={styles.tablist}>
+              {SECTION_OPTIMISATION_TABS.map((name) => (
+                <button
+                  key={name}
+                  ref={(element) => {
+                    buttons.current[name] = element;
+                  }}
+                  type="button"
+                  role="tab"
+                  id={`${base}-tab-${name}`}
+                  aria-selected={name === tab}
+                  aria-controls={`${base}-panel`}
+                  tabIndex={name === tab ? 0 : -1}
+                  className={styles.tab}
+                  data-section-optimisation-tab={name}
+                  onClick={() => chooseTab(name)}
+                  onKeyDown={onKeyDown}
+                >
+                  {sectionOptimisationTabText(name, counts)}
+                </button>
+              ))}
+            </div>
           </div>
-          <SectionFilterBar
-            sectionCode={filter.sectionCode}
-            projectUid={projectUid}
-            options={projectOptions}
-            onSection={(sectionCode) => chooseFilter({ sectionCode, projectUid: null })}
-            onProject={(projectUid) => chooseFilter({ sectionCode: filter.sectionCode, projectUid })}
-          />
-        </div>
-        <div
-          role="tabpanel"
-          id={`${base}-panel`}
-          aria-labelledby={`${base}-tab-${tab}`}
-          tabIndex={0}
-          className={styles.panel}
-          data-section-optimisation-panel={tab}
-        >
-          {tab === 'specification' ? (
-            <SectionSpecificationSection
-              sectionCode={filter.sectionCode}
-              projectUid={projectUid}
-              onSelectProject={(projectUid) => chooseFilter({ sectionCode: filter.sectionCode, projectUid })}
-            />
-          ) : (
-            <SectionAcceptedOptimisations sectionCode={filter.sectionCode} projectUid={projectUid} />
-          )}
+          <div
+            role="tabpanel"
+            id={`${base}-panel`}
+            aria-labelledby={`${base}-tab-${tab}`}
+            tabIndex={0}
+            className={styles.panel}
+            data-section-optimisation-panel={tab}
+          >
+            {tab === 'specification' ? (
+              <SectionSpecificationSection
+                sectionCode={sectionCode}
+                projectUid={projectUid}
+                onSelectProject={chooseObject}
+              />
+            ) : (
+              <SectionAcceptedOptimisations sectionCode={sectionCode} projectUid={projectUid} />
+            )}
+          </div>
         </div>
       </div>
-    </PageShell>
+    </section>
   );
 }

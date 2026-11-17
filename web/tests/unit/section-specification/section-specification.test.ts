@@ -28,7 +28,7 @@ import {
   sectionSpecificationQueryOptions,
   stageMark,
 } from '@/entities/section-specification';
-import { SectionFilterBar, projectFilterOptions } from '@/_pages/section-optimisation';
+import { SectionFilterBar } from '@/_pages/section-optimisation';
 import type { SectionSpecificationColumns } from '@/widgets/section-specification';
 import { SectionSpecificationAnswer, SectionSpecificationSection, groupRowsByProject } from '@/widgets/section-specification';
 
@@ -295,26 +295,19 @@ describe('what is said instead of a table', () => {
 });
 
 describe('the section picker and the container', () => {
-  it('lists the fifteen sections in the owner’s order, АР first, in the row of the tabs', () => {
+  it('lists the fifteen sections in the owner’s order, АР first, in the header of the page (`UIP-S11-01`)', () => {
     const markup = renderToStaticMarkup(
-      createElement(SectionFilterBar, { sectionCode: 'AR', projectUid: null, options: [], onSection: () => undefined, onProject: () => undefined }),
+      createElement(SectionFilterBar, { sectionCode: 'AR', onSection: () => undefined }),
     );
     const values = [...markup.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]).filter((value) => value !== '');
     expect(values).toEqual([...PROJECT_STRUCTURE_ORDER]);
     expect(values).toHaveLength(15);
     expect(markup).toContain('Архитектурные решения (АР)');
     expect(markup).toContain('data-section-picker="15"');
-    expect(markup).toContain('Все объекты раздела');
-    expect(markup).toContain('data-section-project-filter="0"');
-  });
-
-  it('offers the project of the address although the list lacks it, and does not list one twice', () => {
-    const members = [{ projectUid: SECTION_PROJECT_A as never, name: 'Школа на пятьсот мест' }];
-    expect(projectFilterOptions(members, SECTION_PROJECT_B as never, null)).toEqual([
-      ...members, { projectUid: SECTION_PROJECT_B, name: null },
-    ]);
-    expect(projectFilterOptions(members, SECTION_PROJECT_A as never, 'Другое')).toEqual(members);
-    expect(projectFilterOptions(members, null, null)).toEqual(members);
+    // The object is the top strip's: there is no list of projects beside the sections.
+    expect(markup).not.toContain('Все объекты раздела');
+    expect(markup).not.toContain('data-section-project-filter');
+    expect((markup.match(/<select/g) ?? []).length).toBe(1);
   });
 
   it('opens on АР, unfiltered, and waits on its read', () => {

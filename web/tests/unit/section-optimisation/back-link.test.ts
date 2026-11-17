@@ -1,9 +1,10 @@
 /**
- * The way back from «Оптимизация разделов»: the original's «←» leads to the section's projects.
+ * The way back from «Оптимизация раздела»: the original's «←» leads to the section's projects.
  *
  * Here it leads where the reader came from. With a project in the address that is the project's section page (the
  * dashboard's «Оптимизация раздела» link and the section list's link both carry the project and the section); with none, it
- * is the dashboard, whose table of sections is the screen this one is a step below.
+ * is the dashboard, whose table of sections is the screen this one is a step below. It is the arrow of the header
+ * (`UIP-S11-01`): the glyph is the text, and where it leads is its name.
  */
 
 import { createElement } from 'react';
@@ -22,14 +23,17 @@ function page(query: Parameters<typeof readSectionOptimisationAddress>[0]): stri
 describe('the link back', () => {
   it('leads to the project’s section page when the address names a project and a section', () => {
     const markup = page({ section: 'KJ', project: PROJECT });
-    expect(markup).toContain('data-section-optimisation-back="section"');
-    expect(markup).toContain(`<a href="/projects/${PROJECT}/sections/KJ">← К разделу объекта</a>`);
+    const arrow = /<a [^>]*data-section-optimisation-back="section"[^>]*>←<\/a>/.exec(markup)?.[0] ?? '';
+    expect(arrow).toContain(`href="/projects/${PROJECT}/sections/KJ"`);
+    expect(arrow).toContain('aria-label="К разделу объекта"');
+    expect(markup).not.toContain('← К разделу объекта');
   });
 
   it('leads to the dashboard when it names no project', () => {
     const markup = page({ section: 'KJ' });
-    expect(markup).toContain('data-section-optimisation-back="dashboard"');
-    expect(markup).toContain('<a href="/dashboard">← К дашборду</a>');
+    const arrow = /<a [^>]*data-section-optimisation-back="dashboard"[^>]*>←<\/a>/.exec(markup)?.[0] ?? '';
+    expect(arrow).toContain('href="/dashboard"');
+    expect(arrow).toContain('aria-label="К дашборду"');
     expect(markup).not.toContain('/sections/');
   });
 });

@@ -1,21 +1,25 @@
 /**
- * `UI-B-20`, `UI-B-22`: «Оптимизация разделов» opens on the section, the project and the tab its address names.
+ * `UI-B-20`, `UI-B-22`, `UIP-S11-01`: «Оптимизация раздела» opens on the section, the project and the tab its address names, with
+ * the section's header: «←», the badge, «Уровень раздела», the heading and the list of sections, one line of what the screen holds
+ * and the long paragraph behind «ⓘ». There is no list of projects: the object is the top strip's (see `object-scope.test.ts`).
  *
- * Rendered, not read from source (`D-53`): the selects a reviewer would see and the reads the screen starts. The project
- * an address names has no unfiltered answer yet, so the project select must still offer it — from its own read, from the
- * narrowed answer, or by its identity — and never silently drop it.
+ * Rendered, not read from source (`D-53`): the header and the list a reviewer would see and the reads the screen starts.
  */
 
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import type { ProjectUid } from '@/shared/api';
-import { queryKeys } from '@/shared/api';
-import { SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
+import {
+  SECTION_ABOUT_TEXT,
+  SectionOptimisationPage,
+  readSectionOptimisationAddress,
+  sectionBackTarget,
+  sectionLeadLine,
+} from '@/_pages/section-optimisation';
 
 import { newClient, renderScreen } from '../screens/harness';
-import { sectionAnswer } from '../section-specification/fixtures';
-import { ACCEPTED_PROJECT_B, acceptedKey, projectRead, specificationKey } from './fixtures';
+import { ACCEPTED_PROJECT_B, acceptedKey, specificationKey } from './fixtures';
 
 function selected(markup: string, value: string): boolean {
   const options = markup.match(/<option[^>]*>/g) ?? [];
@@ -42,42 +46,24 @@ describe('opening on the address', () => {
     const { markup, client } = page({ section: 'KJ', project: ACCEPTED_PROJECT_B });
     expect(selected(markup, 'KJ')).toBe(true);
     expect(selected(markup, 'AR')).toBe(false);
-    expect(selected(markup, ACCEPTED_PROJECT_B)).toBe(true);
     expect(keys(client)).toContainEqual(specificationKey('KJ', ACCEPTED_PROJECT_B));
     expect(keys(client)).not.toContainEqual(specificationKey('AR', null));
   });
 
-  it('offers the project of the address although no unfiltered answer lists it: by its identity first', () => {
-    const { markup } = page({ section: 'KJ', project: ACCEPTED_PROJECT_B });
-    expect(markup).toContain('data-section-project-filter="1"');
-    expect(text(markup)).toContain(ACCEPTED_PROJECT_B);
-  });
-
-  it('names that project from its own read', () => {
-    const client = newClient();
-    client.setQueryData(queryKeys.projects.detail(ACCEPTED_PROJECT_B as ProjectUid), projectRead(ACCEPTED_PROJECT_B, 'Детский сад'));
-    const { markup } = page({ section: 'KJ', project: ACCEPTED_PROJECT_B }, client);
-    expect(selected(markup, ACCEPTED_PROJECT_B)).toBe(true);
-    expect(text(markup)).toContain('Детский сад');
-    expect(text(markup)).not.toContain(`${ACCEPTED_PROJECT_B}`);
-  });
-
-  it('names it from the narrowed answer once that lists it', () => {
-    const client = newClient();
-    client.setQueryData(
-      specificationKey('AR', ACCEPTED_PROJECT_B),
-      sectionAnswer({ project_filter: ACCEPTED_PROJECT_B as ProjectUid, projects: [{ ...sectionAnswer().projects[0]!, project_uid: ACCEPTED_PROJECT_B as ProjectUid, name: 'Больница' }] }),
-    );
-    const { markup } = page({ project: ACCEPTED_PROJECT_B }, client);
-    expect(selected(markup, ACCEPTED_PROJECT_B)).toBe(true);
-    expect(text(markup)).toContain('Больница');
+  it('has no list of projects, whatever the address names, and reads no project to fill one', () => {
+    for (const query of [{}, { project: ACCEPTED_PROJECT_B }, { section: 'KJ', project: 'all' }]) {
+      const { markup, client } = page(query);
+      expect(markup).not.toContain('data-section-project-filter');
+      expect(markup).not.toContain('section-specification-project');
+      expect(markup).not.toContain('Все объекты раздела');
+      // The reads of the screen are the two tabs' own, and the account's: not the project's (`getProject`) nor the list of projects.
+      expect(keys(client).filter((key) => (key as string[])[0] === 'projects')).toEqual([]);
+    }
   });
 
   it('keeps the old behaviour without an address: АР, every project', () => {
     const { markup, client } = page({});
     expect(selected(markup, 'AR')).toBe(true);
-    expect(selected(markup, '')).toBe(true);
-    expect(markup).toContain('data-section-project-filter="0"');
     expect(keys(client)).toContainEqual(specificationKey('AR', null));
     expect(markup).not.toContain('data-address-ignored');
   });
@@ -90,25 +76,72 @@ describe('opening on the address', () => {
   });
 });
 
-describe('the choice of section and project, in the row of the tabs (`UI-B-24`)', () => {
-  it('sits beside the tabs, once, and neither tab carries a select of its own', () => {
+describe('the header (`UIP-S11-01`)', () => {
+  const { markup } = page({ section: 'KJ', project: ACCEPTED_PROJECT_B });
+  const header = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'));
+
+  it('is «←», the section\u2019s badge, «Уровень раздела» and «Оптимизация раздела», in that order, over the tabs', () => {
+    expect(header).toContain('data-section-optimisation-header');
+    const at = ['←', 'data-section-badge="KJ"', 'Уровень раздела', '<h1', 'Оптимизация раздела</h1>'].map((part) => header.indexOf(part));
+    expect(at.every((index) => index > -1)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(text(header)).toContain('КЖ');
+    expect(markup.indexOf('</header>')).toBeLessThan(markup.indexOf('role="tablist"'));
+    expect((markup.match(/<h1/g) ?? []).length).toBe(1);
+  });
+
+  it('holds the list of sections, once, and nothing else to choose by', () => {
+    expect(header).toContain('data-section-filter-bar');
+    expect((markup.match(/data-section-picker=/g) ?? []).length).toBe(1);
+    expect((header.match(/<select/g) ?? []).length).toBe(1);
+  });
+
+  it('says what the screen holds in one line, and keeps the long paragraph behind «ⓘ», closed', () => {
+    const lead = /<p[^>]*data-section-lead[^>]*>([^<]*)<\/p>/.exec(header)?.[1] ?? '';
+    expect(lead).toBe('Конструкции железобетонные · документы выбранного объекта');
+    expect(lead).not.toContain('Экран только показывает данные');
+    expect(header).toMatch(/<button[^>]*aria-expanded="false"[^>]*data-section-about-toggle[^>]*>ⓘ<\/button>/);
+    expect(header).toContain('aria-label="Что показывает экран"');
+    // The paragraph is in the markup, hidden, and the button names it.
+    const about = /<p id="([^"]+)"[^>]*hidden=""[^>]*data-section-about[^>]*>([^<]*)<\/p>/.exec(header);
+    expect(about).not.toBeNull();
+    expect(about?.[2]).toBe(SECTION_ABOUT_TEXT);
+    expect(header).toContain(`aria-controls="${about?.[1]}"`);
+    expect(SECTION_ABOUT_TEXT).toContain('Экран только показывает данные');
+  });
+
+  it('says every object in the line when the screen follows none', () => {
+    expect(sectionLeadLine('Архитектурные решения', null)).toBe('Архитектурные решения · документы раздела по всем объектам');
+    expect(text(page({ section: 'AR', project: 'all' }).markup)).toContain('Архитектурные решения · документы раздела по всем объектам');
+  });
+
+  it('has the way back where the reader came from, in the arrow', () => {
+    expect(sectionBackTarget(ACCEPTED_PROJECT_B as ProjectUid, 'KJ')).toEqual({
+      kind: 'section',
+      href: `/projects/${ACCEPTED_PROJECT_B}/sections/KJ`,
+      label: 'К разделу объекта',
+    });
+    expect(sectionBackTarget(null, 'KJ')).toEqual({ kind: 'dashboard', href: '/dashboard', label: 'К дашборду' });
+  });
+});
+
+describe('the section is chosen in the header, the object in the top strip', () => {
+  it('has the list of sections before the tabs and none of its own in either tab', () => {
     for (const tab of ['specification', 'accepted'] as const) {
       const { markup } = page({ tab });
       const bar = markup.indexOf('data-section-filter-bar');
-      expect(bar).toBeGreaterThan(markup.indexOf('role="tablist"'));
-      expect(bar).toBeLessThan(markup.indexOf('role="tabpanel"'));
+      expect(bar).toBeGreaterThan(markup.indexOf('<header'));
+      expect(bar).toBeLessThan(markup.indexOf('role="tablist"'));
       expect((markup.match(/data-section-filter-bar/g) ?? []).length).toBe(1);
       expect((markup.match(/data-section-picker=/g) ?? []).length).toBe(1);
-      expect((markup.match(/data-section-project-filter=/g) ?? []).length).toBe(1);
       expect(markup.slice(markup.indexOf('role="tabpanel"'))).not.toContain('<select');
     }
   });
 
-  it('is the same choice for both tabs: the project of the address is selected on either', () => {
+  it('is the same choice for both tabs: the section of the address is selected on either', () => {
     for (const tab of ['specification', 'accepted'] as const) {
       const { markup } = page({ section: 'KJ', project: ACCEPTED_PROJECT_B, tab });
       expect(selected(markup, 'KJ')).toBe(true);
-      expect(selected(markup, ACCEPTED_PROJECT_B)).toBe(true);
     }
   });
 });
@@ -130,7 +163,6 @@ describe('the tabs', () => {
     expect(markup).toContain('data-section-accepted');
     expect(markup).not.toContain('data-section-specification');
     expect(selected(markup, 'KJ')).toBe(true);
-    expect(selected(markup, ACCEPTED_PROJECT_B)).toBe(true);
     expect(keys(client)).toContainEqual(acceptedKey({ sectionCode: 'KJ', projectUid: ACCEPTED_PROJECT_B }));
     // The specification tab is not mounted, but its number is read under the key the tab itself would use (once, whichever
     // tab is open), for the section and project chosen and for no other.
