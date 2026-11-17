@@ -11,11 +11,11 @@ import { createElement, isValidElement } from 'react';
 import type { ComponentType, ReactElement, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ExecutorHost, ExecutorHostModel, Role } from '@/shared/api';
+import type { ExecutorHost, ExecutorHostModel, ExecutorHostWork, Role } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import {
-  availableModelIds, executorHostsQueryOptions, hostFailure, hostRowReading, mayReadHosts, modelChips, modelLabel, modelLabels,
-  noContactSentence, summarySentence,
+  WORK_SHOWN, availableModelIds, executorHostsQueryOptions, hostFailure, hostRowReading, lastSignalSentence, mayReadHosts, modelChips,
+  modelLabel, modelLabels, noContactSentence, summarySentence,
 } from '@/entities/executor-host';
 import { stageLayoutQueryOptions } from '@/entities/stage-layout';
 import { WorkersPage } from '@/_pages/workers';
@@ -28,7 +28,8 @@ import {
 
 import { newClient, renderScreen, renderWith } from '../screens/harness';
 import {
-  HOST_DETAILS, HOST_LIST, ISSUED, SERVER_BUSY, SERVER_EMPTY, SERVER_OFFLINE, SERVER_ONLINE, install, seedDetails, seedHosts, seedLayout,
+  DOCUMENT_A, DOCUMENT_B, HOST_DETAILS, HOST_LIST, ISSUED, PROJECT, SERVER_BUSY, SERVER_EMPTY, SERVER_OFFLINE, SERVER_ONLINE, WORK_ONLINE,
+  install, seedDetails, seedHosts, seedLayout,
 } from './hosts-fixtures';
 
 const requests: { line: string; key: string | null }[] = [];
@@ -241,6 +242,112 @@ describe('a server row has exactly the controls the plan names, for those it nam
     expect(markup).toContain('data-host-recheck');
     const idle = renderScreen(newClient(), createElement(HostDetailsView, { details: { ...HOST_DETAILS, tasks: [] }, rechecking: false, onRecheck: () => {} }));
     expect(idle).toContain('Сейчас на сервере ничего не выполняется.');
+  });
+});
+
+describe('a server is a card (UIP-S15-03)', () => {
+  const card = (host: ExecutorHost, admin = false, asOf: number | null = null): string =>
+    renderScreen(newClient(), createElement(HostRow, { host, admin, asOf }));
+
+  it('says the state in a word beside the dot, the last signal, the load and the models', () => {
+    const markup = card(SERVER_ONLINE);
+    expect(markup).toContain('data-host-state-word');
+    expect(markup).toContain('>на связи<');
+    expect(markup).toContain('data-host-signal');
+    expect(markup).toContain('последний сигнал 11:00');
+    expect(markup).toContain('data-host-load="2/3"');
+    expect(markup).toContain('data-host-model="claude-opus-5-5"');
+    expect(card(SERVER_BUSY)).toContain('>все места заняты<');
+    expect(lastSignalSentence('2026-11-09T11:00:00Z')).toBe('последний сигнал 11:00');
+    expect(lastSignalSentence(undefined)).toBeNull();
+    expect(lastSignalSentence('not a time')).toBeNull();
+  });
+
+  it('is a grey card with its own sentence for a server with no contact and says no state word or signal besides', () => {
+    const markup = card({ ...SERVER_OFFLINE, current_work: [...WORK_ONLINE] });
+    expect(markup).toContain('data-host-no-contact');
+    expect(markup).toContain('нет связи с 11:02');
+    expect(markup).not.toContain('data-host-state-word');
+    expect(markup).not.toContain('data-host-signal');
+    // A claim left on a server out of contact is not known to run: «Сейчас» is not drawn for it.
+    expect(markup).not.toContain('data-host-now');
+  });
+
+  it('says what a server is doing now: the document as a link, the stage as a word, how long', () => {
+    // 21 and 16 minutes after the two calls began.
+    const markup = card(SERVER_ONLINE, false, Date.parse('2026-11-09T11:06:00Z'));
+    expect(markup).toContain('data-host-now');
+    expect(markup).toContain('Сейчас:');
+    expect(markup.match(/data-host-work(?![-\w])/g)).toHaveLength(2);
+    expect(markup).toContain(`href="/projects/${PROJECT}/documents/${DOCUMENT_A}"`);
+    expect(markup).toContain('Планы этажей</a> · Анализ блоков · 21 мин');
+    expect(markup).toContain('Планы этажей</a> · Нормы · 16 мин');
+    expect(markup).not.toContain('data-host-work-more');
+  });
+
+  it('is the same for an expert and an administrator', () => {
+    const now = Date.parse('2026-11-09T11:06:00Z');
+    for (const admin of [false, true]) expect(card(SERVER_ONLINE, admin, now), String(admin)).toContain('Анализ блоков · 21 мин');
+  });
+
+  it('names no model, provider, run or task in the line, only the document and the stage', () => {
+    const markup = card({ ...SERVER_ONLINE, current_work: [...WORK_ONLINE] }, true, Date.parse('2026-11-09T11:06:00Z'));
+    const line = markup.slice(markup.indexOf('data-host-now'));
+    const now = line.slice(0, line.indexOf('</ul>'));
+    expect(now).not.toMatch(/Opus|Sonnet|gpt|claude|codex|run_|ext_|job_/i);
+    expect(now).not.toContain('data-host-model');
+  });
+
+  it('gives no word to a stage the layout has no row for, and never the code in its place', () => {
+    const work = (stage: string | undefined): ExecutorHostWork => ({
+      project_uid: PROJECT, document_uid: DOCUMENT_B, document_title: 'Разрезы', ...(stage === undefined ? {} : { stage_key: stage }), since: '2026-11-09T10:45:00Z',
+    });
+    const now = Date.parse('2026-11-09T11:06:00Z');
+    const unknown = card({ ...SERVER_ONLINE, current_work: [work('preparation'), work(undefined), work('')] }, false, now);
+    expect(unknown).not.toContain('preparation');
+    expect(unknown.match(/Разрезы<\/a> · 21 мин/g)).toHaveLength(3);
+    expect(card({ ...SERVER_ONLINE, current_work: [work('blocks:3')] }, false, now)).toContain('Разрезы</a> · Анализ блоков · 21 мин');
+  });
+
+  it('draws no duration when there is no read to measure against', () => {
+    const markup = card(SERVER_ONLINE);
+    expect(markup).toContain('Планы этажей</a> · Анализ блоков<');
+    expect(markup).not.toContain('мин');
+  });
+
+  it('names three tasks at most and says «и ещё N» for the rest', () => {
+    const many: ExecutorHostWork[] = [1, 2, 3, 4, 5].map((n) => ({
+      project_uid: PROJECT, document_uid: DOCUMENT_A, document_title: `Лист ${n}`, stage_key: 'blocks', since: `2026-11-09T10:4${n}:00Z`,
+    }));
+    const reading = hostRowReading({ ...SERVER_ONLINE, current_work: many });
+    expect(WORK_SHOWN).toBe(3);
+    expect(reading.work.map((item) => item.title)).toEqual(['Лист 1', 'Лист 2', 'Лист 3']);
+    expect(reading.workMore).toBe(2);
+    const markup = card({ ...SERVER_ONLINE, current_work: many });
+    expect(markup.match(/data-host-work(?![-\w])/g)).toHaveLength(3);
+    expect(markup).toContain('и ещё 2');
+    expect(card({ ...SERVER_ONLINE, current_work: many.slice(0, 3) })).not.toContain('и ещё');
+  });
+
+  it('draws nothing under «Сейчас» for a free server and for one whose list the answer left out', () => {
+    expect(card(SERVER_BUSY)).not.toContain('data-host-now');
+    const plain: ExecutorHost = { ...SERVER_ONLINE };
+    delete plain.current_work;
+    expect(card(plain)).not.toContain('data-host-now');
+    expect(hostRowReading(plain).work).toEqual([]);
+    expect(card(SERVER_EMPTY)).not.toContain('Сейчас:');
+  });
+
+  it('can fail: a card draws no CPU, memory, GPU or limit of a provider', () => {
+    const markup = card(SERVER_ONLINE, true, Date.parse('2026-11-09T11:06:00Z'));
+    expect(markup).not.toMatch(/CPU|RAM|GPU|VRAM|лимит|остаток/i);
+  });
+
+  it('puts the cards in a grid and keeps the exports and the marks of the census', () => {
+    const markup = seeded(['expert']);
+    expect(markup).toContain('data-hosts-list');
+    expect(markup.match(/data-host-row=/g)).toHaveLength(4);
+    expect(markup.match(/data-host-now/g)).toHaveLength(1);
   });
 });
 

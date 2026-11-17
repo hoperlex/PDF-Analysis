@@ -7,6 +7,9 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import type {
+  ExecutionQueueItem,
+  ExecutionQueuePage,
+  ExecutionQueueStateCount,
   ExecutorAgentInstall,
   ExecutorHost,
   ExecutorHostDetails,
@@ -18,6 +21,8 @@ import type {
   StageLayoutCell,
   StageModelLayout,
 } from '@/shared/api';
+import { queryKeys } from '@/shared/api';
+import type { ExecutionQueueFilter } from '@/entities/execution';
 import { executorHostDetailsKey, executorHostsKey } from '@/entities/executor-host';
 import { modelCatalogueKey, stageLayoutKey } from '@/entities/stage-layout';
 
@@ -50,10 +55,10 @@ export const PROJECT = `prj_${ULID}A`;
 export const DOCUMENT_A = `doc_${ULID}A`;
 export const DOCUMENT_B = `doc_${ULID}B`;
 
-/** Two calls of «основной»: the same document at two stages, the older first (no model, provider or run: `Г12-B`). */
+/** Two calls of «основной»: the same document at two stages, the older first, the stage as the cell key names it (no model, provider or run: `Г12-B`). */
 export const WORK_ONLINE: readonly ExecutorHostWork[] = [
   { project_uid: PROJECT, document_uid: DOCUMENT_A, document_title: 'Планы этажей', stage_key: 'blocks', since: '2026-11-09T10:45:00Z' },
-  { project_uid: PROJECT, document_uid: DOCUMENT_A, document_title: 'Планы этажей', stage_key: 'norms', since: '2026-11-09T10:50:00Z' },
+  { project_uid: PROJECT, document_uid: DOCUMENT_A, document_title: 'Планы этажей', stage_key: 'norm_verification', since: '2026-11-09T10:50:00Z' },
 ];
 
 export const SERVER_ONLINE = host({
@@ -235,4 +240,47 @@ export function seedDetails(client: QueryClient, details: ExecutorHostDetails = 
 export function seedLayout(client: QueryClient, layout: StageModelLayout = LAYOUT, catalogue: ModelCatalogue = CATALOGUE): void {
   client.setQueryData(stageLayoutKey(), layout);
   client.setQueryData(modelCatalogueKey(), catalogue);
+}
+
+/**
+ * The queue as `listExecutionQueue` answers it, for the tabs «Обзор» and «Задачи» (`UIP-S15-04`, `UIP-S15-05`): one job in each of the
+ * three groups and the counts of every state. Every string is Cyrillic or an identifier.
+ */
+function job(over: Partial<ExecutionQueueItem> & Pick<ExecutionQueueItem, 'state'>, letter: string): ExecutionQueueItem {
+  return {
+    job_id: `job_${ULID}${letter}`, run_id: `run_${ULID}${letter}`, project_uid: PROJECT, project_name: 'Жилой дом', document_uid: DOCUMENT_A,
+    document_name: 'Планы этажей', version_uid: `ver_${ULID}A`, version_ordinal: 1, priority: 0, created_at: '2026-11-09T10:40:00Z',
+    available_at: '2026-11-09T10:40:00Z', ...over,
+  };
+}
+
+export const JOB_RUNNING = job({ state: 'running', started_at: '2026-11-09T10:45:00Z' }, 'A');
+export const JOB_QUEUED = job({ state: 'queued', document_uid: DOCUMENT_B, document_name: 'Разрезы', queue_position: 1 }, 'B');
+export const JOB_DONE = job({ state: 'succeeded', started_at: '2026-11-09T09:00:00Z', finished_at: '2026-11-09T09:30:00Z' }, 'C');
+export const JOB_FAILED = job({
+  state: 'failed', document_uid: DOCUMENT_B, document_name: 'Разрезы', started_at: '2026-11-09T08:00:00Z', finished_at: '2026-11-09T08:10:00Z',
+  error_code: 'dependency_unavailable',
+}, 'D');
+
+/** Three queued, one leased, two running, one waiting to retry; five done and one cancelled; two failed and one stopped. */
+export const QUEUE_OVERVIEW: ExecutionQueueStateCount[] = [
+  { state: 'queued', count: 3 }, { state: 'leased', count: 1 }, { state: 'running', count: 2 }, { state: 'retry_wait', count: 1 },
+  { state: 'succeeded', count: 5 }, { state: 'cancelled', count: 1 }, { state: 'failed', count: 2 }, { state: 'dead_letter', count: 1 },
+];
+
+export function queuePage(items: ExecutionQueueItem[], over: Partial<ExecutionQueuePage> = {}): ExecutionQueuePage {
+  return { items, overview: QUEUE_OVERVIEW, live_failure_count: 2, page: { next_cursor: null }, paused: false, ...over };
+}
+
+/**
+ * The read of the queue the way a tab holds it: under the key of its filter (none: the counts of «Обзор»). `updatedAt` is the moment
+ * of the read, to which the durations of the tabs are measured.
+ */
+export function seedQueue(
+  client: QueryClient,
+  page: ExecutionQueuePage = queuePage([JOB_RUNNING, JOB_QUEUED]),
+  filter: ExecutionQueueFilter = {},
+  options: { readonly cursor?: string; readonly updatedAt?: number } = {},
+): void {
+  client.setQueryData(queryKeys.execution.queue(options.cursor, filter), page, options.updatedAt === undefined ? undefined : { updatedAt: options.updatedAt });
 }
