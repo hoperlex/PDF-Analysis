@@ -1,4 +1,4 @@
-"""`UIP-S12-01` (contract 1.56.0, rulings `Г12-B`, `Г9-B`): the execution status in the decision journal, and the filter by it.
+"""`UIP-S12-01` (contract 1.57.0, rulings `Г12-B`, `Г9-B`): the execution status in the decision journal, and the filter by it.
 
 No database. The route is mounted alone on a bare ``FastAPI`` application over a recording port, so what is under test is the edge:
 how ``?execution_status=`` is read (one value, a comma-separated list, the parameter written twice, the empty string), what is refused,

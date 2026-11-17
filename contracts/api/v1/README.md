@@ -11,7 +11,25 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.56.0` (`UI-PARITY-R3`)
+## Current contract `1.57.0` (`UI-PARITY-R3`)
+
+The stage 4–5 seal of the programme `UI-PARITY-R3` (the task is `docs/program/tasks/UI-PARITY-R3.md`, the seal is `UIP-CONTRACT-03`), raised once
+for the two stages after the contract lanes of the stages were merged. Additive: **no operation and no schema is added; four optional query
+parameters, two optional properties and two required properties of an answer**; no migration (head `0070`), no error code, no identity prefix,
+no state machine. The four changes below were each made by their own lane while this file still read 1.56.0, and are one seal here:
+
+- **The order of the project list (`UIP-S03-02`, owner ruling Г3-B).** `listProjects` takes the optional query `order`: `published` (the default, and the order the operation always had, newest first) or `name`. `name` is decided by the server before paging, so it holds across pages: by the first whole number written in the name, ascending, then the names without a number by `casefold`, and `project_uid` decides among equals. Another value is `422 validation_failed`.
+- **One document of a section's specification and of the accepted proposals (`UIP-S11-05`).** `getSectionSpecification` and `listAcceptedOptimisationProposals` take the optional query `document_uid`, which narrows the answer to one document set. For the specification an unknown document, one of another project than `project_uid` or one confirmed in another section is `404`; for the accepted proposals it is a filter and an empty page is a `200`.
+- **The execution status in the decision journal (`UIP-S12-01`, owner rulings Г9-B and Г12-B).** `DecisionRecord` gains the optional `execution_status` and `execution_status_at` (the designer's status of the finding and when it was set, as on `Finding`; absent where the finding has none), and `listDecisions` takes the optional query `execution_status`, a comma-separated list of `taken_into_account`, `amended`, `declined`, `agreed`; an unknown value or an empty element is `422 validation_failed`.
+- **The month's decision counts of an engineer (`UIP-S14-01`).** `WorkScheduleEngineer` gains `accepted_count` and `rejected_count` (integers from 0; the decisions that stand, findings and optimisation proposals together, taken directly and credited to their author, the month cut in the schedule's time zone). The server always sends both, so they are required in the answer; the properties are new and a reader of 1.56.0 ignores them.
+
+The API has 302 paths, 331 operations and 822 schemas; migration head `0070`. The domain catalogs remain at candidate revision 71; their shared version advances.
+
+Compatibility: additive for a reader. A client of 1.56.0 reads every answer of 1.57.0 unchanged (the new properties of `DecisionRecord` are optional and absent
+where the finding has no status; the two counts of `WorkScheduleEngineer` are new properties), and every request of 1.56.0 is valid unchanged (the new query parameters
+are optional and an absent one means the behaviour the operation always had); `ErrorEnvelope.contract_version` and `info.version` are `1.57.0`.
+
+## Contract `1.56.0` (`UI-PARITY-R3`, historical)
 
 The stage-2 seal of the programme `UI-PARITY-R3` (screens that follow the original PDF-proverka; the task is
 `docs/program/tasks/UI-PARITY-R3.md`, the seal is `UIP-CONTRACT-02`), raised once for the stage after the contract lanes of the stage were merged.

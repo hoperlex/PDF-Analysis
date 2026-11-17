@@ -1,4 +1,4 @@
-"""`UIP-S12-01` (contract 1.56.0): ``listDecisions`` and «Все» carry the execution status of the finding, and ``listDecisions`` filters by it.
+"""`UIP-S12-01` (contract 1.57.0): ``listDecisions`` and «Все» carry the execution status of the finding, and ``listDecisions`` filters by it.
 
 Through the shipped adapters over a real database, like ``test_decision_journal.py``: the status is set by the operation that sets
 it (``setFindingExecutionStatus``) and read back through the journal, so the join and the filter are what the HTTP surface serves.

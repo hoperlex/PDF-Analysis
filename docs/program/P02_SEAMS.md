@@ -10,7 +10,11 @@
 > `contracts/events/v1/**`. Where this document and one of those disagree, the frozen
 > contract wins and the disagreement is a defect in this file.
 
-## Current surface amendment — 1.56.0 / 0070
+## Current surface amendment — 1.57.0 / 0070
+
+`UIP-CONTRACT-03` (programme `UI-PARITY-R3`, stages 4–5): no operation and no schema is added, so the table of §7 and the list of keyed writes do not move. `listProjects` takes the optional query `order` (`published` or `name`), `getSectionSpecification` and `listAcceptedOptimisationProposals` the optional `document_uid`, `listDecisions` the optional `execution_status` (a comma-separated list); `DecisionRecord` gains the optional `execution_status` and `execution_status_at`, and `WorkScheduleEngineer` gains `accepted_count` and `rejected_count`. The surface is 302 paths / 331 operations / 822 schemas; no migration, the head stays `0070_document_group`. The record of the change is `contracts/api/v1/README.md`.
+
+## Surface amendment — 1.56.0 / 0070
 
 `UIP-CONTRACT-02` (programme `UI-PARITY-R3`, stage 2): two keyed writes join the table of §7, `setMyLastProject` (`PUT /me/last-project`, the object an account chose last; any complete account, `204`) and `setDocumentGroup` (`PUT /projects/{project_uid}/documents/{document_uid}/group`, the one optional group of a document; `expert` or `admin`, answers the document's `DocumentVersion`); `Account` gains `last_project_uid` and `DocumentVersion` gains `group` and `block_count`, and `getDocumentVersion` answers the `audit`. The surface is 302 paths / 331 operations / 822 schemas; the storage is `0069_account_last_project` and `0070_document_group`. The record of the change is `contracts/api/v1/README.md`.
 
