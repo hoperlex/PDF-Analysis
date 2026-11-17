@@ -88,62 +88,36 @@
   gap: var(--am-gap-xs);
 }
 
-/* `R-151n`: ✓/✕ beside a finding's row, and in the table's «Решение» column. Tokens only. */
+/*
+ * `R-151n`, `UIP-S06-02`: the decision field (✓ green, ✕ red, «Причина») beside a finding's row, and in the table's «Решение» column.
+ * The field's own look -- the two inks, the pressed fill, the held look, the line of the last press -- is the entity's
+ * (`decision-reason-control.module.css`); this file only places it. Tokens only.
+ */
 .withActions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) fit-content(18rem);
   align-items: start;
   gap: var(--am-gap-xs);
 }
 
+/*
+ * One field is as wide as its content up to 18rem: «Причина» takes what the two buttons leave and the line of the last press
+ * (a refusal's reason runs long) wraps inside it, so a sentence after a press does not widen the table's column or the row's.
+ */
 .rowActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--am-gap-xs);
+  min-width: 0;
+  max-width: 18rem;
 }
 
 /*
- * At a phone's width the `auto` column of ✓/✕ and its note (a refusal's reason runs long) took what the row's `1fr` could not
- * give up: the row's button shrank to 22 px wide and 333 tall, its text starting at x = -7. The actions drop under the row
+ * At a phone's width the `auto` column of the field and its note (a refusal's reason runs long) took what the row's `1fr` could not
+ * give up: the row's button shrank to 22 px wide and 333 tall, its text starting at x = -7. The field drops under the row
  * instead, in a single track that may shrink.
  */
 @media (max-width: 590px) {
   .withActions {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.rowAccept[aria-pressed='true'] {
-  border-color: var(--am-ok);
-  background: var(--am-ok-light);
-  color: var(--am-ok);
-}
-
-.rowReject[aria-pressed='true'] {
-  border-color: var(--am-failed);
-  background: var(--am-failed-light);
-  color: var(--am-failed);
-}
-
-.rowAccept:hover {
-  border-color: var(--am-ok);
-  color: var(--am-ok);
-}
-
-.rowReject:hover {
-  border-color: var(--am-failed);
-  color: var(--am-failed);
-}
-
-.rowNote {
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
-}
-
-.rowNoteFail {
-  color: var(--am-failed);
-  font-size: var(--am-text-xs);
 }
 
 /* `R-151j`: the severity strip -- the expert's decided severity as a filter, the model's proposal labelled apart. */

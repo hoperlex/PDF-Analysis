@@ -92,6 +92,39 @@ describe('resolveIntentKey', () => {
   });
 });
 
+describe('the reason beside a verdict is part of its intent', () => {
+  // `UIP-S06-02`: an accept or a reject carries the text typed beside it as `comment`.
+  const WITH_REASON: AppendDecisionRequest = { ...ACCEPT, comment: 'Пункт подтверждён по листу 3' };
+
+  it('reuses the key when the same verdict with the same reason is pressed again', () => {
+    const mint = counter();
+    const first = resolveIntentKey(null, WITH_REASON, mint.mint);
+    const retry = resolveIntentKey(first, { ...WITH_REASON }, mint.mint);
+
+    expect(retry.idempotencyKey).toBe(first.idempotencyKey);
+    expect(mint.count).toBe(1);
+  });
+
+  it('mints a new key when the reason is edited, removed or added', () => {
+    const mint = counter();
+    const first = resolveIntentKey(null, WITH_REASON, mint.mint);
+    const edited = resolveIntentKey(first, { ...WITH_REASON, comment: 'Пункт подтверждён по листу 4' }, mint.mint);
+    const removed = resolveIntentKey(edited, ACCEPT, mint.mint);
+    const added = resolveIntentKey(removed, WITH_REASON, mint.mint);
+
+    expect(new Set([first, edited, removed, added].map((record) => record.idempotencyKey)).size).toBe(4);
+    expect(mint.count).toBe(4);
+  });
+
+  it('mints a new key for the other verdict with the same reason', () => {
+    const mint = counter();
+    const accept = resolveIntentKey(null, WITH_REASON, mint.mint);
+    const reject = resolveIntentKey(accept, { ...WITH_REASON, event_type: 'reject' }, mint.mint);
+
+    expect(reject.idempotencyKey).not.toBe(accept.idempotencyKey);
+  });
+});
+
 describe('intentSignature', () => {
   it('does not collide when a comment contains the separator characters', () => {
     // A naive `join('|')` would let a crafted comment forge another intent's signature,

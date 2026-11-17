@@ -25,6 +25,11 @@
  * with it. It is filed under the finding it was raised for, so it cannot follow the reviewer
  * to the next finding.
  *
+ * The reason typed beside ✓ or ✕ (`UIP-S06-02`) is part of the intent: it goes in the same event as `comment`, and
+ * `intentSignature` reads it, so a retry with the same text after a failure is the same intent and keeps its key, while
+ * the same press with other text is another command and gets a new one. The hook never empties the field -- it holds
+ * no text; the row that owns the field empties it after the server's answer.
+ *
  * The hook is bound to one finding but lives at page level, so it outlives a change of
  * selection, and everything it reports about the LAST press is kept with the finding the press
  * was raised for (`WEB-HOOKS-PER-FINDING-01`): the mutation's variables are the press, the
@@ -81,6 +86,8 @@ export interface RecordVerdictApi {
     intent: VerdictIntent,
     observationId: FindingObservationId,
     severity?: VerdictSeverity,
+    /** The reason typed beside the press; empty or absent sends no `comment`. */
+    reason?: string,
   ) => void;
   /** A verdict for the bound finding is in flight; another finding's request is not reported. */
   readonly isPending: boolean;
@@ -147,12 +154,13 @@ export function useRecordVerdict({ findingUid, runId }: RecordVerdictArgs): Reco
   const lastPressWasHere = press !== undefined && press.findingUid === findingUid;
 
   return {
-    record: (intent, observationId, severity) => {
+    record: (intent, observationId, severity, reason) => {
       const checked = buildVerdictRequest({
         intent,
         observationId,
         proposedSeverity: severity?.proposed,
         decidedSeverity: severity?.decided,
+        reason,
       });
       if (checked.kind === 'refused') {
         setRefused({ findingUid, refusal: checked.refusal });

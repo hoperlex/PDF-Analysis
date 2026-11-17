@@ -14,6 +14,11 @@
  *     from it, so an accept with no choice is REFUSED here, in words, not defaulted.
  *   - A reject never sends a severity. The ledger's fold clears the decided severity on a
  *     reject, so a value on it could only be refused or ignored.
+ *   - The reason typed beside ✓ or ✕ (`UIP-S06-02`) travels in the SAME event as its `comment`, not
+ *     as a second event. It goes with its ends trimmed, and a reason that is empty after trimming
+ *     is no `comment` key at all: the ledger refuses an empty comment (`min_length` 1), and a press
+ *     without a reason stays byte-for-byte the request it always was. The reason is optional for
+ *     both verdicts; a screen that needs one for a verdict says so in its own refusal.
  *
  * Pure: no React, no request. The hook calls it; a test calls it the same way.
  */
@@ -67,6 +72,11 @@ export interface VerdictRequestInput {
   readonly proposedSeverity?: Severity | undefined;
   /** What the expert chose, or nothing if they have not chosen. */
   readonly decidedSeverity?: Severity | undefined;
+  /**
+   * The reason typed beside the press. Trimmed here (the field's own text is trimmed as well; this is
+   * the request's guarantee, whoever calls it); empty or absent adds no `comment`.
+   */
+  readonly reason?: string | undefined;
 }
 
 export type VerdictRequestCheck =
@@ -74,9 +84,11 @@ export type VerdictRequestCheck =
   | { readonly kind: 'refused'; readonly refusal: VerdictRefusal };
 
 export function buildVerdictRequest(input: VerdictRequestInput): VerdictRequestCheck {
+  const reason = input.reason?.trim() ?? '';
   const request: AppendDecisionRequest = {
     event_type: input.intent,
     finding_observation_id: input.observationId,
+    ...(reason === '' ? {} : { comment: reason }),
   };
 
   if (input.intent === 'reject' || input.proposedSeverity === undefined) {
