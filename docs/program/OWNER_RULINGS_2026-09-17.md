@@ -2045,3 +2045,24 @@ lane records; this section takes 3.55 so that the two cannot collide. The number
 | R-153ap | Poll after the judge, `В2`, who yields the memory at night: «Ночью без новых прогонов». | From 01:00 to 06:00 (a setting) the stand issues no new runs, waits for the running ones, then runs the encoder under a hard limit; the model is unloaded after the window. A run started at night waits for the morning with a note. The first night is the check; a lack of memory is loud (`ADR-0029` decision 8, temporary decision 2). |
 | R-153aq | Poll after the judge, `В1`, precedents for the AI critic: «Критик без прецедентов». | While the night mode stands the critic gets norms only (paragraphs and PNG), with the line «Прецеденты: недоступно до переезда»; the expert sees precedents in the morning (`ADR-0029` temporary decision 2). |
 | R-153ar | Poll after the judge, `В3`, «снять» without a critic's review: «Не разбирал — не предлагать». | A finding that no critic reviewed (outside the AI critic's window, or not covered by the deterministic critic of plan v2) gets only a neutral mark and never enters the «снять» queue (`ADR-0029` decisions 5 and 14). |
+
+## 3.56 — R-155a…R-155i, restart a run from any stage and lift the analysis time limits (owner's direct polls, 2026-11-17)
+
+The occasion: production run `run_01M7MAMZTTDEQTT8VWNG63J7BB` (214. Alia, ЭОМ, version 1) ended `partial` on 2026-11-17 because its
+Attempt reached `ATTEMPT_HARD_CAP_SECONDS = 7200` while the critic ran; the last critic call got about 69 s and failed `codex_timeout`.
+The owner asked how to start the run again from the critic, then ordered one thorough task instead of a hotfix. The answers below were
+given in two polls, the second after two independent judges read the plan. The task is `docs/program/tasks/RUN-RESTART-01.md`.
+`R-155a`, `R-155b`, `R-155f` and `R-155g` change `R-151i` (a new run beside the old one, the source unchanged and listed) and, for a
+restart only, the confirm-only carryover of `W59-DECISION-CARRYOVER-01`.
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-155e | «Хотфикс не нужен, делай план реализации задачи комплексной правки. Запуск повторно с любого этапа (перезаписывает прогон) и поднятие лимитов времени на анализ.» | One task, `RUN-RESTART-01`; no hotfix of the start-from-stage set. |
+| R-155a | First poll, how a restart «overwrites» a run: «Новый заменяет старый, доступно только с частично завершенными или незавершенными прогонами, старый удаляется (что правило не нарушает для частичных и отмененых прогонов)». | A restart creates a new run (a terminal run is never reopened) from any of the eight stage chips; the source must be `partial`, `failed` or `cancelled`; the source is deleted with the `deleteRun` tombstone (migration `0066`), which keeps its data. A published run is not restarted. |
+| R-155b | First poll, the expert's decisions on the source's findings: «Переносить на совпавшие». | Decisions are carried automatically to the findings of the new run that match verbatim, as events linked to their source decision. |
+| R-155c | First poll, the ceiling of one Attempt: «Без потолка». | `ATTEMPT_HARD_CAP_SECONDS` stops bounding a live Attempt; per-call windows and the lease stay; a silence watchdog bounds local work between calls. |
+| R-155d | First poll, a running (hung) run: «Сначала «Остановить»». | The restart is offered on an ended run only; a running run is stopped first with `cancelRun`. |
+| R-155f | Second poll, the settings of a restart: «Как у исходного». | The new run inherits every setting of the source (norms snapshot, profile and prompts, policies, stage plan and models), so the source's saved replies replay; new settings go through «Повторить прогон». |
+| R-155g | Second poll, when the source is deleted: «При публикации нового». | The tombstone is written when the new run publishes; a restart that fails leaves the source listed and itself visible with its reason. |
+| R-155h | Second poll, the window of one model call: «Как в оригинале». | A call's window is its stage row's window (`ROW_TIMEOUT_SECONDS`: text and blocks 1800 s, cross-check 3600 s, norms, critic and correction 600 s), not the ~540 s the stall window cuts it to today. |
+| R-155i | Second poll, the release order: «Всё вместе». | The time limits and the restart ship as one minor version. |
