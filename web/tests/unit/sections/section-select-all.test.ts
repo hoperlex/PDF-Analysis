@@ -137,7 +137,7 @@ describe('a section that fits one page', () => {
 });
 
 describe('a session that cannot start an audit', () => {
-  it('reads no page beyond the one in view and draws no choice', () => {
+  it('draws no choice; it still reads the whole listing, for the groups (`UIP-S02-06`), which every reader is shown', () => {
     const client = newClient();
     client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
     client.setQueryData(key(undefined), page(FIRST_PAGE, 'c2'));
@@ -148,7 +148,10 @@ describe('a session that cannot start an audit', () => {
     expect(markup).not.toContain('data-tally-select');
     // the number and the plaques are still read: a viewer sees the section's figures
     expect(markup).toContain('data-section-count="2"');
-    expect(documentKeys(client)).toHaveLength(1);
+    // `UIP-S02-06`: this test said «reads no page beyond the one in view» while only «Выбрать все» needed the whole listing. The groups are
+    // made of the whole listing and are shown to everyone, so the second page is read for a viewer too (here it is being read).
+    expect(documentKeys(client)).toHaveLength(2);
+    expect(markup).toContain('data-groups-walk="pending"');
   });
 });
 

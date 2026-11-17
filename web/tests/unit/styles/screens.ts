@@ -3781,5 +3781,34 @@ export function screens(): Screen[] {
     })));
   }
 
+  /*
+   * `UIP-S02-06`: the section's cards by group -- the headings of the named groups and of «Без группы» (a dashed frame), the line while the
+   * pages of a longer section are being read, and the error when one could not be read. At the very end, as the block before.
+   */
+  {
+    const inGroup = (n: string, group?: string) => ({
+      ...version(),
+      document_uid: `doc_01J9ZQ8K7NHVXW3T2R5M6P4QG${n}` as never,
+      version_uid: `ver_01J9ZQ8K7NHVXW3T2R5M6P4QG${n}` as never,
+      display_title: `Документ ${n}`,
+      ...(group === undefined ? {} : { group }),
+    });
+    const listing = (cursor: string | undefined) =>
+      queryKeys.projects.documents(PROJECT_UID, cursor, DOCUMENT_PAGE_LIMIT, 'AR', false, undefined, undefined, 'audit');
+    const byGroup = newClient();
+    byGroup.setQueryData(listing(undefined), {
+      items: [inGroup('1', 'Корпус Б'), inGroup('2', 'Корпус А'), inGroup('3'), inGroup('4', 'Корпус А')],
+      page: { next_cursor: null },
+    });
+    add('SectionDetailPage by group', renderScreen(byGroup, createElement(SectionDetailPage, { projectUid: PROJECT_UID, sectionCode: 'AR' })));
+    const reading = newClient();
+    reading.setQueryData(listing(undefined), { items: [inGroup('1', 'Корпус Б'), inGroup('2')], page: { next_cursor: 'Y3Vyc29y' } });
+    add('SectionDetailPage reading every page', renderScreen(reading, createElement(SectionDetailPage, { projectUid: PROJECT_UID, sectionCode: 'AR' })));
+    const failed = newClient();
+    failed.setQueryData(listing(undefined), { items: [inGroup('1', 'Корпус Б'), inGroup('2')], page: { next_cursor: 'Y3Vyc29y' } });
+    seedError(failed, listing('Y3Vyc29y'), apiError(503, 'dependency_unavailable', true));
+    add('SectionDetailPage a page could not be read', renderScreen(failed, createElement(SectionDetailPage, { projectUid: PROJECT_UID, sectionCode: 'AR' })));
+  }
+
   return out;
 }

@@ -23,10 +23,17 @@ export interface SectionChoices {
   readonly awaitingDecision: readonly DocumentVersion[];
 }
 
+/**
+ * The listing in view, whole: the page itself while it is all of the listing (`idle`), the walk's pages once they are all read
+ * (`complete`), and `null` while they are being read or one failed. The groups of `UIP-S02-06` are made of the same.
+ */
+export function wholeListing(pageDocuments: readonly DocumentVersion[], walk: ListingWalk): readonly DocumentVersion[] | null {
+  return walk.status === 'idle' ? pageDocuments : walk.status === 'complete' ? walk.items : null;
+}
+
 /** The sets over the whole listing, or `null` while it is not known whole (the walk is reading, or failed). */
 export function sectionChoices(pageDocuments: readonly DocumentVersion[], walk: ListingWalk): SectionChoices | null {
-  const whole: readonly DocumentVersion[] | null =
-    walk.status === 'idle' ? pageDocuments : walk.status === 'complete' ? walk.items : null;
+  const whole = wholeListing(pageDocuments, walk);
   if (whole === null) return null;
   const all = whole.filter(startable);
   return {

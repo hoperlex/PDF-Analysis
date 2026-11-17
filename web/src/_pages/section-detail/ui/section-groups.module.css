@@ -1,0 +1,65 @@
+/*
+ * The section's cards by group (UIP-S02-06): the original's group is a frame with a strip for its name and number over its cards, and a
+ * dashed frame for the group of the documents that have none. Our own tokens; the frame is the card's radius, the strip a compact line,
+ * not a card.
+ */
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-md);
+}
+
+.group {
+  min-width: 0;
+  margin: 0;
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+}
+
+.groupNone {
+  border-style: dashed;
+}
+
+/* The heading: one compact line, the name and then the number of its documents. */
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  margin: 0 0 var(--am-gap-sm);
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+  font-size: var(--am-text-sm);
+  font-weight: 700;
+}
+
+.headingNone {
+  background: var(--am-surface);
+  color: var(--am-ink-muted);
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.count {
+  flex: none;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The page says the pages are being read, and, when one failed, says that and offers to try again. */
+.reading {
+  margin: 0 0 var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.failed {
+  margin-bottom: var(--am-gap-sm);
+}

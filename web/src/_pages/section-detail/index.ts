@@ -12,4 +12,9 @@ export { SectionSelectionBar } from './ui/section-selection-bar';
 export type { ListingScope, ListingWalk } from './model/use-listing-walk';
 export { useListingWalk } from './model/use-listing-walk';
 export type { SectionChoices } from './model/section-choices';
-export { sectionChoices } from './model/section-choices';
+export { sectionChoices, wholeListing } from './model/section-choices';
+// `UIP-S02-06`: the section's cards by group, made of the whole listing.
+export type { DocumentGroup } from './model/group-documents';
+export { GROUP_NAME_MAX_LENGTH, NO_GROUP_LABEL, groupDocuments, groupOf, orderGroupNames } from './model/group-documents';
+export type { GroupsWalkNoteProps, SectionGroupGrid, SectionGroupsProps } from './ui/section-groups';
+export { GroupsWalkNote, SectionGroups } from './ui/section-groups';
