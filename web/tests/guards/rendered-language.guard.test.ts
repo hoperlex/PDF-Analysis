@@ -2972,6 +2972,17 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     },
   },
   {
+    // `UIP-S17-01`: the object comes from the address, not from the only object of the list, so the table's loading line
+    // («Загрузка: сводку по комплектам…») is reached by a page that is given its object and has no overview yet.
+    name: 'version-compare-overview-loading',
+    make: () => createElement(VersionComparePage, { initial: { projectUid: PROJECT_UID } }),
+    seedClient: (client) => {
+      client.setQueryData(queryKeys.releases.version(), { comparison_modules: 'versions' });
+      client.setQueryData(queryKeys.account.me(), { roles: ['expert'], last_project_uid: null });
+      client.setQueryData(KEYS.projects, { items: [project()], page: STAGE_PAGE });
+    },
+  },
+  {
     // `UIP-S17-01`: «Сравнение версий» with no object in the top strip says in one line where to choose it.
     name: 'version-compare-no-object',
     make: () => createElement(VersionComparePage, {}),

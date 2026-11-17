@@ -585,7 +585,9 @@ describe('the page «Сравнение версий»', () => {
 
   it('(UIP-S17-01) has no card that chooses the object and no subtitle: the object is the top strip\'s', () => {
     const markup = page_({}, { initial: { projectUid: PROJECT_UID } });
-    expect(markup).not.toContain('<select');
+    // the selects that are left are the table's own («Марка», «Порядок»); the card with the list of objects is gone
+    expect(markup).not.toMatch(/<label[^>]*>\s*Объект/);
+    expect(markup).not.toContain('— выберите —');
     expect(markup).not.toContain('Корпус 1');
     expect(markup).not.toContain('am-page__subtitle');
     expect(text(markup)).not.toContain('Версии комплектов объекта: загрузка');

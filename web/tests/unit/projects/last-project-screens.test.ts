@@ -292,7 +292,8 @@ describe('the comparison screens work in the object the top strip names', () => 
     renderScreen(client, createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, createElement(VersionComparePage)));
     return client.getQueryCache().getAll()
       .map((entry) => entry.queryKey as readonly unknown[])
-      .filter((key) => key[0] === 'comparison' && key[1] === 'overview')
+      // `none` is the key of a read for no object, which the hook asks for and the query never sends
+      .filter((key) => key[0] === 'comparison' && key[1] === 'overview' && key[2] !== 'none')
       .map((key) => key[2] as string);
   }
 
