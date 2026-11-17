@@ -168,4 +168,3 @@ def test_an_unknown_version_is_not_found(session, blob_store, produced) -> None:
     assert raised.value.code == ErrorCode.NOT_FOUND
     answer = client.get(f"/versions/{ABSENT_VERSION}")
     assert answer.status_code == 404 and answer.json()["error_code"] == "not_found"
-
