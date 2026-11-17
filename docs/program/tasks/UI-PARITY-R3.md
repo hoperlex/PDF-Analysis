@@ -122,3 +122,4 @@ previous screens. No feature switch is introduced; the two migrations carry thei
 | P3a | `907e968a8` | 0.30.1 rev 1 | G-09, S04-02..04, S06-01..03, S01-01..03; FIX-09..12 |
 | P3b | `227b2586e` | 0.30.2 rev 1 | S06-04..08, S07-01, S08-01..03, S09-01, S10-01; S03-02, S11-05, S12-01, S14-01 (API) + CONTRACT-03 (1.57.0); FIX-13..16 |
 | P4 | `35bc680ee` | 0.30.3 rev 1 | S03-01, S03-03, S02-01..03, S18-01, S19-01, S19-03, S21-01, S09-02..04 (publisher session; main by owner PR #59 `810fdcfe0`) |
+| P5 | `1a6cf86e5` | 0.30.4 rev 1 | S02-04..07; FIX-17..20; database pins of 0068..0070 resealed by the publisher |
