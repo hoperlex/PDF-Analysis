@@ -45,8 +45,10 @@ key to ``command_record``) and ``audit_run`` carries the ``command_id`` of the c
 So «the run that replaced a tombstoned source» is the run whose ``command_id`` equals the tombstone's (``ux_audit_run_restart_command`` makes it
 one run). Before that moment there is no tombstone and the source is listed as it was: the only forward pointer is the new run's own
 ``started_from_run_id``. A plain ``deleteRun`` tombstone names the ``delete_audit_run`` command, which no run was created by, so it replaces
-nothing. ``command_id`` joins ``trg_audit_run_frozen_guard``'s list (nothing ever updated it) so the link cannot be moved after the fact, and so
-does the new column.
+nothing. ``restart_point`` joins ``trg_audit_run_frozen_guard``'s list, and the ``command_id`` of a **restart** row is frozen by a trigger of its
+own (``trg_audit_run_restart_command_frozen``: the generic ``am_guard_frozen_columns`` under a ``WHEN`` of the row's restart point), so the link
+cannot be moved after the fact. The column is not added to the general list on purpose: the recovery drills rewrite the receipts of ordinary runs,
+and nothing about a run that is no restart depends on its command.
 
 ``trg_audit_run_deletion_by_restart`` makes the rule of ``R-155g`` a fact of the database too: a tombstone that names a restart's command is
 refused unless that run is ``published`` **and** names the tombstoned run as its source -- the tombstone is written in the transaction that
@@ -66,7 +68,7 @@ Downgrade
 Refuses while any run carries a restart point: dropping the column would turn «restarted from chip X of run Y» into «computed from scratch», and a
 tombstone written by a restart into a plain deletion -- false statements about what produced the run's findings (AGENTS section 4, no silent
 fallback; the pattern of ``0060``). With none, it restores the pair rule, the frozen list of ``0064``, and drops the column, the indexes, the
-trigger and its function.
+triggers and the function.
 """
 
 from __future__ import annotations
@@ -88,7 +90,7 @@ _FROZEN_RUN_0064 = (
     "'connection_revision_id', 'preset_revision_id', 'executor_group_revision_id', 'routing_rule_revision_id', "
     "'started_by_user_uid', 'started_from_run_id', 'start_stage_id', 'stage_plan', 'publication_mode'"
 )
-_FROZEN_RUN_0071 = _FROZEN_RUN_0064 + ", 'restart_point', 'command_id'"
+_FROZEN_RUN_0071 = _FROZEN_RUN_0064 + ", 'restart_point'"
 
 _POINTS = ("preparation", "text", "blocks", "cross_check", "merge", "norms", "review", "correction")
 _POINT_LIST = ", ".join(f"'{point}'" for point in _POINTS)
@@ -105,6 +107,7 @@ _PAIR_0071 = (
 
 _ACTIVE_RESTART = "ux_audit_run_active_restart"
 _RESTART_COMMAND = "ux_audit_run_restart_command"
+_COMMAND_TRIGGER = "trg_audit_run_restart_command_frozen"
 _DELETION_TRIGGER = "trg_audit_run_deletion_by_restart"
 _DELETION_FUNCTION = "am_guard_run_deletion_by_restart"
 
@@ -177,6 +180,10 @@ def upgrade() -> None:
         f"CREATE TRIGGER {_DELETION_TRIGGER} BEFORE INSERT ON audit_run_deletion "
         f"FOR EACH ROW EXECUTE FUNCTION {_DELETION_FUNCTION}()"
     )
+    op.execute(
+        f"CREATE TRIGGER {_COMMAND_TRIGGER} BEFORE UPDATE ON audit_run FOR EACH ROW WHEN (OLD.restart_point IS NOT NULL) "
+        "EXECUTE FUNCTION am_guard_frozen_columns('command_id')"
+    )
     _frozen_run_guard(_FROZEN_RUN_0071)
 
 
@@ -195,6 +202,7 @@ def downgrade() -> None:
         """
     )
     _frozen_run_guard(_FROZEN_RUN_0064)
+    op.execute(f"DROP TRIGGER {_COMMAND_TRIGGER} ON audit_run")
     op.execute(f"DROP TRIGGER {_DELETION_TRIGGER} ON audit_run_deletion")
     op.execute(f"DROP FUNCTION {_DELETION_FUNCTION}()")
     op.execute(f"DROP INDEX {_RESTART_COMMAND}")

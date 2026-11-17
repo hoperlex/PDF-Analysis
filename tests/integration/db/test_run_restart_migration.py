@@ -11,7 +11,8 @@ that obeys beside a row that does not, with the triggers on, and a refusal is at
   point, never both, never with ``reaudit_of_run_id``; the rows of ``0060`` still obey it; a restart names its starter and its command;
 * **one active restart per source**, released by any terminal state of the first (``ux_audit_run_active_restart``), and **one run per restart command**
   (``ux_audit_run_restart_command``);
-* **frozen**: ``restart_point`` and ``command_id`` cannot be rewritten (``AM003``), a column that is not frozen still can;
+* **frozen**: ``restart_point`` and the ``command_id`` of a restart cannot be rewritten (``AM003``); the command of an ordinary run, and any column
+  that is not frozen, still can;
 * **the link**: a tombstone that names a restart's command is refused (``AM001``) unless that run is ``published`` and names the tombstoned run as its
   source; the run that replaced a tombstoned source is the run whose ``command_id`` is the tombstone's; a plain ``deleteRun`` tombstone replaces nothing;
 * **no constraint of the decision ledger compares versions**, so a carry between two findings of the same version (a restart's) is admitted as it stands;
@@ -298,7 +299,7 @@ def test_a_restart_command_makes_one_run(at_head: Engine) -> None:
 # -- frozen -----------------------------------------------------------------------------------------
 
 
-def test_the_restart_point_and_the_command_cannot_be_rewritten_and_a_free_column_still_can(at_head: Engine) -> None:
+def test_the_restart_point_and_the_command_of_a_restart_cannot_be_rewritten_and_nothing_else_about_an_ordinary_run_changes(at_head: Engine) -> None:
     world = World(at_head)
     with at_head.begin() as connection:
         source = world.ended_source(connection)
@@ -307,8 +308,11 @@ def test_the_restart_point_and_the_command_cannot_be_rewritten_and_a_free_column
     _refused(at_head, lambda c: c.execute(text("UPDATE audit_run SET restart_point = 'text' WHERE run_id = :r"), {"r": run}), "AM003")
     _refused(at_head, lambda c: c.execute(text("UPDATE audit_run SET restart_point = NULL WHERE run_id = :r"), {"r": run}), "AM003")
     _refused(at_head, lambda c: c.execute(text("UPDATE audit_run SET command_id = :c WHERE run_id = :r"), {"r": run, "c": world.command(c)}), "AM003")
-    _refused(at_head, lambda c: c.execute(text("UPDATE audit_run SET command_id = NULL WHERE run_id = :r"), {"r": plain}), "AM003")
-    # The control: a column the guard does not freeze is still written.
+    _refused(at_head, lambda c: c.execute(text("UPDATE audit_run SET command_id = NULL WHERE run_id = :r"), {"r": run}), "AM003")
+    # The controls: the command of a run that is no restart is as it was (the recovery drills rewrite receipts), and so is any column the guard does
+    # not freeze.
+    _accepted(at_head, lambda c: c.execute(text("UPDATE audit_run SET command_id = :c WHERE run_id = :r"), {"r": plain, "c": world.command(c)}))
+    _accepted(at_head, lambda c: c.execute(text("UPDATE audit_run SET command_id = NULL WHERE run_id = :r"), {"r": plain}))
     _accepted(at_head, lambda c: c.execute(text("UPDATE audit_run SET updated_at = now() WHERE run_id = :r"), {"r": run}))
     with at_head.connect() as connection:
         assert connection.execute(text("SELECT restart_point FROM audit_run WHERE run_id = :r"), {"r": run}).scalar_one() == "review"
@@ -470,7 +474,8 @@ def test_the_downgrade_refuses_while_a_run_holds_a_restart_point_and_restores_00
         assert "restart_point" not in pair
         guard = connection.execute(text(
             "SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgname = 'trg_audit_run_frozen_guard'")).scalar_one()
-        assert "'publication_mode'" in guard and "'command_id'" not in guard and "restart_point" not in guard
+        assert "'publication_mode'" in guard and "restart_point" not in guard
+        assert connection.execute(text("SELECT count(*) FROM pg_trigger WHERE tgname = 'trg_audit_run_restart_command_frozen'")).scalar_one() == 0
 
     upgraded = foundation_command(_alembic("upgrade", THIS), url)
     assert upgraded.returncode == 0, upgraded.describe()
@@ -478,4 +483,5 @@ def test_the_downgrade_refuses_while_a_run_holds_a_restart_point_and_restores_00
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == THIS
         guard = connection.execute(text(
             "SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgname = 'trg_audit_run_frozen_guard'")).scalar_one()
-        assert "'restart_point'" in guard and "'command_id'" in guard
+        assert "'restart_point'" in guard
+        assert connection.execute(text("SELECT count(*) FROM pg_trigger WHERE tgname = 'trg_audit_run_restart_command_frozen'")).scalar_one() == 1

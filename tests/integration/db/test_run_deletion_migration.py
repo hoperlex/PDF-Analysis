@@ -168,8 +168,12 @@ def test_the_table_has_the_columns_the_key_the_references_and_the_trigger_the_mi
         assert set(actions.values()) == {"r"}, "every reference is RESTRICT"
         triggers = connection.execute(text(
             "SELECT t.tgname, p.proname FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid "
-            "WHERE t.tgrelid = 'audit_run_deletion'::regclass AND NOT t.tgisinternal")).all()
-        assert [tuple(row) for row in triggers] == [("trg_audit_run_deletion_immutable", "am_immutable_row")]
+            "WHERE t.tgrelid = 'audit_run_deletion'::regclass AND NOT t.tgisinternal ORDER BY t.tgname")).all()
+        # `0071_run_restart` (`RUN-RESTART-01`) adds the guard of a tombstone written by a restart; `0066` declares the immutability.
+        assert [tuple(row) for row in triggers] == [
+            ("trg_audit_run_deletion_by_restart", "am_guard_run_deletion_by_restart"),
+            ("trg_audit_run_deletion_immutable", "am_immutable_row"),
+        ]
 
 
 def test_the_key_and_the_references(at_head: Engine) -> None:

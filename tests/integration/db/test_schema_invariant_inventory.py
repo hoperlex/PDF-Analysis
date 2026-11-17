@@ -456,16 +456,17 @@ from sqlalchemy import Engine, text
 #: Resealed 2026-11-17 for ``0071_run_restart`` (`RUN-RESTART-01`), from this test's own observed output on throwaway PostgreSQL (the project image,
 #: container ``rr-l0-pg``) migrated fresh to ``0071``: columns +1 (``audit_run.restart_point``, to 1942), constraints +2 (``ck_audit_run_restart_point``
 #: and ``ck_audit_run_restart_has_starter_and_command``, to 2339; ``ck_audit_run_started_from_pair`` is redefined, same name, so only the digest moves),
-#: indexes +2 (the two partial unique indexes of the active restart and of the restart command, to 544), triggers +1
-#: (``trg_audit_run_deletion_by_restart``, to 303; ``trg_audit_run_frozen_guard`` is re-created with the longer list, same name, so only the digest
-#: moves) and functions +1 (``am_guard_run_deletion_by_restart``, to 87). Relations, views, extensions, sequences, policies and the state topology are
-#: byte-identical to the ``0070`` seal.
+#: indexes +2 (the two partial unique indexes of the active restart and of the restart command, to 544), triggers +2
+#: (``trg_audit_run_deletion_by_restart`` and ``trg_audit_run_restart_command_frozen``, to 304; ``trg_audit_run_frozen_guard`` is re-created with
+#: the longer list, same name, so only the digest moves) and functions +1 (``am_guard_run_deletion_by_restart``, to 87; the second trigger uses the
+#: generic ``am_guard_frozen_columns``). Relations, views, extensions, sequences, policies and the state topology are byte-identical to the ``0070``
+#: seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "columns": (1942, "52f4adc2596bcbe72ecce0010373eb55d8a973e54f64182bf3335ef28d47b015"),
     "relations": (185, "d946ca76640e7cf1d42bfc6cea4845074a20149a8317addfcda7b7dd6aa88a47"),
     "constraints": (2339, "276ae6b668e2e49112ea28e64c4031c3ff2705b1fe2d4fb555191fcf46a0657b"),
     "indexes": (544, "a36fbeee2185577392932023f5ea329b6b3d38c73de655446cc570a0085ab70a"),
-    "triggers": (303, "e0a9ca8416999e9c4c24de948480355b0475933bd31f5bd860e3322ccbd53cb6"),
+    "triggers": (304, "83233aee4ed4954d770300998fa8960f423ce9e0ad3aa037b91de22b373b71a0"),
     "functions": (87, "d534382579fd406a11f85dd4fd2cec95cc07e3a4c4fe95976cec96669eb0d953"),
     "views": (7, "5e78d3a1fd6d83febea265c402139aefd89d63afd83c1f38acd71979822d1ef8"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

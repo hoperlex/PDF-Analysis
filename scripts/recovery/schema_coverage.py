@@ -153,6 +153,8 @@ TRIGGERS = (
     # `0048_dispatch_time_binding` (`EXEC2-SEAL-2`): the frozen guard of a run moved to its own function, which lets the
     # connection revision be written once, with `binding_state` pending -> bound (19 = ROW | BEFORE | UPDATE).
     ("audit_run", "trg_audit_run_frozen_guard", "am_guard_audit_run_frozen", 19),
+    # `0071_run_restart` (`RUN-RESTART-01`): the command of a restart run is frozen (19 = ROW | BEFORE | UPDATE, under a WHEN of the restart point).
+    ("audit_run", "trg_audit_run_restart_command_frozen", "am_guard_frozen_columns", 19),
     ("audit_run", "trg_audit_run_norm_set", "am_verify_run_norm_set", 23),
     ("audit_run", "trg_audit_run_preset_executor", "am_check_audit_run_preset", 7),
     ("audit_run", "trg_audit_run_state_guard", "am_guard_state_transition", 23),
