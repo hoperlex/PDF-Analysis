@@ -12,16 +12,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExtendedRunReview } from '@/shared/api';
 import { formatExtendedRunReport, procedureReadings, runChips } from '@/entities/audit-run';
-import { readinessPlan } from '@/entities/stage-layout';
 import { CRITIC_QUEUE_NOTES, ObservationList, criticQueueCounts } from '@/widgets/extended-review';
 import { CRITIC_QUEUE_NOTES_DETERMINISTIC, criticIsDeterministic } from '@/widgets/extended-review/ui/critic-queues';
 import { ExtendedReviewView } from '@/widgets/extended-review/ui/extended-review';
 import { extendedCandidateCounts } from '@/widgets/extended-review/ui/extended-review-summary';
-import { PlanStagesDialog } from '@/widgets/run-stages-dialog';
+import { StageModelsDialogView } from '@/widgets/run-stages-dialog';
 
 import { mountLive } from '../analysis-settings/live-render';
 import { runStatus } from '../review/fixtures';
-import { CLAUDE_CELLS } from '../start-run/readiness-fixtures';
+import { readiness } from '../start-run/readiness-fixtures';
 
 const runId = 'run_01M664JCG1QH0NTEWZTC3PM19K';
 beforeEach(() => { vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'https://api.example.test/api/v1'); });
@@ -189,14 +188,12 @@ describe('the exports', () => {
   });
 });
 
-describe('the plan window before a run, under the plan the readiness names', () => {
-  const draw = (extendedPlan?: string | null) => renderToStaticMarkup(createElement(PlanStagesDialog, {
-    rows: readinessPlan(CLAUDE_CELLS), kit: null, onClose: () => undefined, staticOpen: true,
-    ...(extendedPlan === undefined ? {} : { extendedPlan }),
+describe('the window «Модели по этапам» before a run, under the plan the readiness names', () => {
+  const draw = (extendedPlan?: 'v2' | 'v3' | null) => renderToStaticMarkup(createElement(StageModelsDialogView, {
+    source: { kind: 'plan', readiness: readiness(extendedPlan === undefined ? {} : { extended_plan: extendedPlan }) }, onClose: () => undefined, staticOpen: true,
   }));
-  // The line of a stage is the last span of its button (the first is its name).
-  const lineOf = (markup: string, stage: string) => new RegExp(`data-stage-item="${stage}"[^>]*>(?:(?!</button>).)*<span[^>]*>([^<]*)</span></button>`, 's')
-    .exec(markup)?.[1];
+  // The fact of a stage is the last column of its row.
+  const lineOf = (markup: string, stage: string) => new RegExp(`data-stage-fact="${stage}">([^<]*)</span>`).exec(markup)?.[1];
 
   it('under v2 names Критик and Уточнение as without a model, by the original’s rules', () => {
     const markup = draw('v2');
@@ -206,10 +203,10 @@ describe('the plan window before a run, under the plan the readiness names', () 
   });
 
   it('is what it was while the answer carries no plan, or names v3 or none', () => {
-    for (const plan of [undefined, null, 'v3']) {
+    for (const plan of [undefined, null, 'v3'] as const) {
       const markup = draw(plan);
       expect(markup, String(plan)).not.toContain('правила оригинала');
-      expect(lineOf(markup, 'review'), String(plan)).toBeDefined();
+      expect(lineOf(markup, 'review'), String(plan)).toBe('не входит в запуск');
     }
   });
 });

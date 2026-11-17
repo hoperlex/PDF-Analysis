@@ -1,17 +1,12 @@
 /*
- * «Модели по этапам» (`HOSTS-WEB-01`). Layout only; the table is the shared one. The mark of a row whose model no server has is
- * the only colour here, read from the tokens. Every rule is reached by a screen in `tests/unit/styles/screens.ts`.
+ * «Модели по этапам» (`HOSTS-WEB-01`). Layout only. The table of the tab has its own styles in `entities/stage-layout`
+ * (`UIP-S15-02`); what is left here is the panel and the list of the revisions of the advanced page. Every rule is reached by a screen
+ * in `tests/unit/styles/screens.ts`.
  */
 
 .panel {
   min-width: 0;
   max-width: 100%;
-}
-
-.note {
-  margin: 0 0 var(--am-gap-sm);
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
 }
 
 .cells {
@@ -24,28 +19,4 @@
 
 .cell {
   margin: 0;
-}
-
-.fold {
-  margin: var(--am-gap-sm) 0 0;
-}
-
-.fold summary {
-  cursor: pointer;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-}
-
-.fold .cells {
-  margin-top: var(--am-gap-xs);
-}
-
-.missing {
-  margin-left: var(--am-gap-sm);
-  color: var(--am-degraded);
-  font-weight: 600;
-}
-
-.actions {
-  margin: var(--am-gap-sm) 0 0;
 }

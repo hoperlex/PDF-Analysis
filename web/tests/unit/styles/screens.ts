@@ -108,13 +108,12 @@ import { DocumentCardGrid, auditTally } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import {
-  CLAUDE_CELLS, ENSEMBLE_CELLS, READINESS_MIXED, blockedReadiness, modelLines, readiness,
+  ENSEMBLE_CELLS, READINESS_MIXED, blockedReadiness, modelLines, readiness,
 } from '../start-run/readiness-fixtures';
 import { ProjectList } from '@/widgets/project-list';
 import { LastRunCard, RunList, StartRunWithReadiness } from '@/widgets/run-list';
 import { RunEta, RunProgress } from '@/widgets/run-progress';
-import { PlanStagesDialog, RunStagesDialog } from '@/widgets/run-stages-dialog';
-import { readinessPlan } from '@/entities/stage-layout';
+import { RunStagesDialog, StageModelsDialogView } from '@/widgets/run-stages-dialog';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { DocumentContext, SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
@@ -1136,6 +1135,23 @@ export function screens(): Screen[] {
       }),
     ),
   );
+
+  // `UIP-S05-01`: the window «Модели по этапам» with no plan to read: the saved layout while it is off (the note over the table), on the
+  // automatic route (a cell no server has), a layout with no revision, and the plan of the second version (the critic by the original's rules).
+  {
+    add('StageModelsDialogView, the layout is off: the saved layout and the note', render(createElement(StageModelsDialogView, {
+      source: { kind: 'legacy' }, layout: { state: 'ready', layout: HOSTS_LAYOUT_OFF }, onClose: noop, staticOpen: true,
+    })));
+    add('StageModelsDialogView, the automatic route: the saved layout with a cell no server has', render(createElement(StageModelsDialogView, {
+      source: { kind: 'automatic' }, layout: { state: 'ready', layout: HOSTS_LAYOUT }, onClose: noop, staticOpen: true,
+    })));
+    add('StageModelsDialogView, the layout has no revision', render(createElement(StageModelsDialogView, {
+      source: { kind: 'legacy' }, layout: { state: 'ready', layout: HOSTS_LAYOUT_EMPTY }, onClose: noop, staticOpen: true,
+    })));
+    add('StageModelsDialogView, the plan of the second version: the critic by the original\'s rules', render(createElement(StageModelsDialogView, {
+      source: { kind: 'plan', readiness: readiness({ extended_plan: 'v2' }) }, onClose: noop, staticOpen: true,
+    })));
+  }
 
   // `UI-A-24`: the context strip on a version page offers the document's other versions once there are two,
   // and says the history is longer than the page when it is -- the `.switch` and `.more` rules of the strip.
@@ -2221,15 +2237,18 @@ export function screens(): Screen[] {
     add('StartRunWithReadiness, a part by API', start(['expert'], READINESS_MIXED));
     add('StartRunWithReadiness, a model no server has, for an expert', start(['expert'], blockedReadiness()));
     add('StartRunWithReadiness, a model no server has, for an administrator', start(['admin', 'expert'], blockedReadiness()));
-    add('PlanStagesDialog, the plan of the second version, with «Изменить»', render(createElement(PlanStagesDialog, {
-      rows: readinessPlan(CLAUDE_CELLS), kit: 'Только Claude', onClose: noop, editHref: '/workers?tab=models', staticOpen: true,
+    // `UIP-S05-01`: the window «Модели по этапам» replaced the plan mode of the run's window; its screens moved with it.
+    add('StageModelsDialogView, the plan of the second version', render(createElement(StageModelsDialogView, {
+      source: { kind: 'plan', readiness: readiness() }, onClose: noop, staticOpen: true,
     })));
-    add('PlanStagesDialog, a scheme of several models and a cell no server has', render(createElement('div', null,
-      createElement(PlanStagesDialog, {
-        rows: readinessPlan(ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks')), kit: 'Только Claude', onClose: noop, staticOpen: true,
+    add('StageModelsDialogView, a scheme of several models and a cell no server has', render(createElement('div', null,
+      createElement(StageModelsDialogView, {
+        source: { kind: 'plan', readiness: readiness({ kit: 'codex_only', cells: ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks') }) },
+        onClose: noop, staticOpen: true,
       }),
-      createElement(PlanStagesDialog, {
-        rows: readinessPlan(blockedReadiness().cells.filter((cell) => cell.row === 'blocks')), kit: null, onClose: noop, staticOpen: true,
+      createElement(StageModelsDialogView, {
+        source: { kind: 'plan', readiness: readiness({ ready: false, cells: blockedReadiness().cells.filter((cell) => cell.row === 'blocks') }) },
+        onClose: noop, staticOpen: true,
       }),
     )));
   }

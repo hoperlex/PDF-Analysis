@@ -6,6 +6,7 @@
  * `READINESS-WEB-01` adds the plan of a start (`./model/plan.ts`): the cells `getRunStartReadiness` names, read as rows.
  * Nothing here writes. The commands are in `features/manage-stage-layout`.
  * `CMP-WEB-01` adds the four comparison cells (`./model/comparison.ts`): the sets' tables and the lines the layout reads as.
+ * `UIP-S15-02` adds the table itself (`./ui/stage-models-table.tsx`), drawn by the tab «Модели по этапам» and by the window of a start.
  */
 
 export {
@@ -36,3 +37,5 @@ export {
   NO_LAYOUT_ADMIN, ROW_EFFORT_LABEL, ROW_MODEL_LABEL, SAVE_LABEL, STAGE_EFFORT_LABELS, STAGE_KIT_LABELS,
   STAGE_MODELS_TITLE, STAGE_ROLE_LABELS, STAGE_ROW_LABELS, SWITCH_HINT, SWITCH_LABEL, SWITCH_NEEDS_REVISION,
 } from './model/vocabulary';
+export { StageModelsTable } from './ui/stage-models-table';
+export type { StageModelsTableProps } from './ui/stage-models-table';

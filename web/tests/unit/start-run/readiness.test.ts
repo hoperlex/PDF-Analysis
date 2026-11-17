@@ -1,5 +1,5 @@
 /**
- * `READINESS-WEB-01` (plan 2026-11-09 §8): the line under «Запустить», the blocked state, the plan window and the lines of the cost
+ * `READINESS-WEB-01` (plan 2026-11-09 §8): the line under «Запустить», the blocked state, the window «Модели по этапам» it opens and the lines of the cost
  * dialog.
  *
  * The rules of the line are functions, so each is a call. The widget that mounts the control is read from a live mount over a seeded
@@ -28,9 +28,9 @@ import {
   blockedModels, layoutNotAvailable, readinessLine, runStartReadinessKey,
 } from '@/features/start-run';
 import { MODELS_BY_STAGE_ADDRESS, StartRunWithReadiness } from '@/widgets/run-list';
-import { PlanStagesDialog } from '@/widgets/run-stages-dialog';
 
 import { PROJECT_UID, VERSION_UID } from '../review/fixtures';
+import { LAYOUT, LAYOUT_OFF, seedLayout } from '../workers/hosts-fixtures';
 import { newClient, renderScreen, seedError } from '../screens/harness';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import { mountLive } from '../analysis-settings/live-render';
@@ -42,7 +42,7 @@ import {
 
 const BUTTON = ['data-start-run-button', ''] as const;
 const STAGES = ['data-readiness-stages', ''] as const;
-const CLOSE = ['data-run-stages-close', ''] as const;
+const CLOSE = ['data-stage-models-close', ''] as const;
 const RUN = { run_id: 'run_01M2545JSD15ETSNNV904X993K' };
 const NNBSP = '\u202f';
 
@@ -81,8 +81,17 @@ function seededClient(roles: readonly Role[], answer: RunStartReadiness | null) 
   return cache;
 }
 
-async function mount(options: { roles?: readonly Role[]; answer?: RunStartReadiness | null; initiallyOpen?: boolean } = {}) {
-  const cache = seededClient(options.roles ?? ['expert'], options.answer === undefined ? readiness() : options.answer);
+async function mount(options: {
+  roles?: readonly Role[]; answer?: RunStartReadiness | null; initiallyOpen?: boolean;
+  /** The saved layout the window reads where the answer has no plan (it is read from the cache, never from the network). */
+  layout?: typeof LAYOUT;
+  /** A refusal of the readiness read, in place of an answer. */
+  refused?: ApiError;
+} = {}) {
+  const answer = options.refused !== undefined ? null : options.answer === undefined ? readiness() : options.answer;
+  const cache = seededClient(options.roles ?? ['expert'], answer);
+  if (options.layout !== undefined) seedLayout(cache, options.layout);
+  if (options.refused !== undefined) seedError(cache, runStartReadinessKey(VERSION_UID), options.refused);
   live = await mountLive(createElement(QueryClientProvider, { client: cache }, createElement(StartRunWithReadiness, {
     projectUid: PROJECT_UID, versionUid: VERSION_UID, ...(options.initiallyOpen === true ? { initiallyOpen: true } : {}),
   })));
@@ -190,12 +199,14 @@ describe('the line under the button', () => {
     expect(lineOf(subscription.view.markup())).not.toContain('API');
   });
 
-  it('says «Маршрут: прежний», with no set, no mark and no way to the stages, when the layout is off', async () => {
+  it('says «Маршрут: прежний», with no set and no mark, and the way to the stages, when the layout is off', async () => {
     const { view } = await mount({ answer: READINESS_LEGACY });
-    expect(lineOf(view.markup())).toBe('Маршрут: прежний');
-    expect(view.markup()).not.toContain('data-readiness-stages');
+    expect(lineOf(view.markup())).toBe('Маршрут: прежний · Модели по этапам ▸');
+    expect(view.markup()).toContain('data-readiness-stages');
     expect(view.markup()).not.toContain('data-readiness-d291');
-    // Nothing blocks the old route: the button is the one it always was.
+    expect(view.markup()).not.toContain('Набор:');
+    // Nothing blocks the old route: the button is the one it always was, and the only one that starts.
+    expect(view.count('Запустить')).toBe(1);
     expect(await view.pressMarked(...BUTTON)).toBe(true);
   });
 
@@ -268,99 +279,81 @@ describe('when the plan names a model no server has', () => {
   });
 });
 
-describe('«Модели по этапам ▸» opens the stage window in plan mode', () => {
-  it('opens it with the plan and no fact column, and closes it', async () => {
+describe('«Модели по этапам ▸» opens the window «Модели по этапам»', () => {
+  it('opens it with the plan and no fact of a run, and closes it', async () => {
     const { view } = await mount();
-    expect(view.markup()).not.toContain('data-stages-plan');
+    expect(view.markup()).not.toContain('data-stage-models-dialog');
     expect(await view.pressMarked(...STAGES)).toBe(true);
     const markup = view.markup();
-    expect(markup).toContain('data-stages-plan');
-    expect(markup).toContain('Этапы анализа раздела');
+    expect(markup).toContain('data-stage-models-dialog');
+    expect(markup).toContain('Модели по этапам</h2>');
     // The plan: the first stage with a model, with its model, its effort and how it is paid.
-    expect(markup).toContain('data-plan-only');
-    expect(markup).toContain('data-plan-cell="text:main"');
+    expect(markup).toContain('data-stage-cell="text:main"');
     expect(markup).toContain('Sonnet 5.5');
     expect(markup).toContain('среднее');
     expect(markup).toContain('по подписке');
-    // No fact: no state, start, end, duration, tokens or error code, and no start from this stage.
-    for (const fact of ['Факт', 'data-fact-row', 'Состояние', 'Начало', 'Окончание', 'Длительность', 'Код ошибки', 'Запустить с этого этапа']) {
+    // No fact of a run: no state, start, end, duration, tokens or error code, and no start from this stage.
+    for (const fact of ['data-fact-row', 'Состояние', 'Начало', 'Окончание', 'Длительность', 'Код ошибки', 'Запустить с этого этапа']) {
       expect(markup, fact).not.toContain(fact);
     }
+    // «Запустить» stays one button: the window does not start anything (`R-153a`).
+    expect(view.count('Запустить')).toBe(1);
     expect(await view.pressMarked(...CLOSE)).toBe(true);
-    expect(view.markup()).not.toContain('data-stages-plan');
+    expect(view.markup()).not.toContain('data-stage-models-dialog');
   });
 
-  it('is drawn with «Изменить» for an administrator, leading to «Диспетчер → Модели по этапам», and for nobody else', async () => {
+  it('is drawn the same for an administrator and an expert: it is a look at what a start would use, and the window of a run is not this one', async () => {
     const admin = await mount({ roles: ['admin', 'expert'], initiallyOpen: true });
     expect(MODELS_BY_STAGE_ADDRESS).toBe('/workers?tab=models');
-    expect(admin.view.markup()).toContain('data-plan-edit=""');
-    expect(admin.view.markup()).toContain('href="/workers?tab=models"');
-    expect(admin.view.markup()).toContain('>Изменить</a>');
+    expect(admin.view.markup()).toContain('data-stage-models-dialog');
     await live?.unmount();
     const expert = await mount({ roles: ['expert'], initiallyOpen: true });
-    expect(expert.view.markup()).toContain('data-stages-plan');
+    expect(expert.view.markup()).toContain('data-stage-models-dialog');
+    expect(expert.view.markup()).not.toContain('data-run-stages-dialog');
     expect(expert.view.markup()).not.toContain('data-plan-edit');
-    expect(expert.view.markup()).not.toContain('Изменить');
   });
 
-  it('is not offered, and not drawn, when the layout is off', async () => {
-    const { view } = await mount({ answer: READINESS_LEGACY, initiallyOpen: true });
-    expect(view.markup()).not.toContain('data-stages-plan');
+  it('is offered, and opens, when the layout is off: the saved layout, «прежний маршрут» and the note that it is off', async () => {
+    const { view } = await mount({ answer: READINESS_LEGACY, layout: LAYOUT_OFF });
+    expect(view.markup()).not.toContain('data-stage-models-dialog');
+    expect(await view.pressMarked(...STAGES)).toBe(true);
+    const markup = view.markup();
+    expect(markup).toContain('data-stage-models-dialog');
+    expect(markup).toContain('Набор не применяется');
+    expect(markup).toContain('data-stage-fact="text">прежний маршрут<');
+    expect(markup).toContain('Sonnet 5.5');
+    expect(view.count('Запустить')).toBe(1);
+    expect(await view.pressMarked(...CLOSE)).toBe(true);
+    expect(view.markup()).not.toContain('data-stage-models-dialog');
+  });
+
+  it('opens on the automatic route and on a readiness that was not read, each saying its own word', async () => {
+    const automatic = await mount({ refused: refusal(503, 'dependency_unavailable'), layout: LAYOUT });
+    expect(await automatic.view.pressMarked(...STAGES)).toBe(true);
+    expect(automatic.view.markup()).toContain('data-stage-fact="blocks">автоматически<');
+    expect(automatic.view.markup()).not.toContain('Набор не применяется');
+    await live?.unmount();
+    const unread = await mount({ refused: refusal(500, 'internal_error'), layout: LAYOUT });
+    expect(await unread.view.pressMarked(...STAGES)).toBe(true);
+    expect(unread.view.markup()).toContain('data-stage-fact="blocks">не прочитано<');
+    expect(unread.view.markup()).not.toContain('автоматически<');
+  });
+
+  it('has no window to open while the readiness is still being read, so a window opened before it went away is not kept', async () => {
+    // The read never answers, so the line stays at «Проверяем готовность…».
+    vi.mocked(getRunStartReadiness).mockReturnValue(new Promise(() => undefined) as never);
+    const { view } = await mount({ answer: null, initiallyOpen: true });
+    expect(view.markup()).toContain('Проверяем готовность…');
     expect(view.markup()).not.toContain('data-readiness-stages');
-  });
-});
-
-describe('the plan window, drawn open', () => {
-  const draw = (cells: Parameters<typeof readinessPlan>[0], extra: { kit?: string | null; editHref?: string } = {}) => renderToStaticMarkup(
-    createElement(PlanStagesDialog, { rows: readinessPlan(cells), kit: extra.kit === undefined ? 'Только Claude' : extra.kit, onClose: () => undefined, staticOpen: true, ...(extra.editHref === undefined ? {} : { editHref: extra.editHref }) }),
-  );
-
-  it('lists the eight stages and what each does without a model', () => {
-    const markup = draw(CLAUDE_CELLS);
-    for (const stage of ['preparation', 'text', 'blocks', 'cross_check', 'merge', 'norms', 'review', 'correction']) {
-      expect(markup, stage).toContain(`data-stage-item="${stage}"`);
-    }
-    // A stage that is in no run of this kind says so on the left, and a stage without a model says that.
-    expect(markup).toContain('без модели');
-    expect(markup).toContain('не входит в запуск');
-  });
-
-  it('says a cell no server has as such, in the cell, and marks nothing else', () => {
-    // The first stage with a model is open: it is served, and carries no mark.
-    expect(draw([readinessCell('text', 'claude-sonnet-5-5'), missingCell('blocks', 'claude-opus-5-5')])).not.toContain('data-plan-missing');
-    // The stage with the gap, open: the cell says so, and says no access.
-    const blocks = draw([missingCell('blocks', 'claude-opus-5-5')], { kit: null });
-    expect(blocks).toContain('data-plan-missing');
-    expect(blocks).toContain('⚠ нет на серверах');
-    expect(blocks).toContain('data-plan-access="none"');
-    expect(blocks).not.toContain('data-plan-kit');
-    // A served cell says how it is paid, and the set is said once the answer names one.
-    const served = draw([readinessCell('text', 'claude-sonnet-5-5', { access: 'api' })]);
-    expect(served).toContain('по ключу API');
-    expect(served).toContain('data-plan-kit="">Набор: Только Claude</p>');
-  });
-
-  it('shows the legs and the judge of a scheme as the rows of one table, with the role in front', () => {
-    const markup = renderToStaticMarkup(createElement(PlanStagesDialog, {
-      rows: readinessPlan(ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks')), kit: 'Только Claude', onClose: () => undefined, staticOpen: true,
-    }));
-    expect(markup).toContain('первая ветка: Opus 5.5');
-    expect(markup).toContain('вторая ветка: gpt-6-astra');
-    expect(markup).toContain('судья: Sonnet 5.5');
-    expect(markup.indexOf('первая ветка')).toBeLessThan(markup.indexOf('судья'));
-  });
-
-  it('draws «Изменить» only for the link it is given', () => {
-    expect(draw(CLAUDE_CELLS, { editHref: MODELS_BY_STAGE_ADDRESS })).toContain('data-plan-edit');
-    expect(draw(CLAUDE_CELLS)).not.toContain('data-plan-edit');
+    expect(view.markup()).not.toContain('data-stage-models-dialog');
   });
 });
 
 describe('a server with no layout, and a read that failed', () => {
   it('says «Маршрут: автоматически» after a typed 503, and the start stays', () => {
     const markup = rendered(['expert'], (cache) => seedError(cache, runStartReadinessKey(VERSION_UID), refusal(503, 'dependency_unavailable')));
-    expect(lineOf(markup)).toBe('Маршрут: автоматически');
-    expect(markup).not.toContain('data-readiness-stages');
+    expect(lineOf(markup)).toBe('Маршрут: автоматически · Модели по этапам ▸');
+    expect(markup).toContain('data-readiness-stages');
     expect(markup).not.toContain('data-start-blocked');
     expect(markup).not.toContain('Готовность запуска не прочитана');
     // Not an error for the person: no error state, and the button is not held.
@@ -371,8 +364,10 @@ describe('a server with no layout, and a read that failed', () => {
   it('says that the readiness was not read after any other refusal, and still leaves the start to the server', () => {
     const markup = rendered(['expert'], (cache) => seedError(cache, runStartReadinessKey(VERSION_UID), refusal(500, 'internal_error')));
     expect(lineOf(markup)).toContain('Готовность запуска не прочитана');
+    expect(lineOf(markup)).toBe('Готовность запуска не прочитана; запуск проверит её сам. Повторить · Модели по этапам ▸');
     expect(lineOf(markup)).not.toContain('Маршрут: автоматически');
     expect(markup).toContain('data-readiness-retry');
+    expect(markup).toContain('data-readiness-stages');
     expect(/data-start-run-button=""[^>]*disabled/.test(markup)).toBe(false);
   });
 
@@ -380,12 +375,13 @@ describe('a server with no layout, and a read that failed', () => {
     const markup = rendered(['expert'], (cache) => seedError(
       cache, runStartReadinessKey(VERSION_UID), refusal(422, 'analysis_input_invalid', { reason: 'comparison_only_version' }),
     ));
-    expect(lineOf(markup)).toBe('Маршрут: автоматически');
+    expect(lineOf(markup)).toBe('Маршрут: автоматически · Модели по этапам ▸');
   });
 
-  it('says that it is checking while nothing has answered', () => {
+  it('says that it is checking while nothing has answered, and offers no way to the stages yet', () => {
     const markup = rendered(['expert'], () => undefined);
     expect(lineOf(markup)).toBe('Проверяем готовность…');
+    expect(markup).not.toContain('data-readiness-stages');
     expect(/data-start-run-button=""[^>]*disabled/.test(markup)).toBe(false);
   });
 });
