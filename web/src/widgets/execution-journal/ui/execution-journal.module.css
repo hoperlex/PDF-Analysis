@@ -67,3 +67,119 @@
   gap: var(--am-gap-sm);
   margin-top: var(--am-gap-sm);
 }
+
+/*
+ * `UIP-S08-02`: the log of one run, in groups by stage. A group is a native `<details>` with its own table; the four columns
+ * (time, event, pages, state) have one width in every group, so the groups line up. The state's tone comes from the existing
+ * badges (`am-badge--*`), the group's chevron from the heading's own ink: this file declares no colour of its own.
+ */
+.groups {
+  display: grid;
+  gap: var(--am-gap-sm);
+}
+
+.group {
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-sm);
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+
+.groupHead::-webkit-details-marker {
+  display: none;
+}
+
+/* The chevron: a corner of two borders in the heading's ink, turned down when the group is unfolded. */
+.groupHead::before {
+  content: '';
+  flex: none;
+  width: 0.4em;
+  height: 0.4em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.group[open] > .groupHead::before {
+  transform: rotate(45deg);
+}
+
+.groupTitle {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.groupCount {
+  margin-left: auto;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fixed columns, and a floor under the table, so a narrow screen scrolls the rows instead of crushing them. */
+.groupTable {
+  width: 100%;
+  min-width: 34rem;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: var(--am-text-sm);
+}
+
+.groupTable td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-top: 1px solid var(--am-line-soft);
+  vertical-align: top;
+}
+
+.colTime {
+  width: 6rem;
+}
+
+.colPages {
+  width: 8rem;
+}
+
+.colState {
+  width: 12rem;
+}
+
+.stage {
+  color: var(--am-ink-muted);
+}
+
+.pages {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.state code {
+  overflow-wrap: anywhere;
+}
+
+/* The line that names the day, before the first event of each day of a group that spans several. */
+.day td {
+  padding-top: var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

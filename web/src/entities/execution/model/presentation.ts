@@ -1,6 +1,6 @@
-import type { ExecutionJournalEntry, ExecutionQueueItem, ExecutionQueueStateCount, Role, RunState } from '@/shared/api';
-import { ERROR_CODE_VALUES, RUN_STATE_VALUES } from '@/shared/api';
-import { STATE_LABELS } from '@/shared/ui';
+import type { ExecutionJournalEntry, ExecutionQueueItem, ExecutionQueueStateCount, Role, RunState, StageId } from '@/shared/api';
+import { ERROR_CODE_VALUES, RUN_STATE_VALUES, STAGE_ID_VALUES } from '@/shared/api';
+import { STAGE_LABELS, STATE_LABELS } from '@/shared/ui';
 import { terminalReasonNote } from '@/entities/audit-run';
 
 import type { ExecutionQueueState, ExecutionQueueStateGroup } from '../api/use-execution';
@@ -157,23 +157,110 @@ const EVENT_LABELS: Readonly<Record<string, string>> = {
   'provider.completed': 'Вызов завершён',
 };
 
+/** What a line says of a stage the contract's list does not name: never the raw value. */
+export const UNKNOWN_STAGE_LABEL = 'Другой этап';
+
+/** The stage a journal line names, from the contract's closed list of stages. */
+export interface JournalStage {
+  /** The contract's stage id; `null` for a value the list does not name (it is not carried further). */
+  readonly id: StageId | null;
+  /** `STAGE_LABELS` of the id, or `UNKNOWN_STAGE_LABEL`. */
+  readonly label: string;
+}
+
+/** The pages a stage has read of the pages in all, as a progress line says them. */
+export interface JournalPages {
+  readonly completed: number;
+  readonly total: number;
+}
+
+/** «стр. 3 из 10». */
+export function journalPagesText(pages: JournalPages): string {
+  return `стр. ${pages.completed} из ${pages.total}`;
+}
+
+/**
+ * The raw state behind a line's state word, in the vocabulary of the badge that already draws it: a run's own state
+ * (`RunStateBadge`) or a job's (`JobStateBadge`). The screen takes the tone from those badges and invents none.
+ */
+export type JournalStateBadge =
+  | { readonly kind: 'run'; readonly state: RunState }
+  | { readonly kind: 'job'; readonly state: ExecutionQueueState };
+
+/** The events of a stage: the only ones whose `stage_id` the projection reads. */
+const STAGE_EVENT_TYPES: ReadonlySet<string> = new Set(['stage.started', 'stage.pdf_precheck', 'stage.progress', 'stage.finished']);
+/** The events that report pages read: the only ones whose page counts the projection reads. */
+const PAGE_EVENT_TYPES: ReadonlySet<string> = new Set(['stage.pdf_precheck', 'stage.progress']);
+
+/**
+ * The stage a stage event names. Only from the closed list of the contract (`STAGE_LABELS`): a stage id the list does not
+ * hold, or one that is not a string, is «Другой этап» and nothing of it is kept. An event of another kind, or a stage event
+ * that names no stage, has none.
+ */
+function journalStageOf(entry: ExecutionJournalEntry): JournalStage | undefined {
+  if (!STAGE_EVENT_TYPES.has(entry.event_type)) return undefined;
+  const raw: unknown = entry.payload.stage_id;
+  if (raw === undefined || raw === null) return undefined;
+  return typeof raw === 'string' && (STAGE_ID_VALUES as readonly string[]).includes(raw)
+    ? { id: raw as StageId, label: STAGE_LABELS[raw as StageId] }
+    : { id: null, label: UNKNOWN_STAGE_LABEL };
+}
+
+/** The pages a progress event reports; none unless both counts are whole numbers with `0 <= completed <= total`, `total > 0`. */
+function journalPagesOf(entry: ExecutionJournalEntry): JournalPages | undefined {
+  if (!PAGE_EVENT_TYPES.has(entry.event_type)) return undefined;
+  const completed: unknown = entry.payload.completed_pages;
+  const total: unknown = entry.payload.total_pages;
+  if (typeof completed !== 'number' || typeof total !== 'number') return undefined;
+  if (!Number.isSafeInteger(completed) || !Number.isSafeInteger(total)) return undefined;
+  if (completed < 0 || total <= 0 || completed > total) return undefined;
+  return { completed, total };
+}
+
+/** What the screen may read of a journal record: the closed projection (`visibleJournal`). */
+export interface VisibleJournal {
+  readonly event: string;
+  readonly state: string | null;
+  readonly code: string | null;
+  /** The raw state behind `state`, for the existing badges; absent when `state` is. */
+  readonly badge?: JournalStateBadge;
+  /** The stage of a stage event; absent for every other event, and for a stage event that names none. */
+  readonly stage?: JournalStage;
+  /** The pages of a progress event; absent for every other event, and for counts that cannot be pages. */
+  readonly pages?: JournalPages;
+}
+
 /**
  * Render a closed projection of the sealed journal. A new server field, even one in
  * payload, cannot become visible merely because it was added to an API response.
+ *
+ * The stage of a stage event and the pages of a progress event are two of the fields it lets through (`UIP-S08-01`): the
+ * stage only as a member of the contract's list (`STAGE_LABELS`), the pages only as two whole numbers. Free text, model
+ * output and every other field of the payload stay out.
  */
-export function visibleJournal(entry: ExecutionJournalEntry): {
-  event: string;
-  state: string | null;
-  code: string | null;
-} {
+export function visibleJournal(entry: ExecutionJournalEntry): VisibleJournal {
   const payload = entry.payload;
   const rawState = payload.to_state ?? payload.state;
-  const state = entry.aggregate_type === 'AuditRun' &&
-    typeof rawState === 'string' && (RUN_STATE_VALUES as readonly string[]).includes(rawState)
-    ? STATE_LABELS[rawState as RunState]
-    : typeof rawState === 'string' ? jobStateLabel(rawState) : null;
+  let state: string | null = null;
+  let badge: JournalStateBadge | undefined;
+  if (entry.aggregate_type === 'AuditRun' && typeof rawState === 'string' && (RUN_STATE_VALUES as readonly string[]).includes(rawState)) {
+    state = STATE_LABELS[rawState as RunState];
+    badge = { kind: 'run', state: rawState as RunState };
+  } else if (typeof rawState === 'string') {
+    state = jobStateLabel(rawState);
+    if (state !== null) badge = { kind: 'job', state: rawState as ExecutionQueueState };
+  }
   const code = typeof payload.error_code === 'string' &&
     (ERROR_CODE_VALUES as readonly string[]).includes(payload.error_code)
     ? payload.error_code : null;
-  return { event: EVENT_LABELS[entry.event_type] ?? 'Другое событие выполнения', state, code };
+  const stage = journalStageOf(entry);
+  const pages = journalPagesOf(entry);
+  return {
+    event: EVENT_LABELS[entry.event_type] ?? 'Другое событие выполнения',
+    state,
+    code,
+    ...(badge === undefined ? {} : { badge }),
+    ...(stage === undefined ? {} : { stage }),
+    ...(pages === undefined ? {} : { pages }),
+  };
 }
