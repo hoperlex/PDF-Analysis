@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import struct
 import time
 from datetime import datetime, timezone
@@ -13,7 +14,7 @@ from auditmanager.analysis.public import ModelRequest, ProxyDispatchError
 from auditmanager.executors.destinations import DestinationPolicy
 from auditmanager.executors.kinds import adapter_for
 from auditmanager.executors.model import RevisionRecord, RevisionSettings
-from auditmanager.executors.ssh_adapter import SshCommandAdapter, _task
+from auditmanager.executors.ssh_adapter import SSH_LIVE_CALL_SECONDS, SshCommandAdapter, _task
 from auditmanager.executors.ssh_probe import probe_ssh_command
 from auditmanager.storage.public import derive_blob_id
 
@@ -230,17 +231,79 @@ def test_without_a_context_the_call_is_made_as_before(monkeypatch: pytest.Monkey
     assert seen["timeout_s"] == 100.0
 
 
-def test_with_a_context_the_call_is_live_to_the_attempts_ceiling_less_the_margin(
+def test_with_a_context_the_call_is_live_to_its_own_finite_ceiling_with_no_attempt_ceiling(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """`R-155c`: a live Attempt has no age ceiling (``math.inf``), so there is no remainder to cut the call to; it gets the finite
+    per-call ceiling of 7200 s (the remote command stops itself at 7140 s), however long the Attempt has run."""
     context = make_context()
+    assert math.isinf(context.hard_cap_seconds)
+    context.started_monotonic -= 10_000  # claimed almost three hours ago, long past the 900 s watchdog
+    context.progress()                   # live: an earlier call signalled
+    seen = run_with(monkeypatch, context)
+    assert set(seen) == {"timeout_s", "max_output_bytes", "live_hard_cap_s", "live_stall_s", "on_signal"}
+    assert seen["live_hard_cap_s"] == float(SSH_LIVE_CALL_SECONDS) == 7200.0
+    assert math.isfinite(seen["live_hard_cap_s"]), "an SSH call stays bounded"
+    assert seen["live_stall_s"] == 600.0
+    assert seen["on_signal"] == context.progress
+
+
+def test_with_a_finite_attempt_ceiling_the_call_is_still_cut_to_what_it_leaves_less_the_margin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = make_context(hard_cap_seconds=7200.0)
     context.started_monotonic -= 1000  # claimed 1000 s ago: past the 900 s watchdog, so only a
     context.progress()                 # live Attempt (an earlier call signalled) can still call
     seen = run_with(monkeypatch, context)
-    assert set(seen) == {"timeout_s", "max_output_bytes", "live_hard_cap_s", "live_stall_s", "on_signal"}
     assert 7200 - 1000 - DEADLINE_MARGIN_SECONDS - 5 < seen["live_hard_cap_s"] <= 7200 - 1000 - DEADLINE_MARGIN_SECONDS
-    assert seen["live_stall_s"] == 600.0
-    assert seen["on_signal"] == context.progress
+
+
+class _Recorder:
+    """An Attempt context that records the announcement of a call, wrapping a real one."""
+
+    def __init__(self, real: AttemptContext) -> None:
+        self.real = real
+        self.events: list[tuple[str, float | None]] = []
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self.real, name)
+
+    def call_started(self, *, window_seconds: float | None = None) -> None:
+        self.events.append(("started", window_seconds))
+        self.real.call_started(window_seconds=window_seconds)
+
+    def call_finished(self) -> None:
+        self.events.append(("finished", None))
+        self.real.call_finished()
+
+
+def test_the_call_is_announced_to_the_attempt_for_its_longest_possible_duration_and_ended_in_a_finally(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = make_context()
+    context.progress()
+    recorder = _Recorder(context)
+    seen = {}
+
+    def fake_run(*args, **kwargs):
+        seen["in_call"] = context.in_call
+        return answer(), ""
+
+    monkeypatch.setattr("auditmanager.executors.ssh_adapter.run_command", fake_run)
+    SshCommandAdapter(revision(), "private", POLICY, recorder).complete(request())
+    assert recorder.events == [("started", 7200.0), ("finished", None)]
+    assert seen == {"in_call": True}
+    assert context.in_call is False
+
+    def failing_run(*args, **kwargs):
+        raise SshFailure("timeout", "the command outlived its deadline", sent=True)
+
+    monkeypatch.setattr("auditmanager.executors.ssh_adapter.run_command", failing_run)
+    recorder.events.clear()
+    with pytest.raises(ProxyDispatchError):
+        SshCommandAdapter(revision(), "private", POLICY, recorder).complete(request())
+    assert recorder.events == [("started", 7200.0), ("finished", None)], "a failed call ends too"
+    assert context.in_call is False
 
 
 def test_the_signal_the_transport_gets_makes_the_attempt_live(monkeypatch: pytest.MonkeyPatch) -> None:

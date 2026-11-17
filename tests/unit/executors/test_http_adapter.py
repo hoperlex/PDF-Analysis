@@ -7,6 +7,7 @@ destination rules to bite uses the default policy instead, and the gateway then 
 
 from __future__ import annotations
 
+import math
 import time
 import base64
 import hashlib
@@ -157,6 +158,56 @@ def test_the_timeout_is_the_revisions_cut_to_the_watchdog() -> None:
     # Not asserted to the second: remaining time shrinks as the test runs.
     assert 1.0 <= (effective_timeout(120, nearly, margin=60) or 0) <= 100.0
     assert effective_timeout(30, None) == 30.0
+
+
+def test_a_live_attempts_call_keeps_the_revisions_timeout_and_is_bounded() -> None:
+    """`R-155c`/`R-155h`: no age ceiling and no silence cut -- the call's timeout is the revision's, a finite number (a revision's
+    ``timeout_seconds`` is 1..3600), however long the Attempt has run."""
+    live = AttemptContext(run_id="r", attempt_id="a", started_monotonic=time.monotonic() - 20_000)
+    live.progress()
+    assert math.isinf(live.hard_cap_seconds)
+    assert effective_timeout(3600, live) == 3600.0
+    assert effective_timeout(900, live) == 900.0
+    quiet = AttemptContext(run_id="r", attempt_id="a", started_monotonic=time.monotonic() - 20_000)
+    quiet.progress(now=time.monotonic() - 1500)
+    assert effective_timeout(900, quiet) == 900.0, "the 600 s silence window does not cut it to 540 s"
+    assert math.isfinite(effective_timeout(3600, live) or math.inf), "a call's total stays bounded"
+
+
+@pytest.mark.parametrize("flavour", ["openai_chat", "anthropic_messages"])
+def test_each_http_call_is_announced_to_the_attempt_and_ended_in_a_finally(gateway_factory: Any, flavour: str) -> None:
+    gateway = gateway_factory()
+    announced: list[tuple[str, float | None, bool]] = []
+
+    class Watched:
+        def __init__(self) -> None:
+            self.real = AttemptContext(run_id="r", attempt_id="a", started_monotonic=time.monotonic())
+            self.real.progress()
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self.real, name)
+
+        def call_started(self, *, window_seconds: float | None = None) -> None:
+            self.real.call_started(window_seconds=window_seconds)
+            announced.append(("started", window_seconds, self.real.in_call))
+
+        def call_finished(self) -> None:
+            self.real.call_finished()
+            announced.append(("finished", None, self.real.in_call))
+
+    context = Watched()
+    _adapter(gateway, flavour, context=context,
+             base_path="" if flavour == "anthropic_messages" else "/agent/v1").complete(REQUEST)
+    assert announced == [("started", 5.0, True), ("finished", None, False)]
+    assert gateway.requests, "the call was made"
+
+    announced.clear()
+    refused = _adapter(gateway, flavour, policy=DestinationPolicy(), context=context,
+                       base_url=f"http://127.0.0.1:{gateway.port}/v1")
+    with pytest.raises(ProxyDispatchError):
+        refused.complete(REQUEST)
+    assert context.real.in_call is False, "a refused or failed call leaves nothing in flight"
+    assert [event[0] for event in announced] == ["started", "finished"], "announced, then ended however it ended"
 
 
 def test_anthropic_messages_goes_through_the_sdk_to_the_revisions_base_url(gateway_factory: Any) -> None:
