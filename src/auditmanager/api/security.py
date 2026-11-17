@@ -676,6 +676,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         # `R-151i`: a new run that continues an earlier one; the same hands as a re-audit.
         "startRunFromStage": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
+        # `RUN-RESTART-01` (`R-155a`): a new run that replaces an ended one; the same hands as a re-audit and a start from a stage.
+        "restartRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "appendDecision": _EXPERT,
         # `W59-DECISION-CARRYOVER-01`. A carried decision is a verdict like any other: only an
         # expert confirms it, and the command re-reads the role set in its own transaction.

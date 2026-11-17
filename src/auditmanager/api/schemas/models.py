@@ -211,6 +211,8 @@ __all__ = [
     "RunCostEstimate",
     "ReauditRunRequest",
     "StartRunFromStageRequest",
+    "RestartPoint",
+    "RestartRunRequest",
     "SubmitRegistrationRequest",
     "UpdateMyProfileRequest",
     "UpdateUserRequest",
@@ -1008,6 +1010,26 @@ class StageId(str, enum.Enum):
     NORM_VERIFICATION = "norm_verification"
 
 
+class RestartPoint(str, enum.Enum):
+    """`RUN-RESTART-01` (contract 1.59.0, `R-155a`): the stage chip a restart of an ended run starts from -- the eight chips of the run screen
+    (``web/src/entities/audit-run/model/stage-dictionary.ts``), in the order the rail draws them. It is its **own** enum and not ``StageId``: a chip
+    is a reader's grouping of stage ids and of the extended review's procedures (``cross_check`` is no stage id, ``preparation`` covers three).
+
+    The chip named is computed, with every later one; every earlier one is taken from the source chain. ``preparation`` takes nothing: a full rerun
+    with the source's settings. ``merge`` makes no model call. ``text`` is the stage ``text_analysis``; ``blocks`` the stage ``block_analysis``;
+    ``cross_check`` the procedure ``comprehensive_analysis``; ``merge`` ``finding_merge``; ``norms`` ``norm_verification``; ``review``
+    ``finding_review``; ``correction`` ``finding_correction``."""
+
+    PREPARATION = "preparation"
+    TEXT = "text"
+    BLOCKS = "blocks"
+    CROSS_CHECK = "cross_check"
+    MERGE = "merge"
+    NORMS = "norms"
+    REVIEW = "review"
+    CORRECTION = "correction"
+
+
 class ProviderMode(str, enum.Enum):
     LIVE = "live"
     RECORDED = "recorded"
@@ -1141,7 +1163,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.58.0"]
+    contract_version: Literal["1.59.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1670,11 +1692,16 @@ class RunCostEstimateRequest(_Object):
     #: `EXEC2-SEAL-2`. Exclusive with ``executor_connection_id`` and ``preset_id``.
     executor_group_id: ExecutorGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
-    #: `R-151i` (contract 1.42.0). The price of a run started from ``start_stage_id`` of this earlier run; both or neither,
-    #: and exclusive with ``reaudit_of_run_id``, the connection, the preset, the group and ``relaxed_limits`` (the new run
-    #: follows today's route, as a re-audit does).
+    #: `R-151i` (contract 1.42.0). The price of a run started from ``start_stage_id`` of this earlier run; with it or, since 1.59.0, with
+    #: ``restart_point`` (never both, never alone), and exclusive with ``reaudit_of_run_id``, the connection, the preset, the group and
+    #: ``relaxed_limits`` (the new run follows today's route, as a re-audit does).
     start_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `RUN-RESTART-01` (contract 1.59.0). The price of a **restart** of ``start_from_run_id`` from this chip: the source is named by
+    #: ``start_from_run_id``, so it needs it and excludes ``start_stage_id`` (a start from a stage and a restart are two commands) and every
+    #: field that chooses a route, exactly as ``start_stage_id`` does. Read by ``estimateRunCost`` only; ``getRunStartReadiness`` takes the same
+    #: body and refuses it.
+    restart_point: RestartPoint = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class RunCostEstimate(_Object):
@@ -1696,7 +1723,8 @@ class RunCostEstimate(_Object):
     text_characters: Annotated[int, Field(ge=0)]
     page_count: Annotated[int, Field(ge=1)]
     windows: Annotated[int, Field(ge=1)]
-    calls: Annotated[int, Field(ge=1)]
+    #: At least 1 for a run; 0 for a restart whose computed chips make no model call (`RUN-RESTART-01`, contract 1.59.0).
+    calls: Annotated[int, Field(ge=0)]
     input_tokens: Annotated[int, Field(ge=0)]
     output_tokens: Annotated[int, Field(ge=0)]
     estimated_cost_micros: Annotated[int, Field(ge=0)]
@@ -1709,6 +1737,13 @@ class RunCostEstimate(_Object):
     start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     reused_stage_ids: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     computed_stage_ids: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `RUN-RESTART-01` (contract 1.59.0). Present for the estimate of a **restart**: the chip it starts from, the chips it takes from the source
+    #: chain and the chips it computes -- the eight chips of ``RestartPoint`` split in two, in the rail's order (the price is for the computed
+    #: ones, bounded by the calls the source's chain actually made). ``start_from_run_id`` names the source. The two lists are disjoint and
+    #: together are all eight.
+    restart_point: RestartPoint = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reused_restart_points: list[RestartPoint] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    computed_restart_points: list[RestartPoint] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     #: `HOSTS-SEAL-1` (consent v2). Present for the estimate of a run on the stage layout: the digest of the frozen plan and one
     #: line per model with the digest of its rates, the access it is priced at and its share of the estimate.
     stage_plan_digest: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1747,6 +1782,14 @@ class StartRunFromStageRequest(_Object):
     """`R-151i` (contract 1.42.0): the first stage the new run computes; the earlier stages are taken from the run in the path."""
 
     stage_id: StageId
+    cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class RestartRunRequest(_Object):
+    """`RUN-RESTART-01` (contract 1.59.0, `R-155a`): the chip the new run computes from; every earlier chip is taken from the run in the path.
+    ``cost_consent`` confirms the estimate of ``estimateRunCost`` with ``start_from_run_id`` and this ``restart_point``."""
+
+    restart_point: RestartPoint
     cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
@@ -1838,6 +1881,13 @@ class RunStatus(_Object):
     #: itself (every earlier PC-01 stage is the earlier run's). Absent for a run started from a version or as a re-audit.
     started_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `RUN-RESTART-01` (contract 1.59.0, `R-155a`): the chip this run was **restarted** from, present exactly when ``restartRun`` created it.
+    #: Its source is ``started_from_run_id`` (``start_stage_id`` is then absent: a run has a start stage or a restart point, never both).
+    restart_point: RestartPoint = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `RUN-RESTART-01` (contract 1.59.0, `R-155g`): on a run deleted from the run lists **by a restart**, the run that replaced it -- the one
+    #: whose ``restart_point`` run published and deleted it. Absent for every other run, including one deleted with ``deleteRun``, and for a
+    #: source whose restart has not published (it is still listed; read the new run's ``started_from_run_id``).
+    replaced_by_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     project_uid: ProjectUid
     version_uid: VersionUid
     state: RunState
@@ -2400,17 +2450,35 @@ class NormCurrentSnapshot(_Object):
 # --- findings ----------------------------------------------------------------------
 
 
+class DecisionCarryMode(str, enum.Enum):
+    """`RUN-RESTART-01` (contract 1.59.0): how a decision was carried to a finding (``DecisionCarriedFrom.mode``). `version`: an expert confirmed
+    the carryover from a finding of an earlier version in the comparison of versions; `stage`: in the comparison of stages П → Р; `restart`: the
+    server carried it, for a restarted run that published, to the finding of the new run that matches the source verbatim."""
+
+    VERSION = "version"
+    STAGE = "stage"
+    RESTART = "restart"
+
+
 class DecisionCarriedFrom(_Object):
     """`UI-A-73` (contract 1.39.0): where a carried decision came from -- the decision of an earlier version's finding
     that an expert carried over to this finding (`W59-DECISION-CARRYOVER-01`).
 
     ``decision_id`` is the source decision's own identity and ``finding_uid`` and ``version_uid`` the finding and the
-    version it was made on. ``version_ordinal`` is the version's display order («V2») and is never an identity."""
+    version it was made on. ``version_ordinal`` is the version's display order («V2») and is never an identity.
+
+    `RUN-RESTART-01` (contract 1.59.0, `R-155b`): ``run_id`` is the run whose analysis allocated the source finding -- the «from run» origin
+    beside the version, present on every carried decision whose source finding is known -- and ``mode`` how the decision was carried:
+    ``version`` and ``stage`` (the confirmed carryovers of `W59-DECISION-CARRYOVER-01`, from an earlier version) or ``restart`` (made by the
+    server when a restarted run published, between two runs of the **same** version: ``version_uid`` is then the version of the carrying
+    finding too). Both are absent on a decision carried before 1.59.0."""
 
     decision_id: DecisionId
     finding_uid: FindingUid
     version_uid: VersionUid
     version_ordinal: Annotated[int, Field(ge=1)]
+    run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    mode: DecisionCarryMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class Evidence(_Object):

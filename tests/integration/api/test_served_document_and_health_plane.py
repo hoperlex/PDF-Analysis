@@ -314,6 +314,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "startComparisonSheetDescription",
             "startComparisonSpecification",
             "startOptimisationPass",
+            "restartRun",
             "startRun",
             "startRunFromStage",
             "startStageChainBatch",

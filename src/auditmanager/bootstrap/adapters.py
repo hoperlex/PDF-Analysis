@@ -469,6 +469,12 @@ class ExecutionAdapter(_SessionHolder):
             self._runs.submit_existing(new_id)
         return view
 
+    def restart_run(self, *, run_id: str, restart_point: str, user_uid: str, idempotency_key: str,
+                    cost_consent: dict[str, Any] | None = None) -> RunStatusView:
+        """`RUN-RESTART-01` L0 stub (contract 1.59.0): the operation is sealed and refuses with ``503 dependency_unavailable`` until lane L1
+        replaces this body with the command (``runs.commands.restart_run``, then ``self._runs.submit_existing``). Nothing is read or written."""
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="run_restart")
+
     def set_job_priority(
         self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
     ) -> models.ExecutionQueueItem:
@@ -1368,9 +1374,14 @@ class RunAdapter(_SessionHolder):
                           preset_id: str | None = None, relaxed_limits: bool = False,
                           executor_group_id: str | None = None,
                           start_from_run_id: str | None = None,
-                          start_stage_id: str | None = None) -> models.RunCostEstimate:
+                          start_stage_id: str | None = None,
+                          restart_point: str | None = None) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        if restart_point is not None:
+            # `RUN-RESTART-01` L0 stub: the price of a restart is lane L1's (it replaces this refusal with the estimate); until then it
+            # is refused, never priced as a whole run in its place.
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="run_restart")
         def estimate(session):
             if start_from_run_id is not None or start_stage_id is not None:
                 # `R-151i`: the price of the stages a run started from a stage of an earlier run computes. Both fields or
