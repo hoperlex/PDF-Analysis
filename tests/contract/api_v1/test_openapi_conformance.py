@@ -607,7 +607,8 @@ class TestN1ComponentReferenceResolution:
         # `CRIT-SEAL-53` adds one: `reviewDecisionPattern` addresses a pattern by identity. (`listDecisionPatterns` and `getQualityTable` name no parent.)
         # `UIP-G-05` adds one: `setMyLastProject` refuses an unknown project.
         # `UIP-G-10` adds one: `setDocumentGroup` addresses a document by identity (and so a project).
-        assert len(report) == 238, report
+        # `RUN-RESTART-01` adds one: `restartRun` addresses a run.
+        assert len(report) == 239, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]
