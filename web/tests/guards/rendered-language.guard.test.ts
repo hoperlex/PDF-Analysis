@@ -155,7 +155,7 @@ import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
 import { ExecutorStageModels } from '@/widgets/executor-stage-models';
 import { ProcessesSection } from '@/_pages/workers/ui/processes-section';
 import { executorHostDetailsKey, executorHostsKey } from '@/entities/executor-host';
-import { readinessPlan, stageLayoutKey } from '@/entities/stage-layout';
+import { stageLayoutKey } from '@/entities/stage-layout';
 import { LayoutEditorView } from '@/features/manage-stage-layout';
 import { HostDetailsView } from '@/features/manage-executor-host';
 import { StageModelsTable } from '@/widgets/executor-stage-models';
@@ -175,7 +175,7 @@ import {
 import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { StartRunControl, StartRunCostDialogView, StartRunFailureView, runStartReadinessKey } from '@/features/start-run';
 import { StartRunWithReadiness } from '@/widgets/run-list';
-import { PlanStagesDialog } from '@/widgets/run-stages-dialog';
+import { StageModelsDialogView } from '@/widgets/run-stages-dialog';
 import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
 import { AnalysisPresets } from '@/widgets/analysis-presets';
 import { StageChanges, StageJournal } from '@/widgets/stage-changes';
@@ -201,7 +201,7 @@ import {
 } from '../unit/executor-groups/executor-groups-fixtures';
 import { costEstimate } from '../unit/analysis-settings/cost-estimate-fixtures';
 import {
-  CLAUDE_CELLS as READINESS_CLAUDE_CELLS, ENSEMBLE_CELLS as READINESS_ENSEMBLE_CELLS, READINESS_API, READINESS_LEGACY, READINESS_MIXED,
+  ENSEMBLE_CELLS as READINESS_ENSEMBLE_CELLS, READINESS_API, READINESS_LEGACY, READINESS_MIXED,
   blockedReadiness, modelLines as readinessModelLines, readiness as readinessAnswer,
 } from '../unit/start-run/readiness-fixtures';
 import { connectionId as executorConnectionId } from '../unit/workers/executor-fixtures';
@@ -2290,21 +2290,39 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     make: () => createElement(StartRunWithReadiness, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
     seedClient: (client: ReturnType<typeof newClient>) => { client.setQueryData(queryKeys.account.me(), { roles: ['expert'] }); },
   },
+  // `UIP-S05-01`: the window «Модели по этапам» of a start replaced the run's window in plan mode: the plan, a scheme of several models with a cell no
+  // server has, and the three windows with no plan to read (the layout off, the automatic route, the readiness not read).
   {
-    name: 'plan-stages-dialog-administrator',
-    make: () => createElement(PlanStagesDialog, {
-      rows: readinessPlan(READINESS_CLAUDE_CELLS), kit: 'Только Claude', onClose: () => undefined, editHref: '/workers?tab=models', staticOpen: true,
-    }),
+    name: 'stage-models-dialog-plan',
+    make: () => createElement(StageModelsDialogView, { source: { kind: 'plan', readiness: readinessAnswer({ extended_plan: 'v2' }) }, onClose: () => undefined, staticOpen: true }),
   },
   {
-    name: 'plan-stages-dialog-scheme-and-gap',
+    name: 'stage-models-dialog-scheme-and-gap',
     make: () => createElement('div', null,
-      createElement(PlanStagesDialog, {
-        rows: readinessPlan(READINESS_ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks')), kit: 'Только Claude', onClose: () => undefined, staticOpen: true,
+      createElement(StageModelsDialogView, {
+        source: { kind: 'plan', readiness: readinessAnswer({ kit: 'codex_only', cells: READINESS_ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks') }) },
+        onClose: () => undefined, staticOpen: true,
       }),
-      createElement(PlanStagesDialog, {
-        rows: readinessPlan(blockedReadiness().cells.filter((cell) => cell.row === 'blocks')), kit: null, onClose: () => undefined, staticOpen: true,
+      createElement(StageModelsDialogView, {
+        source: { kind: 'plan', readiness: readinessAnswer({ ready: false, cells: blockedReadiness().cells.filter((cell) => cell.row === 'blocks') }) },
+        onClose: () => undefined, staticOpen: true,
       })),
+  },
+  {
+    name: 'stage-models-dialog-layout-off',
+    make: () => createElement(StageModelsDialogView, { source: { kind: 'legacy' }, layout: { state: 'ready', layout: STAGE_LAYOUT_OFF }, onClose: () => undefined, staticOpen: true }),
+  },
+  {
+    name: 'stage-models-dialog-automatic',
+    make: () => createElement(StageModelsDialogView, { source: { kind: 'automatic' }, layout: { state: 'ready', layout: STAGE_LAYOUT }, onClose: () => undefined, staticOpen: true }),
+  },
+  {
+    name: 'stage-models-dialog-not-read',
+    make: () => createElement(StageModelsDialogView, { source: { kind: 'unread' }, layout: { state: 'ready', layout: STAGE_LAYOUT }, onClose: () => undefined, staticOpen: true }),
+  },
+  {
+    name: 'stage-models-dialog-no-revision',
+    make: () => createElement(StageModelsDialogView, { source: { kind: 'legacy' }, layout: { state: 'ready', layout: STAGE_LAYOUT_EMPTY }, onClose: () => undefined, staticOpen: true }),
   },
   // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» (on `/workers/advanced` since `HOSTS-WEB-01b`), in the states a default cache
   // does not select (the preset select of the start control was removed by `RUN-START-ONE-01a`).
@@ -5340,12 +5358,12 @@ const SCHEMA_MARKERS: readonly {
   {
     schema: 'StageRowKey',
     attribute: 'data-stage-row',
-    why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx`, one cell of the table of six rows: Анализ текста, Анализ блоков, Комплексная сверка, Нормы, Критик, Уточнение.',
+    why: '`entities/stage-layout/ui/stage-models-table.tsx` and the window `widgets/run-stages-dialog/ui/stage-models-dialog.tsx`, one cell of the table of six rows: Анализ текста, Анализ блоков, Комплексная сверка, Нормы, Критик, Уточнение.',
   },
   {
     schema: 'StageCellRole',
     attribute: 'data-stage-role',
-    why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx`, the part a cell plays in an ensemble row: the single answer, the two legs, the judge (named in front of the model).',
+    why: '`entities/stage-layout/ui/stage-models-table.tsx` and `widgets/run-stages-dialog/ui/stage-models-dialog.tsx`, the part a cell plays in an ensemble row: the single answer, the two legs, the judge (named in front of the model).',
   },
   {
     schema: 'StageModelKit',
@@ -5355,12 +5373,12 @@ const SCHEMA_MARKERS: readonly {
   {
     schema: 'ModelEffort',
     attribute: 'data-model-effort',
-    why: '`widgets/executor-stage-models/ui/executor-stage-models.tsx` and the effort select of `features/manage-stage-layout/ui/layout-editor.tsx`: низкое, среднее, высокое.',
+    why: '`entities/stage-layout/ui/stage-models-table.tsx`, `widgets/run-stages-dialog/ui/stage-models-dialog.tsx` and the effort select of `features/manage-stage-layout/ui/layout-editor.tsx`: низкое, среднее, высокое.',
   },
   {
     schema: 'ComparisonLayoutKind',
     attribute: 'data-comparison-kind',
-    why: '`features/manage-stage-layout/ui/layout-editor.tsx` (the four rows of «Сравнение версий» under «Свой набор») and `widgets/executor-stage-models/ui/executor-stage-models.tsx` (the four folded lines): Пары листов, Изменения листов, Спецификация, Отчёт.',
+    why: '`features/manage-stage-layout/ui/layout-editor.tsx` (the four rows of «Сравнение версий» under «Свой набор») and `entities/stage-layout/ui/stage-models-table.tsx` (the four folded lines): Пары листов, Изменения листов, Спецификация, Отчёт.',
   },
   {
     schema: 'ExecutorModelAccess',
@@ -5385,7 +5403,7 @@ const SCHEMA_MARKERS: readonly {
   {
     schema: 'ModelUnavailableReason',
     attribute: 'data-host-reason',
-    why: '`features/manage-executor-host/ui/host-details.tsx` (the reasons of «Подробнее») and the mark «⚠ нет на серверах» of `widgets/executor-stage-models`: said only where an action is blocked or a run waits.',
+    why: '`features/manage-executor-host/ui/host-details.tsx` (the reasons of «Подробнее») and the mark «⚠ нет на серверах» of `entities/stage-layout` and `widgets/run-stages-dialog`: said only where an action is blocked or a run waits.',
   },
 ];
 

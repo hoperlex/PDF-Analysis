@@ -28,7 +28,6 @@ import {
   blockedModels, layoutNotAvailable, readinessLine, runStartReadinessKey,
 } from '@/features/start-run';
 import { MODELS_BY_STAGE_ADDRESS, StartRunWithReadiness } from '@/widgets/run-list';
-import { PlanStagesDialog } from '@/widgets/run-stages-dialog';
 
 import { PROJECT_UID, VERSION_UID } from '../review/fixtures';
 import { newClient, renderScreen, seedError } from '../screens/harness';
@@ -42,7 +41,7 @@ import {
 
 const BUTTON = ['data-start-run-button', ''] as const;
 const STAGES = ['data-readiness-stages', ''] as const;
-const CLOSE = ['data-run-stages-close', ''] as const;
+const CLOSE = ['data-stage-models-close', ''] as const;
 const RUN = { run_id: 'run_01M2545JSD15ETSNNV904X993K' };
 const NNBSP = '\u202f';
 
@@ -268,91 +267,44 @@ describe('when the plan names a model no server has', () => {
   });
 });
 
-describe('«Модели по этапам ▸» opens the stage window in plan mode', () => {
-  it('opens it with the plan and no fact column, and closes it', async () => {
+describe('«Модели по этапам ▸» opens the window «Модели по этапам»', () => {
+  it('opens it with the plan and no fact of a run, and closes it', async () => {
     const { view } = await mount();
-    expect(view.markup()).not.toContain('data-stages-plan');
+    expect(view.markup()).not.toContain('data-stage-models-dialog');
     expect(await view.pressMarked(...STAGES)).toBe(true);
     const markup = view.markup();
-    expect(markup).toContain('data-stages-plan');
-    expect(markup).toContain('Этапы анализа раздела');
+    expect(markup).toContain('data-stage-models-dialog');
+    expect(markup).toContain('Модели по этапам</h2>');
     // The plan: the first stage with a model, with its model, its effort and how it is paid.
-    expect(markup).toContain('data-plan-only');
-    expect(markup).toContain('data-plan-cell="text:main"');
+    expect(markup).toContain('data-stage-cell="text:main"');
     expect(markup).toContain('Sonnet 5.5');
     expect(markup).toContain('среднее');
     expect(markup).toContain('по подписке');
-    // No fact: no state, start, end, duration, tokens or error code, and no start from this stage.
-    for (const fact of ['Факт', 'data-fact-row', 'Состояние', 'Начало', 'Окончание', 'Длительность', 'Код ошибки', 'Запустить с этого этапа']) {
+    // No fact of a run: no state, start, end, duration, tokens or error code, and no start from this stage.
+    for (const fact of ['data-fact-row', 'Состояние', 'Начало', 'Окончание', 'Длительность', 'Код ошибки', 'Запустить с этого этапа']) {
       expect(markup, fact).not.toContain(fact);
     }
+    // «Запустить» stays one button: the window does not start anything (`R-153a`).
+    expect(view.count('Запустить')).toBe(1);
     expect(await view.pressMarked(...CLOSE)).toBe(true);
-    expect(view.markup()).not.toContain('data-stages-plan');
+    expect(view.markup()).not.toContain('data-stage-models-dialog');
   });
 
-  it('is drawn with «Изменить» for an administrator, leading to «Диспетчер → Модели по этапам», and for nobody else', async () => {
+  it('is drawn the same for an administrator and an expert: it is a look at what a start would use, and the window of a run is not this one', async () => {
     const admin = await mount({ roles: ['admin', 'expert'], initiallyOpen: true });
     expect(MODELS_BY_STAGE_ADDRESS).toBe('/workers?tab=models');
-    expect(admin.view.markup()).toContain('data-plan-edit=""');
-    expect(admin.view.markup()).toContain('href="/workers?tab=models"');
-    expect(admin.view.markup()).toContain('>Изменить</a>');
+    expect(admin.view.markup()).toContain('data-stage-models-dialog');
     await live?.unmount();
     const expert = await mount({ roles: ['expert'], initiallyOpen: true });
-    expect(expert.view.markup()).toContain('data-stages-plan');
+    expect(expert.view.markup()).toContain('data-stage-models-dialog');
+    expect(expert.view.markup()).not.toContain('data-run-stages-dialog');
     expect(expert.view.markup()).not.toContain('data-plan-edit');
-    expect(expert.view.markup()).not.toContain('Изменить');
   });
 
   it('is not offered, and not drawn, when the layout is off', async () => {
     const { view } = await mount({ answer: READINESS_LEGACY, initiallyOpen: true });
-    expect(view.markup()).not.toContain('data-stages-plan');
+    expect(view.markup()).not.toContain('data-stage-models-dialog');
     expect(view.markup()).not.toContain('data-readiness-stages');
-  });
-});
-
-describe('the plan window, drawn open', () => {
-  const draw = (cells: Parameters<typeof readinessPlan>[0], extra: { kit?: string | null; editHref?: string } = {}) => renderToStaticMarkup(
-    createElement(PlanStagesDialog, { rows: readinessPlan(cells), kit: extra.kit === undefined ? 'Только Claude' : extra.kit, onClose: () => undefined, staticOpen: true, ...(extra.editHref === undefined ? {} : { editHref: extra.editHref }) }),
-  );
-
-  it('lists the eight stages and what each does without a model', () => {
-    const markup = draw(CLAUDE_CELLS);
-    for (const stage of ['preparation', 'text', 'blocks', 'cross_check', 'merge', 'norms', 'review', 'correction']) {
-      expect(markup, stage).toContain(`data-stage-item="${stage}"`);
-    }
-    // A stage that is in no run of this kind says so on the left, and a stage without a model says that.
-    expect(markup).toContain('без модели');
-    expect(markup).toContain('не входит в запуск');
-  });
-
-  it('says a cell no server has as such, in the cell, and marks nothing else', () => {
-    // The first stage with a model is open: it is served, and carries no mark.
-    expect(draw([readinessCell('text', 'claude-sonnet-5-5'), missingCell('blocks', 'claude-opus-5-5')])).not.toContain('data-plan-missing');
-    // The stage with the gap, open: the cell says so, and says no access.
-    const blocks = draw([missingCell('blocks', 'claude-opus-5-5')], { kit: null });
-    expect(blocks).toContain('data-plan-missing');
-    expect(blocks).toContain('⚠ нет на серверах');
-    expect(blocks).toContain('data-plan-access="none"');
-    expect(blocks).not.toContain('data-plan-kit');
-    // A served cell says how it is paid, and the set is said once the answer names one.
-    const served = draw([readinessCell('text', 'claude-sonnet-5-5', { access: 'api' })]);
-    expect(served).toContain('по ключу API');
-    expect(served).toContain('data-plan-kit="">Набор: Только Claude</p>');
-  });
-
-  it('shows the legs and the judge of a scheme as the rows of one table, with the role in front', () => {
-    const markup = renderToStaticMarkup(createElement(PlanStagesDialog, {
-      rows: readinessPlan(ENSEMBLE_CELLS.filter((cell) => cell.row === 'blocks')), kit: 'Только Claude', onClose: () => undefined, staticOpen: true,
-    }));
-    expect(markup).toContain('первая ветка: Opus 5.5');
-    expect(markup).toContain('вторая ветка: gpt-6-astra');
-    expect(markup).toContain('судья: Sonnet 5.5');
-    expect(markup.indexOf('первая ветка')).toBeLessThan(markup.indexOf('судья'));
-  });
-
-  it('draws «Изменить» only for the link it is given', () => {
-    expect(draw(CLAUDE_CELLS, { editHref: MODELS_BY_STAGE_ADDRESS })).toContain('data-plan-edit');
-    expect(draw(CLAUDE_CELLS)).not.toContain('data-plan-edit');
   });
 });
 

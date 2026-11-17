@@ -6,7 +6,7 @@
  *
  * The control (`features/start-run`) draws the button and the line it is given; this widget reads `getRunStartReadiness` for the
  * version (`useRunStartReadiness`), builds the line and the reason from the answer, and mounts the window that «Модели по этапам ▸»
- * opens (`PlanStagesDialog`, a widget, which a feature does not import). Nothing here decides: the set, the access and `ready` are the
+ * opens (`StageModelsDialog`, a widget, which a feature does not import). Nothing here decides: the set, the access and `ready` are the
  * server's words.
  *
  * - **The layout is on, every cell has a server:** «Набор: Только Claude · по подписке · ⚠ не для клиентских документов · Модели по
@@ -26,7 +26,6 @@ import type { ProjectUid, RunStatus, VersionUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { useMayActAsExpert, useMe } from '@/entities/account';
 import { canExecute } from '@/entities/execution';
-import { STAGE_KIT_LABELS, readinessPlan } from '@/entities/stage-layout';
 import {
   CONNECT_SERVER,
   CONTACT_ADMIN,
@@ -35,7 +34,7 @@ import {
   readinessNoteOf,
   useRunStartReadiness,
 } from '@/features/start-run';
-import { PlanStagesDialog } from '@/widgets/run-stages-dialog';
+import { StageModelsDialog } from '@/widgets/run-stages-dialog';
 
 /** «Диспетчер → Модели по этапам»: the tab is a place in the address (`/workers?tab=models`). */
 export const MODELS_BY_STAGE_ADDRESS = `${routes.workers()}?tab=models`;
@@ -72,13 +71,7 @@ export function StartRunWithReadiness({ projectUid, versionUid, onStarted, initi
         blockedReason={blockedReason}
       />
       {open && readiness !== null && readiness.route === 'stage_plan' ? (
-        <PlanStagesDialog
-          rows={readinessPlan(readiness.cells)}
-          kit={readiness.kit === undefined ? null : STAGE_KIT_LABELS[readiness.kit]}
-          extendedPlan={readiness.extended_plan}
-          onClose={() => setOpen(false)}
-          editHref={admin ? MODELS_BY_STAGE_ADDRESS : undefined}
-        />
+        <StageModelsDialog source={{ kind: 'plan', readiness }} onClose={() => setOpen(false)} />
       ) : null}
     </>
   );
