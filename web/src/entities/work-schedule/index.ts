@@ -9,6 +9,7 @@ export { overdueCount } from './model/overdue';
 export type { EngineerFilterSelectProps } from './ui/engineer-filter';
 export { EngineerFilterSelect } from './ui/engineer-filter';
 export {
+  acceptedPercent,
   addDays,
   dayOfMonth,
   doneByDay,

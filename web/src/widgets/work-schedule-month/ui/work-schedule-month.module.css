@@ -420,6 +420,12 @@
   width: 200px;
 }
 
+/* The column's header names its three figures, so it wraps to two lines where it would otherwise widen the table. */
+.stats thead .statsCounter {
+  width: 14rem;
+  white-space: normal;
+}
+
 .stats td[data-low] {
   color: var(--am-failed);
 }

@@ -92,6 +92,15 @@ export function planPercent(fact: number, plan: number): number | null {
   return plan > 0 ? Math.round((fact / plan) * 100) : null;
 }
 
+/**
+ * The accepted decisions against all that stand (accepted and rejected), a whole percent; no decision has no percent, which
+ * is not 0 %: an engineer who decided nothing has not rejected everything.
+ */
+export function acceptedPercent(accepted: number, rejected: number): number | null {
+  const decided = accepted + rejected;
+  return decided > 0 ? Math.round((accepted / decided) * 100) : null;
+}
+
 /** «ok» at the plan or over it, «warn» from half of it, «low» below. */
 export function percentTone(percent: number | null): 'ok' | 'warn' | 'low' | 'none' {
   if (percent === null) return 'none';
@@ -105,17 +114,26 @@ export interface ScheduleTotals {
   readonly plan: number;
   readonly remaining: number;
   readonly percent: number | null;
+  /** The decisions of the month, all the engineers together, and the share of them accepted. */
+  readonly accepted: number;
+  readonly rejected: number;
+  readonly acceptedPercent: number | null;
 }
 
 export function scheduleTotals(engineers: readonly WorkScheduleEngineer[]): ScheduleTotals {
   const fact = engineers.reduce((sum, engineer) => sum + engineer.fact, 0);
   const plan = engineers.reduce((sum, engineer) => sum + engineer.plan, 0);
+  const accepted = engineers.reduce((sum, engineer) => sum + engineer.accepted_count, 0);
+  const rejected = engineers.reduce((sum, engineer) => sum + engineer.rejected_count, 0);
   return {
     engineers: engineers.length,
     fact,
     plan,
     remaining: engineers.reduce((sum, engineer) => sum + Math.max(0, engineer.plan - engineer.fact), 0),
     percent: planPercent(fact, plan),
+    accepted,
+    rejected,
+    acceptedPercent: acceptedPercent(accepted, rejected),
   };
 }
 

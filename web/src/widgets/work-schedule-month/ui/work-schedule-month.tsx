@@ -21,6 +21,7 @@ import { failureMessage } from '@/shared/api/failure-message';
 import type { EngineerFilter, OverdueRead } from '@/entities/work-schedule';
 import {
   EngineerFilterSelect,
+  acceptedPercent,
   dayOfMonth,
   doneByDay,
   initialsOf,
@@ -81,6 +82,20 @@ function Percent({ value }: { readonly value: number | null }) {
         <span className={styles.barFill} style={{ width: `${Math.min(100, value ?? 0)}%` }} />
       </span>
     </span>
+  );
+}
+
+const COUNTER_TITLE =
+  'Решения эксперта за месяц — замечания и оптимизации вместе: сколько принято, сколько отклонено и какая доля принятых. '
+  + 'Считаются действующие решения самого эксперта; перенесённые из прошлой версии и снятые не входят.';
+
+/** «Счётчик»: accepted / rejected / the share accepted, «—» where nothing was decided. */
+function Counter({ accepted, rejected }: { readonly accepted: number; readonly rejected: number }) {
+  const percent = acceptedPercent(accepted, rejected);
+  return percent === null ? (
+    <span data-schedule-counter="none">—</span>
+  ) : (
+    <span data-schedule-counter="">{`${accepted} / ${rejected} / ${percent}%`}</span>
   );
 }
 
@@ -459,6 +474,9 @@ export function WorkScheduleMonthView({
               <th scope="col">Факт</th>
               <th scope="col">Осталось</th>
               <th scope="col">План</th>
+              <th scope="col" className={styles.statsCounter} title={COUNTER_TITLE}>
+                Счётчик: принято / отклонено / % принятых
+              </th>
               <th scope="col" className={styles.statsPercent}>
                 Выполнение
               </th>
@@ -496,6 +514,9 @@ export function WorkScheduleMonthView({
                       </span>
                     )}
                   </td>
+                  <td className={styles.statsCounter}>
+                    <Counter accepted={engineer.accepted_count} rejected={engineer.rejected_count} />
+                  </td>
                   <td className={styles.statsPercent}>
                     <Percent value={planPercent(engineer.fact, engineer.plan)} />
                   </td>
@@ -511,6 +532,9 @@ export function WorkScheduleMonthView({
               </td>
               <td data-low={totals.remaining > 0 ? '' : undefined}>{totals.remaining}</td>
               <td>{totals.plan}</td>
+              <td className={styles.statsCounter}>
+                <Counter accepted={totals.accepted} rejected={totals.rejected} />
+              </td>
               <td className={styles.statsPercent}>
                 <Percent value={totals.percent} />
               </td>
