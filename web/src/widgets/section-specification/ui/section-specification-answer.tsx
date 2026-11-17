@@ -9,6 +9,11 @@
  * and page on every line, and two projects listing the same product are two rows — nothing is
  * merged, and there is no total for the section. Totals are per project and per currency.
  *
+ * **The table is grouped by document** (`UIP-S11-02`, the original's «⌄ АР-1 · v2 · 10 строк»): one row-group for each document
+ * whose current version is confirmed in the section, keyed by `document_uid` and never by a name or a number. A document with
+ * no table says «Спецификация отсутствует» in red; with every object chosen the group names its object too; a group the page
+ * boundary tears says how many of its rows are on this page. «+» and «−» in the first graph open and fold every group.
+ *
  * **A state is said, never shown as an empty table.** A set without a published run or a saved
  * text, a project without a price list, a bound that stops the read, a current version nobody
  * classified — each is a sentence saying what is missing and where it is done.
@@ -67,7 +72,6 @@ export interface SectionSpecificationAnswerProps {
 
 export type SectionSpecificationColumns = 'form7' | 'priced';
 
-const SET_WORD = ['комплект', 'комплекта', 'комплектов'] as const;
 const ROW_WORD = ['строка', 'строки', 'строк'] as const;
 
 /** The nine columns of Form 7, as the original numbers them (`GOST`, graph 1–9). */
@@ -353,65 +357,101 @@ function Pager({ answer, onPage }: Pick<SectionSpecificationAnswerProps, 'answer
   );
 }
 
-/** One project's rows of this page, in the order the server sent them; a project of the answer with none still has its group. */
+/** One document's rows of this page, in the order the server sent them; a document of the answer with none still has its group. */
 interface RowGroup {
-  readonly projectUid: string;
+  readonly documentUid: string;
+  /** The document as the answer lists it; `undefined` for rows of a document the answer does not list. */
+  readonly source: SectionSpecificationSource | undefined;
+  /** The project the document belongs to, named by the answer; `undefined` when the answer does not list it. */
   readonly project: SectionSpecificationProject | undefined;
+  readonly projectUid: string | undefined;
   readonly rows: readonly SectionSpecificationRow[];
 }
 
 /**
- * The rows of the page grouped under their project, the projects in the answer's order (`UI-B-23`). A row whose project the
- * answer does not list is kept under its own group and never dropped.
+ * The rows of the page grouped under their document, the documents in the answer's order: project by project, each project's
+ * sets as it lists them (`UIP-S11-02`). The identity of a group is the row's `document_uid`. A row whose document the answer does
+ * not list is kept under a group of its own and never dropped.
  */
-export function groupRowsByProject(answer: SectionSpecification): readonly RowGroup[] {
-  const byProject = new Map<string, SectionSpecificationRow[]>();
+export function groupRowsByDocument(answer: SectionSpecification): readonly RowGroup[] {
+  const byDocument = new Map<string, SectionSpecificationRow[]>();
   for (const row of answer.rows?.items ?? []) {
-    const held = byProject.get(row.project_uid);
-    if (held === undefined) byProject.set(row.project_uid, [row]);
+    const held = byDocument.get(row.document_uid);
+    if (held === undefined) byDocument.set(row.document_uid, [row]);
     else held.push(row);
   }
-  const groups: RowGroup[] = answer.projects.map((project) => ({
-    projectUid: project.project_uid,
-    project,
-    rows: byProject.get(project.project_uid) ?? [],
-  }));
-  const listed = new Set(answer.projects.map((project) => project.project_uid as string));
-  for (const [projectUid, rows] of byProject) {
-    if (!listed.has(projectUid)) groups.push({ projectUid, project: undefined, rows });
+  const groups: RowGroup[] = [];
+  const listed = new Set<string>();
+  for (const project of answer.projects) {
+    for (const source of project.sources) {
+      listed.add(source.document_uid);
+      groups.push({
+        documentUid: source.document_uid,
+        source,
+        project,
+        projectUid: project.project_uid,
+        rows: byDocument.get(source.document_uid) ?? [],
+      });
+    }
+  }
+  const projects = new Map(answer.projects.map((project) => [project.project_uid as string, project] as const));
+  for (const [documentUid, rows] of byDocument) {
+    if (listed.has(documentUid)) continue;
+    const projectUid = rows[0]?.project_uid;
+    groups.push({ documentUid, source: undefined, project: projects.get(projectUid ?? ''), projectUid, rows });
   }
   return groups;
 }
 
+/** A document has a specification when the server read rows of it; `null` (not read) and `0` are none. */
+function hasSpecification(group: RowGroup): boolean {
+  return group.source === undefined ? group.rows.length > 0 : (group.source.row_count ?? 0) > 0;
+}
+
 function GroupHeader({
-  group, span, collapsed, onToggle,
+  group, span, collapsed, onToggle, withObject, searched,
 }: {
   readonly group: RowGroup;
   readonly span: number;
   readonly collapsed: boolean;
   readonly onToggle: () => void;
+  /** Every object is in view, so the group says which object its document belongs to. */
+  readonly withObject: boolean;
+  readonly searched: boolean;
 }) {
-  const project = group.project;
-  const missing = project !== undefined && project.row_count === 0;
-  const sets = project?.sources.length ?? 0;
+  const source = group.source;
+  const missing = !hasSpecification(group);
+  const total = source?.row_count ?? null;
+  // The page boundary tore the group: some of its rows are here and the rest are on another page. A search narrows the rows, not
+  // the count, so a searched list is not torn, it is filtered.
+  const torn = !searched && !missing && total !== null && group.rows.length > 0 && group.rows.length < total;
   return (
-    <tr className={styles.groupRow} data-section-group-row={group.projectUid} data-section-group-collapsed={collapsed ? 'yes' : 'no'}>
+    <tr className={styles.groupRow} data-section-group-row={group.documentUid} data-section-group-collapsed={collapsed ? 'yes' : 'no'}>
       <td colSpan={span} className={styles.groupCell}>
         <button type="button" className={styles.groupToggle} aria-expanded={!collapsed} onClick={onToggle}>
           <span className={styles.caret} aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
-          <span className={missing ? styles.missing : styles.groupName}>{project?.name ?? 'Объект'}</span>
-          {project === undefined ? null : (
-            <span className={styles.hint}>
-              {' '}· {sets} {pluralRu(sets, SET_WORD)}
-              {missing ? '' : ` · ${project.row_count} ${pluralRu(project.row_count, ROW_WORD)}`}
-            </span>
-          )}
+          <span className={missing ? styles.missing : styles.groupName}>{source?.display_title ?? 'Документ'}</span>
+          <span className={styles.hint}>
+            {source === undefined ? null : ` · v${source.version_ordinal}`}
+            {missing || total === null ? '' : ` · ${total} ${pluralRu(total, ROW_WORD)}`}
+            {torn ? `, на этой странице: ${group.rows.length}` : ''}
+          </span>
         </button>
-        {' '}
-        <span className={styles.hint}>
-          (<Link href={routes.project(group.projectUid)}>объект</Link>,{' '}
-          <Link href={routes.projectOptimisation(group.projectUid)}>вкладка «Оптимизация» объекта</Link>)
-        </span>
+        {withObject && group.project !== undefined ? (
+          <span className={styles.hint} data-section-group-object="">
+            {' · '}
+            <Link href={routes.project(group.project.project_uid)}>{group.project.name}</Link>
+          </span>
+        ) : null}
+        {group.projectUid === undefined ? null : (
+          <>
+            {' '}
+            <span className={styles.hint}>
+              (<Link href={routes.document(group.projectUid, group.documentUid)}>документ</Link>,{' '}
+              <Link href={routes.documentOptimisation(group.projectUid, group.documentUid)}>оптимизация документа</Link>)
+            </span>
+          </>
+        )}
       </td>
     </tr>
   );
@@ -425,23 +465,30 @@ function GroupBody({
   readonly addresses: Addresses;
   readonly columns: SectionSpecificationColumns;
   readonly searched: boolean;
-  /** True when the page holds rows of another project: this one's rows may be on a page before or after it. */
+  /** True when the page holds rows of another document: this one's rows may be on a page before or after it. */
   readonly otherRows: boolean;
 }) {
-  const project = group.project;
   if (group.rows.length === 0) {
-    const none = project !== undefined && project.row_count === 0;
+    const none = !hasSpecification(group);
+    const state = group.source?.state;
     return (
       <tr className={styles.noteRow} data-section-group-empty={none ? 'missing' : 'page'}>
         <td />
         <td colSpan={span - 1}>
-          {none
-            ? 'Спецификация отсутствует'
-            : searched
-              ? 'По текущему поиску строки спецификации этого объекта на этой странице не найдены.'
-              : otherRows
-                ? 'Строки этого объекта — на другой странице списка.'
-                : 'Строк спецификации этого объекта нет.'}
+          {none ? (
+            <>
+              Спецификация отсутствует
+              {state === undefined || state === 'ready' ? null : (
+                <span className={styles.hint}> — {sectionSourceStateMessage(state)}</span>
+              )}
+            </>
+          ) : searched ? (
+            'По текущему поиску строки спецификации этого документа на этой странице не найдены.'
+          ) : otherRows ? (
+            'Строки этого документа — на другой странице списка.'
+          ) : (
+            'Строк спецификации этого документа нет.'
+          )}
         </td>
       </tr>
     );
@@ -450,7 +497,7 @@ function GroupBody({
     <>
       {group.rows.map((row, index) => (
         <Fragment key={row.row_id}>
-          {/* The original's category row: where the form's heading changes inside a project. */}
+          {/* The original's category row: where the form's heading changes inside a document. */}
           {row.group !== null && row.group !== group.rows[index - 1]?.group ? (
             <tr className={styles.categoryRow} data-section-category={row.group}>
               <td />
@@ -465,7 +512,7 @@ function GroupBody({
 }
 
 function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerProps, 'answer' | 'onPage'> & { readonly columns: SectionSpecificationColumns }) {
-  // The projects the reader folded; held by identity so a fold survives another page, and forgotten with the section (the
+  // The documents the reader folded; held by identity so a fold survives another page, and forgotten with the section (the
   // container keys this table by it). Expanded by default, as the original.
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const rows = answer.rows;
@@ -486,13 +533,15 @@ function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerP
     );
   }
   const addresses = addressesOf(answer);
-  const groups = groupRowsByProject(answer);
+  const groups = groupRowsByDocument(answer);
+  // With every object in view a group names its object too; narrowed to one, the object is the screen's.
+  const withObject = answer.project_filter === null;
   const span = FORM7_HEADINGS.length + (columns === 'priced' ? PRICED_HEADINGS.length : 0);
-  const toggle = (projectUid: string) =>
+  const toggle = (documentUid: string) =>
     setFolded((held) => {
       const next = new Set(held);
-      if (next.has(projectUid)) next.delete(projectUid);
-      else next.add(projectUid);
+      if (next.has(documentUid)) next.delete(documentUid);
+      else next.add(documentUid);
       return next;
     });
   return (
@@ -504,14 +553,14 @@ function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerP
               <th className={styles.cell} scope="col">
                 <span className={styles.positionHeading}>
                   <span>{FORM7_HEADINGS[0]}</span>
-                  <span className={styles.allToggle} role="group" aria-label="Управление всеми объектами">
-                    <button type="button" title="Развернуть все объекты" aria-label="Развернуть все объекты" data-section-expand-all="" onClick={() => setFolded(new Set())}>+</button>
+                  <span className={styles.allToggle} role="group" aria-label="Управление всеми документами">
+                    <button type="button" title="Развернуть все документы" aria-label="Развернуть все документы" data-section-expand-all="" onClick={() => setFolded(new Set())}>+</button>
                     <button
                       type="button"
-                      title="Свернуть все объекты"
-                      aria-label="Свернуть все объекты"
+                      title="Свернуть все документы"
+                      aria-label="Свернуть все документы"
                       data-section-collapse-all=""
-                      onClick={() => setFolded(new Set(groups.map((group) => group.projectUid)))}
+                      onClick={() => setFolded(new Set(groups.map((group) => group.documentUid)))}
                     >
                       −
                     </button>
@@ -528,10 +577,17 @@ function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerP
             </tr>
           </thead>
           {groups.map((group) => {
-            const collapsed = folded.has(group.projectUid);
+            const collapsed = folded.has(group.documentUid);
             return (
-              <tbody key={group.projectUid} data-section-group={group.projectUid}>
-                <GroupHeader group={group} span={span} collapsed={collapsed} onToggle={() => toggle(group.projectUid)} />
+              <tbody key={group.documentUid} data-section-group={group.documentUid}>
+                <GroupHeader
+                  group={group}
+                  span={span}
+                  collapsed={collapsed}
+                  onToggle={() => toggle(group.documentUid)}
+                  withObject={withObject}
+                  searched={searched}
+                />
                 {collapsed ? null : (
                   <GroupBody
                     group={group}
@@ -549,7 +605,7 @@ function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerP
       </div>
       <p className="am-note">
         В сохранённом тексте графы «Тип, марка», «Код» и «Завод-изготовитель» не отделены от
-        наименования и показаны вместе с ним. Строки разных объектов не объединяются.
+        наименования и показаны вместе с ним. Строки разных документов и объектов не объединяются.
       </p>
       <Pager answer={answer} onPage={onPage} />
     </>

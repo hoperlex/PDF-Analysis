@@ -20,6 +20,11 @@ const SPEC_POSITION = 'prp_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 
 export { PROJECT_UID as SECTION_PROJECT_A, DOCUMENT_UID as SECTION_DOCUMENT_A, VERSION_UID as SECTION_VERSION_A };
 
+/** The three documents of the first project the answer lists without rows: no run, no text layer, a table over the bound (`UIP-S11-02`). */
+export const SECTION_DOCUMENT_UNREAD_1 = `doc_${ULID}`.replace('B', 'F');
+export const SECTION_DOCUMENT_UNREAD_2 = `doc_${ULID}`.replace('B', 'C');
+export const SECTION_DOCUMENT_UNREAD_3 = `doc_${ULID}`.replace('B', 'D');
+
 /**
  * `W63-SECTION-FORM7-01`. One answer of «Оптимизация разделов», every value Cyrillic, an
  * identifier or a contract enum. `ready` carries two projects: one priced (a row of each status,
@@ -65,17 +70,17 @@ export const sectionAnswer = (over: Partial<SectionSpecification> = {}): Section
           table_count: 1, skipped_by_reason: SECTION_SKIPS,
         },
         {
-          document_uid: `doc_${ULID}`.replace('B', 'F'), display_title: 'Архитектурные решения, паркинг', version_uid: `ver_${ULID}`.replace('B', 'F'),
+          document_uid: SECTION_DOCUMENT_UNREAD_1 as never, display_title: 'Архитектурные решения, паркинг', version_uid: `ver_${ULID}`.replace('B', 'F'),
           version_ordinal: 1, page_count: 12, project_stage: 'P', state: 'analysis_missing', run_id: null,
           text_layer_sha256: null, row_count: null, table_count: null, skipped_by_reason: null,
         },
         {
-          document_uid: `doc_${ULID}`.replace('B', 'C'), display_title: 'Архитектурные решения, склад', version_uid: `ver_${ULID}`.replace('B', 'C'),
+          document_uid: SECTION_DOCUMENT_UNREAD_2 as never, display_title: 'Архитектурные решения, склад', version_uid: `ver_${ULID}`.replace('B', 'C'),
           version_ordinal: 1, page_count: 8, project_stage: 'R', state: 'text_unavailable', run_id: RUN_ID,
           text_layer_sha256: null, row_count: null, table_count: null, skipped_by_reason: null,
         },
         {
-          document_uid: `doc_${ULID}`.replace('B', 'D'), display_title: 'Архитектурные решения, котельная', version_uid: `ver_${ULID}`.replace('B', 'D'),
+          document_uid: SECTION_DOCUMENT_UNREAD_3 as never, display_title: 'Архитектурные решения, котельная', version_uid: `ver_${ULID}`.replace('B', 'D'),
           version_ordinal: 4, page_count: 8, project_stage: 'R', state: 'specification_too_large', run_id: RUN_ID,
           text_layer_sha256: SHA, row_count: null, table_count: 2, skipped_by_reason: SECTION_SKIPS,
         },

@@ -30,12 +30,15 @@ import {
 } from '@/entities/section-specification';
 import { SectionFilterBar } from '@/_pages/section-optimisation';
 import type { SectionSpecificationColumns } from '@/widgets/section-specification';
-import { SectionSpecificationAnswer, SectionSpecificationSection, groupRowsByProject } from '@/widgets/section-specification';
+import { SectionSpecificationAnswer, SectionSpecificationSection, groupRowsByDocument } from '@/widgets/section-specification';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
 import {
   SECTION_DOCUMENT_A,
   SECTION_DOCUMENT_B,
+  SECTION_DOCUMENT_UNREAD_1,
+  SECTION_DOCUMENT_UNREAD_2,
+  SECTION_DOCUMENT_UNREAD_3,
   SECTION_NO_ROWS,
   SECTION_PROJECT_A,
   SECTION_PROJECT_B,
@@ -140,10 +143,11 @@ describe('rows are addressed and never merged', () => {
   it('gives every row its project, set, version, sheet and page', () => {
     const first = rowMarkup(markup, A_COUNTED);
     expect(first).toContain(`data-section-row-project="${SECTION_PROJECT_A}"`);
-    // The project is the row's group (`UI-B-23`): its name is on the group's row, above the rows it holds.
+    // The document is the row's group (`UIP-S11-02`): its title is on the group's row, above the rows it holds, and with every
+    // object in view the group names the object too.
     expect(text(first)).toContain('Архитектурные решения');
-    expect(markup.indexOf('data-section-group-row="' + SECTION_PROJECT_A + '"')).toBeLessThan(markup.indexOf('data-section-row="' + A_COUNTED + '"'));
-    expect(text(markup.slice(markup.indexOf('data-section-group-row="' + SECTION_PROJECT_A + '"')))).toContain('Школа на пятьсот мест');
+    expect(markup.indexOf('data-section-group-row="' + SECTION_DOCUMENT_A + '"')).toBeLessThan(markup.indexOf('data-section-row="' + A_COUNTED + '"'));
+    expect(text(markup.slice(markup.indexOf('data-section-group-row="' + SECTION_DOCUMENT_A + '"')))).toContain('Школа на пятьсот мест');
     expect(text(first)).toContain('версия 2');
     expect(text(first)).toContain('л. 10 / с. 14');
     expect(first).toContain('title="строки 3–3"');
@@ -172,14 +176,14 @@ describe('rows are addressed and never merged', () => {
     expect(panel).toContain(`href="/projects/${SECTION_PROJECT_B}"`);
   });
 
-  it('shows the same product of two projects as two rows, each under its own project', () => {
+  it('shows the same product of two projects as two rows, each under its own document', () => {
     const name = 'Металлический щит МЩ-1';
     expect((text(markup).match(new RegExp(name, 'g')) ?? []).length).toBe(2);
-    const groupA = markup.indexOf(`data-section-group-row="${SECTION_PROJECT_A}"`);
-    const groupB = markup.indexOf(`data-section-group-row="${SECTION_PROJECT_B}"`);
+    const groupA = markup.indexOf(`data-section-group-row="${SECTION_DOCUMENT_A}"`);
+    const groupB = markup.indexOf(`data-section-group-row="${SECTION_DOCUMENT_B}"`);
     expect(groupA).toBeGreaterThan(-1);
     expect(groupB).toBeGreaterThan(groupA);
-    // Each row sits between its own project's group row and the next project's.
+    // Each row sits between its own document's group row and the next group's.
     expect(markup.indexOf(`data-section-row="${A_COUNTED}"`)).toBeGreaterThan(groupA);
     expect(markup.indexOf(`data-section-row="${A_COUNTED}"`)).toBeLessThan(groupB);
     expect(markup.indexOf(`data-section-row="${B_FIRST}"`)).toBeGreaterThan(groupB);
@@ -343,8 +347,13 @@ describe('the section picker and the container', () => {
   });
 });
 
-describe('the original’s Form 7: nine graphs, the rows grouped under a project that folds (`UI-B-23`)', () => {
+describe('the original’s Form 7: nine graphs, the rows grouped under a document that folds (`UI-B-23`, `UIP-S11-02`)', () => {
   const markup = render(sectionAnswer(), () => undefined, 'form7');
+  const header = (html: string, documentUid: string): string => {
+    const from = html.indexOf(`data-section-group-row="${documentUid}"`);
+    expect(from, documentUid).toBeGreaterThan(-1);
+    return html.slice(from, html.indexOf('</tr>', from));
+  };
 
   it('shows the nine graphs and their numbers, and none of the price columns, by default', () => {
     expect(markup).toContain('data-section-columns="form7"');
@@ -369,56 +378,137 @@ describe('the original’s Form 7: nine graphs, the rows grouped under a project
     expect(priced).toContain('data-section-columns="priced"');
   });
 
-  it('groups the rows under one row per project, with its name, sets and rows, folded open', () => {
-    expect((markup.match(/data-section-group-row=/g) ?? []).length).toBe(2);
-    const groups = groupRowsByProject(sectionAnswer());
-    expect(groups.map((group) => [group.projectUid, group.rows.length])).toEqual([[SECTION_PROJECT_A, 4], [SECTION_PROJECT_B, 2]]);
-    const header = markup.slice(markup.indexOf(`data-section-group-row="${SECTION_PROJECT_A}"`));
-    expect(text(header.slice(0, header.indexOf('</tr>')))).toContain('Школа на пятьсот мест · 4 комплекта · 4 строки');
-    expect(header).toContain('aria-expanded="true"');
+  it('groups the rows by `document_uid`: one row-group for each document of the answer, in its order, folded open', () => {
+    const groups = groupRowsByDocument(sectionAnswer());
+    expect(groups.map((group) => [group.documentUid, group.rows.length])).toEqual([
+      [SECTION_DOCUMENT_A, 4],
+      [SECTION_DOCUMENT_UNREAD_1, 0],
+      [SECTION_DOCUMENT_UNREAD_2, 0],
+      [SECTION_DOCUMENT_UNREAD_3, 0],
+      [SECTION_DOCUMENT_B, 2],
+    ]);
+    expect((markup.match(/data-section-group-row=/g) ?? []).length).toBe(5);
     expect(markup).toContain('data-section-group-collapsed="no"');
     expect(markup).not.toContain('data-section-group-collapsed="yes"');
+    expect(header(markup, SECTION_DOCUMENT_A)).toContain('aria-expanded="true"');
   });
 
-  it('says a project with no specification has none, and keeps its group', () => {
+  it('says «Название · v2 · 4 строки» on the group, the way the original says «⌄ МК7-РД-ЭОМ1 · v2 · 10 строк»', () => {
+    expect(text(header(markup, SECTION_DOCUMENT_A))).toContain('⌄ Архитектурные решения · v2 · 4 строки');
+    expect(text(header(markup, SECTION_DOCUMENT_B))).toContain('⌄ Архитектурные решения · v1 · 2 строки');
+    // The number is the server's count of the document's rows, not a count of what the page holds.
+    const counted = sectionAnswer();
+    const more = sectionAnswer({
+      projects: counted.projects.map((project, index) => (index === 0
+        ? { ...project, sources: project.sources.map((source, at) => (at === 0 ? { ...source, row_count: 10 } : source)) }
+        : project)),
+    });
+    expect(text(header(render(more, () => undefined, 'form7'), SECTION_DOCUMENT_A))).toContain('Архитектурные решения · v2 · 10 строк');
+  });
+
+  it('keys a group by the document\u2019s identity, never by its title: two documents of one title are two groups', () => {
+    const answer = sectionAnswer();
+    const html = render(answer, () => undefined, 'form7');
+    // The two groups with rows carry the same title «Архитектурные решения» and are two row-groups.
+    const titles = [SECTION_DOCUMENT_A, SECTION_DOCUMENT_B].map((uid) => text(header(html, uid)));
+    expect(titles[0]).toContain('Архитектурные решения');
+    expect(titles[1]).toContain('Архитектурные решения');
+    expect(new Set(groupRowsByDocument(answer).map((group) => group.documentUid)).size).toBe(5);
+    // And a row is under the group of its own `document_uid`, whatever its project says.
+    const rows = answer.rows!.items.map((row) => (row.row_id === B_FIRST ? { ...row, document_uid: SECTION_DOCUMENT_A as never } : row));
+    const moved = groupRowsByDocument(sectionAnswer({ rows: { ...answer.rows!, items: rows } }));
+    expect(moved.find((group) => group.documentUid === SECTION_DOCUMENT_A)?.rows).toHaveLength(5);
+    expect(moved.find((group) => group.documentUid === SECTION_DOCUMENT_B)?.rows).toHaveLength(1);
+  });
+
+  it('says a document with no table has none, in red, and keeps its group, with what is missing', () => {
+    expect((markup.match(/data-section-group-empty="missing"/g) ?? []).length).toBe(3);
+    expect(text(markup)).toContain('Спецификация отсутствует');
+    expect(text(markup)).toContain(`Спецификация отсутствует — ${SECTION_SOURCE_STATE_MESSAGES.analysis_missing}`);
+    // The name is the red one (`missing`), the document that has rows is not.
+    expect(header(markup, SECTION_DOCUMENT_UNREAD_1)).toMatch(/class="[^"]*missing[^"]*"[^>]*>Архитектурные решения, паркинг</);
+    expect(header(markup, SECTION_DOCUMENT_A)).not.toMatch(/class="[^"]*missing[^"]*"/);
+    // Not a number of rows it has not got.
+    expect(text(header(markup, SECTION_DOCUMENT_UNREAD_1))).not.toMatch(/ 0 строк/);
+    expect(text(header(markup, SECTION_DOCUMENT_UNREAD_1))).toContain('v1');
+    // A document the server read and found no rows in has none too, and says nothing of a state.
     const answer = sectionAnswer();
     const bare = sectionAnswer({
-      projects: answer.projects.map((project, index) => (index === 1 ? { ...project, row_count: 0 } : project)),
+      projects: answer.projects.map((project, index) => (index === 1
+        ? { ...project, row_count: 0, sources: project.sources.map((source) => ({ ...source, row_count: 0 })) }
+        : project)),
       rows: { ...answer.rows!, items: answer.rows!.items.slice(0, 4), total: 4 },
     });
     const html = render(bare, () => undefined, 'form7');
-    expect(html).toContain('data-section-group-empty="missing"');
-    expect(text(html)).toContain('Спецификация отсутствует');
-    // Not a number of rows it has not got.
-    const group = html.slice(html.indexOf(`data-section-group-row="${SECTION_PROJECT_B}"`));
-    expect(text(group.slice(0, group.indexOf('</tr>')))).not.toMatch(/ 0 строк/);
+    const group = html.slice(html.indexOf(`data-section-group-row="${SECTION_DOCUMENT_B}"`));
+    expect(group.slice(0, group.indexOf('</tbody>'))).toContain('data-section-group-empty="missing"');
+    expect(text(group.slice(0, group.indexOf('</tbody>')))).not.toContain('Спецификация отсутствует —');
   });
 
-  it('says a project whose rows are on another page has rows, and a search that spared none of them found none', () => {
+  it('names the object in the group while every object is in view, and not once the screen is narrowed to one', () => {
+    expect(header(markup, SECTION_DOCUMENT_A)).toContain('data-section-group-object');
+    expect(text(header(markup, SECTION_DOCUMENT_A))).toContain('Школа на пятьсот мест');
+    expect(text(header(markup, SECTION_DOCUMENT_B))).toContain('Детский сад');
+    expect(header(markup, SECTION_DOCUMENT_B)).toContain(`href="/projects/${SECTION_PROJECT_B}"`);
+    const answer = sectionAnswer();
+    const narrowed = render(
+      sectionAnswer({
+        project_filter: SECTION_PROJECT_B as never,
+        projects: answer.projects.slice(1),
+        rows: { ...answer.rows!, items: answer.rows!.items.slice(4), total: 2 },
+      }),
+      null,
+      'form7',
+    );
+    expect(narrowed).not.toContain('data-section-group-object');
+    expect(text(header(narrowed, SECTION_DOCUMENT_B))).not.toContain('Детский сад');
+  });
+
+  it('names a group the page boundary tore, with how many of its rows are on this page', () => {
+    const answer = sectionAnswer();
+    // The document says it has 4 rows; the page holds 2 of them and the other 2 are on the next page.
+    const torn = sectionAnswer({ rows: { ...answer.rows!, items: [...answer.rows!.items.slice(0, 2), ...answer.rows!.items.slice(4)], total: 6, next_offset: 2 } });
+    const html = render(torn, () => undefined, 'form7');
+    expect(text(header(html, SECTION_DOCUMENT_A))).toContain('Архитектурные решения · v2 · 4 строки, на этой странице: 2');
+    // A group the page holds whole is not torn, and a search narrows the rows and does not tear a group.
+    expect(text(header(markup, SECTION_DOCUMENT_A))).not.toContain('на этой странице');
+    expect(text(header(render(sectionAnswer({ query: 'щит', rows: { ...answer.rows!, items: answer.rows!.items.slice(0, 2), total: 2 } }), () => undefined, 'form7'), SECTION_DOCUMENT_A)))
+      .not.toContain('на этой странице');
+  });
+
+  it('says a document whose rows are on another page has rows, and a search that spared none of them found none', () => {
     const answer = sectionAnswer();
     const otherPage = sectionAnswer({ rows: { ...answer.rows!, items: answer.rows!.items.slice(0, 4), total: 6 } });
     expect(render(otherPage, () => undefined, 'form7')).toContain('data-section-group-empty="page"');
-    expect(text(render(otherPage, () => undefined, 'form7'))).toContain('Строки этого объекта — на другой странице списка.');
+    expect(text(render(otherPage, () => undefined, 'form7'))).toContain('Строки этого документа — на другой странице списка.');
     const searched = sectionAnswer({ query: 'щит', rows: { ...answer.rows!, items: answer.rows!.items.slice(0, 4), total: 4 } });
-    expect(text(render(searched, () => undefined, 'form7'))).toContain('По текущему поиску строки спецификации этого объекта на этой странице не найдены.');
+    expect(text(render(searched, () => undefined, 'form7'))).toContain('По текущему поиску строки спецификации этого документа на этой странице не найдены.');
   });
 
-  it('has the original’s «+» and «−» for every project in the heading of the first graph', () => {
+  it('has the original’s «+» and «−» for every group in the heading of the first graph', () => {
     expect(markup).toContain('data-section-expand-all=""');
     expect(markup).toContain('data-section-collapse-all=""');
-    expect(markup).toContain('aria-label="Развернуть все объекты"');
-    expect(markup).toContain('aria-label="Свернуть все объекты"');
+    expect(markup).toContain('aria-label="Развернуть все документы"');
+    expect(markup).toContain('aria-label="Свернуть все документы"');
+    expect(markup).not.toContain('все объекты"');
   });
 
-  it('keeps every row’s address under its name, and does not drop a row of a project the answer does not list', () => {
+  it('keeps every row’s address under its name, and does not drop a row of a document the answer does not list', () => {
     const row = rowMarkup(markup, A_COUNTED);
     expect(text(row)).toContain('версия 2');
     expect(text(row)).toContain('л. 10 / с. 14');
     const answer = sectionAnswer();
     const stray = sectionAnswer({ projects: answer.projects.slice(0, 1) });
-    const groups = groupRowsByProject(stray);
-    expect(groups.map((group) => group.projectUid)).toEqual([SECTION_PROJECT_A, SECTION_PROJECT_B]);
-    expect(groups[1]!.project).toBeUndefined();
-    expect(groups[1]!.rows).toHaveLength(2);
+    const groups = groupRowsByDocument(stray);
+    expect(groups.map((group) => group.documentUid)).toEqual([
+      SECTION_DOCUMENT_A, SECTION_DOCUMENT_UNREAD_1, SECTION_DOCUMENT_UNREAD_2, SECTION_DOCUMENT_UNREAD_3, SECTION_DOCUMENT_B,
+    ]);
+    const last = groups[4]!;
+    expect(last.source).toBeUndefined();
+    expect(last.rows).toHaveLength(2);
+    // The stray group is drawn, named «Документ», and its rows are in the table.
+    const html = render(stray, () => undefined, 'form7');
+    expect(html).toContain(`data-section-group-row="${SECTION_DOCUMENT_B}"`);
+    expect(html).toContain(`data-section-row="${B_FIRST}"`);
   });
 });

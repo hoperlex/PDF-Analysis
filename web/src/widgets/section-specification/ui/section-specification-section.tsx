@@ -5,14 +5,14 @@
  * (`W63-SECTION-FORM7-01`), the body of the page's «Форма 7» tab.
  *
  * **What is chosen here.** The search text, and the columns: the original's nine graphs of the form (default), or the same
- * table with the match against the project's price list added (`UI-B-23`). The section and the project are the page's, chosen in
- * the row of the tabs as the original chooses its project there (`UI-B-24`); this widget reads them (`sectionCode`,
+ * table with the match against the project's price list added (`UI-B-23`). The section and the project are the page's (the section is
+ * chosen in its header, the object in the top strip); this widget reads them (`sectionCode`,
  * `projectUid`) and never writes them but through `onSelectProject`, the button of a project's panel that narrows the section
  * to it. All of them are filters over the one read, `getSectionSpecification`: the section code is not an object, a document
  * or a proposal, and nothing here ever writes. The search narrows the rows and never a project's totals.
  *
  * **What is shown** is `SectionSpecificationAnswer`: each project with its sets, its own price list and its own totals, the
- * current versions nobody classified, and the Form-7 rows grouped under their project, each with set, version, sheet and
+ * current versions nobody classified, and the Form-7 rows grouped under their document (`UIP-S11-02`), each with set, version, sheet and
  * page and, on request, the match against that project's price list. Rows come a page at a time.
  */
 
@@ -29,12 +29,11 @@ import type { SectionSpecificationColumns } from './section-specification-answer
 import styles from './section-specification.module.css';
 
 /**
- * The ids of the section and project selects. The selects are drawn by the page, in the row of the tabs (`UI-B-24`), but these are
- * the handles the browser journey (`section-form7`) has always pressed them by; they stay authored here, with the screen's
- * other controls, so the journey's handles and the page's selects cannot drift apart.
+ * The id of the section select. The select is drawn by the page, in its header (`UI-B-24`, `UIP-S11-01`), but this is the handle
+ * the browser journey (`section-form7`) has always pressed it by; it stays authored here, with the screen's other controls, so the
+ * journey's handle and the page's select cannot drift apart. The object has no select: it is the top strip's (`UIP-G-06`).
  */
 export const SECTION_SELECT_ID = 'section-specification-section';
-export const PROJECT_SELECT_ID = 'section-specification-project';
 
 export interface SectionSpecificationSectionProps {
   /** The section read; АР when absent. */
