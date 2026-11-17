@@ -1,7 +1,9 @@
 """Cross-context surface of the decisions boundary.
 
-Everything the package root exports, plus the batch projections and the confirmed
-carryover command (`W59-DECISION-CARRYOVER-01`) that the comparison context calls. A
+Everything the package root exports, plus the batch projections, the confirmed
+carryover command (`W59-DECISION-CARRYOVER-01`) that the comparison context calls and
+the carry of a restarted run's decisions (`RUN-RESTART-01`) that the run executor and
+the worker sweeper call. A
 context outside ``decisions`` imports from here (ALR-05), never from a module beside it.
 """
 
@@ -49,12 +51,21 @@ from auditmanager.decisions.ledger import (
     registered_decision_recorded,
 )
 from auditmanager.decisions.projection import current_verdicts
+from auditmanager.decisions.restart_carry import (
+    CARRY_DECISION_COMMAND_TYPE,
+    CARRY_RUN_COMMAND_TYPE,
+    RestartCarryReport,
+    carry_restart_decisions,
+    pending_restart_carries,
+)
 
 __all__ = [
     "CARRIED_EVENT_FOR_VERDICT",
     "CARRYOVER_COMMAND_TYPE",
     "CARRYOVER_CONFLICT_REASONS",
     "CARRYOVER_MODES",
+    "CARRY_DECISION_COMMAND_TYPE",
+    "CARRY_RUN_COMMAND_TYPE",
     "COMMAND_TYPE_APPEND_DECISION",
     "CONFLICT_CARRYOVER_PAIR_NOT_PROPOSED",
     "CONFLICT_CARRYOVER_SEVERITY_NOT_CARRYABLE",
@@ -71,10 +82,12 @@ __all__ = [
     "ORIGIN_KINDS",
     "PC01_EVENT_TYPES",
     "RESTART_MODE",
+    "RestartCarryReport",
     "VERDICT_FOR_EVENT",
     "append_decision_under_key",
     "carried_origins",
     "carry_over_decision",
+    "carry_restart_decisions",
     "carryover_comment",
     "current_verdict",
     "current_verdict_origins",
@@ -83,6 +96,7 @@ __all__ = [
     "decision_history",
     "decision_journal",
     "known_carry_mode",
+    "pending_restart_carries",
     "rebuild_current_verdict",
     "record_decision",
     "register_decision_recorded",
