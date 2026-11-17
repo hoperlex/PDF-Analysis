@@ -2038,7 +2038,7 @@
       },
       {
         "name": "record-decision",
-        "at": "/projects/{project_uid}/runs/{run_id}/review",
+        "at": "/projects/{project_uid}/runs/{run_id}/review?view=list",
         "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/review/page.tsx",
         "control_module": "web/src/widgets/decision-panel/ui/decision-panel.tsx",
         "$comment": [
@@ -2692,7 +2692,7 @@
         "actions": [
           {
             "do": "click",
-            "selector": "[data-finding-view=\"table\"]",
+            "selector": "[data-finding-view-link=\"list\"]",
             "settle": true
           },
           {
@@ -2703,7 +2703,7 @@
         ],
         "expects_present": [
           {
-            "selector": "[data-finding-view=\"table\"][aria-pressed=\"true\"]"
+            "selector": "[data-finding-view-link=\"table\"]"
           },
           {
             "selector": "[data-verdict-filter=\"accepted\"][aria-pressed=\"true\"]"
@@ -6829,7 +6829,7 @@
           },
           {
             "kind": "attribute",
-            "selector": "[data-proposal-list] article:nth-of-type(1)",
+            "selector": "[data-proposal-list] tr[data-proposal][data-proposal-ordinal=\"1\"]",
             "attribute": "data-proposal",
             "as": [
               "proposal_door_id"
@@ -6839,7 +6839,7 @@
           },
           {
             "kind": "attribute",
-            "selector": "[data-proposal-list] article:nth-of-type(2)",
+            "selector": "[data-proposal-list] tr[data-proposal][data-proposal-ordinal=\"2\"]",
             "attribute": "data-proposal",
             "as": [
               "proposal_window_id"
@@ -6849,7 +6849,7 @@
           },
           {
             "kind": "attribute",
-            "selector": "[data-proposal-list] article:nth-of-type(3)",
+            "selector": "[data-proposal-list] tr[data-proposal][data-proposal-ordinal=\"3\"]",
             "attribute": "data-proposal",
             "as": [
               "proposal_anchor_id"
@@ -6859,7 +6859,7 @@
           },
           {
             "kind": "attribute",
-            "selector": "[data-proposal-list] article:nth-of-type(4)",
+            "selector": "[data-proposal-list] tr[data-proposal][data-proposal-ordinal=\"4\"]",
             "attribute": "data-proposal",
             "as": [
               "proposal_foam_id"
@@ -8373,6 +8373,10 @@
         "actions": [
           {
             "do": "click",
+            "selector": "[data-export-menu] > summary"
+          },
+          {
+            "do": "click",
             "selector": "[data-intent=\"export\"]",
             "settle": true
           }
@@ -8408,8 +8412,16 @@
         "actions": [
           {
             "do": "click",
+            "selector": "[data-export-menu] > summary"
+          },
+          {
+            "do": "click",
             "selector": "[data-intent=\"export\"]",
             "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-export-menu] > summary"
           },
           {
             "do": "click",
@@ -10850,7 +10862,7 @@
     ],
     "runner": "tests/e2e/pc01/journey/identity.mjs",
     "session_store_path_env": "E2E_PC01_SESSION_STORE_PATH",
-    "review_path": "/projects/{project_uid}/runs/{run_id}/review",
+    "review_path": "/projects/{project_uid}/runs/{run_id}/review?view=list",
     "expected_author_label": "Тестов И. П.",
     "manual_steps": ["A13", "A14", "A15", "A16", "A17", "A18", "A19", "A20"],
     "operations": [
