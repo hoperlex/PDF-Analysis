@@ -29,8 +29,8 @@ export function openCandidatesBlock(): void {
 
 /** The columns of the table, each with the class that gives it its width. */
 const COLUMNS = [
-  ['№', 'colNumber'], ['Критичность', 'colSeverity'], ['Лист / стр.', 'colPage'], ['Замечание', 'colFinding'],
-  ['Норма', 'colNorm'], ['Рекомендация', 'colAdvice'], ['Решение', 'colDecision'],
+  ['№', styles.colNumber], ['Критичность', styles.colSeverity], ['Лист / стр.', styles.colPage], ['Замечание', styles.colFinding],
+  ['Норма', styles.colNorm], ['Рекомендация', styles.colAdvice], ['Решение', styles.colDecision],
 ] as const;
 
 const ORIGIN = { text: 'Текст', drawing: 'Чертёж', cross_check: 'Сверка', unknown: 'Источник не сохранён' };
@@ -100,7 +100,7 @@ export function ReviewCandidateTable({ value, projectUid, published = [], sheetO
       <label>Источник<select value={origin} onChange={(event) => { setOrigin(event.target.value); setPage(0); }}><option value="all">Все источники</option><option value="drawing">Чертёж</option><option value="text">Текст</option><option value="cross_check">Сверка</option></select></label></div>
     <p className={styles.note} aria-live="polite">Показано {shown.length ? current * 25 + 1 : 0}–{current * 25 + shown.length} из {matches.length}.</p>
     <div className={styles.scroll}><table className={styles.table} aria-label="Таблица машинных кандидатов"><thead><tr>
-      {COLUMNS.map(([label, width]) => <th key={label} scope="col" className={styles[width]}>{label}</th>)}
+      {COLUMNS.map(([label, width]) => <th key={label} scope="col" className={width}>{label}</th>)}
     </tr></thead><tbody>{shown.map((row) => <Fragment key={row.key}><tr data-candidate-row={row.key}>
       <td><button type="button" className="am-button am-button--quiet am-button--small" aria-expanded={opened === row.key}
         aria-label={`Открыть источники кандидата ${row.number}`} onClick={() => setOpened(opened === row.key ? null : row.key)}>К-{String(row.number).padStart(3, '0')}</button>{row.members.length > 1 ? <small>×{row.members.length}</small> : null}</td>
