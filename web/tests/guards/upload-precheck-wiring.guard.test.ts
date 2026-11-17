@@ -210,3 +210,55 @@ describe('the next-version upload form runs the pre-check and obeys it', () => {
     expect(scanPrecheckWiring(source.replace(from, to)).map((v) => v.rule)).toContain(rule);
   });
 });
+
+/**
+ * `UIP-S22-03`: a ZIP dropped on the field reaches the SAME choice as a picked one. A drop that set the file without `choose` would
+ * skip the pre-check (`setPrecheck` lives in `choose`), and the form would offer to send a file the browser had refused. Like the
+ * rules above, this is a reading of the source text with its mutation proofs: a drop handler that bypasses `choose`, and a zone
+ * that is not given the handler, are each reported.
+ */
+function scanDropWiring(source: string): string[] {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  const problems: string[] = [];
+  const handlerAt = code.indexOf('const dropped =');
+  const sendAt = code.indexOf('const send =');
+  if (handlerAt < 0 || sendAt < handlerAt) {
+    problems.push('drop-reaches-the-choice: no `dropped` handler before the send path');
+  } else if (!/\bchoose\s*\(/.test(code.slice(handlerAt, sendAt))) {
+    problems.push('drop-reaches-the-choice: the `dropped` handler does not call `choose(...)`');
+  }
+  if (!/<DropZone\b[^>]*\bonFiles=\{dropped\}/.test(code)) {
+    problems.push('drop-zone-is-wired: the field is not inside a `<DropZone onFiles={dropped}>`');
+  }
+  return problems;
+}
+
+describe('a dropped file reaches the same choice as a picked one', () => {
+  const source = readText(FORM_PATH);
+
+  it('has no drop wiring violation, so the cases below are not always-red', () => {
+    expect(scanDropWiring(source)).toEqual([]);
+  });
+
+  it.each([
+    {
+      id: 'the drop sets the file and skips the pre-check',
+      from: '    choose(only);',
+      to: '    setFile(only);',
+      expected: 'drop-reaches-the-choice',
+    },
+    {
+      id: 'the zone is not given the drop handler',
+      from: 'onFiles={dropped}',
+      to: 'onFiles={() => {}}',
+      expected: 'drop-zone-is-wired',
+    },
+  ])('reports it when $id', ({ from, to, expected }) => {
+    expect(source.split(from).length - 1, `the mutated text is no longer in the form:\n${from}`).toBe(1);
+    expect(scanDropWiring(source.replace(from, to)).join('\n')).toContain(expected);
+  });
+});

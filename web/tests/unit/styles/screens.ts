@@ -150,6 +150,7 @@ import { DecisionReasonControl, VerdictMark } from '@/entities/expert-decision';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, SectionDot } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { PauseStatusView } from '@/widgets/pause-status';
+import { DropZoneView } from '@/features/upload-document';
 import { UpdateTime } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
@@ -3567,6 +3568,19 @@ export function screens(): Screen[] {
       onSelect: noop,
       view,
     })));
+  }
+  /*
+   * `UIP-S22-03`: the field a ZIP may be dropped on, drawn as `UploadDocumentForm` gives it its children, with a drag over it (the
+   * accent edge and ground) and with the note a folder leaves. At rest it is reached by `UploadPanel` above.
+   */
+  {
+    const field = [
+      createElement('label', { key: 'label', htmlFor: 'seed-drop-file' }, createElement('strong', null, 'Комплект портала (ZIP)')),
+      createElement('input', { key: 'input', id: 'seed-drop-file', type: 'file' }),
+      createElement('p', { key: 'hint', className: 'am-form__hint' }, 'Архив можно перетащить сюда; несколько архивов откроют «Несколько файлов».'),
+    ];
+    add('DropZone, a drag over the field', render(createElement(DropZoneView, { over: true, note: null }, ...field)));
+    add('DropZone, a folder not taken', render(createElement(DropZoneView, { over: false, note: 'folder' }, ...field)));
   }
   // `D-344`: the knowledge base beside a decision carried over from an earlier version -- «↩ Перенесено из V2» after the event
   // label in the table (the `.carried` margin) and in the heading of an event row. The first record carries it, the rest do not,

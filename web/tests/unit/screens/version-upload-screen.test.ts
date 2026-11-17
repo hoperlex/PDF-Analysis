@@ -57,6 +57,29 @@ describe('the next-version upload form', () => {
   });
 });
 
+describe('the field a ZIP may be dropped on (`UIP-S22-03`)', () => {
+  it('is the first upload’s file field, with the way to «Несколько файлов» said beside it', () => {
+    const markup = renderWith(newClient(), createElement(UploadPanel, { projectUid: PROJECT_UID }));
+    expect(markup).toContain('data-drop-zone');
+    expect(markup).toContain('Архив можно перетащить сюда; несколько архивов откроют «Несколько файлов».');
+    // The field is inside the zone, and «Несколько файлов» stays closed until a drop or a hand opens it.
+    const zone = markup.slice(markup.indexOf('data-drop-zone'));
+    expect(zone.indexOf('id="upload-file"')).toBeGreaterThan(-1);
+    expect(zone.indexOf('id="upload-file"')).toBeLessThan(zone.indexOf('data-upload-many-panel'));
+    expect(markup).not.toMatch(/data-upload-many-panel=""[^>]*\bopen/);
+  });
+
+  it('is not the next-version form’s: that form takes no drop and keeps its picker', () => {
+    const markup = renderWith(
+      newClient(),
+      createElement(UploadVersionPanel, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID }),
+    );
+    expect(markup).not.toContain('data-drop-zone');
+    expect(markup).not.toContain('перетащить');
+    expect(markup).toContain('type="file"');
+  });
+});
+
 describe('the next-version panel', () => {
   it('states the same envelope before the picker as the first upload’s panel', () => {
     const version = renderWith(

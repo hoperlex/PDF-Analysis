@@ -1,0 +1,21 @@
+/*
+ * The field a ZIP may be dropped on (`UIP-S22-03`). At rest it is the field with a dashed edge, so it reads as a place to drop
+ * onto; while a drag is over it the edge turns solid in the accent and the ground sinks one step. The ground is the sunken
+ * surface and not the accent tint on purpose: the native field inside keeps its own border, and on the accent tint that border
+ * falls under 3:1 in the dark palette (the line-near-miss row of `contrast-pending.ts`), so a highlight in that tint would add
+ * new sites to a failure the owner has not settled. Every colour is a token (`--am-*`).
+ */
+
+.zone {
+  display: grid;
+  gap: var(--am-gap-sm);
+  padding: var(--am-gap-sm) var(--am-gap-md);
+  border: 1px dashed var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+}
+
+.over {
+  border-style: solid;
+  border-color: var(--am-accent);
+  background: var(--am-surface-sunken);
+}
