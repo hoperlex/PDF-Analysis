@@ -187,3 +187,46 @@
   margin: 0;
   color: var(--am-ink-muted);
 }
+
+/*
+ * The tab «Обзор» (`UIP-S15-04`): the strip of five numbers, the servers in a short form (the card rules above), and the link under them.
+ * The only colour here is the warning of «Ошибки» when there is an error; everything else reads the tokens of the card.
+ */
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+  padding: 0;
+  list-style: none;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-2xs);
+  min-width: 8rem;
+  margin: 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.figureWarning {
+  border-color: var(--am-failed);
+}
+
+.figureLabel {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.figureValue {
+  font-size: var(--am-text-xl);
+  font-weight: 600;
+}
+
+.allServers {
+  margin: var(--am-gap-sm) 0 0;
+}
