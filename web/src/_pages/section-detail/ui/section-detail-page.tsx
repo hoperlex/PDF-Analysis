@@ -30,7 +30,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
-import type { ProjectSection as ProjectSectionCode, ProjectUid } from '@/shared/api';
+import type { DocumentVersion, ProjectSection as ProjectSectionCode, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import { useMayActAsExpert } from '@/entities/account';
@@ -47,6 +47,9 @@ import { SectionBatchBar } from './section-batch-bar';
 import { SectionHeader } from './section-header';
 import { SectionSelectionBar } from './section-selection-bar';
 import styles from './section-detail-page.module.css';
+
+/** The page's documents before the listing has answered: one array, so the bar's reading of them does not change per render. */
+const NO_DOCUMENTS: readonly DocumentVersion[] = [];
 
 export interface SectionDetailPageProps {
   readonly projectUid: string;
@@ -227,7 +230,7 @@ function SectionDetail({
           )}
           {body}
           {/* `UIP-S02-03`: the last thing of the page, so scrolled to its end it covers no card; `reserve` is room below the cards. */}
-          <SectionSelectionBar selection={batch} />
+          <SectionSelectionBar selection={batch} scope={{ projectUid, pageDocuments: query.data?.items ?? NO_DOCUMENTS, walk }} />
         </section>
       </div>
     </section>
