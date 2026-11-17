@@ -2742,8 +2742,6 @@ def test_control_a_refusal_drive_that_lost_its_session_is_detected() -> None:
 # --------------------------------------------------------------------------------------
 
 ACTION_KINDS = frozenset({"fill", "click", "select", "attach_file", "goto", "wait_for", "stage_c4", "approve_run_cost"})
-#: The stages «Запустить с этапа» offers (`web/src/features/start-run-from-stage/model/stages.ts`): the PC-01 chain after its first stage.
-START_FROM_STAGE_IDS = frozenset({"page_geometry_extraction", "document_context_build", "text_analysis"})
 STAGE_C4_PRODUCES = {
     "upload": {"cmp_stage_documents", "cmp_stage_last_upload_id", "cmp_stage_last_candidate_id"},
     "assembly": {"cmp_stage_pair_id", "cmp_stage_assembly_id"},
@@ -2788,8 +2786,6 @@ NIGHT_SCREENS = (
     # `PC01-JOURNEY-GAPS-01`
     "blocks",
     "norms-document",
-    # `RUN-FROM-STAGE-01` (lane J4): «Запустить с этапа» on an ended run's page
-    "run-from-stage",
     # `D-503` (lane MEM-JOURNEY): the «Память решений» tab of «База знаний»
     "decision-memory",
 )
@@ -2837,8 +2833,6 @@ NIGHT_OPERATIONS = (
     "getNormDocument",
     "listNormParagraphs",
     "streamNormDocumentContent",
-    # `RUN-FROM-STAGE-01` (lane J4)
-    "startRunFromStage",
     # `D-503` (lane MEM-JOURNEY)
     "listDecisionMemoryCases",
     "getDecisionMemoryCase",
@@ -2959,16 +2953,13 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
                 if not (REPOSITORY_ROOT / "tests/e2e/pc01/journey/stage-c4.mjs").is_file():
                     findings.append(f"{label}: stage_c4 has no maintained driver")
             if kind == "approve_run_cost":
+                # `RUN-RESTART-01`: the journey approves a start and a re-audit (`run`, a re-audit naming its captured source Run) and nothing else. The
+                # scope of a start from a stage (`run_from_stage`) went with its steps; a restart has none, because no step can reach its consent.
                 base = {"do", "scope", "value", "bound_ms"}
-                if set(action) not in (base, base | {"source_run_id"}, base | {"source_run_id", "stage_id"}) or action.get("scope") not in {"run", "run_from_stage"}:
+                if set(action) not in (base, base | {"source_run_id"}) or action.get("scope") != "run":
                     findings.append(f"{label}: unknown cost approval action shape/scope")
-                if "source_run_id" in action and (action.get("scope") not in {"run", "run_from_stage"} or not re.fullmatch(r"\{[a-z_]+\}", str(action["source_run_id"]))):
+                if "source_run_id" in action and not re.fullmatch(r"\{[a-z_]+\}", str(action["source_run_id"])):
                     findings.append(f"{label}: re-audit cost approval must bind one captured source Run")
-                # `UI-A-60`: a start from a stage names the source Run it continues AND the stage it starts from, and nothing else does.
-                if (action.get("scope") == "run_from_stage") != ("stage_id" in action) or (action.get("scope") == "run_from_stage" and "source_run_id" not in action):
-                    findings.append(f"{label}: a start from a stage names its source Run and its stage; no other cost approval does")
-                if "stage_id" in action and action["stage_id"] not in START_FROM_STAGE_IDS:
-                    findings.append(f"{label}: {action['stage_id']!r} is not a stage a run can be started from {sorted(START_FROM_STAGE_IDS)}")
                 if action.get("value") != "{version_uid}" or not isinstance(action.get("bound_ms"), int) or not 0 < action["bound_ms"] <= 60_000:
                     findings.append(f"{label}: cost approval requires the selected version and a positive bounded wait")
             if kind == "fill" and ("value" in action) == ("secret" in action):
@@ -4439,9 +4430,9 @@ def cost_preflight_findings(manifest: dict) -> list[str]:
         'startRun': ('run', None, 'estimateRunCost', '/runs/cost-estimate'),
         # The click on the row's «Повторный аудит» is the request; the approval action observes the estimate and agrees in the dialog.
         'reauditRun': ('run', None, 'estimateRunCost', '/runs/cost-estimate'),
-        # `UI-A-60`, moved by `RUN-SCREEN-01a`: the dialog of an ended run's chip; its estimate is read when the dialog opens on a chip with one startable stage
-        # (or when a stage is chosen), its start is the dialog's «Запустить».
-        'startRunFromStage': ('run_from_stage', 'Запустить', 'estimateRunCost', '/runs/cost-estimate'),
+        # `RUN-RESTART-01`: neither `startRunFromStage` nor `restartRun` is here on purpose. No step of the journey sends either (the stand freezes
+        # no stage plan, so a restart is refused at its price, and the start from a stage has no control left), and `restart_findings` holds the
+        # restart steps to declaring `restartRun` absent. A step that did send one would need its own consent scope in the driver first.
     }
     for step in write_steps(manifest):
         actions = step.get('actions', [])
@@ -4462,7 +4453,7 @@ def cost_preflight_findings(manifest: dict) -> list[str]:
             if not any(call.get('operationId') == estimate and call.get('method') == 'POST'
                        and call.get('path') == path and call.get('expect_status') == 200 for call in step.get('expects_api', [])):
                 findings.append(f"{step['name']}: {start} has no declared successful cost estimate")
-            if start in ('reauditRun', 'startRunFromStage'):
+            if start == 'reauditRun':
                 action = actions[approval[0]] if len(approval) == 1 else {}
                 names = _templates(action.get('source_run_id'))
                 source = names[0] if len(names) == 1 else None
@@ -4470,11 +4461,10 @@ def cost_preflight_findings(manifest: dict) -> list[str]:
                 # A call with no `bind` addresses `{run_id}` as the journey captured it, which is the source when the action says so.
                 def addresses(call: dict) -> bool:
                     return source is not None and (call.get('bind') or {}).get('run_id', 'run_id') == source
-                what = 'a start from a stage' if start == 'startRunFromStage' else 're-audit'
                 if not any(call.get('operationId') == 'getRunStatus' and call.get('expect_status') == 200 and addresses(call) for call in calls):
-                    findings.append(f"{step['name']}: {what} has no fresh read of its selected source Run")
+                    findings.append(f"{step['name']}: re-audit has no fresh read of its selected source Run")
                 if not any(call.get('operationId') == start and addresses(call) for call in calls):
-                    findings.append(f"{step['name']}: {what} start addresses another source Run")
+                    findings.append(f"{step['name']}: re-audit start addresses another source Run")
     return findings
 
 
@@ -4532,164 +4522,172 @@ def test_control_a_step_that_still_presses_the_retired_two_step_start_is_detecte
 
 
 # --------------------------------------------------------------------------------------
-# `RUN-FROM-STAGE-01` (lane J4, D-412). «Запустить с этапа» is walked by three steps, pinned by NAME so that one which disappears, or
-# quietly stops asserting what it was written to assert, is a red test and not a shrinking journey that still reports OK.
+# `RUN-RESTART-01` (lane L4). «Перезапустить с этого этапа» (`restartRun`, R-155a..R-155i) replaced «Запустить с этого этапа» (the start from a stage of
+# `RUN-FROM-STAGE-01`, D-412) in the dialog of each chip, and the journey walks it by three steps, pinned by NAME so that one which disappears, or quietly
+# stops asserting what it was written to assert, is a red test and not a shrinking journey that still reports OK.
+#
+# What the three steps are, and what is NOT walked. The restart is offered for a run that ENDED `partial`, `failed` or `cancelled`, and the one such run
+# the journey has is the one the queue steps cancelled while it waited. This stand freezes no stage plan (`AUDITMANAGER_PROVIDER_SOURCE=environment`: the
+# layout switch needs the database source) and runs the plain analysis (`AUDITMANAGER_EXTENDED_ANALYSIS=0`), so the server refuses the PRICE of every
+# restart of its runs, `422 analysis_input_invalid` / `restart_source_not_stage_layout`. The journey therefore walks the offer, the confirmation and
+# that refusal (`RESTART_REFUSED`), that the refusal left the cancelled run as it was (`RESTART_UNCHANGED`, R-155g) and the absence of the offer on a
+# published run (`RESTART_ABSENT`), and does NOT walk the price, the consent or the restart that makes the new run: that is the recorded gap (README, «Restart of an ended run»), covered by `tests/integration/runs/test_restart_*.py` on a
+# throwaway stand and by `web/tests/unit/restart-run`. Neither step may therefore declare `restartRun`: a step that sent one would need a consent scope in the driver.
 # --------------------------------------------------------------------------------------
 
-FROM_STAGE_REFUSED = "run-from-stage-refused-for-a-run-that-never-ran"
-FROM_STAGE_TAKEN = "run-from-stage-takes-the-earlier-stages-of-the-first-run"
-FROM_STAGE_UNCHANGED = "run-from-stage-leaves-the-first-run-as-it-was"
-
-#: `RUN-SCREEN-01a`: «Запустить с этапа» is no longer on the run page. A chip of the rail (`data-run-chip`) opens «Этапы анализа раздела»; the
-#: start button in it is labelled so, and a chip that covers exactly ONE startable stage has no stage select (`data-start-from-stage-only`).
-START_FROM_STAGE_OFFER = "Запустить с этого этапа"
+RESTART_REFUSED = "run-restart-refused-for-a-run-without-a-stage-layout"
+RESTART_UNCHANGED = "run-restart-leaves-the-cancelled-run-as-it-was"
+RESTART_ABSENT = "run-restart-is-not-offered-for-a-published-run"
+RESTART_SCREEN = "run-restart"
+RESTART_CONTROL = "web/src/features/restart-run/ui/restart-run-control.tsx"
+RESTART_OFFER = "Перезапустить с этого этапа"
+RESTART_OFFER_SELECTOR = '[data-run-restart="offer"]'
+RESTART_DOOR = "/runs/{run_id}/restart"
+RESTART_REFUSAL_REASON = "restart_source_not_stage_layout"
+#: The chip of the rail the journey presses: the dialog it opens holds the offer and carries the restart point of the same name.
 CHIP_SELECTOR = re.compile(r'\[data-run-chip="([a-z_0-9]+)"\]')
-OFFER_SELECTOR = '[data-run-start-from-stage="offer"]'
-#: The chips whose dialog starts from a stage with nothing to choose, by the stage they start from. The dictionary is checked below
-#: (`test_the_chip_the_journey_presses_covers_the_stage_it_approves`); «Подготовка» covers two startable stages and so draws a select.
-CHIP_START_STAGE = {"text": "text_analysis"}
+
+#: step name -> (case, the operations the step must declare).
+RESTART_STEPS: dict[str, tuple[str, frozenset[str]]] = {
+    RESTART_REFUSED: ("refused", frozenset({"getRunStatus", "estimateRunCost"})),
+    RESTART_UNCHANGED: ("refused", frozenset({"getRunStatus"})),
+    RESTART_ABSENT: ("refused", frozenset({"getRunStatus"})),
+}
+
+
+def chips_pressed(step: dict) -> list[str]:
+    """The chips of the rail the step presses, in order."""
+    out: list[str] = []
+    for action in step.get("actions") or ():
+        match = CHIP_SELECTOR.fullmatch(action.get("selector", "")) if action.get("do") == "click" else None
+        if match:
+            out.append(match.group(1))
+    return out
 
 
 def chip_pressed_before_the_offer(step: dict) -> str | None:
-    """The chip whose dialog the step presses «Запустить с этого этапа» in: the click that comes right before the offer click, or None."""
+    """The chip whose dialog the step presses «Перезапустить с этого этапа» in: the click that comes right before the offer click, or None."""
     actions = step.get("actions") or []
     for index, action in enumerate(actions):
-        if action.get("do") == "click" and action.get("selector") == OFFER_SELECTOR and action.get("text") == START_FROM_STAGE_OFFER:
+        if action.get("do") == "click" and action.get("selector") == RESTART_OFFER_SELECTOR and action.get("text") == RESTART_OFFER:
             previous = actions[index - 1] if index > 0 else {}
             match = CHIP_SELECTOR.fullmatch(previous.get("selector", "")) if previous.get("do") == "click" else None
             return match.group(1) if match else None
     return None
 
 
-def opens_dialog_on_chip(step: dict, chip: str, after_wait_for: str | None = None) -> bool:
-    """The step presses the chip `chip` of the rail; with `after_wait_for`, only after the last `wait_for` whose selector holds that text.
-
-    The dialog is opened so that its details table is on the page when the step's `expects_*` are read; a press BEFORE the wait would open it on
-    the page the journey is leaving.
-    """
-    actions = step.get("actions") or []
-    start = 0
-    if after_wait_for is not None:
-        waits = [index for index, action in enumerate(actions) if action.get("do") == "wait_for" and after_wait_for in action.get("selector", "")]
-        if not waits:
-            return False
-        start = waits[-1] + 1
-    return any(a.get("do") == "click" and a.get("selector") == f'[data-run-chip="{chip}"]' for a in actions[start:])
+def _present(step: dict, selector_has: str, text: str | None = None) -> bool:
+    """The step requires a present element whose selector holds `selector_has` (and, when given, that says `text`)."""
+    return any(selector_has in p.get("selector", "") and (text is None or text in p.get("text_contains", "")) for p in step.get("expects_present") or ())
 
 
-def chip_row_pattern(chip: str, stage: str) -> re.Pattern[str]:
-    """The row of `stage-dictionary.ts` that gives the chip `chip` exactly the one stage `stage`."""
-    return re.compile(rf"id: '{chip}',[^\n]*stageIds: \['{stage}'\]")
+def _absent(step: dict, selector_has: str) -> bool:
+    return any(selector_has in a.get("selector", "") for a in step.get("expects_absent") or ())
 
 
-#: step name -> (case, the operations the step must declare).
-FROM_STAGE_STEPS: dict[str, tuple[str, frozenset[str]]] = {
-    FROM_STAGE_REFUSED: ("refused", frozenset({"getRunStatus", "estimateRunCost"})),
-    FROM_STAGE_TAKEN: ("action", frozenset({"getRunStatus", "estimateRunCost", "startRunFromStage"})),
-    FROM_STAGE_UNCHANGED: ("refused", frozenset({"getRunStatus"})),
-}
-
-
-def from_stage_findings(manifest: dict) -> list[str]:
-    """The three steps are there, in their order, and say what each is for."""
+def restart_findings(manifest: dict, openapi: dict) -> list[str]:
+    """The three steps are there, in their order, on the control the restart is drawn by, and say what each is for."""
+    points = openapi["components"]["schemas"]["RestartPoint"]["enum"]
     steps = write_steps(manifest)
     by_name = {step["name"]: step for step in steps}
     order = [step["name"] for step in steps]
     findings: list[str] = []
-    for name, (case, operations) in FROM_STAGE_STEPS.items():
+    for name, (case, operations) in RESTART_STEPS.items():
         step = by_name.get(name)
         if step is None:
-            findings.append(f"the run-from-stage step '{name}' is gone from the manifest")
+            findings.append(f"the restart step '{name}' is gone from the manifest")
             continue
-        if step.get("screen") != "run-from-stage":
-            findings.append(f"{name}: belongs to screen {step.get('screen')!r}, not 'run-from-stage'")
+        if step.get("screen") != RESTART_SCREEN:
+            findings.append(f"{name}: belongs to screen {step.get('screen')!r}, not {RESTART_SCREEN!r}")
         if step.get("case") != case:
             findings.append(f"{name}: is a {step.get('case')!r} case, not {case!r}")
+        if step.get("control_module") != RESTART_CONTROL:
+            findings.append(f"{name}: presses controls from {step.get('control_module')!r}, not the restart control {RESTART_CONTROL!r}")
         missing = sorted(operations - _declared_operations(step))
         if missing:
             findings.append(f"{name}: no longer declares {missing}")
+        if _declared_operations(step) & {"restartRun", "startRunFromStage"}:
+            findings.append(f"{name}: declares a start; no step of this journey sends a restart (its consent has no driver), it declares the door absent")
     if findings:
         return findings
 
-    # Order: a run that was cancelled while it waited must exist before it is refused; the workers must take work again before a run is
-    # expected to finish; the first run is read last.
-    for later, earlier in (
-        (FROM_STAGE_REFUSED, "queue-cancel-the-waiting-run"),
-        (FROM_STAGE_TAKEN, "worker-takes-new-work-again"),
-        (FROM_STAGE_UNCHANGED, FROM_STAGE_TAKEN),
-    ):
-        if earlier in order and order.index(later) < order.index(earlier):
-            findings.append(f"{later}: comes before '{earlier}', which it needs")
+    # Order: the run the queue steps cancelled must exist before it is restarted, and it is read again after the refusal; the published run is the
+    # first one, long before.
+    if order.index(RESTART_REFUSED) < order.index("queue-cancel-the-waiting-run"):
+        findings.append(f"{RESTART_REFUSED}: comes before 'queue-cancel-the-waiting-run', which makes the run it presses on")
+    if order.index(RESTART_UNCHANGED) < order.index(RESTART_REFUSED):
+        findings.append(f"{RESTART_UNCHANGED}: comes before '{RESTART_REFUSED}', whose refusal it reads the consequences of")
+    for name in RESTART_STEPS:
+        if not any(c.get("method") == "POST" and c.get("path") == RESTART_DOOR for c in by_name[name].get("expects_not_called") or ()):
+            findings.append(f"{name}: does not require that no restart is sent")
 
-    refused = by_name[FROM_STAGE_REFUSED]
+    refused = by_name[RESTART_REFUSED]
+    # The run is the cancelled one: the restart is offered for partial, failed and cancelled runs only, and the journey has no other.
+    if (refused.get("bind") or {}).get("run_id") != "queued_run_id":
+        findings.append(f"{RESTART_REFUSED}: is not bound to the run the queue steps cancelled (`queued_run_id`), the one run of the journey a restart is offered for")
     estimate = next(c for c in refused["expects_api"] if c["operationId"] == "estimateRunCost")
-    if not (estimate.get("refusal") is True and estimate.get("expect_status") == 422
-            and estimate.get("expect_error_code") == "analysis_input_invalid"):
-        findings.append(f"{FROM_STAGE_REFUSED}: the price is not declared as the typed refusal 422 analysis_input_invalid")
-    if not any(c.get("method") == "POST" and c.get("path") == "/runs/{run_id}/start-from-stage" for c in refused.get("expects_not_called") or ()):
-        findings.append(f"{FROM_STAGE_REFUSED}: does not require that nothing is started in place of the refused stage")
+    if not (estimate.get("method") == "POST" and estimate.get("path") == "/runs/cost-estimate" and estimate.get("refusal") is True
+            and estimate.get("expect_status") == 422 and estimate.get("expect_error_code") == "analysis_input_invalid"):
+        findings.append(f"{RESTART_REFUSED}: the price is not declared as the typed refusal 422 analysis_input_invalid")
     answered = {(c.get("json_path"), c.get("equals")) for c in refused.get("expects_response") or () if c.get("of") == "estimateRunCost"}
-    if ("details.reason", "source_stage_not_completed") not in answered:
-        findings.append(f"{FROM_STAGE_REFUSED}: does not require the refusal to name its reason")
-    if CHIP_START_STAGE.get(chip_pressed_before_the_offer(refused) or "") != "text_analysis":
-        findings.append(f"{FROM_STAGE_REFUSED}: does not press a chip with one startable stage, then «{START_FROM_STAGE_OFFER}»")
+    if ("details.reason", RESTART_REFUSAL_REASON) not in answered:
+        findings.append(f"{RESTART_REFUSED}: does not require the refusal to name its reason {RESTART_REFUSAL_REASON!r}")
+    chip = chip_pressed_before_the_offer(refused)
+    if chip not in points:
+        findings.append(f"{RESTART_REFUSED}: does not press a chip of the contract's RestartPoint {points}, then «{RESTART_OFFER}»")
     if any(a.get("do") == "select" for a in refused.get("actions") or ()):
-        findings.append(f"{FROM_STAGE_REFUSED}: still chooses a stage in a select, which a chip with one startable stage does not draw")
-    if not any("data-start-from-stage-only" in p.get("selector", "") for p in refused.get("expects_present") or ()):
-        findings.append(f"{FROM_STAGE_REFUSED}: does not require the dialog to show the stage the chip started from")
+        findings.append(f"{RESTART_REFUSED}: chooses something in a select, which the confirmation of a restart does not draw (the chip is the point)")
+    if chip is not None and not any(f'"restart_point":"{chip}"' in needle for r in refused.get("expects_request") or ()
+                                    if r.get("of") == "estimateRunCost" for needle in r.get("body_contains") or ()):
+        findings.append(f"{RESTART_REFUSED}: does not require the price to be asked for the chip it pressed")
+    if chip is None or not _present(refused, f'[data-run-stages-dialog] [data-run-restart="dialog"][data-restart-point="{chip}"]'):
+        findings.append(f"{RESTART_REFUSED}: does not require the confirmation to carry the point of the chip it pressed, inside the chip's dialog")
+    if not any(a.get("do") == "wait_for" and "[data-restart-failure]" in a.get("selector", "") and a.get("text_contains") for a in refused.get("actions") or ()):
+        findings.append(f"{RESTART_REFUSED}: never waits, under a bound, for the refusal to be said in words")
+    if not _present(refused, "[data-restart-failure]", "без раскладки моделей по этапам"):
+        findings.append(f"{RESTART_REFUSED}: does not require the refusal's sentence on the screen")
+    if not _present(refused, "button[data-restart-send][disabled]"):
+        findings.append(f"{RESTART_REFUSED}: does not require «Перезапустить» to be held")
+    for handle, what in (("[data-restart-plan]", "the plan"), ("[data-cost-approval]", "the consent"), (" select", "a stage select")):
+        if not _absent(refused, handle):
+            findings.append(f"{RESTART_REFUSED}: does not require {what} to be absent")
+    if RESTART_REFUSAL_REASON not in openapi["paths"][RESTART_DOOR]["post"]["description"]:
+        findings.append(f"{RESTART_REFUSED}: the reason {RESTART_REFUSAL_REASON!r} is not one the contract's restartRun names")
 
-    taken = by_name[FROM_STAGE_TAKEN]
-    actions = taken.get("actions") or []
-    chip = chip_pressed_before_the_offer(taken)
-    chosen = CHIP_START_STAGE.get(chip or "")
-    approved = [a for a in actions if a.get("do") == "approve_run_cost"]
-    if chip is None or chosen is None:
-        findings.append(f"{FROM_STAGE_TAKEN}: does not press a chip with one startable stage, then «{START_FROM_STAGE_OFFER}»")
-    if any(a.get("do") == "select" for a in actions):
-        findings.append(f"{FROM_STAGE_TAKEN}: still chooses a stage in a select, which a chip with one startable stage does not draw")
-    if len(approved) != 1 or approved[0].get("scope") != "run_from_stage" or chosen is None or chosen != approved[0].get("stage_id"):
-        findings.append(f"{FROM_STAGE_TAKEN}: does not approve the cost of the stage it chose")
-    start = next(c for c in taken["expects_api"] if c["operationId"] == "startRunFromStage")
-    if not (start.get("expect_status") == 202 and start.get("count") == 1 and start.get("path") == "/runs/{run_id}/start-from-stage"):
-        findings.append(f"{FROM_STAGE_TAKEN}: the start is not declared as one 202 on the source run's own door")
-    if not any(a.get("do") == "wait_for" and "{run_id}" in a.get("selector", "") and "data-run-started-from" in a["selector"] for a in actions):
-        findings.append(f"{FROM_STAGE_TAKEN}: never waits for the NEW run's page to say which run it was started from")
-    await_terminal = taken.get("await_terminal") or {}
-    if await_terminal.get("accept") != ["published"] or not await_terminal.get("bound_ms"):
-        findings.append(f"{FROM_STAGE_TAKEN}: does not wait, under a bound, for the new run to be published")
-    captures = [c for c in [taken.get("capture"), *(taken.get("captures") or ())] if c]
-    if not any(c.get("kind") == "text" and c.get("as") == ["source_finding_count"] and c.get("when") == "before_actions" for c in captures):
-        findings.append(f"{FROM_STAGE_TAKEN}: does not read the source run's finding count before it starts the new one")
-    present = taken.get("expects_present") or []
-    def count_of(entry: dict) -> int:
-        return entry.get("min_count", 1)
-    # The three reused stages are the ONE chip «Подготовка» (`stage-dictionary.ts`); the rail marks it, and its dialog's table has three rows.
-    if not any(p.get("selector") == '[data-run-rail] [data-run-chip="preparation"][data-chip-reused]' for p in present):
-        findings.append(f"{FROM_STAGE_TAKEN}: does not require the chip of the three reused stages to be marked in the rail")
-    if not any(p.get("selector", "").startswith('[data-run-stage-detail="preparation"]') and p.get("selector", "").endswith('[data-stage-elapsed="reused"]')
-               and count_of(p) >= 3 and p.get("text_contains") == "из прогона" for p in present):
-        findings.append(f"{FROM_STAGE_TAKEN}: does not require the details table to say «из прогона» for the three reused stages (D-412)")
-    if not opens_dialog_on_chip(taken, "preparation", after_wait_for="data-run-started-from"):
-        findings.append(f"{FROM_STAGE_TAKEN}: never opens the dialog on «Подготовка» of the NEW run, where the details table is")
-    if not any("{source_finding_count}" in p.get("text_matches", "") for p in present):
-        findings.append(f"{FROM_STAGE_TAKEN}: does not hold the new run's finding count to the source's")
-    if not any('a[href$="/runs/{run_id}"]' in p.get("selector", "") for p in present):
-        findings.append(f"{FROM_STAGE_TAKEN}: does not require the link to the source run")
-    absent = {a.get("selector") for a in taken.get("expects_absent") or ()}
-    if '[data-run-chip="text"][data-chip-reused]' not in absent:
-        findings.append(f"{FROM_STAGE_TAKEN}: does not require the computed stage to be unmarked in the rail")
+    unchanged = by_name[RESTART_UNCHANGED]
+    if (unchanged.get("bind") or {}).get("run_id") != "queued_run_id":
+        findings.append(f"{RESTART_UNCHANGED}: is not bound to the run the queue steps cancelled (`queued_run_id`), the one the refusal was for")
+    if not chips_pressed(unchanged):
+        findings.append(f"{RESTART_UNCHANGED}: presses no chip, so the dialog that still offers the restart is not open")
+    if any(a.get("selector") == RESTART_OFFER_SELECTOR for a in unchanged.get("actions") or ()):
+        findings.append(f"{RESTART_UNCHANGED}: presses the offer, which a read of the run as it was must not do")
+    if not any(p.get("selector") == '[data-run-outcome="cancelled"]' for p in unchanged.get("expects_present") or ()):
+        findings.append(f"{RESTART_UNCHANGED}: does not require the run to be still cancelled, with nothing published")
+    if not _present(unchanged, f'[data-run-stages-dialog] {RESTART_OFFER_SELECTOR}', RESTART_OFFER):
+        findings.append(f"{RESTART_UNCHANGED}: does not require the chip's dialog to still offer the restart")
+    if not _absent(unchanged, "[data-run-replaced]"):
+        findings.append(f"{RESTART_UNCHANGED}: does not require that no restart replaced the run")
+    if not _absent(unchanged, '[data-run-restart="dialog"]'):
+        findings.append(f"{RESTART_UNCHANGED}: does not require the confirmation to be closed on a cold load")
 
-    unchanged = by_name[FROM_STAGE_UNCHANGED]
-    absent = {a.get("selector") for a in unchanged.get("expects_absent") or ()}
-    if not {"[data-run-started-from-note]", "[data-chip-reused]", '[data-stage-elapsed="reused"]'} <= absent:
-        findings.append(f"{FROM_STAGE_UNCHANGED}: does not require the first run to carry no mark of a start from a stage")
-    if not opens_dialog_on_chip(unchanged, "preparation"):
-        findings.append(f"{FROM_STAGE_UNCHANGED}: never opens the dialog on «Подготовка», so a reused row could not be on the page to be refused")
+    absent = by_name[RESTART_ABSENT]
+    if (absent.get("bind") or {}).get("run_id") not in (None, "run_id"):
+        findings.append(f"{RESTART_ABSENT}: is not on the first run of the journey, the one that ended published")
+    if not chips_pressed(absent):
+        findings.append(f"{RESTART_ABSENT}: presses no chip, so no dialog is open to be offered anything in")
+    if any(a.get("selector") == RESTART_OFFER_SELECTOR or a.get("text") == RESTART_OFFER for a in absent.get("actions") or ()):
+        findings.append(f"{RESTART_ABSENT}: presses the offer, which a published run does not have")
+    if not _absent(absent, "[data-run-restart]"):
+        findings.append(f"{RESTART_ABSENT}: does not require that neither the offer nor its confirmation is drawn")
+    if not any(p.get("selector") == '[data-run-outcome="published"]' for p in absent.get("expects_present") or ()):
+        findings.append(f"{RESTART_ABSENT}: does not require the run to be published")
+    if not _present(absent, "[data-run-stages-dialog] [data-fact-row="):
+        findings.append(f"{RESTART_ABSENT}: does not require the chip's dialog to be drawn, so the absence would be that of an empty page")
     return findings
 
 
-def test_the_run_from_stage_steps_are_there_and_say_what_they_are_for(manifest: dict) -> None:
-    assert from_stage_findings(manifest) == []
+def test_the_restart_steps_are_there_and_say_what_they_are_for(manifest: dict, openapi: dict) -> None:
+    assert restart_findings(manifest, openapi) == []
 
 
 def _drop_present(step: dict, needle: str, key: str = "selector") -> None:
@@ -4697,6 +4695,13 @@ def _drop_present(step: dict, needle: str, key: str = "selector") -> None:
     before = len(step["expects_present"])
     step["expects_present"] = [p for p in step["expects_present"] if needle not in p.get(key, "")]
     assert len(step["expects_present"]) < before, f"the mutation removed nothing: no expects_present {key} contains {needle!r}"
+
+
+def _drop_absent(step: dict, needle: str) -> None:
+    """Remove the `expects_absent` entries whose selector contains `needle`; fail the mutation itself when there was none to remove."""
+    before = len(step["expects_absent"])
+    step["expects_absent"] = [a for a in step["expects_absent"] if needle not in a.get("selector", "")]
+    assert len(step["expects_absent"]) < before, f"the mutation removed nothing: no expects_absent selector contains {needle!r}"
 
 
 def _drop_actions(step: dict, selector: str, then=None) -> None:
@@ -4708,99 +4713,123 @@ def _drop_actions(step: dict, selector: str, then=None) -> None:
         then(step["actions"])
 
 
-def test_the_chip_the_journey_presses_covers_the_stage_it_approves() -> None:
-    """`CHIP_START_STAGE` is held to the dictionary the rail is drawn from: the chip covers that stage and that stage alone."""
-    source = _require(WEB_SRC / "entities/audit-run/model/stage-dictionary.ts").read_text(encoding="utf-8")
-    for chip, stage in CHIP_START_STAGE.items():
-        assert chip_row_pattern(chip, stage).search(source), f"the chip {chip!r} no longer covers exactly {stage!r}"
-    assert START_FROM_STAGE_OFFER in _require(WEB_SRC / "widgets/run-stages-dialog/ui/run-stages-dialog.tsx").read_text(encoding="utf-8")
-    assert 'data-start-from-stage-only' in _require(WEB_SRC / "features/start-run-from-stage/ui/start-run-from-stage-control.tsx").read_text(encoding="utf-8")
+def test_the_restart_offer_the_journey_presses_is_the_one_the_dialog_draws(manifest: dict, openapi: dict) -> None:
+    """The words, handles and chips of the two steps are held to the control, the dialog that carries it, and the contract."""
+    control = _require(WEB_SRC / "features/restart-run/ui/restart-run-control.tsx").read_text(encoding="utf-8")
+    assert f"'{RESTART_OFFER}'" in control and 'data-run-restart="offer"' in control
+    assert 'data-run-restart="dialog"' in _require(WEB_SRC / "features/restart-run/ui/restart-run-confirm.tsx").read_text(encoding="utf-8")
+    dialog = _require(WEB_SRC / "widgets/run-stages-dialog/ui/run-stages-dialog.tsx").read_text(encoding="utf-8")
+    assert "<RestartRunControl" in dialog and "data-run-stages-dialog" in dialog
+    # The chip the refused step presses is a restart point of the contract AND a chip of the rail's dictionary.
+    chip = chip_pressed_before_the_offer(_step_of(manifest, RESTART_REFUSED))
+    assert chip in openapi["components"]["schemas"]["RestartPoint"]["enum"]
+    assert re.search(rf"id: '{chip}',", _require(WEB_SRC / "entities/audit-run/model/stage-dictionary.ts").read_text(encoding="utf-8")), chip
+    # The offer is drawn for the three states of an ended run without a result, and the journey's two runs are one of them and the other kind.
+    points = _require(WEB_SRC / "features/restart-run/model/points.ts").read_text(encoding="utf-8")
+    assert re.search(r"ENDED_WITHOUT_RESULT[^;]*'partial'[^;]*'failed'[^;]*'cancelled'", points), "the states a restart is offered for changed"
+    assert "'published'" not in re.search(r"ENDED_WITHOUT_RESULT[^;]*;", points).group(0)
 
 
-def test_control_a_chip_that_no_longer_covers_the_stage_is_detected() -> None:
-    """The dictionary check can fail: a chip row that covers two stages does not satisfy the pattern."""
-    row = "  { id: 'text', short: 'Текст', full: 'Анализ текста', stageIds: ['text_analysis', 'block_analysis'], callsModel: true },"
-    assert not chip_row_pattern("text", "text_analysis").search(row)
-    assert chip_row_pattern("text", "text_analysis").search(row.replace(", 'block_analysis'", ""))
+def test_control_a_chip_that_is_not_a_restart_point_is_detected(manifest: dict, openapi: dict) -> None:
+    """The contract check can fail: a chip the contract's enumeration does not name is refused."""
+    assert restart_findings(manifest, openapi) == []
+    shrunk = {"components": {"schemas": {"RestartPoint": {"enum": [p for p in openapi["components"]["schemas"]["RestartPoint"]["enum"] if p != "text"]}}},
+              "paths": openapi["paths"]}
+    assert any("does not press a chip of the contract's RestartPoint" in f for f in restart_findings(manifest, shrunk))
 
 
-def test_control_a_run_from_stage_step_that_goes_or_stops_asserting_is_detected(manifest: dict) -> None:
-    for name in FROM_STAGE_STEPS:
-        assert any(f"'{name}' is gone" in f for f in from_stage_findings(_without_step(manifest, name))), name
-    for mutate, expected in (
-        (lambda s: s.update(screen="queue"), "belongs to screen 'queue'"),
-        (lambda s: s.update(case="refused"), "is a 'refused' case"),
+def test_control_a_restart_step_that_goes_or_stops_asserting_is_detected(manifest: dict, openapi: dict) -> None:
+    assert restart_findings(manifest, openapi) == []
+    for name in RESTART_STEPS:
+        assert any(f"'{name}' is gone" in f for f in restart_findings(_without_step(manifest, name), openapi)), name
+    for name, mutate, expected in (
+        (RESTART_UNCHANGED, lambda s: s.update(screen="queue"), "belongs to screen 'queue'"),
+        (RESTART_UNCHANGED, lambda s: s.update(case="action"), "is a 'action' case"),
+        (RESTART_REFUSED, lambda s: s.update(screen="queue"), "belongs to screen 'queue'"),
+        (RESTART_REFUSED, lambda s: s.update(case="action"), "is a 'action' case"),
+        (RESTART_ABSENT, lambda s: s.update(case="action"), "is a 'action' case"),
+        (RESTART_ABSENT, lambda s: s.update(control_module="web/src/features/start-run/ui/start-run-control.tsx"), "not the restart control"),
+        (RESTART_REFUSED, lambda s: s["expects_api"].append({"method": "POST", "path": "/runs/{run_id}/restart", "operationId": "restartRun", "expect_status": 202}),
+         "declares a start"),
+        (RESTART_ABSENT, lambda s: s["expects_api"].append({"method": "POST", "path": "/runs/{run_id}/start-from-stage", "operationId": "startRunFromStage", "expect_status": 202}),
+         "declares a start"),
     ):
         copy = json.loads(json.dumps(manifest))
-        mutate(_step_of(copy, FROM_STAGE_TAKEN))
-        assert any(expected in f for f in from_stage_findings(copy)), expected
+        mutate(_step_of(copy, name))
+        assert any(expected in f for f in restart_findings(copy, openapi)), (name, expected)
     mutations: list[tuple[str, object, str]] = [
-        (FROM_STAGE_REFUSED, lambda s: next(c for c in s["expects_api"] if c["operationId"] == "estimateRunCost").update(expect_status=200), "typed refusal"),
-        (FROM_STAGE_REFUSED, lambda s: s.pop("expects_not_called"), "nothing is started in place"),
-        (FROM_STAGE_REFUSED, lambda s: s["expects_response"].pop(0), "name its reason"),
-        (FROM_STAGE_TAKEN, lambda s: next(a for a in s["actions"] if a["do"] == "approve_run_cost").update(stage_id="document_context_build"), "cost of the stage it chose"),
-        (FROM_STAGE_TAKEN, lambda s: next(c for c in s["expects_api"] if c["operationId"] == "startRunFromStage").update(expect_status=200), "one 202"),
-        (FROM_STAGE_TAKEN, lambda s: s.update(actions=[a for a in s["actions"] if not ("data-run-started-from" in a.get("selector", "") and a.get("do") == "wait_for")]), "NEW run's page"),
-        (FROM_STAGE_TAKEN, lambda s: s["await_terminal"].update(accept=["published", "partial"]), "to be published"),
-        (FROM_STAGE_TAKEN, lambda s: s["captures"].pop(0), "finding count before it starts"),
-        (FROM_STAGE_TAKEN, lambda s: _drop_present(s, 'data-chip-reused]'), "chip of the three reused stages to be marked in the rail"),
-        (FROM_STAGE_TAKEN, lambda s: _drop_present(s, '[data-stage-elapsed="reused"]'), "«из прогона»"),
-        (FROM_STAGE_TAKEN, lambda s: _drop_present(s, "{source_finding_count}", key="text_matches"), "finding count to the source's"),
-        (FROM_STAGE_TAKEN, lambda s: _drop_present(s, 'a[href$="/runs/{run_id}"]'), "link to the source run"),
-        (FROM_STAGE_TAKEN, lambda s: s.pop("expects_absent"), "computed stage to be unmarked"),
-        (FROM_STAGE_TAKEN, lambda s: _drop_actions(s, '[data-run-chip="preparation"]'), "never opens the dialog on «Подготовка»"),
-        (FROM_STAGE_TAKEN, lambda s: s["actions"].insert(0, s["actions"].pop()), "never opens the dialog on «Подготовка»"),
-        (FROM_STAGE_TAKEN, lambda s: _drop_actions(s, '[data-run-chip="text"]'), "does not press a chip with one startable stage"),
-        (FROM_STAGE_TAKEN, lambda s: _drop_actions(s, '[data-run-chip="text"]', then=lambda a: a.insert(0, {"do": "click", "selector": '[data-run-chip="preparation"]'})),
-         "does not press a chip with one startable stage"),
-        (FROM_STAGE_TAKEN, lambda s: next(a for a in s["actions"] if a.get("selector") == OFFER_SELECTOR).update(text="Запустить с этапа"), "does not press a chip with one startable stage"),
-        (FROM_STAGE_TAKEN, lambda s: s["actions"].insert(2, {"do": "select", "selector": '[data-run-start-from-stage="dialog"] select', "option_value": "text_analysis"}),
-         "still chooses a stage in a select"),
-        (FROM_STAGE_REFUSED, lambda s: _drop_actions(s, '[data-run-chip="text"]'), "does not press a chip with one startable stage"),
-        (FROM_STAGE_REFUSED, lambda s: _drop_present(s, "data-start-from-stage-only"), "show the stage the chip started from"),
-        (FROM_STAGE_UNCHANGED, lambda s: s.pop("expects_absent"), "no mark of a start from a stage"),
-        (FROM_STAGE_UNCHANGED, lambda s: s.update(expects_absent=[a for a in s["expects_absent"] if a["selector"] != '[data-stage-elapsed="reused"]']), "no mark of a start from a stage"),
-        (FROM_STAGE_UNCHANGED, lambda s: _drop_actions(s, '[data-run-chip="preparation"]'), "never opens the dialog on «Подготовка»"),
+        (RESTART_REFUSED, lambda s: s.pop("expects_not_called"), "no restart is sent"),
+        (RESTART_ABSENT, lambda s: s.pop("expects_not_called"), "no restart is sent"),
+        (RESTART_REFUSED, lambda s: s.pop("bind"), "is not bound to the run the queue steps cancelled"),
+        (RESTART_REFUSED, lambda s: s.update(bind={"run_id": "third_run_id"}), "is not bound to the run the queue steps cancelled"),
+        (RESTART_REFUSED, lambda s: next(c for c in s["expects_api"] if c["operationId"] == "estimateRunCost").update(expect_status=200), "typed refusal"),
+        (RESTART_REFUSED, lambda s: next(c for c in s["expects_api"] if c["operationId"] == "estimateRunCost").update(refusal=False), "typed refusal"),
+        (RESTART_REFUSED, lambda s: s["expects_response"].pop(0), "name its reason"),
+        (RESTART_REFUSED, lambda s: s["expects_response"][0].update(equals="restart_source_not_v2"), "name its reason"),
+        (RESTART_REFUSED, lambda s: _drop_actions(s, '[data-run-chip="text"]'), "does not press a chip of the contract"),
+        (RESTART_REFUSED, lambda s: _drop_actions(s, '[data-run-chip="text"]', then=lambda a: a.insert(0, {"do": "click", "selector": '[data-run-chip="no_such_chip"]'})),
+         "does not press a chip of the contract"),
+        (RESTART_REFUSED, lambda s: next(a for a in s["actions"] if a.get("selector") == RESTART_OFFER_SELECTOR).update(text="Запустить с этого этапа"),
+         "does not press a chip of the contract"),
+        (RESTART_REFUSED, lambda s: next(a for a in s["actions"] if a.get("selector") == RESTART_OFFER_SELECTOR).update(selector='[data-run-start-from-stage="offer"]'),
+         "does not press a chip of the contract"),
+        (RESTART_REFUSED, lambda s: s["actions"].insert(2, {"do": "select", "selector": '[data-run-restart="dialog"] select', "option_value": "text"}),
+         "chooses something in a select"),
+        (RESTART_REFUSED, lambda s: s.pop("expects_request"), "price to be asked for the chip it pressed"),
+        (RESTART_REFUSED, lambda s: s["expects_request"][0].update(body_contains=['"start_from_run_id"']), "price to be asked for the chip it pressed"),
+        (RESTART_REFUSED, lambda s: _drop_present(s, "[data-restart-point="), "carry the point of the chip"),
+        (RESTART_REFUSED, lambda s: _drop_present(s, "[data-run-stages-dialog]"), "carry the point of the chip"),
+        (RESTART_REFUSED, lambda s: s.update(actions=[a for a in s["actions"] if a.get("do") != "wait_for"]), "never waits"),
+        (RESTART_REFUSED, lambda s: _drop_present(s, "[data-restart-failure]", key="selector"), "refusal's sentence"),
+        (RESTART_REFUSED, lambda s: _drop_present(s, "[disabled]"), "to be held"),
+        (RESTART_REFUSED, lambda s: _drop_absent(s, "[data-restart-plan]"), "the plan to be absent"),
+        (RESTART_REFUSED, lambda s: _drop_absent(s, "[data-cost-approval]"), "the consent to be absent"),
+        (RESTART_REFUSED, lambda s: _drop_absent(s, " select"), "a stage select to be absent"),
+        (RESTART_UNCHANGED, lambda s: s.pop("bind"), "is not bound to the run the queue steps cancelled"),
+        (RESTART_UNCHANGED, lambda s: _drop_actions(s, '[data-run-chip="text"]'), "presses no chip"),
+        (RESTART_UNCHANGED, lambda s: s["actions"].append({"do": "click", "selector": RESTART_OFFER_SELECTOR, "text": RESTART_OFFER}), "presses the offer"),
+        (RESTART_UNCHANGED, lambda s: _drop_present(s, '[data-run-outcome="cancelled"]'), "still cancelled"),
+        (RESTART_UNCHANGED, lambda s: _drop_present(s, RESTART_OFFER_SELECTOR), "still offer the restart"),
+        (RESTART_UNCHANGED, lambda s: s["expects_present"][1].pop("text_contains"), "still offer the restart"),
+        (RESTART_UNCHANGED, lambda s: _drop_absent(s, "[data-run-replaced]"), "no restart replaced the run"),
+        (RESTART_UNCHANGED, lambda s: _drop_absent(s, '[data-run-restart="dialog"]'), "closed on a cold load"),
+        (RESTART_UNCHANGED, lambda s: s.pop("expects_not_called"), "no restart is sent"),
+        (RESTART_ABSENT, lambda s: s.update(bind={"run_id": "queued_run_id"}), "is not on the first run"),
+        (RESTART_ABSENT, lambda s: _drop_actions(s, '[data-run-chip="text"]'), "presses no chip"),
+        (RESTART_ABSENT, lambda s: s["actions"].append({"do": "click", "selector": RESTART_OFFER_SELECTOR, "text": RESTART_OFFER}), "presses the offer"),
+        (RESTART_ABSENT, lambda s: s.pop("expects_absent"), "neither the offer nor its confirmation"),
+        (RESTART_ABSENT, lambda s: s.update(expects_absent=[{"selector": '[data-run-restart="dialog"]'}]), "neither the offer nor its confirmation"),
+        (RESTART_ABSENT, lambda s: _drop_present(s, '[data-run-outcome="published"]'), "to be published"),
+        (RESTART_ABSENT, lambda s: _drop_present(s, "[data-run-stages-dialog]"), "dialog to be drawn"),
     ]
     for name, mutate, expected in mutations:
         copy = json.loads(json.dumps(manifest))
         mutate(_step_of(copy, name))
-        assert any(expected in f for f in from_stage_findings(copy)), (name, expected)
-    # the order: the first run is read before the run that continues it exists
+        assert any(expected in f for f in restart_findings(copy, openapi)), (name, expected)
+    # the order: the run the queue steps cancel must exist before it is restarted, and the refusal comes before its consequences are read
+    moved = json.loads(json.dumps(manifest))
+    steps = moved["write"]["steps"]
+    steps.insert(0, steps.pop(next(i for i, s in enumerate(steps) if s["name"] == RESTART_REFUSED)))
+    assert any("comes before 'queue-cancel-the-waiting-run'" in f for f in restart_findings(moved, openapi))
     swapped = json.loads(json.dumps(manifest))
     steps = swapped["write"]["steps"]
     names = [s["name"] for s in steps]
-    i, j = names.index(FROM_STAGE_TAKEN), names.index(FROM_STAGE_UNCHANGED)
+    i, j = names.index(RESTART_REFUSED), names.index(RESTART_UNCHANGED)
     steps[i], steps[j] = steps[j], steps[i]
-    assert any("comes before" in f for f in from_stage_findings(swapped))
+    assert any(f"{RESTART_UNCHANGED}: comes before" in f for f in restart_findings(swapped, openapi))
 
 
-def test_control_a_start_from_a_stage_without_its_source_or_fresh_read_is_detected(manifest: dict) -> None:
-    assert not cost_preflight_findings(manifest)
-    changed = copy.deepcopy(manifest)
-    step = next(s for s in write_steps(changed) if s['name'] == FROM_STAGE_TAKEN)
-    step['expects_api'] = [call for call in step['expects_api'] if call.get('operationId') != 'getRunStatus']
-    assert any('fresh read' in issue for issue in cost_preflight_findings(changed))
-    changed = copy.deepcopy(manifest)
-    step = next(s for s in write_steps(changed) if s['name'] == FROM_STAGE_TAKEN)
-    next(call for call in step['expects_api'] if call.get('operationId') == 'startRunFromStage')['bind'] = {'run_id': 'third_run_id'}
-    assert any('another source' in issue for issue in cost_preflight_findings(changed))
-    changed = copy.deepcopy(manifest)
-    step = next(s for s in write_steps(changed) if s['name'] == FROM_STAGE_TAKEN)
-    step['actions'] = [a for a in step['actions'] if a.get('do') != 'approve_run_cost']
-    assert any('lacks explicit preflight' in issue for issue in cost_preflight_findings(changed))
-
-
-def test_a_cost_approval_names_its_source_and_stage_only_for_a_start_from_a_stage(manifest: dict, openapi: dict) -> None:
+def test_a_cost_approval_names_its_source_only_for_a_reaudit_and_knows_no_retired_scope(manifest: dict, openapi: dict) -> None:
+    """The approval of a cost is a start's or a re-audit's: the scope of the retired start from a stage, and its stage, are refused."""
     assert not night_window_findings(manifest, openapi)
     for mutate, expected in (
-        (lambda a: a.pop("stage_id"), "names its source Run and its stage"),
-        (lambda a: a.update(stage_id="source_preparation"), "is not a stage a run can be started from"),
-        (lambda a: a.pop("source_run_id"), "unknown cost approval action shape"),
-        (lambda a: a.update(scope="run"), "names its source Run and its stage"),
+        (lambda a: a.update(stage_id="text_analysis"), "unknown cost approval action shape"),
+        (lambda a: a.update(scope="run_from_stage"), "unknown cost approval action shape"),
+        (lambda a: a.update(scope="run_restart"), "unknown cost approval action shape"),
+        (lambda a: a.update(source_run_id="run_x"), "re-audit cost approval must bind one captured source Run"),
     ):
         copy = json.loads(json.dumps(manifest))
-        mutate(next(a for a in _step_of(copy, FROM_STAGE_TAKEN)["actions"] if a.get("do") == "approve_run_cost"))
+        mutate(next(a for a in _step_of(copy, "queue-reaudit-the-cancelled-run")["actions"] if a.get("do") == "approve_run_cost"))
         assert any(expected in f for f in night_window_findings(copy, openapi)), expected
 
 
@@ -4859,33 +4888,6 @@ def test_cost_approval_driver_rejects_changed_options_or_forged_consent() -> Non
         for (const patch of [{{confirmed:false}},{{ceiling_micros:1}},{{estimate_digest:estimate.estimate_digest}}]) {{
           assert.throws(()=>assertCostApprovedStart(taken,{{...door,requestBody:JSON.stringify({{cost_consent:{{...sent.cost_consent,...patch}}}})}}));
         }}
-      }}
-      {{
-        // `UI-A-60`: a start from a stage is priced for the stages it computes and starts through the source Run's own door.
-        const stage = 'text_analysis';
-        const from = {{version_uid:'ver_fixture',start_from_run_id:source,start_stage_id:stage}};
-        const priced = {{scope:'run',version_uid:from.version_uid,relaxed_limits:false,currency:'USD',provider_mode:'recorded',
-          billing:'metered',estimate_digest:'c'.repeat(64),estimated_cost_micros:1200000,recommended_ceiling_micros:1500000,
-          start_from_run_id:source,start_stage_id:stage,
-          reused_stage_ids:['source_preparation','page_geometry_extraction','document_context_build'],computed_stage_ids:[stage]}};
-        const taken = costApprovalFromEstimate(priced,from,'run_from_stage','1.5');
-        assert.equal(taken.source_run_id, source);
-        assert.equal(taken.start_stage_id, stage);
-        const sent = {{stage_id:stage,cost_consent:{{estimate_digest:priced.estimate_digest,ceiling_micros:1500000,confirmed:true}}}};
-        const door = {{url:`http://127.0.0.1/bff/v1/runs/${{source}}/start-from-stage`,requestBody:JSON.stringify(sent),requestHeaders:{{'idempotency-key':'from-stage-key'}}}};
-        assertCostApprovedStart(taken,door);
-        assert.throws(()=>assertCostApprovedStart(taken,{{...door,url:'http://127.0.0.1/bff/v1/runs/run_other/start-from-stage'}}));
-        assert.throws(()=>assertCostApprovedStart(taken,{{...door,url:`http://127.0.0.1/bff/v1/runs/${{source}}/reaudit`}}));
-        assert.throws(()=>assertCostApprovedStart(taken,{{...door,requestBody:JSON.stringify({{...sent,stage_id:'document_context_build'}})}}));
-        assert.throws(()=>assertCostApprovedStart(taken,{{...door,requestBody:JSON.stringify({{...sent,executor_connection_id:'exc_override'}})}}));
-        assert.throws(()=>assertCostApprovedStart(taken,{{...door,requestHeaders:{{}}}}));
-        assert.throws(()=>costApprovalFromEstimate({{...priced,start_stage_id:'document_context_build'}},from,'run_from_stage','1.5'));
-        assert.throws(()=>costApprovalFromEstimate(priced,{{...from,executor_connection_id:'exc_override'}},'run_from_stage','1.5'));
-        assert.throws(()=>costApprovalFromEstimate({{...priced,reused_stage_ids:[]}},from,'run_from_stage','1.5'));
-        assert.throws(()=>costApprovalFromEstimate({{...priced,reused_stage_ids:['source_preparation']}},from,'run_from_stage','1.5'));
-        assert.throws(()=>costApprovalFromEstimate({{...priced,computed_stage_ids:[]}},from,'run_from_stage','1.5'));
-        assert.throws(()=>costApprovalFromEstimate({{...priced,computed_stage_ids:[stage,'source_preparation']}},from,'run_from_stage','1.5'));
-        assert.throws(()=>costApprovalFromEstimate(priced,from,'run','1.5'));
       }}
       console.log('cost approval source checks passed; browser not executed');
     """

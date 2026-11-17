@@ -3,12 +3,11 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 
 import {
-  assertFromStageDialogShows,
+  costApprovalFromEstimate,
   csvCells,
   csvShape,
   describeCalls,
   formulaLikeCells,
-  fromStageDialogExpression,
   keepingExchanges,
   namesNeededBy,
   nightWindowMayRun,
@@ -160,30 +159,25 @@ test('D-382: a step that succeeds is left alone, and a browser that is gone does
   assert.deepEqual(describeCalls(undefined, '/bff/v1'), []);
 });
 
-/** A page with the start-from-a-stage control in it: just enough DOM for the dialog's expression to run on. */
-function stageDialogPage({ modal, only = null, select = null }) {
-  const root = {
-    closest: (selector) => (selector === 'dialog[data-run-stages-dialog]' ? modal : null),
-    querySelector: (selector) => {
-      if (selector === '[data-start-from-stage-only]') return only === null ? null : { getAttribute: (name) => (name === 'data-start-from-stage-only' ? only : null) };
-      if (selector === 'select') return select === null ? null : { value: select };
-      return null;
-    },
+test('RUN-RESTART-01: the cost driver gives the consent of a start and a re-audit, and refuses a request that names a restart or a stage to start from', () => {
+  const options = { version_uid: 'ver_fixture' };
+  const estimate = {
+    scope: 'run', version_uid: options.version_uid, relaxed_limits: false, currency: 'USD', provider_mode: 'recorded', billing: 'metered',
+    estimate_digest: 'a'.repeat(64), estimated_cost_micros: 1_200_000, recommended_ceiling_micros: 1_500_000,
   };
-  return { querySelector: (selector) => (selector === '[data-run-start-from-stage="dialog"]' ? root : null) };
-}
-
-const readDialog = (document) => runInNewContext(fromStageDialogExpression('[data-run-start-from-stage="dialog"]'), { document });
-
-test('RUN-SCREEN-01a: the stage on the start-from-a-stage dialog is the stage the journey approves, and the dialog is the chip\'s modal', () => {
-  const open = { open: true };
-  // A chip with one startable stage fixes it; a chip with several draws a select.
-  assertFromStageDialogShows(readDialog(stageDialogPage({ modal: open, only: 'text_analysis' })), 'text_analysis');
-  assertFromStageDialogShows(readDialog(stageDialogPage({ modal: open, select: 'document_context_build' })), 'document_context_build');
-  // Each of the ways it can be wrong is refused: another stage, no stage chosen yet, a control outside the modal, a modal that is not open, no dialog.
-  assert.throws(() => assertFromStageDialogShows(readDialog(stageDialogPage({ modal: open, only: 'document_context_build' })), 'text_analysis'), /offers document_context_build \(chip\)/);
-  assert.throws(() => assertFromStageDialogShows(readDialog(stageDialogPage({ modal: open, select: '' })), 'text_analysis'), /offers no stage \(select\)/);
-  assert.throws(() => assertFromStageDialogShows(readDialog(stageDialogPage({ modal: null, only: 'text_analysis' })), 'text_analysis'), /not inside the open/);
-  assert.throws(() => assertFromStageDialogShows(readDialog(stageDialogPage({ modal: { open: false }, only: 'text_analysis' })), 'text_analysis'), /not inside the open/);
-  assert.throws(() => assertFromStageDialogShows(readDialog({ querySelector: () => null }), 'text_analysis'), /no dialog on the page/);
+  // The request it is built for is accepted ...
+  assert.equal(costApprovalFromEstimate(estimate, options, 'run', '1.5').ceiling_micros, 1_500_000);
+  assert.equal(costApprovalFromEstimate(estimate, { ...options, reaudit_of_run_id: 'run_source' }, 'run', '1.5').source_run_id, 'run_source');
+  // ... and each way a restart or a start from a stage would reach it is refused: the restart's consent has no driver, so a step that asked for it
+  // would otherwise be held to a start's rules and pass.
+  for (const named of [
+    { start_from_run_id: 'run_source' }, { start_stage_id: 'text_analysis' }, { restart_point: 'text' },
+    { start_from_run_id: 'run_source', restart_point: 'text' },
+  ]) {
+    assert.throws(() => costApprovalFromEstimate(estimate, { ...options, ...named }, 'run', '1.5'), /only a start from a stage or a restart names it/, JSON.stringify(named));
+  }
+  // The scopes of the retired start from a stage, and of a restart, are not ones it knows.
+  for (const scope of ['run_from_stage', 'run_restart']) {
+    assert.throws(() => costApprovalFromEstimate(estimate, options, scope, '1.5'), /unknown cost scope/, scope);
+  }
 });

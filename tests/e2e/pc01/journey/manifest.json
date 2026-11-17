@@ -9660,23 +9660,26 @@
         "case": "action"
       },
       {
-        "name": "run-from-stage-refused-for-a-run-that-never-ran",
+        "name": "run-restart-refused-for-a-run-without-a-stage-layout",
         "at": "/projects/{project_uid}/runs/{run_id}",
         "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
-        "control_module": "web/src/features/start-run-from-stage/ui/start-run-from-stage-control.tsx",
+        "control_module": "web/src/features/restart-run/ui/restart-run-control.tsx",
         "bind": {
           "run_id": "queued_run_id"
         },
         "$comment": [
-          "UI-A-60 / R-151i, `docs/program/RUN-FROM-STAGE-01.md`, D-412 (lane J4); the way in is RUN-SCREEN-01a's (WEB-INT-1). The run the queue",
-          "steps cancelled while it waited never began a stage, but it has ENDED, so a stage of its rail offers the start: the expert presses the chip",
-          "«Текст» (`data-run-chip=\"text\"`), which opens «Этапы анализа раздела» on it, and in that dialog «Запустить с этого этапа». The chip covers",
-          "one startable stage, `text_analysis`, so the dialog has no stage select (`data-start-from-stage-only`) and asks the price of a run that would",
-          "take the three stages before it from this one as soon as it opens. The server answers the typed refusal `analysis_input_invalid` with the",
-          "first stage it cannot take (`source_preparation`) and the reason (`source_stage_not_completed`) instead of a figure. The dialog says so in",
-          "words, draws no plan and no consent, and sends nothing: no `POST /runs/{run_id}/start-from-stage`, and no run is created in its place.",
-          "The first stage cannot be tried: the chip «Подготовка» covers three stages and the dialog offers only the two startable ones (a start from",
-          "the first reuses nothing: that is a re-audit)."
+          "RUN-RESTART-01 / R-155a..R-155i (the way in is RUN-SCREEN-01a's chip dialog; replaces the retired «Запустить с этого этапа» pair). The run the queue",
+          "steps cancelled while it waited has ENDED `cancelled` without a replacement, so it is the one run of the journey the restart is offered for: the",
+          "expert presses the chip «Текст» (`data-run-chip=\"text\"`), which opens «Этапы анализа раздела» on it, and in that dialog «Перезапустить с этого",
+          "этапа». The offer opens its confirmation in place (`data-run-restart=\"dialog\"`, `data-restart-point=\"text\"`; a restart has no stage select, the",
+          "chip is the point) and asks the price of the chips a restart would compute: `POST /runs/cost-estimate` with `{version_uid, start_from_run_id,",
+          "restart_point}`. This stand freezes no stage plan (the layout switch needs the database provider source, and `local-stand.sh` runs on the",
+          "environment source with the plain analysis, `AUDITMANAGER_EXTENDED_ANALYSIS=0`), so EVERY run it makes was started without a stage layout and its",
+          "saved replies cannot be taken: the server answers the typed refusal `analysis_input_invalid` with the reason `restart_source_not_stage_layout`",
+          "instead of a figure. The dialog says so in words, draws no plan and no consent, keeps «Перезапустить» held, and sends nothing: no `POST",
+          "/runs/{run_id}/restart`, and no run is created in its place. THE GAP: no step of this journey can reach the price, the consent and the",
+          "restart itself (that needs a run started under the stage layout and the extended review v2, which no recording here holds); those are walked by",
+          "`tests/integration/runs/test_restart_*.py` on a throwaway stand and by `web/tests/unit/restart-run`."
         ],
         "actions": [
           {
@@ -9686,14 +9689,14 @@
           },
           {
             "do": "click",
-            "selector": "[data-run-start-from-stage=\"offer\"]",
-            "text": "Запустить с этого этапа",
+            "selector": "[data-run-restart=\"offer\"]",
+            "text": "Перезапустить с этого этапа",
             "settle": true
           },
           {
             "do": "wait_for",
-            "selector": "[data-start-from-stage-refusal]",
-            "text_contains": "не завершён успешно",
+            "selector": "[data-run-restart=\"dialog\"] [data-restart-failure]",
+            "text_contains": "без раскладки моделей по этапам",
             "bound_ms": 30000
           }
         ],
@@ -9717,187 +9720,15 @@
         "expects_not_called": [
           {
             "method": "POST",
-            "path": "/runs/{run_id}/start-from-stage",
-            "why": "a refused reuse writes nothing: no run is created in the place of the stage that cannot be taken"
+            "path": "/runs/{run_id}/restart",
+            "why": "a refused price asks for no consent and starts nothing: no run is created and the cancelled run stays as it was"
           }
         ],
         "expects_response": [
           {
             "of": "estimateRunCost",
             "json_path": "details.reason",
-            "equals": "source_stage_not_completed"
-          },
-          {
-            "of": "estimateRunCost",
-            "json_path": "details.stage_id",
-            "equals": "source_preparation"
-          }
-        ],
-        "expects_present": [
-          {
-            "selector": "[data-start-from-stage-refusal]",
-            "text_contains": "Подготовка источника"
-          },
-          {
-            "selector": "[data-start-from-stage-refusal]",
-            "text_contains": "Новый прогон не создан"
-          },
-          {
-            "selector": "[data-run-stages-dialog] [data-run-start-from-stage=\"dialog\"] [data-start-from-stage-only=\"text_analysis\"]",
-            "text_contains": "Анализ текста",
-            "$why": "the stage under test is the chip's own, shown in the dialog the chip opened; with a select instead the journey could be asking about another stage"
-          }
-        ],
-        "expects_absent": [
-          {
-            "selector": "[data-start-from-stage-plan]"
-          },
-          {
-            "selector": "[data-run-start-from-stage=\"dialog\"] [data-cost-approval]"
-          },
-          {
-            "selector": "[data-run-start-from-stage=\"dialog\"] select",
-            "$why": "a chip with one startable stage has no stage to choose; a select here would be the old page-level dialog"
-          }
-        ],
-        "forbids_rendered": [
-          "[data-start-from-stage-failure]",
-          "[data-run-failure]"
-        ],
-        "screen": "run-from-stage",
-        "case": "refused"
-      },
-      {
-        "name": "run-from-stage-takes-the-earlier-stages-of-the-first-run",
-        "at": "/projects/{project_uid}/runs/{run_id}",
-        "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
-        "control_module": "web/src/features/start-run-from-stage/ui/start-run-from-stage-control.tsx",
-        "$comment": [
-          "UI-A-60 / R-151i, `docs/program/RUN-FROM-STAGE-01.md`, D-412 (lane J4); the way in and the marks are RUN-SCREEN-01a's (WEB-INT-1). The",
-          "first run of the journey ended `published` on the recorded provider. On its page the expert presses the chip «Текст» of the rail, which",
-          "opens «Этапы анализа раздела» on it, presses «Запустить с этого этапа» there and reads what the server answers for the remaining stages:",
-          "the three before it are taken from this run, only «Анализ текста» is computed, and the figure and the consent are for that stage. After",
-          "the consent the start goes through the SOURCE run's own door (`POST /runs/{run_id}/start-from-stage`, 202, queued), the screen moves to",
-          "the new run, and that run says «Запущен с этапа 4 … из прогона <source>» with a link to the source. Its rail marks the chip «Подготовка»,",
-          "which covers the three reused stages, as taken (`data-chip-reused`, «из прогона» in place of a duration), and the dialog the journey",
-          "opens on that chip lists the three stages with «из прогона» in the duration cell, not 0 с (D-412). The run finishes `published` with",
-          "exactly as many findings as the source: the recorded provider answers the same request."
-        ],
-        "captures": [
-          {
-            "kind": "text",
-            "selector": "[data-run-outcome=\"published\"]",
-            "as": [
-              "source_finding_count"
-            ],
-            "matches": "Прогон опубликован:\\s*([1-9][0-9]*)\\s+наход",
-            "bound_ms": 30000,
-            "when": "before_actions",
-            "$why": "the finding count the source run published, read off its own page; a count of zero or one the screen does not report cannot stand for 'the same'"
-          },
-          {
-            "kind": "response",
-            "of": "startRunFromStage",
-            "json_path": "run_id",
-            "as": [
-              "from_stage_run_id"
-            ],
-            "matches": "^(run_%ID%)$",
-            "bound_ms": 30000
-          }
-        ],
-        "actions": [
-          {
-            "do": "click",
-            "selector": "[data-run-chip=\"text\"]",
-            "settle": true
-          },
-          {
-            "do": "click",
-            "selector": "[data-run-start-from-stage=\"offer\"]",
-            "text": "Запустить с этого этапа",
-            "settle": true
-          },
-          {
-            "do": "wait_for",
-            "selector": "[data-start-from-stage-plan]",
-            "text_contains": "Берутся из этого прогона:",
-            "bound_ms": 30000
-          },
-          {
-            "do": "wait_for",
-            "selector": "[data-start-from-stage-plan]",
-            "text_contains": "Будут выполнены:",
-            "bound_ms": 30000
-          },
-          {
-            "do": "approve_run_cost",
-            "scope": "run_from_stage",
-            "value": "{version_uid}",
-            "source_run_id": "{run_id}",
-            "stage_id": "text_analysis",
-            "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "[data-run-start-from-stage=\"dialog\"] button",
-            "text": "Запустить"
-          },
-          {
-            "do": "wait_for",
-            "selector": "[data-run-started-from=\"{run_id}\"]",
-            "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "[data-run-chip=\"preparation\"]",
-            "settle": true,
-            "$why": "the details table lives in the dialog a chip opens; the reused stages are the three of «Подготовка», so that is the chip it is opened on, and it stays open while the run is waited for"
-          }
-        ],
-        "expects_api": [
-          {
-            "method": "GET",
-            "path": "/runs/{run_id}",
-            "operationId": "getRunStatus",
-            "expect_status": 200
-          },
-          {
-            "method": "POST",
-            "path": "/runs/cost-estimate",
-            "operationId": "estimateRunCost",
-            "expect_status": 200,
-            "count": 1
-          },
-          {
-            "method": "POST",
-            "path": "/runs/{run_id}/start-from-stage",
-            "operationId": "startRunFromStage",
-            "expect_status": 202,
-            "count": 1
-          }
-        ],
-        "expects_response": [
-          {
-            "of": "startRunFromStage",
-            "json_path": "run_id",
-            "matches": "^run_%ID%$"
-          },
-          {
-            "of": "startRunFromStage",
-            "json_path": "state",
-            "equals": "queued",
-            "$why": "202 alone would not say the run was only accepted, not done"
-          },
-          {
-            "of": "startRunFromStage",
-            "json_path": "start_stage_id",
-            "equals": "text_analysis"
-          },
-          {
-            "of": "startRunFromStage",
-            "json_path": "started_from_run_id",
-            "matches": "^run_%ID%$"
+            "equals": "restart_source_not_stage_layout"
           }
         ],
         "expects_request": [
@@ -9905,120 +9736,69 @@
             "of": "estimateRunCost",
             "content_type_starts_with": "application/json",
             "body_contains": [
-              "\"version_uid\"",
               "\"start_from_run_id\"",
-              "\"start_stage_id\""
+              "\"restart_point\":\"text\""
             ]
-          },
-          {
-            "of": "startRunFromStage",
-            "requires_idempotency_key": true,
-            "body_contains": [
-              "\"stage_id\":\"text_analysis\"",
-              "\"cost_consent\"",
-              "\"confirmed\":true"
-            ]
-          }
-        ],
-        "await_terminal": {
-          "$comment": [
-            "The same wait as `start-run`, on the NEW run's page: the first `wait_for` of the actions held the journey there."
-          ],
-          "outcome_selector": "[data-run-outcome]",
-          "outcome_attribute": "data-run-outcome",
-          "non_terminal_value": "in_flight",
-          "accept": [
-            "published"
-          ],
-          "activity_selector": "[data-run-activity]",
-          "activity_attribute": "data-run-activity",
-          "activity_when_final": "stopped",
-          "bound_ms": 150000,
-          "poll_ms": 500
-        },
-        "expects_api_after_terminal": [
-          {
-            "method": "GET",
-            "path": "/runs/{run_id}",
-            "operationId": "getRunStatus",
-            "bind": {
-              "run_id": "from_stage_run_id"
-            }
           }
         ],
         "expects_present": [
           {
-            "selector": "[data-run-started-from-note=\"text_analysis\"]",
-            "text_matches": "^Запущен с этапа 4 «Анализ текста» из прогона\\s+{run_id}:"
+            "selector": "[data-run-stages-dialog] [data-run-restart=\"dialog\"][data-restart-point=\"text\"]",
+            "$why": "the point under test is the chip's own, in the dialog the chip opened; the confirmation of another chip would be asking about another point"
           },
           {
-            "selector": "[data-run-started-from-note=\"text_analysis\"] a[href$=\"/runs/{run_id}\"]",
-            "text_matches": "^{run_id}$"
+            "selector": "[data-run-restart=\"dialog\"] [data-restart-failure]",
+            "text_contains": "без раскладки моделей по этапам"
           },
           {
-            "selector": "[data-run-started-from-note=\"text_analysis\"] [data-run-started-from=\"{run_id}\"]"
+            "selector": "[data-run-restart=\"dialog\"] [data-restart-failure]",
+            "text_contains": "повторите прогон",
+            "$why": "the refusal names the way that always works: a new run with today's settings"
           },
           {
-            "selector": "[data-run-rail] [data-run-chip=\"preparation\"][data-chip-reused]",
-            "$why": "RUN-SCREEN-01a: the three reused stages are one chip, «Подготовка»; the rail marks it as taken from the source"
-          },
-          {
-            "selector": "[data-run-rail] [data-run-chip=\"preparation\"] [data-chip-took=\"из прогона\"]",
-            "text_contains": "из прогона",
-            "$why": "D-412 in the rail: a chip taken by reference says where it came from instead of a duration"
-          },
-          {
-            "selector": "[data-run-rail] [data-run-chip=\"text\"]",
-            "text_contains": "Текст"
-          },
-          {
-            "selector": "[data-run-stage-detail=\"preparation\"] tr[data-stage-id] [data-stage-elapsed=\"reused\"]",
-            "text_contains": "из прогона",
-            "min_count": 3,
-            "$why": "D-412: the details table said «0 с» for a stage taken by reference"
-          },
-          {
-            "selector": "[data-run-outcome=\"published\"]",
-            "text_matches": "Прогон опубликован: {source_finding_count} наход[а-я]*\\.$",
-            "$why": "as many findings as the source run published; the outcome is one paragraph now, so the figure ends the block's text"
+            "selector": "[data-run-restart=\"dialog\"] button[data-restart-send][disabled]",
+            "$why": "nothing can be sent while no price was read and no consent was given"
           }
         ],
         "expects_absent": [
           {
-            "selector": "[data-run-chip=\"text\"][data-chip-reused]"
+            "selector": "[data-run-restart=\"dialog\"] [data-restart-plan]",
+            "$why": "a refused price says nothing of what would be taken and what computed"
           },
           {
-            "selector": "[data-run-chip=\"text\"] [data-chip-took=\"из прогона\"]"
+            "selector": "[data-run-restart=\"dialog\"] [data-cost-approval]",
+            "$why": "no consent is asked for a price that was refused"
           },
           {
-            "selector": "[data-run-stage-detail=\"preparation\"] [data-stage-elapsed]:not([data-stage-elapsed=\"reused\"])",
-            "$why": "every row of the dialog's table for the reused chip is taken by reference; a measured duration there would be a stage the new run computed"
+            "selector": "[data-run-restart=\"dialog\"] select",
+            "$why": "a restart has no stage to choose: the chip is the point; a select here would be the retired start from a stage"
           }
         ],
         "forbids_rendered": [
-          "[data-run-failure]",
-          "[data-start-from-stage-failure]",
-          "[data-start-from-stage-refusal]"
+          "[data-run-failure]"
         ],
-        "screen": "run-from-stage",
-        "case": "action"
+        "screen": "run-restart",
+        "case": "refused"
       },
       {
-        "name": "run-from-stage-leaves-the-first-run-as-it-was",
+        "name": "run-restart-leaves-the-cancelled-run-as-it-was",
         "at": "/projects/{project_uid}/runs/{run_id}",
         "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
-        "control_module": "web/src/features/start-run-from-stage/ui/start-run-from-stage-control.tsx",
+        "control_module": "web/src/features/restart-run/ui/restart-run-control.tsx",
+        "bind": {
+          "run_id": "queued_run_id"
+        },
         "$comment": [
-          "R-151i: the earlier run is unchanged (runs are immutable history). Its page, read cold after the new run ended, still says it was",
-          "started from nothing, marks no chip as taken, shows its own measured durations (the rail's two chips and, in the dialog the journey",
-          "opens on «Подготовка», its three stages) and the finding count the new run matched."
+          "RUN-RESTART-01 / R-155g: a restart that does not happen leaves its source as it was. The page of the cancelled run, read cold after the refused",
+          "price of the step before, still says it was cancelled and that nothing was published, carries no notice that a restart replaced it",
+          "(`data-run-replaced`), and, in the dialog of its chip «Текст», still offers «Перезапустить с этого этапа»: it is still an ended run nobody has",
+          "replaced, listed as before. The confirmation is closed on a cold load (the refusal of the step before is not carried over), and no restart is sent."
         ],
         "actions": [
           {
             "do": "click",
-            "selector": "[data-run-chip=\"preparation\"]",
-            "settle": true,
-            "$why": "the details table lives in the dialog a chip opens; without it no row of the table is on the page and the absence of a reused row would prove nothing"
+            "selector": "[data-run-chip=\"text\"]",
+            "settle": true
           }
         ],
         "expects_api": [
@@ -10029,43 +9809,95 @@
             "expect_status": 200
           }
         ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/runs/{run_id}/restart",
+            "why": "the refusal of the step before was the end of it, and reading the page again sends nothing"
+          }
+        ],
         "expects_present": [
           {
-            "selector": "[data-run-outcome=\"published\"]",
-            "text_matches": "Прогон опубликован: {source_finding_count} наход[а-я]*\\.$"
+            "selector": "[data-run-outcome=\"cancelled\"]",
+            "text_contains": "Ничего не опубликовано",
+            "$why": "the run under test is still the one the queue cancelled, with nothing published"
           },
           {
-            "selector": "[data-run-rail] [data-run-chip][data-chip-state=\"done\"]",
-            "min_count": 2,
-            "$why": "«Подготовка» (three stages) and «Текст» (one): all four stages of the first run succeeded"
-          },
-          {
-            "selector": "[data-run-rail] [data-chip-took]",
-            "min_count": 2
-          },
-          {
-            "selector": "[data-run-stage-detail=\"preparation\"] tr[data-stage-id] [data-stage-elapsed]",
-            "min_count": 3
+            "selector": "[data-run-stages-dialog] [data-run-restart=\"offer\"]",
+            "text_contains": "Перезапустить с этого этапа",
+            "$why": "the offer is drawn for an ended run that no restart has replaced: it is still one, and nothing replaced it"
           }
         ],
         "expects_absent": [
           {
-            "selector": "[data-run-started-from-note]"
+            "selector": "[data-run-replaced]",
+            "$why": "no restart replaced the run: its page carries no «Прогон перезапущен» notice"
           },
           {
-            "selector": "[data-run-started-from]"
-          },
-          {
-            "selector": "[data-chip-reused]"
-          },
-          {
-            "selector": "[data-stage-elapsed=\"reused\"]"
+            "selector": "[data-run-restart=\"dialog\"]",
+            "$why": "a cold load opens no confirmation: the refusal of the step before was not carried over"
           }
         ],
         "forbids_rendered": [
           "[data-run-failure]"
         ],
-        "screen": "run-from-stage",
+        "screen": "run-restart",
+        "case": "refused"
+      },
+      {
+        "name": "run-restart-is-not-offered-for-a-published-run",
+        "at": "/projects/{project_uid}/runs/{run_id}",
+        "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
+        "control_module": "web/src/features/restart-run/ui/restart-run-control.tsx",
+        "$comment": [
+          "RUN-RESTART-01 / R-155a: only a run that ended `partial`, `failed` or `cancelled` is restarted; a published run is repeated as a whole",
+          "(`reauditRun`). The first run of the journey ended `published` on the recorded provider. On its page the expert presses the chip «Текст» of the",
+          "rail, which opens «Этапы анализа раздела» on it; the dialog is drawn (its state row is on the page, so the absence below is not an empty page)",
+          "and holds no «Перезапустить с этого этапа» and no confirmation: the control renders nothing for it, asks no price and sends no restart."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-run-chip=\"text\"]",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus",
+            "expect_status": 200
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/runs/{run_id}/restart",
+            "why": "a published run is not restarted: nothing offers it and nothing sends it"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-run-outcome=\"published\"]",
+            "text_matches": "Прогон опубликован: [1-9][0-9]* наход[а-я]*\\.$",
+            "$why": "the run under test is published, with findings; the absence below is for that state"
+          },
+          {
+            "selector": "[data-run-stages-dialog] [data-fact-row=\"state\"]",
+            "$why": "the dialog of the chip is open and drawn: an absent offer in a closed dialog would prove nothing"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "[data-run-restart]",
+            "$why": "neither the offer nor its confirmation is drawn for a published run (R-155a)"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-run-failure]"
+        ],
+        "screen": "run-restart",
         "case": "refused"
       },
       {
