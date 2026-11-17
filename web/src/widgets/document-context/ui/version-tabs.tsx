@@ -3,9 +3,9 @@
 /**
  * The tab row of the document frame (`UI-A-22`, `R-151m`, `UIP-G-09`): the original's strip on the right of the
  * breadcrumb, «Инфо · Блоки N · Лог · Разбор N · Оптимизация N». It reads the version's runs with the key the run list and
- * the block tiles already use, so a cold load makes no request of its own on the version page; the document's latest pass
- * for the number of «Оптимизация» (`useOptimisationCount`); and the account for «Лог», which is the operator's tab. The tabs
- * are links; the open one is text with `aria-current`.
+ * the block tiles already use, so a cold load makes no request of its own on the version page, and the account for «Лог»,
+ * which is the operator's tab. The numbers of «Блоки» and «Оптимизация» are the frame's, from the version's own read
+ * (`useVersionFigures`, `UIP-S04-02`), handed in. The tabs are links; the open one is text with `aria-current`.
  */
 
 import Link from 'next/link';
@@ -14,7 +14,6 @@ import type { VersionUid } from '@/shared/api';
 import { useMe } from '@/entities/account';
 import { useRunList } from '@/entities/audit-run';
 
-import { useOptimisationCount } from '../api/use-optimisation-count';
 import { mayReadLogOf, versionTabs } from '../model/version-tabs';
 import type { VersionTab, VersionTabFacts } from '../model/version-tabs';
 import styles from './document-context.module.css';
@@ -49,13 +48,10 @@ export function VersionTabsView({ tabs }: VersionTabsViewProps) {
   );
 }
 
-export function VersionTabs(facts: Omit<VersionTabFacts, 'runs' | 'optimisation' | 'mayReadLog'>) {
+export function VersionTabs(facts: Omit<VersionTabFacts, 'runs' | 'mayReadLog'>) {
   const runs = useRunList(facts.versionUid as VersionUid);
-  const optimisation = useOptimisationCount(facts.projectUid, facts.documentUid);
   const me = useMe();
   return (
-    <VersionTabsView
-      tabs={versionTabs({ ...facts, runs: runs.data?.items, optimisation, mayReadLog: mayReadLogOf(me.data?.roles) })}
-    />
+    <VersionTabsView tabs={versionTabs({ ...facts, runs: runs.data?.items, mayReadLog: mayReadLogOf(me.data?.roles) })} />
   );
 }

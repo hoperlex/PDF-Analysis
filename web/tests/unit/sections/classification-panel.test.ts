@@ -419,6 +419,52 @@ describe('the panel on the version screen', () => {
     expect(admin).not.toContain('data-classification-form=""');
   });
 
+  describe('the order of the version’s «Инфо» (`UIP-S04-04`)', () => {
+    const page = (confirmed: boolean) => {
+      const client = newClient();
+      client.setQueryData(
+        queryKeys.versions.detail(VERSION_UID),
+        version(confirmed ? { classification: classification() } : {}),
+      );
+      client.setQueryData(
+        queryKeys.versions.sectionReview(VERSION_UID),
+        review(confirmed ? { classification: classification(), revisions: [] } : {}),
+      );
+      client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [], page: { next_cursor: null } });
+      return renderScreen(
+        client,
+        createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] }),
+      );
+    };
+    const order = (markup: string) =>
+      ['data-last-run-card=', 'data-classification-panel=', 'id="version-runs-title"', 'data-version-facts=']
+        .map((marker) => [marker, markup.indexOf(marker)] as const)
+        .sort((a, b) => a[1] - b[1])
+        .map(([marker]) => marker);
+
+    it('is the card «Последний прогон», the line «Стадия и раздел», the table «Прогоны» and the file’s facts when the section is confirmed', () => {
+      const markup = page(true);
+      expect(markup).toContain('data-classification-state="confirmed"');
+      expect(order(markup)).toEqual(['data-last-run-card=', 'data-classification-panel=', 'id="version-runs-title"', 'data-version-facts=']);
+      // one line: the label is the row's own, and no heading stands above it
+      expect(markup).not.toContain('<h2>Стадия и раздел</h2>');
+      expect(markup).toMatch(/data-classification-row="">[\s\S]*?>Стадия и раздел<\/h2>/);
+    });
+
+    it('puts the confirmation form above the card when the section is not confirmed: no run starts without it', () => {
+      const markup = page(false);
+      expect(markup).toContain('data-classification-form=""');
+      expect(order(markup)).toEqual(['data-classification-panel=', 'data-last-run-card=', 'id="version-runs-title"', 'data-version-facts=']);
+      expect(markup).toContain('<h2>Стадия и раздел</h2>');
+    });
+
+    it('is one column, with no wrapper of the panel left on the page', () => {
+      const markup = page(true);
+      expect(markup).not.toContain('aria-label="Стадия и раздел"');
+      expect((markup.match(/data-classification-panel=/g) ?? []).length).toBe(1);
+    });
+  });
+
   it('hands both АР and another confirmed section to the ordinary Run start', () => {
     const withSection = (code: 'AR' | 'KJ') => {
       const client = newClient();

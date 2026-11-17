@@ -1,0 +1,139 @@
+/* `UIP-S04-03`: the card «Последний прогон»: the run, the row of its stages, «Запустить». Tokens only, no colour of its own. */
+.card {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+/* The heading is the page's own «h2» (the rule of `.am-page__body h2`), as the panels beside it carry theirs; its margins give way to the card's gap. */
+.card > .title {
+  margin: 0;
+}
+
+/* When the run was and how it stands, and the way into it, on one row. */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+.run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* One button for each stage of the run; the row scrolls inside the card rather than wrapping the page. */
+.chips {
+  display: flex;
+  align-items: stretch;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+
+.chipItem {
+  display: flex;
+  flex: 1 0 104px;
+  min-width: 0;
+}
+
+.chip {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--am-gap-2xs);
+  min-width: 0;
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--am-accent);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chip {
+    transition: border-color var(--am-motion-base) var(--am-ease), background var(--am-motion-base) var(--am-ease);
+  }
+}
+
+.chip[data-chip-state='done'] {
+  border-color: var(--am-ok);
+  background: var(--am-ok-light);
+}
+
+.chip[data-chip-state='partial'] {
+  border-color: var(--am-degraded);
+  background: var(--am-degraded-light);
+}
+
+.chip[data-chip-state='failed'] {
+  border-color: var(--am-failed);
+  background: var(--am-failed-light);
+}
+
+.chip[data-chip-state='running'] {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+}
+
+.chip[data-chip-state='waiting'] {
+  border-color: var(--am-degraded);
+  border-style: dashed;
+  background: var(--am-surface-sunken);
+}
+
+.chipName {
+  font-weight: 700;
+  line-height: var(--am-leading-tight);
+}
+
+/* The state in a word, and opposite it the time the stage took; tabular figures keep the digits aligned. */
+.chipStatus {
+  display: flex;
+  align-self: stretch;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.chipTook {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* «Запустить» and the line under it, as the run's table once had them under it. */
+.start {
+  min-width: 0;
+}

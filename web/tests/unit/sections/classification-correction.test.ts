@@ -242,6 +242,60 @@ describe('the panel names the revision and lists the history', () => {
   });
 });
 
+describe('a confirmed «Стадия и раздел» is one line, and the record is behind «Подробнее» (`UIP-S04-04`)', () => {
+  const rowOf = (markup: string) => /data-classification-row="">([\s\S]*?)<\/div>/.exec(markup)?.[1] ?? '';
+  const moreOf = (markup: string) => /data-classification-more="">([\s\S]*?)<\/details>/.exec(markup)?.[1] ?? '';
+
+  it('has the label, the section’s colour, both badges, who confirmed and when, and «Исправить» in one row', () => {
+    const row = rowOf(panel());
+    expect(row).toContain('>Стадия и раздел</h2>');
+    expect(row).toContain('data-section-dot="KJ"');
+    expect(row).toContain('data-project-stage="R"');
+    expect(row).toContain('data-section-code="KJ"');
+    expect(row).toContain('Исправлено экспертом');
+    expect(row).toContain('<time dateTime="2026-10-23T08:00:00Z">');
+    expect(row).toContain('data-classification-correct=""');
+    // an uncorrected one says «Подтверждено», a reader who may not correct has no button
+    const confirmed = rowOf(panel({ review: review({ classification: classification(), revisions: [revision(1, 'P', 'AR', null)] }), roles: ['admin'] }));
+    expect(confirmed).toContain('Подтверждено экспертом');
+    expect(confirmed).not.toContain('data-classification-correct');
+  });
+
+  it('keeps the revision, the account’s code and the history out of the row and behind a closed «Подробнее»', () => {
+    const markup = panel();
+    const row = rowOf(markup);
+    for (const absent of ['<code', 'Ревизия', 'История классификации', 'data-classification-history', USER_B]) {
+      expect(row, absent).not.toContain(absent);
+    }
+    const more = moreOf(markup);
+    expect(markup).toContain('<summary>Подробнее</summary>');
+    expect(markup).not.toMatch(/<details[^>]*\sopen/);
+    expect(more).toContain('data-classification-revision-line="3"');
+    expect(more).toContain('Ревизия 3.');
+    expect(more).toContain(`<code>${USER_B}</code>`);
+    expect(more).toContain('data-classification-history="3"');
+  });
+
+  it('keeps what changes the next step in view: the conflict and a section with no profile stay under the row, outside the fold', () => {
+    const markup = panel({ conflict: true, review: reviewWithoutProfile('KJ') });
+    const more = moreOf(markup);
+    const row = rowOf(markup);
+    expect(markup).toContain('data-classification-conflict=""');
+    expect(markup).toContain('data-profile-unavailable-note=""');
+    expect(more).not.toContain('data-classification-conflict');
+    expect(more).not.toContain('data-profile-unavailable-note');
+    expect(markup.indexOf('data-classification-conflict')).toBeGreaterThan(markup.indexOf(row));
+    expect(markup.indexOf('data-classification-conflict')).toBeLessThan(markup.indexOf('data-classification-more'));
+  });
+
+  it('opens the correction form under the row and above the fold, and takes the button out of the row', () => {
+    const markup = panel({ correcting: true });
+    expect(rowOf(markup)).not.toContain('data-classification-correct');
+    expect(markup.indexOf('data-classification-correction-form')).toBeGreaterThan(markup.indexOf('data-classification-row'));
+    expect(markup.indexOf('data-classification-correction-form')).toBeLessThan(markup.indexOf('data-classification-more'));
+  });
+});
+
 describe('the correction form', () => {
   it('starts from the current stage and section and says a revision will be added', () => {
     const markup = form();

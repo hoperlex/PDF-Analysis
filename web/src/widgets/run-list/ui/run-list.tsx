@@ -20,6 +20,10 @@
  *
  * A `comparison_pdf` has no portal companion. Ordinary section analysis now reads its native
  * PDF text and pages; portal-specific operations remain separate.
+ *
+ * `UIP-S04-03`: «Запустить» is the card «Последний прогон»'s (`LastRunCard`, the first card of the version's «Инфо»), so a page that
+ * draws the card says `startElsewhere` and this list is the table alone: no heading and no start under it, and nothing in its
+ * place for a version with no run (the card says so). Its failure and its loading stay its own; the retry is here.
  */
 
 import { useState } from 'react';
@@ -54,6 +58,8 @@ export interface RunListProps {
   readonly uploadKind?: VersionUploadKind | undefined;
   /** Called with the 202 reading so the screen can move to run progress. */
   readonly onRunStarted?: ((run: RunStatus) => void) | undefined;
+  /** `UIP-S04-03`: the page draws «Запустить» in the card «Последний прогон»; the list is then the table alone. */
+  readonly startElsewhere?: boolean | undefined;
 }
 
 export function RunList(props: RunListProps) {
@@ -66,6 +72,7 @@ function VersionRunList({
   sectionCode,
   uploadKind,
   onRunStarted,
+  startElsewhere = false,
 }: RunListProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useRunList(versionUid, cursor);
@@ -104,6 +111,8 @@ function VersionRunList({
   const page = query.data;
 
   if (page.items.length === 0) {
+    // The card says there is no run, and offers the start.
+    if (startElsewhere) return null;
     return (
       <EmptyState
         title="По этой версии прогонов не запускалось."
@@ -137,10 +146,14 @@ function VersionRunList({
           </button>
         )}
       </div>
-      <h3>
-        {comparisonOnly ? 'Запуск прогона' : isAr ? 'Запустить анализ АР' : 'Запустить ещё один прогон'}
-      </h3>
-      {startControl}
+      {startElsewhere ? null : (
+        <>
+          <h3>
+            {comparisonOnly ? 'Запуск прогона' : isAr ? 'Запустить анализ АР' : 'Запустить ещё один прогон'}
+          </h3>
+          {startControl}
+        </>
+      )}
     </div>
   );
 }

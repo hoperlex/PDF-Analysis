@@ -5,17 +5,21 @@
  * What is held: the open tab is text and not a link; «Разбор» opens the version's newest run that published a result
  * and carries that run's finding count, and with no such run it is not a link and says why; a failed or cancelled run
  * is not a result; «Лог» opens the newest run of any state on its journal, is the operator's and says why it is not
- * a link when there is no run; «Блоки» carries the number it is handed and «Оптимизация» the proposals of the document's
+ * a link when there is no run; «Блоки» carries the number it is handed and «Оптимизация» the proposals of the version's
  * latest pass, with those still undecided in its hint; «Оптимизация» is the document's own tab; the frame draws the tabs and
  * the version bar on the document's page, its «Оптимизация», a version, its «Блоки», a run, its log and its «Разбор», and the tabs
  * read the version's runs under the key the run list already uses.
+ *
+ * `UIP-S04-02`: both numbers are the version's own read (`block_count` and the counts of its `audit`): none without the
+ * field and never a zero, the same on every page of the frame including the document's, where the version held from a
+ * listing carries neither, and a change of version changes them together with the tabs.
  */
 
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { queryKeys } from '@/shared/api';
-import type { OptimisationPassList, RunState } from '@/shared/api';
+import type { DocumentAudit, RunState } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { VERSION_PAGE_LIMIT } from '@/entities/document-version';
@@ -26,7 +30,9 @@ import {
   PDF_BUTTON_LABEL,
   VersionTabsView,
   latestResultRun,
+  optimisationOf,
   runLogAddress,
+  versionFigures,
   versionTabs,
 } from '@/widgets/document-context';
 
@@ -37,6 +43,14 @@ import { classification, page, version } from '../sections/fixtures';
 const FACTS = { projectUid: PROJECT_UID, versionUid: VERSION_UID, documentUid: DOCUMENT_UID } as const;
 const run = (id: string, state: RunState, findings = 0) =>
   runStatus({ run_id: `run_01J9ZQ8K7NHVXW3T2R5M6P4Q8${id}`, state, published_finding_count: findings });
+/** The audit of a version read (`UIP-S04-01`), with the optimisation counts of its latest pass when it has one. */
+const audit = (pass?: { proposals: number; undecided: number }): DocumentAudit => ({
+  state: 'awaiting_decision',
+  finding_count: 5,
+  undecided_finding_count: 2,
+  partial: false,
+  ...(pass === undefined ? {} : { optimisation_proposal_count: pass.proposals, optimisation_undecided_count: pass.undecided }),
+});
 
 describe('versionTabs', () => {
   it('names the five tabs in the order of the original’s strip', () => {
@@ -82,13 +96,15 @@ describe('versionTabs', () => {
     expect(count(undefined)).toBeNull();
   });
 
-  it('carries the proposals of the document’s latest pass, with those undecided in the hint, and no number without a pass', () => {
-    const optimisation = (pass: { proposals: number; undecided: number } | null | undefined) =>
+  it('carries the proposals of the version’s latest pass, with those undecided in the hint, and no number without a pass', () => {
+    const optimisation = (pass: { proposals: number; undecided: number | null } | null | undefined) =>
       versionTabs({ ...FACTS, current: 'version', runs: [], optimisation: pass }).find((tab) => tab.key === 'optimisation');
     const counted = optimisation({ proposals: 8, undecided: 3 });
     expect(counted?.count).toBe(8);
     expect(counted?.title).toBe('Предложений последнего прохода: 8, из них без решения: 3');
     expect(optimisation({ proposals: 0, undecided: 0 })?.count).toBe(0);
+    // a pass whose undecided count the server did not give says its proposals and nothing of the rest
+    expect(optimisation({ proposals: 8, undecided: null })?.title).toBe('Предложений последнего прохода: 8');
     for (const none of [null, undefined]) {
       expect(optimisation(none)?.count).toBeNull();
       expect(optimisation(none)?.title).toBe('Оптимизация документа');
@@ -136,6 +152,30 @@ describe('versionTabs', () => {
 
   it('leaves the document’s tab out when the document is not known yet', () => {
     expect(versionTabs({ ...FACTS, documentUid: undefined, current: 'version', runs: [] }).map((tab) => tab.key)).not.toContain('optimisation');
+  });
+});
+
+describe('the figures of the version read (`UIP-S04-02`)', () => {
+  it('takes the blocks and the optimisation pass from the one read of the version', () => {
+    expect(versionFigures(version({ block_count: 15, audit: audit({ proposals: 8, undecided: 3 }) }))).toEqual({
+      blockCount: 15,
+      optimisation: { proposals: 8, undecided: 3 },
+    });
+  });
+
+  it('has no number for a field the server did not give, and keeps a true zero', () => {
+    expect(versionFigures(version())).toEqual({ blockCount: undefined, optimisation: null });
+    expect(versionFigures(version({ block_count: 0, audit: audit({ proposals: 0, undecided: 0 }) }))).toEqual({
+      blockCount: 0,
+      optimisation: { proposals: 0, undecided: 0 },
+    });
+    // an audit with no pass in it (never optimised) is no pass, not a pass of nothing
+    expect(optimisationOf(audit())).toBeNull();
+    expect(optimisationOf(undefined)).toBeNull();
+  });
+
+  it('says the proposals alone when the undecided count is missing', () => {
+    expect(optimisationOf({ ...audit(), optimisation_proposal_count: 4 })).toEqual({ proposals: 4, undecided: null });
   });
 });
 
@@ -195,7 +235,6 @@ describe('the frame', () => {
     seeded.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), page([]));
     return seeded;
   };
-  const OPTIMISATION_KEY = [...queryKeys.optimisation.allPasses(), 'tab-count', PROJECT_UID, DOCUMENT_UID] as const;
 
   it('carries the tabs and the version bar on a version and on its «Блоки», reading the runs under the run list’s own key', () => {
     for (const current of ['version', 'blocks'] as const) {
@@ -286,35 +325,72 @@ describe('the frame', () => {
     expect(optimisation).toContain(`href="${routes.document(PROJECT_UID, DOCUMENT_UID)}"`);
   });
 
-  it('draws the frame on the document’s own page with the version the page holds, and reads no version of its own', () => {
+  it('draws the frame on the document’s own page with the version the page holds for its names, and reads the version only for the figures', () => {
     const held = version({ classification: classification({ section_code: 'AR' }) });
     const cold = newClient();
     const markup = renderScreen(cold, createElement(DocumentContext, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, version: held, current: 'document' }));
     expect(markup).toContain('data-version-tabs');
     expect(markup).toContain('data-version-bar');
     expect(markup).toMatch(/aria-current="page"[^>]*>Комплект АР</);
-    expect(cold.getQueryCache().find({ queryKey: [...queryKeys.versions.detail(VERSION_UID)] })).toBeUndefined();
+    // the read is the version's own entry, asked for the numbers; nothing of it is drawn until it has answered
+    expect(cold.getQueryCache().find({ queryKey: [...queryKeys.versions.detail(VERSION_UID)] })).toBeDefined();
+    expect(markup).not.toMatch(/Блоки <span/);
+    expect(markup).not.toMatch(/Оптимизация <span/);
   });
 
-  it('carries the optimisation number from the document’s latest pass, read as the newest of the document with limit one', () => {
+  it('draws the numbers of the version read on the document’s page, where the version held from a listing carries none', () => {
+    const held = version({ classification: classification({ section_code: 'AR' }) });
+    const seeded = newClient();
+    seeded.setQueryData(queryKeys.versions.detail(VERSION_UID), version({ block_count: 15, audit: audit({ proposals: 8, undecided: 3 }) }));
+    for (const current of ['document', 'optimisation'] as const) {
+      const markup = renderScreen(seeded, createElement(DocumentContext, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, version: held, current }));
+      expect(markup, current).toMatch(/Блоки <span[^>]*>15<\/span>/);
+      expect(markup, current).toMatch(/Оптимизация <span[^>]*>8<\/span>/);
+    }
+  });
+
+  it('carries the optimisation number from the version’s audit, with those undecided in the hint', () => {
     const seeded = client();
-    const list: OptimisationPassList = {
-      items: [{ proposal_count: 8, decision_counts: { accept: 1, pending: 3, reject: 2, revise: 2 } } as OptimisationPassList['items'][number]],
-    };
-    seeded.setQueryData(OPTIMISATION_KEY, list);
+    seeded.setQueryData(queryKeys.versions.detail(VERSION_UID), version({ audit: audit({ proposals: 8, undecided: 3 }) }));
     const markup = renderScreen(seeded, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'version' }));
     expect(markup).toMatch(/Оптимизация <span[^>]*>8<\/span>/);
     expect(markup).toContain('из них без решения: 3');
-    // and with no pass the tab has no number
-    const none = client();
-    none.setQueryData(OPTIMISATION_KEY, { items: [] } satisfies OptimisationPassList);
-    expect(renderScreen(none, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'version' })))
-      .not.toMatch(/Оптимизация <span/);
+    // and with no pass in the audit, or no audit at all, the tab has no number
+    for (const none of [version({ audit: audit() }), version()]) {
+      const bare = client();
+      bare.setQueryData(queryKeys.versions.detail(VERSION_UID), none);
+      expect(renderScreen(bare, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'version' })))
+        .not.toMatch(/Оптимизация <span/);
+    }
   });
 
-  it('hands «Блоки» the number the page gives it', () => {
-    const markup = renderScreen(client(), createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'blocks', blockCount: 15 }));
-    expect(markup).toMatch(/Блоки <span[^>]*>15<\/span>/);
+  it('hands «Блоки» the number of the version read, none when the server did not give it and zero when it is zero', () => {
+    const blocks = (read: ReturnType<typeof version>, current: 'blocks' | 'version' = 'blocks') => {
+      const seeded = client();
+      seeded.setQueryData(queryKeys.versions.detail(VERSION_UID), read);
+      return renderScreen(seeded, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current }));
+    };
+    expect(blocks(version({ block_count: 15 }))).toMatch(/Блоки <span[^>]*>15<\/span>/);
+    expect(blocks(version({ block_count: 15 }), 'version')).toMatch(/Блоки <span[^>]*>15<\/span>/);
+    expect(blocks(version({ block_count: 0 }))).toMatch(/Блоки <span[^>]*>0<\/span>/);
+    expect(blocks(version())).not.toMatch(/Блоки <span/);
+  });
+
+  it('changes the numbers with the version: each version’s tabs carry that version’s own figures', () => {
+    const otherUid = `${VERSION_UID.slice(0, -1)}Z`;
+    const seeded = client();
+    seeded.setQueryData(queryKeys.versions.detail(otherUid), version({
+      version_uid: otherUid, version_ordinal: 2, block_count: 21, audit: audit({ proposals: 4, undecided: 0 }),
+    }));
+    seeded.setQueryData(queryKeys.runs.list(otherUid, undefined, RUN_PAGE_LIMIT), page([]));
+    seeded.setQueryData(queryKeys.versions.detail(VERSION_UID), version({ block_count: 15, audit: audit({ proposals: 8, undecided: 3 }) }));
+    const first = renderScreen(seeded, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'blocks' }));
+    const second = renderScreen(seeded, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: otherUid, current: 'blocks' }));
+    expect(first).toMatch(/Блоки <span[^>]*>15<\/span>/);
+    expect(first).toMatch(/Оптимизация <span[^>]*>8<\/span>/);
+    expect(second).toMatch(/Блоки <span[^>]*>21<\/span>/);
+    expect(second).toMatch(/Оптимизация <span[^>]*>4<\/span>/);
+    expect(second).not.toMatch(/Блоки <span[^>]*>15<\/span>/);
   });
 
   it('draws the row alone on the levels that have no version in view', () => {
