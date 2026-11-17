@@ -5978,13 +5978,13 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
     // journey itself (`tests/e2e/pc01/journey`) is the instrument that presses it.
     const PRESSED_BEFORE_IT_EXISTS: readonly { readonly text: string; readonly why: string }[] = [
       {
-        text: 'Запустить с этого этапа',
+        text: 'Перезапустить с этого этапа',
         why:
-          '`RUN-SCREEN-01a`: «Запустить с этапа» moved from the run page into «Этапы анализа раздела» (`run-stages-dialog`), which a chip of ' +
-          'the rail opens (`RunProgress` keeps the open chip in a `useState`); one static pass presses nothing and leaves the dialog closed. ' +
-          'The button there reads «Запустить с этого этапа», and the journey (`tests/e2e/pc01/journey/manifest.json`, the three `run-from-stage` steps; ' +
-          '`WEB-INT-1`) presses the chip `[data-run-chip="text"]` first and then this button. tests/unit/screens/run-screen.test.ts and ' +
-          'tests/unit/run/run-screen-live.test.ts render the dialog and press it.',
+          '`RUN-RESTART-01` (`R-155a`): «Перезапустить с этого этапа» is the button of `RestartRunControl` in «Этапы анализа раздела» (`run-stages-dialog`), ' +
+          'which a chip of the rail opens (`RunProgress` keeps the open chip in a `useState`); one static pass presses nothing and leaves the dialog ' +
+          'closed. The control replaced «Запустить с этого этапа», and the journey (`tests/e2e/pc01/journey/manifest.json`, the step ' +
+          '`run-restart-refused-for-a-run-without-a-stage-layout`) presses the chip `[data-run-chip="text"]` first and then this button, on the run the ' +
+          'queue steps cancelled. tests/unit/restart-run/restart-run-control.test.ts renders the control and presses it.',
       },
       {
         text: 'Возобновить выдачу',

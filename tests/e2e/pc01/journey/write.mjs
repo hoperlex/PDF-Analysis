@@ -193,22 +193,12 @@ function decodeJson(text) {
   }
 }
 
-/** The stages PC-01 schedules, in order (`web/src/entities/audit-run`, `PC01_STAGE_IDS`); «Запустить с этого этапа» starts from any but the first. */
-const PC01_CHAIN = ['source_preparation', 'page_geometry_extraction', 'document_context_build', 'text_analysis'];
-
 const COST_SCOPES = {
   // `RUN-START-ONE-01a/01b` (plan v3 §8): the start control is ONE button and has no estimate button, no tick-box. Its click reads the
   // estimate. A metered estimate opens the dialog (`dialog`) in which the ceiling is typed and «Запустить» is the agreement; one that
   // charges nothing is agreed to by the click and the run starts at once. A re-audit on the queue is the same (the dialog is on the page,
   // the click is on the row's «Повторный аудит»), so for it the journey observes the estimate instead of asking for it.
   run: { root: '[data-start-run-control]', startButton: '[data-start-run-button]', dialog: '[data-start-run-dialog]', confirm: '[data-start-run-confirm]', estimatePath: '/runs/cost-estimate', startPath: '/runs' },
-  // `UI-A-60` / `R-151i`, «Запустить с этапа» of an ended run. Since `RUN-SCREEN-01a` it is not on the run page: a chip of the rail opens
-  // «Этапы анализа раздела», and the control sits in that modal (`[data-run-stages-dialog]`) under the words «Запустить с этого этапа».
-  // The dialog has no estimate button: it reads the source run and asks the price of the chosen stage as soon as the stage is chosen,
-  // and, for a chip that covers exactly one startable stage (`data-start-from-stage-only`, no select), as soon as it opens
-  // (`estimate.scope` is `run`). It starts through the source run's own door (`POST /runs/{source}/start-from-stage`), so the start path
-  // is built from the source, as a re-audit's is.
-  run_from_stage: { root: '[data-run-start-from-stage="dialog"]', label: null, estimateScope: 'run', estimatePath: '/runs/cost-estimate', startPath: null },
 };
 
 /**
@@ -225,7 +215,7 @@ export function usdText(micros) {
 /** Pure exchange checks, also exercised by source conformance without a browser. */
 export function costApprovalFromEstimate(estimate, requestBody, scope, ceilingText) {
   assert.ok(Object.hasOwn(COST_SCOPES, scope), `unknown cost scope ${scope}`);
-  assert.equal(estimate?.scope, COST_SCOPES[scope].estimateScope ?? scope);
+  assert.equal(estimate?.scope, scope);
   assert.equal(estimate.version_uid, requestBody?.version_uid);
   assert.equal(estimate.relaxed_limits, requestBody.relaxed_limits === true);
   assert.equal(estimate.currency, 'USD');
@@ -240,22 +230,11 @@ export function costApprovalFromEstimate(estimate, requestBody, scope, ceilingTe
     assert.equal(scope, 'run');
     assert.deepEqual(Object.keys(requestBody).sort(), ['reaudit_of_run_id', 'version_uid'], 're-audit preflight must derive routing on the server');
   }
-  if (scope === 'run_from_stage') {
-    // The price is for the stages the new run computes and its digest names the source run and the stage: the request
-    // carries those two and the version, and nothing that would choose a route.
-    assert.deepEqual(Object.keys(requestBody).sort(), ['start_from_run_id', 'start_stage_id', 'version_uid'], 'a start from a stage must derive routing on the server');
-    assert.equal(estimate.start_from_run_id, requestBody.start_from_run_id, 'the estimate names another source Run');
-    assert.equal(estimate.start_stage_id, requestBody.start_stage_id, 'the estimate names another stage');
-    // PC-01 schedules a chain, so a start from stage N takes exactly the stages before N and computes N and the rest
-    // (`runs.stage_reuse.plan_stage_reuse`): the lists the server answers are held to that, not only to being non-empty.
-    const { reused_stage_ids: reused, computed_stage_ids: computed } = estimate;
-    const position = PC01_CHAIN.indexOf(requestBody.start_stage_id);
-    assert.ok(position > 0, `${requestBody.start_stage_id} is not a stage a run can be started from`);
-    assert.ok(Array.isArray(reused) && Array.isArray(computed), 'the estimate does not say which stages are reused and which are computed');
-    assert.deepEqual(reused, PC01_CHAIN.slice(0, position), 'the estimate does not take exactly the stages before the chosen one');
-    assert.deepEqual(computed, PC01_CHAIN.slice(position), 'the estimate does not compute exactly the chosen stage and the later ones');
-  } else {
-    assert.equal(requestBody.start_from_run_id, undefined, 'only the start from a stage names a source Run to continue');
+  // This driver gives the consent of a start and of a re-audit (which names its source in `reaudit_of_run_id`) and of nothing else: a request
+  // that names a source Run to continue, a stage to start from or a restart point is a start from a stage or a restart, whose consent no step of
+  // the journey can reach (README, «Restart of an ended run»).
+  for (const field of ['start_from_run_id', 'start_stage_id', 'restart_point']) {
+    assert.equal(requestBody[field], undefined, `${field}: only a start from a stage or a restart names it, and this driver approves neither`);
   }
   const decimal = /^(\d+)(?:[.,](\d{1,6}))?$/.exec(ceilingText.trim());
   assert.ok(decimal, 'prefilled cost ceiling is not exact decimal USD');
@@ -264,19 +243,14 @@ export function costApprovalFromEstimate(estimate, requestBody, scope, ceilingTe
   return { scope, estimate_digest: estimate.estimate_digest, ceiling_micros: Number(ceiling),
     estimated_cost_micros: estimate.estimated_cost_micros, provider_mode: estimate.provider_mode,
     estimate_request: requestBody,
-    ...(requestBody.reaudit_of_run_id === undefined ? {} : { source_run_id: requestBody.reaudit_of_run_id }),
-    ...(scope !== 'run_from_stage' ? {} : { source_run_id: requestBody.start_from_run_id, start_stage_id: requestBody.start_stage_id,
-      reused_stage_ids: estimate.reused_stage_ids, computed_stage_ids: estimate.computed_stage_ids }) };
+    ...(requestBody.reaudit_of_run_id === undefined ? {} : { source_run_id: requestBody.reaudit_of_run_id }) };
 }
 
 export function assertCostApprovedStart(approval, exchange) {
   const body = decodeJson(exchange.requestBody);
   assert.ok(body !== undefined, 'cost-approved start has no recorded JSON body');
   const { cost_consent: consent, ...options } = body;
-  if (approval.start_stage_id !== undefined) {
-    assert.deepEqual(options, { stage_id: approval.start_stage_id }, 'a start from a stage must carry the chosen stage and consent only');
-    assert.ok(new URL(exchange.url).pathname.endsWith(`/runs/${approval.source_run_id}/start-from-stage`), 'the start from a stage addresses a different source Run');
-  } else if (approval.source_run_id !== undefined) {
+  if (approval.source_run_id !== undefined) {
     assert.deepEqual(options, {}, 're-audit start must carry consent only');
     assert.ok(new URL(exchange.url).pathname.endsWith(`/runs/${approval.source_run_id}/reaudit`), 're-audit start addresses a different source Run');
   } else {
@@ -286,35 +260,6 @@ export function assertCostApprovedStart(approval, exchange) {
     ceiling_micros: approval.ceiling_micros, confirmed: true }, 'start consent differs from actual UI approval');
   assert.ok(Object.entries(exchange.requestHeaders ?? {}).some(([name, value]) =>
     name.toLowerCase() === 'idempotency-key' && typeof value === 'string' && value.trim() !== ''), 'start has no command key');
-}
-
-/**
- * What the start-from-a-stage dialog shows, held to the stage the journey is about to approve (`RUN-SCREEN-01a`).
- *
- * `shown` is what the page says (`fromStageDialogExpression`): whether the control sits in the open modal «Этапы анализа раздела», and the stage
- * it offers, either fixed by the chip (`data-start-from-stage-only`) or chosen in its select. A journey that approved the estimate it
- * observed for another stage than the one on screen would hand the server a consent the person never saw.
- */
-export function assertFromStageDialogShows(shown, stageId) {
-  assert.ok(shown !== null && typeof shown === 'object', 'the start from a stage has no dialog on the page');
-  assert.equal(shown.inStagesDialog, true, 'the start from a stage is not inside the open «Этапы анализа раздела»: a chip of the rail opens it');
-  assert.equal(shown.stage, stageId, `the dialog offers ${shown.stage ?? 'no stage'} (${shown.via}) and the journey approves ${stageId}`);
-}
-
-/** The expression that reads the dialog's own state off the page, for `assertFromStageDialogShows`. Exported so a test can run it on a fake page. */
-export function fromStageDialogExpression(root) {
-  return `(() => {
-    const root = document.querySelector(${JSON.stringify(root)});
-    if (root === null) return null;
-    const modal = root.closest('dialog[data-run-stages-dialog]');
-    const only = root.querySelector('[data-start-from-stage-only]');
-    const select = root.querySelector('select');
-    return {
-      inStagesDialog: modal !== null && modal.open === true,
-      via: only !== null ? 'chip' : 'select',
-      stage: only !== null ? only.getAttribute('data-start-from-stage-only') : (select !== null && select.value !== '' ? select.value : null),
-    };
-  })()`;
 }
 
 /**
@@ -352,16 +297,11 @@ async function agreeToRunCost(page, { estimate, request, allowSpend, dialog, con
 async function approveRunCost(page, action, expectedVersion, allowSpend, sourceRunId = null, providerMode = null) {
   const standard = COST_SCOPES[action.scope];
   assert.ok(standard, `unknown cost approval scope ${action.scope}`);
-  // `run` is the one-button start (and the queue's re-audit); a start from a stage is asked in its dialog («Этапы анализа раздела», opened on a chip). A re-audit and a start from a stage have no button of this control to press: the
-  // estimate is read when the source is chosen, so the journey observes it instead of asking for it.
-  const oneButton = action.scope === 'run';
-  const fromStage = action.scope === 'run_from_stage';
-  assert.ok(!fromStage || (sourceRunId !== null && typeof action.stage_id === 'string'), 'a start from a stage names its source Run and its stage');
+  // `run` is the one-button start (and the queue's re-audit). A re-audit has no button of this control to press: the estimate is read when
+  // the source is chosen, so the journey observes it instead of asking for it.
   const contract = standard;
-  // The dialog of a start from a stage is read before anything is approved: the stage on screen is the stage the journey approves.
-  if (fromStage) assertFromStageDialogShows(await page.evaluate(fromStageDialogExpression(contract.root)), action.stage_id);
   let after = 0;
-  if (sourceRunId === null && oneButton) {
+  if (sourceRunId === null) {
     // The click starts the run when the estimate charges nothing, so a live origin must be allowed to spend BEFORE it is pressed.
     assert.ok(providerMode === null || providerMode === 'recorded' || allowSpend === true,
       `provider mode '${providerMode}' spends money: the start button is not pressed without --allow-spend`);
@@ -370,11 +310,6 @@ async function approveRunCost(page, action, expectedVersion, allowSpend, sourceR
     assert.ok((await page.waitFor(enabled, { boundMs: action.bound_ms, what: 'the start button' })).ok, 'the start button is unavailable');
     after = page.exchanges().length;
     await page.click(button);
-  } else if (sourceRunId === null) {
-    const enabled = `Array.from(document.querySelectorAll(${JSON.stringify(contract.root + ' button')})).some(e=>e.textContent.trim()===${JSON.stringify(contract.label)}&&!e.disabled)`;
-    assert.ok((await page.waitFor(enabled, { boundMs: action.bound_ms, what: contract.label })).ok, 'cost estimate control unavailable');
-    after = page.exchanges().length;
-    await page.click(contract.root + ' button', { text: contract.label });
   }
   const began = Date.now();
   let observed;
@@ -383,9 +318,7 @@ async function approveRunCost(page, action, expectedVersion, allowSpend, sourceR
     await page.settle({ settleMs: 100, timeoutMs: 700 });
     observed = page.exchanges().slice(after).find((e) => e.method === 'POST'
       && new URL(e.url).pathname.endsWith(contract.estimatePath) && e.status !== null && e.responseBody !== null
-      && (sourceRunId === null || (fromStage
-        ? decodeJson(e.requestBody)?.start_from_run_id === sourceRunId && decodeJson(e.requestBody)?.start_stage_id === action.stage_id
-        : decodeJson(e.requestBody)?.reaudit_of_run_id === sourceRunId)));
+      && (sourceRunId === null || decodeJson(e.requestBody)?.reaudit_of_run_id === sourceRunId));
     // The source Run's status as the API answered it: a page of the app that ends in the same path (Next's prefetch of the run's
     // link, `?_rsc=`) is not it, and answers text that is no Run (found by lane J4: it made `queue-reaudit-the-cancelled-run` red).
     source = sourceRunId === null ? null : page.exchanges().find((e) => e.method === 'GET'
@@ -406,25 +339,11 @@ async function approveRunCost(page, action, expectedVersion, allowSpend, sourceR
     assert.equal(run?.run_id, sourceRunId);
     assert.equal(run.version_uid, expectedVersion, 'source Run belongs to another version');
     assert.ok(['published', 'partial', 'failed', 'cancelled'].includes(run.state), 'source Run is not terminal');
-    assert.equal(fromStage ? request.start_from_run_id : request.reaudit_of_run_id, sourceRunId);
+    assert.equal(request.reaudit_of_run_id, sourceRunId);
   }
-  if (oneButton) {
-    // The dialog sits inside the control on the version page and at the page level on the queue; it is the only one either way.
-    return await agreeToRunCost(page, { estimate, request, allowSpend, confirm: contract.confirm, boundMs: action.bound_ms,
-      dialog: sourceRunId === null ? `${contract.root} ${contract.dialog}` : contract.dialog });
-  }
-  const input = contract.root + ' [data-cost-approval] input[type="text"]';
-  const read = await page.waitFor(`(() => { const e=document.querySelector(${JSON.stringify(input)}); return e && !e.disabled && !e.closest('fieldset')?.disabled && e.getClientRects().length ? {value:e.value} : null; })()`,
-    { boundMs: action.bound_ms, what: 'prefilled cost ceiling' });
-  assert.ok(read.ok, 'cost estimate never produced an editable finite cap');
-  const approval = costApprovalFromEstimate(estimate, request, action.scope, read.value.value);
-  assert.ok(approval.provider_mode === 'recorded' || allowSpend === true, 'live cost approval requires explicit --allow-spend');
-  const checkbox = contract.root + ' [data-cost-approval] input[type="checkbox"]';
-  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(checkbox)})?.checked`), false, 'cost approval was preselected');
-  await page.click(checkbox);
-  await page.settle({ settleMs: 100, timeoutMs: 700 });
-  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(checkbox)})?.checked`), true, 'cost agreement did not persist');
-  return approval;
+  // The dialog sits inside the control on the version page and at the page level on the queue; it is the only one either way.
+  return await agreeToRunCost(page, { estimate, request, allowSpend, confirm: contract.confirm, boundMs: action.bound_ms,
+    dialog: sourceRunId === null ? `${contract.root} ${contract.dialog}` : contract.dialog });
 }
 
 /**
@@ -1191,7 +1110,7 @@ export async function runWritePhase({
       if (action.result === null) continue;
       const starts = findAll('POST', action.result.source_run_id === undefined
         ? COST_SCOPES[action.scope].startPath
-        : `/runs/${action.result.source_run_id}/${action.result.start_stage_id === undefined ? 'reaudit' : 'start-from-stage'}`);
+        : `/runs/${action.result.source_run_id}/reaudit`);
       try {
         assert.ok(starts.length > 0, 'cost agreement was not followed by the declared start');
         for (const start of starts) assertCostApprovedStart(action.result, start);

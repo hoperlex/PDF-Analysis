@@ -24,7 +24,8 @@ fail the step. Recorded mode is required unless `--allow-spend` explicitly permi
 because an unmetered click starts the run at once, a live origin (known from an earlier run) is refused BEFORE the button is pressed.
 No provider mode is selected or replaced by the harness.
 
-The closed `approve_run_cost` action supports `run` and `run_from_stage`. The current manifest has ordinary starts, including two
+The closed `approve_run_cost` action supports `run` only: a start, and the queue's re-audit that names its captured source Run. The scope of the retired
+start from a stage (`run_from_stage`) went with its steps (`RUN-RESTART-01`), and a restart has none (see «Restart of an ended run»). The current manifest has ordinary starts, including two
 historical pending AR v1 steps. Their pending status is preserved; this update does not activate those older steps. Browser
 execution of these approval actions remains **UNVERIFIED**.
 
@@ -742,39 +743,47 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | «Нормы» | designate a snapshot, search, catalogue + filter | an unqualified snapshot has no button; an expert has no designation; an empty query |
 | exports | a run's CSV and Excel (the saved file is read) | admin-only is refused `permission_denied` |
 | «Очередь», «Диспетчер» | pause, a waiting run, priority, cancel, re-audit, resume; worker intake off and on | an expert has no priority or pause; 500 is out of range |
-| the run page, «Запустить с этапа» | the first run is continued from «Анализ текста»: the estimate names the reused and the computed stages, the consent is given, the new run is started through the source run's door and ends `published` with the source's findings | a run that was cancelled while it waited has nothing to take: the price is refused `422 analysis_input_invalid` and nothing is started; the first run is read again and carries no mark of a start from a stage |
+| the run page, «Перезапустить с этого этапа» | **none: the price, the consent and the restart cannot be reached on this stand** (the gap, below) | a run that was cancelled while it waited is offered the restart from the chip «Текст»; its price is refused `422 analysis_input_invalid` / `restart_source_not_stage_layout`, the dialog says so and sends nothing; the cancelled run is read again, unchanged and still offered the restart; the first run, `published`, is offered no restart |
 | «Память решений» (the fourth «Тип» of «База знаний») | the tab is pressed and lists the case the first decision was captured as; the case is opened; «Отозвать» with a closed reason (pressed twice: one keyed `POST`); the list under «Отозвано»; «Вернуть» (pressed twice: one keyed `POST`) | a withdrawal without a reason is a held button; «Действует» holds nothing of the withdrawn case and says the selection is empty; an expert reads the case and is offered no withdrawal control and no status line (the viewer is not walked: `D-650`) |
 | account | profile, password change, sign-out, version history | a surname is required; mismatch and wrong current password; the old pass is refused after a change |
 | «Пользователи» | archive, restore, reset password | a repeat that differs |
 
-### «Запустить с этапа» (`UI-A-60`, lane J4, `D-412`; the way in moved by `RUN-SCREEN-01a`, `WEB-INT-1`)
+### Restart of an ended run (`RUN-RESTART-01`, lane L4; R-155a…R-155i)
 
-Three steps after `worker-takes-new-work-again` (the worker takes work, dispatch is open) walk `docs/program/RUN-FROM-STAGE-01.md` on the
-recorded provider: `run-from-stage-refused-for-a-run-that-never-ran`, `run-from-stage-takes-the-earlier-stages-of-the-first-run` and
-`run-from-stage-leaves-the-first-run-as-it-was` (`FROM_STAGE_STEPS` in `test_pc01_journey_conformance.py` pins their names, cases and what each
-asserts). The start is no longer a button of the run page: a chip of the rail opens «Этапы анализа раздела» and the control sits in that modal under the
-words «Запустить с этого этапа». Both action steps therefore press `[data-run-chip="text"]` and then `[data-run-start-from-stage="offer"]`; the chip «Текст»
-covers one startable stage, so there is no stage select (`[data-start-from-stage-only="text_analysis"]`) and the estimate is read as the dialog opens.
-The action step reads the source's published finding count off its own page, waits for the plan the server answers (the three stages taken,
-«Анализ текста» computed), gives the cost consent through the `approve_run_cost` scope `run_from_stage` (the driver first holds the stage the dialog
-shows, inside the open modal, to the stage it approves -- `assertFromStageDialogShows` -- then observes the estimate and holds the request to
-`{version_uid, start_from_run_id, start_stage_id}` and the start to `{stage_id, cost_consent}` on `POST /runs/{source}/start-from-stage`),
-waits for the NEW run's page, opens the dialog on its chip «Подготовка» (the three reused stages are that one chip) and holds the page to: the line
-«Запущен с этапа 4 … из прогона <source>» with its link, `data-chip-reused` on the chip «Подготовка» and «из прогона» in place of its duration in the
-rail, «из прогона» in the duration cell of its three rows in the dialog's table (not «0 ms»), `published` within the bound and the same number of
-findings as the source. The refusal drives the dialog on the run the queue steps cancelled: it ended, so its chip offers the start, but it never began
-a stage, so the server refuses the price (`source_stage_not_completed` on `source_preparation`); the first stage cannot be tried because no chip's
-dialog offers it. The third step reads the first run cold and holds it to no mark of a start from a stage in the rail or in the dialog opened on
-«Подготовка». Browser execution of these steps after the move to the chips is **UNVERIFIED** (WEB-INT-1 ran no browser).
+«Перезапустить с этого этапа» (`restartRun`, `POST /runs/{run_id}/restart`) replaced «Запустить с этого этапа» (the start from a stage of `RUN-FROM-STAGE-01`,
+`UI-A-60`, `D-412`; the operation `startRunFromStage` stays in the API and no step presses it any more, its control `web/src/features/start-run-from-stage` is gone).
+It is a button in the dialog «Этапы анализа раздела» that a chip of the rail opens, one for each of the eight chips, and it is offered to an expert or an
+administrator for a run that ENDED `partial`, `failed` or `cancelled` and has not been replaced (`replaced_by_run_id`). It opens its confirmation in place
+(`[data-run-restart="dialog"][data-restart-point=<chip>]`, no stage select: the chip is the point), reads the source run and asks the price of the chips a restart
+computes (`POST /runs/cost-estimate` with `{version_uid, start_from_run_id, restart_point}`), and, after the consent, sends `{restart_point, cost_consent}`.
 
-Measured 2026-11-09, lane J4, the 0.19.1 tree plus the lane, one `local-stand.sh` stand (no `LANE_C4`), `--phase write --steps <every step not
-named `cmp-*`>` (87 of 134 checked, 33 pending, 14 `cmp-*` left out, 0 findings, about 3 minutes): the three steps are green, the new run published
-**3 findings, as the source**, its rail marked three stages and the details table read «из прогона» for them; then, with a SECOND project made through
-the API (`D-421`), the read walk at 1280 px and at 390 px: 35 of 35 routes clean each, 0 console errors, 0 React #418, no overflow
-(`.local/evidence/lane-j4-walk-2026-11-09/final2`). Two things the first walk of the lane found and the code now carries: the driver took Next's RSC
-prefetch of the source run's link (`GET /projects/.../runs/<id>?_rsc=`) for the run's status, which made `queue-reaudit-the-cancelled-run` red on any
-built stand (it now takes the exchange whose body is that run); and `version-comparison` (the side menu's `/dashboard` with `?project=`) and `review`
-(the lazy crop of an image block) made calls the routes did not declare.
+Three steps follow `worker-takes-new-work-again` (`RESTART_STEPS` in `test_pc01_journey_conformance.py` pins their names, cases, control and what each asserts, and
+`restart_findings` has a negative control for every assertion):
+
+| step | run | what it presses | what it asserts |
+|---|---|---|---|
+| `run-restart-refused-for-a-run-without-a-stage-layout` (refused) | the run the queue steps cancelled while it waited (`queued_run_id`, `cancelled`: the one run of the journey a restart is offered for) | the chip `[data-run-chip="text"]`, then `[data-run-restart="offer"]` «Перезапустить с этого этапа» | `GET /runs/{run_id}` 200; `POST /runs/cost-estimate` 422 `analysis_input_invalid`, `details.reason` `restart_source_not_stage_layout`, asked once with `restart_point` `text`; the confirmation of the chip's own point is in the chip's dialog, says «…без раскладки моделей по этапам…» and «…повторите прогон», holds «Перезапустить» disabled and draws no plan, no consent and no select; **no `POST /runs/{run_id}/restart`** |
+| `run-restart-leaves-the-cancelled-run-as-it-was` (refused) | the same cancelled run, read cold after the refusal (`R-155g`: a restart that does not happen leaves its source as it was) | the chip `[data-run-chip="text"]`, nothing else | `GET /runs/{run_id}` 200; the outcome still says «Ничего не опубликовано» (`[data-run-outcome="cancelled"]`); the chip's dialog still offers «Перезапустить с этого этапа»; no `[data-run-replaced]` notice («Прогон перезапущен») and no open confirmation; **no `POST /runs/{run_id}/restart`** |
+| `run-restart-is-not-offered-for-a-published-run` (refused) | the first run of the journey, `published` | the chip `[data-run-chip="text"]` | the dialog is drawn (`[data-fact-row="state"]` in it), the outcome says «Прогон опубликован: N находок», and no `[data-run-restart]` of any kind is on the page; **no `POST /runs/{run_id}/restart`** |
+
+The manifest still holds 142 write steps (the pin in `test_pc01_journey_section.py`): these three stand where the three of the retired start from a stage stood.
+
+**Why the refusal and not a restart: the recorded gap.** This stand (`local-stand.sh`) freezes no stage plan on any run: the layout switch needs the database provider
+source and the stand runs on the environment one, and it runs the plain analysis (`AUDITMANAGER_EXTENDED_ANALYSIS=0`, because no recording holds the extended review).
+The server refuses the price of a restart of such a run before any figure (`restart_source_not_stage_layout`; `restart_source_not_v2` would follow), so the price, the plan
+rows (`[data-restart-taken]`, `[data-restart-computed]`), the consent and the restart that makes the new run (202, and the source deleted when it publishes) are **not walked
+by this journey**, and no step declares `restartRun`: it would need a run started under the stage layout and the extended review v2 and a recording for it, i.e. a stand
+this journey does not have, and a faked server answer would prove nothing. They are covered by `tests/integration/runs/test_restart_command.py` and `test_restart_executor.py` (a restart from each of the eight chips,
+the command and the refusals, on a throwaway stand) and `web/tests/unit/restart-run`. The driver therefore has no consent scope for a restart: `costApprovalFromEstimate` refuses a request
+that names `start_from_run_id`, `start_stage_id` or `restart_point`, and `restart_findings` refuses a restart step that declares `restartRun` or `startRunFromStage`. The first step
+that can reach the price (a stand with the layout on and a recording of the extended review) adds that scope, the plan and consent assertions and the `restartRun` 202 with it.
+Browser execution of both steps is **UNVERIFIED** (this lane ran no browser and no stand); what is proved is the static conformance and `write.test.mjs`.
+
+History of the retired steps: `run-from-stage-refused-for-a-run-that-never-ran`, `run-from-stage-takes-the-earlier-stages-of-the-first-run` and
+`run-from-stage-leaves-the-first-run-as-it-was` were measured on 2026-11-09 (lane J4, the 0.19.1 tree, one `local-stand.sh` stand): green, the new run published 3 findings,
+as the source. That walk also found two things the code still carries: the driver took Next's RSC prefetch of the source run's link (`GET /projects/.../runs/<id>?_rsc=`) for the
+run's status, which made `queue-reaudit-the-cancelled-run` red on any built stand (it now takes the exchange whose body is that run); and `version-comparison` (the side menu's
+`/dashboard` with `?project=`) and `review` (the lazy crop of an image block) made calls the routes did not declare (evidence `.local/evidence/lane-j4-walk-2026-11-09/final2`).
 
 ### «Память решений» (`D-495`, lane MEM-JOURNEY, `D-503`)
 
