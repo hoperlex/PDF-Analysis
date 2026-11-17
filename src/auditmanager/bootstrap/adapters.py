@@ -208,18 +208,11 @@ def _carried_from_view(origin: Any) -> DecisionCarriedFromView | None:
     """`UI-A-73`: the wire view of a carried decision's origin; ``None`` for a decision made directly."""
     if origin is None:
         return None
-    # `RUN-RESTART-01` (contract 1.59.0): the one mapping lives with the schema (``decision_carried_from_view``), which also answers the run that allocated
-    # the source finding and the mode of the carry (``restart``); this reader never restates it. A tree that has not got it yet (the decisions lane
-    # merges separately) maps the four fields it always did.
-    from auditmanager.api.schemas import decisions as schemas
+    # `RUN-RESTART-01` (contract 1.59.0): the one mapping lives with the schema; it also answers the run that allocated the source
+    # finding and the mode of the carry (``restart``), so this reader never restates it.
+    from auditmanager.api.schemas.decisions import decision_carried_from_view
 
-    mapper = getattr(schemas, "decision_carried_from_view", None)
-    if mapper is not None:
-        return mapper(origin)
-    return DecisionCarriedFromView(
-        decision_id=origin.decision_id, finding_uid=origin.finding_uid,
-        version_uid=origin.version_uid, version_ordinal=origin.version_ordinal,
-    )
+    return decision_carried_from_view(origin)
 
 
 def _with_carried_origin(session: Session, views: Sequence[Any]) -> list[Any]:

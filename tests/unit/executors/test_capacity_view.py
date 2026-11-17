@@ -149,6 +149,9 @@ def _view(monkeypatch: pytest.MonkeyPatch, *, state: str, revision: str | None, 
         def cost(self, session: Any, run_id: str) -> None:
             return None
 
+        def is_deleted(self, session: Any, run_id: str) -> bool:  # RUN-RESTART-01: `replaced_by` asks it of a terminal run
+            return False
+
     asked: list[str] = []
 
     def run_queue_reason(session: Any, run_id: str) -> str | None:
