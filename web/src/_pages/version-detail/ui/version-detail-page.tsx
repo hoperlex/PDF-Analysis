@@ -31,6 +31,9 @@
  * `UIP-G-09`: the page's header carries no code and no links: the frame names the document and its version, the version's code is in
  * «Сведения о версии и файле», and the way up is the frame's row.
  *
+ * `UIP-S04-03`: the first card of the page is «Последний прогон» (`widgets/run-list`): the version's last run, the row of its stages, the way into
+ * the run and «Запустить» with its line under it; the table of runs below it is the table alone.
+ *
  * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind`
  * `comparison_pdf`) carries the mark «PDF без пакета портала» in its panel; its run list
  * offers the ordinary cost-approved section start.
@@ -49,7 +52,7 @@ import {
   looksLikeVersionUid,
   useDocumentVersion,
 } from '@/entities/document-version';
-import { RunList } from '@/widgets/run-list';
+import { LastRunCard, RunList } from '@/widgets/run-list';
 import { VersionClassification } from '@/widgets/version-classification';
 import { DocumentContext, PDF_OPEN_PARAM } from '@/widgets/document-context';
 import type { PdfDrawerProps } from '@/widgets/document-context';
@@ -121,41 +124,50 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
         />
       ) : null}
       {version.data === undefined ? null : (
-        <div className={styles.columns}>
-          <div className={styles.stack}>
-            <section className={styles.panel} aria-label="Стадия и раздел">
-              <VersionClassification
-                address={{
-                  projectUid: version.data.project_uid,
-                  documentUid: version.data.document_uid,
-                  versionUid: version.data.version_uid,
-                }}
-                roles={roles}
+        <div className={styles.stack}>
+          {/* `UIP-S04-03`: the first card of «Инфо»: the last run, its stages, «Запустить»; the table of runs below is the table alone. */}
+          <LastRunCard
+            projectUid={ownerProjectUid}
+            versionUid={versionUid}
+            uploadKind={version.data.upload_kind}
+            onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
+          />
+          <div className={styles.columns}>
+            <div className={styles.stack}>
+              <section className={styles.panel} aria-label="Стадия и раздел">
+                <VersionClassification
+                  address={{
+                    projectUid: version.data.project_uid,
+                    documentUid: version.data.document_uid,
+                    versionUid: version.data.version_uid,
+                  }}
+                  roles={roles}
+                />
+              </section>
+              {/* The file's identity and manifest are for proof, not for the first look: one click away. */}
+              <details className={styles.facts} data-version-facts="">
+                <summary>Сведения о версии и файле</summary>
+                <VersionPanel version={version.data} />
+              </details>
+            </div>
+
+            <section className={styles.panel} aria-labelledby="version-runs-title">
+              <h2 id="version-runs-title">Прогоны</h2>
+              <p className="am-note">
+                <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
+                что изменилось в анализе одной и той же версии.
+                {' '}<Link href={routes.versionComparison()}>Сравнение версий</Link>{' · '}
+                <Link href={routes.stageComparison()}>Сравнение стадий</Link>
+              </p>
+              <RunList
+                projectUid={ownerProjectUid}
+                versionUid={versionUid}
+                sectionCode={version.data.classification?.section_code}
+                uploadKind={version.data.upload_kind}
+                startElsewhere
               />
             </section>
-            {/* The file's identity and manifest are for proof, not for the first look: one click away. */}
-            <details className={styles.facts} data-version-facts="">
-              <summary>Сведения о версии и файле</summary>
-              <VersionPanel version={version.data} />
-            </details>
           </div>
-
-          <section className={styles.panel} aria-labelledby="version-runs-title">
-            <h2 id="version-runs-title">Прогоны</h2>
-            <p className="am-note">
-              <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
-              что изменилось в анализе одной и той же версии.
-              {' '}<Link href={routes.versionComparison()}>Сравнение версий</Link>{' · '}
-              <Link href={routes.stageComparison()}>Сравнение стадий</Link>
-            </p>
-            <RunList
-              projectUid={ownerProjectUid}
-              versionUid={versionUid}
-              sectionCode={version.data.classification?.section_code}
-              uploadKind={version.data.upload_kind}
-              onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
-            />
-          </section>
         </div>
       )}
     </PageShell>
