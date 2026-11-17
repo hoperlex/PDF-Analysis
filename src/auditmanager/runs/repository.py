@@ -73,7 +73,7 @@ _RUN_COLUMNS = (
     "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id, "
     "connection_revision_id, norm_retrieval_set_id, preset_revision_id, "
     "binding_state, executor_group_revision_id, routing_rule_revision_id, wait_reason, waiting_since, "
-    "started_by_user_uid, started_from_run_id, start_stage_id, stage_plan, publication_mode"
+    "started_by_user_uid, started_from_run_id, start_stage_id, stage_plan, publication_mode, restart_point"
 )
 
 _INSERT_RUN = text(
@@ -83,13 +83,13 @@ _INSERT_RUN = text(
         norms_snapshot_id, provider_mode, frozen_input_digest, command_id,
         reaudit_of_run_id, connection_revision_id, norm_retrieval_set_id, preset_revision_id,
         binding_state, executor_group_revision_id, routing_rule_revision_id, started_by_user_uid,
-        started_from_run_id, start_stage_id, stage_plan, publication_mode
+        started_from_run_id, start_stage_id, stage_plan, publication_mode, restart_point
     ) VALUES (
         :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
         :prompt_bundle_id, :norms_snapshot_id, :provider_mode, :frozen_input_digest, :command_id,
         :reaudit_of_run_id, :connection_revision_id, :norm_retrieval_set_id, :preset_revision_id,
         :binding_state, :executor_group_revision_id, :routing_rule_revision_id, :started_by_user_uid,
-        :started_from_run_id, :start_stage_id, CAST(:stage_plan AS jsonb), :publication_mode
+        :started_from_run_id, :start_stage_id, CAST(:stage_plan AS jsonb), :publication_mode, :restart_point
     )
     """
 )
@@ -279,6 +279,13 @@ _SELECT_STAGE_RESULTS = text(
 )
 
 
+def _constraint_of(exc: DBAPIError) -> str | None:
+    """The name of the constraint a unique/check violation names (psycopg's diagnostics), or ``None``."""
+    diag = getattr(getattr(exc, "orig", None), "diag", None)
+    name = getattr(diag, "constraint_name", None)
+    return None if name is None else str(name)
+
+
 def translate_refusal(exc: DBAPIError) -> DomainError:
     """Map a database refusal on SQLSTATE, never on message text (P02 §3.2)."""
     sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None) or getattr(
@@ -363,6 +370,10 @@ class RunRow:
     #: findings only, as every run did before 0064) or ``one_list`` (the extended-review candidates that pass gate v2 become findings as well).
     #: Written once at INSERT and frozen by the database; ``one_list`` needs a ``stage_plan`` (``ck_audit_run_publication_mode_stage_plan``).
     publication_mode: str = "text_only"
+    #: `RUN-RESTART-01` (migration 0071, `R-155a`): the stage chip a **restart** created this run from (one of the eight ``RestartPoint``
+    #: words), or ``None`` for every other run. Its source is ``started_from_run_id``; ``start_stage_id`` is then ``None`` (the database holds
+    #: that they exclude each other). Written once by ``create`` and frozen.
+    restart_point: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -444,6 +455,7 @@ def _run_row(row: Any) -> RunRow:
         start_stage_id,
         stage_plan,
         publication_mode,
+        restart_point,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -476,6 +488,7 @@ def _run_row(row: Any) -> RunRow:
         start_stage_id=start_stage_id,
         stage_plan=stage_plan,
         publication_mode=publication_mode,
+        restart_point=restart_point,
     )
 
 
@@ -520,6 +533,7 @@ class RunRepository:
         start_stage_id: str | None = None,
         stage_plan: Mapping[str, Any] | None = None,
         publication_mode: str | None = None,
+        restart_point: str | None = None,
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
 
@@ -534,6 +548,10 @@ class RunRepository:
         ``started_from_run_id`` and ``start_stage_id`` (`R-151i`, migration 0060) are given together by
         ``start_run_from_stage`` and by nothing else: the terminal run whose stage outputs this run reuses and the first
         stage it computes. The executor reads them back from the row; the database refuses one without the other.
+
+        ``restart_point`` (`RUN-RESTART-01`, migration 0071) is given with ``started_from_run_id`` by ``restart_run`` and by nothing
+        else, with ``start_stage_id`` left ``None``; the database refuses a restart row without a starter and a command, and a second
+        restart of one source while the first has not ended (mapped here to ``conflict`` / ``restart_in_progress``).
 
         ``norms_snapshot_id`` is the snapshot the creating command pinned
         (`W55A-PIN-01`): ``start_audit_run`` and ``reaudit_run`` read the current one in
@@ -590,9 +608,12 @@ class RunRepository:
                     "start_stage_id": start_stage_id,
                     "stage_plan": None if stage_plan is None else json.dumps(dict(stage_plan), sort_keys=True),
                     "publication_mode": publication_mode,
+                    "restart_point": restart_point,
                 },
             )
         except DBAPIError as exc:
+            if _constraint_of(exc) == "ux_audit_run_active_restart":
+                raise DomainError(ErrorCode.CONFLICT, conflict_reason="restart_in_progress", aggregate_type="AuditRun") from exc
             raise translate_refusal(exc) from exc
         append_execution_event(
             session, event_type="audit_run.created", aggregate_type="AuditRun",

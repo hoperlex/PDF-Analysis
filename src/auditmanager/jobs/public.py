@@ -91,6 +91,9 @@ from auditmanager.jobs.extended_review import extended_context_unit
 
 __all__.append("extended_unit")
 __all__.append("extended_context_unit")
+from auditmanager.jobs.extended_review import extended_context_unit_in_chain, extended_phase_in_chain, extended_unit_in_chain  # RUN-RESTART-01
+
+__all__.extend(["extended_context_unit_in_chain", "extended_phase_in_chain", "extended_unit_in_chain"])
 
 from auditmanager.jobs.extended_review import has_ambiguous_provider_effect
 

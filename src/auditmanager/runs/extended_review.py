@@ -30,6 +30,7 @@ from auditmanager.runs.norm_stage_accounting import NO_NORM_NAMED_REASONS, NORM_
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.stage_plan import call_journal_columns, cell_binding, settings_of
 from auditmanager.runs.stage_layout import ENSEMBLE_ROLES, parse_plan, role_of_phase, row_of_phase
+from auditmanager.runs.restart import (REASON_REPLY_MISSING, REASON_REQUEST_CHANGED, POINT_OF_ROW, RestartRefused, RestartSpec)
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId
 from auditmanager.storage.public import parse_blob_id
@@ -264,9 +265,40 @@ def _saved_response(store, row: dict, request: ModelRequest, binding, *, dispatc
         raise _refuse("extended_saved_reply_invalid") from None
 
 
+def _replay_only(restart, phase):
+    """The chip whose call this is when a restart may only replay it, else ``None`` (a call of the chosen chip or a later one, and every call of a
+    run that is no restart, is made live exactly as before and never looks in the chain)."""
+    if restart is None:
+        return None
+    identity = phase.split(":", 1)[1] if phase.startswith(("v2:", "v3:")) else phase
+    row = row_of_phase(identity)
+    return POINT_OF_ROW.get(row) if restart.replays_row(row) else None
+
+
+def _replayed_response(store, row, request, binding, replay_chip, *, dispatched_sha256=None):
+    """The saved reply of ``row``. For a call a restart may only replay, a reply that cannot be read back as this call's (the blob is gone, its digest or
+    the row's request, model or provider mode is another) is ``restart_reply_missing`` at its chip -- the refusal that escapes the workflow -- and not the
+    ``extended_saved_reply_invalid`` the workflow would catch and save as a partial result."""
+    try:
+        return _saved_response(store, row, request, binding, dispatched_sha256=dispatched_sha256)
+    except DomainError:
+        if replay_chip is None:
+            raise
+        raise RestartRefused(REASON_REPLY_MISSING, replay_chip) from None
+
+
+def _no_replay(session, *, restart, chip, phase):
+    """A restart that cannot take a reply for a call it may only replay: the refusal that escapes the workflow (``RestartRefused``)."""
+    from auditmanager.jobs.public import extended_phase_in_chain
+    answered = extended_phase_in_chain(session, run_ids=restart.ancestors, phase=phase)
+    session.commit()
+    raise RestartRefused(REASON_REQUEST_CHANGED if answered else REASON_REPLY_MISSING, chip)
+
+
 def _call(session, *, run_id, authority, jobs, journal, binding, request, phase, source_sha256,
-          meter, store, publish, checkpoint, global_unknown_fence=False, dispatch_receipt=None):
+          meter, store, publish, checkpoint, global_unknown_fence=False, dispatch_receipt=None, restart=None):
     checkpoint("extended_before_call")
+    replay_chip = _replay_only(restart, phase)
     if getattr(binding, "cells", None) is not None:
         # `HOSTS-LAYOUT-01` (`R-133`): a planned run's calls go through the binding of their cell (``runs.stage_plan.cell_binding``). The
         # run-level binding is the text cell's, and a block or a norm call made on it would run on the wrong model: refused, not skipped.
@@ -278,13 +310,21 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
         from auditmanager.jobs.public import extended_context_unit
         previous = extended_context_unit(session, run_id=run_id, phase=phase,
             source_sha256=source_sha256, base_request_sha256=base_request_sha256)
+        if previous is None and replay_chip is not None:
+            from auditmanager.jobs.public import extended_context_unit_in_chain
+            previous = extended_context_unit_in_chain(session, run_ids=restart.ancestors, phase=phase,
+                source_sha256=source_sha256, base_request_sha256=base_request_sha256)
+            if previous is None:
+                _no_replay(session, restart=restart, chip=replay_chip, phase=phase)
         session.commit()
         if previous is not None:
+            if replay_chip is not None:
+                checkpoint("extended_reply_replayed")  # a replay makes no call: the sign of life is its own
             if dispatch_receipt is not None:
                 dispatch_receipt.update(request_sha256=previous["request_sha256"], replayed=True,
                     human_reference_receipt=previous["parameters"].get("human_reference_receipt", {}))
-            return _saved_response(store, previous, request, binding,
-                                   dispatched_sha256=previous["request_sha256"]), True
+            return _replayed_response(store, previous, request, binding, replay_chip,
+                                      dispatched_sha256=previous["request_sha256"]), True
         from auditmanager.precedents.public import candidate_context_request
         # Current status locks live through provider-effect registration, then are
         # released before network I/O. No runner-side late context is appended.
@@ -299,10 +339,19 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
         **({} if planned else {"connection": None if binding.call is None else binding.call.connection_revision_id})})
     saved = extended_unit(session, run_id=run_id, unit_key=key, source_sha256=source_sha256, phase=phase,
                           **({"replay_received_only": True} if flow_context else {}))
+    if saved is None and replay_chip is not None:
+        from auditmanager.jobs.public import extended_unit_in_chain
+        saved = extended_unit_in_chain(session, run_ids=restart.ancestors, unit_key=key)
+        if saved is None:
+            _no_replay(session, restart=restart, chip=replay_chip, phase=phase)
     if not flow_context or saved is not None:
         session.commit()  # no read/authority lock survives external Blob I/O
     if saved is not None:
-        return _saved_response(store, saved, request, binding), True
+        if replay_chip is not None:
+            checkpoint("extended_reply_replayed")  # a replay makes no call: the sign of life is its own
+        return _replayed_response(store, saved, request, binding, replay_chip), True
+    if replay_chip is not None:  # pragma: no cover - ``_no_replay`` raised above; a chip that may only replay never reaches a live call
+        raise RestartRefused(REASON_REPLY_MISSING, replay_chip)
     if global_unknown_fence:
         from auditmanager.jobs.public import has_ambiguous_provider_effect
         if has_ambiguous_provider_effect(session,run_id=run_id):
@@ -957,8 +1006,14 @@ def _semantic_candidates(session, observations, snapshot_id, *, checkpoint, warn
 
 def run_extended_review(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
                         publish, progress, checkpoint, observations_document, snapshot_id=None, profile_sha256=None,
-                        policy=None, bind_native=None, resume_state=None, visual_only=False) -> dict:
-    """Dispatch the immutable accepted v1/v2 plan or the fresh windowed v3 workflow."""
+                        policy=None, bind_native=None, resume_state=None, visual_only=False, restart=None) -> dict:
+    """Dispatch the immutable accepted v1/v2 plan or the fresh windowed v3 workflow.
+
+    ``restart`` (`RUN-RESTART-01`, a :class:`~auditmanager.runs.restart.RestartSpec`) is given for the run of a restart and only for the v2 workflow
+    (the command refuses any other): the calls of the chips before the restart point are taken from the source chain and never made, and one that
+    cannot be taken raises :class:`~auditmanager.runs.restart.RestartRefused`, which the workflow does not catch."""
+    if restart is not None and not (isinstance(policy, dict) and policy.get("plan_version") == "extended-review-v2"):
+        raise RestartRefused("restart_source_not_v2", "text")
     if isinstance(policy, dict) and policy.get("plan_version") == "extended-review-v3":
         return _run_workflow_v3(session,run=run,authority=authority,jobs=jobs,journal=journal,binding=binding,
             outputs=outputs,store=store,meter=meter,publish=publish,progress=progress,checkpoint=checkpoint,
@@ -968,7 +1023,7 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
         return _run_workflow_v2(session,run=run,authority=authority,jobs=jobs,journal=journal,binding=binding,
             outputs=outputs,store=store,meter=meter,publish=publish,progress=progress,checkpoint=checkpoint,
             observations_document=observations_document,snapshot_id=snapshot_id,profile_sha256=profile_sha256,
-            bind_native=bind_native,full_document=policy.get("max_blocks") == "all",policy=policy)
+            bind_native=bind_native,full_document=policy.get("max_blocks") == "all",policy=policy,restart=restart)
     from auditmanager.analysis.public import read_artifact
     state: dict[str, Any] = {"format": FORMAT, "preliminary": True, "section": "unknown",
         "observations": [], "sources": [], "warnings": [], "coverage": {
@@ -1515,11 +1570,12 @@ def _flow_comprehensive_review(*, run, model_id, section, state, pages, block_it
 
 
 def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings=None,
-        flow_policy=None):
+        flow_policy=None, restart=None, store=None):
     """Search and review every candidate-bearing observation in bounded model calls."""
     if flow_policy is not None:
         return _flow_norm_verification(session=session, run=run, model_id=model_id, section=section,
-            state=state, snapshot_id=snapshot_id, call=call, phase=phase, checkpoint=checkpoint, settings=settings)
+            state=state, snapshot_id=snapshot_id, call=call, phase=phase, checkpoint=checkpoint, settings=settings,
+            restart=restart, store=store)
     from auditmanager.analysis.public import build_norm_review_request
     items = state["observations"]
     state["warnings"].extend(_norms(session, items, snapshot_id,
@@ -1648,15 +1704,79 @@ def _plan_norm_queries_with_model(*, state, items, snapshot_id, model_id, sectio
     return plans
 
 
-def _flow_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings):
+#: `RUN-RESTART-01`. What a norm lookup answered for each observation, saved with the run's extended review (``norm_lookup_results``) so that a
+#: restart from a chip after the norms takes the answers instead of asking the corpus again: a search that timed out (1.2 s), an embedder that is
+#: not the same one and a newer embedding build would otherwise give the norm review another question and the saved reply would not replay.
+NORM_LOOKUP_RESULTS = "norm_lookup_results"
+_NORM_LOOKUP_VERSION = "norm-lookup-results/1"
+#: The fields of an observation that the lookup sets (``_norms``); a replay writes exactly these and nothing else.
+_NORM_LOOKUP_FIELDS = ("norm_status", "norm_reason", "norm_candidates", "norm_lookup_method", "norm_query_plan", "norm_review_status")
+
+
+def _norm_lookup_results(items, warnings, receipts) -> dict:
+    """The lookup's answer, taken right after ``_norms`` and before the review adds its own fields."""
+    return {"version": _NORM_LOOKUP_VERSION, "warnings": sorted(set(warnings)), "receipts": deepcopy(receipts),
+        "items": {item["observation_id"]: {field: deepcopy(item[field]) for field in _NORM_LOOKUP_FIELDS if field in item} for item in items}}
+
+
+def _saved_norm_lookup_results(session, *, store, run_ids):
+    """The lookup results of the nearest run of the chain whose saved extended review holds them, else ``None`` (a run made before `RUN-RESTART-01`)."""
+    repository = RunRepository()
+    for run_id in run_ids:
+        stage = next((row for row in repository.stage_results(session, run_id) if row.stage_id == "text_analysis"), None)
+        ref = None if stage is None else next((r for r in stage.artifacts if r.get("role") == EXTENDED_REVIEW_ROLE), None)
+        session.commit()
+        if ref is None:
+            continue
+        raw = store.read(parse_blob_id(ref["blob_id"]), verify=True)
+        if len(raw) != ref["size_bytes"] or hashlib.sha256(raw).hexdigest() != ref["sha256"]:
+            raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=EXTENDED_REVIEW_ROLE)
+        try:
+            saved = json.loads(raw)["result"].get(NORM_LOOKUP_RESULTS)
+        except (ValueError, TypeError, KeyError, AttributeError):
+            raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=EXTENDED_REVIEW_ROLE) from None
+        if isinstance(saved, dict) and saved.get("version") == _NORM_LOOKUP_VERSION and isinstance(saved.get("items"), dict):
+            return saved
+    return None
+
+
+def _replay_norm_lookup(items, state, saved) -> None:
+    """Write a saved lookup's answers into the observations in place of asking the corpus: what ``_norms`` would have left on each item, its receipts and
+    its warnings. An observation the saved lookup does not know is a question the source never asked -- another one now -- and is refused as a changed
+    request at the norms (``restart_request_changed``): the lookup is never half replayed and half asked."""
+    if any(item["observation_id"] not in saved["items"] for item in items):
+        raise RestartRefused(REASON_REQUEST_CHANGED, "norms")
+    for item in items:
+        item.pop("norm_queries", None)
+        for field in _NORM_LOOKUP_FIELDS:
+            if field in saved["items"][item["observation_id"]]:
+                item[field] = deepcopy(saved["items"][item["observation_id"]][field])
+    state["norm_lookup_receipts"] = deepcopy(saved.get("receipts", []))
+    state["warnings"].extend(saved.get("warnings", []))
+    state[NORM_LOOKUP_RESULTS] = deepcopy(saved)
+
+
+def _flow_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint, settings,
+                            restart=None, store=None):
     """Resolver parity: a valid negative lookup is completed work, not a failed job."""
     from auditmanager.analysis.public import build_norm_review_request
     items = state["observations"]
     model_plans = _plan_norm_queries_with_model(state=state, items=items, snapshot_id=snapshot_id, model_id=model_id, section=section,
         settings=settings, run=run, call=call, phase=phase)
-    state["warnings"].extend(_norms(session, items, snapshot_id, full_document=True,
-        checkpoint=checkpoint, query_planning=True, strict_scope=True, model_plans=model_plans,
-        lookup_receipts=state.setdefault("norm_lookup_receipts", [])))
+    saved_lookup = None
+    if restart is not None and restart.replays_row("norms") and store is not None:
+        # The norms are a chip this restart takes: the lookup is replayed from the nearest run that saved it. None saved (a run made before this
+        # task) leaves the live lookup, and a norm review whose question then differs is refused at ``norms`` by its own replay (`restart_request_changed`).
+        saved_lookup = _saved_norm_lookup_results(session, store=store, run_ids=restart.ancestors)
+    if saved_lookup is not None:
+        _replay_norm_lookup(items, state, saved_lookup)
+        checkpoint("extended_norm_lookup_replayed")
+    else:
+        lookup_warnings = _norms(session, items, snapshot_id, full_document=True,
+            checkpoint=checkpoint, query_planning=True, strict_scope=True, model_plans=model_plans,
+            lookup_receipts=state.setdefault("norm_lookup_receipts", []))
+        state["warnings"].extend(lookup_warnings)
+        state[NORM_LOOKUP_RESULTS] = _norm_lookup_results(items, lookup_warnings, state["norm_lookup_receipts"])
     candidates = [item for item in items if item.get("norm_candidates")]
     for item in items:
         if item.get("norm_status") == "not_found":
@@ -1852,7 +1972,7 @@ def _received_reply(*, state, request, response, parse, call, identity, policy, 
 
 def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
         publish, progress, checkpoint, observations_document, snapshot_id, profile_sha256, bind_native=None,
-        window_context=None, full_document=False, policy=None):
+        window_context=None, full_document=False, policy=None, restart=None):
     from auditmanager.analysis.public import (read_artifact, prepare_native_page_sources,
         build_comprehensive_request, deterministic_extended_merge,
         build_norm_review_request, parse_norm_review)
@@ -1984,7 +2104,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 binding=_phase_binding(binding, identity),request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
                 source_sha256=state["source_sha256"],meter=meter,store=store,publish=publish,checkpoint=checkpoint,
                 global_unknown_fence=v3 or flow_approved,
-                **({"dispatch_receipt": dispatch_receipt} if flow_approved else {}))
+                **({"dispatch_receipt": dispatch_receipt} if flow_approved else {}),
+                **({"restart": restart} if restart is not None else {}))
         except DomainError as error:
             for failed_receipt in (receipt, cell_receipt, parameter_context_receipt, parameter_review_receipt):
                 if failed_receipt is not None:
@@ -2328,7 +2449,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             _full_norm_verification(session=session, run=run, **_kw(binding,"norms"),
                 section=section, state=state, snapshot_id=snapshot_id, call=call,
                 phase=phase, checkpoint=checkpoint,
-                **({"flow_policy": flow_policy} if flow_policy is not None else {}))
+                **({"flow_policy": flow_policy, "restart": restart, "store": store} if flow_policy is not None else {}))
         else:
             window=state["observations"][:40]
             if v3:
@@ -2407,6 +2528,15 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             and p.get("reason") not in {"no_corrections_requested","no_observations"} for p in state["procedures"])
         save("partial" if degraded else "completed")
         return state
+    except RestartRefused as refused:
+        # A restart that cannot take a reply it may only replay is not a partial result (`RUN-RESTART-01`): the procedures are closed as failed or
+        # skipped with the reason, the saved review says ``failed``, and the refusal leaves the workflow for the executor, which fails the run.
+        for procedure in state["procedures"]:
+            if procedure["status"]=="running": procedure.update(status="failed",reason=refused.reason)
+            elif procedure["status"]=="queued": procedure.update(status="skipped",reason="dependency_failed")
+        state["warnings"].append(refused.reason)
+        save("failed")
+        raise
     except (DomainError,ValueError,TypeError,KeyError) as error:
         reason=(error.detail_fields.get("reason") or (error.code.value if v3 else None)) if isinstance(error,DomainError) else _reply_refusal_code(error)
         if isinstance(error,ValueError) and str(error).endswith("_window_too_large"):
