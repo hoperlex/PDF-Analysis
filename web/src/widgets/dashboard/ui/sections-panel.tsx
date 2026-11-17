@@ -26,6 +26,13 @@
  * у которых …», `model/section-breakdown.ts`), shown as the heading's tooltip and said in the text a screen reader reads, so the
  * header is no longer hidden from assistive technology.
  *
+ * **The badge of a row wears the section's colour (`UIP-S01-03`, `UIP-G-17`).** `sectionColourVar(code)` is the one list the menu's
+ * dot and the section's heading read, so the table carries no colour of its own: the badge's outline is that token, set inline as
+ * `border-color` (the stylesheet's own outline is the neutral inert token, which is what the total row and «Без раздела» keep). It is
+ * not set through the custom property `sectionColourStyle` offers (the dot's way): the fake DOM of the live-mount instrument
+ * (`tests/unit/analysis-settings/live-render.ts`) has no `style.setProperty`, which React calls for a custom property, so a section
+ * row set that way could not be mounted by the tests that mount this panel with the dashboard.
+ *
  * **Every row carries the route that analyses its section.** `data-analysed-by` is
  * `PROJECT_SECTIONS`' `analysedBy` — the section's own text profile for all fifteen sections.
  * It is data, not
@@ -48,7 +55,7 @@ import Link from 'next/link';
 
 import { ErrorState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
-import { PROJECT_SECTIONS } from '@/entities/project';
+import { PROJECT_SECTIONS, sectionColourVar } from '@/entities/project';
 import type { ProjectSectionCode } from '@/entities/project';
 import { withNotRunFilter } from '@/entities/document-version';
 import type { SectionDocumentCount } from '@/shared/api';
@@ -131,6 +138,11 @@ function ColumnHead({ column, className }: { readonly column: SectionColumn; rea
   );
 }
 
+/** The badge of a section row: the section's own colour as the outline (`UIP-S01-03`). */
+function badgeStyle(code: ProjectSectionCode): { readonly borderColor: string } {
+  return { borderColor: sectionColourVar(code) };
+}
+
 export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
   const [selected, setSelected] = useState<ProjectSectionCode | null>(null);
   const result = summarizeSectionBreakdown(rows);
@@ -174,7 +186,7 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
                 aria-expanded={selected === section.code}
                 onClick={() => setSelected(selected === section.code ? null : section.code)}
               >
-                <span className={styles.badge}>{section.code}</span>
+                <span className={styles.badge} style={badgeStyle(section.code)}>{section.code}</span>
                 <span className={styles.name}>{section.name}</span>
               </button>
             ) : (
@@ -190,7 +202,7 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
                 href={routes.projectSection(projectUid, section.code)}
                 data-section-open={section.code}
               >
-                <span className={styles.badge}>{section.code}</span>
+                <span className={styles.badge} style={badgeStyle(section.code)}>{section.code}</span>
                 <span className={styles.name}>{section.name}</span>
               </Link>
             )}

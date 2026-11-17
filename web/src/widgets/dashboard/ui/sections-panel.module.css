@@ -159,15 +159,25 @@ a.rowLink {
   padding: var(--am-gap-xs) var(--am-gap);
 }
 
+/*
+ * `UIP-S01-03`: the code badge of a section row wears the section's colour, the one the menu's dot and the section's heading wear
+ * (`UIP-G-17`). The colour is not declared here: the markup sets the badge's `border-color` to the section's token
+ * (`sectionColourVar`), so the palette stays in `globals.css` and a theme changes the badge without a rule of its own. It is the
+ * badge's outline and not its fill: the palette's colours clear 3:1 against the surfaces as a graphic and are not an ink (a fill that
+ * carries text is the thing the palette's note rules out), so the code stays `--am-ink` on a neutral fill. The outline here is the
+ * neutral `--am-inert`: it is what the total row and «Без раздела» wear, the rows that belong to no section. The padding leaves 4 px
+ * each side so the widest code («EOM», 26 px) and the border fit the 40 px of a phone's badge column.
+ */
 .badge {
   display: inline-flex;
   justify-content: center;
   align-items: center;
   min-width: 40px;
-  padding: 2px 6px;
+  padding: 2px 4px;
+  border: 2px solid var(--am-inert);
   border-radius: var(--am-radius-sm);
-  background: var(--am-accent-light);
-  color: var(--am-accent-strong);
+  background: var(--am-surface-sunken);
+  color: var(--am-ink);
   font-size: var(--am-text-xs);
   font-weight: 800;
 }

@@ -15,11 +15,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { DashboardSummary, ProjectUid } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
-import { PROJECT_SECTIONS } from '@/entities/project';
-import { Dashboard } from '@/widgets/dashboard';
+import { PROJECT_SECTIONS, sectionColourStyle, sectionColourVar } from '@/entities/project';
+import { Dashboard, HomeSectionsOverview } from '@/widgets/dashboard';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
-import { parseRules } from '../styles/contrast';
+import { AA_NON_TEXT, AA_TEXT, THEMES, contrastRatio, palette, parseRules, scopedPalettes } from '../styles/contrast';
+import type { TokenName } from '../styles/contrast';
 import { newClient, renderWith } from '../screens/harness';
 import { sectionAudit } from './audit-counts';
 
@@ -249,5 +250,149 @@ describe('a section row opens the section in one click when a project is chosen'
     expect(declarations(css, '.rowLink::after').get('inset')).toBe('0');
     expect(declarations(css, '.metricLink').get('z-index')).toBe('1');
     expect(declarations(css, '.toggle').get('z-index')).toBe('1');
+  });
+});
+
+describe('UIP-S01-03: the code badge of a section row wears the section\'s colour', () => {
+  const css = module('widgets/dashboard/ui/sections-panel.module.css');
+  const globals = readFileSync(join(WEB_ROOT, 'src', 'app', 'globals.css'), 'utf8');
+  const PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B' as ProjectUid;
+
+  /**
+   * The outline each badge in `markup` is set to, by the text it carries (a section code, `Σ` or `—`); `null` for a badge with no
+   * colour of its own, which wears the stylesheet's neutral outline.
+   */
+  function badgeColours(markup: string): Map<string, string | null> {
+    const found = new Map<string, string | null>();
+    for (const match of markup.matchAll(/<span class="_badge_[a-z0-9]+"(?: style="border-color:([^"]*)")?>([^<]*)<\/span>/gu)) {
+      found.set(match[2] ?? '', match[1] ?? null);
+    }
+    return found;
+  }
+
+  const dashboard = (projectUid: ProjectUid | null): string => {
+    const client = newClient();
+    client.setQueryData(queryKeys.dashboard.summary(projectUid), SUMMARY);
+    return renderWith(client, createElement(Dashboard, { projectUid }));
+  };
+  const frontDoor = (projectUid: ProjectUid | null): string => {
+    const client = newClient();
+    client.setQueryData(queryKeys.dashboard.summary(projectUid), SUMMARY);
+    return renderWith(client, createElement(HomeSectionsOverview, { projectUid }));
+  };
+
+  it('sets each of the fifteen sections\' badges to that section\'s own colour, on the dashboard and on the front door, with or without an object', () => {
+    for (const [name, markup] of [
+      ['dashboard, all objects', dashboard(null)],
+      ['dashboard, one object', dashboard(PROJECT)],
+      ['front door, all objects', frontDoor(null)],
+      ['front door, one object', frontDoor(PROJECT)],
+    ] as const) {
+      const colours = badgeColours(markup);
+      for (const section of PROJECT_SECTIONS) {
+        expect(colours.get(section.code), `${name}: ${section.code}`).toBe(sectionColourVar(section.code));
+      }
+      expect(PROJECT_SECTIONS).toHaveLength(15);
+    }
+  });
+
+  it('gives the fifteen badges fifteen different colours, the ones of the menu\'s dots', () => {
+    const colours = PROJECT_SECTIONS.map((section) => badgeColours(dashboard(PROJECT)).get(section.code));
+    expect(new Set(colours).size).toBe(PROJECT_SECTIONS.length);
+    for (const colour of colours) expect(colour).toMatch(/^var\(--am-section-(?:0[1-9]|1[0-5])\)$/);
+    // The one list: what the markup sets is what `sectionColourVar` says, the same list the dot reads.
+    for (const section of PROJECT_SECTIONS) {
+      expect(sectionColourStyle(section.code)['--am-section-colour']).toBe(sectionColourVar(section.code));
+    }
+  });
+
+  it('leaves the total row and «Без раздела» neutral: no colour of their own, so the stylesheet\'s neutral token', () => {
+    for (const markup of [dashboard(null), frontDoor(null)]) {
+      const colours = badgeColours(markup);
+      expect(colours.get('Σ')).toBeNull();
+      expect(colours.get('—')).toBeNull();
+      expect([...colours.keys()].sort()).toEqual([...PROJECT_SECTIONS.map((section) => section.code), 'Σ', '—'].sort());
+    }
+    expect(declarations(css, '.badge').get('border')).toContain(sectionColourVar(null));
+  });
+
+  /** The colour values a module may not spell: a hex, a colour function, a mix. */
+  const COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(/;
+  const spelledColours = (text: string): string[] => {
+    const rules = parseRules(text, 'module');
+    return rules.flatMap((rule) => [...rule.declarations].filter(([, value]) => COLOUR_LITERAL.test(value)).map(([property]) => `${rule.selector} { ${property} }`));
+  };
+  const declaredTokens = (text: string): string[] =>
+    parseRules(text, 'module').flatMap((rule) => [...rule.declarations.keys()].filter((property) => property.startsWith('--')).map((property) => `${rule.selector} { ${property} }`));
+
+  it('reads only tokens: the outline is the neutral token, the section\'s colour comes from the markup, and the stylesheet spells no colour and declares no token', () => {
+    expect(declarations(css, '.badge').get('border')).toBe('2px solid var(--am-inert)');
+    expect(spelledColours(css)).toEqual([]);
+    expect(declaredTokens(css)).toEqual([]);
+  });
+
+  it('can fail: a hex, a colour function or a declared token in the stylesheet is reported', () => {
+    const bad = '.a { background: #ff0000; }\n.b { border: 1px solid rgb(1 2 3); }\n.c { --am-section-colour: red; }\n.d { color: var(--am-ink); }';
+    expect(spelledColours(bad)).toEqual(['.a { background }', '.b { border }']);
+    expect(declaredTokens(bad)).toEqual(['.c { --am-section-colour }']);
+  });
+
+  /**
+   * The census (`contrast.test.ts`) cannot measure this pair: the badge's section colour is an inline `border-color` the markup sets,
+   * which no rule of any stylesheet declares, so the census sees the neutral outline and the code's ink on the fill. The outline is measured here,
+   * for every one of the fifteen sections in both themes, against what it touches: the fill inside it, the row outside it and the
+   * row's tint under the pointer, as the frame draws them (`.am-app__main` remaps the surfaces) and as the root has them; the lower
+   * ratio counts. The colours' own distance from the surfaces is `section-palette.test.ts`'s.
+   */
+  describe('the outline and the code are readable in both themes, for every section', () => {
+    const fill = /^var\((--am-[\w-]+)\)$/.exec(declarations(css, '.badge').get('background') ?? '')?.[1] as TokenName;
+    const ink = /^var\((--am-[\w-]+)\)$/.exec(declarations(css, '.badge').get('color') ?? '')?.[1] as TokenName;
+    const row = /^var\((--am-[\w-]+)\)$/.exec(declarations(css, '.row').get('background') ?? '')?.[1] as TokenName;
+    // The rule is a list (`.sectionRow:hover, .sectionRow[data-open='true']`): the one whose first selector is the hover.
+    const hoverRule = parseRules(css, 'module').find((entry) => entry.selector.startsWith('.sectionRow:hover'));
+    const hover = /^var\((--am-[\w-]+)\)$/.exec(hoverRule?.declarations.get('background') ?? '')?.[1] as TokenName;
+    const scope = scopedPalettes(parseRules(globals, 'globals.css')).find((entry) => entry.selectors.includes('.am-app__main'));
+
+    it('reads its fill, its ink, the row and the row\'s tint as tokens', () => {
+      expect([fill, ink, row, hover]).toEqual(['--am-surface-sunken', '--am-ink', '--am-paper', '--am-accent-light']);
+      expect(scope, 'the frame remaps the surfaces').toBeDefined();
+    });
+
+    for (const theme of THEMES) {
+      it(`${theme}: every section's outline (and the neutral one) is 3:1 against the fill, the row and its tint, and the code is 4.5:1 on the fill`, () => {
+        const tokens = palette(globals, theme);
+        const hex = (token: TokenName, remapped: boolean): string => {
+          const named = remapped ? (scope?.alias.get(token) ?? token) : token;
+          const value = tokens.get(named);
+          if (value === undefined) throw new Error(`${theme}: no value for ${named}`);
+          return value;
+        };
+        const ratios: string[] = [];
+        // The fifteen sections' tokens, and the neutral one the total row and «Без раздела» keep.
+        const outlines = [
+          ...PROJECT_SECTIONS.map((section) => [section.code, /var\((--am-[\w-]+)\)/.exec(sectionColourVar(section.code))?.[1] as TokenName] as const),
+          ['neutral', /var\((--am-[\w-]+)\)/.exec(sectionColourVar(null))?.[1] as TokenName] as const,
+        ];
+        expect(outlines).toHaveLength(PROJECT_SECTIONS.length + 1);
+        for (const [name, token] of outlines) {
+          for (const remapped of [false, true]) {
+            for (const [against, surface] of [['fill', fill], ['row', row], ['tint', hover]] as const) {
+              const ratio = contrastRatio(hex(token, remapped), hex(surface, remapped));
+              if (ratio < AA_NON_TEXT) ratios.push(`${name} ${token} against the ${against}${remapped ? ' (framed)' : ''}: ${ratio.toFixed(2)}`);
+            }
+          }
+        }
+        for (const remapped of [false, true]) {
+          const ratio = contrastRatio(hex(ink, remapped), hex(fill, remapped));
+          if (ratio < AA_TEXT) ratios.push(`the code on the fill${remapped ? ' (framed)' : ''}: ${ratio.toFixed(2)}`);
+        }
+        expect(ratios).toEqual([]);
+      });
+    }
+
+    it('can fail: a colour below 3:1 against a surface is told from one above it', () => {
+      expect(contrastRatio('#eef0f4', '#ffffff')).toBeLessThan(AA_NON_TEXT);
+      expect(contrastRatio('#428228', '#ffffff')).toBeGreaterThanOrEqual(AA_NON_TEXT);
+    });
   });
 });
