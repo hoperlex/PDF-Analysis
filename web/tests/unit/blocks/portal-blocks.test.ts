@@ -267,16 +267,30 @@ describe('the portal status, the ordinal and the polygon are said as the respons
   });
 });
 
-describe('the list groups blocks under their PDF page, in the API order', () => {
-  it('opens one section per page, names a differing portal label, and keeps the order', () => {
+describe('the list is one solid grid for «Все блоки» and one page’s grid under its heading for a page, in the API order', () => {
+  it('«Все блоки» draws one grid with no heading per page, the page in each tile’s caption, and keeps the order', () => {
     const blocks = everyKindOfBlock();
     const markup = list(blocks);
-    expect(count(markup, 'data-portal-page=')).toBe(3);
-    expect(visibleText(markup)).toContain('Страница 1 ');
-    expect(visibleText(markup)).toContain('Страница 2 (у портала — 5)');
-    expect(visibleText(markup)).not.toContain('Страница 1 (у портала');
+    expect(count(markup, 'data-portal-grid="all"')).toBe(1);
+    expect(count(markup, 'data-portal-page=')).toBe(0);
+    expect(count(markup, '<ol')).toBe(1);
+    expect(visibleText(markup)).not.toContain('Страница 1');
+    expect(visibleText(markup)).not.toContain('Страница 2');
+    expect(visibleText(markup)).not.toContain('у портала —');
+    // the page is in the caption of every tile
+    for (const page of [1, 2, 3]) expect(visibleText(markup)).toContain(`стр. ${page}`);
     const ids = [...markup.matchAll(/data-portal-block-type="([a-z]+)"/g)].map((m) => m[1]);
     expect(ids).toEqual(blocks.map((block) => block.block_type));
+  });
+
+  it('a chosen page keeps its heading «Страница N», and names a differing portal label there', () => {
+    const blocks = everyKindOfBlock();
+    const second = list(blocks, { initialPage: 2 });
+    expect(count(second, 'data-portal-page=')).toBe(1);
+    expect(count(second, 'data-portal-grid=')).toBe(0);
+    expect(visibleText(second)).toContain('Страница 2 (у портала — 5)');
+    expect(visibleText(list(blocks, { initialPage: 1 }))).toContain('Страница 1 ');
+    expect(visibleText(list(blocks, { initialPage: 1 }))).not.toContain('Страница 1 (у портала');
   });
 
   it('prints the version block count the API reports beside the count loaded', () => {

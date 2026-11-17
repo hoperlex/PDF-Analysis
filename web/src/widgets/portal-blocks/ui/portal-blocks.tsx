@@ -20,8 +20,8 @@
  * far, so a reader always knows whether the list is complete.
  *
  * **Tiles, a page selector and a block view** (`UI-PARITY`, the original's «Блоки»). The loaded blocks are
- * a grid of tiles, one grouped heading per page, narrowed by the chips above it to «Все блоки», one
- * page or «Без сущностей»; a press on a tile opens the block view (`portal-block-viewer.tsx`), which walks the
+ * a grid of tiles, narrowed by the chips above it to «Все блоки» (one solid grid, no heading per page: the page is in each
+ * tile's caption), one page (its grid under the heading «Страница N») or «Без сущностей»; a press on a tile opens the block view (`portal-block-viewer.tsx`), which walks the
  * blocks of the selection. The tile's number is the run's findings whose evidence sits in the BLOCK when the server's
  * block links for the run were produced (`UI-PARITY-C6`), and otherwise the findings that cite its PAGE, and the
  * sentence under the summary says which (`model/page-findings.ts`). With no run in scope, or none that published
@@ -53,7 +53,9 @@ import {
   pageChips,
   sectionsByPage,
   sectionsOfSelection,
+  sheetOfPage,
   usePortalBlocks,
+  useSheetLabels,
   versionHasPortalBundle,
 } from '@/entities/block';
 import type { PageSelection } from '@/entities/block';
@@ -92,6 +94,8 @@ export interface PortalBlockListViewProps {
   readonly initialOpen?: number | undefined;
   /** The census and the unit suite: the block view is drawn open without `showModal`. */
   readonly staticOpen?: boolean | undefined;
+  /** The sheet the portal gave a PDF page (the page selector's «Лист N»); absent, the chips say «Стр. N». */
+  readonly sheetOf?: ((page: number) => number | undefined) | undefined;
 }
 
 /**
@@ -187,6 +191,7 @@ export function PortalBlockListView({
   onPageChange,
   initialOpen,
   staticOpen = false,
+  sheetOf,
 }: PortalBlockListViewProps) {
   const [choice, setChoice] = useState<PageSelection>(initialPage);
   const [openAt, setOpenAt] = useState<number | null>(initialOpen ?? null);
@@ -237,6 +242,7 @@ export function PortalBlockListView({
         partial={hasMore}
         selection={selection}
         noEntities={noEntityTotal}
+        sheetOf={sheetOf}
         onSelect={(next) => {
           setChoice(next);
           setOpenAt(null);
@@ -244,25 +250,41 @@ export function PortalBlockListView({
         }}
       />
 
-      {shown.map((section) => (
-        <section key={section.pageNumber} className={styles.page} data-portal-page={section.pageNumber}>
-          <h3 className={styles.pageTitle}>
-            Страница {section.pageNumber}
-            {section.differingLabel === null ? null : <> (у портала — {section.differingLabel})</>}
-          </h3>
-          <ol className={styles.blocks}>
-            {section.blocks.map((block) => {
-              position += 1;
-              // The portal's id is an external identifier: a key here and nothing else. The
-              // position keeps two copies of one id (a server that repeated a block across a
-              // cursor) from colliding, so the repetition is shown rather than swallowed.
-              return (
-                <Tile key={`${position}:${block.portal_block_id}`} block={block} at={position} versionUid={versionUid} pageFindings={pageFindings} runAt={runAt} onOpen={open} />
-              );
-            })}
-          </ol>
-        </section>
-      ))}
+      {selection === 'all' ? (
+        // «Все блоки» is one solid grid, as the original's: no heading per page, the page is in each tile's caption.
+        shown.length === 0 ? null : (
+          <section className={styles.page} data-portal-grid="all">
+            <ol className={styles.blocks}>
+              {shown.flatMap((section) => section.blocks).map((block) => {
+                position += 1;
+                // The portal's id is an external identifier: a key here and nothing else. The
+                // position keeps two copies of one id (a server that repeated a block across a
+                // cursor) from colliding, so the repetition is shown rather than swallowed.
+                return (
+                  <Tile key={`${position}:${block.portal_block_id}`} block={block} at={position} versionUid={versionUid} pageFindings={pageFindings} runAt={runAt} onOpen={open} />
+                );
+              })}
+            </ol>
+          </section>
+        )
+      ) : (
+        shown.map((section) => (
+          <section key={section.pageNumber} className={styles.page} data-portal-page={section.pageNumber}>
+            <h3 className={styles.pageTitle}>
+              Страница {section.pageNumber}
+              {section.differingLabel === null ? null : <> (у портала — {section.differingLabel})</>}
+            </h3>
+            <ol className={styles.blocks}>
+              {section.blocks.map((block) => {
+                position += 1;
+                return (
+                  <Tile key={`${position}:${block.portal_block_id}`} block={block} at={position} versionUid={versionUid} pageFindings={pageFindings} runAt={runAt} onOpen={open} />
+                );
+              })}
+            </ol>
+          </section>
+        ))
+      )}
 
       {selection === 'empty' && noEntities !== null ? (
         <>
@@ -347,6 +369,9 @@ export function PortalBlocks({ version, page, onPage }: PortalBlocksProps) {
   // there is none is it the run that read the bundle (`scopeRunId`), and the tiles say which run it is.
   const geometryRunId = query.data?.pages[0]?.produced_by_run_id ?? null;
   const pageFindings = usePageFindings(version.version_uid, geometryRunId);
+  // The sheet each page carries at the portal: the same read as the «Лист» column of «Разбор». While it is on its way, or
+  // when it failed, no page has a sheet and the chips say «Стр. N».
+  const sheets = useSheetLabels(version.version_uid);
 
   if (query.isPending) return <LoadingState what="блоки портала" />;
   if (query.data === undefined) {
@@ -402,6 +427,7 @@ export function PortalBlocks({ version, page, onPage }: PortalBlocksProps) {
       }
       onMore={() => void query.fetchNextPage()}
       pageFindings={pageFindings}
+      sheetOf={(pageNumber) => sheetOfPage(sheets.data, pageNumber)}
       {...(page === undefined ? {} : { initialPage: page })}
       {...(onPage === undefined ? {} : { onPageChange: onPage })}
     />

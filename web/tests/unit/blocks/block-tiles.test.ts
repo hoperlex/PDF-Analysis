@@ -370,7 +370,10 @@ describe('the page selector', () => {
 
   it('takes a page that is not loaded for «Все блоки»', () => {
     const markup = list(everyKindOfBlock(), { initialPage: 9 });
-    expect(count(markup, 'data-portal-page=')).toBe(3);
+    // «Все блоки» is one solid grid (`UIP-S07-01`): no section, no heading «Страница N», every tile in it.
+    expect(count(markup, 'data-portal-page=')).toBe(0);
+    expect(count(markup, 'data-portal-grid="all"')).toBe(1);
+    expect(count(markup, 'data-portal-block-type=')).toBe(7);
   });
 
   it('opens on the page the address names when the widget is given it (?page=N), and on «Все блоки» otherwise', () => {
@@ -384,8 +387,9 @@ describe('the page selector', () => {
     const third = open(pageSelectionOf('3'));
     expect(count(third, 'data-portal-page=')).toBe(1);
     expect(buttons(third, 'data-page-chip').find((chip) => chip.includes('data-page-chip="3"'))).toContain('aria-pressed="true"');
-    expect(count(open(pageSelectionOf('all')), 'data-portal-page=')).toBe(3);
-    expect(count(open(), 'data-portal-page=')).toBe(3);
+    expect(count(open(pageSelectionOf('all')), 'data-portal-grid="all"')).toBe(1);
+    expect(count(open(), 'data-portal-grid="all"')).toBe(1);
+    expect(count(open(), 'data-portal-page=')).toBe(0);
   });
 
   it('says the count is of what has arrived while another page of blocks is waiting', () => {

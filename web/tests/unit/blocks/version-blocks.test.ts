@@ -112,7 +112,8 @@ describe('the page chosen above the tiles lives in the address of the version’
     for (const search of ['page=all', '', 'page=0', 'page=abc', 'page=9']) {
       navigation.search = search;
       const markup = tab(withBlocks());
-      expect(markup.split('data-portal-page=').length - 1, search).toBe(3);
+      expect(markup.split('data-portal-grid="all"').length - 1, search).toBe(1);
+      expect(markup.split('data-portal-page=').length - 1, search).toBe(0);
       expect(chip(markup, 'all'), search).toContain('aria-pressed="true"');
     }
   });
