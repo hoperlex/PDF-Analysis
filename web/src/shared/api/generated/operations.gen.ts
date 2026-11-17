@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.56.0 (OpenAPI 3.1.0)
- *   sha256 1479da367147422abdc9d787ce300d11d4900c670972ea1fb3df2c457e82c29a
+ *   sha256 84f32ac7cdb9a8a7ac913cd221f265582a39662a44274faeccf7e27384ee016d
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -5520,7 +5520,11 @@ export type ListPriceListRevisionsResult = PriceListRevisionList;
 // listProjects - GET /projects
 // ------------------------------------------------------------------------------------
 
-/** List projects, newest first. */
+/**
+ * List projects, newest first.
+ *
+ * `UIP-S03-02` (programme `UI-PARITY-R3`): the optional `order` parameter chooses the order of the whole listing, `published` (the default and the order the operation always had, newest first) or `name`. The order is decided by the server before the listing is paged, so it holds across pages.
+ */
 export type ListProjectsInput = {
   /** Query string parameters. */
   query?: {
@@ -5528,6 +5532,8 @@ export type ListProjectsInput = {
     cursor?: Cursor;
     /** Page size. */
     limit?: number;
+    /** `UIP-S03-02` (programme `UI-PARITY-R3`, owner ruling Г3-B): the order of the whole listing. `published` (the default) is the order the operation always had, newest first. `name` is decided by the server so that it holds across pages: by the first whole number written in the name, ascending (the digits of «213-А», «213. Школа» and «Школа 213» are all 213; leading zeros do not count, so «007» is 7), then names that have no number, alphabetically with letter case ignored (`casefold`); among equal numbers the rest of the name is compared the same way, and `project_uid` decides among equal names, so the order is total. The cursor is built on the identity and resumes after its row in the ordered listing; presented under another `order` it yields that listing's continuation or an empty page, never a page from another listing. Any other value is `422 validation_failed`. */
+    order?: "published" | "name";
   };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -11969,7 +11975,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/projects',
     pathParams: [],
-    queryParams: ['cursor', 'limit'],
+    queryParams: ['cursor', 'limit', 'order'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,

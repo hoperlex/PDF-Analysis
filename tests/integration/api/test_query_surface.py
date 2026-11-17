@@ -1160,7 +1160,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         f"{sorted(set(declared) ^ set(targets))}"
     )
     assert declared == {
-        "listProjects": {"cursor", "limit"},
+        # `UIP-S03-02` (the order of the listing): `published`, the default, or `name`.
+        "listProjects": {"cursor", "limit", "order"},
         "listRunFindings": {"category", "cursor", "limit", "verdict"},
         "listDecisionHistory": {"cursor", "limit"},
         # `UI-PARITY-P0E`, `P0G`, `P0H` (1.20.0, 1.22.0, 1.23.0): the section, archive and tag filters.
@@ -1548,6 +1549,35 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             assert scoped, "a truncated filtered page carried no cursor"
             if get(surface, f"{target}{sep}limit=1&cursor={scoped}").status != 422:
                 inert.setdefault(operation_id, []).append("cursor scope")
+
+    # `UIP-S03-02`: `listProjects`' `order`. The ladder's six projects are named «Лестница 0» to «Лестница 5» and were stamped so
+    # that newest-first is 2, 0, 4, 3, 5, 1: under `order=name` they come back by the number in the name, which is their creation
+    # order, so a passthrough that ignores `order` answers the newest-first order and is caught. The listing is walked whole by its own
+    # cursors, because the ladder's numbers are not the only ones in a database other suites wrote into.
+    def walked_projects(query: str) -> list[str]:
+        walked: list[str] = []
+        cursor: str | None = None
+        for _ in range(10_000):
+            suffix = f"&cursor={quote(cursor)}" if cursor else ""
+            page = ok(get(shipped_router, f"/projects?{query}limit=200{suffix}"))
+            walked += uids(page, "project_uid")
+            cursor = page["page"]["next_cursor"]
+            if cursor is None:
+                return walked
+        raise AssertionError("the project listing did not end")
+
+    ours = set(ladder.created)
+    assert ladder.newest_first != ladder.created, "the ladder cannot tell the name order from the default"
+    if [u for u in walked_projects("order=name&") if u in ours] != ladder.created:
+        inert.setdefault("listProjects", []).append("order")
+    if [u for u in walked_projects("order=published&") if u in ours] != ladder.newest_first:
+        inert.setdefault("listProjects", []).append("order=published")
+    by_name = walked_projects("order=name&")
+    first_by_name = ok(get(shipped_router, "/projects?order=name&limit=1"))
+    second_by_name = ok(get(shipped_router, f"/projects?order=name&limit=1&cursor={quote(first_by_name['page']['next_cursor'])}"))
+    if (uids(first_by_name, "project_uid"), uids(second_by_name, "project_uid")) != ([by_name[0]], [by_name[1]]):
+        inert.setdefault("listProjects", []).append("cursor under order=name")
+    assert get(shipped_router, "/projects?order=newest&limit=1").status == 422, "an unknown order is refused"
 
     # `UI-PARITY-P0E`, `P0G`, `P0H`: `listDocuments`' section, archive and tag filters over the catalogue's three
     # documents -- one confirmed for АР, one archived, one tagged -- written after the sweep, which pages them all.

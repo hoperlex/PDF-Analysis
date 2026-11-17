@@ -674,7 +674,11 @@ class ProjectAdapter:
     def get_project(self, *, project_uid: str) -> ProjectView | None:
         return _project_of(self, project_uid)
 
-    def list_projects(self) -> Sequence[ProjectView]:
+    def list_projects(self, *, order: str = "published") -> Sequence[ProjectView]:
+        # `UIP-S03-02`: `order` is `published` (newest first, the listing as the repository's statement gives it) or `name`
+        # (the first number in the name, then the names without one). The documents boundary owns the rule
+        # (`order_project_listing`); an order it does not know is refused there, never answered in the default order.
+        #
         # `document_count` is carried, not recomputed: `IngestService.list_projects`
         # returns `ProjectListingRecord`s whose count came out of the same statement that
         # produced the row (`R-10`). Passing it here rather than counting here is what
@@ -693,8 +697,9 @@ class ProjectAdapter:
         # counters are two statements, as every panel of the dashboard is; a document published between them is in
         # one answer and not yet in the other, and the next poll agrees.
         from auditmanager.dashboard import AuditCountsRecord, DocumentAuditReadModel, counts_by_project
+        from auditmanager.documents.repository import order_project_listing
 
-        listing = self._service.list_projects()
+        listing = order_project_listing(self._service.list_projects(), order)
         with self._sessions() as session:
             counts = counts_by_project(DocumentAuditReadModel().groups(session))
         return tuple(

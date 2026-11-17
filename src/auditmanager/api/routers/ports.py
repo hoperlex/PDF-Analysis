@@ -331,14 +331,20 @@ class ProjectPort(Protocol):
     def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
         """Create a project, or replay the recorded outcome of an identical request."""
 
-    def list_projects(self) -> Sequence[ProjectView]:
-        """Every project, **newest first**.
+    def list_projects(self, *, order: str = "published") -> Sequence[ProjectView]:
+        """Every project, **newest first** under the default ``order="published"``.
 
         The order is part of this declaration, not a detail of the implementation: the
         router pages the sequence and never re-sorts it, so a port that returned oldest
         first would page correctly through the wrong listing. `listProjects` says newest
         first and `tests/integration/api/test_query_surface.py` asserts it over
         timestamps whose order is deliberately not the identity order.
+
+        ``order="name"`` (`UIP-S03-02`) is the other order the operation offers: by the first
+        whole number in the name ascending, then the names without one, each compared without
+        regard to letter case, and the identity last, so it is total. It is this port's to
+        decide, for the reason the paragraph above gives: the router pages the sequence it is
+        handed. The router refuses any other value before it reaches here.
 
         The edge cuts pages out of what this returns. No query surface in this tree
         accepts a cursor, and for PC-01 that is the right trade: see the query-surface

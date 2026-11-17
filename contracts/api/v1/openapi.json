@@ -286,12 +286,27 @@
           "projects"
         ],
         "summary": "List projects, newest first.",
+        "description": "`UIP-S03-02` (programme `UI-PARITY-R3`): the optional `order` parameter chooses the order of the whole listing, `published` (the default and the order the operation always had, newest first) or `name`. The order is decided by the server before the listing is paged, so it holds across pages.",
         "parameters": [
           {
             "$ref": "#/components/parameters/Cursor"
           },
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "`UIP-S03-02` (programme `UI-PARITY-R3`, owner ruling Г3-B): the order of the whole listing. `published` (the default) is the order the operation always had, newest first. `name` is decided by the server so that it holds across pages: by the first whole number written in the name, ascending (the digits of «213-А», «213. Школа» and «Школа 213» are all 213; leading zeros do not count, so «007» is 7), then names that have no number, alphabetically with letter case ignored (`casefold`); among equal numbers the rest of the name is compared the same way, and `project_uid` decides among equal names, so the order is total. The cursor is built on the identity and resumes after its row in the ordered listing; presented under another `order` it yields that listing's continuation or an empty page, never a page from another listing. Any other value is `422 validation_failed`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "published",
+                "name"
+              ],
+              "default": "published"
+            }
           },
           {
             "$ref": "#/components/parameters/CorrelationId"
