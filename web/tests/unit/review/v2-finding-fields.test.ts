@@ -16,6 +16,8 @@
  * Rendered to static markup, as the rest of this suite does: no DOM, no `jsdom`.
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
@@ -33,7 +35,10 @@ import {
   SeverityBadge,
   groupByCategory,
   normCitationStateLabel,
+  severityTone,
 } from '@/entities/finding';
+import type { SeverityTone } from '@/entities/finding';
+import { severityTone as tileSeverityTone } from '@/widgets/portal-blocks';
 import { ReviewPage } from '@/_pages/review';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { chosenSeverity, draftFromControl } from '@/widgets/decision-panel/model/severity-draft';
@@ -54,6 +59,8 @@ import {
   runStatus,
 } from './fixtures';
 import { newClient, renderScreen } from '../screens/harness';
+import { THEMES, palette, parseRules, scopedPalettes, splitSelectorList } from '../styles/contrast';
+import type { Theme, TokenName } from '../styles/contrast';
 
 // ------------------------------------------------------------------ what the reader sees
 
@@ -185,16 +192,28 @@ describe('the five severities have Russian labels and render as them', () => {
   }
 
   it('gives each severity its own tone, so the list can be read at a glance', () => {
+    // It said so for a while with two severities on one grey («Рекомендация» and «Проверить смежный раздел»): the table below
+    // was written to match the code, and the count of distinct tones in it was never asked. Five severities are five tones.
     const tones: Record<Severity, string> = {
       critical: 'am-badge--failed',
       economic: 'am-badge--degraded',
       operational: 'am-badge--active',
-      recommendation: 'am-badge--inert',
+      recommendation: 'am-badge--ok',
       check_adjacent: 'am-badge--inert',
     };
     for (const severity of SEVERITY_VALUES) {
       expect(render(createElement(SeverityBadge, { severity }))).toContain(`class="am-badge ${tones[severity]}"`);
     }
+    const drawn = SEVERITY_VALUES.map((severity) => /class="am-badge (am-badge--\w+)"/.exec(render(createElement(SeverityBadge, { severity })))?.[1]);
+    expect(new Set(drawn).size).toBe(SEVERITY_VALUES.length);
+  });
+
+  it('computes the tone in one place: the badge, the tile of a block and `severityTone` say the same', () => {
+    expect(tileSeverityTone).toBe(severityTone);
+    for (const severity of SEVERITY_VALUES) {
+      expect(render(createElement(SeverityBadge, { severity }))).toContain(`class="am-badge am-badge--${severityTone(severity)}"`);
+    }
+    expect(severityTone(null)).toBe('inert');
   });
 
   it('shows a value outside the closed set as a fault, not as a blank and not as itself', () => {
@@ -209,6 +228,149 @@ describe('the five severities have Russian labels and render as them', () => {
       createElement(SeverityBadge, { severity: 'critical', title: 'Критичность, предложенная моделью' }),
     );
     expect(markup).toContain('title="Критичность, предложенная моделью"');
+  });
+});
+
+// ------------------------------------------------------------------ the five tones, told apart
+
+const GLOBALS = fileURLToPath(new URL('../../../src/app/globals.css', import.meta.url));
+const GLOBALS_CSS = readFileSync(GLOBALS, 'utf8');
+const GLOBAL_RULES = parseRules(GLOBALS_CSS, 'globals.css');
+
+/**
+ * Two colours closer than this are not two colours: twice the OKLab distance of about 0.02 that is taken as the smallest visible
+ * step (the same floor `section-palette.test.ts` holds the section colours to).
+ */
+const MIN_APART = 0.04;
+
+/** A six-digit hex as OKLab (Ottosson's matrices), the space the distances are measured in. */
+function oklab(hex: string): readonly [number, number, number] {
+  const linear = (pair: string): number => {
+    const channel = parseInt(pair, 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  };
+  const r = linear(hex.slice(1, 3));
+  const g = linear(hex.slice(3, 5));
+  const b = linear(hex.slice(5, 7));
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+function distance(a: string, b: string): number {
+  const [al, aa, ab] = oklab(a);
+  const [bl, ba, bb] = oklab(b);
+  return Math.hypot(al - bl, aa - ba, ab - bb);
+}
+
+/** The ink token a tone's badge reads, from the declaration in `globals.css` (`.am-badge--<tone> { color: var(--am-…) }`). */
+function inkTokenOf(tone: SeverityTone): TokenName {
+  const rule = GLOBAL_RULES.find((one) => splitSelectorList(one.selector).includes(`.am-badge--${tone}`) && one.declarations.has('color'));
+  const reference = /^var\((--am-[\w-]+)\)$/.exec((rule?.declarations.get('color') ?? '').trim());
+  if (reference === null) throw new Error(`.am-badge--${tone} reads no colour token in globals.css`);
+  return reference[1] as TokenName;
+}
+
+/**
+ * The colour a tone's ink really has in a palette: inside the application frame (`.am-app__main`, where every screen is drawn)
+ * the accent is the showcase accent, so «Эксплуатационное» is teal there and blue only outside it.
+ */
+function inkOf(tone: SeverityTone, theme: Theme, framed: boolean): string {
+  const tokens = palette(GLOBALS_CSS, theme);
+  let token = inkTokenOf(tone);
+  if (framed) {
+    const scope = scopedPalettes(GLOBAL_RULES).find((one) => one.selectors.includes('.am-app__main'));
+    token = scope?.alias.get(token) ?? token;
+  }
+  const hex = tokens.get(token);
+  if (hex === undefined || !/^#[0-9a-f]{6}$/i.test(hex)) throw new Error(`${token} is not a six-digit colour in the ${theme} palette`);
+  return hex;
+}
+
+/** The two tones of a list that are the nearest to each other, and how far apart their inks are. */
+function closestPair(tones: readonly SeverityTone[], theme: Theme, framed: boolean): { readonly pair: readonly [number, number]; readonly apart: number } {
+  let best = { pair: [0, 1] as readonly [number, number], apart: Number.POSITIVE_INFINITY };
+  tones.forEach((a, i) => {
+    tones.forEach((b, j) => {
+      if (j <= i) return;
+      const apart = distance(inkOf(a, theme, framed), inkOf(b, theme, framed));
+      if (apart < best.apart) best = { pair: [i, j], apart };
+    });
+  });
+  return best;
+}
+
+describe('the five severities are told apart by colour, in both palettes', () => {
+  const tones = SEVERITY_VALUES.map((severity) => severityTone(severity));
+
+  it('puts every two of the five tones at least 0.04 apart in OKLab, inside the application frame and outside it', () => {
+    for (const theme of THEMES) {
+      for (const framed of [false, true]) {
+        const { pair, apart } = closestPair(tones, theme, framed);
+        const where = `${theme} palette ${framed ? 'inside' : 'outside'} the frame: ${SEVERITY_VALUES[pair[0]]} and ${SEVERITY_VALUES[pair[1]]}`;
+        expect(apart, `${where} are ${apart.toFixed(3)} apart`).toBeGreaterThanOrEqual(MIN_APART);
+      }
+    }
+  });
+
+  it('would have caught the old table: two severities on one grey are 0 apart', () => {
+    const old: readonly SeverityTone[] = ['failed', 'degraded', 'active', 'inert', 'inert'];
+    for (const theme of THEMES) expect(closestPair(old, theme, true).apart).toBe(0);
+  });
+
+  it('reads the teal of «Эксплуатационное» from the frame’s accent, which is what makes it a colour apart from the green', () => {
+    // Inside the frame the accent is the showcase accent; outside it is the blue. The two tones that sit next to each other
+    // in hue (operational teal, recommendation green) are the nearest pair of the five, which is why they are measured.
+    for (const theme of THEMES) {
+      expect(inkOf('active', theme, true)).not.toBe(inkOf('active', theme, false));
+      expect(distance(inkOf('active', theme, true), inkOf('ok', theme, true))).toBeGreaterThanOrEqual(MIN_APART);
+    }
+  });
+});
+
+// ------------------------------------------------------------------ the model's proposed severity
+
+describe('a proposed severity is the same pill, apart from a decision', () => {
+  const proposed = (severity: Severity): string => render(createElement(SeverityBadge, { severity, proposed: true }));
+
+  for (const severity of SEVERITY_VALUES) {
+    it(`draws «${severity}» as a proposal: its own attribute, never the decision's, the word and the tooltip`, () => {
+      const markup = proposed(severity);
+      expect(markup).toContain(`data-proposed-severity="${severity}"`);
+      expect(markup).not.toContain('data-severity=');
+      expect(markup).toContain('title="Предложение модели, не решение эксперта"');
+      expect(markup).toContain(`>${SEVERITY_LABELS[severity]}<`);
+      expect(markup).toContain('>предложено<');
+      expect(rawSeverityWords(markup)).toEqual([]);
+      expect(latinWords(markup)).toEqual([]);
+    });
+
+    it(`keeps the tone of «${severity}» and adds only the dashed edge`, () => {
+      const decided = render(createElement(SeverityBadge, { severity }));
+      const tone = /am-badge--\w+/.exec(decided)?.[0];
+      expect(tone).toBeDefined();
+      expect(proposed(severity)).toMatch(new RegExp(`class="am-badge ${tone} [^"]*proposed[^"]*"`));
+      // The decision's pill has neither the word nor the dashed class.
+      expect(decided).not.toContain('предложено');
+      expect(decided).not.toMatch(/class="[^"]*proposed/);
+    });
+  }
+
+  it('does not take a tooltip of its own: the one it has is the guard, and no screen can word a proposal as a decision', () => {
+    const markup = render(createElement(SeverityBadge, { severity: 'critical', proposed: true }));
+    expect(markup.match(/title="/g)).toHaveLength(1);
+  });
+
+  it('shows a value outside the closed set as a fault, proposed or not', () => {
+    const markup = render(createElement(SeverityBadge, { severity: 'urgent' as Severity, proposed: true }));
+    expect(markup).toContain('data-closed-vocabulary-fault="severity"');
+    expect(markup).not.toContain('data-proposed-severity');
+    expect(markup).not.toContain('urgent');
   });
 });
 

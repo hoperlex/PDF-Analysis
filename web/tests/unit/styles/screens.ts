@@ -132,13 +132,13 @@ import type {
 import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
 import type { Account, AnalysisPreset, AnalysisProfileListItem } from '@/shared/api';
 import type { RegistrationRequest, RunStartReadiness, RunWaitCell } from '@/shared/api';
-import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
+import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, SEVERITY_VALUES, queryKeys } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { AVATAR_PALETTE_SIZE, Avatar, Dialog, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
-import { groupByCategory } from '@/entities/finding';
+import { SeverityBadge, groupByCategory } from '@/entities/finding';
 import { DecisionReasonControl, VerdictMark } from '@/entities/expert-decision';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, SectionDot } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
@@ -3536,6 +3536,17 @@ export function screens(): Screen[] {
     )));
     add('VerdictMark, a value outside the closed set', render(createElement(VerdictMark, { verdict: 'approved' as Verdict })));
   }
+
+  /*
+   * `UIP-S06-03`: the severity badge in each of its five tones, as the expert's decision and as the model's proposal (the same
+   * pill with a dashed edge, the word «предложено» after the label and its tooltip). At the very end, for the reason above.
+   */
+  add('SeverityBadge, the five severities decided', render(createElement('p', null,
+    ...SEVERITY_VALUES.map((severity) => createElement(SeverityBadge, { key: severity, severity })),
+  )));
+  add('SeverityBadge, the five severities proposed by the model', render(createElement('p', null,
+    ...SEVERITY_VALUES.map((severity) => createElement(SeverityBadge, { key: severity, severity, proposed: true })),
+  )));
 
   return out;
 }
