@@ -8717,8 +8717,15 @@ class StagePair(_Object):
 
 
 class StagePairPage(_Object):
+    """One page of the project's stage pairs and, beside it, how many documents have no pair (`UIP-S16-02`, `Г12-B`): `unpaired_p_count`
+    documents of stage П and `unpaired_r_count` documents of stage Р. They are counted by the server over the whole project -- the
+    confirmed classification of each document's latest version, the confirmed pairs and the current members of an assembly; an archived
+    document is not counted -- and are the same on every page: a page of pairs does not change them."""
+
     items: list[StagePair]
     page: PageInfo
+    unpaired_p_count: Annotated[int, Field(ge=0)]
+    unpaired_r_count: Annotated[int, Field(ge=0)]
 
 
 class StagePairSuggestion(_Object):
@@ -9446,9 +9453,27 @@ class ExecutorHostModel(_Object):
     state: Literal["available", "busy"]
 
 
+class ExecutorHostWork(_Object):
+    """One thing a server is doing now (`UIP-S15-01`): the document its call is about, the object the document belongs to (both by
+    identity, for a link), the stage and since when. It names no model, no provider, no token and no run (`Г12-B`): the screen says
+    what is being done, not with what. `stage_key` is absent when the call names no stage."""
+
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    document_title: Annotated[str, Field(min_length=1, max_length=400)]
+    stage_key: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    since: datetime
+
+
 class ExecutorHost(_Object):
     """A server (ADR-0028): its name, the «Использовать» switch, whether it is on line, the models it can serve now and its slots.
-    `models` holds only what can be used (an unavailable model is not listed); the reasons are in `ExecutorHostDetails`."""
+    `models` holds only what can be used (an unavailable model is not listed); the reasons are in `ExecutorHostDetails`.
+    `current_work` (`UIP-S15-01`) is what the server is doing now, oldest first, one entry for each call it runs (a document may appear
+    more than once). It is on the servers of `listExecutorHosts` -- always, empty for a server that is free and for one that is off line
+    (nothing is known to run there) -- and is absent from every other answer that carries a server (`getExecutorHost`, the writes and
+    `ExecutorHostDetails.host`). The model, the provider and the run of a call stay in the administrator's `ExecutorHostDetails.tasks`."""
 
     host_id: ExecutorHostId
     display_name: Annotated[str, Field(min_length=1, max_length=120)]
@@ -9464,6 +9489,9 @@ class ExecutorHost(_Object):
     created_at: datetime
     created_by: UserUid
     archived_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    current_work: Annotated[list[ExecutorHostWork], Field(max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ExecutorHostList(_Object):

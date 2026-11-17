@@ -45899,15 +45899,28 @@
           },
           "page": {
             "$ref": "#/components/schemas/PageInfo"
+          },
+          "unpaired_p_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unpaired P Count"
+          },
+          "unpaired_r_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unpaired R Count"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page"
+          "page",
+          "unpaired_p_count",
+          "unpaired_r_count"
         ],
-        "title": "StagePairPage"
+        "title": "StagePairPage",
+        "description": "One page of the project's stage pairs and, beside it, how many documents have no pair (`UIP-S16-02`, `Г12-B`): `unpaired_p_count`\ndocuments of stage П and `unpaired_r_count` documents of stage Р. They are counted by the server over the whole project -- the\nconfirmed classification of each document's latest version, the confirmed pairs and the current members of an assembly; an archived\ndocument is not counted -- and are the same on every page: a page of pairs does not change them."
       },
       "StagePairSuggestion": {
         "properties": {
@@ -51138,6 +51151,14 @@
             "type": "string",
             "format": "date-time",
             "title": "Archived At"
+          },
+          "current_work": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutorHostWork"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Current Work"
           }
         },
         "additionalProperties": false,
@@ -51154,7 +51175,7 @@
           "created_by"
         ],
         "title": "ExecutorHost",
-        "description": "A server (ADR-0028): its name, the «Использовать» switch, whether it is on line, the models it can serve now and its slots.\n`models` holds only what can be used (an unavailable model is not listed); the reasons are in `ExecutorHostDetails`."
+        "description": "A server (ADR-0028): its name, the «Использовать» switch, whether it is on line, the models it can serve now and its slots.\n`models` holds only what can be used (an unavailable model is not listed); the reasons are in `ExecutorHostDetails`.\n`current_work` (`UIP-S15-01`) is what the server is doing now, oldest first, one entry for each call it runs (a document may appear\nmore than once). It is on the servers of `listExecutorHosts` -- always, empty for a server that is free and for one that is off line\n(nothing is known to run there) -- and is absent from every other answer that carries a server (`getExecutorHost`, the writes and\n`ExecutorHostDetails.host`). The model, the provider and the run of a call stay in the administrator's `ExecutorHostDetails.tasks`."
       },
       "ExecutorHostDetails": {
         "properties": {
@@ -51473,6 +51494,42 @@
         ],
         "title": "ExecutorHostTask",
         "description": "A call running on the host now: the run, the stage and since when."
+      },
+      "ExecutorHostWork": {
+        "properties": {
+          "project_uid": {
+            "$ref": "#/components/schemas/ProjectUid"
+          },
+          "document_uid": {
+            "$ref": "#/components/schemas/DocumentUid"
+          },
+          "document_title": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Document Title"
+          },
+          "stage_key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Stage Key"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Since"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "project_uid",
+          "document_uid",
+          "document_title",
+          "since"
+        ],
+        "title": "ExecutorHostWork",
+        "description": "One thing a server is doing now (`UIP-S15-01`): the document its call is about, the object the document belongs to (both by\nidentity, for a link), the stage and since when. It names no model, no provider, no token and no run (`Г12-B`): the screen says\nwhat is being done, not with what. `stage_key` is absent when the call names no stage."
       },
       "ExecutorModelAccess": {
         "type": "string",

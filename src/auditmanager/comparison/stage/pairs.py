@@ -19,7 +19,7 @@ from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import AuditEventId, IdempotencyKey, StagePairId
 
-from .suggestions import StageDocument, StageSuggestion, suggest_stage_pairs
+from .suggestions import StageDocument, StageSuggestion, UnpairedCounts, count_unpaired, suggest_stage_pairs
 
 __all__ = ["StagePairCommandService", "StagePairReadRepository", "StagePairRow"]
 
@@ -48,6 +48,35 @@ _PAIR_COLUMNS = (
 
 def _pair(row: object) -> StagePairRow:
     return StagePairRow(*tuple(row))  # type: ignore[arg-type]
+
+
+def _bound_document_uids(session: Session, project_uid: str) -> frozenset[str]:
+    """Every document a confirmed pair of the project binds: the left (П) document, the right (Р) document and the current members
+    of an assembly (an ``add`` that no ``remove`` reverses). A pair that is only suggested binds nothing."""
+    bound: set[str] = set()
+    for left, right in session.execute(
+        text(
+            "SELECT left_document_uid, right_document_uid FROM stage_pair "
+            "WHERE project_uid = :project AND state = 'confirmed'"
+        ),
+        {"project": project_uid},
+    ):
+        bound.add(left)
+        if right is not None:
+            bound.add(right)
+    for (document_uid,) in session.execute(
+        text(
+            "SELECT m.document_uid FROM stage_assembly_member m "
+            "JOIN stage_pair p ON p.stage_assembly_id = m.stage_assembly_id "
+            "WHERE p.project_uid = :project AND p.state = 'confirmed' "
+            "AND m.action = 'add' AND NOT EXISTS ("
+            "SELECT 1 FROM stage_assembly_member r "
+            "WHERE r.reverses_member_id = m.stage_assembly_member_id AND r.action = 'remove')"
+        ),
+        {"project": project_uid},
+    ):
+        bound.add(document_uid)
+    return frozenset(bound)
 
 
 class StagePairReadRepository:
@@ -113,30 +142,29 @@ class StagePairReadRepository:
             {"project": project_uid},
         ).all()
         documents = tuple(StageDocument(*tuple(row)) for row in rows)
-        bound: set[str] = set()
-        for left, right in session.execute(
+        return suggest_stage_pairs(documents, bound_document_uids=_bound_document_uids(session, project_uid))
+
+    @staticmethod
+    def unpaired_counts(session: Session, *, project_uid: str) -> UnpairedCounts:
+        """`UIP-S16-02`: how many П documents and how many Р documents of the project have no pair. The classification is the current
+        confirmed one of each document's latest version (an expert's correction counts), the pairs are the confirmed ones and an
+        assembly counts by its current members; a document that is archived is not in use and is not counted. It is the whole project,
+        so it does not depend on the page of pairs a caller reads."""
+        StagePairReadRepository.require_project(session, project_uid)
+        rows = session.execute(
             text(
-                "SELECT left_document_uid, right_document_uid FROM stage_pair "
-                "WHERE project_uid = :project AND state = 'confirmed'"
+                "SELECT d.document_uid, c.project_stage FROM document d "
+                "JOIN LATERAL (SELECT v.version_uid FROM document_version v "
+                "WHERE v.document_uid = d.document_uid ORDER BY v.version_ordinal DESC LIMIT 1) latest ON TRUE "
+                "JOIN version_classification_current c ON c.version_uid = latest.version_uid "
+                "WHERE d.project_uid = :project AND d.archived_at IS NULL ORDER BY d.document_uid"
             ),
             {"project": project_uid},
-        ):
-            bound.add(left)
-            if right is not None:
-                bound.add(right)
-        for (document_uid,) in session.execute(
-            text(
-                "SELECT m.document_uid FROM stage_assembly_member m "
-                "JOIN stage_pair p ON p.stage_assembly_id = m.stage_assembly_id "
-                "WHERE p.project_uid = :project AND p.state = 'confirmed' "
-                "AND m.action = 'add' AND NOT EXISTS ("
-                "SELECT 1 FROM stage_assembly_member r "
-                "WHERE r.reverses_member_id = m.stage_assembly_member_id AND r.action = 'remove')"
-            ),
-            {"project": project_uid},
-        ):
-            bound.add(document_uid)
-        return suggest_stage_pairs(documents, bound_document_uids=frozenset(bound))
+        ).all()
+        return count_unpaired(
+            ((str(document_uid), str(stage)) for document_uid, stage in rows),
+            bound_document_uids=_bound_document_uids(session, project_uid),
+        )
 
 
 def _classification(session: Session, *, project_uid: str, document_uid: str) -> tuple[str, str]:

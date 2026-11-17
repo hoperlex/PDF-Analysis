@@ -9263,11 +9263,14 @@ class ComparisonStagePairAdapter(_StagesModuleGate):
             rows, next_pair = self._reads.page(
                 session, project_uid=project_uid, after_pair_id=after, limit=limit,
             )
+            unpaired = self._reads.unpaired_counts(session, project_uid=project_uid)
         return models.StagePairPage(
             items=[self._pair_view(row) for row in rows],
             page=models.PageInfo(
                 next_cursor=None if next_pair is None else encode_cursor((next_pair,))
             ),
+            unpaired_p_count=unpaired.stage_p,
+            unpaired_r_count=unpaired.stage_r,
         )
 
     def get_pair(self, *, pair_id: str) -> models.StagePair:

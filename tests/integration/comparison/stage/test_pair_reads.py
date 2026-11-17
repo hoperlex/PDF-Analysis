@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.bootstrap.adapters import ComparisonStagePairAdapter
 from auditmanager.comparison.stage.assemblies import StageAssemblyService
 from auditmanager.comparison.stage.pairs import StagePairCommandService, StagePairReadRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -237,3 +238,104 @@ def test_pair_command_refuses_a_foreign_document_without_revealing_it(
         text("SELECT count(*) FROM stage_pair WHERE project_uid = :project"),
         {"project": project},
     ).scalar_one() == 0
+
+
+# --- how many documents have no pair (`UIP-S16-02`) --------------------------------------------------------------------------
+
+
+def add_unclassified_document(session: Session, project: str, title: str) -> str:
+    document = uid("doc")
+    version = uid("ver")
+    session.execute(
+        text("INSERT INTO document (document_uid, project_uid, display_title) VALUES (:d, :p, :t)"),
+        {"d": document, "p": project, "t": title},
+    )
+    session.execute(
+        text(
+            "INSERT INTO document_version (version_uid, document_uid, version_ordinal, media_type, "
+            "byte_size, sha256, page_count) VALUES (:v, :d, 1, 'application/pdf', 4096, :sha, 1)"
+        ),
+        {"v": version, "d": document, "sha": "d" * 64},
+    )
+    return document
+
+
+def test_unpaired_counts_follow_the_confirmed_pairs_and_assemblies_of_the_whole_project(
+    comparison_session: Session,
+) -> None:
+    project, left, right, other, actor = seed(comparison_session)
+    repository = StagePairReadRepository()
+    sessions = sessionmaker(
+        bind=comparison_session.connection(), expire_on_commit=False,
+        future=True, join_transaction_mode="create_savepoint",
+    )
+
+    def counts() -> tuple[int, int]:
+        found = repository.unpaired_counts(comparison_session, project_uid=project)
+        return found.stage_p, found.stage_r
+
+    # the seed: one П, two Р, all classified by the expert
+    assert counts() == (1, 2)
+
+    # not counted: a document nobody classified, an archived one, and a document of another project
+    add_unclassified_document(comparison_session, project, "No stage yet")
+    archived = add_classified_document(comparison_session, project, actor, "R", "Archived 09")
+    comparison_session.execute(
+        text("UPDATE document SET archived_at = clock_timestamp(), archived_by_user_uid = :actor WHERE document_uid = :d"),
+        {"d": archived, "actor": actor},
+    )
+    foreign_project = uid("prj")
+    comparison_session.execute(
+        text("INSERT INTO project (project_uid, name) VALUES (:project, 'Foreign counts')"), {"project": foreign_project},
+    )
+    add_classified_document(comparison_session, foreign_project, actor, "P", "Foreign P")
+    assert counts() == (1, 2)
+
+    # a pair that is only suggested binds nothing; the second П document counts
+    extra = add_classified_document(comparison_session, project, actor, "P", "Extra 03")
+    comparison_session.execute(
+        text(
+            "INSERT INTO stage_pair (stage_pair_id, project_uid, left_document_uid, "
+            "right_document_uid, state) VALUES (:pair, :project, :left, :right, 'suggested')"
+        ),
+        {"pair": uid("stp"), "project": project, "left": extra, "right": other},
+    )
+    assert counts() == (2, 2)
+
+    # a confirmed pair binds its two documents
+    pairs = StagePairCommandService(sessions)
+    pairs.confirm_pair(
+        project_uid=project, left_document_uid=left, right_document_uid=right, assembly_id=None,
+        user_uid=actor, idempotency_key=f"stage-count-pair-{new_ulid()}",
+    )
+    assert counts() == (1, 1)
+
+    # an assembly binds nothing until a confirmed pair names it, and then binds its current members
+    third = add_classified_document(comparison_session, project, actor, "R", "Third 04")
+    assemblies = StageAssemblyService(sessions)
+    assembly = assemblies.create(
+        project_uid=project, label="Корпус Б", document_uids=(other, third), user_uid=actor,
+        idempotency_key=f"stage-count-assembly-{new_ulid()}",
+    )
+    assert counts() == (1, 2)
+    pairs.confirm_pair(
+        project_uid=project, left_document_uid=extra, right_document_uid=None, assembly_id=assembly.assembly_id,
+        user_uid=actor, idempotency_key=f"stage-count-assembly-pair-{new_ulid()}",
+    )
+    assert counts() == (0, 0)
+    assemblies.revise(
+        assembly_id=assembly.assembly_id, base_member_no=assembly.member_revision_no,
+        add_document_uids=(), remove_document_uids=(third,), user_uid=actor,
+        idempotency_key=f"stage-count-assembly-revise-{new_ulid()}",
+    )
+    assert counts() == (0, 1), "a member taken out of the assembly has no pair again"
+
+    # the wire answer carries the same two numbers on every page, whatever the page holds
+    adapter = ComparisonStagePairAdapter(sessions, comparison_modules="versions,stages")
+    first = adapter.list_pairs(project_uid=project, cursor=None, limit=1)
+    assert len(first.items) == 1 and first.page.next_cursor is not None
+    second = adapter.list_pairs(project_uid=project, cursor=first.page.next_cursor, limit=1)
+    whole = adapter.list_pairs(project_uid=project, cursor=None, limit=50)
+    assert len(second.items) == 1 and len(whole.items) == 3, "two confirmed pairs and the suggested one"
+    for page in (first, second, whole):
+        assert (page.unpaired_p_count, page.unpaired_r_count) == (0, 1)
