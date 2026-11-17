@@ -8,7 +8,8 @@
  * The strip is a view over the state and group filters; a state's press sets the value the «Состояние задачи» select sets. The numbers are
  * the page's `overview` (`UI-PARITY-P0M`): the server's count of every state over the period. A state with no job is not drawn, so the
  * strip stays one line, unless it is the state the list is narrowed to (a filter must always show what it is). A group is always drawn,
- * with its total, which is the number of rows its press lists.
+ * with its total, which is the number of rows its press lists. A state that is the only one drawn in its group (`UIP-S13-02`) is not drawn
+ * either, since the group's press already says it; it is drawn when the list is narrowed to it.
  */
 
 import type { ExecutionQueueStateCount } from '@/shared/api';
@@ -56,7 +57,10 @@ export function QueueStateStrip({ overview, selected, selectedGroup = '', onSele
       </button>
       {QUEUE_STATE_GROUPS.map((group) => {
         const groupTotal = group.states.reduce((sum, state) => sum + countOf(overview, state), 0);
-        const shown = group.states.filter((state) => countOf(overview, state) > 0 || state === selected);
+        const present = group.states.filter((state) => countOf(overview, state) > 0 || state === selected);
+        // `UIP-S13-02`: a state alone in its group would say what the group's own press says («Ошибки 9» and «Ошибка 9»), so it is not drawn,
+        // unless it is the one the list is narrowed to: a filter always shows what it is.
+        const shown = present.length === 1 && present[0] !== selected ? [] : present;
         return (
           <span key={group.key} className={styles.stateGroup} data-queue-group={group.key} data-queue-group-total={groupTotal}>
             {onSelectGroup === undefined ? (

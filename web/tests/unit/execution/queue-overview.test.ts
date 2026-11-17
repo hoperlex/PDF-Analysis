@@ -51,7 +51,9 @@ describe('the queue overview', () => {
       { job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'failed', priority: 0,
         created_at: CREATED, available_at: CREATED, attempt_count: 3, ...QUEUE_WORK },
     ]);
-    expect(markup).toContain('№ 2 в очереди');
+    // `UIP-S13-01`: the place is a short «№ 2» in the one-line row; the words are in its tooltip.
+    expect(markup).toContain('№ 2</span>');
+    expect(markup).toContain('title="Место в очереди: 2"');
     expect(markup).toContain('Попыток: 0');
     expect(markup).toContain('Попыток: 3');
     expect(markup.match(/data-queue-position=/g)).toHaveLength(1);

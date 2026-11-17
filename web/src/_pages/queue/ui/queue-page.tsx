@@ -6,9 +6,9 @@ import Link from 'next/link';
 import type { ExecutionQueueItem, RunStatus } from '@/shared/api';
 import { newIdempotencyKey } from '@/shared/api';
 import { routes, useAddressState } from '@/shared/lib';
-import { useMe } from '@/entities/account';
+import { mayActAsExpert, useMe } from '@/entities/account';
 import {
-  QUEUE_STATE_GROUPS, QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueStateCount,
+  QUEUE_STATE_GROUPS, QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease,
   runWorker, useExecutionQueue,
   useWorkerLookup,
 } from '@/entities/execution';
@@ -17,15 +17,21 @@ import { useCancelRun } from '@/features/cancel-run';
 import { useReauditCostApproval, useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
-import { ComparisonQueueBlock, ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
-import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import { ComparisonQueueBlock, ExecutionQueue, QueueProgress, QueueStateStrip } from '@/widgets/execution-queue';
+import { EmptyState, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { EMPTY_QUEUE_ADDRESS, readQueueAddress, writeQueueAddress } from '../model/address';
+import { cancellableCount } from '../model/cancel-queue';
+import { finishedCount, visibleRows } from '../model/hide-finished';
 import type { QueueAddress } from '../model/address';
-import { QUEUE_PERIOD_OPTIONS, isQueuePeriod, queuePeriodStart } from '../model/period';
+import { isQueuePeriod, queuePeriodStart } from '../model/period';
 import type { QueuePeriod } from '../model/period';
 import { reauditEstimateChanged, reauditStep } from '../model/reaudit-start';
 import type { ReauditStep } from '../model/reaudit-start';
+import { AddDocumentsPanel } from './add-documents-panel';
+import { CancelQueueButton, CancelQueuePanel } from './cancel-queue';
+import { QueueFilters } from './queue-filters';
 import { ReauditStart } from './reaudit-start';
+import { useCancelQueue } from './use-cancel-queue';
 import styles from './queue-page.module.css';
 
 interface RunIntent {
@@ -53,11 +59,19 @@ type NewIntent =
   | { readonly kind: 'priority'; readonly item: ExecutionQueueItem; readonly priority: number }
   | { readonly kind: 'pause'; readonly paused: boolean };
 
+/**
+ * The document and its version, as every confirmation of the queue names the work (`UIP-S13-02`, `Г12-B`): a run's number is a technical
+ * detail and is not on the main view; the document's name and the version are what the reader knows the work by.
+ */
+function workOf(item: ExecutionQueueItem): string {
+  return `документа «${item.document_name}», версия ${item.version_ordinal}`;
+}
+
 export function intentLabel(intent: Intent): string {
   switch (intent.kind) {
-    case 'cancel': return `Отменить прогон ${intent.item.run_id}?`;
-    case 'reaudit': return `Начать повторный аудит прогона ${intent.item.run_id}?`;
-    case 'priority': return `Установить приоритет ${intent.priority} для прогона ${intent.item.run_id}?`;
+    case 'cancel': return `Отменить прогон ${workOf(intent.item)}?`;
+    case 'reaudit': return `Начать повторный аудит ${workOf(intent.item)}?`;
+    case 'priority': return `Установить приоритет ${intent.priority} для ${workOf(intent.item)}?`;
     case 'pause': return intent.paused ? 'Приостановить выдачу задач?' : 'Возобновить выдачу задач?';
   }
 }
@@ -68,9 +82,13 @@ export interface QueuePageProps {
    * Inside the app router the address itself is the source and this is what it said; a static render starts from it.
    */
   readonly initialAddress?: QueueAddress | undefined;
+  /** Test seam (`UIP-S13-03`): the page starts with the panel «Добавить документы» open. */
+  readonly initiallyAdding?: boolean | undefined;
+  /** Test seam (`UIP-S13-03`): the page starts with the finished records hidden. */
+  readonly initiallyHidden?: boolean | undefined;
 }
 
-export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePageProps = {}) {
+export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS, initiallyAdding = false, initiallyHidden = false }: QueuePageProps = {}) {
   // The state and the period are in the address (`?state=&period=`), so a link opens the queue filtered, a reload keeps the filter and
   // the side menu's «Очередь» (no query) clears it. A choice REPLACES the entry: a filter is not a place to go Back to.
   const [address, setAddress] = useAddressState(readQueueAddress, writeQueueAddress, initialAddress);
@@ -92,6 +110,10 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
   const [commandFailure, setCommandFailure] = useState<ExecutionFailure | null>(null);
   const [lastRun, setLastRun] = useState<RunStatus | null>(null);
   const [completed, setCompleted] = useState(false);
+  // `UIP-S13-03`: the panel «Добавить документы», and the browser's own view that leaves the finished records out of the list. The view is
+  // not kept anywhere: it is gone with the page, and nothing is deleted or written to the server by it.
+  const [adding, setAdding] = useState(initiallyAdding);
+  const [hideFinished, setHideFinished] = useState(initiallyHidden);
   // `RUN-START-ONE-01b`: the server said the estimate changed, so the person looks at the new one before anything is sent.
   const [lookAgain, setLookAgain] = useState(false);
   // The estimate a repeated Run was sent for by the click alone, so a refusal of that send is not followed by another one.
@@ -116,8 +138,15 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
     intent?.kind === 'reaudit' ? intent.key : null);
   const priority = useSetJobPriority();
   const pause = usePauseExecution();
-  const busy = cancel.isPending || reaudit.isPending || priority.isPending || pause.isPending;
+  // `UIP-S13-04`: «Отменить очередь» is a sequence of cancels of its own; while it reads or sends, the page's other commands wait.
+  const sweep = useCancelQueue();
+  const busy = cancel.isPending || reaudit.isPending || priority.isPending || pause.isPending || sweep.busy;
   const roles = account.data?.roles ?? [];
+  // Putting work in the queue is starting an audit, which the server allows an expert only (`R-150e`); until the roles are read the way in stays.
+  const mayStart = mayActAsExpert(account.data?.roles);
+  const rows = queue.data?.items ?? [];
+  const shownRows = visibleRows(rows, hideFinished);
+  const finished = finishedCount(rows);
   const readFailure = queue.error === null ? null : executionFailure(queue.error, false);
   const accountFailure = account.error === null ? null : executionFailure(account.error, false);
   const next = queue.data?.page.next_cursor ?? null;
@@ -248,37 +277,27 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
       subtitle="Устойчивые задачи прогонов. Данные обновляются автоматически, пока вкладка открыта, и по запросу."
       actions={(
         <>
-          {/* The original's «+ Добавить проекты»: work enters the queue from a project's documents, so the way there is one click. */}
-          <Link href={routes.projects()} title="Выберите объект и запустите аудит его документов" data-queue-add>+ Добавить объекты</Link>
+          {/* `UIP-S13-04`: one press cancels what is waiting or running, run by run; drawn for the roles that may cancel a run, for a number the server said. */}
+          <CancelQueueButton count={canExecute(roles, 'cancel') ? cancellableCount(queue.data?.overview) : 0} busy={busy} onClick={sweep.begin} />
+          {/* The original's «+ Добавить проекты»: it opens the panel on this page, where the documents of an object are put in the queue. */}
+          {mayStart ? (
+            <button className="am-button" type="button" aria-expanded={adding} data-queue-add onClick={() => setAdding((open) => !open)}>
+              {adding ? 'Скрыть' : '+ Добавить документы'}
+            </button>
+          ) : null}
+          {/* `UIP-S13-03`: a view of this browser, nothing is deleted; with it on, the same place says how to bring the records back. */}
+          {finished > 0 || hideFinished ? (
+            <button className="am-button am-button--quiet" type="button" data-queue-hide-finished={finished} onClick={() => setHideFinished((hidden) => !hidden)}>
+              {hideFinished ? 'Показать всё' : `Убрать завершённые (${finished})`}
+            </button>
+          ) : null}
           <button className="am-button am-button--quiet" type="button" onClick={() => { void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>
         </>
       )}
     >
       <UpdateTime dataUpdatedAt={queue.dataUpdatedAt} failed={queue.isError} />
       <div className={styles.toolbar}>
-        <label>
-          Состояние задачи{' '}
-          <select
-            name="queue-state"
-            data-queue-state-filter
-            value={stateFilter}
-            onChange={(event) => chooseState(event.currentTarget.value)}
-          >
-            <option value="">Все состояния</option>
-            {QUEUE_STATE_OPTIONS.map((option) => {
-              // `UI-PARITY-P0M`: each state with its count, so the filter says what it would list.
-              const count = queueStateCount(queue.data?.overview, option.value);
-              return <option key={option.value} value={option.value}>{count === null ? option.label : `${option.label} (${count})`}</option>;
-            })}
-          </select>
-        </label>
-        <label>
-          Период{' '}
-          <select name="queue-period" data-queue-period-filter value={period.value} onChange={(event) => choosePeriod(event.currentTarget.value)}>
-            {QUEUE_PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
-        {/* `UI-B-51`, `UI-B-69`, `D-370`: the original's «Активные / Завершённые / Ошибки» with their counts; a group's press lists the whole group, a state's sets the state filter above. */}
+        {/* `UI-B-51`, `UI-B-69`, `D-370`: the original's «Активные / Завершённые / Ошибки» with their counts; a group's press lists the whole group, a state's sets the state filter. */}
         {queue.data?.overview === undefined ? null : (
           <QueueStateStrip
             overview={queue.data.overview}
@@ -288,6 +307,8 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
             onSelectGroup={chooseGroup}
           />
         )}
+        {/* `UIP-S13-02`: the state and the period are one button's panel, not two lists in the row. */}
+        <QueueFilters state={stateFilter} period={period.value} overview={queue.data?.overview} onState={chooseState} onPeriod={choosePeriod} />
         {account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
           <button
             type="button"
@@ -299,6 +320,9 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
           </button>
         ) : null}
       </div>
+      {/* `UIP-S13-02`: «N / M», its bar and «✓ N ✗ M», from the overview over the period. */}
+      <QueueProgress overview={queue.data?.overview} />
+      <CancelQueuePanel queue={sweep} />
       {queue.data?.paused === true ? <p role="status" className="am-note" data-execution-paused>Выдача задач приостановлена.</p> : null}
       {account.isPending ? <LoadingState what="права на управление очередью" /> : null}
       {accountFailure !== null ? (
@@ -321,30 +345,42 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
         */}
       {queue.data !== undefined ? (
         <div className={styles.panel}>
-          <ExecutionQueue
-            items={queue.data.items}
-            roles={roles}
-            asOf={asOf}
-            busy={busy}
-            filtered={stateFilter !== '' || groupFilter !== '' || period.from !== undefined}
-            workerOf={(runId) => runWorker(workers.data, workers.error !== null, runId)}
-            onCancel={(item) => select({ kind: 'cancel', item })}
-            onReaudit={(item) => select({ kind: 'reaudit', item })}
-            onPriority={(item, value) => select({ kind: 'priority', item, priority: value })}
-            onReorder={(item, value, place) => void reorder(item, value, place)}
-            reorderNote={reorderNote}
-            onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
-            onNext={next === null ? null : () => setCursors((current) => [...current, next])}
-          />
+          {hideFinished && shownRows.length === 0 && rows.length > 0 ? (
+            // Every record of this page is finished and hidden: say so, and keep the way to the other pages.
+            <div data-queue-all-hidden="">
+              <EmptyState title="Завершённые задачи скрыты" detail="На этой странице все задачи завершены. Нажмите «Показать всё», чтобы увидеть их." />
+              <p className={styles.pager}>
+                <button type="button" className="am-button am-button--quiet" disabled={cursors.length === 0} onClick={() => setCursors((current) => current.slice(0, -1))}>Назад</button>
+                <button type="button" className="am-button am-button--quiet" disabled={next === null} onClick={() => { if (next !== null) setCursors((current) => [...current, next]); }}>Далее</button>
+              </p>
+            </div>
+          ) : (
+            <ExecutionQueue
+              items={shownRows}
+              roles={roles}
+              asOf={asOf}
+              busy={busy}
+              filtered={stateFilter !== '' || groupFilter !== '' || period.from !== undefined}
+              workerOf={(runId) => runWorker(workers.data, workers.error !== null, runId)}
+              onCancel={(item) => select({ kind: 'cancel', item })}
+              onReaudit={(item) => select({ kind: 'reaudit', item })}
+              onPriority={(item, value) => select({ kind: 'priority', item, priority: value })}
+              onReorder={(item, value, place) => void reorder(item, value, place)}
+              reorderNote={reorderNote}
+              onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
+              onNext={next === null ? null : () => setCursors((current) => [...current, next])}
+            />
+          )}
         </div>
       ) : null}
+      {adding && mayStart ? <AddDocumentsPanel /> : null}
       <div className={styles.panel}>
         <ComparisonQueueBlock />
       </div>
       {intent !== null && intent.kind === 'reaudit' && reauditNow !== null ? (
         <ReauditStart
           step={reauditNow}
-          runId={intent.item.run_id}
+          work={workOf(intent.item)}
           estimate={reauditCost.estimate}
           ceiling={reauditCost.ceiling}
           changed={lookAgain}
@@ -380,7 +416,7 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
         </div>
       ) : null}
       {completed ? <p role="status" className="am-note">Команда выполнена.</p> : null}
-      {lastRun !== null ? <p><Link href={routes.run(lastRun.project_uid, lastRun.run_id)}>Открыть прогон {lastRun.run_id}</Link></p> : null}
+      {lastRun !== null ? <p><Link href={routes.run(lastRun.project_uid, lastRun.run_id)}>Открыть прогон</Link></p> : null}
     </PageShell>
   );
 }

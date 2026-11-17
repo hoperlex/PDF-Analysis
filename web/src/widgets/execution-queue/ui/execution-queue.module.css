@@ -11,26 +11,61 @@
   gap: var(--am-gap-xs);
 }
 
-/* A job is a line of the original's queue: state, place, work and times on one line, its facts in a muted line under it. */
+/*
+ * `UIP-S13-01`: a job is one line of the original's queue, one step of a list high (`--am-row-step`, `UIP-G-14`): the handle, the place, the work,
+ * its times, the state and the buttons, with «Подробнее ▾» at the line's end. A line that has more to say (why it waits, why it failed) says
+ * it in a muted line under, and the identities and the rest are in the panel «Подробнее ▾» opens. Tokens only.
+ */
 .row {
   min-width: 0;
   max-width: 100%;
-  padding: var(--am-gap-xs) var(--am-gap-sm);
+  padding: 0 var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-sm);
   overflow-wrap: anywhere;
 }
 
 .row p {
-  margin: var(--am-gap-xs) 0 0;
+  margin: 0 0 var(--am-gap-xs);
 }
 
 .line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 var(--am-gap);
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  min-height: var(--am-row-step);
   min-width: 0;
+}
+
+/* The place in the dispatcher's order: a short «№ 3», kept whole. */
+.place {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* «Подробнее ▾» stands at the right end of the line, after the buttons of the row. */
+.moreToggle {
+  margin-left: auto;
+}
+
+/* The panel under the line: the worker, the running line of facts and the priority field. */
+.more {
+  padding: var(--am-gap-xs) 0 var(--am-gap-sm);
+}
+
+.priorityForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+.priorityForm input {
+  width: 5rem;
+  max-width: 100%;
+  margin-left: var(--am-gap-xs);
 }
 
 /* `UI-B-52`: the original's drag handle at the head of a waiting job, and the row a drag is over (`queue-item--drag-over`). */
@@ -58,7 +93,7 @@
 }
 
 .work {
-  flex: 1 1 18rem;
+  flex: 1 1 14rem;
   min-width: 0;
   font-weight: 600;
 }
@@ -67,11 +102,6 @@
   font-size: var(--am-text-sm);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-
-.priority {
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
 }
 
 .identity code {
@@ -99,19 +129,6 @@
 nav.actions {
   justify-content: space-between;
   margin-top: var(--am-gap-sm);
-}
-
-.actions form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--am-gap-sm);
-}
-
-.actions input {
-  width: 5rem;
-  max-width: 100%;
-  margin-left: var(--am-gap-xs);
 }
 
 /* The read-only block «Сравнение» under the list (`CMP-VC-UI-01`): layout only, every colour from the global classes. */
@@ -202,4 +219,24 @@ nav.actions {
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
   font-weight: 600;
+}
+
+/* `UIP-S13-02`: the line of progress «N / M ▮▮▯ ✓ N ✗ M» over the list. Sizes and gaps only. */
+.progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressCount {
+  font-weight: 600;
+}
+
+.progressBar {
+  width: min(20rem, 100%);
+  height: var(--am-gap-sm);
 }

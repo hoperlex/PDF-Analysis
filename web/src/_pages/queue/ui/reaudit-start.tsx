@@ -7,7 +7,7 @@
  * An estimate that charges nothing is agreed to by the click on «Повторный аудит», so the only things drawn on its way
  * are the line while it is read and the line while it is sent: no panel, no tick-box, no second press. An estimate that
  * can charge opens ONE dialog, the same one the start control opens (`@/features/start-run`), with «Запустить» and
- * «Отмена»; its subject names the Run that is repeated.
+ * «Отмена»; its subject names the document and the version that are repeated.
  */
 
 import type { RunCostEstimate } from '@/shared/api';
@@ -20,7 +20,8 @@ import styles from './queue-page.module.css';
 
 export interface ReauditStartProps {
   readonly step: ReauditStep;
-  readonly runId: string;
+  /** The work that is repeated, as the confirmations name it: «документа «АР», версия 2». Never a run's number (`UIP-S13-02`). */
+  readonly work: string;
   /** The estimate and its ceiling, for the `ask` step. */
   readonly estimate: RunCostEstimate | null;
   readonly ceiling: string;
@@ -42,7 +43,7 @@ export interface ReauditStartProps {
 }
 
 export function ReauditStart({
-  step, runId, estimate, ceiling, changed, busy, failure, onCeilingChange, onConfirm, onCancel, onReadAgain, onRetry,
+  step, work, estimate, ceiling, changed, busy, failure, onCeilingChange, onConfirm, onCancel, onReadAgain, onRetry,
 }: ReauditStartProps) {
   switch (step) {
     case 'reading':
@@ -62,7 +63,7 @@ export function ReauditStart({
           ceiling={ceiling}
           changed={changed}
           busy={busy}
-          subject={`Повторный аудит прогона ${runId}.`}
+          subject={`Повторный аудит ${work}.`}
           onCeilingChange={onCeilingChange}
           onConfirm={onConfirm}
           onCancel={onCancel}
