@@ -336,6 +336,38 @@ describe('the idempotency key follows the intent, whatever else is pressed meanw
     expect(calls[2]?.idempotencyKey).toBe(calls[0]?.idempotencyKey);
   });
 
+  it('keeps the key of A’s retry with the same reason after B was pressed with its own reason in between (`UIP-S06-02`)', async () => {
+    render(A).verdict.record('accept', OBS_A, undefined, 'Пункт подтверждён');
+    await flush();
+    calls[0]?.settle(REFUSED);
+    await flush();
+
+    render(B).verdict.record('reject', OBS_B, undefined, 'Не относится к разделу');
+    await flush();
+    calls[1]?.settle('ok');
+    await flush();
+
+    render(A).verdict.record('accept', OBS_A, undefined, 'Пункт подтверждён');
+    await flush();
+    expect(calls).toHaveLength(3);
+    expect(calls.map((call) => call.body.comment)).toEqual(['Пункт подтверждён', 'Не относится к разделу', 'Пункт подтверждён']);
+    expect(calls[2]?.idempotencyKey).toBe(calls[0]?.idempotencyKey);
+    expect(calls[1]?.idempotencyKey).not.toBe(calls[0]?.idempotencyKey);
+  });
+
+  it('mints another key when A is pressed again with other text after the failure (`UIP-S06-02`)', async () => {
+    render(A).verdict.record('accept', OBS_A, undefined, 'Пункт подтверждён');
+    await flush();
+    calls[0]?.settle(REFUSED);
+    await flush();
+    render(A).verdict.record('accept', OBS_A, undefined, 'Пункт подтверждён частично');
+    await flush();
+
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.body.comment).toBe('Пункт подтверждён частично');
+    expect(calls[1]?.idempotencyKey).not.toBe(calls[0]?.idempotencyKey);
+  });
+
   it('keeps the key of a comment’s retry after another finding’s comment failed in between', async () => {
     render(A).comment.append('Срок согласован.', OBS_A);
     await flush();

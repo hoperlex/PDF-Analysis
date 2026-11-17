@@ -116,23 +116,35 @@ describe('✓/✕ on a block finding', () => {
   it('records an accept against the block finding and its canonical observation', async () => {
     expect(block().observation.evidence).toEqual([]);
 
-    rowActions(block()).onAccept();
+    rowActions(block()).onAccept('');
     await flush();
 
     expect(sent).toEqual([{ findingUid: BLOCK_UID, body: { event_type: 'accept', finding_observation_id: BLOCK_OBSERVATION } }]);
   });
 
   it('records a reject against the block finding and its canonical observation', async () => {
-    rowActions(block()).onReject();
+    rowActions(block()).onReject('');
     await flush();
 
     expect(sent).toEqual([{ findingUid: BLOCK_UID, body: { event_type: 'reject', finding_observation_id: BLOCK_OBSERVATION } }]);
   });
 
+  it('records the reason typed beside ✓ and ✕ as the comment of the same event, and none when the field is empty (`UIP-S06-02`)', async () => {
+    rowActions(block()).onAccept(' Размер проёма подтверждён по чертежу ');
+    await flush();
+    rowActions(block()).onReject('');
+    await flush();
+
+    expect(sent).toEqual([
+      { findingUid: BLOCK_UID, body: { event_type: 'accept', finding_observation_id: BLOCK_OBSERVATION, comment: 'Размер проёма подтверждён по чертежу' } },
+      { findingUid: BLOCK_UID, body: { event_type: 'reject', finding_observation_id: BLOCK_OBSERVATION } },
+    ]);
+  });
+
   it('shows the verdict the server answered with, so the pressed button reads as pressed', async () => {
     expect(rowActions(block()).verdict).toBe('pending');
 
-    rowActions(block()).onAccept();
+    rowActions(block()).onAccept('');
     await flush();
 
     expect(rowActions(block()).verdict).toBe('accepted');
@@ -145,7 +157,7 @@ describe('✓/✕ on a block finding', () => {
       observation: observation({ ...blockFinding().observation, finding_observation_id: BLOCK_OBSERVATION, proposed_severity: 'critical' }),
     });
 
-    rowActions(proposed).onAccept();
+    rowActions(proposed).onAccept('');
     await flush();
 
     expect(sent).toEqual([]);
