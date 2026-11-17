@@ -32,6 +32,7 @@ export default async function SectionOptimisationRoute({ params, searchParams }:
         section: first(query.section),
         project: first(query.project),
         tab: first(query.tab),
+        document: first(query.document),
       })}
     />
   );
