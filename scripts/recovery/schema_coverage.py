@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0070_document_group"
+HEAD = "0071_run_restart"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -481,6 +481,9 @@ TRIGGERS = (
     ("norm_crop_render", "trg_norm_crop_render_immutable", "am_immutable_row", 27),
     # `0066_run_deletion` (`RUN-DELETE-01`): a tombstone is immutable (27 = ROW | BEFORE | DELETE | UPDATE); there is no restore.
     ("audit_run_deletion", "trg_audit_run_deletion_immutable", "am_immutable_row", 27),
+    # `0071_run_restart` (`RUN-RESTART-01`): a tombstone that names a restart's command is written only for the source of a run that published
+    # (7 = ROW | BEFORE | INSERT).
+    ("audit_run_deletion", "trg_audit_run_deletion_by_restart", "am_guard_run_deletion_by_restart", 7),
     # `0067_precedents_wave5` (`CRIT-SEAL-53`). 27 = ROW | BEFORE | DELETE | UPDATE; 7 = ROW | BEFORE | INSERT. A pattern and its journal take the forget
     # guard of `0061` and the guard on INSERT of `0064`; the journal is numbered per pattern without a gap and has the database's own transition rule
     # (the number trigger fires first, by name); the facts and the cross evidence are immutable, and the cross evidence is held to another version of the
@@ -584,7 +587,9 @@ SEQUENCES = {
 #: `0069_account_last_project` (`UIP-G-05`) adds one table: two checks (the shapes of the two identities), one foreign key (the account) and the
 #: primary key (one row per account): c 1596, f 418, p 170, t 9, u 143.
 #: `0070_document_group` (`UIP-G-10`) adds one check to the existing ``document`` table (``ck_document_group_label_length``): c 1597.
-CONSTRAINT_COUNTS = {"c": 1597, "f": 418, "p": 170, "t": 9, "u": 143}
+#: `0071_run_restart` (`RUN-RESTART-01`) adds two checks to ``audit_run`` (``ck_audit_run_restart_point`` and ``ck_audit_run_restart_has_starter_and_command``;
+#: ``ck_audit_run_started_from_pair`` is redefined, same name): c 1599 (measured on a throwaway database at ``0071``, 2026-11-17).
+CONSTRAINT_COUNTS = {"c": 1599, "f": 418, "p": 170, "t": 9, "u": 143}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -608,7 +613,9 @@ CONSTRAINT_COUNTS = {"c": 1597, "f": 418, "p": 170, "t": 9, "u": 143}
 #: `0066_run_deletion` adds two (its primary key and the unique receipt) and `0067_precedents_wave5` eleven (four primary keys, three unique
 #: constraints and four lookups): 528 + 13 = 541 (re-measured on a throwaway database at ``0067``, 2026-11-11, main→dev merge).
 #: `0069_account_last_project` adds one (its primary key): 542.
-INDEX_COUNT = 542
+#: `0071_run_restart` adds two (the partial unique indexes of the active restart of a source and of the command of a restart): 544 (measured on a
+#: throwaway database at ``0071``, 2026-11-17).
+INDEX_COUNT = 544
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((
