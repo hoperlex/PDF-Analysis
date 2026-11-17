@@ -236,9 +236,10 @@ describe('the findings a tile counts are those that cite its PAGE', () => {
   });
 
   it('maps the severities to the badge tones the severity badge uses, and a missing one to neutral', () => {
-    expect(
-      (['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'] as const).map(severityTone),
-    ).toEqual(['failed', 'degraded', 'active', 'inert', 'inert']);
+    const tones = (['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'] as const).map(severityTone);
+    expect(tones).toEqual(['failed', 'degraded', 'active', 'ok', 'inert']);
+    // Five severities, five tones (`UIP-S06-03`): it said `inert` twice for a while and nothing asked for the count.
+    expect(new Set(tones).size).toBe(5);
     expect(severityTone(null)).toBe('inert');
   });
 

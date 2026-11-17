@@ -1,0 +1,11 @@
+/*
+ * `UIP-S06-03`: the model's proposed severity is the same pill in the same tone with a dashed edge.
+ *
+ * No colour is declared here: the tone (ink, tint, edge colour) comes from the `am-badge--*` modifier the badge also carries,
+ * where the contrast census reads it. The element-and-class selector outranks `.am-badge`'s own `border: 1px solid`, whatever
+ * order the two sheets arrive in. The dashed edge is the second carrier of «this is a proposal»; the word and the tooltip are
+ * the others, so the difference never rests on a dash alone.
+ */
+span.proposed {
+  border-style: dashed;
+}

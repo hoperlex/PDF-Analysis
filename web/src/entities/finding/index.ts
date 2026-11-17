@@ -34,6 +34,14 @@ export {
   normCitationStateMeaning,
 } from './model/citation-labels';
 
+/**
+ * `UIP-S06-03`: the badge tone of a severity, computed once. The severity badge and the round count on a block tile
+ * (`widgets/portal-blocks`) both read it. `SeverityBadge` has a `proposed` variant for the model's proposal: a dashed pill with
+ * the word «предложено», the tooltip «Предложение модели, не решение эксперта» and `data-proposed-severity` in place of
+ * `data-severity`.
+ */
+export type { SeverityTone } from './model/severity-tone';
+export { severityTone } from './model/severity-tone';
 export type { SeverityBadgeProps } from './ui/severity-badge';
 export { SeverityBadge } from './ui/severity-badge';
 
