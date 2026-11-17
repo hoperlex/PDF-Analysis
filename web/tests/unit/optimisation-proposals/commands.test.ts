@@ -64,7 +64,12 @@ import * as react from 'react';
 import type { OptimisationPass, ProposalDecisionResult } from '@/shared/api';
 import { decideOptimisationProposal, queryKeys, startOptimisationPass } from '@/shared/api';
 import type { DecideOptimisationProposalCommand } from '@/features/decide-optimisation-proposal';
-import { decisionSignature, useDecideOptimisationProposal } from '@/features/decide-optimisation-proposal';
+import {
+  decisionInForce,
+  decisionSignature,
+  normalisedComment,
+  useDecideOptimisationProposal,
+} from '@/features/decide-optimisation-proposal';
 import type { StartOptimisationPassCommand } from '@/features/start-optimisation-pass';
 import { useStartOptimisationPass } from '@/features/start-optimisation-pass';
 
@@ -158,6 +163,34 @@ describe('starting a pass', () => {
       [{ queryKey: queryKeys.optimisation.allPasses() }],
       [{ queryKey: queryKeys.optimisation.proposalsOf(PASS_ID) }],
     ]);
+  });
+});
+
+describe('the reason of a press (`UIP-S09-03`)', () => {
+  it('is sent trimmed, and as no comment at all when the field is empty or blank', () => {
+    expect(normalisedComment('  Марка подходит  ')).toBe('Марка подходит');
+    expect(normalisedComment('')).toBeNull();
+    expect(normalisedComment('   ')).toBeNull();
+  });
+
+  it('is the comment of the verdict whatever the verdict: the field goes in the same event', async () => {
+    vi.mocked(decideOptimisationProposal).mockResolvedValue({ data: {} } as never);
+    for (const verdict of ['accept', 'reject', 'revise', 'revoke'] as const) {
+      await decideHook().mutationFn({ ...DECIDE, verdict, comment: normalisedComment(' причина ') });
+    }
+    const bodies = vi.mocked(decideOptimisationProposal).mock.calls.map((call) => call[0]?.body);
+    expect(bodies).toEqual([
+      { verdict: 'accept', comment: 'причина' },
+      { verdict: 'reject', comment: 'причина' },
+      { verdict: 'revise', comment: 'причина' },
+      { verdict: 'revoke', comment: 'причина' },
+    ]);
+  });
+
+  it('says a decision is in force until it is withdrawn: nothing decided and a withdrawal are not', () => {
+    expect(decisionInForce(null)).toBe(false);
+    expect(decisionInForce(decision({ verdict: 'revoke' }))).toBe(false);
+    for (const verdict of ['accept', 'reject', 'revise'] as const) expect(decisionInForce(decision({ verdict }))).toBe(true);
   });
 });
 

@@ -69,7 +69,10 @@ import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { SpecificationPricesAnswer, SpecificationPricesChooser } from '@/widgets/specification-prices';
-import { OptimisationByDocument, ProposalSetChooser } from '@/widgets/optimisation-proposals';
+import { ExportProposalsView, OptimisationByDocument, OptimisationProposals, ProposalListView, ProposalSetChooser } from '@/widgets/optimisation-proposals';
+import { CarryOverProposalDecisionsView } from '@/features/carry-over-proposal-decisions';
+import { ImportProposalDecisionsView } from '@/features/import-proposal-decisions';
+import { carrySources } from '@/entities/optimisation-proposal';
 import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
@@ -213,7 +216,11 @@ import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixt
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY, seedExecutors,
 } from '../workers/executor-fixtures';
-import { carryOverShapes, proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
+import {
+  AR_DOCUMENT_UID as PROPOSALS_DOCUMENT_UID, OLDER_PASS_ID as PROPOSALS_OLDER_PASS_ID, PROPOSALS_PROJECT_UID, SHEET_URL as PROPOSALS_SHEET_URL, carryOverShapes, decision as proposalDecision,
+  pass as proposalPass, proposal as proposalOf, proposalPage as proposalPageOf, proposalShapes, seedLoadedProposals,
+  tapeProposal as tapeProposalOf,
+} from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
 import { ACCEPTED_PROJECT_A, acceptedPage } from '../section-optimisation/fixtures';
 
@@ -3703,6 +3710,75 @@ export function screens(): Screen[] {
         view, groups: groupByCategory(rows), selectedFindingUid: null, onSelect: noop, renderRowActions: actions,
       })));
     }
+  }
+
+  /*
+   * `UIP-S09-02`: the top row of the proposals tab with every part drawn at once -- the plates with their counts and «Всего», the link to
+   * the cards, «Файлы ▾», «Загрузить решения» with the refusal of two rows and of the file, «Перенести решения из V1» asking for its
+   * confirmation, and a refused file in the line under the row; then the same row while a file is being made. The table under it carries
+   * a decided row of each colour. At the very end, for the reason above.
+   */
+  {
+    const open = proposalPass({ version_ordinal: 2, decision_counts: { pending: 1, accept: 1, reject: 1, revise: 0 }, proposal_count: 3 });
+    const earlier = proposalPass({
+      optimisation_pass_id: PROPOSALS_OLDER_PASS_ID, version_ordinal: 1, decision_counts: { pending: 2, accept: 3, reject: 1, revise: 2 },
+    });
+    const sources = carrySources([open, earlier], open);
+    const page = proposalPageOf({
+      optimisation_pass: open,
+      items: [
+        proposalOf({ current_verdict: 'accept', current_decision: proposalDecision({ verdict: 'accept' }) }),
+        tapeProposalOf(),
+        proposalOf({
+          optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4QA3', ordinal: 3, current_verdict: 'reject',
+          current_decision: proposalDecision({ verdict: 'reject', comment: null }),
+        }),
+      ],
+      total: 3,
+    });
+    const view = (actions: ReactElement) => renderScreen(newClient(), createElement(ProposalListView, {
+      page, canDecide: false, onDecision: noop, onPage: noop, layout: 'table', onLayout: noop,
+      sheet: { url: PROPOSALS_SHEET_URL, isLoading: false, failure: null, onRetry: noop }, actions,
+    }));
+    add('OptimisationProposals top row, files, load refused, carrying over to confirm, file refused', view(createElement(ExportProposalsView, {
+      pending: false,
+      failure: { detail: 'Файл не удалось выгрузить.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100' } as never,
+      onDownload: noop,
+      onDownloadXlsx: noop,
+      importControl: createElement(ImportProposalDecisionsView, {
+        pending: false, onChoose: noop, failure: 'Файл пуст.',
+        report: {
+          optimisation_pass_id: open.optimisation_pass_id, recorded: 1, unchanged: 1, refused: 2,
+          rows: [
+            { row: 4, outcome: 'refused', reason: 'unknown_proposal' },
+            { row: 7, outcome: 'refused', reason: 'comment_required' },
+          ],
+        },
+      }),
+      carryOverControl: createElement(CarryOverProposalDecisionsView, {
+        sources, confirming: sources[0] ?? null, pending: false, report: null, failure: null, onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    })));
+    add('OptimisationProposals top row, a file being made', view(createElement(ExportProposalsView, {
+      pending: true, failure: null, onDownload: noop, onDownloadXlsx: noop,
+    })));
+  }
+
+  /*
+   * `UIP-S09-04`: «Проход от … ▾» of a set with a single pass (the panel holds the facts and no choice), and of a set whose newest pass
+   * the address does not name (the line that says so over the top row). The panel of the two passes is in «OptimisationProposals loaded».
+   * At the very end, for the reason above.
+   */
+  {
+    const one = newClient();
+    seedLoadedProposals(one);
+    one.setQueryData(queryKeys.optimisation.passes(PROPOSALS_PROJECT_UID, PROPOSALS_DOCUMENT_UID), { items: [proposalPass()] });
+    add('OptimisationProposals one pass', renderScreen(one, createElement(OptimisationProposals, { projectUid: PROPOSALS_PROJECT_UID, roles: ['expert'] })));
+    const missing = newClient();
+    seedLoadedProposals(missing);
+    add('OptimisationProposals pass of the address not found', renderScreen(missing, createElement(OptimisationProposals, {
+      projectUid: PROPOSALS_PROJECT_UID, roles: ['expert'], passId: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q9X', onPassChange: noop,
+    })));
   }
 
   return out;

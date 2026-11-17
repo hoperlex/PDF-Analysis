@@ -83,19 +83,170 @@
 }
 
 /*
- * `UI-B-05`: the original's strip -- the counts by decision, and the buttons beside them. The filter keeps its place at
- * the left and the actions stand at the right; they wrap under it on a narrow screen.
+ * `UIP-S09-04`: «Проход от … ▾». The element is a `<details>` at the right of the top row: its summary is the row's quiet button and
+ * its panel opens under it, anchored to its right edge and capped by the viewport, as the export bar's panels are. It holds the
+ * choice of a pass (`.passes`) and the facts of the open one (`.facts`, in two columns here, since the panel is narrower than the tab).
+ * Tokens only.
+ */
+.passMenu {
+  position: relative;
+  display: inline-block;
+}
+
+.passTrigger {
+  list-style: none;
+}
+
+.passTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.passPopup {
+  position: absolute;
+  top: calc(100% + var(--am-gap-2xs));
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  min-width: 20rem;
+  max-width: min(38rem, calc(100vw - 2 * var(--am-gap-md)));
+  max-height: 70vh;
+  overflow: auto;
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  text-align: left;
+}
+
+.passPopup .facts {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+/* While the proposals are on their way or refused, the element stands alone at the right, where it will stand in the top row. */
+.passOnly {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 var(--am-gap-sm);
+}
+
+/*
+ * `UI-B-05`, `UIP-S09-02`: the top row, as the original's -- the plates of the decisions with their counts and «Всего: N» at the
+ * left, the files and the loading of decisions at the right. One row; it wraps as a whole on a narrow screen (the right half drops
+ * under the left, still at the right edge). Nothing stands over it. A refusal of a file is a line of its own under the row
+ * (`.refusal`, as wide as the row), and the line that says a file is being made (`.fileNote`) stands at the right under the buttons.
  */
 .strip {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--am-gap-xs) var(--am-gap);
   margin: 0 0 var(--am-gap-sm);
 }
 
-.strip > .filters {
+.stripLeft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  min-width: 0;
+}
+
+.stripLeft > .filters {
+  margin: 0;
+}
+
+/* «Всего: N»: the pass's count, the quiet figure after the plates. */
+.total {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  white-space: nowrap;
+}
+
+/* `UIP-S09-01`: the link to the other layout stands after the plates; the actions keep the right edge. */
+.stripLeft > .layoutSwitch {
+  align-self: center;
+}
+
+/*
+ * The right half. The buttons stand in one row, flush right. «Загрузить решения» and «Перенести решения из V#» are the features'
+ * own controls, drawn as they were: each is a box of its own (`display: contents` here) so that its button is one more item of this
+ * row and each line of its report (the counts, the refused rows, the confirmation, a refusal of the file) is a row of its own at
+ * the row's end, under the buttons.
+ */
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+  margin-left: auto;
+}
+
+.tools > [data-proposal-decision-import],
+.tools > [data-proposal-decision-carryover] {
+  display: contents;
+}
+
+.tools > [data-proposal-decision-import] > p,
+.tools > [data-proposal-decision-import] > ul,
+.tools > [data-proposal-decision-carryover] > ul,
+.tools > [data-proposal-decision-carryover] > p,
+.tools > [data-proposal-decision-carryover] > [data-carryover-confirm] {
+  flex-basis: 100%;
+  order: 3;
+  max-width: none;
+  margin: 0;
+  text-align: right;
+}
+
+.tools > [data-proposal-decision-import] > ul,
+.tools > [data-proposal-decision-carryover] > ul {
+  padding: 0;
+  list-style: none;
+}
+
+/* «Файлы ▾»: the shared menu's trigger drawn as the row's quiet button; the popup keeps the menu's own rules and opens at its right edge. */
+.files {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.files :global(.am-menu__trigger) {
+  min-height: 34px;
+  padding: 6px 14px;
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font-size: var(--am-text-md);
+  font-weight: 500;
+}
+
+.files :global(.am-menu__trigger:hover),
+.files :global(.am-menu__trigger[aria-expanded='true']) {
+  border-color: var(--am-ink-soft);
+  background: var(--am-surface);
+  box-shadow: none;
+}
+
+.fileNote {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  text-align: right;
+}
+
+.refusal {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.filters {
   margin: 0;
 }
 
@@ -199,17 +350,6 @@
 
 .judgement > p {
   margin-top: 0;
-}
-
-/* The form in the last column: a tighter stack and its two hints at the small size, so the column is not the tallest part. */
-.judgement :global(.am-form) {
-  gap: var(--am-gap-xs);
-  max-width: none;
-}
-
-.judgement :global(.am-form__hint) {
-  margin: 0;
-  font-size: var(--am-text-xs);
 }
 
 @media (max-width: 1100px) {

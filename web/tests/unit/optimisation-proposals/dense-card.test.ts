@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
+import { ProposalDecisionFormView } from '@/features/decide-optimisation-proposal';
 import { ProposalCard, ProposalTable } from '@/widgets/optimisation-proposals';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
@@ -67,6 +68,43 @@ describe('a proposal row', () => {
   });
 });
 
+/**
+ * `UIP-S09-03`: the field of the decision stands in the verdict group of a card and in the decision cell of a table row, after the
+ * decision line, and is one component in both places: ✓, ✕, «⋯» and the one-line «Причина» of the entity.
+ */
+describe('the decision field in a card and in a row (`UIP-S09-03`)', () => {
+  const noop = (): void => undefined;
+  const field = (item = proposal({ current_verdict: 'pending', current_decision: null })) =>
+    createElement(ProposalDecisionFormView, {
+      proposalId: item.optimisation_proposal_id, current: item.current_decision, reason: '', sending: null, note: null,
+      onReason: noop, onDecide: noop,
+    });
+
+  it('stands in the verdict group of a card, after the decision line and before the history', () => {
+    const markup = renderScreen(newClient(), createElement(ProposalCard, {
+      proposal: proposal({ current_verdict: 'revise', current_decision: decision() }),
+      controls: field(proposal({ current_verdict: 'revise', current_decision: decision() })),
+      history: createElement('div', { 'data-test-history': '' }),
+    }));
+    const group = /<div class="[^"]*judgement[^"]*">([\s\S]*?)<\/div><\/article>/.exec(markup)?.[1] ?? '';
+    expect(group.indexOf('data-decision-control')).toBeGreaterThan(group.indexOf('Решение:'));
+    expect(group.indexOf('data-test-history')).toBeGreaterThan(group.indexOf('data-decision-control'));
+    expect(group).toContain('data-decision-reason');
+    expect(group).not.toContain('<textarea');
+  });
+
+  it('stands in the decision cell of a table row, once, with the same markers as in a card', () => {
+    const item = proposal({ current_verdict: 'revise', current_decision: decision() });
+    const markup = renderScreen(newClient(), createElement(ProposalTable, { items: [item], canDecide: true, controlsFor: field }));
+    const cell = /<td class="[^"]*judgement[^"]*">([\s\S]*?)<\/td><\/tr>/.exec(markup)?.[1] ?? '';
+    expect(cell.match(/data-decision-control=""/g)).toHaveLength(1);
+    expect(cell.match(/data-intent="(accept|reject)"/g)).toHaveLength(2);
+    expect(cell).toContain(`data-proposal-decision="${item.optimisation_proposal_id}"`);
+    // The columns are the same seven: the reason is no column of its own.
+    expect(markup.match(/<th /g)).toHaveLength(7);
+  });
+});
+
 describe('the action bar of a proposals tab', () => {
   function loaded(): string {
     const shape = proposalShapes().find((entry) => entry.name === 'proposals-loaded');
@@ -104,15 +142,19 @@ describe('the strip over the proposals (UI-B-05)', () => {
     const first = markup.indexOf('data-proposal="');
     expect(filter).toBeGreaterThan(-1);
     expect(exportAt).toBeGreaterThan(filter);
+    // The facts stand in the panel of the pass element, which is the last item of the strip's right half (`UIP-S09-04`).
     expect(facts).toBeGreaterThan(exportAt);
     expect(first).toBeGreaterThan(facts);
     // One strip holds both.
     expect(markup.slice(markup.lastIndexOf('<div', filter), exportAt)).toMatch(/strip/);
   });
 
-  it('keeps the pass’s facts in the markup, in a block the reader opens', () => {
+  it('keeps the pass’s facts in the markup, behind the button «Проход от … ▾» the reader opens (`UIP-S09-04`)', () => {
     const markup = loaded();
-    expect(markup).toMatch(/<details[^>]*data-pass-summary=""[^>]*><summary>Сведения о проходе<\/summary>/);
+    // The disclosure «Сведения о проходе» is gone: the facts stand in the panel of the one element of the pass, closed.
+    expect(markup).not.toContain('Сведения о проходе');
+    expect(markup).toMatch(/<details[^>]*data-pass-menu=""[^>]*><summary[^>]*>Проход от /);
+    expect(/<details[^>]*data-pass-menu=""[^>]*>/.exec(markup)?.[0]).not.toContain('open');
     expect(markup).toContain('не смешиваются со счётчиками замечаний');
   });
 });
