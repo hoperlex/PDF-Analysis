@@ -82,12 +82,12 @@ const CONFIRMED_PAIR = {
 
 test('D-380: the confirmed-pair state needs the counter to count a pair AND the table to be drawn', () => {
   const probe = (nodes) => runInNewContext(stateProbeExpression(CONFIRMED_PAIR), pageOf(nodes));
-  const withPair = probe({ '[data-pair-counters]': [{ innerText: 'Сопоставлено: 1 · Возможных пар: 0' }], 'section table': [{ innerText: 'x' }] });
+  const withPair = probe({ '[data-pair-counters]': [{ innerText: 'Сопоставлено: 1 · Возможных: 0' }], 'section table': [{ innerText: 'x' }] });
   assert.deepEqual({ ok: withPair.ok, seen: [...withPair.seen] }, { ok: true, seen: [1, 1] });
-  const noPair = probe({ '[data-pair-counters]': [{ innerText: 'Сопоставлено: 0 · Возможных пар: 4' }], 'section table': [] });
+  const noPair = probe({ '[data-pair-counters]': [{ innerText: 'Сопоставлено: 0 · Возможных: 4' }], 'section table': [] });
   assert.equal(noPair.ok, false, 'no confirmed pair is not the state');
   assert.deepEqual([...noPair.seen], [0, 0]);
-  const noTable = probe({ '[data-pair-counters]': [{ innerText: 'Сопоставлено: 2 · Возможных пар: 0' }] });
+  const noTable = probe({ '[data-pair-counters]': [{ innerText: 'Сопоставлено: 2 · Возможных: 0' }] });
   assert.equal(noTable.ok, false, 'a counter without its table is not the state');
   assert.deepEqual([...noTable.seen], [1, 0]);
   const chooser = probe({});
