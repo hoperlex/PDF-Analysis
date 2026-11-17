@@ -10,7 +10,9 @@
  *   - once the server has written the press the field is empty and the line says «Записано»;
  *   - a press the browser refuses before sending (✓ on a finding with a proposed severity the expert has not chosen) and a press
  *     the server fails leave the text where it is, and pressing again with that text reuses the idempotency key of the first
- *     press -- while other text, or the other verdict, is another command with another key.
+ *     press -- while other text, or the other verdict, is another command with another key;
+ *   - the choice «Критичность» beside ✓ (`UIP-S06-08`): the severity the expert chose goes with the reason in the same accept, a ✓
+ *     without a choice says so in the row and opens nothing, and a finding the model proposed no severity for has no select.
  */
 
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -49,14 +51,14 @@ let written = 0;
 
 const MARKER = 'Записано';
 
-function row(subject: Finding, onOpen: (findingUid: string) => void = () => {}): ReactElement {
+function row(subject: Finding): ReactElement {
   return createElement(
     QueryClientProvider,
     { client: newClient() },
     createElement(
       'div',
       { ref: (node: unknown) => { host = node as DomNode | null; } },
-      createElement(ReviewRowActions, { finding: subject, runId: RUN, onOpen }),
+      createElement(ReviewRowActions, { finding: subject, runId: RUN }),
     ),
   );
 }
@@ -82,9 +84,26 @@ async function type(text: string): Promise<void> {
   });
 }
 
-async function mount(subject: Finding, onOpen?: (findingUid: string) => void): Promise<LiveRender> {
-  live = await mountLive(row(subject, onOpen));
+async function mount(subject: Finding): Promise<LiveRender> {
+  live = await mountLive(row(subject));
   return live;
+}
+
+type SelectProps = { value?: string; onChange?: (event: unknown) => void };
+
+/** The props React stored on the severity select's node, or `null` when the row draws none. */
+function selectProps(): SelectProps | null {
+  const found = descendants(host as DomNode).filter((node) => node.nodeName === 'select');
+  expect(found.length).toBeLessThanOrEqual(1);
+  if (found[0] === undefined) return null;
+  const key = Object.keys(found[0] as object).find((name) => name.startsWith('__reactProps$'));
+  return (found[0] as unknown as Record<string, SelectProps>)[key as string] as SelectProps;
+}
+
+async function choose(severity: string): Promise<void> {
+  await (live as LiveRender).settle(() => {
+    ((selectProps() as SelectProps).onChange as (event: unknown) => void)({ type: 'change', target: { value: severity }, currentTarget: { value: severity } });
+  });
 }
 
 interface Sent {
@@ -296,15 +315,13 @@ describe('after a failure', () => {
 describe('a ✓ the browser refuses before sending', () => {
   const proposed = () => finding({ observation: observation({ proposed_severity: 'critical' }) });
 
-  it('sends nothing, opens the finding in the panel, says why, and leaves the text in the field', async () => {
-    const opened: string[] = [];
-    const view = await mount(proposed(), (findingUid) => opened.push(findingUid));
+  it('sends nothing, says why in the row, and leaves the text in the field', async () => {
+    const view = await mount(proposed());
     await type(REASON);
 
     await view.press('✓');
 
     expect(vi.mocked(appendDecision)).not.toHaveBeenCalled();
-    expect(opened).toEqual([FINDING_UID]);
     expect(shown()).toBe(REASON);
     expect(view.markup()).toContain('Перед принятием выберите критичность. Ничего не отправлено.');
     expect(view.markup()).toContain('role="alert"');
@@ -330,5 +347,72 @@ describe('a ✓ the browser refuses before sending', () => {
     expect(sent().map((call) => call.body)).toEqual([
       { event_type: 'accept', finding_observation_id: OBSERVATION_ID, comment: REASON, severity: 'economic' },
     ]);
+  });
+});
+
+describe('the choice «Критичность» beside ✓', () => {
+  const proposed = (over: Partial<Finding> = {}) => finding({ observation: observation({ proposed_severity: 'critical' }), ...over });
+
+  it('is in the row of a finding the model proposed a severity for, empty, and not in the row of one it did not', async () => {
+    await mount(finding());
+    expect(selectProps()).toBeNull();
+    await (live as LiveRender).unmount();
+    live = null;
+
+    await mount(proposed());
+    expect(selectProps()?.value).toBe('');
+  });
+
+  it('sends one accept with the chosen severity and the reason, never the proposal', async () => {
+    const view = await mount(proposed());
+    await type(REASON);
+    await choose('economic');
+    expect(selectProps()?.value).toBe('economic');
+
+    await view.press('✓');
+
+    expect(sent().map((call) => call.body)).toEqual([
+      { event_type: 'accept', finding_observation_id: OBSERVATION_ID, comment: REASON, severity: 'economic' },
+    ]);
+    expect(shown()).toBe('');
+    expect(view.markup()).toContain(`role="status">${MARKER}<`);
+  });
+
+  it('refuses ✓ without a choice in the row, opens nothing, keeps the reason, and sends the accept once a choice is made', async () => {
+    const view = await mount(proposed());
+    await type(REASON);
+
+    await view.press('✓');
+    expect(vi.mocked(appendDecision)).not.toHaveBeenCalled();
+    expect(view.markup()).toContain('Перед принятием выберите критичность. Ничего не отправлено.');
+    expect(view.markup()).toContain('aria-invalid="true"');
+    expect(shown()).toBe(REASON);
+
+    await choose('operational');
+    // The sentence asked for the choice, and goes when it is made.
+    expect(view.markup()).not.toContain('Перед принятием выберите критичность.');
+    expect(view.markup()).not.toContain('aria-invalid');
+
+    await view.press('✓');
+    expect(sent().map((call) => call.body)).toEqual([
+      { event_type: 'accept', finding_observation_id: OBSERVATION_ID, comment: REASON, severity: 'operational' },
+    ]);
+  });
+
+  it('is held while the press is out, and once the finding is accepted, with the severity that was chosen', async () => {
+    let answer: (value: unknown) => void = () => {};
+    vi.mocked(appendDecision).mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }) as never);
+    const view = await mount(proposed());
+    await choose('economic');
+
+    await view.press('✓');
+    expect(view.markup()).toMatch(/<select[^>]*disabled/);
+
+    await view.settle(() => {
+      answer({ data: { current_verdict: 'accepted', event: decisionEvent({ decision_id: decisionId('Y') }) } });
+    });
+    // Accepted: ✓ is not offered, and the choice is held with the severity that was chosen.
+    expect(view.markup()).toMatch(/<select[^>]*disabled/);
+    expect(selectProps()?.value).toBe('economic');
   });
 });

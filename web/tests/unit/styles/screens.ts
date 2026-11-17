@@ -3642,5 +3642,47 @@ export function screens(): Screen[] {
     })));
   }
 
+  /*
+   * `UIP-S06-08`: the choice «Критичность» beside ✓ in a row, in the four states it is drawn in -- empty, refused for want of a choice
+   * (invalid, with the row's own sentence under it), chosen, and held (a press on its way, a finding already accepted) -- in the table's
+   * «Решение» column and in a list row. At the very end, for the reason above.
+   */
+  {
+    const uid = (n: number): string => `fnd_01J9ZQ8K7NHVXW3T2R5M6P4QT${String(n).padStart(2, '0')}`;
+    const rows = [
+      finding({ finding_uid: uid(0), current_verdict: 'pending', observation: observation({ proposed_severity: 'critical' }) }),
+      finding({ finding_uid: uid(1), current_verdict: 'pending', observation: observation({ proposed_severity: 'economic' }) }),
+      finding({ finding_uid: uid(2), current_verdict: 'pending', observation: observation({ proposed_severity: 'operational' }) }),
+      finding({
+        finding_uid: uid(3), current_verdict: 'accepted', decided_severity: 'recommendation',
+        observation: observation({ proposed_severity: 'critical' }),
+      }),
+      finding({ finding_uid: uid(4), current_verdict: 'pending', observation: observation({}) }),
+    ];
+    const refusal = { tone: 'fail', text: 'Перед принятием выберите критичность. Ничего не отправлено.' } as const;
+    const actions = (row: Finding) => {
+      const proposal = row.observation.proposed_severity !== undefined;
+      const at = rows.findIndex((one) => one.finding_uid === row.finding_uid);
+      return createElement(FindingRowActions, {
+        verdict: row.current_verdict,
+        sending: at === 2 ? 'accept' : null,
+        note: at === 0 ? refusal : null,
+        onAccept: noop,
+        onReject: noop,
+        severity: !proposal ? undefined : {
+          value: at === 1 ? 'economic' : at === 3 ? 'recommendation' : at === 2 ? 'operational' : '',
+          required: row.decided_severity === undefined,
+          invalid: at === 0,
+          onChange: noop,
+        },
+      });
+    };
+    for (const view of ['table', 'list'] as const) {
+      add(`FindingList ${view}, the choice of severity beside ✓ in each of its states`, render(createElement(FindingList, {
+        view, groups: groupByCategory(rows), selectedFindingUid: null, onSelect: noop, renderRowActions: actions,
+      })));
+    }
+  }
+
   return out;
 }

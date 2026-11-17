@@ -150,10 +150,28 @@ button.viewLink:hover {
 /*
  * One field is as wide as its content up to 18rem: «Причина» takes what the two buttons leave and the line of the last press
  * (a refusal's reason runs long) wraps inside it, so a sentence after a press does not widen the table's column or the row's.
+ * The choice of severity, when the finding has one, stands before the field in the same box.
  */
 .rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
   min-width: 0;
   max-width: 18rem;
+}
+
+/*
+ * `UIP-S06-08`: the choice of severity beside ✓. As tall as `.am-button--small` beside it, and as wide as its longest label up to the
+ * row's own width (the element-and-class selector outranks the global select's 34 px and 10 px padding); in a narrow cell it takes
+ * the cell, with its text cut, rather than widening it. The field of ✓, ✕ and «Причина» follows it, on the same line when both fit.
+ */
+select.severityChoice {
+  flex: 0 1 auto;
+  min-height: 28px;
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+  text-overflow: ellipsis;
 }
 
 /*

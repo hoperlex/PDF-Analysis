@@ -448,15 +448,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       recommendation={detail.observation.recommendation_text}
       advice={criticAdvice}
       actions={mayAct && selectedSummary !== null ? (
-        <ReviewRowActions
-          finding={selectedSummary}
-          runId={runId}
-          onOpen={(findingUid) => {
-            // The severity is chosen in the panel: close the view on it.
-            setExpanded(false);
-            setSelection(selectFinding(findingUid));
-          }}
-        />
+        // The key is the finding: stepping to its neighbour in the view is another finding's field, with no text or choice of this one's.
+        <ReviewRowActions key={selectedSummary.finding_uid} finding={selectedSummary} runId={runId} />
       ) : null}
       blocks={blocksUnderThePage}
     />
@@ -558,16 +551,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
               }}
               renderExpansion={() => <OpenedFinding>{detailContent}</OpenedFinding>}
               sheetOf={(page) => sheetOfPage(sheetLabels.data, page)}
-              // `R-151n`: ✓/✕ in each row, for a session that may decide.
-              renderRowActions={mayAct ? (finding) => (
-                <ReviewRowActions
-                  finding={finding}
-                  runId={runId}
-                  onOpen={(findingUid) => {
-                    setSelection(selectFinding(findingUid));
-                  }}
-                />
-              ) : undefined}
+              // `R-151n`, `UIP-S06-08`: ✓/✕, «Причина» and, where the model proposed a severity, the choice of it, in each row, for a
+              // session that may decide. A press never opens the finding: a refusal says itself in the row.
+              renderRowActions={mayAct ? (finding) => <ReviewRowActions finding={finding} runId={runId} /> : undefined}
               isLoading={findingsQuery.isPending}
               emptyDetail={run?.state === 'partial' ? <p>Прогон завершился частично. Отсутствие опубликованных замечаний не подтверждает, что в документе их нет.
                 {' '}<Link href={routes.run(projectUid, runId)}>Проверить этапы и ограничения прогона</Link>.</p> : undefined}

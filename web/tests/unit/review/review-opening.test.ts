@@ -30,7 +30,7 @@ import { EvidenceViewerEagerSeam, ReviewPage, resolveSelection, selectFinding } 
 import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
 import { newClient } from '../screens/harness';
-import { PROJECT_UID, RUN_ID, finding, findingDetail, runStatus } from './fixtures';
+import { PROJECT_UID, RUN_ID, finding, findingDetail, observation, runStatus } from './fixtures';
 import { RoutedReviewAddress, currentSearch, resetRoutedAddress, writtenAddresses, writtenHow, writtenStates } from './routed-review-address';
 
 const ULID = '01J9ZQ8K7NHVXW3T2R5M6P4Q';
@@ -206,5 +206,34 @@ describe('«Разбор» opens the first finding that waits', () => {
     await live!.update(element(LIST));
     expect(opened(live!.markup())).toBe(WAITING);
     expect(currentSearch()).toBe(`${LIST}&finding=${WAITING}`);
+  });
+});
+
+/**
+ * `UIP-S06-08`: ✓ on a finding whose severity the expert has not chosen is refused in the row itself and opens nothing. The card the reader
+ * has open stays open, and the address, which names it, is not written. The refused row is the only row on the screen with a ✓ (the
+ * verdict filter shows the waiting finding and the open one is an accepted finding the filter hides), so the press cannot be another's.
+ */
+describe('a ✓ the row refuses does not open the finding', () => {
+  it('says the refusal in the row and leaves the open finding and the address as they were', async () => {
+    const items = [
+      withVerdict(ACCEPTED, 'accepted'),
+      finding({ finding_uid: WAITING, current_verdict: 'pending', observation: observation({ proposed_severity: 'critical' }) }),
+    ];
+    const address = `${LIST}&verdict=waiting&finding=${ACCEPTED}`;
+    const { client } = await open(address, items);
+    await live!.settle(() => {
+      client.setQueryData(queryKeys.account.me(), { user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', roles: ['expert'], login: 'эксперт' });
+    });
+    expect(opened(live!.markup())).toBe(ACCEPTED);
+    expect(live!.markup()).toContain('data-row-severity');
+
+    expect(await live!.press('✓')).toBe(true);
+
+    expect(live!.markup()).toContain('Перед принятием выберите критичность. Ничего не отправлено.');
+    expect(live!.markup()).toContain('role="alert"');
+    expect(opened(live!.markup())).toBe(ACCEPTED);
+    expect(currentSearch()).toBe(address);
+    expect(writtenAddresses()).toEqual([]);
   });
 });
