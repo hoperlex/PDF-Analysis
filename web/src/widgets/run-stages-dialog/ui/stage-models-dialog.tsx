@@ -15,21 +15,29 @@
  *   (`useStageModelLayout`), and «Фактически работает» says the one word of the case instead of a fact it cannot read. While the layout
  *   is off, the words `LAYOUT_OFF_NOTE` stand over the table.
  *
+ * **An administrator** is also drawn «Изменить» (`UIP-S05-03`), which opens the existing form of the layout in this same window, in place of the
+ * table (`./stage-models-edit.tsx`); a save is a new revision, as on the screen «Диспетчер», and the window goes back to the table. An expert has
+ * neither the button nor the form (`R-150w`).
+ *
  * It names no server and writes no number the answer does not carry. «Расширенные ▸ Модели по этапам» (the revisions, the journal and the
  * switch) is not here.
  */
 
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import type { StageModelLayout } from '@/shared/api';
-import { executionFailure } from '@/entities/execution';
+import { useMe } from '@/entities/account';
+import { canExecute, executionFailure } from '@/entities/execution';
 import { ACCESS_LABELS } from '@/entities/executor-host';
 import {
+  EDIT_LABEL,
   KIT_LEGEND,
   LAYOUT_OFF_NOTE,
   NOT_ON_SERVERS,
   NOT_ON_SERVERS_HINT,
   NO_LAYOUT,
+  NO_LAYOUT_ADMIN,
   STAGE_KIT_LABELS,
   STAGE_MODELS_TITLE,
   useStageModelLayout,
@@ -52,6 +60,7 @@ import {
 } from '../model/stage-models-rows';
 import type { StageModelsRow, StageModelsSource } from '../model/stage-models-rows';
 
+import { StageModelsEdit } from './stage-models-edit';
 import styles from './stage-models-dialog.module.css';
 
 /** What the saved layout is while the window has no plan to read: the answer of its read, in the three phases of a read. */
@@ -67,6 +76,10 @@ export interface StageModelsDialogViewProps {
   readonly onClose: () => void;
   /** The census and the unit suite: drawn open without `showModal`. */
   readonly staticOpen?: boolean | undefined;
+  /** An administrator: «Изменить» is drawn and calls this. Absent for everyone else, who has no control here. */
+  readonly onEdit?: (() => void) | undefined;
+  /** The form of the layout, drawn in place of the table while the administrator edits (it has its own «Сохранить набор» and «Отменить»). */
+  readonly editor?: ReactNode | undefined;
 }
 
 /** «Только Claude · Только Codex · Свой набор»: the one in force is marked. Not a control. */
@@ -130,7 +143,7 @@ function StageModelsTableOfWindow({ rows }: { readonly rows: readonly StageModel
 }
 
 /** The body of the window: the set, the note while the layout is off, and the table or the sentence that says why there is none. */
-function Body({ source, layout }: { readonly source: StageModelsSource; readonly layout: StageLayoutReading | undefined }) {
+function Body({ source, layout, admin }: { readonly source: StageModelsSource; readonly layout: StageLayoutReading | undefined; readonly admin: boolean }) {
   if (source.kind === 'plan') {
     const kit = kitOf(source, undefined);
     return (
@@ -150,7 +163,7 @@ function Body({ source, layout }: { readonly source: StageModelsSource; readonly
       {kit === null ? null : <Kits active={kit} />}
       {source.kind === 'legacy' ? <p className={styles.note} data-layout-state="off">{LAYOUT_OFF_NOTE}</p> : null}
       {layout.layout.current === undefined ? (
-        <EmptyState title={NO_LAYOUT} />
+        <EmptyState title={admin ? NO_LAYOUT_ADMIN : NO_LAYOUT} />
       ) : (
         <StageModelsTableOfWindow rows={layoutStageRows(layout.layout, factWordOf(source))} />
       )}
@@ -159,7 +172,8 @@ function Body({ source, layout }: { readonly source: StageModelsSource; readonly
 }
 
 /** The window as it is drawn, with its inputs given: the census, the language guard and the unit suite draw this one. */
-export function StageModelsDialogView({ source, layout, onClose, staticOpen = false }: StageModelsDialogViewProps) {
+export function StageModelsDialogView({ source, layout, onClose, staticOpen = false, onEdit, editor }: StageModelsDialogViewProps) {
+  const editing = editor !== undefined;
   return (
     <Dialog
       title={STAGE_MODELS_TITLE}
@@ -167,13 +181,20 @@ export function StageModelsDialogView({ source, layout, onClose, staticOpen = fa
       onClose={onClose}
       staticOpen={staticOpen}
       markers={{ 'data-stage-models-dialog': '', 'data-stage-models-source': source.kind }}
-      actions={
-        <button type="button" className="am-button am-button--quiet" data-stage-models-close="" onClick={onClose}>
-          {CLOSE_LABEL}
-        </button>
-      }
+      actions={editing ? undefined : (
+        <>
+          {onEdit === undefined ? null : (
+            <button type="button" className="am-button" data-stage-models-edit-open="" onClick={onEdit}>
+              {EDIT_LABEL}
+            </button>
+          )}
+          <button type="button" className="am-button am-button--quiet" data-stage-models-close="" onClick={onClose}>
+            {CLOSE_LABEL}
+          </button>
+        </>
+      )}
     >
-      <Body source={source} layout={layout} />
+      {editing ? editor : <Body source={source} layout={layout} admin={onEdit !== undefined} />}
     </Dialog>
   );
 }
@@ -182,10 +203,18 @@ export interface StageModelsDialogProps {
   readonly source: StageModelsSource;
   readonly onClose: () => void;
   readonly staticOpen?: boolean | undefined;
+  /** Test seam: the administrator's form starts open. */
+  readonly initiallyEditing?: boolean | undefined;
 }
 
-/** The window of a start: the layout is read here, and only for a source that has no plan to read. */
-export function StageModelsDialog({ source, onClose, staticOpen }: StageModelsDialogProps) {
+/**
+ * The window of a start: the layout is read here, and only for a source that has no plan to read. The role is read here too: «Изменить» and the
+ * form belong to the administrator alone, and the form reads the servers and the catalogue of models only once it is opened.
+ */
+export function StageModelsDialog({ source, onClose, staticOpen, initiallyEditing = false }: StageModelsDialogProps) {
+  const me = useMe();
+  const admin = canExecute(me.data?.roles ?? [], 'connections');
+  const [editing, setEditing] = useState(initiallyEditing);
   const query = useStageModelLayout(source.kind !== 'plan');
   let layout: StageLayoutReading | undefined;
   if (source.kind !== 'plan') {
@@ -198,5 +227,14 @@ export function StageModelsDialog({ source, onClose, staticOpen }: StageModelsDi
       layout = { state: 'loading' };
     }
   }
-  return <StageModelsDialogView source={source} layout={layout} onClose={onClose} staticOpen={staticOpen} />;
+  return (
+    <StageModelsDialogView
+      source={source}
+      layout={layout}
+      onClose={onClose}
+      staticOpen={staticOpen}
+      onEdit={admin ? () => setEditing(true) : undefined}
+      editor={admin && editing ? <StageModelsEdit onClose={() => setEditing(false)} /> : undefined}
+    />
+  );
 }
