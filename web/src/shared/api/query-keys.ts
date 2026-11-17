@@ -112,6 +112,13 @@ export interface DecisionJournalFilters {
    * two cache entries and a project change cannot show the other project's page.
    */
   readonly project_uid?: ProjectUid;
+  /**
+   * The execution statuses the journal is restricted to (`UIP-S12-01`, `R-151g`): one or more values of
+   * `FindingExecutionStatus` joined by commas, as the contract writes the list (`agreed,amended`). Absent is every
+   * entry: the parameter is left out, never sent empty. Part of the key, so two sets are two cache entries; write the
+   * values in the order of `FindingExecutionStatus` so the same set is the same entry.
+   */
+  readonly execution_status?: string;
   readonly cursor?: string;
   readonly limit?: number;
 }

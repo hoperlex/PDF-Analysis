@@ -806,6 +806,7 @@ class LedgerDecisionAdapter:
         category: str | None = None,
         verdict: str | None = None,
         project_uid: str | None = None,
+        execution_statuses: Sequence[str] | None = None,
     ) -> Sequence[DecisionRecordView]:
         """The journal, straight off `W38-KB`'s read. No ordering is applied here.
 
@@ -835,9 +836,12 @@ class LedgerDecisionAdapter:
                 verdict=entry.verdict,
                 comment=entry.comment,
                 section=entry.section,
+                execution_status=entry.execution_status,
+                execution_status_at=entry.execution_status_at,
             )
             for entry in decision_journal(
-                self._session, category=category, verdict=verdict, project_uid=project_uid
+                self._session, category=category, verdict=verdict, project_uid=project_uid,
+                execution_statuses=execution_statuses,
             )
         )
 

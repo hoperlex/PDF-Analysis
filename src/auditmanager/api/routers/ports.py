@@ -922,6 +922,7 @@ class DecisionPort(Protocol):
         category: str | None,
         verdict: str | None,
         project_uid: str | None,
+        execution_statuses: Sequence[str] | None = None,
     ) -> Sequence[DecisionRecordView]:
         """Every recorded decision, across findings, **newest first**.
 
@@ -942,6 +943,12 @@ class DecisionPort(Protocol):
         **finding** to the project it belongs to, as the two filters above narrow it by
         category and verdict. It is a filter and not a parent: a project nothing was decided
         in -- or one that does not exist -- matches no row and yields an empty sequence.
+
+        ``execution_statuses`` (`UIP-S12-01`) is ``None`` for no filter, and otherwise the values (each of the frozen
+        ``FindingExecutionStatus``, none repeated) of which the finding's designer execution status must be **any**: a
+        finding with no status is in none of them. It narrows the **finding** as the filters above do, and the record
+        carries ``execution_status`` and ``execution_status_at`` when the finding has a status, whether or not it is
+        filtered. The status is not an expert decision: it never changes the record's verdict or the number of entries.
 
         Each record also carries where its decision belongs (`document_uid`, `version_uid`,
         and the display names `project_name` and `document_name`, joined at read time and

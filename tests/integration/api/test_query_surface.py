@@ -1170,7 +1170,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listDocuments": {"cursor", "limit", "section_code", "include_archived", "tag", "audit_state", "order"},
         "listVersions": {"cursor", "limit"},
         "listRuns": {"cursor", "limit"},
-        "listDecisions": {"category", "cursor", "limit", "verdict", "project_uid"},
+        # `UIP-S12-01`: the designer's execution status of the finding, one or several (comma-separated).
+        "listDecisions": {"category", "cursor", "limit", "verdict", "project_uid", "execution_status"},
         "listRegistrations": {"status", "cursor", "limit"},
         "listUsers": {"include_archived", "cursor", "limit"},
         "listAuthEvents": {"cursor", "limit"},
@@ -1456,6 +1457,37 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
                 or nobody["total"] != 0
             ):
                 inert.setdefault(operation_id, []).append("project_uid")
+
+        if "execution_status" in names and operation_id == "listDecisions":
+            # `UIP-S12-01`. The journal is deployment-wide, so the discriminating pair is the two accepted findings of this
+            # run, given two different statuses, against the status nothing here was given: each value keeps exactly the
+            # entries of the finding that carries it, a list keeps both, and a status nobody holds keeps none of ours.
+            # Only the entries of this run's own project are looked at, so rows another suite left behind cannot answer.
+            from auditmanager.access.public import UserRepository
+            from auditmanager.decisions.execution_status import set_execution_status
+
+            designer = str(UserRepository().create_user(
+                session, f"qs-execution-status-{uuid.uuid4().hex[:12]}@example.com",
+                f"qs-execution-status-{uuid.uuid4().hex}").user_uid)
+            for finding, status in ((first, "agreed"), (other, "amended")):
+                set_execution_status(session, finding_uid=finding.finding_uid, status=status, actor_uid=designer,
+                                     idempotency_key=f"qs-execution-status-{status}-{uuid.uuid4().hex[:8]}")
+            mine = f"project_uid={mixed_run.run.project_uid}"
+
+            def kept(values: str) -> list[dict[str, Any]]:
+                return ok(get(surface, f"{target}{sep}{mine}&execution_status={values}&limit=200"))["items"]
+
+            agreed, amended = kept("agreed"), kept("amended")
+            both, neither = kept("agreed,amended"), kept("declined")
+            if (
+                not agreed or {r["finding_uid"] for r in agreed} != {first.finding_uid}
+                or {r["execution_status"] for r in agreed} != {"agreed"}
+                or not amended or {r["finding_uid"] for r in amended} != {other.finding_uid}
+                or {r["decision_id"] for r in both} != {r["decision_id"] for r in agreed + amended}
+                or neither
+                or ok(get(surface, f"{target}{sep}{mine}&execution_status=agreed&limit=200"))["total"] != len(agreed)
+            ):
+                inert.setdefault(operation_id, []).append("execution_status")
 
         if "q" in names and operation_id == "listNormDocuments":
             # The catalogue's text filter keeps the document whose designation it starts.

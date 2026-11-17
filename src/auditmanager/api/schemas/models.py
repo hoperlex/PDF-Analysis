@@ -2873,6 +2873,11 @@ class DecisionRecord(_Object):
     decision_event_count: Annotated[int, Field(ge=0)]
     #: `UI-A-73` (contract 1.39.0): as on ``DecisionEvent``.
     carried_from: DecisionCarriedFrom = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `UIP-S12-01` (`R-151g`): the designer's execution status of the finding the decision was taken on, and when it was
+    #: set; as on ``Finding``. Absent when the finding has none. Not an expert decision: it never changes this record.
+    execution_status: FindingExecutionStatus = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    execution_status_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DecisionRecordPage(_Object):

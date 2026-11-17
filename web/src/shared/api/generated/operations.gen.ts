@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.56.0 (OpenAPI 3.1.0)
- *   sha256 b45b581aac9c7bc989191842b8a2bb8e309083c1ed6f367e066f9786b0013957
+ *   sha256 21860fae666685f8227bba24ab513344119b504a20b740093c7403a4b6a71d9a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -4997,6 +4997,8 @@ export type ListDecisionPatternsResult = DecisionPatternList;
  * Ordered by `(recorded_at, decision_id)` **descending** - the newest decision first, as `listProjects` orders projects - and that is a total order, stable across pages. The server's row sequence is never exposed, in a field or inside a cursor.
  *
  * `category` and `verdict` filter on the **finding**, exactly as they do on `listRunFindings`: the category of the finding the event was recorded against, and the verdict that now stands for it. Neither filters on the event. `project_uid` (`UI-PARITY-P0A`) filters on the finding in the same way: the finding must belong to that project. It is a filter and not a parent, so a project nothing was decided in -- or one that does not exist -- is an empty page. `total` is the number of entries that match all the filters given, on every page of the listing and not the number on this page. There is no parent identity in the path, so an empty journal is an empty page and never `not_found`.
+ *
+ * `execution_status` (`UIP-S12-01`) filters on the finding in the same way, by the designer's execution status (`R-151g`): one value or several, and the entry is kept when the finding's status is any of them. Each entry carries `execution_status` and `execution_status_at` when its finding has a status and neither when it has none; the status is not an expert decision, so setting it never changes a verdict, an entry or a count of them. The same two properties are on the finding of an entry of `listKnowledgeBaseEntries`.
  */
 export type ListDecisionsInput = {
   /** Query string parameters. */
@@ -5005,6 +5007,8 @@ export type ListDecisionsInput = {
     category?: FindingCategory;
     /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
     cursor?: Cursor;
+    /** `UIP-S12-01` (programme `UI-PARITY-R3`, owner rulings Г9-B and Г12-B): keep only the entries of findings whose designer execution status (`R-151g`) is any of these. One or more of `taken_into_account`, `amended`, `declined`, `agreed`, separated by commas (`agreed,amended`); the parameter written more than once is read as the same list. A finding with no status is in none of them. Absent means no status filter. An unknown value, or an empty element as in `agreed,`, is `422 validation_failed` with `constraint: enum`. It filters like `verdict`: `total` is the number of entries that match, so the count of one status is the `total` of that status read with `limit=1`. */
+    execution_status?: string;
     /** Page size. */
     limit?: number;
     /** Restrict the page to decisions on findings of this project. Absent means no project filter. */
@@ -11683,7 +11687,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/decisions',
     pathParams: [],
-    queryParams: ['category', 'cursor', 'limit', 'project_uid', 'verdict'],
+    queryParams: ['category', 'cursor', 'execution_status', 'limit', 'project_uid', 'verdict'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,

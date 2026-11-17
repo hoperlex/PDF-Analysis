@@ -25,6 +25,7 @@ __all__ = [
     "CategoryFilterParam",
     "CorrelationIdParam",
     "CursorParam",
+    "ExecutionStatusFilterParam",
     "IncludeArchivedParam",
     "LimitParam",
     "ProjectUidFilterParam",
@@ -178,6 +179,46 @@ VerdictFilterParam = Annotated[
     BeforeValidator(_absent),
     WithJsonSchema({"$ref": "#/components/schemas/Verdict"}),
     Query(json_schema_extra=optional_property),
+]
+
+def _execution_status_list(value: Any) -> Any:
+    """``?execution_status=agreed,amended``: one or more statuses, or the absent parameter.
+
+    The documented form is one comma-separated value, because the generated client sends a query value as one string; the
+    parameter written more than once is read as the same list rather than keeping its last occurrence and dropping the
+    others without a word. Each element is then validated against the frozen ``FindingExecutionStatus`` enum, so an
+    unknown value -- or an empty element, as in ``agreed,`` -- is ``validation_failed`` (``constraint: enum``) and never an
+    empty page. The empty string alone is the absent parameter, as for every other filter of this surface.
+    """
+    if value is None:
+        return None
+    raw = [value] if isinstance(value, str) else value
+    if not isinstance(raw, (list, tuple)):
+        return raw
+    if all(item == "" for item in raw):
+        return None
+    elements: list[Any] = []
+    for item in raw:
+        elements.extend(item.split(",") if isinstance(item, str) else [item])
+    return elements
+
+
+#: `UIP-S12-01` (contract 1.56.0, ruling `Г12-B`). ``listDecisions``' ``execution_status``: the finding's designer
+#: execution status (`R-151g`), one or more of the four values of ``FindingExecutionStatus``, comma-separated. In the
+#: document it is an inline string: a list-valued query parameter would need a transport the generated client does not
+#: have (it sends one string per name), so the list is carried in the value and checked here, element by element.
+ExecutionStatusFilterParam = Annotated[
+    list[models.FindingExecutionStatus] | None,
+    BeforeValidator(_execution_status_list),
+    WithJsonSchema({"type": "string"}),
+    Query(
+        description=(
+            "Only the entries of findings whose execution status is any of these: one or more of `taken_into_account`, "
+            "`amended`, `declined`, `agreed`, separated by commas (`agreed,amended`). A finding with no status is in "
+            "none of them. Absent means no status filter. An unknown value is `422 validation_failed`."
+        ),
+        json_schema_extra=optional_property,
+    ),
 ]
 
 #: `UI-PARITY-P0A`. The optional ``project_uid`` query filter of ``getDashboardSummary`` and

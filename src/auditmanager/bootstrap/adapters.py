@@ -2992,6 +2992,7 @@ class DecisionAdapter(_SessionHolder):
         category: str | None = None,
         verdict: str | None = None,
         project_uid: str | None = None,
+        execution_statuses: Sequence[str] | None = None,
     ) -> Sequence[DecisionRecordView]:
         """The journal, filtered in the query rather than here.
 
@@ -3000,7 +3001,7 @@ class DecisionAdapter(_SessionHolder):
         deployment has ever taken. The predicate goes to PostgreSQL, against the same
         columns the record reports.
 
-        All three arguments (`UI-PARITY-P0A` added ``project_uid``) are named in the signature
+        All four arguments (`UI-PARITY-P0A` added ``project_uid``, `UIP-S12-01` ``execution_statuses``) are named in the signature
         rather than swallowed by ``**_``. The
         finding adapter's first version took ``**_`` and dropped its two filters, so a
         filtered request returned everything and looked like it had worked, and
@@ -3013,7 +3014,8 @@ class DecisionAdapter(_SessionHolder):
             return tuple(
                 _record_view(entry)
                 for entry in decision_journal(
-                    session, category=category, verdict=verdict, project_uid=project_uid
+                    session, category=category, verdict=verdict, project_uid=project_uid,
+                    execution_statuses=execution_statuses,
                 )
             )
 
@@ -3043,6 +3045,8 @@ def _record_view(entry: Any) -> DecisionRecordView:
         comment=entry.comment,
         section=entry.section,
         carried_from=_carried_from_view(entry.carried_from),
+        execution_status=entry.execution_status,
+        execution_status_at=entry.execution_status_at,
     )
 
 
