@@ -120,3 +120,4 @@ previous screens. No feature switch is introduced; the two migrations carry thei
 | P1 | `39198d68c` | 0.30.0 rev 1 | G-01, G-02, G-03, G-04, G-11, G-13, G-14, G-17; FIX-01…07 |
 | P2 | `5a564a8cb` | 0.30.0 rev 2 | G-05, G-06, G-07, G-08, G-16; S04-01, G-10 (API only); CONTRACT-02 (1.56.0); FIX-02, FIX-08 |
 | P3a | `907e968a8` | 0.30.1 rev 1 | G-09, S04-02..04, S06-01..03, S01-01..03; FIX-09..12 |
+| P3b | `227b2586e` | 0.30.2 rev 1 | S06-04..08, S07-01, S08-01..03, S09-01, S10-01; S03-02, S11-05, S12-01, S14-01 (API) + CONTRACT-03 (1.57.0); FIX-13..16 |

@@ -179,6 +179,7 @@ def test_authored_shape_and_form() -> None:
     # §6.1) is the same day's other dev publications: «Во весь экран» and «Открыть PDF» join item 3, «Все» item 4, the
     # run screen's head item 6; the version is full at seven items, so «График работ» opens 0.12.1 the same day.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
+        "0.30.3": 1,
         "0.30.2": 1,
         "0.30.1": 1,
         "0.30.0": 2,
@@ -191,6 +192,7 @@ def test_authored_shape_and_form() -> None:
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == [
+        "0.30.3",
         "0.30.2",
         "0.30.1",
         "0.30.0",

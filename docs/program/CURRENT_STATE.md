@@ -1,5 +1,7 @@
 # Current state
 
+**Updated 2026-11-17 by `UI-PARITY-R3` publication point P4 (unverified development candidate, product `0.30.3`, branch `publish/ui-parity-r3` on `origin/dev`, published by the delegated publisher session).** Stage 4 begins on the section page (one header line, dense document cards about seven in a row, the bottom bar «Выбрано: N · Запустить все (N) · Снять выделение»); the object selector reads the list by name and creates an object in a window; the optimisation proposals get one top row, the shared decision field with «⋯» and «Проход от … ▾»; sign-in, password change and the role-less «Главная» read shorter. API `1.57.0` and migration head `0070_document_group` unchanged. Known open at this point, owned by running lanes: the journey conformance control `new-project-name` (FIX-18), two unreached contrast rows of the selection bar (FIX-19), the journey manifest's proposal steps (FIX-20), the overflowing «Причина» field in «Разбор» (FIX-17).
+
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P3b (unverified development candidate, product `0.30.2`, branch `integration/ui-parity-r3` on `origin/dev`).** Stage 3 completes for «Разбор» (one header line, severity plates and one filter row, the table by default with the severity stripe, accepted and rejected rows, severity beside ✓, «Скачать ▾»), «Блоки» («Лист N» buttons, one tile grid), the PDF panel page field, the grouped «Лог» with its status line, and the optimisation table by default. Contract resealed as `1.57.0` for additive reads (listProjects order, document filters, execution status in the decision journal, schedule accepted/rejected counts); migration head `0070_document_group`.
 
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P3a (unverified development candidate, product `0.30.1`, branch `integration/ui-parity-r3` on `origin/dev`).** Stage 3 begins: one document frame on every document page (section › document, counted tabs «Инфо · Блоки · Лог · Разбор · Оптимизация», version bar), the «Последний прогон» card and a one-line «Стадия и раздел» on «Инфо», the decision field with a reason in each «Разбор» row recorded as one event, five severity tones with a dashed proposed pill; stage 4 «Главная» follows the current object. API `1.56.0` and migration head `0070_document_group` unchanged.
@@ -95,7 +97,7 @@ Checks run per branch before the merge:
 
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
-- Product `VERSION` is `0.30.2`; this file describes development, not a release.
+- Product `VERSION` is `0.30.3`; this file describes development, not a release.
 - The development API contract is `1.57.0`: **302 paths / 331 operations / 822 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0070_document_group`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 
