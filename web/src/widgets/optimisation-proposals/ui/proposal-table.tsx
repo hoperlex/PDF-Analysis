@@ -1,15 +1,20 @@
 'use client';
 
 /**
- * `UI-B-06`: a pass's proposals as the original's table -- one header over every row, one proposal a row, the verdict with its form
- * and its history in the last column. The columns are the original's, in its order, on what this contract carries: the number,
- * the specification row (its provenance, text and «Открыть лист»), the position now in the price list, the cheaper analog, the saving,
- * the basis of the match (the original's «Риски» and «Норма» wait for a contract, `R-150g`), and the decision.
+ * `UI-B-06`, `UIP-S09-01`: a pass's proposals as the original's table, which is what the «Оптимизация» tab opens with -- one header over
+ * every row, one proposal a row, the verdict with its form and its history in the last column. The columns are the original's, in its
+ * order, on what this contract carries: the number, the specification row (its provenance, text and «Открыть лист»), the position now
+ * in the price list, the cheaper analog, the saving, the basis of the match (the original's «Риски» and «Норма» wait for a contract,
+ * `R-150g`), and the decision.
  *
  * It draws the same proposals as `ProposalCard` with the same pieces (`PositionText`, `ProposalFigures`, `ProposalBasisNotes`,
  * `ProposalDecisionLine`) and the same markers (`data-proposal`, `data-decision`, `data-open-sheet`), so the decision form, the
  * history and the journey address a row as they address a card. The sheet's block strip stands in a row of its own under the
  * proposal, across every column, as the original opens the blocks under its row.
+ *
+ * The rows of a page stand by verdict -- waiting, accepted, for revision, rejected (`orderProposalRows`) -- and the number of a proposal
+ * stays its own; the accepted rows are drawn on green and the rejected struck through (the module's CSS). The order is the page's: the
+ * pages themselves are the server's.
  */
 
 import { Fragment } from 'react';
@@ -18,6 +23,7 @@ import type { ReactNode } from 'react';
 import type { OptimisationProposal } from '@/shared/api';
 import { DECISION_STATE_LABELS, describeProvenance, formatAmount } from '@/entities/optimisation-proposal';
 
+import { orderProposalRows } from '../model/row-order';
 import styles from './optimisation-proposals.module.css';
 import {
   PositionText,
@@ -68,7 +74,11 @@ function ProposalRow({
   const proposed = formatAmount(proposal.proposed_unit_price, proposal.currency);
   return (
     <Fragment>
-      <tr data-proposal={proposal.optimisation_proposal_id} data-decision={proposal.current_verdict}>
+      <tr
+        data-proposal={proposal.optimisation_proposal_id}
+        data-proposal-ordinal={proposal.ordinal}
+        data-decision={proposal.current_verdict}
+      >
         <td className={styles.numberCell}>
           <strong>{proposal.ordinal}</strong>
           <span className={styles.state}>{DECISION_STATE_LABELS[proposal.current_verdict]}</span>
@@ -120,7 +130,7 @@ function ProposalRow({
 export function ProposalTable({ items, controlsFor, historyFor, blocksFor, documentUrl, canDecide }: ProposalTableProps) {
   return (
     <div className={styles.tableFrame}>
-      <table className={styles.proposalTable} data-proposal-table="" aria-label="Предложения прохода по порядку">
+      <table className={styles.proposalTable} data-proposal-table="" aria-label="Предложения прохода">
         <thead>
           <tr>
             {COLUMNS.map((name) => (
@@ -131,7 +141,7 @@ export function ProposalTable({ items, controlsFor, historyFor, blocksFor, docum
           </tr>
         </thead>
         <tbody>
-          {items.map((proposal) => (
+          {orderProposalRows(items).map((proposal) => (
             <ProposalRow
               key={proposal.optimisation_proposal_id}
               proposal={proposal}
