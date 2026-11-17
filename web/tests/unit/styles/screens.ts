@@ -103,7 +103,7 @@ import {
   CLAUDE_CELLS, ENSEMBLE_CELLS, READINESS_MIXED, blockedReadiness, modelLines, readiness,
 } from '../start-run/readiness-fixtures';
 import { ProjectList } from '@/widgets/project-list';
-import { RunList, StartRunWithReadiness } from '@/widgets/run-list';
+import { LastRunCard, RunList, StartRunWithReadiness } from '@/widgets/run-list';
 import { RunEta, RunProgress } from '@/widgets/run-progress';
 import { PlanStagesDialog, RunStagesDialog } from '@/widgets/run-stages-dialog';
 import { readinessPlan } from '@/entities/stage-layout';
@@ -2390,6 +2390,19 @@ export function screens(): Screen[] {
     add('DocumentList loaded', at(createElement(DocumentList, { projectUid: PROJECT_UID })));
     add('VersionList loaded', at(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
     add('RunList loaded', at(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+    // `UIP-S04-03`: «Последний прогон»: ряд этапов в каждом состоянии, на которое есть правило (прогон идёт, этапы прочитаны), и очередь без прочитанных этапов (первый этап ждёт).
+    {
+      const facts = { calls_succeeded: 0, calls_failed: 0, calls_retried: 0, input_tokens: 0, output_tokens: 0, subscription_input_tokens: 0, subscription_output_tokens: 0, cost_micros: 0, started_at: '2026-09-10T08:00:00Z', finished_at: '2026-09-10T08:00:30Z' };
+      const stageOf = (chip: 'preparation' | 'text' | 'blocks' | 'cross_check' | 'merge', state: 'pending' | 'running' | 'done' | 'partial' | 'failed') => ({ chip, stage_ids: ['x'], plan: [], facts: { ...facts, state } });
+      const readClient = populatedClient();
+      readClient.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [runStatus({ run_id: RUN_ID, state: 'running', terminal_at: null })], page: { next_cursor: null } });
+      readClient.setQueryData(runStagesKey(RUN_ID), { run_id: RUN_ID, state: 'running', plan_source: 'run_binding', items: [stageOf('preparation', 'done'), stageOf('text', 'partial'), stageOf('blocks', 'failed'), stageOf('cross_check', 'running'), stageOf('merge', 'pending')] });
+      add('LastRunCard, a run going, the stages read: a chip in each state', renderScreen(readClient, createElement(LastRunCard, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+      const queuedClient = populatedClient();
+      queuedClient.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [runStatus({ run_id: RUN_ID, state: 'queued', terminal_at: null })], page: { next_cursor: null } });
+      add('LastRunCard, a queued run, the stages not read: the first chip waits', renderScreen(queuedClient, createElement(LastRunCard, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+      add('LastRunCard, the stage window open on a chip', renderScreen(readClient, createElement(LastRunCard, { projectUid: PROJECT_UID, versionUid: VERSION_UID, initiallyOpenChip: 'text' })));
+    }
     // `RunTable`: the dense run table in the states its cells branch on — the executor and preset lines
     // under the badge (a queued run waiting for its executor, a published run started with a preset), a
     // run with a starter's label, a failed run (no «Разобрать», no findings count) and a partial run — so the muted second line, the
