@@ -4,21 +4,22 @@
  * «Оптимизация разделов» — a section's combined Form-7 specification across projects
  * (`W63-SECTION-FORM7-01`), the body of the page's «Форма 7» tab.
  *
- * **What is chosen here.** The search text, and the columns: the original's nine graphs of the form (default), or the same
- * table with the match against the project's price list added (`UI-B-23`). The section and the project are the page's, chosen in
- * the row of the tabs as the original chooses its project there (`UI-B-24`); this widget reads them (`sectionCode`,
+ * **What is chosen here**, in one row over the table (`UIP-S11-03`): the search text — «Найти», «Сбросить поиск» — and the columns: the original's nine graphs of the form (default), or the same
+ * table with the match against the project's price list added (`UI-B-23`). The section and the project are the page's (the section is
+ * chosen in its header, the object in the top strip); this widget reads them (`sectionCode`,
  * `projectUid`) and never writes them but through `onSelectProject`, the button of a project's panel that narrows the section
  * to it. All of them are filters over the one read, `getSectionSpecification`: the section code is not an object, a document
  * or a proposal, and nothing here ever writes. The search narrows the rows and never a project's totals.
  *
- * **What is shown** is `SectionSpecificationAnswer`: each project with its sets, its own price list and its own totals, the
- * current versions nobody classified, and the Form-7 rows grouped under their project, each with set, version, sheet and
- * page and, on request, the match against that project's price list. Rows come a page at a time.
+ * **What is shown** is `SectionSpecificationAnswer`: the Form-7 rows grouped under their document (`UIP-S11-02`), each with set,
+ * version, sheet and page and, on request, the match against that project's price list; under them the summary by object (its sets, its
+ * own price list and its own totals) in one disclosure and the incomplete sources in another (`UIP-S11-03`). Rows come a page at a
+ * time. The long paragraph that once opened the tab is gone: what it said stands in the answer, where it is true of what is shown.
  */
 
 import { useState } from 'react';
 
-import type { ProjectSection as ContractProjectSection, ProjectUid } from '@/shared/api';
+import type { DocumentUid, ProjectSection as ContractProjectSection, ProjectUid } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { ErrorState, LoadingState } from '@/shared/ui';
 import { ANALYSED_SECTION_CODE } from '@/entities/project';
@@ -29,18 +30,22 @@ import type { SectionSpecificationColumns } from './section-specification-answer
 import styles from './section-specification.module.css';
 
 /**
- * The ids of the section and project selects. The selects are drawn by the page, in the row of the tabs (`UI-B-24`), but these are
- * the handles the browser journey (`section-form7`) has always pressed them by; they stay authored here, with the screen's
- * other controls, so the journey's handles and the page's selects cannot drift apart.
+ * The id of the section select. The select is drawn by the page, in its header (`UI-B-24`, `UIP-S11-01`), but this is the handle
+ * the browser journey (`section-form7`) has always pressed it by; it stays authored here, with the screen's other controls, so the
+ * journey's handle and the page's select cannot drift apart. The object has no select: it is the top strip's (`UIP-G-06`).
  */
 export const SECTION_SELECT_ID = 'section-specification-section';
-export const PROJECT_SELECT_ID = 'section-specification-project';
 
 export interface SectionSpecificationSectionProps {
   /** The section read; АР when absent. */
   readonly sectionCode?: ContractProjectSection | undefined;
   /** The project the rows are narrowed to; every project of the section when absent. */
   readonly projectUid?: ProjectUid | null | undefined;
+  /**
+   * `UIP-S11-06`: the one document of the scope the rows are narrowed to; every document when absent. A filter and not a merge:
+   * the rows of the document stay the rows of their own document and version.
+   */
+  readonly documentUid?: DocumentUid | null | undefined;
   /** Narrow the section to one project (the button of a project's panel). */
   readonly onSelectProject?: ((projectUid: ProjectUid) => void) | undefined;
 }
@@ -48,32 +53,26 @@ export interface SectionSpecificationSectionProps {
 export function SectionSpecificationSection({
   sectionCode = ANALYSED_SECTION_CODE,
   projectUid = null,
+  documentUid = null,
   onSelectProject,
 }: SectionSpecificationSectionProps) {
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [columns, setColumns] = useState<SectionSpecificationColumns>('form7');
-  // A page of rows belongs to the section and project it was read under; another one starts from the first page.
-  const scope = `${sectionCode}|${projectUid ?? ''}`;
+  // A page of rows belongs to the section, project and document it was read under; another one starts from the first page.
+  const scope = `${sectionCode}|${projectUid ?? ''}|${documentUid ?? ''}`;
   const [seenScope, setSeenScope] = useState(scope);
   if (seenScope !== scope) {
     setSeenScope(scope);
     setOffset(0);
   }
-  const specification = useSectionSpecification({ sectionCode, projectUid, query, offset });
+  const specification = useSectionSpecification({ sectionCode, projectUid, documentUid, query, offset });
   const answer = specification.data;
   const failure = specification.error === null ? null : failureMessage(specification.error);
 
   return (
     <section className={styles.section} aria-label="Сводная спецификация раздела" data-section-specification="">
-      <p className={styles.rule}>
-        Строки спецификации (форма 7) текущих версий комплектов, которые эксперт подтвердил для
-        выбранного раздела, из всех объектов. Раздел только отбирает комплекты: каждая строка
-        остаётся строкой своего объекта, комплекта и листа и сопоставляется с прайс-листом своего
-        объекта. Цена и сумма показаны только для строки, однозначно сопоставленной с позицией в той же
-        единице измерения и с числовым количеством; итоги считаются по объектам и валютам отдельно.
-      </p>
       <form
         className={`am-form ${styles.filters}`}
         aria-label="Отбор строк раздела"
@@ -83,7 +82,7 @@ export function SectionSpecificationSection({
           setOffset(0);
         }}
       >
-        <div className="am-form__field">
+        <div className={styles.searchField}>
           <label htmlFor="section-specification-query"><strong>Поиск по строкам</strong></label>
           <input
             id="section-specification-query"
@@ -136,6 +135,7 @@ export function SectionSpecificationSection({
         <SectionSpecificationAnswer
           answer={answer}
           columns={columns}
+          documentFiltered={documentUid !== null}
           onPage={specification.isPlaceholderData ? null : setOffset}
           onSelectProject={onSelectProject === undefined ? null : (uid) => onSelectProject(uid as ProjectUid)}
         />

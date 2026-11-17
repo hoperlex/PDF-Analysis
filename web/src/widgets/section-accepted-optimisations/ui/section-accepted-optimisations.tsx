@@ -7,19 +7,27 @@
  * **What is listed.** `listAcceptedOptimisationProposals`, newest acceptance first, a page at a time. A proposal an
  * expert rejected, sent back, decided and then withdrew, or never decided is not here; a proposal accepted again after
  * a withdrawal is. The section and the project are filters, not parents: a section nothing was accepted in is an empty
- * page, said as such. Each row names its project and document set and leads to the document's «Оптимизация» tab, on the
- * pass the proposal belongs to (`UI-B-02`). Every price and the saving are the API's exact text; a saving the API
+ * page, said as such. Every price and the saving are the API's exact text; a saving the API
  * leaves out is said to be not computed, never shown as zero. Under the amount stands the server's percent of the price
  * (`saving_percent`, `D-346`), «−25 % к цене в прайс-листе», the very figure the proposal card states.
  *
- * **Filters.** The section and the project are the page's, chosen in the row of the tabs (`UI-B-24`) and shared with the
- * specification tab; this widget reads them as props and starts from its first page whenever either changes.
+ * **The columns are the original's, in its order** (`UIP-S11-04`): «Документ / источник» (the document, which leads to its
+ * «Оптимизация» tab on the pass the proposal belongs to, `UI-B-02`, then the page and the position; the object on a second line),
+ * «Позиции» (the row of the specification, the quantity on a second line), «Текущее решение», «Принятое предложение», «Экономия»
+ * and «Решение». The original's «Эффект» with a type and its «Ограничения» are not here: the proposal has one type and the server
+ * states no restriction, so there is nothing to put in them. The long paragraph that opened the tab is gone.
+ *
+ * **Filters.** The section, the project and the document (`UIP-S11-06`) are the page's — the section in its header, the object in
+ * the top strip, the document in the row of the tabs — and shared with the specification tab; this widget reads them as props and
+ * starts from its first page whenever one changes. A document nothing was accepted in is an empty page, said of the document.
  */
 
 import Link from 'next/link';
 import { useState } from 'react';
 
-import type { AcceptedOptimisationProposal, AcceptedOptimisationProposalPage, ProjectSection, ProjectUid } from '@/shared/api';
+import type {
+  AcceptedOptimisationProposal, AcceptedOptimisationProposalPage, DocumentUid, ProjectSection, ProjectUid,
+} from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { formatInstant, routes } from '@/shared/lib';
 import type { TableColumn } from '@/shared/ui';
@@ -52,40 +60,58 @@ export function acceptedSectionTitle(code: string | undefined): string | null {
 const COLUMNS: readonly TableColumn<AcceptedOptimisationProposal>[] = [
   {
     key: 'place',
-    header: 'Объект и комплект',
+    header: 'Документ / источник',
     cell: (row) => (
       <>
         <Link href={routes.documentOptimisation(row.project_uid, row.document_uid, row.optimisation_pass_id)}>
-          {row.project_name}
+          {row.document_name}
         </Link>
-        <span className={styles.place}>
-          {[row.document_name, acceptedSectionTitle(row.section)].filter((part) => part !== null).join(' · ')}
+        <span className={styles.mark}>
+          {' '}· страница {row.page_number}
+          {row.row_position === null ? '' : `, позиция ${row.row_position}`}
         </span>
         <span className={styles.place}>
-          страница {row.page_number}
-          {row.row_position === null ? '' : `, позиция ${row.row_position}`}
+          {[row.project_name, acceptedSectionTitle(row.section)].filter((part) => part !== null).join(' · ')}
         </span>
       </>
     ),
   },
-  { key: 'row', header: 'Позиция спецификации', cell: (row) => row.row_text },
   {
-    key: 'change',
-    header: 'Принятая замена',
+    key: 'row',
+    header: 'Позиции',
+    cell: (row) => (
+      <>
+        {row.row_text}
+        <span className={styles.place}>Количество: {acceptedQuantity(row)}</span>
+      </>
+    ),
+  },
+  {
+    key: 'current',
+    header: 'Текущее решение',
     cell: (row) => (
       <>
         <span className={styles.change}>{row.matched_name}</span>
-        <span className={styles.change}>
-          → {row.proposed_name} · {row.proposed_vendor}
-        </span>
         <span className={styles.place}>
-          {formatAmount(row.current_unit_price, row.currency)} → {formatAmount(row.proposed_unit_price, row.currency)} за{' '}
-          {row.unit}
+          {formatAmount(row.current_unit_price, row.currency)} за {row.unit}
         </span>
       </>
     ),
   },
-  { key: 'quantity', header: 'Количество', cell: acceptedQuantity },
+  {
+    key: 'proposed',
+    header: 'Принятое предложение',
+    cell: (row) => (
+      <>
+        <span className={styles.change}>
+          {row.proposed_name} · {row.proposed_vendor}
+        </span>
+        <span className={styles.place}>
+          {formatAmount(row.proposed_unit_price, row.currency)} за {row.unit}
+        </span>
+      </>
+    ),
+  },
   {
     key: 'saving',
     header: 'Экономия',
@@ -127,16 +153,22 @@ export interface SectionAcceptedListProps {
   readonly hasPrevious: boolean;
   readonly onPrevious: () => void;
   readonly onNext: (cursor: string) => void;
+  /** `UIP-S11-06`: the list is narrowed to one document, so an empty page names the document. */
+  readonly documentFiltered?: boolean | undefined;
 }
 
 /** The answer: the count, the rows, the pager — or the empty page said in words. Rendered by the static harness. */
-export function SectionAcceptedList({ page, hasPrevious, onPrevious, onNext }: SectionAcceptedListProps) {
+export function SectionAcceptedList({ page, hasPrevious, onPrevious, onNext, documentFiltered = false }: SectionAcceptedListProps) {
   const next = page.page.next_cursor;
   if (page.items.length === 0 && !hasPrevious) {
     return (
       <EmptyState
-        title="Нет принятых экспертом оптимизаций."
-        detail="Непроверенные, отклонённые и возвращённые на доработку предложения сюда намеренно не включаются. Принятое появится здесь после решения эксперта на вкладке «Оптимизация» комплекта."
+        title={documentFiltered ? 'По этому документу нет принятых экспертом оптимизаций.' : 'Нет принятых экспертом оптимизаций.'}
+        detail={
+          documentFiltered
+            ? 'Непроверенные, отклонённые и возвращённые на доработку предложения сюда намеренно не включаются. Принятое по документу появится здесь после решения эксперта на вкладке «Оптимизация» этого документа.'
+            : 'Непроверенные, отклонённые и возвращённые на доработку предложения сюда намеренно не включаются. Принятое появится здесь после решения эксперта на вкладке «Оптимизация» комплекта.'
+        }
       />
     );
   }
@@ -159,29 +191,26 @@ export function SectionAcceptedList({ page, hasPrevious, onPrevious, onNext }: S
 export interface SectionAcceptedOptimisationsProps {
   readonly sectionCode: ProjectSection;
   readonly projectUid: ProjectUid | null;
+  /** `UIP-S11-06`: one document of the scope; every document when absent. */
+  readonly documentUid?: DocumentUid | null | undefined;
 }
 
-export function SectionAcceptedOptimisations({ sectionCode, projectUid }: SectionAcceptedOptimisationsProps) {
+export function SectionAcceptedOptimisations({ sectionCode, projectUid, documentUid = null }: SectionAcceptedOptimisationsProps) {
   const [cursors, setCursors] = useState<readonly string[]>([]);
-  // A cursor belongs to the section and project it was issued under: another choice starts from the first page.
-  const scope = `${sectionCode}|${projectUid ?? ''}`;
+  // A cursor belongs to the section, project and document it was issued under: another choice starts from the first page.
+  const scope = `${sectionCode}|${projectUid ?? ''}|${documentUid ?? ''}`;
   const [seenScope, setSeenScope] = useState(scope);
   if (seenScope !== scope) {
     setSeenScope(scope);
     setCursors([]);
   }
   const cursor = cursors.at(-1);
-  const accepted = useAcceptedOptimisationProposals({ sectionCode, projectUid, ...(cursor === undefined ? {} : { cursor }) });
+  const accepted = useAcceptedOptimisationProposals({ sectionCode, projectUid, documentUid, ...(cursor === undefined ? {} : { cursor }) });
   const failure = accepted.error === null ? null : failureMessage(accepted.error);
   const page = accepted.data;
 
   return (
     <section className={styles.section} aria-label="Принятые оптимизации раздела" data-section-accepted="">
-      <p className={styles.rule}>
-        Предложения оптимизации, по которым действующее решение — «принято», по объектам выбранного раздела, сначала недавние.
-        Раздел и объект только отбирают записи; каждая строка остаётся предложением своего объекта и прохода, и по ссылке открывается
-        вкладка «Оптимизация» его комплекта.
-      </p>
       {accepted.isPending ? <LoadingState what="принятых оптимизаций" /> : null}
       {failure !== null ? (
         <div data-accepted-failure={failure.kind}>
@@ -199,6 +228,7 @@ export function SectionAcceptedOptimisations({ sectionCode, projectUid }: Sectio
           hasPrevious={cursors.length > 0}
           onPrevious={() => setCursors((held) => held.slice(0, -1))}
           onNext={(next) => setCursors((held) => [...held, next])}
+          documentFiltered={documentUid !== null}
         />
       ) : null}
     </section>

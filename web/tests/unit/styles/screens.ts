@@ -225,7 +225,7 @@ import {
   tapeProposal as tapeProposalOf,
 } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
-import { ACCEPTED_PROJECT_A, acceptedPage } from '../section-optimisation/fixtures';
+import { acceptedPage, specificationKey } from '../section-optimisation/fixtures';
 
 import type { Screen } from './contrast';
 import { auditCounts, sectionAudit } from '../dashboard/audit-counts';
@@ -879,6 +879,15 @@ export function screens(): Screen[] {
     runScreen('partial', { degradation_set: ['text_analysis'], published_finding_count: 1 }),
   );
   add('RunProgress failed', runScreen('failed', { terminal_reason: 'analysis_failed' as ErrorCode }));
+  // `UIP-S11-06`: «Оптимизация раздела» with the filter «Документ» drawn in the row of the tabs: the scope's answer is seeded, so the
+  // list holds documents of two objects (grouped under their names), and the table is grouped by document.
+  {
+    const client = newClient();
+    client.setQueryData(specificationKey('AR', null), sectionAnswer());
+    add('SectionOptimisationPage with the filter «Документ»', renderScreen(client, createElement(SectionOptimisationPage, {
+      initial: readSectionOptimisationAddress({ section: 'AR' }),
+    })));
+  }
   // `UI-A-65`: the rail states how long each stage took, and an open run draws its live line (below).
   add(
     'RunProgress published with stage times',
@@ -1449,10 +1458,7 @@ export function screens(): Screen[] {
   add('SectionOptimisationPage accepted tab, an address it could not read', withRouter(createElement(SectionOptimisationPage, {
     initial: readSectionOptimisationAddress({ section: 'ZZ', tab: 'accepted' }),
   })));
-  add('SectionFilterBar', render(createElement(SectionFilterBar, {
-    sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_A as never,
-    options: [{ projectUid: ACCEPTED_PROJECT_A as never, name: 'Школа на пятьсот мест' }], onSection: noop, onProject: noop,
-  })));
+  add('SectionFilterBar', render(createElement(SectionFilterBar, { sectionCode: 'AR', onSection: noop })));
   add('SectionAcceptedList ready', render(createElement(SectionAcceptedList, {
     page: acceptedPage(), hasPrevious: false, onPrevious: noop, onNext: noop,
   })));

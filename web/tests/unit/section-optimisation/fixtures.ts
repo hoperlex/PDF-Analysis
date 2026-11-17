@@ -88,18 +88,19 @@ export function projectRead(uid: string, name: string): Project {
 }
 
 export const acceptedKey = (
-  filter: { sectionCode?: string; projectUid?: string; cursor?: string } = {},
+  filter: { sectionCode?: string; projectUid?: string; documentUid?: string; cursor?: string } = {},
 ) =>
   queryKeys.optimisation.accepted({
     ...(filter.projectUid === undefined ? {} : { project_uid: filter.projectUid as never }),
+    ...(filter.documentUid === undefined ? {} : { document_uid: filter.documentUid as never }),
     ...(filter.sectionCode === undefined ? {} : { section_code: filter.sectionCode as never }),
     ...(filter.cursor === undefined ? {} : { cursor: filter.cursor }),
     limit: ACCEPTED_PAGE_LIMIT,
   });
 
-export const specificationKey = (sectionCode: string, projectUid: string | null) =>
+export const specificationKey = (sectionCode: string, projectUid: string | null, documentUid: string | null = null) =>
   queryKeys.optimisation.sectionSpecification(sectionCode as never, {
-    projectUid: projectUid as never, q: null, offset: 0, limit: SECTION_ROW_LIMIT,
+    projectUid: projectUid as never, documentUid: documentUid as never, q: null, offset: 0, limit: SECTION_ROW_LIMIT,
   });
 
 export interface AcceptedShape {

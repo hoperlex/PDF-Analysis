@@ -23,7 +23,7 @@
   gap: var(--am-gap-xs);
 }
 
-/* `UI-B-24`: the section and the project, chosen beside the tabs as the original chooses its project there. */
+/* `UI-B-24`, `UIP-S11-01`: the list of sections, chosen in the header beside the section's badge. */
 .filterBar {
   display: flex;
   flex-wrap: wrap;
@@ -96,7 +96,95 @@
   color: var(--am-ink-muted);
 }
 
-.back {
-  margin: 0 0 var(--am-gap-xs);
+/*
+ * The header (`UIP-S11-01`): «←», the section's badge, «Уровень раздела», the heading and the list of sections on one line that
+ * wraps on a narrow window; under it the one line of what the screen holds, and the paragraph that «ⓘ» opens. Sizes are tokens.
+ */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  min-width: 0;
+  margin-bottom: var(--am-gap-sm);
   font-size: var(--am-text-sm);
+}
+
+/* «←»: a 24 px target, a quiet glyph; it names where it leads for a screen reader. */
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
+  font-size: var(--am-text-lg);
+  line-height: 1;
+  text-decoration: none;
+}
+
+.badge {
+  align-items: center;
+}
+
+.level {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.title {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--am-text-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: var(--am-leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.info {
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--am-radius-sm);
+  background: transparent;
+  color: var(--am-ink-muted);
+  font: inherit;
+  font-size: var(--am-text-md);
+  cursor: pointer;
+}
+
+.info:hover,
+.info[aria-expanded='true'] {
+  color: var(--am-ink);
+}
+
+.info:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+/* The two lines under the heading take the whole row. */
+.lead {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--am-ink-muted);
+}
+
+.about {
+  flex: 1 0 100%;
+  max-width: 82ch;
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  color: var(--am-ink-muted);
+}
+
+.about[hidden] {
+  display: none;
 }
