@@ -138,14 +138,14 @@ describe('what a row draws: unavailable is not a chip', () => {
   });
 });
 
-describe('the two tabs and the quiet link', () => {
-  it('draws two tabs, «Серверы» and «Модели по этапам», and no more', () => {
+describe('the four tabs and the quiet link', () => {
+  it('draws four tabs, «Обзор», «Серверы», «Задачи» and «Модели по этапам», and no more', () => {
     const markup = seeded(['admin']);
-    expect(markup.match(/role="tab"/g)).toHaveLength(2);
-    expect(markup).toContain('>Серверы<');
-    expect(markup).toContain('>Модели по этапам<');
-    expect(markup).not.toContain('>Обзор<');
+    expect(markup.match(/role="tab"/g)).toHaveLength(4);
+    for (const label of ['Обзор', 'Серверы', 'Задачи', 'Модели по этапам']) expect(markup).toContain(`>${label}<`);
     expect(markup).not.toContain('>Подключения<');
+    expect(markup).not.toContain('>Диагностика<');
+    expect(markup).not.toContain('>Лимиты<');
     expect(markup).toContain('data-workers-panel="servers"');
   });
 
@@ -159,11 +159,12 @@ describe('the two tabs and the quiet link', () => {
     }
   });
 
-  it('says the summary line instead of the old overview', () => {
+  it('keeps the summary line on «Серверы»; the strip of «Обзор» is a tab of its own', () => {
     const markup = seeded(['expert']);
     expect(markup).toContain('data-hosts-summary');
     expect(markup).toContain('На связи 3 из 4 · свободно 3 из 7');
     expect(markup).not.toContain('data-workers-overview');
+    expect(markup).not.toContain('data-overview-figures');
   });
 
   it('keeps the D-291 warning, in one line', () => {
@@ -362,7 +363,7 @@ describe('the viewer sees none of the new reads', () => {
   });
 
   it('draws a viewer neither tab\'s data, even from a cache that holds it', () => {
-    for (const tab of ['servers', 'models'] as const) {
+    for (const tab of ['overview', 'servers', 'tasks', 'models'] as const) {
       const markup = seeded(['viewer'], tab);
       expect(markup, tab).not.toContain('data-hosts-summary');
       expect(markup, tab).not.toContain('data-host-row');

@@ -36,8 +36,8 @@ export function isAdvancedSection(value: unknown): value is AdvancedSection {
 }
 
 /**
- * The section an old tab of «Диспетчер» is now: the five tabs that moved keep their name (`?tab=routes`), and «Обзор», which
- * became the summary line, has none.
+ * The section an old tab of «Диспетчер» is now: the five tabs that moved keep their name (`?tab=routes`). «Обзор», «Серверы»,
+ * «Задачи» and «Модели по этапам» are tabs of the screen itself (`./tabs.ts`) and have none.
  */
 export function legacyAdvancedTab(tab: string | undefined): AdvancedSection | null {
   return tab !== undefined && isAdvancedSection(tab) && tab !== 'presets' && tab !== 'layout' && tab !== 'precedents' ? tab : null;

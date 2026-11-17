@@ -8,13 +8,15 @@
  * `force-dynamic` because the guard reads a cookie, and a screen served from a cache is a
  * screen showing somebody else's session.
  *
- * **Old addresses keep working (`HOSTS-WEB-01`).** «Диспетчер» has two tabs, «Серверы» and «Модели по этапам»; the former
+ * **The tab is in the address (`UIP-S15-06`).** «Диспетчер» has four tabs, «Обзор», «Серверы», «Задачи» and «Модели по этапам»:
+ * `?tab=overview|servers|tasks|models`. A value that is none of them opens the tab the screen opens on, «Обзор».
+ *
+ * **Old addresses keep working (`HOSTS-WEB-01`).** The former
  * tabs «Подключения», «Группы», «Правила», «Назначения» and «Процессы» are on `/workers/advanced`. An address that names one
  * of them (`?tab=connections`), or a connection for the key form (`?connection=`, where the BFF's `executor-secret` door sends
  * the person back with how the last key post ended, `?secret=`), is redirected there with its parameters; the key form itself
  * is rendered on that page, on the server. Every value read from the address is validated against a closed set or a pattern
- * first; a value that fails is dropped, never echoed. «Обзор» became the summary line of «Серверы»: its old address opens
- * the screen on the default tab.
+ * first; a value that fails is dropped, never echoed.
  */
 
 import { redirect } from 'next/navigation';
