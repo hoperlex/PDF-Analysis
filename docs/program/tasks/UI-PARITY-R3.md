@@ -1,7 +1,7 @@
 # Task UI-PARITY-R3 — screens look and behave like the original PDF-proverka, in our own style
 
 task_id: UI-PARITY-R3
-status: in progress (integration branch `integration/ui-parity-r3`, published to `origin/dev` at each publication point)
+status: completed in development candidate (`origin/dev`, publication points P1–P9; `UIP-S19-02` held for the owner; not on `main`)
 
 ## Outcome
 
@@ -125,3 +125,4 @@ previous screens. No feature switch is introduced; the two migrations carry thei
 | P5 | `1a6cf86e5` | 0.30.4 rev 1 | S02-04..07; FIX-17..20; database pins of 0068..0070 resealed by the publisher |
 | P6 | `6ea6e36ac` | 0.30.5 rev 1 | S13-01..04, S15-02, S05-01..04, S11-01..04, S11-06, S12-02..04; FIX-21..23 |
 | P7 | `1953f94f9` | 0.30.6 rev 1 | S14-02..04, S16-01, S17-01..03, S22-02, S22-03; FIX-24, FIX-26 |
+| P8 | `e0bdd65d1` | 0.30.7 rev 1 | S15-01, S16-02 (API) + CONTRACT-04 (1.58.0); S15-03..06, S16-03, S16-04; FIX-25, FIX-27; DEBT-01 |

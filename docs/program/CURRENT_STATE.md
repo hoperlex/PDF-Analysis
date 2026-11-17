@@ -1,5 +1,7 @@
 # Current state
 
+**Updated 2026-11-17 by `UI-PARITY-R3` publication point P9, the last (unverified development candidate, product `0.30.8`, branch `publish/ui-parity-r3` on `origin/dev`, published by the delegated publisher session).** Debt of the pool: one reading line and one «Повторить» on a section being read whole, the proposed severity on one line in «Разбор», no pager on a one-page «Очередь», journey manifest notes. The pool is delivered except `UIP-S19-02`, held for the owner; API `1.58.0` and migration head `0070_document_group` unchanged.
+
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P8 (unverified development candidate, product `0.30.7`, branch `publish/ui-parity-r3` on `origin/dev`, published by the delegated publisher session).** «Диспетчер» in four tabs opening on «Обзор», server cards with «Сейчас», «Задачи» by period; step one of «Сравнение стадий» with «Только П / Только Р» counts, «Подтвердить все предложения (N)» and the suggested pairs in the one table. Contract resealed as `1.58.0` for two additive reads (`listExecutorHosts` `current_work`, `listStagePairs` unpaired counts), checked on throwaway PostgreSQL; migration head `0070_document_group` unchanged.
 
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P7 (unverified development candidate, product `0.30.6`, branch `publish/ui-parity-r3` on `origin/dev`, published by the delegated publisher session).** «График работ» counts accepted and rejected findings in «Выполнено» and gives an administrator «Назначить работу» and «Отпуск / отсутствие» on «Календарь запаса»; «Назначения» opens on the expert of the address; both comparisons take the top strip's object and the original's step table; the pause confirmation states its effect; an archive can be dropped on the file field. API `1.57.0` and migration head `0070_document_group` unchanged.
@@ -97,7 +99,7 @@ Checks run per branch before the merge:
 
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
-- Product `VERSION` is `0.30.7`; this file describes development, not a release.
+- Product `VERSION` is `0.30.8`; this file describes development, not a release.
 - The development API contract is `1.58.0`: **302 paths / 331 operations / 823 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0070_document_group`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 
