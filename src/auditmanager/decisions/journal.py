@@ -38,7 +38,7 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.decisions.carryover import CarriedOrigin
+from auditmanager.decisions.carryover import CarriedOrigin, known_carry_mode
 
 __all__ = ["JournalEntry", "decision_journal"]
 
@@ -107,6 +107,8 @@ _JOURNAL = text(
         cs.finding_uid AS carried_finding_uid,
         cf.version_uid AS carried_version_uid,
         cv.version_ordinal AS carried_version_ordinal,
+        cf.allocated_by_run_id AS carried_run_id,
+        cc.outcome ->> 'mode' AS carried_mode,
         es.status AS execution_status,
         es.set_at AS execution_status_at
     FROM expert_decision_event e
@@ -120,6 +122,7 @@ _JOURNAL = text(
     LEFT JOIN expert_decision_event cs ON cs.decision_id = e.carried_from_decision_id
     LEFT JOIN finding cf ON cf.finding_uid = cs.finding_uid
     LEFT JOIN document_version cv ON cv.version_uid = cf.version_uid
+    LEFT JOIN command_record cc ON cc.command_id = e.command_id
     LEFT JOIN finding_execution_status es ON es.finding_uid = e.finding_uid
     WHERE (CAST(:category AS text) IS NULL OR o.category = CAST(:category AS text))
       AND (CAST(:verdict AS text) IS NULL OR v.current_verdict = CAST(:verdict AS text))
@@ -260,6 +263,7 @@ def decision_journal(
                 None if row["carried_decision_id"] is None else CarriedOrigin(
                     decision_id=row["carried_decision_id"], finding_uid=row["carried_finding_uid"],
                     version_uid=row["carried_version_uid"], version_ordinal=int(row["carried_version_ordinal"]),
+                    run_id=row["carried_run_id"], mode=known_carry_mode(row["carried_mode"]),
                 )
             ),
         )

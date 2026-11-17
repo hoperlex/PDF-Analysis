@@ -25,6 +25,7 @@ __all__ = [
     "append_decision_body",
     "check_comment_is_present_for_a_comment_event",
     "decision_carried_from_body",
+    "decision_carried_from_view",
     "decision_event_body",
     "decision_record_body",
 ]
@@ -46,6 +47,21 @@ class DecisionCarriedFromView:
     #: ``restart``). Both ``None`` (and both omitted) for a decision whose reader did not read them; the contract declares them optional.
     run_id: str | None = None
     mode: str | None = None
+
+
+def decision_carried_from_view(origin: Any) -> DecisionCarriedFromView | None:
+    """The wire view of a carried decision's origin (``decisions.CarriedOrigin``); ``None`` for a decision made directly.
+
+    The one mapping, field by field: the source decision, finding and version, the version's display ordinal and, since contract 1.59.0
+    (`RUN-RESTART-01`), the run that allocated the source finding and how the decision was carried. The origin is read by attribute, so a
+    reader that has not read the run or the mode (``None``) answers a view without them, which is the contract's «optional».
+    """
+    if origin is None:
+        return None
+    return DecisionCarriedFromView(
+        decision_id=origin.decision_id, finding_uid=origin.finding_uid, version_uid=origin.version_uid,
+        version_ordinal=origin.version_ordinal, run_id=getattr(origin, "run_id", None), mode=getattr(origin, "mode", None),
+    )
 
 
 def decision_carried_from_body(view: DecisionCarriedFromView) -> dict[str, Any]:

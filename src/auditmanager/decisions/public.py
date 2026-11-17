@@ -31,6 +31,7 @@ from auditmanager.decisions.carryover import (
     CONFLICT_CARRYOVER_SEVERITY_NOT_CARRYABLE,
     CONFLICT_CARRYOVER_SOURCE_DECISION_NOT_CURRENT,
     CONFLICT_CARRYOVER_TARGET_ALREADY_DECIDED,
+    RESTART_MODE,
     CarriedDecision,
     CarriedOrigin,
     CarryoverProvenance,
@@ -38,6 +39,7 @@ from auditmanager.decisions.carryover import (
     carry_over_decision,
     carryover_comment,
     current_verdict_origins,
+    known_carry_mode,
 )
 from auditmanager.decisions.ledger import (
     ORIGIN_KINDS,
@@ -68,6 +70,7 @@ __all__ = [
     "JournalEntry",
     "ORIGIN_KINDS",
     "PC01_EVENT_TYPES",
+    "RESTART_MODE",
     "VERDICT_FOR_EVENT",
     "append_decision_under_key",
     "carried_origins",
@@ -79,6 +82,7 @@ __all__ = [
     "decision_events_by_id",
     "decision_history",
     "decision_journal",
+    "known_carry_mode",
     "rebuild_current_verdict",
     "record_decision",
     "register_decision_recorded",

@@ -36,6 +36,11 @@ so it waits for this transaction, and this one waits for it):
   ``carryover_severity_not_carryable`` when the target's observation cannot hold one. It is
   never dropped.
 
+**A restart is the one carry no expert confirms** (`RUN-RESTART-01`, `R-155b`): when a restarted run publishes, the server carries the decisions of
+the run's lineage to the findings that match verbatim. That is :mod:`auditmanager.decisions.restart_carry`; it appends the same kind of
+event through :func:`~auditmanager.decisions.ledger.record_decision`, with the mode ``restart`` (the one mode that admits a source and a
+target of one version), and never goes through :func:`carry_over_decision`'s confirm-only rules.
+
 This module does not decide *which* pairs may be carried: the comparison context proves that
 the recomputed comparison still proposes the pair before it calls :func:`carry_over_decision`.
 """
@@ -63,6 +68,7 @@ from auditmanager.shared.identity import (
     FindingObservationId,
     FindingUid,
     IdentityError,
+    RunId,
     VersionUid,
 )
 from auditmanager.shared.identity.ids import UserUid
@@ -72,6 +78,7 @@ __all__ = [
     "CARRYOVER_COMMAND_TYPE",
     "CARRYOVER_CONFLICT_REASONS",
     "CARRYOVER_MODES",
+    "RESTART_MODE",
     "CONFLICT_CARRYOVER_PAIR_NOT_PROPOSED",
     "CONFLICT_CARRYOVER_SEVERITY_NOT_CARRYABLE",
     "CONFLICT_CARRYOVER_SOURCE_DECISION_NOT_CURRENT",
@@ -95,7 +102,13 @@ CARRIED_EVENT_FOR_VERDICT: Final[dict[str, str]] = {"accepted": "accept", "rejec
 CARRYOVER_MODES: Final[dict[str, str]] = {
     "version": "сравнение версий",
     "stage": "сравнение стадий П → Р",
+    "restart": "перезапуск прогона",
 }
+
+#: `RUN-RESTART-01` (`R-155b`): the mode of a carry made by the server when a restarted run published, between two runs of the **same**
+#: version and with no expert confirmation. It is the only mode that admits one version on both sides (the database has no version rule),
+#: and the only one whose provenance names the two runs.
+RESTART_MODE: Final[str] = "restart"
 
 #: ``conflict`` details (``conflict_reason``) of a refused carryover. The first is raised by
 #: the comparison context, which proves the pair; the others here, under the row locks.
@@ -127,6 +140,10 @@ class CarryoverProvenance:
     source_version_ordinal: int
     target_version_uid: str
     mode: str
+    #: `RUN-RESTART-01`: the run that allocated the source finding and the run of the target finding. Both are required (and checked) for
+    #: mode ``restart``, whose two findings belong to one version, so the runs are what tells them apart; unused by the other modes.
+    source_run_id: str | None = None
+    target_run_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +167,13 @@ def carryover_comment(provenance: CarryoverProvenance) -> str:
     exact-repeat check compares it whole -- it is never parsed back.
     """
     _check_provenance(provenance)
+    if provenance.mode == RESTART_MODE:
+        # The server's act, not an expert's confirmation (`R-155b`): the sentence says so by naming the restart and both runs.
+        return (
+            f"Перенесено при перезапуске из прогона {provenance.source_run_id}. "
+            f"Исходное решение {provenance.source_decision_id} по замечанию "
+            f"{provenance.source_finding_uid}; прогон-приёмник {provenance.target_run_id}."
+        )
     return (
         f"Решение перенесено из версии {provenance.source_version_ordinal} "
         f"({CARRYOVER_MODES[provenance.mode]}) после подтверждения экспертом. "
@@ -181,7 +205,16 @@ def _check_provenance(provenance: CarryoverProvenance) -> None:
         raise _invalid("source_version_ordinal")
     if provenance.mode not in CARRYOVER_MODES:
         raise DomainError(ErrorCode.VALIDATION_FAILED, field="mode", constraint="enum")
-    if provenance.source_version_uid == provenance.target_version_uid:
+    if provenance.mode == RESTART_MODE:
+        # One version on both sides is the point of a restart; what makes it a pair is the two distinct runs.
+        for field in ("source_run_id", "target_run_id"):
+            try:
+                RunId.parse(getattr(provenance, field))
+            except (IdentityError, TypeError):
+                raise _invalid(field) from None
+        if provenance.source_run_id == provenance.target_run_id:
+            raise _conflict(CONFLICT_CARRYOVER_PAIR_NOT_PROPOSED)
+    elif provenance.source_version_uid == provenance.target_version_uid:
         raise _conflict(CONFLICT_CARRYOVER_PAIR_NOT_PROPOSED)
 
 
@@ -349,26 +382,39 @@ def carry_over_decision(
 class CarriedOrigin:
     """Where one carried event came from (`UI-A-73`): the source decision, its finding and version.
 
-    The first three are identities; ``version_ordinal`` is the source version's display order («V2»)
-    and is never compared as an identity.
+    The first three are identities; ``version_ordinal`` is the source version's display order («V2») and is never compared as an
+    identity. ``run_id`` (`RUN-RESTART-01`, contract 1.59.0) is the run that allocated the source finding -- the «from run» beside the
+    version -- and ``mode`` how the decision was carried (``version``, ``stage`` or ``restart``), read from the outcome of the command that
+    carried it; ``None`` for a command whose outcome names no known mode.
     """
 
     decision_id: str
     finding_uid: str
     version_uid: str
     version_ordinal: int
+    run_id: str | None = None
+    mode: str | None = None
+
+
+def known_carry_mode(value: object) -> str | None:
+    """A mode read from a command outcome, or ``None`` when it is not one of :data:`CARRYOVER_MODES` (never guessed, never passed through)."""
+    return value if isinstance(value, str) and value in CARRYOVER_MODES else None
 
 
 #: The source of each named carried event: through ``carried_from_decision_id`` to the source event, its finding, that
-#: finding's version and the version's ordinal. Inner joins, because the foreign keys make every link exist.
+#: finding's version and the version's ordinal, and the run that allocated the source finding. The mode is the carrying event's own
+#: command outcome (``LEFT JOIN``: an event carried by a path that wrote no outcome has none). Inner joins elsewhere, because the
+#: foreign keys make every link exist.
 _ORIGINS_OF_EVENTS = text(
     """
     SELECT e.decision_id AS carrier_id, s.decision_id AS source_decision_id, s.finding_uid AS source_finding_uid,
-           f.version_uid AS source_version_uid, v.version_ordinal AS source_version_ordinal
+           f.version_uid AS source_version_uid, v.version_ordinal AS source_version_ordinal,
+           f.allocated_by_run_id AS source_run_id, cr.outcome ->> 'mode' AS carried_mode
     FROM expert_decision_event e
     JOIN expert_decision_event s ON s.decision_id = e.carried_from_decision_id
     JOIN finding f ON f.finding_uid = s.finding_uid
     JOIN document_version v ON v.version_uid = f.version_uid
+    LEFT JOIN command_record cr ON cr.command_id = e.command_id
     WHERE e.decision_id IN :decision_ids
     """
 ).bindparams(bindparam("decision_ids", expanding=True))
@@ -378,15 +424,25 @@ _ORIGINS_OF_EVENTS = text(
 _ORIGINS_OF_CURRENT_VERDICTS = text(
     """
     SELECT cv.finding_uid AS carrier_finding_uid, s.decision_id AS source_decision_id, s.finding_uid AS source_finding_uid,
-           f.version_uid AS source_version_uid, v.version_ordinal AS source_version_ordinal
+           f.version_uid AS source_version_uid, v.version_ordinal AS source_version_ordinal,
+           f.allocated_by_run_id AS source_run_id, cr.outcome ->> 'mode' AS carried_mode
     FROM finding_current_verdict cv
     JOIN expert_decision_event e ON e.decision_id = cv.latest_verdict_decision_id
     JOIN expert_decision_event s ON s.decision_id = e.carried_from_decision_id
     JOIN finding f ON f.finding_uid = s.finding_uid
     JOIN document_version v ON v.version_uid = f.version_uid
+    LEFT JOIN command_record cr ON cr.command_id = e.command_id
     WHERE cv.finding_uid IN :finding_uids
     """
 ).bindparams(bindparam("finding_uids", expanding=True))
+
+
+def _origin_of(row) -> CarriedOrigin:  # noqa: ANN001 - a SQLAlchemy RowMapping
+    return CarriedOrigin(
+        decision_id=row["source_decision_id"], finding_uid=row["source_finding_uid"],
+        version_uid=row["source_version_uid"], version_ordinal=int(row["source_version_ordinal"]),
+        run_id=row["source_run_id"], mode=known_carry_mode(row["carried_mode"]),
+    )
 
 
 def carried_origins(session: Session, decision_ids: Sequence[str]) -> dict[str, CarriedOrigin]:
@@ -399,13 +455,7 @@ def carried_origins(session: Session, decision_ids: Sequence[str]) -> dict[str, 
     if not wanted:
         return {}
     rows = session.execute(_ORIGINS_OF_EVENTS, {"decision_ids": wanted}).mappings().all()
-    return {
-        row["carrier_id"]: CarriedOrigin(
-            decision_id=row["source_decision_id"], finding_uid=row["source_finding_uid"],
-            version_uid=row["source_version_uid"], version_ordinal=int(row["source_version_ordinal"]),
-        )
-        for row in rows
-    }
+    return {row["carrier_id"]: _origin_of(row) for row in rows}
 
 
 def current_verdict_origins(session: Session, finding_uids: Sequence[str]) -> dict[str, CarriedOrigin]:
@@ -419,10 +469,4 @@ def current_verdict_origins(session: Session, finding_uids: Sequence[str]) -> di
     if not wanted:
         return {}
     rows = session.execute(_ORIGINS_OF_CURRENT_VERDICTS, {"finding_uids": wanted}).mappings().all()
-    return {
-        row["carrier_finding_uid"]: CarriedOrigin(
-            decision_id=row["source_decision_id"], finding_uid=row["source_finding_uid"],
-            version_uid=row["source_version_uid"], version_ordinal=int(row["source_version_ordinal"]),
-        )
-        for row in rows
-    }
+    return {row["carrier_finding_uid"]: _origin_of(row) for row in rows}
