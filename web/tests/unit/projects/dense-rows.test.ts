@@ -21,6 +21,8 @@ import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { ProjectList } from '@/widgets/project-list';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
+import { parseRules } from '../styles/contrast';
+import { withoutMedia } from '../styles/css-reads';
 import { auditCounts } from '../dashboard/audit-counts';
 import { newClient, renderWith } from '../screens/harness';
 import { PROJECT_UID, classification, otherVersion, version } from '../sections/fixtures';
@@ -89,11 +91,27 @@ describe('a document card', () => {
   const documents = [version({ page_count: 12, classification: classification() }), otherVersion('B')];
   const [classified, unclassified] = documents as [DocumentVersion, DocumentVersion];
   const addresses = () => ({ href: '/v', documentHref: '/d' });
+  const facts = (markup: string) => [...markup.matchAll(/data-card-fact="([a-z]+)"/g)].map((match) => match[1]);
 
-  it('says its pages beside the number and the history link in the same row', () => {
+  it('is one line of name, number of version and box, and the number leads to the document’s versions', () => {
     const markup = renderWith(newClient(), createElement(DocumentCardGrid, { documents, addresses }));
-    expect(markup).toContain('>12 стр.<');
+    expect(markup).toMatch(/<p class="[^"]*"><a [^>]*title="Комплект АР\n[^"]*"[^>]*href="\/v">Комплект АР<\/a><\/p>/);
+    expect(markup).toMatch(/<a [^>]*title="Все версии документа"[^>]*href="\/d">V1<\/a>/);
+    // not drawn any more: «все версии» in a row of its own, the pages beside the number, the stage badge (they are read, below)
+    expect(markup).not.toMatch(/<a [^>]*>все версии<\/a>/);
+    expect(markup).not.toContain('am-badge--active');
+  });
+
+  it('keeps the pages, the stage, the section and the tags in words a screen reader reads and the tooltip carries, and in no line', () => {
+    const tagged = version({ page_count: 12, classification: classification(), tags: ['Корпус 1', 'Корпус 2'] });
+    const markup = renderWith(newClient(), createElement(DocumentCardGrid, { documents: [tagged], addresses }));
+    expect(facts(markup)).toEqual(['pages', 'stage', 'section', 'tags', 'versions']);
     expect(markup).toContain('>все версии<');
+    expect(markup).toContain('>12 стр.<');
+    expect(markup).toContain('>Стадия: П<');
+    expect(markup).toContain('>Метки: Корпус 1, Корпус 2<');
+    expect(markup).toContain('12 стр.\nСтадия: П\nАрхитектурные решения (АР)\nМетки: Корпус 1, Корпус 2\nV1: все версии документа"');
+    expect(markup).toContain('data-version-classification="P:AR"');
     expect(markup).not.toContain('страниц 12');
   });
 
@@ -104,20 +122,26 @@ describe('a document card', () => {
     expect(both).toContain('data-section-code="AR"');
     expect(stage).toContain('data-project-stage="P"');
     expect(stage).not.toContain('data-section-code');
+    expect(facts(none)).toEqual(['pages', 'versions']);
     expect(none).not.toContain('data-version-classification');
+    // a version with no confirmed section says so, as the badge did, except in the group that is that very case
+    const unconfirmed = renderWith(newClient(), createElement(DocumentCardGrid, { documents: [unclassified], addresses }));
+    expect(unconfirmed).toContain('>Раздел не подтверждён<');
   });
 
-  it('says how many findings the result run published, beside the chip, and nothing for a document with none', () => {
+  it('says how many findings the result run published in its first mark, and a zero for a result with none', () => {
     const audited = (n: number) => version({
       classification: classification(),
       audit: { state: 'awaiting_decision', partial: false, result_run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', finding_count: n, undecided_finding_count: 1 },
     });
     const three = renderWith(newClient(), createElement(DocumentCardGrid, { documents: [audited(3)], addresses }));
     const many = renderWith(newClient(), createElement(DocumentCardGrid, { documents: [audited(12)], addresses }));
-    const none = renderWith(newClient(), createElement(DocumentCardGrid, { documents: [audited(0)], addresses }));
-    expect(three).toMatch(/data-card-findings="3"[^>]*>3 замечания</);
-    expect(many).toMatch(/data-card-findings="12"[^>]*>12 замечаний</);
-    expect(none).not.toContain('data-card-findings');
+    const clean = renderWith(newClient(), createElement(DocumentCardGrid, {
+      documents: [version({ classification: classification(), audit: { state: 'clean', partial: false, finding_count: 0, undecided_finding_count: 0 } })], addresses,
+    }));
+    expect(three).toMatch(/data-card-findings="3"[^>]*><span[^>]*>Замечания<\/span><span[^>]*>3<\/span><span[^>]*aria-hidden="true">·<\/span>/);
+    expect(many).toMatch(/data-card-findings="12"[^>]*><span[^>]*>Замечания<\/span><span[^>]*>12<\/span>/);
+    expect(clean).toMatch(/data-card-findings="0"[^>]*data-card-mark-state="done"|data-card-mark-state="done"[^>]*data-card-findings="0"/);
   });
 
   it('opens the grid with a Σ card that is not a document', () => {
@@ -138,7 +162,47 @@ describe('a document card as a whole target', () => {
     expect(css).toMatch(/\.card\s*\{[^}]*position:\s*relative;/);
   });
 
-  it('keeps the card’s other controls above the stretched link, so the history link and the box still work', () => {
-    expect(css).toMatch(/\.topEnd,[^{]*\{[^}]*z-index:\s*1;/);
+  it('keeps the card’s other controls above the stretched link, so the number of the version and the box still work', () => {
+    expect(css).toMatch(/\.ordinal,\s*\.select\s*\{[^}]*z-index:\s*1;/);
+    const marks = readFileSync(join(WEB_ROOT, 'src/entities/document-version/ui/audit-chip.module.css'), 'utf8');
+    expect(marks).toMatch(/\.marks a\.mark,[^{]*\{[^}]*z-index:\s*1;/);
+  });
+});
+
+describe('the density of a document card (UIP-S02-02)', () => {
+  const css = readFileSync(join(WEB_ROOT, 'src/entities/document-version/ui/document-cards.module.css'), 'utf8');
+  /** The declarations of every base rule (outside `@media`) whose selector list names `selector`, in source order, as the cascade merges them. */
+  const rule = (selector: string): string => {
+    const merged = new Map<string, string>();
+    for (const found of parseRules(withoutMedia(css), 'module')) {
+      if (!found.selector.split(',').some((part) => part.trim() === selector)) continue;
+      for (const [property, value] of found.declarations) merged.set(property, value);
+    }
+    return [...merged].map(([k, v]) => `${k}: ${v}`).join('; ');
+  };
+
+  it('takes the card’s size from the tokens of UIP-G-14: the grid’s column floor is the width less a gap, the card’s height at least the token', () => {
+    expect(rule('.grid')).toContain('minmax(min(100%, calc(var(--am-card-doc-width) - var(--am-gap-md))), 1fr)');
+    expect(rule('.card')).toContain('min-height: var(--am-card-doc-height)');
+    // the Σ card is a cell of the same grid and the same size
+    expect(rule('.leading')).toContain('min-height: var(--am-card-doc-height)');
+  });
+
+  it('draws the name on one line, cut with an ellipsis, in a 24 px target, and the line is 24 px high', () => {
+    expect(rule('.title a')).toContain('white-space: nowrap');
+    expect(rule('.title a')).toContain('text-overflow: ellipsis');
+    expect(rule('.title a')).toContain('min-height: var(--am-target-min)');
+    expect(rule('.select')).toContain('min-height: var(--am-target-min)');
+    expect(rule('.select')).toContain('min-width: var(--am-target-min)');
+  });
+
+  it('makes the cards a container, so a mark reads the width of its own card to say its word', () => {
+    expect(rule('.card')).toContain('container-type: inline-size');
+    const marks = readFileSync(join(WEB_ROOT, 'src/entities/document-version/ui/audit-chip.module.css'), 'utf8');
+    expect(marks).toMatch(/@container \(min-width: 17rem\)\s*\{\s*\.label\s*\{/);
+  });
+
+  it('is one column on a phone', () => {
+    expect(css).toMatch(/@media \(max-width: 590px\)\s*\{\s*\.grid\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/);
   });
 });

@@ -65,7 +65,24 @@ describe('the card of a document', () => {
     expect(markup).toContain('>Проверен экспертом<');
     expect(markup).toContain('>Ждёт решения: 2<');
     expect(markup).toContain('>Не запускался<');
-    expect(markup).toContain('title="3 замечания, без решения эксперта: 2"');
+    // `UIP-S02-02`: the figures of the result run are the mark's tooltip, and the card's tooltip carries the state and its detail
+    expect(markup).toContain('title="Замечания: 3, без решения эксперта: 2"');
+    expect(markup).toMatch(/title="Ожидающий\nЖдёт решения: 2 \(частично\)\n3 замечания, без решения эксперта: 2\n/);
+    expect(markup).toMatch(/title="Проверенный\nПроверен экспертом\n4 замечания\n/);
+  });
+
+  it('says the state of each document with two marks and a sign, not with a chip: ✓ all decided, · something undecided, — not run', () => {
+    const markup = grid([CHECKED, WAITING, NEVER]);
+    const marks = [...markup.matchAll(/data-card-mark="findings" data-card-mark-state="([a-z]+)"/g)].map((match) => match[1]);
+    expect(marks).toEqual(['done', 'open', 'none']);
+    // each card has both marks, the second one being the optimisation's
+    expect((markup.match(/data-card-mark="optimisation"/g) ?? []).length).toBe(3);
+    expect(markup).not.toMatch(/am-badge--(?:failed|pending|inert|ok|degraded|active)[^"]*"[^>]*>Не запускался</);
+    // a card too narrow for the word keeps it for the reader: the label is in the markup (clipped by the stylesheet) and so is the state
+    expect(markup).toContain('>Замечания<');
+    expect(markup).toContain('>есть нерешённое<');
+    expect(markup).toContain('>всё решено<');
+    expect(markup).toContain('>нет результата<');
   });
 
   it('links the chip of a document that was run to «Разбор» of its result run, and a never-run one links nowhere', () => {

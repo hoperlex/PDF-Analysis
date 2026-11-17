@@ -31,9 +31,11 @@
   gap: var(--am-gap-sm);
   min-width: 0;
   margin: 0;
-  font-size: var(--am-text-xl);
+  /* One line is the point of the header (UIP-S02-01): at 19 px the heading and the plaques left 4 px of a 1178 px row at 1440 and a
+     scrollbar wrapped it, at 16 px they leave about 50. */
+  font-size: var(--am-text-lg);
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   line-height: var(--am-leading-tight);
 }
 

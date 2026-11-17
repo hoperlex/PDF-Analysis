@@ -167,6 +167,93 @@ export function optimisationPill(audit: DocumentAudit | undefined): Optimisation
   };
 }
 
+// ---- the two marks of a document card (`UIP-S02-02`) ---------------------------------------------------------------
+
+/**
+ * How far one of a card's two lines of work has gone, as the original's pill states it with one sign:
+ * `done` ✓ (every finding, or every proposal, has an expert's decision, or there is nothing to decide), `open` · (something is still
+ * undecided, or the result is not whole) and `none` — (not run: there is no result to speak of).
+ */
+export type CardMarkState = 'done' | 'open' | 'none';
+
+/** The sign of each state. The tone says the same thing in colour, but the sign is what carries it. */
+export const CARD_MARK_SIGNS: Readonly<Record<CardMarkState, string>> = { done: '✓', open: '·', none: '—' };
+
+/**
+ * The words of each state, for a reader who does not see the sign. Neutral in gender and number, because they stand after
+ * «Замечания» and after «Оптимизация» alike; the tooltip of the mark says the case in full («документ не запускался»).
+ */
+export const CARD_MARK_WORDS: Readonly<Record<CardMarkState, string>> = {
+  done: 'всё решено',
+  open: 'есть нерешённое',
+  none: 'нет результата',
+};
+
+export const FINDINGS_MARK_LABEL = 'Замечания';
+
+/** One of the card's two marks: the word, the count the server gave (none where there is nothing to count) and the state. */
+export interface CardMark {
+  readonly kind: 'findings' | 'optimisation';
+  readonly label: string;
+  /** The number beside the word; `null` where the document was not run and there is no number to give. */
+  readonly count: number | null;
+  readonly state: CardMarkState;
+  /** The design system's badge tone: existing state tokens only (`ok`, `degraded` for «есть нерешённое», `inert`). */
+  readonly tone: 'ok' | 'degraded' | 'inert';
+  /** The sentence for the tooltip and the reading: «Замечания: 3, без решения эксперта: 2». */
+  readonly title: string;
+}
+
+const TONE_OF: Readonly<Record<CardMarkState, CardMark['tone']>> = { done: 'ok', open: 'degraded', none: 'inert' };
+
+/**
+ * The mark «Замечания N ✓ · —» of a card, from the document's audit (`R-150o`, `R-150r`): never run is `none`; a result with a
+ * finding still undecided is `open`; every finding decided, or a whole result that published none, is `done`. A result that is only
+ * partial and published no finding is `open`, never `done`: an absence of findings does not say there are none (`R-150s`).
+ */
+export function findingsMark(audit: DocumentAudit): CardMark {
+  const base = { kind: 'findings', label: FINDINGS_MARK_LABEL } as const;
+  const make = (state: CardMarkState, count: number | null, title: string): CardMark =>
+    ({ ...base, count, state, tone: TONE_OF[state], title: `${FINDINGS_MARK_LABEL}: ${title}` });
+  switch (audit.state) {
+    case 'not_run':
+      return make('none', null, 'документ не запускался');
+    case 'awaiting_decision':
+      return make('open', audit.finding_count, audit.undecided_finding_count === 0
+        ? `${audit.finding_count}`
+        : `${audit.finding_count}, без решения эксперта: ${audit.undecided_finding_count}`);
+    case 'checked':
+      return make('done', audit.finding_count, `${audit.finding_count}, по каждому есть решение эксперта`);
+    case 'clean':
+      return audit.partial
+        ? make('open', 0, 'не опубликовано; проверка выполнена частично, отсутствие замечаний не доказано')
+        : make('done', 0, 'нет, анализ завершён');
+  }
+}
+
+/** The mark «Оптимизация N ✓ · —» of a card: the latest pass's proposals and how many of them still wait for an expert (`D-361`). */
+export function optimisationMark(audit: DocumentAudit): CardMark {
+  const pill = optimisationPill(audit);
+  const base = { kind: 'optimisation', label: OPTIMISATION_PILL_LABEL } as const;
+  if (pill === null) {
+    return {
+      ...base,
+      count: null,
+      state: 'none',
+      tone: 'inert',
+      title: `${OPTIMISATION_PILL_LABEL}: ${audit.optimisation_proposal_count === 0 ? 'предложений нет' : 'проход не запускался'}`,
+    };
+  }
+  const state: CardMarkState = pill.undecided === 0 ? 'done' : 'open';
+  return {
+    ...base,
+    count: pill.count,
+    state,
+    tone: TONE_OF[state],
+    title: `${OPTIMISATION_PILL_LABEL}: ${pill.count}${pill.undecided === 0 ? ', по всем есть решение эксперта' : `, без решения эксперта: ${pill.undecided}`}`,
+  };
+}
+
 /** The audit state of a document, or `null` when its answer carried none. */
 export function auditStateOf(version: Pick<DocumentVersion, 'audit'>): AuditStateCode | null {
   return version.audit?.state ?? null;

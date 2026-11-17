@@ -96,6 +96,7 @@ function SectionDetail({
     ...(tag === null ? {} : { tag }),
   });
   const wholeSection = routes.projectSection(projectUid, sectionCode);
+  const optimisation = routes.sectionOptimisation(section.code, projectUid);
   // `UIP-S02-01`: the object's name for the arrow to its «Главная», read by identity (`getProject`).
   const objectName = useProject(projectUid).data?.name;
   // `R-151c`: the cards a reader chose to start together.
@@ -151,13 +152,19 @@ function SectionDetail({
           documents={query.data.items}
           classification="stage"
           leading={
-            // `UI-A-53`: the original's Σ card, the section's own control and not a document.
+            // `UI-A-53`, `UIP-S02-02`: the original's Σ card, the section's own control and not a document: the same size as a
+            // document's, the title opens the section's optimisation and the two links open its two views, with no figures.
             <>
-              <span className={`am-badge am-badge--active ${styles.sigmaBadge}`}>Σ сводная</span>
-              <Link href={routes.sectionOptimisation(section.code, projectUid)} data-section-optimisation-link={section.code}>
-                Оптимизация раздела
-              </Link>
-              <span className={styles.sigmaNote}>спецификация, кандидаты на замену, принятое</span>
+              <p className={styles.sigmaTitle}>
+                <Link href={optimisation} data-section-optimisation-link={section.code}>
+                  <span className={styles.sigma} aria-hidden="true">Σ</span> Оптимизация раздела
+                </Link>
+              </p>
+              <span className={styles.sigmaLinks}>
+                <Link className={styles.sigmaLink} href={optimisation} data-section-optimisation-view="specification">Спецификация</Link>
+                {/* «Кандидаты»: the candidates the experts accepted, the view the address names `accepted`. */}
+                <Link className={styles.sigmaLink} href={`${optimisation}&tab=accepted`} data-section-optimisation-view="accepted">Кандидаты</Link>
+              </span>
             </>
           }
           select={selectionSlot(batch.selection)}

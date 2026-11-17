@@ -37,14 +37,18 @@ describe('the section page', () => {
     expect(options.queryKey).not.toEqual(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT));
   });
 
-  it('draws each document of the section as a card: number, title, version link and history', () => {
+  it('draws each document of the section as a card: title, version link and the number of the version, which leads to its history', () => {
     const markup = renderWith(seeded([AR_ONE, AR_TWO]), createElement(SectionDetailPage, { projectUid: PROJECT_UID, sectionCode: 'AR' }));
     expect(markup).toContain('data-document-cards="2"');
     expect(markup).toContain('>V1<');
     expect(markup).toContain('>V3<');
     expect(markup).toContain(`href="/projects/${PROJECT_UID}/versions/${AR_ONE.version_uid}"`);
     expect(markup).toContain(`href="/projects/${PROJECT_UID}/documents/${AR_TWO.document_uid}"`);
+    // `UIP-S02-02`: «все версии» is no longer a link in a row of its own: the number of the version is the link to the history and the
+    // words stand in the text a screen reader reads
+    expect((markup.match(/title="Все версии документа"/g) ?? []).length).toBe(2);
     expect((markup.match(/>все версии</g) ?? []).length).toBe(2);
+    expect(markup).not.toMatch(/<a [^>]*>все версии<\/a>/);
   });
 
   it('names the section in the heading, with its code, its name and the dot of its colour, and draws no strip of crumbs', () => {
@@ -128,6 +132,11 @@ describe('the section page keeps the original’s controls', () => {
     expect(markup).toContain(`href="${escaped}"`);
     // two documents, two document cards: the Σ card is counted in no figure
     expect(markup).toContain('data-document-cards="2"');
+    // `UIP-S02-02`: two links, with no figures, and no badge «Σ сводная»
+    expect(markup).toMatch(/<a [^>]*class="[^"]*"[^>]*data-section-optimisation-view="specification"[^>]*>Спецификация<\/a>/);
+    expect(markup).toMatch(/data-section-optimisation-view="accepted"[^>]*>Кандидаты<\/a>/);
+    expect(markup).toContain(`href="${escaped}&amp;tab=accepted"`);
+    expect(markup).not.toContain('Σ сводная');
     expect(markup.indexOf('data-grid-leading')).toBeLessThan(markup.indexOf('data-document-uid'));
   });
 
