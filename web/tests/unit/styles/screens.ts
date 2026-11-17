@@ -3582,6 +3582,30 @@ export function screens(): Screen[] {
     add('DropZone, a drag over the field', render(createElement(DropZoneView, { over: true, note: null }, ...field)));
     add('DropZone, a folder not taken', render(createElement(DropZoneView, { over: false, note: 'folder' }, ...field)));
   }
+  /*
+   * `UIP-FIX-24`: the strip's one «Пауза» button, drawn as the strip draws it -- closed (the caret on the button), and open over a
+   * paused queue and paused vectors (the button expanded, both items, both badges). The screens above draw only the confirmation,
+   * which replaces the button, so `.menu`, `.caret` and the expanded button were reached by none.
+   */
+  {
+    const inBar = (child: ReactElement): string => render(createElement('header', { className: 'am-app__bar' }, child));
+    const drawnOpen = (props: MenuProps): ReactElement => createElement(MenuView, {
+      ...props, state: { open: true, active: 0 }, triggerId: 'seed-pause-trigger', menuId: 'seed-pause-menu',
+    });
+    const strip = {
+      failed: false, mayToggle: true, asking: false, busy: false, error: null, onAsk: noop, onConfirm: noop, onCancel: noop,
+    };
+    add('AppFrame, the pause button, closed', inBar(createElement(PauseStatusView, {
+      ...strip, status: { paused: false, changed_at: '2026-11-05T10:00:00Z' },
+    })));
+    add('AppFrame, the pause button open over a paused queue and paused vectors', inBar(createElement(PauseStatusView, {
+      ...strip,
+      status: { paused: true, changed_at: '2026-11-05T10:00:00Z' },
+      vectors: { kind: 'read', paused: true, since: '2026-11-05T09:00:00Z' },
+      onToggleVectors: noop,
+      menu: drawnOpen,
+    })));
+  }
   // `D-344`: the knowledge base beside a decision carried over from an earlier version -- «↩ Перенесено из V2» after the event
   // label in the table (the `.carried` margin) and in the heading of an event row. The first record carries it, the rest do not,
   // so the census measures the mark on the table's cell and on a row without one. At the very end, for the reason above.
