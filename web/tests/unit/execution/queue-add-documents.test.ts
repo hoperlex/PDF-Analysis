@@ -112,7 +112,7 @@ describe('the panel', () => {
   it('with «Все объекты» asks for the object first and reads no documents', () => {
     const markup = render('project=all', { objects: true, documents: false });
     expect(markup).toContain('data-queue-add-pick');
-    expect(markup).toContain('<option value="">Выберите объект</option>');
+    expect(markup).toContain('<option value="" selected="">Выберите объект</option>');
     expect(markup).toContain('Школа № 7');
     expect(markup).toContain('Детский сад');
     expect(markup).not.toContain('data-queue-add-documents');
