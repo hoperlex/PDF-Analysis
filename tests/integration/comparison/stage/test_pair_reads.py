@@ -323,12 +323,16 @@ def test_unpaired_counts_follow_the_confirmed_pairs_and_assemblies_of_the_whole_
         user_uid=actor, idempotency_key=f"stage-count-assembly-pair-{new_ulid()}",
     )
     assert counts() == (0, 0)
+    # one revision takes `third` out and puts `fourth` in (an assembly keeps two to a hundred members): the member taken out has no pair
+    # again and the member put in is bound by the pair that names the assembly
+    fourth = add_classified_document(comparison_session, project, actor, "R", "Fourth 05")
+    assert counts() == (0, 1), "a Р document that is in no assembly yet has no pair"
     assemblies.revise(
         assembly_id=assembly.assembly_id, base_member_no=assembly.member_revision_no,
-        add_document_uids=(), remove_document_uids=(third,), user_uid=actor,
+        add_document_uids=(fourth,), remove_document_uids=(third,), user_uid=actor,
         idempotency_key=f"stage-count-assembly-revise-{new_ulid()}",
     )
-    assert counts() == (0, 1), "a member taken out of the assembly has no pair again"
+    assert counts() == (0, 1), "`third` is out of the assembly and has no pair again, `fourth` is in it and has one"
 
     # the wire answer carries the same two numbers on every page, whatever the page holds
     adapter = ComparisonStagePairAdapter(sessions, comparison_modules="versions,stages")
