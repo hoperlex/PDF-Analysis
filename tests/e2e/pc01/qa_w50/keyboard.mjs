@@ -48,6 +48,22 @@ const SHUT = { expanded: 'false', panelHidden: true };
 const MENU_OPEN = { expanded: 'true', popupHidden: false };
 const MENU_SHUT = { expanded: 'false', popupHidden: true };
 
+/**
+ * «Работа» as `UIP-G-07` orders it for an account holding `expert` or `admin`, on `/` (no object): the registry's first two rows
+ * («Главная», «Дашборд»), the project entry (`R-153h`: «Объекты» when no object is current), then the registry's other
+ * rows of the group in registry order (`web/src/shared/config/screen-registry.ts`, `web/src/_app/navigation.ts`).
+ */
+const WORK_LINKS = [
+  'a:Главная',
+  'a:Дашборд',
+  'a:Объекты',
+  'a:График работ',
+  'a:Назначения',
+  'a:Оптимизация разделов',
+  'a:Сравнение стадий',
+  'a:Сравнение версий',
+];
+
 async function focus(page, expression) {
   return await page.evaluate(`(() => { const el = ${expression}; if (!el) return false; el.focus(); return document.activeElement === el; })()`);
 }
@@ -145,11 +161,11 @@ await withColdBrowser(
       await keys.press('Enter');
       r.check('Enter opens «Работа»', OPEN, await page.evaluate(disclosure(ROW, 'Работа')));
       const walked = [];
-      for (let i = 0; i < 3; i += 1) {
+      for (let i = 0; i < WORK_LINKS.length; i += 1) {
         await keys.press('Tab');
         walked.push(await page.evaluate(FOCUSED));
       }
-      r.check('Tab walks its links in order', ['a:Объекты', 'a:Дашборд', 'a:Оптимизация разделов'], walked);
+      r.check('Tab walks its links in order', WORK_LINKS, walked);
       r.check('… and it stays open while focus is inside', OPEN, await page.evaluate(disclosure(ROW, 'Работа')));
       await keys.press('ArrowDown');
       r.note('ArrowDown inside a group (the disclosure pattern leaves arrows to the browser)', {
@@ -157,8 +173,11 @@ await withColdBrowser(
         state: await page.evaluate(disclosure(ROW, 'Работа')),
       });
       await keys.press('Tab');
-      r.check('Tab past the last link leaves the group, to «Знания»', 'button:Знания', await page.evaluate(FOCUSED));
+      r.check('Tab past the last link leaves the group, to «Разделы» (the object\'s sections follow «Работа», UIP-G-07)', 'button:Разделы', await page.evaluate(FOCUSED));
       r.check('… and «Работа» closed when focus left it', SHUT, await page.evaluate(disclosure(ROW, 'Работа')));
+      r.check('… «Разделы» is closed on `/` (no section page is shown)', SHUT, await page.evaluate(disclosure(ROW, 'Разделы')));
+      await keys.press('Tab');
+      r.check('Tab past the closed «Разделы» reaches «Знания»', 'button:Знания', await page.evaluate(FOCUSED));
 
       await keys.press(' ');
       r.check('Space opens «Знания»', OPEN, await page.evaluate(disclosure(ROW, 'Знания')));
@@ -216,13 +235,11 @@ await withColdBrowser(
       await keys.press('Enter');
       r.check('Enter opens «Меню»', OPEN, await page.evaluate(disclosure(ST, 'Меню')));
       await keys.press('Tab');
-      r.check('Tab: «Главная»', 'a:Главная', await page.evaluate(FOCUSED));
-      await keys.press('Tab');
-      r.check('Tab: the «Работа» group', 'button:Работа', await page.evaluate(FOCUSED));
+      r.check('Tab: the «Работа» group (it is the first item of «Меню»; «Главная» is a link inside it since UIP-G-07)', 'button:Работа', await page.evaluate(FOCUSED));
       await keys.press('Enter');
       r.check('Enter opens «Работа» inside «Меню»', OPEN, await page.evaluate(disclosure(ST, 'Работа')));
       await keys.press('Tab');
-      r.check('Tab: «Объекты»', 'a:Объекты', await page.evaluate(FOCUSED));
+      r.check('Tab: «Главная»', 'a:Главная', await page.evaluate(FOCUSED));
       await keys.press('Escape');
       r.check('Escape closes the inner group only', [SHUT, OPEN],
         [await page.evaluate(disclosure(ST, 'Работа')), await page.evaluate(disclosure(ST, 'Меню'))]);
@@ -233,7 +250,7 @@ await withColdBrowser(
 
       await keys.press(' ');
       r.check('Space opens «Меню»', OPEN, await page.evaluate(disclosure(ST, 'Меню')));
-      // Tab through to the last group button and past it: the stacked list holds Главная and three groups.
+      // Tab through to the last group button and past it: the stacked list holds four groups (UIP-G-07): «Работа», «Разделы», «Знания», «Система».
       const seen = [];
       for (let i = 0; i < 5; i += 1) {
         await keys.press('Tab');
@@ -259,11 +276,10 @@ await withColdBrowser(
 
       r.check('focus «Меню» once more', true, await focus(page, MENU_BUTTON));
       await keys.press('Enter');
-      await keys.press('Tab');
-      await keys.press('Tab');
+      await keys.press('Tab'); // the «Работа» group's button
       await keys.press('Enter');
-      await keys.press('Tab');
-      await keys.press('Tab');
+      await keys.press('Tab'); // «Главная»
+      await keys.press('Tab'); // «Дашборд»
       r.check('inside «Меню» › «Работа»: on «Дашборд»', 'a:Дашборд', await page.evaluate(FOCUSED));
       await keys.press('Enter');
       await page.waitFor("document.location.pathname === '/dashboard' ? 'landed' : null", { boundMs: 15000, what: '/dashboard' });
