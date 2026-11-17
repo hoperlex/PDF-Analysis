@@ -13,6 +13,8 @@ export { hostFailure, hostRefusalSentence } from './model/failure';
 export type { OverviewFigure, OverviewFigureKey, OverviewInput } from './model/overview';
 export { OVERVIEW_LABELS, OVERVIEW_QUEUE_NOT_READ, UNKNOWN_FIGURE, overviewFigures } from './model/overview';
 export { modelLabel, modelLabels } from './model/models';
+export type { TasksPeriod, TasksPeriodRange } from './model/tasks-period';
+export { DEFAULT_TASKS_PERIOD, TASKS_PERIODS, tasksPeriodRange } from './model/tasks-period';
 export type { HostRowReading, HostRowTone, HostWorkReading, ModelChip } from './model/rows';
 export { WORK_SHOWN, availableModelIds, hostRowReading, liveHosts, modelChips } from './model/rows';
 export {
