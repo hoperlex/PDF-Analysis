@@ -121,6 +121,8 @@ export function ProposalDecisionFormView({
   return (
     <div
       data-proposal-decision={proposalId}
+      // The state the browser journey reads: «На доработку» was refused for want of a reason (the words are the field's note).
+      data-revise-hint={note !== null && note.text === REVISE_NEEDS_REASON_TEXT ? '' : undefined}
       aria-busy={sending === null ? undefined : true}
       inert={held ? true : undefined}
       onChange={(event) => {

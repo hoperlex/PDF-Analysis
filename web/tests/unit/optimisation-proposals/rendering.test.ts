@@ -277,6 +277,11 @@ describe('the decision field (`UIP-S09-03`)', () => {
   it('says in the row what the last press did: a refusal before sending, the server’s reason and «Записано»', () => {
     const refused = rendered('decision-form-refused');
     expect(refused).toMatch(/role="alert"[^>]*>Для «На доработку» нужна причина</);
+    // The journey reads the refusal as a state of the row (`data-revise-hint`), present for this refusal and for no other line.
+    expect(refused).toMatch(/<div[^>]*data-proposal-decision="[^"]+"[^>]*data-revise-hint=""/);
+    for (const name of ['decision-form-idle', 'decision-form-refused-nothing-to-revoke', 'decision-form-recorded']) {
+      expect(rendered(name), name).not.toContain('data-revise-hint');
+    }
     expect(rendered('decision-form-refused-nothing-to-revoke')).toContain('Снимать нечего');
     expect(rendered('decision-form-recorded')).toMatch(/role="status"[^>]*>Записано</);
     expect(rendered('decision-form-idle')).not.toMatch(/role="(alert|status)"/);
@@ -412,8 +417,10 @@ describe('a press in the field of a row (`UIP-S09-03`)', () => {
     await mount();
     await (live as LiveRender).press('На доработку');
     expect((live as LiveRender).markup()).toContain('Для «На доработку» нужна причина');
+    expect((live as LiveRender).markup()).toContain('data-revise-hint=""');
     await type('Заменить марку.');
     expect((live as LiveRender).markup()).not.toContain('Для «На доработку» нужна причина');
+    expect((live as LiveRender).markup()).not.toContain('data-revise-hint');
     expect(await (live as LiveRender).press('На доработку')).toBe(true);
     expect(sent()).toHaveLength(1);
     expect(sent()[0]?.body).toEqual({ verdict: 'revise', comment: 'Заменить марку.' });
