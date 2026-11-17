@@ -16,7 +16,7 @@
  *     make a redirect cycle impossible.
  *   - **the project class** (`R-150c`, `UI-PARITY-01`). Every row states a `projectScope`; the
  *     `required` rows are exactly the ones with `[project_uid]` in the address; the `optional`
- *     set is exactly six screens; every other row is `global`.
+ *     set is exactly eight screens («Главная» among them since `UIP-S01-01`); every other row is `global`.
  *
  * Every check is a pure function over rows, exercised against a deliberately broken registry
  * — which proves it can go red — and against the live one.
@@ -297,7 +297,9 @@ describe('R-66: the groups, their members and their order', () => {
 
   it('UIP-G-07: «Главная» is the first row of «Работа», in the menu, and still the one product screen open to an account with no role (R-80)', () => {
     const home = REGISTRY.find((entry) => entry.address === '/');
-    expect(home).toMatchObject({ label: 'Главная', group: 'work', access: 'session', roles: 'any', inMenu: true, projectScope: 'global' });
+    expect(home).toMatchObject({ label: 'Главная', group: 'work', access: 'session', roles: 'any', inMenu: true });
+    // `UIP-S01-01`: it follows the object the header chose, so the choice changes its table and does not lead away from it.
+    expect(home?.projectScope).toBe('optional');
     expect(REGISTRY.find((entry) => entry.group === 'work' && entry.inMenu)?.address).toBe('/');
     // The group it left holds nothing now; the name stays in `SCREEN_GROUPS` for the top strip's labels.
     expect(REGISTRY.filter((entry) => entry.group === 'home')).toEqual([]);
@@ -353,6 +355,8 @@ function scopeOf(registry: readonly ScreenEntry[], scope: ProjectScope): string[
 
 /** The ruling (`R-150c`): the screens that follow the header's project. Order is the registry's. */
 const OPTIONAL_SCREENS = [
+  // `UIP-S01-01` (Г7-B): the front door's table of sections is counted over the object the header chose.
+  '/',
   '/dashboard',
   // `R-151m`: «Назначения» follows the header.
   '/dispatcher',
@@ -414,7 +418,7 @@ describe('R-150c: every row states how the screen relates to the project', () =>
     expect(REGISTRY.find((row) => row.address === '/projects')?.projectScope).toBe('global');
   });
 
-  it('optional: exactly the seven screens that follow the header', () => {
+  it('optional: exactly the eight screens that follow the header, «Главная» among them (UIP-S01-01)', () => {
     expect(scopeOf(REGISTRY, 'optional').sort()).toEqual([...OPTIONAL_SCREENS].sort());
   });
 

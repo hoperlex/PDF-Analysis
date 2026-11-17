@@ -6,6 +6,14 @@
  * only — how many registration requests wait for a decision. A session holding `expert` also
  * gets «Мои задачи» (`W61-DISPATCHER-01`): its open assignments, with their moves and links.
  *
+ * ## The order, and the object (`UIP-S01-01`)
+ *
+ * The original's front door is its table of sections, so the table comes first: the greeting is one line with the roles
+ * beside it and no frame, the table «Разделы объекта» spans the page, «Мои задачи» follow it and the three tiles close the
+ * page, in one column at every width. The table is counted over the object the screen works in (`LazyHomeSections` reads
+ * it: the address, then the account's last object; the screen's registry class is `optional`), and the tiles and «Мои задачи»
+ * keep counting every object.
+ *
  * ## Which tiles: the registry decides, as it does for the screens they summarise
  *
  * Each tile summarises one registered screen — `/projects`, `/dashboard`,
@@ -35,7 +43,8 @@
  *
  * `displayLabel` is `Фамилия И. О.` with a last name of up to sixty letters, which in one word
  * is wider than the 780 px floor at the title's size. The heading's own rule breaks it
- * anywhere (`home-page.module.css`), so it wraps instead of widening the page.
+ * anywhere (`home-page.module.css`), so it wraps instead of widening the page; the roles
+ * stand beside it where they fit and under it where they do not.
  */
 
 import type { Role } from '@/shared/api';
@@ -100,7 +109,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
 
   return (
     <section className="am-page" data-screen="home">
-      <header className={`am-page__header ${styles.hero}`}>
+      <header className="am-page__header">
         <div className={styles.heading}>
           {/*
             One text node, and an exclamation rather than a period: the name form ends in one
@@ -123,8 +132,8 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
           <>
             {tasks || summary ? (
               <div className={styles.overviewGrid}>
-                {tasks ? <div className={styles.tasks}><MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /></div> : null}
                 {summary ? <div className={styles.sections}><LazyHomeSections /></div> : null}
+                {tasks ? <div className={styles.tasks}><MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /></div> : null}
               </div>
             ) : null}
             {projects || summary || registrations ? (

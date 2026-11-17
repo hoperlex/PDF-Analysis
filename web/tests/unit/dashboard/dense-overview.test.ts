@@ -145,10 +145,16 @@ describe('the front door is compact', () => {
     expect(declarations(tiles, '.figures dd').get('font-size')).toBe('var(--am-text-lg)');
   });
 
-  it('greets in the page-title size on a band no larger than the tiles under it', () => {
+  it('greets in the page-title size, in one line with no frame (UIP-S01-01: the band is not a card any more)', () => {
     expect(declarations(home, '.greeting').get('font-size')).toBe('var(--am-text-2xl)');
-    expect(declarations(home, '.hero').get('padding')).toBe('var(--am-gap)');
-    expect(declarations(home, '.hero').get('border-radius')).toBe('var(--am-radius)');
+    // The greeting and the roles are one flex line that wraps; the old `.hero` card (padding, border, background, shadow) is gone.
+    expect(declarations(home, '.heading').get('display')).toBe('flex');
+    expect(declarations(home, '.heading').get('flex-wrap')).toBe('wrap');
+    expect(parseRules(home, 'module').map((rule) => rule.selector)).not.toContain('.hero');
+    for (const selector of ['.heading', '.greeting']) {
+      const painted = ['border', 'background', 'box-shadow'].filter((property) => declarations(home, selector).has(property));
+      expect(painted, selector).toEqual([]);
+    }
   });
 });
 

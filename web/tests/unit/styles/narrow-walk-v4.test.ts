@@ -2,7 +2,7 @@
  * Three layout faults of 0.20.3 that no width assertion could see, because nothing scrolled sideways: a grid column collapsed and the
  * page grew taller instead (browser walk WALK-V4, 2026-11-09, a throwaway stand of a built `next start`, DOM facts over CDP).
  *
- *  - «Главная»: the tasks and the section table sat side by side from 1280 px. The table's row needs about 520 px beside its name
+ *  - «Главная»: the tasks and the section table sat side by side from 1280 px (`UIP-S01-01`: the table now comes first and takes the page, in one column at every width; the readers below keep the measurements). The table's row needs about 520 px beside its name
  *    (five numbers of 5.5rem, the arrow, the gaps and the paddings), and the table's column is 0.575 of the page less 293 px: the
  *    name button was 12 px wide at 1280 (rows 797 px tall, the page 9065 px), 104 px at 1440, 242 px at 1680. Two columns now start
  *    at 1680 px, where the name is 190 px and a row is two lines at most.
@@ -63,7 +63,7 @@ describe('the readers of a stylesheet can fail (lane WALK-V4)', () => {
   });
 });
 
-describe('«Главная»: the tasks and the section table share a row only where the table fits (lane WALK-V4)', () => {
+describe('«Главная»: the table of sections and the tasks stand in one column at every width (lane WALK-V4; `UIP-S01-01` took the second column away)', () => {
   it('can fail: the old stylesheet, two tracks from the base rule, reads as wrong', () => {
     const old =
       '.overviewGrid { display: grid; grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr); }\n' +
@@ -72,21 +72,29 @@ describe('«Главная»: the tasks and the section table share a row only w
     expect(columnBreakpoints(old, '.overviewGrid')).toEqual([]);
   });
 
-  it('is one column by default, and two only inside one min-width block', () => {
-    expect(declares(withoutMedia(HOME), '.overviewGrid', 'grid-template-columns', ONE_TRACK)).toBe(true);
-    expect(columnBreakpoints(HOME, '.overviewGrid')).toHaveLength(1);
+  it('can fail: the 0.30.0 stylesheet, one track and a second one from 1680 px, reads as two columns', () => {
+    const before =
+      '.overviewGrid { display: grid; grid-template-columns: minmax(0, 1fr); }\n' +
+      '@media (min-width: 1680px) { .overviewGrid { grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr); } }';
+    expect(columnBreakpoints(before, '.overviewGrid')).toEqual([1680]);
   });
 
-  it('starts the second column where the section table leaves its name 190 px (measured 190 px at 1680, 144 px at 1600)', () => {
-    // The table's column is 0.575 of the page less 293 px; a row spends 556 px of it (the panel's 34, the row's 34, the five numbers
-    // of 5.5rem with their gaps 456, the arrow 16 and two gaps 16), and the name sits 52 px inside its button (the badge and the gap).
-    const column = (viewport: number): number => 0.575 * (viewport - 293);
-    const name = (viewport: number): number => column(viewport) - 556 - 52;
-    expect(Math.round(name(1680))).toBe(190);
-    expect(Math.round(name(1280))).toBeLessThan(0);
-    const [breakpoint] = columnBreakpoints(HOME, '.overviewGrid');
-    expect(breakpoint).toBeDefined();
-    expect(name(breakpoint ?? 0)).toBeGreaterThanOrEqual(189);
+  it('is one column by default, and no min-width block gives it a second track', () => {
+    expect(declares(withoutMedia(HOME), '.overviewGrid', 'grid-template-columns', ONE_TRACK)).toBe(true);
+    expect(columnBreakpoints(HOME, '.overviewGrid')).toEqual([]);
+  });
+
+  it('leaves the table the whole page, so its name keeps 190 px wherever a row is one line (from 1101 px, `WALK-V5`)', () => {
+    // The page is the viewport less the frame and the gaps (293 px, as measured by the walk); a row spends 556 px of the table's width
+    // (the panel's 34, the row's 34, the five numbers of 5.5rem with their gaps 456, the arrow 16 and two gaps 16), and the name sits
+    // 52 px inside its button (the badge and the gap). Two columns gave the table 0.575 of the page, 144 px of name at 1600.
+    const name = (page: number): number => page - 556 - 52;
+    const whole = (viewport: number): number => viewport - 293;
+    const half = (viewport: number): number => 0.575 * (viewport - 293);
+    expect(Math.round(name(half(1680)))).toBe(190); // the old second column's own breakpoint: measured 190
+    expect(Math.round(name(half(1600)))).toBe(144); // measured 144
+    expect(name(whole(1101))).toBeGreaterThanOrEqual(189);
+    expect(name(whole(1280))).toBeGreaterThan(name(half(1680)));
   });
 
   it('keeps the tiles at two columns below 1280 px, as before', () => {

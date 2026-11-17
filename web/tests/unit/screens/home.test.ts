@@ -50,7 +50,7 @@ import tileStyles from '@/widgets/home-tiles/ui/home-tiles.module.css';
 
 import { newClient, renderScreen, seedError } from './harness';
 import {
-  ADMIN, EXPERT, KEYS, loaded, LABEL, LONGEST_LABEL, MY_WORK, NO_NEXT, PROJECTS, ULID_STEM, assignment, projectPage, registrationPage, summary,
+  ADMIN, EXPERT, KEYS, loaded, LABEL, LONGEST_LABEL, MY_WORK, NO_NEXT, PROJECTS, ULID_STEM, account, assignment, projectPage, registrationPage, summary,
 } from './home-fixtures';
 
 // ============================================================================ fixtures
@@ -118,10 +118,19 @@ describe('the greeting, from the subject the route hands down', () => {
     expect(markup).not.toMatch(/\.\./);
   });
 
-  it('reads the account from the props alone: the page asks getMe nothing', () => {
+  it('takes the name and the roles from the props alone: the account is read for the last object and for nothing else (UIP-S01-01)', () => {
     const client = newClient();
-    draw(home(ADMIN), client);
-    expect(client.getQueryCache().findAll({ queryKey: queryKeys.account.all() })).toEqual([]);
+    // An account answer that names another person and holds another role: neither the greeting nor the roles move with it.
+    client.setQueryData(queryKeys.account.me(), account(null, ['viewer']));
+    const markup = draw(home(ADMIN), client);
+    expect(markup).toContain(`Здравствуйте, ${LABEL}!`);
+    expect(markup).not.toContain('Другой А. А.');
+    expect(markup).toContain(`Роли: ${ROLE_LABELS.expert}, ${ROLE_LABELS.admin}.`);
+    expect(markup).not.toContain(ROLE_LABELS.viewer);
+    // The one account read is `getMe`'s, the query the object context (`useCurrentProject`) shares with the frame.
+    expect(client.getQueryCache().findAll({ queryKey: queryKeys.account.all() }).map((query) => query.queryKey)).toEqual([
+      queryKeys.account.me(),
+    ]);
   });
 
   it('names the roles with the account entity’s labels', () => {
@@ -131,6 +140,53 @@ describe('the greeting, from the subject the route hands down', () => {
     );
     expect(draw(home(['admin']))).toContain(`Роли: ${ROLE_LABELS.admin}.`);
     expect(draw(home([]))).toContain('Роли не назначены.');
+  });
+});
+
+describe('the front door opens on its table, under a one-line greeting (UIP-S01-01)', () => {
+  const CSS = (): string => readFileSync(fileURLToPath(new URL(PAGE_CSS, import.meta.url)), 'utf8');
+  /** A band is a frame when its rule paints a border, a background or a shadow. */
+  const framed = (css: string, selector: string): boolean => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const body = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+    return /(?:^|[\s;])(?:border|background|box-shadow)\s*:/.test(body);
+  };
+
+  it('names the roles in the heading\'s own box, beside the name, and draws no band around them', () => {
+    const markup = draw(home(EXPERT), loaded());
+    expect(markup).toMatch(
+      new RegExp(
+        `<header class="am-page__header"><div class="${pageStyles.heading}"><h1 class="am-page__title ${pageStyles.greeting}">Здравствуйте, [^<]+!</h1><p class="am-page__subtitle" data-roles="expert">Роли: [^<]+\\.</p></div></header>`,
+      ),
+    );
+    const css = CSS();
+    expect(declarations(PAGE_CSS, '.heading')).toMatch(/display\s*:\s*flex/);
+    expect(declarations(PAGE_CSS, '.heading')).toMatch(/flex-wrap\s*:\s*wrap/);
+    expect(framed(css, '.heading')).toBe(false);
+    expect(framed(css, '.greeting')).toBe(false);
+  });
+
+  it('can fail: the old band, with its border and its card background, reads as a frame', () => {
+    const old = '.hero {\n  padding: var(--am-gap);\n  border: 1px solid var(--am-line);\n  background: var(--am-paper);\n}\n';
+    expect(framed(old, '.hero')).toBe(true);
+    expect(framed('.hero {\n  padding: 0;\n}\n', '.hero')).toBe(false);
+  });
+
+  it('puts the table of sections first, «Мои задачи» after it and the three tiles last', () => {
+    const markup = draw(home(ADMIN), loaded());
+    const at = (marker: string): number => {
+      const index = markup.indexOf(marker);
+      expect(index, marker).toBeGreaterThanOrEqual(0);
+      return index;
+    };
+    const order = ['<h1 ', 'data-home-sections=""', 'data-home-block="my-tasks"', 'data-home-tile="recent-projects"', 'data-home-tile="summary"', 'data-home-tile="registrations"'].map(at);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('keeps the table for a session that has no tasks (an administrator alone)', () => {
+    const markup = draw(home(['admin']), loaded());
+    expect(markup).toContain('data-home-sections=""');
+    expect(markup).not.toContain('data-home-block="my-tasks"');
   });
 });
 
@@ -177,6 +233,8 @@ async function requestsOf(element: ReactElement): Promise<string[]> {
     '/bff/v1/dashboard': summary(),
     '/bff/v1/registrations': registrationPage(2),
     '/bff/v1/assignments': MY_WORK,
+    // `UIP-S01-01`: «Главная» follows the object, so it asks for the account's last object; this account has none.
+    '/bff/v1/me': account(null),
   };
   vi.stubGlobal(
     'fetch',
@@ -211,6 +269,7 @@ describe('the administrator’s tile, and what the page asks the API', () => {
     expect(await requestsOf(home(EXPERT))).toEqual([
       'GET /bff/v1/assignments?limit=50&mine=true',
       'GET /bff/v1/dashboard',
+      'GET /bff/v1/me',
       'GET /bff/v1/projects?limit=5',
     ]);
   });
@@ -222,6 +281,7 @@ describe('the administrator’s tile, and what the page asks the API', () => {
     expect(await requestsOf(home(ADMIN))).toEqual([
       'GET /bff/v1/assignments?limit=50&mine=true',
       'GET /bff/v1/dashboard',
+      'GET /bff/v1/me',
       'GET /bff/v1/projects?limit=5',
       'GET /bff/v1/registrations?limit=1&status=pending',
     ]);
