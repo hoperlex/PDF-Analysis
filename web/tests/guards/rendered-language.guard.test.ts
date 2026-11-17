@@ -1283,7 +1283,7 @@ const KEYS = {
   findings: queryKeys.runs.findings(RUN_ID),
   finding: queryKeys.findings.detail(FINDING_UID),
   decisions: queryKeys.findings.decisions(FINDING_UID),
-  journal: queryKeys.findings.journal({ limit: JOURNAL_PAGE_LIMIT }),
+  journal: queryKeys.findings.journal({ verdict: 'rejected', limit: JOURNAL_PAGE_LIMIT }),
   executionQueue: queryKeys.execution.queue(),
   executionJournal: queryKeys.execution.journal(),
   // `W54-WORKERS-WEB`: the «Диспетчер» screen's first page.
@@ -1526,6 +1526,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.findings, { data: { items: [], page } });
   client.setQueryData(KEYS.decisions, { data: { items: [], page } });
   client.setQueryData(KEYS.journal, { items: [], page, total: 0 });
+  client.setQueryData(queryKeys.findings.journal({ limit: 1 }), { items: [], page, total: 0 });
   client.setQueryData(KEYS.account, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.users, { items: [], page });
   client.setQueryData(KEYS.authEvents, { items: [], page });
