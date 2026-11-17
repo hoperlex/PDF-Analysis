@@ -230,7 +230,7 @@ function SectionDetail({
           )}
           {body}
           {/* `UIP-S02-03`: the last thing of the page, so scrolled to its end it covers no card; `reserve` is room below the cards. */}
-          <SectionSelectionBar selection={batch} scope={{ projectUid, pageDocuments: query.data?.items ?? NO_DOCUMENTS, walk }} />
+          <SectionSelectionBar selection={batch} scope={{ projectUid, sectionCode: section.code, pageDocuments: query.data?.items ?? NO_DOCUMENTS, walk }} />
         </section>
       </div>
     </section>

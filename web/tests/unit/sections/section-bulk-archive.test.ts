@@ -20,7 +20,7 @@ vi.mock('@/shared/api', async (importOriginal) => ({
 import type { DocumentVersion } from '@/shared/api';
 import { failureMessage, setDocumentArchived } from '@/shared/api';
 import { SectionSelectionBar, SectionSelectionBarView, bulkTargets } from '@/_pages/section-detail';
-import type { SectionArchiveView } from '@/_pages/section-detail';
+import type { SectionArchiveView, SectionBulk } from '@/_pages/section-detail';
 import { archiveDocuments, archiveReportLine } from '@/features/manage-document';
 import type { ArchiveReport, ArchiveTarget } from '@/features/manage-document';
 import type { BatchSelection } from '@/widgets/project-sections';
@@ -132,10 +132,15 @@ describe('the bottom bar with «В архив»', () => {
     selection: { selected: new Set<string>(), onToggle: noop },
     chosenCount: count, batch: null, choose: noop, clear: noop, openBatch: noop, closeBatch: noop, ...over,
   });
-  const archiveOf = (over: Partial<SectionArchiveView> = {}): { archive: SectionArchiveView } => ({
+  // The packages of `UIP-S02-05` are the other test's; here they are held idle.
+  const archiveOf = (over: Partial<SectionArchiveView> = {}): SectionBulk => ({
     archive: { count: 3, pending: false, progress: null, report: null, onArchive: noop, onDismiss: noop, ...over },
+    packages: {
+      count: 0, skippedCount: 3, refusal: 'У выбранных документов нет результата аудита: пакеты собирать не из чего.', pending: false,
+      status: null, summary: null, error: null, onDownload: noop, onCancel: noop, onDismiss: noop,
+    },
   });
-  const bar = (selection: BatchSelection, bulk?: { archive: SectionArchiveView }) =>
+  const bar = (selection: BatchSelection, bulk?: SectionBulk) =>
     renderToStaticMarkup(createElement(SectionSelectionBarView, { selection, bulk }));
 
   it('offers «В архив (N)» between «Запустить все» and «Снять выделение», with the count of what it would send', () => {
@@ -226,7 +231,7 @@ describe('pressing «В архив (N)»', () => {
 
   const bar = (selection: BatchSelection, pageDocuments: readonly DocumentVersion[] = [A, B, C]) =>
     createElement(QueryClientProvider, { client: clientOf }, createElement(SectionSelectionBar, {
-      selection, scope: { projectUid: PROJECT_UID, pageDocuments, walk: { status: 'idle' } },
+      selection, scope: { projectUid: PROJECT_UID, sectionCode: 'AR', pageDocuments, walk: { status: 'idle' } },
     }));
   let clientOf = newClient();
   beforeEach(() => { clientOf = newClient(); });

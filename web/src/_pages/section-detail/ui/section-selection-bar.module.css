@@ -87,3 +87,8 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }
+
+/* The words beside a held «Скачать пакеты аудита» (the limit, or no result among the chosen) take the bar's whole line. */
+.wide {
+  flex: 1 0 100%;
+}
