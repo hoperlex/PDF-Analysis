@@ -12,8 +12,10 @@
  * Who sees what: the badges are for everyone the queue is open to (`expert`, `admin`); the button is for those who may pause
  * (`mayToggle`, an administrator). A viewer never gets the strip (`offersPauseStatus`).
  *
- * The queue's pause is confirmed in place, as it always was (it stops every new run). The vectors' pause is not: it
- * stops nothing that runs, the intents keep queuing, and a second choice undoes it.
+ * The queue's pause is confirmed in place, as it always was (it stops every new run), and the confirmation says what
+ * the choice does (`UIP-S22-02`, the original's «Дождаться завершения» in our words): one line under the question, the
+ * pause's own effect (`ADR-0029`: new runs are not handed out, the ones that go on finish) or the resume's. The vectors'
+ * pause is not confirmed: it stops nothing that runs, the intents keep queuing, and a second choice undoes it.
  */
 
 import Link from 'next/link';
@@ -33,6 +35,10 @@ export const UNREAD_LABEL = 'Состояние выдачи не прочита
 
 /** The one button. */
 export const PAUSE_BUTTON_LABEL = 'Пауза';
+
+/** What the confirmation says the choice does, under its question: the pause's effect and the resume's (`UIP-S22-02`). */
+const PAUSE_CONSEQUENCE = 'Новые прогоны не начнутся, идущие закончатся.';
+const RESUME_CONSEQUENCE = 'Новые прогоны снова начнутся.';
 
 /** What each menu item names, and what a choice does to it. */
 export function dispatchItemLabel(paused: boolean): string {
@@ -143,6 +149,7 @@ export function PauseStatusView({
       {mayToggle && asking ? (
         <span className={styles.confirm} role="group" aria-label={question}>
           <span className={styles.question}>{question}</span>
+          <span className={styles.consequence}>{paused ? RESUME_CONSEQUENCE : PAUSE_CONSEQUENCE}</span>
           <button type="button" className="am-button" disabled={busy} onClick={onConfirm}>
             {paused ? 'Продолжить' : 'Пауза'}
           </button>

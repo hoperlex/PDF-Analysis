@@ -29,6 +29,12 @@
   color: var(--am-ink);
 }
 
+/* What the choice does, one line after the question (`UIP-S22-02`): secondary ink, the strip's small text. */
+.consequence {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
 .error {
   color: var(--am-failed);
 }

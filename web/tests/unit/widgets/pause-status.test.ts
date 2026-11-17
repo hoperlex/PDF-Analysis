@@ -74,6 +74,21 @@ describe('the pause state in the top strip', () => {
     expect([confirmed, cancelled]).toEqual([1, 1]);
   });
 
+  it('says what the choice does under the question: the pause stops new runs only, the resume lets them start (`UIP-S22-02`)', () => {
+    const pausing = html({ status: RUNNING, mayToggle: true, asking: true });
+    expect(pausing).toContain('Новые прогоны не начнутся, идущие закончатся.');
+    expect(pausing).not.toContain('Новые прогоны снова начнутся.');
+    const resuming = html({ status: PAUSED, mayToggle: true, asking: true });
+    expect(resuming).toContain('Новые прогоны снова начнутся.');
+    expect(resuming).not.toContain('идущие закончатся');
+    // Nothing is promised before the question is asked, and a reader who may not toggle never sees it.
+    expect(html({ status: RUNNING, mayToggle: true })).not.toContain('Новые прогоны');
+    expect(html({ status: PAUSED, mayToggle: false, asking: true })).not.toContain('Новые прогоны');
+    // The words of the form stay: the question, then the two buttons.
+    expect(pausing).toContain('Поставить выдачу задач на паузу?');
+    expect(resuming).toContain('Продолжить выдачу задач?');
+  });
+
   it('shows the refusal of a command and an unread state, never an invented one', () => {
     expect(html({ status: RUNNING, mayToggle: true, error: 'Недостаточно прав.' })).toContain('Недостаточно прав.');
     expect(html({ status: undefined, failed: true })).toContain(UNREAD_LABEL);
