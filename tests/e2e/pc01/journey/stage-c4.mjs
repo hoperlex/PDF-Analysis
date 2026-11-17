@@ -326,7 +326,6 @@ async function promote(page, state) {
 const PHASES = { upload, assembly, swapped_map: swappedMap, full_run: fullRun, repair_undo: repairUndo, verdict, journal, promote };
 export async function stageC4Action({ page, action, captured, repositoryRoot }) {
   assert.ok(PHASES[action.phase], `unknown C4 phase ${action.phase}`);
-  await page.select('main', { label: 'Объект', optionValue: captured.project_uid });
   await visible(page, '[data-stage-workspace]');
   const values = await PHASES[action.phase](page, action.phase === 'upload' ? action : captured,
     action.phase === 'upload' ? captured : undefined, repositoryRoot);
