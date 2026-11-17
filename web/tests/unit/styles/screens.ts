@@ -14,6 +14,7 @@
  * fixtures `tests/unit/review` already uses, and adds no dependency.
  */
 
+import { PathnameContext, SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { createElement } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 
@@ -236,6 +237,16 @@ function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError
 }
 
 const noop = (): void => {};
+
+/**
+ * «Разбор» opens as the table in every run (`UIP-S06-06`), and the table opens no finding of its own. The screens that were taken
+ * for the list beside the open finding -- the card, the panel, the strips under the page -- are drawn under `?view=list`, so the
+ * census keeps reaching them; the table is drawn by the screens that stand at the end of this list.
+ */
+function inListView(page: ReactElement): ReactElement {
+  const query = new URLSearchParams({ view: 'list' });
+  return createElement(PathnameContext.Provider, { value: '/review' }, createElement(SearchParamsContext.Provider, { value: query as never }, page));
+}
 
 /** The four identities this census uses, keyed as `web/src/app`'s directories spell them. */
 const IDENTITIES = {
@@ -1832,6 +1843,7 @@ export function screens(): Screen[] {
     'FindingList selected',
     render(
       createElement(FindingList, {
+        view: 'list',
         groups: groupByCategory(FINDINGS),
         selectedFindingUid: FINDING_UID,
         onSelect: noop,
@@ -1860,6 +1872,7 @@ export function screens(): Screen[] {
   })));
   // `R-151g`: an accepted finding's execution status in its row, and the control with a refusal.
   add('FindingList with an execution status', render(createElement(FindingList, {
+    view: 'list',
     groups: groupByCategory(FINDINGS.map((finding, index) => index === 0
       ? { ...finding, current_verdict: 'accepted' as const, execution_status: 'amended' as const, merged_observations: [V2_OBSERVATION, V2_SIBLING] }
       : { ...finding, current_verdict: 'rejected' as const })),
@@ -1924,6 +1937,7 @@ export function screens(): Screen[] {
     'FindingList with row actions, recorded and refused',
     render(
       createElement(FindingList, {
+        view: 'list',
         groups: groupByCategory(FINDINGS),
         selectedFindingUid: FINDING_UID,
         onSelect: noop,
@@ -2687,7 +2701,7 @@ export function screens(): Screen[] {
       'ReviewPage loaded',
       renderScreen(
         client,
-        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+        inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
       ),
     );
   }
@@ -2727,7 +2741,7 @@ export function screens(): Screen[] {
       };
       add(
         'ReviewPage loaded, with the cited page’s blocks',
-        renderScreen(withBlocks(true), createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
+        renderScreen(withBlocks(true), inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }))),
       );
       const strip = (page: number, over: Partial<Parameters<typeof ReviewPageBlocks>[0]> = {}) =>
         createElement(ReviewPageBlocks, { projectUid: PROJECT_UID, versionUid: VERSION_UID, page, ...over });
@@ -2845,7 +2859,7 @@ export function screens(): Screen[] {
       'ReviewPage loaded, v2 finding',
       renderScreen(
         client,
-        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+        inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
       ),
     );
   }

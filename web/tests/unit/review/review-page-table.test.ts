@@ -1,7 +1,7 @@
 /**
- * `UI-A-68`: «Разбор» in its table view. The address decides (`?view=table`, `?finding=`): the list keeps the
- * open finding beside it as ever; the table is one column, opens a row only when it is asked to (as the original's
- * does), and puts the finding under that row. The export bar stands over the findings in both.
+ * `UI-A-68`, `UIP-S06-06`: «Разбор» in its table view. The table opens in every run, with no `?view=` in the address; only
+ * `?view=list` opens the list, which keeps the open finding beside it as ever. The table is one column, opens a row only when it
+ * is asked to (as the original's does), and puts the finding under that row. The file actions stand over the findings in both.
  */
 
 import { createElement } from 'react';
@@ -19,7 +19,7 @@ import { queryKeys } from '@/shared/api';
 import { ReviewPage } from '@/_pages/review';
 
 import { newClient, renderWith } from '../screens/harness';
-import { PROJECT_UID, RUN_ID, finding, findingDetail, runStatus } from './fixtures';
+import { PROJECT_UID, RUN_ID, finding, findingDetail, observation, runStatus } from './fixtures';
 
 afterEach(() => {
   navigation.search = '';
@@ -44,43 +44,86 @@ function page(search: string, oneList = false): string {
 }
 
 describe('the review page by its address', () => {
-  it('opens a new one-list run as a full-width table, with an explicit list choice still available', () => {
-    expect(page('', true)).toContain('data-finding-table');
-    expect(page('', true)).not.toContain('data-finding-expansion');
-    expect(page('view=list', true)).toContain('am-review__detail');
-    expect(page('view=list', true)).not.toContain('data-finding-table');
+  it('opens every run as a full-width table: a text run and a one-list run alike, with no view in the address', () => {
+    for (const oneList of [false, true]) {
+      const markup = page('', oneList);
+      expect(markup).toContain('data-finding-table');
+      expect(markup).not.toContain('data-finding-expansion');
+      expect(markup).not.toContain('am-review__detail');
+    }
   });
-  it('keeps the list and the open finding beside it without a view', () => {
-    const markup = page('');
-    expect(markup).not.toContain('data-finding-table');
-    expect(markup).toContain('am-review__detail');
-    expect(markup).toContain(`data-finding-uid="${FIRST}"`);
+
+  it('opens the list, with the open finding beside it, only for `?view=list`', () => {
+    for (const oneList of [false, true]) {
+      const markup = page('view=list', oneList);
+      expect(markup).not.toContain('data-finding-table');
+      expect(markup).toContain('am-review__detail');
+      expect(markup).toContain(`data-finding-uid="${FIRST}"`);
+    }
+  });
+
+  it('takes an unknown view for the table, and the former `?view=table` is the table still', () => {
+    for (const search of ['view=grid', 'view=', 'view=table']) {
+      const markup = page(search);
+      expect(markup, search).toContain('data-finding-table');
+      expect(markup, search).not.toContain('am-review__detail');
+    }
   });
 
   it('draws the table at full width and opens nothing until a row is chosen', () => {
-    const markup = page('view=table');
+    const markup = page('');
     expect(markup).toContain('data-finding-table');
-    expect(markup).toContain('data-finding-view="table"');
+    expect(markup).toContain('data-finding-view-link="list"');
     expect(markup).not.toContain('am-review__detail');
     expect(markup).not.toContain('data-finding-expansion');
     expect(markup).not.toContain('am-review__finding');
   });
 
+  it('says in the list that the table is one press away', () => {
+    const markup = page('view=list');
+    expect(markup).toContain('data-finding-view-link="table"');
+    expect(markup).not.toContain('data-finding-view-link="list"');
+  });
+
   it('opens the finding the address names under its own row', () => {
-    const markup = page(`view=table&finding=${SECOND}`);
+    const markup = page(`finding=${SECOND}`);
     expect((markup.match(/data-finding-expansion=/g) ?? []).length).toBe(1);
     expect(markup).toContain(`data-finding-expansion="${SECOND}"`);
     expect(markup.indexOf(`data-row-key="${SECOND}"`)).toBeLessThan(markup.indexOf('data-finding-expansion'));
   });
 
-  it('stands the file actions in the toolbar’s first row, before the verdict tally', () => {
-    const markup = page('');
-    expect(markup.indexOf('data-exportable')).toBeGreaterThan(markup.indexOf('data-finding-total'));
-    expect(markup.indexOf('data-exportable')).toBeLessThan(markup.indexOf('data-verdict-tally'));
+  it('shows «Все» as the choice when the address has no verdict, and for `?verdict=active` of the earlier default', () => {
+    for (const search of ['', 'verdict=active', 'verdict=unknown']) {
+      expect(page(search), search).toMatch(/aria-pressed="true"[^>]*data-verdict-filter="all"/);
+    }
+    expect(page('verdict=waiting')).toMatch(/aria-pressed="true"[^>]*data-verdict-filter="waiting"/);
+  });
+
+  it('opens an address of the proposals’ own plate as the plate it names', () => {
+    const client = newClient();
+    navigation.search = 'severity=proposed:critical';
+    const envelope = { next_cursor: null } as { next_cursor: null };
+    client.setQueryData(queryKeys.runs.detail(RUN_ID), runStatus({ run_id: RUN_ID }));
+    client.setQueryData(queryKeys.runs.findings(RUN_ID), {
+      data: { items: [finding({ finding_uid: FIRST, observation: observation({ proposed_severity: 'critical' }) }), finding({ finding_uid: SECOND })], page: envelope },
+    });
+    const markup = renderWith(client, createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
+    expect(markup).toMatch(/aria-pressed="true"[^>]*data-severity-filter="critical"/);
+    expect(markup).not.toContain('data-severity-filter="proposed:');
+    expect(markup).toContain(`data-row-key="${FIRST}"`);
+    expect(markup).not.toContain(`data-row-key="${SECOND}"`);
+  });
+
+  it('stands the file actions in the toolbar’s first row, after the totals and before the choice «Показывать»', () => {
+    for (const search of ['', 'view=list']) {
+      const markup = page(search);
+      expect(markup.indexOf('data-exportable')).toBeGreaterThan(markup.indexOf('data-finding-total'));
+      expect(markup.indexOf('data-exportable')).toBeLessThan(markup.indexOf('data-verdict-filter'));
+    }
   });
 
   it('puts the file actions over the findings in either view', () => {
-    for (const search of ['', 'view=table']) {
+    for (const search of ['', 'view=list']) {
       const markup = page(search);
       const bar = markup.indexOf('data-exportable');
       expect(bar).toBeGreaterThan(-1);

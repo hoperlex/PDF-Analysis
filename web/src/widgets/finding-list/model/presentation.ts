@@ -3,25 +3,25 @@
  * No React and no query, so the list, the table and their tests read the same words.
  */
 
-import type { Finding, Verdict } from '@/shared/api';
+import type { Finding, Severity, Verdict } from '@/shared/api';
 import type { FindingGroup } from '@/entities/finding';
 
 /**
- * `UI-A-70`, `UI-A-71`: the verdicts of the run at a glance and a filter by them, as the original's
- * «Экспертная оценка» counter and its pending → accepted → rejected order. The page loads every finding of
- * the run (`R-150i`), so the counts and the filter are over the whole run, never over one page.
- * `needs_manual_review` waits for the expert like `pending` (`UI-PARITY-METRICS`).
+ * `UI-A-70`, `UI-A-71`, `UIP-S06-06`: the verdicts of the run at a glance and the one choice «Показывать: Все / Ждут / Приняты /
+ * Отклонены», as the original's counter and its pending → accepted → rejected order. The page loads every finding of the run
+ * (`R-150i`), so the counts and the filter are over the whole run, never over one page. `needs_manual_review` waits for the
+ * expert like `pending` (`UI-PARITY-METRICS`). «Все» is the default: the rejected are not hidden, they stand last.
  */
-export type VerdictFilter = 'active' | 'all' | 'waiting' | 'accepted' | 'rejected';
+export type VerdictFilter = 'all' | 'waiting' | 'accepted' | 'rejected';
 
 const WAITING: ReadonlySet<Verdict> = new Set<Verdict>(['pending', 'needs_manual_review']);
 
-export function verdictBucket(verdict: Verdict): Exclude<VerdictFilter, 'all' | 'active'> {
+export function verdictBucket(verdict: Verdict): Exclude<VerdictFilter, 'all'> {
   if (WAITING.has(verdict)) return 'waiting';
   return verdict === 'accepted' ? 'accepted' : 'rejected';
 }
 
-const BUCKET_RANK: Readonly<Record<Exclude<VerdictFilter, 'all' | 'active'>, number>> = { waiting: 0, accepted: 1, rejected: 2 };
+const BUCKET_RANK: Readonly<Record<Exclude<VerdictFilter, 'all'>, number>> = { waiting: 0, accepted: 1, rejected: 2 };
 
 /**
  * `UI-A-71`: the original's order, pending → accepted → rejected, with the run's own order kept inside each of the three
@@ -82,4 +82,55 @@ export function findingNumbers(groups: readonly FindingGroup<Finding>[]): Readon
     for (const finding of group.findings) numbers.set(finding.finding_uid, numbers.size + 1);
   }
   return numbers;
+}
+
+/** The five severities in the order the plates stand: the original's red to grey. */
+export const SEVERITY_ORDER: readonly Severity[] = ['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'];
+
+/** What a plate stands for: one of the five severities, or the findings that have none to count under. */
+export type PlateSeverity = Severity | 'undetermined';
+
+/**
+ * `R-151j`, `UIP-S06-06`: the plate a finding is counted under and selected by. The severity the expert decided
+ * (`decided_severity`) when there is one; otherwise the model's proposal, so a run nobody has decided yet still shows its
+ * shape; otherwise «Не определена». The count says whose it is only in the plate's tooltip (`severityPlates`), and the two
+ * fields stay apart in the data: this reads them, it writes neither, and the proposal never becomes the finding's decision
+ * (AGENTS §4).
+ */
+export function plateOf(finding: Finding): PlateSeverity {
+  return finding.decided_severity ?? finding.observation.proposed_severity ?? 'undetermined';
+}
+
+/** The findings under one plate, apart by whose severity it is: the expert's decision, or the model's proposal for a finding not yet decided. */
+export interface PlateCount {
+  readonly decided: number;
+  readonly proposed: number;
+}
+
+export interface SeverityPlates {
+  readonly bySeverity: Readonly<Record<Severity, PlateCount>>;
+  /** Findings with neither a decided nor a proposed severity. */
+  readonly undetermined: number;
+}
+
+/** The number on a plate: both kinds together, each finding once. */
+export function plateTotal(count: PlateCount): number {
+  return count.decided + count.proposed;
+}
+
+/** The plates of a run, counted over all of its findings (`R-150i`), never over what a filter leaves. */
+export function severityPlates(groups: readonly FindingGroup<Finding>[]): SeverityPlates {
+  const decided: Record<Severity, number> = { critical: 0, economic: 0, operational: 0, recommendation: 0, check_adjacent: 0 };
+  const proposed: Record<Severity, number> = { critical: 0, economic: 0, operational: 0, recommendation: 0, check_adjacent: 0 };
+  let undetermined = 0;
+  for (const group of groups) {
+    for (const finding of group.findings) {
+      const plate = plateOf(finding);
+      if (plate === 'undetermined') undetermined += 1;
+      else if (finding.decided_severity !== undefined) decided[plate] += 1;
+      else proposed[plate] += 1;
+    }
+  }
+  const bySeverity = Object.fromEntries(SEVERITY_ORDER.map((severity) => [severity, { decided: decided[severity], proposed: proposed[severity] }])) as Record<Severity, PlateCount>;
+  return { bySeverity, undetermined };
 }

@@ -1,7 +1,8 @@
 /**
- * `UI-A-70`, `UI-A-71`: the finding list tallies the run's verdicts and filters by them. The page loads
+ * `UI-A-70`, `UI-A-71`, `UIP-S06-06`: the finding list tallies the run's verdicts and filters by them. The page loads
  * every finding of the run (`R-150i`), so these are whole-run figures. `needs_manual_review` waits for the
- * expert like `pending`.
+ * expert like `pending`. The choice is «Все / Ждут / Приняты / Отклонены», and «Все» is the default: the rejected are not
+ * hidden, and the address of the earlier default (`?verdict=active`) opens as «Все».
  */
 import { describe, expect, it } from 'vitest';
 
@@ -46,14 +47,21 @@ describe('verdicts at a glance', () => {
 });
 
 describe('the verdict filter read from the address', () => {
-  it('reads a known value and opens active review by default', async () => {
+  it('reads a known value and opens «Все» by default, for an absent, an unknown and the former `active` value alike', async () => {
     const { verdictFilterOf } = await import('@/widgets/finding-list');
     expect(verdictFilterOf('waiting')).toBe('waiting');
     expect(verdictFilterOf('accepted')).toBe('accepted');
     expect(verdictFilterOf('rejected')).toBe('rejected');
-    expect(verdictFilterOf(null)).toBe('active');
     expect(verdictFilterOf('all')).toBe('all');
-    expect(verdictFilterOf('active')).toBe('active');
-    expect(verdictFilterOf('pending')).toBe('active');
+    expect(verdictFilterOf(null)).toBe('all');
+    expect(verdictFilterOf('')).toBe('all');
+    expect(verdictFilterOf('active')).toBe('all');
+    expect(verdictFilterOf('pending')).toBe('all');
+  });
+
+  it('shows the rejected under «Все»: nothing is hidden by default', () => {
+    const all = filterGroups(GROUPS, 'all');
+    expect(all.flatMap((g) => g.findings.map((f) => f.finding_uid))).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(verdictBucket(all[1]?.findings[0]?.current_verdict ?? 'pending')).toBe('rejected');
   });
 });

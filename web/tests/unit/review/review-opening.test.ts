@@ -13,6 +13,9 @@
  *
  * Mounted live under `routed-review-address.ts`, which gives the page an address that follows what it writes; the evidence viewer is
  * stubbed (it draws a PDF page, which a node DOM cannot) and the transport answers nothing.
+ *
+ * `UIP-S06-06`: the table is what every run opens, and it opens no finding of its own, so the cases about the finding the screen opens
+ * are read under `?view=list`, the one way the list opens; the table's own case stands first of the table cases.
  */
 
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -60,6 +63,8 @@ function seed(client: QueryClient, items: Finding[]): void {
 }
 
 let live: LiveRender | null = null;
+
+const LIST = 'view=list';
 
 async function open(query: string, items: Finding[]): Promise<{ client: QueryClient; element: (search: string) => ReturnType<typeof createElement> }> {
   const client = newClient();
@@ -128,22 +133,22 @@ describe('resolveSelection, with the finding the screen opens', () => {
 
 describe('«Разбор» opens the first finding that waits', () => {
   it('opens the waiting finding, not the run’s first, and writes it to the address', async () => {
-    await open('', HALF_DECIDED());
+    await open(LIST, HALF_DECIDED());
     expect(opened(live!.markup())).toBe(WAITING);
-    expect(currentSearch()).toBe(`finding=${WAITING}`);
-    expect(writtenAddresses()).toEqual([`finding=${WAITING}`]);
+    expect(currentSearch()).toBe(`${LIST}&finding=${WAITING}`);
+    expect(writtenAddresses()).toEqual([`${LIST}&finding=${WAITING}`]);
     // `D-341`: null as the state, the form Next syncs to `useSearchParams`; and the entry is replaced, not added to.
     expect(writtenStates).toEqual([null]);
     expect(writtenHow).toEqual(['replace']);
   });
 
   it('keeps the other parameters of the address when it writes the finding', async () => {
-    await open('verdict=all&severity=all&foo=bar', HALF_DECIDED());
-    expect(currentSearch()).toBe(`verdict=all&severity=all&foo=bar&finding=${WAITING}`);
+    await open(`${LIST}&verdict=all&severity=all&foo=bar`, HALF_DECIDED());
+    expect(currentSearch()).toBe(`${LIST}&verdict=all&severity=all&foo=bar&finding=${WAITING}`);
   });
 
   it('stays on the opened finding when a decision moves it among the rows', async () => {
-    const { client } = await open('', HALF_DECIDED());
+    const { client } = await open(LIST, HALF_DECIDED());
     expect(opened(live!.markup())).toBe(WAITING);
     // The reader accepts it: the list re-reads, and the finding now stands among the accepted rows; the next waiting one is first shown.
     await live!.settle(async () => {
@@ -155,44 +160,51 @@ describe('«Разбор» opens the first finding that waits', () => {
       ]);
     });
     expect(opened(live!.markup())).toBe(WAITING);
-    expect(currentSearch()).toBe(`finding=${WAITING}`);
-    expect(writtenAddresses()).toEqual([`finding=${WAITING}`]);
+    expect(currentSearch()).toBe(`${LIST}&finding=${WAITING}`);
+    expect(writtenAddresses()).toEqual([`${LIST}&finding=${WAITING}`]);
   });
 
   it('leaves a finding the address names alone', async () => {
-    await open(`finding=${ACCEPTED}`, HALF_DECIDED());
+    await open(`${LIST}&finding=${ACCEPTED}`, HALF_DECIDED());
     expect(opened(live!.markup())).toBe(ACCEPTED);
     expect(writtenAddresses()).toEqual([]);
   });
 
   it('replaces a link to a finding the run does not have by the waiting one', async () => {
-    await open(`finding=${ABSENT}`, HALF_DECIDED());
+    await open(`${LIST}&finding=${ABSENT}`, HALF_DECIDED());
     expect(opened(live!.markup())).toBe(WAITING);
-    expect(currentSearch()).toBe(`finding=${WAITING}`);
+    expect(currentSearch()).toBe(`${LIST}&finding=${WAITING}`);
   });
 
   it('opens the first row of what a verdict filter shows', async () => {
-    await open('verdict=rejected', HALF_DECIDED());
+    await open(`${LIST}&verdict=rejected`, HALF_DECIDED());
     expect(opened(live!.markup())).toBe(REJECTED);
-    expect(currentSearch()).toBe(`verdict=rejected&finding=${REJECTED}`);
+    expect(currentSearch()).toBe(`${LIST}&verdict=rejected&finding=${REJECTED}`);
   });
 
   it('opens the run’s first finding when every one of them waits', async () => {
-    await open('', [withVerdict(WAITING, 'pending'), withVerdict(ALSO_WAITING, 'pending')]);
+    await open(LIST, [withVerdict(WAITING, 'pending'), withVerdict(ALSO_WAITING, 'pending')]);
     expect(opened(live!.markup())).toBe(WAITING);
   });
 
-  it('opens nothing in the table, and writes nothing', async () => {
-    await open('view=table', HALF_DECIDED());
-    expect(opened(live!.markup())).toBeNull();
-    expect(live!.markup()).not.toContain('data-finding-expansion');
-    expect(writtenAddresses()).toEqual([]);
+  it('opens nothing in the table, which is what an address without a view opens, and writes nothing', async () => {
+    for (const query of ['', 'view=table']) {
+      await open(query, HALF_DECIDED());
+      expect(live!.markup()).toContain('data-finding-table');
+      expect(opened(live!.markup())).toBeNull();
+      expect(live!.markup()).not.toContain('data-finding-expansion');
+      expect(writtenAddresses(), query).toEqual([]);
+      await live!.unmount();
+      live = null;
+      resetRoutedAddress();
+    }
   });
 
   it('opens the waiting finding when the reader turns from the table to the list', async () => {
-    const { element } = await open('view=table', HALF_DECIDED());
-    await live!.update(element(''));
+    const { element } = await open('', HALF_DECIDED());
+    expect(opened(live!.markup())).toBeNull();
+    await live!.update(element(LIST));
     expect(opened(live!.markup())).toBe(WAITING);
-    expect(currentSearch()).toBe(`finding=${WAITING}`);
+    expect(currentSearch()).toBe(`${LIST}&finding=${WAITING}`);
   });
 });

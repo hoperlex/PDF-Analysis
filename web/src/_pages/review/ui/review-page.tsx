@@ -85,14 +85,16 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const mayAct = useMayActAsExpert();
   // `UI-PARITY-01` completion scenario 5: the chosen finding and the verdict filter live in the address
   // (`?finding=`, `?verdict=`), so a saved link opens the same finding under the same filter. Outside the
-  // app router both hooks answer `null` and the page keeps its first finding and «Все».
+  // app router both hooks answer `null` and the page keeps its first finding and «Все». The defaults are never
+  // written (`UIP-S06-06`): «Все» is no `?verdict=`, the table is no `?view=`, «Все» of the severity is no `?severity=`.
   const pathname = usePathname() ?? routes.review(projectUid, runId);
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const linkedFinding = searchParams.get('finding');
   const verdictFilter = verdictFilterOf(searchParams.get('verdict'));
   // `R-151j`: the severity filter lives in the address too (`?severity=`).
   const severityFilter = severityFilterOf(searchParams.get('severity'));
-  // `UI-A-68`: the findings as the list beside the open finding, or as the original's full-width table (`?view=table`).
+  // `UI-A-68`, `UIP-S06-06`: the findings as the original's full-width table (every run opens it), or, by `?view=list`, as the list
+  // beside the open finding.
   const [selection, setSelectionState] = useState<ReviewSelection | null>(
     linkedFinding === null ? null : selectFinding(linkedFinding),
   );
@@ -120,10 +122,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     setSelectionState(next);
   };
   const setView = (next: FindingView) => {
-    writeAddress('view', next === defaultView ? null : next);
+    writeAddress('view', next === 'table' ? null : next);
   };
   const setVerdictFilter = (filter: VerdictFilter) => {
-    writeAddress('verdict', filter === 'active' ? null : filter);
+    writeAddress('verdict', filter === 'all' ? null : filter);
   };
   const setSeverityFilter = (filter: SeverityFilter) => {
     writeAddress('severity', filter === 'all' ? null : filter);
@@ -134,8 +136,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   // key is now decided in one place -- `runStatusQueryOptions` -- and this screen reads
   // whatever that place writes.
   const runQuery = useQuery(runStatusQueryOptions(runId));
-  const defaultView = runQuery.data?.publication_mode === 'one_list' ? 'table' : 'list';
-  const view = findingViewOf(searchParams.get('view') ?? defaultView);
+  const view = findingViewOf(searchParams.get('view'));
 
   // The COMPLETE list: every page of the run's findings, or the error of the page that
   // failed. The query resolves only once the last page has arrived, so the list below is
