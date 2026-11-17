@@ -41,6 +41,7 @@ import { AdminAreaTabsView } from '@/entities/user';
 import { RegistrationQueue } from '@/widgets/registration-queue';
 import { VersionHistoryView } from '@/widgets/version-history';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
+import { ReviewCandidateTable } from '@/widgets/extended-review';
 import { Dashboard } from '@/widgets/dashboard';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
@@ -3096,6 +3097,40 @@ export function screens(): Screen[] {
         },
       },
     ],
+  })));
+  /*
+   * `UIP-DEBT-01`: the machine candidates under the table of «Разбор» (`ReviewCandidateTable`, `review-candidates.module.css`).
+   * Thirteen colour rules of that sheet were reached by no screen, because no screen drew the block at all. One saved result carries
+   * every state the sheet colours: a proposal of each severity the filter row names (so the three `data-candidate-filter` chips and the
+   * pressed «Все»), a group of two records from a text and a drawing source (origin «Сверка», the small «×2»), a norm with its quote,
+   * a candidate with no norm, no recommendation and no proposed severity (the quiet notes), and the read-only cell of every row.
+   */
+  const candidate = (observation_id: string, over: Record<string, unknown> = {}) => ({
+    observation_id, title: 'Несовпадение размеров', description: 'На плане 3000 мм, в спецификации 2800 мм.', source_ids: ['drawing'], ...over,
+  });
+  add('ReviewCandidateTable with a proposal of each severity, a norm with its quote and a group of two records', render(createElement(ReviewCandidateTable, {
+    projectUid: PROJECT_UID,
+    value: {
+      version_uid: VERSION_UID,
+      sources: [{ source_id: 'drawing', kind: 'image', page_number: 2 }, { source_id: 'text', kind: 'text', page_number: 3 }],
+      observations: [
+        candidate('a', {
+          proposed_severity: 'critical', recommendation_text: 'Сверить размеры плана со спецификацией.',
+          norm_candidates: [{ paragraph_id: 'p1', designation: 'СП 70.13330.2012', clause_number: '5.2', quote: 'Отклонения не должны превышать допусков.', document_id: NORM_DOCUMENT_ID }],
+        }),
+        candidate('b', { proposed_severity: 'economic', source_ids: ['text'], recommendation_text: 'Согласовать спецификацию.' }),
+        candidate('c', { proposed_severity: 'operational' }),
+        candidate('d'),
+        candidate('e', { source_ids: ['text'] }),
+      ],
+      consolidation: { complete: true, version: 'ensemble-linked-v1' },
+      consolidated_observations: [
+        { group_id: 'g1', ...candidate('a'), origin_records: [{ raw_index: 0 }] },
+        { group_id: 'g2', ...candidate('b'), origin_records: [{ raw_index: 1 }] },
+        { group_id: 'g3', ...candidate('c'), origin_records: [{ raw_index: 2 }] },
+        { group_id: 'g4', ...candidate('d'), origin_records: [{ raw_index: 3 }, { raw_index: 4 }] },
+      ],
+    },
   })));
   // `UI-B-34`: the original's table, the page's own default view: project, section, severity, verdict, reason and date by column.
   add('KnowledgeBase table', render(createElement(KnowledgeBase, {
