@@ -387,8 +387,9 @@ def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
     # tables of the decision memory: 136 + 8 = 144; `0061_decision_memory_m2` adds the settings' journal: 145; `0062_hosts_stage_models` adds nine (the host with its journals,
     # report and cooldown, the stage layout with its revisions and switch, and the cell binding): 154; `0063_drop_ar_v3_beta` drops the two tables of `0032`: 152, which is `len(coverage.TABLES)`.
     # `0064_precedents_seal` (`CRIT-SEAL-50`) adds twelve (152 -> 164); `0065_norm_crop_render` (`CRIT-SEAL-52`) adds one (165);
-    # `0066_run_deletion` (`RUN-DELETE-01`) adds one (166); `0067_precedents_wave5` (`CRIT-SEAL-53`) adds four (170).
-    assert refused == sorted(coverage.TABLES) and len(refused) == 170
+    # `0066_run_deletion` (`RUN-DELETE-01`) adds one (166); `0067_precedents_wave5` (`CRIT-SEAL-53`) adds four (170);
+    # `0069_account_last_project` (`UIP-G-05`) adds one (171).
+    assert refused == sorted(coverage.TABLES) and len(refused) == 171
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------
