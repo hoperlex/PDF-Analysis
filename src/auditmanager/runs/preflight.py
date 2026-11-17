@@ -164,6 +164,36 @@ class RunCostEstimateValue:
         return result
 
 
+@dataclass(frozen=True, slots=True)
+class RestartPricing:
+    """What a restart prices of the full estimate (`RUN-RESTART-01`): only the model calls it makes.
+
+    The rows before the restart point make **no** call (the text row is taken by reference, the earlier rows are replayed): their cells are priced at
+    zero. A row the restart computes, that the source chain ran to its end (``completed_rows``), is bounded by the calls the chain actually made
+    for it (``actual_calls``, the most any one run of the chain holds, shared by the cells of the row), because a replay of the same work asks the
+    same questions; a row the chain did not finish keeps the estimate's own bound, which prices every call it could make. ``apply`` changes the
+    ledger the planned estimate prices (``cell key -> [calls, input tokens, output tokens]``) and nothing else; the cells stay in it, so the rows
+    the estimate priced are still the rows the consent holds (``stage_plan_rows_changed``) and every model of the plan keeps its line."""
+
+    zero_rows: frozenset
+    completed_rows: frozenset = frozenset()
+    actual_calls: object = None
+
+    def apply(self, ledger, plan):
+        actual = self.actual_calls or {}
+        for key, entry in ledger.items():
+            row = key.partition(":")[0]
+            if row in self.zero_rows:
+                entry[:] = [0, 0, 0]
+            elif row in self.completed_rows and row in actual and entry[0] > 0:
+                cells = max(1, len(plan.cells_of_row(row)))
+                bound = max(1, -(-actual[row] // cells))  # per cell: the row's calls are shared by its cells (legs and judge)
+                if bound < entry[0]:
+                    entry[1] = entry[1] * bound // entry[0]
+                    entry[2] = entry[2] * bound // entry[0]
+                    entry[0] = bound
+
+
 class RunCostPreflight:
     """No I/O in construction; every estimate is recomputed in the start transaction."""
 
@@ -370,7 +400,7 @@ class RunCostPreflight:
         raise _invalid("analysis_workflow", "unsupported_plan")
 
     def estimate_run(self, session, *, version_uid, executor_connection_id=None, preset_id=None, relaxed_limits=False, version_record=None,
-                     allow_native_page_pieces=True, parse_native_text=True, executor_group_id=None, stage_plan=_UNSET):
+                     allow_native_page_pieces=True, parse_native_text=True, executor_group_id=None, stage_plan=_UNSET, restart=None):
         if type(relaxed_limits) is not bool:
             raise _invalid("relaxed_limits", "boolean")
         # `HOSTS-LAYOUT-01`: with the stage layout on, the estimate is by model: the plan's cells decide the model, the effort, the answer
@@ -655,6 +685,8 @@ class RunCostPreflight:
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,
             executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits,
             extended_review=extended, **({"native_page_piece_policy": page_pieces} if page_pieces is not None else {}))
+        if planned and restart is not None:
+            restart.apply(ledger, plan)
         if planned:
             if {key.partition(":")[0] for key in ledger} != set(rows_in_use(extended)):  # the rows the estimate priced are the rows the consent will hold
                 raise _invalid("analysis_workflow", "stage_plan_rows_changed")
@@ -714,5 +746,66 @@ class RunCostPreflight:
         public = value.as_dict()
         public.update(start_from_run_id=run_id, start_stage_id=start_stage_id,
             reused_stage_ids=list(plan.reused_stage_ids), computed_stage_ids=list(plan.computed_stage_ids))
+        public["estimate_digest"] = _digest(authority)
+        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group, value.stage_plan)
+
+    def estimate_restart(self, session, *, run_id, restart_point, version_record=None, parse_native_text=True, stage_plan=_UNSET):
+        """`RUN-RESTART-01`: the price of restarting ``run_id`` from ``restart_point``, for the model calls the restart makes.
+
+        The new run takes every setting the source froze (`R-155f`), so the estimate is asked of today's configuration and **must agree with the
+        source's accepted consent**: the same source facts and prompts (``source_sha256``), the same extended-review policy, window and cells (model,
+        effort, access). Anything else is ``restart_settings_differ`` -- the saved replies would not replay -- and is refused here, as a price is
+        asked, not after it is consented to. The consent is bound to this source and chip: a digest from a re-audit, a start from a stage or another
+        chip is ``run_cost_estimate_stale``. The answer names the chips taken and the chips computed (``reused_restart_points``,
+        ``computed_restart_points``).
+        """
+        from .repository import RunRepository
+        from .restart import (
+            REASON_NOT_STAGE_LAYOUT, REASON_NOT_V2, REASON_SETTINGS_DIFFER, chain_calls, chips_before, chips_from, refusal,
+            require_restart_point, restart_chain, source_command_outcome, untaken_rows,
+        )
+        from .stage_layout import parse_plan
+
+        point = require_restart_point(restart_point)
+        runs = RunRepository()
+        source = runs.get(session, run_id)
+        if source.stage_plan is None:
+            raise refusal(REASON_NOT_STAGE_LAYOUT)
+        outcome = source_command_outcome(session, source)
+        consent = outcome.get("cost_consent")
+        extended = None if not isinstance(consent, dict) else consent.get("extended_review")
+        if not isinstance(extended, dict) or extended.get("plan_version") != "extended-review-v2":
+            raise refusal(REASON_NOT_V2)
+        if stage_plan is _UNSET:
+            stage_plan = None if self.stage_plans is None else self.stage_plans(session)
+        if stage_plan is None:
+            raise refusal(REASON_SETTINGS_DIFFER)  # the layout is off today: a start would not take the plan the source froze
+        chain = restart_chain(session, run_id)
+        calls = chain_calls(session, chain)
+        stage = next((row for row in runs.stage_results(session, run_id) if row.stage_id == "text_analysis"), None)
+        metrics = {} if stage is None else stage.metrics
+        from .restart import PROCEDURE_OF_POINT, ROW_OF_POINT
+
+        completed = frozenset(
+            ROW_OF_POINT[chip] for chip in chips_from(point)
+            if chip in ROW_OF_POINT and chip in PROCEDURE_OF_POINT and str(metrics.get("extended_" + PROCEDURE_OF_POINT[chip])) in {"completed", "partial"})
+        pricing = RestartPricing(zero_rows=untaken_rows(point), completed_rows=completed, actual_calls=dict(calls.calls_by_row))
+        value = self.estimate_run(session, version_uid=source.version_uid, version_record=version_record,
+            parse_native_text=parse_native_text, stage_plan=stage_plan, restart=pricing)
+        authority = json.loads(value.authority_json)
+        frozen = parse_plan(source.stage_plan)
+        today = value.stage_plan
+        same_cells = today is not None and [(c.cell_key, c.model_id, c.effort, c.access) for c in today.cells] == [
+            (c.cell_key, c.model_id, c.effort, c.access) for c in frozen.cells]
+        if (not same_cells or authority.get("source_sha256") != consent.get("source_sha256")
+                or authority.get("extended_review") != extended
+                or authority.get("window_characters") != consent.get("window_characters")
+                or authority.get("max_windows") != consent.get("max_windows")
+                or authority.get("native_page_piece_policy") != consent.get("native_page_piece_policy")):
+            raise refusal(REASON_SETTINGS_DIFFER)
+        authority["restarted_from"] = {"run_id": run_id, "restart_point": point, "reused": list(chips_before(point))}
+        public = value.as_dict()
+        public.update(start_from_run_id=run_id, restart_point=point, reused_restart_points=list(chips_before(point)),
+            computed_restart_points=list(chips_from(point)))
         public["estimate_digest"] = _digest(authority)
         return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group, value.stage_plan)

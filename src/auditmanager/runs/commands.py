@@ -171,6 +171,9 @@ COMMAND_TYPE_START_RUN: Final[str] = "start_audit_run"
 #: `R-151i`: a new run that reuses the completed stage outputs of an earlier one before the chosen stage.
 COMMAND_TYPE_START_RUN_FROM_STAGE: Final[str] = "start_run_from_stage"
 
+#: `RUN-RESTART-01`: a new run that replaces an ended run, taking everything before the chosen chip from its chain.
+COMMAND_TYPE_RESTART_RUN: Final[str] = "restart_run"
+
 #: The manifest role whose bytes ``source_preparation`` consumes.
 # Imported, not restated. This was the third spelling of one concept in three trees: the
 # storage blob role `source_document`, this module's own copy of the contract's
@@ -1544,7 +1547,157 @@ def start_run_from_stage(
     return StartedRun(new_id, str(claimed.command_id), False)
 
 
+def restart_run(
+    session: Session, *, source_run_id: str, restart_point: str, roles: frozenset[str], user_uid: str,
+    idempotency_key: str, provider_mode: str, runs: RunRepository | None = None, jobs: JobRepository | None = None,
+    commands: CommandRepository | None = None, documents: DocumentRepository | None = None,
+    section_profiles: SectionProfiles | None = None, cost_preflight: Any = None,
+    cost_consent: Mapping[str, Any] | None = None, cost_actor_uid: str | None = None,
+    stage_plans: StagePlanSource | None = None,
+) -> StartedRun:
+    """Create the NEW run that restarts the ended run ``source_run_id`` from the chip ``restart_point`` (`RUN-RESTART-01`, `R-155a`..`R-155i`).
+
+    The source is a run that ended ``partial``, ``failed`` or ``cancelled``, that no restart or ``deleteRun`` has replaced, that holds no live lease
+    and no active restart of its lineage, that ran the **stage layout** with the extended review **v2**. The new run copies **every setting the
+    source froze** (`R-155f`): the version and its input digest, the norms snapshot (and a verified retrieval set pin), the analysis profile and
+    prompt bundle, the provider mode, the publication mode, the stage plan (the cells are the source's; the layout revision named is today's, whose
+    cells the estimate proved equal) and -- through the consent the estimate binds to this source and chip -- the extended-review policy, window and
+    cost envelope. Each of those is *not* read from today's configuration: a deployment whose configuration moved refuses with
+    ``restart_settings_differ`` instead, because the saved replies would not replay (a new setting goes through ``reaudit_run``). The cell
+    **bindings** (``audit_run_cell_binding``) are not settings: dispatch writes them for the new run, once, as for every planned run, and a reply key
+    holds neither host nor connection.
+
+    **What is taken, and the refusals, all before anything is written -- the idempotency key included** (``analysis_input_invalid`` carries
+    ``reason`` and, where one chip is to blame, ``restart_point`` and ``stage_id``):
+
+    * the preparation stages of the source by reference (every chip but «Подготовка», which is a full rerun with the same settings and still names
+      its source): ``plan_stage_reuse``'s ``source_stage_*`` reasons;
+    * the saved text observations byte for byte (the chips after «Текст»): ``restart_text_not_reusable``;
+    * the model replies of the chips before the chosen one: every call the source chain made for them has a saved reply and every kept procedure
+      reached its end, else ``restart_reply_missing``.
+
+    The tombstone of the source and the carry of the expert's decisions are written **when the new run publishes**, in the executor's terminal
+    transaction (`R-155g`); this command writes neither. A restart of a run that is itself a failed or cancelled restart is allowed (its source is
+    that run; the lineage is tombstoned as a whole when one run of it publishes, ``runs.restart.tombstone_lineage``).
+
+    **The idempotency key** is the caller's header; the fingerprint is the request -- the source, the chip, the source's stored input digest and the
+    cost consent -- so the same key with another chip is ``idempotency_key_reuse`` and a retry replays the run the first acceptance created.
+    """
+    from auditmanager.runs import restart as rr
+    from auditmanager.runs.restart_text import find_saved_text
+    from auditmanager.runs.stage_layout import parse_plan
+
+    _require_run_control_role(roles)
+    point = rr.require_restart_point(restart_point)
+    if not user_uid:
+        raise DomainError(ErrorCode.PERMISSION_DENIED)
+    repository = runs or RunRepository()
+    ledger = commands or CommandRepository()
+    document_repo = documents or DocumentRepository()
+    session.execute(text(
+        "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
+    ), {"run_id": source_run_id}).scalar_one_or_none()
+    source = repository.get(session, source_run_id)
+    key = IdempotencyKey(idempotency_key)
+    approved_cost = None
+    estimate = None
+
+    def _guard_source() -> None:
+        """The state of the source, in the order the contract lists the refusals; asked before the claim and again after it."""
+        if source.state not in rr.RESTARTABLE_STATES:
+            raise DomainError(
+                ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+                machine="audit_run", current_state=source.state, requested_state="restart",
+            )
+        if repository.is_deleted(session, source_run_id):
+            raise DomainError(ErrorCode.CONFLICT, conflict_reason=rr.CONFLICT_SOURCE_DELETED, aggregate_type="AuditRun")
+        if rr.has_live_lease(session, source_run_id):
+            raise DomainError(ErrorCode.CONFLICT, conflict_reason=rr.CONFLICT_SOURCE_LEASED, aggregate_type="AuditRun")
+        if rr.lineage_restart_active(session, source_run_id):
+            raise DomainError(ErrorCode.CONFLICT, conflict_reason=rr.CONFLICT_IN_PROGRESS, aggregate_type="AuditRun")
+
+    if ledger.find(session, command_type=COMMAND_TYPE_RESTART_RUN, idempotency_key=key) is None:
+        _guard_source()
+        if source.stage_plan is None:
+            raise rr.refusal(rr.REASON_NOT_STAGE_LAYOUT)
+        outcome = rr.source_command_outcome(session, source)
+        consent_of_source = outcome.get("cost_consent")
+        extended = None if not isinstance(consent_of_source, dict) else consent_of_source.get("extended_review")
+        if not isinstance(extended, dict) or extended.get("plan_version") != "extended-review-v2":
+            raise rr.refusal(rr.REASON_NOT_V2)
+        if cost_preflight is None:
+            # The source froze a plan, so its restart is never started without the consent that binds the models (``read_run_cost_policy``).
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        if provider_mode != source.provider_mode:
+            raise rr.refusal(rr.REASON_SETTINGS_DIFFER)
+        source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
+        if section_profiles is not None:
+            routed = route_classified_version(source_version, section_profiles)
+            if (routed.analysis_profile_id, routed.prompt_bundle_id) != (source.analysis_profile_id, source.prompt_bundle_id):
+                raise rr.refusal(rr.REASON_SETTINGS_DIFFER)  # today's routing is not the profile the source froze
+        planned = None if stage_plans is None else stage_plans(session)
+        estimate = cost_preflight.estimate_restart(
+            session, run_id=source_run_id, restart_point=point, version_record=source_version, parse_native_text=False,
+            **_planned_estimate_kwargs(planned, stage_plans))
+        chain = rr.restart_chain(session, source_run_id)
+        visual_only = visual_only_pages_allowed(json.loads(estimate.authority_json).get("extended_review"))
+        if rr.takes_preparation(point):
+            plan_stage_reuse(session, source_run_id=source_run_id, start_stage_id="text_analysis", visual_only_pages=visual_only, runs=repository)
+        if rr.takes_text(point):
+            find_saved_text(session, chain=chain, provider_mode=source.provider_mode, runs=repository)
+        rows = {row.stage_id: row for row in repository.stage_results(session, source_run_id)}
+        text_metrics = rows["text_analysis"].metrics if "text_analysis" in rows else {}
+        calls = rr.chain_calls(session, chain)
+        gone = rr.rows_with_unavailable_replies(session, chain)
+        for chip in rr.chips_before(point):
+            row = rr.ROW_OF_POINT.get(chip)
+            if chip != "text" and row is not None and (calls.unanswered_by_row.get(row) or row in gone):
+                raise rr.refusal(rr.REASON_REPLY_MISSING, chip)
+        missing = rr.kept_procedures_reached_their_end(point, text_metrics)
+        if missing is not None:
+            raise rr.refusal(rr.REASON_REPLY_MISSING, missing)
+        approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
+    claimed = ledger.begin(
+        session, command_type=COMMAND_TYPE_RESTART_RUN, idempotency_key=key,
+        fingerprint=payload_fingerprint({
+            "restart_of_run_id": source_run_id,
+            "restart_point": point,
+            "frozen_input_digest": source.frozen_input_digest,
+            **({"cost_consent": dict(cost_consent)} if cost_consent is not None else {}),
+        }),
+    )
+    if isinstance(claimed, CommandReplay):
+        replay_run_id = claimed.outcome.get("run_id")
+        if not isinstance(replay_run_id, str):
+            raise DomainError(ErrorCode.IDEMPOTENCY_KEY_STALE, command_type=COMMAND_TYPE_RESTART_RUN)
+        return StartedRun(replay_run_id, str(claimed.command_id), True)
+    assert isinstance(claimed, CommandStarted)
+    _guard_source()
+    assert approved_cost is not None and estimate is not None  # a new key always went through the checks above
+    new_id = str(RunId.new())
+    stage_plan = estimate.stage_plan if isinstance(getattr(estimate, "stage_plan", None), FrozenStagePlan) else parse_plan(source.stage_plan)
+    repository.create(
+        session, run_id=new_id, project_uid=source.project_uid, version_uid=source.version_uid,
+        analysis_profile_id=source.analysis_profile_id, prompt_bundle_id=source.prompt_bundle_id,
+        provider_mode=source.provider_mode, frozen_input_digest=source.frozen_input_digest,
+        command_id=str(claimed.command_id), started_from_run_id=source_run_id, restart_point=point,
+        norms_snapshot_id=source.norms_snapshot_id, norm_retrieval_set_id=source.norm_retrieval_set_id,
+        publication_mode=source.publication_mode, started_by_user_uid=user_uid,
+        **_planned_columns(stage_plan),
+    )
+    _journal_stage_plan(session, new_id, stage_plan)
+    repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
+    (jobs or JobRepository()).enqueue(session, run_id=new_id)
+    outcome = rr.source_command_outcome(session, source)
+    ledger.succeed(session, claimed.command_id, {
+        "run_id": new_id, "restart_of_run_id": source_run_id, "restart_point": point, "cost_consent": approved_cost,
+        **({"relaxed_limits": True} if outcome.get("relaxed_limits") is True else {}),
+    })
+    return StartedRun(new_id, str(claimed.command_id), False)
+
+
 __all__ = [
+    "COMMAND_TYPE_RESTART_RUN",
     "COMMAND_TYPE_START_RUN",
     "COMMAND_TYPE_START_RUN_FROM_STAGE",
     "NormsSnapshotReader",
@@ -1559,6 +1712,7 @@ __all__ = [
     "cancel_audit_run",
     "delete_audit_run",
     "reaudit_run",
+    "restart_run",
     "admit_group_for_start",
     "refuse_comparison_only_version",
     "refuse_group_conflicts",

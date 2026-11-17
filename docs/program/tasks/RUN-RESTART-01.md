@@ -129,6 +129,31 @@ Integrator: session pdf-analysis-28, branch `integration/run-restart`. Lanes bra
   `bootstrap/adapters.py:1375-1384`).
 - Tombstone when the new run publishes (`R-155g`), in the terminal transaction.
 
+### Chain, lineage and tombstones (decided by L1)
+
+- **Chain.** The chain of a run is the run, its restart source, that source's own restart source, and so on up to the first run that is no restart
+  (`runs.restart.restart_chain`). A restart of a run that is itself a failed or cancelled restart is allowed; its source is that run.
+  Replies are looked for along the chain (own run first, then the nearest ancestor); the text observations are taken from the nearest run of the chain
+  whose `text_analysis` row holds the artifact (a restart that took the text itself holds it by reference).
+- **Lineage.** Every run whose chain ends at the same root. A command refuses a restart while *any* restart of the lineage has not ended
+  (`conflict` / `restart_in_progress`; the database's partial unique index `ux_audit_run_active_restart` is the per-source last word).
+- **Tombstones.** When restart run R ends `published` **or** `partial` (owner `R-155g` «при публикации нового»: a partial run has published findings too;
+  the guard `trg_audit_run_deletion_by_restart` of migration 0071 was changed from `published` only), the executor writes, in the transaction that moved R
+  to its terminal state and after the state change: (a) the tombstone of R's direct source with **R's own restart command** (the guarded path), and
+  (b) for every other lineage run that is not tombstoned and ended `partial`/`failed`/`cancelled`, a tombstone with a plain `delete_audit_run` command
+  record of its own (key `restart-lineage-<R>-<run>`, outcome `{run_id, replaced_by_run_id: R}`). A lineage run that is active or published is left alone.
+  So exactly one run of the lineage stays listed. The step is idempotent (`runs.restart.tombstone_lineage`).
+- **`replaced_by_run_id`** of a tombstoned run (`runs.restart.replaced_by`): the run whose `command_id` is the tombstone's; else the one run of the lineage
+  that is a restart, ended `published`/`partial` and is not tombstoned; and a replacement that was itself replaced later is followed to the run that
+  stands. A plain `deleteRun` of a run outside every restart lineage replaces nothing.
+- **Settings copy.** The new run copies version, project, input digest, norms snapshot (and a verified retrieval-set pin), analysis profile, prompt bundle,
+  provider mode, publication mode and the stage plan's cells. The consent it runs under is the one the restart estimate binds: the estimate refuses
+  (`restart_settings_differ`) unless today's source digest, extended-review policy, window and cells equal the source's accepted consent. The layout
+  revision named in the new run's plan is today's (the cells are proven equal). The cell **bindings** (`audit_run_cell_binding`) are dispatch's product,
+  written for the new run at its claim as for every planned run; a reply key holds neither host nor connection, so the replies replay on any member.
+- **`finding_observation.model_call_id`** of the findings a restart publishes from a taken text points at the **source's** model calls (a foreign key to
+  `model_call`, satisfied by the source's rows): the findings come from those calls.
+
 ### Decisions (L1b)
 
 - `carry_over_decision` refuses same-version pairs (`decisions/carryover.py` `_check_provenance`, 0058); add mode `restart`.
@@ -169,6 +194,32 @@ Integrator: session pdf-analysis-28, branch `integration/run-restart`. Lanes bra
   start only when `free -m` available ≥ 2500 MB; cap each locked command at `timeout 1200`, one test group per command, release
   between groups. Disk is at 95 %: no new `.venv` or `node_modules` (they are symlinks to `.local/worktrees/ui-parity-r3`).
 - Never touch `/srv/auditmanager`, the production stand, `/opt/pdf-analysis-agent` or another project's paths and containers.
+
+## L1 results (executor lane, branch `agent/run-restart-l1-executor`)
+
+What the lane built, where, and what it measured (commands and counts are in the lane's final report; the pins are the tests named here).
+
+- **Command** `runs.commands.restart_run` (`COMMAND_TYPE_RESTART_RUN`): the refusals in the contract's words, none of them writes the key
+  (`tests/integration/runs/test_restart_command.py`, 35 cases on a throwaway PostgreSQL). Wired by `ExecutionAdapter.restart_run`; the L0 stub and its
+  503 prose are gone.
+- **Estimate** `RunCostPreflight.estimate_restart` + `RestartPricing`: rows before the chip priced at zero, a row the source chain finished bounded by
+  its actual calls, the digest bound to this source and chip; `RunAdapter.estimate_run_cost(restart_point=...)`.
+- **Executor** (`runs/executor.py`, `runs/restart.py`, `runs/restart_text.py`, `runs/extended_review.py`, `jobs/extended_review.py`): preparation by
+  reference, the text blob byte for byte, the replies of the chips before the chip by chain; a replay that cannot be made raises `RestartRefused`
+  (not a `DomainError`: the v2 workflow would catch that and save a partial result), the text row fails with `{stage_id, restart_point, reason}`, the
+  gate is not asked. Tombstones and the lineage in the terminal transaction; the carry after it (lazy import of `decisions`), swept by the worker.
+  Pins: `tests/unit/runs/test_restart_replay.py`, `test_restart_rules.py`, `test_restart_carry_sweeper.py`,
+  `tests/integration/runs/test_restart_executor.py` (a restart from each of the eight chips, refusals, chains, signs of life).
+- **Norm lookups** of the v2 flow path are saved with the run's extended review (`norm_lookup_results`) and replayed by a restart from a chip after
+  «Нормы»; a run made before this task saved none, so a restart from «Критик» may still refuse at «Нормы» (`restart_request_changed`,
+  `restart_point: norms`). The non-flow v2 path (no `flow_repair_policy`) still looks the corpus up live.
+- **Migration 0071** guard changed to admit `partial` as well as `published` (owner `R-155g`); `test_run_restart_migration.py` proves `partial` and
+  `published` are admitted and `failed`, `cancelled` and `running` refused.
+
+Known limits: the integration of the executor runs a source of the v2 workflow **without a stage plan** (a planned run needs a host and a binding per cell
+at dispatch); the command's checks run on planned sources whose stage rows and calls are seeded. A planned run restarted end to end is the integrator's
+live check. A block leg that failed after its retries has no reply, so a restart from a later chip refuses (`restart_reply_missing`, `restart_point: blocks`).
+Two restarts of one lineage racing past the command's read are caught per source by the database index only.
 
 ## Integration and rollback
 
