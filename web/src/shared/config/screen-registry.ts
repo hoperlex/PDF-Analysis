@@ -145,6 +145,10 @@ export const SCREEN_REGISTRY = [
    * `roles: 'any'` stays, because the screens around the guard need `/` open to a session with no role (`R-80`), so
    * `buildNavigation` offers this row only beside another one: an account with no role has no product menu, and a
    * menu with «Главная» alone would be one.
+   *
+   * `UIP-S01-01` (Г7-B): «Главная» follows the object the top strip chooses (`optional`), as «Дашборд» does. Its table of sections
+   * is counted over that object, the choice in the top strip changes the table and no longer leads to the object's page, and the
+   * account's last object opens it when the address names none. The three tiles and «Мои задачи» still read every object.
    */
   {
     address: '/',
@@ -153,7 +157,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any',
     inMenu: true,
-    projectScope: 'global',
+    projectScope: 'optional',
   },
 
   /*

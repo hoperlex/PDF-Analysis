@@ -3,13 +3,14 @@
  * helpers read and write it. Each test names the rule it holds.
  *
  * The classes come from the live screen registry (`required` under `/projects/[project_uid]`,
- * `optional` for the six screens that follow the header, `global` for the rest), plus one
+ * `optional` for the eight screens that follow the header, `global` for the rest), plus one
  * fixture registry for the cases the live one cannot reach: a row with no class.
  */
 
 import { describe, expect, it } from 'vitest';
 
 import type { ScreenEntry } from '@/shared/config';
+import { SCREEN_REGISTRY } from '@/shared/config';
 import {
   ALL_PROJECTS_PARAM,
   PROJECT_DEPENDENT_PARAMS,
@@ -36,6 +37,8 @@ const REQUIRED_PATHS = [
   `/projects/${A}/runs/run_1/review`,
 ];
 const OPTIONAL_PATHS = [
+  // `UIP-S01-01` (Г7-B): «Главная» follows the header's object -- its table of sections is counted over it.
+  '/',
   '/dashboard',
   '/knowledge-base',
   '/section-optimisation',
@@ -46,7 +49,6 @@ const OPTIONAL_PATHS = [
   '/dispatcher',
 ];
 const GLOBAL_PATHS = [
-  '/',
   '/projects',
   '/queue',
   '/logs',
@@ -72,6 +74,16 @@ describe('projectScopeOf: the registry class of the screen an address is', () =>
   it('is null for an address no row matches, and never a class by default', () => {
     expect(projectScopeOf('/no-such-screen')).toBeNull();
     expect(projectScopeOf(`/projects/${A}/no-such-child`)).toBeNull();
+  });
+
+  it('UIP-S01-01: «Главная» (`/`) follows the object: it takes the last one where the address is silent, and `?project=all` still beats it', () => {
+    expect(projectScopeOf('/')).toBe('optional');
+    expect(resolveProjectContext('/', q(''), A)).toEqual({ projectUid: A, source: 'remembered' });
+    expect(resolveProjectContext('/', q(`project=${B}`), A)).toEqual({ projectUid: B, source: 'query' });
+    expect(resolveProjectContext('/', q('project=all'), A)).toEqual({ projectUid: null, source: 'all' });
+    // Can fail: the same row as `global` is the old behaviour, which ignores the account's last object.
+    const asGlobal = SCREEN_REGISTRY.map((row) => (row.address === '/' ? { ...row, projectScope: 'global' as const } : row));
+    expect(resolveProjectContext('/', q(''), A, asGlobal)).toEqual({ projectUid: null, source: 'none' });
   });
 
   it('can fail: a registry row with no class is an error, not a quiet `global`', () => {

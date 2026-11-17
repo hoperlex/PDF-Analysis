@@ -8,7 +8,7 @@
  * not drive against real data — the aggregate that answers it is `W46-SPEND`'s own
  * hotspot and arrived only at merge.
  *
- * **What the numbers are, and what the sentence above them says (`WEB-SECTION-COPY-01`).**
+ * **What the numbers are, and where the sentence that says it stands (`WEB-SECTION-COPY-01`, `UIP-S01-02`).**
  * The server counts a document in the section an expert confirmed for its **current
  * version**, and a document whose current version no expert has classified in the row
  * «Без раздела» (`SECTION-READ-MODEL-01`, `D-180`). The sentence says exactly that, in the
@@ -20,6 +20,18 @@
  * sent through the form leaves «Без раздела» as soon as an expert confirms it, so the old
  * sentence described a state no document stays in. An earlier version of it (`F-3`) had the
  * same defect from the other side: it denied that a section is stored at all.
+ *
+ * Since `UIP-S01-02` it is no longer a paragraph over the table (the original has none): it is the definition of the heading
+ * «Раздел», and its second half is the hint of the row «Без раздела». Every other heading has a definition of its own («документов,
+ * у которых …», `model/section-breakdown.ts`), shown as the heading's tooltip and said in the text a screen reader reads, so the
+ * header is no longer hidden from assistive technology.
+ *
+ * **The badge of a row wears the section's colour (`UIP-S01-03`, `UIP-G-17`).** `sectionColourVar(code)` is the one list the menu's
+ * dot and the section's heading read, so the table carries no colour of its own: the badge's outline is that token, set inline as
+ * `border-color` (the stylesheet's own outline is the neutral inert token, which is what the total row and «Без раздела» keep). It is
+ * not set through the custom property `sectionColourStyle` offers (the dot's way): the fake DOM of the live-mount instrument
+ * (`tests/unit/analysis-settings/live-render.ts`) has no `style.setProperty`, which React calls for a custom property, so a section
+ * row set that way could not be mounted by the tests that mount this panel with the dashboard.
  *
  * **Every row carries the route that analyses its section.** `data-analysed-by` is
  * `PROJECT_SECTIONS`' `analysedBy` — the section's own text profile for all fifteen sections.
@@ -43,14 +55,20 @@ import Link from 'next/link';
 
 import { ErrorState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
-import { PROJECT_SECTIONS } from '@/entities/project';
+import { PROJECT_SECTIONS, sectionColourVar } from '@/entities/project';
 import type { ProjectSectionCode } from '@/entities/project';
 import { withNotRunFilter } from '@/entities/document-version';
 import type { SectionDocumentCount } from '@/shared/api';
 
 import { incompleteBreakdownFailure } from '../model/dashboard-failure';
-import { summarizeSectionBreakdown } from '../model/section-breakdown';
-import type { SectionAuditFigures } from '../model/section-breakdown';
+import {
+  SECTION_METRIC_COLUMNS,
+  SECTION_NAME_COLUMN,
+  SECTION_TOTAL_LABEL,
+  SECTION_UNCLASSIFIED_HINT,
+  summarizeSectionBreakdown,
+} from '../model/section-breakdown';
+import type { SectionAuditFigures, SectionColumn } from '../model/section-breakdown';
 import styles from './sections-panel.module.css';
 
 export interface SectionsPanelProps {
@@ -79,14 +97,15 @@ function SectionMetrics({
   readonly audit: SectionAuditFigures | undefined;
   readonly notRunHref: string | null;
 }) {
+  const { notRun, noExpertDecision, checked, total, findings } = SECTION_METRIC_COLUMNS;
   return (
     <span className={styles.metrics}>
-      <span className={`${styles.metric} ${styles.notRun}`} title="Не запускались" data-metric="not-run">
+      <span className={`${styles.metric} ${styles.notRun}`} title={notRun.label} data-metric="not-run">
         {audit !== undefined && notRunHref !== null && audit.notRun > 0 ? (
           <Link
             className={styles.metricLink}
             href={notRunHref}
-            aria-label={`Не запускались: ${audit.notRun}. Открыть список`}
+            aria-label={`${notRun.label}: ${audit.notRun}. Открыть список`}
             data-not-run-link=""
           >
             {audit.notRun}
@@ -95,14 +114,33 @@ function SectionMetrics({
           (audit?.notRun ?? '—')
         )}
       </span>
-      <span className={`${styles.metric} ${styles.awaiting}`} title="Нет решений эксперта" data-attention={audit !== undefined && audit.noExpertDecision > 0 ? 'true' : 'false'}>
+      <span className={`${styles.metric} ${styles.awaiting}`} title={noExpertDecision.label} data-attention={audit !== undefined && audit.noExpertDecision > 0 ? 'true' : 'false'}>
         {audit?.noExpertDecision ?? '—'}
       </span>
-      <span className={`${styles.metric} ${styles.checked}`} title="Проверено экспертом">{audit?.checked ?? '—'}</span>
-      <span className={`${styles.metric} ${styles.total}`} title="Документы"><strong>{documents}</strong></span>
-      <span className={`${styles.metric} ${styles.remarks}`} title="Замечаний">{audit?.findings ?? '—'}</span>
+      <span className={`${styles.metric} ${styles.checked}`} title={checked.label}>{audit?.checked ?? '—'}</span>
+      <span className={`${styles.metric} ${styles.total}`} title={total.label}><strong>{documents}</strong></span>
+      <span className={`${styles.metric} ${styles.remarks}`} title={findings.label}>{audit?.findings ?? '—'}</span>
     </span>
   );
+}
+
+/**
+ * One heading of the header (`UIP-S01-02`): its words, its definition as the tooltip, and the same definition as text a screen
+ * reader reads after the words (a tooltip alone is not read reliably, and is out of reach of the keyboard; a shared tooltip with
+ * keyboard control is `UIP-G-04`'s, in `shared/ui`). The words stay a plain `<span>`: the definition is not part of what is drawn.
+ */
+function ColumnHead({ column, className }: { readonly column: SectionColumn; readonly className?: string | undefined }) {
+  return (
+    <span className={className === undefined ? styles.head : `${styles.head} ${className}`} title={column.definition} data-column={column.key}>
+      <span>{column.label}</span>
+      <span className={styles.definition}>{`. ${column.definition}`}</span>
+    </span>
+  );
+}
+
+/** The badge of a section row: the section's own colour as the outline (`UIP-S01-03`). */
+function badgeStyle(code: ProjectSectionCode): { readonly borderColor: string } {
+  return { borderColor: sectionColourVar(code) };
 }
 
 export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
@@ -122,19 +160,14 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
 
   return (
     <div className={styles.overview} data-panel="per-section-breakdown">
-      <p className="am-state__correlation">
-        Документ учитывается в том разделе, который эксперт подтвердил для его текущей версии.
-        Пока раздел не подтверждён, документ попадает в строку «Без раздела». Раздел
-        подтверждает эксперт на экране версии.
-      </p>
-      <div className={styles.header} aria-hidden="true">
-        <span>Раздел</span>
+      <div className={styles.header} data-sections-head="">
+        <ColumnHead column={SECTION_NAME_COLUMN} className={styles.nameHead} />
         <span className={styles.metrics}>
-          <span>Не запускались</span>
-          <span>Нет решений эксперта</span>
-          <span>Проверено</span>
-          <span>Документы</span>
-          <span>Замечаний</span>
+          <ColumnHead column={SECTION_METRIC_COLUMNS.notRun} />
+          <ColumnHead column={SECTION_METRIC_COLUMNS.noExpertDecision} />
+          <ColumnHead column={SECTION_METRIC_COLUMNS.checked} />
+          <ColumnHead column={SECTION_METRIC_COLUMNS.total} />
+          <ColumnHead column={SECTION_METRIC_COLUMNS.findings} />
         </span>
       </div>
       <ul className={styles.rows} data-section-count={PROJECT_SECTIONS.length}>
@@ -153,7 +186,7 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
                 aria-expanded={selected === section.code}
                 onClick={() => setSelected(selected === section.code ? null : section.code)}
               >
-                <span className={styles.badge}>{section.code}</span>
+                <span className={styles.badge} style={badgeStyle(section.code)}>{section.code}</span>
                 <span className={styles.name}>{section.name}</span>
               </button>
             ) : (
@@ -169,7 +202,7 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
                 href={routes.projectSection(projectUid, section.code)}
                 data-section-open={section.code}
               >
-                <span className={styles.badge}>{section.code}</span>
+                <span className={styles.badge} style={badgeStyle(section.code)}>{section.code}</span>
                 <span className={styles.name}>{section.name}</span>
               </Link>
             )}
@@ -199,15 +232,16 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
         <li className={`${styles.row} ${styles.totalRow}`} data-section="total">
           <span className={styles.totalLabel}>
             <span className={styles.badge}>Σ</span>
-            <span className={styles.name}>Итого по разделам</span>
+            <span className={styles.name}>{SECTION_TOTAL_LABEL}</span>
           </span>
           <SectionMetrics documents={summary.totals.documents} audit={summary.totals.audit} notRunHref={null} />
           <span className={styles.arrow} aria-hidden="true" />
         </li>
-        <li className={`${styles.row} ${styles.unclassified}`} data-section="unclassified">
+        <li className={`${styles.row} ${styles.unclassified}`} data-section="unclassified" title={SECTION_UNCLASSIFIED_HINT}>
           <span className={styles.badge}>—</span>
           <span className={styles.name}>Без раздела:</span>
           <strong>{summary.unclassifiedCount}</strong>
+          <span className={styles.definition}>{`. ${SECTION_UNCLASSIFIED_HINT}`}</span>
         </li>
       </ul>
       {selected === null ? null : (

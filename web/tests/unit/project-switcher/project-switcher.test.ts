@@ -206,10 +206,22 @@ describe('choosing a project (R-150c): the address is rewritten, nothing else ke
   });
 
   it('on a global screen the choice opens the chosen project\'s page; «Все объекты» opens the list', () => {
-    for (const pathname of ['/queue', '/logs', '/workers', '/projects', '/', '/norms', '/admin/users']) {
+    for (const pathname of ['/queue', '/logs', '/workers', '/projects', '/norms', '/admin/users']) {
       expect(chooseProject(at(pathname, `project=${A}`), B), pathname).toBe(`/projects/${B}`);
       expect(chooseProject(at(pathname, `project=${A}`), null), pathname).toBe('/projects');
     }
+  });
+
+  it('UIP-S01-01: on «Главная» the choice stays on the front door and rewrites ?project=; it no longer opens the object\'s page', () => {
+    expect(chooseProject(at('/', `project=${A}`), B)).toBe(`/?project=${B}`);
+    expect(chooseProject(at('/', `project=${A}`), null)).toBe('/?project=all');
+    // the account's last object is what the screen is on while the address is silent; choosing it writes it down, another one replaces it
+    expect(chooseProject(at('/', '', A), A)).toBe(`/?project=${A}`);
+    expect(chooseProject(at('/', '', A), B)).toBe(`/?project=${B}`);
+    expect(chooseProject(at('/', '', A), null)).toBe('/?project=all');
+    // can fail: not the global behaviour, which led to the object's page or to the list
+    expect(chooseProject(at('/', `project=${A}`), B)).not.toBe(`/projects/${B}`);
+    expect(chooseProject(at('/', `project=${A}`), null)).not.toBe('/projects');
   });
 
   it('an address the registry does not have behaves like a global screen, and so does an unknown pathname', () => {
@@ -449,7 +461,7 @@ describe('the button: the project\'s name, or «Все объекты», muted o
 
   it('carries the hint «экран общий» only on a global screen, and mutes the button there', () => {
     expect(GLOBAL_SCREEN_HINT).toBe('экран общий');
-    for (const pathname of ['/', '/projects', '/queue', '/logs', '/workers', '/norms', '/admin/users']) {
+    for (const pathname of ['/projects', '/queue', '/logs', '/workers', '/norms', '/admin/users']) {
       const model = buildSwitcherModel(at(pathname), ready());
       expect(model.hint, pathname).toBe(GLOBAL_SCREEN_HINT);
       expect(model.triggerLabel, pathname).toBe(`Все объекты, ${GLOBAL_SCREEN_HINT}`);
@@ -461,7 +473,8 @@ describe('the button: the project\'s name, or «Все объекты», muted o
       expect(markup, pathname).toMatch(/<button\b[^>]*aria-label="Все объекты, экран общий" title="экран общий"/);
       expect(buttonFace(markup), pathname).not.toContain('экран общий');
     }
-    for (const pathname of ['/dashboard', '/knowledge-base', '/section-optimisation']) {
+    // `UIP-S01-01`: «Главная» follows the object, so it says no «экран общий» and its button is not muted.
+    for (const pathname of ['/', '/dashboard', '/knowledge-base', '/section-optimisation']) {
       const model = buildSwitcherModel(at(pathname), ready());
       expect(model.hint, pathname).toBeNull();
       expect(model.triggerLabel, pathname).toBe('Все объекты');
@@ -772,7 +785,9 @@ describe('UIP-G-06: the island reads the account only where its answer changes w
   it('asks (enabled) on an optional screen with a silent address, and nowhere else', () => {
     expect((accountQuery(at('/dashboard'))?.options as { enabled?: boolean }).enabled).toBe(true);
     expect((accountQuery(at('/knowledge-base', 'tab=x'))?.options as { enabled?: boolean }).enabled).toBe(true);
-    for (const address of [at('/dashboard', `project=${A}`), at('/dashboard', 'project=all'), at(`/projects/${A}`), at('/queue'), at('/'), at(null)]) {
+    // `UIP-S01-01`: «Главная» is an optional screen, so a silent address asks for the account's last object there too.
+    expect((accountQuery(at('/'))?.options as { enabled?: boolean }).enabled).toBe(true);
+    for (const address of [at('/dashboard', `project=${A}`), at('/dashboard', 'project=all'), at('/', `project=${A}`), at('/', 'project=all'), at(`/projects/${A}`), at('/queue'), at(null)]) {
       const query = accountQuery(address);
       expect(query === undefined || (query.options as { enabled?: boolean }).enabled === false, JSON.stringify([address.pathname, address.searchParams.toString()])).toBe(true);
     }

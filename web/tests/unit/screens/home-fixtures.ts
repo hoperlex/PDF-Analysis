@@ -4,7 +4,7 @@
  * test holds.
  */
 
-import type { Assignment, AssignmentPage, DashboardSummary, Project, ProjectPage, RegistrationRequestPage, Role } from '@/shared/api';
+import type { Account, Assignment, AssignmentPage, DashboardSummary, Project, ProjectPage, RegistrationRequestPage, Role } from '@/shared/api';
 import { RUN_STATE_VALUES, VERDICT_VALUES, queryKeys } from '@/shared/api';
 import { PROJECT_SECTIONS } from '@/entities/project';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
@@ -57,6 +57,19 @@ export function summary(over: Partial<DashboardSummary> = {}): DashboardSummary 
     awaiting_decision_findings: 11,
     ...over,
   };
+}
+
+/**
+ * `UIP-S01-01`: the account as `getMe` answers it, with only what the front door's object context reads (`last_project_uid`) and a
+ * name that is not the greeting's, so a test can see that the greeting comes from the props and not from here.
+ */
+export function account(lastProject: string | null | undefined, roles: readonly Role[] = EXPERT): Account {
+  return {
+    user_uid: `usr_${ULID_STEM}A`,
+    display_label: 'Другой А. А.',
+    roles: [...roles],
+    ...(lastProject === undefined ? {} : { last_project_uid: lastProject }),
+  } as unknown as Account;
 }
 
 /** A pending request whose every personal field is a word this file then looks for. */
