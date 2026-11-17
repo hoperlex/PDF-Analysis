@@ -25,12 +25,15 @@ import {
   EXPORT_CSV_LABEL,
   EXPORT_XLSX_LABEL,
   ExportProposalsView,
+  OptimisationProposals,
+  PassList,
   ProposalCard,
   ProposalHistoryView,
   ProposalListView,
   classifiedDocumentSets,
 } from '@/widgets/optimisation-proposals';
-import { ApiError, decideOptimisationProposal } from '@/shared/api';
+import { ApiError, decideOptimisationProposal, queryKeys } from '@/shared/api';
+import { formatInstant } from '@/shared/lib';
 import type { ProposalDecisionImportRefusal } from '@/shared/api';
 import { ProposalDecisionForm, ProposalDecisionFormView } from '@/features/decide-optimisation-proposal';
 
@@ -38,9 +41,11 @@ import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
 import { newClient, renderScreen } from '../screens/harness';
 import {
+  AR_DOCUMENT_UID,
   DOOR_PROPOSAL,
   OLDER_PASS_ID,
   PASS_ID,
+  PROPOSALS_PROJECT_UID,
   arVersion,
   carryOverShapes,
   decision,
@@ -49,6 +54,8 @@ import {
   proposal,
   proposalPage,
   proposalShapes,
+  seedLoadedProposals,
+  seedOlderPassProposals,
   SHEET_URL,
   unclassifiedVersion,
 } from './fixtures';
@@ -90,7 +97,7 @@ describe('the sets', () => {
 describe('the loaded section for an expert', () => {
   const markup = rendered('proposals-loaded');
 
-  it('lists the passes and opens the newest, with the proposals’ own counts', () => {
+  it('offers the passes and opens the newest, with the proposals’ own counts (`UIP-S09-04`: in the panel of «Проход от … ▾»)', () => {
     expect(markup).toContain('data-pass-count="2"');
     expect(markup).toContain('data-optimisation-pass="opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8N"');
     expect(markup).toContain('data-decision-count="pending"');
@@ -701,5 +708,126 @@ describe('the top row of the tab (`UIP-S09-02`)', () => {
     const plain = row();
     expect(plain).toContain(EXPORT_CSV_LABEL);
     expect(plain).not.toContain(EXPORT_XLSX_LABEL);
+  });
+});
+
+/**
+ * `UIP-S09-04`: «Проход от ДД.ММ.ГГГГ ЧЧ:ММ ▾» -- one element at the right of the top row in place of the list «Проходы комплекта» and
+ * the disclosure «Сведения о проходе». It chooses the pass (with the number of proposals and the counts of decisions of each) and opens
+ * the facts of the open one; a set with one pass shows that pass and its facts; the address `?pass=` works as it did, and a pass it
+ * names that the set does not have is said.
+ */
+describe('«Проход от … ▾» (`UIP-S09-04`)', () => {
+  const noop = (): void => undefined;
+  const NEWEST = formatInstant(pass().started_at);
+  const OLDER = formatInstant('2026-10-19T09:00:00Z');
+  const section = (props: Record<string, unknown> = {}, seed: (client: ReturnType<typeof newClient>) => void = seedLoadedProposals) => {
+    const client = newClient();
+    seed(client);
+    return renderScreen(client, createElement(OptimisationProposals, { projectUid: PROPOSALS_PROJECT_UID, roles: ['expert'], ...props }));
+  };
+  /** The pass element's own markup. */
+  const element = (markup: string): string => /<details[^>]*data-pass-menu=""[\s\S]*?<\/details>/.exec(markup)?.[0] ?? '';
+
+  it('is one button in the top row, after the files, and says the open pass', () => {
+    const markup = rendered('proposals-loaded');
+    expect(markup).toContain(`Проход от ${NEWEST}`);
+    expect(markup.match(/data-pass-menu=""/g)).toHaveLength(1);
+    const at = (marker: string) => markup.indexOf(marker);
+    expect(at('data-pass-menu')).toBeGreaterThan(at('data-proposals-files'));
+    expect(at('data-pass-menu')).toBeLessThan(at('data-proposal-table'));
+    // Inside the one block of the row, which the browser journey waits for.
+    const row = /<div class="[^"]*tools[^"]*" data-proposals-export="">([\s\S]*)/.exec(markup)?.[1] ?? '';
+    expect(row).toContain('data-pass-menu');
+    expect(markup).toMatch(/<summary[^>]*>Проход от [^<]*<span aria-hidden="true">▾<\/span><\/summary>/);
+  });
+
+  it('is closed, and the list «Проходы комплекта» and the disclosure «Сведения о проходе» are gone', () => {
+    const markup = rendered('proposals-loaded');
+    expect(/<details[^>]*data-pass-menu=""[^>]*>/.exec(markup)?.[0]).not.toContain('open');
+    expect(markup).not.toContain('Сведения о проходе');
+    // The only list of passes is inside the element's panel.
+    expect(markup.match(/aria-label="Проходы комплекта"/g)).toHaveLength(1);
+    expect(element(markup)).toContain('aria-label="Проходы комплекта"');
+  });
+
+  it('lists each pass in the panel with the number of its proposals and the counts of its decisions, the open one pressed', () => {
+    const panel = element(rendered('proposals-loaded'));
+    expect(panel).toContain('data-pass-count="2"');
+    const items = [...panel.matchAll(/<li class="[^"]*"><button[^>]*aria-pressed="(true|false)"[^>]*>Проход от ([^<]*)<\/button><span>([^<]*)<\/span>/g)].map(
+      (item) => [item[1], item[2], (item[3] ?? '').replace(/<!-- -->/g, '')],
+    );
+    expect(items).toEqual([
+      ['true', NEWEST, 'предложений — 2; не решено — 1, принято — 0, отклонено — 0, на доработку — 1'],
+      ['false', OLDER, 'предложений — 1; не решено — 0, принято — 1, отклонено — 0, на доработку — 0'],
+    ]);
+  });
+
+  it('opens the facts of the open pass in the same panel: the version, the run, the price list and the vendor list', () => {
+    const panel = element(rendered('proposals-loaded'));
+    expect(panel).toContain('data-optimisation-pass="opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8N"');
+    for (const label of ['Версия комплекта', 'Прогон', 'Прайс-лист', 'Вендор-лист раздела', 'Строки спецификации']) expect(panel, label).toContain(`<dt>${label}</dt>`);
+    for (const id of [pass().version_uid, pass().run_id, pass().price_list_id, pass().vendor_list_id]) expect(panel, id).toContain(`<code>${id}</code>`);
+    expect(panel).toContain('не решено: <strong>1</strong>');
+  });
+
+  it('shows a set’s only pass and its facts, and offers no choice', () => {
+    const markup = section({}, (client) => {
+      seedLoadedProposals(client);
+      client.setQueryData(queryKeys.optimisation.passes(PROPOSALS_PROJECT_UID, AR_DOCUMENT_UID), { items: [pass()] });
+    });
+    const panel = element(markup);
+    expect(panel).toContain('data-pass-count="1"');
+    expect(panel).toContain(`Проход от ${NEWEST}`);
+    expect(panel).not.toContain('aria-label="Проходы комплекта"');
+    expect(panel).not.toContain('aria-pressed');
+    expect(panel).toContain(`<code>${pass().run_id}</code>`);
+  });
+
+  it('opens the pass the address names, with its own facts and proposals', () => {
+    const markup = section({ passId: OLDER_PASS_ID, onPassChange: noop }, (client) => {
+      seedLoadedProposals(client);
+      seedOlderPassProposals(client);
+    });
+    expect(markup).not.toContain('data-pass-not-found');
+    expect(markup).toMatch(new RegExp(`<summary[^>]*>Проход от ${OLDER.replace('.', '\\.')}`));
+    expect(element(markup)).toMatch(new RegExp(`aria-pressed="true"[^>]*>Проход от ${OLDER.replace('.', '\\.')}<`));
+    expect(markup).toContain(`data-optimisation-pass="${OLDER_PASS_ID}"`);
+    expect(markup).toContain('data-proposal-total="1"');
+  });
+
+  it('says a pass of the address that the set does not have, and opens the newest', () => {
+    const markup = section({ passId: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q9X', onPassChange: noop });
+    expect(markup).toContain('data-pass-not-found="opp_01J9ZQ8K7NHVXW3T2R5M6P4Q9X"');
+    expect(markup).toMatch(/role="status"[^>]*>Проход из адреса не найден среди проходов этого комплекта: открыт последний\./);
+    expect(markup).toContain(`<summary`);
+    expect(markup).toContain(`Проход от ${NEWEST}`);
+    expect(markup).toContain(`data-optimisation-pass="${PASS_ID}"`);
+    // A pass that exists is not reported.
+    expect(section({ passId: PASS_ID, onPassChange: noop })).not.toContain('data-pass-not-found');
+  });
+
+  it('hands the choice of another pass to the page when its button is pressed', async () => {
+    const chosen: string[] = [];
+    const live = await mountLive(createElement(PassList, {
+      passes: [pass(), pass({ optimisation_pass_id: OLDER_PASS_ID, started_at: '2026-10-19T09:00:00Z', proposal_count: 1 })],
+      active: PASS_ID,
+      onOpen: (id: string) => chosen.push(id),
+    }));
+    expect(live.count(`Проход от ${NEWEST}`)).toBe(1);
+    expect(await live.press(`Проход от ${OLDER}`)).toBe(true);
+    expect(chosen).toEqual([OLDER_PASS_ID]);
+    await live.unmount();
+  });
+
+  it('stays at the right while the proposals are on their way or refused, so another pass can be chosen, and says nothing for a set with no pass', () => {
+    const refused = rendered('proposals-pass-refused');
+    expect(refused).toContain('data-pass-menu');
+    expect(refused).toContain('Предложения не прочитаны');
+    expect(refused.indexOf('data-pass-menu')).toBeLessThan(refused.indexOf('Предложения не прочитаны'));
+    expect(refused).not.toContain('data-proposals-export');
+    const none = rendered('proposals-no-passes');
+    expect(none).toContain('Проходов по этому комплекту ещё не было');
+    expect(none).not.toContain('data-pass-menu');
   });
 });

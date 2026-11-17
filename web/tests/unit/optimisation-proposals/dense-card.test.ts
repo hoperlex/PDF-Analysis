@@ -142,15 +142,19 @@ describe('the strip over the proposals (UI-B-05)', () => {
     const first = markup.indexOf('data-proposal="');
     expect(filter).toBeGreaterThan(-1);
     expect(exportAt).toBeGreaterThan(filter);
+    // The facts stand in the panel of the pass element, which is the last item of the strip's right half (`UIP-S09-04`).
     expect(facts).toBeGreaterThan(exportAt);
     expect(first).toBeGreaterThan(facts);
     // One strip holds both.
     expect(markup.slice(markup.lastIndexOf('<div', filter), exportAt)).toMatch(/strip/);
   });
 
-  it('keeps the pass’s facts in the markup, in a block the reader opens', () => {
+  it('keeps the pass’s facts in the markup, behind the button «Проход от … ▾» the reader opens (`UIP-S09-04`)', () => {
     const markup = loaded();
-    expect(markup).toMatch(/<details[^>]*data-pass-summary=""[^>]*><summary>Сведения о проходе<\/summary>/);
+    // The disclosure «Сведения о проходе» is gone: the facts stand in the panel of the one element of the pass, closed.
+    expect(markup).not.toContain('Сведения о проходе');
+    expect(markup).toMatch(/<details[^>]*data-pass-menu=""[^>]*><summary[^>]*>Проход от /);
+    expect(/<details[^>]*data-pass-menu=""[^>]*>/.exec(markup)?.[0]).not.toContain('open');
     expect(markup).toContain('не смешиваются со счётчиками замечаний');
   });
 });

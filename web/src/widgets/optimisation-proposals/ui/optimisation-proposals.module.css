@@ -83,6 +83,55 @@
 }
 
 /*
+ * `UIP-S09-04`: «Проход от … ▾». The element is a `<details>` at the right of the top row: its summary is the row's quiet button and
+ * its panel opens under it, anchored to its right edge and capped by the viewport, as the export bar's panels are. It holds the
+ * choice of a pass (`.passes`) and the facts of the open one (`.facts`, in two columns here, since the panel is narrower than the tab).
+ * Tokens only.
+ */
+.passMenu {
+  position: relative;
+  display: inline-block;
+}
+
+.passTrigger {
+  list-style: none;
+}
+
+.passTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.passPopup {
+  position: absolute;
+  top: calc(100% + var(--am-gap-2xs));
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  min-width: 20rem;
+  max-width: min(38rem, calc(100vw - 2 * var(--am-gap-md)));
+  max-height: 70vh;
+  overflow: auto;
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  text-align: left;
+}
+
+.passPopup .facts {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+/* While the proposals are on their way or refused, the element stands alone at the right, where it will stand in the top row. */
+.passOnly {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 var(--am-gap-sm);
+}
+
+/*
  * `UI-B-05`, `UIP-S09-02`: the top row, as the original's -- the plates of the decisions with their counts and «Всего: N» at the
  * left, the files and the loading of decisions at the right. One row; it wraps as a whole on a narrow screen (the right half drops
  * under the left, still at the right edge). Nothing stands over it. A refusal of a file is a line of its own under the row
@@ -301,17 +350,6 @@
 
 .judgement > p {
   margin-top: 0;
-}
-
-/* The form in the last column: a tighter stack and its two hints at the small size, so the column is not the tallest part. */
-.judgement :global(.am-form) {
-  gap: var(--am-gap-xs);
-  max-width: none;
-}
-
-.judgement :global(.am-form__hint) {
-  margin: 0;
-  font-size: var(--am-text-xs);
 }
 
 @media (max-width: 1100px) {

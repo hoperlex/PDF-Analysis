@@ -69,7 +69,7 @@ import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { SpecificationPricesAnswer, SpecificationPricesChooser } from '@/widgets/specification-prices';
-import { ExportProposalsView, OptimisationByDocument, ProposalListView, ProposalSetChooser } from '@/widgets/optimisation-proposals';
+import { ExportProposalsView, OptimisationByDocument, OptimisationProposals, ProposalListView, ProposalSetChooser } from '@/widgets/optimisation-proposals';
 import { CarryOverProposalDecisionsView } from '@/features/carry-over-proposal-decisions';
 import { ImportProposalDecisionsView } from '@/features/import-proposal-decisions';
 import { carrySources } from '@/entities/optimisation-proposal';
@@ -217,7 +217,7 @@ import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY, seedExecutors,
 } from '../workers/executor-fixtures';
 import {
-  OLDER_PASS_ID as PROPOSALS_OLDER_PASS_ID, SHEET_URL as PROPOSALS_SHEET_URL, carryOverShapes, decision as proposalDecision,
+  AR_DOCUMENT_UID as PROPOSALS_DOCUMENT_UID, OLDER_PASS_ID as PROPOSALS_OLDER_PASS_ID, PROPOSALS_PROJECT_UID, SHEET_URL as PROPOSALS_SHEET_URL, carryOverShapes, decision as proposalDecision,
   pass as proposalPass, proposal as proposalOf, proposalPage as proposalPageOf, proposalShapes, seedLoadedProposals,
   tapeProposal as tapeProposalOf,
 } from '../optimisation-proposals/fixtures';
@@ -3761,6 +3761,23 @@ export function screens(): Screen[] {
     })));
     add('OptimisationProposals top row, a file being made', view(createElement(ExportProposalsView, {
       pending: true, failure: null, onDownload: noop, onDownloadXlsx: noop,
+    })));
+  }
+
+  /*
+   * `UIP-S09-04`: «Проход от … ▾» of a set with a single pass (the panel holds the facts and no choice), and of a set whose newest pass
+   * the address does not name (the line that says so over the top row). The panel of the two passes is in «OptimisationProposals loaded».
+   * At the very end, for the reason above.
+   */
+  {
+    const one = newClient();
+    seedLoadedProposals(one);
+    one.setQueryData(queryKeys.optimisation.passes(PROPOSALS_PROJECT_UID, PROPOSALS_DOCUMENT_UID), { items: [proposalPass()] });
+    add('OptimisationProposals one pass', renderScreen(one, createElement(OptimisationProposals, { projectUid: PROPOSALS_PROJECT_UID, roles: ['expert'] })));
+    const missing = newClient();
+    seedLoadedProposals(missing);
+    add('OptimisationProposals pass of the address not found', renderScreen(missing, createElement(OptimisationProposals, {
+      projectUid: PROPOSALS_PROJECT_UID, roles: ['expert'], passId: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q9X', onPassChange: noop,
     })));
   }
 
