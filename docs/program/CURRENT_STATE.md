@@ -1,5 +1,7 @@
 # Current state
 
+**Updated 2026-11-17 by `UI-PARITY-R3` publication point P3b (unverified development candidate, product `0.30.2`, branch `integration/ui-parity-r3` on `origin/dev`).** Stage 3 completes for «Разбор» (one header line, severity plates and one filter row, the table by default with the severity stripe, accepted and rejected rows, severity beside ✓, «Скачать ▾»), «Блоки» («Лист N» buttons, one tile grid), the PDF panel page field, the grouped «Лог» with its status line, and the optimisation table by default. Contract resealed as `1.57.0` for additive reads (listProjects order, document filters, execution status in the decision journal, schedule accepted/rejected counts); migration head `0070_document_group`.
+
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P3a (unverified development candidate, product `0.30.1`, branch `integration/ui-parity-r3` on `origin/dev`).** Stage 3 begins: one document frame on every document page (section › document, counted tabs «Инфо · Блоки · Лог · Разбор · Оптимизация», version bar), the «Последний прогон» card and a one-line «Стадия и раздел» on «Инфо», the decision field with a reason in each «Разбор» row recorded as one event, five severity tones with a dashed proposed pill; stage 4 «Главная» follows the current object. API `1.56.0` and migration head `0070_document_group` unchanged.
 
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P2 (unverified development candidate, product `0.30.0` note revision 2, branch `integration/ui-parity-r3` on `origin/dev`).** Stage 2 «Shell»: the server remembers the object an account chose last (`setMyLastProject`, `getMe.last_project_uid`) and object-scoped screens open on it, with `?project=all` as the explicit «Все объекты»; the menu follows the original's order with «Главная» first and «Разделы» always shown with section dots; the top-strip switcher loses its caption and frame; «Что нового» shows only on «Главная». Ahead of their stages and API-only so far: `getDocumentVersion` carries `audit` and `block_count` (UIP-S04-01) and a document has one «Группа» (`setDocumentGroup`, UIP-G-10). Contract resealed as `1.56.0`; migrations `0069_account_last_project` and `0070_document_group`.
@@ -42,12 +44,6 @@
 **Updated 2026-11-05 by `UI-PARITY-W2-WEB` (unverified development candidates, published one by one).** Web slices on contract 1.20.0: the queue's pause state and switch in the top strip (`R-151f`, 110b9dac); the section page `/projects/[project_uid]/sections/[section_code]` and documents as a card grid (`R-151l`, `R-151s`, b6eccfe3); «Блоки» as a version tab `/projects/[project_uid]/versions/[version_uid]/blocks`, out of the menu (`R-151m`, ff3e9cb6; 33 registered addresses); ✓/✕ in each finding row on «Разбор» (`R-151n`, 4e922722); starting several documents with one agreement (`R-151c`, 22abc9e0). Checks per slice: `tsc`, eslint of touched paths, guards, the style census and focused vitest. Not run: a browser journey and `next build` (`D-314`); «Диспетчер» still reads no `?project=` (`R-151m`, owed).
 
 **Updated 2026-11-05 by `UI-PARITY-P0E` (unverified development candidate).** Contract **1.20.0** is an additive read slice for rulings `R-151l` and `R-151f`: `listDocuments` takes the optional `section_code` (only documents whose current version is confirmed for that section) and `getExecutionDispatch` (`GET /execution/dispatch`) reads the pause state for the top strip, `viewer` refused. 250 paths / 278 operations / 675 schemas; no migration; domain catalogs at candidate revision 38. Checks: contract suites (`tests/contract/api_v1`, `domain_p02`, `program`), the new adapter unit test, web `tsc`, guards and the 60 web test files the version sweep touched, green. Not run: the stand-backed role sweep (`tests/integration/api/test_role_register.py` needs object storage).
-
-**Updated 2026-11-05 by `UI-PARITY-INT-1105c` (unverified development candidate, third publication).** The administrator forms offer «Наблюдатель» (`VIEWER_ROLE_OFFERED` on). Both the user form and the registration approval refuse it beside another role before sending (`R-150e`); turning the switch off is the rollback.
-
-Stand rerun on `b9a725c5`: 108 passed. It covers the dashboard census, the inventory at `0050`, the `0015` vocabulary and the optimisation viewer capability tests, the three reds of the earlier combined check, now green.
-
-`test_project_match` `unit_mismatch` stays red and is unrelated to this work (`D-315`). Web checks for the form change: `tsc`, eslint and focused vitest, green.
 
 **Updated 2026-11-05 by `UI-PARITY-INT-1105b` (unverified development candidate, second publication).** New on top of `UI-PARITY-INT-1105`:
 - the dashboard's section rows carry the original's five numbers (`UI-A-35`);
@@ -99,7 +95,7 @@ Checks run per branch before the merge:
 
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
-- Product `VERSION` is `0.30.1`; this file describes development, not a release.
+- Product `VERSION` is `0.30.2`; this file describes development, not a release.
 - The development API contract is `1.57.0`: **302 paths / 331 operations / 822 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0070_document_group`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 
