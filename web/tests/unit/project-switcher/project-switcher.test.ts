@@ -15,10 +15,11 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ApiError } from '@/shared/api';
+import { ApiError, listProjects } from '@/shared/api';
 import type { Account, ErrorEnvelope, Project, ProjectPage } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { ProjectList } from '@/widgets/project-list';
 import { MENU_CLOSED } from '@/shared/ui';
 import { MenuView } from '@/shared/ui/menu';
 import {
@@ -48,6 +49,11 @@ import { newClient, renderScreen, seedError } from '../screens/harness';
 
 const navigation = vi.hoisted(() => ({ pathname: null as string | null, search: '' }));
 
+vi.mock('@/shared/api', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listProjects: vi.fn(),
+}));
+
 vi.mock('next/navigation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePathname: () => navigation.pathname,
@@ -55,6 +61,10 @@ vi.mock('next/navigation', async (importOriginal) => ({
 }));
 
 // ----------------------------------------------------------------------------------- fixtures
+
+/** `UIP-S03-03`: the selector's list is the one ordered by name, its own entry apart from the «new first» list of the other screens. */
+const SWITCHER_LIST = queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT, 'name');
+const NEWEST_FIRST_LIST = queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT);
 
 const A = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const B = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
@@ -554,7 +564,7 @@ describe('the island: a render with no query client makes no request; the list i
 
   it('reads the cached first page into rows, and the button takes the name from it', () => {
     const client = newClient();
-    client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), page(PROJECTS));
+    client.setQueryData(SWITCHER_LIST, page(PROJECTS));
     const markup = renderScreen(client, createElement(ProjectSwitcherLive, { address: at('/dashboard', `project=${B}`) }));
     expect(markup).toContain('>Школа №7</span>');
     expect(itemsOf(markup).slice(0, 2).map(([, href]) => href)).toEqual([`/dashboard?project=${A}`, `/dashboard?project=${B}`]);
@@ -566,7 +576,7 @@ describe('the island: a render with no query client makes no request; the list i
       renderScreen(client, createElement(ProjectSwitcherLive, { address }));
       // The account's answer (`getMe`) is its own query, asked for below; only the list is read here.
       const queries = client.getQueryCache().getAll().filter((query) => query.queryKey[0] !== 'account');
-      expect(queries.map((query) => query.queryKey)).toEqual([queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT)]);
+      expect(queries.map((query) => query.queryKey)).toEqual([SWITCHER_LIST]);
       return (queries[0]?.options as { enabled?: boolean }).enabled;
     };
     expect(enabledFor(at('/dashboard', `project=${A}`))).toBe(true);
@@ -578,9 +588,65 @@ describe('the island: a render with no query client makes no request; the list i
     expect(enabledFor(at('/'))).toBe(false);
   });
 
+  it('UIP-S03-03: reads the list ordered by name, as an entry of its own: the key names the order and the request asks for it', async () => {
+    const asked = vi.mocked(listProjects);
+    asked.mockReset();
+    asked.mockResolvedValue({ data: page(PROJECTS) } as never);
+    const client = newClient();
+    renderScreen(client, createElement(ProjectSwitcherLive, { address: at('/dashboard', `project=${A}`) }));
+    const queries = client.getQueryCache().getAll().filter((query) => query.queryKey[0] !== 'account');
+    expect(queries.map((query) => query.queryKey)).toEqual([SWITCHER_LIST]);
+    expect(SWITCHER_LIST).not.toEqual(NEWEST_FIRST_LIST);
+    await (queries[0]?.options as { queryFn: () => Promise<unknown> }).queryFn();
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(asked.mock.calls[0]?.[0]).toEqual({ query: { limit: PROJECT_PAGE_LIMIT, order: 'name' } });
+  });
+
+  it('UIP-S03-03: the other readers of the list keep «new first»: their key names no order and their request sends none', async () => {
+    const asked = vi.mocked(listProjects);
+    asked.mockReset();
+    asked.mockResolvedValue({ data: page(PROJECTS) } as never);
+    const client = newClient();
+    renderScreen(client, createElement(ProjectList, {}));
+    const queries = client.getQueryCache().getAll();
+    expect(queries.map((query) => query.queryKey)).toEqual([NEWEST_FIRST_LIST]);
+    await (queries[0]?.options as { queryFn: () => Promise<unknown> }).queryFn();
+    expect(asked.mock.calls[0]?.[0]).toEqual({ query: { limit: PROJECT_PAGE_LIMIT } });
+  });
+
+  it('UIP-S03-03: one order is never served for the other: a «new first» page in the cache gives the selector no rows, and the reverse', () => {
+    const newestOnly = newClient();
+    newestOnly.setQueryData(NEWEST_FIRST_LIST, page(PROJECTS));
+    const markup = renderScreen(newestOnly, createElement(ProjectSwitcherLive, { address: at('/dashboard', `project=${A}`) }));
+    expect(itemsOf(markup).map(([, , text]) => text)).toEqual([ALL_PROJECTS_LABEL, NEW_PROJECT_LABEL]);
+    expect(markup).toContain('Загрузка объектов…');
+
+    const byName = newClient();
+    byName.setQueryData(SWITCHER_LIST, page(PROJECTS));
+    const rows = itemsOf(renderScreen(byName, createElement(ProjectSwitcherLive, { address: at('/dashboard', `project=${A}`) })));
+    expect(rows.slice(0, 2).map(([, , text]) => text)).toEqual(['Мост через Неву', 'Школа №7']);
+    // and the page «Объекты» does not read what the selector holds
+    expect(renderScreen(byName, createElement(ProjectList, {}))).not.toContain('Мост через Неву');
+  });
+
+  it('UIP-S03-03: the rows are drawn in the order the server gave them, whatever it was: the widget does not sort', () => {
+    const reversed = [SCHOOL, MOST];
+    const rows = itemsOf(markupOf(at('/dashboard'), ready(reversed))).map(([, , text]) => text.split('\n')[0]);
+    expect(rows.slice(0, 2)).toEqual(['Школа №7', 'Мост через Неву']);
+    const shuffled = [project(C, 'Б'), project(A, '213. Школа'), project(B, '7 школа')];
+    expect(itemsOf(markupOf(at('/dashboard'), ready(shuffled))).slice(0, 3).map(([, , text]) => text)).toEqual(['Б', '213. Школа', '7 школа']);
+  });
+
+  it('a note «Показаны первые N» stays when the server has more: the first page of the order is not the whole list (UIP-S03-03)', () => {
+    const markup = markupOf(at('/dashboard'), ready(PROJECTS, { more: true }));
+    expect(markup).toContain('Показаны первые 2.');
+    expect(itemsOf(markup).map(([, , text]) => text)).toContain(MORE_PROJECTS_LABEL);
+    expect(markupOf(at('/dashboard'), ready(PROJECTS))).not.toContain('Показаны первые');
+  });
+
   it('shows the failure of a failed read inside the menu, with the retry', () => {
     const client = newClient();
-    seedError(client, queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), apiError(503, 'dependency_unavailable', true));
+    seedError(client, SWITCHER_LIST, apiError(503, 'dependency_unavailable', true));
     const markup = renderScreen(client, createElement(ProjectSwitcherLive, { address: at('/dashboard', `project=${A}`) }));
     expect(markup).toContain('Объекты не загрузились');
     expect(markup).toContain('Название недоступно');
@@ -594,7 +660,7 @@ describe('UIP-S03-01: once the island is live, «Новый объект» opens
   const live = (roles?: readonly string[], address: SwitcherAddress = at('/dashboard', `project=${A}`)): string => {
     const client = newClient();
     if (roles !== undefined) client.setQueryData(queryKeys.account.me(), account(roles));
-    client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), page(PROJECTS));
+    client.setQueryData(SWITCHER_LIST, page(PROJECTS));
     return renderScreen(client, createElement(ProjectSwitcherLive, { address }));
   };
   const lastItem = (markup: string) => itemsOf(markup).at(-1);
@@ -866,7 +932,7 @@ describe('UIP-G-06: the island reads the account only where its answer changes w
   it('names the account\'s last object on the button once the one getMe query has it', () => {
     const client = newClient();
     client.setQueryData(queryKeys.account.me(), account(B));
-    client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), page(PROJECTS));
+    client.setQueryData(SWITCHER_LIST, page(PROJECTS));
     const markup = renderScreen(client, createElement(ProjectSwitcherLive, { address: at('/dashboard') }));
     expect(markup).toContain('>Школа №7</span>');
     expect(marksOf(markup).current).toEqual(['Школа №7']);
@@ -878,7 +944,7 @@ describe('UIP-G-06: the island reads the account only where its answer changes w
     const client = newClient();
     client.setQueryData(queryKeys.account.me(), account(B));
     renderScreen(client, createElement(ProjectSwitcherLive, { address: at('/dashboard') }));
-    const list = client.getQueryCache().find({ queryKey: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT) });
+    const list = client.getQueryCache().find({ queryKey: SWITCHER_LIST });
     expect((list?.options as { enabled?: boolean }).enabled).toBe(true);
   });
 

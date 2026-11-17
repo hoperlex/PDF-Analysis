@@ -36,7 +36,7 @@
 
 import type { DataTag } from '@tanstack/react-query';
 
-import type { ListDecisionMemoryCasesInput } from './generated/operations.gen';
+import type { ListDecisionMemoryCasesInput, ListProjectsInput } from './generated/operations.gen';
 import type {
   AssignmentStatus,
   AssignmentUid,
@@ -101,6 +101,9 @@ export const QUERY_NAMESPACES = [
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
+
+/** The order of the project list the server can give (`listProjects`'s `order`, `UIP-S03-02`). */
+export type ProjectListOrder = NonNullable<NonNullable<ListProjectsInput['query']>['order']>;
 
 /** Filters that make a decision journal page a distinct cache entry. */
 export interface DecisionJournalFilters {
@@ -379,7 +382,15 @@ export const queryKeys = {
   },
   projects: {
     all: () => ['projects'] as const,
-    list: (cursor?: string, limit?: number) => ['projects', 'list', { cursor, limit }] as const,
+    /**
+     * One page of `listProjects`. `order` (`UIP-S03-03`, contract 1.57.0) is the server's order of the whole listing and is part
+     * of the key, so a page read in one order is never served for the other: `published` (newest first, the default, and the
+     * order every reader had before the parameter existed) is the key with no `order` in it, which is the key those readers still
+     * have; `name` (by the number in the name, then alphabetically) is a key of its own. Both sit under `projects.all()`, so a
+     * command that changes the list invalidates both.
+     */
+    list: (cursor?: string, limit?: number, order?: ProjectListOrder) =>
+      ['projects', 'list', { cursor, limit, order: order === 'name' ? 'name' : undefined }] as const,
     detail: (projectUid: ProjectUid) => ['projects', 'detail', projectUid] as const,
     /**
      * One page of `listDocuments` for one project.

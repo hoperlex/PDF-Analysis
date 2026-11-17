@@ -193,7 +193,9 @@ export function ProjectSwitcherLive({ address }: { readonly address: Pick<Switch
   const mayCreate = mayActAsExpert(useQuery<Account>({ ...meQueryOptions(), enabled: asksAccount }).data?.roles);
   const resolved: SwitcherAddress = { ...address, remembered: last.projectUid, rememberedPending: last.pending };
   const needsName = switcherContext(resolved).projectUid !== null;
-  const query = useProjectList(undefined, { enabled: needsName || reached });
+  // `UIP-S03-03`: the server orders the list by name (the number in the name, then alphabetically) before it is paged; the rows are
+  // drawn in the order they come, and this entry of the cache is not the «new first» list of the other screens.
+  const query = useProjectList(undefined, { enabled: needsName || reached, order: 'name' });
   const model = buildSwitcherModel(resolved, switcherListOf(query.data, query.error, query.isFetching), { mayCreate });
   const { remember, failure, reset } = useRememberProject();
   return (

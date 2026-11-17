@@ -54,9 +54,17 @@
  *
  * ## What is not shown
  *
- * Only the first page of the list is read (`PROJECT_PAGE_LIMIT`, the page the home and the
- * project screens already read, so the cache serves it). When the server says more exist, the
- * model says so and links to the full list; it never presents the first page as the whole.
+ * Only the first page of the list is read (`PROJECT_PAGE_LIMIT`). When the server says more exist, the
+ * model says so (the note «Показаны первые N», and the row linking to the full list); it never presents the first page as the
+ * whole.
+ *
+ * ## The order of the rows (`UIP-S03-03`, owner ruling Г3-B)
+ *
+ * The selector asks for the list **ordered by name** (`order=name`): by the number written in the name, then alphabetically, as
+ * the original's picker orders its rows. The SERVER orders the whole listing before it is paged, so the first page is the first
+ * page of that order; the model keeps the order of the rows it is given and never sorts them (a list that is longer than its first
+ * page would be sorted wrongly by a client). The list is its own cache entry, apart from the «new first» list the screens
+ * «Объекты» and «Главная» read, which keep their order; a command that changes the projects refreshes both.
  */
 
 import type { Project, ProjectPage } from '@/shared/api';
