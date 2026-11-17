@@ -47,6 +47,7 @@ import shutil
 import socket
 import subprocess
 import threading
+import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -187,6 +188,9 @@ def setting(name, default=""):
 
 
 if argv[:2] == ["image", "inspect"]:
+    if "--format" in argv and setting("STUB_IMAGE_ID"):
+        # `build-overload` puts the names back on the ids it read before the build.
+        sys.stdout.write(setting("STUB_IMAGE_ID") + "\n")
     sys.exit(0 if setting("STUB_IMAGES_EXIST", "1") == "1" else 1)
 
 if argv[:1] == ["inspect"]:
@@ -204,6 +208,12 @@ if argv[:1] == ["compose"]:
     sub = argv[5] if len(argv) > 5 else ""
     rest = argv[6:]
     if sub == "build":
+        # `build-overload`: a build that takes time, so the watcher has something to stop. The
+        # second line is written only by a build that was NOT stopped.
+        import time
+        time.sleep(float(setting("STUB_BUILD_SLEEP", "0")))
+        with open(os.environ["STUB_LOG"], "a", encoding="utf-8") as handle:
+            handle.write("build-finished\n")
         sys.exit(int(setting("STUB_BUILD_STATUS", "0")))
     if sub == "up":
         sys.exit(int(setting("STUB_UP_STATUS", "0")))
@@ -435,6 +445,10 @@ def _run(
     # depends on what this host happens to have under `/srv`.
     environment["STAND_COPY_RECORD"] = str(tmp_path / "stand-copy" / "record.json")
     environment["BUNDLE_STAGING"] = str(tmp_path / "stand-staging")
+    # `build-overload` samples the host while the build runs. Every case reads its own files,
+    # absent unless the case writes them, so no case depends on this host's memory.
+    environment["DEPLOY_MEMINFO"] = str(tmp_path / "meminfo")
+    environment["DEPLOY_MEMORY_PRESSURE"] = str(tmp_path / "pressure-memory")
     environment.update(stub or {})
 
     completed = subprocess.run(
@@ -1277,6 +1291,111 @@ DB_ROLE_GUARDS = (
 JUDGE_FIX_GUARDS = ("trusted-proxies-empty-with-name",)
 
 
+class TestTheBuildIsStoppedWhenTheHostIsOverloaded:
+    """`build-overload`: the 2026-11-17 outage, where `next build` drove the 4 GB production host into
+    swap thrash for 70 minutes with no time limit and nothing watching it.
+
+    The watcher samples two files every interval; the cases write them. A stopped build is told
+    apart from a finished one by the stub's ``build-finished`` line, which only a build that ran to
+    its end writes, and from a refusal before the build by the ``build`` call in the log.
+    """
+
+    LOW_MEMORY = "MemTotal:        4015000 kB\nMemAvailable:     102400 kB\n"
+    PLENTY = "MemTotal:        4015000 kB\nMemAvailable:    2048000 kB\n"
+    THRASH = "some avg10=71.00 avg60=40.00 avg300=12.00 total=1\nfull avg10=45.12 avg60=30.00 avg300=9.00 total=1\n"
+    QUIET = "some avg10=0.00 avg60=0.00 avg300=0.00 total=1\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=1\n"
+    FAST = "ALPHA_BUILD_SAMPLE_SECONDS=0.2\nALPHA_BUILD_OVERLOAD_SAMPLES=2\n"
+
+    def _host(self, tmp_path: Path, meminfo: str, pressure: str) -> dict[str, str]:
+        (tmp_path / "meminfo").write_text(meminfo, encoding="utf-8")
+        (tmp_path / "pressure-memory").write_text(pressure, encoding="utf-8")
+        return {}
+
+    def _stopped(self, completed: subprocess.CompletedProcess[str], log: Path) -> str:
+        calls = log.read_text(encoding="utf-8")
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "build_overload" in completed.stderr, completed.stderr
+        assert "EMERGENCY STOP of the image build" in completed.stderr, completed.stderr
+        assert "build" in calls, "it refused before even trying to build"
+        assert "build-finished" not in calls, "the build ran to its end instead of being stopped"
+        assert _up_calls(log) == [], calls
+        return calls
+
+    def test_low_memory_stops_the_build_and_starts_nothing(self, tmp_path: Path, free_port: int) -> None:
+        script, env_file = _ready(tmp_path, free_port)
+        env_file.write_text(env_file.read_text(encoding="utf-8") + self.FAST, encoding="utf-8")
+        self._host(tmp_path, self.LOW_MEMORY, self.QUIET)
+        started = time.monotonic()
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file, stub={"STUB_BUILD_SLEEP": "60"})
+        self._stopped(completed, log)
+        assert "MemAvailable 100 MB is under 256 MB" in completed.stderr, completed.stderr
+        assert time.monotonic() - started < 40, "the build was not stopped; it was waited for"
+
+    def test_memory_pressure_stops_the_build(self, tmp_path: Path, free_port: int) -> None:
+        script, env_file = _ready(tmp_path, free_port)
+        env_file.write_text(env_file.read_text(encoding="utf-8") + self.FAST, encoding="utf-8")
+        self._host(tmp_path, self.PLENTY, self.THRASH)
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file, stub={"STUB_BUILD_SLEEP": "60"})
+        self._stopped(completed, log)
+        assert "memory pressure (full avg10) is 45%" in completed.stderr, completed.stderr
+
+    def test_the_time_limit_stops_a_build_on_a_quiet_host(self, tmp_path: Path, free_port: int) -> None:
+        script, env_file = _ready(tmp_path, free_port)
+        env_file.write_text(
+            env_file.read_text(encoding="utf-8") + self.FAST + "ALPHA_BUILD_MAX_SECONDS=1\n", encoding="utf-8"
+        )
+        self._host(tmp_path, self.PLENTY, self.QUIET)
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file, stub={"STUB_BUILD_SLEEP": "60"})
+        self._stopped(completed, log)
+        assert "the build ran for 1 s, its limit" in completed.stderr, completed.stderr
+
+    def test_the_names_go_back_to_the_images_that_are_serving(self, tmp_path: Path, free_port: int) -> None:
+        script, env_file = _ready(tmp_path, free_port)
+        env_file.write_text(env_file.read_text(encoding="utf-8") + self.FAST, encoding="utf-8")
+        self._host(tmp_path, self.LOW_MEMORY, self.QUIET)
+        completed, log = _run(
+            script, tmp_path=tmp_path, env_file=env_file,
+            stub={"STUB_BUILD_SLEEP": "60", "STUB_IMAGE_ID": "sha256:serving"},
+        )
+        lines = self._stopped(completed, log).splitlines()
+        build_at = next(i for i, line in enumerate(lines) if line.split()[5:6] == ["build"])
+        retags = [i for i, line in enumerate(lines) if re.fullmatch(r"tag sha256:serving \S+-(api|web)", line)]
+        assert {lines[i].rsplit("-", 1)[1] for i in retags} == {"api", "web"}, lines
+        assert all(i > build_at for i in retags), "the names were put back before the build, not after it"
+
+    def test_a_quiet_host_lets_the_build_finish(self, tmp_path: Path, free_port: int) -> None:
+        script, env_file = _ready(tmp_path, free_port)
+        env_file.write_text(env_file.read_text(encoding="utf-8") + self.FAST, encoding="utf-8")
+        self._host(tmp_path, self.PLENTY, self.QUIET)
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file, stub={"STUB_BUILD_SLEEP": "1"})
+        calls = log.read_text(encoding="utf-8")
+        assert "build_overload" not in completed.stderr, completed.stderr
+        assert "build-finished" in calls, calls
+        assert _up_calls(log) != [], (completed.returncode, completed.stderr)
+
+    def test_a_setting_that_is_not_a_number_is_refused_before_the_build(self, tmp_path: Path, free_port: int) -> None:
+        script, env_file = _ready(tmp_path, free_port)
+        env_file.write_text(env_file.read_text(encoding="utf-8") + "ALPHA_BUILD_MAX_SECONDS=soon\n", encoding="utf-8")
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "ALPHA_BUILD_MAX_SECONDS is 'soon', which is not a non-negative number" in completed.stderr
+        calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+        assert [line for line in calls if line.split()[5:6] == ["build"]] == [], calls
+
+    def test_that_guard_is_shown_able_to_fail(self, tmp_path: Path, free_port: int) -> None:
+        """Delete it and the same overloaded host waits for the build to finish and then brings it up."""
+        cut = _mutant(tmp_path, "build-overload")
+        script = _stage(tmp_path / "mutant-overload", script=cut)
+        env_file = tmp_path / "alpha.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=free_port) + self.FAST, encoding="utf-8")
+        self._host(tmp_path, self.LOW_MEMORY, self.THRASH)
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file, stub={"STUB_BUILD_SLEEP": "2"})
+        calls = log.read_text(encoding="utf-8")
+        assert "build_overload" not in completed.stderr, completed.stderr
+        assert "build-finished" in calls, calls
+        assert _up_calls(log) != [], (completed.returncode, completed.stderr)
+
+
 def test_every_guard_in_the_script_has_a_case_here() -> None:
     """A guard added without a test is caught here rather than in a deployment.
 
@@ -1297,14 +1416,16 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     `test_default_credential_gate.py`), named in the set below as well, and 31 since
     `JUDGE-FIXES-F2-01` added `trusted-proxies-empty-with-name` (`D-229` item 4; cases in
     `test_acme_deploy_guards.py`), and 36 since `PROD-04-DB-ROLES-01` added the five database-role guards
-    (cases in `test_db_roles_deploy_guards.py`).
+    (cases in `test_db_roles_deploy_guards.py`), and 37 since the 2026-11-17 production outage added
+    `build-overload`, covered in :class:`TestTheBuildIsStoppedWhenTheHostIsOverloaded`.
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 36, markers
+    assert len(markers) == 37, markers
     covered = set(BEFORE_DOCKER) | set(STAND_GUARDS) | {
         "port-not-foreign",
         "images-built",
+        "build-overload",
         "services-healthy",
         "migrations-at-head",
         "proxy-answers",

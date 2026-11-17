@@ -1117,7 +1117,121 @@ echo "-- building the images --"
 # `compose.server.yml` are of third-party images this never touches.
 export BUILDX_NO_DEFAULT_ATTESTATIONS=1
 BUILD_STATUS=0
-compose build || BUILD_STATUS=$?
+BUILD_DONE=no
+
+# >>> guard: build-overload
+# THE BUILD RUNS ON THE HOST THAT IS SERVING, so it must not be able to take that host down.
+# On 2026-11-17 the web image's `next build` type-checked ~2,300 files (~2.1 GB of heap) on the
+# 4 GB production VPS while a run was live; the host went into swap thrash, nginx stopped
+# completing TLS handshakes, SSH timed out at the banner, and the stand was down for 70 minutes
+# until the owner cancelled the workflow and rebooted the machine. The build had no time limit
+# and nothing watched the host while it ran.
+#
+# So the build runs in its own process group and this loop samples the host every
+# `ALPHA_BUILD_SAMPLE_SECONDS` (default 5). The build is STOPPED -- the whole group, TERM and
+# then KILL -- when, for `ALPHA_BUILD_OVERLOAD_SAMPLES` samples in a row (default 3), either
+#   * MemAvailable in /proc/meminfo is under `ALPHA_BUILD_MIN_AVAILABLE_MB` (default 256), or
+#   * the memory pressure stall `full avg10` in /proc/pressure/memory reaches
+#     `ALPHA_BUILD_MAX_MEMORY_PRESSURE` percent (default 30; a kernel without PSI skips this);
+# or at once when the build has run `ALPHA_BUILD_MAX_SECONDS` (default 1800; a quiet build of
+# the whole stack takes about 6 minutes). Stopping the client cancels BuildKit's session, so
+# the RUN step under it is cancelled too and its memory is returned.
+#
+# The previous images keep serving: nothing has been brought up yet. The names `<instance>-api`
+# and `<instance>-web` are put back on the images that were serving (`PREVIOUS_*_ID` above), so a
+# build stopped half-way -- one image exported, the other not -- leaves no name pointing at new
+# code that a hand-run `docker compose up` would start against an unmigrated database.
+# `DEPLOY_MEMINFO` and `DEPLOY_MEMORY_PRESSURE` name other files only for the tests;
+# deploy-auto passes no environment, so on the stand /proc is read.
+setting_number() {
+    local value
+    value="$(configured "$1")"
+    value="${value:-$2}"
+    case "$value" in
+        ''|*[!0-9.]*|*.*.*|.*) refuse "$1 is '$value', which is not a non-negative number." \
+                                      "Nothing was built and nothing was started." ;;
+    esac
+    printf '%s\n' "$value"
+}
+BUILD_MIN_AVAILABLE_MB="$(setting_number ALPHA_BUILD_MIN_AVAILABLE_MB 256)"
+BUILD_MAX_MEMORY_PRESSURE="$(setting_number ALPHA_BUILD_MAX_MEMORY_PRESSURE 30)"
+BUILD_MAX_SECONDS="$(setting_number ALPHA_BUILD_MAX_SECONDS 1800)"
+BUILD_OVERLOAD_SAMPLES="$(setting_number ALPHA_BUILD_OVERLOAD_SAMPLES 3)"
+BUILD_SAMPLE_SECONDS="$(setting_number ALPHA_BUILD_SAMPLE_SECONDS 5)"
+DEPLOY_MEMINFO="${DEPLOY_MEMINFO:-/proc/meminfo}"
+DEPLOY_MEMORY_PRESSURE="${DEPLOY_MEMORY_PRESSURE:-/proc/pressure/memory}"
+
+host_overload() {
+    local available full
+    available="$(awk '/^MemAvailable:/ { print int($2 / 1024); exit }' "$DEPLOY_MEMINFO" 2>/dev/null || true)"
+    if [ -n "$available" ] && [ "$available" -lt "${BUILD_MIN_AVAILABLE_MB%.*}" ]; then
+        printf 'MemAvailable %s MB is under %s MB' "$available" "$BUILD_MIN_AVAILABLE_MB"
+        return 0
+    fi
+    full="$(awk '$1 == "full" { for (i = 2; i <= NF; i++) if ($i ~ /^avg10=/) { sub(/^avg10=/, "", $i); print int($i); exit } }' \
+        "$DEPLOY_MEMORY_PRESSURE" 2>/dev/null || true)"
+    if [ -n "$full" ] && [ "$full" -ge "${BUILD_MAX_MEMORY_PRESSURE%.*}" ]; then
+        printf 'memory pressure (full avg10) is %s%%, at or over %s%%' "$full" "$BUILD_MAX_MEMORY_PRESSURE"
+        return 0
+    fi
+    return 1
+}
+
+set -m
+compose build </dev/null &
+BUILD_PID=$!
+set +m
+BUILD_STARTED=$SECONDS
+BUILD_SAMPLE_TENTHS="$(awk -v s="$BUILD_SAMPLE_SECONDS" 'BEGIN { t = int(s * 10 + 0.5); if (t < 1) t = 1; print t }')"
+OVERLOAD_STRIKES=0
+OVERLOAD=""
+while kill -0 "$BUILD_PID" 2>/dev/null; do
+    # One sample interval, in tenths, so a build that ends early is noticed at once.
+    waited=0
+    while [ "$waited" -lt "$BUILD_SAMPLE_TENTHS" ] && kill -0 "$BUILD_PID" 2>/dev/null; do
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+    kill -0 "$BUILD_PID" 2>/dev/null || break
+    if reason="$(host_overload)"; then
+        OVERLOAD_STRIKES=$((OVERLOAD_STRIKES + 1))
+    else
+        OVERLOAD_STRIKES=0
+    fi
+    if [ "$OVERLOAD_STRIKES" -ge "${BUILD_OVERLOAD_SAMPLES%.*}" ]; then
+        OVERLOAD="$reason, $OVERLOAD_STRIKES samples in a row"
+        break
+    fi
+    if [ $((SECONDS - BUILD_STARTED)) -ge "${BUILD_MAX_SECONDS%.*}" ]; then
+        OVERLOAD="the build ran for ${BUILD_MAX_SECONDS} s, its limit"
+        break
+    fi
+done
+if [ -n "$OVERLOAD" ]; then
+    printf 'deploy.sh: EMERGENCY STOP of the image build: %s\n' "$OVERLOAD" >&2
+    kill -TERM -- "-$BUILD_PID" 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+        kill -0 -- "-$BUILD_PID" 2>/dev/null || break
+        sleep 1
+    done
+    kill -KILL -- "-$BUILD_PID" 2>/dev/null || true
+    wait "$BUILD_PID" 2>/dev/null || true
+    for pinned in "$INSTANCE-api:$PREVIOUS_API_ID" "$INSTANCE-web:$PREVIOUS_WEB_ID"; do
+        name="${pinned%%:*}"
+        id="${pinned#*:}"
+        [ -n "$id" ] || continue
+        docker tag "$id" "$name" >/dev/null 2>&1 \
+            || printf 'deploy.sh: NOTE: %s could not be put back on %s.\n' "$name" "$id" >&2
+    done
+    refuse "build_overload: the image build was stopped because the host is overloaded ($OVERLOAD)." \
+           "NOTHING WAS STARTED, REPLACED OR STOPPED: the containers that were serving still serve, and the" \
+           "image names point at the images they run. Do not run 'docker compose up' by hand. Deploy again" \
+           "when the host is quiet (no live run); the thresholds are the ALPHA_BUILD_* settings in the env file."
+fi
+wait "$BUILD_PID" || BUILD_STATUS=$?
+BUILD_DONE=yes
+# <<< guard: build-overload
+[ "$BUILD_DONE" = yes ] || compose build || BUILD_STATUS=$?
 
 # >>> guard: images-built
 # THE TWO STEPS ARE THE ROLLBACK, as far as one exists without a server to switch on.

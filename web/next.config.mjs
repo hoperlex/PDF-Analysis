@@ -12,8 +12,12 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typescript: {
-    // A type error is a build failure. Never relaxed.
-    ignoreBuildErrors: false,
+    // A type error is a build failure wherever a build is checked: `npm run typecheck` runs on
+    // every candidate before it is published, and a local `npm run build` type-checks too.
+    // The one exception is the production image (`infra/deploy/Dockerfile.web` sets
+    // WEB_BUILD_SKIP_TYPECHECK=1): it builds an already-checked tree on the 4 GB serving host,
+    // where the checker's ~2 GB peak made `build-overload` stop the deploy (owner, 2026-11-17).
+    ignoreBuildErrors: process.env.WEB_BUILD_SKIP_TYPECHECK === '1',
   },
   eslint: {
     // `npm run lint` is the lint gate; the build does not silently re-run it.
