@@ -411,7 +411,7 @@ def test_a_confirmed_carryover_appends_one_attributed_event_with_its_provenance(
         seeded.decisions["A"], 1,
     )
     # `UI-A-73`: the structured source is written with the event, and read back through it.
-    origin = CarriedOrigin(seeded.decisions["A"], seeded.source["A"][0], seeded.v1, 1)
+    origin = CarriedOrigin(seeded.decisions["A"], seeded.source["A"][0], seeded.v1, 1, run_id=seeded.r1, mode="version")
     assert event.carried_from_decision_id == seeded.decisions["A"]
     assert decision_history(comparison_session, seeded.target["A"][0])[0].carried_from_decision_id == (
         seeded.decisions["A"]
@@ -456,7 +456,7 @@ def test_the_origin_of_a_current_verdict_follows_the_verdict_not_the_latest_even
     """`UI-A-73`: a comment leaves the carried verdict standing with its origin; the expert's own verdict replaces it."""
     carried = _carry(comparison_session, seeded, _request(seeded, "A")).event
     target = seeded.target["A"]
-    origin = CarriedOrigin(seeded.decisions["A"], seeded.source["A"][0], seeded.v1, 1)
+    origin = CarriedOrigin(seeded.decisions["A"], seeded.source["A"][0], seeded.v1, 1, run_id=seeded.r1, mode="version")
 
     _decide(comparison_session, target, "comment", comment="Согласовано с проектировщиком.")
     assert current_verdict(comparison_session, target[0]).latest_verdict_decision_id == carried.decision_id
