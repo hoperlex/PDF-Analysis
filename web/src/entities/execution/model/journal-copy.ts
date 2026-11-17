@@ -2,8 +2,9 @@
  * The text «Скопировать» puts on the clipboard from the journal (`UI-B-43`).
  *
  * It is built from the same closed projection the page draws (`visibleJournal`), never from the
- * entry itself: the event's Russian name, its time, the run, the state and the error code. An
- * unknown event is the generic «Другое событие выполнения», and the payload, the aggregate and
+ * entry itself: the event's Russian name, its time, the run, the state and the error code, and for a stage event the stage's
+ * Russian name (a stage the contract's list does not hold is «Другой этап», never its raw value) and, for a progress event,
+ * «стр. N из M» (`UIP-S08-01`). An unknown event is the generic «Другое событие выполнения», and the payload, the aggregate and
  * every other field of the record stay out, so what a person pastes into a message is what they
  * could read on the screen. The original's copy button joined its sections the same way: plain
  * lines, one per record, no markup.
@@ -15,7 +16,7 @@
 import type { ExecutionJournalEntry } from '@/shared/api';
 import { formatInstantUtc } from '@/shared/lib';
 
-import { visibleJournal } from './presentation';
+import { journalPagesText, visibleJournal } from './presentation';
 
 /** What the copied page is a page of: one run, or every run. */
 export interface JournalCopyScope {
@@ -23,12 +24,14 @@ export interface JournalCopyScope {
   readonly runId: string | null;
 }
 
-/** One record as a line: time, event, run, then the state and the code when the record has them. */
+/** One record as a line: time, event, its stage and pages when it has them, run, then the state and the code when the record has them. */
 export function journalCopyLine(entry: ExecutionJournalEntry): string {
   const visible = visibleJournal(entry);
   return [
     formatInstantUtc(entry.occurred_at),
     visible.event,
+    ...(visible.stage === undefined ? [] : [visible.stage.label]),
+    ...(visible.pages === undefined ? [] : [journalPagesText(visible.pages)]),
     `прогон ${entry.run_id}`,
     ...(visible.state === null ? [] : [`состояние: ${visible.state}`]),
     ...(visible.code === null ? [] : [`код: ${visible.code}`]),

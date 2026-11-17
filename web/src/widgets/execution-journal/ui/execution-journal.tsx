@@ -1,6 +1,6 @@
 import type { ExecutionJournalEntry } from '@/shared/api';
 import { formatClock, formatInstant, formatInstantUtc, routes } from '@/shared/lib';
-import { visibleJournal } from '@/entities/execution';
+import { journalPagesText, visibleJournal } from '@/entities/execution';
 import { EmptyState } from '@/shared/ui';
 
 import styles from './execution-journal.module.css';
@@ -37,7 +37,12 @@ export function ExecutionJournal({ entries, onNext, onPrevious }: ExecutionJourn
                 return (
                   <tr key={entry.event_id}>
                     <td className={styles.time}><time dateTime={entry.occurred_at} title={`${formatInstant(entry.occurred_at)} · ${formatInstantUtc(entry.occurred_at)}`}>{formatClock(entry.occurred_at)}</time></td>
-                    <td className={styles.event}><strong>{visible.event}</strong></td>
+                    <td className={styles.event}>
+                      <strong>{visible.event}</strong>
+                      {/* `UIP-S08-01`: the stage's Russian name (a stage the contract's list does not hold is «Другой этап») and the pages read. */}
+                      {visible.stage === undefined ? null : <> · <span data-journal-stage={visible.stage.id ?? 'other'}>{visible.stage.label}</span></>}
+                      {visible.pages === undefined ? null : <> · <span data-journal-pages="">{journalPagesText(visible.pages)}</span></>}
+                    </td>
                     <td>{visible.state === null ? null : <strong>{visible.state}</strong>}</td>
                     <td>{visible.code === null ? null : <code>{visible.code}</code>}</td>
                     <td className={styles.identity}><a href={routes.logs(entry.run_id)}><code>{entry.run_id}</code></a></td>

@@ -13,10 +13,12 @@ export type { VectorsPause } from './model/vector-pause';
 export { executionFailure } from './model/failure';
 export type { ExecutionFailure, ExecutionFailureKind } from './model/failure';
 export {
-  QUEUE_STATE_GROUPS, QUEUE_STATE_OPTIONS, canCancel, canExecute, canReaudit, canSeePause, jobStateLabel, queueAgeLabel, queueItemError,
-  queueOverviewLine, queueStateCount, visibleJournal,
+  QUEUE_STATE_GROUPS, QUEUE_STATE_OPTIONS, UNKNOWN_STAGE_LABEL, canCancel, canExecute, canReaudit, canSeePause, jobStateLabel,
+  journalPagesText, queueAgeLabel, queueItemError, queueOverviewLine, queueStateCount, visibleJournal,
 } from './model/presentation';
-export type { ExecutionAction, QueueItemError, QueueStateGroup } from './model/presentation';
+export type {
+  ExecutionAction, JournalPages, JournalStage, JournalStateBadge, QueueItemError, QueueStateGroup, VisibleJournal,
+} from './model/presentation';
 export {
   groupWorkers, hasUnknownWorkerState, jobHoldsLease, runHoldsLease, runWorker,
   workerIntakeLabel, workerStateLabel, workersOverview,
