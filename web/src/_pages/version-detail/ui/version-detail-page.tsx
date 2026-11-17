@@ -34,6 +34,9 @@
  * `UIP-S04-03`: the first card of the page is «Последний прогон» (`widgets/run-list`): the version's last run, the row of its stages, the way into
  * the run and «Запустить» with its line under it; the table of runs below it is the table alone.
  *
+ * `UIP-S04-04`: the order is the card, the line «Стадия и раздел» (`widgets/version-classification`), the table «Прогоны», «Сведения о версии и
+ * файле»; one column. A version whose section nobody has confirmed has the confirmation form first, above the card.
+ *
  * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind`
  * `comparison_pdf`) carries the mark «PDF без пакета портала» in its panel; its run list
  * offers the ordinary cost-approved section start.
@@ -101,6 +104,18 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
   }
 
   const ownerProjectUid = version.data?.project_uid ?? projectUid;
+  // `UIP-S04-04`: a confirmed section is a line under the last run's card; an unconfirmed one is the form above it.
+  const confirmed = version.data?.classification !== undefined;
+  const classification = version.data === undefined ? null : (
+    <VersionClassification
+      address={{
+        projectUid: version.data.project_uid,
+        documentUid: version.data.document_uid,
+        versionUid: version.data.version_uid,
+      }}
+      roles={roles}
+    />
+  );
   // `UI-A-22`: the page is named by its document and its number, as the original's version bar names the folder.
   const documentTitle = version.data === undefined ? undefined : (version.data.display_title ?? version.data.source_filename);
   const title = version.data === undefined
@@ -125,6 +140,12 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
       ) : null}
       {version.data === undefined ? null : (
         <div className={styles.stack}>
+          {/*
+            `UIP-S04-04`: the order of «Инфо»: the card «Последний прогон», the line «Стадия и раздел», the table of runs, the file's facts.
+            A section nobody has confirmed puts the confirmation form first: no run starts without it, and the card's «Запустить» would
+            only refuse.
+          */}
+          {confirmed ? null : classification}
           {/* `UIP-S04-03`: the first card of «Инфо»: the last run, its stages, «Запустить»; the table of runs below is the table alone. */}
           <LastRunCard
             projectUid={ownerProjectUid}
@@ -132,42 +153,28 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
             uploadKind={version.data.upload_kind}
             onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
           />
-          <div className={styles.columns}>
-            <div className={styles.stack}>
-              <section className={styles.panel} aria-label="Стадия и раздел">
-                <VersionClassification
-                  address={{
-                    projectUid: version.data.project_uid,
-                    documentUid: version.data.document_uid,
-                    versionUid: version.data.version_uid,
-                  }}
-                  roles={roles}
-                />
-              </section>
-              {/* The file's identity and manifest are for proof, not for the first look: one click away. */}
-              <details className={styles.facts} data-version-facts="">
-                <summary>Сведения о версии и файле</summary>
-                <VersionPanel version={version.data} />
-              </details>
-            </div>
-
-            <section className={styles.panel} aria-labelledby="version-runs-title">
-              <h2 id="version-runs-title">Прогоны</h2>
-              <p className="am-note">
-                <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
-                что изменилось в анализе одной и той же версии.
-                {' '}<Link href={routes.versionComparison()}>Сравнение версий</Link>{' · '}
-                <Link href={routes.stageComparison()}>Сравнение стадий</Link>
-              </p>
-              <RunList
-                projectUid={ownerProjectUid}
-                versionUid={versionUid}
-                sectionCode={version.data.classification?.section_code}
-                uploadKind={version.data.upload_kind}
-                startElsewhere
-              />
-            </section>
-          </div>
+          {confirmed ? classification : null}
+          <section className={styles.panel} aria-labelledby="version-runs-title">
+            <h2 id="version-runs-title">Прогоны</h2>
+            <p className="am-note">
+              <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
+              что изменилось в анализе одной и той же версии.
+              {' '}<Link href={routes.versionComparison()}>Сравнение версий</Link>{' · '}
+              <Link href={routes.stageComparison()}>Сравнение стадий</Link>
+            </p>
+            <RunList
+              projectUid={ownerProjectUid}
+              versionUid={versionUid}
+              sectionCode={version.data.classification?.section_code}
+              uploadKind={version.data.upload_kind}
+              startElsewhere
+            />
+          </section>
+          {/* The file's identity and manifest are for proof, not for the first look: one click away. */}
+          <details className={styles.facts} data-version-facts="">
+            <summary>Сведения о версии и файле</summary>
+            <VersionPanel version={version.data} />
+          </details>
         </div>
       )}
     </PageShell>

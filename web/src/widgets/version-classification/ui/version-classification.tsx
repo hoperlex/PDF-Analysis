@@ -27,6 +27,12 @@
  *
  * The panel carries `id="version-classification"`, which is where the run control's refusal
  * links to (`routes.versionClassification`).
+ *
+ * `UIP-S04-04`: **a confirmed «Стадия и раздел» is one line** — the label, the section's colour and the stage and section badges,
+ * «Подтверждено экспертом <когда>» (or «Исправлено экспертом»), and «Исправить» for an expert; the revision, the account's code and
+ * the history are behind «Подробнее». What changes the next step stays on the page: the conflict, a section with no profile, and the
+ * correction form itself, which opens under the line. The forms are as they were; only their place and the fold of the history
+ * changed. The panel owns its frame (`version-classification.module.css`), so the page only chooses where it stands.
  */
 
 import { useState } from 'react';
@@ -35,6 +41,7 @@ import type { Role, SectionReview } from '@/shared/api';
 import { ErrorState, LoadingState } from '@/shared/ui';
 import { VERSION_CLASSIFICATION_ANCHOR, formatInstant } from '@/shared/lib';
 import { failureMessage } from '@/shared/api/failure-message';
+import { SectionDot } from '@/entities/project';
 import type { VersionAddress } from '@/entities/document-version';
 import {
   ClassificationBadges,
@@ -48,6 +55,8 @@ import {
 } from '@/entities/document-version';
 import { ClassifyVersionForm } from '@/features/classify-version';
 import { CorrectVersionClassificationForm } from '@/features/correct-version-classification';
+
+import styles from './version-classification.module.css';
 
 export interface VersionClassificationProps {
   /** Built from the fetched version's own body, never from the address bar. */
@@ -84,63 +93,60 @@ export function VersionClassificationView({
   if (classification !== null) {
     const option = reviewOptionOf(review.options, classification.section_code);
     const profileUnavailable = option !== null && !option.executable;
+    const mayCorrect = canCorrectClassification(roles) && onCorrecting !== undefined;
     return (
-      <div
-        className="am-state"
-        data-classification-state="confirmed"
-        data-classified-document={address.documentUid}
-      >
-        <div className="am-state__title">
-          <ClassificationBadges
-            classification={classification}
-            profileUnavailable={profileUnavailable}
-          />
-        </div>
-        <div className="am-state__detail">
-          {conflict ? (
-            <p data-classification-conflict="">
-              Стадия и раздел уже подтверждены другим решением — показана сохранённая
-              классификация. Ваш выбор не применён; изменить её может эксперт кнопкой
-              «Исправить» с указанием причины.
-            </p>
-          ) : null}
-          <p data-classification-revision-line={classification.revision}>
-            {revisionText(classification.revision)}.{' '}
+      <div className={styles.confirmed} data-classification-state="confirmed" data-classified-document={address.documentUid}>
+        <div className={styles.row} data-classification-row="">
+          <h2 className={styles.label}>Стадия и раздел</h2>
+          <span className={styles.mark}>
+            <SectionDot code={classification.section_code} />
+            <ClassificationBadges classification={classification} profileUnavailable={profileUnavailable} />
+          </span>
+          <span className={styles.said} data-classification-confirmed="">
             {isCorrected(classification) ? 'Исправлено экспертом' : 'Подтверждено экспертом'}{' '}
-            {formatInstant(classification.confirmed_at)} (
-            <code>{classification.confirmed_by_user_uid}</code>).
-          </p>
-          {profileUnavailable ? (
-            <p data-profile-unavailable-note="">
-              Для этого раздела профиль анализа ещё не зарегистрирован: прогон по этой версии
-              будет отклонён, пока профиль не появится. Анализ по другому разделу вместо него не
-              запускается.
-            </p>
+            <time dateTime={classification.confirmed_at}>{formatInstant(classification.confirmed_at)}</time>
+          </span>
+          {mayCorrect && !correcting ? (
+            <button
+              type="button"
+              className={`am-button am-button--small ${styles.correct}`}
+              data-classification-correct=""
+              onClick={() => onCorrecting(true)}
+            >
+              Исправить
+            </button>
           ) : null}
-          {canCorrectClassification(roles) && onCorrecting !== undefined ? (
-            correcting ? (
-              <CorrectVersionClassificationForm
-                address={address}
-                review={review}
-                current={classification}
-                onDone={() => onCorrecting(false)}
-                onCancel={() => onCorrecting(false)}
-              />
-            ) : (
-              <p>
-                <button
-                  type="button"
-                  className="am-button"
-                  data-classification-correct=""
-                  onClick={() => onCorrecting(true)}
-                >
-                  Исправить
-                </button>
-              </p>
-            )
-          ) : null}
-          <ClassificationHistory revisions={review.revisions} />
         </div>
+        {conflict ? (
+          <p data-classification-conflict="">
+            Стадия и раздел уже подтверждены другим решением — показана сохранённая
+            классификация. Ваш выбор не применён; изменить её может эксперт кнопкой
+            «Исправить» с указанием причины.
+          </p>
+        ) : null}
+        {profileUnavailable ? (
+          <p data-profile-unavailable-note="">
+            Для этого раздела профиль анализа ещё не зарегистрирован: прогон по этой версии
+            будет отклонён, пока профиль не появится. Анализ по другому разделу вместо него не
+            запускается.
+          </p>
+        ) : null}
+        {mayCorrect && correcting ? (
+          <CorrectVersionClassificationForm
+            address={address}
+            review={review}
+            current={classification}
+            onDone={() => onCorrecting(false)}
+            onCancel={() => onCorrecting(false)}
+          />
+        ) : null}
+        <details className={styles.more} data-classification-more="">
+          <summary>Подробнее</summary>
+          <p data-classification-revision-line={classification.revision}>
+            {revisionText(classification.revision)}. Учётная запись эксперта: <code>{classification.confirmed_by_user_uid}</code>.
+          </p>
+          <ClassificationHistory revisions={review.revisions} />
+        </details>
       </div>
     );
   }
@@ -199,13 +205,15 @@ export function VersionClassification({ address, roles }: VersionClassificationP
     );
   }
 
+  // A confirmed section is the one-line row, which carries its own label; every other answer has the heading above it.
+  const confirmed = review.isSuccess && review.data.classification !== null;
   return (
     <section
       id={VERSION_CLASSIFICATION_ANCHOR}
-      className="am-section"
+      className={confirmed ? `am-section ${styles.panel} ${styles.panelRow}` : `am-section ${styles.panel}`}
       data-classification-panel={address.versionUid}
     >
-      <h2>Стадия и раздел</h2>
+      {confirmed ? null : <h2>Стадия и раздел</h2>}
       {body}
     </section>
   );
