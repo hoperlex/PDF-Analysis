@@ -5,7 +5,7 @@
  * each chip of the run with the chip's name, its state in a word and the time it took, and the chips are the run page's (the status's,
  * completed by the stages the server read: a chip only the stages list is drawn from them, and where both speak the stages' words are the
  * chip's); no token, no cost and no model is on the card, and the model of a stage is in the chip's hint for an administrator only; a
- * press on a stage opens the run page's own window «Этапы анализа раздела», with «Запустить с этого этапа» for an account that may start
+ * press on a stage opens the run page's own window «Этапы анализа раздела», with «Перезапустить с этого этапа» for an account that may restart
  * a run and not for one that may not; «Запустить» is the one control of `R-153a` with its line under it, in the card, and a version with
  * no run says so and offers the same button; the card reads the progress once (the list the table reads, and the stages of the newest
  * run), and a run still going says its progress is on the run page; the table of runs, told the start is elsewhere, is the table alone.
@@ -160,6 +160,18 @@ describe('the row of stages', () => {
   });
 });
 
+describe('the row of stages of a restarted run', () => {
+  it('marks the chips taken from the source, as it does for a start from a stage', () => {
+    const restarted = ENDED({ started_from_run_id: OTHER_RUN, restart_point: 'text' });
+    const markup = card({ runs: [restarted], stages: null });
+    expect(markup).toMatch(/data-last-run-chip="preparation"[\s\S]*?выполнен<\/span><span[^>]*>из прогона</);
+    expect(markup).toMatch(/data-last-run-chip="text"[\s\S]*?выполнен<\/span><span[^>]*>1 мин 30 с</);
+    // The chips after the point are computed, so the run that took «Текст» too marks it as well.
+    const later = card({ runs: [ENDED({ started_from_run_id: OTHER_RUN, restart_point: 'blocks' })], stages: null });
+    expect(later).toMatch(/data-last-run-chip="text"[\s\S]*?выполнен<\/span><span[^>]*>из прогона</);
+  });
+});
+
 describe('what is not on the card', () => {
   it('has no token, no cost and no model line in the row of stages, though the stages say them', () => {
     // The start control under the row has its own words (its menu item speaks of the money ceiling); the row and the run's head are judged.
@@ -235,12 +247,18 @@ describe('the window a press on a stage opens', () => {
     expect(markup).toMatch(/data-fact-row="tokens"/);
   });
 
-  it('offers «Запустить с этого этапа» to an account that may start a run, and not to one that may not', () => {
-    expect(card({ open: 'text', roles: ['expert'] })).toContain('Запустить с этого этапа');
-    expect(card({ open: 'text', roles: ['admin'] })).toContain('Запустить с этого этапа');
-    const viewer = card({ open: 'text', roles: ['viewer'] });
+  it('offers «Перезапустить с этого этапа» to an account that may restart, for a run that ended without a clean result only', () => {
+    const failed = (roles: string[]) => card({ runs: [ENDED({ state: 'failed' })], open: 'text', roles });
+    expect(failed(['expert'])).toContain('Перезапустить с этого этапа');
+    expect(failed(['admin'])).toContain('Перезапустить с этого этапа');
+    const viewer = failed(['viewer']);
     expect(viewer).toContain('data-run-stages-dialog=""');
-    expect(viewer).not.toContain('Запустить с этого этапа');
+    expect(viewer).not.toContain('Перезапустить с этого этапа');
+    // A published run is repeated, not restarted (`R-155a`); the old words are gone.
+    const published = card({ open: 'text', roles: ['expert'] });
+    expect(published).toContain('data-run-stages-dialog=""');
+    expect(published).not.toContain('Перезапустить с этого этапа');
+    expect(failed(['expert'])).not.toContain('Запустить с этого этапа');
   });
 
   it('is closed until a stage is pressed', () => {
@@ -354,7 +372,7 @@ describe('a press on a stage, live', () => {
   afterEach(async () => { await live?.unmount(); live = null; });
 
   it('opens the window on that stage, moves between stages, and closes, leaving the card as it was', async () => {
-    const client = clientOf({ roles: ['expert'] });
+    const client = clientOf({ runs: [ENDED({ state: 'failed' })], roles: ['expert'] });
     live = await mountLive(createElement(QueryClientProvider, { client },
       createElement(LastRunCard, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
     await live.settle(() => undefined);
@@ -362,7 +380,7 @@ describe('a press on a stage, live', () => {
     await live.pressMarked('data-last-run-chip', 'text');
     expect(live.markup()).toContain('data-run-stages-dialog');
     expect(live.markup()).toContain('data-run-stage-detail="text"');
-    expect(live.markup()).toContain('Запустить с этого этапа');
+    expect(live.markup()).toContain('Перезапустить с этого этапа');
     await live.pressMarked('data-stage-item', 'cross_check');
     expect(live.markup()).toContain('data-run-stage-detail="cross_check"');
     await live.press('Закрыть');

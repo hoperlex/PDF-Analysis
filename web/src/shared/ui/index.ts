@@ -29,6 +29,9 @@ export { StageStatusBadge } from './stage-status-badge';
 
 export { STAGE_LABELS, runStageLabel } from './stage-label';
 
+// `RUN-RESTART-01`: the words of `interrupted_reason`, printed raw before the silence watchdog gave it a sentence.
+export { INTERRUPTED_REASON_LABELS, interruptedReasonLabel } from './interrupted-reason';
+
 export type { PageShellProps } from './page-shell';
 export { PageShell } from './page-shell';
 

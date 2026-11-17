@@ -1,7 +1,7 @@
 /**
  * `RUN-SCREEN-01a`: the run screen, live -- what a press does. A chip opens «Этапы анализа раздела» on it, the list inside moves
- * between chips, «Закрыть» closes it, the tabs switch, and «Запустить с этого этапа» starts from the stage of the chip with no select to
- * choose from, under the same consent and key as the control has always used.
+ * between chips, «Закрыть» closes it, the tabs switch, and «Перезапустить с этого этапа» (`RUN-RESTART-01`) restarts a run that ended
+ * without a clean result from the chip, under the consent and the key of a start, with no stage to choose.
  */
 
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -13,10 +13,10 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: ()
 vi.mock('@/shared/config/review-indication', () => ({ SHOW_REVIEW_INDICATION: true }));
 vi.mock('@/shared/api', async (importOriginal) => ({
   ...await importOriginal<Record<string, unknown>>(),
-  getRunStatus: vi.fn(), getExtendedRunReview: vi.fn(), listRunFindings: vi.fn(), estimateRunCost: vi.fn(), startRunFromStage: vi.fn(),
+  getRunStatus: vi.fn(), getExtendedRunReview: vi.fn(), listRunFindings: vi.fn(), estimateRunCost: vi.fn(), restartRun: vi.fn(),
 }));
 
-import { estimateRunCost, getExtendedRunReview, getRunStatus, listRunFindings, queryKeys, startRunFromStage } from '@/shared/api';
+import { estimateRunCost, getExtendedRunReview, getRunStatus, listRunFindings, queryKeys, restartRun } from '@/shared/api';
 import type { RunStatus, StageId } from '@/shared/api';
 import { RunProgress } from '@/widgets/run-progress';
 
@@ -37,7 +37,7 @@ const REVIEW = { run_id: RUN_ID, status: 'completed', result: { workflow_version
 ] } };
 
 const ended = (over: Partial<RunStatus> = {}): RunStatus => ({
-  ...runStatus(), run_id: RUN_ID, state: 'published', version_uid: VERSION_UID,
+  ...runStatus(), run_id: RUN_ID, state: 'failed', version_uid: VERSION_UID,
   stages: PREP.map((stage_id) => ({ stage_id, status: 'succeeded' as const, error_code: null })), ...over,
 });
 
@@ -50,11 +50,11 @@ beforeEach(() => {
   vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => ({ data: {
     ...costEstimate({ version_uid: (body as { version_uid: string }).version_uid }),
     start_from_run_id: (body as { start_from_run_id?: string }).start_from_run_id,
-    start_stage_id: (body as { start_stage_id?: string }).start_stage_id,
-    reused_stage_ids: ['source_preparation', 'page_geometry_extraction', 'document_context_build'], computed_stage_ids: ['text_analysis'],
+    restart_point: (body as { restart_point?: string }).restart_point,
+    reused_restart_points: ['preparation'], computed_restart_points: ['text', 'blocks', 'cross_check', 'merge', 'norms', 'review', 'correction'],
   } }) as never);
-  vi.mocked(startRunFromStage).mockResolvedValue({ data: { ...runStatus(), run_id: NEW_RUN, project_uid: PROJECT_UID,
-    started_from_run_id: RUN_ID, start_stage_id: 'text_analysis' } as RunStatus } as never);
+  vi.mocked(restartRun).mockResolvedValue({ data: { ...runStatus(), run_id: NEW_RUN, project_uid: PROJECT_UID,
+    started_from_run_id: RUN_ID, restart_point: 'text' } as RunStatus } as never);
 });
 afterEach(async () => { await live?.unmount(); live = null; });
 
@@ -106,37 +106,48 @@ describe('the tabs', () => {
   });
 });
 
-describe('«Запустить с этого этапа»', () => {
-  it('starts from the stage of the chip with no select, under the consent the control has always asked', async () => {
+describe('«Перезапустить с этого этапа»', () => {
+  const settled = async (view: LiveRender) => {
+    for (let tick = 0; tick < 20 && view.markup().includes('Загрузка: оценка стоимости перезапуска'); tick += 1) await view.settle(() => undefined);
+  };
+
+  it('restarts from the chip the dialog is open on, with nothing to choose, under the consent a start asks', async () => {
     const view = await mount();
     await view.pressMarked('data-run-chip', 'text');
-    await view.press('Запустить с этого этапа');
-    expect(view.markup()).toContain('data-start-from-stage-only="text_analysis"');
-    const form = /<section[^>]*data-run-start-from-stage="dialog">.*?<\/section>/s.exec(view.markup())?.[0] ?? '';
-    expect(form).toContain('data-start-from-stage-only');
+    await view.press('Перезапустить с этого этапа');
+    const form = /<section[^>]*data-run-restart="dialog"[^>]*>.*?<\/section>/s.exec(view.markup())?.[0] ?? '';
+    expect(form).toContain('data-restart-point="text"');
     expect(form).not.toContain('<select');
-    for (let tick = 0; tick < 20 && view.markup().includes('Загрузка: оценка стоимости запуска с этапа'); tick += 1) await view.settle(() => undefined);
+    await settled(view);
     expect(estimateRunCost).toHaveBeenCalledWith(
-      { body: { version_uid: VERSION_UID, start_from_run_id: RUN_ID, start_stage_id: 'text_analysis' } },
+      { body: { version_uid: VERSION_UID, start_from_run_id: RUN_ID, restart_point: 'text' } },
       expect.objectContaining({ signal: expect.anything() }));
-    expect(startRunFromStage).not.toHaveBeenCalled();
+    expect(restartRun).not.toHaveBeenCalled();
+    expect(view.markup()).toContain('data-restart-taken="">«Подготовка»<');
     await view.check(APPROVE_COST, true);
-    await view.press('Запустить');
-    expect(vi.mocked(startRunFromStage).mock.calls[0]![0]).toEqual({
-      path: { run_id: RUN_ID }, body: { stage_id: 'text_analysis', cost_consent: COST_CONSENT }, idempotencyKey: expect.any(String),
+    await view.press('Перезапустить');
+    expect(vi.mocked(restartRun).mock.calls[0]![0]).toEqual({
+      path: { run_id: RUN_ID }, body: { restart_point: 'text', cost_consent: COST_CONSENT }, idempotencyKey: expect.any(String),
     });
     expect(push).toHaveBeenCalledWith(`/projects/${PROJECT_UID}/runs/${NEW_RUN}`);
   });
 
-  it('offers only the stages of the chip it is opened on when the chip has several', async () => {
+  it('is offered in the dialog of each chip, for the chip it shows', async () => {
     const view = await mount();
     await view.pressMarked('data-run-chip', 'preparation');
-    await view.press('Запустить с этого этапа');
-    const form = /<section[^>]*data-run-start-from-stage="dialog">.*?<\/section>/s.exec(view.markup())?.[0] ?? '';
-    expect(form).toContain('<option value="page_geometry_extraction">');
-    expect(form).toContain('<option value="document_context_build">');
-    expect(form).not.toContain('<option value="text_analysis">');
-    expect(form).not.toContain('<option value="source_preparation">');
-    expect(estimateRunCost).not.toHaveBeenCalled();
+    await view.press('Перезапустить с этого этапа');
+    expect(view.markup()).toContain('data-restart-point="preparation"');
+    await view.press('Отмена');
+    await view.pressMarked('data-stage-item', 'blocks');
+    await view.press('Перезапустить с этого этапа');
+    expect(view.markup()).toContain('data-restart-point="blocks"');
+    expect(vi.mocked(estimateRunCost).mock.calls.every((call) => (call[0] as { body: { restart_point?: string } }).body.restart_point !== undefined)).toBe(true);
+  });
+
+  it('is not offered for a published run, which is repeated and not restarted', async () => {
+    const view = await mount(ended({ state: 'published' }));
+    await view.pressMarked('data-run-chip', 'text');
+    expect(view.markup()).toContain('data-run-stage-detail="text"');
+    expect(view.markup()).not.toContain('Перезапустить с этого этапа');
   });
 });

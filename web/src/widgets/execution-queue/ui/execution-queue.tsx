@@ -10,7 +10,7 @@ import {
 } from '@/entities/execution';
 import type { RunWorker } from '@/entities/execution';
 import { QueueItemWaiting } from '@/entities/audit-run';
-import { EmptyState, ErrorState } from '@/shared/ui';
+import { EmptyState, ErrorState, interruptedReasonLabel } from '@/shared/ui';
 
 import { keyboardTarget, planReorder, reorderRefusalText } from '../model/reorder';
 import { queueTiming } from '../model/timing';
@@ -127,6 +127,7 @@ export function ExecutionQueue({
       <ol>
         {items.map((item) => {
           const error = queueItemError(item);
+          const interruptedWords = item.interrupted_reason === undefined ? null : interruptedReasonLabel(item.interrupted_reason);
           const mayCancel = canExecute(roles, 'cancel') && canCancel(item);
           const mayReaudit = canExecute(roles, 'reaudit') && canReaudit(item);
           const mayPrioritise = canExecute(roles, 'priority') && item.state === 'queued';
@@ -250,7 +251,8 @@ export function ExecutionQueue({
             )}
             {item.interrupted_reason === undefined ? null : (
               <p data-queue-interrupted={item.interrupted_reason}>
-                Прогон был прерван: <code>{item.interrupted_reason}</code>
+                {/* `RUN-RESTART-01`: a reason with words of its own is said in them; any other is printed as the server wrote it. */}
+                {interruptedWords === null ? <>Прогон был прерван: <code>{item.interrupted_reason}</code></> : `${interruptedWords}.`}
               </p>
             )}
             {/*

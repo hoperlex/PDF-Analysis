@@ -26,6 +26,7 @@ import { formatInstantUtc, routes } from '@/shared/lib';
 import { PROVIDER_MODE_LABELS, RunStateBadge, runStageLabel } from '@/shared/ui';
 import { chipProgress, isRunAnimating, runFinishEstimate } from '@/entities/audit-run';
 import type { LiveProgress, RunChip, RunChipDefinition, RunExecutorLine, RunFinishEstimate } from '@/entities/audit-run';
+import { pointName } from '@/features/restart-run';
 
 import type { StartedFrom } from '../model/started-from';
 
@@ -150,8 +151,14 @@ export function RunHeader({
 
       <RunRail chips={chips} model={model} stages={stages} onOpen={onOpenChip} />
 
-      {/* `R-151i`: a run started from a stage says so under its head, with the way back to the run it took the first stages from. */}
-      {from === null ? null : (
+      {/* `R-151i`: a run started from a stage says so under its head, with the way back to the run it took the first stages from; a restart
+          (`RUN-RESTART-01`) says the chip it was restarted from, in one line. */}
+      {from === null ? null : from.kind === 'restart' ? (
+        <p className={styles.caption} data-run-started-from-note={from.point} data-run-restarted="">
+          Перезапущен с этапа «{pointName(from.point)}» из прогона{' '}
+          <Link href={routes.run(status.project_uid, from.sourceRunId)}><code data-run-started-from={from.sourceRunId}>{from.sourceRunId}</code></Link>.
+        </p>
+      ) : (
         <p className={styles.caption} data-run-started-from-note={from.stageId}>
           Запущен с этапа {from.ordinal} «{runStageLabel(from.stageId)}» из прогона{' '}
           <Link href={routes.run(status.project_uid, from.sourceRunId)}><code data-run-started-from={from.sourceRunId}>{from.sourceRunId}</code></Link>:

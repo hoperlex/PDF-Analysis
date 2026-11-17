@@ -472,18 +472,30 @@ describe('«Этапы анализа раздела»', () => {
     expect(viewer).toContain('Opus 5.5');
   });
 
-  it('offers «Запустить с этого этапа» for a chip with a stage a new run may start from, on an ended run, to an operator', () => {
-    for (const [chip, offered] of [['text', true], ['preparation', true], ['merge', false]] as const) {
-      const markup = runDialog(status(), { selected: chip, roles: ['expert'], procedures: [
+  it('offers «Перезапустить с этого этапа» in the dialog of each of the eight chips, for a run that ended without a clean result, to an operator', () => {
+    for (const chip of ['preparation', 'text', 'blocks', 'cross_check', 'merge', 'norms', 'review', 'correction'] as const) {
+      const markup = runDialog(status({ state: 'failed' }), { selected: chip, roles: ['expert'], procedures: [
         { id: 'finding_merge', title: 'Свод', status: 'completed', reason: null, dependency: null, errorCode: null },
       ] });
-      expect(markup.includes('data-run-start-from-stage="offer"'), chip).toBe(offered);
+      expect(markup.match(/data-run-restart="offer"/g), chip).toHaveLength(1);
+      expect(markup, chip).toContain('Перезапустить с этого этапа');
     }
-    expect(runDialog(status(), { selected: 'text', roles: ['expert'] })).toContain('Запустить с этого этапа');
   });
 
-  it('offers it to nobody for a run that is still going and for the read-only role', () => {
-    expect(runDialog(status({ state: 'running', terminal_at: null }), { selected: 'text', roles: ['expert'] })).not.toContain('data-run-start-from-stage');
-    expect(runDialog(status(), { selected: 'text', roles: ['viewer'] })).not.toContain('data-run-start-from-stage');
+  it('offers it for each state that ended without a clean result, and for no other', () => {
+    for (const state of ['partial', 'failed', 'cancelled'] as const) {
+      expect(runDialog(status({ state }), { selected: 'text', roles: ['expert'] }), state).toContain('data-run-restart="offer"');
+    }
+    for (const state of ['published', 'created', 'queued', 'running', 'validating'] as const) {
+      expect(runDialog(status({ state, terminal_at: null }), { selected: 'text', roles: ['expert'] }), state).not.toContain('data-run-restart');
+    }
+  });
+
+  it('offers it to nobody for a run a restart has replaced and for the read-only role, and says nothing in the place of the button', () => {
+    const replaced = runDialog(status({ state: 'failed', replaced_by_run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8N' as never }), { selected: 'text', roles: ['expert'] });
+    expect(replaced).not.toContain('data-run-restart');
+    expect(runDialog(status({ state: 'failed' }), { selected: 'text', roles: ['viewer'] })).not.toContain('data-run-restart');
+    // The wrapper takes no room when the button is not drawn.
+    expect(replaced).toMatch(/<div class="_start_[a-z0-9]+"><\/div>/);
   });
 });

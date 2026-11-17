@@ -1,0 +1,65 @@
+/*
+ * «Перезапустить с этого этапа» (`RUN-RESTART-01`): the open confirmation inside «Этапы анализа раздела». Tokens only: spacing from
+ * `--am-gap-*`, type from `--am-text-*`, ink and lines from `--am-*`; no token is declared here. The buttons are the global `am-button`.
+ */
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+/* What is taken and what is computed: two rows of the global key/value list, the label on the left, the chips on the right. */
+.plan {
+  grid-template-columns: minmax(6.5rem, 0.3fr) minmax(0, 1fr);
+  margin: 0;
+}
+
+.plan dt,
+.plan dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.plan dd {
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* The one caution of the window: a quiet edge in the degraded colour, as the run's outcome «частично» draws it. */
+.warning {
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-left: 4px solid var(--am-degraded);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-degraded-light);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+}
+
+.failure {
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-left: 4px solid var(--am-failed);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-failed-light);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}

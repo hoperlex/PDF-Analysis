@@ -1,6 +1,7 @@
 /**
- * `UI-A-60` / `R-151i`: a run started from a stage says so on its page, links the run it took the first stages from, and marks
- * those stages in the rail. A run started any other way shows none of it.
+ * `UI-A-60` / `R-151i` and `RUN-RESTART-01` / `R-155a`: a run started from a stage, or restarted from a chip, says so on its page, links the
+ * run it took the first stages from, and marks those stages in the rail. A run started any other way shows none of it. The page of a run a
+ * restart replaced says «Прогон перезапущен» and leads to the new run; a run the silence watchdog stopped says so in a sentence.
  */
 
 import { createElement } from 'react';
@@ -27,9 +28,20 @@ function page(overrides: Partial<RunStatus>): string {
 describe('the model of a run started from a stage', () => {
   it('names the stages before the start stage as taken, and the rest as computed', () => {
     const from = startedFrom({ started_from_run_id: SOURCE as never, start_stage_id: 'document_context_build' });
-    expect(from?.ordinal).toBe(3);
+    expect(from?.kind).toBe('stage');
+    expect(from?.kind === 'stage' ? from.ordinal : null).toBe(3);
     expect([...(from?.reusedStageIds ?? [])]).toEqual(['source_preparation', 'page_geometry_extraction']);
     expect(startedFrom({ started_from_run_id: SOURCE as never, start_stage_id: 'text_analysis' })?.reusedStageIds.size).toBe(3);
+  });
+
+  it('names the chips before the restart point as taken, for a restart', () => {
+    const from = startedFrom({ started_from_run_id: SOURCE as never, restart_point: 'blocks' });
+    expect(from?.kind).toBe('restart');
+    expect(from?.kind === 'restart' ? from.point : null).toBe('blocks');
+    expect([...(from?.reusedStageIds ?? [])]).toEqual([
+      'source_preparation', 'page_geometry_extraction', 'document_context_build', 'text_analysis',
+    ]);
+    expect(startedFrom({ started_from_run_id: SOURCE as never, restart_point: 'preparation' })?.reusedStageIds.size).toBe(0);
   });
 
   it('is nothing for a run that was not started from a stage, or whose pair is broken', () => {
@@ -37,6 +49,7 @@ describe('the model of a run started from a stage', () => {
     expect(startedFrom({ started_from_run_id: SOURCE as never })).toBeNull();
     expect(startedFrom({ start_stage_id: 'text_analysis' })).toBeNull();
     expect(startedFrom({ started_from_run_id: SOURCE as never, start_stage_id: 'block_analysis' })).toBeNull();
+    expect(startedFrom({ restart_point: 'text' })).toBeNull();
   });
 });
 
@@ -73,6 +86,84 @@ describe('the run page', () => {
     expect(markup).not.toContain('data-run-started-from');
     expect(markup).not.toContain('data-pipeline-reused');
     expect(markup).not.toContain('Запущен с этапа');
+  });
+});
+
+describe('the run page of a restarted run', () => {
+  const RESTARTED = { started_from_run_id: SOURCE as never, restart_point: 'blocks' as const };
+
+  it('says the chip by its short name and links the run it was restarted from, in one line', () => {
+    const markup = page(RESTARTED);
+    expect(markup).toContain('data-run-restarted=""');
+    expect(markup).toContain('data-run-started-from-note="blocks"');
+    expect(markup).toMatch(/Перезапущен с этапа «Блоки» из прогона(?:<!-- -->)? (?:<!-- -->)?<a href="\/projects\/[^"]+\/runs\/run_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z"/);
+    expect(markup).toContain(`data-run-started-from="${SOURCE}"`);
+    expect(markup).not.toContain('Запущен с этапа');
+  });
+
+  it('marks the chips taken from the source in the rail, and only those', () => {
+    const markup = page({
+      ...RESTARTED,
+      stages: ['source_preparation', 'page_geometry_extraction', 'document_context_build', 'text_analysis'].map((stage_id) => ({
+        stage_id: stage_id as never, status: 'succeeded' as const, error_code: null,
+      })),
+    });
+    expect(markup).toMatch(/data-run-chip="preparation"[^>]*data-chip-reused/);
+    expect(markup).toMatch(/data-run-chip="text"[^>]*data-chip-reused/);
+  });
+
+  it('says why a restart that could not replay a saved reply stopped, before any paid call', () => {
+    const markup = page({
+      ...RESTARTED, state: 'failed', terminal_reason: 'analysis_input_invalid',
+      terminal_detail: { stage_id: 'norm_verification', reason: 'restart_request_changed' },
+    });
+    expect(markup).toContain('data-restart-refusal=""');
+    expect(markup).toContain('Поиск норм дал другой результат');
+    expect(markup).toContain('Перезапустите с «Норм».');
+  });
+});
+
+describe('the run page of a run a restart replaced', () => {
+  const NEW = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8N';
+
+  it('says «Прогон перезапущен» at the top, with the way to the new run', () => {
+    const markup = page({ state: 'partial', degradation_set: ['text_analysis'], replaced_by_run_id: NEW as never });
+    expect(markup).toContain(`data-run-replaced="${NEW}"`);
+    expect(markup).toContain('>Прогон перезапущен<');
+    expect(markup).toContain(`href="/projects/${PROJECT_UID}/runs/${NEW}"`);
+    expect(markup).toContain('Открыть новый прогон');
+    // The notice comes before the head.
+    expect(markup.indexOf('data-run-replaced=')).toBeLessThan(markup.indexOf('data-run-head'));
+  });
+
+  it('offers none of the actions of a live run: no review, no findings tile', () => {
+    const base = { state: 'published' as const, published_finding_count: 3 };
+    expect(page(base)).toContain('Разобрать замечания');
+    expect(page(base)).toContain('data-run-findings-tile');
+    const markup = page({ ...base, replaced_by_run_id: NEW as never });
+    expect(markup).not.toContain('Разобрать замечания');
+    expect(markup).not.toContain('data-run-findings-tile');
+    expect(markup).not.toContain('в Разбор');
+  });
+
+  it('is not drawn for a run nobody replaced', () => {
+    expect(page({ state: 'failed' })).not.toContain('data-run-replaced');
+  });
+});
+
+describe('the run page of a run the silence watchdog stopped', () => {
+  const STALLED = { state: 'failed' as const, interrupted_reason: 'attempt_stalled' };
+
+  it('says it in a sentence, and names the chip when the run says which', () => {
+    const plain = page(STALLED);
+    expect(plain).toContain('Прогон остановлен: нет признаков работы 30 минут.');
+    expect(plain).not.toContain('attempt_stalled</');
+    const named = page({ ...STALLED, terminal_detail: { stage_id: 'block_analysis' } });
+    expect(named).toContain('Прогон остановлен: нет признаков работы 30 минут на этапе «Блоки».');
+  });
+
+  it('keeps printing another reason as the server wrote it', () => {
+    expect(page({ state: 'failed', interrupted_reason: 'attempt_budget_exhausted' })).toContain('Прогон был прерван и сверен: attempt_budget_exhausted.');
   });
 });
 

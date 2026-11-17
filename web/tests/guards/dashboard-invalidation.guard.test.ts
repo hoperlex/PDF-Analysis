@@ -189,8 +189,9 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // `RUN-DELETE-01`: a deleted run leaves the dashboard's run activity and its state counts.
   'src/features/delete-run/model/use-delete-run.ts': true,
   'src/features/reaudit-run/model/use-reaudit-run.ts': true,
-  // `UI-A-60` (`R-151i`): a run started from a stage is a new run, counted by the dashboard as a re-audit is.
-  'src/features/start-run-from-stage/model/use-start-run-from-stage.ts': true,
+  // `RUN-RESTART-01` (`R-155a`; it replaced the start from a stage of `UI-A-60`): a restarted run is a new run, counted by the dashboard
+  // as a re-audit is.
+  'src/features/restart-run/model/use-restart-run.ts': true,
   'src/features/set-job-priority/model/use-set-job-priority.ts': false,
   'src/features/pause-execution/model/use-pause-execution.ts': false,
   // `PAUSE-WEB-01`: pausing or resuming the vectors writes the vector control's own read and invalidates only that key;
