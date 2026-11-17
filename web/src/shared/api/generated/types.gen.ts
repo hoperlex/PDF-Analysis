@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.56.0 (OpenAPI 3.1.0)
- *   sha256 bd1396b36a49546b48c0a465c10424b04b160ee31b2ec34bc98dea40449bec69
+ *   AuditManager PC-01 API 1.57.0 (OpenAPI 3.1.0)
+ *   sha256 6a88ecb4a91c3bad046ec910cf4278b5ae4e01acb504291f9b34aeef5931aedd
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.56.0';
+export const CONTRACT_VERSION = '1.57.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'bd1396b36a49546b48c0a465c10424b04b160ee31b2ec34bc98dea40449bec69';
+export const CONTRACT_DIGEST = '6a88ecb4a91c3bad046ec910cf4278b5ae4e01acb504291f9b34aeef5931aedd';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -4377,7 +4377,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.56.0";
+  contract_version: "1.57.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;

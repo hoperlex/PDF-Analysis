@@ -203,7 +203,7 @@ def _execution_status_list(value: Any) -> Any:
     return elements
 
 
-#: `UIP-S12-01` (contract 1.56.0, ruling `Г12-B`). ``listDecisions``' ``execution_status``: the finding's designer
+#: `UIP-S12-01` (contract 1.57.0, ruling `Г12-B`). ``listDecisions``' ``execution_status``: the finding's designer
 #: execution status (`R-151g`), one or more of the four values of ``FindingExecutionStatus``, comma-separated. In the
 #: document it is an inline string: a list-valued query parameter would need a transport the generated client does not
 #: have (it sends one string per name), so the list is carried in the value and checked here, element by element.

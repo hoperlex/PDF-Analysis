@@ -24,7 +24,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = ["build_project_routes"]
 
-# `UIP-S03-02` (contract 1.56.0): the order of the listing. `published` is the order the operation always had, newest first;
+# `UIP-S03-02` (contract 1.57.0): the order of the listing. `published` is the order the operation always had, newest first;
 # `name` is the order by the first number in the name. Inline, like `listDocuments`' own `order`: the two words are the whole
 # vocabulary and a parameter that named a component schema would add one. Any other value is `validation_failed`, never the
 # default order under another name.
