@@ -1463,8 +1463,10 @@ class SectionSpecificationPort(Protocol):
     A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives. The
     answer is always a ``SectionSpecification``: a bound that stops it (``section_too_large``)
     and a set without a run or a saved text are states in the answer, never an error envelope
-    and never an empty table. An unknown ``project_uid`` filter is ``404``. Nothing behind
-    this port writes.
+    and never an empty table. An unknown ``project_uid`` filter is ``404``, and so is a
+    ``document_uid`` filter (`UIP-S11-05`) that names no set of this section's answer: an
+    unknown one, one of another project than ``project_uid`` and one whose current version is
+    confirmed in another section. Nothing behind this port writes.
     """
 
     def get_section_specification(
@@ -1476,6 +1478,7 @@ class SectionSpecificationPort(Protocol):
         offset: int,
         limit: int,
         user_uid: str,
+        document_uid: str | None = None,
     ) -> models.SectionSpecification:
         """The section's combined specification of current versions, priced per project."""
 
@@ -1682,10 +1685,11 @@ class OptimisationProposalPort(Protocol):
         one keyed command, one report."""
 
     def list_accepted_optimisation_proposals(
-        self, *, project_uid: str | None, section_code: str | None, user_uid: str
+        self, *, project_uid: str | None, section_code: str | None, user_uid: str, document_uid: str | None = None
     ) -> Sequence[models.AcceptedOptimisationProposal]:
         """`UI-B-27`: the proposals whose decision in force is an acceptance, newest acceptance first, optionally of
-        one project and one section; the edge pages them."""
+        one project, one document set (`UIP-S11-05`) and one section; the edge pages them. Every filter is a filter, so
+        a document set nothing was accepted in, or that does not exist, is an empty answer."""
 
 
 # --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------

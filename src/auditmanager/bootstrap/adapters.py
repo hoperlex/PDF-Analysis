@@ -5742,6 +5742,7 @@ class SectionSpecificationAdapter(_SessionHolder):
         offset: int,
         limit: int,
         user_uid: str,
+        document_uid: str | None = None,
     ) -> models.SectionSpecification:
         from auditmanager.access.public import AccountRepository
         from auditmanager.optimisation.public import read_section_specification
@@ -5753,6 +5754,7 @@ class SectionSpecificationAdapter(_SessionHolder):
                 actor_roles=AccountRepository().roles_of(session, user_uid),
                 reader=self._reader,
                 project_uid=project_uid,
+                document_uid=document_uid,
                 query=query,
                 offset=offset,
                 limit=limit,
@@ -6763,7 +6765,7 @@ class OptimisationProposalAdapter(_SessionHolder):
         )
 
     def list_accepted_optimisation_proposals(
-        self, *, project_uid: str | None, section_code: str | None, user_uid: str
+        self, *, project_uid: str | None, section_code: str | None, user_uid: str, document_uid: str | None = None
     ) -> Sequence[models.AcceptedOptimisationProposal]:
         """`UI-B-27`: the accepted proposals, each acceptance's author named by the account's display label."""
         from auditmanager.access.public import AccountRepository
@@ -6776,6 +6778,7 @@ class OptimisationProposalAdapter(_SessionHolder):
                 actor_roles=accounts.roles_of(session, user_uid),
                 project_uid=project_uid,
                 section=section_code,
+                document_uid=document_uid,
             )
             labels = _Labels(session, accounts)
             return tuple(

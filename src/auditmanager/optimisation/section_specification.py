@@ -31,7 +31,13 @@ project without a price list serves its rows with no match at all, never a figur
 
 **Filters.** ``project_uid`` narrows the projects, sources, exclusions and rows to one project
 (an unknown project is ``not_found`` ``Project``; a known one with no member set answers an
-empty section). ``query`` keeps the rows whose own Form-7 text -- position, description,
+empty section). ``document_uid`` (`UIP-S11-05`) narrows them to one document set the same way
+and is read through the set's own project, so it never scans the deployment; a document that
+is unknown, belongs to another project than a named ``project_uid``, or whose current version
+is neither confirmed in this section nor unclassified (another section's, or no version at
+all) is ``not_found`` ``Document`` -- the answer an unknown identity gets, so the section
+never discloses which of these it is; an unclassified one is listed in ``excluded`` like any
+unclassified current version. ``query`` keeps the rows whose own Form-7 text -- position, description,
 group heading, unit as printed, note -- contains it after case folding, ``ё``/``е`` and
 whitespace runs are folded; it never narrows the projects, their states or their totals.
 
@@ -349,6 +355,17 @@ def _project_filter(value: object) -> ProjectUid | None:
         ) from None
 
 
+def _document_filter(value: object) -> DocumentUid | None:
+    if value is None:
+        return None
+    try:
+        return DocumentUid.parse(value)  # type: ignore[arg-type]
+    except (IdentityError, TypeError):
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED, field="document_uid", constraint="pattern"
+        ) from None
+
+
 def _integrity(message: str) -> DomainError:
     return DomainError(ErrorCode.INTERNAL_ERROR, message=message)
 
@@ -419,6 +436,7 @@ def _membership(
     *,
     section: str,
     project_uid: ProjectUid | None,
+    document_uid: DocumentUid | None = None,
 ) -> tuple[list[_Member], list[ExcludedVersion], int]:
     """Member sets, and the first unclassified current versions with their full count.
 
@@ -427,6 +445,10 @@ def _membership(
     is not classified at all. Both come back in the answer's order. The exclusion listing keeps
     only the first :data:`MAX_LISTED_EXCLUDED` while it counts them all, so the memory held is
     bounded however many sets are unclassified.
+
+    ``document_uid`` (`UIP-S11-05`) keeps one set in both lists. The documents projection has no
+    filter by document, so the walk is the project's own (the caller names it) and the set is
+    picked from the pages; every record of a page is still checked before it is dropped.
     """
     project = None if project_uid is None else str(project_uid)
 
@@ -440,7 +462,8 @@ def _membership(
             limit=_MEMBERSHIP_PAGE,
         )
     ):
-        listed.extend(_checked_member(item, section=section, project=project) for item in page)
+        checked = [_checked_member(item, section=section, project=project) for item in page]
+        listed.extend(item for item in checked if document_uid is None or item.document_uid == document_uid)
     members: list[_Member] = []
     for owner, items in groupby(
         sorted(listed, key=_listing_order), key=lambda item: str(item.project_uid)
@@ -455,11 +478,13 @@ def _membership(
             session, project_uid=project_uid, after=after, limit=_MEMBERSHIP_PAGE
         )
     ):
-        unclassified_count += len(page)
-        first = sorted(
-            [*first, *(_checked_unclassified(item, project=project) for item in page)],
-            key=_listing_order,
-        )[:MAX_LISTED_EXCLUDED]
+        kept = [
+            item
+            for item in (_checked_unclassified(item, project=project) for item in page)
+            if document_uid is None or item.document_uid == document_uid
+        ]
+        unclassified_count += len(kept)
+        first = sorted([*first, *kept], key=_listing_order)[:MAX_LISTED_EXCLUDED]
     excluded = [
         ExcludedVersion(
             project_uid=str(item.project_uid),
@@ -665,6 +690,7 @@ def read_section_specification(
     query: str | None = None,
     offset: int = 0,
     limit: int = DEFAULT_ROW_PAGE,
+    document_uid: str | None = None,
     documents: DocumentRepository | None = None,
     repository: OptimisationRepository | None = None,
 ) -> SectionSpecification:
@@ -672,6 +698,7 @@ def read_section_specification(
     require_reader(frozenset(actor_roles), aggregate_type=AGGREGATE_SECTION_SPECIFICATION)
     section = parse_section_code(section_code)
     project_filter = _project_filter(project_uid)
+    document_filter = _document_filter(document_uid)
     search = _query(query)
     start = _bounded(offset, field="offset", minimum=0, maximum=None)
     size = _bounded(limit, field="limit", minimum=1, maximum=MAX_ROW_PAGE)
@@ -696,12 +723,25 @@ def read_section_specification(
 
     if project_filter is not None:
         documents.get_project(session, project_filter)  # an unknown project is not_found
-    elif documents.count_projects(session) > MAX_SCANNED_PROJECTS:
+    scope = project_filter
+    if document_filter is not None:
+        # The set's own project is the scope: one project's pages are read, whatever the size of the
+        # deployment, and the project bound below does not apply to a read that names one set. An
+        # unknown set, and a set of another project than the one named, are the same `not_found`.
+        owner = documents.require_document(session, document_filter)
+        if project_filter is not None and owner != project_filter:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
+        scope = owner
+    elif project_filter is None and documents.count_projects(session) > MAX_SCANNED_PROJECTS:
         return replace(answer, state=SECTION_STATE_TOO_LARGE, limit_reason=LIMIT_PROJECTS)
 
     members, excluded, excluded_count = _membership(
-        session, documents, section=section, project_uid=project_filter
+        session, documents, section=section, project_uid=scope, document_uid=document_filter
     )
+    if document_filter is not None and not members and not excluded_count:
+        # Confirmed in another section, or no current version: nothing of this section's answer
+        # concerns the set, which is what an unknown set is. Same error, same details.
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
     source_count = sum(len(member.versions) for member in members)
     answer = replace(
         answer,

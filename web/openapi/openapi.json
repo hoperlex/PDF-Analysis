@@ -6454,7 +6454,7 @@
           "optimisation"
         ],
         "summary": "Get Section Specification",
-        "description": "«Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert|viewer`.",
+        "description": "«Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `document_uid` (`UIP-S11-05`) narrows it to one document set the same way, without scanning other projects, and a document that is unknown, of another project than `project_uid`, or whose current version is confirmed in another section is `404` (a current version nobody classified is answered, listed in `excluded`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert|viewer`.",
         "operationId": "getSectionSpecification",
         "security": [
           {
@@ -6468,6 +6468,14 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/ProjectUid"
+            }
+          },
+          {
+            "name": "document_uid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentUid"
             }
           },
           {
@@ -23958,7 +23966,7 @@
         ],
         "summary": "List Accepted Optimisation Proposals",
         "operationId": "listAcceptedOptimisationProposals",
-        "description": "The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` states, present where `saving` is `null` and absent only at a zero current price. Any one role, `role:admin|expert|viewer`.",
+        "description": "The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project, `document_uid` (`UIP-S11-05`) to one document set and `section_code` to the versions an expert confirmed in that section; none is a parent, so an empty result is a `200` with no rows -- a document that does not exist, or that belongs to another project or section than the one named, included. `total` is the number of proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` states, present where `saving` is `null` and absent only at a zero current price. Any one role, `role:admin|expert|viewer`.",
         "security": [
           {
             "bearerAuth": []
@@ -23999,6 +24007,14 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/ProjectSection"
+            }
+          },
+          {
+            "name": "document_uid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentUid"
             }
           },
           {

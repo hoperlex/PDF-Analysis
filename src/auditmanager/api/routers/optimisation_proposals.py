@@ -334,8 +334,8 @@ def build_optimisation_proposal_routes(
             **success(
                 200, "One page of the accepted proposals, newest acceptance first, and the number that match."
             ),
-            # No 404: `project_uid` and `section_code` are filters, not parents -- a project or a section nothing was
-            # accepted in matches no row, and that is an empty page.
+            # No 404: `project_uid`, `document_uid` and `section_code` are filters, not parents -- a project, a document
+            # set or a section nothing was accepted in matches no row, and that is an empty page.
             **envelope_responses(401, 403, 422, 500, 503),
         },
         description=(
@@ -343,8 +343,10 @@ def build_optimisation_proposal_routes(
             "acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and "
             "the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest "
             "decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. "
-            "`project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that "
-            "section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of "
+            "`project_uid` narrows to one project, `document_uid` (`UIP-S11-05`) to one document set and "
+            "`section_code` to the versions an expert confirmed in that section; none is a parent, so an empty "
+            "result is a `200` with no rows -- a document that does not exist, or that belongs to another project or "
+            "section than the one named, included. `total` is the number of "
             "proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, "
             "the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` "
             "states, present where `saving` is `null` and absent only at a zero current price. Any one role, "
@@ -357,9 +359,11 @@ def build_optimisation_proposal_routes(
         limit: LimitParam = 50,
         project_uid: ProjectUidFilterParam = None,  # type: ignore[assignment]
         section_code: SectionCodeFilterParam = None,  # type: ignore[assignment]
+        document_uid: DocumentFilterParam = None,
     ) -> WireResponse:
         rows = proposals.list_accepted_optimisation_proposals(
             project_uid=project_uid,
+            document_uid=document_uid,
             section_code=None if section_code is None else section_code.value,
             user_uid=subject.user_uid,
         )

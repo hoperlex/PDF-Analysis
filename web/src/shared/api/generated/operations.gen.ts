@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.56.0 (OpenAPI 3.1.0)
- *   sha256 84f32ac7cdb9a8a7ac913cd221f265582a39662a44274faeccf7e27384ee016d
+ *   sha256 b45b581aac9c7bc989191842b8a2bb8e309083c1ed6f367e066f9786b0013957
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -3723,7 +3723,7 @@ export type GetRunStatusResult = RunStatus;
 /**
  * Get Section Specification
  *
- * «Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert|viewer`.
+ * «Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `document_uid` (`UIP-S11-05`) narrows it to one document set the same way, without scanning other projects, and a document that is unknown, of another project than `project_uid`, or whose current version is confirmed in another section is `404` (a current version nobody classified is answered, listed in `excluded`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert|viewer`.
  */
 export type GetSectionSpecificationInput = {
   /** Path parameters, substituted into `/sections/{section_code}/specification`. */
@@ -3732,6 +3732,7 @@ export type GetSectionSpecificationInput = {
   };
   /** Query string parameters. */
   query?: {
+    document_uid?: DocumentUid;
     /** Specification rows per answer. */
     limit?: number;
     /** Position in the list of rows that survive the search. */
@@ -4415,12 +4416,13 @@ export type IssueTokenResult = IssueTokenResponse;
 /**
  * List Accepted Optimisation Proposals
  *
- * The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` states, present where `saving` is `null` and absent only at a zero current price. Any one role, `role:admin|expert|viewer`.
+ * The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project, `document_uid` (`UIP-S11-05`) to one document set and `section_code` to the versions an expert confirmed in that section; none is a parent, so an empty result is a `200` with no rows -- a document that does not exist, or that belongs to another project or section than the one named, included. `total` is the number of proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` states, present where `saving` is `null` and absent only at a zero current price. Any one role, `role:admin|expert|viewer`.
  */
 export type ListAcceptedOptimisationProposalsInput = {
   /** Query string parameters. */
   query?: {
     cursor?: Cursor;
+    document_uid?: DocumentUid;
     limit?: number;
     project_uid?: ProjectUid;
     section_code?: ProjectSection;
@@ -10995,7 +10997,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/sections/{section_code}/specification',
     pathParams: ['section_code'],
-    queryParams: ['limit', 'offset', 'project_uid', 'q'],
+    queryParams: ['document_uid', 'limit', 'offset', 'project_uid', 'q'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -11401,7 +11403,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/optimisation-proposals/accepted',
     pathParams: [],
-    queryParams: ['cursor', 'limit', 'project_uid', 'section_code'],
+    queryParams: ['cursor', 'document_uid', 'limit', 'project_uid', 'section_code'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
