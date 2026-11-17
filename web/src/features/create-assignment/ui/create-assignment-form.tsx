@@ -12,7 +12,7 @@
 import { useState } from 'react';
 
 import { ErrorState } from '@/shared/ui';
-import { assignmentFailure, assignmentScope } from '@/entities/assignment';
+import { assignmentFailure, assignmentScope, resolveExpertChoice } from '@/entities/assignment';
 import { useDocumentList } from '@/entities/document-version';
 import { useProjectList } from '@/entities/project';
 
@@ -30,6 +30,11 @@ export interface CreateAssignmentFormProps {
    * `null` or absent for «Все проекты». Only the start: the field stays free, and a change of the header re-mounts the form.
    */
   readonly defaultProjectUid?: string | null | undefined;
+  /**
+   * `UIP-S14-03`: the expert the address names, which the form starts on when that account is among `experts`. While the
+   * experts are not loaded none is chosen, so the submit stays off; the administrator may change the choice.
+   */
+  readonly defaultExpertUid?: string | null | undefined;
 }
 
 function DocumentChoice({
@@ -58,15 +63,17 @@ function DocumentChoice({
   );
 }
 
-export function CreateAssignmentForm({ experts, defaultProjectUid = null }: CreateAssignmentFormProps) {
+export function CreateAssignmentForm({ experts, defaultProjectUid = null, defaultExpertUid = null }: CreateAssignmentFormProps) {
   const projects = useProjectList();
   const create = useCreateAssignment();
   const [projectUid, setProjectUid] = useState(defaultProjectUid ?? '');
   const [documentUid, setDocumentUid] = useState('');
-  const [assignee, setAssignee] = useState('');
+  // `null`: the administrator has not chosen, so the address's expert stands once the list that holds them is loaded.
+  const [chosen, setChosen] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [created, setCreated] = useState<{ readonly uid: string; readonly what: string; readonly who: string } | null>(null);
 
+  const assignee = chosen ?? resolveExpertChoice(experts, defaultExpertUid) ?? '';
   const projectItems = projects.isSuccess ? projects.data.items : [];
   const ready = projectUid !== '' && assignee !== '' && !create.isPending;
 
@@ -112,7 +119,7 @@ export function CreateAssignmentForm({ experts, defaultProjectUid = null }: Crea
       )}
       <label className="am-form__field">
         Эксперт
-        <select value={assignee} required onChange={(event) => setAssignee(event.target.value)}>
+        <select value={assignee} required onChange={(event) => setChosen(event.target.value)}>
           <option value="">Выберите эксперта</option>
           {experts.map((expert) => (
             <option key={expert.userUid} value={expert.userUid}>

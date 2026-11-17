@@ -10,6 +10,9 @@
  *
  * `D-319`: an administrator can narrow both tabs to one engineer (`?engineer=`), and «Выполнено» also reads the reserve
  * — the open assignments of «Назначения» — for its «Просрочки» tile.
+ *
+ * `UIP-S14-04`: «Календарь запаса» offers an administrator «Отпуск / отсутствие», which opens «Выполнено» in the mode of the
+ * days off and the absences (`?mode=absences`); the widget only calls back, and this page moves the tab.
  */
 
 import { useId, useRef, useState } from 'react';
@@ -23,7 +26,7 @@ import { overdueCount, resolveEngineerFilter, todayIso, useWorkSchedule, useWork
 import { ReserveCalendarView } from '@/widgets/reserve-calendar';
 import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
 
-import { RESERVE_DAYS, SCHEDULE_TABS, SCHEDULE_TAB_LABELS, scheduleSearch } from '../model/address';
+import { RESERVE_DAYS, SCHEDULE_TABS, SCHEDULE_TAB_LABELS, openAbsences, scheduleSearch, withoutMode } from '../model/address';
 import type { ScheduleAddress, ScheduleTab } from '../model/address';
 import styles from './work-schedule-page.module.css';
 
@@ -43,9 +46,11 @@ interface TabProps {
   readonly onEngineer: (engineer: string | null) => void;
 }
 
-function MonthTab({ month, today, admin, engineer, onMonth, onEngineer }: TabProps & {
+function MonthTab({ month, today, admin, absences, engineer, onMonth, onEngineer }: TabProps & {
   readonly month: string;
   readonly today: string;
+  /** The address asked for «Выходные и отсутствия»; only an administrator is given the mode. */
+  readonly absences: boolean;
   readonly onMonth: (month: string) => void;
 }) {
   const schedule = useWorkSchedule(month);
@@ -76,16 +81,18 @@ function MonthTab({ month, today, admin, engineer, onMonth, onEngineer }: TabPro
       today={today}
       filter={filter}
       overdue={overdue}
+      initialMode={admin && absences ? 'calendar' : 'view'}
       onMonth={onMonth}
       onEngineer={onEngineer}
     />
   );
 }
 
-function ReserveTab({ start, today, admin, engineer, onStart, onEngineer }: TabProps & {
+function ReserveTab({ start, today, admin, engineer, onStart, onEngineer, onAbsences }: TabProps & {
   readonly start: string;
   readonly today: string;
   readonly onStart: (start: string) => void;
+  readonly onAbsences: () => void;
 }) {
   const reserve = useWorkScheduleReserve(start, RESERVE_DAYS);
   if (reserve.isPending) return <LoadingState what="календарь запаса" />;
@@ -101,14 +108,25 @@ function ReserveTab({ start, today, admin, engineer, onStart, onEngineer }: TabP
     );
   }
   const filter = resolveEngineerFilter(reserve.data.engineers, admin ? engineer : null);
-  return <ReserveCalendarView reserve={reserve.data} admin={admin} today={today} filter={filter} onStart={onStart} onEngineer={onEngineer} />;
+  return (
+    <ReserveCalendarView
+      reserve={reserve.data}
+      admin={admin}
+      today={today}
+      filter={filter}
+      onStart={onStart}
+      onEngineer={onEngineer}
+      onAbsences={onAbsences}
+    />
+  );
 }
 
 export function WorkSchedulePage({ roles, initial, today = todayIso() }: WorkSchedulePageProps) {
-  const [address, setAddress] = useState<ScheduleAddress>(initial);
+  const admin = roles.includes('admin');
+  // The mode of the absences is an administrator's; an expert's address that names it is read as if it did not.
+  const [address, setAddress] = useState<ScheduleAddress>(admin ? initial : withoutMode(initial));
   const base = useId();
   const buttons = useRef<Partial<Record<ScheduleTab, HTMLButtonElement | null>>>({});
-  const admin = roles.includes('admin');
 
   const go = (next: ScheduleAddress) => {
     setAddress(next);
@@ -119,7 +137,7 @@ export function WorkSchedulePage({ roles, initial, today = todayIso() }: WorkSch
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
     event.preventDefault();
     const next: ScheduleTab = address.tab === 'completed' ? 'reserve' : 'completed';
-    go({ ...address, tab: next });
+    go(withoutMode({ ...address, tab: next }));
     buttons.current[next]?.focus();
   };
 
@@ -149,7 +167,7 @@ export function WorkSchedulePage({ roles, initial, today = todayIso() }: WorkSch
               tabIndex={tab === address.tab ? 0 : -1}
               className={styles.tab}
               data-schedule-tab={tab}
-              onClick={() => go({ ...address, tab })}
+              onClick={() => go(withoutMode({ ...address, tab }))}
               onKeyDown={onKeyDown}
             >
               {SCHEDULE_TAB_LABELS[tab]}
@@ -162,8 +180,9 @@ export function WorkSchedulePage({ roles, initial, today = todayIso() }: WorkSch
               month={address.month}
               today={today}
               admin={admin}
+              absences={address.mode === 'absences'}
               engineer={address.engineer}
-              onMonth={(month) => go({ ...address, month })}
+              onMonth={(month) => go(withoutMode({ ...address, month }))}
               onEngineer={(engineer) => go({ ...address, engineer })}
             />
           ) : (
@@ -172,8 +191,9 @@ export function WorkSchedulePage({ roles, initial, today = todayIso() }: WorkSch
               today={today}
               admin={admin}
               engineer={address.engineer}
-              onStart={(start) => go({ ...address, start })}
+              onStart={(start) => go(withoutMode({ ...address, start }))}
               onEngineer={(engineer) => go({ ...address, engineer })}
+              onAbsences={() => go(openAbsences(address))}
             />
           )}
         </div>

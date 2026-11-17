@@ -22,7 +22,7 @@ import { switchProject } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import { useCurrentProject, useProjectList } from '@/entities/project';
 import { USER_PAGE_LIMIT, useUsers } from '@/entities/user';
-import { canAssignWork } from '@/entities/assignment';
+import { EXPERT_PARAM, canAssignWork, parseExpertAddress } from '@/entities/assignment';
 import { CreateAssignmentForm } from '@/features/create-assignment';
 import type { ExpertOption } from '@/features/transition-assignment';
 import { AssignmentBoard } from '@/widgets/assignment-board';
@@ -56,7 +56,13 @@ function ProjectScope({ projectUid, allProjectsHref }: { readonly projectUid: st
   );
 }
 
-function AdministratorTools({ roles, viewerUid, projectUid }: { readonly roles: readonly Role[]; readonly viewerUid: string | null; readonly projectUid: string | null }) {
+function AdministratorTools({ roles, viewerUid, projectUid, expertUid }: {
+  readonly roles: readonly Role[];
+  readonly viewerUid: string | null;
+  readonly projectUid: string | null;
+  /** `UIP-S14-03`: the expert the address names, which the form opens on when the loaded experts include them. */
+  readonly expertUid: string | null;
+}) {
   const users = useUsers({ includeArchived: false, limit: USER_PAGE_LIMIT });
   const experts = users.isSuccess ? expertOptions(users.data.items) : [];
   return (
@@ -68,7 +74,7 @@ function AdministratorTools({ roles, viewerUid, projectUid }: { readonly roles: 
             Список экспертов не загружен — назначить работу сейчас нельзя.
           </p>
         ) : null}
-        <CreateAssignmentForm key={projectUid ?? 'all'} experts={experts} defaultProjectUid={projectUid} />
+        <CreateAssignmentForm key={projectUid ?? 'all'} experts={experts} defaultProjectUid={projectUid} defaultExpertUid={expertUid} />
       </section>
       <section className={`am-section ${styles.panel}`} data-dispatcher-list="">
         <h2>Назначения</h2>
@@ -83,11 +89,16 @@ export function DispatcherPage({ roles }: DispatcherPageProps) {
   // pasted link restores it. «Все объекты» is the explicit `?project=all`.
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const { projectUid } = useCurrentProject(DISPATCHER_ADDRESS);
-  const allProjects = switchProject(searchParams, null, projectUid).toString();
-  const allProjectsHref = `${DISPATCHER_ADDRESS}?${allProjects}`;
   const me = useMe();
   const viewerUid = me.isSuccess ? me.data.user_uid : null;
   const admin = canAssignWork(roles);
+  // `UIP-S14-03`: `?expert=` is read for an administrator and only when it is an account identifier; any other value is
+  // dropped, and the link back to every object does not carry it either, so it is drawn nowhere.
+  const expertUid = admin ? parseExpertAddress(searchParams.get(EXPERT_PARAM)) : null;
+  const carried = new URLSearchParams(searchParams.toString());
+  if (expertUid === null) carried.delete(EXPERT_PARAM);
+  const allProjects = switchProject(carried, null, projectUid).toString();
+  const allProjectsHref = `${DISPATCHER_ADDRESS}?${allProjects}`;
   return (
     <section className="am-page" data-screen="dispatcher">
       <header className={`am-page__header ${styles.hero}`}>
@@ -101,7 +112,7 @@ export function DispatcherPage({ roles }: DispatcherPageProps) {
       <div className="am-page__body am-page__body--canvas">
         <ProjectScope projectUid={projectUid} allProjectsHref={allProjectsHref} />
         {admin ? (
-          <AdministratorTools roles={roles} viewerUid={viewerUid} projectUid={projectUid} />
+          <AdministratorTools roles={roles} viewerUid={viewerUid} projectUid={projectUid} expertUid={expertUid} />
         ) : (
           <section className={`am-section ${styles.panel}`} data-dispatcher-list="">
             <h2>Мои назначения</h2>

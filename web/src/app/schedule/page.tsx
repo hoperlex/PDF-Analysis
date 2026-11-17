@@ -2,7 +2,7 @@
  * `/schedule` — the route file for «График работ» (`UI-PARITY-P0P`).
  *
  * Delegation-only: it hands the screen the session's roles — the screen draws the administrator's controls only for
- * `admin` — and the tab, month, reserve start and engineer the address names. The API decides every read and move.
+ * `admin` — and the tab, month, reserve start, engineer and (`?mode=absences`, for an administrator) mode the address names. The API decides every read and move.
  *
  * `W50-PLAN.md` §3.2: the route awaits `requireScreen` with its own address before it renders; the registry's row is
  * `session`, roles `expert` and `admin`. Declared `force-dynamic` because the guard reads a cookie.
@@ -29,6 +29,7 @@ export default async function WorkScheduleRoute({ params, searchParams }: Screen
         month: first(query.month),
         start: first(query.start),
         engineer: first(query.engineer),
+        mode: first(query.mode),
       })}
     />
   );
