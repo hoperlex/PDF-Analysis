@@ -3,8 +3,8 @@
  * of 4px/8px cells, the head in small capitals, the finding, its norms and its recommendation side by side, and the opened finding in
  * a strip under its row. Tokens only. A row reads at a glance by three things the colour is not the only carrier of: the stripe at
  * its left in the tone of its severity (solid when the expert decided it, dashed when it is the model's proposal, and the pill in the
- * cell says which in words), the tint of an accepted row, and the strike-through of a rejected one; the word of the verdict stands in
- * the last cell. A word is not cut in a narrow column: the cells break only a word that cannot fit its own line at all.
+ * cell says which in words), the tint of an accepted row, and the strike-through of a rejected one; the verdict's sign (its word is the sign's name) stands
+ * in the last cell. A word is not cut in a narrow column: the cells break only a word that cannot fit its own line at all.
  */
 
 .scroll {
@@ -34,23 +34,25 @@
 }
 
 .colPages {
-  width: 9%;
+  width: 7%;
 }
 
+/* The finding is the widest column of the table. */
 .colText {
-  width: 24%;
+  width: 26%;
 }
 
 .colNorms {
-  width: 16%;
+  width: 11%;
 }
 
 .colRecommendation {
-  width: 20%;
+  width: 12%;
 }
 
+/* Wide enough for the whole line of the «Решение» cell (the sign, the choice of severity, ✓, ✕ and «Причина») at the width of a desktop. */
 .colDecision {
-  width: 12%;
+  width: 25%;
 }
 
 .head {
@@ -269,11 +271,70 @@
   -webkit-line-clamp: 2;
 }
 
+/*
+ * `UIP-FIX-17`: the «Решение» cell is one line -- the verdict's sign, the choice of severity (for a finding the model proposed one
+ * for), ✓, ✕ and «Причина» -- so a row is as high as one line of controls (28 px buttons) and not three. The field is what gives:
+ * it takes what the others leave and is narrower in a narrow column, never put under the buttons. Only the line of the last press
+ * («Записано», a refusal) goes under the buttons, on a line of its own, and so does the mark of a carried decision, when there is one.
+ *
+ * The field and its row are the markup of `entities/expert-decision` and `FindingRowActions`, whose own rules wrap (a list row, the
+ * full-screen side column and the proposal's card read them that way); they are placed here from the cell, by the handles the markup
+ * carries (`data-row-actions`, `data-row-severity`, `data-decision-control`, `data-decision-reason`, `data-decision-note`,
+ * `data-carried-from`), and the `min-width`s below are what keeps the buttons and a few letters of the field on one line. Every
+ * selector here outranks the one it overrides on specificity, so the order the sheets arrive in does not matter.
+ */
 .decision {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+/* The sign of the verdict stands as tall as the buttons beside it, so it is on their line when the note is under them. */
+.decision > [data-verdict] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+}
+
+/* The choice and the field: the rest of the line, never wrapped; the cell wraps them as a whole only when it is narrower than their minimum. */
+.decision [data-row-actions] {
+  flex: 1 1 0;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: var(--am-gap-xs);
+  max-width: none;
+  min-width: 12.5rem;
+}
+
+/* «Критичность» in full; the longer names are cut with an ellipsis before the field is. */
+.decision select[data-row-severity] {
+  flex: 0 1 7rem;
+  min-width: 4.5rem;
+}
+
+/* ✓ and ✕ and a few letters of the field (2.5rem) always stand together; the note, when there is one, is the only thing that wraps. */
+.decision [data-decision-control] {
+  flex: 1 1 0;
+  gap: var(--am-gap-xs);
+  min-width: 7.5rem;
+}
+
+.decision [data-decision-control] input[data-decision-reason] {
+  flex: 1 1 0;
+  min-width: 2.5rem;
+  padding-inline: var(--am-gap-xs);
+}
+
+.decision [data-decision-control] [data-decision-note] {
+  flex: 1 0 100%;
+}
+
+/* The mark of a carried decision stands under the line, not inside it: it is long and rare, and the field is not given up for it. */
+.decision > [data-carried-from] {
+  flex: 1 0 100%;
 }
 
 /* The opened finding: a strip across the table under its row, on the page's own surface. */

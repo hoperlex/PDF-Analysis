@@ -150,7 +150,8 @@ button.viewLink:hover {
 /*
  * One field is as wide as its content up to 18rem: «Причина» takes what the two buttons leave and the line of the last press
  * (a refusal's reason runs long) wraps inside it, so a sentence after a press does not widen the table's column or the row's.
- * The choice of severity, when the finding has one, stands before the field in the same box.
+ * The choice of severity, when the finding has one, stands before the field in the same box. The table's «Решение» cell does not take
+ * this box as it is: it is one line there, and `finding-table.module.css` places the same markup itself (`UIP-FIX-17`).
  */
 .rowActions {
   display: flex;

@@ -19,6 +19,11 @@
  *
  * There is no draft, no «save all» and no un-press (`Г9-B`): a press is one decision at once, and the field is only the text
  * that goes with it. Further actions of a screen («На доработку», «Снять решение») stand in the `extra` slot, after ✕.
+ *
+ * The markup wraps by default (the buttons, then the field, then the note, each as a line of its own when there is no room), which
+ * is what a card and a list row want. A place that needs one line (the «Решение» cell of «Разбор», `UIP-FIX-17`) places the field
+ * from outside, by the handles the markup carries (`data-decision-control`, `data-decision-reason`, `data-decision-note`); the
+ * default here does not change for it.
  */
 
 import { useState } from 'react';
@@ -100,7 +105,11 @@ export function DecisionReasonControl({ verdict, sending, note, onAccept, onReje
         }}
       />
       {note === null ? null : (
-        <span className={note.tone === 'ok' ? styles.noteOk : styles.noteFail} role={note.tone === 'ok' ? 'status' : 'alert'}>
+        <span
+          className={note.tone === 'ok' ? styles.noteOk : styles.noteFail}
+          data-decision-note=""
+          role={note.tone === 'ok' ? 'status' : 'alert'}
+        >
           {note.text}
         </span>
       )}

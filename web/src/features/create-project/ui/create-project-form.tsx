@@ -61,9 +61,9 @@ function CreateProjectFormInner({ onCreated, mode = 'page', formId, onBusyChange
   const inWindow = mode === 'window';
   const ownId = useId();
   const id = formId ?? ownId;
-  // The page's field keeps its old id (the page has one form); the window's is made from the form's, so a window opened over
-  // the page «Объекты» does not hold a second element of the same id.
-  const inputId = inWindow ? `${id}-name` : 'new-project-name';
+  // The window's field takes its id from the form's, so a window opened over the page «Объекты» does not hold a second element of
+  // the same id. The page's field keeps its own, written out in the page branch below: it is the handle the browser journey fills.
+  const windowInputId = `${id}-name`;
   const [name, setName] = useState('');
   const [localProblem, setLocalProblem] = useState<ProjectNameProblem | null>(null);
   const [created, setCreated] = useState<Project | null>(null);
@@ -123,9 +123,9 @@ function CreateProjectFormInner({ onCreated, mode = 'page', formId, onBusyChange
         }}
       >
         <div className="am-form__field">
-          <label htmlFor={inputId}>Название объекта</label>
+          <label htmlFor={windowInputId}>Название объекта</label>
           <input
-            id={inputId}
+            id={windowInputId}
             name="name"
             type="text"
             autoComplete="off"
@@ -151,12 +151,12 @@ function CreateProjectFormInner({ onCreated, mode = 'page', formId, onBusyChange
         submit();
       }}
     >
-      <label htmlFor={inputId}>
+      <label htmlFor="new-project-name">
         <strong>Новый объект</strong>
       </label>
       <div className="am-form__row">
         <input
-          id={inputId}
+          id="new-project-name"
           name="name"
           type="text"
           value={name}
