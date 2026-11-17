@@ -9,6 +9,11 @@
  * and page on every line, and two projects listing the same product are two rows — nothing is
  * merged, and there is no total for the section. Totals are per project and per currency.
  *
+ * **What stands where** (`UIP-S11-03`). The table comes first. The summary by object — the documents with their state, the price list, the
+ * totals per currency — lies under the disclosure «Источники и итоги» (open only where a bound stopped the read, because the way out,
+ * «Показать только этот объект», is in it), and «Неполные источники: N» is one disclosure at the bottom: the documents the server could
+ * not read yet and the current versions nobody classified. Nothing is counted here: the totals are the server's, shown.
+ *
  * **The table is grouped by document** (`UIP-S11-02`, the original's «⌄ АР-1 · v2 · 10 строк»): one row-group for each document
  * whose current version is confirmed in the section, keyed by `document_uid` and never by a name or a number. A document with
  * no table says «Спецификация отсутствует» in red; with every object chosen the group names its object too; a group the page
@@ -221,24 +226,52 @@ function ProjectPanel({
   );
 }
 
-function Excluded({ answer }: { readonly answer: SectionSpecification }) {
-  if (answer.excluded_count === 0) return null;
+/**
+ * «Неполные источники: N» (`UIP-S11-03`, the original's one disclosure at the foot of its frame): the documents of the section the
+ * server could not read rows of yet — each with what is missing — and the current versions nobody classified, which the summary does
+ * not hold. One list of warnings instead of two blocks; the figure is the count of both, drawn only where there is something to say.
+ */
+function IncompleteSources({ answer }: { readonly answer: SectionSpecification }) {
+  const unread = answer.projects.flatMap((project) =>
+    project.sources.filter((source) => source.state !== 'ready').map((source) => ({ project, source })),
+  );
+  const total = unread.length + answer.excluded_count;
+  if (total === 0) return null;
   return (
-    <details className={styles.details} data-section-excluded-versions={answer.excluded_count}>
-      <summary>Текущие версии без подтверждённого раздела: {answer.excluded_count}. В сводку они не входят.</summary>
-      <ul className={styles.list}>
-        {answer.excluded.map((item) => (
-          <li key={item.version_uid}>
-            <Link href={routes.project(item.project_uid)}>{item.project_name}</Link>
-            {' / '}
-            <Link href={routes.document(item.project_uid, item.document_uid)}>{item.display_title}</Link>
-            {' '}— версия {item.version_ordinal}: {sectionExclusionLabel(item.reason)}
-          </li>
-        ))}
-      </ul>
-      {answer.excluded.length < answer.excluded_count ? (
-        <p className="am-note">Показаны первые {answer.excluded.length}; счёт полный.</p>
-      ) : null}
+    <details className={styles.details} data-section-incomplete={total}>
+      <summary>Неполные источники: {total}</summary>
+      {unread.length === 0 ? null : (
+        <ul className={styles.list} data-section-unread-sources={unread.length}>
+          {unread.map(({ project, source }) => (
+            <li key={source.version_uid} data-section-incomplete-state={source.state}>
+              <Link href={routes.project(project.project_uid)}>{project.name}</Link>
+              {' / '}
+              <Link href={routes.document(project.project_uid, source.document_uid)}>{source.display_title}</Link>
+              {' '}— версия {source.version_ordinal}: {sectionSourceStateMessage(source.state)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {answer.excluded_count === 0 ? null : (
+        <>
+          <p className={styles.hint} data-section-excluded-versions={answer.excluded_count}>
+            Текущие версии без подтверждённого раздела: {answer.excluded_count}. В сводку они не входят.
+          </p>
+          <ul className={styles.list}>
+            {answer.excluded.map((item) => (
+              <li key={item.version_uid}>
+                <Link href={routes.project(item.project_uid)}>{item.project_name}</Link>
+                {' / '}
+                <Link href={routes.document(item.project_uid, item.document_uid)}>{item.display_title}</Link>
+                {' '}— версия {item.version_ordinal}: {sectionExclusionLabel(item.reason)}
+              </li>
+            ))}
+          </ul>
+          {answer.excluded.length < answer.excluded_count ? (
+            <p className="am-note">Показаны первые {answer.excluded.length}; счёт полный.</p>
+          ) : null}
+        </>
+      )}
     </details>
   );
 }
@@ -633,8 +666,13 @@ export function SectionSpecificationAnswer({ answer, onPage, onSelectProject, co
               : 'У выбранного объекта нет комплектов, текущая версия которых подтверждена для этого раздела.'
           }
         />
-      ) : (
-        <>
+      ) : null}
+      <RowsTable key={answer.section_code} answer={answer} onPage={onPage} columns={columns} />
+      {answer.projects.length === 0 ? null : (
+        // `UIP-S11-03`: the summary by object under one disclosure. A read a bound stopped has no table, and what it offers instead —
+        // narrowing to one object — is in the summary, so that one stands open.
+        <details className={styles.details} open={tooLarge} data-section-summary-panel="">
+          <summary>Источники и итоги</summary>
           <p data-section-summary="">
             Объектов в разделе: {answer.projects.length}, комплектов: {answer.source_count}
             {tooLarge ? '.' : `, строк спецификации: ${answer.row_count}.`}
@@ -646,10 +684,9 @@ export function SectionSpecificationAnswer({ answer, onPage, onSelectProject, co
               <ProjectPanel key={project.project_uid} project={project} onSelectProject={answer.project_filter === null ? onSelectProject : null} />
             ))}
           </div>
-        </>
+        </details>
       )}
-      <Excluded answer={answer} />
-      <RowsTable key={answer.section_code} answer={answer} onPage={onPage} columns={columns} />
+      <IncompleteSources answer={answer} />
     </div>
   );
 }

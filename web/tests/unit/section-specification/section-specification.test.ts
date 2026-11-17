@@ -230,13 +230,39 @@ describe('what is said instead of a table', () => {
     expect(text(markup)).toContain('не прочитано строк таблиц: 1');
   });
 
-  it('lists the current versions nobody classified, outside the summary, and counts them completely', () => {
+  it('lists the current versions nobody classified in the one disclosure at the foot, and counts them completely', () => {
     const markup = render(sectionAnswer());
     expect(markup).toContain('data-section-excluded-versions="3"');
     expect(text(markup)).toContain('Текущие версии без подтверждённого раздела: 3. В сводку они не входят.');
     expect(text(markup)).toContain(SECTION_EXCLUSION_LABELS.version_unclassified);
     expect(text(markup)).toContain('Показаны первые 1; счёт полный.');
     expect(render(sectionAnswer({ excluded: [], excluded_count: 0 }))).not.toContain('data-section-excluded-versions');
+  });
+
+  it('«Неполные источники: N» is one disclosure at the bottom: the documents not read yet and the versions nobody classified', () => {
+    const markup = render(sectionAnswer());
+    // Three documents of the first project are not `ready`, and three current versions are unclassified.
+    expect((markup.match(/data-section-incomplete=/g) ?? []).length).toBe(1);
+    expect(markup).toContain('data-section-incomplete="6"');
+    expect(text(markup)).toContain('Неполные источники: 6');
+    expect(markup).toContain('data-section-unread-sources="3"');
+    const incomplete = markup.slice(markup.indexOf('data-section-incomplete='));
+    for (const state of ['analysis_missing', 'text_unavailable', 'specification_too_large'] as const) {
+      expect(incomplete).toContain(`data-section-incomplete-state="${state}"`);
+      expect(text(incomplete)).toContain(SECTION_SOURCE_STATE_MESSAGES[state]);
+    }
+    expect(text(incomplete)).toContain('Школа на пятьсот мест / Архитектурные решения, паркинг — версия 1');
+    // It is the foot of the answer: after the table and after the summary, and the old block over the table is gone.
+    expect(markup.indexOf('data-section-incomplete=')).toBeGreaterThan(markup.indexOf('<table'));
+    expect(markup.indexOf('data-section-incomplete=')).toBeGreaterThan(markup.indexOf('data-section-summary-panel'));
+    expect(text(markup)).not.toContain('Текущие версии без подтверждённого раздела: 3. В сводку они не входят. Школа');
+    // The figure counts both kinds, and nothing is drawn when there is nothing to say.
+    const ready = sectionAnswer({
+      excluded: [], excluded_count: 0,
+      projects: sectionAnswer().projects.map((project) => ({ ...project, sources: project.sources.filter((source) => source.state === 'ready') })),
+    });
+    expect(render(ready)).not.toContain('data-section-incomplete');
+    expect(text(render(sectionAnswer({ ...ready, excluded: sectionAnswer().excluded, excluded_count: 3 })))).toContain('Неполные источники: 3');
   });
 
   for (const reason of ['projects', 'sources', 'rows'] as const) {
@@ -298,6 +324,48 @@ describe('what is said instead of a table', () => {
   });
 });
 
+describe('what stands where in the tab (`UIP-S11-03`)', () => {
+  const markup = render(sectionAnswer());
+
+  it('puts the summary by object under «Источники и итоги», closed, after the table', () => {
+    expect((markup.match(/data-section-summary-panel/g) ?? []).length).toBe(1);
+    const panel = markup.slice(markup.indexOf('data-section-summary-panel'));
+    expect(panel.slice(0, 120)).toContain('<summary>Источники и итоги</summary>');
+    expect(markup).not.toMatch(/<details[^>]*open=""[^>]*data-section-summary-panel/);
+    expect(markup.indexOf('<table')).toBeLessThan(markup.indexOf('data-section-summary-panel'));
+    // The documents with their state, the price list and the totals per currency are all under it.
+    const inside = panel.slice(0, panel.indexOf('</details>'));
+    for (const part of ['data-section-summary=', 'data-section-sources=', 'data-section-price-list=', 'data-section-totals=', 'data-section-project=']) {
+      expect(inside).toContain(part);
+    }
+    // and none of them is above it
+    const above = markup.slice(0, markup.indexOf('data-section-summary-panel'));
+    for (const part of ['data-section-sources=', 'data-section-price-list=', 'data-section-totals=', 'data-section-project=']) {
+      expect(above).not.toContain(part);
+    }
+  });
+
+  it('keeps it open only where a bound stopped the read, because the way out — one object — is in it', () => {
+    const answer = sectionAnswer();
+    const stopped = sectionAnswer({
+      ...SECTION_NO_ROWS, state: 'section_too_large', limit_reason: 'sources',
+      projects: answer.projects.map((item) => ({
+        ...item, price_state: 'not_read' as const, price_list: null, matching: null, row_count: 0,
+        sources: item.sources.map((source) => ({ ...source, state: 'not_read' as const, run_id: null,
+          text_layer_sha256: null, row_count: null, table_count: null, skipped_by_reason: null })),
+      })),
+    });
+    expect(render(stopped)).toMatch(/<details[^>]*open=""[^>]*data-section-summary-panel/);
+    expect(render(stopped)).toContain('Показать только этот объект');
+  });
+
+  it('says nothing of a summary where the section has no document, and never draws an empty disclosure', () => {
+    const none = { projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0 };
+    expect(render(sectionAnswer(none))).not.toContain('data-section-summary-panel');
+    expect(render(sectionAnswer(none))).not.toContain('data-section-incomplete');
+  });
+});
+
 describe('the section picker and the container', () => {
   it('lists the fifteen sections in the owner’s order, АР first, in the header of the page (`UIP-S11-01`)', () => {
     const markup = renderToStaticMarkup(
@@ -320,6 +388,31 @@ describe('the section picker and the container', () => {
     expect(markup).toContain('data-section-specification');
     expect(markup).toContain('Показать сопоставление с прайс-листом');
     expect(client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([sectionKey()]);
+  });
+
+  it('has the search, «Найти», «Сбросить поиск» and the price match in ONE row over the table, and no long paragraph above it', () => {
+    const markup = renderScreen(newClient(), createElement(SectionSpecificationSection));
+    const forms = markup.match(/<form[\s\S]*?<\/form>/g) ?? [];
+    expect(forms).toHaveLength(1);
+    const row = forms[0]!;
+    expect(row).toContain('aria-label="Отбор строк раздела"');
+    expect(text(row)).toContain('Поиск по строкам');
+    expect(row).toContain('id="section-specification-query"');
+    expect(row).toMatch(/<button[^>]*type="submit"[^>]*>Найти<\/button>/);
+    expect(row).toMatch(/<button[^>]*>Сбросить поиск<\/button>/);
+    expect(row).toContain('data-section-columns-toggle');
+    expect(text(row)).toContain('Показать сопоставление с прайс-листом');
+    // The paragraph that explained the rules is not on the tab: what it said stands where it is true.
+    expect(text(markup)).not.toContain('Строки спецификации (форма 7) текущих версий комплектов');
+    expect(text(markup)).not.toContain('сопоставляется с прайс-листом своего объекта');
+  });
+
+  it('answers a search with the same row over the table: the row is above the answer', () => {
+    const client = newClient();
+    client.setQueryData(sectionKey(), sectionAnswer());
+    const markup = renderScreen(client, createElement(SectionSpecificationSection));
+    expect(markup.indexOf('aria-label="Отбор строк раздела"')).toBeLessThan(markup.indexOf('<table'));
+    expect((markup.match(/<form/g) ?? []).length).toBe(1);
   });
 
   it('says a refused read is refused and offers to try again', () => {

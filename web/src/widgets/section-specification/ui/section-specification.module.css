@@ -5,19 +5,15 @@
   overflow-wrap: anywhere;
 }
 
-.rule {
-  margin: 0 0 var(--am-gap-sm);
-  color: var(--am-ink-muted);
-}
-
+/* `UIP-S11-03`: the search, «Найти», «Сбросить поиск», «Обновить» and the price match in ONE row over the table; it wraps only where the window is narrow. */
 .filters {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--am-gap-sm) var(--am-gap);
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
   max-width: none;
   margin: 0 0 var(--am-gap-sm);
-  padding: var(--am-gap-sm) var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);
@@ -26,6 +22,30 @@
 .filters select,
 .filters input[type='search'] {
   max-width: 100%;
+}
+
+/* The caption stands beside the field, not above it, so the row is one line; the field takes what the buttons leave. */
+.searchField {
+  display: flex;
+  flex: 1 1 18rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  min-width: 0;
+}
+
+.searchField label {
+  margin: 0;
+}
+
+.searchField input[type='search'] {
+  flex: 1 1 10rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.filters button {
+  margin: 0;
 }
 
 .projects {

@@ -4,16 +4,17 @@
  * «Оптимизация разделов» — a section's combined Form-7 specification across projects
  * (`W63-SECTION-FORM7-01`), the body of the page's «Форма 7» tab.
  *
- * **What is chosen here.** The search text, and the columns: the original's nine graphs of the form (default), or the same
+ * **What is chosen here**, in one row over the table (`UIP-S11-03`): the search text — «Найти», «Сбросить поиск» — and the columns: the original's nine graphs of the form (default), or the same
  * table with the match against the project's price list added (`UI-B-23`). The section and the project are the page's (the section is
  * chosen in its header, the object in the top strip); this widget reads them (`sectionCode`,
  * `projectUid`) and never writes them but through `onSelectProject`, the button of a project's panel that narrows the section
  * to it. All of them are filters over the one read, `getSectionSpecification`: the section code is not an object, a document
  * or a proposal, and nothing here ever writes. The search narrows the rows and never a project's totals.
  *
- * **What is shown** is `SectionSpecificationAnswer`: each project with its sets, its own price list and its own totals, the
- * current versions nobody classified, and the Form-7 rows grouped under their document (`UIP-S11-02`), each with set, version, sheet and
- * page and, on request, the match against that project's price list. Rows come a page at a time.
+ * **What is shown** is `SectionSpecificationAnswer`: the Form-7 rows grouped under their document (`UIP-S11-02`), each with set,
+ * version, sheet and page and, on request, the match against that project's price list; under them the summary by object (its sets, its
+ * own price list and its own totals) in one disclosure and the incomplete sources in another (`UIP-S11-03`). Rows come a page at a
+ * time. The long paragraph that once opened the tab is gone: what it said stands in the answer, where it is true of what is shown.
  */
 
 import { useState } from 'react';
@@ -66,13 +67,6 @@ export function SectionSpecificationSection({
 
   return (
     <section className={styles.section} aria-label="Сводная спецификация раздела" data-section-specification="">
-      <p className={styles.rule}>
-        Строки спецификации (форма 7) текущих версий комплектов, которые эксперт подтвердил для
-        выбранного раздела, из всех объектов. Раздел только отбирает комплекты: каждая строка
-        остаётся строкой своего объекта, комплекта и листа и сопоставляется с прайс-листом своего
-        объекта. Цена и сумма показаны только для строки, однозначно сопоставленной с позицией в той же
-        единице измерения и с числовым количеством; итоги считаются по объектам и валютам отдельно.
-      </p>
       <form
         className={`am-form ${styles.filters}`}
         aria-label="Отбор строк раздела"
@@ -82,7 +76,7 @@ export function SectionSpecificationSection({
           setOffset(0);
         }}
       >
-        <div className="am-form__field">
+        <div className={styles.searchField}>
           <label htmlFor="section-specification-query"><strong>Поиск по строкам</strong></label>
           <input
             id="section-specification-query"
