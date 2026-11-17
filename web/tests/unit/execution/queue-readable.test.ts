@@ -258,7 +258,9 @@ describe('the row is one line with «Подробнее ▾»', () => {
     const { line, panel } = parts(list(['admin'], [item()]));
     expect(panel).toContain(' hidden=""');
     expect(line).toContain('aria-expanded="false"');
-    expect(line).toContain('Подробнее <span aria-hidden="true">▾</span>');
+    // One text node: the element's text is exactly «Подробнее ▾» (what the journey presses and the language guard reads); the name is «Подробнее».
+    expect(line).toContain('aria-label="Подробнее"');
+    expect(line).toMatch(/data-queue-more-toggle="">Подробнее ▾<\/button>/);
     const controls = /aria-controls="([^"]+)"/.exec(line)?.[1] ?? '';
     expect(controls).not.toBe('');
     expect(panel).toContain(`id="${controls}"`);

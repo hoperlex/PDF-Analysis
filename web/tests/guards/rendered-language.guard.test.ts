@@ -129,7 +129,7 @@ import { ChangePasswordPage } from '@/_pages/change-password';
 import { LogsPage } from '@/_pages/logs';
 import { ManageUserControls } from '@/features/manage-user';
 import type { Account } from '@/shared/api';
-import type { RegistrationRequest } from '@/shared/api';
+import type { ExecutionQueueItem, RegistrationRequest } from '@/shared/api';
 import { RegistrationQueue } from '@/widgets/registration-queue';
 import { VersionHistoryView } from '@/widgets/version-history';
 import { UserCard } from '@/widgets/user-card';
@@ -143,6 +143,10 @@ import { FindingList, FindingRowActions } from '@/widgets/finding-list';
 import { groupByCategory } from '@/entities/finding';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
+import { QueuePage } from '@/_pages/queue';
+import type { QueuePageProps } from '@/_pages/queue';
+import { CancelQueuePanel } from '@/_pages/queue/ui/cancel-queue';
+import type { CancelQueue } from '@/_pages/queue/ui/use-cancel-queue';
 import { WorkerList } from '@/widgets/worker-list';
 import { modelLabel } from '@/entities/executor-host';
 import { WorkersAdvancedPage, WorkersPage } from '@/_pages/workers';
@@ -2003,6 +2007,14 @@ const QUEUE_REQUEST: RegistrationRequest = {
   submitted_at: '2026-10-08T00:00:00Z',
 };
 
+/** A queue job of the shared fixture's work, in `state`, named `name`, for the shapes of «Отменить очередь». */
+function QUEUE_JOB(suffix: string, state: ExecutionQueueItem['state'], name: string): ExecutionQueueItem {
+  return {
+    job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${suffix}`, run_id: `run_01J9ZQ8K7NHVXW3T2R5M6P4Q8${suffix}`, state, priority: 0,
+    created_at: '2026-10-09T10:00:00Z', available_at: '2026-10-09T10:00:00Z', ...QUEUE_WORK, document_name: name,
+  };
+}
+
 type ScreenCase = {
   readonly name: string;
   readonly make: () => ReactElement;
@@ -3011,6 +3023,55 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       onPriority: () => {}, onNext: null, onPrevious: null,
     }),
   },
+  /*
+   * `UIP-S13-02`..`04`: the queue page's own states, which one static pass of the derived `queue` screen does not select. The view that
+   * hides the finished rows is page state (`initiallyHidden` is its seam), so a page whose every row is finished and hidden is rendered here
+   * with such a queue; and «Отменить очередь» runs a sequence of its own (`useCancelQueue`), so its panel is rendered in each phase of it,
+   * over a stand-in that does nothing, through the same view the page mounts.
+   */
+  {
+    name: 'queue-page-finished-hidden',
+    make: () => createElement(QueuePage as ComponentType<QueuePageProps>, { initiallyHidden: true }),
+    seedClient: (client) => client.setQueryData(KEYS.executionQueue, {
+      items: (['succeeded', 'failed'] as const).map((state, index) => ({
+        job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${'AB'[index] as string}`,
+        run_id: RUN_ID, state, priority: 0,
+        created_at: '2026-10-09T10:00:00Z', available_at: '2026-10-09T10:00:00Z', ...QUEUE_WORK,
+      })),
+      page: { next_cursor: null }, paused: false,
+    }),
+  },
+  {
+    // The panel «Добавить документы» open: the object asked for (the derived screen's address names none).
+    name: 'queue-page-add-panel',
+    make: () => createElement(QueuePage as ComponentType<QueuePageProps>, { initiallyAdding: true }),
+  },
+  ...(
+    [
+      ['reading', { kind: 'reading' }],
+      ['read-failed', { kind: 'read_failed', failure: { kind: 'read_unavailable', detail: 'Сервер не ответил. Повторите чтение после проверки соединения.', correlationId: null } }],
+      ['ask', { kind: 'ask', jobs: [QUEUE_JOB('A', 'queued', 'Лист 1'), QUEUE_JOB('B', 'running', 'Лист 2')] }],
+      ['sending', { kind: 'sending', total: 5, sent: 2 }],
+      [
+        'done',
+        {
+          kind: 'done',
+          outcomes: [
+            { kind: 'cancelled', item: QUEUE_JOB('A', 'queued', 'Лист 1') },
+            { kind: 'refused', item: QUEUE_JOB('B', 'running', 'Лист 2'), reason: 'отмена на этапе проверки недоступна' },
+            { kind: 'unknown', item: QUEUE_JOB('C', 'leased', 'Лист 3'), reason: 'исход неизвестен' },
+            { kind: 'skipped', item: QUEUE_JOB('D', 'queued', 'Лист 4') },
+          ],
+        },
+      ],
+      ['done-nothing', { kind: 'done', outcomes: [] }],
+    ] as readonly (readonly [string, CancelQueue['phase']])[]
+  ).map(([phase, state]): ScreenCase => ({
+    name: `queue-cancel-all-${phase}`,
+    make: () => createElement(CancelQueuePanel, {
+      queue: { phase: state, busy: false, begin: () => {}, confirm: () => {}, dismiss: () => {}, stop: () => {}, retryUnknown: () => {} },
+    }),
+  })),
   /*
    * `W54-WORKERS-WEB`. The worker list's branches the «Диспетчер» page reaches only from
    * a page the cache states do not hold: a state outside the sealed set, an empty later
