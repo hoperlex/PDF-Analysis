@@ -115,7 +115,7 @@ export const HOST_DETAILS_OFF: ExecutorHostDetails = {
 };
 
 export const CATALOGUE: ModelCatalogue = {
-  contract_version: '1.57.0',
+  contract_version: '1.58.0',
   items: [
     { provider: 'claude_code', model_id: 'claude-opus-5-5', access: ['subscription', 'api'], efforts: ['medium', 'high'], accepted_reported: ['claude-opus-5-5'] },
     { provider: 'claude_code', model_id: 'claude-sonnet-5-5', access: ['subscription', 'api'], efforts: ['low', 'medium', 'high'], accepted_reported: ['claude-sonnet-5-5'] },

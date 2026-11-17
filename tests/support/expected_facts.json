@@ -2011,6 +2011,7 @@
       "ExecutorHostSlots",
       "ExecutorHostState",
       "ExecutorHostTask",
+      "ExecutorHostWork",
       "ExecutorIdentityBasis",
       "ExecutorIntegrationAuthorisation",
       "ExecutorKind",
@@ -2489,5 +2490,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0070_document_group",
-  "contract_version": "1.57.0"
+  "contract_version": "1.58.0"
 }
