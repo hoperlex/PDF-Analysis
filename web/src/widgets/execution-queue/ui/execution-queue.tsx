@@ -75,6 +75,8 @@ export function ExecutionQueue({
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [localNote, setLocalNote] = useState<string | null>(null);
+  // `UIP-S13-01`: the rows whose «Подробнее ▾» is open; a row is closed until the reader opens it, and a read of the list keeps what is open.
+  const [openRows, setOpenRows] = useState<ReadonlySet<string>>(() => new Set());
   const handles = useRef(new Map<string, HTMLElement>());
   const refocus = useRef<string | null>(null);
   // The row whose drag has begun and not ended; the mark on the screen follows it a turn later.
@@ -128,6 +130,8 @@ export function ExecutionQueue({
           const mayCancel = canExecute(roles, 'cancel') && canCancel(item);
           const mayReaudit = canExecute(roles, 'reaudit') && canReaudit(item);
           const mayPrioritise = canExecute(roles, 'priority') && item.state === 'queued';
+          const opened = openRows.has(item.job_id);
+          const panelId = `${hintId}-more-${item.job_id}`;
           return (
           <li
             key={item.job_id}
@@ -149,8 +153,11 @@ export function ExecutionQueue({
               if (moving !== undefined) move(moving, queued.findIndex((candidate) => candidate.job_id === item.job_id), false);
             } : undefined}
           >
-            {/* One line as the original's queue item: state, place, the work, its times; the rest of the facts under it. */}
-            <div className={styles.line}>
+            {/*
+              * `UIP-S13-01`: one line as the original's queue item -- «⋮⋮ · № · объект · документ · версия · время → время · длительность ·
+              * состояние · Отменить» -- and «Подробнее ▾» at its end. The identities, the times of acceptance and the rest are in the panel it opens.
+              */}
+            <div className={styles.line} data-queue-line="">
               {mayReorder && item.state === 'queued' ? (
                 // The original's six-dot handle: the drag source, and the focus the keyboard moves the row from.
                 <span
@@ -193,9 +200,12 @@ export function ExecutionQueue({
                   ⋮⋮
                 </span>
               ) : null}
-              <JobStateBadge state={item.state} />
               {/* `UI-PARITY-P0M`: a queued job's place in the dispatcher's order, as the original numbers its queue. */}
-              {item.queue_position === undefined ? null : <span data-queue-position={item.queue_position}>№ {item.queue_position} в очереди</span>}
+              {item.queue_position === undefined ? null : (
+                <span className={styles.place} data-queue-position={item.queue_position} title={`Место в очереди: ${item.queue_position}`}>
+                  № {item.queue_position}
+                </span>
+              )}
               {/* `UI-PARITY-QUEUE-A`: what the job executes, read from the server and never from a screen's memory. */}
               <span className={styles.work} data-queue-work>
                 <Link href={routes.project(item.project_uid)}>{item.project_name}</Link>
@@ -205,30 +215,31 @@ export function ExecutionQueue({
                 <Link href={routes.version(item.project_uid, item.version_uid)}>{`Версия ${item.version_ordinal}`}</Link>
               </span>
               <QueueTimingLine item={item} asOf={asOf} />
-              <span className={styles.priority}>Приоритет: {item.priority}</span>
+              <JobStateBadge state={item.state} />
+              {mayCancel ? (
+                <button className="am-button am-button--quiet am-button--small" type="button" disabled={busy} onClick={() => onCancel(item)}>Отменить прогон</button>
+              ) : null}
+              {mayReaudit ? (
+                <button className="am-button am-button--quiet am-button--small" type="button" disabled={busy} onClick={() => onReaudit(item)}>Повторный аудит</button>
+              ) : null}
+              <button
+                type="button"
+                className={`am-button am-button--quiet am-button--small ${styles.moreToggle}`}
+                aria-expanded={opened}
+                aria-controls={panelId}
+                data-queue-more-toggle=""
+                onClick={() => setOpenRows((current) => {
+                  const next = new Set(current);
+                  if (next.has(item.job_id)) next.delete(item.job_id);
+                  else next.add(item.job_id);
+                  return next;
+                })}
+              >
+                Подробнее <span aria-hidden="true">{opened ? '▴' : '▾'}</span>
+              </button>
             </div>
+            {/* What a reader needs at once to act on a row stays in it: why it waits, why it failed, why it was interrupted. */}
             <QueueItemWaiting item={item} />
-            {jobHoldsLease(item.state) ? <div className={styles.identity}><RunWorkerLine worker={workerOf(item.run_id)} /></div> : null}
-            {/* The job's identities and times as one running line of facts, as many to a line as the panel holds. */}
-            <p className={styles.facts}>
-              <span className={styles.identity}>
-                Прогон <a href={routes.logs(item.run_id)}><code>{item.run_id}</code></a>
-                {' '}(<Link href={routes.run(item.project_uid, item.run_id)}>Открыть прогон</Link>)
-              </span>
-              <span className={styles.identity}>Задача <code>{item.job_id}</code></span>
-              <span>Принята: <time dateTime={item.created_at}>{formatInstant(item.created_at)}</time></span>
-              {/* `R-151v`: who started the run, as the original's queue says; older runs do not know. */}
-              <span data-queue-started-by>Запустил: {item.started_by_label ?? 'неизвестно'}</span>
-              <span>Возраст: {queueAgeLabel(item.created_at, asOf)}</span>
-              {item.attempt_count === undefined ? null : <span data-queue-attempts={item.attempt_count}>Попыток: {item.attempt_count}</span>}
-              <span>Доступна: <time dateTime={item.available_at}>{formatInstant(item.available_at)}</time></span>
-              {item.estimated_finish_at === undefined ? null : (
-                // `R-151u`: from similar past runs; never shown without enough history.
-                <span data-queue-eta>
-                  Ожидаемое завершение: ≈ <time dateTime={item.estimated_finish_at}>{formatInstant(item.estimated_finish_at)}</time>
-                </span>
-              )}
-            </p>
             {error === null ? null : (
               <p role="status" data-queue-error={error.code}>
                 Ошибка: <code>{error.code}</code>{error.sentence === null ? null : <> — {error.sentence}</>}
@@ -239,20 +250,41 @@ export function ExecutionQueue({
                 Прогон был прерван: <code>{item.interrupted_reason}</code>
               </p>
             )}
-            {mayCancel || mayReaudit || mayPrioritise ? (
-            <div className={styles.actions}>
-              {mayCancel ? (
-                <button className="am-button am-button--quiet am-button--small" type="button" disabled={busy} onClick={() => onCancel(item)}>Отменить прогон</button>
-              ) : null}
-              {mayReaudit ? (
-                <button className="am-button am-button--quiet am-button--small" type="button" disabled={busy} onClick={() => onReaudit(item)}>Повторный аудит</button>
-              ) : null}
+            {/*
+              * «Подробнее ▾»: the job's identities and times as one running line of facts, the worker that holds it and the priority field.
+              * Always in the markup (closed it is `hidden`), so the ids are text a reader selects and copies from here.
+              */}
+            <div id={panelId} hidden={!opened} className={styles.more} data-queue-more="">
+              {jobHoldsLease(item.state) ? <div className={styles.identity}><RunWorkerLine worker={workerOf(item.run_id)} /></div> : null}
+              <p className={styles.facts}>
+                <span className={styles.identity}>
+                  Прогон <a href={routes.logs(item.run_id)}><code>{item.run_id}</code></a>
+                  {' '}(<Link href={routes.run(item.project_uid, item.run_id)}>Открыть прогон</Link>)
+                </span>
+                <span className={styles.identity}>Задача <code>{item.job_id}</code></span>
+                <span>Принята: <time dateTime={item.created_at}>{formatInstant(item.created_at)}</time></span>
+                {/* `R-151v`: who started the run, as the original's queue says; older runs do not know. */}
+                <span data-queue-started-by>Запустил: {item.started_by_label ?? 'неизвестно'}</span>
+                <span>Возраст: {queueAgeLabel(item.created_at, asOf)}</span>
+                {item.attempt_count === undefined ? null : <span data-queue-attempts={item.attempt_count}>Попыток: {item.attempt_count}</span>}
+                <span>Доступна: <time dateTime={item.available_at}>{formatInstant(item.available_at)}</time></span>
+                <span>Приоритет: {item.priority}</span>
+                {item.estimated_finish_at === undefined ? null : (
+                  // `R-151u`: from similar past runs; never shown without enough history.
+                  <span data-queue-eta>
+                    Ожидаемое завершение: ≈ <time dateTime={item.estimated_finish_at}>{formatInstant(item.estimated_finish_at)}</time>
+                  </span>
+                )}
+              </p>
               {mayPrioritise ? (
-                <form onSubmit={(event) => {
-                  event.preventDefault();
-                  const value = Number(new FormData(event.currentTarget).get('priority'));
-                  if (Number.isInteger(value) && value >= -100 && value <= 100) onPriority(item, value);
-                }}>
+                <form
+                  className={styles.priorityForm}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const value = Number(new FormData(event.currentTarget).get('priority'));
+                    if (Number.isInteger(value) && value >= -100 && value <= 100) onPriority(item, value);
+                  }}
+                >
                   <label>Приоритет
                     <input name="priority" type="number" min="-100" max="100" step="1" defaultValue={item.priority} required />
                   </label>
@@ -260,7 +292,6 @@ export function ExecutionQueue({
                 </form>
               ) : null}
             </div>
-            ) : null}
           </li>
           );
         })}
