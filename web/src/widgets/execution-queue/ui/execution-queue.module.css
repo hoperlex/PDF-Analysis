@@ -220,3 +220,23 @@ nav.actions {
   font-size: var(--am-text-sm);
   font-weight: 600;
 }
+
+/* `UIP-S13-02`: the line of progress «N / M ▮▮▯ ✓ N ✗ M» over the list. Sizes and gaps only. */
+.progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressCount {
+  font-weight: 600;
+}
+
+.progressBar {
+  width: min(20rem, 100%);
+  height: var(--am-gap-sm);
+}

@@ -67,12 +67,15 @@ describe('execution roles and visible controls', () => {
     expect(queue(['admin'], { ...queued, state: 'succeeded' })).not.toContain('Отменить прогон');
   });
 
-  it('names the exact run in every row confirmation', () => {
+  it('names the document and its version, not the run\'s number, in every row confirmation', () => {
+    // `UIP-S13-02` (`Г12-B`): a run's number is not on the main view; the work is known by its document and version.
     for (const kind of ['cancel', 'reaudit', 'priority'] as const) {
       const label = kind === 'priority'
         ? intentLabel({ kind, item: queued, priority: 7, key: 'ik-same-intent' })
         : intentLabel({ kind, item: queued, key: 'ik-same-intent' });
-      expect(label).toContain(RUN_ID);
+      expect(label).toContain(`«${queued.document_name}», версия ${queued.version_ordinal}`);
+      expect(label).not.toContain(RUN_ID);
+      expect(label).not.toContain('run_');
     }
   });
 });

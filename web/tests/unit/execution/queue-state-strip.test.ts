@@ -8,7 +8,8 @@
  *   - the strip draws the server's overview and nothing else: the group totals and the total are sums of the overview, a state without
  *     a job is not drawn, except the one the list is narrowed to;
  *   - the pressed state is the address's, and «Все» is pressed with no state;
- *   - the page draws the strip only where the page carries an overview, beside the select, and not in place of it.
+ *   - the page draws the strip only where the page carries an overview, beside the filters («Фильтры ▾»), and not in place of them;
+ *   - a state alone in its group is not drawn beside the group's press (`UIP-S13-02`), unless the list is narrowed to it.
  */
 
 import { createElement } from 'react';
@@ -64,14 +65,26 @@ describe('the strip', () => {
   });
 
   it('draws a press for each state that has a job, labelled as the row labels it, and none for the others', () => {
+    // `UIP-S13-02`: a state alone in its group is the group's own press («Завершённые 12» is «Завершена 12»); only a group with two
+    // states that have a job draws them. Here the active group has two (queued and running), the other two groups have one each.
     const markup = strip();
-    for (const state of ['queued', 'running', 'succeeded', 'failed'] as const) {
+    for (const state of ['queued', 'running'] as const) {
       expect(markup).toContain(`data-queue-state-chip="${state}"`);
       expect(markup).toContain(`${jobStateLabel(state)} ${OVERVIEW.find((entry) => entry.state === state)?.count}`);
     }
-    for (const state of ['leased', 'retry_wait', 'cancelled', 'dead_letter'] as const) {
+    for (const state of ['leased', 'retry_wait', 'cancelled', 'dead_letter', 'succeeded', 'failed'] as const) {
       expect(markup).not.toContain(`data-queue-state-chip="${state}"`);
     }
+  });
+
+  it('draws the states of a group that holds two with a job, and none of a group that holds one', () => {
+    const two = strip('', OVERVIEW.map((entry) => (entry.state === 'dead_letter' ? { ...entry, count: 4 } : entry)));
+    expect(two).toContain('data-queue-state-chip="failed"');
+    expect(two).toContain('data-queue-state-chip="dead_letter"');
+    expect(two).toContain('Ошибки 6');
+    // «Ошибки 2» alone: no «Ошибка 2» beside it.
+    expect(strip()).toContain('Ошибки 2');
+    expect(strip()).not.toContain('Ошибка 2');
   });
 
   it('draws the state the list is narrowed to even without a job, so a filter shows what it is', () => {
@@ -79,6 +92,11 @@ describe('the strip', () => {
     expect(markup).toContain('data-queue-state-chip="dead_letter"');
     expect(markup).toMatch(/aria-pressed="true"[^>]*data-queue-state-chip="dead_letter"/);
     expect(markup).toContain('data-queue-state-total="0"');
+  });
+
+  it('draws the lone state the list is narrowed to, pressed, though it is alone in its group', () => {
+    const markup = strip('failed');
+    expect(markup).toMatch(/aria-pressed="true"[^>]*data-queue-state-chip="failed"/);
   });
 
   it('presses «Все» with no state, and the state otherwise', () => {
@@ -113,7 +131,7 @@ describe('the page', () => {
     return renderScreen(client, createElement(QueuePage as ComponentType<QueuePageProps>, { initialAddress: { state, period: 'all' } }));
   };
 
-  it('draws the strip beside the select when the page carries an overview', () => {
+  it('draws the strip beside «Фильтры ▾» when the page carries an overview', () => {
     const markup = render(OVERVIEW);
     expect(markup).toContain('data-queue-state-strip');
     expect(markup).toContain('Активные 4');
@@ -126,7 +144,7 @@ describe('the page', () => {
     expect(markup).toMatch(/<option value="failed" selected="">/);
   });
 
-  it('draws no strip where the page carries no overview, and the select still stands', () => {
+  it('draws no strip where the page carries no overview, and the filters still stand', () => {
     const markup = render(undefined);
     expect(markup).not.toContain('data-queue-state-strip');
     expect(markup).toContain('data-queue-state-filter');

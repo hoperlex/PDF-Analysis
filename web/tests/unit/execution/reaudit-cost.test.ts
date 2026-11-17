@@ -104,8 +104,9 @@ describe('an estimate that can charge asks once, in one dialog', () => {
     expect(markup).not.toContain('data-execution-intent="reaudit"');
     expect(view.count('Подтвердить')).toBe(0);
     expect(view.count('Обновить оценку стоимости')).toBe(0);
-    // It names the run it repeats, and holds the ceiling the estimate recommends.
-    expect(markup).toContain(`Повторный аудит прогона ${RUN_ID}.`);
+    // It names the document and the version it repeats (`UIP-S13-02`: no run's number on the main view), and holds the ceiling the estimate recommends.
+    expect(markup).toContain(`Повторный аудит документа «${QUEUE_WORK.document_name}», версия ${QUEUE_WORK.version_ordinal}.`);
+    expect(markup).not.toContain('Повторный аудит прогона');
     expect(markup).toContain('Предварительная оценка: $1.2.');
     await view.press('Запустить');
     expect(reauditRun).toHaveBeenCalledTimes(1);
@@ -113,7 +114,8 @@ describe('an estimate that can charge asks once, in one dialog', () => {
     // It went: the dialog is gone and the page says so and links the new run.
     expect(dialogs(view)).toBe(0);
     expect(view.markup()).toContain('Команда выполнена.');
-    expect(view.markup()).toContain(`Открыть прогон ${NEW_RUN}`);
+    // The link to the new run says no number (`UIP-S13-02`); the number is in its address.
+    expect(view.markup()).toMatch(new RegExp(`<a href="[^"]*/runs/${NEW_RUN}">Открыть прогон</a>`));
   });
 
   it('sends the ceiling the person typed and refuses a ceiling below the estimate', async () => {
@@ -181,7 +183,7 @@ describe('an estimate that charges nothing is agreed to by the click', () => {
     expect(markup).not.toContain('data-execution-intent="reaudit"');
     expect(view.count('Подтвердить')).toBe(0);
     expect(markup).toContain('Команда выполнена.');
-    expect(markup).toContain(`Открыть прогон ${NEW_RUN}`);
+    expect(markup).toMatch(new RegExp(`<a href="[^"]*/runs/${NEW_RUN}">Открыть прогон</a>`));
   });
 
   it('is sent once while it is on its way, however often the page is drawn meanwhile', async () => {

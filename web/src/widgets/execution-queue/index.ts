@@ -10,5 +10,9 @@ export {
 export { ComparisonAiQueueBlock, ComparisonAiQueueBlockView, NO_AI_QUEUE } from './ui/comparison-ai-queue-block';
 export type { QueueStateStripProps } from './ui/queue-state-strip';
 export { QueueStateStrip } from './ui/queue-state-strip';
+export type { QueueProgressProps } from './ui/queue-progress';
+export { QueueProgress } from './ui/queue-progress';
+export type { QueueProgress as QueueProgressFigures } from './model/progress';
+export { queueProgress } from './model/progress';
 export type { ReorderEdges, ReorderPlan, ReorderRefusal } from './model/reorder';
 export { PRIORITY_MAX, PRIORITY_MIN, keyboardTarget, planReorder, reorderRefusalText, takenBefore } from './model/reorder';

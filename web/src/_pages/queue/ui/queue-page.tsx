@@ -8,7 +8,7 @@ import { newIdempotencyKey } from '@/shared/api';
 import { routes, useAddressState } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
-  QUEUE_STATE_GROUPS, QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueStateCount,
+  QUEUE_STATE_GROUPS, QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease,
   runWorker, useExecutionQueue,
   useWorkerLookup,
 } from '@/entities/execution';
@@ -17,14 +17,15 @@ import { useCancelRun } from '@/features/cancel-run';
 import { useReauditCostApproval, useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
-import { ComparisonQueueBlock, ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
+import { ComparisonQueueBlock, ExecutionQueue, QueueProgress, QueueStateStrip } from '@/widgets/execution-queue';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { EMPTY_QUEUE_ADDRESS, readQueueAddress, writeQueueAddress } from '../model/address';
 import type { QueueAddress } from '../model/address';
-import { QUEUE_PERIOD_OPTIONS, isQueuePeriod, queuePeriodStart } from '../model/period';
+import { isQueuePeriod, queuePeriodStart } from '../model/period';
 import type { QueuePeriod } from '../model/period';
 import { reauditEstimateChanged, reauditStep } from '../model/reaudit-start';
 import type { ReauditStep } from '../model/reaudit-start';
+import { QueueFilters } from './queue-filters';
 import { ReauditStart } from './reaudit-start';
 import styles from './queue-page.module.css';
 
@@ -53,11 +54,19 @@ type NewIntent =
   | { readonly kind: 'priority'; readonly item: ExecutionQueueItem; readonly priority: number }
   | { readonly kind: 'pause'; readonly paused: boolean };
 
+/**
+ * The document and its version, as every confirmation of the queue names the work (`UIP-S13-02`, `Г12-B`): a run's number is a technical
+ * detail and is not on the main view; the document's name and the version are what the reader knows the work by.
+ */
+function workOf(item: ExecutionQueueItem): string {
+  return `документа «${item.document_name}», версия ${item.version_ordinal}`;
+}
+
 export function intentLabel(intent: Intent): string {
   switch (intent.kind) {
-    case 'cancel': return `Отменить прогон ${intent.item.run_id}?`;
-    case 'reaudit': return `Начать повторный аудит прогона ${intent.item.run_id}?`;
-    case 'priority': return `Установить приоритет ${intent.priority} для прогона ${intent.item.run_id}?`;
+    case 'cancel': return `Отменить прогон ${workOf(intent.item)}?`;
+    case 'reaudit': return `Начать повторный аудит ${workOf(intent.item)}?`;
+    case 'priority': return `Установить приоритет ${intent.priority} для ${workOf(intent.item)}?`;
     case 'pause': return intent.paused ? 'Приостановить выдачу задач?' : 'Возобновить выдачу задач?';
   }
 }
@@ -256,29 +265,7 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
     >
       <UpdateTime dataUpdatedAt={queue.dataUpdatedAt} failed={queue.isError} />
       <div className={styles.toolbar}>
-        <label>
-          Состояние задачи{' '}
-          <select
-            name="queue-state"
-            data-queue-state-filter
-            value={stateFilter}
-            onChange={(event) => chooseState(event.currentTarget.value)}
-          >
-            <option value="">Все состояния</option>
-            {QUEUE_STATE_OPTIONS.map((option) => {
-              // `UI-PARITY-P0M`: each state with its count, so the filter says what it would list.
-              const count = queueStateCount(queue.data?.overview, option.value);
-              return <option key={option.value} value={option.value}>{count === null ? option.label : `${option.label} (${count})`}</option>;
-            })}
-          </select>
-        </label>
-        <label>
-          Период{' '}
-          <select name="queue-period" data-queue-period-filter value={period.value} onChange={(event) => choosePeriod(event.currentTarget.value)}>
-            {QUEUE_PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
-        {/* `UI-B-51`, `UI-B-69`, `D-370`: the original's «Активные / Завершённые / Ошибки» with their counts; a group's press lists the whole group, a state's sets the state filter above. */}
+        {/* `UI-B-51`, `UI-B-69`, `D-370`: the original's «Активные / Завершённые / Ошибки» with their counts; a group's press lists the whole group, a state's sets the state filter. */}
         {queue.data?.overview === undefined ? null : (
           <QueueStateStrip
             overview={queue.data.overview}
@@ -288,6 +275,8 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
             onSelectGroup={chooseGroup}
           />
         )}
+        {/* `UIP-S13-02`: the state and the period are one button's panel, not two lists in the row. */}
+        <QueueFilters state={stateFilter} period={period.value} overview={queue.data?.overview} onState={chooseState} onPeriod={choosePeriod} />
         {account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
           <button
             type="button"
@@ -299,6 +288,8 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
           </button>
         ) : null}
       </div>
+      {/* `UIP-S13-02`: «N / M», its bar and «✓ N ✗ M», from the overview over the period. */}
+      <QueueProgress overview={queue.data?.overview} />
       {queue.data?.paused === true ? <p role="status" className="am-note" data-execution-paused>Выдача задач приостановлена.</p> : null}
       {account.isPending ? <LoadingState what="права на управление очередью" /> : null}
       {accountFailure !== null ? (
@@ -344,7 +335,7 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
       {intent !== null && intent.kind === 'reaudit' && reauditNow !== null ? (
         <ReauditStart
           step={reauditNow}
-          runId={intent.item.run_id}
+          work={workOf(intent.item)}
           estimate={reauditCost.estimate}
           ceiling={reauditCost.ceiling}
           changed={lookAgain}
@@ -380,7 +371,7 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
         </div>
       ) : null}
       {completed ? <p role="status" className="am-note">Команда выполнена.</p> : null}
-      {lastRun !== null ? <p><Link href={routes.run(lastRun.project_uid, lastRun.run_id)}>Открыть прогон {lastRun.run_id}</Link></p> : null}
+      {lastRun !== null ? <p><Link href={routes.run(lastRun.project_uid, lastRun.run_id)}>Открыть прогон</Link></p> : null}
     </PageShell>
   );
 }

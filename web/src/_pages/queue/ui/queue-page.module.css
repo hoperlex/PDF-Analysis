@@ -34,6 +34,46 @@
   border-color: var(--am-accent);
 }
 
+/*
+ * `UIP-S13-02`: «Фильтры ▾». A `<details>` in the row of chips: its summary is the row's quiet button and its panel opens under it, at its
+ * left edge, over what follows (it takes no room of its own). Tokens only.
+ */
+.filters {
+  position: relative;
+  display: inline-block;
+}
+
+.filtersTrigger {
+  list-style: none;
+}
+
+.filtersTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.filtersPanel {
+  position: absolute;
+  top: calc(100% + var(--am-gap-2xs));
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: var(--am-gap-sm);
+  width: max-content;
+  min-width: 16rem;
+  max-width: min(24rem, calc(100vw - 2 * var(--am-gap-md)));
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+}
+
+.filtersPanel label {
+  display: grid;
+  gap: var(--am-gap-2xs);
+}
+
 @media (max-width: 780px) {
   .panel,
   .intent {
