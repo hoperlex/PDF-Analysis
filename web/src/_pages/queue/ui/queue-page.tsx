@@ -349,10 +349,13 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS, initiallyAddin
             // Every record of this page is finished and hidden: say so, and keep the way to the other pages.
             <div data-queue-all-hidden="">
               <EmptyState title="Завершённые задачи скрыты" detail="На этой странице все задачи завершены. Нажмите «Показать всё», чтобы увидеть их." />
-              <p className={styles.pager}>
-                <button type="button" className="am-button am-button--quiet" disabled={cursors.length === 0} onClick={() => setCursors((current) => current.slice(0, -1))}>Назад</button>
-                <button type="button" className="am-button am-button--quiet" disabled={next === null} onClick={() => { if (next !== null) setCursors((current) => [...current, next]); }}>Далее</button>
-              </p>
+              {/* `UIP-DEBT-02`: with no page before it and none after it there is nothing to turn, so no row; with one side open the other stays, inactive. */}
+              {cursors.length === 0 && next === null ? null : (
+                <p className={styles.pager}>
+                  <button type="button" className="am-button am-button--quiet" disabled={cursors.length === 0} onClick={() => setCursors((current) => current.slice(0, -1))}>Назад</button>
+                  <button type="button" className="am-button am-button--quiet" disabled={next === null} onClick={() => { if (next !== null) setCursors((current) => [...current, next]); }}>Далее</button>
+                </p>
+              )}
             </div>
           ) : (
             <ExecutionQueue

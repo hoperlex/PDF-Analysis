@@ -305,10 +305,13 @@ export function ExecutionQueue({
           {localNote ?? reorderNote ?? ''}
         </p>
       ) : null}
-      <nav aria-label="Страницы очереди" className={styles.actions}>
-        <button type="button" className="am-button am-button--quiet" disabled={onPrevious === null} onClick={onPrevious ?? undefined}>Назад</button>
-        <button type="button" className="am-button am-button--quiet" disabled={onNext === null} onClick={onNext ?? undefined}>Далее</button>
-      </nav>
+      {/* `UIP-DEBT-02`: a queue that fits one page has no pages to turn, so the row is not drawn; with one side open the other stays, inactive. */}
+      {onPrevious === null && onNext === null ? null : (
+        <nav aria-label="Страницы очереди" className={styles.actions}>
+          <button type="button" className="am-button am-button--quiet" disabled={onPrevious === null} onClick={onPrevious ?? undefined}>Назад</button>
+          <button type="button" className="am-button am-button--quiet" disabled={onNext === null} onClick={onNext ?? undefined}>Далее</button>
+        </nav>
+      )}
     </section>
   );
 }
