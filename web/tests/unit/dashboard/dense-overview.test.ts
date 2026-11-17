@@ -33,16 +33,18 @@ function declarations(css: string, selector: string): ReadonlyMap<string, string
 }
 
 /**
- * The one minimum a row's control may declare: 24 px, the WCAG 2.5.8 target size (`--am-target-min`). Any other
- * `min-height` is a row height fixed in CSS, which is what the dense overview gave up.
+ * The minimums a row's control and a row may declare: 24 px, the WCAG 2.5.8 target size (`--am-target-min`), and, since `UIP-S01-02`,
+ * one step of the table (`--am-row-step`, 40 px, `UIP-G-14`) for the row itself. Both are tokens, so a retuned size costs no change
+ * here. Any other `min-height` is a row height fixed in CSS, which is what the dense overview gave up.
  */
 const TARGET_FLOOR = 'var(--am-target-min)';
+const ROW_STEP = 'var(--am-row-step)';
 
-/** The rules of a stylesheet that declare a `min-height` other than the target floor. */
+/** The rules of a stylesheet that declare a `min-height` other than the target floor and the row step. */
 function fixedHeights(css: string) {
   return parseRules(css, 'module').filter((rule) => {
     const height = rule.declarations.get('min-height');
-    return height !== undefined && height !== TARGET_FLOOR;
+    return height !== undefined && height !== TARGET_FLOOR && height !== ROW_STEP;
   });
 }
 
@@ -85,15 +87,64 @@ describe('the dashboard opens on its table', () => {
     expect(fixedHeights(sections).map((rule) => rule.selector), 'a rule that fixes a height').toEqual([]);
   });
 
-  it('can fail: a fixed row height is reported, the 24 px target floor is not', () => {
-    const css = '.a { min-height: 44px; }\n.b { min-height: var(--am-target-min); }\n.c { padding: 0; }\n.d, .e { min-height: 3rem; }';
-    expect(fixedHeights(css).map((rule) => rule.selector)).toEqual(['.a', '.d, .e']);
+  it('can fail: a fixed row height is reported, the 24 px target floor and the table\'s row step are not', () => {
+    const css =
+      '.a { min-height: 44px; }\n.b { min-height: var(--am-target-min); }\n.c { padding: 0; }\n.d, .e { min-height: 3rem; }\n.f { min-height: var(--am-row-step); }\n.g { min-height: 40px; }';
+    expect(fixedHeights(css).map((rule) => rule.selector)).toEqual(['.a', '.d, .e', '.g']);
+  });
+
+  it('UIP-S01-02: a section row is one step of the table high, read from the token and not spelled in the module', () => {
+    const css = module('widgets/dashboard/ui/sections-panel.module.css');
+    expect(declarations(css, '.row').get('min-height')).toBe(ROW_STEP);
+    // No row rule fixes the height with a length of its own: `height` is not declared on a row, and `min-height` is the token.
+    for (const selector of ['.row', '.sectionRow', '.unclassified', '.totalRow']) {
+      const rule = parseRules(css, 'module').find((entry) => entry.selector === selector);
+      expect(rule?.declarations.get('height'), selector).toBeUndefined();
+      const minHeight = rule?.declarations.get('min-height');
+      expect(minHeight === undefined || minHeight === ROW_STEP, selector).toBe(true);
+    }
   });
 
   it('gives the row\'s button and toggle the 24 px target floor and nothing taller', () => {
     const css = module('widgets/dashboard/ui/sections-panel.module.css');
     expect(declarations(css, '.rowButton').get('min-height')).toBe(TARGET_FLOOR);
     expect(declarations(css, '.toggle').get('min-height')).toBe(TARGET_FLOOR);
+  });
+});
+
+/** The rules of a header (`.header`, its media variants and what is inside it) that let a browser cut a word. */
+function cuttingRules(css: string) {
+  return parseRules(css, 'module').filter((rule) => {
+    if (!/^\.(?:header|head|nameHead)\b/.test(rule.selector)) return false;
+    const wrap = rule.declarations.get('overflow-wrap') ?? rule.declarations.get('word-wrap');
+    const breaking = rule.declarations.get('word-break');
+    const hyphens = rule.declarations.get('hyphens');
+    return (wrap !== undefined && wrap !== 'normal') || (breaking !== undefined && breaking !== 'normal') || (hyphens !== undefined && hyphens !== 'manual');
+  });
+}
+
+describe('UIP-S01-02: the headings wrap between words and never inside one', () => {
+  const css = module('widgets/dashboard/ui/sections-panel.module.css');
+
+  it('says so on the header: no cutting of words, no hyphenation, at every width', () => {
+    const header = declarations(css, '.header');
+    expect(header.get('overflow-wrap')).toBe('normal');
+    expect(header.get('word-break')).toBe('normal');
+    expect(header.get('hyphens')).toBe('manual');
+    // The narrow layout (a phone) used to cut words anywhere; no rule of the header or inside it does now.
+    expect(cuttingRules(css).map((rule) => rule.selector)).toEqual([]);
+  });
+
+  it('can fail: the old narrow rule, which cut a word anywhere, is reported', () => {
+    const old = '.header { overflow-wrap: normal; }\n@media (max-width: 1100px) { .header .metrics { overflow-wrap: anywhere; } }\n.name { overflow-wrap: anywhere; }';
+    expect(cuttingRules(old).map((rule) => rule.selector)).toEqual(['.header .metrics']);
+    expect(cuttingRules('.header { word-break: break-all; }\n.head { hyphens: auto; }').map((rule) => rule.selector)).toEqual(['.header', '.head']);
+  });
+
+  it('reads the original\'s weight and spacing, so the longest word fits its 5.5rem column (about 87 px of 88 px, measured on the face)', () => {
+    const header = declarations(css, '.header');
+    expect(header.get('font-weight')).toBe('600');
+    expect(header.get('letter-spacing')).toBe('0.02em');
   });
 });
 
@@ -117,7 +168,9 @@ describe("the section table's five numbers carry the original's inks", () => {
     client.setQueryData(queryKeys.dashboard.summary(), SUMMARY);
     const markup = renderWith(client, createElement(Dashboard));
     const total = /<li[^>]*data-section="total"[^>]*>([\s\S]*?)<\/li>/.exec(markup)?.[1] ?? '';
-    expect(total).toContain('Итого по разделам');
+    // `UIP-S01-02`: the original's word, «Итого», and not «Итого по разделам».
+    expect(total).toContain('>Итого</span>');
+    expect(total).not.toContain('Итого по разделам');
     const sections = SUMMARY.section_breakdown.filter((row) => row.section !== undefined);
     const sum = (read: (row: (typeof sections)[number]) => number): number => sections.reduce((acc, row) => acc + read(row), 0);
     // The five figures, in the table's column order: not run, awaiting a decision, checked, documents, remarks.

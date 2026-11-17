@@ -2,7 +2,17 @@
   min-width: 0;
 }
 
-/* The header's columns are the row's: the name, the five numbers, and an empty cell where a row has its arrow. */
+/*
+ * The header's columns are the row's: the name, the five numbers, and an empty cell where a row has its arrow.
+ *
+ * `UIP-S01-02`: the headings are the original's words («Не запускались на проверку», «Нет решений эксперта», «Проверено экспертом»),
+ * and they wrap between words only, never inside one: `overflow-wrap: normal` and no hyphenation. The longest word, «запускались»,
+ * is about 87 px wide in capitals at this size, weight and spacing (84.3 px of glyphs and 2.5 px of spacing, measured on the face with
+ * the font's own metrics; 89.7 px at the weight 700 and the 0.03em this header had), and a column is 88 px (5.5rem): the weight and
+ * the spacing are the original's (600, 0.02em), so the word fits its column instead of being cut. On a phone a column is narrower
+ * than that word (about 58 px at 390 px) and the word overflows its column by a pixel or two into the gap, which a cut word would
+ * not make better. Not verified in a browser.
+ */
 .header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto 16px;
@@ -11,13 +21,34 @@
   padding: var(--am-gap-xs) var(--am-gap);
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
-  font-weight: 700;
+  font-weight: 600;
+  line-height: var(--am-leading-tight);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
 }
 
 .header::after {
   content: '';
+}
+
+.head {
+  min-width: 0;
+}
+
+/*
+ * The definition of a heading (and of «Без раздела»): text for a screen reader, not drawn. The tooltip carries the same words for the
+ * pointer. A rule of the document, not of the heading: it is the same box whatever the heading's size.
+ */
+.definition {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .rows {
@@ -39,6 +70,8 @@
   align-items: center;
   gap: var(--am-gap-sm);
   min-width: 0;
+  /* `UIP-S01-02`: a row is one step of the table high (`--am-row-step`, 40 px, `UIP-G-14`); a longer name grows it. */
+  min-height: var(--am-row-step);
   padding-block: var(--am-gap-xs);
   padding-inline: var(--am-gap);
   border: 1px solid var(--am-line);
@@ -287,16 +320,24 @@ a.arrow:hover,
     border: 1px solid transparent;
   }
 
-  .header > :first-child,
   .header::after {
     display: none;
+  }
+
+  /* The name's heading is not drawn on a phone (the numbers stand under their own labels), but it is still read: its definition is the table's. */
+  .nameHead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .header .metrics {
     font-size: calc(var(--am-text-xs) * 0.9);
     letter-spacing: 0;
     text-transform: none;
-    overflow-wrap: anywhere;
   }
 }
 

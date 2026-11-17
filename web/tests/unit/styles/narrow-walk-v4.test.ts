@@ -163,9 +163,14 @@ describe('«Главная» and «Дашборд» on a phone and a tablet: a s
     expect(declares(withoutMedia(SECTIONS), '.metrics', 'grid-template-columns', /^repeat\(5, 5\.5rem\)$/)).toBe(true);
   });
 
-  it('keeps the header\'s labels over the numbers: one track, no «Раздел» cell, no empty arrow cell', () => {
+  it('keeps the header\'s labels over the numbers: one track, no «Раздел» cell drawn, no empty arrow cell', () => {
     expect(declaresIn(SECTIONS, PHONE, '.header', 'grid-template-columns', ONE_TRACK)).toBe(true);
-    expect(declaresIn(SECTIONS, PHONE, '.header > :first-child', 'display', /^none$/)).toBe(true);
+    // `UIP-S01-02`: the «Раздел» heading is not drawn on a phone but is still read, so it is taken out of the layout as a visually
+    // hidden box (its definition is the table's) and not with `display: none`, which would take it from a screen reader too.
+    expect(declaresIn(SECTIONS, PHONE, '.nameHead', 'position', /^absolute$/)).toBe(true);
+    expect(declaresIn(SECTIONS, PHONE, '.nameHead', 'clip-path', /^inset\(50%\)$/)).toBe(true);
+    expect(declaresIn(SECTIONS, PHONE, '.header > :first-child', 'display', /^none$/)).toBe(false);
+    expect(declaresIn(SECTIONS, PHONE, '.nameHead', 'display', /^none$/)).toBe(false);
     expect(declaresIn(SECTIONS, PHONE, '.header::after', 'display', /^none$/)).toBe(true);
   });
 });
