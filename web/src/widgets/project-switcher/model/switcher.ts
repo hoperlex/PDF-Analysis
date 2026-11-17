@@ -42,6 +42,16 @@
  * «Новый проект» are not choices and carry none. A project the address names that is not in the first page marks no row,
  * and says so in the button's value (`Проект вне первых N`), not by guessing.
  *
+ * ## «Новый объект» (`UIP-S03-01`)
+ *
+ * The last entry makes an object, and **where the island can open the window «Новый объект» it does** (`creates` marks the
+ * entry; `switcherMenuProps` turns it into an action when it is given the handler). The entry still carries the address of the
+ * list's form, `routes.projects()`: that is what the first render, a render with no island and every instrument that draws the
+ * menu without a handler show, so the entry works with no script too. It is left out when the account is known not to be an
+ * expert (`SwitcherOptions.mayCreate`, `R-150e`): the server refuses the create to anyone else. When the window creates the
+ * object, the object becomes the open one exactly as a click on its row does ({@link afterObjectCreated}): the choice is kept
+ * (`setMyLastProject`) and the address is the one {@link chooseProject} computes.
+ *
  * ## What is not shown
  *
  * Only the first page of the list is read (`PROJECT_PAGE_LIMIT`, the page the home and the
@@ -101,6 +111,11 @@ export type SwitcherList =
       readonly more: boolean;
       /** A newer read failed after this one succeeded; the rows are real but may be old. */
       readonly refreshFailure: ProjectListFailure | null;
+      /**
+       * A newer read is on its way (`UIP-S03-01`: a new object has just been made and the list is being read again). An
+       * object the address names that these rows do not hold is then not yet unknown: the button says «Загрузка…».
+       */
+      readonly refreshing?: boolean;
     };
 
 /** One line above the entries: a status, or a fault. */
@@ -125,8 +140,16 @@ export type SwitcherEntry =
       readonly figures?: readonly [RowFigure, RowFigure];
       /** `UIP-G-08`: what a screen reader says for a row with figures: the name, then the figures with their words. */
       readonly name?: string;
+      /** `UIP-S03-01`: the entry makes an object. The island opens the window «Новый объект» for it; its `href` is the list's form. */
+      readonly creates?: true;
     }
   | { readonly kind: 'retry'; readonly label: string };
+
+/** What the model is told beside the address and the list. */
+export interface SwitcherOptions {
+  /** `false`: the account is known not to be an expert (`mayActAsExpert`), so «Новый объект» is not offered. Absent: it is. */
+  readonly mayCreate?: boolean | undefined;
+}
 
 export interface SwitcherModel {
   /** The class of the screen being shown; `null` for an address the registry does not have. */
@@ -184,6 +207,28 @@ export function chosenProject(model: SwitcherModel, href: string | null): string
     if (entry.kind === 'link' && entry.projectUid !== undefined && entry.href === href) return entry.projectUid;
   }
   return null;
+}
+
+/** What {@link afterObjectCreated} does, as the island gives it. */
+export interface CreatedObjectEffects {
+  /** Asks the server to keep the object as the account's last (`useRememberProject().remember`; a refusal is shown beside the button). */
+  readonly remember: (projectUid: string) => void;
+  /** Opens an address (`router.push`). */
+  readonly navigate: (href: string) => void;
+  /** Closes the window «Новый объект». */
+  readonly close: () => void;
+}
+
+/**
+ * The window «Новый объект» made `project` (`UIP-S03-01`): the new object becomes the open one, as a click on its row in the
+ * list does (`UIP-G-06`): the choice is kept, the screen goes to the address {@link chooseProject} computes (`?project=` on a
+ * screen that follows the object, the object's own page elsewhere), and the window closes. The choice is asked for first and the
+ * address opened second, as the row's click does (the link follows whatever the server says); the window closes last.
+ */
+export function afterObjectCreated(address: SwitcherAddress, project: Pick<Project, 'project_uid'>, effects: CreatedObjectEffects): void {
+  effects.remember(project.project_uid);
+  effects.navigate(chooseProject(address, project.project_uid));
+  effects.close();
 }
 
 /** A name for display: one line, no stray whitespace. The stored name is not changed. */
@@ -245,14 +290,18 @@ export function projectRowLabels(projects: readonly Project[]): string[] {
   });
 }
 
-/** The list state for a query's `data` and `error` (`error` is `null` when the read has not failed). */
-export function switcherListOf(data: ProjectPage | undefined, error: unknown): SwitcherList {
+/**
+ * The list state for a query's `data` and `error` (`error` is `null` when the read has not failed). `refreshing`: a newer read of
+ * rows already held is on its way (`isFetching` of a query that has `data`).
+ */
+export function switcherListOf(data: ProjectPage | undefined, error: unknown, refreshing = false): SwitcherList {
   if (data !== undefined) {
     return {
       kind: 'ready',
       projects: data.items,
       more: data.page.next_cursor !== null,
       refreshFailure: error === null || error === undefined ? null : classifyProjectListFailure(error),
+      ...(refreshing ? { refreshing: true } : {}),
     };
   }
   if (error !== null && error !== undefined) return { kind: 'error', failure: classifyProjectListFailure(error) };
@@ -271,6 +320,8 @@ function valueOf(projectUid: string | null, list: SwitcherList, waiting: boolean
     case 'ready': {
       const found = list.projects.find((project) => project.project_uid === projectUid);
       if (found !== undefined) return displayName(found);
+      // The rows are being read again: an object made a moment ago is not in them yet, and is not unknown.
+      if (list.refreshing === true) return 'Загрузка…';
       return list.more ? `Объект вне первых ${list.projects.length}` : 'Неизвестный объект';
     }
   }
@@ -308,7 +359,7 @@ function triggerLabelOf(value: string, all: boolean, hint: string | null): strin
 }
 
 /** The whole selector for `address` and `list`. */
-export function buildSwitcherModel(address: SwitcherAddress, list: SwitcherList): SwitcherModel {
+export function buildSwitcherModel(address: SwitcherAddress, list: SwitcherList, options: SwitcherOptions = {}): SwitcherModel {
   const { scope, projectUid, source } = switcherContext(address);
   // An `optional` screen whose address is silent waits for the account's answer before it can name the object.
   const waiting = address.rememberedPending === true && scope === 'optional' && source === 'none';
@@ -336,8 +387,9 @@ export function buildSwitcherModel(address: SwitcherAddress, list: SwitcherList)
   }
   entries.push({ kind: 'link', label: ALL_PROJECTS_LABEL, href: chooseProject(address, null), current: projectUid === null && !waiting });
   if (list.kind === 'ready' && list.more) entries.push({ kind: 'link', label: MORE_PROJECTS_LABEL, href: routes.projects() });
-  // The creation form lives on the project list; the selector links to it rather than copying it.
-  entries.push({ kind: 'link', label: NEW_PROJECT_LABEL, href: routes.projects() });
+  // `UIP-S03-01`: the island opens the window «Новый объект» for this entry. The address is the list's own form, for a render that
+  // has no island; the entry is not offered to an account known not to be an expert.
+  if (options.mayCreate !== false) entries.push({ kind: 'link', label: NEW_PROJECT_LABEL, href: routes.projects(), creates: true });
 
   const [first, ...rest] = entries;
   return {

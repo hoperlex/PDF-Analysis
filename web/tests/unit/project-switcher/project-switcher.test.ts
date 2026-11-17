@@ -459,6 +459,23 @@ describe('the button: the project\'s name, or «Все объекты», muted o
     expect(buildSwitcherModel(named, ready()).value).toBe('Неизвестный объект');
   });
 
+  it('UIP-S03-01: while the rows are read again, an object they do not hold yet is «Загрузка…», not unknown; one they hold keeps its name', () => {
+    const named = at('/dashboard', `project=${C}`);
+    expect(buildSwitcherModel(named, ready(PROJECTS, { refreshing: true })).value).toBe('Загрузка…');
+    expect(buildSwitcherModel(named, ready(PROJECTS, { refreshing: false })).value).toBe('Неизвестный объект');
+    expect(buildSwitcherModel(at('/dashboard', `project=${B}`), ready(PROJECTS, { refreshing: true })).value).toBe('Школа №7');
+    // a page with more behind it says so once the read is over, and not before
+    expect(buildSwitcherModel(named, ready(PROJECTS, { more: true, refreshing: true })).value).toBe('Загрузка…');
+    expect(buildSwitcherModel(named, ready(PROJECTS, { more: true })).value).toBe('Объект вне первых 2');
+  });
+
+  it('UIP-S03-01: the island marks a read that is on its way over rows it holds (`isFetching` with data), and no other', () => {
+    expect(switcherListOf(page(PROJECTS), null, true)).toMatchObject({ kind: 'ready', refreshing: true });
+    expect(switcherListOf(page(PROJECTS), null)).not.toHaveProperty('refreshing');
+    expect(switcherListOf(page(PROJECTS), null, false)).not.toHaveProperty('refreshing');
+    expect(switcherListOf(undefined, null, true)).toEqual({ kind: 'loading' });
+  });
+
   it('carries the hint «экран общий» only on a global screen, and mutes the button there', () => {
     expect(GLOBAL_SCREEN_HINT).toBe('экран общий');
     for (const pathname of ['/projects', '/queue', '/logs', '/workers', '/norms', '/admin/users']) {
@@ -568,6 +585,59 @@ describe('the island: a render with no query client makes no request; the list i
     expect(markup).toContain('Объекты не загрузились');
     expect(markup).toContain('Название недоступно');
     expect(itemsOf(markup)[0]).toEqual(['button', null, RETRY_LABEL]);
+  });
+});
+
+describe('UIP-S03-01: once the island is live, «Новый объект» opens the window; the account decides whether it is offered', () => {
+  const account = (roles: readonly string[]): Account =>
+    ({ user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', roles, last_project_uid: null }) as unknown as Account;
+  const live = (roles?: readonly string[], address: SwitcherAddress = at('/dashboard', `project=${A}`)): string => {
+    const client = newClient();
+    if (roles !== undefined) client.setQueryData(queryKeys.account.me(), account(roles));
+    client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), page(PROJECTS));
+    return renderScreen(client, createElement(ProjectSwitcherLive, { address }));
+  };
+  const lastItem = (markup: string) => itemsOf(markup).at(-1);
+
+  it('is a button of the menu in the live island, not the link of the first render', () => {
+    expect(lastItem(live(['expert']))).toEqual(['button', null, NEW_PROJECT_LABEL]);
+    // the first render of the same selector, with no island yet, is still the link to the list's form
+    navigation.pathname = '/dashboard';
+    navigation.search = `project=${A}`;
+    expect(itemsOf(renderToStaticMarkup(createElement(ProjectSwitcher))).at(-1)).toEqual(['a', '/projects', NEW_PROJECT_LABEL]);
+  });
+
+  it('is offered while the account is not known yet, and to an expert (the server refuses anyone else)', () => {
+    expect(lastItem(live())?.[2]).toBe(NEW_PROJECT_LABEL);
+    expect(lastItem(live(['expert']))?.[2]).toBe(NEW_PROJECT_LABEL);
+    expect(lastItem(live(['admin', 'expert']))?.[2]).toBe(NEW_PROJECT_LABEL);
+  });
+
+  it('is not offered to an account known not to be an expert: «Наблюдатель», or an administrator alone', () => {
+    for (const roles of [['viewer'], ['admin'], []]) {
+      const markup = live(roles);
+      expect(itemsOf(markup).map(([, , text]) => text), roles.join(',')).toEqual(['Мост через Неву', 'Школа №7', ALL_PROJECTS_LABEL]);
+      expect(markup, roles.join(',')).not.toContain(NEW_PROJECT_LABEL);
+    }
+  });
+
+  it('can fail: the rows of the objects and «Все объекты» stay links with the account known or not, so only this one row moves', () => {
+    for (const roles of [undefined, ['expert'], ['viewer']] as const) {
+      const rows = itemsOf(live(roles)).filter(([, , text]) => text !== NEW_PROJECT_LABEL);
+      expect(rows.map(([tag]) => tag), String(roles)).toEqual(['a', 'a', 'a']);
+    }
+  });
+
+  it('reads the account under the enabled the island already had, so the role costs no request of its own', () => {
+    const enabledFor = (address: SwitcherAddress): boolean | undefined => {
+      const client = newClient();
+      renderScreen(client, createElement(ProjectSwitcherLive, { address }));
+      return (client.getQueryCache().find({ queryKey: queryKeys.account.me() })?.options as { enabled?: boolean } | undefined)?.enabled;
+    };
+    expect(enabledFor(at('/dashboard'))).toBe(true);
+    for (const address of [at('/dashboard', `project=${A}`), at('/queue'), at(`/projects/${A}`), at(null)]) {
+      expect(enabledFor(address), JSON.stringify([address.pathname, address.searchParams.toString()])).toBe(false);
+    }
   });
 });
 

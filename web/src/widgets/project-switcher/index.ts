@@ -8,13 +8,18 @@ export { ProjectSwitcher, ProjectSwitcherLive, ProjectSwitcherView, switcherMenu
 export type { ObjectMenuItem, ObjectMenuProps, ObjectMenuViewProps } from './ui/object-menu';
 export { ObjectMenu, ObjectMenuView } from './ui/object-menu';
 
+export type { NewObjectDialogProps } from './ui/new-object-dialog';
+export { NEW_OBJECT_CANCEL_LABEL, NEW_OBJECT_CREATE_LABEL, NewObjectDialog } from './ui/new-object-dialog';
+
 export type {
+  CreatedObjectEffects,
   RowFigure,
   SwitcherAddress,
   SwitcherEntry,
   SwitcherList,
   SwitcherModel,
   SwitcherNote,
+  SwitcherOptions,
 } from './model/switcher';
 export {
   ALL_PROJECTS_LABEL,
@@ -25,6 +30,7 @@ export {
   NO_EXPERT_DECISION_LABEL,
   RETRY_LABEL,
   SWITCHER_LABEL,
+  afterObjectCreated,
   buildSwitcherModel,
   chooseProject,
   chosenProject,
