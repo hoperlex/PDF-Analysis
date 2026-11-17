@@ -1,5 +1,7 @@
 # Current state
 
+**Updated 2026-11-17 by `UI-PARITY-R3` publication point P7 (unverified development candidate, product `0.30.6`, branch `publish/ui-parity-r3` on `origin/dev`, published by the delegated publisher session).** «График работ» counts accepted and rejected findings in «Выполнено» and gives an administrator «Назначить работу» and «Отпуск / отсутствие» on «Календарь запаса»; «Назначения» opens on the expert of the address; both comparisons take the top strip's object and the original's step table; the pause confirmation states its effect; an archive can be dropped on the file field. API `1.57.0` and migration head `0070_document_group` unchanged.
+
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P6 (unverified development candidate, product `0.30.5`, branch `publish/ui-parity-r3` on `origin/dev`, published by the delegated publisher session).** «Очередь» in one-line rows with «Подробнее ▾», «Фильтры ▾» and «N / M», with «+ Добавить документы», «Убрать завершённые (N)» and «Отменить очередь (N)»; the «Модели по этапам» window in the original's layout under «Запустить», edited by an administrator; «Оптимизация разделов» with «Форма 7» by documents and the «Документ» filter; «База знаний» in dense rows opening on «Отклонено». API `1.57.0` and migration head `0070_document_group` unchanged. The four `HOTFIX-RUN-*-1106` entries of 2026-11-06 left this file; they stand verbatim in [the 2026-11-07 state archive](history/CURRENT_STATE_2026-11-07_dcb0083b9.md).
 
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P5 (unverified development candidate, product `0.30.4`, branch `publish/ui-parity-r3` on `origin/dev`, published by the delegated publisher session).** The section page groups its cards by the document group («Без группы» last), an expert moves a card by dragging or by «Группа…»; the bottom bar of chosen documents gains «В архив (N)» and «Скачать пакеты аудита» (one archive, at most 20 documents and 256 MiB); the «Разбор» decision cell stands on one line. The four items left open at P4 are closed (FIX-17..20). API `1.57.0` and migration head `0070_document_group` unchanged; the database pins of `0069`/`0070` (application-role table count, fresh-migration inventory) are resealed.
@@ -93,7 +95,7 @@ Checks run per branch before the merge:
 
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
-- Product `VERSION` is `0.30.5`; this file describes development, not a release.
+- Product `VERSION` is `0.30.6`; this file describes development, not a release.
 - The development API contract is `1.58.0`: **302 paths / 331 operations / 823 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0070_document_group`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 
