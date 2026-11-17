@@ -446,11 +446,18 @@ from sqlalchemy import Engine, text
 #: Resealed 2026-11-11 for the main→dev merge (``0066_run_deletion`` then ``0067_precedents_wave5``), from this test's own observed output on a
 #: throwaway PostgreSQL (the project image, container ``rd02-pg``) migrated fresh to ``0067``: relations 184, columns 1934, constraints 2329, indexes
 #: 541, triggers 302, functions 86, views 7 -- the sum of the two seals above, each family reviewed.
+#: Resealed 2026-11-17 for ``0068_reviewable_findings`` (it reached ``main`` ``ab638e460`` unsealed) and the UI-PARITY-R3 migrations
+#: ``0069_account_last_project`` (`UIP-G-05`) and ``0070_document_group`` (`UIP-G-10`), from this test's own observed output on throwaway PostgreSQL
+#: (the project image). Migrated fresh to ``0068`` on ``ab638e460`` (container ``uip-pub-base-db-ab638e4-pg``): columns 1937 and constraints 2332, so
+#: ``0068`` adds three of each and nothing else. Migrated fresh to ``0070`` on ``35bc680ee`` (container ``uip-pub-main-db-35bc680-pg``): relations +1
+#: (``account_last_project``, to 185), columns +4 (the table's three and ``document.group_label``, to 1941), constraints +5 (the table's two format
+#: checks, its account foreign key and primary key, and ``ck_document_group_label_length``, to 2337), indexes +1 (the primary key, to 542); triggers,
+#: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0067`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1934, "ef02c2d585a9d5a59b1fd96e14845735129c7114974d43e4e690f32c840342c3"),
-    "relations": (184, "849589ed784729f5da1be0b20a1169b960001ad878d81a24590f5818ad429558"),
-    "constraints": (2329, "895c8c867f19498f459253b2680aea921fa4f86af2cfb1de0c4f883ef1e3fa34"),
-    "indexes": (541, "767aae4996dc76db5286600b622348413440cb73094b8972a9889ec25a7b890c"),
+    "columns": (1941, "eeb0c5557399704b98b7603f6a4895003dfa4cf5d6a67514a423758216d8c5f6"),
+    "relations": (185, "d946ca76640e7cf1d42bfc6cea4845074a20149a8317addfcda7b7dd6aa88a47"),
+    "constraints": (2337, "12114f12ab28718dd35c990fbe9cefdbdf7416c42f5a87bcc1a2a8baffeb463c"),
+    "indexes": (542, "b4d14de6279d3094914ada3fc2db7f7c0d21f4e4c4ee8cee52262070bb1262c9"),
     "triggers": (302, "841b211ddd2d2199d75a5cf2a548b64fb8ae0dcafc4fc9976eed11b2ca8764e7"),
     "functions": (86, "4ca8c9d63270876dad063cdea6c49a0e7aa5afba3ea7355ecb023b81cc22e664"),
     "views": (7, "5e78d3a1fd6d83febea265c402139aefd89d63afd83c1f38acd71979822d1ef8"),
