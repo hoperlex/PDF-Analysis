@@ -7009,6 +7009,10 @@
           },
           {
             "do": "click",
+            "selector": "[data-proposals-export] button[aria-haspopup=\"menu\"]"
+          },
+          {
+            "do": "click",
             "selector": "[data-proposals-export] button",
             "text": "Выгрузить CSV предложений"
           }
@@ -7047,7 +7051,7 @@
         "$comment": [
           "The proposals as the API gives them (the oracle's figures: the saving is exact, and ABSENT -- never 0 --",
           "for the foam, whose quantity is a dash) and an input the form refuses: «На доработку» without a comment.",
-          "The button is disabled and the hint says why; nothing is sent."
+          "The field is empty and «На доработку» is pressed from the «⋯» menu: the form says why and nothing is sent."
         ],
         "actions": [
           {
@@ -7070,6 +7074,15 @@
             "do": "wait_for",
             "selector": "[data-proposal]",
             "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"] button[aria-haspopup=\"menu\"]"
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"] button",
+            "text": "На доработку"
           }
         ],
         "expects_api": [
@@ -7119,11 +7132,8 @@
         ],
         "expects_present": [
           {
-            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"] button[disabled]",
-            "text_contains": "На доработку"
-          },
-          {
-            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"] [data-revise-hint]"
+            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"][data-revise-hint]",
+            "text_contains": "Для «На доработку» нужна причина"
           },
           {
             "selector": "[data-proposal=\"{proposal_foam_id}\"]",
@@ -7178,8 +7188,7 @@
           },
           {
             "do": "click",
-            "selector": "[data-proposal-decision=\"{proposal_door_id}\"] button",
-            "text": "Принять",
+            "selector": "[data-proposal-decision=\"{proposal_door_id}\"] button[data-intent=\"accept\"]",
             "times": 2
           }
         ],
@@ -7210,8 +7219,7 @@
             "selector": "[data-proposal=\"{proposal_door_id}\"][data-decision=\"accept\"]"
           },
           {
-            "selector": "[data-proposal-decision=\"{proposal_door_id}\"] button[disabled]",
-            "text_contains": "Принять"
+            "selector": "[data-proposal-decision=\"{proposal_door_id}\"] button[data-intent=\"accept\"][disabled]"
           },
           {
             "selector": "[data-decision-count=\"accept\"]",
@@ -7264,8 +7272,7 @@
           },
           {
             "do": "click",
-            "selector": "[data-proposal-decision=\"{proposal_window_id}\"] button",
-            "text": "Принять"
+            "selector": "[data-proposal-decision=\"{proposal_window_id}\"] button[data-intent=\"accept\"]"
           },
           {
             "do": "wait_for",
@@ -7274,8 +7281,7 @@
           },
           {
             "do": "click",
-            "selector": "[data-proposal-decision=\"{proposal_window_id}\"] button",
-            "text": "Отклонить"
+            "selector": "[data-proposal-decision=\"{proposal_window_id}\"] button[data-intent=\"reject\"]"
           },
           {
             "do": "wait_for",
@@ -7360,8 +7366,12 @@
           },
           {
             "do": "fill",
-            "selector": "textarea[id=\"decision-comment-{proposal_anchor_id}\"]",
+            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"] input[data-decision-reason]",
             "value": "=СУММ(A1:A9)"
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"] button[aria-haspopup=\"menu\"]"
           },
           {
             "do": "click",
@@ -7568,6 +7578,10 @@
             "do": "wait_for",
             "selector": "[data-proposals-export]",
             "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposals-export] button[aria-haspopup=\"menu\"]"
           },
           {
             "do": "click",
@@ -7894,6 +7908,10 @@
             "do": "wait_for",
             "selector": "[data-proposals-export]",
             "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposals-export] button[aria-haspopup=\"menu\"]"
           },
           {
             "do": "click",
