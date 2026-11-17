@@ -75,7 +75,7 @@ One agent process per machine, with one host token, installs without being told 
   - new API responders for Anthropic, OpenAI and OpenRouter that read the key file (`R-153d`) and answer only catalogue models. API access is `metered`.
   - The exact `model_id` and `effort` come from the task; the agent holds no local capability mapping (`ADR-0028` decision 18).
 - **Keys.** An API key never appears in a report, a log, a task payload or the environment of a child CLI; the child environment is an allowlist and a test proves it.
-- **Slots and liveness.** Concurrency per provider follows the stand's slots (defaults: subscription 1, API 2). The task carries the cell timeout; the agent extends its claim only while the CLI produced output in the last 120 s, within the 7200 s ceiling.
+- **Slots and liveness.** Concurrency per provider follows the stand's slots (defaults: subscription 1, API 2). The task carries the cell timeout; the agent extends its claim only while the CLI produced output in the last 120 s (600 s since `R-153p`). Since `R-155c`/`R-155h` (2026-11-17) the Attempt has no age ceiling -- the 7200 s ceiling this line once named is gone; only the contract's clamp of one host call, `payload.host.timeout_seconds` 1..7200, remains -- and a call's window is its row's, no longer cut to the 600 s silence window.
 - **Install.** The terminal command with a 15-minute grant and the SSH path A keep working; `--uninstall` and the exit-code semantics are unchanged. `README.md`, `RUNNER_API.md` and the example configuration describe host mode.
 - **Package.** New files enter `PACKAGE_FILES`; the archive stays deterministic.
 

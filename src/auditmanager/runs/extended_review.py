@@ -409,7 +409,7 @@ _sleep = time.sleep
 #: The per-run leg breaker (D-662, approved by the owner 2026-11-10; the original has none). A leg that ended **failed after its retries**
 #: in this many consecutive batches while the other leg answered is no longer asked for the rest of the run: the next batches go straight to
 #: the surviving leg and the judge only searches for gaps, as it does when a leg fails. Without it a persistently failing model costs
-#: ``LEG_RETRY_ATTEMPTS`` x ``LEG_RETRY_DELAY_SECONDS`` = 150 s on every batch and can push the attempt towards its 7200 s cap.
+#: ``LEG_RETRY_ATTEMPTS`` x ``LEG_RETRY_DELAY_SECONDS`` = 150 s on every batch and lengthens the attempt (it has no age ceiling, `R-155c`; its calls and the silence watchdog bound it).
 LEG_BREAKER_CONSECUTIVE_BATCHES = 3
 _BREAKER_FORMAT = "block-leg-breaker/1"
 _BREAKER_LEGS = ("leg1", "leg2")
