@@ -9,6 +9,7 @@ connection's own revision is as it was: no ``host`` in its payload, no sign of l
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -88,6 +89,83 @@ def test_the_window_is_the_cells_timeout_cut_to_what_the_watchdog_leaves_less_th
     window = answer_window(CALL.timeout_seconds, near_end)
     assert window is not None and window <= 200 - pull.DEADLINE_MARGIN_SECONDS + 1, "the watchdog's remainder less the margin bounds it"
     assert answer_window(CALL.timeout_seconds, _context(used=fresh.watchdog_seconds - pull.DEADLINE_MARGIN_SECONDS)) is None
+
+
+def test_a_live_attempts_call_has_its_rows_window_not_the_540_seconds_the_silence_window_left() -> None:
+    """`R-155h`: the cross-check row has 3600 s, text and blocks 1800 s, norms/critic/refinement 600 s. A live Attempt used to leave
+    a call at most its 600 s silence window less the 60 s margin; it has no age ceiling now (`R-155c`), so the call's window is the
+    row's, whatever the Attempt has run and however long it has been quiet."""
+    live = _context(used=10_000)  # claimed almost three hours ago
+    live.progress()
+    assert math.isinf(live.hard_cap_seconds)
+    for row, window in {"text": 1800, "blocks": 1800, "cross_check": 3600, "norms": 600, "review": 600, "correction": 600}.items():
+        assert answer_window(window, live) == float(window), row
+    assert answer_window(3600, live) != 540.0
+    live_but_quiet = _context(used=10_000)
+    live_but_quiet.progress(now=time.monotonic() - 1500)  # 25 minutes since its last sign: the stall window is long gone
+    assert live_but_quiet.remaining_seconds() == 0.0
+    assert answer_window(3600, live_but_quiet) == 3600.0, "the silence window does not cut a call"
+
+
+def test_an_attempt_that_has_shown_no_life_keeps_the_watchdogs_cut_on_its_first_call() -> None:
+    fresh = _context()
+    window = answer_window(3600, fresh)
+    assert window is not None and window <= fresh.watchdog_seconds - pull.DEADLINE_MARGIN_SECONDS
+
+
+def test_the_task_of_a_cross_check_call_carries_3600_seconds_and_the_call_is_announced_to_the_attempt(clock: Clock) -> None:
+    class Announced:
+        """A real context that records the announcements and whether the call was in flight while the runner was waited for."""
+
+        def __init__(self) -> None:
+            self.real = _context(used=10_000)
+            self.real.progress()
+            self.events: list[tuple[str, float | None]] = []
+            self.in_call_while_waiting: list[bool] = []
+            self.run_id, self.attempt_id, self.call_id = "run_1", "att_1", "mc_1"
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self.real, name)
+
+        def call_started(self, *, window_seconds: float | None = None) -> None:
+            self.events.append(("started", window_seconds))
+            self.real.call_started(window_seconds=window_seconds)
+
+        def call_finished(self) -> None:
+            self.events.append(("finished", None))
+            self.real.call_finished()
+
+    announced = Announced()
+
+    def script(c: Clock, store: FakeStore) -> None:
+        announced.in_call_while_waiting.append(announced.real.in_call)
+        _answer(c, store)
+
+    store = FakeStore(clock, script)
+    cross_check = replace(CALL, timeout_seconds=3600, cell_key="cross_check:main")
+    _adapter(clock, store, context=announced, host_call=cross_check).complete(REQUEST)
+    assert store.payload is not None and store.payload["host"]["timeout_seconds"] == 3600
+    assert store.inserted["deadline_seconds"] == 3600.0
+    assert announced.events == [("started", 3600.0), ("finished", None)]
+    assert announced.in_call_while_waiting and all(announced.in_call_while_waiting), "in flight while it waited"
+    assert announced.real.in_call is False and announced.real.fence_reason() is None
+
+
+def test_a_call_that_ends_in_failure_is_announced_as_finished(clock: Clock) -> None:
+    announced = _context(used=10)
+    announced.progress()
+    store = FakeStore(clock)  # nobody claims: the task expires
+    with pytest.raises(ProxyDispatchError):
+        _adapter(clock, store, context=announced, host_call=replace(CALL, timeout_seconds=30)).complete(REQUEST)
+    assert announced.in_call is False, "the finally ended it"
+
+
+def test_a_call_refused_for_lack_of_time_is_never_announced(clock: Clock) -> None:
+    tired = _context(used=_context().watchdog_seconds - 10)
+    store = FakeStore(clock)
+    with pytest.raises(ProxyDispatchError):
+        _adapter(clock, store, context=tired).complete(REQUEST)
+    assert tired.in_call is False
 
 
 def test_the_timeout_in_the_task_is_the_window_it_was_given_within_the_contracts_bounds() -> None:

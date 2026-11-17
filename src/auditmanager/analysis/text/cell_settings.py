@@ -40,8 +40,9 @@ ROW_ESTIMATE_OUTPUT_TOKENS: Final[Mapping[str, int]] = {
 #: ``CLAUDE_BLOCK_ANALYSIS_TIMEOUT`` 1800 (our call is a window of blocks, and a leg or the judge takes the row's value); the comprehensive
 #: check ``CLAUDE_FINDINGS_MERGE_TIMEOUT`` 3600 (raised after the merge was killed twice at 1801 s with its work lost); the norms
 #: ``CLAUDE_NORM_VERIFY_TIMEOUT`` 600; the critic ``CLAUDE_OPTIMIZATION_CRITIC_TIMEOUT`` 600; the refinement
-#: ``CLAUDE_OPTIMIZATION_CORRECTOR_TIMEOUT`` 600. Each is cut to what the attempt watchdog leaves; the 7200 s hard cap of an attempt
-#: (``jobs/lease.py``) is unchanged.
+#: ``CLAUDE_OPTIMIZATION_CORRECTOR_TIMEOUT`` 600. Each is the call's whole window (`R-155h`): a live attempt has no age ceiling to cut it
+#: (`R-155c`: ``jobs/lease.py`` ``ATTEMPT_HARD_CAP_SECONDS`` is ``math.inf``) and its 600 s silence window no longer does, so a cross-check call
+#: has its 3600 s; only an attempt that has shown no sign of life yet keeps the 900 s watchdog, which cuts its first call.
 ROW_TIMEOUT_SECONDS: Final[Mapping[str, int]] = {
     "text": 1_800, "blocks": 1_800, "cross_check": 3_600, "norms": 600, "review": 600, "correction": 600,
 }

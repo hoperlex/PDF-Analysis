@@ -18,13 +18,13 @@ What makes it safe to delete in a directory other things write to:
 * **only the three exact names** -- :data:`FILE_NAME` and :data:`DIRECTORY_NAME` match what the
   producers' ``mkstemp``/``TemporaryDirectory`` write, random part included; nothing else in
   the directory is looked at, and a name that merely starts alike is not matched;
-* **only what is old** -- older than :data:`STALE_AFTER_SECONDS`, which is the attempt's absolute
-  ceiling plus a minute. A file is made after its attempt was claimed, and the heartbeat fences
-  the attempt no later than ``jobs.lease.ATTEMPT_HARD_CAP_SECONDS`` after the claim (a **live**
-  attempt, one whose model call shows signs of life, may run that long; one that never signals
-  is fenced at the shorter ``ATTEMPT_WATCHDOG_SECONDS``), so an older file belongs to an attempt
-  that no longer holds authority: its results cannot be published, and a thread of it still
-  reading the file keeps its open descriptor. Age is the
+* **only what is old** -- older than :data:`STALE_AFTER_SECONDS`. That number used to be the live
+  attempt's age ceiling plus a minute, the longest an attempt could hold a file; a live attempt has
+  no age ceiling now (`R-155c`), so it is a constant of its own, and age alone no longer proves
+  that the attempt that made a file is gone. What proves it is **who sweeps and when**: the sweep
+  at a process start runs before this process has any attempt, and the worker's running sweep
+  runs only while none of its slots is busy (``workers.service``). Temporaries of *another*
+  process that shares the directory are not covered; a container has its own ``/tmp``. Age is the
   later of the modification and the change time (a file touched, renamed or chmod-ed is
   young), and a directory is as young as its youngest member;
 * **only a regular file or a real directory, owned by this user** -- a symbolic link of that
@@ -49,8 +49,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from auditmanager.jobs.lease import ATTEMPT_HARD_CAP_SECONDS
-
 __all__ = [
     "DIRECTORY_NAME",
     "FILE_NAME",
@@ -71,9 +69,10 @@ FILE_NAME: Final[re.Pattern[str]] = re.compile(rf"^am-(?:source|geometry)-{_RAND
 #: ``auditmanager-bundle-<random>`` (``ingest.bundle_archive``).
 DIRECTORY_NAME: Final[re.Pattern[str]] = re.compile(rf"^auditmanager-bundle-{_RANDOM}$")
 
-#: Older than the longest an attempt can hold a file -- the live attempt's ceiling -- by a minute
-#: (the lease length). See the module docstring.
-STALE_AFTER_SECONDS: Final[float] = float(ATTEMPT_HARD_CAP_SECONDS + 60)
+#: How old a temporary must be to be called stale: two hours and a minute, the value it has always had. Its own number since
+#: `R-155c`: it was the live attempt's two-hour ceiling plus the lease's minute, and with no ceiling that sum is infinite, which
+#: would sweep nothing. See the module docstring for what makes an age safe now.
+STALE_AFTER_SECONDS: Final[float] = 7260.0
 
 #: A bundle directory holds at most eight members; this bounds the walk of a directory that
 #: holds something else.

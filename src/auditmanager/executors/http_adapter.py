@@ -16,8 +16,13 @@ point at ``postgres`` or at link-local metadata is refused *in the call*, not on
 redirect is followed and no proxy from the environment is used.
 
 The revision's ``gateway_model`` is what is sent and what the reply must report; the pin id
-only gives tariffs and the budget (plan section 3). The timeout of each call is the revision's,
-cut to what the Attempt's watchdog has left (:class:`~auditmanager.jobs.public.AttemptContext`).
+only gives tariffs and the budget (plan section 3). The timeout of each call is the revision's
+(1..3600 s, so a call's total is bounded), cut to what the Attempt's limits leave
+(:class:`~auditmanager.jobs.public.AttemptContext`): the watchdog's remainder for an Attempt that has shown no
+sign of life and nothing for a live one, which has no age ceiling (`R-155c`). Each call is announced to the Attempt
+(``call_started`` with that window, ``call_finished`` in a ``finally``), so the silence watchdog leaves the Attempt
+alone while the call is in flight and fences it when the call outlives its window by a grace -- the backstop for a
+socket that dribbles bytes for longer than its per-operation timeout.
 """
 
 from __future__ import annotations
@@ -47,6 +52,7 @@ from auditmanager.executors.destinations import (
     refusal_of,
 )
 from auditmanager.executors.image_input import add_anthropic_images, add_openai_images, checked_pngs
+from auditmanager.jobs.public import model_call_budget_seconds, model_call_finished, model_call_started
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -84,17 +90,16 @@ def completions_url(base_url: str) -> str:
 def effective_timeout(
     revision_timeout_seconds: int, context: Any | None, *, margin: int = DEADLINE_MARGIN_SECONDS
 ) -> float | None:
-    """The seconds one call may take: the revision's, cut to the Attempt's remaining watchdog
-    minus ``margin``. ``None`` when less than one second is left, which the caller refuses.
+    """The seconds one call may take: the revision's, cut to what the Attempt's limits leave minus ``margin``.
+    ``None`` when less than one second is left, which the caller refuses.
 
-    The call is starting: for a live Attempt that is a sign of life (`STALL-LOCAL-WORK-01`), so the
-    timeout is not shrunk by the worker's own work before the call."""
+    What the limits leave is :func:`~auditmanager.jobs.public.model_call_budget_seconds`: the watchdog's remainder for an Attempt
+    that has shown no sign of life and nothing for a live one, which has no age ceiling (`R-155c`); the silence window no longer
+    cuts a call (`R-155h`). A pure function: the adapter announces the call to the Attempt itself
+    (:func:`~auditmanager.jobs.public.model_call_started`)."""
     timeout = float(revision_timeout_seconds)
     if context is not None:
-        starting = getattr(context, "call_started", None)
-        if callable(starting):
-            starting()
-        timeout = min(timeout, float(context.remaining_seconds()) - margin)
+        timeout = min(timeout, model_call_budget_seconds(context) - margin)
     return None if timeout < 1.0 else timeout
 
 
@@ -205,10 +210,13 @@ class AnthropicMessagesAdapter:
         if images:
             add_anthropic_images(body, images)
         started = time.monotonic()
+        model_call_started(self._context, allowed)
         try:
             message = self._client.messages.create(**body, timeout=allowed)
         except Exception as failure:  # noqa: BLE001 - mapped to the catalog below
             raise self._map(failure) from None
+        finally:
+            model_call_finished(self._context)
         latency_ms = int((time.monotonic() - started) * 1000)
         blocks = getattr(message, "content", None) or ()
         text = "".join(block.text for block in blocks if getattr(block, "type", "") == "text")
@@ -283,9 +291,31 @@ class AnthropicMessagesAdapter:
 
 
 class OpenAIImageAdapter(ProxyAdapter):
-    """A pinned proxy call with the selected PNGs, in order, in the user message."""
+    """A pinned proxy call with the selected PNGs, in order, in the user message.
+
+    It announces each call to the Attempt (`R-155c`): the whole of ``ProxyAdapter.complete`` -- the request, the wait for the
+    answer and the read of its body -- is one call of the window ``effective_timeout`` gives it."""
+
+    def __init__(self, settings: ProxySettings, *, opener: Any | None = None,
+                 context: Any | None = None, timeout_seconds: int | None = None) -> None:
+        super().__init__(settings, opener=opener)
+        self._call_context = context
+        self._call_timeout_seconds = timeout_seconds
 
     def complete(self, request: ModelRequest) -> ModelResponse:
+        context, timeout_seconds = self._call_context, self._call_timeout_seconds
+        if context is None or timeout_seconds is None:
+            return self._complete_with_images(request)
+        window = effective_timeout(timeout_seconds, context)
+        if window is None:
+            raise _no_time_left()
+        model_call_started(context, window)
+        try:
+            return self._complete_with_images(request)
+        finally:
+            model_call_finished(context)
+
+    def _complete_with_images(self, request: ModelRequest) -> ModelResponse:
         images = checked_pngs(request)
         if not images:
             return super().complete(request)
@@ -372,6 +402,7 @@ def build_http_adapter(
         return OpenAIImageAdapter(
             ProxySettings(base_url=base_url, token=api_key, model=gateway_model),
             opener=_Opener(director, timeout_seconds, context),
+            context=context, timeout_seconds=timeout_seconds,
         )
     if api_flavour == "anthropic_messages":
         return AnthropicMessagesAdapter(

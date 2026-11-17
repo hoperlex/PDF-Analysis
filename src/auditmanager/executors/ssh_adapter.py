@@ -30,6 +30,7 @@ from auditmanager.executors.http_adapter import DEADLINE_MARGIN_SECONDS, effecti
 from auditmanager.executors.image_input import checked_pngs
 from auditmanager.executors.model import RevisionRecord
 from auditmanager.executors.ssh_transport import SshEndpoint, SshFailure, run_command
+from auditmanager.jobs.public import model_call_finished, model_call_started
 from auditmanager.shared.errors import ErrorCode
 
 #: A task with at most one image, as before: a 16 MiB PNG is about 21.4 MiB as base64.
@@ -37,6 +38,10 @@ MAX_TASK_BYTES = 24 << 20
 #: A task with several images: 32 MiB of PNG is about 42.7 MiB as base64, plus the text.
 MAX_MULTI_IMAGE_TASK_BYTES = 48 << 20
 MAX_ANSWER_BYTES = 2 << 20
+#: `R-155c`. The ceiling of **one** live SSH call (a command that prints heartbeats), counted from the call's start. The Attempt has
+#: no age ceiling to leave a remainder from any more, so each call has a finite one of its own: the 7200 s a host call may last at
+#: most (``payload.host.timeout_seconds`` 1..7200, the contract's clamp). The remote command stops itself at 7140 s, before this.
+SSH_LIVE_CALL_SECONDS = 7200
 #: The efforts the remote command accepts in the task's ``effort`` member. The sealed request's ``output_config.effort`` is passed on when it is
 #: one of these and left out otherwise; the command sets no other cap on the model's work.
 _EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max"})
@@ -157,15 +162,22 @@ class SshCommandAdapter:
         started = time.monotonic()
         live: dict[str, Any] = {}
         context = self._context
+        window = timeout
         if context is not None:
-            # A command that prints heartbeats lives until the Attempt's ceiling, less the margin
-            # the run keeps for what follows the call, and is cut after the Attempt's stall window
-            # of silence; `timeout` above bounds only a command that never prints one.
+            # A command that prints heartbeats lives until its own ceiling (:data:`SSH_LIVE_CALL_SECONDS`, cut to what the
+            # Attempt's ceiling leaves less the margin the run keeps for what follows the call -- nothing, with none), and is cut after
+            # the Attempt's stall window of silence; `timeout` above bounds only a command that never prints one.
+            live_ceiling = max(0.0, min(float(SSH_LIVE_CALL_SECONDS),
+                                        float(context.hard_remaining_seconds()) - DEADLINE_MARGIN_SECONDS))
             live = {
-                "live_hard_cap_s": max(0.0, float(context.hard_remaining_seconds()) - DEADLINE_MARGIN_SECONDS),
+                "live_hard_cap_s": live_ceiling,
                 "live_stall_s": float(context.stall_seconds),
                 "on_signal": context.progress,
             }
+            window = max(timeout, live_ceiling)
+        # The call is announced to the Attempt for the longest it can last, so the silence watchdog leaves the Attempt alone for it
+        # and a grace (`R-155c`); the end is announced in a `finally`.
+        model_call_started(context, window)
         try:
             raw, _stderr = run_command(
                 endpoint, self._key, settings.host_key, payload,
@@ -176,6 +188,8 @@ class SshCommandAdapter:
                 f"the SSH command failed ({failure.outcome})", sent=failure.sent,
                 dependency=_LIVE_CUT_DEPENDENCY.get(failure.outcome, "model_provider"),
             ) from None
+        finally:
+            model_call_finished(context)
         return _reply(raw, int((time.monotonic() - started) * 1000))
 
 

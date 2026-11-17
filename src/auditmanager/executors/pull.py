@@ -8,8 +8,12 @@ result from the same table (`R-143c`: the remote party only ever calls HTTP).
 
 The wait
 --------
-``deadline = min(revision answer deadline, watchdog remaining - 60 s)``, from the
-:class:`~auditmanager.jobs.public.AttemptContext` the factory passes in. The worker waits on a
+``deadline = min(the call's window, what the Attempt's limits leave - 60 s)``, from the
+:class:`~auditmanager.jobs.public.AttemptContext` the factory passes in. The call's window is the revision's answer deadline or, for a
+call of a stage cell, the cell's row window (`R-155h`); what the limits leave is the watchdog's remainder for an Attempt that has shown
+no sign of life and **nothing** for a live one (it has no age ceiling, `R-155c`), so a live call's window is its row's, not the ~540 s
+of the silence window it used to be cut to. Silence inside the call is bounded by the party that makes it: the host agent's own
+activity window and the runner's claim lease (an extension of the claim is a sign of life, :meth:`PullAdapter._sign_of_life`). The worker waits on a
 ``LISTEN`` connection and polls as well, so a lost notification costs one poll interval. When
 the deadline passes the task is expired and the call fails as ``dependency_unavailable``,
 ``retry_safe=False`` (a plain ``DomainError`` would be marked ``provider_effect_uncertain`` and
@@ -65,6 +69,7 @@ from auditmanager.executors.task_context import (
     context_request_of,
     read_run_context_facts,
 )
+from auditmanager.jobs.public import model_call_budget_seconds, model_call_finished, model_call_started
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -107,7 +112,7 @@ class HostCall:
     provider, access, model and effort of the cell the call belongs to, the cell's timeout and the cell key. **No answer cap**: since
     `LIMITS-01` (`R-153n`) the task carries no ``max_output_tokens`` and the agent sets none on any model.
     ``timeout_seconds`` is the call's own window -- the constant of the cell's row or kind (`R-153o`); the task carries the smaller of it and
-    what the watchdog leaves (:func:`answer_window`). The caller -- the layout's ``binding_for(cell)`` -- builds it from the frozen
+    what the Attempt's limits leave (:func:`answer_window`: with a live Attempt, nothing -- the window is the row's). The caller -- the layout's ``binding_for(cell)`` -- builds it from the frozen
     ``stage_plan`` and the member the cell was bound to."""
 
     provider: str
@@ -126,17 +131,16 @@ class HostCall:
 
 
 def answer_window(revision_deadline_seconds: int, context: Any | None) -> float | None:
-    """Seconds a task may wait: the revision's answer deadline cut to what the watchdog leaves,
-    minus the margin. ``None`` when less than one second is left, which the caller refuses.
+    """Seconds a task may wait: the call's own window (the revision's answer deadline, or the cell's row window) cut to what the
+    Attempt's limits leave, minus the margin. ``None`` when less than one second is left, which the caller refuses.
 
-    The call is starting: for a live Attempt that is a sign of life (`STALL-LOCAL-WORK-01`), so the
-    window is not shrunk by the worker's own work before the call."""
+    What the limits leave is :func:`~auditmanager.jobs.public.model_call_budget_seconds`: the watchdog's remainder for an Attempt that
+    has shown no sign of life, and the absolute ceiling alone for a live one -- infinite, since a live Attempt has none (`R-155c`).
+    The silence window no longer cuts a call (`R-155h`): the window of a live call is its row's. A pure function: the caller tells the
+    context the call has started (:func:`~auditmanager.jobs.public.model_call_started`) once it will make it."""
     window = float(revision_deadline_seconds)
     if context is not None:
-        starting = getattr(context, "call_started", None)
-        if callable(starting):
-            starting()
-        window = min(window, float(context.remaining_seconds()) - DEADLINE_MARGIN_SECONDS)
+        window = min(window, model_call_budget_seconds(context) - DEADLINE_MARGIN_SECONDS)
     return None if window < 1.0 else window
 
 
@@ -302,12 +306,18 @@ class PullAdapter:
             descriptor = self._context_request(payload)
             if descriptor is not None:
                 payload["context_request"] = descriptor
-        started = self._monotonic()
-        task = self._write_task(payload, window)
-        _log.info("executor task=%s run=%s request_sha256=%s deadline_seconds=%.1f",
-                  task.task_id, getattr(self._context, "run_id", None),
-                  request.request_sha256, window)
-        return self._await(task, started, window)
+        # The call starts here: the Attempt is told, so its silence watchdog leaves it alone for this window and a grace, and again when it
+        # ends however it ends (`R-155c`). The task's write and the whole wait are inside.
+        model_call_started(self._context, window)
+        try:
+            started = self._monotonic()
+            task = self._write_task(payload, window)
+            _log.info("executor task=%s run=%s request_sha256=%s deadline_seconds=%.1f",
+                      task.task_id, getattr(self._context, "run_id", None),
+                      request.request_sha256, window)
+            return self._await(task, started, window)
+        finally:
+            model_call_finished(self._context)
 
     # -- internals -------------------------------------------------------------------------
 

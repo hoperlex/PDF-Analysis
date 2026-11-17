@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import math
 import os
 import tempfile
 import time
@@ -64,25 +65,23 @@ def make_bundle(directory: Path, name: str = BUNDLE) -> Path:
 # ---------------------------------------------------------------------------------------
 
 
-def test_the_threshold_is_the_live_attempts_ceiling_and_a_minute() -> None:
-    """Signs of life: the threshold was the 900 s watchdog plus a minute (960). A **live**
-    attempt (its model call shows signs of life) now runs until 7200 s, and the file it made after
-    its claim is its own until then; 960 would sweep it from under a call that is thinking."""
+def test_the_threshold_is_a_constant_of_its_own_not_derived_from_the_attempts_ceiling() -> None:
+    """`R-155c`: it was the live attempt's two-hour ceiling plus a minute (7260). A live attempt has no ceiling now
+    (``math.inf``), and ``inf + 60`` would sweep nothing for ever; the threshold keeps its value as a number of its own."""
     assert ATTEMPT_WATCHDOG_SECONDS == 900
-    assert ATTEMPT_HARD_CAP_SECONDS == 7200
+    assert math.isinf(ATTEMPT_HARD_CAP_SECONDS)
     assert STALE_AFTER_SECONDS == 7260.0
+    assert math.isfinite(STALE_AFTER_SECONDS)
 
 
-def test_a_file_a_live_attempt_could_still_hold_is_not_swept(tmp_path: Path) -> None:
-    """One minute past the old threshold (watchdog + 120 s) is young: the attempt may be live."""
+def test_a_file_younger_than_the_threshold_is_not_swept_and_one_past_it_is(tmp_path: Path) -> None:
+    """One minute past the old 960 s threshold (watchdog + 120 s) is young; the threshold is 7260 s."""
     make_file(tmp_path, SOURCE)
     now = time.time()
     old_threshold = float(ATTEMPT_WATCHDOG_SECONDS + 60)
     assert sweep_stale_temporaries(directory=tmp_path, now=now + old_threshold + 60).removed == ()
     assert (tmp_path / SOURCE).exists()
-    assert sweep_stale_temporaries(
-        directory=tmp_path, now=now + float(ATTEMPT_HARD_CAP_SECONDS) - 1,
-    ).removed == ()
+    assert sweep_stale_temporaries(directory=tmp_path, now=now + STALE_AFTER_SECONDS - 1).removed == ()
     assert sweep_stale_temporaries(
         directory=tmp_path, now=now + STALE_AFTER_SECONDS + 5,
     ).removed == (SOURCE,)
@@ -125,8 +124,7 @@ def test_the_names_are_the_ones_the_producers_write() -> None:
 
 
 def test_nothing_younger_than_the_watchdog_is_removed(tmp_path: Path) -> None:
-    """A live attempt's file is young: it is made after the claim and the heartbeat fences the
-    attempt no later than 7200 s after it (900 s for one that never shows a sign of life)."""
+    """A file younger than the threshold (7260 s) is left alone, whoever made it."""
     make_file(tmp_path, SOURCE)
     make_bundle(tmp_path)
 

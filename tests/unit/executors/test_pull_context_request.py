@@ -115,7 +115,9 @@ class Comparison:
     def remaining_seconds(self) -> float:
         return 3000.0
 
-    def call_started(self) -> None: ...
+    def call_started(self, *, window_seconds: float | None = None) -> None: ...
+
+    def call_finished(self) -> None: ...
 
 
 @pytest.mark.parametrize("run_id", [None, "run_1"])

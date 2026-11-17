@@ -959,14 +959,28 @@ class JobRepository:
         if not paused:
             self.wake_workers(session)
 
-    def reclaim_expired(self, session: Session, *, force_attempt_id: str | None = None) -> int:
+    def reclaim_expired(
+        self, session: Session, *, force_attempt_id: str | None = None, fail_reason: str | None = None,
+    ) -> int:
         """Fence lost Attempts and resume only when no ambiguous provider effect exists.
 
         A watchdog passes ``force_attempt_id`` after the fixed execution deadline. It
-        fences authority but does not free the caller's in-process worker slot.
+        fences authority but does not free the caller's in-process worker slot: the work
+        thread keeps it until it returns, or until the worker, told by the heartbeat that
+        the thread outlived its grace (``jobs.lease.install_slot_recovery``), exits.
         The forced pass considers only its Attempt. Periodic passes take all Run
         locks in one stable order, including when two sweeps overlap.
+
+        ``fail_reason`` (with ``force_attempt_id``; `R-155c`) is the watchdog saying the Attempt
+        **stalled**: a worker that shows no sign of life is hung, and resuming it would hang
+        again, so the Run is **not** re-queued. The Job ends ``failed`` and the Run ``failed``
+        with this ``interrupted_reason`` (``attempt_stalled``) whatever the Attempt count is and
+        whether or not a provider effect is ambiguous -- an ambiguous one is still settled
+        ``outcome_unknown`` first, as for any lost Attempt. The stage the Attempt was in is named
+        in ``terminal_detail.stage_id``, a key ``analysis_failed`` declares safe.
         """
+        if fail_reason is not None and force_attempt_id is None:
+            raise ValueError("a failure reason names the Attempt that stalled")
         from auditmanager.runs.public import fail_reclaimed_run
 
         session.execute(text("SET LOCAL lock_timeout = '2s'"))
@@ -1060,24 +1074,33 @@ class JobRepository:
                                  "error_code": ErrorCode.ANALYSIS_FAILED.value,
                                  "dispatch_class": "outcome_unknown"},
                     )
-            if ambiguous or count >= 3:
-                if state == "running" and not ambiguous:
+            stalled = fail_reason is not None and candidate["attempt_id"] == force_attempt_id
+            if stalled or ambiguous or count >= 3:
+                if state == "running" and not ambiguous and not stalled:
                     self._advance_job(session, str(candidate["job_id"]), "running", "retry_wait")
                     self._advance_job(session, str(candidate["job_id"]), "retry_wait", "dead_letter")
                 else:
                     self._advance_job(session, str(candidate["job_id"]), state, "failed")
-                fail_reclaimed_run(
-                    session, run_id=run_id, from_state=str(run_state),
-                    interrupted_reason=(
+                if stalled:
+                    # `R-155c`: not re-queued, and the stage the worker stopped in is the one thing worth naming.
+                    interrupted_reason = str(fail_reason)
+                    terminal_detail = self._stalled_stage_detail(
+                        session, run_id=run_id, job_id=str(candidate["job_id"]),
+                    )
+                else:
+                    interrupted_reason = (
                         "provider_outcome_unknown" if ambiguous else "attempt_budget_exhausted"
-                    ),
+                    )
                     # D-169: an exhausted budget names the stage that killed the worker again
                     # and again; an uncertain provider effect keeps the cause it always had.
-                    terminal_detail=(
+                    terminal_detail = (
                         None if ambiguous else self._repeated_kill_detail(
                             session, run_id=run_id, job_id=str(candidate["job_id"]),
                         )
-                    ),
+                    )
+                fail_reclaimed_run(
+                    session, run_id=run_id, from_state=str(run_state),
+                    interrupted_reason=interrupted_reason, terminal_detail=terminal_detail,
                 )
             else:
                 if state == "running":
@@ -1115,6 +1138,35 @@ class JobRepository:
         if len(stages) >= 2 and stages[-1] is not None and stages[-1] == stages[-2]:
             return {"stage_id": str(stages[-1])}
         return None
+
+    @staticmethod
+    def _stalled_stage_detail(
+        session: Session, *, run_id: str, job_id: str
+    ) -> dict[str, str] | None:
+        """``{"stage_id": ...}`` of the stage the **stalled** Attempt had started last, or ``None``.
+
+        `R-155c`. Unlike :meth:`_repeated_kill_detail` this does not need two losses to blame an input: a stall is
+        one Attempt that stopped signalling, and the stage it stopped in is where to look. The stalled Attempt is the
+        newest lost one (the caller has just advanced it to ``lost`` in this transaction)."""
+        stages = [
+            row["stage_id"] for row in session.execute(
+                _LOST_ATTEMPT_STAGES, {"run_id": run_id, "job_id": job_id}
+            ).mappings().all()
+        ]
+        if stages and stages[-1] is not None:
+            return {"stage_id": str(stages[-1])}
+        return None
+
+    @staticmethod
+    def attempt_state(session: Session, attempt_id: str) -> str | None:
+        """The state of one Attempt (``running``, ``succeeded``, ``lost``, ``cancelled``...) or ``None``; an unlocked read.
+
+        The heartbeat reads it when its lease could not be extended, to tell an Attempt that ended itself
+        (``succeeded``, ``failed``) from one whose authority was taken away (`R-155c`, slot recovery)."""
+        value = session.execute(
+            text("SELECT state FROM attempt WHERE attempt_id = :attempt_id"), {"attempt_id": attempt_id},
+        ).scalar_one_or_none()
+        return None if value is None else str(value)
 
     def start_execution(self, session: Session, *, run_id: str) -> AttemptAuthority:
         """Claim the Run's Job with a new current Attempt, Lease and token.

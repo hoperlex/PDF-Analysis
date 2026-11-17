@@ -184,7 +184,8 @@ def input_budget_characters(
 #: (:data:`REFERENCE_DOCUMENT_CHARACTERS` / 30), about 1.56 million characters: 10.2 windows of the primary
 #: model's 152 361, so twelve covers the envelope with slack. Twelve windows are also three Attempts of four
 #: windows at the proxy's 200 second per-call ceiling inside the 900 second watchdog
-#: (``jobs.lease.ATTEMPT_WATCHDOG_SECONDS``, ``R-146y``). The ceiling, not this number, bounds the spend.
+#: (``jobs.lease.ATTEMPT_WATCHDOG_SECONDS``, ``R-146y``) -- the figure of that day: a live Attempt has no age ceiling since ``R-155c`` and the
+#: watchdog bounds only an Attempt that has shown no sign of life. The ceiling, not this number, bounds the spend.
 #:
 #: ``1`` restores the one-call behaviour exactly (the start-time limit equals the per-call figure and no
 #: version above it is admitted), which is the rollback of the whole feature.

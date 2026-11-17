@@ -321,12 +321,15 @@ def _run_lifespan(application: Application) -> Any:
     flight, and ``STARTUP_THRESHOLD`` is ``0 seconds`` -- a reconciliation on every
     construction would terminate live runs. A lifespan runs when something *serves*.
 
-    **Shutdown: stop accepting, do not wait.** PC-01 cannot resume, so a run interrupted
-    by a shutdown is going to be ``failed`` whatever this does; the only question is
-    whether it is marked now or at the next start. Marking it here would be a second
-    implementation of the rule the reconciler already owns, and it would cover strictly
-    fewer cases -- a ``SIGKILL`` reaches no shutdown hook at all. One mechanism, at
-    startup, where it works for every way a process can end.
+    **Shutdown: stop accepting, do not wait.** A run interrupted by a shutdown is not ended
+    here: its lease lapses and the reclaim (``JobRepository.reclaim_expired``, in either
+    process) re-queues it, so the next Attempt resumes it from its saved state
+    (``runs/executor.py``, ``load_saved_workflow``; ``workers/service.py``, "Drain") -- or
+    fails it when a provider effect of the lost Attempt is ambiguous or its budget is spent.
+    Marking it here would be a second implementation of the rule the reclaim and the startup
+    reconciler already own, and it would cover strictly fewer cases -- a ``SIGKILL`` reaches
+    no shutdown hook at all. One mechanism, at startup and in the reclaim, where it works
+    for every way a process can end.
 
     **`W54-WORKER-01` (R-105): the API may not be the claimant.** Under
     ``EXECUTION_ROLE=api`` the carrier started here only fences expired leases; the worker
