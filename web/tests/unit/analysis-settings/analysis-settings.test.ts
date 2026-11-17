@@ -38,6 +38,7 @@ import {
   shortDigest,
 } from '@/entities/analysis-profile';
 import { PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
+import { routes } from '@/shared/lib';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
 
@@ -352,6 +353,51 @@ describe('lane N1: the table reads at a glance', () => {
     // `HOSTS-WEB-01b`: the presets live on `/workers/advanced`, so neither the section nor the subtitle names them here.
     expect(markup).not.toContain('Пресеты запуска');
     expect(markup).not.toContain('пресеты запуска');
+  });
+});
+
+describe('the pointer to the models of the stages (UIP-S05-04)', () => {
+  const page = (client = newClient()) => renderScreen(client, createElement(AnalysisSettingsPage));
+  const withProfiles = () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.analysis.profiles(), { items: ITEMS });
+    return client;
+  };
+
+  it('says over the table, in one line, that the models of the stages are set in «Диспетчер», and the word is the link to its tab', () => {
+    const markup = page(withProfiles());
+    expect(markup).toContain('Модели по этапам задаются в <a href="/workers?tab=models">«Диспетчере»</a>.');
+    expect(markup.match(/data-models-pointer/g)).toHaveLength(1);
+    expect(markup.match(/<a /g)).toHaveLength(1);
+    expect(markup.indexOf('data-models-pointer')).toBeLessThan(markup.indexOf('<table'));
+    // The address is the screen's own, built by `routes`, not typed here.
+    expect(markup).toContain(`href="${routes.workers()}?tab=models"`);
+  });
+
+  it('is a pointer and nothing else: nothing on the page chooses a model, and the table is the one the registry draws', () => {
+    const markup = page(withProfiles());
+    expect(markup).not.toMatch(/<(form|input|select|textarea)\b/);
+    expect(markup).toContain(table());
+    expect(rowCodes(markup)).toEqual([...PROJECT_STRUCTURE_ORDER]);
+    // The subtitle says what it said, and does not become the pointer.
+    expect(markup).toContain('Профили здесь только показываются, изменить их нельзя.');
+  });
+
+  it('stands while the registry is read and when it is refused, since it does not depend on the registry', () => {
+    expect(page()).toContain('data-models-pointer');
+    expect(page()).toContain('Загрузка: профилей анализа…');
+    const client = newClient();
+    seedError(client, queryKeys.analysis.profiles(), new ApiError(500, {
+      contract_version: '1.57.0', error_code: 'internal_error', message: 'refused', correlation_id: 'cid-pointer-1', retryable: false,
+    }, null));
+    const refused = page(client);
+    expect(refused).toContain('data-models-pointer');
+    expect(refused).toContain('Профили анализа не прочитаны');
+  });
+
+  it('can fail: a page without the pointer has none of its words', () => {
+    expect(table()).not.toContain('data-models-pointer');
+    expect(table()).not.toContain('Диспетчере');
   });
 });
 
