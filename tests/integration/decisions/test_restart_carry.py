@@ -603,3 +603,40 @@ class TestTheOriginTheWireReads:
         assert source[0] not in by_verdict and said.decision_id not in by_event      # a decision made directly has no origin
         entry = next(item for item in decision_journal(stand.session, project_uid=stand.project_uid) if item.decision_id == carried.decision_id)
         assert (entry.carried_from.run_id, entry.carried_from.mode) == (root, "restart")
+
+
+class _NoGeometry:
+    """Stands for the object store, as in the decision memory's own suites: no block index and no crops."""
+
+    def evidence_boxes_in(self, session: Session, run_id: str) -> dict[str, Any]:  # noqa: ARG002
+        return {}
+
+    def portal_crops_in(self, session: Session, run_id: str) -> tuple[dict[str, Any], ...]:  # noqa: ARG002
+        return ()
+
+
+class TestWithTheRealDecisionMemory:
+    def test_the_memory_keeps_a_carried_verdict_as_carried_without_text_and_the_comment_as_words(
+        self, stand: Stand, chain: tuple[str, str], carrying: sessionmaker[Session],
+    ) -> None:
+        """The composition root's own assembler as the port: a carried verdict is stored with origin ``carried`` (which ``precedents.votes.case_vote``
+        leaves out of every vote) and none of the system's sentence as the expert's words; a carried comment is a comment, never a decision."""
+        from auditmanager.bootstrap.adapters import MemoryCaptureAssembler
+
+        root, target = chain
+        source, new = stand.finding(root), stand.finding(target)
+        register_decision_recorded(MemoryCaptureAssembler(geometry=_NoGeometry()))
+        said = stand.decide(source, "accept", comment="Согласен.")
+        report = carry_restart_decisions(carrying, run_id=target, actor_user_uid=stand.actor)
+        assert (report.carried_verdicts, report.carried_comments, report.failures, report.complete) == (1, 1, 0, True)
+        carried_verdict, carried_comment = stand.history(new[0])
+        origins = dict(stand.session.execute(text("SELECT source_decision_id, origin_kind FROM decision_memory_decision")).all())
+        assert origins[said.decision_id] == "direct"
+        assert origins[carried_verdict.decision_id] == "carried"                   # the kind `case_vote` leaves out
+        assert carried_comment.decision_id not in origins                            # a comment is no decision
+        words = dict(stand.session.execute(text(
+            "SELECT d.source_decision_id, t.comment FROM decision_memory_decision d "
+            "JOIN decision_memory_decision_text t ON t.memory_decision_id = d.memory_decision_id")).all())
+        assert words[carried_verdict.decision_id] is None
+        kept = dict(stand.session.execute(text("SELECT source_decision_id, comment FROM decision_memory_comment")).all())
+        assert kept[carried_comment.decision_id].endswith("Согласен.")

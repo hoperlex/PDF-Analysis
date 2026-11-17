@@ -220,12 +220,12 @@ class TestTheComments:
 class TestTies:
     def test_equal_twins_are_paired_in_the_order_of_their_references_natural_sorted(self) -> None:
         sources = [finding(ROOT, ref="primary_text_10"), finding(ROOT, ref="primary_text_2")]
-        targets = [finding(TARGET, ref="primary_text_7"), finding(TARGET, ref="primary_text_30")]
+        targets = [finding(TARGET, ref="primary_text_9"), finding(TARGET, ref="primary_text_7")]
         accept_two, reject_ten = event(sources[1], "accept"), event(sources[0], "reject")
         result = plan([*sources, *targets], [accept_two, reject_ten])
         pairs = {item.target.extended_ref: (item.event_type, item.source.extended_ref) for item in result.items}
-        # 2 < 10 and 7 < 30: the 2nd pairs the 7th, the 10th the 30th -- not "primary_text_10" < "primary_text_2" as plain text
-        assert pairs == {"primary_text_7": ("accept", "primary_text_2"), "primary_text_30": ("reject", "primary_text_10")}
+        # 2 < 10 and 7 < 9: the 2nd pairs the 7th and the 10th the 9th. As plain text "primary_text_10" < "primary_text_2" and the pairs would cross.
+        assert pairs == {"primary_text_7": ("accept", "primary_text_2"), "primary_text_9": ("reject", "primary_text_10")}
         assert result.ties_skipped == 0
 
     def test_twins_with_no_reference_are_not_paired_and_are_counted(self) -> None:
