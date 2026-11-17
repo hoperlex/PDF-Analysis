@@ -34,3 +34,61 @@
   align-items: center;
   gap: var(--am-gap-sm);
 }
+
+/*
+ * `UIP-S02-04`: what the actions of the bar say once they have run, on a line of their own under the count and the buttons:
+ * the one message of a pass («Убрано в архив: k из N»), the documents the server refused with the reason of each, and a sentence
+ * on what is kept. The reason is the failure colour; the sentence is muted text.
+ */
+.notes {
+  display: grid;
+  flex: 1 0 100%;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.report {
+  display: grid;
+  gap: var(--am-gap-xs);
+}
+
+.reportLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  color: var(--am-ink);
+  font-size: var(--am-text-md);
+  font-weight: 700;
+}
+
+.failures {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--am-text-sm);
+}
+
+.failedTitle {
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+.reason {
+  color: var(--am-failed);
+}
+
+.note {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* The words beside a held «Скачать пакеты аудита» (the limit, or no result among the chosen) take the bar's whole line. */
+.wide {
+  flex: 1 0 100%;
+}

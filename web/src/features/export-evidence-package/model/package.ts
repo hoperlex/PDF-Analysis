@@ -54,7 +54,7 @@ function cancelled(signal?: AbortSignal): void {
 function tooLarge(): never {
   throw new EvidencePackageError('package_too_large', 'Полный пакет превышает 64 МиБ. Пакет не создан; исходные PDF не исключались.');
 }
-function progress(options: EvidencePackageOptions, value: EvidencePackageProgress): void {
+function progress(options: Pick<EvidencePackageOptions, 'signal' | 'onProgress'>, value: EvidencePackageProgress): void {
   cancelled(options.signal);
   options.onProgress?.(value);
 }
@@ -118,8 +118,8 @@ async function reportBytes(report: EvidencePackageReport, signal?: AbortSignal):
 function archiveSize(entries: readonly Entry[]): number {
   return entries.reduce((sum, entry) => sum + entry.data.byteLength + 76 + encoder.encode(entry.name).length * 2, 22);
 }
-function guardSize(entries: readonly Entry[], extraBytes = 0): void {
-  if (archiveSize(entries) + extraBytes > MAX_BYTES) tooLarge();
+function guardSize(entries: readonly Entry[], extraBytes = 0, limit = MAX_BYTES, refuse: () => never = tooLarge): void {
+  if (archiveSize(entries) + extraBytes > limit) refuse();
 }
 
 /** ZIP STORE/CRC32 adapted from entities/audit-run/lib/extended-xlsx.ts in this repository.
@@ -147,8 +147,13 @@ async function checksum(data: Uint8Array, signal?: AbortSignal): Promise<number>
   }
   return (value ^ 0xFFFFFFFF) >>> 0;
 }
-async function archive(entries: readonly Entry[], options: EvidencePackageOptions): Promise<Blob> {
-  guardSize(entries);
+async function archive(
+  entries: readonly Entry[],
+  options: Pick<EvidencePackageOptions, 'signal' | 'onProgress'>,
+  limit = MAX_BYTES,
+  refuse: () => never = tooLarge,
+): Promise<Blob> {
+  guardSize(entries, 0, limit, refuse);
   const records: Array<{ name: Uint8Array; data: Uint8Array; crc: number; offset: number }> = [];
   for (const entry of entries) {
     const data = new Uint8Array(entry.data);
@@ -301,5 +306,87 @@ export async function buildEvidencePackage(options: EvidencePackageOptions): Pro
     cancelled(options.signal);
     if (error instanceof EvidencePackageError || error instanceof DOMException && error.name === 'AbortError') throw error;
     throw new EvidencePackageError('source_read_failed', 'Не удалось прочитать все обязательные файлы. Пакет не создан; повторите экспорт после восстановления доступа.');
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// `UIP-S02-05`: several finished packages in one ZIP.
+//
+// «Скачать пакеты аудита» of a section gives one archive holding the package of each chosen document, built by the very
+// builder above and kept as the file it made (its own manifest and checks stay inside it). This function only packs the
+// finished files, with the archive writer above, and writes `index.json` beside them: each file's size and SHA-256 and
+// what the caller says about them (which document each is, which were left out). It reads nothing from the server.
+
+/** The most the bundle may hold, in bytes: it is built in memory beside the packages it holds. */
+export const EVIDENCE_BUNDLE_MAX_BYTES = 256 * 1024 * 1024;
+export const EVIDENCE_BUNDLE_MAX_FILES = 100;
+const BUNDLE_INDEX_NAME = 'index.json';
+
+export interface EvidenceBundleFile {
+  /** The entry's name in the archive: a short name, no path. */
+  readonly name: string;
+  readonly content: Blob;
+  readonly mediaType?: string;
+}
+export interface EvidenceBundleOptions {
+  readonly fileName: string;
+  readonly files: readonly EvidenceBundleFile[];
+  /** What the caller says about the files, written into `index.json` beside the figures this function measures. */
+  readonly index: Readonly<Record<string, unknown>>;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (progress: EvidencePackageProgress) => void;
+}
+
+function bundleTooLarge(): never {
+  throw new EvidencePackageError(
+    'package_too_large',
+    `Пакеты выбранных документов вместе больше ${EVIDENCE_BUNDLE_MAX_BYTES / 1024 / 1024} МиБ. Архив не создан; выберите меньше документов.`,
+  );
+}
+
+export async function buildEvidenceBundle(options: EvidenceBundleOptions): Promise<{ blob: Blob; fileName: string }> {
+  cancelled(options.signal);
+  if (!Array.isArray(options.files) || options.files.length < 1 || options.files.length > EVIDENCE_BUNDLE_MAX_FILES) {
+    throw new EvidencePackageError('invalid_request', 'Для архива нужен хотя бы один готовый пакет.');
+  }
+  const desiredName = safeName(options.fileName, 'Имя архива');
+  const fileName = desiredName.toLowerCase().endsWith('.zip') ? desiredName : `${desiredName}.zip`;
+  const entries: Entry[] = [];
+  const manifest: Array<{ entry_name: string; media_type: string; byte_size: number; sha256: string }> = [];
+  const names = new Set<string>([BUNDLE_INDEX_NAME]);
+  progress(options, { phase: 'preparing', completed: 0, total: options.files.length });
+  try {
+    for (const file of options.files) {
+      const name = safeName(file.name, 'Имя пакета');
+      const normalizedName = name.normalize('NFC').toLowerCase();
+      if (names.has(normalizedName)) throw new EvidencePackageError('invalid_request', 'Имена пакетов в архиве повторяются.');
+      names.add(normalizedName);
+      if (!(file.content instanceof Blob)) throw new EvidencePackageError('invalid_request', 'Пакет для архива должен быть готовым файлом.');
+      if (file.content.size > EVIDENCE_BUNDLE_MAX_BYTES) bundleTooLarge();
+      const data = await file.content.arrayBuffer();
+      cancelled(options.signal);
+      const mediaType = file.mediaType ?? 'application/zip';
+      entries.push({ name, data, mediaType });
+      guardSize(entries, 0, EVIDENCE_BUNDLE_MAX_BYTES, bundleTooLarge);
+      manifest.push({ entry_name: name, media_type: mediaType, byte_size: data.byteLength, sha256: await sha256(data, options.signal) });
+      progress(options, { phase: 'preparing', completed: manifest.length, total: options.files.length });
+    }
+    const index = {
+      ...options.index,
+      format: 'auditmanager-audit-packages-v1',
+      created_at: new Date().toISOString(),
+      files: manifest,
+      archive: { method: 'ZIP_STORE', maximum_bytes: EVIDENCE_BUNDLE_MAX_BYTES, entry_count: entries.length + 1 },
+    };
+    entries.push({ name: BUNDLE_INDEX_NAME, data: utf8(JSON.stringify(index, null, 2)), mediaType: 'application/json' });
+    guardSize(entries, 0, EVIDENCE_BUNDLE_MAX_BYTES, bundleTooLarge);
+    progress(options, { phase: 'packaging', completed: 0, total: entries.length });
+    const blob = await archive(entries, options, EVIDENCE_BUNDLE_MAX_BYTES, bundleTooLarge);
+    cancelled(options.signal);
+    return { blob, fileName };
+  } catch (error) {
+    cancelled(options.signal);
+    if (error instanceof EvidencePackageError || error instanceof DOMException && error.name === 'AbortError') throw error;
+    throw new EvidencePackageError('source_read_failed', 'Не удалось собрать архив из готовых пакетов. Архив не создан; повторите попытку.');
   }
 }

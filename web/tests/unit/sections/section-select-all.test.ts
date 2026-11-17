@@ -244,7 +244,8 @@ describe('the bottom bar of the chosen documents', () => {
   it('is the last thing of the page and the page keeps room under the cards while it is drawn', () => {
     const page = readFileSync(join(WEB_ROOT, 'src/_pages/section-detail/ui/section-detail-page.tsx'), 'utf8');
     const body = page.slice(page.indexOf('{body}'));
-    expect(body).toContain('<SectionSelectionBar selection={batch} />');
+    // `UIP-S02-04`: it is given what its actions act on (`scope`); it is still the one bar, at the end of the page.
+    expect(body).toMatch(/<SectionSelectionBar selection=\{batch\} scope=\{\{ projectUid, /);
     expect(body.slice(body.indexOf('<SectionSelectionBar'))).not.toMatch(/<DocumentCardGrid|<Section(?:Header|BatchBar)/);
     expect(page).toContain("batch.chosenCount > 0 ? `am-section ${styles.reserve}` : 'am-section'");
     const css = readFileSync(join(WEB_ROOT, 'src/_pages/section-detail/ui/section-detail-page.module.css'), 'utf8');

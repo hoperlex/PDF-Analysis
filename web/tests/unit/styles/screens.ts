@@ -93,14 +93,15 @@ import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
-import { SectionDetailPage } from '@/_pages/section-detail';
+import { SectionDetailPage, SectionHeader, SectionSelectionBar, SectionSelectionBarView } from '@/_pages/section-detail';
+import type { SectionBulk } from '@/_pages/section-detail';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { DocumentDetailPage } from '@/_pages/document-detail';
 import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
 import { ReserveCalendarView } from '@/widgets/reserve-calendar';
 import { NO_ENGINEER_FILTER } from '@/entities/work-schedule';
 import { assignmentUid, monthFixture, reserveFixture, EXPERT_A, EXPERT_B } from '../work-schedule/fixtures';
-import { DocumentCardGrid } from '@/entities/document-version';
+import { DocumentCardGrid, auditTally } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import {
@@ -2107,6 +2108,85 @@ export function screens(): Screen[] {
         onClose: noop,
       })),
     );
+  }
+  // `UIP-S02-01`, `UIP-S02-03`: the section header with a choice (the box, the pressed plate «ждут решения N», «Снять выделение») and the bottom
+  // bar of the chosen, drawn only while a card is chosen; `UIP-S02-04`, `UIP-S02-05`: the bar's actions and what they say once they have run —
+  // «В архив (N)» with the one message of a pass and the refused documents, «Скачать пакеты аудита» held with the limit in words, building with
+  // the document it is on, finished with the skipped documents listed, and refused with the document named.
+  {
+    const doc = (n: string, state: 'awaiting_decision' | 'not_run') => ({
+      ...version(),
+      document_uid: `doc_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      version_uid: `ver_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      display_title: `Документ ${n}`,
+      classification: { ...CONFIRMED },
+      audit: { state, partial: false, finding_count: state === 'not_run' ? 0 : 3, undecided_finding_count: state === 'not_run' ? 0 : 2 },
+    });
+    const documents = [doc('B1', 'awaiting_decision'), doc('B2', 'not_run')];
+    const chosen = (ids: readonly string[]) => ({
+      selection: { selected: new Set<string>(ids), onToggle: noop },
+      chosenCount: ids.length, batch: null, choose: noop, clear: noop, openBatch: noop, closeBatch: noop,
+    });
+    add('SectionHeader with the documents that wait for a decision chosen', render(createElement(SectionHeader, {
+      projectUid: PROJECT_UID, section: projectSectionOf('AR'), objectName: 'Школа', documents, walk: { status: 'idle' },
+      tally: auditTally(documents), partial: false, notRunHref: '/projects/x/sections/AR?filter=not_run',
+      selection: chosen([documents[0]!.version_uid]), addHref: '/projects/x#upload', refreshing: false, onRefresh: noop,
+    })));
+    add('SectionSelectionBar with one document chosen', render(createElement(SectionSelectionBar, { selection: chosen([documents[0]!.version_uid]) })));
+
+    const ids = documents.map((item) => item.version_uid);
+    const archive = { count: 2, pending: false, progress: null, report: null, onArchive: noop, onDismiss: noop };
+    const packages = {
+      count: 1, skippedCount: 1, refusal: null, pending: false, status: null, summary: null, error: null,
+      onDownload: noop, onCancel: noop, onDismiss: noop,
+    };
+    const bar = (count: number, bulk: SectionBulk) => render(createElement(SectionSelectionBarView, { selection: chosen(ids.slice(0, count)), bulk }));
+    const target = (item: (typeof documents)[number]) => ({ documentUid: item.document_uid, title: item.display_title });
+    add('SectionSelectionBar with «В архив (N)» and «Скачать пакеты аудита»', bar(2, { archive, packages }));
+    add('SectionSelectionBar, the packages held with the limit in words', bar(2, {
+      archive,
+      packages: {
+        ...packages, count: 21,
+        refusal: 'Пакеты аудита собираются не больше чем для 20 документов с результатом за раз: выбрано 21. Уберите лишние из выбора.',
+      },
+    }));
+    add('SectionSelectionBar, an archive pass running', bar(2, { archive: { ...archive, pending: true, progress: { done: 1, total: 2 } }, packages }));
+    add('SectionSelectionBar, the archive pass done with one refused document', bar(1, {
+      archive: {
+        ...archive, count: 1,
+        report: {
+          total: 2, archived: [target(documents[0]!)],
+          failed: [{ target: target(documents[1]!), reason: 'Недостаточно прав для этого действия.' }],
+        },
+      },
+      packages,
+    }));
+    add('SectionSelectionBar, the archive pass done and nothing chosen', bar(0, {
+      archive: { ...archive, count: 0, report: { total: 2, archived: documents.map(target), failed: [] } },
+      packages,
+    }));
+    add('SectionSelectionBar, the packages building', bar(2, {
+      archive,
+      packages: { ...packages, pending: true, status: 'Документ 1 из 1 «Документ B1»: Получение исходного PDF · 0 из 1' },
+    }));
+    add('SectionSelectionBar, the packages done with a skipped document', bar(2, {
+      archive,
+      packages: {
+        ...packages,
+        status: 'audit-packages-AR.zip: 1 пакет аудита и index.json. Пропущено документов без результата аудита: 1 — они перечислены ниже и в index.json.',
+        summary: {
+          fileName: 'audit-packages-AR.zip', packed: [],
+          skipped: [{ documentUid: documents[1]!.document_uid, versionUid: documents[1]!.version_uid, title: 'Документ B2', runId: undefined }],
+        },
+      },
+    }));
+    add('SectionSelectionBar, the packages refused', bar(2, {
+      archive,
+      packages: {
+        ...packages,
+        error: { title: 'Пакеты аудита не собраны', detail: 'Документ «Документ B1»: Не удалось получить CSV замечаний. Общий ZIP не создан.', correlationId: 'cid-1' },
+      },
+    }));
   }
   // `RUN-START-ONE-01a`: the one dialog of a start that can charge money, drawn open: a billed estimate with its ceiling,
   // one the server sent back, and a start without a money ceiling.
