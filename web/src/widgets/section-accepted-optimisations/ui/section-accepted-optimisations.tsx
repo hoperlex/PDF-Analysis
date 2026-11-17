@@ -7,10 +7,15 @@
  * **What is listed.** `listAcceptedOptimisationProposals`, newest acceptance first, a page at a time. A proposal an
  * expert rejected, sent back, decided and then withdrew, or never decided is not here; a proposal accepted again after
  * a withdrawal is. The section and the project are filters, not parents: a section nothing was accepted in is an empty
- * page, said as such. Each row names its project and document set and leads to the document's «Оптимизация» tab, on the
- * pass the proposal belongs to (`UI-B-02`). Every price and the saving are the API's exact text; a saving the API
+ * page, said as such. Every price and the saving are the API's exact text; a saving the API
  * leaves out is said to be not computed, never shown as zero. Under the amount stands the server's percent of the price
  * (`saving_percent`, `D-346`), «−25 % к цене в прайс-листе», the very figure the proposal card states.
+ *
+ * **The columns are the original's, in its order** (`UIP-S11-04`): «Документ / источник» (the document, which leads to its
+ * «Оптимизация» tab on the pass the proposal belongs to, `UI-B-02`, then the page and the position; the object on a second line),
+ * «Позиции» (the row of the specification, the quantity on a second line), «Текущее решение», «Принятое предложение», «Экономия»
+ * and «Решение». The original's «Эффект» with a type and its «Ограничения» are not here: the proposal has one type and the server
+ * states no restriction, so there is nothing to put in them. The long paragraph that opened the tab is gone.
  *
  * **Filters.** The section and the project are the page's, chosen in the row of the tabs (`UI-B-24`) and shared with the
  * specification tab; this widget reads them as props and starts from its first page whenever either changes.
@@ -52,40 +57,58 @@ export function acceptedSectionTitle(code: string | undefined): string | null {
 const COLUMNS: readonly TableColumn<AcceptedOptimisationProposal>[] = [
   {
     key: 'place',
-    header: 'Объект и комплект',
+    header: 'Документ / источник',
     cell: (row) => (
       <>
         <Link href={routes.documentOptimisation(row.project_uid, row.document_uid, row.optimisation_pass_id)}>
-          {row.project_name}
+          {row.document_name}
         </Link>
-        <span className={styles.place}>
-          {[row.document_name, acceptedSectionTitle(row.section)].filter((part) => part !== null).join(' · ')}
+        <span className={styles.mark}>
+          {' '}· страница {row.page_number}
+          {row.row_position === null ? '' : `, позиция ${row.row_position}`}
         </span>
         <span className={styles.place}>
-          страница {row.page_number}
-          {row.row_position === null ? '' : `, позиция ${row.row_position}`}
+          {[row.project_name, acceptedSectionTitle(row.section)].filter((part) => part !== null).join(' · ')}
         </span>
       </>
     ),
   },
-  { key: 'row', header: 'Позиция спецификации', cell: (row) => row.row_text },
   {
-    key: 'change',
-    header: 'Принятая замена',
+    key: 'row',
+    header: 'Позиции',
+    cell: (row) => (
+      <>
+        {row.row_text}
+        <span className={styles.place}>Количество: {acceptedQuantity(row)}</span>
+      </>
+    ),
+  },
+  {
+    key: 'current',
+    header: 'Текущее решение',
     cell: (row) => (
       <>
         <span className={styles.change}>{row.matched_name}</span>
-        <span className={styles.change}>
-          → {row.proposed_name} · {row.proposed_vendor}
-        </span>
         <span className={styles.place}>
-          {formatAmount(row.current_unit_price, row.currency)} → {formatAmount(row.proposed_unit_price, row.currency)} за{' '}
-          {row.unit}
+          {formatAmount(row.current_unit_price, row.currency)} за {row.unit}
         </span>
       </>
     ),
   },
-  { key: 'quantity', header: 'Количество', cell: acceptedQuantity },
+  {
+    key: 'proposed',
+    header: 'Принятое предложение',
+    cell: (row) => (
+      <>
+        <span className={styles.change}>
+          {row.proposed_name} · {row.proposed_vendor}
+        </span>
+        <span className={styles.place}>
+          {formatAmount(row.proposed_unit_price, row.currency)} за {row.unit}
+        </span>
+      </>
+    ),
+  },
   {
     key: 'saving',
     header: 'Экономия',
@@ -177,11 +200,6 @@ export function SectionAcceptedOptimisations({ sectionCode, projectUid }: Sectio
 
   return (
     <section className={styles.section} aria-label="Принятые оптимизации раздела" data-section-accepted="">
-      <p className={styles.rule}>
-        Предложения оптимизации, по которым действующее решение — «принято», по объектам выбранного раздела, сначала недавние.
-        Раздел и объект только отбирают записи; каждая строка остаётся предложением своего объекта и прохода, и по ссылке открывается
-        вкладка «Оптимизация» его комплекта.
-      </p>
       {accepted.isPending ? <LoadingState what="принятых оптимизаций" /> : null}
       {failure !== null ? (
         <div data-accepted-failure={failure.kind}>

@@ -5,11 +5,6 @@
   overflow-wrap: anywhere;
 }
 
-.rule {
-  margin: 0 0 var(--am-gap-sm);
-  color: var(--am-ink-muted);
-}
-
 .summary {
   margin: 0 0 var(--am-gap-sm);
   font-weight: 600;
@@ -17,6 +12,11 @@
 
 .place {
   display: block;
+  color: var(--am-ink-muted);
+}
+
+/* The page and the position stand on the line of the document, muted, as the original's «v2 · OPT-003 · л. …». */
+.mark {
   color: var(--am-ink-muted);
 }
 
