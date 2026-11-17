@@ -138,7 +138,6 @@ export const PENDING_UNREACHED: readonly PendingUnreached[] = [
   { origin: 'web/src/_app/app-frame.module.css', selector: '.railTooltip' },
   { origin: 'web/src/_pages/account/ui/account-page.module.css', selector: '.profile' },
   { origin: 'web/src/_pages/queue/ui/queue-page.module.css', selector: '.intent' },
-  { origin: 'web/src/_pages/stage-compare/ui/stage-compare-page.module.css', selector: '.projectChooser' },
   { origin: 'web/src/_pages/stage-compare/ui/stage-upload-panel.module.css', selector: '.card' },
   { origin: 'web/src/_pages/stage-compare/ui/stage-upload-panel.module.css', selector: '.form, .batch, .card' },
   { origin: 'web/src/_pages/stage-compare/ui/stage-workspace.module.css', selector: '.panel' },

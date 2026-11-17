@@ -1383,7 +1383,7 @@
       "$comment": [
         "«Сравнение версий» (CMP-VC-UI-01, plan section 1.1) reads the project list, the signed-in account's roles and the product's",
         "module set on a cold route. The project is chosen on the screen; when the session has exactly one project it is taken without",
-        "a click and the tab «Проекты и этапы» reads the comparison overview of it, plus the project's unfinished uploads while the",
+        "a click and the tab «Документы и этапы» reads the comparison overview of it, plus the project's unfinished uploads while the",
         "upload dialog is open. A document set opens «Сравнение листов» by a click that this walk does not make, so the matrix,",
         "the edit history, the series, the sheet pairs, the versions and the thumbnails are `optional_api`: the claim names every read",
         "the screen can make without asserting a tab the walk never opens. The commands (the preparation, the series, the edit",
@@ -3531,7 +3531,7 @@
         "case": "action"
       },
       {
-        "at": "/version-comparison",
+        "at": "/version-comparison?project={project_uid}",
         "page_module": "web/src/app/version-comparison/page.tsx",
         "screen": "version-comparison",
         "case": "action",
@@ -3543,15 +3543,9 @@
         ],
         "actions": [
           {
-            "do": "select",
-            "selector": "select",
-            "option_value": "{project_uid}",
-            "settle": true
-          },
-          {
             "do": "click",
             "selector": "button",
-            "text": "Загрузить проект со всеми версиями",
+            "text": "Загрузить документ со всеми версиями",
             "settle": true
           },
           {
@@ -3699,7 +3693,7 @@
         ]
       },
       {
-        "at": "/version-comparison",
+        "at": "/version-comparison?project={project_uid}",
         "page_module": "web/src/app/version-comparison/page.tsx",
         "screen": "version-comparison",
         "case": "action",
@@ -3710,12 +3704,6 @@
           "document_uid": "cmp_version_document_uid"
         },
         "actions": [
-          {
-            "do": "select",
-            "selector": "select",
-            "option_value": "{project_uid}",
-            "settle": true
-          },
           {
             "do": "wait_for",
             "selector": "tr[data-document-uid=\"{document_uid}\"]",
@@ -3789,7 +3777,7 @@
         ]
       },
       {
-        "at": "/version-comparison",
+        "at": "/version-comparison?project={project_uid}",
         "page_module": "web/src/app/version-comparison/page.tsx",
         "screen": "version-comparison",
         "case": "action",
@@ -3801,12 +3789,6 @@
           "comparison_series_id": "cmp_version_series_id"
         },
         "actions": [
-          {
-            "do": "select",
-            "selector": "select",
-            "option_value": "{project_uid}",
-            "settle": true
-          },
           {
             "do": "wait_for",
             "selector": "tr[data-document-uid=\"{document_uid}\"]",
@@ -3896,7 +3878,7 @@
         ]
       },
       {
-        "at": "/version-comparison",
+        "at": "/version-comparison?project={project_uid}",
         "page_module": "web/src/app/version-comparison/page.tsx",
         "screen": "version-comparison",
         "case": "action",
@@ -3908,12 +3890,6 @@
           "comparison_transition_id": "cmp_version_transition_id"
         },
         "actions": [
-          {
-            "do": "select",
-            "selector": "select",
-            "option_value": "{project_uid}",
-            "settle": true
-          },
           {
             "do": "wait_for",
             "selector": "tr[data-document-uid=\"{document_uid}\"]",
@@ -3977,7 +3953,7 @@
         ]
       },
       {
-        "at": "/version-comparison",
+        "at": "/version-comparison?project={project_uid}",
         "page_module": "web/src/app/version-comparison/page.tsx",
         "screen": "version-comparison",
         "case": "action",
@@ -3989,12 +3965,6 @@
           "comparison_series_id": "cmp_version_series_id"
         },
         "actions": [
-          {
-            "do": "select",
-            "selector": "select",
-            "option_value": "{project_uid}",
-            "settle": true
-          },
           {
             "do": "wait_for",
             "selector": "tr[data-document-uid=\"{document_uid}\"] [data-step=\"ai_changes\"] [data-step-action=\"start\"]",
@@ -4082,7 +4052,7 @@
         ]
       },
       {
-        "at": "/version-comparison",
+        "at": "/version-comparison?project={project_uid}",
         "page_module": "web/src/app/version-comparison/page.tsx",
         "screen": "version-comparison",
         "case": "action",
@@ -4094,12 +4064,6 @@
           "comparison_series_id": "cmp_version_series_id"
         },
         "actions": [
-          {
-            "do": "select",
-            "selector": "select",
-            "option_value": "{project_uid}",
-            "settle": true
-          },
           {
             "do": "wait_for",
             "selector": "tr[data-document-uid=\"{document_uid}\"] [data-summary-md]",
@@ -4129,7 +4093,7 @@
       },
       {
         "name": "cmp-stage-upload",
-        "at": "/stage-comparison",
+        "at": "/stage-comparison?project={project_uid}",
         "page_module": "web/src/app/stage-comparison/page.tsx",
         "screen": "stage-comparison",
         "case": "action",
@@ -4225,7 +4189,7 @@
       },
       {
         "name": "cmp-stage-assembly",
-        "at": "/stage-comparison",
+        "at": "/stage-comparison?project={project_uid}",
         "page_module": "web/src/app/stage-comparison/page.tsx",
         "screen": "stage-comparison",
         "case": "action",
@@ -4290,7 +4254,7 @@
       },
       {
         "name": "cmp-stage-swapped-map",
-        "at": "/stage-comparison",
+        "at": "/stage-comparison?project={project_uid}",
         "page_module": "web/src/app/stage-comparison/page.tsx",
         "screen": "stage-comparison",
         "case": "action",
@@ -4343,7 +4307,7 @@
       },
       {
         "name": "cmp-stage-full-run",
-        "at": "/stage-comparison",
+        "at": "/stage-comparison?project={project_uid}",
         "page_module": "web/src/app/stage-comparison/page.tsx",
         "screen": "stage-comparison",
         "case": "action",
@@ -4403,7 +4367,7 @@
       },
       {
         "name": "cmp-stage-repair-undo",
-        "at": "/stage-comparison",
+        "at": "/stage-comparison?project={project_uid}",
         "page_module": "web/src/app/stage-comparison/page.tsx",
         "screen": "stage-comparison",
         "case": "action",
@@ -4480,7 +4444,7 @@
       },
       {
         "name": "cmp-stage-verdict",
-        "at": "/stage-comparison",
+        "at": "/stage-comparison?project={project_uid}",
         "page_module": "web/src/app/stage-comparison/page.tsx",
         "screen": "stage-comparison",
         "case": "action",
@@ -4533,7 +4497,7 @@
       },
       {
         "name": "cmp-stage-journal",
-        "at": "/stage-comparison",
+        "at": "/stage-comparison?project={project_uid}",
         "page_module": "web/src/app/stage-comparison/page.tsx",
         "screen": "stage-comparison",
         "case": "action",
@@ -4616,7 +4580,7 @@
       },
       {
         "name": "cmp-stage-promote",
-        "at": "/stage-comparison",
+        "at": "/stage-comparison?project={project_uid}",
         "page_module": "web/src/app/stage-comparison/page.tsx",
         "screen": "stage-comparison",
         "case": "action",

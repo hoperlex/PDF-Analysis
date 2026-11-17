@@ -14,31 +14,6 @@
   white-space: nowrap;
 }
 
-/*
- * The card of the old object chooser is gone; its rule stays until the census' list of rules no screen reaches
- * (`contrast-pending.ts`) drops the row of this selector, which is not this task's file.
- */
-.projectChooser {
-  display: grid;
-  gap: var(--am-gap-sm);
-  max-width: 100%;
-  margin-bottom: var(--am-gap);
-  padding: var(--am-gap);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
-  background: var(--am-surface);
-}
-
-.projectChooser select {
-  max-width: min(100%, 460px);
-}
-
 .workspace {
   min-width: 0;
-}
-
-@media (max-width: 780px) {
-  .projectChooser {
-    padding: var(--am-gap);
-  }
 }
