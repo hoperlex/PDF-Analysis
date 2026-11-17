@@ -23,6 +23,7 @@
  * creating a shared fixture directory outside any session's ownership.
  */
 
+import { PathnameContext, SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
@@ -61,6 +62,19 @@ import type {
  * `esbuild: { jsx: 'automatic' }` — and is reported as a seam defect, not repaired here.
  */
 (globalThis as unknown as { React?: typeof React }).React = React;
+
+/**
+ * «Разбор» opens as the table in every run (`UIP-S06-06`), and the table opens no finding of its own. A screen that is read for the list
+ * beside the open finding -- its card, its panel, the strips under the page -- is drawn under `?view=list`, the one way the list opens.
+ */
+export function inListView(page: ReactElement): ReactElement {
+  const query = new URLSearchParams({ view: 'list' });
+  return React.createElement(
+    PathnameContext.Provider,
+    { value: '/review' },
+    React.createElement(SearchParamsContext.Provider, { value: query as never }, page),
+  );
+}
 
 /** Render a component to markup. No DOM, no `jsdom`, no testing-library — none is a dependency. */
 export function render(element: ReactElement): string {

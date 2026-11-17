@@ -85,14 +85,16 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const mayAct = useMayActAsExpert();
   // `UI-PARITY-01` completion scenario 5: the chosen finding and the verdict filter live in the address
   // (`?finding=`, `?verdict=`), so a saved link opens the same finding under the same filter. Outside the
-  // app router both hooks answer `null` and the page keeps its first finding and «Все».
+  // app router both hooks answer `null` and the page keeps its first finding and «Все». The defaults are never
+  // written (`UIP-S06-06`): «Все» is no `?verdict=`, the table is no `?view=`, «Все» of the severity is no `?severity=`.
   const pathname = usePathname() ?? routes.review(projectUid, runId);
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const linkedFinding = searchParams.get('finding');
   const verdictFilter = verdictFilterOf(searchParams.get('verdict'));
   // `R-151j`: the severity filter lives in the address too (`?severity=`).
   const severityFilter = severityFilterOf(searchParams.get('severity'));
-  // `UI-A-68`: the findings as the list beside the open finding, or as the original's full-width table (`?view=table`).
+  // `UI-A-68`, `UIP-S06-06`: the findings as the original's full-width table (every run opens it), or, by `?view=list`, as the list
+  // beside the open finding.
   const [selection, setSelectionState] = useState<ReviewSelection | null>(
     linkedFinding === null ? null : selectFinding(linkedFinding),
   );
@@ -120,10 +122,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     setSelectionState(next);
   };
   const setView = (next: FindingView) => {
-    writeAddress('view', next === defaultView ? null : next);
+    writeAddress('view', next === 'table' ? null : next);
   };
   const setVerdictFilter = (filter: VerdictFilter) => {
-    writeAddress('verdict', filter === 'active' ? null : filter);
+    writeAddress('verdict', filter === 'all' ? null : filter);
   };
   const setSeverityFilter = (filter: SeverityFilter) => {
     writeAddress('severity', filter === 'all' ? null : filter);
@@ -134,8 +136,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   // key is now decided in one place -- `runStatusQueryOptions` -- and this screen reads
   // whatever that place writes.
   const runQuery = useQuery(runStatusQueryOptions(runId));
-  const defaultView = runQuery.data?.publication_mode === 'one_list' ? 'table' : 'list';
-  const view = findingViewOf(searchParams.get('view') ?? defaultView);
+  const view = findingViewOf(searchParams.get('view'));
 
   // The COMPLETE list: every page of the run's findings, or the error of the page that
   // failed. The query resolves only once the last page has arrived, so the list below is
@@ -447,15 +448,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       recommendation={detail.observation.recommendation_text}
       advice={criticAdvice}
       actions={mayAct && selectedSummary !== null ? (
-        <ReviewRowActions
-          finding={selectedSummary}
-          runId={runId}
-          onOpen={(findingUid) => {
-            // The severity is chosen in the panel: close the view on it.
-            setExpanded(false);
-            setSelection(selectFinding(findingUid));
-          }}
-        />
+        // The key is the finding: stepping to its neighbour in the view is another finding's field, with no text or choice of this one's.
+        <ReviewRowActions key={selectedSummary.finding_uid} finding={selectedSummary} runId={runId} />
       ) : null}
       blocks={blocksUnderThePage}
     />
@@ -557,16 +551,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
               }}
               renderExpansion={() => <OpenedFinding>{detailContent}</OpenedFinding>}
               sheetOf={(page) => sheetOfPage(sheetLabels.data, page)}
-              // `R-151n`: ✓/✕ in each row, for a session that may decide.
-              renderRowActions={mayAct ? (finding) => (
-                <ReviewRowActions
-                  finding={finding}
-                  runId={runId}
-                  onOpen={(findingUid) => {
-                    setSelection(selectFinding(findingUid));
-                  }}
-                />
-              ) : undefined}
+              // `R-151n`, `UIP-S06-08`: ✓/✕, «Причина» and, where the model proposed a severity, the choice of it, in each row, for a
+              // session that may decide. A press never opens the finding: a refusal says itself in the row.
+              renderRowActions={mayAct ? (finding) => <ReviewRowActions finding={finding} runId={runId} /> : undefined}
               isLoading={findingsQuery.isPending}
               emptyDetail={run?.state === 'partial' ? <p>Прогон завершился частично. Отсутствие опубликованных замечаний не подтверждает, что в документе их нет.
                 {' '}<Link href={routes.run(projectUid, runId)}>Проверить этапы и ограничения прогона</Link>.</p> : undefined}

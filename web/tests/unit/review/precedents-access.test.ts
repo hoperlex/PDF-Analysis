@@ -13,7 +13,7 @@ const seen = vi.hoisted(() => ({ run: [] as boolean[], finding: [] as boolean[] 
 vi.mock('next/navigation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePathname: () => null,
-  useSearchParams: () => new URLSearchParams(''),
+  useSearchParams: () => new URLSearchParams('view=list'),
 }));
 
 vi.mock('@/entities/decision-memory', async (importOriginal) => {

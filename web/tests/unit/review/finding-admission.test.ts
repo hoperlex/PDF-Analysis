@@ -137,6 +137,7 @@ describe('the finding list', () => {
         groups,
         selectedFindingUid: null,
         onSelect: () => {},
+        view: 'list',
       }),
     );
     expect(markup.indexOf('data-category="internal_contradiction"')).toBeLessThan(

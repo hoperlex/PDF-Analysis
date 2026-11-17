@@ -65,7 +65,7 @@ describe('the chip in a run\'s list and table', () => {
   const groups = () => groupByCategory(mixed());
 
   it('stands on the rows of a drawing and a cross-check, and not on the text row', () => {
-    const markup = render(createElement(FindingList, { groups: groups(), selectedFindingUid: null, onSelect: noop }));
+    const markup = render(createElement(FindingList, { groups: groups(), selectedFindingUid: null, onSelect: noop, view: 'list' }));
 
     expect(markup.match(/data-finding-origin=/g)).toHaveLength(2);
     expect(markup).toContain('data-finding-origin="drawing"');
@@ -83,7 +83,7 @@ describe('the chip in a run\'s list and table', () => {
   });
 
   it('is not in a text-only run at all: the list is the markup it always was', () => {
-    const list = render(createElement(FindingList, { groups: groupByCategory([finding()]), selectedFindingUid: null, onSelect: noop }));
+    const list = render(createElement(FindingList, { groups: groupByCategory([finding()]), selectedFindingUid: null, onSelect: noop, view: 'list' }));
     const table = render(createElement(FindingTable, { findings: [finding()], numberOf: new Map(), selectedFindingUid: null, onSelect: noop }));
 
     expect(list).not.toContain('data-finding-origin');

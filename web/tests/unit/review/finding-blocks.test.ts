@@ -37,7 +37,7 @@ import {
   stampBlock,
   textBlock,
 } from '../blocks/fixtures';
-import { FINDING_UID, PROJECT_UID, RUN_ID, VERSION_UID, evidence, findingDetail, observation, runStatus } from './fixtures';
+import { FINDING_UID, PROJECT_UID, RUN_ID, VERSION_UID, evidence, findingDetail, inListView, observation, runStatus } from './fixtures';
 
 const KEY = portalBlocksQueryOptions(BLOCKS_VERSION_UID).queryKey;
 
@@ -319,7 +319,7 @@ function reviewMarkup(seed: (client: ReturnType<typeof newClient>) => void): str
   client.setQueryData(queryKeys.findings.detail(detail.finding_uid), { data: detail });
   client.setQueryData(queryKeys.findings.decisions(detail.finding_uid), { data: { items: [], page: { next_cursor: null } } });
   seed(client);
-  return renderScreen(client, createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
+  return renderScreen(client, inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })));
 }
 
 describe('«Разбор» shows the finding’s blocks above the page’s', () => {

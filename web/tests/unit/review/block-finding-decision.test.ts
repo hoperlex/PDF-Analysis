@@ -78,7 +78,7 @@ function rowActions(finding: ReturnType<typeof blockFinding>) {
   world.refIndex = 0;
   world.cellIndex = 0;
   (world.model as MutationModel).rewind();
-  const element = ReviewRowActions({ finding, runId: RUN, onOpen: () => {} }) as ReactElement<FindingRowActionsProps>;
+  const element = ReviewRowActions({ finding, runId: RUN }) as ReactElement<FindingRowActionsProps>;
   expect(isValidElement(element)).toBe(true);
   return element.props;
 }
@@ -112,6 +112,11 @@ beforeEach(async () => {
 
 describe('✓/✕ on a block finding', () => {
   const block = () => blockFinding({ finding_uid: BLOCK_UID, observation: observation({ ...blockFinding().observation, finding_observation_id: BLOCK_OBSERVATION }) });
+  const proposedBlock = (over: Partial<ReturnType<typeof blockFinding>> = {}) => blockFinding({
+    finding_uid: BLOCK_UID,
+    observation: observation({ ...blockFinding().observation, finding_observation_id: BLOCK_OBSERVATION, proposed_severity: 'critical' }),
+    ...over,
+  });
 
   it('records an accept against the block finding and its canonical observation', async () => {
     expect(block().observation.evidence).toEqual([]);
@@ -152,15 +157,120 @@ describe('✓/✕ on a block finding', () => {
   });
 
   it('still refuses ✓ without a chosen severity when the model proposed one, and sends nothing', async () => {
-    const proposed = blockFinding({
-      finding_uid: BLOCK_UID,
-      observation: observation({ ...blockFinding().observation, finding_observation_id: BLOCK_OBSERVATION, proposed_severity: 'critical' }),
-    });
+    const proposed = proposedBlock();
 
     rowActions(proposed).onAccept('');
     await flush();
 
     expect(sent).toEqual([]);
     expect(rowActions(proposed).note?.tone).toBe('fail');
+  });
+});
+
+/**
+ * The choice «Критичность» beside ✓ in the row (`UIP-S06-08`, `R-151j`). The row hands the request builder what the expert chose and
+ * nothing else; the rules (the refusal, a severity only on an accept) are `features/record-verdict`'s and are read here only through
+ * what the row sends and says. The cells of the stub `useState` stand for one mounted row, so a second finding handed to the same row
+ * is the full-screen view stepping to the neighbour.
+ */
+describe('the choice of severity in the row', () => {
+  const proposed = (uid = BLOCK_UID, over: Record<string, unknown> = {}) => blockFinding({
+    finding_uid: uid,
+    observation: observation({ ...blockFinding().observation, finding_observation_id: BLOCK_OBSERVATION, proposed_severity: 'critical' }),
+    ...over,
+  });
+
+  it('offers none for a finding the model proposed no severity for, and the one that has a proposal starts empty', () => {
+    expect(rowActions(blockFinding({ finding_uid: BLOCK_UID })).severity).toBeUndefined();
+    const choice = rowActions(proposed()).severity;
+    expect(choice?.value).toBe('');
+    expect(choice?.required).toBe(true);
+    expect(choice?.invalid).toBe(false);
+  });
+
+  it('never puts the proposal into the choice, whichever severity the model proposed', async () => {
+    for (const value of ['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'] as const) {
+      const finding = blockFinding({
+        finding_uid: BLOCK_UID,
+        observation: observation({ ...blockFinding().observation, finding_observation_id: BLOCK_OBSERVATION, proposed_severity: value }),
+      });
+      expect(rowActions(finding).severity?.value).toBe('');
+    }
+    rowActions(proposed()).onAccept('');
+    await flush();
+    expect(sent).toEqual([]);
+  });
+
+  it('sends one accept with the severity the expert chose and the reason, in the same event', async () => {
+    rowActions(proposed()).severity?.onChange('economic');
+    expect(rowActions(proposed()).severity?.value).toBe('economic');
+
+    rowActions(proposed()).onAccept(' Размер подтверждён по листу 3 ');
+    await flush();
+
+    expect(sent).toEqual([
+      { findingUid: BLOCK_UID, body: { event_type: 'accept', finding_observation_id: BLOCK_OBSERVATION, comment: 'Размер подтверждён по листу 3', severity: 'economic' } },
+    ]);
+    expect(vi.mocked(appendDecision)).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses ✓ without a choice in the row itself, with the panel’s sentence, sends nothing and says the select is invalid', async () => {
+    rowActions(proposed()).onAccept('Причина');
+    await flush();
+
+    expect(sent).toEqual([]);
+    const after = rowActions(proposed());
+    expect(after.note).toEqual({ tone: 'fail', text: 'Перед принятием выберите критичность. Ничего не отправлено.' });
+    expect(after.severity?.invalid).toBe(true);
+  });
+
+  it('lifts the refusal when the choice it asked for is made, and then ✓ goes', async () => {
+    rowActions(proposed()).onAccept('');
+    await flush();
+    expect(rowActions(proposed()).note?.tone).toBe('fail');
+
+    rowActions(proposed()).severity?.onChange('operational');
+    expect(rowActions(proposed()).note).toBeNull();
+    expect(rowActions(proposed()).severity?.invalid).toBe(false);
+
+    rowActions(proposed()).onAccept('');
+    await flush();
+    expect(sent).toEqual([{ findingUid: BLOCK_UID, body: { event_type: 'accept', finding_observation_id: BLOCK_OBSERVATION, severity: 'operational' } }]);
+  });
+
+  it('empties the choice when the expert picks the empty item, and ✓ is refused again', async () => {
+    rowActions(proposed()).severity?.onChange('economic');
+    rowActions(proposed()).severity?.onChange('');
+    expect(rowActions(proposed()).severity?.value).toBe('');
+
+    rowActions(proposed()).onAccept('');
+    await flush();
+    expect(sent).toEqual([]);
+  });
+
+  it('does not follow the reader to another finding: the same row handed the neighbour reads empty', async () => {
+    const NEXT_UID = 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8E';
+    rowActions(proposed()).severity?.onChange('economic');
+    expect(rowActions(proposed()).severity?.value).toBe('economic');
+
+    expect(rowActions(proposed(NEXT_UID)).severity?.value).toBe('');
+    rowActions(proposed(NEXT_UID)).onAccept('');
+    await flush();
+    expect(sent).toEqual([]);
+
+    // Back on the first finding the choice made there is as it was left.
+    expect(rowActions(proposed()).severity?.value).toBe('economic');
+  });
+
+  it('reads the severity the expert already decided, and the proposal never', () => {
+    expect(rowActions(proposed(BLOCK_UID, { decided_severity: 'recommendation' })).severity?.value).toBe('recommendation');
+    expect(rowActions(proposed(BLOCK_UID, { decided_severity: 'recommendation' })).severity?.required).toBe(false);
+  });
+
+  it('sends no severity for a reject, whatever is chosen', async () => {
+    rowActions(proposed()).severity?.onChange('economic');
+    rowActions(proposed()).onReject('Не относится к разделу');
+    await flush();
+    expect(sent).toEqual([{ findingUid: BLOCK_UID, body: { event_type: 'reject', finding_observation_id: BLOCK_OBSERVATION, comment: 'Не относится к разделу' } }]);
   });
 });

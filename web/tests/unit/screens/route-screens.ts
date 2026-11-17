@@ -112,6 +112,7 @@ import { WorkSchedulePage } from '@/_pages/work-schedule';
 import { RegisterPage } from '@/_pages/register';
 import { RegisterSubmittedPage } from '@/_pages/register-submitted';
 import { ReviewPage } from '@/_pages/review';
+import { inListView } from '../review/fixtures';
 import { RunPage } from '@/_pages/run';
 import { SectionDetailPage } from '@/_pages/section-detail';
 import { SectionOptimisationPage } from '@/_pages/section-optimisation';
@@ -456,11 +457,12 @@ export const SEEDS: readonly Seed[] = [
   {
     address: '/projects/[project_uid]/runs/[run_id]/review',
     name: 'review',
+    // The list beside the open finding is what the guards read: the table, which every run opens by default (`UIP-S06-06`), opens none.
     make: (s) =>
-      createElement(ReviewPage, {
+      inListView(createElement(ReviewPage, {
         projectUid: s['project_uid'] as string,
         runId: s['run_id'] as string,
-      }),
+      })),
     discipline: { project_uid: 'defers-to-route', run_id: 'defers-to-route' },
   },
   {

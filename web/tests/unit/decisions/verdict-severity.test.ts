@@ -370,6 +370,28 @@ describe('pressing Accept and Reject through the hook', () => {
     expect(sent).toEqual([]);
     expect(hook().refusal).toBe('severity_required');
   });
+
+  it('sends the severity the expert chose and the reason in one accept, and sends them once the choice a refusal asked for is made (`UIP-S06-08`)', () => {
+    hook().record('accept', OBSERVATION_ID as never, { proposed: 'critical' }, 'Размер подтверждён');
+    expect(sent).toEqual([]);
+    expect(hook().refusal).toBe('severity_required');
+
+    hook().record('accept', OBSERVATION_ID as never, { proposed: 'critical', decided: 'economic' }, ' Размер подтверждён ');
+    expect(sent).toEqual([
+      { event_type: 'accept', finding_observation_id: OBSERVATION_ID, comment: 'Размер подтверждён', severity: 'economic' },
+    ]);
+    // The press that was sent cleared the refusal of the one before it.
+    expect(hook().refusal).toBeNull();
+  });
+
+  it('never sends the model’s proposal as the severity: the proposal alone is a refusal, whichever it is', () => {
+    for (const proposed of SEVERITY_VALUES) {
+      sent.length = 0;
+      hook().record('accept', OBSERVATION_ID as never, { proposed });
+      expect(sent, proposed).toEqual([]);
+      expect(hook().refusal).toBe('severity_required');
+    }
+  });
 });
 
 describe('the request the hook’s mutation puts on the wire', () => {

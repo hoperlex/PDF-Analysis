@@ -54,6 +54,7 @@ import {
   evidence,
   finding,
   findingDetail,
+  inListView,
   observation,
   render,
   runStatus,
@@ -166,6 +167,7 @@ function list(items: readonly Finding[]): string {
       groups: groupByCategory([...items]),
       selectedFindingUid: null,
       onSelect: () => {},
+      view: 'list',
     }),
   );
 }
@@ -726,7 +728,7 @@ function reviewPage(detail: FindingDetail): string {
   client.setQueryData(queryKeys.findings.decisions(detail.finding_uid), {
     data: { items: [], page: { next_cursor: null } },
   });
-  return renderScreen(client, createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
+  return renderScreen(client, inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })));
 }
 
 describe('the review screen hands the fields to the widgets', () => {

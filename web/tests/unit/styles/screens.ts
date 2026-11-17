@@ -14,6 +14,7 @@
  * fixtures `tests/unit/review` already uses, and adds no dependency.
  */
 
+import { PathnameContext, SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { createElement } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 
@@ -236,6 +237,16 @@ function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError
 }
 
 const noop = (): void => {};
+
+/**
+ * «Разбор» opens as the table in every run (`UIP-S06-06`), and the table opens no finding of its own. The screens that were taken
+ * for the list beside the open finding -- the card, the panel, the strips under the page -- are drawn under `?view=list`, so the
+ * census keeps reaching them; the table is drawn by the screens that stand at the end of this list.
+ */
+function inListView(page: ReactElement): ReactElement {
+  const query = new URLSearchParams({ view: 'list' });
+  return createElement(PathnameContext.Provider, { value: '/review' }, createElement(SearchParamsContext.Provider, { value: query as never }, page));
+}
 
 /** The four identities this census uses, keyed as `web/src/app`'s directories spell them. */
 const IDENTITIES = {
@@ -1853,6 +1864,7 @@ export function screens(): Screen[] {
     'FindingList selected',
     render(
       createElement(FindingList, {
+        view: 'list',
         groups: groupByCategory(FINDINGS),
         selectedFindingUid: FINDING_UID,
         onSelect: noop,
@@ -1881,6 +1893,7 @@ export function screens(): Screen[] {
   })));
   // `R-151g`: an accepted finding's execution status in its row, and the control with a refusal.
   add('FindingList with an execution status', render(createElement(FindingList, {
+    view: 'list',
     groups: groupByCategory(FINDINGS.map((finding, index) => index === 0
       ? { ...finding, current_verdict: 'accepted' as const, execution_status: 'amended' as const, merged_observations: [V2_OBSERVATION, V2_SIBLING] }
       : { ...finding, current_verdict: 'rejected' as const })),
@@ -1945,6 +1958,7 @@ export function screens(): Screen[] {
     'FindingList with row actions, recorded and refused',
     render(
       createElement(FindingList, {
+        view: 'list',
         groups: groupByCategory(FINDINGS),
         selectedFindingUid: FINDING_UID,
         onSelect: noop,
@@ -2708,7 +2722,7 @@ export function screens(): Screen[] {
       'ReviewPage loaded',
       renderScreen(
         client,
-        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+        inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
       ),
     );
   }
@@ -2748,7 +2762,7 @@ export function screens(): Screen[] {
       };
       add(
         'ReviewPage loaded, with the cited page’s blocks',
-        renderScreen(withBlocks(true), createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
+        renderScreen(withBlocks(true), inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }))),
       );
       const strip = (page: number, over: Partial<Parameters<typeof ReviewPageBlocks>[0]> = {}) =>
         createElement(ReviewPageBlocks, { projectUid: PROJECT_UID, versionUid: VERSION_UID, page, ...over });
@@ -2866,7 +2880,7 @@ export function screens(): Screen[] {
       'ReviewPage loaded, v2 finding',
       renderScreen(
         client,
-        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+        inListView(createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
       ),
     );
   }
@@ -3608,6 +3622,87 @@ export function screens(): Screen[] {
       xlsx: { ...idle, error: { title: 'Excel не выгружен', detail: 'Файл не создан.' } },
       pack: { ...idlePackage, error: { title: 'Пакет аудита не собран', detail: 'Неполный ZIP не скачивается; повторите попытку.' } },
     })));
+  }
+
+  /*
+   * `UIP-S06-06`, `UIP-S06-07`: the table of «Разбор» over a run that holds every severity twice, decided and proposed, in the three
+   * verdicts, and one finding with no severity. Its stripes (five tones, solid and dashed), its tints, its struck rows, and the five
+   * plates over it with «Не определена» drawn, all stand in one screen so each tone's colour is measured on a waiting row, on the
+   * green of an accepted one and on the red of a rejected one. The list that was the default stands under `view: 'list'` above.
+   * At the very end, for the reason above.
+   */
+  {
+    const verdicts = ['pending', 'accepted', 'rejected'] as const;
+    const uid = (n: number): string => `fnd_01J9ZQ8K7NHVXW3T2R5M6P4QS${String(n).padStart(2, '0')}`;
+    const severityRows = SEVERITY_VALUES.flatMap((severity, index) => [
+      finding({
+        finding_uid: uid(index), category: 'internal_contradiction', current_verdict: verdicts[index % 3] as Verdict,
+        decided_severity: severity, observation: observation({ proposed_severity: severity }),
+      }),
+      finding({
+        finding_uid: uid(index + 10), category: 'dimensions', current_verdict: verdicts[(index + 1) % 3] as Verdict,
+        observation: observation({ proposed_severity: severity }),
+      }),
+    ]);
+    const bare = finding({ finding_uid: uid(30), category: 'dimensions', current_verdict: 'pending', observation: observation({}) });
+    add('FindingList, table of every severity decided and proposed, in every verdict', render(createElement(FindingList, {
+      view: 'table',
+      groups: groupByCategory([...severityRows, bare]),
+      selectedFindingUid: null,
+      onSelect: noop,
+      renderRowActions: (row: { readonly current_verdict: Verdict }) =>
+        createElement(FindingRowActions, { verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop }),
+    })));
+    add('FindingList, one severity plate pressed, the list link', render(createElement(FindingList, {
+      view: 'list',
+      groups: groupByCategory([...severityRows, bare]),
+      selectedFindingUid: null,
+      onSelect: noop,
+      severityFilter: 'economic',
+      verdictFilter: 'waiting',
+    })));
+  }
+
+  /*
+   * `UIP-S06-08`: the choice «Критичность» beside ✓ in a row, in the four states it is drawn in -- empty, refused for want of a choice
+   * (invalid, with the row's own sentence under it), chosen, and held (a press on its way, a finding already accepted) -- in the table's
+   * «Решение» column and in a list row. At the very end, for the reason above.
+   */
+  {
+    const uid = (n: number): string => `fnd_01J9ZQ8K7NHVXW3T2R5M6P4QT${String(n).padStart(2, '0')}`;
+    const rows = [
+      finding({ finding_uid: uid(0), current_verdict: 'pending', observation: observation({ proposed_severity: 'critical' }) }),
+      finding({ finding_uid: uid(1), current_verdict: 'pending', observation: observation({ proposed_severity: 'economic' }) }),
+      finding({ finding_uid: uid(2), current_verdict: 'pending', observation: observation({ proposed_severity: 'operational' }) }),
+      finding({
+        finding_uid: uid(3), current_verdict: 'accepted', decided_severity: 'recommendation',
+        observation: observation({ proposed_severity: 'critical' }),
+      }),
+      finding({ finding_uid: uid(4), current_verdict: 'pending', observation: observation({}) }),
+    ];
+    const refusal = { tone: 'fail', text: 'Перед принятием выберите критичность. Ничего не отправлено.' } as const;
+    const actions = (row: Finding) => {
+      const proposal = row.observation.proposed_severity !== undefined;
+      const at = rows.findIndex((one) => one.finding_uid === row.finding_uid);
+      return createElement(FindingRowActions, {
+        verdict: row.current_verdict,
+        sending: at === 2 ? 'accept' : null,
+        note: at === 0 ? refusal : null,
+        onAccept: noop,
+        onReject: noop,
+        severity: !proposal ? undefined : {
+          value: at === 1 ? 'economic' : at === 3 ? 'recommendation' : at === 2 ? 'operational' : '',
+          required: row.decided_severity === undefined,
+          invalid: at === 0,
+          onChange: noop,
+        },
+      });
+    };
+    for (const view of ['table', 'list'] as const) {
+      add(`FindingList ${view}, the choice of severity beside ✓ in each of its states`, render(createElement(FindingList, {
+        view, groups: groupByCategory(rows), selectedFindingUid: null, onSelect: noop, renderRowActions: actions,
+      })));
+    }
   }
 
   return out;

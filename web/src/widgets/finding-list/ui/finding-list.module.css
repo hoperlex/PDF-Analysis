@@ -10,18 +10,28 @@
   gap: var(--am-gap-xs);
 }
 
-/* The toolbar over the findings: its rows stand 8px apart, as the list's own do. */
+/* The toolbar over the findings (`UIP-S06-06`): its two rows stand 8px apart, as the list's own do. */
 .toolbar {
   display: flex;
   flex-direction: column;
   gap: var(--am-gap-sm);
 }
 
-/* The first row: the total, the severity chips and, at the right, the file actions; it wraps as a whole. */
+/* The first row: the plates and the totals at the left, the file actions at the right; it wraps as a whole. */
 .top {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.lead {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   align-items: center;
+  min-width: 0;
   gap: var(--am-gap-xs) var(--am-gap);
 }
 
@@ -34,31 +44,67 @@
   gap: var(--am-gap-sm);
 }
 
-/* `UI-A-70`, `UI-A-71`: the run's verdicts at a glance and the filter by them. Tokens only. */
-.verdicts {
+/*
+ * `R-151j`, `UIP-S06-06`: the five severity plates. Each is a pressed-or-not button wearing the tone of its severity from the
+ * global `am-badge--*` (red, amber, teal, green, grey), so the plate reads at a glance and the colour is not the only statement:
+ * the name and the number stand in every plate. A pressed plate has a ring in its own ink (`box-shadow` carries no colour pair of
+ * its own); the weight does not change, so a press does not move its neighbours.
+ */
+.plates {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--am-gap-xs) var(--am-gap-sm);
+  gap: var(--am-gap-xs);
 }
 
-.tally {
+.plate[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px currentColor;
+}
+
+.count {
+  font-weight: 700;
+}
+
+/* The totals, the original's «Всего: N»: one line in the ink of the page. */
+.totals {
   margin: 0;
-  color: var(--am-ink-muted);
+  color: var(--am-ink);
   font-size: var(--am-text-sm);
 }
 
-/* The run's total, the original's «Всего: N», in the ink of the page, not of the counts after it. */
 .total {
   color: var(--am-ink);
 }
 
-.controls {
+/* The second row: the one choice «Показывать» and the link to the other way of reading the findings. */
+.show {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--am-gap-xs) var(--am-gap-sm);
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.showLabel {
+  align-self: center;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* «Показать списком» is a link in look and a button in act: it switches the way the page reads, and goes nowhere. */
+button.viewLink {
+  min-height: var(--am-target-min);
+  padding: 0 var(--am-gap-xs);
+  border: 0;
+  background: transparent;
+  color: var(--am-accent);
+  font: inherit;
+  font-size: var(--am-text-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+
+button.viewLink:hover {
+  color: var(--am-accent-strong);
 }
 
 /*
@@ -85,6 +131,7 @@
 .filter {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--am-gap-xs);
 }
 
@@ -103,10 +150,28 @@
 /*
  * One field is as wide as its content up to 18rem: «Причина» takes what the two buttons leave and the line of the last press
  * (a refusal's reason runs long) wraps inside it, so a sentence after a press does not widen the table's column or the row's.
+ * The choice of severity, when the finding has one, stands before the field in the same box.
  */
 .rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
   min-width: 0;
   max-width: 18rem;
+}
+
+/*
+ * `UIP-S06-08`: the choice of severity beside ✓. As tall as `.am-button--small` beside it, and as wide as its longest label up to the
+ * row's own width (the element-and-class selector outranks the global select's 34 px and 10 px padding); in a narrow cell it takes
+ * the cell, with its text cut, rather than widening it. The field of ✓, ✕ and «Причина» follows it, on the same line when both fit.
+ */
+select.severityChoice {
+  flex: 0 1 auto;
+  min-height: 28px;
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+  text-overflow: ellipsis;
 }
 
 /*
@@ -118,26 +183,6 @@
   .withActions {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-/* `R-151j`: the severity strip -- the expert's decided severity as a filter, the model's proposal labelled apart. */
-.severities {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--am-gap-xs) var(--am-gap);
-}
-
-.stripLabel {
-  align-self: center;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-}
-
-.proposed {
-  margin: 0;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
 }
 
 /* `R-151g`: the designer's execution status of an accepted finding, beside its verdict. */
@@ -154,32 +199,6 @@
 .mergedMark {
   color: var(--am-ink);
   font-weight: 700;
-}
-
-/*
- * The severity chips carry the original's colours as a bar on their left border (critical red, economic amber,
- * operational blue, the rest grey), so the strip reads at a glance without the colour being the only statement:
- * the name and the count stand in every chip.
- */
-.severities [data-severity-filter='critical'],
-.severities [data-severity-filter='proposed:critical'] {
-  border-left: 3px solid var(--am-failed);
-}
-
-.severities [data-severity-filter='economic'],
-.severities [data-severity-filter='proposed:economic'] {
-  border-left: 3px solid var(--am-degraded);
-}
-
-.severities [data-severity-filter='operational'],
-.severities [data-severity-filter='proposed:operational'] {
-  border-left: 3px solid var(--am-accent);
-}
-
-.severities [data-severity-filter='recommendation'],
-.severities [data-severity-filter='check_adjacent'],
-.severities [data-severity-filter='undetermined'] {
-  border-left: 3px solid var(--am-inert);
 }
 
 /*
