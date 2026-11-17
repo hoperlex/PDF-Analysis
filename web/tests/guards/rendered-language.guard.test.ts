@@ -155,10 +155,12 @@ import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorGroups } from '@/widgets/executor-groups';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { ExecutorRules } from '@/widgets/executor-rules';
-import { ExecutorHosts, HostRow } from '@/widgets/executor-hosts';
+import { ExecutorHostTasks, ExecutorHosts, ExecutorHostsOverview, HostRow, HostsOverviewView } from '@/widgets/executor-hosts';
 import { ExecutorStageModels } from '@/widgets/executor-stage-models';
 import { ProcessesSection } from '@/_pages/workers/ui/processes-section';
-import { executorHostDetailsKey, executorHostsKey } from '@/entities/executor-host';
+import { executorHostDetailsKey, executorHostsKey, tasksPeriodRange } from '@/entities/executor-host';
+import { precedentKeys } from '@/entities/decision-memory';
+import { PrecedentSections, PrecedentSectionsView } from '@/_pages/workers/ui/precedent-sections';
 import { stageLayoutKey } from '@/entities/stage-layout';
 import { LayoutEditorView } from '@/features/manage-stage-layout';
 import { HostDetailsView } from '@/features/manage-executor-host';
@@ -168,7 +170,8 @@ import {
 } from '@/features/manage-executor-host';
 import {
   CATALOGUE as STAGE_CATALOGUE, HOST_DETAILS_OFF, LAYOUT_ENSEMBLE as STAGE_LAYOUT_ENSEMBLE,
-  ISSUED, SERVER_ONLINE, install as hostInstall, seedDetails as seedHostDetails, seedHosts, seedLayout,
+  HOST_LIST as HOSTS_LIST, ISSUED, JOB_DONE, JOB_FAILED, JOB_QUEUED, JOB_RUNNING, QUEUE_OVERVIEW, SERVER_ONLINE,
+  install as hostInstall, queuePage, seedDetails as seedHostDetails, seedHosts, seedLayout, seedQueue,
   LAYOUT as STAGE_LAYOUT, LAYOUT_EMPTY as STAGE_LAYOUT_EMPTY, LAYOUT_OFF as STAGE_LAYOUT_OFF,
   COMPARISON_CELLS as STAGE_COMPARISON_CELLS, LAYOUT_COMPARISON as STAGE_LAYOUT_COMPARISON,
 } from '../unit/workers/hosts-fixtures';
@@ -1264,6 +1267,9 @@ const WORKERS: readonly ExecutionWorker[] = [
     heartbeat_at: '2026-10-08T12:00:00Z', current_run_ids: [],
   },
 ];
+
+/** `UIP-S15-06`: the moment the tab «Задачи» is counted from in the states of «Диспетчер», so the keys it reads can be seeded. */
+const TASKS_OPENED = new Date('2026-11-09T11:06:00Z');
 
 const KEYS = {
   projects: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT),
@@ -3290,6 +3296,107 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'workers-models-viewer',
     make: () => createElement(ExecutorStageModels, { roles: ['viewer'] }),
+  },
+  /*
+   * `UIP-S15-06`, `UIP-FIX-25`. «Диспетчер» opens on «Обзор» and has «Задачи» as its third tab. «Обзор»: the strip of five numbers
+   * and the servers in a short form, for both roles, with the queue not read, and the refusal a viewer is given. «Задачи»: the three
+   * groups (the active ones on the tab, the completed ones with their period and the errors with the reason on the widget, whose group
+   * is a `useState` one pass cannot press), an empty group, the read that failed, and the refusal. The period is counted from a fixed
+   * moment, so the seeded keys are the keys the widget reads. The cold state of the matrix renders the loading label of each.
+   */
+  {
+    name: 'workers-overview',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'overview' }),
+    seedClient: (client) => { seedHosts(client); seedQueue(client, queuePage([])); },
+  },
+  {
+    name: 'workers-overview-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'overview' }),
+    seedClient: (client) => { seedHosts(client); seedQueue(client, queuePage([])); client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }); },
+  },
+  {
+    name: 'workers-overview-expert-reads',
+    make: () => createElement(ExecutorHostsOverview, { roles: ['expert'], onShowServers: () => undefined }),
+  },
+  {
+    name: 'workers-overview-viewer',
+    make: () => createElement(ExecutorHostsOverview, { roles: ['viewer'], onShowServers: () => undefined }),
+  },
+  {
+    name: 'workers-overview-queue-unread',
+    make: () => createElement(HostsOverviewView, { list: HOSTS_LIST, queue: null, asOf: TASKS_OPENED.getTime(), onShowServers: () => undefined }),
+  },
+  {
+    name: 'workers-overview-no-servers',
+    make: () => createElement(HostsOverviewView, {
+      list: { items: [], online: 0, slots_free: 0, slots_total: 0, total: 0 },
+      queue: { overview: QUEUE_OVERVIEW, liveFailures: 0 }, asOf: TASKS_OPENED.getTime(), onShowServers: () => undefined,
+    }),
+  },
+  {
+    name: 'workers-tasks',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'tasks' }),
+    seedClient: (client) => {
+      seedQueue(client, queuePage([]));
+      seedQueue(client, queuePage([JOB_RUNNING, JOB_QUEUED]), { stateGroup: 'active' });
+    },
+  },
+  {
+    name: 'workers-tasks-completed',
+    make: () => createElement(ExecutorHostTasks, { roles: ['expert'], initialGroup: 'completed', initialPeriod: 'week', now: TASKS_OPENED }),
+    seedClient: (client) => {
+      seedQueue(client, queuePage([]));
+      seedQueue(client, queuePage([JOB_DONE], { page: { next_cursor: 'c2' } }), { stateGroup: 'completed', ...tasksPeriodRange('week', TASKS_OPENED) });
+    },
+  },
+  {
+    name: 'workers-tasks-errors',
+    make: () => createElement(ExecutorHostTasks, { roles: ['admin'], initialGroup: 'errors', now: TASKS_OPENED }),
+    seedClient: (client) => {
+      seedQueue(client, queuePage([]));
+      seedQueue(client, queuePage([JOB_FAILED]), { stateGroup: 'errors' });
+    },
+  },
+  {
+    name: 'workers-tasks-empty',
+    make: () => createElement(ExecutorHostTasks, { roles: ['expert'], initialGroup: 'completed', now: TASKS_OPENED }),
+    seedClient: (client) => {
+      seedQueue(client, queuePage([]));
+      seedQueue(client, queuePage([]), { stateGroup: 'completed', ...tasksPeriodRange('today', TASKS_OPENED) });
+    },
+  },
+  {
+    name: 'workers-tasks-failed',
+    make: () => createElement(ExecutorHostTasks, { roles: ['expert'], now: TASKS_OPENED }),
+    seedClient: (client) => seedError(client, queryKeys.execution.queue(undefined, { stateGroup: 'active' }), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'workers-tasks-reads',
+    make: () => createElement(ExecutorHostTasks, { roles: ['expert'], now: TASKS_OPENED }),
+  },
+  {
+    name: 'workers-tasks-viewer',
+    make: () => createElement(ExecutorHostTasks, { roles: ['viewer'] }),
+  },
+  /*
+   * `UIP-FIX-25`: the three branches of the section «Прецеденты и векторы» (`_pages/workers/ui/precedent-sections.tsx`) that no state
+   * rendered: the settings still on their way, the settings that could not be read, and the refusal of «Выключить» (a `useState` that
+   * the settled command writes, so the view is rendered with the failure the page would hold).
+   */
+  {
+    name: 'workers-precedents-loading',
+    make: () => createElement(PrecedentSections),
+  },
+  {
+    name: 'workers-precedents-unread',
+    make: () => createElement(PrecedentSections),
+    seedClient: (client) => seedError(client, precedentKeys.settings(), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'workers-precedents-not-changed',
+    make: () => createElement(PrecedentSectionsView, {
+      sections: [], pending: false, failure: executionFailure(apiError(503, 'dependency_unavailable'), true), onOff: () => undefined,
+    }),
   },
   {
     name: 'workers-connect-command',
